@@ -4,7 +4,10 @@ use prost::Message;
 
 use crate::{
     ids::BoundaryId,
-    value::{RunCompletedRecord, RunStartedRecord, ValueFileRecord, ValueRecord, pb},
+    value::{
+        CaptureLossRecord, LogRecord, RunCompletedRecord, RunStartedRecord, ValueFileRecord,
+        ValueRecord, pb,
+    },
 };
 
 pub fn encode_length_delimited_message(
@@ -23,6 +26,17 @@ pub fn encode_header(out: &mut Vec<u8>, boundary_id: BoundaryId) -> Result<(), p
 
 pub fn encode_record(out: &mut Vec<u8>, record: &ValueRecord) -> Result<(), prost::EncodeError> {
     encode_file_record(out, &ValueFileRecord::CapturedValue(record.clone()))
+}
+
+pub fn encode_log_event(out: &mut Vec<u8>, record: &LogRecord) -> Result<(), prost::EncodeError> {
+    encode_file_record(out, &ValueFileRecord::LogEvent(record.clone()))
+}
+
+pub fn encode_capture_loss(
+    out: &mut Vec<u8>,
+    record: &CaptureLossRecord,
+) -> Result<(), prost::EncodeError> {
+    encode_file_record(out, &ValueFileRecord::CaptureLoss(record.clone()))
 }
 
 pub fn encode_run_started(
@@ -50,6 +64,26 @@ pub fn encode_file_record(
             capture: record.capture.as_ref().map(Into::into),
             run_started: None,
             run_completed: None,
+            log_event: None,
+            capture_loss: None,
+        },
+        ValueFileRecord::LogEvent(record) => pb::ValueRecordV1 {
+            metadata: Some((&record.value_ref).into()),
+            body: record.body.clone(),
+            capture: None,
+            run_started: None,
+            run_completed: None,
+            log_event: Some((&record.event).into()),
+            capture_loss: None,
+        },
+        ValueFileRecord::CaptureLoss(record) => pb::ValueRecordV1 {
+            metadata: None,
+            body: Vec::new(),
+            capture: None,
+            run_started: None,
+            run_completed: None,
+            log_event: None,
+            capture_loss: Some(record.into()),
         },
         ValueFileRecord::RunStarted(record) => pb::ValueRecordV1 {
             metadata: None,
@@ -57,6 +91,8 @@ pub fn encode_file_record(
             capture: None,
             run_started: Some(record.into()),
             run_completed: None,
+            log_event: None,
+            capture_loss: None,
         },
         ValueFileRecord::RunCompleted(record) => pb::ValueRecordV1 {
             metadata: None,
@@ -64,6 +100,8 @@ pub fn encode_file_record(
             capture: None,
             run_started: None,
             run_completed: Some(record.into()),
+            log_event: None,
+            capture_loss: None,
         },
     }
     .encode_length_delimited(out)
@@ -74,9 +112,11 @@ mod tests {
     use prost::Message;
 
     use crate::{
-        ids::BoundaryId,
+        ids::{BexCallId, BexThreadId, BoundaryId, EngineId, ProcessEuid},
+        run::{SourceLocation, TraceCallKey},
         value::{
-            ValueAvailability, ValueCodec, ValueRecord, ValueRef, pb,
+            CaptureLossKind, CaptureLossReason, CaptureLossRecord, LogEventRecord, LogRecord,
+            ValueAvailability, ValueCodec, ValueFileRecord, ValueRecord, ValueRef, pb,
             read::read_bamlvalue_from_bytes,
         },
     };
@@ -114,6 +154,61 @@ mod tests {
     }
 
     #[test]
+    fn log_event_record_metadata_round_trips_through_prost() {
+        let record = LogRecord {
+            value_ref: ValueRef::available("value_log", ValueCodec::BamlOutboundValue, 3, 3),
+            body: vec![4, 5, 6],
+            event: LogEventRecord {
+                call: TraceCallKey {
+                    process_euid: ProcessEuid([1; 16]),
+                    engine_id: EngineId(2),
+                    thread_id: BexThreadId(3),
+                    call_id: BexCallId(4),
+                },
+                level: Some("info".to_string()),
+                source: Some(SourceLocation {
+                    file_path: Some("main.baml".to_string()),
+                    file_id: Some(9),
+                    line: 12,
+                    column: 3,
+                    end_line: Some(12),
+                    end_column: Some(20),
+                    start_offset: Some(100),
+                    end_offset: Some(117),
+                }),
+                timestamp_ms: 170,
+                message_preview: Some("hello".to_string()),
+            },
+        };
+        let mut bytes = Vec::new();
+        super::encode_header(&mut bytes, BoundaryId::from_bytes([7; 16])).unwrap();
+        super::encode_log_event(&mut bytes, &record).unwrap();
+
+        let parsed = read_bamlvalue_from_bytes(&bytes).unwrap();
+        assert_eq!(parsed.records, vec![ValueFileRecord::LogEvent(record)]);
+        assert!(!parsed.truncated);
+    }
+
+    #[test]
+    fn capture_loss_record_round_trips() {
+        let record = CaptureLossRecord {
+            kind: CaptureLossKind::Log,
+            reason: CaptureLossReason::QueueFull,
+            skipped_count: 3,
+            call: None,
+            message: Some("Skipped 3 captured log value(s)".to_string()),
+            timestamp_ms: 1234,
+        };
+        let mut bytes = Vec::new();
+        super::encode_header(&mut bytes, BoundaryId::from_bytes([9; 16])).unwrap();
+        super::encode_capture_loss(&mut bytes, &record).unwrap();
+
+        let parsed = read_bamlvalue_from_bytes(&bytes).unwrap();
+        assert_eq!(parsed.records, vec![ValueFileRecord::CaptureLoss(record)]);
+        assert!(!parsed.truncated);
+    }
+
+    #[test]
     fn prost_record_shape_is_length_delimited() {
         let record = pb::ValueRecordV1 {
             metadata: Some(pb::ValueMetadataV1 {
@@ -128,6 +223,8 @@ mod tests {
             capture: None,
             run_started: None,
             run_completed: None,
+            log_event: None,
+            capture_loss: None,
         };
         let mut bytes = Vec::new();
         record.encode_length_delimited(&mut bytes).unwrap();

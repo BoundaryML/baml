@@ -105,7 +105,7 @@ pub use bex_heap::{ActiveHeapPermit, HeapGuard, HeapPermitManager, InactiveHeapP
 use bex_vm::{BexVm, VmExecState};
 use bex_vm_types::{
     FunctionMeta, FunctionOrigin, GlobalPool, HeapPtr, Object, SharedGlobals, SysOp,
-    TaskGroupInner, Value, VmGlobals,
+    TaskGroupInner, Value, ValueKind, VmGlobals,
 };
 pub use conversion::test_arg_to_external;
 // Re-export CancellationToken for callers.
@@ -118,7 +118,7 @@ use sys_types::{OpError, SysOpResult};
 use thiserror::Error;
 pub use tokio_util::sync::CancellationToken;
 
-use crate::value_capture::{CaptureKind, TraceCaptureProducer};
+use crate::value_capture::{CaptureKind, TraceCaptureProducer, TraceLogMetadata};
 pub use crate::{
     future::{FutureManager, FutureManagerGuard, FutureManagerInner},
     thread::{BexThread, ChildErrorQueue},
@@ -250,6 +250,12 @@ pub struct BexCallResult {
 struct RootValueCaptureContext {
     boundary_id: bex_events::ids::BoundaryId,
     call: bex_events::run::TraceCallKey,
+    producer: TraceCaptureProducer,
+}
+
+#[derive(Clone)]
+struct LogCaptureContext {
+    boundary_id: bex_events::ids::BoundaryId,
     producer: TraceCaptureProducer,
 }
 
@@ -725,6 +731,27 @@ fn _default_round_robin_start() -> usize {
     {
         nanos as usize
     }
+}
+
+fn epoch_ms() -> u64 {
+    use web_time::{SystemTime, UNIX_EPOCH};
+    let millis = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |duration| duration.as_millis());
+    u64::try_from(millis).unwrap_or(u64::MAX)
+}
+
+fn truncate_preview(mut value: String, max_chars: usize) -> String {
+    if value.chars().count() <= max_chars {
+        return value;
+    }
+    let cut = value
+        .char_indices()
+        .nth(max_chars)
+        .map_or(value.len(), |(idx, _)| idx);
+    value.truncate(cut);
+    value.push_str("...");
+    value
 }
 
 /// Extract an owned `RuntimeTy` from a `SysOp::BamlHostCallHostValue` type-arg operand
@@ -2247,8 +2274,15 @@ impl BexEngine {
                         thread_id: entry_call_ref.thread_id,
                         call_id: entry_call_ref.call_id,
                     },
-                    producer: value_capture,
+                    producer: value_capture.clone(),
                 });
+        let log_capture = boundary
+            .capture_defaults
+            .logs_enabled
+            .then(|| LogCaptureContext {
+                boundary_id: boundary.boundary_id,
+                producer: value_capture.clone(),
+            });
         if let (Some(capture), Some(entries)) = (root_capture.as_ref(), root_input_values.as_ref())
         {
             let _ = capture.producer.capture_with(
@@ -2269,6 +2303,7 @@ impl BexEngine {
                 thread,
                 host_call_id,
                 root_capture.clone(),
+                log_capture,
                 &cancel,
                 copy_objects,
             )
@@ -3011,6 +3046,95 @@ impl BexEngine {
                 });
     }
 
+    fn capture_baml_log_event(
+        &self,
+        thread: &ActiveHeapPermit<BexThread>,
+        capture: Option<&LogCaptureContext>,
+        data: Value,
+        source_location: Option<(u32, u32, u32, u32, u32)>,
+    ) {
+        let Some(capture) = capture else {
+            return;
+        };
+        let call = bex_events::run::TraceCallKey {
+            process_euid: self.process_euid,
+            engine_id: self.engine_id,
+            thread_id: BexThreadId(thread.vm.prof_thread_id),
+            call_id: BexCallId(thread.vm.current_call_id()),
+        };
+        let _ = capture
+            .producer
+            .capture_log_with(capture.boundary_id, call, |trace_heap| {
+                let (level, body) = Self::extract_baml_log_payload(data);
+                let metadata = TraceLogMetadata {
+                    level,
+                    source: Self::source_location_from_event(source_location),
+                    timestamp_ms: epoch_ms(),
+                    message_preview: Self::log_message_preview(body),
+                };
+                let snapshot =
+                    trace_heap.copy_value_from_bex_heap(&self.heap, thread.proof(), body);
+                (metadata, snapshot)
+            });
+    }
+
+    fn extract_baml_log_payload(data: Value) -> (Option<String>, Value) {
+        let Some(ptr) = data.as_object_ptr() else {
+            return (None, data);
+        };
+        let Object::Map(map) = (unsafe { ptr.get() }) else {
+            return (None, data);
+        };
+        let mut level = None;
+        let mut body = None;
+        for (key, value) in map.to_index_map() {
+            match key.to_string().as_str() {
+                "level" => {
+                    if let Some(ptr) = value.as_object_ptr()
+                        && let Object::String(level_value) = unsafe { ptr.get() }
+                    {
+                        level = Some(level_value.to_string());
+                    }
+                }
+                "data" => body = Some(value),
+                _ => {}
+            }
+        }
+        (level, body.unwrap_or(data))
+    }
+
+    fn source_location_from_event(
+        source_location: Option<(u32, u32, u32, u32, u32)>,
+    ) -> Option<bex_events::run::SourceLocation> {
+        let (file_id, line, column, start_offset, end_offset) = source_location?;
+        Some(bex_events::run::SourceLocation {
+            file_path: None,
+            file_id: Some(u64::from(file_id)),
+            line,
+            column,
+            end_line: None,
+            end_column: None,
+            start_offset: Some(start_offset),
+            end_offset: Some(end_offset),
+        })
+    }
+
+    fn log_message_preview(value: Value) -> Option<String> {
+        let preview = match value.kind() {
+            ValueKind::Null => "null".to_string(),
+            ValueKind::Bool(value) => value.to_string(),
+            ValueKind::Int(value) => value.to_string(),
+            ValueKind::OmittedArg => "<omitted argument>".to_string(),
+            ValueKind::Object(ptr) => match unsafe { ptr.get() } {
+                Object::String(value) => value.to_string(),
+                Object::Bigint(value) => value.to_string(),
+                Object::Float(value) => value.to_string(),
+                _ => return None,
+            },
+        };
+        Some(truncate_preview(preview, 160))
+    }
+
     /// Route an unhandled VM throw value through the embedder's terminal
     /// paths: settle a spawned child errored (or cancelled), surface a clean
     /// `baml.panics.Exit`, or surface as `EngineError::UnhandledThrow`.
@@ -3270,6 +3394,7 @@ impl BexEngine {
         future_id: FutureId,
         prof_thread_id: u64,
         prof_suppressed: bool,
+        log_capture: Option<LogCaptureContext>,
     ) -> std::pin::Pin<
         Box<dyn std::future::Future<Output = Result<(), EngineError>> + Send + 'static>,
     > {
@@ -3285,6 +3410,7 @@ impl BexEngine {
             future_id,
             prof_thread_id,
             prof_suppressed,
+            log_capture,
         ))
     }
 
@@ -3311,6 +3437,7 @@ impl BexEngine {
         future_id: FutureId,
         prof_thread_id: u64,
         prof_suppressed: bool,
+        log_capture: Option<LogCaptureContext>,
     ) -> Result<(), EngineError> {
         // BEP-034 spawn options: link a user-provided `CancelToken`
         // (`with baml.spawn.options(cancel = ...)`) into this spawn's effective
@@ -3442,6 +3569,7 @@ impl BexEngine {
                     permit,
                     call_id,
                     None,
+                    log_capture,
                     &child_cancel,
                     true,
                 )
@@ -3511,6 +3639,7 @@ impl BexEngine {
         thread: ActiveHeapPermit<BexThread>,
         call_id: CallId,
         root_capture: Option<RootValueCaptureContext>,
+        log_capture: Option<LogCaptureContext>,
         cancel: &CancellationToken,
         copy_objects: bool,
     ) -> Result<ThreadOutcome, EngineError> {
@@ -3529,6 +3658,7 @@ impl BexEngine {
                 thread,
                 call_id,
                 root_capture,
+                log_capture,
                 cancel,
                 copy_objects,
             )
@@ -3584,6 +3714,7 @@ impl BexEngine {
         mut thread: ActiveHeapPermit<BexThread>,
         call_id: CallId,
         root_capture: Option<RootValueCaptureContext>,
+        log_capture: Option<LogCaptureContext>,
         cancel: &CancellationToken,
         copy_objects: bool,
     ) -> Result<ThreadOutcome, EngineError> {
@@ -4080,6 +4211,7 @@ impl BexEngine {
                                 future_id,
                                 child_prof_thread_id,
                                 thread.vm.prof_suppressed,
+                                log_capture.clone(),
                             )
                             .await?;
                         future_ptr
@@ -4303,12 +4435,20 @@ impl BexEngine {
                 }
 
                 VmExecState::Event {
-                    event_name: _,
-                    data: _,
-                    source_location: _,
+                    event_name,
+                    data,
+                    source_location,
                 } => {
-                    // Tracing removed: `baml.events.send()` is a no-op. It still
-                    // returns null — the SendEvent instruction pops its two
+                    if event_name == "$baml_log" {
+                        self.capture_baml_log_event(
+                            &thread,
+                            log_capture.as_ref(),
+                            data,
+                            source_location,
+                        );
+                    }
+                    // Only reserved `$baml_log` events are currently produced
+                    // by the standard library. `SendEvent` pops its two
                     // arguments but does not push a return value, so push null
                     // before the VM resumes at the next instruction.
                     thread.vm.stack.push(Value::NULL);

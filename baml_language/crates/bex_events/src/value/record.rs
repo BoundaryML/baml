@@ -4,7 +4,7 @@ use crate::{
     ids::{BexCallId, BexThreadId, BoundaryId, EngineId, ProcessEuid},
     run::{
         CancellationState, ProjectGeneration, ProjectId, RunError, RunErrorClass,
-        RunRequestSummary, RunStatus, RunTarget, RunTimeAnchor, TraceCallKey,
+        RunRequestSummary, RunStatus, RunTarget, RunTimeAnchor, SourceLocation, TraceCallKey,
     },
 };
 
@@ -102,6 +102,7 @@ pub enum ValueCaptureKind {
     RootInput,
     RootOutput,
     RootError,
+    LogBody,
 }
 
 impl ValueCaptureKind {
@@ -111,6 +112,7 @@ impl ValueCaptureKind {
             Self::RootInput => "rootInput",
             Self::RootOutput => "rootOutput",
             Self::RootError => "rootError",
+            Self::LogBody => "logBody",
         }
     }
 }
@@ -145,8 +147,66 @@ pub struct ValueRecord {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LogEventRecord {
+    pub call: TraceCallKey,
+    pub level: Option<String>,
+    pub source: Option<SourceLocation>,
+    pub timestamp_ms: u64,
+    pub message_preview: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LogRecord {
+    pub value_ref: ValueRef,
+    pub body: Vec<u8>,
+    pub event: LogEventRecord,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CaptureLossKind {
+    Value,
+    Log,
+}
+
+impl CaptureLossKind {
+    #[must_use]
+    pub fn as_wire_str(self) -> &'static str {
+        match self {
+            Self::Value => "value",
+            Self::Log => "log",
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CaptureLossReason {
+    QueueFull,
+}
+
+impl CaptureLossReason {
+    #[must_use]
+    pub fn as_wire_str(self) -> &'static str {
+        match self {
+            Self::QueueFull => "queueFull",
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CaptureLossRecord {
+    pub kind: CaptureLossKind,
+    pub reason: CaptureLossReason,
+    pub skipped_count: u64,
+    pub call: Option<TraceCallKey>,
+    pub message: Option<String>,
+    pub timestamp_ms: u64,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ValueFileRecord {
     CapturedValue(ValueRecord),
+    LogEvent(LogRecord),
+    CaptureLoss(CaptureLossRecord),
     RunStarted(RunStartedRecord),
     RunCompleted(RunCompletedRecord),
 }
@@ -276,6 +336,7 @@ impl TryFrom<crate::value::pb::ValueCaptureV1> for ValueCapture {
             crate::value::pb::ValueCaptureKind::RootInput => ValueCaptureKind::RootInput,
             crate::value::pb::ValueCaptureKind::RootOutput => ValueCaptureKind::RootOutput,
             crate::value::pb::ValueCaptureKind::RootError => ValueCaptureKind::RootError,
+            crate::value::pb::ValueCaptureKind::LogBody => ValueCaptureKind::LogBody,
             crate::value::pb::ValueCaptureKind::Unspecified => {
                 return Err(io::Error::new(
                     io::ErrorKind::InvalidData,
@@ -302,8 +363,124 @@ impl From<&ValueCapture> for crate::value::pb::ValueCaptureV1 {
                     crate::value::pb::ValueCaptureKind::RootOutput as i32
                 }
                 ValueCaptureKind::RootError => crate::value::pb::ValueCaptureKind::RootError as i32,
+                ValueCaptureKind::LogBody => crate::value::pb::ValueCaptureKind::LogBody as i32,
             },
             call: Some(value.call.into()),
+        }
+    }
+}
+
+impl TryFrom<crate::value::pb::SourceLocationV1> for SourceLocation {
+    type Error = io::Error;
+
+    fn try_from(value: crate::value::pb::SourceLocationV1) -> Result<Self, Self::Error> {
+        Ok(Self {
+            file_path: value.file_path,
+            file_id: value.file_id,
+            line: value.line,
+            column: value.column,
+            end_line: value.end_line,
+            end_column: value.end_column,
+            start_offset: value.start_offset,
+            end_offset: value.end_offset,
+        })
+    }
+}
+
+impl From<&SourceLocation> for crate::value::pb::SourceLocationV1 {
+    fn from(value: &SourceLocation) -> Self {
+        Self {
+            file_path: value.file_path.clone(),
+            file_id: value.file_id,
+            line: value.line,
+            column: value.column,
+            end_line: value.end_line,
+            end_column: value.end_column,
+            start_offset: value.start_offset,
+            end_offset: value.end_offset,
+        }
+    }
+}
+
+impl TryFrom<crate::value::pb::LogEventV1> for LogEventRecord {
+    type Error = io::Error;
+
+    fn try_from(value: crate::value::pb::LogEventV1) -> Result<Self, Self::Error> {
+        let call = value
+            .call
+            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "log event omitted call"))?;
+        Ok(Self {
+            call: call.try_into()?,
+            level: value.level,
+            source: value.source.map(TryInto::try_into).transpose()?,
+            timestamp_ms: value.timestamp_ms,
+            message_preview: value.message_preview,
+        })
+    }
+}
+
+impl From<&LogEventRecord> for crate::value::pb::LogEventV1 {
+    fn from(value: &LogEventRecord) -> Self {
+        Self {
+            call: Some(value.call.into()),
+            level: value.level.clone(),
+            source: value.source.as_ref().map(Into::into),
+            timestamp_ms: value.timestamp_ms,
+            message_preview: value.message_preview.clone(),
+        }
+    }
+}
+
+impl TryFrom<crate::value::pb::CaptureLossV1> for CaptureLossRecord {
+    type Error = io::Error;
+
+    fn try_from(value: crate::value::pb::CaptureLossV1) -> Result<Self, Self::Error> {
+        let kind = match value.kind() {
+            crate::value::pb::CaptureLossKind::Value => CaptureLossKind::Value,
+            crate::value::pb::CaptureLossKind::Log => CaptureLossKind::Log,
+            crate::value::pb::CaptureLossKind::Unspecified => {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "capture loss omitted kind",
+                ));
+            }
+        };
+        let reason = match value.reason() {
+            crate::value::pb::CaptureLossReason::QueueFull => CaptureLossReason::QueueFull,
+            crate::value::pb::CaptureLossReason::Unspecified => {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "capture loss omitted reason",
+                ));
+            }
+        };
+        Ok(Self {
+            kind,
+            reason,
+            skipped_count: value.skipped_count,
+            call: value.call.map(TryInto::try_into).transpose()?,
+            message: value.message,
+            timestamp_ms: value.timestamp_ms,
+        })
+    }
+}
+
+impl From<&CaptureLossRecord> for crate::value::pb::CaptureLossV1 {
+    fn from(value: &CaptureLossRecord) -> Self {
+        Self {
+            kind: match value.kind {
+                CaptureLossKind::Value => crate::value::pb::CaptureLossKind::Value as i32,
+                CaptureLossKind::Log => crate::value::pb::CaptureLossKind::Log as i32,
+            },
+            reason: match value.reason {
+                CaptureLossReason::QueueFull => {
+                    crate::value::pb::CaptureLossReason::QueueFull as i32
+                }
+            },
+            skipped_count: value.skipped_count,
+            call: value.call.map(Into::into),
+            message: value.message.clone(),
+            timestamp_ms: value.timestamp_ms,
         }
     }
 }

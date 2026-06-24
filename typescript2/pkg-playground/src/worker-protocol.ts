@@ -345,7 +345,13 @@ export type RunRequestState =
   | 'runTerminal';
 
 export interface PayloadBody {
-  state: { kind: string; id?: string };
+  state:
+    | { kind: 'inlineBytes' }
+    | { kind: 'inlineJson' }
+    | { kind: 'retainedByRef'; id: string }
+    | { kind: 'truncated' }
+    | { kind: 'compacted' }
+    | { kind: 'omittedByPolicy' };
   contentType: string | null;
   originalSizeBytes: number | null;
   retainedSizeBytes: number | null;
@@ -385,8 +391,8 @@ export interface PayloadEvent {
         state: RunRequestState;
         waiterCount: number;
       }
-	    | {
-	        type: 'envResolved';
+    | {
+        type: 'envResolved';
         requestId: string;
         key: string;
         status:
@@ -396,15 +402,21 @@ export interface PayloadEvent {
           | 'declinedMissing';
         state: RunRequestState;
         valueRedacted: boolean;
-	        displayValue: string | null;
-	      }
-	    | { type: 'log'; level: string | null; message: string }
-	    | {
-	        type: 'capturedValue';
-	        role: 'rootInput';
-	        label: string | null;
-	        valueRef: ValueRef | null;
-	      };
+        displayValue: string | null;
+      }
+    | {
+        type: 'log';
+        level: string | null;
+        message: string;
+        source: RunSourceLocation | null;
+        valueRef: ValueRef | null;
+      }
+    | {
+        type: 'capturedValue';
+        role: 'rootInput';
+        label: string | null;
+        valueRef: ValueRef | null;
+      };
   redaction: {
     valueRedacted: boolean;
     displaySafe: boolean;

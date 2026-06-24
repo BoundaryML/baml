@@ -280,6 +280,152 @@ describe('run-store-projections', () => {
     ]);
   });
 
+  it('projects identified logs under their owning call node', () => {
+    const run = runFixture({
+      calls: [
+        callFixture({
+          id: 'root',
+          parentId: null,
+          functionName: 'user.Main',
+          startedAtNs: '100000000',
+          endedAtNs: '200000000',
+        }),
+        callFixture({
+          id: 'child',
+          parentId: 'root',
+          functionName: 'user.Work',
+          startedAtNs: '125000000',
+          endedAtNs: '175000000',
+        }),
+      ],
+      payloads: [
+        payloadFixture({
+          id: 'log-1',
+          callNodeId: 'child',
+          timestampMs: 120,
+          kind: {
+            type: 'log',
+            level: 'warn',
+            message: 'watch this',
+            source: { line: 12, column: 3 },
+            valueRef: null,
+          },
+        }),
+      ],
+    });
+
+    const rows = runToTraceRows(run);
+
+    expect(rows.find((row) => row.id === 'root')?.logs).toEqual([]);
+    expect(rows.find((row) => row.id === 'child')?.logs).toEqual([
+      expect.objectContaining({
+        id: 'log-1',
+        level: 'warn',
+        message: 'watch this',
+        sourceLine: 12,
+        state: 'unavailable',
+        value: null,
+      }),
+    ]);
+  });
+
+  it('attaches logs through call payload ids and hydrates value refs', () => {
+    const bytes = outboundStringBytes('full log body');
+    const valueRef = valueRefFixture('log_value', bytes);
+    const run = runFixture({
+      calls: [
+        callFixture({
+          id: 'root',
+          payloadIds: ['log-1'],
+        }),
+      ],
+      payloads: [
+        payloadFixture({
+          id: 'log-1',
+          callNodeId: null,
+          kind: {
+            type: 'log',
+            level: 'info',
+            message: 'full log body',
+            source: null,
+            valueRef,
+          },
+        }),
+      ],
+    });
+
+    expect(runToTraceRows(run, cacheWith('log_value', bytes))).toEqual([
+      expect.objectContaining({
+        id: 'root',
+        logs: [
+          expect.objectContaining({
+            id: 'log-1',
+            state: 'available',
+            value: 'full log body',
+          }),
+        ],
+      }),
+    ]);
+  });
+
+  it('projects explicit log body availability states', () => {
+    const run = runFixture({
+      calls: [
+        callFixture({
+          id: 'root',
+          payloadIds: ['log-lost', 'log-truncated', 'log-omitted'],
+        }),
+      ],
+      payloads: [
+        payloadFixture({
+          id: 'log-lost',
+          timestampMs: 101,
+          kind: {
+            type: 'log',
+            level: 'error',
+            message: 'lost',
+            source: null,
+            valueRef: {
+              ...valueRefFixture('lost_value', new Uint8Array()),
+              availability: 'lost',
+              originalSizeBytes: null,
+              retainedSizeBytes: null,
+              diagnostic: 'queue full',
+            },
+          },
+        }),
+        payloadFixture({
+          id: 'log-truncated',
+          timestampMs: 102,
+          body: {
+            state: { kind: 'truncated' },
+            contentType: null,
+            originalSizeBytes: 512,
+            retainedSizeBytes: 128,
+          },
+        }),
+        payloadFixture({
+          id: 'log-omitted',
+          timestampMs: 103,
+          body: {
+            state: { kind: 'omittedByPolicy' },
+            contentType: null,
+            originalSizeBytes: null,
+            retainedSizeBytes: null,
+          },
+        }),
+      ],
+    });
+
+    const logs = runToTraceRows(run)[0].logs;
+
+    expect(logs.map((log) => [log.id, log.state, log.diagnostic])).toEqual([
+      ['log-lost', 'lost', 'queue full'],
+      ['log-truncated', 'truncated', null],
+      ['log-omitted', 'omitted', null],
+    ]);
+  });
+
   it('projects profile blocks from RunStore call edges and timestamps', () => {
     const run = runFixture({
       rootCallNodeId: 'root',
@@ -610,6 +756,8 @@ function payloadFixture(
       type: 'log',
       level: 'info',
       message: 'placeholder',
+      source: null,
+      valueRef: null,
     },
     redaction: {
       valueRedacted: false,

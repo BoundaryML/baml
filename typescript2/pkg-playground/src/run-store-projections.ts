@@ -40,6 +40,34 @@ export type RunTraceRow = {
   spanLeftPct: number;
   spanWidthPct: number;
   sourceLine: number | null;
+  logs: RunTraceLog[];
+};
+
+export type RunTraceLogState =
+  | 'loading'
+  | 'available'
+  | 'pending'
+  | 'omitted'
+  | 'truncated'
+  | 'missing'
+  | 'lost'
+  | 'error'
+  | 'unavailable';
+
+export type RunTraceLog = {
+  id: string;
+  timestampMs: number;
+  level: string | null;
+  message: string;
+  sourceLine: number | null;
+  valueRef: ValueRef | null;
+  value: BamlJsValue | null;
+  state: RunTraceLogState;
+  diagnostic: string | null;
+};
+
+type LogPayloadEvent = PayloadEvent & {
+  kind: Extract<PayloadEvent['kind'], { type: 'log' }>;
 };
 
 export type ExecutionProfileOrigin = 'user' | 'library' | 'system' | 'unknown';
@@ -111,11 +139,15 @@ export function runToDisplayRun(
   };
 }
 
-export function runToTraceRows(run: Run | null | undefined): RunTraceRow[] {
+export function runToTraceRows(
+  run: Run | null | undefined,
+  valueBodyCache?: ValueBodyCache,
+): RunTraceRow[] {
   if (!run || run.calls.length === 0) return [];
   const calls = [...run.calls].sort(compareCallsByStart);
   const callsById = new Map(run.calls.map((call) => [call.id, call]));
   const threadParentCallIds = threadParentCallIdsByThread(run, callsById);
+  const logsByCallId = traceLogsByCallId(run, valueBodyCache);
   const starts = calls
     .map((call) => parseNs(call.startedAtNs))
     .filter((value): value is bigint => value !== null);
@@ -150,6 +182,7 @@ export function runToTraceRows(run: Run | null | undefined): RunTraceRow[] {
       spanLeftPct: leftPct,
       spanWidthPct: Math.min(widthPct, 100 - leftPct),
       sourceLine: call.callSiteSource?.line ?? call.calleeSource?.line ?? null,
+      logs: logsByCallId.get(call.id) ?? [],
     };
   });
 }
@@ -657,6 +690,163 @@ export function decodeRootInputValue(
     }
   }
   return null;
+}
+
+function traceLogsByCallId(
+  run: Run,
+  valueBodyCache?: ValueBodyCache,
+): Map<string, RunTraceLog[]> {
+  const logsByCallId = new Map<string, RunTraceLog[]>();
+  const callsByPayloadId = new Map<string, string[]>();
+  for (const call of run.calls) {
+    for (const payloadId of call.payloadIds) {
+      const ids = callsByPayloadId.get(payloadId);
+      if (ids) {
+        ids.push(call.id);
+      } else {
+        callsByPayloadId.set(payloadId, [call.id]);
+      }
+    }
+  }
+
+  for (const payload of run.payloads) {
+    if (!isLogPayload(payload)) continue;
+    const callIds = new Set<string>();
+    if (payload.callNodeId) callIds.add(payload.callNodeId);
+    for (const callId of callsByPayloadId.get(payload.id) ?? []) {
+      callIds.add(callId);
+    }
+    if (callIds.size === 0) continue;
+    const log = payloadToTraceLog(run.boundaryId, payload, valueBodyCache);
+    for (const callId of callIds) {
+      const logs = logsByCallId.get(callId);
+      if (logs) {
+        logs.push(log);
+      } else {
+        logsByCallId.set(callId, [log]);
+      }
+    }
+  }
+
+  for (const logs of logsByCallId.values()) {
+    logs.sort((a, b) => a.timestampMs - b.timestampMs || a.id.localeCompare(b.id));
+  }
+  return logsByCallId;
+}
+
+function payloadToTraceLog(
+  boundaryId: BoundaryId,
+  payload: LogPayloadEvent,
+  valueBodyCache?: ValueBodyCache,
+): RunTraceLog {
+  const projected = payload.kind.valueRef
+    ? projectValueRef(boundaryId, payload.kind.valueRef, valueBodyCache)
+    : projectPayloadBodyState(payload.body);
+  return {
+    id: payload.id,
+    timestampMs: payload.timestampMs,
+    level: payload.kind.level,
+    message: payload.kind.message,
+    sourceLine: payload.kind.source?.line ?? null,
+    valueRef: payload.kind.valueRef,
+    value: projected.value,
+    state: projected.state,
+    diagnostic: projected.diagnostic,
+  };
+}
+
+function projectPayloadBodyState(
+  body: PayloadEvent['body'],
+): { state: RunTraceLogState; value: BamlJsValue | null; diagnostic: string | null } {
+  const state = body?.state;
+  if (!state) return { state: 'unavailable', value: null, diagnostic: null };
+  switch (state.kind) {
+    case 'truncated':
+      return { state: 'truncated', value: null, diagnostic: null };
+    case 'omittedByPolicy':
+      return { state: 'omitted', value: null, diagnostic: null };
+    case 'compacted':
+      return { state: 'missing', value: null, diagnostic: null };
+    case 'inlineBytes':
+    case 'inlineJson':
+    case 'retainedByRef':
+      return { state: 'unavailable', value: null, diagnostic: null };
+    default:
+      state satisfies never;
+      return { state: 'unavailable', value: null, diagnostic: null };
+  }
+}
+
+function isLogPayload(payload: PayloadEvent): payload is LogPayloadEvent {
+  return payload.kind.type === 'log';
+}
+
+function projectValueRef(
+  boundaryId: BoundaryId,
+  valueRef: ValueRef | null,
+  valueBodyCache?: ValueBodyCache,
+): { state: RunTraceLogState; value: BamlJsValue | null; diagnostic: string | null } {
+  if (!valueRef) return { state: 'unavailable', value: null, diagnostic: null };
+  if (valueRef.availability !== 'available') {
+    return {
+      state: valueAvailabilityToTraceLogState(valueRef.availability),
+      value: null,
+      diagnostic: valueRef.diagnostic,
+    };
+  }
+
+  const cached = valueBodyCache?.get(boundaryId, valueRef);
+  if (!cached) {
+    void valueBodyCache?.read(boundaryId, valueRef).catch(() => {});
+    return { state: 'loading', value: null, diagnostic: null };
+  }
+  if (cached.availability !== 'available') {
+    return {
+      state: valueAvailabilityToTraceLogState(cached.availability),
+      value: null,
+      diagnostic: cached.diagnostic,
+    };
+  }
+  if (cached.codec !== 'bamlOutboundValue' || !cached.bytes) {
+    return {
+      state: 'error',
+      value: null,
+      diagnostic: 'Unsupported log value body',
+    };
+  }
+  try {
+    return {
+      state: 'available',
+      value: decodeBamlOutboundValue(cached.bytes),
+      diagnostic: null,
+    };
+  } catch {
+    return {
+      state: 'error',
+      value: null,
+      diagnostic: 'Failed to decode log value body',
+    };
+  }
+}
+
+function valueAvailabilityToTraceLogState(
+  availability: ValueRef['availability'],
+): RunTraceLogState {
+  switch (availability) {
+    case 'pending':
+      return 'pending';
+    case 'available':
+      return 'available';
+    case 'missing':
+      return 'missing';
+    case 'omitted':
+      return 'omitted';
+    case 'lost':
+      return 'lost';
+    default:
+      availability satisfies never;
+      return 'unavailable';
+  }
 }
 
 function decodeValueRef(

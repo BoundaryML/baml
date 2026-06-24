@@ -8,10 +8,10 @@ use std::{
 
 use bex_events::{
     ids::BoundaryId,
-    run::TraceCallKey,
+    run::{SourceLocation, TraceCallKey},
     value::{
-        ValueArtifactSink, ValueCapture, ValueCaptureKind, ValueCodec, ValueRef, ValueWriteOutcome,
-        ValueWriter,
+        LogEventRecord, ValueArtifactSink, ValueCapture, ValueCaptureKind, ValueCodec, ValueRef,
+        ValueWriteOutcome, ValueWriter,
     },
 };
 
@@ -25,6 +25,15 @@ pub enum CaptureKind {
     RootInput,
     RootOutput,
     RootError,
+    LogBody,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TraceLogMetadata {
+    pub level: Option<String>,
+    pub source: Option<SourceLocation>,
+    pub timestamp_ms: u64,
+    pub message_preview: Option<String>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -32,6 +41,7 @@ pub struct TraceValueDraft {
     pub boundary_id: BoundaryId,
     pub call: TraceCallKey,
     pub kind: CaptureKind,
+    pub log: Option<TraceLogMetadata>,
     pub snapshot: TraceSnapshotHandle,
 }
 
@@ -40,6 +50,7 @@ pub struct EncodedTraceValue {
     pub boundary_id: BoundaryId,
     pub call: TraceCallKey,
     pub kind: CaptureKind,
+    pub log: Option<TraceLogMetadata>,
     pub value_ref: ValueRef,
     pub body: Vec<u8>,
 }
@@ -47,15 +58,29 @@ pub struct EncodedTraceValue {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TraceCaptureConfig {
     pub enabled: bool,
-    pub max_pending_drafts: usize,
+    pub max_pending_value_drafts: usize,
+    pub max_pending_log_drafts: usize,
 }
 
 impl TraceCaptureConfig {
     #[must_use]
-    pub fn enabled(max_pending_drafts: usize) -> Self {
+    pub fn enabled(max_pending_drafts_per_kind: usize) -> Self {
         Self {
             enabled: true,
-            max_pending_drafts,
+            max_pending_value_drafts: max_pending_drafts_per_kind,
+            max_pending_log_drafts: max_pending_drafts_per_kind,
+        }
+    }
+
+    #[must_use]
+    pub fn enabled_with_budgets(
+        max_pending_value_drafts: usize,
+        max_pending_log_drafts: usize,
+    ) -> Self {
+        Self {
+            enabled: true,
+            max_pending_value_drafts,
+            max_pending_log_drafts,
         }
     }
 
@@ -63,7 +88,8 @@ impl TraceCaptureConfig {
     pub fn disabled() -> Self {
         Self {
             enabled: false,
-            max_pending_drafts: 0,
+            max_pending_value_drafts: 0,
+            max_pending_log_drafts: 0,
         }
     }
 }
@@ -77,7 +103,8 @@ pub struct TraceCaptureProducer {
 #[derive(Debug)]
 struct TraceCaptureInner {
     config: TraceCaptureConfig,
-    reserved_slots: usize,
+    reserved_value_slots: usize,
+    reserved_log_slots: usize,
     pending: VecDeque<TraceValueDraft>,
     stats: TraceCaptureStats,
 }
@@ -87,6 +114,8 @@ pub struct TraceCaptureStats {
     pub published: u64,
     pub skipped_disabled: u64,
     pub skipped_queue_full: u64,
+    pub skipped_value_queue_full: u64,
+    pub skipped_log_queue_full: u64,
     pub abandoned_reservations: u64,
 }
 
@@ -103,7 +132,8 @@ impl TraceCaptureProducer {
             trace_heap: TraceHeap::new(),
             inner: Arc::new(Mutex::new(TraceCaptureInner {
                 config,
-                reserved_slots: 0,
+                reserved_value_slots: 0,
+                reserved_log_slots: 0,
                 pending: VecDeque::new(),
                 stats: TraceCaptureStats::default(),
             })),
@@ -134,12 +164,41 @@ impl TraceCaptureProducer {
             inner.stats.skipped_disabled = inner.stats.skipped_disabled.saturating_add(1);
             return Err(CaptureSkipReason::Disabled);
         }
-        let occupied = inner.pending.len().saturating_add(inner.reserved_slots);
-        if occupied >= inner.config.max_pending_drafts {
+        let occupied = inner
+            .pending
+            .iter()
+            .filter(|draft| draft.kind.queue_class() == kind.queue_class())
+            .count()
+            .saturating_add(match kind.queue_class() {
+                CaptureQueueClass::Value => inner.reserved_value_slots,
+                CaptureQueueClass::Log => inner.reserved_log_slots,
+            });
+        let max_pending = match kind.queue_class() {
+            CaptureQueueClass::Value => inner.config.max_pending_value_drafts,
+            CaptureQueueClass::Log => inner.config.max_pending_log_drafts,
+        };
+        if occupied >= max_pending {
             inner.stats.skipped_queue_full = inner.stats.skipped_queue_full.saturating_add(1);
+            match kind.queue_class() {
+                CaptureQueueClass::Value => {
+                    inner.stats.skipped_value_queue_full =
+                        inner.stats.skipped_value_queue_full.saturating_add(1);
+                }
+                CaptureQueueClass::Log => {
+                    inner.stats.skipped_log_queue_full =
+                        inner.stats.skipped_log_queue_full.saturating_add(1);
+                }
+            }
             return Err(CaptureSkipReason::QueueFull);
         }
-        inner.reserved_slots = inner.reserved_slots.saturating_add(1);
+        match kind.queue_class() {
+            CaptureQueueClass::Value => {
+                inner.reserved_value_slots = inner.reserved_value_slots.saturating_add(1);
+            }
+            CaptureQueueClass::Log => {
+                inner.reserved_log_slots = inner.reserved_log_slots.saturating_add(1);
+            }
+        }
         Ok(CaptureReservation {
             producer: self.clone(),
             boundary_id,
@@ -159,6 +218,18 @@ impl TraceCaptureProducer {
         let reservation = self.try_reserve(boundary_id, call, kind)?;
         let snapshot = copy_snapshot(self.trace_heap());
         reservation.commit(snapshot);
+        Ok(())
+    }
+
+    pub fn capture_log_with(
+        &self,
+        boundary_id: BoundaryId,
+        call: TraceCallKey,
+        copy_snapshot: impl FnOnce(&TraceHeap) -> (TraceLogMetadata, TraceSnapshotHandle),
+    ) -> Result<(), CaptureSkipReason> {
+        let reservation = self.try_reserve(boundary_id, call, CaptureKind::LogBody)?;
+        let (log, snapshot) = copy_snapshot(self.trace_heap());
+        reservation.commit_log(snapshot, log);
         Ok(())
     }
 
@@ -184,14 +255,28 @@ impl TraceCaptureProducer {
         writer: &mut ValueWriter<S>,
     ) -> io::Result<Vec<EncodedTraceValue>> {
         self.drain_to_value_recorder(|draft, body| {
-            writer.append_body_with_capture(
-                ValueCodec::BamlOutboundValue,
-                body,
-                Some(ValueCapture {
-                    kind: value_capture_kind(draft.kind),
-                    call: draft.call,
-                }),
-            )
+            if let Some(log) = &draft.log {
+                writer.append_log_body(
+                    ValueCodec::BamlOutboundValue,
+                    body,
+                    LogEventRecord {
+                        call: draft.call,
+                        level: log.level.clone(),
+                        source: log.source.clone(),
+                        timestamp_ms: log.timestamp_ms,
+                        message_preview: log.message_preview.clone(),
+                    },
+                )
+            } else {
+                writer.append_body_with_capture(
+                    ValueCodec::BamlOutboundValue,
+                    body,
+                    Some(ValueCapture {
+                        kind: value_capture_kind(draft.kind),
+                        call: draft.call,
+                    }),
+                )
+            }
         })
     }
 
@@ -224,6 +309,7 @@ impl TraceCaptureProducer {
                 boundary_id: draft.boundary_id,
                 call: draft.call,
                 kind: draft.kind,
+                log: draft.log,
                 value_ref: outcome.value_ref,
                 body,
             });
@@ -237,6 +323,24 @@ fn value_capture_kind(kind: CaptureKind) -> ValueCaptureKind {
         CaptureKind::RootInput => ValueCaptureKind::RootInput,
         CaptureKind::RootOutput => ValueCaptureKind::RootOutput,
         CaptureKind::RootError => ValueCaptureKind::RootError,
+        CaptureKind::LogBody => ValueCaptureKind::LogBody,
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum CaptureQueueClass {
+    Value,
+    Log,
+}
+
+impl CaptureKind {
+    fn queue_class(self) -> CaptureQueueClass {
+        match self {
+            CaptureKind::RootInput | CaptureKind::RootOutput | CaptureKind::RootError => {
+                CaptureQueueClass::Value
+            }
+            CaptureKind::LogBody => CaptureQueueClass::Log,
+        }
     }
 }
 
@@ -251,16 +355,32 @@ pub struct CaptureReservation {
 
 impl CaptureReservation {
     pub fn commit(mut self, snapshot: TraceSnapshotHandle) {
+        self.commit_with_log(snapshot, None);
+    }
+
+    pub fn commit_log(mut self, snapshot: TraceSnapshotHandle, log: TraceLogMetadata) {
+        self.commit_with_log(snapshot, Some(log));
+    }
+
+    fn commit_with_log(&mut self, snapshot: TraceSnapshotHandle, log: Option<TraceLogMetadata>) {
         let mut inner = self
             .producer
             .inner
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        inner.reserved_slots = inner.reserved_slots.saturating_sub(1);
+        match self.kind.queue_class() {
+            CaptureQueueClass::Value => {
+                inner.reserved_value_slots = inner.reserved_value_slots.saturating_sub(1);
+            }
+            CaptureQueueClass::Log => {
+                inner.reserved_log_slots = inner.reserved_log_slots.saturating_sub(1);
+            }
+        }
         inner.pending.push_back(TraceValueDraft {
             boundary_id: self.boundary_id,
             call: self.call,
             kind: self.kind,
+            log,
             snapshot,
         });
         inner.stats.published = inner.stats.published.saturating_add(1);
@@ -278,7 +398,14 @@ impl Drop for CaptureReservation {
             .inner
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        inner.reserved_slots = inner.reserved_slots.saturating_sub(1);
+        match self.kind.queue_class() {
+            CaptureQueueClass::Value => {
+                inner.reserved_value_slots = inner.reserved_value_slots.saturating_sub(1);
+            }
+            CaptureQueueClass::Log => {
+                inner.reserved_log_slots = inner.reserved_log_slots.saturating_sub(1);
+            }
+        }
         inner.stats.abandoned_reservations = inner.stats.abandoned_reservations.saturating_add(1);
     }
 }
@@ -297,7 +424,10 @@ mod tests {
 
     use crate::{
         trace_heap::{TraceHeap, TraceSnapshotHandle},
-        value_capture::{CaptureKind, CaptureSkipReason, TraceCaptureConfig, TraceCaptureProducer},
+        value_capture::{
+            CaptureKind, CaptureSkipReason, TraceCaptureConfig, TraceCaptureProducer,
+            TraceLogMetadata,
+        },
     };
 
     fn boundary_id() -> BoundaryId {
@@ -315,6 +445,15 @@ mod tests {
 
     fn fake_snapshot(_: &TraceHeap) -> TraceSnapshotHandle {
         TraceSnapshotHandle::for_test(99)
+    }
+
+    fn fake_log_metadata() -> TraceLogMetadata {
+        TraceLogMetadata {
+            level: Some("info".to_string()),
+            source: None,
+            timestamp_ms: 123,
+            message_preview: Some("hello".to_string()),
+        }
     }
 
     #[test]
@@ -336,6 +475,24 @@ mod tests {
         assert_eq!(result, Err(CaptureSkipReason::QueueFull));
         assert_eq!(calls.load(Ordering::Relaxed), 0);
         assert_eq!(producer.stats().skipped_queue_full, 1);
+        assert!(producer.drain().is_empty());
+    }
+
+    #[test]
+    fn zero_capacity_log_capture_does_not_run_copy_closure() {
+        let producer = TraceCaptureProducer::new(TraceCaptureConfig::enabled_with_budgets(1, 0));
+        let calls = Arc::new(AtomicUsize::new(0));
+        let calls_for_copy = Arc::clone(&calls);
+
+        let result = producer.capture_log_with(boundary_id(), trace_key(), move |_| {
+            calls_for_copy.fetch_add(1, Ordering::Relaxed);
+            (fake_log_metadata(), TraceSnapshotHandle::for_test(1))
+        });
+
+        assert_eq!(result, Err(CaptureSkipReason::QueueFull));
+        assert_eq!(calls.load(Ordering::Relaxed), 0);
+        assert_eq!(producer.stats().skipped_queue_full, 1);
+        assert_eq!(producer.stats().skipped_log_queue_full, 1);
         assert!(producer.drain().is_empty());
     }
 
@@ -385,6 +542,51 @@ mod tests {
         assert_eq!(drafts[1].kind, CaptureKind::RootOutput);
         assert_eq!(drafts[1].snapshot, TraceSnapshotHandle::for_test(100));
         assert_eq!(producer.stats().published, 2);
+    }
+
+    #[test]
+    fn log_capture_uses_log_budget_and_keeps_metadata() {
+        let producer = TraceCaptureProducer::new(TraceCaptureConfig::enabled_with_budgets(1, 1));
+        producer
+            .capture_with(
+                boundary_id(),
+                trace_key(),
+                CaptureKind::RootInput,
+                fake_snapshot,
+            )
+            .unwrap();
+        producer
+            .capture_log_with(boundary_id(), trace_key(), |_| {
+                (fake_log_metadata(), TraceSnapshotHandle::for_test(100))
+            })
+            .unwrap();
+
+        assert_eq!(
+            producer.capture_with(
+                boundary_id(),
+                trace_key(),
+                CaptureKind::RootOutput,
+                fake_snapshot,
+            ),
+            Err(CaptureSkipReason::QueueFull),
+        );
+        assert_eq!(
+            producer.capture_log_with(boundary_id(), trace_key(), |_| {
+                (fake_log_metadata(), TraceSnapshotHandle::for_test(101))
+            }),
+            Err(CaptureSkipReason::QueueFull),
+        );
+
+        let drafts = producer.drain();
+        assert_eq!(drafts.len(), 2);
+        assert_eq!(drafts[0].kind, CaptureKind::RootInput);
+        assert_eq!(drafts[0].log, None);
+        assert_eq!(drafts[1].kind, CaptureKind::LogBody);
+        assert_eq!(drafts[1].snapshot, TraceSnapshotHandle::for_test(100));
+        assert_eq!(drafts[1].log, Some(fake_log_metadata()));
+        assert_eq!(producer.stats().published, 2);
+        assert_eq!(producer.stats().skipped_value_queue_full, 1);
+        assert_eq!(producer.stats().skipped_log_queue_full, 1);
     }
 
     #[test]

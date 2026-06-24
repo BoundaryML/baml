@@ -21,6 +21,18 @@ enum ValueCaptureKind {
   VALUE_CAPTURE_KIND_ROOT_INPUT = 1;
   VALUE_CAPTURE_KIND_ROOT_OUTPUT = 2;
   VALUE_CAPTURE_KIND_ROOT_ERROR = 3;
+  VALUE_CAPTURE_KIND_LOG_BODY = 4;
+}
+
+enum CaptureLossKind {
+  CAPTURE_LOSS_KIND_UNSPECIFIED = 0;
+  CAPTURE_LOSS_KIND_VALUE = 1;
+  CAPTURE_LOSS_KIND_LOG = 2;
+}
+
+enum CaptureLossReason {
+  CAPTURE_LOSS_REASON_UNSPECIFIED = 0;
+  CAPTURE_LOSS_REASON_QUEUE_FULL = 1;
 }
 
 enum RunStatus {
@@ -56,9 +68,37 @@ message TraceCallKeyV1 {
   uint64 call_id = 4;
 }
 
+message SourceLocationV1 {
+  optional string file_path = 1;
+  optional uint64 file_id = 2;
+  uint32 line = 3;
+  uint32 column = 4;
+  optional uint32 end_line = 5;
+  optional uint32 end_column = 6;
+  optional uint32 start_offset = 7;
+  optional uint32 end_offset = 8;
+}
+
 message ValueCaptureV1 {
   ValueCaptureKind kind = 1;
   TraceCallKeyV1 call = 2;
+}
+
+message LogEventV1 {
+  TraceCallKeyV1 call = 1;
+  optional string level = 2;
+  SourceLocationV1 source = 3;
+  uint64 timestamp_ms = 4;
+  optional string message_preview = 5;
+}
+
+message CaptureLossV1 {
+  CaptureLossKind kind = 1;
+  CaptureLossReason reason = 2;
+  uint64 skipped_count = 3;
+  optional TraceCallKeyV1 call = 4;
+  optional string message = 5;
+  uint64 timestamp_ms = 6;
 }
 
 message TimeAnchorV1 {
@@ -135,4 +175,6 @@ message ValueRecordV1 {
   ValueCaptureV1 capture = 3;
   RunStartedV1 run_started = 10;
   RunCompletedV1 run_completed = 11;
+  LogEventV1 log_event = 12;
+  CaptureLossV1 capture_loss = 13;
 }

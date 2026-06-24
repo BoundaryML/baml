@@ -435,6 +435,9 @@ pub struct EnvResolved {
 pub struct LogPayload {
     pub level: Option<String>,
     pub message: String,
+    pub source: Option<SourceLocation>,
+    pub value_ref: Option<ValueRef>,
+    pub trace_call: Option<TraceCallKey>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1249,6 +1252,45 @@ impl InMemoryRunStore {
                 role: CapturedValueRole::RootInput,
                 label: Some("inputs".to_string()),
                 value_ref,
+            }),
+            redaction: RedactionMetadata::display_safe(),
+            body: None,
+        };
+        Some(push_payload_patch(record, &retention, payload, None))
+    }
+
+    pub fn ingest_log_value_ref(
+        &self,
+        boundary_id: BoundaryId,
+        call: TraceCallKey,
+        level: Option<String>,
+        message: String,
+        source: Option<SourceLocation>,
+        value_ref: Option<ValueRef>,
+    ) -> Option<RunPatch> {
+        let mut inner = self
+            .inner
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let payload_id = inner.allocate_payload_id();
+        let retention = inner.retention.clone();
+        let record = inner.runs.get_mut(&boundary_id)?;
+        let call_node_id = record
+            .run
+            .calls
+            .iter()
+            .any(|node| node.trace_key == call)
+            .then(|| call_node_id(&call));
+        let payload = PayloadEvent {
+            id: payload_id,
+            call_node_id,
+            timestamp_ms: epoch_ms(),
+            kind: PayloadKind::Log(LogPayload {
+                level,
+                message,
+                source,
+                value_ref,
+                trace_call: Some(call),
             }),
             redaction: RedactionMetadata::display_safe(),
             body: None,
@@ -2075,14 +2117,45 @@ fn push_patch(
     patch
 }
 
+pub(crate) fn attach_payload_ids_to_calls(calls: &mut [CallNode], payloads: &[PayloadEvent]) {
+    for call in calls.iter_mut() {
+        call.payload_ids.clear();
+    }
+    for payload in payloads {
+        let Some(call_node_id) = payload.call_node_id else {
+            continue;
+        };
+        let Some(call) = calls.iter_mut().find(|call| call.id == call_node_id) else {
+            continue;
+        };
+        if !call.payload_ids.contains(&payload.id) {
+            call.payload_ids.push(payload.id);
+        }
+    }
+}
+
 fn push_payload_patch(
     record: &mut RunRecord,
     retention: &RunRetentionPolicy,
     payload: PayloadEvent,
     status: Option<RunStatus>,
 ) -> RunPatch {
+    let call_update = payload.call_node_id.and_then(|call_node_id| {
+        let call = record
+            .run
+            .calls
+            .iter_mut()
+            .find(|call| call.id == call_node_id)?;
+        if !call.payload_ids.contains(&payload.id) {
+            call.payload_ids.push(payload.id);
+        }
+        Some(call.clone())
+    });
     record.run.payloads.push(payload.clone());
     let mut changes = vec![RunPatchChange::UpsertPayload(payload)];
+    if let Some(call) = call_update {
+        changes.push(RunPatchChange::UpsertCallNode(call));
+    }
     if let Some(status) = status {
         changes.push(RunPatchChange::SetStatus(status));
     }
@@ -2274,6 +2347,19 @@ fn recompute_record_profile(
             }
         }
     }
+    for payload in &mut record.run.payloads {
+        if payload.call_node_id.is_none()
+            && let PayloadKind::Log(LogPayload {
+                trace_call: Some(call),
+                ..
+            }) = &payload.kind
+            && record.run.calls.iter().any(|node| node.trace_key == *call)
+        {
+            payload.call_node_id = Some(call_node_id(call));
+            payload_updates.push(payload.clone());
+        }
+    }
+    attach_payload_ids_to_calls(&mut record.run.calls, &record.run.payloads);
     let graph_runtime_overlay =
         build_graph_runtime_overlay(&record.run, graph_overlay_span_provider);
     record.run.graph_runtime_overlay = Some(graph_runtime_overlay.clone());
@@ -2296,8 +2382,11 @@ fn recompute_record_profile(
             .map(RunPatchChange::UpsertThreadNode),
     );
     changes.extend(
-        reconstructed
+        record
+            .run
             .calls
+            .iter()
+            .cloned()
             .into_iter()
             .map(RunPatchChange::UpsertCallNode),
     );
@@ -4324,6 +4413,133 @@ mod tests {
         assert_eq!(payload["kind"]["role"], "rootInput");
         assert_eq!(payload["kind"]["label"], "inputs");
         assert_eq!(payload["kind"]["valueRef"]["id"], "value_inputs");
+    }
+
+    #[test]
+    fn run_store_backfills_identified_log_payloads_to_reconstructed_calls() {
+        use crate::value::{ValueCodec, ValueRef};
+
+        let store = InMemoryRunStore::default();
+        let start = create_test_run(&store, request("logs"), RequestId(1));
+        let logged_call = TraceCallKey {
+            process_euid: ProcessEuid([1; 16]),
+            engine_id: EngineId(2),
+            thread_id: BexThreadId(1),
+            call_id: BexCallId(2),
+        };
+        let source = SourceLocation {
+            file_path: None,
+            file_id: Some(9),
+            line: 12,
+            column: 3,
+            end_line: None,
+            end_column: None,
+            start_offset: Some(30),
+            end_offset: Some(44),
+        };
+        let value_ref = ValueRef::available("value_log", ValueCodec::BamlOutboundValue, 6, 6);
+        let initial_patch = store
+            .ingest_log_value_ref(
+                start.boundary_id,
+                logged_call,
+                Some("warn".to_string()),
+                "watch this".to_string(),
+                Some(source.clone()),
+                Some(value_ref),
+            )
+            .expect("run should exist");
+
+        assert!(initial_patch.changes.iter().any(|change| {
+            matches!(
+                change,
+                RunPatchChange::UpsertPayload(PayloadEvent {
+                    call_node_id: None,
+                    kind: PayloadKind::Log(LogPayload {
+                        trace_call: Some(_),
+                        ..
+                    }),
+                    ..
+                })
+            )
+        }));
+
+        for event in [
+            envelope(
+                ProfileEventKind::StartThread {
+                    thread_id: BexThreadId(1),
+                    parent_thread_id: None,
+                    parent_call_id: None,
+                    name: None,
+                },
+                10,
+            ),
+            envelope(
+                ProfileEventKind::CallFunction {
+                    thread_id: BexThreadId(1),
+                    call_id: BexCallId(1),
+                    parent_call_id: None,
+                    function_id: FunctionId(1),
+                    call_site_source: None,
+                },
+                20,
+            ),
+            envelope(
+                ProfileEventKind::CallFunction {
+                    thread_id: BexThreadId(1),
+                    call_id: BexCallId(2),
+                    parent_call_id: Some(BexCallId(1)),
+                    function_id: FunctionId(2),
+                    call_site_source: Some(source.clone()),
+                },
+                30,
+            ),
+        ] {
+            store.ingest_profile_event(event);
+        }
+        let AttachRootTraceResult::Attached { patches } =
+            store.attach_root_trace(start.boundary_id, root_call_ref(1, 1))
+        else {
+            panic!("root trace should attach");
+        };
+
+        let expected_call_id = call_node_id(&logged_call);
+        assert!(patches.iter().any(|patch| {
+            patch.changes.iter().any(|change| {
+                matches!(
+                    change,
+                    RunPatchChange::UpsertPayload(PayloadEvent {
+                        call_node_id: Some(call_id),
+                        kind: PayloadKind::Log(LogPayload { .. }),
+                        ..
+                    }) if *call_id == expected_call_id
+                )
+            })
+        }));
+        let snapshot = store.snapshot(start.boundary_id).unwrap();
+        let payload = snapshot
+            .payloads
+            .iter()
+            .find(|payload| matches!(payload.kind, PayloadKind::Log(_)))
+            .expect("log payload");
+        assert_eq!(payload.call_node_id, Some(expected_call_id));
+        let child = snapshot
+            .calls
+            .iter()
+            .find(|call| call.id == expected_call_id)
+            .expect("logged call");
+        assert_eq!(child.payload_ids, vec![payload.id]);
+
+        let wire = run_to_wire(&snapshot);
+        let payload = &wire["payloads"][0];
+        assert_eq!(
+            payload["callNodeId"],
+            format!("call_node_{}", expected_call_id.get())
+        );
+        assert_eq!(payload["kind"]["type"], "log");
+        assert_eq!(payload["kind"]["level"], "warn");
+        assert_eq!(payload["kind"]["message"], "watch this");
+        assert_eq!(payload["kind"]["source"]["line"], 12);
+        assert_eq!(payload["kind"]["valueRef"]["id"], "value_log");
     }
 
     #[test]

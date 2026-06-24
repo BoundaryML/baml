@@ -48,6 +48,7 @@ import type {
 } from './worker-protocol';
 import type { ResultRendererProps } from './result-renderers';
 import { ResultDisplay } from './ResultDisplay';
+import { ValueRenderer } from './ValueRenderer';
 import { registerBuiltinResultRenderers } from './renderers/registerBuiltins';
 import {
   HttpRequestCurlRenderer,
@@ -59,11 +60,13 @@ import { companionFunctionName } from './shared/companion-functions';
 import { createExecutionStore, type ExecutionStore } from './execution-store';
 import { createRunStoreClient } from './run-store-client';
 import { createValueBodyCache } from './value-body-cache';
+import type { ValueBodyCache } from './value-body-cache';
 import type { ExecutionStoreSnapshot } from './execution-store';
 import {
   decodeRunResultValue,
   runToTraceRows,
   runToDisplayRun,
+  type RunTraceLog,
   type RunStoreDisplayRun,
 } from './run-store-projections';
 import {
@@ -463,8 +466,94 @@ function formatTraceMs(value: number | null): string {
   return `${Math.round(value)}ms`;
 }
 
-const TraceTimelineView: FC<{ run: Run | undefined }> = ({ run }) => {
-  const rows = runToTraceRows(run);
+function traceLogLevelClass(level: string | null): string {
+  switch (level) {
+    case 'error':
+      return 'text-vsc-red';
+    case 'warn':
+      return 'text-vsc-yellow';
+    case 'debug':
+      return 'text-vsc-text-muted';
+    case 'info':
+    case null:
+      return 'text-vsc-accent';
+    default:
+      return 'text-vsc-text-muted';
+  }
+}
+
+function traceLogStateLabel(log: RunTraceLog): string | null {
+  switch (log.state) {
+    case 'available':
+      return null;
+    case 'loading':
+      return 'loading';
+    case 'pending':
+      return 'pending';
+    case 'omitted':
+      return 'omitted';
+    case 'truncated':
+      return 'truncated';
+    case 'missing':
+      return 'missing';
+    case 'lost':
+      return 'lost';
+    case 'error':
+      return 'error';
+    case 'unavailable':
+      return 'unavailable';
+    default:
+      log.state satisfies never;
+      return null;
+  }
+}
+
+const TraceLogView: FC<{ log: RunTraceLog }> = ({ log }) => {
+  const stateLabel = traceLogStateLabel(log);
+  return (
+    <div className="rounded border border-vsc-border-subtle bg-vsc-surface/60 px-2 py-1">
+      <div className="flex min-w-0 items-center gap-1.5">
+        <span
+          className={cn(
+            'font-vsc-mono text-[10px] uppercase',
+            traceLogLevelClass(log.level),
+          )}
+        >
+          {log.level ?? 'log'}
+        </span>
+        {log.sourceLine != null && (
+          <span className="text-vsc-text-faint text-[10px]">
+            :{log.sourceLine}
+          </span>
+        )}
+        <span className="min-w-0 truncate text-vsc-text-muted text-[11px]">
+          {log.message}
+        </span>
+        {stateLabel && (
+          <span className="ml-auto shrink-0 rounded border border-vsc-border-subtle px-1 py-0.5 text-[10px] text-vsc-text-faint">
+            {stateLabel}
+          </span>
+        )}
+      </div>
+      {log.value !== null && (
+        <div className="mt-1 overflow-x-auto">
+          <ValueRenderer value={log.value} displayMode="inline" />
+        </div>
+      )}
+      {log.diagnostic && (
+        <div className="mt-1 text-[10px] text-vsc-text-faint">
+          {log.diagnostic}
+        </div>
+      )}
+    </div>
+  );
+};
+
+const TraceTimelineView: FC<{
+  run: Run | undefined;
+  valueBodyCache: ValueBodyCache;
+}> = ({ run, valueBodyCache }) => {
+  const rows = runToTraceRows(run, valueBodyCache);
   if (rows.length === 0) {
     return (
       <div className="flex-1 flex items-center justify-center text-vsc-text-faint text-xs bg-vsc-bg">
@@ -513,6 +602,16 @@ const TraceTimelineView: FC<{ run: Run | undefined }> = ({ run }) => {
                   }}
                 />
               </div>
+              {row.logs.length > 0 && (
+                <div
+                  className="mt-1.5 space-y-1"
+                  style={{ paddingLeft: Math.min(row.depth, 12) * 12 + 10 }}
+                >
+                  {row.logs.map((log) => (
+                    <TraceLogView key={log.id} log={log} />
+                  ))}
+                </div>
+              )}
             </div>
             <div className="text-[10px] text-vsc-text-faint">
               {formatTraceMs(row.durationMs)}
@@ -2741,7 +2840,10 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                   className="flex-1 min-h-0 mt-0 flex flex-col"
                   style={{ minHeight: 300 }}
                 >
-                  <TraceTimelineView run={latestGraphRunSnapshot} />
+                  <TraceTimelineView
+                    run={latestGraphRunSnapshot}
+                    valueBodyCache={valueBodyCache}
+                  />
                 </TabsContent>
 
                 {/* Profile flamegraph */}

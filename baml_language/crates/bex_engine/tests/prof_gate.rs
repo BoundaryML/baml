@@ -28,12 +28,15 @@ use std::{
 
 use bex_engine::{
     BexEngine, BexExternalValue, CancellationToken, EngineError, FunctionCallContextBuilder,
+    value_capture::{TraceCaptureConfig, TraceCaptureProducer},
 };
 use bex_events::{
+    ids::BoundaryId,
     prof::{file::read_bamlprof, pb},
     run::{
         self, CallNodeId, CallStatus, ReconstructedProfile, TraceCallKey, TraceThreadKey, bamlprof,
     },
+    value::{ByteValueArtifactSink, ValueFileRecord, ValueWriter, read_bamlvalue_from_bytes},
 };
 use common::compile_for_engine;
 use pb::disk_event_v1::Event;
@@ -287,6 +290,126 @@ async fn native_profile_reconstructs_canonical_parity_shape() {
     let reconstructed =
         bamlprof::reconstruct_bamlprof(&contents).expect("native profile reconstructs");
     assert_canonical_profile_parity_shape(&reconstructed);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn log_capture_attributes_repeated_nested_calls() {
+    let _guard = test_lock().await;
+    init_prof_env();
+    let source = r#"
+        function log_phase4_leaf() -> int {
+            log.info("leaf");
+            1
+        }
+
+        function log_phase4_branch() -> int {
+            log.warn("branch");
+            log_phase4_leaf()
+        }
+
+        function main() -> int {
+            log_phase4_branch() + log_phase4_branch()
+        }
+    "#;
+    let program = compile_for_engine(source);
+    let engine = Arc::new(
+        BexEngine::new(program, Arc::new(sys_native::SysOps::native()), Vec::new())
+            .expect("engine construction"),
+    );
+    let boundary_id = BoundaryId::from_bytes([4; 16]);
+    let value_capture = TraceCaptureProducer::new(TraceCaptureConfig::enabled(16));
+    let call_ctx = FunctionCallContextBuilder::new(sys_types::CallId::next())
+        .with_boundary_id(boundary_id)
+        .with_capture_defaults(bex_engine::CaptureDefaults {
+            values_enabled: false,
+            logs_enabled: true,
+        })
+        .with_value_capture(value_capture.clone())
+        .build();
+    let result = engine
+        .call_function_with_trace("main", vec![], call_ctx, true)
+        .await
+        .expect("logged program runs");
+    assert_eq!(result.value.unwrap(), BexExternalValue::Int(2));
+    drop(engine);
+
+    let mut writer =
+        ValueWriter::new(ByteValueArtifactSink::new(), boundary_id).expect("value writer");
+    let captured = value_capture
+        .drain_to_value_writer(&mut writer)
+        .expect("log drafts encode");
+    assert_eq!(captured.len(), 4, "expected 4 captured logs: {captured:#?}");
+    assert_eq!(value_capture.trace_heap().retained_snapshot_count(), 0);
+
+    let parsed = read_bamlvalue_from_bytes(writer.sink().bytes()).expect("value bytes parse");
+    assert_eq!(parsed.records.len(), 4);
+    assert!(
+        parsed
+            .records
+            .iter()
+            .all(|record| matches!(record, ValueFileRecord::LogEvent(_))),
+        "all captured records should be log events: {:#?}",
+        parsed.records
+    );
+
+    let (header, events) = load_profile("user.log_phase4_leaf");
+    assert_balance(&header, &events);
+    let contents = bex_events::prof::file::BamlprofContents {
+        header,
+        events: events
+            .into_iter()
+            .map(|event| pb::DiskEventV1 { event: Some(event) })
+            .collect(),
+        truncated: false,
+    };
+    let reconstructed =
+        bamlprof::reconstruct_bamlprof(&contents).expect("log profile reconstructs");
+    assert!(
+        reconstructed.diagnostics.is_empty(),
+        "profile reconstruction diagnostics: {:#?}",
+        reconstructed.diagnostics
+    );
+    let function_by_call = reconstructed
+        .calls
+        .iter()
+        .filter_map(|call| {
+            call.function_name
+                .as_ref()
+                .map(|name| (call.trace_key, name))
+        })
+        .collect::<HashMap<_, _>>();
+    let mut logs_by_function = HashMap::<String, usize>::new();
+    let mut previews_by_function = HashMap::<String, Vec<String>>::new();
+    for encoded in captured {
+        let log = encoded.log.expect("encoded log metadata");
+        let function = function_by_call
+            .get(&encoded.call)
+            .unwrap_or_else(|| panic!("captured log call not in profile: {:?}", encoded.call));
+        *logs_by_function.entry((*function).clone()).or_default() += 1;
+        previews_by_function
+            .entry((*function).clone())
+            .or_default()
+            .push(log.message_preview.unwrap_or_default());
+    }
+
+    assert_eq!(
+        logs_by_function.get("user.log_phase4_branch"),
+        Some(&2),
+        "branch logs should attach to repeated branch calls"
+    );
+    assert_eq!(
+        logs_by_function.get("user.log_phase4_leaf"),
+        Some(&2),
+        "leaf logs should attach to nested repeated leaf calls"
+    );
+    assert_eq!(
+        previews_by_function.get("user.log_phase4_branch").cloned(),
+        Some(vec!["branch".to_string(), "branch".to_string()])
+    );
+    assert_eq!(
+        previews_by_function.get("user.log_phase4_leaf").cloned(),
+        Some(vec!["leaf".to_string(), "leaf".to_string()])
+    );
 }
 
 fn assert_canonical_profile_parity_shape(reconstructed: &ReconstructedProfile) {

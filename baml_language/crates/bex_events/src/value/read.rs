@@ -4,7 +4,7 @@ use std::io::{self, Read};
 
 use prost::Message;
 
-use crate::value::{ValueFileRecord, ValueRecord, pb};
+use crate::value::{LogRecord, ValueFileRecord, ValueRecord, pb};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BamlvalueContents {
@@ -58,7 +58,9 @@ pub fn read_bamlvalue_from_bytes(bytes: &[u8]) -> io::Result<BamlvalueContents> 
 
 fn file_record_from_proto(record: pb::ValueRecordV1) -> io::Result<ValueFileRecord> {
     let has_lifecycle = record.run_started.is_some() || record.run_completed.is_some();
-    if has_lifecycle && record.metadata.is_some() {
+    let has_log_event = record.log_event.is_some();
+    let has_capture_loss = record.capture_loss.is_some();
+    if has_lifecycle && (record.metadata.is_some() || has_log_event || has_capture_loss) {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
             "value record mixed body metadata with lifecycle metadata",
@@ -70,9 +72,31 @@ fn file_record_from_proto(record: pb::ValueRecordV1) -> io::Result<ValueFileReco
     if let Some(completed) = record.run_completed {
         return Ok(ValueFileRecord::RunCompleted(completed.try_into()?));
     }
+    if let Some(loss) = record.capture_loss {
+        if record.metadata.is_some() || has_log_event || record.capture.is_some() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "value record mixed capture loss metadata with body metadata",
+            ));
+        }
+        return Ok(ValueFileRecord::CaptureLoss(loss.try_into()?));
+    }
     let metadata = record.metadata.ok_or_else(|| {
         io::Error::new(io::ErrorKind::InvalidData, "value record omitted metadata")
     })?;
+    if has_log_event && record.capture.is_some() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "value record mixed log metadata with value capture metadata",
+        ));
+    }
+    if let Some(log_event) = record.log_event {
+        return Ok(ValueFileRecord::LogEvent(LogRecord {
+            value_ref: metadata.try_into()?,
+            body: record.body,
+            event: log_event.try_into()?,
+        }));
+    }
     Ok(ValueFileRecord::CapturedValue(ValueRecord {
         value_ref: metadata.try_into()?,
         body: record.body,

@@ -20,11 +20,12 @@ use crate::{
         CancellationState, DiagnosticSeverity, FunctionName, PayloadEvent, PayloadId,
         ProfileEventEnvelope, RedactionMetadata, Run, RunDiagnostic, RunError, RunErrorClass,
         RunFilter, RunResult, RunRetentionState, RunStatus, RunSummary, RunTarget, RunVisibility,
-        RunVisibilityFilter, call_node_id, reconstruct_with_function_table,
+        RunVisibilityFilter, attach_payload_ids_to_calls, call_node_id,
+        reconstruct_with_function_table,
     },
     value::{
-        RunCompletedRecord, RunStartedRecord, ValueCaptureKind, ValueCodec, ValueFileRecord,
-        ValueRef, read_bamlvalue_from_bytes,
+        CaptureLossRecord, RunCompletedRecord, RunStartedRecord, ValueCaptureKind, ValueCodec,
+        ValueFileRecord, ValueRef, read_bamlvalue_from_bytes,
     },
 };
 
@@ -41,7 +42,7 @@ use self::{
 use crate::{
     ids::CallRef,
     run::{RunOutcome, TraceCallKey},
-    value::{ValueCapture, ValueWriteOutcome},
+    value::{LogEventRecord, ValueCapture, ValueWriteOutcome},
 };
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -290,6 +291,52 @@ impl HistoryStore {
         state.writer.append_value_body(capture, codec, body)
     }
 
+    pub fn append_log_body(
+        &self,
+        boundary_id: BoundaryId,
+        event: LogEventRecord,
+        codec: ValueCodec,
+        body: Vec<u8>,
+    ) -> io::Result<ValueWriteOutcome> {
+        let mut inner = self
+            .inner
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let Some(state) = inner.boundaries.get_mut(&boundary_id) else {
+            return Err(io::Error::new(
+                io::ErrorKind::NotFound,
+                format!(
+                    "history boundary {} was not begun",
+                    boundary_id.to_wire_string()
+                ),
+            ));
+        };
+        ensure_run_started_written(state)?;
+        state.writer.append_log_body(event, codec, body)
+    }
+
+    pub fn append_capture_loss(
+        &self,
+        boundary_id: BoundaryId,
+        record: &CaptureLossRecord,
+    ) -> io::Result<()> {
+        let mut inner = self
+            .inner
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let Some(state) = inner.boundaries.get_mut(&boundary_id) else {
+            return Err(io::Error::new(
+                io::ErrorKind::NotFound,
+                format!(
+                    "history boundary {} was not begun",
+                    boundary_id.to_wire_string()
+                ),
+            ));
+        };
+        ensure_run_started_written(state)?;
+        state.writer.append_capture_loss(record)
+    }
+
     pub fn complete(
         &self,
         boundary_id: BoundaryId,
@@ -526,11 +573,15 @@ fn open_boundary_from_segments_with_fallback(
     let mut started = None;
     let mut completed = None;
     let mut captured_values = Vec::new();
+    let mut log_values = Vec::new();
+    let mut capture_losses = Vec::new();
     for record in value_records {
         match record {
             ValueFileRecord::RunStarted(record) => started = Some(record),
             ValueFileRecord::RunCompleted(record) => completed = Some(record),
             ValueFileRecord::CapturedValue(record) => captured_values.push(record),
+            ValueFileRecord::LogEvent(record) => log_values.push(record),
+            ValueFileRecord::CaptureLoss(record) => capture_losses.push(record),
         }
     }
     let started = started.ok_or_else(|| {
@@ -577,6 +628,11 @@ fn open_boundary_from_segments_with_fallback(
             format!("{:?}: {}", diagnostic.code, diagnostic.message),
         )
     }));
+    diagnostics.extend(
+        capture_losses
+            .into_iter()
+            .map(capture_loss_replay_diagnostic),
+    );
 
     let root_trace = captured_values
         .iter()
@@ -621,9 +677,10 @@ fn open_boundary_from_segments_with_fallback(
         .map(|record| record.value_ref.clone());
 
     let mut payloads = Vec::new();
+    let mut next_payload_id = 1;
     if let Some(value_ref) = root_input_ref {
         payloads.push(PayloadEvent {
-            id: PayloadId(1),
+            id: PayloadId(next_payload_id),
             call_node_id: root_call_node_id,
             timestamp_ms: started.created_at_ms,
             kind: crate::run::PayloadKind::CapturedValue(crate::run::CapturedValuePayload {
@@ -634,6 +691,33 @@ fn open_boundary_from_segments_with_fallback(
             redaction: RedactionMetadata::display_safe(),
             body: None,
         });
+        next_payload_id = next_payload_id.saturating_add(1);
+    }
+    for record in log_values {
+        let call_node = reconstructed
+            .calls
+            .iter()
+            .any(|call| call.trace_key == record.event.call)
+            .then(|| call_node_id(&record.event.call));
+        payloads.push(PayloadEvent {
+            id: PayloadId(next_payload_id),
+            call_node_id: call_node,
+            timestamp_ms: record.event.timestamp_ms,
+            kind: crate::run::PayloadKind::Log(crate::run::LogPayload {
+                level: record.event.level.clone(),
+                message: record
+                    .event
+                    .message_preview
+                    .clone()
+                    .unwrap_or_else(|| "captured log".to_string()),
+                source: record.event.source.clone(),
+                value_ref: Some(record.value_ref),
+                trace_call: Some(record.event.call),
+            }),
+            redaction: RedactionMetadata::display_safe(),
+            body: None,
+        });
+        next_payload_id = next_payload_id.saturating_add(1);
     }
 
     let completed_at_ms = completed.as_ref().map(|record| record.completed_at_ms);
@@ -642,6 +726,9 @@ fn open_boundary_from_segments_with_fallback(
         .map_or(RunStatus::Running, |record| record.status);
     let (result, error, cancellation) =
         outcome_fields_from_replay(completed, output_ref, error_ref);
+    let mut calls = reconstructed.calls;
+    attach_payload_ids_to_calls(&mut calls, &payloads);
+
     Ok(Run {
         boundary_id,
         target: started.request.target.clone(),
@@ -657,7 +744,7 @@ fn open_boundary_from_segments_with_fallback(
         cancellation,
         root_call_node_id,
         graph_runtime_overlay: None,
-        calls: reconstructed.calls,
+        calls,
         threads: reconstructed.threads,
         payloads,
         diagnostics,
@@ -672,13 +759,17 @@ pub fn read_value_from_segments(
     for segment in value_segments {
         let parsed = read_bamlvalue_from_bytes(&segment.bytes)?;
         for record in parsed.records {
-            let ValueFileRecord::CapturedValue(record) = record else {
-                continue;
+            let (value_ref, body) = match record {
+                ValueFileRecord::CapturedValue(record) => (record.value_ref, record.body),
+                ValueFileRecord::LogEvent(record) => (record.value_ref, record.body),
+                ValueFileRecord::CaptureLoss(_)
+                | ValueFileRecord::RunStarted(_)
+                | ValueFileRecord::RunCompleted(_) => continue,
             };
-            if record.value_ref.id == value_ref_id {
+            if value_ref.id == value_ref_id {
                 return Ok(Some(HistoryValueBody {
-                    codec: record.value_ref.codec,
-                    body: record.body,
+                    codec: value_ref.codec,
+                    body,
                 }));
             }
         }
@@ -781,6 +872,21 @@ fn boundary_id_from_dir_name(dir: &Path) -> Option<BoundaryId> {
     name.char_indices()
         .rev()
         .find_map(|(index, _)| BoundaryId::from_wire_str(&name[index..]))
+}
+
+fn capture_loss_replay_diagnostic(record: CaptureLossRecord) -> RunDiagnostic {
+    let mut diagnostic = history_diagnostic(
+        "valueCaptureLoss",
+        record.message.unwrap_or_else(|| {
+            format!(
+                "Skipped {} captured {} value(s) because the trace capture queue was full",
+                record.skipped_count,
+                record.kind.as_wire_str()
+            )
+        }),
+    );
+    diagnostic.call_node_id = record.call.map(|call| call_node_id(&call));
+    diagnostic
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -924,7 +1030,7 @@ mod tests {
         run::{
             ProjectGeneration, ProjectId, RequestId, RunRequestSummary, RunTimeAnchor, StartGuard,
         },
-        value::ValueCaptureKind,
+        value::{CaptureLossKind, CaptureLossReason, CaptureLossRecord, ValueCaptureKind},
     };
 
     fn temp_project(tag: &str) -> PathBuf {
@@ -1100,6 +1206,174 @@ mod tests {
         let mut event_bytes = Vec::new();
         encode_disk_event(&mut event_bytes, &call_event());
         assert!(!event_bytes.is_empty());
+        let _ = std::fs::remove_dir_all(project);
+    }
+
+    #[test]
+    fn history_replays_log_payloads_and_bodies() {
+        let project = temp_project("log-replay");
+        let boundary_id = BoundaryId::from_bytes([9; 16]);
+        let store = HistoryStore::new(vec![project.clone()]);
+        let start = start_context(boundary_id);
+        store.begin(&project, &start).unwrap();
+
+        let trace = root_trace();
+        let event = call_event();
+        let envelope = crate::run::profile_event_envelope_from_disk_event(
+            crate::run::ProfileEventSource::Replay {
+                artifact_id: "test".to_string(),
+            },
+            trace.process_euid,
+            trace.engine_id,
+            &event,
+        )
+        .unwrap();
+        store.ingest_history_profile_event(envelope, event);
+        store
+            .attach_root_trace(boundary_id, trace.call_ref())
+            .unwrap();
+        let source = crate::run::SourceLocation {
+            file_path: Some("main.baml".to_string()),
+            file_id: None,
+            line: 17,
+            column: 5,
+            end_line: None,
+            end_column: None,
+            start_offset: Some(80),
+            end_offset: Some(96),
+        };
+        let outcome = store
+            .append_log_body(
+                boundary_id,
+                LogEventRecord {
+                    call: trace,
+                    level: Some("info".to_string()),
+                    source: Some(source.clone()),
+                    timestamp_ms: 12,
+                    message_preview: Some("log preview".to_string()),
+                },
+                ValueCodec::BamlOutboundValue,
+                vec![4, 5, 6],
+            )
+            .unwrap();
+        store
+            .complete(
+                boundary_id,
+                &RunOutcome::Succeeded(RunResult {
+                    value_ref: None,
+                    renderer_hint: None,
+                    supporting_payload_ids: Vec::new(),
+                }),
+                20,
+            )
+            .unwrap();
+
+        let replayed = store.open(boundary_id).unwrap();
+        let expected_call_id = call_node_id(&trace);
+        let payload = replayed
+            .payloads
+            .iter()
+            .find(|payload| matches!(payload.kind, crate::run::PayloadKind::Log(_)))
+            .expect("log payload should replay");
+        assert_eq!(payload.call_node_id, Some(expected_call_id));
+        let crate::run::PayloadKind::Log(log) = &payload.kind else {
+            unreachable!("filtered to log");
+        };
+        assert_eq!(log.level.as_deref(), Some("info"));
+        assert_eq!(log.message, "log preview");
+        assert_eq!(log.source, Some(source));
+        assert_eq!(
+            log.value_ref
+                .as_ref()
+                .map(|value_ref| value_ref.id.as_str()),
+            Some("value_1")
+        );
+        assert_eq!(log.trace_call, Some(trace));
+        assert_eq!(
+            replayed
+                .calls
+                .iter()
+                .find(|call| call.id == expected_call_id)
+                .expect("call should replay")
+                .payload_ids,
+            vec![payload.id]
+        );
+        assert_eq!(
+            store
+                .read_value(boundary_id, &outcome.value_ref.id)
+                .unwrap()
+                .unwrap()
+                .body,
+            vec![4, 5, 6]
+        );
+
+        let _ = std::fs::remove_dir_all(project);
+    }
+
+    #[test]
+    fn history_replays_capture_loss_as_diagnostic() {
+        let project = temp_project("capture-loss");
+        let boundary_id = BoundaryId::from_bytes([10; 16]);
+        let store = HistoryStore::new(vec![project.clone()]);
+        let start = start_context(boundary_id);
+        store.begin(&project, &start).unwrap();
+
+        let trace = root_trace();
+        let event = call_event();
+        let envelope = crate::run::profile_event_envelope_from_disk_event(
+            crate::run::ProfileEventSource::Replay {
+                artifact_id: "test".to_string(),
+            },
+            trace.process_euid,
+            trace.engine_id,
+            &event,
+        )
+        .unwrap();
+        store.ingest_history_profile_event(envelope, event);
+        store
+            .attach_root_trace(boundary_id, trace.call_ref())
+            .unwrap();
+
+        store
+            .append_capture_loss(
+                boundary_id,
+                &CaptureLossRecord {
+                    kind: CaptureLossKind::Log,
+                    reason: CaptureLossReason::QueueFull,
+                    skipped_count: 4,
+                    call: None,
+                    message: Some(
+                        "Skipped 4 captured log value(s) because the trace capture queue was full"
+                            .to_string(),
+                    ),
+                    timestamp_ms: 30,
+                },
+            )
+            .unwrap();
+        store
+            .complete(
+                boundary_id,
+                &RunOutcome::Succeeded(RunResult {
+                    value_ref: None,
+                    renderer_hint: None,
+                    supporting_payload_ids: Vec::new(),
+                }),
+                40,
+            )
+            .unwrap();
+
+        let replayed = store.open(boundary_id).unwrap();
+        let diagnostic = replayed
+            .diagnostics
+            .iter()
+            .find(|diagnostic| diagnostic.code.as_deref() == Some("valueCaptureLoss"))
+            .expect("capture loss should replay as diagnostic");
+        assert_eq!(
+            diagnostic.message,
+            "Skipped 4 captured log value(s) because the trace capture queue was full"
+        );
+        assert_eq!(diagnostic.call_node_id, None);
+
         let _ = std::fs::remove_dir_all(project);
     }
 

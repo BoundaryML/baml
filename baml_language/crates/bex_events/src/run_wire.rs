@@ -288,6 +288,8 @@ fn payload_kind_to_wire(kind: &PayloadKind) -> Value {
             "type": "log",
             "level": log.level.as_ref(),
             "message": &log.message,
+            "source": log.source.as_ref().map(source_location_to_wire),
+            "valueRef": log.value_ref.as_ref().map(value_ref_to_wire),
         }),
         PayloadKind::CapturedValue(captured) => json!({
             "type": "capturedValue",

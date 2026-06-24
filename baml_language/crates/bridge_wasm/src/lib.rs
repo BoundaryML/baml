@@ -81,8 +81,9 @@ use bex_events::{
         patch_to_wire, run_summary_to_wire, run_to_wire,
     },
     value::{
-        ByteValueArtifactSink, RunCompletedRecord, RunStartedRecord, ValueCapture,
-        ValueCaptureKind, ValueCodec, ValueRef, ValueWriteOutcome, ValueWriter,
+        ByteValueArtifactSink, CaptureLossKind, CaptureLossReason, CaptureLossRecord,
+        LogEventRecord, RunCompletedRecord, RunStartedRecord, ValueCapture, ValueCaptureKind,
+        ValueCodec, ValueRef, ValueWriteOutcome, ValueWriter,
     },
 };
 pub use bridge_ctypes::{
@@ -258,6 +259,42 @@ impl WasmHistoryStoreInner {
         boundary
             .value_writer
             .append_body_with_capture(codec, body, Some(capture))
+    }
+
+    fn append_log_body(
+        &mut self,
+        boundary_id: BoundaryId,
+        event: LogEventRecord,
+        codec: ValueCodec,
+        body: Vec<u8>,
+    ) -> io::Result<ValueWriteOutcome> {
+        let boundary = self.boundaries.get_mut(&boundary_id).ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::NotFound,
+                format!(
+                    "WASM history boundary {} was not begun",
+                    boundary_id.to_wire_string()
+                ),
+            )
+        })?;
+        boundary.value_writer.append_log_body(codec, body, event)
+    }
+
+    fn append_capture_loss(
+        &mut self,
+        boundary_id: BoundaryId,
+        record: &CaptureLossRecord,
+    ) -> io::Result<()> {
+        let boundary = self.boundaries.get_mut(&boundary_id).ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::NotFound,
+                format!(
+                    "WASM history boundary {} was not begun",
+                    boundary_id.to_wire_string()
+                ),
+            )
+        })?;
+        boundary.value_writer.append_capture_loss(record)
     }
 
     fn complete(
@@ -813,6 +850,7 @@ impl BamlWasmRuntime {
             .with_boundary_id(boundary_id)
             .with_capture_defaults(bex_project::CaptureDefaults {
                 values_enabled: true,
+                logs_enabled: true,
             })
             .with_value_capture(value_capture.clone())
             .build();
@@ -948,6 +986,7 @@ impl BamlWasmRuntime {
             .with_boundary_id(boundary_id)
             .with_capture_defaults(bex_project::CaptureDefaults {
                 values_enabled: true,
+                logs_enabled: true,
             })
             .with_value_capture(value_capture.clone())
             .build();
@@ -1487,6 +1526,7 @@ impl BamlWasmRuntime {
             .with_boundary_id(boundary_id)
             .with_capture_defaults(bex_project::CaptureDefaults {
                 values_enabled: true,
+                logs_enabled: true,
             })
             .with_value_capture(value_capture.clone())
             .build();
@@ -1873,20 +1913,46 @@ fn drain_wasm_captured_values(
     };
     let mut history_errors = Vec::new();
     let encoded_values = match producer.drain_to_value_recorder(|draft, body| {
-        let capture = ValueCapture {
-            kind: value_capture_kind_from_bex(draft.kind),
-            call: draft.call,
-        };
-        match history_store.borrow_mut().append_value_body(
-            draft.boundary_id,
-            capture.clone(),
-            ValueCodec::BamlOutboundValue,
-            body.clone(),
-        ) {
-            Ok(outcome) => Ok(outcome),
-            Err(err) => {
-                history_errors.push(err.to_string());
-                writer.append_body_with_capture(ValueCodec::BamlOutboundValue, body, Some(capture))
+        if let Some(log) = &draft.log {
+            let event = LogEventRecord {
+                call: draft.call,
+                level: log.level.clone(),
+                source: log.source.clone(),
+                timestamp_ms: log.timestamp_ms,
+                message_preview: log.message_preview.clone(),
+            };
+            match history_store.borrow_mut().append_log_body(
+                draft.boundary_id,
+                event.clone(),
+                ValueCodec::BamlOutboundValue,
+                body.clone(),
+            ) {
+                Ok(outcome) => Ok(outcome),
+                Err(err) => {
+                    history_errors.push(err.to_string());
+                    writer.append_log_body(ValueCodec::BamlOutboundValue, body, event)
+                }
+            }
+        } else {
+            let capture = ValueCapture {
+                kind: value_capture_kind_from_bex(draft.kind),
+                call: draft.call,
+            };
+            match history_store.borrow_mut().append_value_body(
+                draft.boundary_id,
+                capture.clone(),
+                ValueCodec::BamlOutboundValue,
+                body.clone(),
+            ) {
+                Ok(outcome) => Ok(outcome),
+                Err(err) => {
+                    history_errors.push(err.to_string());
+                    writer.append_body_with_capture(
+                        ValueCodec::BamlOutboundValue,
+                        body,
+                        Some(capture),
+                    )
+                }
             }
         }
     }) {
@@ -1904,6 +1970,53 @@ fn drain_wasm_captured_values(
             format!("history value retention failed; retained live bytes only: {err}"),
         );
     }
+    let stats = producer.stats();
+    if stats.skipped_value_queue_full > 0 {
+        append_wasm_capture_loss_record(
+            history_store,
+            boundary_id,
+            CaptureLossKind::Value,
+            stats.skipped_value_queue_full,
+        )
+        .unwrap_or_else(|err| {
+            send_wasm_history_diagnostic(
+                callback,
+                run_store,
+                boundary_id,
+                format!("history capture-loss retention failed: {err}"),
+            );
+        });
+        send_value_capture_loss_diagnostic(
+            callback,
+            run_store,
+            boundary_id,
+            "value",
+            stats.skipped_value_queue_full,
+        );
+    }
+    if stats.skipped_log_queue_full > 0 {
+        append_wasm_capture_loss_record(
+            history_store,
+            boundary_id,
+            CaptureLossKind::Log,
+            stats.skipped_log_queue_full,
+        )
+        .unwrap_or_else(|err| {
+            send_wasm_history_diagnostic(
+                callback,
+                run_store,
+                boundary_id,
+                format!("history capture-loss retention failed: {err}"),
+            );
+        });
+        send_value_capture_loss_diagnostic(
+            callback,
+            run_store,
+            boundary_id,
+            "log",
+            stats.skipped_log_queue_full,
+        );
+    }
 
     let mut refs = RootValueRefs::default();
     for encoded in encoded_values {
@@ -1915,6 +2028,22 @@ fn drain_wasm_captured_values(
                 body: encoded.body,
             },
         );
+
+        if let Some(log) = encoded.log {
+            if let Some(patch) = run_store.ingest_log_value_ref(
+                encoded.boundary_id,
+                encoded.call,
+                log.level,
+                log.message_preview
+                    .clone()
+                    .unwrap_or_else(|| "captured log".to_string()),
+                log.source,
+                Some(value_ref),
+            ) {
+                send_run_patch(callback, &patch);
+            }
+            continue;
+        }
 
         match encoded.kind {
             bex_project::CaptureKind::RootInput => {
@@ -1930,10 +2059,30 @@ fn drain_wasm_captured_values(
             bex_project::CaptureKind::RootError => {
                 refs.error = Some(value_ref);
             }
+            bex_project::CaptureKind::LogBody => {}
         }
     }
 
     refs
+}
+
+fn append_wasm_capture_loss_record(
+    history_store: &WasmHistoryStore,
+    boundary_id: BoundaryId,
+    kind: CaptureLossKind,
+    skipped: u64,
+) -> io::Result<()> {
+    history_store.borrow_mut().append_capture_loss(
+        boundary_id,
+        &CaptureLossRecord {
+            kind,
+            reason: CaptureLossReason::QueueFull,
+            skipped_count: skipped,
+            call: None,
+            message: Some(capture_loss_message(kind.as_wire_str(), skipped)),
+            timestamp_ms: epoch_ms(),
+        },
+    )
 }
 
 fn value_capture_kind_from_bex(kind: bex_project::CaptureKind) -> ValueCaptureKind {
@@ -1941,6 +2090,7 @@ fn value_capture_kind_from_bex(kind: bex_project::CaptureKind) -> ValueCaptureKi
         bex_project::CaptureKind::RootInput => ValueCaptureKind::RootInput,
         bex_project::CaptureKind::RootOutput => ValueCaptureKind::RootOutput,
         bex_project::CaptureKind::RootError => ValueCaptureKind::RootError,
+        bex_project::CaptureKind::LogBody => ValueCaptureKind::LogBody,
     }
 }
 
@@ -1982,6 +2132,33 @@ fn send_value_capture_diagnostic(
     ) {
         send_run_patch(callback, &patch);
     }
+}
+
+fn send_value_capture_loss_diagnostic(
+    callback: &send_wrapper::SendWrapper<Function>,
+    run_store: &InMemoryRunStore,
+    boundary_id: BoundaryId,
+    capture_kind: &str,
+    skipped: u64,
+) {
+    if let Some(patch) = run_store.add_diagnostic(
+        boundary_id,
+        RunDiagnostic {
+            severity: bex_events::run::DiagnosticSeverity::Warning,
+            code: Some("valueCaptureLoss".to_string()),
+            message: capture_loss_message(capture_kind, skipped),
+            call_node_id: None,
+            payload_id: None,
+        },
+    ) {
+        send_run_patch(callback, &patch);
+    }
+}
+
+fn capture_loss_message(capture_kind: &str, skipped: u64) -> String {
+    format!(
+        "Skipped {skipped} captured {capture_kind} value(s) because the trace capture queue was full"
+    )
 }
 
 fn runtime_error_outcome_with_ref(

@@ -13,8 +13,8 @@ use crate::{
     },
     run::{ProfileEventEnvelope, ProfileEventKind},
     value::{
-        FileValueArtifactSink, RunCompletedRecord, RunStartedRecord, ValueCapture, ValueCodec,
-        ValueWriteOutcome, ValueWriter,
+        CaptureLossRecord, FileValueArtifactSink, LogEventRecord, RunCompletedRecord,
+        RunStartedRecord, ValueCapture, ValueCodec, ValueWriteOutcome, ValueWriter,
     },
 };
 
@@ -114,6 +114,22 @@ impl BoundaryWriter {
     ) -> io::Result<ValueWriteOutcome> {
         self.value_writer_for_thread(capture.call.thread_id.0)?
             .append_body_with_capture(codec, body, Some(capture))
+    }
+
+    pub fn append_log_body(
+        &mut self,
+        event: LogEventRecord,
+        codec: ValueCodec,
+        body: Vec<u8>,
+    ) -> io::Result<ValueWriteOutcome> {
+        self.value_writer_for_thread(event.call.thread_id.0)?
+            .append_log_body(codec, body, event)
+    }
+
+    pub fn append_capture_loss(&mut self, record: &CaptureLossRecord) -> io::Result<()> {
+        let thread_id = record.call.map_or(0, |call| call.thread_id.0);
+        self.value_writer_for_thread(thread_id)?
+            .append_capture_loss(record)
     }
 
     pub fn flush(&mut self) -> io::Result<()> {

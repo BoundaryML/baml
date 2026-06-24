@@ -5,9 +5,12 @@ use std::io;
 use crate::{
     ids::BoundaryId,
     value::{
-        RunCompletedRecord, RunStartedRecord, ValueArtifactRef, ValueArtifactSink, ValueCapture,
-        ValueCodec, ValueRecord, ValueRef,
-        encode::{encode_header, encode_record, encode_run_completed, encode_run_started},
+        CaptureLossRecord, LogEventRecord, LogRecord, RunCompletedRecord, RunStartedRecord,
+        ValueArtifactRef, ValueArtifactSink, ValueCapture, ValueCodec, ValueRecord, ValueRef,
+        encode::{
+            encode_capture_loss, encode_header, encode_log_event, encode_record,
+            encode_run_completed, encode_run_started,
+        },
     },
 };
 
@@ -61,6 +64,34 @@ impl<S: ValueArtifactSink> ValueWriter<S> {
             .map_err(|err| io::Error::new(io::ErrorKind::InvalidData, err))?;
         self.sink.write_chunk(&encoded)?;
         Ok(ValueWriteOutcome { value_ref })
+    }
+
+    pub fn append_log_body(
+        &mut self,
+        codec: ValueCodec,
+        body: Vec<u8>,
+        event: LogEventRecord,
+    ) -> io::Result<ValueWriteOutcome> {
+        let id = format!("value_{}", self.next_value_id);
+        self.next_value_id = self.next_value_id.saturating_add(1);
+        let value_ref = ValueRef::available(id, codec, body.len(), body.len());
+        let record = LogRecord {
+            value_ref: value_ref.clone(),
+            body,
+            event,
+        };
+        let mut encoded = Vec::new();
+        encode_log_event(&mut encoded, &record)
+            .map_err(|err| io::Error::new(io::ErrorKind::InvalidData, err))?;
+        self.sink.write_chunk(&encoded)?;
+        Ok(ValueWriteOutcome { value_ref })
+    }
+
+    pub fn append_capture_loss(&mut self, record: &CaptureLossRecord) -> io::Result<()> {
+        let mut encoded = Vec::new();
+        encode_capture_loss(&mut encoded, record)
+            .map_err(|err| io::Error::new(io::ErrorKind::InvalidData, err))?;
+        self.sink.write_chunk(&encoded)
     }
 
     pub fn append_run_started(&mut self, record: &RunStartedRecord) -> io::Result<()> {

@@ -14,7 +14,9 @@ pub use bex::{Bex, BexCallTraceResult};
 pub use bex_engine::{
     CANCELLED_PANIC_CLASS, CaptureDefaults, EngineError, FunctionCallContext,
     FunctionCallContextBuilder, is_cancelled_engine_error,
-    value_capture::{CaptureKind, EncodedTraceValue, TraceCaptureConfig, TraceCaptureProducer},
+    value_capture::{
+        CaptureKind, EncodedTraceValue, TraceCaptureConfig, TraceCaptureProducer, TraceLogMetadata,
+    },
 };
 pub use bex_external_types::{
     BexExternalAdt, BexExternalValue, Handle, HostReleaseFn, HostReturnTypeError, HostValueArc,

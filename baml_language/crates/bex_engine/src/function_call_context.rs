@@ -25,6 +25,7 @@ impl BoundaryContext {
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct CaptureDefaults {
     pub values_enabled: bool,
+    pub logs_enabled: bool,
 }
 
 impl CaptureDefaults {
@@ -32,6 +33,7 @@ impl CaptureDefaults {
     pub fn disabled() -> Self {
         Self {
             values_enabled: false,
+            logs_enabled: false,
         }
     }
 }

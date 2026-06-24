@@ -7781,7 +7781,7 @@ impl<'db> LoweringContext<'db> {
         let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
 
         // Check if callee is `reflect.type_of<T>()` — a value-producing intrinsic.
-        // Unlike void intrinsics (log.*, baml.events.send), this emits an assignment
+        // Unlike void intrinsics (log.*), this emits an assignment
         // of `Rvalue::LoadType(template)` to `dest` rather than a StatementKind::Intrinsic.
         if let Some(template) = self.check_type_of_intrinsic(callee, expr_id) {
             self.builder.assign(dest, Rvalue::LoadType(template));
@@ -7816,7 +7816,7 @@ impl<'db> LoweringContext<'db> {
             }
         }
 
-        // Check if callee is a compiler intrinsic (log.*, baml.events.send).
+        // Check if callee is a compiler intrinsic (log.*).
         // Intrinsics are void side effects — emit as a statement, not a call.
         if let Some(op) = self.check_intrinsic(callee) {
             self.builder.push_statement(
