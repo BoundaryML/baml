@@ -626,6 +626,12 @@ pub struct Class {
 
     /// Class-level type attribute (e.g., from @@stream.done).
     pub ty_attr: baml_type::TyAttr,
+
+    /// BEP-042: `true` if this class defines a magic `cleanup(self) -> void`
+    /// finalizer. Set at emit time. The GC checks this bit to decide whether an
+    /// instance is finalizable — so the common case (no `cleanup`) is a single
+    /// flag read and never enters the finalizer registry.
+    pub has_cleanup: bool,
 }
 
 impl std::fmt::Display for Class {

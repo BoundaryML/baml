@@ -171,6 +171,20 @@ pub struct BexHeap {
     /// Next handle key to allocate.
     next_handle_key: AtomicUsize,
 
+    /// BEP-042: instances whose `cleanup` finalizer must run after the current
+    /// collection. Populated during a collection (`copy_collection` /
+    /// `copy_collection_minor`) when a dead-but-not-yet-cleaned instance of a
+    /// `has_cleanup` class is discovered and kept alive; the pointers are the
+    /// **new** (post-copy) locations. Drained by the engine via
+    /// [`take_pending_finalizers`](Self::take_pending_finalizers) at the same
+    /// safepoint, before any other collection runs, so the pointers stay valid.
+    ///
+    /// Each entry pairs the instance's post-copy `HeapPtr` with its resolved
+    /// `cleanup` function name (`{class_fqn}.cleanup`), computed by the GC while
+    /// it still has the class in hand — so the engine drain needs no heap read
+    /// to dispatch.
+    pending_finalizers: Mutex<Vec<(HeapPtr, String)>>,
+
     /// TLAB chunk size for new allocations.
     tlab_size: usize,
 
@@ -286,6 +300,7 @@ impl BexHeap {
             gen2_cards: UnsafeCell::new(CardTable::new()),
             handles: RwLock::new(HashMap::new()),
             next_handle_key: AtomicUsize::new(0),
+            pending_finalizers: Mutex::new(Vec::new()),
             tlab_size,
             growth_lock: Mutex::new(()),
             allocs_since_gc: AtomicUsize::new(0),
@@ -971,6 +986,29 @@ impl BexHeap {
         for ptr in handles.values_mut() {
             *ptr = forwarding[ptr];
         }
+    }
+
+    /// BEP-042: record an instance (by its post-copy `HeapPtr`) and its resolved
+    /// `cleanup` function name, to be finalized after the current collection.
+    /// Called by the GC when it discovers and keeps alive a dead, not-yet-cleaned
+    /// instance of a `has_cleanup` class.
+    pub(crate) fn push_pending_finalizer(&self, ptr: HeapPtr, cleanup_fn: String) {
+        self.pending_finalizers
+            .lock()
+            .expect("pending_finalizers lock poisoned")
+            .push((ptr, cleanup_fn));
+    }
+
+    /// BEP-042: take and clear the queue of instances awaiting `cleanup`. The
+    /// engine drains this right after a collection (still at the GC safepoint,
+    /// before resuming normal execution) and invokes each instance's `cleanup`.
+    pub fn take_pending_finalizers(&self) -> Vec<(HeapPtr, String)> {
+        std::mem::take(
+            &mut *self
+                .pending_finalizers
+                .lock()
+                .expect("pending_finalizers lock poisoned"),
+        )
     }
 
     /// Create a handle to an object.

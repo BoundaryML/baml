@@ -300,6 +300,7 @@ mod tests {
             alias: None,
             type_tag: 100,
             ty_attr: TyAttr::default(),
+            has_cleanup: false,
         }))
     }
 

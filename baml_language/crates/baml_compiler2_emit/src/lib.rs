@@ -827,6 +827,22 @@ pub fn generate_project_bytecode_with_opt(
             let type_tag = bex_vm_types::type_tags::CLASS_BASE + class_type_tag_counter;
             class_type_tag_counter += 1;
 
+            // BEP-042: does this class define a magic `cleanup(self) -> void`
+            // finalizer? Mirrors `cleanup_guard::has_cleanup_shape` (the AST
+            // recognition) on the lowered HIR `Function`. The flag lets the GC
+            // skip the no-`cleanup` common case without a per-instance lookup.
+            let has_cleanup = class_data.methods.iter().any(|method_id| {
+                let func = &item_tree[*method_id];
+                func.name.as_str() == baml_compiler2_ast::cleanup_guard::CLEANUP_METHOD
+                    && func.generic_params.is_empty()
+                    && func.params.len() == 1
+                    && func.params[0].name.as_str() == "self"
+                    && matches!(
+                        func.return_type.as_ref().map(|st| &st.expr),
+                        Some(baml_compiler2_ast::ast::TypeExpr::Void { .. })
+                    )
+            });
+
             let class_obj_idx = program.add_object(Object::Class(Box::new(Class {
                 name: fq_to_type_name(&fq_name),
                 fields,
@@ -834,6 +850,7 @@ pub fn generate_project_bytecode_with_opt(
                 alias: class_alias,
                 type_tag,
                 ty_attr: TyAttr::default(),
+                has_cleanup,
             })));
             // Register with fully-qualified name for inter-package lookups.
             class_object_indices.insert(fq_name.clone(), class_obj_idx);
