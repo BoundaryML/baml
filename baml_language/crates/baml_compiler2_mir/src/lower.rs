@@ -2113,6 +2113,7 @@ impl<'db> LoweringContext<'db> {
                 iterable_assoc.clone(),
                 TyAttr::default(),
             )));
+        #[expect(deprecated)]
         self.emit_interface_dispatch_switch(
             InterfaceDispatchCall {
                 expr_id: body,
@@ -2152,6 +2153,7 @@ impl<'db> LoweringContext<'db> {
             iterable_assoc.clone(),
             TyAttr::default(),
         );
+        #[expect(deprecated)]
         self.emit_interface_dispatch_switch(
             InterfaceDispatchCall {
                 expr_id: body,
@@ -7905,6 +7907,7 @@ impl<'db> LoweringContext<'db> {
                     // visible when the default body was compiled (user/cross-
                     // package/eval types). Container-backed interfaces stay on the
                     // switch (their element type is erased at runtime).
+                    #[expect(deprecated)]
                     if !self.iface_may_be_container_backed(&iface_tn)
                         && recv_tir_ty
                             .as_ref()
@@ -7977,6 +7980,7 @@ impl<'db> LoweringContext<'db> {
                     }
                     // Union containing an interface member: dispatch on the
                     // runtime class across all implementors.
+                    #[expect(deprecated)]
                     if let Some(candidates) =
                         self.union_iface_method_candidates(&members, &method_name)
                         && self.emit_method_candidate_switch(
@@ -10313,6 +10317,7 @@ impl<'db> LoweringContext<'db> {
                 dest,
             );
         }
+        #[expect(deprecated)]
         self.emit_interface_dispatch_switch(
             InterfaceDispatchCall {
                 expr_id,
@@ -10544,6 +10549,7 @@ impl<'db> LoweringContext<'db> {
         let receiver_op = self.lower_to_operand(base);
         let receiver_ty = self.expr_ty(base);
         let recv_local = self.operand_to_local(receiver_op, receiver_ty);
+        #[expect(deprecated)]
         self.emit_method_candidate_switch(recv_local, &candidates, expr_id, args, dest, None)
     }
 
@@ -10566,6 +10572,7 @@ impl<'db> LoweringContext<'db> {
             match member {
                 Tir2Ty::Class(qtn, _, _) => {
                     let class_tn = qtn.clone();
+                    #[expect(deprecated)]
                     let member_candidates = self.class_member_method_candidates(&class_tn, method);
                     if member_candidates.is_empty() {
                         return None;
@@ -10601,6 +10608,7 @@ impl<'db> LoweringContext<'db> {
     /// used for interface arms. Without this, a `Dog | Cat` union whose members
     /// satisfy a method only through an inherited default resolved to nothing and
     /// the call dispatched as a map read (VM `expected map, got instance`).
+    #[deprecated = "Fails to handle generic parameters when resolving interface members"]
     fn class_member_method_candidates(
         &self,
         class_tn: &TypeName,
@@ -10647,6 +10655,7 @@ impl<'db> LoweringContext<'db> {
     /// Field-read candidates for a concrete-class union member whose `field` is
     /// supplied by an interface view (`implements Named { name as full }`) rather
     /// than a class-owned slot. Mirrors [`class_member_method_candidates`].
+    #[deprecated = "Fails to handle generic parameters when resolving interface members"]
     fn class_member_field_candidates(
         &self,
         class_tn: &TypeName,
@@ -10737,6 +10746,7 @@ impl<'db> LoweringContext<'db> {
         true
     }
 
+    #[deprecated = "Use virtual calls instead"]
     fn emit_interface_dispatch_switch(
         &mut self,
         call: InterfaceDispatchCall<'_>,
@@ -10762,6 +10772,7 @@ impl<'db> LoweringContext<'db> {
         if resolved.is_empty() {
             return false;
         }
+        #[expect(deprecated)]
         self.emit_method_candidate_switch(
             recv_local,
             &resolved,
@@ -10871,6 +10882,7 @@ impl<'db> LoweringContext<'db> {
     /// Emit a runtime class-tag switch that calls the matching
     /// `InterfaceMethodCandidate` for `recv_local`. Returns false (emitting
     /// nothing) when there are no candidates.
+    #[deprecated = "Use virtual calls instead"]
     fn emit_method_candidate_switch(
         &mut self,
         recv_local: Local,
@@ -11257,6 +11269,7 @@ impl<'db> LoweringContext<'db> {
                         // (`implements Named { name as full }`) rather than a
                         // class-owned slot. Resolve it through the class's
                         // implemented interfaces, mirroring the method path.
+                        #[expect(deprecated)]
                         let member_candidates =
                             self.class_member_field_candidates(&class_tn, field);
                         if member_candidates.is_empty() {
@@ -11532,64 +11545,27 @@ impl<'db> LoweringContext<'db> {
                 let file_pkg_info = file_package(self.db, file);
                 let file_pkg_items = self.resolve_class_pkg_items_by_name(&file_pkg_info.package);
                 let file_item_tree = file_item_tree(self.db, file);
-                for imp in &file_item_tree.implements_for {
+                for (impl_idx, imp) in file_item_tree.implements_for.iter().enumerate() {
+                    let impl_loc = baml_compiler2_hir::loc::ImplLoc::new(
+                        self.db,
+                        file,
+                        file_item_tree.free_impls[impl_idx],
+                    );
+                    let Ok(data) =
+                        baml_compiler2_tir::interfaces::impl_data(self.db, impl_loc).as_ref()
+                    else {
+                        continue;
+                    };
+                    let Some(root_iface_qtn) =
+                        baml_compiler2_tir::interfaces::interface_loc_qtn(self.db, data.interface)
+                    else {
+                        continue;
+                    };
                     let mut diags = Vec::new();
-                    let target_ty_tir = baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
-                        self.db,
-                        &imp.for_target.expr,
-                        file_pkg_items,
-                        &file_pkg_info.namespace_path,
-                        &imp.generic_params,
-                        &mut diags,
-                    );
-                    let Some(root_iface_loc) =
-                        baml_compiler2_tir::interfaces::resolve_path_to_interface(
-                            self.db,
-                            &imp.interface_target.expr,
-                            file_pkg_items,
-                            &file_pkg_info.namespace_path,
-                        )
-                    else {
-                        continue;
-                    };
-                    let iface_tree =
-                        baml_compiler2_hir::file_item_tree(self.db, root_iface_loc.file(self.db));
-                    let Some(root_iface_data) =
-                        iface_tree.interfaces.get(&root_iface_loc.id(self.db))
-                    else {
-                        continue;
-                    };
-                    let root_iface_qtn = baml_compiler2_tir::lower_type_expr::qualify_def(
-                        self.db,
-                        Definition::Interface(root_iface_loc),
-                        &root_iface_data.name,
-                    );
-                    let root_iface_args_tir: Vec<baml_compiler2_tir::ty::Ty> =
-                        match &imp.interface_target.expr {
-                            baml_compiler2_ast::TypeExpr::Path { generic_args, .. } => generic_args
-                                .iter()
-                                .map(|arg| {
-                                    baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
-                                        self.db,
-                                        arg,
-                                        file_pkg_items,
-                                        &file_pkg_info.namespace_path,
-                                        &imp.generic_params,
-                                        &mut diags,
-                                    )
-                                })
-                                .collect(),
-                            _ => Vec::new(),
-                        };
-                    let root_iface_assoc_tir = lower_interface_target_associated_bindings(
-                        self.db,
-                        &imp.interface_target.expr,
-                        &imp.associated_type_bindings,
-                        file_pkg_items,
-                        &file_pkg_info.namespace_path,
-                        &imp.generic_params,
-                        &mut diags,
-                    );
+                    let target_ty_tir = data.for_ty_pattern.clone();
+                    let root_iface_loc = data.interface;
+                    let root_iface_args_tir = data.interface_args.clone();
+                    let root_iface_assoc_tir = data.associated_types.clone();
                     let bounds = imp
                         .generic_param_bounds
                         .iter()
@@ -12108,16 +12084,24 @@ impl<'db> LoweringContext<'db> {
             let pkg_info = file_package(self.db, file);
             let pkg_items = self.resolve_class_pkg_items_by_name(&pkg_info.package);
             let item_tree = file_item_tree(self.db, file);
-            for imp in &item_tree.implements_for {
-                let mut diags = Vec::new();
-                let target_ty_tir = baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
+            for (impl_idx, imp) in item_tree.implements_for.iter().enumerate() {
+                let impl_loc = baml_compiler2_hir::loc::ImplLoc::new(
                     self.db,
-                    &imp.for_target.expr,
-                    pkg_items,
-                    &pkg_info.namespace_path,
-                    &imp.generic_params,
-                    &mut diags,
+                    file,
+                    item_tree.free_impls[impl_idx],
                 );
+                let Ok(data) =
+                    baml_compiler2_tir::interfaces::impl_data(self.db, impl_loc).as_ref()
+                else {
+                    continue;
+                };
+                let Some(root_iface_qtn) =
+                    baml_compiler2_tir::interfaces::interface_loc_qtn(self.db, data.interface)
+                else {
+                    continue;
+                };
+                let mut diags = Vec::new();
+                let target_ty_tir = data.for_ty_pattern.clone();
 
                 // Bindings of the impl's generic params recovered from the
                 // receiver (`for` target `T[]` matched against the concrete
@@ -12148,53 +12132,9 @@ impl<'db> LoweringContext<'db> {
                     bindings
                 };
 
-                let Some(root_iface_loc) =
-                    baml_compiler2_tir::interfaces::resolve_path_to_interface(
-                        self.db,
-                        &imp.interface_target.expr,
-                        pkg_items,
-                        &pkg_info.namespace_path,
-                    )
-                else {
-                    continue;
-                };
-                let root_iface_tree =
-                    baml_compiler2_hir::file_item_tree(self.db, root_iface_loc.file(self.db));
-                let Some(root_iface_data) =
-                    root_iface_tree.interfaces.get(&root_iface_loc.id(self.db))
-                else {
-                    continue;
-                };
-                let root_iface_qtn = baml_compiler2_tir::lower_type_expr::qualify_def(
-                    self.db,
-                    Definition::Interface(root_iface_loc),
-                    &root_iface_data.name,
-                );
-                let root_iface_args_tir = match &imp.interface_target.expr {
-                    baml_compiler2_ast::TypeExpr::Path { generic_args, .. } => generic_args
-                        .iter()
-                        .map(|arg| {
-                            baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
-                                self.db,
-                                arg,
-                                pkg_items,
-                                &pkg_info.namespace_path,
-                                &imp.generic_params,
-                                &mut diags,
-                            )
-                        })
-                        .collect::<Vec<_>>(),
-                    _ => Vec::new(),
-                };
-                let root_iface_assoc_tir = lower_interface_target_associated_bindings(
-                    self.db,
-                    &imp.interface_target.expr,
-                    &imp.associated_type_bindings,
-                    pkg_items,
-                    &pkg_info.namespace_path,
-                    &imp.generic_params,
-                    &mut diags,
-                );
+                let root_iface_loc = data.interface;
+                let root_iface_args_tir = data.interface_args.clone();
+                let root_iface_assoc_tir = data.associated_types.clone();
                 let bounds = imp
                     .generic_param_bounds
                     .iter()

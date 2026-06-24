@@ -7703,6 +7703,78 @@ fn malformed_impls_do_not_spuriously_overlap() {
     );
 }
 
+/// An unresolved interface type-argument in an `implements` clause must be
+/// reported EXACTLY ONCE. `impl_data` owns it; the implements-target validator
+/// in the LSP must not re-emit it (otherwise the error appears two or three
+/// times — the duplication an `.any()`-based assertion never catches).
+#[test]
+fn implements_target_arg_error_is_reported_exactly_once() {
+    let in_body = collect_compile_errors(
+        r#"
+        interface Container<T> {
+            function size(self) -> int
+        }
+        class Box {
+            items: int[]
+            implements Container<DoesNotExist> {
+                function size(self) -> int { return 0 }
+            }
+        }
+        "#,
+    );
+    assert_eq!(
+        in_body
+            .iter()
+            .filter(|e| e.contains("DoesNotExist"))
+            .count(),
+        1,
+        "in-body interface arg error must be reported once; got:\n  {}",
+        in_body.join("\n  ")
+    );
+
+    let out_of_body = collect_compile_errors(
+        r#"
+        interface Container<T> {
+            function size(self) -> int
+        }
+        class Cat {
+            name: string
+        }
+        implement Container<DoesNotExist> for Cat {
+            function size(self) -> int { return 0 }
+        }
+        "#,
+    );
+    assert_eq!(
+        out_of_body
+            .iter()
+            .filter(|e| e.contains("DoesNotExist"))
+            .count(),
+        1,
+        "out-of-body interface arg error must be reported once; got:\n  {}",
+        out_of_body.join("\n  ")
+    );
+}
+
+/// When BOTH the interface target and the for-target are unresolved, the
+/// for-target error must still be reported — `impl_data` resolves the interface
+/// first, but it carries the for-target diagnostic into the failure rather than
+/// dropping it.
+#[test]
+fn unresolved_for_target_reported_even_when_interface_unresolved() {
+    let errors = collect_compile_errors(
+        r#"
+        implement BadInterface for AlsoMissing {}
+        "#,
+    );
+    assert!(
+        errors.iter().any(|e| e.contains("AlsoMissing")),
+        "the unresolved for-target must not be dropped when the interface is also \
+         unresolved; got:\n  {}",
+        errors.join("\n  ")
+    );
+}
+
 // `Box<int | T>` and `Box<int | string | bool>` provably overlap: instantiating
 // `T = string | bool` makes them the same realized type. An unbounded variable
 // can stand for a union, so it absorbs the extra members — a definite overlap,

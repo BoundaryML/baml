@@ -641,14 +641,21 @@ fn check_interfaces<'db>(
     // single compiler-side source); check.rs only surfaces them, mapping each
     // diagnostic's span-free origin to a precise source range.
     {
-        use baml_compiler2_tir::interfaces::ImplDiagnosticLocation;
+        use baml_compiler2_tir::interfaces::{ImplDataError, ImplDiagnosticLocation};
         let item_tree = baml_compiler2_hir::file_item_tree(db, file);
         for impl_id in item_tree.impls.keys() {
             let impl_loc = baml_compiler2_hir::loc::ImplLoc::new(db, file, *impl_id);
-            let Ok(data) = baml_compiler2_tir::interfaces::impl_data(db, impl_loc).as_ref() else {
-                continue;
+            // `impl_data` owns an impl's diagnostics whether or not it fully
+            // resolves: an unresolved interface target still carries the
+            // diagnostics it lowered (the bad interface target, the for-target,
+            // the bounds), so surface those too.
+            let impl_diags = match baml_compiler2_tir::interfaces::impl_data(db, impl_loc).as_ref()
+            {
+                Ok(data) => &data.diagnostics,
+                Err(ImplDataError::InterfaceUnresolved { diagnostics }) => diagnostics,
+                Err(ImplDataError::Malformed) => continue,
             };
-            if data.diagnostics.is_empty() {
+            if impl_diags.is_empty() {
                 continue;
             }
             let Some(sm) =
@@ -656,7 +663,7 @@ fn check_interfaces<'db>(
             else {
                 continue;
             };
-            for (error, loc) in &data.diagnostics {
+            for (error, loc) in impl_diags {
                 let span = match loc {
                     ImplDiagnosticLocation::InterfaceTarget => sm.interface_target_span,
                     ImplDiagnosticLocation::ForTarget => sm.for_target_span.unwrap_or(sm.impl_span),
@@ -4361,22 +4368,11 @@ fn validate_implements_for<'db>(
             &generic_param_names,
             &mut iface_lower_errs,
         );
-        // Surface errors lowering the interface target (unknown type, wrong generic
-        // arity, …) and stop — exactly as the for-target does above. Otherwise an
-        // out-of-body `implement BadIface<a, b> for Bar` would silently swallow these
-        // and run the orphan check on a degraded `iface_ty` (the in-body path reports
-        // them, so this kept the two paths inconsistent).
+        // Interface-target lowering errors (unknown type, wrong generic arity, …)
+        // are owned + surfaced by `impl_data` (the impl-diagnostics loop). Here we
+        // only bail when the target is ill-formed so the orphan check doesn't run
+        // on a degraded `iface_ty`; the error sink is intentionally discarded.
         if !iface_lower_errs.is_empty() {
-            for error in iface_lower_errs {
-                diagnostics.push(
-                    Diagnostic::error(tir_type_error_to_diagnostic_id(&error), error.to_string())
-                        .with_primary_span(Span {
-                            file_id,
-                            range: imp.interface_target.span,
-                        })
-                        .with_phase(DiagnosticPhase::Type),
-                );
-            }
             return;
         }
         let iface_args: Vec<Ty> = match expand_type_alias(&iface_ty, aliases) {
@@ -4716,33 +4712,9 @@ fn validate_class_implements<'db>(
             }
             continue;
         };
-        // E0002: the interface name resolved, but its generic type arguments
-        // must themselves be resolvable types. `implements Container<Bogus>`
-        // is rejected here just like a field type `x: Bogus` is. Without this,
-        // an unresolvable type argument in an `implements` clause is silently
-        // dropped — the only code that lowers the target (dispatch-source
-        // collection) discards these diagnostics.
-        {
-            let mut arg_errors = Vec::new();
-            baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
-                db,
-                &block.target.expr,
-                pkg_items,
-                namespace_path,
-                &class.generic_params,
-                &mut arg_errors,
-            );
-            for error in arg_errors {
-                diagnostics.push(
-                    Diagnostic::error(tir_type_error_to_diagnostic_id(&error), error.to_string())
-                        .with_primary_span(Span {
-                            file_id,
-                            range: block.target.span,
-                        })
-                        .with_phase(DiagnosticPhase::Type),
-                );
-            }
-        }
+        // Interface-target lowering errors (e.g. `implements Container<Bogus>`,
+        // an unresolvable type argument) are owned by `impl_data` and surfaced by
+        // the impl-diagnostics loop above; this validator no longer re-emits them.
         let iface_display_name = resolved_iface.display_name();
         let iface_qtn = resolved_iface.qtn.clone();
         let iface_file = resolved_iface.loc.file(db);
