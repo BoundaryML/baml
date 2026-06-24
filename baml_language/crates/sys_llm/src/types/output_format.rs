@@ -119,7 +119,7 @@ impl OutputFormatContent {
 
     fn render_impl(&self, options: &RenderOptions) -> Result<Option<String>, RenderError> {
         if matches!(options.prefix, RenderSetting::Auto) {
-            if let Some(instruction) = media_output_instruction(&self.target) {
+            if let Some(instruction) = media_output_instruction(&self.target, options) {
                 return Ok(Some(instruction));
             }
         }
@@ -456,7 +456,7 @@ impl OutputFormatContent {
             RuntimeTy::Bigint { .. } => Ok(Some("bigint".to_string())),
             RuntimeTy::Float { .. } => Ok(Some("float".to_string())),
             RuntimeTy::Bool { .. } => Ok(Some("bool".to_string())),
-            RuntimeTy::Null { .. } => Ok(Some("null".to_string())),
+            RuntimeTy::Null { .. } => Ok(Some(rendered_null_type(options).to_string())),
 
             RuntimeTy::List(inner, _) => {
                 let inner_str = self
@@ -733,12 +733,20 @@ fn render_literal(lit: &LiteralValue) -> String {
     }
 }
 
-fn media_output_instruction(target: &RuntimeTy) -> Option<String> {
+fn rendered_null_type(options: &RenderOptions) -> &str {
+    match &options.render_null_as {
+        RenderSetting::Always(value) => value.as_str(),
+        RenderSetting::Auto | RenderSetting::Never => "null",
+    }
+}
+
+fn media_output_instruction(target: &RuntimeTy, options: &RenderOptions) -> Option<String> {
+    let null_type = rendered_null_type(options);
     match target {
         RuntimeTy::Media(kind, _) => Some(format!("Return an {kind} output.")),
         RuntimeTy::Union(variants, _) if nullable_media_union_kind(variants).is_some() => {
             let kind = nullable_media_union_kind(variants).expect("checked above");
-            Some(format!("Return an {kind} output or null."))
+            Some(format!("Return an {kind} output or {null_type}."))
         }
         RuntimeTy::List(inner, _) => match inner.as_ref() {
             RuntimeTy::Media(kind, _) => Some(format!("Return one or more {kind} outputs.")),
@@ -848,6 +856,8 @@ pub struct RenderOptions {
     pub map_style: MapStyle,
     /// Whether to quote class field names
     pub quote_class_fields: RenderSetting<bool>,
+    /// String to use when rendering the `null` type.
+    pub render_null_as: RenderSetting<String>,
 }
 
 impl Default for RenderOptions {
@@ -861,6 +871,7 @@ impl Default for RenderOptions {
             always_hoist_enums: RenderSetting::Auto,
             map_style: MapStyle::TypeParameters,
             quote_class_fields: RenderSetting::Auto,
+            render_null_as: RenderSetting::Auto,
         }
     }
 }
@@ -1064,6 +1075,17 @@ mod tests {
             Some("Return an image output or null.".to_string())
         );
 
+        let rendered = OutputFormatContent::new(RuntimeTy::optional(image.clone()))
+            .render(&RenderOptions {
+                render_null_as: RenderSetting::Always("omit".to_string()),
+                ..RenderOptions::default()
+            })
+            .unwrap();
+        assert_eq!(
+            rendered,
+            Some("Return an image output or omit.".to_string())
+        );
+
         let rendered = OutputFormatContent::new(RuntimeTy::Union(
             vec![
                 image,
@@ -1088,6 +1110,20 @@ mod tests {
         }));
         let rendered = content.render(&RenderOptions::default()).unwrap();
         assert_eq!(rendered, Some("string or null".to_string()));
+    }
+
+    #[test]
+    fn test_render_optional_with_custom_null_type() {
+        let content = OutputFormatContent::new(RuntimeTy::optional(RuntimeTy::String {
+            attr: TyAttr::default(),
+        }));
+        let rendered = content
+            .render(&RenderOptions {
+                render_null_as: RenderSetting::Always("omit".to_string()),
+                ..RenderOptions::default()
+            })
+            .unwrap();
+        assert_eq!(rendered, Some("string or omit".to_string()));
     }
 
     #[test]

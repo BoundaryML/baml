@@ -156,19 +156,23 @@ fn convert_class(
             .unwrap_or(BexExternalValue::Null);
         fields.insert(key, value);
     }
-    // A generic class instance carries its concrete class type args (De Bruijn
-    // order) in `class_ty` (the value-level type channel). Decode them into the
-    // BEV carrier; non-generic instances have no `class_ty` and default to `[]`.
-    let type_args = match class.class_ty {
-        Some(ty_class) => ty_class
-            .type_args
-            .iter()
-            .map(crate::ty_decode::proto_ty_to_runtime_ty)
-            .collect::<Result<Vec<_>, _>>()?,
-        None => vec![],
+    // The class binds via `class_ty`: `class_ty.name` is the FQN and
+    // `class_ty.type_args` (De Bruijn order) a generic instance's concrete
+    // args. A well-formed class value always sets `class_ty`; an absent one
+    // decodes to an unnamed class with no type args.
+    let (class_name, type_args) = match class.class_ty {
+        Some(ty_class) => {
+            let args = ty_class
+                .type_args
+                .iter()
+                .map(crate::ty_decode::proto_ty_to_runtime_ty)
+                .collect::<Result<Vec<_>, _>>()?;
+            (ty_class.name, args)
+        }
+        None => (String::new(), vec![]),
     };
     Ok(BexExternalValue::Instance {
-        class_name: class.name,
+        class_name,
         type_args,
         fields,
     })
@@ -408,17 +412,17 @@ mod tests {
     #[test]
     fn convert_class_decodes_generic_type_args() {
         use crate::baml_core::cffi::{
-            InboundClassValue, Ty, TyClass, TyPrimitive, TyPrimitiveKind, ty::Ty as TyVariant,
+            BamlTy, BamlTyClass, BamlTyPrimitive, BamlTyPrimitiveKind, InboundClassValue,
+            baml_ty::Ty as TyVariant,
         };
-        let int_ty = Ty {
-            ty: Some(TyVariant::Primitive(TyPrimitive {
-                kind: TyPrimitiveKind::TyPrimitiveInt as i32,
+        let int_ty = BamlTy {
+            ty: Some(TyVariant::Primitive(BamlTyPrimitive {
+                kind: BamlTyPrimitiveKind::BamlTyPrimitiveInt as i32,
             })),
         };
         let class = InboundClassValue {
-            name: "generic_tests.GenericBox".to_string(),
             fields: vec![],
-            class_ty: Some(TyClass {
+            class_ty: Some(BamlTyClass {
                 name: "generic_tests.GenericBox".to_string(),
                 type_args: vec![int_ty],
             }),
@@ -438,19 +442,28 @@ mod tests {
         }
     }
 
-    /// A non-generic instance (no `class_ty`) decodes to empty `type_args`.
+    /// A non-generic instance binds its FQN from `class_ty` with empty `type_args`.
     #[test]
     fn convert_class_non_generic_has_empty_type_args() {
-        use crate::baml_core::cffi::InboundClassValue;
+        use crate::baml_core::cffi::{BamlTyClass, InboundClassValue};
         let class = InboundClassValue {
-            name: "user.Plain".to_string(),
             fields: vec![],
-            class_ty: None,
+            class_ty: Some(BamlTyClass {
+                name: "user.Plain".to_string(),
+                type_args: vec![],
+            }),
         };
         let table = CffiHandleTable::new();
         let result = convert_class(class, &table).expect("decode succeeds");
         match result {
-            BexExternalValue::Instance { type_args, .. } => assert!(type_args.is_empty()),
+            BexExternalValue::Instance {
+                class_name,
+                type_args,
+                ..
+            } => {
+                assert_eq!(class_name, "user.Plain");
+                assert!(type_args.is_empty());
+            }
             other => panic!("expected Instance, got: {other:?}"),
         }
     }

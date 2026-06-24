@@ -1,0 +1,10 @@
+version: v2
+modules:
+  - path: .
+lint:
+  use:
+    - STANDARD
+  except:
+    # Enum value names mirror the Rust/host-side names (BamlHandleType,
+    # MediaTypeEnum, …) on purpose and do not carry buf's enum-name prefix.
+    - ENUM_VALUE_PREFIX

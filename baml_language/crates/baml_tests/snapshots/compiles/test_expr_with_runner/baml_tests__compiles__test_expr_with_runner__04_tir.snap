@@ -12,7 +12,6 @@ function user.$init_test_main(registry: testing.TestCollector) -> ? throws never
         }
     null : null
   }
-  !! 23..38: unresolved name: Quorum
 }
 lambda user.$init_test_main {
 }

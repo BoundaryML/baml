@@ -302,7 +302,7 @@ def test_sdk_panic_wire_envelope_decodes_to_BamlPanic():
     # Build the smallest envelope that round-trips: a `panic` arm with a
     # `baml.panics.SdkPanic` ClassValue holding a single `message` field.
     envelope = baml_outbound_pb2.BamlOutboundResult()
-    envelope.panic.value.class_value.name.name = "baml.panics.SdkPanic"
+    envelope.panic.value.class_value.name = "baml.panics.SdkPanic"
     msg_field = envelope.panic.value.class_value.fields.add()
     msg_field.key = "message"
     msg_field.value.string_value = "synthetic bridge failure"

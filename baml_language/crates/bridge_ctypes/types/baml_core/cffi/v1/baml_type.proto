@@ -1,122 +1,108 @@
 // See crates/bridge_ctypes/README.md for the list of consumers and the
 // commands used to regenerate each language's proto client.
-//
-// Shared, self-contained type representation passed as a *value* across the
-// bridge in both directions. This is distinct from outbound's `BamlTy`, which
-// is type *metadata* riding alongside container values; `Ty` here is a
-// first-class value the host can construct on its own (e.g. from a Python
-// type or a generated class) and hand to the engine.
-//
-// Primary use: binding a generic function's / generic method's TypeVars at a
-// host call. The host sends an ordered `Ty` list (De Bruijn order — enclosing
-// class params first, then the callee's own params) in
-// `CallFunctionArgs.type_args`; the engine decodes each into a
-// `baml_type::RuntimeTy` and seeds the entry frame's `type_args` slot.
+
 syntax = "proto3";
 package baml_core.cffi.v1;
 
 option go_package = "./cffi";
 
-// A BAML type, as a value. Absent `ty` (none of the oneof set) is treated as
-// the unknown/top type by the decoder.
+// The wire representation of BAML types, 1:1 with RuntimeTy.
 //
-// Every variant here mirrors a `baml_type::RuntimeTy` variant. `RuntimeTy`
-// carries a `TyAttr` on every variant; the wire form intentionally drops it —
-// the decoder reconstructs `TyAttr::default()`. Tags 1-10 predate the full
-// mirror; `optional` (6) has no own `RuntimeTy` variant — it is sugar for
-// `T | null` and decodes to a `Union`.
-message Ty {
+// Matching ConcreteTy or RealizedTy are wrong, because this needs to be able
+// to represent the type of anything that can be inspected in BAML, including
+// the type of a function's arg (which, for a generic function, is a TypeVar).
+message BamlTy {
   oneof ty {
-    TyPrimitive primitive = 1;
+    BamlTyPrimitive primitive = 1;
     // `class_ty` (not `class`) — `class` is a reserved word in Python, where
     // `msg.class` would be a syntax error in the generated pb2 client.
-    TyClass class_ty = 2;
-    TyEnum enum = 3;
-    TyList list = 4;
-    TyMap map = 5;
-    TyOptional optional = 6;
-    TyUnion union = 7;
-    TyLiteral literal = 8;
-    TyTypeAlias type_alias = 9;
+    BamlTyClass class_ty = 2;
+    BamlTyEnum enum = 3;
+    BamlTyList list = 4;
+    BamlTyMap map = 5;
+    BamlTyOptional optional = 6;
+    BamlTyUnion union = 7;
+    BamlTyLiteral literal = 8;
+    BamlTyTypeAlias type_alias = 9;
     // `unknown` decodes to `RuntimeTy::BuiltinUnknown` — the top type.
-    TyUnknown unknown = 10;
-    TyMedia media = 11;
-    TyInterface interface = 12;
-    TyEnumVariant enum_variant = 13;
-    TyFunction function = 14;
-    TyFuture future = 15;
-    TyRustType rust_type = 16;
+    BamlTyUnknown unknown = 10;
+    BamlTyMedia media = 11;
+    BamlTyInterface interface = 12;
+    BamlTyEnumVariant enum_variant = 13;
+    BamlTyFunction function = 14;
+    BamlTyFuture future = 15;
+    BamlTyRustType rust_type = 16;
     // `meta_type` (not `type`) — `type` is a reserved word in TypeScript;
     // mirrors `RuntimeTy::Type`, the `type` metatype.
-    TyMetaType meta_type = 17;
-    TyResource resource = 18;
-    TyPromptAst prompt_ast = 19;
-    TyVoid void = 20;
-    TyWatchAccessor watch_accessor = 21;
-    TyTypeVar type_var = 22;
-    TyAssociatedTypeProjection associated_type_projection = 23;
-    TyNever never = 24;
+    BamlTyMetaType meta_type = 17;
+    BamlTyResource resource = 18;
+    BamlTyPromptAst prompt_ast = 19;
+    BamlTyVoid void = 20;
+    BamlTyWatchAccessor watch_accessor = 21;
+    BamlTyTypeVar type_var = 22;
+    BamlTyAssociatedTypeProjection associated_type_projection = 23;
+    BamlTyNever never = 24;
   }
 }
 
 // Scalar/leaf types with no parameters.
-enum TyPrimitiveKind {
-  TY_PRIMITIVE_UNSPECIFIED = 0;
-  TY_PRIMITIVE_STRING = 1;
-  TY_PRIMITIVE_INT = 2;
-  TY_PRIMITIVE_FLOAT = 3;
-  TY_PRIMITIVE_BOOL = 4;
-  TY_PRIMITIVE_NULL = 5;
-  TY_PRIMITIVE_BYTES = 6;
-  TY_PRIMITIVE_BIGINT = 7;
+enum BamlTyPrimitiveKind {
+  BAML_TY_PRIMITIVE_UNSPECIFIED = 0;
+  BAML_TY_PRIMITIVE_STRING = 1;
+  BAML_TY_PRIMITIVE_INT = 2;
+  BAML_TY_PRIMITIVE_FLOAT = 3;
+  BAML_TY_PRIMITIVE_BOOL = 4;
+  BAML_TY_PRIMITIVE_NULL = 5;
+  BAML_TY_PRIMITIVE_BYTES = 6;
+  BAML_TY_PRIMITIVE_BIGINT = 7;
 }
 
-message TyPrimitive {
-  TyPrimitiveKind kind = 1;
+message BamlTyPrimitive {
+  BamlTyPrimitiveKind kind = 1;
 }
 
 // A named user class plus its concrete generic arguments, in declaration
 // order. `name` is the BAML FQN (e.g. "generic_tests.GBox").
-message TyClass {
+message BamlTyClass {
   string name = 1;
-  repeated Ty type_args = 2;
+  repeated BamlTy type_args = 2;
 }
 
 // A named type alias plus any concrete generic arguments, in declaration
 // order. `name` is the BAML FQN.
-message TyTypeAlias {
+message BamlTyTypeAlias {
   string name = 1;
-  repeated Ty type_args = 2;
+  repeated BamlTy type_args = 2;
 }
 
-message TyEnum {
+message BamlTyEnum {
   string name = 1;
 }
 
-message TyList {
-  Ty item = 1;
+message BamlTyList {
+  BamlTy item = 1;
 }
 
-message TyMap {
-  Ty key = 1;
-  Ty value = 2;
+message BamlTyMap {
+  BamlTy key = 1;
+  BamlTy value = 2;
 }
 
-message TyOptional {
-  Ty inner = 1;
+message BamlTyOptional {
+  BamlTy inner = 1;
 }
 
-message TyUnion {
-  repeated Ty options = 1;
+message BamlTyUnion {
+  repeated BamlTy options = 1;
 }
 
-message TyUnknown {}
+message BamlTyUnknown {}
 
 // Mirrors `baml_base::Literal`. `bigint_value` and `float_value` are decimal
 // strings (a bigint has no fixed-width proto scalar; a BAML float is stored as
 // its source string to preserve formatting). Literal types widen to their base
 // primitive at decode time.
-message TyLiteral {
+message BamlTyLiteral {
   oneof literal {
     string string_value = 1;
     int64 int_value = 2;
@@ -127,118 +113,111 @@ message TyLiteral {
 }
 
 // Media kinds, mirroring `baml_base::MediaKind`.
-enum TyMediaKind {
-  TY_MEDIA_KIND_UNSPECIFIED = 0;
-  TY_MEDIA_KIND_IMAGE = 1;
-  TY_MEDIA_KIND_AUDIO = 2;
-  TY_MEDIA_KIND_VIDEO = 3;
-  TY_MEDIA_KIND_PDF = 4;
-  TY_MEDIA_KIND_GENERIC = 5;
+enum BamlTyMediaKind {
+  BAML_TY_MEDIA_KIND_UNSPECIFIED = 0;
+  BAML_TY_MEDIA_KIND_IMAGE = 1;
+  BAML_TY_MEDIA_KIND_AUDIO = 2;
+  BAML_TY_MEDIA_KIND_VIDEO = 3;
+  BAML_TY_MEDIA_KIND_PDF = 4;
+  BAML_TY_MEDIA_KIND_GENERIC = 5;
 }
 
 // `image` / `audio` / `video` / `pdf` (`RuntimeTy::Media`).
-message TyMedia {
-  TyMediaKind kind = 1;
+message BamlTyMedia {
+  BamlTyMediaKind kind = 1;
 }
 
 // A structural interface (`RuntimeTy::Interface`). `name` is the interface FQN,
 // `type_args` its concrete generic arguments in declaration order, and
 // `bindings` the resolved associated-type bindings in declaration order.
-message TyInterface {
+message BamlTyInterface {
   string name = 1;
-  repeated Ty type_args = 2;
-  repeated TyAssociatedBinding bindings = 3;
+  repeated BamlTy type_args = 2;
+  repeated BamlTyAssociatedBinding bindings = 3;
 }
 
-// One associated-type binding of a `TyInterface`, e.g. `Item = int`.
-message TyAssociatedBinding {
+// One associated-type binding of a `BamlTyInterface`, e.g. `Item = int`.
+message BamlTyAssociatedBinding {
   string name = 1;
-  Ty ty = 2;
+  BamlTy ty = 2;
 }
 
 // A specific enum variant such as `Status.HttpError`
 // (`RuntimeTy::EnumVariant`). `name` is the enum's dotted FQN.
-message TyEnumVariant {
+message BamlTyEnumVariant {
   string name = 1;
   string variant = 2;
 }
 
 // Param-passing mode, mirroring `baml_type::FunctionParamMode`.
-enum TyFunctionParamMode {
-  TY_FUNCTION_PARAM_MODE_UNSPECIFIED = 0;
-  TY_FUNCTION_PARAM_MODE_REQUIRED = 1;
-  TY_FUNCTION_PARAM_MODE_OPTIONAL = 2;
+enum BamlTyFunctionParamMode {
+  BAML_TY_FUNCTION_PARAM_MODE_UNSPECIFIED = 0;
+  BAML_TY_FUNCTION_PARAM_MODE_REQUIRED = 1;
+  BAML_TY_FUNCTION_PARAM_MODE_OPTIONAL = 2;
 }
 
-// A single parameter of a `TyFunction` (`RuntimeFunctionParamTy`). `name` is
+// A single parameter of a `BamlTyFunction` (`RuntimeFunctionParamTy`). `name` is
 // absent for positional/anonymous params.
-message TyFunctionParam {
+message BamlTyFunctionParam {
   optional string name = 1;
-  Ty ty = 2;
-  TyFunctionParamMode mode = 3;
-}
-
-// An optional bound on a generic param. Positionally aligned with
-// `TyFunction.generic_params`; absent `ty` means the param is unbounded
-// (`None` in `Vec<Option<RuntimeTy>>`).
-message TyGenericParamBound {
-  Ty ty = 1;
+  BamlTy ty = 2;
+  BamlTyFunctionParamMode mode = 3;
 }
 
 // A function/arrow type `<G…>(T1, T2, ...) -> R throws E`
 // (`RuntimeTy::Function`).
-message TyFunction {
+message BamlTyFunction {
+  reserved 2; // formerly generic_param_bounds — see ty_encode.rs
   repeated string generic_params = 1;
-  repeated TyGenericParamBound generic_param_bounds = 2;
-  repeated TyFunctionParam params = 3;
-  Ty ret = 4;
-  Ty throws = 5;
+  repeated BamlTyFunctionParam params = 3;
+  BamlTy ret = 4;
+  BamlTy throws = 5;
 }
 
 // A future handle carrying its resolved value type and error type
 // (`RuntimeTy::Future`).
-message TyFuture {
-  Ty value = 1;
-  Ty error = 2;
+message BamlTyFuture {
+  BamlTy value = 1;
+  BamlTy error = 2;
 }
 
 // Opaque Rust-managed state (`RuntimeTy::RustType`).
-message TyRustType {}
+message BamlTyRustType {}
 
-// The `type` metatype — a runtime value wrapping a `Ty` (`RuntimeTy::Type`).
-message TyMetaType {}
+// The `type` metatype — a runtime value wrapping a `BamlTy` (`RuntimeTy::Type`).
+message BamlTyMetaType {}
 
 // Opaque resource handle: file, socket, or HTTP response body
 // (`RuntimeTy::Resource`).
-message TyResource {}
+message BamlTyResource {}
 
 // Opaque structured prompt tree for LLM calls (`RuntimeTy::PromptAst`).
-message TyPromptAst {}
+message BamlTyPromptAst {}
 
 // The void type — the type of effectful expressions (`RuntimeTy::Void`).
-message TyVoid {}
+message BamlTyVoid {}
 
 // Watch accessor for `x.$watch` on a watched variable
 // (`RuntimeTy::WatchAccessor`).
-message TyWatchAccessor {
-  Ty inner = 1;
+message BamlTyWatchAccessor {
+  BamlTy inner = 1;
 }
 
 // A type variable / generic parameter such as `T` in `Array<T>`
 // (`RuntimeTy::TypeVar`).
-message TyTypeVar {
+message BamlTyTypeVar {
   string name = 1;
 }
 
 // An associated-type projection such as `P.Output` or `(T as Iterator).Item`
 // (`RuntimeTy::AssociatedTypeProjection`). `interface` is absent when the
 // projection is not qualified by an explicit interface.
-message TyAssociatedTypeProjection {
-  Ty base = 1;
-  Ty interface = 2;
+message BamlTyAssociatedTypeProjection {
+  BamlTy base = 1;
+  BamlTy interface = 2;
   string member = 3;
 }
 
 // The bottom type — an expression that never produces a value
 // (`RuntimeTy::Never`).
-message TyNever {}
+message BamlTyNever {}

@@ -23,7 +23,7 @@ export interface EncodeCallArgsOptions {
      * `CallFunctionArgs.type_args`. Mirrors Python's `encode_call_args`
      * `type_args` argument. Omitted/empty for non-generic calls.
      */
-    typeArgs?: Array<[string, baml_core.cffi.v1.ITy]>;
+    typeArgs?: Array<[string, baml_core.cffi.v1.IBamlTy]>;
 }
 /**
  * Encode kwargs into `CallFunctionArgs` bytes.

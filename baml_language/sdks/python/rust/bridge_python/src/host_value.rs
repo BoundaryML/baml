@@ -51,7 +51,7 @@ use std::{
 
 use bridge_cffi::complete_host_call;
 use bridge_ctypes::baml_core::cffi::{
-    BamlHandle, BamlHandleType, InboundClassValue, InboundMapEntry, InboundValue,
+    BamlHandle, BamlHandleType, BamlTyClass, InboundClassValue, InboundMapEntry, InboundValue,
     inbound_map_entry::Key as InboundMapKey, inbound_value::Value as InboundValueVariant,
 };
 use prost::Message;
@@ -512,9 +512,11 @@ fn build_host_callable_inbound(
     fields.push(handle_field);
     InboundValue {
         value: Some(InboundValueVariant::ClassValue(InboundClassValue {
-            name: "baml.errors.HostCallable".to_string(),
             fields,
-            class_ty: None,
+            class_ty: Some(BamlTyClass {
+                name: "baml.errors.HostCallable".to_string(),
+                type_args: vec![],
+            }),
         })),
     }
 }

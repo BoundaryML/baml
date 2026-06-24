@@ -266,7 +266,7 @@ def _resolve_types_kwarg(types_kwarg: Any, type_params: List[str]) -> List[Any]:
     `_types=` is a `{param_name: type}` dict and is **required iff** the callee
     declares its own generic params (`type_params`); it is the *only* accepted
     shape (the legacy single-type / positional tuple/list forms are gone — one
-    name-keyed shape keeps binding unambiguous and matches the named `TyArg`
+    name-keyed shape keeps binding unambiguous and matches the named `BamlTyArg`
     wire). Class type params (bound from a generic receiver) are *not* part of
     `_types=`.
     """
@@ -312,7 +312,7 @@ def _build_type_args(
     type_params: List[str],
     class_type_params: List[str],
 ) -> List[Any]:
-    """Build the named, order-preserving `TyArg` list for a generic call: each
+    """Build the named, order-preserving `BamlTyArg` list for a generic call: each
     entry is `(type_var_name, wire_ty)`. Enclosing class params (recovered from
     the `self` receiver's Pydantic generic metadata) come first, then the
     callee's own `<...>` params (`_types=`) — De Bruijn order. The engine maps
@@ -437,7 +437,7 @@ def define_function(
     Generics: `type_params` are the callee's own `<...>` param names (bound
     by an explicit `_types=` kwarg), and `class_type_params` are the
     enclosing generic class's param names (bound from the `self` receiver's
-    runtime type args). When either is set, a named, order-preserving `TyArg`
+    runtime type args). When either is set, a named, order-preserving `BamlTyArg`
     list (`(type_var, type_value)` per TypeVar) is sent in
     `CallFunctionArgs.type_args` for the engine to seed the entry frame.
     """
