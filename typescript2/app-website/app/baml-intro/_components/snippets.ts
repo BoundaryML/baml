@@ -1,10 +1,12 @@
 import type { TermEvent } from '../../learn3/_components/TermPlay';
 
 /* ------------------------------------------------------------------ *
- * Snippets. Every BAML_* snippet passes `baml check` AND `baml test`
- * against the release toolchain on this branch (verified 2026-06-10);
- * the intentional diagnostics (BAML_UNREACHABLE warning, NS_BAD error)
- * show the compiler's real messages. Terminal transcripts are captured
+ * Snippets. Every BAML_* snippet is verified against the release
+ * toolchain on this branch (baml 0.11.3-nightly.20260610); most pass
+ * `baml check`/`baml test` clean. The intentional diagnostics —
+ * BAML_UNKNOWN (E0007, field access on `unknown`), BAML_UNREACHABLE
+ * (E0063, dead catch arm), NS_BAD (unresolved type) — show the
+ * compiler's real messages. Terminal transcripts are captured
  * CLI output. Benchmark numbers are real measurements from an
  * 18-core Apple Silicon machine — see the comments on BENCH_* below.
  * Re-verify with `baml check` if you edit anything.
@@ -17,135 +19,77 @@ export const TS_LIES = `interface User {
   email: string;
 }
 
-// "as User" is a promise the compiler believes
-// and nobody checks
+// 'as' is an unchecked promise the compiler believes
 const user = JSON.parse(raw) as User;
-
-user.email.toLowerCase();
-// runtime: TypeError — email is undefined.
-// the type system signed off on it anyway`;
+user.email.toLowerCase();`;
 
 export const BAML_UNKNOWN = `class User {
   name: string,
   email: string,
 }
 
-// \`unknown\` is the only escape hatch -- and the
-// compiler makes you prove what it is before you can
-// touch it. The check happens at RUNTIME: the value
-// really is a User after this, or you took the other
-// arm. There is no \`as\`. There is no \`any\`.
 function load(raw: unknown) -> string {
-  match (raw) {
-    let u: User => u.email,
-    _ => "not a user",
-  }
-}
-
-function ada() -> User {
-  User { name: "ada", email: "ada@x.com" }
-}
-
-test "types exist at runtime" {
-  assert.equal(load(ada()), "ada@x.com");
-  assert.equal(load(42), "not a user");
-}
-
-// types are values: reflect on them at runtime
-test "types are values too" {
-  let t = reflect.type_of<User>();
-  assert.equal(t.to_string(), "User");
+  // no \`as\`, no \`any\` -- prove it with \`match\` first
+  raw.email.to_lower_case()
 }`;
 
 /* ---------------- 1b · error handling ---------------- */
 
-export const TS_CATCH = `try {
-  await pipeline(doc);
-} catch (e) {
-  // e: unknown — the type system has no idea
-  // what pipeline() can actually throw
-  if (e instanceof NetError) { /* guess */ }
+export const TS_CATCH = `function show(ok: boolean) {
+  try {
+    return fetch_page(ok);
+  } catch (e) {
+    // e: unknown -- TS can't tell you what fetch_page throws
+    if (e instanceof NetError) return "recovered: " + e.detail;
+  }
 }`;
 
-export const BAML_UNREACHABLE = `// The compiler knows fetch_page can ONLY throw
-// NetError -- so the ParseError arm is provably
-// dead code.
-function show(ok: bool) -> string {
+export const BAML_UNREACHABLE = `function show(ok: bool) -> string {
   fetch_page(ok) catch (e) {
-    ParseError => "unreachable",
     NetError => "recovered: " + e.detail,
+    ParseError => "unreachable",
   }
 }
 
-// -- the rest is plumbing --------------------------
-
-function fetch_page(ok: bool) -> string
-  // throws ParseError  // uncomment this!
-{
-  if (!ok) {
-    throw NetError { detail: "connect timeout" };
-  };
+// -- the rest is plumbing --
+function fetch_page(ok: bool) -> string {
+  if (!ok) { throw NetError { detail: "timeout" } };
   "<html>"
 }
 
-class NetError {
-  detail: string,
-}
-
-class ParseError {
-  detail: string,
-}`;
+class NetError { detail: string }
+class ParseError { detail: string }`;
 
 /* ---------------- 1c · match on types or values ---------------- */
 
 export const TS_INSTANCEOF = `function route(msg: Refund | Question | string) {
-  // narrowing by hand, one guard at a time
-  if (msg instanceof Refund) {
-    return "refund order " + msg.orderId;
-  } else if (msg instanceof Question) {
-    return "answer: " + msg.text;
-  } else if (typeof msg === "string") {
-    return "plain text: " + msg;
-  }
-  // and instanceof lies across realms/serialization
+  // a grab-bag: typeof, instanceof, "has key" -- and
+  // instanceof lies on JSON-parsed data
+  if (typeof msg === "string") return "text: " + msg;
+  if (msg instanceof Refund) return "refund " + msg.id;
+  if ("text" in msg) return "answer: " + msg.text;
+  // miss a case -> silently returns undefined
 }`;
 
-export const BAML_MATCH = `// match on the TYPE of a union value -- no
-// instanceof, no discriminant field to maintain
-function route(msg: Refund | Question | string) -> string {
+export const BAML_MATCH = `function route(msg: Refund | Question | string) -> string {
   match (msg) {
     Refund => "refund " + msg.id,
     Question => "answer: " + msg.text,
-    string => "plain text: " + msg,
+    string => "text: " + msg,
   }
 }
 
 // ...or match on VALUES, with guards
-function grade(score: int) -> string {
-  match (score) {
+function grade(n: int) -> string {
+  match (n) {
     100 => "perfect",
     let s if s >= 60 => "pass",
     _ => "fail",
   }
 }
 
-test "match on types and values" {
-  assert.equal(route(Refund { id: "o1" }), "refund o1");
-  assert.equal(route("hello"), "plain text: hello");
-  assert.equal(grade(100), "perfect");
-  assert.equal(grade(61), "pass");
-  assert.equal(grade(12), "fail");
-}
-
-// -- the shapes being routed ------------------------
-
-class Refund {
-  id: string,
-}
-
-class Question {
-  text: string,
-}`;
+class Refund { id: string }
+class Question { text: string }`;
 
 /* ---------------- 2 · namespaces are directories ---------------- */
 
@@ -168,38 +112,7 @@ export const LS_EVENTS: TermEvent[] = [
   { text: '# of the program. ls is a map of it.', tone: 'dim' },
 ];
 
-/* ---------------- 3 · native testing ---------------- */
-
-export const BAML_TEST = `testset "basics" {
-  test "clearly positive" {
-    let v = classify("absolutely loved it!");
-    assert.equal(v.label, "positive");
-  }
-
-  test "clearly negative" {
-    let v = classify("this was terrible.");
-    assert.equal(v.label, "negative");
-  }
-}
-
-// -- the classifier under test --------------------------------------
-
-class Sentiment {
-  label: "positive" | "negative" | "neutral",
-}
-
-function classify(text: string) -> Sentiment {
-  let t = text.to_lower_case();
-  if (t.includes("love") || t.includes("great") || t.includes("amazing")) {
-    Sentiment { label: "positive" }
-  } else if (t.includes("hate") || t.includes("terrible") || t.includes("awful")) {
-    Sentiment { label: "negative" }
-  } else {
-    Sentiment { label: "neutral" }
-  }
-}`;
-
-/* ---------------- 4 · baml describe ---------------- */
+/* ---------------- 3 · baml describe ---------------- */
 
 export const GREP_EVENTS: TermEvent[] = [
   { cmd: 'grep -rn "greet" baml_src/' },
@@ -246,7 +159,7 @@ export const DESCRIBE_EVENTS: TermEvent[] = [
   },
 ];
 
-/* ---------------- 5 · baml pack ---------------- */
+/* ---------------- 4 · baml pack ---------------- */
 
 export const BAML_PACKED = `function greet(name: string) -> Greeting {
   Greeting { message: "hi, " + name }
@@ -299,7 +212,7 @@ export const PACK_BENCH = [
   },
 ] as const;
 
-/* ---------------- 6 · baml run -e ---------------- */
+/* ---------------- 5 · baml run -e ---------------- */
 
 // Captured output from this branch's release CLI.
 export const RUN_E_EVENTS: TermEvent[] = [
@@ -320,7 +233,7 @@ export const RUN_E_EVENTS: TermEvent[] = [
   },
 ];
 
-/* ---------------- 7 · green threads ---------------- */
+/* ---------------- 6 · green threads ---------------- */
 
 export const BAML_SPAWN = `// Nothing marks this function async. spawn runs any
 // call in parallel; await joins the result.

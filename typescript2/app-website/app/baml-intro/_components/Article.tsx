@@ -22,7 +22,6 @@ import {
   BAML_PACKED,
   BAML_RUNNER,
   BAML_SPAWN,
-  BAML_TEST,
   BAML_UNKNOWN,
   BAML_UNREACHABLE,
   BENCH_BAML,
@@ -83,6 +82,30 @@ function Sub({
       </h3>
       {children}
     </div>
+  );
+}
+
+/* The two top-level divisions: "BAML for AI workflows" and "BAML for AI
+ * Agents". A part title is bigger than the numbered subsection headers and
+ * carries an eyebrow + a divider rule, so each half of the page announces
+ * itself as its own section. */
+function Part({
+  id,
+  eyebrow,
+  title,
+  children,
+}: {
+  id: string;
+  eyebrow?: string;
+  title: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className="l6-section l6-part" id={id}>
+      {eyebrow ? <p className="l6-part-eyebrow font-mono">{eyebrow}</p> : null}
+      <h2 className="l6-part-title">{title}</h2>
+      {children}
+    </section>
   );
 }
 
@@ -163,15 +186,15 @@ const TOC: { id: string; label: string; sub?: boolean }[] = [
   { id: 'wf-llm', label: '1 · Native LLM Functions', sub: true },
   { id: 'wf-tests', label: '2 · BAML Tests', sub: true },
   { id: 'wf-metrics', label: '3 · Metrics primitive', sub: true },
-  { id: 'types', label: '1 · Type-system' },
-  { id: 'namespaces', label: '2 · Namespaces' },
-  { id: 'testing', label: '3 · Testing framework' },
-  { id: 'describe', label: '4 · baml describe' },
-  { id: 'pack', label: '5 · baml pack' },
-  { id: 'run-e', label: '6 · baml run -e' },
-  { id: 'threads', label: '7 · Green threads' },
-  { id: 'supply-chain', label: '8 · Supply chain' },
-  { id: 'self-improvement', label: '9 · Self-improvement' },
+  { id: 'agents', label: 'BAML for AI Agents' },
+  { id: 'types', label: '1 · Type-system', sub: true },
+  { id: 'namespaces', label: '2 · Namespaces', sub: true },
+  { id: 'describe', label: '3 · baml describe', sub: true },
+  { id: 'pack', label: '4 · baml pack', sub: true },
+  { id: 'run-e', label: '5 · baml run -e', sub: true },
+  { id: 'threads', label: '6 · Green threads', sub: true },
+  { id: 'supply-chain', label: '7 · Supply chain', sub: true },
+  { id: 'self-improvement', label: '8 · Self-improvement', sub: true },
   { id: 'adoption', label: 'BAML is incrementally adoptable' },
   { id: 'close', label: 'Try it out!' },
 ];
@@ -287,20 +310,20 @@ export function Article() {
         <p className="l6-lead">{'BAML is meant to be written by agents'}</p>
         <p>
           {
-            'Every feature was designed to prevent context pollution and churn when coding with AI. We opt for features that make agents make less mistakes at runtime (like Rust), but without fighting the borrow-checker. BAML should still be comprehensible to the millions of non-technical people now coding with AI.'
+            'Every feature was designed to prevent context pollution and churn when coding with AI. We opt for features that make agents make less mistakes at runtime (like Rust), but without fighting the borrow-checker. We want BAML to be comprehensible to the millions of non-technical people now coding with AI.'
           }
         </p>
         <p>
           {
-            'Our goal is to make BAML feel like TypeScript, but without the sins of Javascript: with better error handling, without type-erasure, no '
+            'Our goal is to make it feel like TypeScript, but without the sins of Javascript: with a sound type-system, better error handling, no '
           }
           <code>any</code>
           {', and more.'}
         </p>
       </section>
 
-      {/* ---- AI workflows ---- */}
-      <Section id="workflows" title="BAML for AI workflows">
+      {/* ---- Part 1 · AI workflows ---- */}
+      <Part eyebrow="Part 1" id="workflows" title="BAML for AI workflows">
         <p>
           {'Writing code is one thing, but in the future '}
           <em>every</em>
@@ -395,12 +418,12 @@ export function Article() {
             }
           </p>
         </Sub>
-      </Section>
+      </Part>
 
-      {/* ---- language features lead-in ---- */}
-      <section className="l6-section">
+      {/* ---- Part 2 · AI agents ---- */}
+      <Part eyebrow="Part 2" id="agents" title="BAML for AI Agents">
         <p>{'Now, a few of the agent-centric language features underneath:'}</p>
-      </section>
+      </Part>
 
       {/* ---- 1 · type system ---- */}
       <Section
@@ -409,11 +432,25 @@ export function Article() {
         title="A type-system like TypeScript, but as reliable as Rust"
       >
         <p>
+          {'BAML has a type system like TypeScript, but sound. TypeScript '}
+          <a
+            className="l6-link"
+            href="https://github.com/Microsoft/TypeScript/wiki/TypeScript-Design-Goals#non-goals"
+            rel="noreferrer"
+            target="_blank"
+          >
+            explicitly chose not to be sound
+          </a>
           {
-            'BAML supports advanced features like generics on day 1. And because types exist at runtime, variables always match their annotated type — no need to choose between 5 different schema validation libraries. There is no '
+            ', trading it away for productivity. That was the right move for humans, but it’s the wrong default when agents are writing the code.'
           }
+        </p>
+        <p>
+          {'BAML has no '}
           <code>any</code>
-          {'; all code must be fully typed.'}
+          {
+            ', types are what the code says at runtime, and it includes advanced features like generics on day one. No need to reach out for 5 schema validation libraries when the type system does it for you.'
+          }
         </p>
         <div className="l6-pair">
           <div>
@@ -424,8 +461,9 @@ export function Article() {
               code={TS_LIES}
               diagnostics={[
                 {
-                  line: 10,
-                  message: 'TypeError: undefined — at runtime, far from here',
+                  line: 8,
+                  message:
+                    'runtime TypeError: email is undefined — far from here',
                   severity: 'error',
                 },
               ]}
@@ -435,7 +473,9 @@ export function Article() {
             />
           </div>
           <div>
-            <p className="l6-pane-label l6-pane-label--after">baml</p>
+            <p className="l6-pane-label l6-pane-label--after">
+              baml — caught at compile time
+            </p>
             <BamlEditor filename="load.baml" initialCode={BAML_UNKNOWN} />
           </div>
         </div>
@@ -462,7 +502,7 @@ export function Article() {
               <BamlCode
                 code={TS_CATCH}
                 filename="run.ts"
-                highlightLines={[3]}
+                highlightLines={[4]}
                 lang="typescript"
               />
             </div>
@@ -492,7 +532,7 @@ export function Article() {
               <BamlCode
                 code={TS_INSTANCEOF}
                 filename="route.ts"
-                highlightLines={[3, 5, 7]}
+                highlightLines={[4, 5, 6]}
                 lang="typescript"
               />
             </div>
@@ -552,30 +592,16 @@ export function Article() {
         </p>
       </Section>
 
-      {/* ---- 3 · native testing ---- */}
-      <Section id="testing" num="3" title="Native testing framework">
-        <p>
-          {'Write tests anywhere, in any file. (More on testing '}
-          <a className="l6-link" href="#workflows">
-            above
-          </a>
-          {'.)'}
-        </p>
-        <div className="l6-block">
-          <BamlEditor filename="tests.baml" initialCode={BAML_TEST} />
-        </div>
-      </Section>
-
-      {/* ---- 4 · describe ---- */}
+      {/* ---- 3 · describe ---- */}
       <Section
         id="describe"
-        num="4"
+        num="3"
         title="baml describe — a built-in AST-based grep, to find things faster"
       >
         <p>
           <code>describe</code>
           {
-            ' is easier for agents to use than an LSP, and more informative than grep. Here’s a transcript of an agent searching with grep, versus with baml describe:'
+            ' is easier for agents to use than an LSP, and more informative than grep — agents writing BAML code don’t need to search through 10 files to figure out how things work. Here’s a transcript of an agent searching with grep, versus with baml describe:'
           }
         </p>
         <div className="l6-pair">
@@ -597,10 +623,10 @@ export function Article() {
         </p>
       </Section>
 
-      {/* ---- 5 · pack ---- */}
+      {/* ---- 4 · pack ---- */}
       <Section
         id="pack"
-        num="5"
+        num="4"
         title="baml pack — ship a function as a tiny binary"
       >
         <p>
@@ -635,10 +661,10 @@ export function Article() {
         </Sub>
       </Section>
 
-      {/* ---- 6 · run -e ---- */}
+      {/* ---- 5 · run -e ---- */}
       <Section
         id="run-e"
-        num="6"
+        num="5"
         title="baml run -e — run small baml programs inline"
       >
         <p>
@@ -651,10 +677,10 @@ export function Article() {
         </div>
       </Section>
 
-      {/* ---- 7 · green threads ---- */}
+      {/* ---- 6 · green threads ---- */}
       <Section
         id="threads"
-        num="7"
+        num="6"
         title="Green threads a.k.a ‘make any function run in parallel’"
       >
         <p>
@@ -716,8 +742,8 @@ export function Article() {
         <Scheduler />
       </Section>
 
-      {/* ---- 8 · supply chain ---- */}
-      <Section id="supply-chain" num="8" title="No supply chain attacks">
+      {/* ---- 7 · supply chain ---- */}
+      <Section id="supply-chain" num="7" title="No supply chain attacks">
         <p>
           {'Okay, to be fair, BAML doesn’t '}
           <em>yet</em>
@@ -728,7 +754,7 @@ export function Article() {
       </Section>
 
       {/* ---- self improvement ---- */}
-      <Section id="self-improvement" num="9" title="Recursive self-improvement">
+      <Section id="self-improvement" num="8" title="Recursive self-improvement">
         <p>
           {
             'We take a data-driven approach to improving BAML, using feedback from agents themselves. We built '

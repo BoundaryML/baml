@@ -200,6 +200,28 @@
   border-radius: 60% 40% 55% 45% / 50% 60% 40% 55%;
   transform: translateY(-3px) rotate(-2deg);
 }
+/* ---- part dividers: the two top-level sections (workflows / agents).
+   Larger than the numbered subsection headers, with an eyebrow and a rule,
+   so each half of the page reads as its own division. */
+.l6 .l6-part {
+  border-top: 1px solid var(--l6-rule);
+}
+.l6 .l6-part-eyebrow {
+  margin: 0 0 0.55rem;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--l6-accent);
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+}
+.l6 .l6-part-title {
+  margin: 0 0 1.1rem;
+  font-size: clamp(29px, 3.8vw, 42px);
+  font-weight: 680;
+  line-height: 1.12;
+  color: var(--l6-ink);
+  letter-spacing: -0.02em;
+}
 .l6 p {
   margin: 0 0 1rem;
 }
