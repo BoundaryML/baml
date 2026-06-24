@@ -1166,6 +1166,9 @@ fn lower_class(
     // Each is skipped if the user already defined that method.
     crate::auto_derive_json::maybe_synthesize_derived_methods(&mut class_def);
 
+    // BEP-042: wrap a magic `cleanup(self) -> void` method in its run-once guard.
+    crate::cleanup_guard::maybe_inject_cleanup_guard(&mut class_def);
+
     Some(class_def)
 }
 

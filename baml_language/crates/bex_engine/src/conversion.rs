@@ -148,7 +148,7 @@ impl BexEngine {
                     let handle = self.heap.create_handle(ptr);
                     let ty = RuntimeTy::Class(
                         class.name.clone(),
-                        instance.class_type_args.clone(),
+                        instance.class_type_args.to_vec(),
                         baml_type::TyAttr::default(),
                     );
                     return Ok(BexExternalValue::Adt(BexExternalAdt::TaggedHeapHandle {
@@ -190,7 +190,7 @@ impl BexEngine {
 
                 Ok(BexExternalValue::Instance {
                     class_name: class.name.to_string(),
-                    type_args: instance.class_type_args.clone(),
+                    type_args: instance.class_type_args.to_vec(),
                     fields: fields?,
                 })
             }
@@ -1548,7 +1548,7 @@ fn find_matching_union_member(value: Value, members: &[RuntimeTy]) -> Option<&Ru
                             matches!(m, RuntimeTy::Class(tn, expected_args, _)
                                 if *tn == class.name
                                 && (expected_args.is_empty()
-                                    || expected_args == &inst.class_type_args))
+                                    || expected_args[..] == inst.class_type_args[..]))
                         })
                     } else {
                         None
@@ -1682,7 +1682,7 @@ pub(crate) fn vm_arg_to_external(vm: &BexVm, value: Value) -> BexExternalValue {
 
                     BexExternalValue::Instance {
                         class_name,
-                        type_args: instance.class_type_args.clone(),
+                        type_args: instance.class_type_args.to_vec(),
                         fields,
                     }
                 }

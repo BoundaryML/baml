@@ -133,7 +133,7 @@ fn alloc_instance_ntypeargs_stores_class_type_args() {
     match vm.get_object(inst_ptr) {
         Object::Instance(inst) => {
             assert_eq!(
-                inst.class_type_args,
+                inst.class_type_args.to_vec(),
                 vec![RuntimeTy::int()],
                 "Instance::class_type_args should equal [RuntimeTy::int()]"
             );

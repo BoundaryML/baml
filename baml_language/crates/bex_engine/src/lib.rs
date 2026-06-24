@@ -891,7 +891,7 @@ fn value_runtime_baml_ty(value: Value, _proof: bex_heap::PermitProof<'_>) -> Opt
                     };
                     Some(RuntimeTy::Class(
                         class.name.clone(),
-                        instance.class_type_args.clone(),
+                        instance.class_type_args.to_vec(),
                         TyAttr::default(),
                     ))
                 }
@@ -2313,7 +2313,7 @@ impl BexEngine {
                 let class_type_args = receiver
                     .as_object_ptr()
                     .and_then(|ptr| match thread.vm.get_object(ptr) {
-                        Object::Instance(inst) => Some(inst.class_type_args.clone()),
+                        Object::Instance(inst) => Some(inst.class_type_args.to_vec()),
                         _ => None,
                     })
                     .unwrap_or_default();

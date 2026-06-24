@@ -557,7 +557,7 @@ impl Continuation for EqualsDriver {
 fn value_concrete_ty(vm: &BexVm, ptr: HeapPtr) -> Option<RuntimeTy> {
     match vm.get_object(ptr) {
         Object::Instance(inst) => {
-            let (class_ptr, type_args) = (inst.class, inst.class_type_args.clone());
+            let (class_ptr, type_args) = (inst.class, inst.class_type_args.to_vec());
             match vm.get_object(class_ptr) {
                 Object::Class(class) => Some(RuntimeTy::Class(
                     class.name.clone(),

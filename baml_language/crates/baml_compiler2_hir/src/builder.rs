@@ -1234,6 +1234,18 @@ impl<'db> SemanticIndexBuilder<'db> {
                         span: method.name_span,
                     });
             }
+            // BEP-042: `cleanup` is a reserved magic finalizer name. A method
+            // named `cleanup` whose signature isn't `cleanup(self) -> void` is
+            // malformed (the magic guard only fires for the exact shape).
+            if method.name.as_str() == ast::cleanup_guard::CLEANUP_METHOD
+                && !ast::cleanup_guard::has_cleanup_shape(method)
+            {
+                self.diagnostics
+                    .push(Hir2Diagnostic::CleanupMagicMethodSignature {
+                        class_name: c.name.clone(),
+                        span: method.name_span,
+                    });
+            }
             seen.entry(method.name.clone())
                 .or_default()
                 .push(MemberSite {

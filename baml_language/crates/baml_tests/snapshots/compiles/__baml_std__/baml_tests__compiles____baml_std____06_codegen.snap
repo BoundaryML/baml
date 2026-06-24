@@ -1727,6 +1727,9 @@ function baml.Uint8Array.to_json(self: baml.Uint8Array) -> baml.json.json {
 function baml.Uint8Array.zeroes(size: int) -> uint8array {
 }
 
+function baml._cleanup_begin(value: T) -> bool {
+}
+
 function baml._compare_shim(a: T, b: T) -> int {
 }
 

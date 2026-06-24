@@ -1487,6 +1487,8 @@ fn baml.Array.unshift = builtin(vm)
 
 fn baml.Map.values = builtin(vm)
 
+fn baml._cleanup_begin = builtin(vm)
+
 fn baml._to_string_default = builtin(vm)
 
 fn baml._to_string_shim = builtin(vm)

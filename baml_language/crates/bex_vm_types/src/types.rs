@@ -14,7 +14,7 @@ use std::{
     mem::MaybeUninit,
     sync::{
         Arc,
-        atomic::{AtomicU8, AtomicU64, Ordering},
+        atomic::{AtomicBool, AtomicU8, AtomicU64, Ordering},
     },
 };
 
@@ -643,12 +643,23 @@ pub struct Instance {
     /// Resolved class-level type args at construction time.  Empty when the
     /// class is non-generic.  De Bruijn-ordered to match
     /// `enclosing_generic_params()`: index 0 = first class param, etc.
-    pub class_type_args: Vec<baml_type::RuntimeTy>,
+    ///
+    /// Boxed (immutable after construction) rather than a `Vec` so `Instance`
+    /// stays within `Object`'s 64-byte budget once the `cleaned` latch is added
+    /// — matching the existing `Box<[RuntimeTy]>` convention for type-arg lists
+    /// (`Closure::captured_type_args`, `BoundMethod::type_args`).
+    pub class_type_args: Box<[baml_type::RuntimeTy]>,
 
     /// Fields are accessed by index. No string lookups. Each slot is atomic so
     /// racing field reads/writes across `spawn` fibers cannot become a Rust
     /// data race.
     pub fields: Vec<AtomicValueSlot>,
+
+    /// BEP-042 `cleanup` run-once latch. `false` for a fresh instance; flipped
+    /// `true` by the first `cleanup` invocation (explicit, `defer`, or — Commit
+    /// 2 — the GC finalizer). Only classes with a `cleanup` method ever read or
+    /// write it; for every other instance it is an inert `false`.
+    pub cleaned: CleanupLatch,
 }
 
 impl Instance {
@@ -659,8 +670,9 @@ impl Instance {
     ) -> Self {
         Self {
             class,
-            class_type_args,
+            class_type_args: class_type_args.into(),
             fields: fields.into_iter().map(AtomicValueSlot::new).collect(),
+            cleaned: CleanupLatch::new(false),
         }
     }
 
@@ -1199,6 +1211,78 @@ impl BorshSerialize for AtomicValueSlot {
 impl BorshDeserialize for AtomicValueSlot {
     fn deserialize_reader<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
         Value::deserialize_reader(reader).map(Self::new)
+    }
+}
+
+/// Per-instance "already cleaned" latch backing BEP-042 `cleanup`.
+///
+/// `cleanup` (the magic finalizer method) must run **at most once** per
+/// instance, regardless of whether it is triggered by an explicit
+/// `obj.cleanup()`, a `defer { obj.cleanup() }`, or (Commit 2) the GC
+/// finalizer. This is the shared run-once latch — the analogue of .NET's
+/// `BIT_SBLK_FINALIZER_RUN` / `GC.SuppressFinalize` bit.
+///
+/// Atomic because a `defer`-driven cleanup can run on a different `spawn` fiber
+/// than another path (and, Commit 2, the GC may discover the same instance).
+/// The test-and-set in [`Self::begin`] is the synchronization point: only the
+/// first caller observes "not yet cleaned" and runs the body.
+///
+/// Stored inline on [`Instance`] (not in a side table) so it is correct by
+/// construction across every GC mode: `copy_object_to_inactive` clones the
+/// object, and [`Clone`] preserves the bit, so a surviving instance stays
+/// cleaned and a reclaimed slot reused for a fresh instance starts uncleaned —
+/// no stale-pointer aliasing. Like [`AtomicValueSlot`] it carries manual
+/// `Clone`/`Debug`/`Borsh` impls so it can live in the derived `Instance`.
+#[repr(transparent)]
+pub struct CleanupLatch(AtomicBool);
+
+impl CleanupLatch {
+    #[inline]
+    pub const fn new(cleaned: bool) -> Self {
+        Self(AtomicBool::new(cleaned))
+    }
+
+    /// Test-and-set the latch on cleanup entry. Returns `true` iff this is the
+    /// *first* call (the caller should run the cleanup body); returns `false`
+    /// if the instance was already cleaned (the caller should skip the body).
+    ///
+    /// The latch is set on entry, not on success: a `cleanup` body that throws
+    /// or panics is still considered cleaned and will not be retried (BEP-042).
+    #[inline]
+    pub fn begin(&self) -> bool {
+        // `swap` returns the previous value; the first call observes `false`.
+        !self.0.swap(true, Ordering::AcqRel)
+    }
+
+    #[inline]
+    pub fn is_cleaned(&self) -> bool {
+        self.0.load(Ordering::Acquire)
+    }
+}
+
+impl Clone for CleanupLatch {
+    fn clone(&self) -> Self {
+        Self::new(self.is_cleaned())
+    }
+}
+
+impl std::fmt::Debug for CleanupLatch {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("CleanupLatch")
+            .field(&self.is_cleaned())
+            .finish()
+    }
+}
+
+impl BorshSerialize for CleanupLatch {
+    fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
+        self.is_cleaned().serialize(writer)
+    }
+}
+
+impl BorshDeserialize for CleanupLatch {
+    fn deserialize_reader<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
+        bool::deserialize_reader(reader).map(Self::new)
     }
 }
 

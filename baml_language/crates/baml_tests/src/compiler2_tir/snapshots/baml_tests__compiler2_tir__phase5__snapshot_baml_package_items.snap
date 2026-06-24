@@ -17,6 +17,7 @@ namespace baml:
   type ToString
   class TypeValue { methods: [_to_string_impl, implements, implemented_by, implementors, to_json, from_json, to_string] }
   class Uint8Array { methods: [to_json, length, at, push, pop, concat, includes, reverse, slice, zeroes, from_array, to_array, from_hex, to_hex, from_base64, to_base64, _to_string_impl, sort, from_json, to_string] }
+  function _cleanup_begin<T>
   function _compare_shim<T>
   function _float_total_cmp
   function _is_primitive_array<T>
