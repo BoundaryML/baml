@@ -891,7 +891,7 @@ fn value_runtime_baml_ty(value: Value, _proof: bex_heap::PermitProof<'_>) -> Opt
                     };
                     Some(RuntimeTy::Class(
                         class.name.clone(),
-                        instance.class_type_args.clone(),
+                        instance.class_type_args.to_vec(),
                         TyAttr::default(),
                     ))
                 }
@@ -1715,7 +1715,10 @@ impl BexEngine {
     /// # Returns
     ///
     /// Statistics about the collection (live count, collected count, etc.)
-    pub async fn collect_garbage(&self, level: bex_heap::CollectionLevel) -> bex_heap::GcStats {
+    pub async fn collect_garbage(
+        self: &Arc<Self>,
+        level: bex_heap::CollectionLevel,
+    ) -> bex_heap::GcStats {
         #[cfg(not(target_arch = "wasm32"))]
         self.park_requested.store(true, Ordering::Relaxed);
         let mut heap_guard = self.heap_permit_manager.request_park().await;
@@ -1792,6 +1795,14 @@ impl BexEngine {
         // *after* `collect_garbage` returns; both `maybe_collect_garbage` call
         // sites release their permit before calling.)
         bex_external_types::host_value::host_release_dispatch::drain();
+
+        // BEP-042: run the `cleanup` finalizer for every instance this
+        // collection kept alive. The `heap_guard` is dropped (so `call_function`
+        // can acquire a permit), the queued pointers are valid (drained at this
+        // same safepoint, before any other collection), and a caller that holds
+        // `checking_gc` (the engine GC paths) blocks a nested collection from
+        // moving them mid-drain.
+        self.drain_finalizers().await;
 
         tracing::debug!(
             "GC completed: {} live, {} collected",
@@ -2313,7 +2324,7 @@ impl BexEngine {
                 let class_type_args = receiver
                     .as_object_ptr()
                     .and_then(|ptr| match thread.vm.get_object(ptr) {
-                        Object::Instance(inst) => Some(inst.class_type_args.clone()),
+                        Object::Instance(inst) => Some(inst.class_type_args.to_vec()),
                         _ => None,
                     })
                     .unwrap_or_default();
@@ -2839,7 +2850,7 @@ impl BexEngine {
     /// collection level (Minor or Major) based on live object counts and
     /// allocation pressure.
     async fn gc_safepoint<T: RootHaver>(
-        &self,
+        self: &Arc<Self>,
         mut permit: ActiveHeapPermit<T>,
     ) -> ActiveHeapPermit<T> {
         let i_am_checking = self
@@ -2866,7 +2877,7 @@ impl BexEngine {
     /// permit-released state (e.g., the engine's `Await` branch waiting on
     /// a `SetOnce`) — calling [`Self::gc_safepoint`] there would do an
     /// extra release-and-reacquire pair around the heuristic for nothing.
-    async fn maybe_collect_garbage(&self) {
+    async fn maybe_collect_garbage(self: &Arc<Self>) {
         let i_am_checking = self
             .checking_gc
             .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
@@ -2880,6 +2891,54 @@ impl BexEngine {
         // If we are not the checker, the actual checker (some other VM) is
         // either already waiting in `request_park` or about to. Our caller
         // is permit-released, so they're not blocking that wait.
+    }
+
+    /// BEP-042: run the `cleanup` finalizer for each instance the GC kept alive
+    /// during the collection that just completed.
+    ///
+    /// Called immediately after a collection (the GC copied each pending instance
+    /// into the survivor space, so it is alive). The queued instances are rooted
+    /// into handles before the first `await` (see the body), so they stay valid
+    /// across any nested or concurrent collection — `collect_garbage` is `pub` and
+    /// can be called directly, where the `checking_gc` guard is NOT held, so we do
+    /// not rely on it. Each `cleanup` runs as an ordinary function call on the
+    /// real instance (passed by handle, never copied), so it sets the instance's
+    /// run-once latch; a `cleanup` racing on another fiber via an explicit call
+    /// or `defer` is deduped by that latch.
+    ///
+    /// A throwing `cleanup` is logged and swallowed — there is no caller to
+    /// propagate to on the GC path, and a bad finalizer must not break the GC
+    /// (BEP-042; matches Python's `__del__`).
+    async fn drain_finalizers(self: &Arc<Self>) {
+        // Root the entire queue into handles BEFORE the first `await`. The queued
+        // pointers are raw `HeapPtr`s; if a `cleanup` body yields and a nested or
+        // concurrent collection runs (possible when `collect_garbage` is called
+        // directly, where `checking_gc` is not held), the not-yet-processed
+        // pointers would be moved. Handles are GC roots and are fixed up across a
+        // collection, so converting up front keeps every pending instance valid.
+        let pending: Vec<_> = self
+            .heap
+            .take_pending_finalizers()
+            .into_iter()
+            .map(|(ptr, cleanup_fn)| (self.heap.create_handle(ptr), cleanup_fn))
+            .collect();
+        for (handle, cleanup_fn) in pending {
+            let ctx = FunctionCallContextBuilder::new(sys_types::CallId::next())
+                .with_profile_enabled(false)
+                .build();
+            // `Box::pin` breaks the async-recursion cycle: a `cleanup` body can
+            // allocate and trigger another collection, which re-enters this
+            // drain — boxing erases the otherwise-infinite future size.
+            let call = Box::pin(self.call_function(
+                &cleanup_fn,
+                vec![BexExternalValue::Handle(handle)],
+                ctx,
+                /* copy_objects = */ false,
+            ));
+            if let Err(e) = call.await {
+                tracing::warn!("BEP-042 cleanup finalizer `{cleanup_fn}` failed: {e}");
+            }
+        }
     }
 
     /// Transition the child future settled by `thread` to `Cancelled`

@@ -1419,6 +1419,8 @@ fn baml.Array.unshift = builtin(vm)
 
 fn baml.Map.values = builtin(vm)
 
+fn baml._cleanup_begin = builtin(vm)
+
 fn baml._from_json_shim = builtin(vm)
 
 fn baml._to_json_default = builtin(vm)

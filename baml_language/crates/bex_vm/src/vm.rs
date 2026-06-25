@@ -300,6 +300,7 @@ mod tests {
             alias: None,
             type_tag: 100,
             ty_attr: TyAttr::default(),
+            has_cleanup: false,
         }))
     }
 
@@ -1438,7 +1439,7 @@ impl BexVm {
                 attr: TyAttr::default(),
             },
             Object::Instance(inst) => {
-                let type_args = inst.class_type_args.clone();
+                let type_args = inst.class_type_args.to_vec();
                 match self.get_object(inst.class) {
                     Object::Class(class) => {
                         // Media values are `Object::Instance`s of the std media
@@ -3699,7 +3700,7 @@ impl BexVm {
             Object::BoundMethod(bm) => {
                 let bm_args: Box<[baml_type::RuntimeTy]> = match bm.receiver.as_object_ptr() {
                     Some(recv_ptr) => match self.get_object(recv_ptr) {
-                        Object::Instance(inst) => inst.class_type_args.clone().into_boxed_slice(),
+                        Object::Instance(inst) => inst.class_type_args.clone(),
                         _ => Box::new([]),
                     },
                     None => Box::new([]),

@@ -300,6 +300,9 @@ pub enum DiagnosticId {
     /// A class declares a `from_json` method directly; it must be provided by
     /// implementing the `baml.FromJson` interface instead.
     FromJsonMustImplementInterface,
+    /// A class declares a `cleanup` method whose signature is not the reserved
+    /// magic-finalizer shape `cleanup(self) -> void` (BEP-042).
+    CleanupMagicMethodSignature,
 }
 
 impl DiagnosticId {
@@ -494,6 +497,7 @@ impl DiagnosticId {
             DiagnosticId::DeferControlFlowEscape => "E0141",
             DiagnosticId::ToJsonMustImplementInterface => "E0142",
             DiagnosticId::FromJsonMustImplementInterface => "E0143",
+            DiagnosticId::CleanupMagicMethodSignature => "E0144",
         }
     }
 }

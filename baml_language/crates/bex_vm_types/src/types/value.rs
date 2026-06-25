@@ -1,4 +1,4 @@
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 use borsh::{BorshDeserialize, BorshSerialize};
 
@@ -435,6 +435,77 @@ impl BorshSerialize for AtomicValueSlot {
 impl BorshDeserialize for AtomicValueSlot {
     fn deserialize_reader<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
         Value::deserialize_reader(reader).map(Self::new)
+    }
+}
+
+/// Per-instance "already cleaned" latch backing BEP-042 `cleanup`.
+///
+/// `cleanup` (the magic finalizer method) must run **at most once** per
+/// instance, regardless of whether it is triggered by an explicit
+/// `obj.cleanup()`, a `defer { obj.cleanup() }`, or the GC finalizer. This is
+/// the shared run-once latch — the analogue of .NET's `GC.SuppressFinalize` bit.
+///
+/// Atomic because a `defer`-driven cleanup can run on a different `spawn` fiber
+/// than another path (and the GC may discover the same instance). The
+/// test-and-set in [`Self::begin`] is the synchronization point: only the first
+/// caller observes "not yet cleaned" and runs the body.
+///
+/// Stored inline on [`Instance`](super::Instance) (not in a side table) so it is
+/// correct by construction across every GC mode: the collector clones the object
+/// when it copies it, and [`Clone`] preserves the bit, so a surviving instance
+/// stays cleaned and a reclaimed slot reused for a fresh instance starts
+/// uncleaned — no stale-pointer aliasing. Like [`AtomicValueSlot`] it carries
+/// manual `Clone`/`Debug`/`Borsh` impls so it can live in the derived `Instance`.
+#[repr(transparent)]
+pub struct CleanupLatch(AtomicBool);
+
+impl CleanupLatch {
+    #[inline]
+    pub const fn new(cleaned: bool) -> Self {
+        Self(AtomicBool::new(cleaned))
+    }
+
+    /// Test-and-set the latch on cleanup entry. Returns `true` iff this is the
+    /// *first* call (the caller should run the cleanup body); returns `false` if
+    /// the instance was already cleaned (the caller should skip the body).
+    ///
+    /// The latch is set on entry, not on success: a `cleanup` body that throws
+    /// or panics is still considered cleaned and will not be retried (BEP-042).
+    #[inline]
+    pub fn begin(&self) -> bool {
+        // `swap` returns the previous value; the first call observes `false`.
+        !self.0.swap(true, Ordering::AcqRel)
+    }
+
+    #[inline]
+    pub fn is_cleaned(&self) -> bool {
+        self.0.load(Ordering::Acquire)
+    }
+}
+
+impl Clone for CleanupLatch {
+    fn clone(&self) -> Self {
+        Self::new(self.is_cleaned())
+    }
+}
+
+impl std::fmt::Debug for CleanupLatch {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("CleanupLatch")
+            .field(&self.is_cleaned())
+            .finish()
+    }
+}
+
+impl BorshSerialize for CleanupLatch {
+    fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
+        self.is_cleaned().serialize(writer)
+    }
+}
+
+impl BorshDeserialize for CleanupLatch {
+    fn deserialize_reader<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
+        bool::deserialize_reader(reader).map(Self::new)
     }
 }
 

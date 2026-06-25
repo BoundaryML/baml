@@ -1149,7 +1149,7 @@ fn lower_class(
         .filter_map(|block| lower_implements_block(&block, diags, env_var_refs))
         .collect();
 
-    let class_def = crate::ast::ClassDef {
+    let mut class_def = crate::ast::ClassDef {
         name: Name::new(name_token.text()),
         generic_params,
         generic_param_bounds,
@@ -1166,6 +1166,9 @@ fn lower_class(
     // methods. `obj.to_json()` desugars to `baml.json.from(obj)` and
     // `Type.from_json(j)` desugars to `baml.json.to<Type>(j)` (TIR + MIR);
     // customization is via `implements baml.ToJson` / `baml.FromJson`.
+
+    // BEP-042: wrap a magic `cleanup(self) -> void` method in its run-once guard.
+    crate::cleanup_guard::maybe_inject_cleanup_guard(&mut class_def);
 
     Some(class_def)
 }

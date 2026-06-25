@@ -58,6 +58,21 @@ function _to_string_shim<T>(value: T) -> string throws never {
   $rust_function
 }
 
+/// Internal: BEP-042 `cleanup` run-once guard. Compiled into the prologue of a
+/// user class's magic `cleanup(self) -> void` method as
+/// `if (baml._cleanup_begin(self)) { <body> }`. Atomically test-and-sets the
+/// receiver instance's per-instance "cleaned" latch and returns `true` iff this
+/// is the *first* invocation (so the body should run); a second `cleanup` on the
+/// same instance — from an explicit call, a `defer`, or (later) the GC finalizer
+/// — returns `false`, so the body is skipped. The latch is set on entry, so a
+/// `cleanup` that throws is still considered cleaned (BEP-042). For a non-instance
+/// receiver it returns `true` defensively (the guard is only emitted for class
+/// `cleanup` methods, whose `self` is always an instance).
+//baml:vm
+function _cleanup_begin<T>(value: T) -> bool throws never {
+  $rust_function
+}
+
 /// Opt-in JSON conversion.
 ///
 /// A type implements `baml.ToJson` to control how `baml.json.from(value)`

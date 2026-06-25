@@ -100,6 +100,7 @@ function baml.values(self: ?) -> V[]  [builtin]
 lambda (i, j) in sort_by_key: captures [keys]
 
 --- <builtin>/baml/conversions.baml ---
+function baml._cleanup_begin(value: T) -> bool  [builtin]
 function baml._from_json_shim(j: baml.json.json) -> T  [builtin]
 function baml._to_json_default(value: T) -> baml.json.json  [builtin]
 function baml._to_json_shim(value: T) -> baml.json.json  [builtin]
