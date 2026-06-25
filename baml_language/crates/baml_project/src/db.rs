@@ -1264,6 +1264,57 @@ impl ProjectDatabase {
                 }
             }
 
+            // Region governance for `//#` headers: a header owns the lines from
+            // its own line until the next header in the same block, or the end
+            // of that block. Clicking anywhere in that region (e.g. inside an
+            // `if` that is not itself a rendered node) should be able to select
+            // the header node. So find the nearest preceding header whose block
+            // still contains the cursor and inject it as the LEAST-specific
+            // candidate — a max length sorts it last, behind any real node.
+            #[allow(clippy::cast_possible_truncation)] // arena indices never exceed u32
+            if let Some(eb) = expr_body {
+                let mut governing: Option<(u32, text_size::TextSize)> = None;
+                for (idx, (_id, range)) in source_map.stmt_spans.iter().enumerate() {
+                    let idx_u32 = idx as u32;
+                    let stmt_id = la_arena::Idx::<baml_compiler2_ast::Stmt>::from_raw(
+                        la_arena::RawIdx::from_u32(idx_u32),
+                    );
+                    if !matches!(
+                        &eb.stmts[stmt_id],
+                        baml_compiler2_ast::Stmt::HeaderComment { .. }
+                    ) {
+                        continue;
+                    }
+                    // The header must begin at or before the cursor.
+                    if range.start() > offset {
+                        continue;
+                    }
+                    // ...and its own block must still contain the cursor —
+                    // otherwise the header's region ended when that block closed.
+                    let header_scope = index.scope_at_offset(range.start(), None);
+                    let header_scope_range = index.scopes[header_scope.index() as usize].range;
+                    if !(header_scope_range.contains(offset) || header_scope_range.end() == offset)
+                    {
+                        continue;
+                    }
+                    // Nearest preceding header wins (the next header supersedes).
+                    let take = match governing {
+                        None => true,
+                        Some((_, start)) => range.start() > start,
+                    };
+                    if take {
+                        governing = Some((idx_u32, range.start()));
+                    }
+                }
+                if let Some((idx_u32, _)) = governing {
+                    let tagged =
+                        baml_compiler2_visualization::control_flow::STMT_SOURCE_EXPR_TAG | idx_u32;
+                    // Max length → sorts last, so any real expression node under
+                    // the cursor is still preferred over the governing header.
+                    containing.push((tagged, func_scope_range.len()));
+                }
+            }
+
             // Sort smallest-first and deduplicate so the TS side tries
             // the most specific expression first.
             containing.sort_by_key(|&(_, len)| len);
@@ -1325,6 +1376,46 @@ impl std::fmt::Debug for ProjectDatabase {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn header_above_if_keeps_all_branch_arms() {
+        use baml_compiler2_visualization::control_flow::{
+            NodeType, prepare_control_flow_graph_for_visualization,
+        };
+        let mut db = ProjectDatabase::new();
+        db.set_project_root(std::path::Path::new("/tmp"));
+        db.add_or_update_file(
+            std::path::Path::new("/tmp/wf.baml"),
+            r#"
+function classify(text: string) -> string {
+  let t = text.to_lower_case();
+  //# check sentiment
+  if (t.includes("love")) { "positive" } else { "negative" }
+}
+"#,
+        );
+        let graph = db.ast_control_flow_graph("classify").unwrap();
+        let prepared = prepare_control_flow_graph_for_visualization(&graph);
+        // The `//# check sentiment` header sits directly above the if, so the
+        // whole branch group and both arms must survive pruning, even though
+        // neither arm holds its own anchor (header / LLM call).
+        let arms = prepared
+            .nodes
+            .values()
+            .filter(|n| matches!(n.node_type, NodeType::BranchArm))
+            .count();
+        assert!(
+            arms >= 2,
+            "a header directly above an if should keep all its branch arms; got {arms}"
+        );
+        assert!(
+            prepared
+                .nodes
+                .values()
+                .any(|n| matches!(n.node_type, NodeType::BranchGroup)),
+            "the annotated branch group should survive pruning"
+        );
+    }
 
     #[test]
     fn test_ast_control_flow_graph_with_headers() {
@@ -1400,6 +1491,68 @@ function Workflow(input: string) -> string {
 
         // Edges should be non-empty.
         assert!(!graph.edges_by_src.is_empty(), "graph should have edges");
+    }
+
+    #[test]
+    #[allow(clippy::cast_possible_truncation)] // tiny test fixtures fit in u32
+    fn cursor_in_header_region_selects_governing_header() {
+        use baml_compiler2_visualization::control_flow::{NodeType, STMT_SOURCE_EXPR_TAG};
+
+        let mut db = ProjectDatabase::new();
+        db.set_project_root(std::path::Path::new("/tmp"));
+        let src = r#"
+function Workflow(input: string) -> string {
+    //# Prepare
+    let x = input;
+    //# Process
+    if (input == "go") {
+        "yes"
+    } else {
+        "no"
+    }
+}
+"#;
+        db.add_or_update_file(std::path::Path::new("/tmp/wf.baml"), src);
+
+        // The "Process" header node's tagged source_expr.
+        let graph = db.ast_control_flow_graph("Workflow").unwrap();
+        let process_expr = graph
+            .nodes
+            .values()
+            .find(|n| matches!(n.node_type, NodeType::HeaderContextEnter) && n.label == "Process")
+            .and_then(|n| n.source_expr)
+            .expect("Process header should exist with a source_expr");
+        assert!(process_expr & STMT_SOURCE_EXPR_TAG != 0);
+
+        // Cursor inside the if-arm (`"yes"`) — that arm is not itself a rendered
+        // node, but it lives in the region governed by "//# Process".
+        let offset = (src.find("\"yes\"").unwrap() as u32) + 1;
+        let ctx = db.playground_cursor_context("/tmp/wf.baml", offset);
+        assert!(
+            ctx.source_expr_candidates.contains(&process_expr),
+            "cursor inside the Process region should offer the Process header; got {:?}",
+            ctx.source_expr_candidates
+        );
+
+        // Cursor on the `let x = input;` line is governed by "//# Prepare", not
+        // "//# Process" (the later header only governs from its own line down).
+        let prepare_expr = graph
+            .nodes
+            .values()
+            .find(|n| matches!(n.node_type, NodeType::HeaderContextEnter) && n.label == "Prepare")
+            .and_then(|n| n.source_expr)
+            .expect("Prepare header should exist with a source_expr");
+        let let_offset = (src.find("let x = input;").unwrap() as u32) + 4;
+        let let_ctx = db.playground_cursor_context("/tmp/wf.baml", let_offset);
+        assert!(
+            let_ctx.source_expr_candidates.contains(&prepare_expr),
+            "cursor on the let line should offer the Prepare header; got {:?}",
+            let_ctx.source_expr_candidates
+        );
+        assert!(
+            !let_ctx.source_expr_candidates.contains(&process_expr),
+            "the later Process header must not govern lines above it"
+        );
     }
 
     #[test]

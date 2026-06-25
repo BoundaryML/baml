@@ -232,6 +232,31 @@ fn compute_required_nodes(graph: &ControlFlowGraph) -> HashSet<NodeId> {
         }
     }
 
+    // A `//#` header placed directly above an `if`/`match` annotates the whole
+    // branch: keep any BranchGroup that is a direct child of a kept header so
+    // every arm renders (via the arm loop below), even when no arm contains its
+    // own anchor.
+    let mut header_branch_groups: Vec<NodeId> = Vec::new();
+    for node in graph.nodes.values() {
+        if !matches!(node.node_type, NodeType::BranchGroup) {
+            continue;
+        }
+        let Some(parent_id) = node.parent_node_id else {
+            continue;
+        };
+        let parent_is_kept_header = keep.contains(&parent_id)
+            && matches!(
+                graph.nodes.get(&parent_id).map(|p| &p.node_type),
+                Some(NodeType::HeaderContextEnter)
+            );
+        if parent_is_kept_header {
+            header_branch_groups.push(node.id);
+        }
+    }
+    for id in header_branch_groups {
+        keep.insert(id);
+    }
+
     // All arms of a kept branch group render, even header-less ones.
     for node in graph.nodes.values() {
         if !matches!(node.node_type, NodeType::BranchArm) {
@@ -755,7 +780,9 @@ mod tests {
     // -- Pass 1 tests --
 
     #[test]
-    fn pass1_drops_branch_group_without_headers() {
+    fn pass1_keeps_branch_group_directly_under_header() {
+        // A `//#` header directly above an if/match annotates the whole branch:
+        // the branch group and all arms survive even with no anchor inside them.
         let mut graph = ControlFlowGraph::default();
         let root = Node::root(NodeId::new(0), "f|root:0", "root");
         let header = make_node(1, Some(0), "header", NodeType::HeaderContextEnter);
@@ -767,8 +794,24 @@ mod tests {
         graph.nodes.insert(branch_arm.id, branch_arm);
         let filtered = remove_implicit_nodes(&graph);
         assert!(filtered.nodes.contains_key(&header.id));
+        assert!(filtered.nodes.contains_key(&NodeId::new(2)));
+        assert!(filtered.nodes.contains_key(&NodeId::new(3)));
+    }
+
+    #[test]
+    fn pass1_drops_branch_group_without_anchor_outside_header() {
+        // A branch group with no anchor that is NOT directly under a header is
+        // still pruned — only headers / LLM calls force a branch to render.
+        let mut graph = ControlFlowGraph::default();
+        let root = Node::root(NodeId::new(0), "f|root:0", "root");
+        let branch_group = make_node(1, Some(0), "if", NodeType::BranchGroup);
+        let branch_arm = make_node(2, Some(1), "arm1", NodeType::BranchArm);
+        graph.nodes.insert(root.id, root);
+        graph.nodes.insert(branch_group.id, branch_group);
+        graph.nodes.insert(branch_arm.id, branch_arm);
+        let filtered = remove_implicit_nodes(&graph);
+        assert!(!filtered.nodes.contains_key(&NodeId::new(1)));
         assert!(!filtered.nodes.contains_key(&NodeId::new(2)));
-        assert!(!filtered.nodes.contains_key(&NodeId::new(3)));
     }
 
     #[test]
