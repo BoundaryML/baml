@@ -830,8 +830,8 @@ pub fn generate_project_bytecode_with_opt(
             // BEP-042: does this class define a magic `cleanup(self) -> void`
             // finalizer? This MUST stay in lockstep with the canonical
             // `cleanup_guard::has_cleanup_shape` (which validates the AST and
-            // emits E0144): same shape — one `self` param, no generics, `-> void`
-            // return, and no propagating `throws` — checked here on the lowered
+            // emits E0144): same shape — one `self` param with no default, no
+            // generics, `-> void` return, and no propagating `throws` — on the lowered
             // HIR `Function`. The `throws` part reuses the shared helper; the rest
             // is mirrored (the two share field types but not the struct).
             //
@@ -851,6 +851,7 @@ pub fn generate_project_bytecode_with_opt(
                     && func.generic_params.is_empty()
                     && func.params.len() == 1
                     && func.params[0].name.as_str() == "self"
+                    && func.params[0].default.is_none()
                     && baml_compiler2_ast::cleanup_guard::throws_is_effectively_none(
                         func.throws.as_ref(),
                     )

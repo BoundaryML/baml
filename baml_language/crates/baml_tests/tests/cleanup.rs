@@ -185,6 +185,25 @@ function main() -> int { 0 }
 
 #[tokio::test]
 #[should_panic(expected = "[E0144]")]
+async fn cleanup_with_default_on_self_is_compile_error() {
+    // Method parameters accept defaults during lowering, so `cleanup(self = ...)`
+    // would otherwise pass the name/arity checks and be mistaken for the magic
+    // finalizer. A default on `self` is meaningless (the finalizer is only ever
+    // invoked with the receiver) and is not the reserved shape, so it must be
+    // rejected rather than silently accepted as a finalizer.
+    let _ = baml_test!(
+        r#"
+class Bad {
+  x int
+  function cleanup(self = null) -> void { }
+}
+function main() -> int { 0 }
+"#
+    );
+}
+
+#[tokio::test]
+#[should_panic(expected = "[E0144]")]
 async fn cleanup_with_throws_is_compile_error() {
     // A finalizer must not declare a `throws` contract — on the GC path the
     // error has no caller and is swallowed, so a propagating `cleanup` is the

@@ -59,10 +59,10 @@ pub fn is_cleanup_magic_method(func: &FunctionDef) -> bool {
 }
 
 /// The required shape of the magic `cleanup` method: exactly one parameter
-/// `self`, no generic parameters, an explicit `-> void` return, and no `throws`
-/// clause. Shared by the guard injector (which only rewrites well-shaped
-/// finalizers) and the HIR signature check (which reports a method named
-/// `cleanup` that fails this). The name itself is checked by
+/// `self` with no default value, no generic parameters, an explicit `-> void`
+/// return, and no `throws` clause. Shared by the guard injector (which only
+/// rewrites well-shaped finalizers) and the HIR signature check (which reports a
+/// method named `cleanup` that fails this). The name itself is checked by
 /// [`is_cleanup_magic_method`] / the HIR pass.
 ///
 /// A propagating `throws` is disallowed because a finalizer must not have an
@@ -71,10 +71,17 @@ pub fn is_cleanup_magic_method(func: &FunctionDef) -> bool {
 /// handle errors must do so internally (`... catch { ... }`). An explicit
 /// `throws never` is fine — it provably has no error to drop (see
 /// [`throws_is_effectively_none`]).
+///
+/// A default on `self` (e.g. `cleanup(self = null)`) is rejected too: method
+/// parameters accept defaults during lowering (`defaults_allowed`), so without
+/// this guard a defaulted `self` would slip through as the reserved shape. The
+/// finalizer is only ever invoked with the receiver, so a default is meaningless
+/// and not part of the blessed signature.
 pub fn has_cleanup_shape(func: &FunctionDef) -> bool {
     func.generic_params.is_empty()
         && func.params.len() == 1
         && func.params[0].name.as_str() == "self"
+        && func.params[0].default.is_none()
         && throws_is_effectively_none(func.throws.as_ref())
         && matches!(
             func.return_type.as_ref().map(|st| &st.expr),
