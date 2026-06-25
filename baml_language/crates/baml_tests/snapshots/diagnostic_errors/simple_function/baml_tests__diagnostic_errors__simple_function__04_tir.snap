@@ -22,9 +22,6 @@ class user.User {
   name: string
   age: int
 }
-function user.User.from_json(j: baml.json.json) -> user.User throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  User { name: baml.json.from_json<string>(baml.json.field(j, "name")), age: baml.json.from_json<int>(baml.json.field(j, "age")) } : user.User
-}
 function user.HelloWorld$stream(name: string, client: baml.llm.Client = GPT4) -> baml.llm.Stream<string | null, string> throws never {
   baml.llm.stream_llm_function(client, "HelloWorld", map { "name": name }) : baml.llm.Stream<string | null, string>
   !! 0..104: unresolved name: GPT4

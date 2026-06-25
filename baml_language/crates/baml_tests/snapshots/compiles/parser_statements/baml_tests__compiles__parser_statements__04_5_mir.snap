@@ -188,33 +188,6 @@ fn user.edge_type_then_object() -> int {
     }
 }
 
-fn user.EdgeFoo.from_json(j: baml.json.json) -> EdgeFoo {
-    // Locals:
-    let _0: EdgeFoo // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: int
-    let _3: baml.json.json
-    let _4: type
-
-    bb0: {
-        _3 = call const fn baml.json.field(copy _1, const "x") -> [bb1];
-    }
-
-    bb1: {
-        _4 = load_type(int);
-        _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
-    }
-
-    bb2: {
-        _0 = user.EdgeFoo { copy _2 };
-        goto -> bb3;
-    }
-
-    bb3: {
-        return;
-    }
-}
-
 fn user.let_mixed_semicolons() -> int {
     // Locals:
     let _0: int // _0 // return
@@ -1165,45 +1138,6 @@ fn user.ConditionalLogic(age: int) -> string {
 
     bb4: {
         _0 = const "minor";
-        goto -> bb5;
-    }
-
-    bb5: {
-        return;
-    }
-}
-
-fn user.Point.from_json(j: baml.json.json) -> Point {
-    // Locals:
-    let _0: Point // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: int
-    let _3: baml.json.json
-    let _4: type
-    let _5: int
-    let _6: baml.json.json
-    let _7: type
-
-    bb0: {
-        _3 = call const fn baml.json.field(copy _1, const "x") -> [bb1];
-    }
-
-    bb1: {
-        _4 = load_type(int);
-        _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
-    }
-
-    bb2: {
-        _6 = call const fn baml.json.field(copy _1, const "y") -> [bb3];
-    }
-
-    bb3: {
-        _7 = load_type(int);
-        _5 = call const fn baml.json.from_json<copy _7>(copy _6) -> [bb4];
-    }
-
-    bb4: {
-        _0 = user.Point { copy _2, copy _5 };
         goto -> bb5;
     }
 

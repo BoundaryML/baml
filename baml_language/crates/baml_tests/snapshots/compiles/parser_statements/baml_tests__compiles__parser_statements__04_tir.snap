@@ -93,9 +93,6 @@ function user.edge_call_then_index(foo: () -> int[] throws never) -> int throws 
 class user.EdgeFoo {
   x: int
 }
-function user.EdgeFoo.from_json(j: baml.json.json) -> user.EdgeFoo throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  EdgeFoo { x: baml.json.from_json<int>(baml.json.field(j, "x")) } : user.EdgeFoo
-}
 function user.edge_type_then_object() -> int throws never {
   { : int
     EdgeFoo { x: 1 }.x : int
@@ -265,9 +262,6 @@ function user.let_statements() -> int throws never {
 class user.Point {
   x: int
   y: int
-}
-function user.Point.from_json(j: baml.json.json) -> user.Point throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  Point { x: baml.json.from_json<int>(baml.json.field(j, "x")), y: baml.json.from_json<int>(baml.json.field(j, "y")) } : user.Point
 }
 class user.Point$stream {
   x: int | null

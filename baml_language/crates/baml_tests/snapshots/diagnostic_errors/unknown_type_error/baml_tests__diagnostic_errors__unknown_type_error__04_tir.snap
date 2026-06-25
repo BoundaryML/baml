@@ -36,9 +36,6 @@ function user.UnknownFieldAccess(raw: unknown) -> string throws never {
 class user.Envelope {
   payload: unknown
 }
-function user.Envelope.from_json(j: baml.json.json) -> user.Envelope throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  baml.json.from_string<T>(baml.json.stringify(j)) : user.Envelope
-}
 function user.UnknownNestedFieldAccess(envelope: user.Envelope) -> string throws never {
   { : unknown
     envelope.payload.email : unknown

@@ -1,30 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-function user.Config.from_json(j: baml.json.json) -> Config {
-    load_var j
-    load_const "key"
-    call baml.json.field
-    store_var _3
-    load_type string
-    load_var _3
-    call baml.json.from_json
-    init_instance user.Config .key
-    return
-}
-
-function user.llm.Response.from_json(j: baml.json.json) -> llm.Response {
-    load_var j
-    load_const "text"
-    call baml.json.field
-    store_var _3
-    load_type string
-    load_var _3
-    call baml.json.from_json
-    init_instance user.llm.Response .text
-    return
-}
-
 function user.llm.UseConfig(cfg: Config) -> llm.Response {
     load_var cfg
     load_field .key

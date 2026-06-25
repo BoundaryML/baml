@@ -28,9 +28,6 @@ type user.JSON = int | float | string | bool | user.JSON[] | map<string, baml.js
 class user.NotJSON {
   inner: unknown
 }
-function user.NotJSON.from_json(j: baml.json.json) -> user.NotJSON throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  NotJSON { inner: baml.json.from_json<name>(baml.json.field(j, "inner")) } : user.NotJSON
-}
 function user.EchoJSON(i: user.JSON) -> user.JSON throws never {
   { : user.NotJSON
     NotJSON { inner: "Whoops" } : user.NotJSON

@@ -5,14 +5,8 @@ source: crates/baml_tests/src/generated_tests.rs
 class user.A {
   field: string
 }
-function user.A.from_json(j: baml.json.json) -> user.A throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  A { field: baml.json.from_json<string>(baml.json.field(j, "field")) } : user.A
-}
 class user.A {
   field: string
-}
-function user.A.from_json(j: baml.json.json) -> user.A throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  A { field: baml.json.from_json<string>(baml.json.field(j, "field")) } : user.A
 }
 type user.A = int
 class user.A$stream {

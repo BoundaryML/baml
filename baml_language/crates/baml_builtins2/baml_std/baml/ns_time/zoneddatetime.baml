@@ -191,12 +191,14 @@ class ZonedDateTime {
         self.to_plain().millisecond()
     }
 
-    function from_json(j: baml.json.json) -> ZonedDateTime throws root.json.JsonDecodeError {
-        match (j) {
-            string => ZonedDateTime.parse(j) catch (_) {
-                root.errors.ParseError { message } => throw root.json.JsonDecodeError { message: message, path: "" },
-            },
-            _ => throw root.json.JsonDecodeError { message: "Expected RFC 3339 / RFC 9557 timestamp string" }
+    implements baml.FromJson {
+        function from_json(j: baml.json.json) -> Self throws baml.json.JsonDecodeError {
+            match (j) {
+                string => ZonedDateTime.parse(j) catch (_) {
+                    root.errors.ParseError { message } => throw baml.json.JsonDecodeError { message: message, path: "" },
+                },
+                _ => throw baml.json.JsonDecodeError { message: "Expected RFC 3339 / RFC 9557 timestamp string", path: "" }
+            }
         }
     }
     implements baml.ToJson {

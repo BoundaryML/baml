@@ -9,12 +9,6 @@ class user.Outer {
   inner: user.Inner
   name: string
 }
-function user.from_json(j: baml.json.json) -> user.Inner  [expr] {
-  user.Inner { value: baml.json.from_json(baml.json.field(j, "value")) }
-}
-function user.from_json(j: baml.json.json) -> user.Outer  [expr] {
-  user.Outer { inner: baml.json.from_json(baml.json.field(j, "inner")), name: baml.json.from_json(baml.json.field(j, "name")) }
-}
 function user.test_captured_chain(outer: user.Outer) -> int  [expr] {
   { let result = [1].map((x) -> { {  } outer.inner.value }) } result[0]
 }

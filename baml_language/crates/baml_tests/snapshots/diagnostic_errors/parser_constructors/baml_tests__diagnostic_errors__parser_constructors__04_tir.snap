@@ -6,9 +6,6 @@ class user.Point {
   x: int
   y: int
 }
-function user.Point.from_json(j: baml.json.json) -> user.Point throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  Point { x: baml.json.from_json<int>(baml.json.field(j, "x")), y: baml.json.from_json<int>(baml.json.field(j, "y")) } : user.Point
-}
 function user.stringArray() -> string[] throws never {
   { : string[]
     ["hello", "world", "test"] : string[]
@@ -47,15 +44,9 @@ class user.Point {
   x: int
   y: int
 }
-function user.Point.from_json(j: baml.json.json) -> user.Point throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  Point { x: baml.json.from_json<int>(baml.json.field(j, "x")), y: baml.json.from_json<int>(baml.json.field(j, "y")) } : user.Point
-}
 class user.Vec2D {
   p: user.Point
   q: user.Point
-}
-function user.Vec2D.from_json(j: baml.json.json) -> user.Vec2D throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  Vec2D { p: baml.json.from_json<Point>(baml.json.field(j, "p")), q: baml.json.from_json<Point>(baml.json.field(j, "q")) } : user.Vec2D
 }
 function user.point() -> user.Point throws never {
   { : user.Point

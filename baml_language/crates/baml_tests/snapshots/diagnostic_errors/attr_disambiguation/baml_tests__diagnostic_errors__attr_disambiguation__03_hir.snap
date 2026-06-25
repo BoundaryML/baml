@@ -46,27 +46,6 @@ enum user.GRole {Admin, User, Guest}
 enum user.GSeverity {Low, Medium, High}
 enum user.GSize {Small, Medium, Large}
 enum user.GStatus {Active, Inactive, Pending}
-function user.from_json(j: baml.json.json) -> user.GPoint  [expr] {
-  user.GPoint { x: baml.json.from_json(baml.json.field(j, "x")), y: baml.json.from_json(baml.json.field(j, "y")) }
-}
-function user.from_json(j: baml.json.json) -> user.GAliased  [expr] {
-  user.GAliased { status: baml.json.from_json(baml.json.field(j, "status")), role: baml.json.from_json(baml.json.field(j, "role")), point: baml.json.from_json(baml.json.field(j, "point")), coord: baml.json.from_json(baml.json.field(j, "coord")) }
-}
-function user.from_json(j: baml.json.json) -> user.GComplex  [expr] {
-  user.GComplex { statuses: baml.json.from_json(baml.json.field(j, "statuses")), maybe_status: baml.json.from_json(baml.json.field(j, "maybe_status")), role_or_status: baml.json.from_json(baml.json.field(j, "role_or_status")), points: baml.json.from_json(baml.json.field(j, "points")), maybe_point: baml.json.from_json(baml.json.field(j, "maybe_point")), config_map: baml.json.from_json(baml.json.field(j, "config_map")) }
-}
-function user.from_json(j: baml.json.json) -> user.GProfile  [expr] {
-  user.GProfile { status: baml.json.from_json(baml.json.field(j, "status")), role: baml.json.from_json(baml.json.field(j, "role")), name: baml.json.from_json(baml.json.field(j, "name")), location: baml.json.from_json(baml.json.field(j, "location")), fallback: baml.json.from_json(baml.json.field(j, "fallback")) }
-}
-function user.from_json(j: baml.json.json) -> user.GCoord  [expr] {
-  user.GCoord { lat: baml.json.from_json(baml.json.field(j, "lat")), lng: baml.json.from_json(baml.json.field(j, "lng")) }
-}
-function user.from_json(j: baml.json.json) -> user.GIncident  [expr] {
-  user.GIncident { severity: baml.json.from_json(baml.json.field(j, "severity")), priority: baml.json.from_json(baml.json.field(j, "priority")), title: baml.json.from_json(baml.json.field(j, "title")), config: baml.json.from_json(baml.json.field(j, "config")) }
-}
-function user.from_json(j: baml.json.json) -> user.GConfig  [expr] {
-  user.GConfig { key: baml.json.from_json(baml.json.field(j, "key")), value: baml.json.from_json(baml.json.field(j, "value")) }
-}
 enum user.GroupF {F1, F2, F3, F4, F5, F6}
 class user.MFoo {
   x: int
@@ -78,12 +57,6 @@ class user.OrderingModifiers {
   c4: user.MFoo[]
   c5: user.MFoo[]?
   c6: map<string, user.MFoo>
-}
-function user.from_json(j: baml.json.json) -> user.MFoo  [expr] {
-  user.MFoo { x: baml.json.from_json(baml.json.field(j, "x")) }
-}
-function user.from_json(j: baml.json.json) -> user.OrderingModifiers  [expr] {
-  user.OrderingModifiers { c1: baml.json.from_json(baml.json.field(j, "c1")), c2: baml.json.from_json(baml.json.field(j, "c2")), c3: baml.json.from_json(baml.json.field(j, "c3")), c4: baml.json.from_json(baml.json.field(j, "c4")), c5: baml.json.from_json(baml.json.field(j, "c5")), c6: baml.json.from_json(baml.json.field(j, "c6")) }
 }
 class user.AliasInNestedTypes {
   d1: user.NFoo[]
@@ -102,15 +75,6 @@ class user.NBar {
 }
 class user.NFoo {
   x: int
-}
-function user.from_json(j: baml.json.json) -> user.NFoo  [expr] {
-  user.NFoo { x: baml.json.from_json(baml.json.field(j, "x")) }
-}
-function user.from_json(j: baml.json.json) -> user.NBar  [expr] {
-  user.NBar { x: baml.json.from_json(baml.json.field(j, "x")) }
-}
-function user.from_json(j: baml.json.json) -> user.AliasInNestedTypes  [expr] {
-  user.AliasInNestedTypes { d1: baml.json.from_json(baml.json.field(j, "d1")), d2: baml.json.from_json(baml.json.field(j, "d2")), d3: baml.json.from_json(baml.json.field(j, "d3")), d4: baml.json.from_json(baml.json.field(j, "d4")), d5: baml.json.from_json(baml.json.field(j, "d5")), d6: baml.json.from_json(baml.json.field(j, "d6")), d7: baml.json.from_json(baml.json.field(j, "d7")), d8: baml.json.from_json(baml.json.field(j, "d8")), d9: baml.json.from_json(baml.json.field(j, "d9")), d10: baml.json.from_json(baml.json.field(j, "d10")) }
 }
 class user.EA {
   x: int
@@ -140,18 +104,6 @@ function user.E7() -> user.EFoo  [expr] {
 function user.E8() -> user.EFoo  [expr] {
   {  } user.EFoo { x: 1 }
 }
-function user.from_json(j: baml.json.json) -> user.EFoo  [expr] {
-  user.EFoo { x: baml.json.from_json(baml.json.field(j, "x")) }
-}
-function user.from_json(j: baml.json.json) -> user.EC  [expr] {
-  user.EC { x: baml.json.from_json(baml.json.field(j, "x")) }
-}
-function user.from_json(j: baml.json.json) -> user.EB  [expr] {
-  user.EB { x: baml.json.from_json(baml.json.field(j, "x")) }
-}
-function user.from_json(j: baml.json.json) -> user.EA  [expr] {
-  user.EA { x: baml.json.from_json(baml.json.field(j, "x")) }
-}
 class user.Fizz {
   x: int
 }
@@ -165,12 +117,6 @@ class user.OrderingSimple {
   a7: user.Fizz
   a8: user.Fizz
   a9: user.Fizz
-}
-function user.from_json(j: baml.json.json) -> user.Fizz  [expr] {
-  user.Fizz { x: baml.json.from_json(baml.json.field(j, "x")) }
-}
-function user.from_json(j: baml.json.json) -> user.OrderingSimple  [expr] {
-  user.OrderingSimple { a1: baml.json.from_json(baml.json.field(j, "a1")), a2: baml.json.from_json(baml.json.field(j, "a2")), a3: baml.json.from_json(baml.json.field(j, "a3")), a4: baml.json.from_json(baml.json.field(j, "a4")), a5: baml.json.from_json(baml.json.field(j, "a5")), a6: baml.json.from_json(baml.json.field(j, "a6")), a7: baml.json.from_json(baml.json.field(j, "a7")), a8: baml.json.from_json(baml.json.field(j, "a8")), a9: baml.json.from_json(baml.json.field(j, "a9")) }
 }
 class user.OrderingUnions {
   b1: user.UA | user.UB | user.UC
@@ -196,16 +142,4 @@ class user.UB {
 }
 class user.UC {
   x: int
-}
-function user.from_json(j: baml.json.json) -> user.UA  [expr] {
-  user.UA { x: baml.json.from_json(baml.json.field(j, "x")) }
-}
-function user.from_json(j: baml.json.json) -> user.OrderingUnions  [expr] {
-  user.OrderingUnions { b1: baml.json.from_json(baml.json.field(j, "b1")), b2: baml.json.from_json(baml.json.field(j, "b2")), b3: baml.json.from_json(baml.json.field(j, "b3")), b4: baml.json.from_json(baml.json.field(j, "b4")), b5: baml.json.from_json(baml.json.field(j, "b5")), b6: baml.json.from_json(baml.json.field(j, "b6")), b7: baml.json.from_json(baml.json.field(j, "b7")), b8: baml.json.from_json(baml.json.field(j, "b8")), b9: baml.json.from_json(baml.json.field(j, "b9")), b10: baml.json.from_json(baml.json.field(j, "b10")), b11: baml.json.from_json(baml.json.field(j, "b11")), b12: baml.json.from_json(baml.json.field(j, "b12")), b13: baml.json.from_json(baml.json.field(j, "b13")), b14: baml.json.from_json(baml.json.field(j, "b14")) }
-}
-function user.from_json(j: baml.json.json) -> user.UB  [expr] {
-  user.UB { x: baml.json.from_json(baml.json.field(j, "x")) }
-}
-function user.from_json(j: baml.json.json) -> user.UC  [expr] {
-  user.UC { x: baml.json.from_json(baml.json.field(j, "x")) }
 }

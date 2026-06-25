@@ -24,6 +24,3 @@ function user.EchoJSON(i: user.JSON) -> user.JSON  [expr] {
 function user.MakeJSON(i: user.NotJSON) -> user.JSON  [expr] {
   {  } i.inner
 }
-function user.from_json(j: baml.json.json) -> user.NotJSON  [expr] {
-  user.NotJSON { inner: baml.json.from_json(baml.json.field(j, "inner")) }
-}

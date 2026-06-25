@@ -74,12 +74,14 @@ class PlainTime {
         self._nanoseconds / 1000000 % 1000
     }
 
-    function from_json(j: baml.json.json) -> PlainTime throws root.json.JsonDecodeError {
-        match (j) {
-            string => PlainTime.parse(j) catch (_) {
-                root.errors.ParseError { message } => throw root.json.JsonDecodeError { message: message, path: "" },
-            },
-            _ => throw root.json.JsonDecodeError { message: "Expected ISO 8601 time string" }
+    implements baml.FromJson {
+        function from_json(j: baml.json.json) -> Self throws baml.json.JsonDecodeError {
+            match (j) {
+                string => PlainTime.parse(j) catch (_) {
+                    root.errors.ParseError { message } => throw baml.json.JsonDecodeError { message: message, path: "" },
+                },
+                _ => throw baml.json.JsonDecodeError { message: "Expected ISO 8601 time string", path: "" }
+            }
         }
     }
     implements baml.ToJson {

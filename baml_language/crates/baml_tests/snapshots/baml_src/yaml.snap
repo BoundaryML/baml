@@ -96,7 +96,23 @@ function yaml.$init_test_ns_yaml_yaml(registry: testing.TestCollector) -> null {
     return
 }
 
-function yaml.YamlWrappedName.from_json(j: baml.json.json) -> yaml.YamlWrappedName {
+function yaml.YamlWrappedName$stream.baml.FromJson.from_json(j: baml.json.json) -> yaml.YamlWrappedName$stream {
+    load_var j
+    load_const "name"
+    call baml.json.field
+    store_var _4
+    load_type string
+    load_var _4
+    call baml.json.from_json
+    store_var _3
+    load_const "wrapped:"
+    load_var _3
+    bin_op +
+    init_instance user.yaml.YamlWrappedName .name
+    return
+}
+
+function yaml.YamlWrappedName.baml.FromJson.from_json(j: baml.json.json) -> yaml.YamlWrappedName {
     load_var j
     load_const "name"
     call baml.json.field

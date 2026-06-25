@@ -37,15 +37,3 @@ function user.OptionalChaining(user: user.User?, nonNullUser: user.User, node: u
 function user.OptionalIndex(node: user.Node?, items: int[]?, lookup: map<string, int>?, nonNullItems: int[]) -> int  [expr] {
   { let b1 = items?.[0]; let b2 = node?.children?.[0]; let b3 = node?.children?.[0].value; let b4 = node?.children?.[0].next?.value; let b5 = lookup?.["total"]; let b6 = node?.labels?.["main"]; let b7 = node?.labels?.["main"].value; let b8 = node?.children?.[0]; let b9 = items?.[0].to_string(); let b10 = node?.children?.[node?.value]; let b11 = node?.children?.[items?.[0] NullCoalesce 0]; let b12 = nonNullItems?.[0]; items?.[0] = 42; node?.children?.[0].value = 99; lookup?.["total"] = 100; node?.labels?.["main"].value = 50; items?.[0] Add= 10; lookup?.["total"] Add= 5; let b13 = <missing>; return b1 NullCoalesce 0 }
 }
-function user.from_json(j: baml.json.json) -> user.Address  [expr] {
-  user.Address { street: baml.json.from_json(baml.json.field(j, "street")), zip: baml.json.from_json(baml.json.field(j, "zip")) }
-}
-function user.from_json(j: baml.json.json) -> user.Node  [expr] {
-  user.Node { value: baml.json.from_json(baml.json.field(j, "value")), next: baml.json.from_json(baml.json.field(j, "next")), children: baml.json.from_json(baml.json.field(j, "children")), labels: baml.json.from_json(baml.json.field(j, "labels")) }
-}
-function user.from_json(j: baml.json.json) -> user.User  [expr] {
-  user.User { id: baml.json.from_json(baml.json.field(j, "id")), profile: baml.json.from_json(baml.json.field(j, "profile")) }
-}
-function user.from_json(j: baml.json.json) -> user.Profile  [expr] {
-  user.Profile { name: baml.json.from_json(baml.json.field(j, "name")), address: baml.json.from_json(baml.json.field(j, "address")), scores: baml.json.from_json(baml.json.field(j, "scores")), settings: baml.json.from_json(baml.json.field(j, "settings")) }
-}

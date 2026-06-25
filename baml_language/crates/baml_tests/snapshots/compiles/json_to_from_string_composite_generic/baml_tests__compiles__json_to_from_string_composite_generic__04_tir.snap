@@ -5,14 +5,8 @@ source: crates/baml_tests/src/generated_tests.rs
 class user.User {
   name: string
 }
-function user.User.from_json(j: baml.json.json) -> user.User throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  User { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.User
-}
 class user.Container {
   item: T
-}
-function user.Container.from_json(j: baml.json.json) -> user.Container<unknown> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  Container { item: baml.json.from_json<T>(baml.json.field(j, "item")) } : user.Container<T>
 }
 function user.decode_container(s: string) -> user.Container<user.User> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   { : user.Container<user.User>

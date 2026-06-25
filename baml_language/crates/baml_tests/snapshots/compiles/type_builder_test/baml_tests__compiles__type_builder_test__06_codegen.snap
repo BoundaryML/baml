@@ -162,15 +162,3 @@ function user.Fn$stream(client: baml.llm.Client) -> baml.llm.Stream<string | nul
     call baml.llm.stream_llm_function
     return
 }
-
-function user.TopLevelClass.from_json(j: baml.json.json) -> TopLevelClass {
-    load_var j
-    load_const "a"
-    call baml.json.field
-    store_var _3
-    load_type string
-    load_var _3
-    call baml.json.from_json
-    init_instance user.TopLevelClass .a
-    return
-}

@@ -10,14 +10,8 @@ function user.B.greet(self: user.B) -> string throws never {
     self.label : string
   }
 }
-function user.B.from_json(j: baml.json.json) -> user.B throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  B { label: baml.json.from_json<string>(baml.json.field(j, "label")) } : user.B
-}
 class user.A {
   b: user.B
-}
-function user.A.from_json(j: baml.json.json) -> user.A throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  A { b: baml.json.from_json<B>(baml.json.field(j, "b")) } : user.A
 }
 function user.test_deep_method(a: user.A) -> string throws never {
   { : string

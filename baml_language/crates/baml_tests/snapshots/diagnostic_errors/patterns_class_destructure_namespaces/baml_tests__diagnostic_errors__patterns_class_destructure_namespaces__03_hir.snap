@@ -23,9 +23,3 @@ class user.llm.openai.Box {
 class user.llm.openai.Response {
   score: int
 }
-function user.llm.openai.from_json(j: baml.json.json) -> user.llm.openai.Box<T>  [expr] {
-  user.llm.openai.Box { value: baml.json.from_json(baml.json.field(j, "value")) }
-}
-function user.llm.openai.from_json(j: baml.json.json) -> user.llm.openai.Response  [expr] {
-  user.llm.openai.Response { score: baml.json.from_json(baml.json.field(j, "score")) }
-}

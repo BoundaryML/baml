@@ -52,14 +52,8 @@ function user.namespaced_class_destructure_unknown_field(response: user.llm.open
 class user.llm.openai.Box {
   value: T
 }
-function user.llm.openai.Box.from_json(j: baml.json.json) -> user.llm.openai.Box<unknown> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  Box { value: baml.json.from_json<T>(baml.json.field(j, "value")) } : user.llm.openai.Box<T>
-}
 class user.llm.openai.Response {
   score: int
-}
-function user.llm.openai.Response.from_json(j: baml.json.json) -> user.llm.openai.Response throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  Response { score: baml.json.from_json<int>(baml.json.field(j, "score")) } : user.llm.openai.Response
 }
 class user.llm.openai.Box$stream {
   value: T | null
