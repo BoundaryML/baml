@@ -81,6 +81,22 @@ async def test_identity_async_infers():
     assert await identity_async(7) == 7
 
 
+def test_identity_null_round_trips():
+    # §I I4 (decided): a `null` actual is no inference evidence (NOT bound as
+    # `T=null`) ⇒ `T` defaults to host-only `rust_type`, and the value round-trips
+    # unchanged.
+    assert identity(None) is None
+
+
+def test_identity_unbound_generic_instance_round_trips():
+    # §G G2 (decided): an UNBOUND generic instance — constructed without the
+    # `[int]` subscript — carries no wire type-args, so it is host-only
+    # (`T=rust_type`) and rides through the VM opaquely, round-tripping unchanged
+    # (and staying distinct from a properly-bound `GenericBox[int]`, G4).
+    unbound = GenericBox(value=5)
+    assert identity(unbound) == unbound
+
+
 # ===========================================================================
 # §B — structural / container solving across one or more arguments
 # ===========================================================================
@@ -217,13 +233,19 @@ def test_union_with_concrete_sibling_infers_typevar():
     assert tag_or_value(5) == "int"
 
 
-def test_union_concrete_sibling_absorbs_value_requires_binding():
-    # The flip side: a `string` actual IS absorbed by the concrete `string`
-    # sibling, so nothing routes to `T`; it stays unbound and Gate A rejects
-    # (the `string` arm, not `T`, is what handles strings). Pins that the fix
-    # subtracts concrete siblings rather than always binding `T`.
-    with pytest.raises(BamlPanic):
-        tag_or_value("hi")
+def test_union_concrete_sibling_absorbs_value_binds_rust_type():
+    # §H H3 (decided): a `string` actual IS absorbed by the concrete `string`
+    # sibling, so nothing routes to `T`. `T` still has a value position (the `x`
+    # param) and no closure occurrence, so it defaults to host-only `rust_type`
+    # (rule 4) rather than being rejected.
+    assert tag_or_value("hi") == "$rust_type"
+
+
+def test_union_null_actual_binds_rust_type():
+    # §H H3 / §I I4 (decided): a `null` actual is no inference evidence (not bound
+    # as `T=null`), and the `null` sibling absorbs it, so `T` defaults to
+    # `rust_type`.
+    assert tag_or_value(None) == "$rust_type"
 
 
 def test_return_only_var_still_requires_binding():

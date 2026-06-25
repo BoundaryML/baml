@@ -22,9 +22,8 @@
 //! `TypeExpr`, or `TirTypeError` (e.g. `lower_type_expr_with_generics`,
 //! `erase_unresolved_typevars`) stays in `baml_compiler2_tir::generics`.
 
-use rustc_hash::FxHashMap;
-
 use baml_type::{Name, Ty, TyAttr};
+use rustc_hash::FxHashMap;
 
 // ── Inference options ─────────────────────────────────────────────────────────
 
@@ -214,14 +213,14 @@ fn solve_var(name: &Name, occ: &[(Variance, Ty)]) -> Result<Option<Ty>, InferErr
     match rigid {
         Some(eq) => {
             // T == eq; every lower must be <: eq and eq <: every upper.
-            if let Some(l) = &lower {
-                if !l.is_subtype_of(&eq) {
-                    return fail(format!(
-                        "`{name}` would have to be both `{eq}` and `{l}` at the same time: one \
-                         argument fixes `{name}` to `{eq}` (where it appears inside a list, \
-                         map, or class type), while another supplies a `{l}`."
-                    ));
-                }
+            if let Some(l) = &lower
+                && !l.is_subtype_of(&eq)
+            {
+                return fail(format!(
+                    "`{name}` would have to be both `{eq}` and `{l}` at the same time: one \
+                     argument fixes `{name}` to `{eq}` (where it appears inside a list, \
+                     map, or class type), while another supplies a `{l}`."
+                ));
             }
             for u in &uppers {
                 if !eq.is_subtype_of(u) {
@@ -277,16 +276,16 @@ fn meet_all(name: &Name, tys: &[&Ty]) -> Result<Option<Ty>, InferError> {
             Some(prev) => meet_ty(&prev, ty),
         });
     }
-    if let Some(m) = &acc {
-        if matches!(m, Ty::Never { .. }) {
-            return Err(InferError {
-                var: name.clone(),
-                message: format!(
-                    "`{name}` can't satisfy every argument at once: two function arguments \
-                     accept incompatible types for `{name}`, with no type in common."
-                ),
-            });
-        }
+    if let Some(m) = &acc
+        && matches!(m, Ty::Never { .. })
+    {
+        return Err(InferError {
+            var: name.clone(),
+            message: format!(
+                "`{name}` can't satisfy every argument at once: two function arguments \
+                 accept incompatible types for `{name}`, with no type in common."
+            ),
+        });
     }
     Ok(acc)
 }
@@ -658,8 +657,9 @@ pub fn normalize_union_members(members: impl IntoIterator<Item = Ty>, attr: TyAt
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use baml_type::Ty;
+
+    use super::*;
 
     fn a() -> TyAttr {
         TyAttr::default()
@@ -817,7 +817,11 @@ mod tests {
     }
 
     fn pair_cls(first: Ty, second: Ty) -> Ty {
-        Ty::Class(TypeName::local(Name::new("GenericPair")), vec![first, second], a())
+        Ty::Class(
+            TypeName::local(Name::new("GenericPair")),
+            vec![first, second],
+            a(),
+        )
     }
 
     fn float() -> Ty {
@@ -916,7 +920,10 @@ mod tests {
             (list(tv("T")), list(int())),
             (list(tv("T")), list(string())),
         ]);
-        assert!(res.is_err(), "pair(int[], string[]) must reject, got {res:?}");
+        assert!(
+            res.is_err(),
+            "pair(int[], string[]) must reject, got {res:?}"
+        );
     }
 
     #[test]
@@ -976,7 +983,10 @@ mod tests {
         // variance, not "arrays are involved."
         let res = solve_call(&[(tv("T"), list(int())), (tv("T"), list(string()))])
             .expect("covariant occurrences must join");
-        assert_union_members(get(&res, "T").expect("T bound"), &[list(int()), list(string())]);
+        assert_union_members(
+            get(&res, "T").expect("T bound"),
+            &[list(int()), list(string())],
+        );
     }
 
     #[test]
@@ -997,8 +1007,8 @@ mod tests {
     #[test]
     fn g5_plain_covariant_join_unchanged() {
         // choose<T>(5, "a") ⇒ plain covariant join ⇒ T = int | string (the §C path).
-        let res = solve_call(&[(tv("T"), int()), (tv("T"), string())])
-            .expect("plain covariant join");
+        let res =
+            solve_call(&[(tv("T"), int()), (tv("T"), string())]).expect("plain covariant join");
         assert_union_members(get(&res, "T").expect("T bound"), &[int(), string()]);
     }
 
@@ -1009,11 +1019,8 @@ mod tests {
         // second_of<T>(p: GenericPair<int, T>) vs GenericPair<int, string> ⇒
         // T = string, recovered from the 2nd class arg (a single invariant
         // occurrence — no conflict).
-        let res = solve_call(&[(
-            pair_cls(int(), tv("T")),
-            pair_cls(int(), string()),
-        )])
-        .expect("class-arg recovery must succeed");
+        let res = solve_call(&[(pair_cls(int(), tv("T")), pair_cls(int(), string()))])
+            .expect("class-arg recovery must succeed");
         assert_eq!(get(&res, "T"), Some(&string()));
     }
 
@@ -1039,7 +1046,10 @@ mod tests {
         // is INSIDE the box and the same actuals conflict.)
         let res = solve_call(&[(tv("T"), boxed(int())), (tv("T"), boxed(string()))])
             .expect("covariant class join must succeed");
-        assert_union_members(get(&res, "T").expect("T bound"), &[boxed(int()), boxed(string())]);
+        assert_union_members(
+            get(&res, "T").expect("T bound"),
+            &[boxed(int()), boxed(string())],
+        );
     }
 
     #[test]

@@ -8,18 +8,17 @@ mod common;
 
 use std::sync::Arc;
 
-use bex_engine::{BexEngine, BexExternalValue, EngineError, FunctionCallContextBuilder};
+use baml_type::RuntimeTy;
+use bex_engine::{BexEngine, BexExternalValue as BEV, EngineError, FunctionCallContextBuilder};
+use bex_resource_types::{HostValueArc, HostValueKind};
 use common::compile_for_engine;
+use indexmap::{IndexMap, indexmap};
 use sys_native::SysOpsExt;
 
 /// Call `function` with the given argument values and NO explicit type bindings
 /// — the engine must infer every `TypeVar` from the values.
-async fn call_infer(
-    source: &str,
-    function: &str,
-    args: Vec<BexExternalValue>,
-) -> Result<BexExternalValue, EngineError> {
-    call_with_bindings(source, function, args, vec![]).await
+async fn call_infer(source: &str, function: &str, args: Vec<BEV>) -> Result<BEV, EngineError> {
+    call_with_bindings(source, function, args, IndexMap::new()).await
 }
 
 /// Like `call_infer` but seeds some explicit bindings (for the partial-binding
@@ -27,28 +26,32 @@ async fn call_infer(
 async fn call_with_bindings(
     source: &str,
     function: &str,
-    args: Vec<BexExternalValue>,
-    type_args: Vec<(String, baml_type::RuntimeTy)>,
-) -> Result<BexExternalValue, EngineError> {
+    args: Vec<BEV>,
+    type_args: IndexMap<&str, RuntimeTy>,
+) -> Result<BEV, EngineError> {
     let snapshot = compile_for_engine(source);
     let engine = Arc::new(
         BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new())
             .expect("Failed to create engine"),
     );
+    let type_args = type_args
+        .into_iter()
+        .map(|(k, v)| (k.to_string(), v))
+        .collect();
     engine
         .call_function(
             function,
             args,
             FunctionCallContextBuilder::new(sys_types::CallId::next())
-                .with_type_args(type_args.into_iter().collect())
+                .with_type_args(type_args)
                 .build(),
             true,
         )
         .await
 }
 
-fn s(v: &str) -> BexExternalValue {
-    BexExternalValue::String(v.into())
+fn s(v: &str) -> BEV {
+    BEV::String(v.into())
 }
 
 /// A free generic function reflecting its single `TypeVar` as a string — the
@@ -63,10 +66,10 @@ const IDENTITY: &str = r#"
 #[tokio::test]
 async fn infer_identity_int() {
     // T1: identity(5) ⇒ T=int.
-    let out = call_infer(IDENTITY, "identity", vec![BexExternalValue::Int(5)])
+    let out = call_infer(IDENTITY, "identity", vec![BEV::Int(5)])
         .await
         .unwrap();
-    assert_eq!(out, BexExternalValue::String("int".into()));
+    assert_eq!(out, BEV::String("int".into()));
 }
 
 #[tokio::test]
@@ -75,15 +78,15 @@ async fn infer_identity_string_widens() {
     let out = call_infer(IDENTITY, "identity", vec![s("hi")])
         .await
         .unwrap();
-    assert_eq!(out, BexExternalValue::String("string".into()));
+    assert_eq!(out, BEV::String("string".into()));
 }
 
 #[tokio::test]
 async fn infer_identity_bool() {
-    let out = call_infer(IDENTITY, "identity", vec![BexExternalValue::Bool(true)])
+    let out = call_infer(IDENTITY, "identity", vec![BEV::Bool(true)])
         .await
         .unwrap();
-    assert_eq!(out, BexExternalValue::String("bool".into()));
+    assert_eq!(out, BEV::String("bool".into()));
 }
 
 #[tokio::test]
@@ -91,10 +94,10 @@ async fn infer_identity_null_binds_rust_type() {
     // §I I4 (decided): a bare `null` actual gives the value position no concrete
     // leaf, so we do NOT bind `T = null`; `T` defaults to host-only `rust_type`
     // (rule 4) and the value round-trips unchanged.
-    let out = call_infer(IDENTITY, "identity", vec![BexExternalValue::Null])
+    let out = call_infer(IDENTITY, "identity", vec![BEV::Null])
         .await
         .unwrap();
-    assert_eq!(out, BexExternalValue::String("$rust_type".into()));
+    assert_eq!(out, BEV::String("$rust_type".into()));
 }
 
 // ── §A: generic instance arg carries wire type_args ────────────────────────
@@ -107,15 +110,15 @@ async fn infer_identity_generic_instance() {
         function identity<T>(x: T) -> string { reflect.type_of<T>().to_string() }
         function main() -> int { 0 }
     "#;
-    let arg = BexExternalValue::instance_generic(
+    let arg = BEV::instance_generic(
         "GenericBox",
-        vec![baml_type::RuntimeTy::int()],
-        indexmap::IndexMap::from_iter([("value", BexExternalValue::Int(5))]),
+        vec![RuntimeTy::int()],
+        indexmap::IndexMap::from_iter([("value", BEV::Int(5))]),
     );
     let out = call_infer(source, "identity", vec![arg]).await.unwrap();
     // Exact render of the class type is determined by RuntimeTy Display; assert
     // it mentions the class and its int arg.
-    let BexExternalValue::String(rendered) = &out else {
+    let BEV::String(rendered) = &out else {
         panic!("expected string, got {out:?}");
     };
     assert!(
@@ -138,19 +141,19 @@ async fn infer_make_triple_structural() {
         }
         function main() -> int { 0 }
     "#;
-    let b = BexExternalValue::Array {
-        element_type: baml_type::RuntimeTy::string(),
+    let b = BEV::Array {
+        element_type: RuntimeTy::string(),
         items: vec![s("a"), s("b")],
     };
-    let c = BexExternalValue::Map {
-        key_type: baml_type::RuntimeTy::string(),
-        value_type: baml_type::RuntimeTy::bool(),
-        entries: indexmap::IndexMap::from_iter([("k".to_string(), BexExternalValue::Bool(true))]),
+    let c = BEV::Map {
+        key_type: RuntimeTy::string(),
+        value_type: RuntimeTy::bool(),
+        entries: indexmap::IndexMap::from_iter([("k".to_string(), BEV::Bool(true))]),
     };
-    let out = call_infer(source, "make_triple", vec![BexExternalValue::Int(1), b, c])
+    let out = call_infer(source, "make_triple", vec![BEV::Int(1), b, c])
         .await
         .unwrap();
-    let BexExternalValue::String(rendered) = &out else {
+    let BEV::String(rendered) = &out else {
         panic!("expected string, got {out:?}");
     };
     let r = rendered.as_str();
@@ -168,13 +171,13 @@ async fn infer_second_of_nested_generic() {
         function second_of<T>(p: GenericPair<int, T>) -> string { reflect.type_of<T>().to_string() }
         function main() -> int { 0 }
     "#;
-    let arg = BexExternalValue::instance_generic(
+    let arg = BEV::instance_generic(
         "GenericPair",
-        vec![baml_type::RuntimeTy::int(), baml_type::RuntimeTy::string()],
-        indexmap::IndexMap::from_iter([("first", BexExternalValue::Int(1)), ("second", s("hi"))]),
+        vec![RuntimeTy::int(), RuntimeTy::string()],
+        indexmap::IndexMap::from_iter([("first", BEV::Int(1)), ("second", s("hi"))]),
     );
     let out = call_infer(source, "second_of", vec![arg]).await.unwrap();
-    assert_eq!(out, BexExternalValue::String("string".into()));
+    assert_eq!(out, BEV::String("string".into()));
 }
 
 // ── §C: union merge (same var, multiple positions) ─────────────────────────
@@ -187,23 +190,19 @@ const CHOOSE: &str = r#"
 #[tokio::test]
 async fn infer_choose_same_type_merges_to_one() {
     // T14: choose(5, 6) ⇒ T = int (union(int,int) dedups).
-    let out = call_infer(
-        CHOOSE,
-        "choose",
-        vec![BexExternalValue::Int(5), BexExternalValue::Int(6)],
-    )
-    .await
-    .unwrap();
-    assert_eq!(out, BexExternalValue::String("int".into()));
+    let out = call_infer(CHOOSE, "choose", vec![BEV::Int(5), BEV::Int(6)])
+        .await
+        .unwrap();
+    assert_eq!(out, BEV::String("int".into()));
 }
 
 #[tokio::test]
 async fn infer_choose_divergent_unions() {
     // T15: choose(5, "a") ⇒ T = int | string. Assert the render mentions both.
-    let out = call_infer(CHOOSE, "choose", vec![BexExternalValue::Int(5), s("a")])
+    let out = call_infer(CHOOSE, "choose", vec![BEV::Int(5), s("a")])
         .await
         .unwrap();
-    let BexExternalValue::String(rendered) = &out else {
+    let BEV::String(rendered) = &out else {
         panic!("expected string, got {out:?}");
     };
     assert!(
@@ -223,14 +222,14 @@ async fn partial_explicit_seed_then_infer() {
         }
         function main() -> int { 0 }
     "#;
-    let b = BexExternalValue::Array {
-        element_type: baml_type::RuntimeTy::string(),
+    let b = BEV::Array {
+        element_type: RuntimeTy::string(),
         items: vec![s("x")],
     };
-    let c = BexExternalValue::Map {
-        key_type: baml_type::RuntimeTy::string(),
-        value_type: baml_type::RuntimeTy::bool(),
-        entries: indexmap::IndexMap::from_iter([("k".to_string(), BexExternalValue::Bool(true))]),
+    let c = BEV::Map {
+        key_type: RuntimeTy::string(),
+        value_type: RuntimeTy::bool(),
+        entries: indexmap::IndexMap::from_iter([("k".to_string(), BEV::Bool(true))]),
     };
     // Seed A=string explicitly even though the value is int(1) — explicit wins:
     // the render must carry `bool` (C inferred) but NOT `int` (A is string, not
@@ -238,12 +237,12 @@ async fn partial_explicit_seed_then_infer() {
     let out = call_with_bindings(
         source,
         "make_triple",
-        vec![BexExternalValue::Int(1), b, c],
-        vec![("A".to_string(), baml_type::RuntimeTy::string())],
+        vec![BEV::Int(1), b, c],
+        indexmap! { "A" => RuntimeTy::string() },
     )
     .await
     .unwrap();
-    let BexExternalValue::String(rendered) = &out else {
+    let BEV::String(rendered) = &out else {
         panic!("expected string, got {out:?}");
     };
     let r = rendered.as_str();
@@ -259,12 +258,12 @@ async fn explicit_binding_wins_over_inference() {
     let out = call_with_bindings(
         IDENTITY,
         "identity",
-        vec![BexExternalValue::Int(5)],
-        vec![("T".to_string(), baml_type::RuntimeTy::string())],
+        vec![BEV::Int(5)],
+        indexmap! { "T" => RuntimeTy::string() },
     )
     .await
     .unwrap();
-    assert_eq!(out, BexExternalValue::String("string".into()));
+    assert_eq!(out, BEV::String("string".into()));
 }
 
 // ── §E: must-specify still rejects (return/body-only vars) ─────────────────
@@ -320,8 +319,8 @@ async fn return_only_var_still_requires_binding() {
 /// An opaque host value with no BAML type. `RustData` stands in for a
 /// `HostValue` here (both synthesize as `HostOnly`), exercising the
 /// `T = rust_type` binding without a live host bridge.
-fn host_only() -> BexExternalValue {
-    BexExternalValue::RustData(Arc::new(()))
+fn host_only() -> BEV {
+    BEV::RustData(Arc::new(()))
 }
 
 #[tokio::test]
@@ -330,7 +329,7 @@ async fn infer_identity_host_only_binds_rust_type() {
     let out = call_infer(IDENTITY, "identity", vec![host_only()])
         .await
         .unwrap();
-    let BexExternalValue::String(rendered) = &out else {
+    let BEV::String(rendered) = &out else {
         panic!("expected string, got {out:?}");
     };
     // RustType renders as `$rust_type` (qualified `baml.rust.RustType`).
@@ -343,14 +342,10 @@ async fn infer_identity_host_only_binds_rust_type() {
 #[tokio::test]
 async fn infer_choose_known_and_host_only() {
     // T25: choose(5, host_obj) ⇒ T = int | rust_type.
-    let out = call_infer(
-        CHOOSE,
-        "choose",
-        vec![BexExternalValue::Int(5), host_only()],
-    )
-    .await
-    .unwrap();
-    let BexExternalValue::String(rendered) = &out else {
+    let out = call_infer(CHOOSE, "choose", vec![BEV::Int(5), host_only()])
+        .await
+        .unwrap();
+    let BEV::String(rendered) = &out else {
         panic!("expected string, got {out:?}");
     };
     assert!(
@@ -359,18 +354,106 @@ async fn infer_choose_known_and_host_only() {
     );
 }
 
+#[tokio::test]
+async fn f2_wrap_host_only_returns_generic_box_of_rust_type() {
+    // §F F2: wrap(host_obj) ⇒ T = rust_type; returns a `GenericBox<rust_type>`
+    // wrapping the opaque handle (the box materializes, its element rides as
+    // rust_data).
+    let source = r#"
+        class GenericBox<T> { value T }
+        function wrap<T>(x: T) -> GenericBox<T> { GenericBox<T> { value: x } }
+        function main() -> int { 0 }
+    "#;
+    let out = call_infer(source, "wrap", vec![host_only()]).await.unwrap();
+    // The result is a `GenericBox` instance (its `value` field is the opaque
+    // handle, round-tripped as rust_data).
+    assert!(
+        matches!(&out, BEV::Instance { class_name, .. } if class_name.contains("GenericBox")),
+        "expected a GenericBox instance, got {out:?}"
+    );
+}
+
+#[tokio::test]
+async fn g3_nested_unbound_under_bare_formal_is_rust_type() {
+    // §G G3: identity(GenericBox(value=GenericBox(value="hello"))) — the OUTER
+    // instance is unbound under a bare-`T` formal ⇒ the whole value is rust_type.
+    let source = r#"
+        class GenericBox<T> { value T }
+        function identity<T>(x: T) -> string { reflect.type_of<T>().to_string() }
+        function main() -> int { 0 }
+    "#;
+    let inner = BEV::instance(
+        "GenericBox",
+        indexmap::IndexMap::from_iter([("value", s("hello"))]),
+    );
+    let outer = BEV::instance(
+        "GenericBox",
+        indexmap::IndexMap::from_iter([("value", inner)]),
+    );
+    let out = call_infer(source, "identity", vec![outer]).await.unwrap();
+    assert_eq!(out, BEV::String("$rust_type".into()));
+}
+
+// ── §J J13: a closure-typed parameter poisons its TypeVars (must-specify) ────
+
+#[tokio::test]
+async fn j13_closure_typed_param_poisons_typevars_must_specify() {
+    // §J J13: apply<T,R>(f: (T) -> R, x: T) — `f` is a host callable, opaque to
+    // BAML, so `T` and `R` are poisoned and must be specified explicitly EVEN
+    // THOUGH `x` would otherwise pin `T=int`. With no explicit bindings the call
+    // is rejected (must-specify), not silently inferred.
+    let source = r#"
+        function apply<T, R>(f: (T) -> R, x: T) -> string {
+            reflect.type_of<T>().to_string()
+        }
+        function main() -> int { 0 }
+    "#;
+    let f = BEV::HostValue(HostValueArc::new(1, HostValueKind::Callable));
+    let err = call_infer(source, "apply", vec![f, BEV::Int(5)])
+        .await
+        .expect_err("T and R are closure-poisoned ⇒ must be specified explicitly");
+    assert!(
+        matches!(err, EngineError::TypeMismatch { .. }),
+        "expected a must-specify TypeMismatch, got {err:?}"
+    );
+}
+
+#[tokio::test]
+async fn j13_closure_poisoned_typevars_succeed_when_specified() {
+    // §J J13 (positive): the same call succeeds once `T` and `R` are specified.
+    let source = r#"
+        function apply<T, R>(f: (T) -> R, x: T) -> string {
+            reflect.type_of<T>().to_string()
+        }
+        function main() -> int { 0 }
+    "#;
+    let f = BEV::HostValue(HostValueArc::new(2, HostValueKind::Callable));
+    let out = call_with_bindings(
+        source,
+        "apply",
+        vec![f, BEV::Int(5)],
+        indexmap! {
+            "T" => RuntimeTy::int(),
+            "R" => RuntimeTy::int(),
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(out, BEV::String("int".into()));
+}
+
 // ── §J: empty collections → rust_type element/value ────────────────────────
 
 #[tokio::test]
 async fn infer_identity_empty_array_binds_rust_type_list() {
     // An empty `[]` carries no element evidence, but it still inhabits a list:
     // `identity([])` ⇒ T = rust_type[], NOT a Gate-A rejection.
-    let arg = BexExternalValue::Array {
-        element_type: baml_type::RuntimeTy::int(),
+    let arg = BEV::Array {
+        element_type: RuntimeTy::int(),
         items: vec![],
     };
     let out = call_infer(IDENTITY, "identity", vec![arg]).await.unwrap();
-    let BexExternalValue::String(rendered) = &out else {
+    let BEV::String(rendered) = &out else {
         panic!("expected string, got {out:?}");
     };
     let r = rendered.as_str();
@@ -384,13 +467,13 @@ async fn infer_identity_empty_array_binds_rust_type_list() {
 async fn infer_identity_empty_map_binds_rust_type_map() {
     // A genuinely empty `{}` carries no value evidence, but every wire entry is
     // string-keyed: `identity({})` ⇒ T = map<string, rust_type>, not rejected.
-    let arg = BexExternalValue::Map {
-        key_type: baml_type::RuntimeTy::string(),
-        value_type: baml_type::RuntimeTy::int(),
+    let arg = BEV::Map {
+        key_type: RuntimeTy::string(),
+        value_type: RuntimeTy::int(),
         entries: indexmap::IndexMap::new(),
     };
     let out = call_infer(IDENTITY, "identity", vec![arg]).await.unwrap();
-    let BexExternalValue::String(rendered) = &out else {
+    let BEV::String(rendered) = &out else {
         panic!("expected string, got {out:?}");
     };
     let r = rendered.as_str();
@@ -414,20 +497,20 @@ const MAYBE_ID: &str = r#"
 #[tokio::test]
 async fn infer_maybe_id_present_value() {
     // T32: maybe_id(5) null-strips T? to bare T ⇒ T=int.
-    let out = call_infer(MAYBE_ID, "maybe_id", vec![BexExternalValue::Int(5)])
+    let out = call_infer(MAYBE_ID, "maybe_id", vec![BEV::Int(5)])
         .await
         .unwrap();
-    assert_eq!(out, BexExternalValue::String("int".into()));
+    assert_eq!(out, BEV::String("int".into()));
 }
 
 #[tokio::test]
 async fn infer_maybe_id_null_value() {
     // §I I4 (decided): maybe_id(None) does NOT null-strip `T?` to bind `T=null`;
     // a `null`-only actual is no evidence ⇒ `T` defaults to `rust_type`.
-    let out = call_infer(MAYBE_ID, "maybe_id", vec![BexExternalValue::Null])
+    let out = call_infer(MAYBE_ID, "maybe_id", vec![BEV::Null])
         .await
         .unwrap();
-    assert_eq!(out, BexExternalValue::String("$rust_type".into()));
+    assert_eq!(out, BEV::String("$rust_type".into()));
 }
 
 // ── §H: union with a concrete sibling — NOW IN SCOPE (02a, G5 reversal) ──────
@@ -451,14 +534,10 @@ const TAG_OR_VALUE_REFLECT: &str = r#"
 async fn infer_tag_or_value_binds_t_from_int() {
     // T30: tag_or_value(5) ⇒ T=int. The int is not absorbed by the `string`/
     // `null` siblings, so it routes to the lone `TypeVar` member.
-    let out = call_infer(
-        TAG_OR_VALUE_REFLECT,
-        "tag_or_value",
-        vec![BexExternalValue::Int(5)],
-    )
-    .await
-    .unwrap();
-    assert_eq!(out, BexExternalValue::String("int".into()));
+    let out = call_infer(TAG_OR_VALUE_REFLECT, "tag_or_value", vec![BEV::Int(5)])
+        .await
+        .unwrap();
+    assert_eq!(out, BEV::String("int".into()));
 }
 
 #[tokio::test]
@@ -470,7 +549,7 @@ async fn infer_tag_or_value_string_arg_binds_rust_type() {
     let out = call_infer(TAG_OR_VALUE_REFLECT, "tag_or_value", vec![s("hi")])
         .await
         .unwrap();
-    assert_eq!(out, BexExternalValue::String("$rust_type".into()));
+    assert_eq!(out, BEV::String("$rust_type".into()));
 }
 
 #[tokio::test]
@@ -478,14 +557,10 @@ async fn infer_tag_or_value_null_binds_rust_type() {
     // §H H3 (decided): tag_or_value(None) ⇒ a `null` actual is no evidence (it is
     // not bound as `T=null`), and the `null` sibling absorbs it, so `T` gets no
     // residual ⇒ defaults to `rust_type` (rule 4).
-    let out = call_infer(
-        TAG_OR_VALUE_REFLECT,
-        "tag_or_value",
-        vec![BexExternalValue::Null],
-    )
-    .await
-    .unwrap();
-    assert_eq!(out, BexExternalValue::String("$rust_type".into()));
+    let out = call_infer(TAG_OR_VALUE_REFLECT, "tag_or_value", vec![BEV::Null])
+        .await
+        .unwrap();
+    assert_eq!(out, BEV::String("$rust_type".into()));
 }
 
 /// Match-bodied variant — the function in `02a`'s "Current status" that fails to
@@ -506,14 +581,10 @@ const TAG_OR_VALUE_MATCH: &str = r#"
 async fn infer_tag_or_value_match_roundtrips_int() {
     // End-to-end: the match-bodied function compiles (introspection fix), infers
     // T=int (inference fix), and round-trips the value ⇒ tag_or_value(5) == 5.
-    let out = call_infer(
-        TAG_OR_VALUE_MATCH,
-        "tag_or_value",
-        vec![BexExternalValue::Int(5)],
-    )
-    .await
-    .unwrap();
-    assert_eq!(out, BexExternalValue::Int(5));
+    let out = call_infer(TAG_OR_VALUE_MATCH, "tag_or_value", vec![BEV::Int(5)])
+        .await
+        .unwrap();
+    assert_eq!(out, BEV::Int(5));
 }
 
 // ── §F: leaf ADT synth (media / collector) ─────────────────────────────────
@@ -523,16 +594,15 @@ async fn infer_identity_media_binds_concrete_media_type() {
     // Regression: a media argument is a concrete leaf BAML type, so
     // identity<T>(image) must bind T = image (not the host-only rust_type that
     // the Adt(_) catch-all previously synthesized).
-    use bex_engine::BexExternalValue as V;
     use bex_external_types::{BexExternalAdt, MediaKind};
     let media = baml_builtins2::MediaValue::from_url(
         MediaKind::Image,
         "http://example.com/y.png",
         Some("image/png"),
     );
-    let arg = V::Adt(BexExternalAdt::Media(media));
+    let arg = BEV::Adt(BexExternalAdt::Media(media));
     let out = call_infer(IDENTITY, "identity", vec![arg]).await.unwrap();
-    assert_eq!(out, BexExternalValue::String("image".into()));
+    assert_eq!(out, BEV::String("image".into()));
 }
 
 #[tokio::test]
@@ -541,7 +611,6 @@ async fn infer_nonempty_map_binds_key_despite_valueless_values() {
     // still carries key evidence — every wire entry is string-keyed — so the
     // map-key TypeVar K must bind to `string` rather than collapsing the whole
     // map to NoEvidence (which previously left K unbound and Gate-A rejected).
-    use bex_engine::BexExternalValue as V;
     let src = r#"
         function map_key<K>(m: map<K, int[]>) -> string { reflect.type_of<K>().to_string() }
         function main() -> int { 0 }
@@ -549,21 +618,18 @@ async fn infer_nonempty_map_binds_key_despite_valueless_values() {
     let mut entries = indexmap::IndexMap::new();
     entries.insert(
         "a".to_string(),
-        V::Array {
-            element_type: baml_type::RuntimeTy::int(),
+        BEV::Array {
+            element_type: RuntimeTy::int(),
             items: vec![],
         },
     );
-    let arg = V::Map {
-        key_type: baml_type::RuntimeTy::string(),
-        value_type: baml_type::RuntimeTy::List(
-            Box::new(baml_type::RuntimeTy::int()),
-            baml_type::TyAttr::default(),
-        ),
+    let arg = BEV::Map {
+        key_type: RuntimeTy::string(),
+        value_type: RuntimeTy::List(Box::new(RuntimeTy::int()), baml_type::TyAttr::default()),
         entries,
     };
     let out = call_infer(src, "map_key", vec![arg]).await.unwrap();
-    assert_eq!(out, BexExternalValue::String("string".into()));
+    assert_eq!(out, BEV::String("string".into()));
 }
 
 // ── §H: known-but-deferred Gate A holes (class-method body-only TypeVars) ───
@@ -602,12 +668,12 @@ async fn unbound_generic_instance_should_be_host_only() {
         function main() -> int { 0 }
     "#;
     // Instance whose wire type_args are EMPTY (unbound generic class encoding).
-    let arg = BexExternalValue::instance(
+    let arg = BEV::instance(
         "GenericBox",
-        indexmap::IndexMap::from_iter([("value", BexExternalValue::Int(5))]),
+        indexmap::IndexMap::from_iter([("value", BEV::Int(5))]),
     );
     let out = call_infer(source, "identity", vec![arg]).await.unwrap();
-    assert_eq!(out, BexExternalValue::String("$rust_type".into()));
+    assert_eq!(out, BEV::String("$rust_type".into()));
 }
 
 /// A value-returning identity — proves a value *round-trips* (not just that `T`
@@ -622,14 +688,17 @@ const IDENTITY_VALUE: &str = r#"
 async fn g2_unbound_generic_instance_round_trips_opaque() {
     // §G G2: `identity(GenericBox(value=5))` over an UNBOUND instance ⇒ T=rust_type;
     // the instance rides through the VM opaquely and comes back verbatim.
-    let unbound = BexExternalValue::instance(
+    let unbound = BEV::instance(
         "GenericBox",
-        indexmap::IndexMap::from_iter([("value", BexExternalValue::Int(5))]),
+        indexmap::IndexMap::from_iter([("value", BEV::Int(5))]),
     );
     let out = call_infer(IDENTITY_VALUE, "identity", vec![unbound.clone()])
         .await
         .unwrap();
-    assert_eq!(out, unbound, "unbound generic instance must round-trip unchanged");
+    assert_eq!(
+        out, unbound,
+        "unbound generic instance must round-trip unchanged"
+    );
 }
 
 #[tokio::test]
@@ -637,14 +706,14 @@ async fn g4_bound_and_unbound_generic_instances_are_distinct() {
     // §G G4 (discriminator): a properly-bound `GenericBox[int]` round-trips as a
     // real bound instance (wire args `[int]`), while the UNBOUND form rides
     // opaquely — so the two are NOT equal after a round-trip.
-    let bound = BexExternalValue::instance_generic(
+    let bound = BEV::instance_generic(
         "GenericBox",
-        vec![baml_type::RuntimeTy::int()],
-        indexmap::IndexMap::from_iter([("value", BexExternalValue::Int(5))]),
+        vec![RuntimeTy::int()],
+        indexmap::IndexMap::from_iter([("value", BEV::Int(5))]),
     );
-    let unbound = BexExternalValue::instance(
+    let unbound = BEV::instance(
         "GenericBox",
-        indexmap::IndexMap::from_iter([("value", BexExternalValue::Int(5))]),
+        indexmap::IndexMap::from_iter([("value", BEV::Int(5))]),
     );
     let bound_out = call_infer(IDENTITY_VALUE, "identity", vec![bound])
         .await
@@ -668,12 +737,14 @@ async fn g1_unbound_instance_under_forcing_formal_recovers_field_type() {
         function second_of<T>(p: GenericPair<int, T>) -> string { reflect.type_of<T>().to_string() }
         function main() -> int { 0 }
     "#;
-    let unbound = BexExternalValue::instance(
+    let unbound = BEV::instance(
         "GenericPair",
-        indexmap::IndexMap::from_iter([("first", BexExternalValue::Int(1)), ("second", s("hi"))]),
+        indexmap::IndexMap::from_iter([("first", BEV::Int(1)), ("second", s("hi"))]),
     );
-    let out = call_infer(source, "second_of", vec![unbound]).await.unwrap();
-    assert_eq!(out, BexExternalValue::String("string".into()));
+    let out = call_infer(source, "second_of", vec![unbound])
+        .await
+        .unwrap();
+    assert_eq!(out, BEV::String("string".into()));
 }
 
 // ── §J: variance soundness at the value seam (02d/02e) ──────────────────────
@@ -687,16 +758,16 @@ async fn g1_unbound_instance_under_forcing_formal_recovers_field_type() {
 // function-param cases (J1–J3, J8) live only at the unifier layer (and are
 // reified at the bridge per J13). See `02e2` for the layer mapping.
 
-fn arr(element_type: baml_type::RuntimeTy, items: Vec<BexExternalValue>) -> BexExternalValue {
-    BexExternalValue::Array {
+fn arr(element_type: RuntimeTy, items: Vec<BEV>) -> BEV {
+    BEV::Array {
         element_type,
         items,
     }
 }
 
-fn int_map(value_type: baml_type::RuntimeTy, entries: &[(&str, BexExternalValue)]) -> BexExternalValue {
-    BexExternalValue::Map {
-        key_type: baml_type::RuntimeTy::string(),
+fn int_map(value_type: RuntimeTy, entries: &[(&str, BEV)]) -> BEV {
+    BEV::Map {
+        key_type: RuntimeTy::string(),
         value_type,
         entries: entries
             .iter()
@@ -715,8 +786,8 @@ const PAIR: &str = r#"
 async fn infer_pair_invariant_list_conflict_rejects() {
     // J4/E1: pair(int[], string[]) ⇒ a⇒T==int, b⇒T==string (both invariant) ⇒
     // no consistent T ⇒ reject (today's bug fabricated `(int|string)[]`).
-    let a = arr(baml_type::RuntimeTy::int(), vec![BexExternalValue::Int(1)]);
-    let b = arr(baml_type::RuntimeTy::string(), vec![s("x")]);
+    let a = arr(RuntimeTy::int(), vec![BEV::Int(1)]);
+    let b = arr(RuntimeTy::string(), vec![s("x")]);
     let err = call_infer(PAIR, "pair", vec![a, b])
         .await
         .expect_err("invariant list conflict must reject");
@@ -744,10 +815,10 @@ async fn infer_pair_invariant_list_conflict_rejects() {
 async fn infer_pair_invariant_list_agree_binds() {
     // J9/G1 regression: pair(int[], int[]) ⇒ two invariant occurrences AGREE ⇒
     // T = int; must still succeed (the fix narrows, it must not over-reject).
-    let a = arr(baml_type::RuntimeTy::int(), vec![BexExternalValue::Int(1)]);
-    let b = arr(baml_type::RuntimeTy::int(), vec![BexExternalValue::Int(2)]);
+    let a = arr(RuntimeTy::int(), vec![BEV::Int(1)]);
+    let b = arr(RuntimeTy::int(), vec![BEV::Int(2)]);
     let out = call_infer(PAIR, "pair", vec![a, b]).await.unwrap();
-    assert_eq!(out, BexExternalValue::String("int".into()));
+    assert_eq!(out, BEV::String("int".into()));
 }
 
 #[tokio::test]
@@ -755,10 +826,10 @@ async fn infer_choose_union_outside_container_joins() {
     // J10/G2 regression: choose(int[], string[]) ⇒ both occurrences are covariant
     // (bare `T`), so the union forms OUTSIDE the container ⇒ T = int[] | string[].
     // Proves the fix keys on position variance, not "arrays are involved."
-    let a = arr(baml_type::RuntimeTy::int(), vec![BexExternalValue::Int(1)]);
-    let b = arr(baml_type::RuntimeTy::string(), vec![s("x")]);
+    let a = arr(RuntimeTy::int(), vec![BEV::Int(1)]);
+    let b = arr(RuntimeTy::string(), vec![s("x")]);
     let out = call_infer(CHOOSE, "choose", vec![a, b]).await.unwrap();
-    let BexExternalValue::String(rendered) = &out else {
+    let BEV::String(rendered) = &out else {
         panic!("expected string, got {out:?}");
     };
     let r = rendered.as_str();
@@ -778,12 +849,15 @@ async fn infer_merge_invariant_map_value_conflict_rejects() {
         }
         function main() -> int { 0 }
     "#;
-    let a = int_map(baml_type::RuntimeTy::int(), &[("k", BexExternalValue::Int(1))]);
-    let b = int_map(baml_type::RuntimeTy::string(), &[("k", s("x"))]);
+    let a = int_map(RuntimeTy::int(), &[("k", BEV::Int(1))]);
+    let b = int_map(RuntimeTy::string(), &[("k", s("x"))]);
     let err = call_infer(src, "merge", vec![a, b])
         .await
         .expect_err("invariant map-value conflict must reject");
-    assert!(matches!(err, EngineError::TypeMismatch { .. }), "got {err:?}");
+    assert!(
+        matches!(err, EngineError::TypeMismatch { .. }),
+        "got {err:?}"
+    );
 }
 
 #[tokio::test]
@@ -797,20 +871,23 @@ async fn infer_combine_invariant_class_arg_conflict_rejects() {
         }
         function main() -> int { 0 }
     "#;
-    let x = BexExternalValue::instance_generic(
+    let x = BEV::instance_generic(
         "GenericBox",
-        vec![baml_type::RuntimeTy::int()],
-        indexmap::IndexMap::from_iter([("value", BexExternalValue::Int(1))]),
+        vec![RuntimeTy::int()],
+        indexmap::IndexMap::from_iter([("value", BEV::Int(1))]),
     );
-    let y = BexExternalValue::instance_generic(
+    let y = BEV::instance_generic(
         "GenericBox",
-        vec![baml_type::RuntimeTy::string()],
+        vec![RuntimeTy::string()],
         indexmap::IndexMap::from_iter([("value", s("x"))]),
     );
     let err = call_infer(src, "combine", vec![x, y])
         .await
         .expect_err("invariant class-arg conflict must reject");
-    assert!(matches!(err, EngineError::TypeMismatch { .. }), "got {err:?}");
+    assert!(
+        matches!(err, EngineError::TypeMismatch { .. }),
+        "got {err:?}"
+    );
 }
 
 #[tokio::test]
@@ -821,11 +898,14 @@ async fn infer_glue_invariant_vs_covariant_conflict_rejects() {
         function glue<T>(bare: T, arr: T[]) -> string { reflect.type_of<T>().to_string() }
         function main() -> int { 0 }
     "#;
-    let arr_arg = arr(baml_type::RuntimeTy::string(), vec![s("x")]);
-    let err = call_infer(src, "glue", vec![BexExternalValue::Int(1), arr_arg])
+    let arr_arg = arr(RuntimeTy::string(), vec![s("x")]);
+    let err = call_infer(src, "glue", vec![BEV::Int(1), arr_arg])
         .await
         .expect_err("invariant×covariant conflict must reject");
-    assert!(matches!(err, EngineError::TypeMismatch { .. }), "got {err:?}");
+    assert!(
+        matches!(err, EngineError::TypeMismatch { .. }),
+        "got {err:?}"
+    );
 }
 
 #[tokio::test]
@@ -836,11 +916,11 @@ async fn infer_glue_invariant_and_covariant_agree_binds() {
         function glue<T>(bare: T, arr: T[]) -> string { reflect.type_of<T>().to_string() }
         function main() -> int { 0 }
     "#;
-    let arr_arg = arr(baml_type::RuntimeTy::int(), vec![BexExternalValue::Int(2)]);
-    let out = call_infer(src, "glue", vec![BexExternalValue::Int(1), arr_arg])
+    let arr_arg = arr(RuntimeTy::int(), vec![BEV::Int(2)]);
+    let out = call_infer(src, "glue", vec![BEV::Int(1), arr_arg])
         .await
         .unwrap();
-    assert_eq!(out, BexExternalValue::String("int".into()));
+    assert_eq!(out, BEV::String("int".into()));
 }
 
 // ── §D: n-ary covariant join ────────────────────────────────────────────────
@@ -858,11 +938,11 @@ async fn infer_triple_choose_three_covariant_join() {
     let out = call_infer(
         src,
         "triple_choose",
-        vec![BexExternalValue::Int(5), s("asdf"), BexExternalValue::Bool(true)],
+        vec![BEV::Int(5), s("asdf"), BEV::Bool(true)],
     )
     .await
     .unwrap();
-    let BexExternalValue::String(rendered) = &out else {
+    let BEV::String(rendered) = &out else {
         panic!("expected string, got {out:?}");
     };
     let r = rendered.as_str();
@@ -886,15 +966,12 @@ async fn infer_make_triple_heterogeneous_list_element_unions() {
         }
         function main() -> int { 0 }
     "#;
-    let b = arr(
-        baml_type::RuntimeTy::int(),
-        vec![BexExternalValue::Int(1), s("x")],
-    );
-    let c = int_map(baml_type::RuntimeTy::bool(), &[("k", BexExternalValue::Bool(true))]);
-    let out = call_infer(src, "make_triple", vec![BexExternalValue::Int(1), b, c])
+    let b = arr(RuntimeTy::int(), vec![BEV::Int(1), s("x")]);
+    let c = int_map(RuntimeTy::bool(), &[("k", BEV::Bool(true))]);
+    let out = call_infer(src, "make_triple", vec![BEV::Int(1), b, c])
         .await
         .unwrap();
-    let BexExternalValue::String(rendered) = &out else {
+    let BEV::String(rendered) = &out else {
         panic!("expected string, got {out:?}");
     };
     let r = rendered.as_str();
@@ -921,7 +998,10 @@ async fn infer_two_typevar_union_is_uninferrable_rejects() {
     let err = call_infer(src, "two_in_union", vec![s("hello")])
         .await
         .expect_err("two free vars in one union are un-inferrable");
-    assert!(matches!(err, EngineError::TypeMismatch { .. }), "got {err:?}");
+    assert!(
+        matches!(err, EngineError::TypeMismatch { .. }),
+        "got {err:?}"
+    );
 }
 
 // ── §A: known non-generic BAML class actual ─────────────────────────────────
@@ -935,12 +1015,12 @@ async fn infer_identity_known_class_instance() {
         function identity<T>(x: T) -> string { reflect.type_of<T>().to_string() }
         function main() -> int { 0 }
     "#;
-    let arg = BexExternalValue::instance(
+    let arg = BEV::instance(
         "StringIntPair",
-        indexmap::IndexMap::from_iter([("my_string", s("a")), ("my_int", BexExternalValue::Int(1))]),
+        indexmap::IndexMap::from_iter([("my_string", s("a")), ("my_int", BEV::Int(1))]),
     );
     let out = call_infer(src, "identity", vec![arg]).await.unwrap();
-    let BexExternalValue::String(rendered) = &out else {
+    let BEV::String(rendered) = &out else {
         panic!("expected string, got {out:?}");
     };
     assert!(
@@ -951,8 +1031,8 @@ async fn infer_identity_known_class_instance() {
 
 // ── §B: nested generic-class arg, four vars zipped ──────────────────────────
 
-fn pair_rt(first: baml_type::RuntimeTy, second: baml_type::RuntimeTy) -> baml_type::RuntimeTy {
-    baml_type::RuntimeTy::Class(
+fn pair_rt(first: RuntimeTy, second: RuntimeTy) -> RuntimeTy {
+    RuntimeTy::Class(
         baml_type::TypeName::local(baml_type::Name::new("GenericPair")),
         vec![first, second],
         baml_type::TyAttr::default(),
@@ -971,21 +1051,17 @@ async fn infer_extract_four_vars_from_nested_generic() {
         }
         function main() -> int { 0 }
     "#;
-    use baml_type::RuntimeTy;
-    let inner1 = BexExternalValue::instance_generic(
+    let inner1 = BEV::instance_generic(
         "GenericPair",
         vec![RuntimeTy::int(), RuntimeTy::string()],
-        indexmap::IndexMap::from_iter([("first", BexExternalValue::Int(1)), ("second", s("a"))]),
+        indexmap::IndexMap::from_iter([("first", BEV::Int(1)), ("second", s("a"))]),
     );
-    let inner2 = BexExternalValue::instance_generic(
+    let inner2 = BEV::instance_generic(
         "GenericPair",
         vec![RuntimeTy::bool(), RuntimeTy::float()],
-        indexmap::IndexMap::from_iter([
-            ("first", BexExternalValue::Bool(true)),
-            ("second", BexExternalValue::Float(1.5)),
-        ]),
+        indexmap::IndexMap::from_iter([("first", BEV::Bool(true)), ("second", BEV::Float(1.5))]),
     );
-    let arg = BexExternalValue::instance_generic(
+    let arg = BEV::instance_generic(
         "GenericPair",
         vec![
             pair_rt(RuntimeTy::int(), RuntimeTy::string()),
@@ -994,7 +1070,7 @@ async fn infer_extract_four_vars_from_nested_generic() {
         indexmap::IndexMap::from_iter([("first", inner1), ("second", inner2)]),
     );
     let out = call_infer(src, "extract", vec![arg]).await.unwrap();
-    let BexExternalValue::String(rendered) = &out else {
+    let BEV::String(rendered) = &out else {
         panic!("expected string, got {out:?}");
     };
     let r = rendered.as_str();
@@ -1022,24 +1098,24 @@ async fn explicit_binding_wins_over_contradicting_scalar_actual() {
         }
         function main() -> int { 0 }
     "#;
-    let b = BexExternalValue::Array {
-        element_type: baml_type::RuntimeTy::string(),
+    let b = BEV::Array {
+        element_type: RuntimeTy::string(),
         items: vec![s("x")],
     };
-    let c = BexExternalValue::Map {
-        key_type: baml_type::RuntimeTy::string(),
-        value_type: baml_type::RuntimeTy::bool(),
-        entries: indexmap::IndexMap::from_iter([("k".to_string(), BexExternalValue::Bool(true))]),
+    let c = BEV::Map {
+        key_type: RuntimeTy::string(),
+        value_type: RuntimeTy::bool(),
+        entries: indexmap::IndexMap::from_iter([("k".to_string(), BEV::Bool(true))]),
     };
     let out = call_with_bindings(
         src,
         "make_triple",
         vec![s("nope"), b, c],
-        vec![("A".to_string(), baml_type::RuntimeTy::int())],
+        indexmap! { "A" => RuntimeTy::int() },
     )
     .await
     .expect("explicit A=int wins; the scalar `a` is not re-validated at this seam");
-    let BexExternalValue::String(rendered) = &out else {
+    let BEV::String(rendered) = &out else {
         panic!("expected string, got {out:?}");
     };
     let r = rendered.as_str();
@@ -1062,18 +1138,18 @@ async fn infer_choose_divergent_generic_instances_union() {
         function choose<T>(left: T, right: T) -> string { reflect.type_of<T>().to_string() }
         function main() -> int { 0 }
     "#;
-    let x = BexExternalValue::instance_generic(
+    let x = BEV::instance_generic(
         "GenericBox",
-        vec![baml_type::RuntimeTy::int()],
-        indexmap::IndexMap::from_iter([("value", BexExternalValue::Int(1))]),
+        vec![RuntimeTy::int()],
+        indexmap::IndexMap::from_iter([("value", BEV::Int(1))]),
     );
-    let y = BexExternalValue::instance_generic(
+    let y = BEV::instance_generic(
         "GenericBox",
-        vec![baml_type::RuntimeTy::string()],
+        vec![RuntimeTy::string()],
         indexmap::IndexMap::from_iter([("value", s("x"))]),
     );
     let out = call_infer(src, "choose", vec![x, y]).await.unwrap();
-    let BexExternalValue::String(rendered) = &out else {
+    let BEV::String(rendered) = &out else {
         panic!("expected string, got {out:?}");
     };
     let r = rendered.as_str();
@@ -1096,13 +1172,13 @@ async fn infer_tag_or_value_binds_generic_instance() {
         }
         function main() -> int { 0 }
     "#;
-    let arg = BexExternalValue::instance_generic(
+    let arg = BEV::instance_generic(
         "GenericBox",
-        vec![baml_type::RuntimeTy::string()],
+        vec![RuntimeTy::string()],
         indexmap::IndexMap::from_iter([("value", s("asdf"))]),
     );
     let out = call_infer(src, "tag_or_value", vec![arg]).await.unwrap();
-    let BexExternalValue::String(rendered) = &out else {
+    let BEV::String(rendered) = &out else {
         panic!("expected string, got {out:?}");
     };
     let r = rendered.as_str();
@@ -1123,12 +1199,12 @@ async fn infer_identity_enum_binds_enum_type() {
         function identity<T>(x: T) -> string { reflect.type_of<T>().to_string() }
         function main() -> int { 0 }
     "#;
-    let arg = BexExternalValue::Variant {
+    let arg = BEV::Variant {
         enum_name: "SomeEnum".to_string(),
         variant_name: "VARIANT".to_string(),
     };
     let out = call_infer(src, "identity", vec![arg]).await.unwrap();
-    let BexExternalValue::String(rendered) = &out else {
+    let BEV::String(rendered) = &out else {
         panic!("expected string, got {out:?}");
     };
     assert!(

@@ -2072,16 +2072,17 @@ impl BexEngine {
                     _ => None,
                 })
                 .collect();
-            let inferred = crate::conversion::infer_bindings_runtime_checked(&pairs)
-                .map_err(|detail| EngineError::TypeMismatch {
-                    message: friendly_inference_conflict(function_name, &detail),
+            let inferred =
+                crate::conversion::infer_bindings_runtime_checked(&pairs).map_err(|detail| {
+                    EngineError::TypeMismatch {
+                        message: friendly_inference_conflict(function_name, &detail),
+                    }
                 })?;
 
             // Classify where each TypeVar occurs across the parameter types so we
             // can apply the closure-poison (rule 2) and `RustType`-default (rule
             // 4) policies from `03c-impl-guide`.
-            let positions =
-                crate::conversion::classify_param_var_positions(&declared_param_types);
+            let positions = crate::conversion::classify_param_var_positions(&declared_param_types);
 
             for (name, ty) in inferred {
                 // Rule 2 (closure poison): a var occurring inside a function-typed
@@ -2105,9 +2106,11 @@ impl BexEngine {
                 if positions.closure.contains(var) || positions.ambiguous_union.contains(var) {
                     continue;
                 }
-                type_args.entry(var.clone()).or_insert_with(|| RuntimeTy::RustType {
-                    attr: baml_type::TyAttr::default(),
-                });
+                type_args
+                    .entry(var.clone())
+                    .or_insert_with(|| RuntimeTy::RustType {
+                        attr: baml_type::TyAttr::default(),
+                    });
             }
         }
 

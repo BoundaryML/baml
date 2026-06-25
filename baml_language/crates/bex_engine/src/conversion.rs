@@ -580,7 +580,9 @@ impl BexEngine {
         if expected_ty.and_then(peel_to_rust_type).is_some() && is_structural_host_only(&external) {
             let arc: std::sync::Arc<dyn std::any::Any + Send + Sync> =
                 std::sync::Arc::new(bex_external_types::OpaqueExternalValue(external));
-            return Ok(Value::object(holder.holder_mut().tlab_mut().alloc_rust_data(arc)));
+            return Ok(Value::object(
+                holder.holder_mut().tlab_mut().alloc_rust_data(arc),
+            ));
         }
         Ok(match external {
             BexExternalValue::Handle(handle) => Value::object(
@@ -1147,9 +1149,30 @@ pub(crate) fn substitute_type_vars(
             Box::new(substitute_type_vars(inner, bindings)),
             attr.clone(),
         ),
-        // Other positions (leaves, opaque handles, Function/Interface/projection)
-        // don't carry a class's type vars in a host-callable return type, so they
-        // pass through unchanged.
+        // A function-typed parameter (`f: (T) -> R`) carries call type-vars in its
+        // params/return/throws. Substitute them so an explicitly-bound closure
+        // param materializes against concrete types (J13: `apply[int,int]` binds
+        // `f` as `(int) -> int`, not the unvalidatable `(T) -> R`).
+        RuntimeTy::Function {
+            params,
+            ret,
+            throws,
+            attr,
+        } => RuntimeTy::Function {
+            params: params
+                .iter()
+                .map(|p| baml_type::RuntimeFunctionParamTy {
+                    name: p.name.clone(),
+                    ty: substitute_type_vars(&p.ty, bindings),
+                    mode: p.mode,
+                })
+                .collect(),
+            ret: Box::new(substitute_type_vars(ret, bindings)),
+            throws: Box::new(substitute_type_vars(throws, bindings)),
+            attr: attr.clone(),
+        },
+        // Other positions (leaves, opaque handles, Interface/projection) don't
+        // carry call type-vars in these paths, so they pass through unchanged.
         _ => ty.clone(),
     }
 }
@@ -1234,8 +1257,7 @@ pub(crate) fn infer_bindings_runtime(
     actual: &RuntimeTy,
     out: &mut indexmap::IndexMap<String, RuntimeTy>,
 ) {
-    let mut bindings: rustc_hash::FxHashMap<baml_type::Name, Ty> =
-        rustc_hash::FxHashMap::default();
+    let mut bindings: rustc_hash::FxHashMap<baml_type::Name, Ty> = rustc_hash::FxHashMap::default();
     baml_type_runtime::infer_value_bindings(&Ty::from(formal), &Ty::from(actual), &mut bindings);
     for (name, ty) in bindings {
         // A binding is always a subterm/union of a runtime-derived actual, so the
@@ -1385,7 +1407,7 @@ fn walk_var_positions(ty: &RuntimeTy, in_closure: bool, out: &mut ParamVarPositi
             walk_var_positions(throws, true, out);
         }
         RuntimeTy::List(inner, _) | RuntimeTy::WatchAccessor(inner, _) => {
-            walk_var_positions(inner, in_closure, out)
+            walk_var_positions(inner, in_closure, out);
         }
         RuntimeTy::Map { key, value, .. } => {
             walk_var_positions(key, in_closure, out);
