@@ -777,16 +777,20 @@ fn write_highlighted_body(
         .map_or(first, |e| e + 1);
     let lines = &all[first..last];
 
-    if lines.len() <= available_for_body || available_for_body < 3 {
+    if lines.len() <= available_for_body {
         for line in lines {
             writeln!(w, "{line}")?;
         }
         return Ok(lines.len());
     }
 
-    // Head + tail with a skip marker, split purely on line count.
-    let head = (available_for_body - 1) / 2;
-    let tail = (available_for_body - 1) - head;
+    // Doesn't fit: show a head/tail window with a skip marker, split purely on
+    // line count. One line is reserved for the marker; `saturating_sub` keeps a
+    // tiny budget (0..=2) from underflowing or dumping the whole body, and
+    // biasing `head` upward favors showing the declaration line.
+    let window = available_for_body.saturating_sub(1);
+    let head = window.div_ceil(2);
+    let tail = window - head;
     for line in &lines[..head] {
         writeln!(w, "{line}")?;
     }

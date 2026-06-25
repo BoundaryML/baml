@@ -536,7 +536,9 @@ impl<'db> Highlighter<'db> {
     /// reference span is known but the whole line is shown.
     pub fn enclosing_line(&self, file: SourceFile, range: TextRange) -> String {
         let text = file.text(self.db);
-        let start: usize = range.start().into();
+        // Clamp both bounds: a stale/out-of-range `range` must not panic the
+        // `text[..start]` / `text[end..]` slices below.
+        let start: usize = usize::min(range.start().into(), text.len());
         let end: usize = usize::min(range.end().into(), text.len());
         let line_start = text[..start].rfind('\n').map_or(0, |i| i + 1);
         let line_end = text[end..].find('\n').map_or(text.len(), |i| end + i);
