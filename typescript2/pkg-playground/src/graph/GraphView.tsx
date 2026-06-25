@@ -30,6 +30,7 @@ import type { ResultRendererProps } from '../result-renderers';
 import { getChrome } from './constants';
 import { cfgToGraphNodes, graphToReactflow } from './convert';
 import { layoutGraph } from './layout';
+import { applyLevelOfDetail, maxNodeDepth, zoomToRevealDepth } from './lod';
 import { kNodeTypes } from './nodes';
 import { kEdgeTypes, ColorfulMarkerDefinitions } from './edges';
 import { GraphThemeContext, useGraphTheme } from './theme';
@@ -239,6 +240,33 @@ function GraphViewInner({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [graph, theme]);
 
+  // ── Semantic ("Google Maps") zoom ────────────────────────────────────────
+  // The full CFG is deeply nested; we only render down to `revealDepth`,
+  // collapsing deeper subgraphs into a single leaf. The depth tracks the
+  // viewport zoom (see onMove below): zoom out → shallow, zoom in → deeper.
+  const maxDepth = useMemo(
+    () => maxNodeDepth(graphModel.rfNodes),
+    [graphModel],
+  );
+  const [revealDepth, setRevealDepth] = useState(2);
+  const lodModel = useMemo(
+    () =>
+      applyLevelOfDetail(graphModel.rfNodes, graphModel.rfEdges, revealDepth),
+    [graphModel, revealDepth],
+  );
+
+  // Map the live zoom to a reveal depth. State only changes at depth
+  // boundaries, so this re-layouts at most a few times per zoom gesture.
+  const onMove = useCallback(
+    (_event: unknown, viewport: { zoom: number }) => {
+      setRevealDepth((prev) => {
+        const next = zoomToRevealDepth(viewport.zoom, maxDepth);
+        return next === prev ? prev : next;
+      });
+    },
+    [maxDepth],
+  );
+
   const runtimeInputsRef = useRef({
     graphRuntimeOverlay,
     calls,
@@ -320,9 +348,9 @@ function GraphViewInner({
   // Runtime overlay can affect geometry when an error preview is visible.
   useEffect(() => {
     const layoutRunId = ++layoutRunIdRef.current;
-    const nodesWithRuntime = decorateNodesWithRuntime(graphModel.rfNodes);
+    const nodesWithRuntime = decorateNodesWithRuntime(lodModel.nodes);
 
-    layoutGraph(nodesWithRuntime, graphModel.rfEdges, direction)
+    layoutGraph(nodesWithRuntime, lodModel.edges, direction)
       .then(({ nodes: laid, edges: laidEdges }) => {
         if (layoutRunId !== layoutRunIdRef.current) return;
         setNodes(decorateNodesWithRuntime(laid));
@@ -339,7 +367,7 @@ function GraphViewInner({
         console.error('[GraphView] Layout failed:', err);
       });
   }, [
-    graphModel,
+    lodModel,
     graphRuntimeOverlay,
     calls,
     runStatus,
@@ -517,6 +545,7 @@ function GraphViewInner({
         nodeTypes={kNodeTypes}
         edgeTypes={kEdgeTypes}
         onNodeClick={handleNodeClick}
+        onMove={onMove}
         nodesDraggable={false}
         nodesFocusable
         edgesFocusable={false}
