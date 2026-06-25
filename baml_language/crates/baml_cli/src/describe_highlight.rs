@@ -10,7 +10,7 @@
 //! dependency/reference rows, which can touch several files) computes each file's
 //! tokens at most once.
 
-use std::{cell::RefCell, collections::HashMap, path::Path, rc::Rc};
+use std::{cell::RefCell, collections::HashMap, fmt::Write, path::Path, rc::Rc};
 
 use baml_db::{
     FileId, SourceFile,
@@ -143,15 +143,18 @@ pub fn highlight_fqn_opt(name: &str, leaf_kind: Option<DefinitionKind>) -> Strin
     let namespace = style_for(SemanticTokenType::Namespace);
     let dot = style_for(SemanticTokenType::Operator);
     let leaf = leaf_kind.map_or_else(|| namespace.clone(), kind_style);
-    let parts: Vec<&str> = name.split('.').collect();
-    let last = parts.len().saturating_sub(1);
     let mut out = String::new();
-    for (i, part) in parts.iter().enumerate() {
-        if i > 0 {
-            out.push_str(&dot.apply_to('.').to_string());
+    let mut parts = name.split('.').peekable();
+    while let Some(part) = parts.next() {
+        let style = if parts.peek().is_none() {
+            &leaf
+        } else {
+            &namespace
+        };
+        let _ = write!(out, "{}", style.apply_to(part));
+        if parts.peek().is_some() {
+            let _ = write!(out, "{}", dot.apply_to('.'));
         }
-        let style = if i == last { &leaf } else { &namespace };
-        out.push_str(&style.apply_to(part).to_string());
     }
     out
 }
@@ -324,7 +327,9 @@ pub fn highlight_str(text: &str) -> String {
             Some(style_for(SemanticTokenType::Operator)) // punctuation / operators
         };
         match style {
-            Some(s) => out.push_str(&s.apply_to(&t.text).to_string()),
+            Some(s) => {
+                let _ = write!(out, "{}", s.apply_to(&t.text));
+            }
             None => out.push_str(&t.text),
         }
         pending_decl = decl_keyword_kind(t.kind);
@@ -460,7 +465,7 @@ fn push_styled(out: &mut String, seg: &str, style: &Style) {
             out.push('\n');
         }
         if !line.is_empty() {
-            out.push_str(&style.apply_to(line).to_string());
+            let _ = write!(out, "{}", style.apply_to(line));
         }
     }
 }

@@ -619,7 +619,7 @@ pub fn write_description(
         // Colored TTY output renders the verbatim definition slice through the
         // compiler's semantic tokens. Plain output (pipes, JSON, tests) keeps
         // the existing cleaned/truncated behavior byte-for-byte.
-        if console::colors_enabled() {
+        if colors {
             lines_used += write_highlighted_body(w, &hl, desc, available_for_body)?;
         } else {
             let was_truncated = body_lines.len() > available_for_body;
@@ -906,12 +906,9 @@ fn write_method_section(
             continue;
         }
         if let Some(doc) = &m.docstring {
-            let line = format!("/// {doc}");
-            if console::colors_enabled() {
-                writeln!(w, "  {}", console::style(line).color256(244))?;
-            } else {
-                writeln!(w, "  {line}")?;
-            }
+            // `highlight_str` self-gates on color and renders `///` lines as comments.
+            let doc_line = crate::describe_highlight::highlight_str(&format!("/// {doc}"));
+            writeln!(w, "  {doc_line}")?;
         }
         let text = m.file.text(db);
         let (start, end) =
@@ -923,11 +920,7 @@ fn write_method_section(
             &m_path.display().to_string(),
             &format!("{start}-{end}"),
         );
-        let sig = if console::colors_enabled() {
-            crate::describe_highlight::highlight_str(&m.signature)
-        } else {
-            m.signature.clone()
-        };
+        let sig = crate::describe_highlight::highlight_str(&m.signature);
         writeln!(w, "  {sig}  {loc}")?;
         remaining = remaining.saturating_sub(unit_cost);
     }
@@ -946,7 +939,6 @@ pub fn write_listing(
     entries: &[baml_lsp2_actions::ListingEntry],
     project_root: &std::path::Path,
 ) -> std::io::Result<()> {
-    let colors = console::colors_enabled();
     for entry in entries {
         let abs = std::path::Path::new(&entry.file_path);
         let rel = relative_path(abs, project_root);
@@ -955,24 +947,33 @@ pub fn write_listing(
             &rel.display().to_string(),
             &entry.line.to_string(),
         );
-        if colors {
-            writeln!(
-                w,
-                "{} {} {}",
-                crate::describe_highlight::kind_style(entry.kind)
-                    .apply_to(format!("{:<16}", entry.kind.as_str())),
-                crate::describe_highlight::highlight_name_padded(&entry.fqn(), entry.kind, 32),
-                loc,
-            )?;
-        } else {
-            writeln!(w, "{:<16} {:<32} {}", entry.kind.as_str(), entry.fqn(), loc)?;
-        }
+        write_symbol_row(w, "", entry.kind, &entry.fqn(), &loc)?;
     }
     Ok(())
 }
 
-/// Write one indented `kind  name  location` row (dependencies / container),
-/// colored by kind on a TTY. `location` is preformatted (e.g. `path:line`).
+/// Write one `kind  name  location` row, colored by kind on a TTY. `indent` is
+/// prepended verbatim and `location` is preformatted (e.g. `path:line`).
+fn write_symbol_row(
+    w: &mut impl std::io::Write,
+    indent: &str,
+    kind: baml_lsp2_actions::DefinitionKind,
+    name: &str,
+    location: &str,
+) -> std::io::Result<()> {
+    if console::colors_enabled() {
+        writeln!(
+            w,
+            "{indent}{} {} {location}",
+            crate::describe_highlight::kind_style(kind).apply_to(format!("{:<16}", kind.as_str())),
+            crate::describe_highlight::highlight_name_padded(name, kind, 32),
+        )
+    } else {
+        writeln!(w, "{indent}{:<16} {:<32} {location}", kind.as_str(), name)
+    }
+}
+
+/// Write an indented dependency / container row, colored by kind on a TTY.
 fn write_kind_row(
     w: &mut impl std::io::Write,
     kind: baml_lsp2_actions::DefinitionKind,
@@ -982,17 +983,7 @@ fn write_kind_row(
     line: usize,
 ) -> std::io::Result<()> {
     let loc = crate::describe_highlight::location(abs_path, rel_display, &line.to_string());
-    if console::colors_enabled() {
-        writeln!(
-            w,
-            "  {} {} {}",
-            crate::describe_highlight::kind_style(kind).apply_to(format!("{:<16}", kind.as_str())),
-            crate::describe_highlight::highlight_name_padded(name, kind, 32),
-            loc,
-        )
-    } else {
-        writeln!(w, "  {:<16} {:<32} {}", kind.as_str(), name, loc)
-    }
+    write_symbol_row(w, "  ", kind, name, &loc)
 }
 
 /// Convert listing entries to JSON array.
