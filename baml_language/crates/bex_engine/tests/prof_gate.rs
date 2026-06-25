@@ -120,7 +120,7 @@ fn llm_function_capture_defaults_auto_inputs_outputs_errors() {
     let program = compile_for_engine(source);
     let mut llm_capture = None;
     let mut plain_capture = None;
-    for object in program.objects.iter() {
+    for object in &program.objects {
         let Object::Function(function) = object else {
             continue;
         };
@@ -527,7 +527,7 @@ async fn call_output_capture_attributes_repeated_enabled_calls() {
         }
     "#;
     let mut program = compile_for_engine(source);
-    for object in program.objects.iter_mut() {
+    for object in &mut program.objects {
         let Object::Function(function) = object else {
             continue;
         };
@@ -843,7 +843,7 @@ async fn call_input_capture_attributes_enabled_sysop_calls() {
         }
     "#;
     let mut program = compile_for_engine(source);
-    for object in program.objects.iter_mut() {
+    for object in &mut program.objects {
         let Object::Function(function) = object else {
             continue;
         };
@@ -955,7 +955,7 @@ async fn call_output_capture_attributes_enabled_native_calls() {
         }
     "#;
     let mut program = compile_for_engine(source);
-    for object in program.objects.iter_mut() {
+    for object in &mut program.objects {
         let Object::Function(function) = object else {
             continue;
         };
@@ -1059,7 +1059,7 @@ async fn call_error_capture_records_throw_origin_without_rethrow_duplicate() {
         }
     "#;
     let mut program = compile_for_engine(source);
-    for object in program.objects.iter_mut() {
+    for object in &mut program.objects {
         let Object::Function(function) = object else {
             continue;
         };

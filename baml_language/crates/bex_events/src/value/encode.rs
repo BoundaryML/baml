@@ -130,7 +130,7 @@ mod tests {
     fn value_record_metadata_round_trips_through_prost() {
         let value_ref = ValueRef::available("value_7", ValueCodec::BamlOutboundValue, 3, 3);
         let record = ValueRecord {
-            value_ref: value_ref.clone(),
+            value_ref,
             body: vec![1, 2, 3],
             blob_ref: None,
             capture: None,

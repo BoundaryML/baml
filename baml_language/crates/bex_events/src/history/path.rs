@@ -254,7 +254,7 @@ mod tests {
     fn target_slug_never_returns_empty() {
         assert_eq!(
             target_slug(&RunTarget::Internal {
-                name: "".to_string()
+                name: String::new()
             }),
             "boundary"
         );

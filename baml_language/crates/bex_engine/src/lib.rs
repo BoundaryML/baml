@@ -3315,6 +3315,10 @@ impl BexEngine {
     /// `route_unhandled_vm_throw` re-typing when the throw escapes all
     /// in-BAML catches. For non-host-callable sysops (which never produce
     /// `HostThrown` payloads), pass `None` for the throws contract.
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "The unwind bridge keeps capture, contract, and thread state explicit."
+    )]
     async fn inject_sysop_throw(
         self: &Arc<Self>,
         thread: &mut ActiveHeapPermit<BexThread>,
@@ -3742,6 +3746,10 @@ impl BexEngine {
     /// on every exit path (the inner loop has many early returns; thread
     /// join at shutdown makes the final commits visible to the consumer per
     /// plan §1).
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "The thread wrapper forwards lifecycle, capture, and cancellation state explicitly."
+    )]
     async fn run_thread_event_loop(
         self: &Arc<Self>,
         return_type: RuntimeTy,

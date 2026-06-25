@@ -20,10 +20,14 @@ use std::{
 #[cfg(target_arch = "wasm32")]
 use web_time::{SystemTime, UNIX_EPOCH};
 
-pub use crate::ids::BoundaryId;
-use crate::ids::{BexCallId, BexThreadId, CallRef, EngineId, FunctionId, ProcessEuid, ThreadRef};
-pub use crate::run_wire::{patch_to_wire, run_summary_to_wire, run_to_wire};
-use crate::value::ValueRef;
+pub use crate::{
+    ids::BoundaryId,
+    run_wire::{patch_to_wire, run_summary_to_wire, run_to_wire},
+};
+use crate::{
+    ids::{BexCallId, BexThreadId, CallRef, EngineId, FunctionId, ProcessEuid, ThreadRef},
+    value::ValueRef,
+};
 
 pub trait ProfileEventObserver: Send + Sync + 'static {
     fn ingest_profile_event(&self, envelope: ProfileEventEnvelope);
@@ -2454,7 +2458,6 @@ fn recompute_record_profile(
             .calls
             .iter()
             .cloned()
-            .into_iter()
             .map(RunPatchChange::UpsertCallNode),
     );
     changes.extend(
@@ -4556,7 +4559,7 @@ mod tests {
                     call_id: BexCallId(2),
                     parent_call_id: Some(BexCallId(1)),
                     function_id: FunctionId(2),
-                    call_site_source: Some(source.clone()),
+                    call_site_source: Some(source),
                 },
                 30,
             ),

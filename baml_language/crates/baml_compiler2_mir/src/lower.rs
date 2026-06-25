@@ -1505,6 +1505,14 @@ struct InterfaceDispatchCall<'a> {
 }
 
 #[derive(Clone, Copy)]
+struct DispatchCallLowering<'a> {
+    expr_id: AstExprId,
+    args: &'a [AstExprId],
+    runtime_id: Option<AstExprId>,
+    dest: &'a Place,
+}
+
+#[derive(Clone, Copy)]
 struct InterfaceDefaultCallContext<'a> {
     iface_tn: &'a TypeName,
     iface_type_args: &'a [Tir2Ty],
@@ -7864,10 +7872,12 @@ impl<'db> LoweringContext<'db> {
                         recv_local,
                         &members,
                         &method_name,
-                        expr_id,
-                        args,
-                        runtime_id,
-                        &dest,
+                        DispatchCallLowering {
+                            expr_id,
+                            args,
+                            runtime_id,
+                            dest: &dest,
+                        },
                     ) {
                         return;
                     }
@@ -7878,10 +7888,12 @@ impl<'db> LoweringContext<'db> {
                         && self.emit_method_candidate_switch(
                             recv_local,
                             &candidates,
-                            expr_id,
-                            args,
-                            runtime_id,
-                            &dest,
+                            DispatchCallLowering {
+                                expr_id,
+                                args,
+                                runtime_id,
+                                dest: &dest,
+                            },
                             None,
                         )
                     {
@@ -10420,7 +10432,15 @@ impl<'db> LoweringContext<'db> {
         let receiver_ty = self.expr_ty(base);
         let recv_local = self.operand_to_local(receiver_op, receiver_ty);
         self.emit_union_class_dispatch(
-            recv_local, &members, method, expr_id, args, runtime_id, dest,
+            recv_local,
+            &members,
+            method,
+            DispatchCallLowering {
+                expr_id,
+                args,
+                runtime_id,
+                dest,
+            },
         )
     }
 
@@ -10456,10 +10476,12 @@ impl<'db> LoweringContext<'db> {
         self.emit_method_candidate_switch(
             recv_local,
             &candidates,
-            expr_id,
-            args,
-            runtime_id,
-            dest,
+            DispatchCallLowering {
+                expr_id,
+                args,
+                runtime_id,
+                dest,
+            },
             None,
         )
     }
@@ -10601,10 +10623,7 @@ impl<'db> LoweringContext<'db> {
         recv_local: Local,
         members: &[Tir2Ty],
         method: &Name,
-        expr_id: AstExprId,
-        args: &[AstExprId],
-        runtime_id: Option<AstExprId>,
-        dest: &Place,
+        call: DispatchCallLowering<'_>,
     ) -> bool {
         let mut arms: Vec<(TypeName, ItemRef)> = Vec::new();
         for member in members {
@@ -10621,8 +10640,8 @@ impl<'db> LoweringContext<'db> {
             return false;
         }
 
-        let arg_ops = self.lower_call_arg_operands(expr_id, args);
-        let runtime_id_operand = self.lower_runtime_id_operand(runtime_id);
+        let arg_ops = self.lower_call_arg_operands(call.expr_id, call.args);
+        let runtime_id_operand = self.lower_runtime_id_operand(call.runtime_id);
         let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
 
         let bb_join = self.builder.create_block();
@@ -10651,7 +10670,7 @@ impl<'db> LoweringContext<'db> {
                 all_args,
                 0,
                 runtime_id_operand.clone(),
-                dest.clone(),
+                call.dest.clone(),
                 bb_join,
                 unwind,
             );
@@ -10692,10 +10711,12 @@ impl<'db> LoweringContext<'db> {
         self.emit_method_candidate_switch(
             recv_local,
             &resolved,
-            expr_id,
-            args,
-            runtime_id,
-            dest,
+            DispatchCallLowering {
+                expr_id,
+                args,
+                runtime_id,
+                dest,
+            },
             Some(InterfaceDefaultCallContext {
                 iface_tn,
                 iface_type_args,
@@ -10803,10 +10824,7 @@ impl<'db> LoweringContext<'db> {
         &mut self,
         recv_local: Local,
         resolved: &[InterfaceMethodCandidate],
-        expr_id: AstExprId,
-        args: &[AstExprId],
-        runtime_id: Option<AstExprId>,
-        dest: &Place,
+        call: DispatchCallLowering<'_>,
         interface_default_context: Option<InterfaceDefaultCallContext<'_>>,
     ) -> bool {
         if resolved.is_empty() {
@@ -10814,10 +10832,10 @@ impl<'db> LoweringContext<'db> {
         }
 
         // Lower args once; same operands used in every arm.
-        let arg_ops = self.lower_call_arg_operands(expr_id, args);
-        let type_arg_ops = self.lower_call_type_args(expr_id, true, None);
-        let runtime_id_operand = self.lower_runtime_id_operand(runtime_id);
-        let has_explicit_type_args = self.call_has_explicit_type_args(expr_id);
+        let arg_ops = self.lower_call_arg_operands(call.expr_id, call.args);
+        let type_arg_ops = self.lower_call_type_args(call.expr_id, true, None);
+        let runtime_id_operand = self.lower_runtime_id_operand(call.runtime_id);
+        let has_explicit_type_args = self.call_has_explicit_type_args(call.expr_id);
         let ntypeargs = type_arg_ops.len();
         let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
 
@@ -10882,7 +10900,7 @@ impl<'db> LoweringContext<'db> {
                         all_args,
                         ntypeargs,
                         runtime_id_operand.clone(),
-                        dest.clone(),
+                        call.dest.clone(),
                         bb_join,
                         unwind,
                     );
@@ -10934,7 +10952,7 @@ impl<'db> LoweringContext<'db> {
                         all_args,
                         arm_ntypeargs,
                         runtime_id_operand.clone(),
-                        dest.clone(),
+                        call.dest.clone(),
                         bb_join,
                         unwind,
                     );

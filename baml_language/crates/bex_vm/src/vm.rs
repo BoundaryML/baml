@@ -850,7 +850,7 @@ pub struct BexVm {
     pub value_capture_auto_enabled: bool,
 
     /// Values observed at call return/throw boundaries. The engine drains
-    /// these into TraceHeap while holding a heap permit.
+    /// these into `TraceHeap` while holding a heap permit.
     pub pending_call_captures: Vec<VmCallCaptureEvent>,
 
     /// Optional engine-owned hook for approved bytecode/sys-op input snapshots.
@@ -4391,8 +4391,7 @@ impl BexVm {
 
             FunctionKind::SysOp(_) => {
                 log::error!(
-                    "[VM] tried to CALL SysOp function '{}' via bytecode — SysOps must go through the engine yield path",
-                    callee_name
+                    "[VM] tried to CALL SysOp function '{callee_name}' via bytecode — SysOps must go through the engine yield path"
                 );
                 return Err(VmInternalError::TypeError {
                     expected: FunctionType::Callable.into(),
@@ -4405,8 +4404,7 @@ impl BexVm {
                 // This should never happen - native functions should be resolved
                 // by attach_builtins() before the VM runs.
                 panic!(
-                    "Unresolved native function '{}' - did you forget to call attach_builtins()?",
-                    callee_name
+                    "Unresolved native function '{callee_name}' - did you forget to call attach_builtins()?"
                 );
             }
         }

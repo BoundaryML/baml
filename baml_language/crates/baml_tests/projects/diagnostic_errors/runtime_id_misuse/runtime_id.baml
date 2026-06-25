@@ -21,7 +21,8 @@ function member_access() -> int {
     $id.len()
 }
 
-// $id is not a call-site argument label; overrides are set inside the callee.
+// $id is a call-site side channel, not an ordinary function argument. This
+// call still omits the required ordinary `x` argument.
 function takes_int(x: int) -> int {
     x
 }

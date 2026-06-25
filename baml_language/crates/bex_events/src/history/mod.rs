@@ -13,6 +13,15 @@ use std::{
 };
 use std::{io, path::Path};
 
+#[cfg(not(target_arch = "wasm32"))]
+use self::router::BoundaryTraceRouter;
+#[cfg(not(target_arch = "wasm32"))]
+use self::{
+    boundary_writer::BoundaryWriter,
+    path::{
+        BoundaryHistoryPath, build_boundary_history_path, find_boundary_dir, list_boundary_dirs,
+    },
+};
 use crate::{
     ids::BoundaryId,
     prof::{pb, read::read_bamlprof_from_bytes},
@@ -26,16 +35,6 @@ use crate::{
     value::{
         BlobRef, BlobStore, CaptureLossRecord, RunCompletedRecord, RunStartedRecord,
         ValueCaptureKind, ValueCodec, ValueFileRecord, ValueRef, read_bamlvalue_from_bytes,
-    },
-};
-
-#[cfg(not(target_arch = "wasm32"))]
-use self::router::BoundaryTraceRouter;
-#[cfg(not(target_arch = "wasm32"))]
-use self::{
-    boundary_writer::BoundaryWriter,
-    path::{
-        BoundaryHistoryPath, build_boundary_history_path, find_boundary_dir, list_boundary_dirs,
     },
 };
 #[cfg(not(target_arch = "wasm32"))]
@@ -383,7 +382,7 @@ impl HistoryStore {
             .clone();
         let mut summaries = list_boundary_dirs(&search_roots)
             .into_iter()
-            .filter_map(|dir| self.open_from_dir(&dir).ok())
+            .filter_map(|dir| Self::open_from_dir(&dir).ok())
             .filter(|run| history_run_matches_filter(run, filter))
             .map(|run| summarize_history_run(&run))
             .collect::<Vec<_>>();
@@ -416,7 +415,7 @@ impl HistoryStore {
                     ),
                 )
             })?;
-        self.open_from_dir(&dir)
+        Self::open_from_dir(&dir)
     }
 
     pub fn read_value(
@@ -453,7 +452,7 @@ impl HistoryStore {
         read_value_from_segments_with_blobs(&value_segments, value_ref_id, Some(&blob_store))
     }
 
-    fn open_from_dir(&self, dir: &Path) -> io::Result<Run> {
+    fn open_from_dir(dir: &Path) -> io::Result<Run> {
         open_boundary_from_dir(dir)
     }
 }
@@ -1199,7 +1198,7 @@ mod tests {
                 thread_id: 1,
                 call_id,
                 parent_call_id: Some(parent_call_id),
-                function_id: call_id as u32,
+                function_id: u32::try_from(call_id).expect("test call id fits in u32"),
                 timestamp_ns: 5 + call_id,
                 call_site_file_id: None,
                 call_site_start_offset: None,
@@ -1299,7 +1298,7 @@ mod tests {
         );
 
         let stack_path = stack_segment_paths(
-            &find_boundary_dir(&[project.clone()], boundary_id).expect("boundary dir"),
+            &find_boundary_dir(std::slice::from_ref(&project), boundary_id).expect("boundary dir"),
         )
         .pop()
         .expect("stack segment");
@@ -1448,7 +1447,7 @@ mod tests {
             large_body
         );
 
-        let boundary_dir = find_boundary_dir(&[project.clone()], boundary_id).unwrap();
+        let boundary_dir = find_boundary_dir(std::slice::from_ref(&project), boundary_id).unwrap();
         let blob_paths = std::fs::read_dir(boundary_dir.join("blobs").join("sha256"))
             .unwrap()
             .flatten()

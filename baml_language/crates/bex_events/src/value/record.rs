@@ -1,5 +1,6 @@
 use std::io;
 
+use super::BlobRef;
 use crate::{
     ids::{BexCallId, BexThreadId, BoundaryId, EngineId, ProcessEuid},
     run::{
@@ -7,8 +8,6 @@ use crate::{
         RunRequestSummary, RunStatus, RunTarget, RunTimeAnchor, SourceLocation, TraceCallKey,
     },
 };
-
-use super::BlobRef;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ValueCodec {
@@ -638,13 +637,17 @@ fn run_target_from_proto(value: crate::value::pb::RunTargetV1) -> io::Result<Run
             parent_function_name: target.parent_function_name,
             helper: target.helper,
         }),
-        Target::Companion(target) => Ok(RunTarget::Companion {
-            parent_boundary_id: target
+        Target::Companion(target) => {
+            let parent_boundary_id = target
                 .parent_boundary_id
-                .map(boundary_id_from_vec)
-                .transpose()?,
-            function_name: target.function_name,
-        }),
+                .as_deref()
+                .map(boundary_id_from_slice)
+                .transpose()?;
+            Ok(RunTarget::Companion {
+                parent_boundary_id,
+                function_name: target.function_name,
+            })
+        }
         Target::Internal(target) => Ok(RunTarget::Internal { name: target.name }),
     }
 }
@@ -686,8 +689,8 @@ fn run_target_to_proto(value: &RunTarget) -> crate::value::pb::RunTargetV1 {
     }
 }
 
-fn boundary_id_from_vec(value: Vec<u8>) -> io::Result<BoundaryId> {
-    let bytes: [u8; 16] = value.as_slice().try_into().map_err(|_| {
+fn boundary_id_from_slice(value: &[u8]) -> io::Result<BoundaryId> {
+    let bytes: [u8; 16] = value.try_into().map_err(|_| {
         io::Error::new(
             io::ErrorKind::InvalidData,
             format!("boundary id must be 16 bytes, got {}", value.len()),

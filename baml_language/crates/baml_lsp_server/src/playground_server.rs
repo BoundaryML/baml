@@ -29,16 +29,19 @@ use axum::{
     routing::{get, get_service},
 };
 use base64::Engine as _;
-use bex_events::history::{HistoryObserverRegistration, HistoryStore, register_history_observer};
-use bex_events::run::{
-    AttachRootTraceResult, BoundaryId, CancellationState, CapturedValueRole, DiagnosticSeverity,
-    ExecutionRequest, HostCallId, InMemoryRunStore, ProjectGeneration, ProjectId, RequestId,
-    RunCursor, RunCursorExpiredReason, RunDiagnostic, RunError, RunErrorClass, RunFilter, RunKind,
-    RunOutcome, RunResult, RunSubscription, RunTarget, RunVisibilityFilter, StartedHostRun,
-};
-use bex_events::value::{
-    ByteValueArtifactSink, CaptureLossKind, CaptureLossReason, CaptureLossRecord, LogEventRecord,
-    ValueCapture, ValueCaptureKind, ValueCodec, ValueRef, ValueWriter,
+use bex_events::{
+    history::{HistoryObserverRegistration, HistoryStore, register_history_observer},
+    run::{
+        AttachRootTraceResult, BoundaryId, CancellationState, CapturedValueRole,
+        DiagnosticSeverity, ExecutionRequest, HostCallId, InMemoryRunStore, ProjectGeneration,
+        ProjectId, RequestId, RunCursor, RunCursorExpiredReason, RunDiagnostic, RunError,
+        RunErrorClass, RunFilter, RunKind, RunOutcome, RunResult, RunSubscription, RunTarget,
+        RunVisibilityFilter, StartedHostRun,
+    },
+    value::{
+        ByteValueArtifactSink, CaptureLossKind, CaptureLossReason, CaptureLossRecord,
+        LogEventRecord, ValueCapture, ValueCaptureKind, ValueCodec, ValueRef, ValueWriter,
+    },
 };
 use bex_project::{is_cancelled_engine_error, is_cancelled_runtime_error};
 use futures::{SinkExt, stream::StreamExt};

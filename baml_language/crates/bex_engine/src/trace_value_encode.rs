@@ -18,6 +18,10 @@ struct BamlOutboundValue {
 }
 
 #[derive(Clone, PartialEq, ::prost::Oneof)]
+#[expect(
+    clippy::enum_variant_names,
+    reason = "Variant names mirror the protobuf value oneof fields."
+)]
 enum BamlValueVariant {
     #[prost(message, tag = "2")]
     NullValue(BamlValueNull),
@@ -46,6 +50,10 @@ enum BamlValueVariant {
 }
 
 #[derive(Clone, PartialEq, Message)]
+#[expect(
+    clippy::empty_structs_with_brackets,
+    reason = "prost empty message structs use braced form."
+)]
 struct BamlValueNull {}
 
 #[derive(Clone, PartialEq, Message)]

@@ -4,6 +4,7 @@ use std::{
     io::{self, Write},
 };
 
+use super::path::BoundaryHistoryPath;
 use crate::{
     ids::BoundaryId,
     prof::{
@@ -17,8 +18,6 @@ use crate::{
         RunStartedRecord, ValueCapture, ValueCodec, ValueWriteOutcome, ValueWriter,
     },
 };
-
-use super::path::BoundaryHistoryPath;
 
 pub struct BoundaryWriter {
     path: BoundaryHistoryPath,
@@ -60,9 +59,7 @@ impl BoundaryWriter {
         envelope: &ProfileEventEnvelope,
         disk_event: &pb::DiskEventV1,
     ) -> io::Result<()> {
-        let Some(thread_id) = thread_id_for_event(&envelope.event.kind) else {
-            return Ok(());
-        };
+        let thread_id = thread_id_for_event(&envelope.event.kind);
         if !self.stack_writers.contains_key(&thread_id) {
             let started_at_epoch_ns = self.started_at_epoch_ns;
             let path = self.path.stack_segment_path(thread_id, 0);
@@ -212,11 +209,11 @@ impl StackSegmentWriter {
     }
 }
 
-fn thread_id_for_event(kind: &ProfileEventKind) -> Option<u64> {
+fn thread_id_for_event(kind: &ProfileEventKind) -> u64 {
     match kind {
         ProfileEventKind::StartThread { thread_id, .. }
         | ProfileEventKind::EndThread { thread_id, .. }
         | ProfileEventKind::CallFunction { thread_id, .. }
-        | ProfileEventKind::EndFunction { thread_id, .. } => Some(thread_id.0),
+        | ProfileEventKind::EndFunction { thread_id, .. } => thread_id.0,
     }
 }

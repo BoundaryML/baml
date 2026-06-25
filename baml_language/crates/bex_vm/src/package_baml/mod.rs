@@ -323,10 +323,10 @@ pub(super) fn to_json_override_fn_name(vm: &BexVm, v: Value) -> Option<String> {
 
 /// Resolves native function pointers for unresolved native functions in objects.
 ///
-/// Only functions in the `baml.*` namespace are resolved here. Functions from
-/// other packages (e.g. `assert.*`, `testing.*`) are left as `NativeUnresolved`
-/// so they can be wired up by future package implementations. They will only
-/// fail at runtime if actually called.
+/// Only functions in VM-owned native namespaces are resolved here. Functions
+/// from other packages (e.g. `assert.*`, `testing.*`) are left as
+/// `NativeUnresolved` so they can be wired up by future package implementations.
+/// They will only fail at runtime if actually called.
 pub fn attach_builtins(object: Object) -> Result<Object, VmInternalError> {
     Ok(match object {
         Object::Function(function) => {

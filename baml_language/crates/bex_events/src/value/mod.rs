@@ -1,6 +1,6 @@
 //! Target-neutral `.bamlvalue` metadata and framing.
 //!
-//! RunStore carries [`ValueRef`] metadata only. The bytes live in a value
+//! `RunStore` carries [`ValueRef`] metadata only. The bytes live in a value
 //! artifact and are hydrated by `readValue(boundaryId, valueRef)`.
 
 pub mod artifact;

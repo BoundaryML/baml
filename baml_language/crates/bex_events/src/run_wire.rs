@@ -1,12 +1,14 @@
 use serde_json::{Value, json};
 
-use crate::run::{
-    CallNode, CallStatus, CapturedValueRole, DiagnosticSeverity, EnvResolutionStatus, PayloadBody,
-    PayloadBodyState, PayloadEvent, PayloadId, PayloadKind, Run, RunDiagnostic, RunError,
-    RunOutcome, RunPatch, RunPatchChange, RunRequestState, RunResult, RunStatus, RunSummary,
-    RunTarget, RunVisibility, ThreadNode, ThreadStatus,
+use crate::{
+    run::{
+        CallNode, CallStatus, CapturedValueRole, DiagnosticSeverity, EnvResolutionStatus,
+        PayloadBody, PayloadBodyState, PayloadEvent, PayloadId, PayloadKind, Run, RunDiagnostic,
+        RunError, RunOutcome, RunPatch, RunPatchChange, RunRequestState, RunResult, RunStatus,
+        RunSummary, RunTarget, RunVisibility, ThreadNode, ThreadStatus,
+    },
+    value::ValueRef,
 };
-use crate::value::ValueRef;
 
 pub fn run_to_wire(run: &Run) -> Value {
     json!({

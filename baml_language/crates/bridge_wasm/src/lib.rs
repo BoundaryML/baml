@@ -398,9 +398,7 @@ impl WasmHistoryStoreInner {
 
 impl WasmHistoryBoundary {
     fn write_profile_record(&mut self, record: &HistoryProfileRecord) -> io::Result<()> {
-        let Some(thread_id) = thread_id_for_profile_record(record) else {
-            return Ok(());
-        };
+        let thread_id = thread_id_for_profile_record(record);
         if !self.profile_writers.contains_key(&thread_id) {
             let writer = WasmProfileSegmentWriter::new(
                 thread_id,
@@ -412,7 +410,8 @@ impl WasmHistoryBoundary {
         self.profile_writers
             .get_mut(&thread_id)
             .expect("profile writer inserted above")
-            .write_event(&record.disk_event)
+            .write_event(&record.disk_event);
+        Ok(())
     }
 
     fn profile_segments(&self) -> Vec<HistoryProfileSegment> {
@@ -461,11 +460,10 @@ impl WasmProfileSegmentWriter {
         })
     }
 
-    fn write_event(&mut self, disk_event: &bex_events::prof::pb::DiskEventV1) -> io::Result<()> {
+    fn write_event(&mut self, disk_event: &bex_events::prof::pb::DiskEventV1) {
         bex_events::prof::encode::encode_disk_event(&mut self.scratch, disk_event);
         self.bytes.extend_from_slice(&self.scratch);
         self.scratch.clear();
-        Ok(())
     }
 
     fn segment(&self) -> HistoryProfileSegment {
@@ -476,12 +474,12 @@ impl WasmProfileSegmentWriter {
     }
 }
 
-fn thread_id_for_profile_record(record: &HistoryProfileRecord) -> Option<u64> {
+fn thread_id_for_profile_record(record: &HistoryProfileRecord) -> u64 {
     match &record.envelope.event.kind {
         bex_events::run::ProfileEventKind::StartThread { thread_id, .. }
         | bex_events::run::ProfileEventKind::EndThread { thread_id, .. }
         | bex_events::run::ProfileEventKind::CallFunction { thread_id, .. }
-        | bex_events::run::ProfileEventKind::EndFunction { thread_id, .. } => Some(thread_id.0),
+        | bex_events::run::ProfileEventKind::EndFunction { thread_id, .. } => thread_id.0,
     }
 }
 
@@ -2221,7 +2219,6 @@ fn runtime_error_outcome_with_ref(
 
 #[cfg(test)]
 mod history_tests {
-    use super::*;
     use bex_events::{
         ids::{BexCallId, BexThreadId, EngineId, ProcessEuid},
         prof::pb,
@@ -2230,6 +2227,8 @@ mod history_tests {
             StartGuard, profile_event_envelope_from_disk_event,
         },
     };
+
+    use super::*;
 
     fn start_context(boundary_id: BoundaryId) -> StartRunContext {
         StartRunContext {
