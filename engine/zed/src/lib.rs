@@ -23,6 +23,13 @@ const HARDCODED_EXTENSION_CONFIG: HardcodedExtensionConfig = HardcodedExtensionC
 
 const GITHUB_REPO: &str = "BoundaryML/baml";
 
+// The engine (`baml-cli`) release we download the language server from is tagged
+// with this exact version. We pin to it rather than using `latest_github_release`
+// because the repo also publishes a separate `baml-language-*` nightly line, whose
+// releases hold the GitHub "latest" pointer and would otherwise be picked up here.
+// Kept in sync with extension.toml by tools/versions/zed.cfg.
+const ENGINE_RELEASE_TAG: &str = env!("CARGO_PKG_VERSION");
+
 fn language_server_binary(
     language_server_id: &LanguageServerId,
     _worktree: &zed::Worktree,
@@ -52,13 +59,7 @@ fn language_server_binary(
                 &zed::LanguageServerInstallationStatus::CheckingForUpdate,
             );
 
-            let release = zed::latest_github_release(
-                GITHUB_REPO,
-                zed::GithubReleaseOptions {
-                    require_assets: true,
-                    pre_release: false,
-                },
-            )?;
+            let release = zed::github_release_by_tag_name(GITHUB_REPO, ENGINE_RELEASE_TAG)?;
 
             let (platform, arch) = zed::current_platform();
             let asset_name = format!(
