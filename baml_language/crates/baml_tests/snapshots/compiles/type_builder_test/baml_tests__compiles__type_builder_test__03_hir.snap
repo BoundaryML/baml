@@ -19,5 +19,5 @@ function user.Fn$render_prompt(client: baml.llm.Client = ...) -> baml.llm.Prompt
   baml.llm.render_prompt(client, "Fn", map {  })
 }
 function user.from_json(j: baml.json.json) -> user.TopLevelClass  [expr] {
-  user.TopLevelClass { a: baml.json.from_json(baml.json.field(j, "a")) }
+  baml.json.to(j)
 }

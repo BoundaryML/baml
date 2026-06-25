@@ -360,14 +360,9 @@ function user.SearchService.Run(self: SearchService, query: string, limit: int) 
 }
 
 function user.SearchService.from_json(j: baml.json.json) -> SearchService {
+    load_type SearchService
     load_var j
-    load_const "base"
-    call baml.json.field
-    store_var _3
-    load_type string
-    load_var _3
-    call baml.json.from_json
-    init_instance user.SearchService .base
+    call baml.json.to
     return
 }
 

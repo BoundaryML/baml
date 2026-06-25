@@ -10,10 +10,10 @@ class user.Outer {
   name: string
 }
 function user.from_json(j: baml.json.json) -> user.Inner  [expr] {
-  user.Inner { value: baml.json.from_json(baml.json.field(j, "value")) }
+  baml.json.to(j)
 }
 function user.from_json(j: baml.json.json) -> user.Outer  [expr] {
-  user.Outer { inner: baml.json.from_json(baml.json.field(j, "inner")), name: baml.json.from_json(baml.json.field(j, "name")) }
+  baml.json.to(j)
 }
 function user.test_captured_field_access(obj: user.Outer) -> string  [expr] {
   { let get_name = () -> string { {  } obj.name } } get_name()

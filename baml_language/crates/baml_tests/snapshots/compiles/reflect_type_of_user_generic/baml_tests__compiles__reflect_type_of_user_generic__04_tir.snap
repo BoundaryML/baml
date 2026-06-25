@@ -5,8 +5,8 @@ source: crates/baml_tests/src/generated_tests.rs
 class user.Person {
   name: string
 }
-function user.Person.from_json(j: baml.json.json) -> user.Person throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  Person { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.Person
+function user.Person.from_json(j: baml.json.json) -> user.Person throws baml.json.JsonDecodeError {
+  baml.json.to<T>(j) : user.Person
 }
 function user.reflect_type<T>() -> type throws never {
   { : type

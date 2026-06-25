@@ -6,11 +6,11 @@ class user.foo {
   x: int
 }
 function user.from_json(j: baml.json.json) -> user.foo  [expr] {
-  user.foo { x: baml.json.from_json(baml.json.field(j, "x")) }
+  baml.json.to(j)
 }
 class user.foo.Bar {
   y: string
 }
 function user.foo.from_json(j: baml.json.json) -> user.foo.Bar  [expr] {
-  user.foo.Bar { y: baml.json.from_json(baml.json.field(j, "y")) }
+  baml.json.to(j)
 }

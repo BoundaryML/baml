@@ -6,8 +6,8 @@ class user.AtomicPoint {
   x: float
   y: float
 }
-function user.AtomicPoint.from_json(j: baml.json.json) -> user.AtomicPoint throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  AtomicPoint { x: baml.json.from_json<float>(baml.json.field(j, "x")), y: baml.json.from_json<float>(baml.json.field(j, "y")) } : user.AtomicPoint
+function user.AtomicPoint.from_json(j: baml.json.json) -> user.AtomicPoint throws baml.json.JsonDecodeError {
+  baml.json.to<T>(j) : user.AtomicPoint
 }
 class user.AtomicPoint$stream {
   x: float | null

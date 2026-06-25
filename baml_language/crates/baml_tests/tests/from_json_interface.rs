@@ -34,7 +34,7 @@ fn from_json_interface_compiles() {
         class Temp {
             celsius float
             implements baml.FromJson {
-                function from_json(j: baml.json.json) -> Self throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+                function from_json(j: baml.json.json) -> Self throws baml.json.JsonDecodeError {
                     Temp { celsius: baml.json.to<float>(baml.json.field(j, "c")) }
                 }
             }
@@ -58,7 +58,7 @@ async fn to_dispatches_fromjson_override() {
         class Temp {
             celsius float
             implements baml.FromJson {
-                function from_json(j: baml.json.json) -> Self throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+                function from_json(j: baml.json.json) -> Self throws baml.json.JsonDecodeError {
                     Temp { celsius: baml.json.to<float>(baml.json.field(j, "c")) }
                 }
             }
@@ -112,12 +112,12 @@ async fn from_to_roundtrip_with_override() {
         class Temp {
             celsius float
             implements baml.FromJson {
-                function from_json(j: baml.json.json) -> Self throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+                function from_json(j: baml.json.json) -> Self throws baml.json.JsonDecodeError {
                     Temp { celsius: baml.json.to<float>(baml.json.field(j, "celsius")) }
                 }
             }
         }
-        function main() -> bool throws baml.json.JsonSerializationError | baml.json.JsonParseError | baml.json.JsonDecodeError {
+        function main() -> bool throws baml.json.JsonSerializationError | baml.json.JsonDecodeError {
             let original: Temp = Temp { celsius: 36.6 }
             let j: baml.json.json = baml.json.from(original)
             let decoded: Temp = baml.json.to<Temp>(j)
@@ -138,7 +138,7 @@ async fn nested_field_override_is_honored() {
         class Inner {
             v int
             implements baml.FromJson {
-                function from_json(j: baml.json.json) -> Self throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+                function from_json(j: baml.json.json) -> Self throws baml.json.JsonDecodeError {
                     Inner { v: baml.json.to<int>(baml.json.field(j, "wrapped")) }
                 }
             }

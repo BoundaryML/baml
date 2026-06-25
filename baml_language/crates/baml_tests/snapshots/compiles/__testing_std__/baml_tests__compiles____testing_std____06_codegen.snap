@@ -13,21 +13,9 @@ function testing.FailFast() -> (testing.TestSetChild[]) -> testing.TestSetReport
 }
 
 function testing.NamedChildReport.from_json(j: baml.json.json) -> testing.NamedChildReport {
+    load_type testing.NamedChildReport
     load_var j
-    load_const "name"
-    call baml.json.field
-    store_var _3
-    load_type string
-    load_var _3
-    call baml.json.from_json
-    load_var j
-    load_const "report"
-    call baml.json.field
-    store_var _6
-    load_type testing.TestReport | testing.TestSetReport
-    load_var _6
-    call baml.json.from_json
-    init_instance testing.NamedChildReport .name, .report
+    call baml.json.to
     return
 }
 
@@ -122,28 +110,9 @@ function testing.Retry(max_attempts: int) -> (() -> testing.TestReport throws ne
 }
 
 function testing.RunReport.from_json(j: baml.json.json) -> testing.RunReport {
+    load_type testing.RunReport
     load_var j
-    load_const "outcome"
-    call baml.json.field
-    store_var _3
-    load_type "pass" | "fail" | "error"
-    load_var _3
-    call baml.json.from_json
-    load_var j
-    load_const "duration_ms"
-    call baml.json.field
-    store_var _6
-    load_type int
-    load_var _6
-    call baml.json.from_json
-    load_var j
-    load_const "message"
-    call baml.json.field
-    store_var _9
-    load_type string | null
-    load_var _9
-    call baml.json.from_json
-    init_instance testing.RunReport .outcome, .duration_ms, .message
+    call baml.json.to
     return
 }
 
@@ -153,47 +122,16 @@ function testing.Sequential() -> (testing.TestSetChild[]) -> testing.TestSetRepo
 }
 
 function testing.SerializedTest.from_json(j: baml.json.json) -> testing.SerializedTest {
+    load_type testing.SerializedTest
     load_var j
-    load_const "type"
-    call baml.json.field
-    store_var _3
-    load_type string
-    load_var _3
-    call baml.json.from_json
-    load_var j
-    load_const "name"
-    call baml.json.field
-    store_var _6
-    load_type string
-    load_var _6
-    call baml.json.from_json
-    init_instance testing.SerializedTest .type, .name
+    call baml.json.to
     return
 }
 
 function testing.SerializedTestSet.from_json(j: baml.json.json) -> testing.SerializedTestSet {
+    load_type testing.SerializedTestSet
     load_var j
-    load_const "name"
-    call baml.json.field
-    store_var _3
-    load_type string
-    load_var _3
-    call baml.json.from_json
-    load_var j
-    load_const "items"
-    call baml.json.field
-    store_var _6
-    load_type testing.SerializedTest | testing.SerializedTestSet[]
-    load_var _6
-    call baml.json.from_json
-    load_var j
-    load_const "loadingTimeMs"
-    call baml.json.field
-    store_var _9
-    load_type int
-    load_var _9
-    call baml.json.from_json
-    init_instance testing.SerializedTestSet .name, .items, .loadingTimeMs
+    call baml.json.to
     return
 }
 
@@ -532,28 +470,9 @@ function testing.TestCollector.find_testset(self: testing.TestCollector, name: s
 }
 
 function testing.TestCollector.from_json(j: baml.json.json) -> testing.TestCollector {
+    load_type testing.TestCollector
     load_var j
-    load_const "prefix"
-    call baml.json.field
-    store_var _3
-    load_type string
-    load_var _3
-    call baml.json.from_json
-    load_var j
-    load_const "tests"
-    call baml.json.field
-    store_var _6
-    load_type testing.TestRegistration[]
-    load_var _6
-    call baml.json.from_json
-    load_var j
-    load_const "testsets"
-    call baml.json.field
-    store_var _9
-    load_type testing.TestSetRegistration[]
-    load_var _9
-    call baml.json.from_json
-    init_instance testing.TestCollector .prefix, .tests, .testsets
+    call baml.json.to
     return
 }
 
@@ -1050,28 +969,9 @@ function testing.TestCollector.register_test_set(self: testing.TestCollector, na
 }
 
 function testing.TestRegistration.from_json(j: baml.json.json) -> testing.TestRegistration {
+    load_type testing.TestRegistration
     load_var j
-    load_const "name"
-    call baml.json.field
-    store_var _3
-    load_type string
-    load_var _3
-    call baml.json.from_json
-    load_var j
-    load_const "body"
-    call baml.json.field
-    store_var _6
-    load_type () -> void throws unknown
-    load_var _6
-    call baml.json.from_json
-    load_var j
-    load_const "runner"
-    call baml.json.field
-    store_var _9
-    load_type ((() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never) | null
-    load_var _9
-    call baml.json.from_json
-    init_instance testing.TestRegistration .name, .body, .runner
+    call baml.json.to
     return
 }
 
@@ -1471,28 +1371,9 @@ function testing.TestRegistry.expand_testset_registry(self: testing.TestRegistry
 }
 
 function testing.TestRegistry.from_json(j: baml.json.json) -> testing.TestRegistry {
+    load_type testing.TestRegistry
     load_var j
-    load_const "collector"
-    call baml.json.field
-    store_var _3
-    load_type testing.TestCollector
-    load_var _3
-    call baml.json.from_json
-    load_var j
-    load_const "expansions"
-    call baml.json.field
-    store_var _6
-    load_type map<string, testing.TestRegistry>
-    load_var _6
-    call baml.json.from_json
-    load_var j
-    load_const "loading_time_ms"
-    call baml.json.field
-    store_var _9
-    load_type int
-    load_var _9
-    call baml.json.from_json
-    init_instance testing.TestRegistry .collector, .expansions, .loading_time_ms
+    call baml.json.to
     return
 }
 
@@ -2555,113 +2436,30 @@ function testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.
 }
 
 function testing.TestReport.from_json(j: baml.json.json) -> testing.TestReport {
+    load_type testing.TestReport
     load_var j
-    load_const "outcome"
-    call baml.json.field
-    store_var _3
-    load_type "pass" | "fail" | "error"
-    load_var _3
-    call baml.json.from_json
-    load_var j
-    load_const "runs"
-    call baml.json.field
-    store_var _6
-    load_type testing.RunReport[]
-    load_var _6
-    call baml.json.from_json
-    init_instance testing.TestReport .outcome, .runs
+    call baml.json.to
     return
 }
 
 function testing.TestSetChild.from_json(j: baml.json.json) -> testing.TestSetChild {
+    load_type testing.TestSetChild
     load_var j
-    load_const "name"
-    call baml.json.field
-    store_var _3
-    load_type string
-    load_var _3
-    call baml.json.from_json
-    load_var j
-    load_const "run"
-    call baml.json.field
-    store_var _6
-    load_type () -> testing.TestReport | testing.TestSetReport throws never
-    load_var _6
-    call baml.json.from_json
-    init_instance testing.TestSetChild .name, .run
+    call baml.json.to
     return
 }
 
 function testing.TestSetRegistration.from_json(j: baml.json.json) -> testing.TestSetRegistration {
+    load_type testing.TestSetRegistration
     load_var j
-    load_const "name"
-    call baml.json.field
-    store_var _3
-    load_type string
-    load_var _3
-    call baml.json.from_json
-    load_var j
-    load_const "collector"
-    call baml.json.field
-    store_var _6
-    load_type (testing.TestCollector) -> void throws unknown
-    load_var _6
-    call baml.json.from_json
-    load_var j
-    load_const "runner"
-    call baml.json.field
-    store_var _9
-    load_type ((testing.TestSetChild[]) -> testing.TestSetReport throws never) | null
-    load_var _9
-    call baml.json.from_json
-    init_instance testing.TestSetRegistration .name, .collector, .runner
+    call baml.json.to
     return
 }
 
 function testing.TestSetReport.from_json(j: baml.json.json) -> testing.TestSetReport {
+    load_type testing.TestSetReport
     load_var j
-    load_const "outcome"
-    call baml.json.field
-    store_var _3
-    load_type "pass" | "fail" | "error"
-    load_var _3
-    call baml.json.from_json
-    load_var j
-    load_const "passed"
-    call baml.json.field
-    store_var _6
-    load_type int
-    load_var _6
-    call baml.json.from_json
-    load_var j
-    load_const "failed"
-    call baml.json.field
-    store_var _9
-    load_type int
-    load_var _9
-    call baml.json.from_json
-    load_var j
-    load_const "total"
-    call baml.json.field
-    store_var _12
-    load_type int
-    load_var _12
-    call baml.json.from_json
-    load_var j
-    load_const "failed_names"
-    call baml.json.field
-    store_var _15
-    load_type string[]
-    load_var _15
-    call baml.json.from_json
-    load_var j
-    load_const "results"
-    call baml.json.field
-    store_var _18
-    load_type testing.TestReport | testing.TestSetReport[]
-    load_var _18
-    call baml.json.from_json
-    init_instance testing.TestSetReport .outcome, .passed, .failed, .total, .failed_names, .results
+    call baml.json.to
     return
 }
 

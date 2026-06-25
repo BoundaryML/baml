@@ -6,7 +6,7 @@ class user.Box {
   value: T
 }
 function user.from_json(j: baml.json.json) -> user.Box<T>  [expr] {
-  user.Box { value: baml.json.from_json(baml.json.field(j, "value")) }
+  baml.json.to(j)
 }
 function user.main() -> int  [expr] {
   { let boxed: user.Box<int> = user.Box { value: 42 }; let Box { value: value } = boxed } value

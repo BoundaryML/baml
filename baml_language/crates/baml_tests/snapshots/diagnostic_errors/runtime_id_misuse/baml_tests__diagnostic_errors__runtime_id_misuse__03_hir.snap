@@ -16,7 +16,7 @@ function user.compound_assignment() -> string  [expr] {
   { $id Add= "-suffix" } $id
 }
 function user.from_json(j: baml.json.json) -> user.WithId  [expr] {
-  user.WithId { field_id: baml.json.from_json(baml.json.field(j, "field_id")), $id: baml.json.from_json(baml.json.field(j, "$id")) }
+  baml.json.to(j)
 }
 function user.member_access() -> int  [expr] {
   {  } $id.len()

@@ -53,7 +53,7 @@ function user.GenerateTests$render_prompt(count: int, topic: string, client: bam
   baml.llm.render_prompt(client, "GenerateTests", map { "count": count, "topic": topic })
 }
 function user.from_json(j: baml.json.json) -> user.Sentiment  [expr] {
-  user.Sentiment { feeling: baml.json.from_json(baml.json.field(j, "feeling")), confidence: baml.json.from_json(baml.json.field(j, "confidence")), reasoning: baml.json.from_json(baml.json.field(j, "reasoning")) }
+  baml.json.to(j)
 }
 
 --- captures ---

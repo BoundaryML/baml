@@ -57,5 +57,5 @@ function user.OptionalIntPlusInt(x: int?, y: int) -> int  [expr] {
   {  } x Add y
 }
 function user.from_json(j: baml.json.json) -> user.BigintHolder  [expr] {
-  user.BigintHolder { count: baml.json.from_json(baml.json.field(j, "count")) }
+  baml.json.to(j)
 }

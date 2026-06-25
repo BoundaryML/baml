@@ -80,47 +80,47 @@ class user.ChainUser {
   tags: string[]
   scores: int[][]
 }
-function user.ChainUser.from_json(j: baml.json.json) -> user.ChainUser throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  ChainUser { name: baml.json.from_json<string>(baml.json.field(j, "name")), profile: baml.json.from_json<ChainProfile>(baml.json.field(j, "profile")), tags: baml.json.from_json<string[]>(baml.json.field(j, "tags")), scores: baml.json.from_json<int[][]>(baml.json.field(j, "scores")) } : user.ChainUser
+function user.ChainUser.from_json(j: baml.json.json) -> user.ChainUser throws baml.json.JsonDecodeError {
+  baml.json.to<T>(j) : user.ChainUser
 }
 class user.ChainProfile {
   bio: string
   settings: user.ChainSettings
   items: user.ChainItem[]
 }
-function user.ChainProfile.from_json(j: baml.json.json) -> user.ChainProfile throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  ChainProfile { bio: baml.json.from_json<string>(baml.json.field(j, "bio")), settings: baml.json.from_json<ChainSettings>(baml.json.field(j, "settings")), items: baml.json.from_json<ChainItem[]>(baml.json.field(j, "items")) } : user.ChainProfile
+function user.ChainProfile.from_json(j: baml.json.json) -> user.ChainProfile throws baml.json.JsonDecodeError {
+  baml.json.to<T>(j) : user.ChainProfile
 }
 class user.ChainSettings {
   theme: string
   notifications: bool
   preferences: user.ChainPreferences
 }
-function user.ChainSettings.from_json(j: baml.json.json) -> user.ChainSettings throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  ChainSettings { theme: baml.json.from_json<string>(baml.json.field(j, "theme")), notifications: baml.json.from_json<bool>(baml.json.field(j, "notifications")), preferences: baml.json.from_json<ChainPreferences>(baml.json.field(j, "preferences")) } : user.ChainSettings
+function user.ChainSettings.from_json(j: baml.json.json) -> user.ChainSettings throws baml.json.JsonDecodeError {
+  baml.json.to<T>(j) : user.ChainSettings
 }
 class user.ChainPreferences {
   color: string
   font: string
   size: int
 }
-function user.ChainPreferences.from_json(j: baml.json.json) -> user.ChainPreferences throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  ChainPreferences { color: baml.json.from_json<string>(baml.json.field(j, "color")), font: baml.json.from_json<string>(baml.json.field(j, "font")), size: baml.json.from_json<int>(baml.json.field(j, "size")) } : user.ChainPreferences
+function user.ChainPreferences.from_json(j: baml.json.json) -> user.ChainPreferences throws baml.json.JsonDecodeError {
+  baml.json.to<T>(j) : user.ChainPreferences
 }
 class user.ChainItem {
   label: string
   value: int
   metadata: user.ChainMetadata
 }
-function user.ChainItem.from_json(j: baml.json.json) -> user.ChainItem throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  ChainItem { label: baml.json.from_json<string>(baml.json.field(j, "label")), value: baml.json.from_json<int>(baml.json.field(j, "value")), metadata: baml.json.from_json<ChainMetadata>(baml.json.field(j, "metadata")) } : user.ChainItem
+function user.ChainItem.from_json(j: baml.json.json) -> user.ChainItem throws baml.json.JsonDecodeError {
+  baml.json.to<T>(j) : user.ChainItem
 }
 class user.ChainMetadata {
   created_at: string
   tags: string[]
 }
-function user.ChainMetadata.from_json(j: baml.json.json) -> user.ChainMetadata throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  ChainMetadata { created_at: baml.json.from_json<string>(baml.json.field(j, "created_at")), tags: baml.json.from_json<string[]>(baml.json.field(j, "tags")) } : user.ChainMetadata
+function user.ChainMetadata.from_json(j: baml.json.json) -> user.ChainMetadata throws baml.json.JsonDecodeError {
+  baml.json.to<T>(j) : user.ChainMetadata
 }
 function user.ChainExprs(user: user.ChainUser, items: user.ChainItem[], m: map<string, int>) -> string throws never {
   { : string
@@ -223,50 +223,50 @@ class user.ChainMetadata$stream {
 }
 class user.EmptyClass {
 }
-function user.EmptyClass.from_json(j: baml.json.json) -> user.EmptyClass throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  EmptyClass {  } : user.EmptyClass
+function user.EmptyClass.from_json(j: baml.json.json) -> user.EmptyClass throws baml.json.JsonDecodeError {
+  baml.json.to<T>(j) : user.EmptyClass
 }
 class user.SingleField {
   name: string
 }
-function user.SingleField.from_json(j: baml.json.json) -> user.SingleField throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  SingleField { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.SingleField
+function user.SingleField.from_json(j: baml.json.json) -> user.SingleField throws baml.json.JsonDecodeError {
+  baml.json.to<T>(j) : user.SingleField
 }
 class user.MultiField {
   name: string
   age: int
   active: bool
 }
-function user.MultiField.from_json(j: baml.json.json) -> user.MultiField throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  MultiField { name: baml.json.from_json<string>(baml.json.field(j, "name")), age: baml.json.from_json<int>(baml.json.field(j, "age")), active: baml.json.from_json<bool>(baml.json.field(j, "active")) } : user.MultiField
+function user.MultiField.from_json(j: baml.json.json) -> user.MultiField throws baml.json.JsonDecodeError {
+  baml.json.to<T>(j) : user.MultiField
 }
 class user.ColonFields {
   name: string
   age: int
 }
-function user.ColonFields.from_json(j: baml.json.json) -> user.ColonFields throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  ColonFields { name: baml.json.from_json<string>(baml.json.field(j, "name")), age: baml.json.from_json<int>(baml.json.field(j, "age")) } : user.ColonFields
+function user.ColonFields.from_json(j: baml.json.json) -> user.ColonFields throws baml.json.JsonDecodeError {
+  baml.json.to<T>(j) : user.ColonFields
 }
 class user.SingleAttrField {
   name: string @description("The user's name")
 }
-function user.SingleAttrField.from_json(j: baml.json.json) -> user.SingleAttrField throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  SingleAttrField { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.SingleAttrField
+function user.SingleAttrField.from_json(j: baml.json.json) -> user.SingleAttrField throws baml.json.JsonDecodeError {
+  baml.json.to<T>(j) : user.SingleAttrField
 }
 class user.MultiAttrField {
   name: string @description("The user's name") @alias("user_name")
   summary: string | null @description("A summary") @alias("sum")
 }
-function user.MultiAttrField.from_json(j: baml.json.json) -> user.MultiAttrField throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  MultiAttrField { name: baml.json.from_json<string>(baml.json.field(j, "name")), summary: baml.json.from_json<string?>(baml.json.field(j, "summary")) } : user.MultiAttrField
+function user.MultiAttrField.from_json(j: baml.json.json) -> user.MultiAttrField throws baml.json.JsonDecodeError {
+  baml.json.to<T>(j) : user.MultiAttrField
 }
 class user.LongAttrField {
   name: string @description("This is an extremely long description attribute value that should push the field definition well past the default line width limit of one hundred columns")
   data: map<string, int | string | bool> @description("complex data") @alias("payload")
   config: map<string, map<string, int | string | bool | null>> @description("deeply nested config structure for testing wrapping")
 }
-function user.LongAttrField.from_json(j: baml.json.json) -> user.LongAttrField throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  LongAttrField { name: baml.json.from_json<string>(baml.json.field(j, "name")), data: baml.json.from_json<map<string, int | string | bool>>(baml.json.field(j, "data")), config: baml.json.from_json<map<string, map<string, int | string | bool | null>>>(baml.json.field(j, "config")) } : user.LongAttrField
+function user.LongAttrField.from_json(j: baml.json.json) -> user.LongAttrField throws baml.json.JsonDecodeError {
+  baml.json.to<T>(j) : user.LongAttrField
 }
 class user.LongFieldTypes {
   very_long_field_name_that_takes_up_space: int | string | bool | float | null | int[] | string[]
@@ -274,8 +274,8 @@ class user.LongFieldTypes {
   callback_field: (first_param: int, second_param: string, third_param: bool) -> map<string, int> throws never
   deeply_nested: (int | string | bool | float | null)[] | null
 }
-function user.LongFieldTypes.from_json(j: baml.json.json) -> user.LongFieldTypes throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  baml.json.from_string<T>(baml.json.stringify(j)) : user.LongFieldTypes
+function user.LongFieldTypes.from_json(j: baml.json.json) -> user.LongFieldTypes throws baml.json.JsonDecodeError {
+  baml.json.to<T>(j) : user.LongFieldTypes
 }
 class user.TypeVariety {
   simple: string
@@ -292,80 +292,80 @@ class user.TypeVariety {
   paren_union_array: (int | string | bool)[]
   triple_nested: map<string, map<string, map<string, int>>>
 }
-function user.TypeVariety.from_json(j: baml.json.json) -> user.TypeVariety throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  baml.json.from_string<T>(baml.json.stringify(j)) : user.TypeVariety
+function user.TypeVariety.from_json(j: baml.json.json) -> user.TypeVariety throws baml.json.JsonDecodeError {
+  baml.json.to<T>(j) : user.TypeVariety
 }
 class user.DynamicClass {
   name: string
 }
-function user.DynamicClass.from_json(j: baml.json.json) -> user.DynamicClass throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  DynamicClass { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.DynamicClass
+function user.DynamicClass.from_json(j: baml.json.json) -> user.DynamicClass throws baml.json.JsonDecodeError {
+  baml.json.to<T>(j) : user.DynamicClass
 }
 class user.MultiBlockAttr {
   name: string
 }
-function user.MultiBlockAttr.from_json(j: baml.json.json) -> user.MultiBlockAttr throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  MultiBlockAttr { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.MultiBlockAttr
+function user.MultiBlockAttr.from_json(j: baml.json.json) -> user.MultiBlockAttr throws baml.json.JsonDecodeError {
+  baml.json.to<T>(j) : user.MultiBlockAttr
 }
 class user.TriviaClass {
   name: string
 }
-function user.TriviaClass.from_json(j: baml.json.json) -> user.TriviaClass throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  TriviaClass { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.TriviaClass
+function user.TriviaClass.from_json(j: baml.json.json) -> user.TriviaClass throws baml.json.JsonDecodeError {
+  baml.json.to<T>(j) : user.TriviaClass
 }
 class user.TriviaClassBlock {
   name: string
 }
-function user.TriviaClassBlock.from_json(j: baml.json.json) -> user.TriviaClassBlock throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  TriviaClassBlock { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.TriviaClassBlock
+function user.TriviaClassBlock.from_json(j: baml.json.json) -> user.TriviaClassBlock throws baml.json.JsonDecodeError {
+  baml.json.to<T>(j) : user.TriviaClassBlock
 }
 class user.TriviaFieldAttrs {
   name: string @description("the name")
 }
-function user.TriviaFieldAttrs.from_json(j: baml.json.json) -> user.TriviaFieldAttrs throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  TriviaFieldAttrs { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.TriviaFieldAttrs
+function user.TriviaFieldAttrs.from_json(j: baml.json.json) -> user.TriviaFieldAttrs throws baml.json.JsonDecodeError {
+  baml.json.to<T>(j) : user.TriviaFieldAttrs
 }
 class user.TriviaFieldAttrsBlock {
   name: string @description("the name")
 }
-function user.TriviaFieldAttrsBlock.from_json(j: baml.json.json) -> user.TriviaFieldAttrsBlock throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  TriviaFieldAttrsBlock { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.TriviaFieldAttrsBlock
+function user.TriviaFieldAttrsBlock.from_json(j: baml.json.json) -> user.TriviaFieldAttrsBlock throws baml.json.JsonDecodeError {
+  baml.json.to<T>(j) : user.TriviaFieldAttrsBlock
 }
 class user.TriviaLongFieldType {
   data: map<string, int | string | bool | float | null> @description("a long description")
 }
-function user.TriviaLongFieldType.from_json(j: baml.json.json) -> user.TriviaLongFieldType throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  TriviaLongFieldType { data: baml.json.from_json<map<string, int | string | bool | float | null>>(baml.json.field(j, "data")) } : user.TriviaLongFieldType
+function user.TriviaLongFieldType.from_json(j: baml.json.json) -> user.TriviaLongFieldType throws baml.json.JsonDecodeError {
+  baml.json.to<T>(j) : user.TriviaLongFieldType
 }
 class user.TriviaLongFieldTypeBlock {
   data: map<string, int | string | bool | float | null> @description("a long description")
 }
-function user.TriviaLongFieldTypeBlock.from_json(j: baml.json.json) -> user.TriviaLongFieldTypeBlock throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  TriviaLongFieldTypeBlock { data: baml.json.from_json<map<string, int | string | bool | float | null>>(baml.json.field(j, "data")) } : user.TriviaLongFieldTypeBlock
+function user.TriviaLongFieldTypeBlock.from_json(j: baml.json.json) -> user.TriviaLongFieldTypeBlock throws baml.json.JsonDecodeError {
+  baml.json.to<T>(j) : user.TriviaLongFieldTypeBlock
 }
 class user.TriviaMultiAttr {
   name: string @description("name") @alias("user_name")
 }
-function user.TriviaMultiAttr.from_json(j: baml.json.json) -> user.TriviaMultiAttr throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  TriviaMultiAttr { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.TriviaMultiAttr
+function user.TriviaMultiAttr.from_json(j: baml.json.json) -> user.TriviaMultiAttr throws baml.json.JsonDecodeError {
+  baml.json.to<T>(j) : user.TriviaMultiAttr
 }
 class user.TriviaMultiAttrBlock {
   name: string @description("name") @alias("user_name")
 }
-function user.TriviaMultiAttrBlock.from_json(j: baml.json.json) -> user.TriviaMultiAttrBlock throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  TriviaMultiAttrBlock { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.TriviaMultiAttrBlock
+function user.TriviaMultiAttrBlock.from_json(j: baml.json.json) -> user.TriviaMultiAttrBlock throws baml.json.JsonDecodeError {
+  baml.json.to<T>(j) : user.TriviaMultiAttrBlock
 }
 class user.A {
   x: int
 }
-function user.A.from_json(j: baml.json.json) -> user.A throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  A { x: baml.json.from_json<int>(baml.json.field(j, "x")) } : user.A
+function user.A.from_json(j: baml.json.json) -> user.A throws baml.json.JsonDecodeError {
+  baml.json.to<T>(j) : user.A
 }
 class user.ThisIsAnExtremelyLongClassNameThatDefinitelyExceedsTheOneHundredCharacterLineLimitAllByItself {
   x: int
 }
-function user.ThisIsAnExtremelyLongClassNameThatDefinitelyExceedsTheOneHundredCharacterLineLimitAllByItself.from_json(j: baml.json.json) -> user.ThisIsAnExtremelyLongClassNameThatDefinitelyExceedsTheOneHundredCharacterLineLimitAllByItself throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  ThisIsAnExtremelyLongClassNameThatDefinitelyExceedsTheOneHundredCharacterLineLimitAllByItself { x: baml.json.from_json<int>(baml.json.field(j, "x")) } : user.ThisIsAnExtremelyLongClassNameThatDefinitelyExceedsTheOneHundredCharacterLineLimitAllByItself
+function user.ThisIsAnExtremelyLongClassNameThatDefinitelyExceedsTheOneHundredCharacterLineLimitAllByItself.from_json(j: baml.json.json) -> user.ThisIsAnExtremelyLongClassNameThatDefinitelyExceedsTheOneHundredCharacterLineLimitAllByItself throws baml.json.JsonDecodeError {
+  baml.json.to<T>(j) : user.ThisIsAnExtremelyLongClassNameThatDefinitelyExceedsTheOneHundredCharacterLineLimitAllByItself
 }
 class user.AttributeVariety {
   a: string @skip
@@ -375,15 +375,15 @@ class user.AttributeVariety {
   e: string
   f: string
 }
-function user.AttributeVariety.from_json(j: baml.json.json) -> user.AttributeVariety throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  AttributeVariety { a: baml.json.from_json<string>(baml.json.field(j, "a")), b: baml.json.from_json<string>(baml.json.field(j, "b")), c: baml.json.from_json<string>(baml.json.field(j, "c")), d: baml.json.from_json<string>(baml.json.field(j, "d")), e: baml.json.from_json<string>(baml.json.field(j, "e")), f: baml.json.from_json<string>(baml.json.field(j, "f")) } : user.AttributeVariety
+function user.AttributeVariety.from_json(j: baml.json.json) -> user.AttributeVariety throws baml.json.JsonDecodeError {
+  baml.json.to<T>(j) : user.AttributeVariety
 }
 class user.ExtraWhitespace {
   name: string @description("name") @alias("n")
   age: int
 }
-function user.ExtraWhitespace.from_json(j: baml.json.json) -> user.ExtraWhitespace throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  ExtraWhitespace { name: baml.json.from_json<string>(baml.json.field(j, "name")), age: baml.json.from_json<int>(baml.json.field(j, "age")) } : user.ExtraWhitespace
+function user.ExtraWhitespace.from_json(j: baml.json.json) -> user.ExtraWhitespace throws baml.json.JsonDecodeError {
+  baml.json.to<T>(j) : user.ExtraWhitespace
 }
 class user.ManyFields {
   field1: int
@@ -397,8 +397,8 @@ class user.ManyFields {
   field9: int
   field10: int
 }
-function user.ManyFields.from_json(j: baml.json.json) -> user.ManyFields throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  ManyFields { field1: baml.json.from_json<int>(baml.json.field(j, "field1")), field2: baml.json.from_json<int>(baml.json.field(j, "field2")), field3: baml.json.from_json<int>(baml.json.field(j, "field3")), field4: baml.json.from_json<int>(baml.json.field(j, "field4")), field5: baml.json.from_json<int>(baml.json.field(j, "field5")), field6: baml.json.from_json<int>(baml.json.field(j, "field6")), field7: baml.json.from_json<int>(baml.json.field(j, "field7")), field8: baml.json.from_json<int>(baml.json.field(j, "field8")), field9: baml.json.from_json<int>(baml.json.field(j, "field9")), field10: baml.json.from_json<int>(baml.json.field(j, "field10")) } : user.ManyFields
+function user.ManyFields.from_json(j: baml.json.json) -> user.ManyFields throws baml.json.JsonDecodeError {
+  baml.json.to<T>(j) : user.ManyFields
 }
 class user.Outer {
   inner: user.InnerNested
@@ -406,14 +406,14 @@ class user.Outer {
   optional: user.InnerNested | null
   mapping: map<string, user.InnerNested>
 }
-function user.Outer.from_json(j: baml.json.json) -> user.Outer throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  Outer { inner: baml.json.from_json<InnerNested>(baml.json.field(j, "inner")), list: baml.json.from_json<InnerNested[]>(baml.json.field(j, "list")), optional: baml.json.from_json<InnerNested?>(baml.json.field(j, "optional")), mapping: baml.json.from_json<map<string, InnerNested>>(baml.json.field(j, "mapping")) } : user.Outer
+function user.Outer.from_json(j: baml.json.json) -> user.Outer throws baml.json.JsonDecodeError {
+  baml.json.to<T>(j) : user.Outer
 }
 class user.InnerNested {
   value: int
 }
-function user.InnerNested.from_json(j: baml.json.json) -> user.InnerNested throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  InnerNested { value: baml.json.from_json<int>(baml.json.field(j, "value")) } : user.InnerNested
+function user.InnerNested.from_json(j: baml.json.json) -> user.InnerNested throws baml.json.JsonDecodeError {
+  baml.json.to<T>(j) : user.InnerNested
 }
 class user.WithMethod {
   name: string
@@ -423,8 +423,8 @@ function user.WithMethod.greet() -> string throws never {
     "hello" : "hello"
   }
 }
-function user.WithMethod.from_json(j: baml.json.json) -> user.WithMethod throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  WithMethod { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.WithMethod
+function user.WithMethod.from_json(j: baml.json.json) -> user.WithMethod throws baml.json.JsonDecodeError {
+  baml.json.to<T>(j) : user.WithMethod
 }
 class user.WithLongMethod {
   name: string
@@ -434,52 +434,52 @@ function user.WithLongMethod.processData(first_input: map<string, int>, second_i
     map { "result": 1 } : map<string, int | string | bool>
   }
 }
-function user.WithLongMethod.from_json(j: baml.json.json) -> user.WithLongMethod throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  WithLongMethod { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.WithLongMethod
+function user.WithLongMethod.from_json(j: baml.json.json) -> user.WithLongMethod throws baml.json.JsonDecodeError {
+  baml.json.to<T>(j) : user.WithLongMethod
 }
 class user.DeepOuter {
   level1: user.DeepLevel1
 }
-function user.DeepOuter.from_json(j: baml.json.json) -> user.DeepOuter throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  DeepOuter { level1: baml.json.from_json<DeepLevel1>(baml.json.field(j, "level1")) } : user.DeepOuter
+function user.DeepOuter.from_json(j: baml.json.json) -> user.DeepOuter throws baml.json.JsonDecodeError {
+  baml.json.to<T>(j) : user.DeepOuter
 }
 class user.DeepLevel1 {
   level2: user.DeepLevel2
   items: user.DeepLevel2[]
   mapping: map<string, user.DeepLevel2>
 }
-function user.DeepLevel1.from_json(j: baml.json.json) -> user.DeepLevel1 throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  DeepLevel1 { level2: baml.json.from_json<DeepLevel2>(baml.json.field(j, "level2")), items: baml.json.from_json<DeepLevel2[]>(baml.json.field(j, "items")), mapping: baml.json.from_json<map<string, DeepLevel2>>(baml.json.field(j, "mapping")) } : user.DeepLevel1
+function user.DeepLevel1.from_json(j: baml.json.json) -> user.DeepLevel1 throws baml.json.JsonDecodeError {
+  baml.json.to<T>(j) : user.DeepLevel1
 }
 class user.DeepLevel2 {
   level3: user.DeepLevel3
   value: int | string | bool | float | null
 }
-function user.DeepLevel2.from_json(j: baml.json.json) -> user.DeepLevel2 throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  DeepLevel2 { level3: baml.json.from_json<DeepLevel3>(baml.json.field(j, "level3")), value: baml.json.from_json<int | string | bool | float | null>(baml.json.field(j, "value")) } : user.DeepLevel2
+function user.DeepLevel2.from_json(j: baml.json.json) -> user.DeepLevel2 throws baml.json.JsonDecodeError {
+  baml.json.to<T>(j) : user.DeepLevel2
 }
 class user.DeepLevel3 {
   data: string
   nested: map<string, map<string, int>>
 }
-function user.DeepLevel3.from_json(j: baml.json.json) -> user.DeepLevel3 throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  DeepLevel3 { data: baml.json.from_json<string>(baml.json.field(j, "data")), nested: baml.json.from_json<map<string, map<string, int>>>(baml.json.field(j, "nested")) } : user.DeepLevel3
+function user.DeepLevel3.from_json(j: baml.json.json) -> user.DeepLevel3 throws baml.json.JsonDecodeError {
+  baml.json.to<T>(j) : user.DeepLevel3
 }
 class user.TrailingCommas {
   name: string
   age: int
   active: bool
 }
-function user.TrailingCommas.from_json(j: baml.json.json) -> user.TrailingCommas throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  TrailingCommas { name: baml.json.from_json<string>(baml.json.field(j, "name")), age: baml.json.from_json<int>(baml.json.field(j, "age")), active: baml.json.from_json<bool>(baml.json.field(j, "active")) } : user.TrailingCommas
+function user.TrailingCommas.from_json(j: baml.json.json) -> user.TrailingCommas throws baml.json.JsonDecodeError {
+  baml.json.to<T>(j) : user.TrailingCommas
 }
 class user.TrailingSemicolons {
   name: string
   age: int
   active: bool
 }
-function user.TrailingSemicolons.from_json(j: baml.json.json) -> user.TrailingSemicolons throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  TrailingSemicolons { name: baml.json.from_json<string>(baml.json.field(j, "name")), age: baml.json.from_json<int>(baml.json.field(j, "age")), active: baml.json.from_json<bool>(baml.json.field(j, "active")) } : user.TrailingSemicolons
+function user.TrailingSemicolons.from_json(j: baml.json.json) -> user.TrailingSemicolons throws baml.json.JsonDecodeError {
+  baml.json.to<T>(j) : user.TrailingSemicolons
 }
 class user.MixedDelimiters {
   a: string
@@ -487,8 +487,8 @@ class user.MixedDelimiters {
   c: bool
   d: float
 }
-function user.MixedDelimiters.from_json(j: baml.json.json) -> user.MixedDelimiters throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  MixedDelimiters { a: baml.json.from_json<string>(baml.json.field(j, "a")), b: baml.json.from_json<int>(baml.json.field(j, "b")), c: baml.json.from_json<bool>(baml.json.field(j, "c")), d: baml.json.from_json<float>(baml.json.field(j, "d")) } : user.MixedDelimiters
+function user.MixedDelimiters.from_json(j: baml.json.json) -> user.MixedDelimiters throws baml.json.JsonDecodeError {
+  baml.json.to<T>(j) : user.MixedDelimiters
 }
 class user.FieldsAndMethods {
   name: string
@@ -500,43 +500,43 @@ function user.FieldsAndMethods.greet() -> string throws never {
     "hello" : "hello"
   }
 }
-function user.FieldsAndMethods.from_json(j: baml.json.json) -> user.FieldsAndMethods throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  FieldsAndMethods { name: baml.json.from_json<string>(baml.json.field(j, "name")), age: baml.json.from_json<int>(baml.json.field(j, "age")), active: baml.json.from_json<bool>(baml.json.field(j, "active")) } : user.FieldsAndMethods
+function user.FieldsAndMethods.from_json(j: baml.json.json) -> user.FieldsAndMethods throws baml.json.JsonDecodeError {
+  baml.json.to<T>(j) : user.FieldsAndMethods
 }
 class user.SingleFieldComma {
   name: string
 }
-function user.SingleFieldComma.from_json(j: baml.json.json) -> user.SingleFieldComma throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  SingleFieldComma { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.SingleFieldComma
+function user.SingleFieldComma.from_json(j: baml.json.json) -> user.SingleFieldComma throws baml.json.JsonDecodeError {
+  baml.json.to<T>(j) : user.SingleFieldComma
 }
 class user.SingleFieldSemicolon {
   name: string
 }
-function user.SingleFieldSemicolon.from_json(j: baml.json.json) -> user.SingleFieldSemicolon throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  SingleFieldSemicolon { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.SingleFieldSemicolon
+function user.SingleFieldSemicolon.from_json(j: baml.json.json) -> user.SingleFieldSemicolon throws baml.json.JsonDecodeError {
+  baml.json.to<T>(j) : user.SingleFieldSemicolon
 }
 class user.NoColonDelimiters {
   name: string
   age: int
   active: bool
 }
-function user.NoColonDelimiters.from_json(j: baml.json.json) -> user.NoColonDelimiters throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  NoColonDelimiters { name: baml.json.from_json<string>(baml.json.field(j, "name")), age: baml.json.from_json<int>(baml.json.field(j, "age")), active: baml.json.from_json<bool>(baml.json.field(j, "active")) } : user.NoColonDelimiters
+function user.NoColonDelimiters.from_json(j: baml.json.json) -> user.NoColonDelimiters throws baml.json.JsonDecodeError {
+  baml.json.to<T>(j) : user.NoColonDelimiters
 }
 class user.AttrsWithDelimiters {
   name: string @description("name")
   age: int @alias("user_age")
   active: bool
 }
-function user.AttrsWithDelimiters.from_json(j: baml.json.json) -> user.AttrsWithDelimiters throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  AttrsWithDelimiters { name: baml.json.from_json<string>(baml.json.field(j, "name")), age: baml.json.from_json<int>(baml.json.field(j, "age")), active: baml.json.from_json<bool>(baml.json.field(j, "active")) } : user.AttrsWithDelimiters
+function user.AttrsWithDelimiters.from_json(j: baml.json.json) -> user.AttrsWithDelimiters throws baml.json.JsonDecodeError {
+  baml.json.to<T>(j) : user.AttrsWithDelimiters
 }
 class user.SemicolonTrivia {
   name: string
   age: int
 }
-function user.SemicolonTrivia.from_json(j: baml.json.json) -> user.SemicolonTrivia throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  SemicolonTrivia { name: baml.json.from_json<string>(baml.json.field(j, "name")), age: baml.json.from_json<int>(baml.json.field(j, "age")) } : user.SemicolonTrivia
+function user.SemicolonTrivia.from_json(j: baml.json.json) -> user.SemicolonTrivia throws baml.json.JsonDecodeError {
+  baml.json.to<T>(j) : user.SemicolonTrivia
 }
 class user.EmptyClass$stream {
 }
@@ -1599,20 +1599,20 @@ function user.AssertStmts(x: int, y: int) -> int throws never {
 class user.MatchSuccess {
   data: string
 }
-function user.MatchSuccess.from_json(j: baml.json.json) -> user.MatchSuccess throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  MatchSuccess { data: baml.json.from_json<string>(baml.json.field(j, "data")) } : user.MatchSuccess
+function user.MatchSuccess.from_json(j: baml.json.json) -> user.MatchSuccess throws baml.json.JsonDecodeError {
+  baml.json.to<T>(j) : user.MatchSuccess
 }
 class user.MatchFailure {
   reason: string
 }
-function user.MatchFailure.from_json(j: baml.json.json) -> user.MatchFailure throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  MatchFailure { reason: baml.json.from_json<string>(baml.json.field(j, "reason")) } : user.MatchFailure
+function user.MatchFailure.from_json(j: baml.json.json) -> user.MatchFailure throws baml.json.JsonDecodeError {
+  baml.json.to<T>(j) : user.MatchFailure
 }
 class user.ArrayPatternTriviaBox {
   values: int[]
 }
-function user.ArrayPatternTriviaBox.from_json(j: baml.json.json) -> user.ArrayPatternTriviaBox throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  ArrayPatternTriviaBox { values: baml.json.from_json<int[]>(baml.json.field(j, "values")) } : user.ArrayPatternTriviaBox
+function user.ArrayPatternTriviaBox.from_json(j: baml.json.json) -> user.ArrayPatternTriviaBox throws baml.json.JsonDecodeError {
+  baml.json.to<T>(j) : user.ArrayPatternTriviaBox
 }
 enum user.MatchStatus
 type user.MatchResult = user.MatchSuccess | user.MatchFailure
@@ -1921,23 +1921,23 @@ class user.OtherPoint {
   x: int
   y: int
 }
-function user.OtherPoint.from_json(j: baml.json.json) -> user.OtherPoint throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  OtherPoint { x: baml.json.from_json<int>(baml.json.field(j, "x")), y: baml.json.from_json<int>(baml.json.field(j, "y")) } : user.OtherPoint
+function user.OtherPoint.from_json(j: baml.json.json) -> user.OtherPoint throws baml.json.JsonDecodeError {
+  baml.json.to<T>(j) : user.OtherPoint
 }
 class user.OtherVec {
   p: user.OtherPoint
   q: user.OtherPoint
 }
-function user.OtherVec.from_json(j: baml.json.json) -> user.OtherVec throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  OtherVec { p: baml.json.from_json<OtherPoint>(baml.json.field(j, "p")), q: baml.json.from_json<OtherPoint>(baml.json.field(j, "q")) } : user.OtherVec
+function user.OtherVec.from_json(j: baml.json.json) -> user.OtherVec throws baml.json.JsonDecodeError {
+  baml.json.to<T>(j) : user.OtherVec
 }
 class user.OtherTriple {
   a: user.OtherVec
   b: user.OtherVec
   c: user.OtherVec
 }
-function user.OtherTriple.from_json(j: baml.json.json) -> user.OtherTriple throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  OtherTriple { a: baml.json.from_json<OtherVec>(baml.json.field(j, "a")), b: baml.json.from_json<OtherVec>(baml.json.field(j, "b")), c: baml.json.from_json<OtherVec>(baml.json.field(j, "c")) } : user.OtherTriple
+function user.OtherTriple.from_json(j: baml.json.json) -> user.OtherTriple throws baml.json.JsonDecodeError {
+  baml.json.to<T>(j) : user.OtherTriple
 }
 function user.OtherExprs(a: int, b: int) -> int throws never {
   { : int
@@ -2102,14 +2102,14 @@ type user.DeepPostfix = (int | string | bool | float | null)[][] | null
 class user.TypeAliasSuccess {
   data: string
 }
-function user.TypeAliasSuccess.from_json(j: baml.json.json) -> user.TypeAliasSuccess throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  TypeAliasSuccess { data: baml.json.from_json<string>(baml.json.field(j, "data")) } : user.TypeAliasSuccess
+function user.TypeAliasSuccess.from_json(j: baml.json.json) -> user.TypeAliasSuccess throws baml.json.JsonDecodeError {
+  baml.json.to<T>(j) : user.TypeAliasSuccess
 }
 class user.TypeAliasFailure {
   reason: string
 }
-function user.TypeAliasFailure.from_json(j: baml.json.json) -> user.TypeAliasFailure throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  TypeAliasFailure { reason: baml.json.from_json<string>(baml.json.field(j, "reason")) } : user.TypeAliasFailure
+function user.TypeAliasFailure.from_json(j: baml.json.json) -> user.TypeAliasFailure throws baml.json.JsonDecodeError {
+  baml.json.to<T>(j) : user.TypeAliasFailure
 }
 type user.Result = user.TypeAliasSuccess | user.TypeAliasFailure
 type user.MaybeResult = user.Result | null

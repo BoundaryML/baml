@@ -6,12 +6,12 @@ class user.llm.Response {
   text: string
 }
 function user.llm.from_json(j: baml.json.json) -> user.llm.Response  [expr] {
-  user.llm.Response { text: baml.json.from_json(baml.json.field(j, "text")) }
+  baml.json.to(j)
 }
 class user.llm.Response {
   body: string
   status: int
 }
 function user.llm.from_json(j: baml.json.json) -> user.llm.Response  [expr] {
-  user.llm.Response { body: baml.json.from_json(baml.json.field(j, "body")), status: baml.json.from_json(baml.json.field(j, "status")) }
+  baml.json.to(j)
 }

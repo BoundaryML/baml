@@ -6,7 +6,7 @@ class user.Config {
   key: string
 }
 function user.from_json(j: baml.json.json) -> user.Config  [expr] {
-  user.Config { key: baml.json.from_json(baml.json.field(j, "key")) }
+  baml.json.to(j)
 }
 class user.llm.Response {
   text: string
@@ -15,5 +15,5 @@ function user.llm.UseConfig(cfg: Config) -> user.llm.Response  [expr] {
   {  } user.llm.Response { text: cfg.key }
 }
 function user.llm.from_json(j: baml.json.json) -> user.llm.Response  [expr] {
-  user.llm.Response { text: baml.json.from_json(baml.json.field(j, "text")) }
+  baml.json.to(j)
 }

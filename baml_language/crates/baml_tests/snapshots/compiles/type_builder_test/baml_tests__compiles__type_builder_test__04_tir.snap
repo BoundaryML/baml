@@ -17,8 +17,8 @@ function user.Fn$build_request_stream(client: baml.llm.Client = ...) -> baml.htt
 class user.TopLevelClass {
   a: string
 }
-function user.TopLevelClass.from_json(j: baml.json.json) -> user.TopLevelClass throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  TopLevelClass { a: baml.json.from_json<string>(baml.json.field(j, "a")) } : user.TopLevelClass
+function user.TopLevelClass.from_json(j: baml.json.json) -> user.TopLevelClass throws baml.json.JsonDecodeError {
+  baml.json.to<T>(j) : user.TopLevelClass
 }
 enum user.TopLevelEnum
 function user.Fn$stream(client: baml.llm.Client = ...) -> baml.llm.Stream<string | null, string> throws never {

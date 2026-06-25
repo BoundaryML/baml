@@ -2,33 +2,16 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 function user.MetaField.from_json(j: baml.json.json) -> MetaField {
+    load_type MetaField
     load_var j
-    load_const "type"
-    call baml.json.field
-    store_var _3
-    load_type type
-    load_var _3
-    call baml.json.from_json
-    init_instance user.MetaField .type
+    call baml.json.to
     return
 }
 
 function user.RiskFactor.from_json(j: baml.json.json) -> RiskFactor {
+    load_type RiskFactor
     load_var j
-    load_const "type"
-    call baml.json.field
-    store_var _3
-    load_type string
-    load_var _3
-    call baml.json.from_json
-    load_var j
-    load_const "severity"
-    call baml.json.field
-    store_var _6
-    load_type float
-    load_var _6
-    call baml.json.from_json
-    init_instance user.RiskFactor .type, .severity
+    call baml.json.to
     return
 }
 

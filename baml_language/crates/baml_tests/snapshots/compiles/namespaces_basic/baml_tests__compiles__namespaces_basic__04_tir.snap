@@ -6,8 +6,8 @@ class user.Config {
   key: string
   model: string
 }
-function user.Config.from_json(j: baml.json.json) -> user.Config throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  Config { key: baml.json.from_json<string>(baml.json.field(j, "key")), model: baml.json.from_json<string>(baml.json.field(j, "model")) } : user.Config
+function user.Config.from_json(j: baml.json.json) -> user.Config throws baml.json.JsonDecodeError {
+  baml.json.to<T>(j) : user.Config
 }
 function user.GetResponse(cfg: user.Config) -> user.llm.Response throws never {
   { : user.llm.Response
@@ -22,8 +22,8 @@ class user.llm.Response {
   text: string
   model: string
 }
-function user.llm.Response.from_json(j: baml.json.json) -> user.llm.Response throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  Response { text: baml.json.from_json<string>(baml.json.field(j, "text")), model: baml.json.from_json<string>(baml.json.field(j, "model")) } : user.llm.Response
+function user.llm.Response.from_json(j: baml.json.json) -> user.llm.Response throws baml.json.JsonDecodeError {
+  baml.json.to<T>(j) : user.llm.Response
 }
 function user.llm.MakeResponse(cfg: user.Config) -> user.llm.Response throws never {
   { : user.llm.Response

@@ -31,33 +31,16 @@ function user.ConditionalLogic(age: int) -> string {
 }
 
 function user.EdgeFoo.from_json(j: baml.json.json) -> EdgeFoo {
+    load_type EdgeFoo
     load_var j
-    load_const "x"
-    call baml.json.field
-    store_var _3
-    load_type int
-    load_var _3
-    call baml.json.from_json
-    init_instance user.EdgeFoo .x
+    call baml.json.to
     return
 }
 
 function user.Point.from_json(j: baml.json.json) -> Point {
+    load_type Point
     load_var j
-    load_const "x"
-    call baml.json.field
-    store_var _3
-    load_type int
-    load_var _3
-    call baml.json.from_json
-    load_var j
-    load_const "y"
-    call baml.json.field
-    store_var _6
-    load_type int
-    load_var _6
-    call baml.json.from_json
-    init_instance user.Point .x, .y
+    call baml.json.to
     return
 }
 

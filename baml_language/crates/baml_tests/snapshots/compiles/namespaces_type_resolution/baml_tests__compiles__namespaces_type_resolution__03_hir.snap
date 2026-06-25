@@ -68,16 +68,16 @@ function user.RootUsesNestedClient(c: root.llm.openai.Client) -> string  [expr] 
   {  } c.api_key
 }
 function user.from_json(j: baml.json.json) -> user.Config  [expr] {
-  user.Config { key: baml.json.from_json(baml.json.field(j, "key")), env: baml.json.from_json(baml.json.field(j, "env")) }
+  baml.json.to(j)
 }
 function user.from_json(j: baml.json.json) -> user.RootWithCrossNsAlias  [expr] {
-  user.RootWithCrossNsAlias { llm_alias: baml.json.from_json(baml.json.field(j, "llm_alias")), own_alias: baml.json.from_json(baml.json.field(j, "own_alias")) }
+  baml.json.to(j)
 }
 function user.from_json(j: baml.json.json) -> user.Error  [expr] {
-  user.Error { code: baml.json.from_json(baml.json.field(j, "code")), message: baml.json.from_json(baml.json.field(j, "message")) }
+  baml.json.to(j)
 }
 function user.from_json(j: baml.json.json) -> user.RootWithCrossNsFields  [expr] {
-  user.RootWithCrossNsFields { own_config: baml.json.from_json(baml.json.field(j, "own_config")), llm_config: baml.json.from_json(baml.json.field(j, "llm_config")), auth_config: baml.json.from_json(baml.json.field(j, "auth_config")), llm_response: baml.json.from_json(baml.json.field(j, "llm_response")), nested_client: baml.json.from_json(baml.json.field(j, "nested_client")), own_status: baml.json.from_json(baml.json.field(j, "own_status")), own_alias: baml.json.from_json(baml.json.field(j, "own_alias")) }
+  baml.json.to(j)
 }
 class user.auth.Config {
   provider: string
@@ -151,13 +151,13 @@ function user.auth.AuthUsesRootStatus() -> root.Status  [expr] {
   {  } root.Status.Pending
 }
 function user.auth.from_json(j: baml.json.json) -> user.auth.Config  [expr] {
-  user.auth.Config { provider: baml.json.from_json(baml.json.field(j, "provider")), secret: baml.json.from_json(baml.json.field(j, "secret")) }
+  baml.json.to(j)
 }
 function user.auth.from_json(j: baml.json.json) -> user.auth.Error  [expr] {
-  user.auth.Error { realm: baml.json.from_json(baml.json.field(j, "realm")), expired: baml.json.from_json(baml.json.field(j, "expired")) }
+  baml.json.to(j)
 }
 function user.auth.from_json(j: baml.json.json) -> user.auth.Token  [expr] {
-  user.auth.Token { value: baml.json.from_json(baml.json.field(j, "value")), role: baml.json.from_json(baml.json.field(j, "role")) }
+  baml.json.to(j)
 }
 class user.llm.Config {
   model: string
@@ -251,19 +251,19 @@ function user.llm.LlmUsesRootStatus() -> root.Status  [expr] {
   {  } root.Status.Ok
 }
 function user.llm.from_json(j: baml.json.json) -> user.llm.Config  [expr] {
-  user.llm.Config { model: baml.json.from_json(baml.json.field(j, "model")), temperature: baml.json.from_json(baml.json.field(j, "temperature")) }
+  baml.json.to(j)
 }
 function user.llm.from_json(j: baml.json.json) -> user.llm.LlmWithCrossNsFields  [expr] {
-  user.llm.LlmWithCrossNsFields { own_config: baml.json.from_json(baml.json.field(j, "own_config")), own_response: baml.json.from_json(baml.json.field(j, "own_response")), root_config: baml.json.from_json(baml.json.field(j, "root_config")), root_error: baml.json.from_json(baml.json.field(j, "root_error")), auth_config: baml.json.from_json(baml.json.field(j, "auth_config")), nested_client: baml.json.from_json(baml.json.field(j, "nested_client")), own_status: baml.json.from_json(baml.json.field(j, "own_status")), own_alias: baml.json.from_json(baml.json.field(j, "own_alias")), root_alias: baml.json.from_json(baml.json.field(j, "root_alias")) }
+  baml.json.to(j)
 }
 function user.llm.from_json(j: baml.json.json) -> user.llm.Error  [expr] {
-  user.llm.Error { reason: baml.json.from_json(baml.json.field(j, "reason")), retryable: baml.json.from_json(baml.json.field(j, "retryable")) }
+  baml.json.to(j)
 }
 function user.llm.from_json(j: baml.json.json) -> user.llm.LlmWithRootAlias  [expr] {
-  user.llm.LlmWithRootAlias { root_alias: baml.json.from_json(baml.json.field(j, "root_alias")), own_alias: baml.json.from_json(baml.json.field(j, "own_alias")) }
+  baml.json.to(j)
 }
 function user.llm.from_json(j: baml.json.json) -> user.llm.Response  [expr] {
-  user.llm.Response { text: baml.json.from_json(baml.json.field(j, "text")), tokens: baml.json.from_json(baml.json.field(j, "tokens")) }
+  baml.json.to(j)
 }
 class user.llm.openai.Client {
   api_key: string
@@ -329,8 +329,8 @@ function user.llm.openai.OpenAIUsesRootStatus() -> root.Status  [expr] {
   {  } root.Status.Ok
 }
 function user.llm.openai.from_json(j: baml.json.json) -> user.llm.openai.Client  [expr] {
-  user.llm.openai.Client { api_key: baml.json.from_json(baml.json.field(j, "api_key")), org_id: baml.json.from_json(baml.json.field(j, "org_id")) }
+  baml.json.to(j)
 }
 function user.llm.openai.from_json(j: baml.json.json) -> user.llm.openai.Error  [expr] {
-  user.llm.openai.Error { status_code: baml.json.from_json(baml.json.field(j, "status_code")), body: baml.json.from_json(baml.json.field(j, "body")) }
+  baml.json.to(j)
 }

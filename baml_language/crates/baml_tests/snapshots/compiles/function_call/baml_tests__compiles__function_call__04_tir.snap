@@ -33,8 +33,8 @@ function user.Baz.Greeting(self: user.Baz) -> string throws never {
     "Hello, " + self.name + "!" : string
   }
 }
-function user.Baz.from_json(j: baml.json.json) -> user.Baz throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  Baz { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.Baz
+function user.Baz.from_json(j: baml.json.json) -> user.Baz throws baml.json.JsonDecodeError {
+  baml.json.to<T>(j) : user.Baz
 }
 function user.param_in_if_statement(b: bool) -> int throws never {
   { : 1 | 2

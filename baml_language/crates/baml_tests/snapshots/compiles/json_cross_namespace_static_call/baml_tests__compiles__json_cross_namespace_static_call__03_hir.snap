@@ -15,8 +15,8 @@ class user.pkg.inner.Box {
   value: T
 }
 function user.pkg.inner.from_json(j: baml.json.json) -> user.pkg.inner.Box<T>  [expr] {
-  {  } user.pkg.inner.Box { value: baml.json.from_json(baml.json.field(j, "value")) }
+  baml.json.to(j)
 }
 function user.pkg.inner.from_json(j: baml.json.json) -> user.pkg.inner.AutoBox<T>  [expr] {
-  user.pkg.inner.AutoBox { value: baml.json.from_json(baml.json.field(j, "value")) }
+  baml.json.to(j)
 }

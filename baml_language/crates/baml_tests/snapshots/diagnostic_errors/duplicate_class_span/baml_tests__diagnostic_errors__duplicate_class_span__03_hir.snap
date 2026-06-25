@@ -10,8 +10,8 @@ class user.A {
 }
 type user.A = int
 function user.from_json(j: baml.json.json) -> user.A  [expr] {
-  user.A { field: baml.json.from_json(baml.json.field(j, "field")) }
+  baml.json.to(j)
 }
 function user.from_json(j: baml.json.json) -> user.A  [expr] {
-  user.A { field: baml.json.from_json(baml.json.field(j, "field")) }
+  baml.json.to(j)
 }

@@ -258,7 +258,13 @@ function json_auto_derive.$init_test_ns_json_auto_derive_json_auto_derive(regist
     return
 }
 
-function json_auto_derive.BAliasFrom.from_json(j: baml.json.json) -> json_auto_derive.BAliasFrom {
+function json_auto_derive.BAliasFrom$stream.baml.FromJson.from_json(j: baml.json.json) -> json_auto_derive.BAliasFrom$stream {
+    load_const 99
+    init_instance user.json_auto_derive.BAliasFrom .y
+    return
+}
+
+function json_auto_derive.BAliasFrom.baml.FromJson.from_json(j: baml.json.json) -> json_auto_derive.BAliasFrom {
     load_const 99
     init_instance user.json_auto_derive.BAliasFrom .y
     return
@@ -284,13 +290,25 @@ function json_auto_derive.BArr.baml.ToJson.to_json(self: json_auto_derive.BArr) 
     return
 }
 
-function json_auto_derive.BMapFrom.from_json(j: baml.json.json) -> json_auto_derive.BMapFrom {
+function json_auto_derive.BMapFrom$stream.baml.FromJson.from_json(j: baml.json.json) -> json_auto_derive.BMapFrom$stream {
     load_const 0
     init_instance user.json_auto_derive.BMapFrom .v
     return
 }
 
-function json_auto_derive.BOnlyFrom.from_json(j: baml.json.json) -> json_auto_derive.BOnlyFrom {
+function json_auto_derive.BMapFrom.baml.FromJson.from_json(j: baml.json.json) -> json_auto_derive.BMapFrom {
+    load_const 0
+    init_instance user.json_auto_derive.BMapFrom .v
+    return
+}
+
+function json_auto_derive.BOnlyFrom$stream.baml.FromJson.from_json(j: baml.json.json) -> json_auto_derive.BOnlyFrom$stream {
+    load_const 99
+    init_instance user.json_auto_derive.BOnlyFrom .y
+    return
+}
+
+function json_auto_derive.BOnlyFrom.baml.FromJson.from_json(j: baml.json.json) -> json_auto_derive.BOnlyFrom {
     load_const 99
     init_instance user.json_auto_derive.BOnlyFrom .y
     return
@@ -306,13 +324,25 @@ function json_auto_derive.BOnlyTo.baml.ToJson.to_json(self: json_auto_derive.BOn
     return
 }
 
-function json_auto_derive.BOptFrom.from_json(j: baml.json.json) -> json_auto_derive.BOptFrom {
+function json_auto_derive.BOptFrom$stream.baml.FromJson.from_json(j: baml.json.json) -> json_auto_derive.BOptFrom$stream {
     load_const 99
     init_instance user.json_auto_derive.BOptFrom .y
     return
 }
 
-function json_auto_derive.BOverride.from_json(j: baml.json.json) -> json_auto_derive.BOverride {
+function json_auto_derive.BOptFrom.baml.FromJson.from_json(j: baml.json.json) -> json_auto_derive.BOptFrom {
+    load_const 99
+    init_instance user.json_auto_derive.BOptFrom .y
+    return
+}
+
+function json_auto_derive.BOverride$stream.baml.FromJson.from_json(j: baml.json.json) -> json_auto_derive.BOverride$stream {
+    load_const 99
+    init_instance user.json_auto_derive.BOverride .y
+    return
+}
+
+function json_auto_derive.BOverride.baml.FromJson.from_json(j: baml.json.json) -> json_auto_derive.BOverride {
     load_const 99
     init_instance user.json_auto_derive.BOverride .y
     return
@@ -348,7 +378,13 @@ function json_auto_derive.BZero.baml.ToJson.to_json(self: json_auto_derive.BZero
     return
 }
 
-function json_auto_derive.BZeroFrom.from_json(j: baml.json.json) -> json_auto_derive.BZeroFrom {
+function json_auto_derive.BZeroFrom$stream.baml.FromJson.from_json(j: baml.json.json) -> json_auto_derive.BZeroFrom$stream {
+    load_const 0
+    init_instance user.json_auto_derive.BZeroFrom .y
+    return
+}
+
+function json_auto_derive.BZeroFrom.baml.FromJson.from_json(j: baml.json.json) -> json_auto_derive.BZeroFrom {
     load_const 0
     init_instance user.json_auto_derive.BZeroFrom .y
     return
@@ -376,19 +412,25 @@ function json_auto_derive.Secret.baml.ToJson.to_json(self: json_auto_derive.Secr
     return
 }
 
+function json_auto_derive.SecretBoth$stream.baml.FromJson.from_json(j: baml.json.json) -> json_auto_derive.SecretBoth$stream {
+    load_const "[reset]"
+    init_instance user.json_auto_derive.SecretBoth .data
+    return
+}
+
 function json_auto_derive.SecretBoth$stream.baml.ToJson.to_json(self: json_auto_derive.SecretBoth$stream) -> baml.json.json {
     load_const "[redacted]"
     return
 }
 
-function json_auto_derive.SecretBoth.baml.ToJson.to_json(self: json_auto_derive.SecretBoth) -> baml.json.json {
-    load_const "[redacted]"
+function json_auto_derive.SecretBoth.baml.FromJson.from_json(j: baml.json.json) -> json_auto_derive.SecretBoth {
+    load_const "[reset]"
+    init_instance user.json_auto_derive.SecretBoth .data
     return
 }
 
-function json_auto_derive.SecretBoth.from_json(j: baml.json.json) -> json_auto_derive.SecretBoth {
-    load_const "[reset]"
-    init_instance user.json_auto_derive.SecretBoth .data
+function json_auto_derive.SecretBoth.baml.ToJson.to_json(self: json_auto_derive.SecretBoth) -> baml.json.json {
+    load_const "[redacted]"
     return
 }
 
@@ -412,7 +454,13 @@ function json_auto_derive.SecretRedact2.baml.ToJson.to_json(self: json_auto_deri
     return
 }
 
-function json_auto_derive.SecretReset.from_json(j: baml.json.json) -> json_auto_derive.SecretReset {
+function json_auto_derive.SecretReset$stream.baml.FromJson.from_json(j: baml.json.json) -> json_auto_derive.SecretReset$stream {
+    load_const "[reset]"
+    init_instance user.json_auto_derive.SecretReset .data
+    return
+}
+
+function json_auto_derive.SecretReset.baml.FromJson.from_json(j: baml.json.json) -> json_auto_derive.SecretReset {
     load_const "[reset]"
     init_instance user.json_auto_derive.SecretReset .data
     return
@@ -421,7 +469,7 @@ function json_auto_derive.SecretReset.from_json(j: baml.json.json) -> json_auto_
 function json_auto_derive.alias_chain_dispatch_from_json_val() -> int {
     load_const "{\"y\":7}"
     call baml.json.parse
-    call user.json_auto_derive.BAliasFrom.from_json
+    call user.json_auto_derive.BAliasFrom.baml.FromJson.from_json
     load_field .y
     return
 }
@@ -1686,7 +1734,7 @@ function json_auto_derive.round_trip_with_overrides_both_directions_val() -> str
   L62:
     call baml.json.stringify
     call baml.json.parse
-    call user.json_auto_derive.SecretBoth.from_json
+    call user.json_auto_derive.SecretBoth.baml.FromJson.from_json
     load_field .data
     return
 

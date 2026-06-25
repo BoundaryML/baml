@@ -113,25 +113,14 @@ fn user.Formatter.from_json(j: baml.json.json) -> Formatter {
     // Locals:
     let _0: Formatter // _0 // return
     let _1: baml.json.json // j // param
-    let _2: string
-    let _3: baml.json.json
-    let _4: type
+    let _2: type
 
     bb0: {
-        _3 = call const fn baml.json.field(copy _1, const "prefix") -> [bb1];
+        _2 = load_type(Formatter);
+        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
     }
 
     bb1: {
-        _4 = load_type(string);
-        _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
-    }
-
-    bb2: {
-        _0 = user.Formatter { copy _2 };
-        goto -> bb3;
-    }
-
-    bb3: {
         return;
     }
 }
@@ -140,37 +129,14 @@ fn user.Employee.from_json(j: baml.json.json) -> Employee {
     // Locals:
     let _0: Employee // _0 // return
     let _1: baml.json.json // j // param
-    let _2: string
-    let _3: baml.json.json
-    let _4: type
-    let _5: string
-    let _6: baml.json.json
-    let _7: type
+    let _2: type
 
     bb0: {
-        _3 = call const fn baml.json.field(copy _1, const "first") -> [bb1];
+        _2 = load_type(Employee);
+        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
     }
 
     bb1: {
-        _4 = load_type(string);
-        _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
-    }
-
-    bb2: {
-        _6 = call const fn baml.json.field(copy _1, const "last") -> [bb3];
-    }
-
-    bb3: {
-        _7 = load_type(string);
-        _5 = call const fn baml.json.from_json<copy _7>(copy _6) -> [bb4];
-    }
-
-    bb4: {
-        _0 = user.Employee { copy _2, copy _5 };
-        goto -> bb5;
-    }
-
-    bb5: {
         return;
     }
 }
@@ -179,25 +145,14 @@ fn user.Box.from_json(j: baml.json.json) -> Box<T> {
     // Locals:
     let _0: Box<T> // _0 // return
     let _1: baml.json.json // j // param
-    let _2: T
-    let _3: baml.json.json
-    let _4: type
+    let _2: type
 
     bb0: {
-        _3 = call const fn baml.json.field(copy _1, const "value") -> [bb1];
+        _2 = load_type(Box<#0>);
+        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
     }
 
     bb1: {
-        _4 = load_type(#0);
-        _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
-    }
-
-    bb2: {
-        _0 = user.Box<#0> { copy _2 };
-        goto -> bb3;
-    }
-
-    bb3: {
         return;
     }
 }
@@ -206,37 +161,14 @@ fn user.RangeCheck.from_json(j: baml.json.json) -> RangeCheck {
     // Locals:
     let _0: RangeCheck // _0 // return
     let _1: baml.json.json // j // param
-    let _2: int
-    let _3: baml.json.json
-    let _4: type
-    let _5: int
-    let _6: baml.json.json
-    let _7: type
+    let _2: type
 
     bb0: {
-        _3 = call const fn baml.json.field(copy _1, const "min") -> [bb1];
+        _2 = load_type(RangeCheck);
+        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
     }
 
     bb1: {
-        _4 = load_type(int);
-        _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
-    }
-
-    bb2: {
-        _6 = call const fn baml.json.field(copy _1, const "max") -> [bb3];
-    }
-
-    bb3: {
-        _7 = load_type(int);
-        _5 = call const fn baml.json.from_json<copy _7>(copy _6) -> [bb4];
-    }
-
-    bb4: {
-        _0 = user.RangeCheck { copy _2, copy _5 };
-        goto -> bb5;
-    }
-
-    bb5: {
         return;
     }
 }
@@ -245,25 +177,14 @@ fn user.Config.from_json(j: baml.json.json) -> Config {
     // Locals:
     let _0: Config // _0 // return
     let _1: baml.json.json // j // param
-    let _2: Encoder
-    let _3: baml.json.json
-    let _4: type
+    let _2: type
 
     bb0: {
-        _3 = call const fn baml.json.field(copy _1, const "encoder") -> [bb1];
+        _2 = load_type(Config);
+        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
     }
 
     bb1: {
-        _4 = load_type(Encoder);
-        _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
-    }
-
-    bb2: {
-        _0 = user.Config { copy _2 };
-        goto -> bb3;
-    }
-
-    bb3: {
         return;
     }
 }
@@ -272,25 +193,14 @@ fn user.Calculator.from_json(j: baml.json.json) -> Calculator {
     // Locals:
     let _0: Calculator // _0 // return
     let _1: baml.json.json // j // param
-    let _2: string
-    let _3: baml.json.json
-    let _4: type
+    let _2: type
 
     bb0: {
-        _3 = call const fn baml.json.field(copy _1, const "op") -> [bb1];
+        _2 = load_type(Calculator);
+        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
     }
 
     bb1: {
-        _4 = load_type(string);
-        _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
-    }
-
-    bb2: {
-        _0 = user.Calculator { copy _2 };
-        goto -> bb3;
-    }
-
-    bb3: {
         return;
     }
 }
@@ -299,25 +209,14 @@ fn user.Counter.from_json(j: baml.json.json) -> Counter {
     // Locals:
     let _0: Counter // _0 // return
     let _1: baml.json.json // j // param
-    let _2: int
-    let _3: baml.json.json
-    let _4: type
+    let _2: type
 
     bb0: {
-        _3 = call const fn baml.json.field(copy _1, const "value") -> [bb1];
+        _2 = load_type(Counter);
+        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
     }
 
     bb1: {
-        _4 = load_type(int);
-        _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
-    }
-
-    bb2: {
-        _0 = user.Counter { copy _2 };
-        goto -> bb3;
-    }
-
-    bb3: {
         return;
     }
 }
@@ -326,25 +225,14 @@ fn user.Encoder.from_json(j: baml.json.json) -> Encoder {
     // Locals:
     let _0: Encoder // _0 // return
     let _1: baml.json.json // j // param
-    let _2: string
-    let _3: baml.json.json
-    let _4: type
+    let _2: type
 
     bb0: {
-        _3 = call const fn baml.json.field(copy _1, const "charset") -> [bb1];
+        _2 = load_type(Encoder);
+        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
     }
 
     bb1: {
-        _4 = load_type(string);
-        _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
-    }
-
-    bb2: {
-        _0 = user.Encoder { copy _2 };
-        goto -> bb3;
-    }
-
-    bb3: {
         return;
     }
 }

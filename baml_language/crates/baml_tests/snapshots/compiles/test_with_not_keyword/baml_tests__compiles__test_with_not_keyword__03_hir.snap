@@ -12,10 +12,10 @@ function user.$init_test_main(registry: testing.TestCollector) -> ?  [expr] {
   { registry.register_test("with as field", () -> void { { let h = user.HasWith { with: 1 } } assert.equal(h.with, 1) }, null) } null
 }
 function user.from_json(j: baml.json.json) -> user.Foo  [expr] {
-  user.Foo { x: baml.json.from_json(baml.json.field(j, "x")) }
+  baml.json.to(j)
 }
 function user.from_json(j: baml.json.json) -> user.HasWith  [expr] {
-  user.HasWith { with: baml.json.from_json(baml.json.field(j, "with")) }
+  baml.json.to(j)
 }
 function user.make_foo() -> user.Foo  [expr] {
   {  } user.Foo { x: 1 }

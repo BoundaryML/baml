@@ -94,25 +94,14 @@ fn user.BigintCounter.from_json(j: baml.json.json) -> BigintCounter {
     // Locals:
     let _0: BigintCounter // _0 // return
     let _1: baml.json.json // j // param
-    let _2: bigint
-    let _3: baml.json.json
-    let _4: type
+    let _2: type
 
     bb0: {
-        _3 = call const fn baml.json.field(copy _1, const "count") -> [bb1];
+        _2 = load_type(BigintCounter);
+        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
     }
 
     bb1: {
-        _4 = load_type(bigint);
-        _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
-    }
-
-    bb2: {
-        _0 = user.BigintCounter { copy _2 };
-        goto -> bb3;
-    }
-
-    bb3: {
         return;
     }
 }

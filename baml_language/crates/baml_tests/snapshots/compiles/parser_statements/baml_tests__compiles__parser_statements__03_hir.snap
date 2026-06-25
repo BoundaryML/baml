@@ -30,7 +30,7 @@ function user.edge_type_then_object() -> int  [expr] {
   {  } user.EdgeFoo { x: 1 }.x
 }
 function user.from_json(j: baml.json.json) -> user.EdgeFoo  [expr] {
-  user.EdgeFoo { x: baml.json.from_json(baml.json.field(j, "x")) }
+  baml.json.to(j)
 }
 function user.let_mixed_semicolons() -> int  [expr] {
   { let a = 1; let b = 2; let c = 3; let d = 4; return a Add b Add c Add d }
@@ -88,7 +88,7 @@ class user.Point {
   y: int
 }
 function user.from_json(j: baml.json.json) -> user.Point  [expr] {
-  user.Point { x: baml.json.from_json(baml.json.field(j, "x")), y: baml.json.from_json(baml.json.field(j, "y")) }
+  baml.json.to(j)
 }
 function user.let_statements() -> int  [expr] {
   { let x = 1; let y: int = 2; let z: int[] = [1, 2, 3]; let point: user.Point = user.Point { x: 1, y: 2 }; return point.x Add point.y }

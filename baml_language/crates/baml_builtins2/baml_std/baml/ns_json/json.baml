@@ -123,7 +123,7 @@ function from_string<T>(s: string) -> T throws JsonParseError | JsonDecodeError 
 /// Throws `JsonParseError` / `JsonDecodeError` on shape mismatch.
 //baml:mut_vm
 //baml:may_yield
-function from_json<T>(j: json) -> T throws JsonParseError | JsonDecodeError {
+function from_json<T>(j: json) -> T throws JsonDecodeError {
   $rust_function
 }
 
@@ -141,7 +141,7 @@ function from_json<T>(j: json) -> T throws JsonParseError | JsonDecodeError {
 /// Throws `JsonParseError` / `JsonDecodeError` on shape mismatch.
 //baml:mut_vm
 //baml:may_yield
-function to<T>(j: json) -> T throws JsonParseError | JsonDecodeError {
+function to<T>(j: json) -> T throws JsonDecodeError {
   root._from_json_shim<T>(j)
 }
 

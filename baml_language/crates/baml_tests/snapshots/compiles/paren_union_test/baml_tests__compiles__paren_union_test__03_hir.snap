@@ -27,5 +27,5 @@ class user.Union {
   opt_arr_opt_fun_opt_opt_opt_arr_arr_opt_arr: (user.Union | user.Union?[]? | user.Union | user.Union) -> user.Union | user.Union?[]? | user.Union | user.Union???[][]?[]
 }
 function user.from_json(j: baml.json.json) -> user.Union  [expr] {
-  baml.json.from_string(baml.json.stringify(j))
+  baml.json.to(j)
 }

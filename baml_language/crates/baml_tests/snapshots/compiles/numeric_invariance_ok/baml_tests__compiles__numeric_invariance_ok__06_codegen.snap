@@ -2,14 +2,9 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 function user.BigintCounter.from_json(j: baml.json.json) -> BigintCounter {
+    load_type BigintCounter
     load_var j
-    load_const "count"
-    call baml.json.field
-    store_var _3
-    load_type bigint
-    load_var _3
-    call baml.json.from_json
-    init_instance user.BigintCounter .count
+    call baml.json.to
     return
 }
 

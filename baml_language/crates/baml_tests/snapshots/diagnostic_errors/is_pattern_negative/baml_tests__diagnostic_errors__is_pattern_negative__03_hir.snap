@@ -15,10 +15,10 @@ function user.binding_leak_scope() -> int  [expr] {
   { let v: int | string = 7; let _ = v is x: int } x
 }
 function user.from_json(j: baml.json.json) -> user.WrapNonGeneric  [expr] {
-  user.WrapNonGeneric { x: baml.json.from_json(baml.json.field(j, "x")) }
+  baml.json.to(j)
 }
 function user.from_json(j: baml.json.json) -> user.WrapGeneric<T>  [expr] {
-  user.WrapGeneric { val: baml.json.from_json(baml.json.field(j, "val")) }
+  baml.json.to(j)
 }
 function user.or_pattern_leak() -> int  [expr] {
   { let v: int | string = 7; let _ = v is x: int | x: string } x

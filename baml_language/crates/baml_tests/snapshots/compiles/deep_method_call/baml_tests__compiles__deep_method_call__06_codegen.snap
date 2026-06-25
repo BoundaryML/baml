@@ -2,26 +2,16 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 function user.A.from_json(j: baml.json.json) -> A {
+    load_type A
     load_var j
-    load_const "b"
-    call baml.json.field
-    store_var _3
-    load_type B
-    load_var _3
-    call baml.json.from_json
-    init_instance user.A .b
+    call baml.json.to
     return
 }
 
 function user.B.from_json(j: baml.json.json) -> B {
+    load_type B
     load_var j
-    load_const "label"
-    call baml.json.field
-    store_var _3
-    load_type string
-    load_var _3
-    call baml.json.from_json
-    init_instance user.B .label
+    call baml.json.to
     return
 }
 

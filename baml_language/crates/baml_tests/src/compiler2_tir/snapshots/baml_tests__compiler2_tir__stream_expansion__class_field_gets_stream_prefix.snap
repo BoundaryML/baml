@@ -5,14 +5,14 @@ expression: "render_tir(&db, file)"
 class user.Inner {
   value: string
 }
-function user.Inner.from_json(j: baml.json.json) -> user.Inner throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  Inner { value: baml.json.from_json<string>(baml.json.field(j, "value")) } : user.Inner
+function user.Inner.from_json(j: baml.json.json) -> user.Inner throws baml.json.JsonDecodeError {
+  baml.json.to<T>(j) : user.Inner
 }
 class user.Outer {
   inner: user.Inner
 }
-function user.Outer.from_json(j: baml.json.json) -> user.Outer throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  Outer { inner: baml.json.from_json<Inner>(baml.json.field(j, "inner")) } : user.Outer
+function user.Outer.from_json(j: baml.json.json) -> user.Outer throws baml.json.JsonDecodeError {
+  baml.json.to<T>(j) : user.Outer
 }
 class user.Inner$stream {
   value: string | null

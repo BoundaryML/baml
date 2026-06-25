@@ -148,7 +148,7 @@ function _to_json_shim<T>(value: T) -> baml.json.json throws baml.json.JsonSeria
 /// it can't have a default body — an interface default method may not return
 /// `Self`; the structural fallback lives in `baml.json.to` instead.)
 interface FromJson {
-  function from_json(j: baml.json.json) -> Self throws baml.json.JsonParseError | baml.json.JsonDecodeError
+  function from_json(j: baml.json.json) -> Self throws baml.json.JsonDecodeError
 }
 
 /// Internal: dispatch `from_json` on the target type `T`, honoring a
@@ -165,6 +165,6 @@ interface FromJson {
 /// shim can be removed.
 //baml:mut_vm
 //baml:may_yield
-function _from_json_shim<T>(j: baml.json.json) -> T throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+function _from_json_shim<T>(j: baml.json.json) -> T throws baml.json.JsonDecodeError {
   $rust_function
 }

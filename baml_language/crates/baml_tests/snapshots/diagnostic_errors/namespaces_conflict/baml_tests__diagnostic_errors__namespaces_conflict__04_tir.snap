@@ -5,8 +5,8 @@ source: crates/baml_tests/src/generated_tests.rs
 class user.llm.Response {
   text: string
 }
-function user.llm.Response.from_json(j: baml.json.json) -> user.llm.Response throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  Response { text: baml.json.from_json<string>(baml.json.field(j, "text")) } : user.llm.Response
+function user.llm.Response.from_json(j: baml.json.json) -> user.llm.Response throws baml.json.JsonDecodeError {
+  baml.json.to<T>(j) : user.llm.Response
 }
 class user.llm.Response$stream {
   text: string | null
@@ -15,8 +15,8 @@ class user.llm.Response {
   body: string
   status: int
 }
-function user.llm.Response.from_json(j: baml.json.json) -> user.llm.Response throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  Response { body: baml.json.from_json<string>(baml.json.field(j, "body")), status: baml.json.from_json<int>(baml.json.field(j, "status")) } : user.llm.Response
+function user.llm.Response.from_json(j: baml.json.json) -> user.llm.Response throws baml.json.JsonDecodeError {
+  baml.json.to<T>(j) : user.llm.Response
 }
 class user.llm.Response$stream {
   body: string | null

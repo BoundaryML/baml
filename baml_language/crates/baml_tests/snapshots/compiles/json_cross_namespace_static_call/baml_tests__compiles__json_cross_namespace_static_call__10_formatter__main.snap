@@ -20,7 +20,7 @@ source: crates/baml_tests/src/generated_tests.rs
 // "function `from_json` expects 0 type argument(s), got 1".
 function decode_root(
     j: baml.json.json,
-) -> root.pkg.inner.Box<int> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+) -> root.pkg.inner.Box<int> throws baml.json.JsonDecodeError {
     root.pkg.inner.Box<int>.from_json(j)
 }
 
@@ -29,6 +29,6 @@ function decode_root(
 // the receiver's `<int>` through the synthesizer's frame.
 function decode_auto(
     j: baml.json.json,
-) -> root.pkg.inner.AutoBox<int> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+) -> root.pkg.inner.AutoBox<int> throws baml.json.JsonDecodeError {
     root.pkg.inner.AutoBox<int>.from_json(j)
 }

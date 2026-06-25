@@ -44,28 +44,28 @@ function user.format(self: ?, text: string) -> string  [expr] {
   {  } self.prefix Add text
 }
 function user.from_json(j: baml.json.json) -> user.Formatter  [expr] {
-  user.Formatter { prefix: baml.json.from_json(baml.json.field(j, "prefix")) }
+  baml.json.to(j)
 }
 function user.from_json(j: baml.json.json) -> user.Employee  [expr] {
-  user.Employee { first: baml.json.from_json(baml.json.field(j, "first")), last: baml.json.from_json(baml.json.field(j, "last")) }
+  baml.json.to(j)
 }
 function user.from_json(j: baml.json.json) -> user.Box<T>  [expr] {
-  user.Box { value: baml.json.from_json(baml.json.field(j, "value")) }
+  baml.json.to(j)
 }
 function user.from_json(j: baml.json.json) -> user.RangeCheck  [expr] {
-  user.RangeCheck { min: baml.json.from_json(baml.json.field(j, "min")), max: baml.json.from_json(baml.json.field(j, "max")) }
+  baml.json.to(j)
 }
 function user.from_json(j: baml.json.json) -> user.Config  [expr] {
-  user.Config { encoder: baml.json.from_json(baml.json.field(j, "encoder")) }
+  baml.json.to(j)
 }
 function user.from_json(j: baml.json.json) -> user.Calculator  [expr] {
-  user.Calculator { op: baml.json.from_json(baml.json.field(j, "op")) }
+  baml.json.to(j)
 }
 function user.from_json(j: baml.json.json) -> user.Counter  [expr] {
-  user.Counter { value: baml.json.from_json(baml.json.field(j, "value")) }
+  baml.json.to(j)
 }
 function user.from_json(j: baml.json.json) -> user.Encoder  [expr] {
-  user.Encoder { charset: baml.json.from_json(baml.json.field(j, "charset")) }
+  baml.json.to(j)
 }
 function user.full_name(self: ?) -> string  [expr] {
   {  } self.first Add " " Add self.last

@@ -1,39 +1,31 @@
 //! Auto-derived `from_json` synthesis for user-defined classes.
 //!
 //! Pure AST transform — no type information needed. For every user
-//! `class C { f1: T1, f2: T2, ... }` that does not already define `from_json`,
-//! this pass appends a synthesized method marked `FunctionOrigin::AutoDerive`:
+//! `class C { ... }` that does not already define `from_json`, this pass appends
+//! a thin synthesized delegate marked `FunctionOrigin::AutoDerive`:
 //!
 //! ```baml
 //! function from_json(j: json) -> C throws ... {
-//!     C {
-//!         f1: baml.json.from_json<T1>(baml.json.field(j, "f1")),
-//!         f2: baml.json.from_json<T2>(baml.json.field(j, "f2")),
-//!         ...
-//!     }
+//!     baml.json.to<C>(j)
 //! }
 //! ```
 //!
-//! Every field routes through `baml.json.from_json<F>` so override dispatch
-//! is centralized in the native handler: it `YieldToCall`s the field type's
-//! `<fqn>.from_json` (user or auto-derived) for class fields, walks `List<C>`
-//! and `Map<string, C>` element-by-element honoring per-element overrides,
-//! and falls back to structural decode for primitives, enums, etc. The
-//! `baml.json.field(j, "f")` helper extracts a json object's field value
-//! since the `json` union doesn't typecheck under direct indexing.
+//! The override-honoring per-field decode lives in the `baml.json.to` driver
+//! (VM `class_from_json_start`): it decodes each field through `baml.json.to`,
+//! dispatching a field type's `baml.FromJson` override (and walking lists / maps
+//! / optionals), and structurally decodes leaves. So the synthesized body is the
+//! *structural default* for non-implementors; a class customizes deserialization
+//! by `implements baml.FromJson` instead (a bare user `from_json` method trips
+//! the HIR `FromJsonMustImplementInterface` ban — the synthesized delegate is
+//! exempt). There is no recursion: the driver decodes fields directly rather
+//! than re-calling this `from_json`.
 //!
-//! For generic classes the `Self` type-arg expands to `C<T1, T2, ...>`; the
-//! BEP-039 type-arg threading machinery routes the runtime `T_i` from
-//! `Object::Instance::class_type_args` through the call.
-//!
-//! `to_json` is NOT auto-derived: serialization is owned by the `baml.ToJson`
-//! interface, and `baml.json.from(value)` is the universal driver that renders
-//! non-implementors structurally (a bare `to_json` method trips the HIR
-//! `ToJsonMustImplementInterface` ban). `from_json` remains synthesized because
-//! deserialization has no interface yet (see the `FromJson` follow-up). A
-//! user-defined `from_json` suppresses synthesis.
+//! `to_json` is NOT auto-derived at all — `baml.ToJson` + the `baml.json.from`
+//! Rust walker own serialization. `from_json` keeps a thin delegate because the
+//! deserialize side constructs `Self` (a static, receiver-less call), which the
+//! delegate expresses without a static-call sugar.
 
-use baml_base::{Name, TypePath};
+use baml_base::Name;
 use la_arena::Arena;
 use text_size::TextRange;
 
@@ -47,7 +39,15 @@ use crate::ast::{
 /// longer auto-derived — see the module docs.)
 pub(crate) fn maybe_synthesize_derived_methods(class: &mut ClassDef) {
     let span = class.name_span;
-    let has_from_json = class.methods.iter().any(|m| m.name.as_str() == "from_json");
+    // Suppress the delegate when the user already provides `from_json` — a
+    // (E0143-banned) bare method, or an `implements baml.FromJson { function
+    // from_json }` override (in `class.implements`). For an implementor the
+    // override IS the `C.from_json`, so no delegate is needed.
+    let has_from_json = class.methods.iter().any(|m| m.name.as_str() == "from_json")
+        || class
+            .implements
+            .iter()
+            .any(|b| b.methods.iter().any(|m| m.name.as_str() == "from_json"));
     if !has_from_json {
         class.methods.push(synthesize_from_json(class, span));
     }
@@ -102,21 +102,12 @@ fn baml_json_class(name: &str) -> TypeExpr {
         attrs: vec![],
     }
 }
-
-fn union(variants: Vec<TypeExpr>) -> TypeExpr {
-    TypeExpr::Union {
-        variants,
-        attrs: vec![],
-    }
-}
-
 fn spanned(expr: TypeExpr, span: TextRange) -> SpannedTypeExpr {
     SpannedTypeExpr { expr, span }
 }
 
-/// Synthesize `function from_json(j: json) -> Self throws JsonParseError | JsonDecodeError {
-///     baml.json.from_string<Self>(baml.json.stringify(j))
-/// }`
+/// Synthesize the thin delegate
+/// `function from_json(j: json) -> Self throws JsonDecodeError { baml.json.to<Self>(j) }`.
 fn synthesize_from_json(class: &ClassDef, span: TextRange) -> FunctionDef {
     let j_param = Param {
         name: Name::new("j"),
@@ -126,7 +117,7 @@ fn synthesize_from_json(class: &ClassDef, span: TextRange) -> FunctionDef {
         name_span: span,
     };
 
-    let (body, source_map) = build_from_json_body(class, span);
+    let (body, source_map) = build_from_json_delegate_body(class, span);
 
     FunctionDef {
         name: Name::new("from_json"),
@@ -137,13 +128,9 @@ fn synthesize_from_json(class: &ClassDef, span: TextRange) -> FunctionDef {
         params: vec![j_param],
         defaults: FunctionDefaults::empty(),
         return_type: Some(spanned(class_self_type(class), span)),
-        throws: Some(spanned(
-            union(vec![
-                baml_json_class("JsonParseError"),
-                baml_json_class("JsonDecodeError"),
-            ]),
-            span,
-        )),
+        // Decoding a `json` value into `Self` throws `JsonDecodeError` on shape
+        // mismatch; it never parses, so it cannot throw `JsonParseError`.
+        throws: Some(spanned(baml_json_class("JsonDecodeError"), span)),
         body: Some(FunctionBodyDef::Expr(body, source_map)),
         declarative_meta: None,
         origin: FunctionOrigin::AutoDerive,
@@ -155,92 +142,34 @@ fn synthesize_from_json(class: &ClassDef, span: TextRange) -> FunctionDef {
     }
 }
 
-/// Returns `true` if the type expression (and all nested types) are safe to
-/// use with per-field `to_json()` synthesis. Returns `false` for types that do
-/// not have a `to_json` method:
-/// - `$rust_type` — opaque Rust-managed types have no BAML `to_json`
-/// - function types — lambdas/function values have no `to_json`
-/// - `unknown` / `error` / `builtin unknown` — unresolved types
+/// Build the structural-default `from_json` body: `baml.json.to<Self>(j)`.
 ///
-/// Container types (`T?`, `T[]`, `map<K,V>`) are safe if their inner types
-/// are safe. `TypeVar` references (`T` where `T` is a class generic parameter)
-/// are handled at the per-field level by routing through the
-/// `baml.json.to_json(v)` runtime-dispatch helper, so they don't disqualify a
-/// class from per-field synthesis.
-fn type_expr_is_safe_for_per_field(ty: &TypeExpr) -> bool {
-    match ty {
-        // Types that have no `to_json` method — fall back to wrapper body
-        TypeExpr::Rust { .. } => false,
-        TypeExpr::Function { .. } => false,
-        TypeExpr::Unknown { .. } => false,
-        TypeExpr::Error { .. } => false,
-        TypeExpr::BuiltinUnknown { .. } => false,
-        // Container types: safe if inner types are safe
-        TypeExpr::Optional { inner, .. } | TypeExpr::List { inner, .. } => {
-            type_expr_is_safe_for_per_field(inner)
-        }
-        TypeExpr::Map { key, value, .. } => {
-            type_expr_is_safe_for_per_field(key) && type_expr_is_safe_for_per_field(value)
-        }
-        TypeExpr::Union { variants, .. } => variants.iter().all(type_expr_is_safe_for_per_field),
-        // All other types (primitives, concrete paths, literals, media, TypeVars) are safe
-        _ => true,
-    }
-}
-
-/// Returns `true` if all fields of the class have types that are safe for
-/// per-field `to_json()` synthesis.
-fn class_is_safe_for_per_field_synthesis(class: &ClassDef) -> bool {
-    class.fields.iter().all(|f| {
-        f.type_expr
-            .as_ref()
-            .map(|st| type_expr_is_safe_for_per_field(&st.expr))
-            .unwrap_or(false) // fields with missing type annotations are not safe
-    })
-}
-
-/// Build the fallback AST `baml.json.from_string<Self>(baml.json.stringify(j))`.
-///
-/// Used when the class has fields with types that don't support per-field
-/// dispatch — e.g., `$rust_type`, function types, `unknown`.
-fn build_from_json_wrapper_body(class: &ClassDef, span: TextRange) -> (ExprBody, AstSourceMap) {
+/// The override-honoring per-field decode lives in the `baml.json.to` driver
+/// (VM `class_from_json_start`), so the auto-derived body is a thin delegate: it
+/// routes through any `baml.FromJson` override on a field's type and decodes
+/// structurally otherwise, with no recursion (the driver decodes fields directly
+/// rather than re-calling this `from_json`). The `baml.FromJson` interface owns
+/// user-facing customization; this delegate is the structural default for
+/// non-implementors.
+fn build_from_json_delegate_body(class: &ClassDef, span: TextRange) -> (ExprBody, AstSourceMap) {
     let mut exprs: Arena<Expr> = Arena::new();
     let mut expr_spans: Arena<TextRange> = Arena::new();
-
     let mut alloc = |expr: Expr| -> ExprId {
         let id = exprs.alloc(expr);
         expr_spans.alloc(span);
         id
     };
-
-    // `baml.json.stringify`
-    let stringify_callee = alloc(Expr::Path(vec![
+    let to_callee = alloc(Expr::Path(vec![
         Name::new("baml"),
         Name::new("json"),
-        Name::new("stringify"),
+        Name::new("to"),
     ]));
-    // `j`
     let j_arg = alloc(Expr::Path(vec![Name::new("j")]));
-    // `baml.json.stringify(j)`
-    let stringify_call = alloc(Expr::Call {
-        callee: stringify_callee,
-        type_args: vec![],
+    let to_call = alloc(Expr::Call {
+        callee: to_callee,
+        type_args: vec![class_self_type(class)],
         args: vec![CallArg::positional(j_arg)],
     });
-
-    // `baml.json.from_string`
-    let from_string_callee = alloc(Expr::Path(vec![
-        Name::new("baml"),
-        Name::new("json"),
-        Name::new("from_string"),
-    ]));
-    // `baml.json.from_string<Self>(<above>)`
-    let from_string_call = alloc(Expr::Call {
-        callee: from_string_callee,
-        type_args: vec![class_self_type(class)],
-        args: vec![CallArg::positional(stringify_call)],
-    });
-
     let body = ExprBody {
         exprs,
         stmts: Arena::new(),
@@ -248,127 +177,7 @@ fn build_from_json_wrapper_body(class: &ClassDef, span: TextRange) -> (ExprBody,
         match_arms: Arena::new(),
         catch_arms: Arena::new(),
         type_annotations: Arena::new(),
-        root_expr: Some(from_string_call),
-    };
-    let source_map = AstSourceMap {
-        expr_spans,
-        ..Default::default()
-    };
-    (body, source_map)
-}
-
-/// Build the AST for the BEP-038 per-field class-instance constructor:
-///
-/// ```baml
-/// C<T1, ...> {
-///     f1: baml.json.from_json<F1>(baml.json.field(j, "f1")),
-///     f2: baml.json.from_json<F2>(baml.json.field(j, "f2")),
-///     ...
-/// }
-/// ```
-///
-/// Every field routes through `baml.json.from_json<F>` so override dispatch
-/// is centralized in the native handler. The native looks up `<fqn>.from_json`
-/// for class field types and `YieldToCall`s it (honoring user overrides), and
-/// walks `List<C>` / `Map<string, C>` per-element honoring nested overrides.
-///
-/// If any field has a type that doesn't support per-field dispatch (e.g.,
-/// `$rust_type`, function types, `unknown`), falls back to the wrapper body
-/// (`baml.json.from_string<Self>(stringify(j))`).
-fn build_from_json_body(class: &ClassDef, span: TextRange) -> (ExprBody, AstSourceMap) {
-    // Fall back to wrapper body for classes with unsafe field types.  Reuses
-    // the same predicate as `to_json` so the two synthesizers stay aligned.
-    if !class_is_safe_for_per_field_synthesis(class) {
-        return build_from_json_wrapper_body(class, span);
-    }
-
-    let mut exprs: Arena<Expr> = Arena::new();
-    let mut expr_spans: Arena<TextRange> = Arena::new();
-
-    let mut alloc = |expr: Expr| -> ExprId {
-        let id = exprs.alloc(expr);
-        expr_spans.alloc(span);
-        id
-    };
-
-    let mut entries: Vec<(Name, ExprId)> = Vec::with_capacity(class.fields.len());
-    for field in &class.fields {
-        // Field type, used as the type-arg to `baml.json.from_json<F>`.  If
-        // the field has no annotation (legal but unusual), the wrapper-body
-        // branch above would already have caught it via
-        // `class_is_safe_for_per_field_synthesis`.
-        let field_ty = field
-            .type_expr
-            .as_ref()
-            .map(|st| st.expr.clone())
-            .unwrap_or(TypeExpr::Path {
-                segments: vec![Name::new("unknown")],
-                generic_args: vec![],
-                associated_type_bindings: vec![],
-                attrs: vec![],
-            });
-
-        // `baml.json.field`
-        let field_helper = alloc(Expr::Path(vec![
-            Name::new("baml"),
-            Name::new("json"),
-            Name::new("field"),
-        ]));
-        // `j`
-        let j_path = alloc(Expr::Path(vec![Name::new("j")]));
-        // `"<field_name>"`
-        let key_lit = alloc(Expr::Literal(crate::ast::Literal::String(
-            field.name.as_str().to_string(),
-        )));
-        // `baml.json.field(j, "<field_name>")`
-        let field_json = alloc(Expr::Call {
-            callee: field_helper,
-            type_args: vec![],
-            args: vec![CallArg::positional(j_path), CallArg::positional(key_lit)],
-        });
-
-        // `baml.json.from_json`
-        let from_json_callee = alloc(Expr::Path(vec![
-            Name::new("baml"),
-            Name::new("json"),
-            Name::new("from_json"),
-        ]));
-        // `baml.json.from_json<F>(baml.json.field(j, "<field_name>"))`
-        let value_expr = alloc(Expr::Call {
-            callee: from_json_callee,
-            type_args: vec![field_ty],
-            args: vec![CallArg::positional(field_json)],
-        });
-
-        entries.push((field.name.clone(), value_expr));
-    }
-
-    // `C<T1, ...> { f1: ..., f2: ..., ... }`
-    let generic_args: Vec<TypeExpr> = class
-        .generic_params
-        .iter()
-        .map(|gp| TypeExpr::Path {
-            segments: vec![gp.clone()],
-            generic_args: vec![],
-            associated_type_bindings: vec![],
-            attrs: vec![],
-        })
-        .collect();
-    let object = alloc(Expr::Object {
-        type_name: TypePath::bare(class.name.clone()),
-        type_args: generic_args,
-        fields: entries,
-        spreads: vec![],
-    });
-
-    let body = ExprBody {
-        exprs,
-        stmts: Arena::new(),
-        patterns: Arena::new(),
-        match_arms: Arena::new(),
-        catch_arms: Arena::new(),
-        type_annotations: Arena::new(),
-        root_expr: Some(object),
+        root_expr: Some(to_call),
     };
     let source_map = AstSourceMap {
         expr_spans,

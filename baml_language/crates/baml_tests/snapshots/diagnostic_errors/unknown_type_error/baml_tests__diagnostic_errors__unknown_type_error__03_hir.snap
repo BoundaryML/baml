@@ -25,5 +25,5 @@ function user.UnknownNestedFieldAccess(envelope: user.Envelope) -> string  [expr
   {  } envelope.payload.email
 }
 function user.from_json(j: baml.json.json) -> user.Envelope  [expr] {
-  baml.json.from_string(baml.json.stringify(j))
+  baml.json.to(j)
 }

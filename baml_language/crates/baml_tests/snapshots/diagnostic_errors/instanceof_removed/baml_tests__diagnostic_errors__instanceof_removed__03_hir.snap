@@ -15,8 +15,8 @@ function user.check_instanceof_in_if(x: user.Cat | user.Dog) -> string  [expr] {
   { if (<missing>) { return "dog" } } "cat"
 }
 function user.from_json(j: baml.json.json) -> user.Cat  [expr] {
-  user.Cat { name: baml.json.from_json(baml.json.field(j, "name")) }
+  baml.json.to(j)
 }
 function user.from_json(j: baml.json.json) -> user.Dog  [expr] {
-  user.Dog { breed: baml.json.from_json(baml.json.field(j, "breed")) }
+  baml.json.to(j)
 }

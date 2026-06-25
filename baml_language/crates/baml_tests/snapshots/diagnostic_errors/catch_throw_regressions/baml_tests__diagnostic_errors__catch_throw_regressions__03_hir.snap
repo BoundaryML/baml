@@ -43,5 +43,5 @@ function user.WrapperAlwaysThrows(n: int) -> user.Status  [expr] {
   {  } AlwaysThrowsStatus(n)
 }
 function user.from_json(j: baml.json.json) -> user.BuildError  [expr] {
-  user.BuildError { reason: baml.json.from_json(baml.json.field(j, "reason")) }
+  baml.json.to(j)
 }

@@ -15,13 +15,13 @@
 // receiver's class-level type-args are misinterpreted as method-level
 // type-args of the static callee, producing
 // "function `from_json` expects 0 type argument(s), got 1".
-function decode_root(j: baml.json.json) -> root.pkg.inner.Box<int> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+function decode_root(j: baml.json.json) -> root.pkg.inner.Box<int> throws baml.json.JsonDecodeError {
     root.pkg.inner.Box<int>.from_json(j)
 }
 
 // Auto-derived counterpart: `AutoBox<T>` has no user `from_json`, so this
 // call must resolve to the synthesized `AutoBox.from_json` and still thread
 // the receiver's `<int>` through the synthesizer's frame.
-function decode_auto(j: baml.json.json) -> root.pkg.inner.AutoBox<int> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+function decode_auto(j: baml.json.json) -> root.pkg.inner.AutoBox<int> throws baml.json.JsonDecodeError {
     root.pkg.inner.AutoBox<int>.from_json(j)
 }

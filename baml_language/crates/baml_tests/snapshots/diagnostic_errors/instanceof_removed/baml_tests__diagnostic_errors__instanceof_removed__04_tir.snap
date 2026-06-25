@@ -5,14 +5,14 @@ source: crates/baml_tests/src/generated_tests.rs
 class user.Cat {
   name: string
 }
-function user.Cat.from_json(j: baml.json.json) -> user.Cat throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  Cat { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.Cat
+function user.Cat.from_json(j: baml.json.json) -> user.Cat throws baml.json.JsonDecodeError {
+  baml.json.to<T>(j) : user.Cat
 }
 class user.Dog {
   breed: string
 }
-function user.Dog.from_json(j: baml.json.json) -> user.Dog throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  Dog { breed: baml.json.from_json<string>(baml.json.field(j, "breed")) } : user.Dog
+function user.Dog.from_json(j: baml.json.json) -> user.Dog throws baml.json.JsonDecodeError {
+  baml.json.to<T>(j) : user.Dog
 }
 function user.check_instanceof(x: user.Cat | user.Dog) -> bool throws never {
   { : never

@@ -273,23 +273,24 @@ namespace baml.time:
   class AmbiguousTimeError { methods: [from_json] }
   type Disambiguation
   class Duration { methods: [abs, from_nanoseconds, from_microseconds, from_milliseconds, from_seconds, from_minutes, from_hours, to_nanoseconds, to_microseconds, to_milliseconds, to_seconds, to_minutes, to_hours, from_json] }
-  class Instant { methods: [now, elapsed, parse, _to_string_impl, from_json, max, min, abs_diff, from_timestamp_nanoseconds, from_timestamp_microseconds, from_timestamp_milliseconds, from_timestamp_seconds, to_timestamp_nanoseconds, to_timestamp_microseconds, to_timestamp_milliseconds, to_timestamp_seconds, epoch, to_string, to_json] }
-  class PlainDate { methods: [from_components, parse, _to_string_impl, to_plain_datetime, _to_plain_datetime, year, month, day, from_json, to_string, to_json] }
-  class PlainDateTime { methods: [from_components, _from_components, parse, _to_string_impl, to_zoned, max, min, to_plain_date, to_plain_time, year, month, day, hour, minute, second, millisecond, from_json, to_string, to_json] }
-  class PlainTime { methods: [from_components, _from_components, parse, _to_string_impl, to_plain_datetime, hour, minute, second, millisecond, from_json, to_string, to_json] }
+  class Instant { methods: [now, elapsed, parse, _to_string_impl, max, min, abs_diff, from_timestamp_nanoseconds, from_timestamp_microseconds, from_timestamp_milliseconds, from_timestamp_seconds, to_timestamp_nanoseconds, to_timestamp_microseconds, to_timestamp_milliseconds, to_timestamp_seconds, epoch, to_string, from_json, to_json] }
+  class PlainDate { methods: [from_components, parse, _to_string_impl, to_plain_datetime, _to_plain_datetime, year, month, day, to_string, from_json, to_json] }
+  class PlainDateTime { methods: [from_components, _from_components, parse, _to_string_impl, to_zoned, max, min, to_plain_date, to_plain_time, year, month, day, hour, minute, second, millisecond, to_string, from_json, to_json] }
+  class PlainTime { methods: [from_components, _from_components, parse, _to_string_impl, to_plain_datetime, hour, minute, second, millisecond, to_string, from_json, to_json] }
   class TimeZoneOffset { methods: [utc, new, from_timezone, local, from_duration, to_duration, hours, minutes, from_json] }
   class UnknownTimezoneError { methods: [from_json] }
-  class ZonedDateTime { methods: [now, now_in, from_instant, to_instant, from_components, parse, _to_string_impl, max, min, with_timezone, timezone, timezone_offset, to_plain, year, month, day, hour, minute, second, millisecond, from_json, to_string, to_json] }
+  class ZonedDateTime { methods: [now, now_in, from_instant, to_instant, from_components, parse, _to_string_impl, max, min, with_timezone, timezone, timezone_offset, to_plain, year, month, day, hour, minute, second, millisecond, to_string, from_json, to_json] }
   function _format_zoned
   function _tz_offset_at
   function _tz_to_instant
   function system_timezone
 namespace baml.toml:
   type Item
-  class Table { methods: [from_json, parse, to_json] }
+  class Table { methods: [parse, to_json, from_json] }
   class TomlParseError { methods: [from_json] }
   function item_from_json
   function item_to_json
+  function table_from_json
 namespace baml.unstable:
   function string<T>
 namespace baml.yaml:

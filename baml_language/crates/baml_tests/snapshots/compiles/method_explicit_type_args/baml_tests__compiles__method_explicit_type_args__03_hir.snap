@@ -6,7 +6,7 @@ class user.Foo {
   tag: string
 }
 function user.from_json(j: baml.json.json) -> user.Foo  [expr] {
-  user.Foo { tag: baml.json.from_json(baml.json.field(j, "tag")) }
+  baml.json.to(j)
 }
 function user.use_method_type_args() -> int  [expr] {
   { let f = user.Foo { tag: "x" }; let v: int = f.zero() NullCoalesce 5 } v

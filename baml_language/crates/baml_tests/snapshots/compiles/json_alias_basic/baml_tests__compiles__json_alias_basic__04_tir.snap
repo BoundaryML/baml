@@ -5,8 +5,8 @@ source: crates/baml_tests/src/generated_tests.rs
 class user.Wrapper {
   data: baml.json.json
 }
-function user.Wrapper.from_json(j: baml.json.json) -> user.Wrapper throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  Wrapper { data: baml.json.from_json<baml.json.json>(baml.json.field(j, "data")) } : user.Wrapper
+function user.Wrapper.from_json(j: baml.json.json) -> user.Wrapper throws baml.json.JsonDecodeError {
+  baml.json.to<T>(j) : user.Wrapper
 }
 function user.MakeWrapper() -> user.Wrapper throws never {
   { : user.Wrapper

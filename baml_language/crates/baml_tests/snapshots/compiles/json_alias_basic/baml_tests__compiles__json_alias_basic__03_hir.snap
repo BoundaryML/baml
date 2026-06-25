@@ -33,5 +33,5 @@ function user.ReturnString() -> baml.json.json  [expr] {
   {  } "hello"
 }
 function user.from_json(j: baml.json.json) -> user.Wrapper  [expr] {
-  user.Wrapper { data: baml.json.from_json(baml.json.field(j, "data")) }
+  baml.json.to(j)
 }

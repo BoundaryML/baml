@@ -2,60 +2,15 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 function user.Education.from_json(j: baml.json.json) -> Education {
+    load_type Education
     load_var j
-    load_const "school"
-    call baml.json.field
-    store_var _3
-    load_type string
-    load_var _3
-    call baml.json.from_json
-    load_var j
-    load_const "degree"
-    call baml.json.field
-    store_var _6
-    load_type Degree
-    load_var _6
-    call baml.json.from_json
-    load_var j
-    load_const "year"
-    call baml.json.field
-    store_var _9
-    load_type int
-    load_var _9
-    call baml.json.from_json
-    init_instance user.Education .school, .degree, .year
+    call baml.json.to
     return
 }
 
 function user.Resume.from_json(j: baml.json.json) -> Resume {
+    load_type Resume
     load_var j
-    load_const "name"
-    call baml.json.field
-    store_var _3
-    load_type string
-    load_var _3
-    call baml.json.from_json
-    load_var j
-    load_const "education"
-    call baml.json.field
-    store_var _6
-    load_type Education[]
-    load_var _6
-    call baml.json.from_json
-    load_var j
-    load_const "highest_degree"
-    call baml.json.field
-    store_var _9
-    load_type Degree
-    load_var _9
-    call baml.json.from_json
-    load_var j
-    load_const "aliases"
-    call baml.json.field
-    store_var _12
-    load_type Education[]
-    load_var _12
-    call baml.json.from_json
-    init_instance user.Resume .name, .education, .highest_degree, .aliases
+    call baml.json.to
     return
 }

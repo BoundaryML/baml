@@ -55,22 +55,22 @@ function testing.find_testset(self: ?, name: string) -> testing.TestSetRegistrat
   { for ts in self.testsets {  } if (ts.name Eq name) { return ts }; throw "TestSet not found: " Add name }
 }
 function testing.from_json(j: baml.json.json) -> testing.TestRegistration  [expr] {
-  testing.TestRegistration { name: baml.json.from_json(baml.json.field(j, "name")), body: baml.json.from_json(baml.json.field(j, "body")), runner: baml.json.from_json(baml.json.field(j, "runner")) }
+  baml.json.to(j)
 }
 function testing.from_json(j: baml.json.json) -> testing.SerializedTest  [expr] {
-  testing.SerializedTest { type: baml.json.from_json(baml.json.field(j, "type")), name: baml.json.from_json(baml.json.field(j, "name")) }
+  baml.json.to(j)
 }
 function testing.from_json(j: baml.json.json) -> testing.TestSetRegistration  [expr] {
-  testing.TestSetRegistration { name: baml.json.from_json(baml.json.field(j, "name")), collector: baml.json.from_json(baml.json.field(j, "collector")), runner: baml.json.from_json(baml.json.field(j, "runner")) }
+  baml.json.to(j)
 }
 function testing.from_json(j: baml.json.json) -> testing.SerializedTestSet  [expr] {
-  testing.SerializedTestSet { name: baml.json.from_json(baml.json.field(j, "name")), items: baml.json.from_json(baml.json.field(j, "items")), loadingTimeMs: baml.json.from_json(baml.json.field(j, "loadingTimeMs")) }
+  baml.json.to(j)
 }
 function testing.from_json(j: baml.json.json) -> testing.TestCollector  [expr] {
-  testing.TestCollector { prefix: baml.json.from_json(baml.json.field(j, "prefix")), tests: baml.json.from_json(baml.json.field(j, "tests")), testsets: baml.json.from_json(baml.json.field(j, "testsets")) }
+  baml.json.to(j)
 }
 function testing.from_json(j: baml.json.json) -> testing.TestRegistry  [expr] {
-  testing.TestRegistry { collector: baml.json.from_json(baml.json.field(j, "collector")), expansions: baml.json.from_json(baml.json.field(j, "expansions")), loading_time_ms: baml.json.from_json(baml.json.field(j, "loading_time_ms")) }
+  baml.json.to(j)
 }
 function testing.new(collector: testing.TestCollector) -> testing.TestRegistry  [expr] {
   {  } testing.TestRegistry { collector: collector, expansions: map {  }, loading_time_ms: 0 }
@@ -185,17 +185,17 @@ type testing.TestSetBody = (TestCollector) -> void throws unknown
 type testing.TestSetReportThunk = () -> testing.TestSetReport throws never
 type testing.TestSetRunner = (testing.TestSetChild[]) -> testing.TestSetReport throws never
 function testing.from_json(j: baml.json.json) -> testing.RunReport  [expr] {
-  testing.RunReport { outcome: baml.json.from_json(baml.json.field(j, "outcome")), duration_ms: baml.json.from_json(baml.json.field(j, "duration_ms")), message: baml.json.from_json(baml.json.field(j, "message")) }
+  baml.json.to(j)
 }
 function testing.from_json(j: baml.json.json) -> testing.TestSetChild  [expr] {
-  testing.TestSetChild { name: baml.json.from_json(baml.json.field(j, "name")), run: baml.json.from_json(baml.json.field(j, "run")) }
+  baml.json.to(j)
 }
 function testing.from_json(j: baml.json.json) -> testing.NamedChildReport  [expr] {
-  testing.NamedChildReport { name: baml.json.from_json(baml.json.field(j, "name")), report: baml.json.from_json(baml.json.field(j, "report")) }
+  baml.json.to(j)
 }
 function testing.from_json(j: baml.json.json) -> testing.TestReport  [expr] {
-  testing.TestReport { outcome: baml.json.from_json(baml.json.field(j, "outcome")), runs: baml.json.from_json(baml.json.field(j, "runs")) }
+  baml.json.to(j)
 }
 function testing.from_json(j: baml.json.json) -> testing.TestSetReport  [expr] {
-  testing.TestSetReport { outcome: baml.json.from_json(baml.json.field(j, "outcome")), passed: baml.json.from_json(baml.json.field(j, "passed")), failed: baml.json.from_json(baml.json.field(j, "failed")), total: baml.json.from_json(baml.json.field(j, "total")), failed_names: baml.json.from_json(baml.json.field(j, "failed_names")), results: baml.json.from_json(baml.json.field(j, "results")) }
+  baml.json.to(j)
 }

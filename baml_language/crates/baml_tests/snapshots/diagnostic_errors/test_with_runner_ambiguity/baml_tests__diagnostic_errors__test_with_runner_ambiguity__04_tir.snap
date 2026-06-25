@@ -5,8 +5,8 @@ source: crates/baml_tests/src/generated_tests.rs
 class user.MyRunner {
   threshold: float
 }
-function user.MyRunner.from_json(j: baml.json.json) -> user.MyRunner throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  MyRunner { threshold: baml.json.from_json<float>(baml.json.field(j, "threshold")) } : user.MyRunner
+function user.MyRunner.from_json(j: baml.json.json) -> user.MyRunner throws baml.json.JsonDecodeError {
+  baml.json.to<T>(j) : user.MyRunner
 }
 function user.$init_test_main(registry: testing.TestCollector) -> ? throws never {
   { : null

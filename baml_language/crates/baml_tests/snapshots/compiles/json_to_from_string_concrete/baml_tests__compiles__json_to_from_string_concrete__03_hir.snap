@@ -10,7 +10,7 @@ function user.deserialize_user(s: string) -> user.User  [expr] {
   {  } baml.json.from_string(s)
 }
 function user.from_json(j: baml.json.json) -> user.User  [expr] {
-  user.User { name: baml.json.from_json(baml.json.field(j, "name")), age: baml.json.from_json(baml.json.field(j, "age")) }
+  baml.json.to(j)
 }
 function user.serialize_user(u: user.User) -> string  [expr] {
   {  } baml.json.to_string(u)

@@ -2,14 +2,9 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 function user.Resume.from_json(j: baml.json.json) -> Resume {
+    load_type Resume
     load_var j
-    load_const "name"
-    call baml.json.field
-    store_var _3
-    load_type string
-    load_var _3
-    call baml.json.from_json
-    init_instance user.Resume .name
+    call baml.json.to
     return
 }
 
