@@ -87,12 +87,14 @@ async fn infer_identity_bool() {
 }
 
 #[tokio::test]
-async fn infer_identity_null_binds_null() {
-    // T47/T33: a bare null binds T=null (TIR-faithful).
+async fn infer_identity_null_binds_rust_type() {
+    // §I I4 (decided): a bare `null` actual gives the value position no concrete
+    // leaf, so we do NOT bind `T = null`; `T` defaults to host-only `rust_type`
+    // (rule 4) and the value round-trips unchanged.
     let out = call_infer(IDENTITY, "identity", vec![BexExternalValue::Null])
         .await
         .unwrap();
-    assert_eq!(out, BexExternalValue::String("null".into()));
+    assert_eq!(out, BexExternalValue::String("$rust_type".into()));
 }
 
 // ── §A: generic instance arg carries wire type_args ────────────────────────
@@ -420,11 +422,12 @@ async fn infer_maybe_id_present_value() {
 
 #[tokio::test]
 async fn infer_maybe_id_null_value() {
-    // T33: maybe_id(None) ⇒ T=null (TIR-faithful).
+    // §I I4 (decided): maybe_id(None) does NOT null-strip `T?` to bind `T=null`;
+    // a `null`-only actual is no evidence ⇒ `T` defaults to `rust_type`.
     let out = call_infer(MAYBE_ID, "maybe_id", vec![BexExternalValue::Null])
         .await
         .unwrap();
-    assert_eq!(out, BexExternalValue::String("null".into()));
+    assert_eq!(out, BexExternalValue::String("$rust_type".into()));
 }
 
 // ── §H: union with a concrete sibling — NOW IN SCOPE (02a, G5 reversal) ──────
@@ -459,22 +462,22 @@ async fn infer_tag_or_value_binds_t_from_int() {
 }
 
 #[tokio::test]
-async fn infer_tag_or_value_string_arg_leaves_t_unbound() {
-    // tag_or_value("hi") ⇒ the `string` sibling absorbs the actual; T stays
-    // unbound ⇒ Gate A rejects (sound: the string arm, not T, handles strings).
-    let err = call_infer(TAG_OR_VALUE_REFLECT, "tag_or_value", vec![s("hi")])
+async fn infer_tag_or_value_string_arg_binds_rust_type() {
+    // §H H3 (decided): tag_or_value("hi") ⇒ the `string` sibling absorbs the
+    // actual, so the `T` arm gets no residual evidence. `T` still has a value
+    // position (the `x` param) and no closure occurrence, so it defaults to
+    // `rust_type` (rule 4) rather than being rejected.
+    let out = call_infer(TAG_OR_VALUE_REFLECT, "tag_or_value", vec![s("hi")])
         .await
-        .expect_err("string is absorbed by the concrete sibling; T must stay unbound");
-    assert!(
-        matches!(err, EngineError::TypeMismatch { .. }),
-        "got {err:?}"
-    );
+        .unwrap();
+    assert_eq!(out, BexExternalValue::String("$rust_type".into()));
 }
 
 #[tokio::test]
-async fn infer_tag_or_value_null_binds_null() {
-    // tag_or_value(None) ⇒ null is not absorbed by the `string` sibling, so it
-    // routes to T ⇒ T=null (consistent with the bare-null binding decision).
+async fn infer_tag_or_value_null_binds_rust_type() {
+    // §H H3 (decided): tag_or_value(None) ⇒ a `null` actual is no evidence (it is
+    // not bound as `T=null`), and the `null` sibling absorbs it, so `T` gets no
+    // residual ⇒ defaults to `rust_type` (rule 4).
     let out = call_infer(
         TAG_OR_VALUE_REFLECT,
         "tag_or_value",
@@ -482,7 +485,7 @@ async fn infer_tag_or_value_null_binds_null() {
     )
     .await
     .unwrap();
-    assert_eq!(out, BexExternalValue::String("null".into()));
+    assert_eq!(out, BexExternalValue::String("$rust_type".into()));
 }
 
 /// Match-bodied variant — the function in `02a`'s "Current status" that fails to
@@ -610,30 +613,6 @@ async fn unbound_generic_instance_should_be_host_only() {
     let out = call_infer(source, "identity", vec![arg]).await.unwrap();
     // Expected per M18: T = rust_type (host-only), not `GenericBox<>`.
     assert_eq!(out, BexExternalValue::String("$rust_type".into()));
-}
-
-// ── §I: known-but-deferred spec discrepancy (M27 null-sibling absorption) ───
-
-#[tokio::test]
-#[ignore = "SPEC DISCREPANCY (deferred / contested decision): per 02a matrix M27, \
-            tag_or_value(None) on `T | string | null` should bind NOTHING for T \
-            (null is absorbed by the explicit `null` sibling) ⇒ Gate A rejects the \
-            reflect-body form. The shipped implementation deliberately binds \
-            T = null (test infer_tag_or_value_null_binds_null, comment cites the \
-            bare-null decision #1). M27 vs M20 is flagged as `the crisp pin` in the \
-            matrix but M27 is still marked FAIL/not-yet-implemented; flipping it \
-            reverses a documented shipped choice, so it needs a human decision."]
-async fn tag_or_value_null_should_bind_nothing_m27() {
-    let out = call_infer(
-        TAG_OR_VALUE_REFLECT,
-        "tag_or_value",
-        vec![BexExternalValue::Null],
-    )
-    .await;
-    assert!(
-        matches!(out, Err(EngineError::TypeMismatch { .. })),
-        "M27: null absorbed by null sibling ⇒ T unbound ⇒ reject; got {out:?}"
-    );
 }
 
 // ── §J: variance soundness at the value seam (02d/02e) ──────────────────────

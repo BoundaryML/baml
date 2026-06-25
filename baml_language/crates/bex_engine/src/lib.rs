@@ -2065,8 +2065,38 @@ impl BexEngine {
                 .map_err(|detail| EngineError::TypeMismatch {
                     message: friendly_inference_conflict(function_name, &detail),
                 })?;
+
+            // Classify where each TypeVar occurs across the parameter types so we
+            // can apply the closure-poison (rule 2) and `RustType`-default (rule
+            // 4) policies from `03c-impl-guide`.
+            let positions =
+                crate::conversion::classify_param_var_positions(&declared_param_types);
+
             for (name, ty) in inferred {
+                // Rule 2 (closure poison): a var occurring inside a function-typed
+                // parameter is opaque to BAML — drop any value-inferred binding so
+                // it is *required explicitly* (Gate A errors if unspecified), even
+                // when another argument would otherwise pin it (`apply<T,R>(f:
+                // (T)->R, x: T)` — `x` must NOT bind `T`).
+                if positions.closure.contains(&name) {
+                    continue;
+                }
                 type_args.entry(name).or_insert(ty);
+            }
+
+            // Rule 4 (RustType default): a var with ≥1 value position, no closure
+            // occurrence, still unbound after inference (empty collection, `null`
+            // actual, union-sibling-absorbed, unbound generic under a non-recursing
+            // formal) defaults to `rust_type` and rides opaquely. Vars with no
+            // value position (return/body-only) and closure-poisoned vars are left
+            // unbound for Gate A's must-specify error.
+            for var in &positions.value_position {
+                if positions.closure.contains(var) || positions.ambiguous_union.contains(var) {
+                    continue;
+                }
+                type_args.entry(var.clone()).or_insert_with(|| RuntimeTy::RustType {
+                    attr: baml_type::TyAttr::default(),
+                });
             }
         }
 

@@ -292,8 +292,14 @@ impl BexEngine {
             BexExternalValue::Uint8Array(_) => {
                 SynthTy::Known(RuntimeTy::Uint8Array { attr: attr() })
             }
-            // A bare `null` binds `T = null` (TIR-faithful; 00b3 T33/T47).
-            BexExternalValue::Null => SynthTy::Known(RuntimeTy::null()),
+            // A bare `null` carries NO inference evidence (03b §I/§H, rule 4):
+            // a `null`-only actual gives the value position no concrete leaf, so
+            // we do NOT bind `T = null` (and do NOT null-strip a `T?` formal to
+            // bind `T = null`). It rides host-only ⇒ the var defaults to
+            // `rust_type` and the value round-trips unchanged (`identity(None)
+            // == None`). This is a *runtime* leaf decision; the shared
+            // compile-time unifier still binds `null` faithfully.
+            BexExternalValue::Null => SynthTy::HostOnly,
             BexExternalValue::Array { items, .. } => {
                 // An array always inhabits a list. When its elements carry no
                 // evidence (an empty `[]`, or elements that are themselves
@@ -1138,6 +1144,109 @@ pub(crate) fn infer_bindings_runtime_checked(
         }
     }
     Ok(out)
+}
+
+/// Where each `TypeVar` occurs across a generic call's *parameter* types, used
+/// to classify still-unbound vars after inference (03c `03c-impl-guide` rules
+/// 2 & 4):
+///
+/// - `value_position` — the var appears in a parameter at a position **not**
+///   inside a function-typed sub-term (a bare arg, container element, class/map
+///   arg, union member). Such a var, if it came up unbound (empty collection,
+///   `null` actual, union-sibling-absorbed, unbound generic), **defaults to
+///   `RustType`** and rides opaquely (rule 4).
+/// - `closure` — the var appears **inside a function-typed parameter's
+///   signature** (its params/return/throws, any depth). A host callable is
+///   opaque to BAML, so the var cannot be inferred from it *or* validated
+///   against it; it is **poisoned** and must be specified explicitly (rule 2),
+///   overriding any value-position evidence it might also have.
+///
+/// A var in neither set has no parameter occurrence at all (return-only /
+/// body-only) ⇒ must-specify (rule 3), left for Gate A.
+///
+/// `ambiguous_union` is a further must-specify carve-out: a var that is a direct
+/// member of a union alongside **another** free `TypeVar` (`f<T,U>(x: T | U |
+/// int)`). Such a union has no principled way to split the actual between its
+/// free vars, so an unbound one is rejected rather than defaulted to `RustType`
+/// (03b J12, distinct from §H's single-`TypeVar`-beside-concrete case).
+#[derive(Default)]
+pub(crate) struct ParamVarPositions {
+    pub value_position: std::collections::HashSet<String>,
+    pub closure: std::collections::HashSet<String>,
+    pub ambiguous_union: std::collections::HashSet<String>,
+}
+
+/// Classify every `TypeVar` occurring in the declared parameter types into
+/// [`ParamVarPositions`]. See that type's docs for the rule mapping.
+pub(crate) fn classify_param_var_positions(params: &[RuntimeTy]) -> ParamVarPositions {
+    let mut out = ParamVarPositions::default();
+    for p in params {
+        walk_var_positions(p, false, &mut out);
+    }
+    out
+}
+
+fn walk_var_positions(ty: &RuntimeTy, in_closure: bool, out: &mut ParamVarPositions) {
+    match ty {
+        RuntimeTy::TypeVar(name, _) => {
+            if in_closure {
+                out.closure.insert(name.to_string());
+            } else {
+                out.value_position.insert(name.to_string());
+            }
+        }
+        // Descending into a function-typed position poisons every var reached
+        // through it — params, return, and throws alike.
+        RuntimeTy::Function {
+            params,
+            ret,
+            throws,
+            ..
+        } => {
+            for p in params {
+                walk_var_positions(&p.ty, true, out);
+            }
+            walk_var_positions(ret, true, out);
+            walk_var_positions(throws, true, out);
+        }
+        RuntimeTy::List(inner, _) | RuntimeTy::WatchAccessor(inner, _) => {
+            walk_var_positions(inner, in_closure, out)
+        }
+        RuntimeTy::Map { key, value, .. } => {
+            walk_var_positions(key, in_closure, out);
+            walk_var_positions(value, in_closure, out);
+        }
+        RuntimeTy::Union(members, _) => {
+            // A union with ≥2 direct `TypeVar` members is un-inferrable (no
+            // principled split). Mark those direct members must-specify so the
+            // rule-4 default skips them (03b J12).
+            let direct_tvs: Vec<&str> = members
+                .iter()
+                .filter_map(|m| match m {
+                    RuntimeTy::TypeVar(name, _) => Some(name.as_str()),
+                    _ => None,
+                })
+                .collect();
+            if direct_tvs.len() >= 2 {
+                for name in &direct_tvs {
+                    out.ambiguous_union.insert(name.to_string());
+                }
+            }
+            for m in members {
+                walk_var_positions(m, in_closure, out);
+            }
+        }
+        RuntimeTy::Class(_, args, _) => {
+            for a in args {
+                walk_var_positions(a, in_closure, out);
+            }
+        }
+        RuntimeTy::Future(value, error, _) => {
+            walk_var_positions(value, in_closure, out);
+            walk_var_positions(error, in_closure, out);
+        }
+        _ => {}
+    }
 }
 
 /// The outcome of synthesizing a `RuntimeTy` from a runtime argument value —
