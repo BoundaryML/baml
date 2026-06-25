@@ -9,6 +9,7 @@
 
 pub mod ast;
 pub(crate) mod auto_derive_json;
+pub mod borsh_helpers;
 pub(crate) mod companions;
 pub(crate) mod disambiguate;
 pub mod docstring;
