@@ -49,6 +49,7 @@ import type {
 import type { ResultRendererProps } from './result-renderers';
 import { ResultDisplay } from './ResultDisplay';
 import { ValueRenderer } from './ValueRenderer';
+import { CapturedValueCard } from './CapturedValueCard';
 import { registerBuiltinResultRenderers } from './renderers/registerBuiltins';
 import {
   HttpRequestCurlRenderer,
@@ -66,7 +67,6 @@ import {
   decodeRunResultValue,
   runToTraceRows,
   runToDisplayRun,
-  type RunTraceCallValue,
   type RunTraceLog,
   type RunStoreDisplayRun,
 } from './run-store-projections';
@@ -550,72 +550,6 @@ const TraceLogView: FC<{ log: RunTraceLog }> = ({ log }) => {
   );
 };
 
-function traceCallValueRoleLabel(role: RunTraceCallValue['role']): string {
-  switch (role) {
-    case 'callInput':
-      return 'input';
-    case 'callOutput':
-      return 'output';
-    case 'callError':
-      return 'error';
-    default:
-      role satisfies never;
-      return 'value';
-  }
-}
-
-function traceCallValueRoleClass(role: RunTraceCallValue['role']): string {
-  switch (role) {
-    case 'callInput':
-      return 'text-vsc-text-muted';
-    case 'callOutput':
-      return 'text-vsc-accent';
-    case 'callError':
-      return 'text-vsc-red';
-    default:
-      role satisfies never;
-      return 'text-vsc-text-muted';
-  }
-}
-
-const TraceCallValueView: FC<{ value: RunTraceCallValue }> = ({ value }) => {
-  const stateLabel = traceValueStateLabel(value);
-  return (
-    <div className="rounded border border-vsc-border-subtle bg-vsc-surface/60 px-2 py-1">
-      <div className="flex min-w-0 items-center gap-1.5">
-        <span
-          className={cn(
-            'font-vsc-mono text-[10px] uppercase',
-            traceCallValueRoleClass(value.role),
-          )}
-        >
-          {traceCallValueRoleLabel(value.role)}
-        </span>
-        {value.label && (
-          <span className="min-w-0 truncate text-vsc-text-muted text-[11px]">
-            {value.label}
-          </span>
-        )}
-        {stateLabel && (
-          <span className="ml-auto shrink-0 rounded border border-vsc-border-subtle px-1 py-0.5 text-[10px] text-vsc-text-faint">
-            {stateLabel}
-          </span>
-        )}
-      </div>
-      {value.value !== null && (
-        <div className="mt-1 overflow-x-auto">
-          <ValueRenderer value={value.value} displayMode="inline" />
-        </div>
-      )}
-      {value.diagnostic && (
-        <div className="mt-1 text-[10px] text-vsc-text-faint">
-          {value.diagnostic}
-        </div>
-      )}
-    </div>
-  );
-};
-
 const TraceTimelineView: FC<{
   run: Run | undefined;
   valueBodyCache: ValueBodyCache;
@@ -685,7 +619,7 @@ const TraceTimelineView: FC<{
                   style={{ paddingLeft: Math.min(row.depth, 12) * 12 + 10 }}
                 >
                   {row.callValues.map((value) => (
-                    <TraceCallValueView key={value.id} value={value} />
+                    <CapturedValueCard key={value.id} value={value} compact />
                   ))}
                 </div>
               )}
@@ -2899,6 +2833,9 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                         latestGraphRunSnapshot?.graphRuntimeOverlay
                       }
                       calls={latestGraphRunSnapshot?.calls}
+                      run={latestGraphRunSnapshot ?? null}
+                      valueBodyCache={valueBodyCache}
+                      valueBodyCacheVersion={valueBodyCacheVersion}
                       runStatus={latestGraphRunSnapshot?.status}
                       runError={latestGraphRunSnapshot?.error?.message ?? null}
                       customRenderers={resultRenderers}
@@ -3035,6 +2972,9 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                           latestGraphRunSnapshot?.graphRuntimeOverlay
                         }
                         calls={latestGraphRunSnapshot?.calls}
+                        run={latestGraphRunSnapshot ?? null}
+                        valueBodyCache={valueBodyCache}
+                        valueBodyCacheVersion={valueBodyCacheVersion}
                         runStatus={latestGraphRunSnapshot?.status}
                         runError={
                           latestGraphRunSnapshot?.error?.message ?? null

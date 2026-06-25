@@ -6,10 +6,11 @@ import {
   executionProfileColorKey,
   executionProfileSearchFunctionKeys,
   filterExecutionProfileProjection,
+  runToGraphNodeValues,
   runToDisplayRun,
   runToTraceRows,
 } from './run-store-projections';
-import type { Run, ValueRef } from './worker-protocol';
+import type { GraphRuntimeOverlay, Run, ValueRef } from './worker-protocol';
 import type { ValueBodyCache } from './value-body-cache';
 
 describe('run-store-projections', () => {
@@ -460,6 +461,214 @@ describe('run-store-projections', () => {
     ]);
   });
 
+  it('projects graph node value previews from captured call values', () => {
+    const inputBytes = outboundStringBytes('prompt text');
+    const outputBytes = outboundImageBytes('https://example.com/generated.png');
+    const errorBytes = outboundStringBytes('bad image');
+    const inputRef = valueRefFixture('graph_input', inputBytes);
+    const outputRef = valueRefFixture('image_output', outputBytes);
+    const errorRef = valueRefFixture('graph_error', errorBytes);
+    const run = runFixture({
+      calls: [
+        callFixture({
+          id: 'image-call',
+          payloadIds: ['payload-input', 'payload-output', 'payload-error'],
+        }),
+      ],
+      payloads: [
+        payloadFixture({
+          id: 'payload-input',
+          callNodeId: null,
+          timestampMs: 99,
+          kind: {
+            type: 'capturedValue',
+            role: 'callInput',
+            label: 'inputs',
+            valueRef: inputRef,
+          },
+        }),
+        payloadFixture({
+          id: 'payload-output',
+          callNodeId: null,
+          timestampMs: 100,
+          kind: {
+            type: 'capturedValue',
+            role: 'callOutput',
+            label: 'generated',
+            valueRef: outputRef,
+          },
+        }),
+        payloadFixture({
+          id: 'payload-error',
+          callNodeId: null,
+          timestampMs: 101,
+          kind: {
+            type: 'capturedValue',
+            role: 'callError',
+            label: 'error',
+            valueRef: errorRef,
+          },
+        }),
+      ],
+    });
+
+    const values = runToGraphNodeValues(
+      run,
+      graphOverlayFixture(7, ['image-call']),
+      cacheWithEntries({
+        graph_input: inputBytes,
+        image_output: outputBytes,
+        graph_error: errorBytes,
+      }),
+    ).get('7');
+
+    expect(values).toEqual([
+      expect.objectContaining({
+        id: 'payload-input',
+        role: 'callInput',
+        label: 'inputs',
+        value: 'prompt text',
+      }),
+      expect.objectContaining({
+        id: 'payload-output',
+        role: 'callOutput',
+        label: 'generated',
+        value: expect.objectContaining({
+          media_type: 'image',
+          content_type: 'url',
+          url: 'https://example.com/generated.png',
+        }),
+      }),
+      expect.objectContaining({
+        id: 'payload-error',
+        role: 'callError',
+        label: 'error',
+        value: 'bad image',
+      }),
+    ]);
+  });
+
+  it('projects root input values onto the root call graph node', () => {
+    const inputBytes = outboundStringBytes('a happy golden retriever');
+    const inputRef = valueRefFixture('root_input', inputBytes);
+    const run = runFixture({
+      rootCallNodeId: 'root-call',
+      calls: [callFixture({ id: 'root-call', payloadIds: [] })],
+      payloads: [
+        payloadFixture({
+          id: 'payload-root-input',
+          timestampMs: 98,
+          kind: {
+            type: 'capturedValue',
+            role: 'rootInput',
+            label: 'inputs',
+            valueRef: inputRef,
+          },
+        }),
+      ],
+    });
+
+    const values = runToGraphNodeValues(
+      run,
+      graphOverlayFixture(7, ['root-call']),
+      cacheWith('root_input', inputBytes),
+    ).get('7');
+
+    expect(values).toEqual([
+      expect.objectContaining({
+        id: 'payload-root-input',
+        role: 'callInput',
+        label: 'inputs',
+        value: 'a happy golden retriever',
+      }),
+    ]);
+  });
+
+  it('projects direct root run result values onto the root call graph node', () => {
+    const bytes = outboundImageBytes('https://example.com/root-result.png');
+    const valueRef = valueRefFixture('root_result', bytes);
+    const run = runFixture({
+      status: 'succeeded',
+      completedAtMs: 150,
+      rootCallNodeId: 'root-llm-call',
+      result: {
+        valueRef,
+        rendererHint: null,
+        supportingPayloadIds: [],
+      },
+      calls: [callFixture({ id: 'root-llm-call', payloadIds: [] })],
+      payloads: [],
+    });
+
+    const values = runToGraphNodeValues(
+      run,
+      graphOverlayFixture(11, ['root-llm-call']),
+      cacheWith('root_result', bytes),
+    ).get('11');
+
+    expect(values).toEqual([
+      expect.objectContaining({
+        id: 'root-result',
+        role: 'callOutput',
+        label: 'output',
+        value: expect.objectContaining({
+          media_type: 'image',
+          url: 'https://example.com/root-result.png',
+        }),
+      }),
+    ]);
+  });
+
+  it('projects direct root run result values onto a single visible descendant graph node', () => {
+    const bytes = outboundImageBytes('https://example.com/direct-llm.png');
+    const valueRef = valueRefFixture('direct_llm_result', bytes);
+    const run = runFixture({
+      status: 'succeeded',
+      completedAtMs: 150,
+      rootCallNodeId: 'root-user-function',
+      result: {
+        valueRef,
+        rendererHint: null,
+        supportingPayloadIds: [],
+      },
+      calls: [
+        callFixture({
+          id: 'root-user-function',
+          functionName: 'user.generate_image',
+          payloadIds: [],
+        }),
+        callFixture({
+          id: 'inner-llm-call',
+          functionName: 'baml.llm.call_llm_function',
+          parentId: 'root-user-function',
+          payloadIds: [],
+        }),
+      ],
+      payloads: [],
+    });
+
+    const values = runToGraphNodeValues(
+      run,
+      {
+        ...graphOverlayFixture(12, ['inner-llm-call']),
+        unattachedCallNodeIds: ['root-user-function'],
+      },
+      cacheWith('direct_llm_result', bytes),
+    ).get('12');
+
+    expect(values).toEqual([
+      expect.objectContaining({
+        id: 'root-result',
+        role: 'callOutput',
+        label: 'output',
+        value: expect.objectContaining({
+          media_type: 'image',
+          url: 'https://example.com/direct-llm.png',
+        }),
+      }),
+    ]);
+  });
+
   it('projects explicit log body availability states', () => {
     const run = runFixture({
       calls: [
@@ -868,6 +1077,19 @@ function outboundStringBytes(value: string): Uint8Array {
   }).finish();
 }
 
+function outboundImageBytes(url: string): Uint8Array {
+  return BamlOutboundValue.encode({
+    value: {
+      $case: 'mediaValue',
+      mediaValue: {
+        media: 1,
+        mimeType: 'image/png',
+        value: { $case: 'url', url },
+      },
+    },
+  }).finish();
+}
+
 function valueRefFixture(id: string, bytes: Uint8Array): ValueRef {
   return {
     id,
@@ -876,6 +1098,19 @@ function valueRefFixture(id: string, bytes: Uint8Array): ValueRef {
     originalSizeBytes: bytes.length,
     retainedSizeBytes: bytes.length,
     diagnostic: null,
+  };
+}
+
+function graphOverlayFixture(
+  cfgNodeId: number,
+  callNodeIds: string[],
+): GraphRuntimeOverlay {
+  return {
+    boundaryId: 'run-1',
+    projectGeneration: 1,
+    entries: [{ cfgNodeId, callNodeIds }],
+    unattachedCallNodeIds: [],
+    diagnostics: [],
   };
 }
 

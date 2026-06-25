@@ -1,13 +1,17 @@
 import ELK from 'elkjs/lib/elk.bundled.js';
 import type { ElkNode, ElkExtendedEdge } from 'elkjs/lib/elk-api';
+import {
+  capturedValueCardContentHeight,
+  CAPTURED_VALUE_CARD_HEADER_HEIGHT,
+  CAPTURED_VALUE_CARD_PADDING_Y,
+  CAPTURED_VALUE_CARD_TEXT_HEIGHT,
+} from '../CapturedValueCard';
 import { depthScale } from './lod';
 import type { WorkflowNode, WorkflowEdge } from './types';
 import {
-  NODE_IMAGE_PREVIEW_GAP,
-  NODE_IMAGE_PREVIEW_MAX,
-  NODE_IMAGE_PREVIEW_SINGLE_HEIGHT,
-  NODE_IMAGE_PREVIEW_TILE_HEIGHT,
-  NODE_IMAGE_PREVIEW_WIDTH,
+  NODE_VALUE_PREVIEW_GAP,
+  NODE_VALUE_PREVIEW_MAX,
+  NODE_VALUE_PREVIEW_WIDTH,
 } from './nodes/NodeOutputPreview';
 
 const elk = new ELK();
@@ -73,33 +77,39 @@ function wrappingOptions(
 
 function nodeSize(node: WorkflowNode): { w: number; h: number } {
   const base = NODE_SIZES[node.type ?? 'base'] ?? NODE_SIZES.base;
-  const imageCount = node.data.imageOutputs?.length ?? 0;
+  const valuePreviewCount = node.data.valuePreviews?.length ?? 0;
   const visualSize = (() => {
-    if (imageCount > 0) {
-      const visibleCount = Math.min(imageCount, NODE_IMAGE_PREVIEW_MAX);
-      const previewRows = visibleCount === 1 ? 1 : Math.ceil(visibleCount / 2);
+    if (valuePreviewCount > 0) {
+      const visibleValues = (node.data.valuePreviews ?? []).slice(
+        0,
+        NODE_VALUE_PREVIEW_MAX,
+      );
       const previewHeight =
-        visibleCount === 1
-          ? NODE_IMAGE_PREVIEW_SINGLE_HEIGHT
-          : previewRows * NODE_IMAGE_PREVIEW_TILE_HEIGHT +
-            (previewRows - 1) * NODE_IMAGE_PREVIEW_GAP;
+        visibleValues.reduce(
+          (height, value) => height + capturedValueCardHeight(value),
+          0,
+        ) +
+        Math.max(0, visibleValues.length - 1) * NODE_VALUE_PREVIEW_GAP;
       return {
-        w: Math.max(base.w, NODE_IMAGE_PREVIEW_WIDTH),
+        w: Math.max(base.w, NODE_VALUE_PREVIEW_WIDTH),
         h: base.h + previewHeight + 14,
       };
     }
 
     if (node.data.errorMessage) {
       return {
-        w: Math.max(base.w, 360),
-        h: base.h + 176,
+        w: Math.max(base.w, NODE_VALUE_PREVIEW_WIDTH),
+        h: base.h + capturedValueCardHeightForContent(0, true) + 14,
       };
     }
 
     if (node.data.hasResult) {
       return {
-        w: Math.max(base.w, 360),
-        h: base.h + 216,
+        w: Math.max(base.w, NODE_VALUE_PREVIEW_WIDTH),
+        h:
+          base.h +
+          capturedValueCardHeightForContent(CAPTURED_VALUE_CARD_TEXT_HEIGHT, false) +
+          14,
       };
     }
 
@@ -110,7 +120,7 @@ function nodeSize(node: WorkflowNode): { w: number; h: number } {
   // that render a result/image/error preview, whose content doesn't shrink, so
   // the box stays sized to it. Groups auto-size from children. Buffer is fixed.
   const hasPreview =
-    imageCount > 0 || !!node.data.errorMessage || !!node.data.hasResult;
+    valuePreviewCount > 0 || !!node.data.errorMessage || !!node.data.hasResult;
   const s = hasPreview
     ? 1
     : depthScale(typeof node.data.depth === 'number' ? node.data.depth : 0);
@@ -118,6 +128,28 @@ function nodeSize(node: WorkflowNode): { w: number; h: number } {
     w: visualSize.w * s + 2 * NODE_BUFFER,
     h: visualSize.h * s + 2 * NODE_BUFFER,
   };
+}
+
+function capturedValueCardHeight(
+  value: NonNullable<WorkflowNode['data']['valuePreviews']>[number],
+): number {
+  return capturedValueCardHeightForContent(
+    capturedValueCardContentHeight(value),
+    value.diagnostic != null,
+  );
+}
+
+function capturedValueCardHeightForContent(
+  contentHeight: number,
+  hasDiagnostic: boolean,
+): number {
+  return (
+    CAPTURED_VALUE_CARD_HEADER_HEIGHT +
+    CAPTURED_VALUE_CARD_PADDING_Y +
+    contentHeight +
+    (contentHeight > 0 ? 6 : 0) +
+    (hasDiagnostic ? 18 : 0)
+  );
 }
 
 function buildElkNodes(
@@ -149,17 +181,25 @@ function buildElkNodes(
         portsByNode,
         node.id,
       );
+      const previewHeight = graphValuePreviewHeight(node);
+      const topPadding = previewHeight > 0 ? 42 + previewHeight : 30;
       elkNode.layoutOptions = {
         'elk.algorithm': 'layered',
         'elk.direction': isHorizontal ? 'RIGHT' : 'DOWN',
         'elk.hierarchyHandling': 'INCLUDE_CHILDREN',
-        'elk.padding': '[top=30,left=12,bottom=12,right=12]',
+        'elk.padding': `[top=${topPadding},left=12,bottom=12,right=12]`,
         'spacing.nodeNode': '30',
         'spacing.nodeNodeBetweenLayers': '40',
         // Wrap long sequential chains (e.g. many //# steps) into rows.
         ...wrappingOptions(children.length, wrap),
       };
-      elkNode.labels = [{ text: node.data.label, width: 80, height: 20 }];
+      elkNode.labels = [
+        {
+          text: node.data.label,
+          width: Math.max(80, previewHeight > 0 ? NODE_VALUE_PREVIEW_WIDTH : 0),
+          height: 20,
+        },
+      ];
       if (children.length > 0) {
         elkNode.children = children;
       } else {
@@ -197,6 +237,15 @@ function buildElkNodes(
 
     return elkNode;
   });
+}
+
+function graphValuePreviewHeight(node: WorkflowNode): number {
+  const values = (node.data.valuePreviews ?? []).slice(0, NODE_VALUE_PREVIEW_MAX);
+  if (values.length === 0) return 0;
+  return (
+    values.reduce((height, value) => height + capturedValueCardHeight(value), 0) +
+    Math.max(0, values.length - 1) * NODE_VALUE_PREVIEW_GAP
+  );
 }
 
 // ── Edge LCA (lowest common ancestor) ───────────────────────────────

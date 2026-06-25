@@ -3,6 +3,7 @@ import type { BamlJsValue } from '@b/pkg-proto';
 
 import type {
   FetchLogEntry,
+  GraphRuntimeOverlay,
   PayloadEvent,
   Run,
   BoundaryId,
@@ -92,6 +93,12 @@ type CapturedValuePayloadKind = Extract<
 type CallValuePayloadEvent = PayloadEvent & {
   kind: CapturedValuePayloadKind & { role: RunTraceCallValueRole };
 };
+
+type RootInputPayloadEvent = PayloadEvent & {
+  kind: CapturedValuePayloadKind & { role: 'rootInput' };
+};
+
+export type GraphNodeValuePreview = RunTraceCallValue;
 
 export type ExecutionProfileOrigin = 'user' | 'library' | 'system' | 'unknown';
 
@@ -210,6 +217,70 @@ export function runToTraceRows(
       callValues: callValuesByCallId.get(call.id) ?? [],
     };
   });
+}
+
+export function runToGraphNodeValues(
+  run: Run | null | undefined,
+  overlay: GraphRuntimeOverlay | null | undefined,
+  valueBodyCache?: ValueBodyCache,
+): Map<string, GraphNodeValuePreview[]> {
+  const valuesByNodeId = new Map<string, GraphNodeValuePreview[]>();
+  if (
+    !run ||
+    !overlay ||
+    overlay.entries.length === 0 ||
+    run.calls.length === 0
+  ) {
+    return valuesByNodeId;
+  }
+
+  const nodeIdsByCallId = new Map<string, string[]>();
+  for (const entry of overlay.entries) {
+    const nodeId = String(entry.cfgNodeId);
+    for (const callNodeId of entry.callNodeIds) {
+      const ids = nodeIdsByCallId.get(callNodeId);
+      if (ids) ids.push(nodeId);
+      else nodeIdsByCallId.set(callNodeId, [nodeId]);
+    }
+  }
+
+  const callsByPayloadId = callIdsByPayloadId(run);
+  for (const payload of run.payloads) {
+    if (!isCallValuePayload(payload)) continue;
+    const value = payloadToTraceCallValue(run.boundaryId, payload, valueBodyCache);
+
+    const nodeIds = new Set<string>();
+    for (const callId of callIdsForPayload(payload, callsByPayloadId)) {
+      for (const nodeId of nodeIdsByCallId.get(callId) ?? []) {
+        nodeIds.add(nodeId);
+      }
+    }
+    if (nodeIds.size === 0) continue;
+
+    for (const nodeId of nodeIds) {
+      addGraphNodeValue(valuesByNodeId, nodeId, value);
+    }
+  }
+
+  const rootInput = rootInputToGraphValue(run, valueBodyCache);
+  if (rootInput && run.rootCallNodeId) {
+    for (const nodeId of graphNodeIdsForRootResult(run, nodeIdsByCallId)) {
+      addGraphNodeValue(valuesByNodeId, nodeId, rootInput);
+    }
+  }
+
+  const rootValue = rootResultToGraphValue(run, valueBodyCache);
+  if (rootValue && run.rootCallNodeId) {
+    for (const nodeId of graphNodeIdsForRootResult(run, nodeIdsByCallId)) {
+      addGraphNodeValue(valuesByNodeId, nodeId, rootValue);
+    }
+  }
+
+  for (const values of valuesByNodeId.values()) {
+    values.sort(compareGraphNodeValues);
+  }
+
+  return valuesByNodeId;
 }
 
 export function buildExecutionProfileProjection(
@@ -841,6 +912,144 @@ function payloadToTraceCallValue(
   };
 }
 
+function graphNodeIdsForRootResult(
+  run: Run,
+  nodeIdsByCallId: Map<string, string[]>,
+): string[] {
+  const rootCallNodeId = run.rootCallNodeId;
+  if (!rootCallNodeId) return [];
+
+  const directNodeIds = nodeIdsByCallId.get(rootCallNodeId);
+  if (directNodeIds && directNodeIds.length > 0) return directNodeIds;
+
+  const callsById = new Map(run.calls.map((call) => [call.id, call]));
+  const descendantNodeIds = new Set<string>();
+  for (const call of run.calls) {
+    if (!isDescendantCall(call.id, rootCallNodeId, callsById)) continue;
+    for (const nodeId of nodeIdsByCallId.get(call.id) ?? []) {
+      descendantNodeIds.add(nodeId);
+    }
+  }
+  return descendantNodeIds.size === 1 ? [...descendantNodeIds] : [];
+}
+
+function isDescendantCall(
+  callId: string,
+  ancestorId: string,
+  callsById: Map<string, Run['calls'][number]>,
+): boolean {
+  const seen = new Set<string>([callId]);
+  let parentId = callsById.get(callId)?.parentId ?? null;
+  while (parentId && !seen.has(parentId)) {
+    if (parentId === ancestorId) return true;
+    seen.add(parentId);
+    parentId = callsById.get(parentId)?.parentId ?? null;
+  }
+  return false;
+}
+
+function rootInputToGraphValue(
+  run: Run,
+  valueBodyCache?: ValueBodyCache,
+): GraphNodeValuePreview | null {
+  const payload = run.payloads.find(isRootInputPayload);
+  if (!payload) return null;
+
+  const projected = payload.kind.valueRef
+    ? projectValueRef(run.boundaryId, payload.kind.valueRef, valueBodyCache)
+    : projectPayloadBodyState(payload.body);
+  return {
+    id: payload.id,
+    timestampMs: payload.timestampMs,
+    role: 'callInput',
+    label: payload.kind.label ?? 'inputs',
+    valueRef: payload.kind.valueRef,
+    value: projected.value,
+    state: projected.state,
+    diagnostic: projected.diagnostic,
+  };
+}
+
+function rootResultToGraphValue(
+  run: Run,
+  valueBodyCache?: ValueBodyCache,
+): GraphNodeValuePreview | null {
+  if (run.error?.valueRef) {
+    const projected = projectValueRef(
+      run.boundaryId,
+      run.error.valueRef,
+      valueBodyCache,
+    );
+    return {
+      id: 'root-error',
+      timestampMs: run.completedAtMs ?? run.startedAtMs ?? run.createdAtMs,
+      role: 'callError',
+      label: 'error',
+      valueRef: run.error.valueRef,
+      value: projected.value,
+      state: projected.state,
+      diagnostic: projected.diagnostic ?? run.error.message,
+    };
+  }
+
+  if (!run.result) return null;
+  const projected = run.result.valueRef
+    ? projectValueRef(run.boundaryId, run.result.valueRef, valueBodyCache)
+    : {
+        state: 'available' as const,
+        value: decodeRunResultValue(run, valueBodyCache),
+        diagnostic: null,
+      };
+  if (projected.value === null && projected.state === 'available') return null;
+  return {
+    id: 'root-result',
+    timestampMs: run.completedAtMs ?? run.startedAtMs ?? run.createdAtMs,
+    role: 'callOutput',
+    label: 'output',
+    valueRef: run.result.valueRef,
+    value: projected.value,
+    state: projected.state,
+    diagnostic: projected.diagnostic,
+  };
+}
+
+function addGraphNodeValue(
+  valuesByNodeId: Map<string, GraphNodeValuePreview[]>,
+  nodeId: string,
+  value: GraphNodeValuePreview,
+) {
+  const existing = valuesByNodeId.get(nodeId) ?? [];
+  if (!existing.some((item) => item.id === value.id)) {
+    existing.push(value);
+  }
+  if (existing.length > 0) valuesByNodeId.set(nodeId, existing);
+}
+
+function compareGraphNodeValues(
+  left: GraphNodeValuePreview,
+  right: GraphNodeValuePreview,
+): number {
+  return (
+    graphValueRoleOrder(left.role) - graphValueRoleOrder(right.role) ||
+    left.timestampMs - right.timestampMs ||
+    left.id.localeCompare(right.id)
+  );
+}
+
+function graphValueRoleOrder(role: RunTraceCallValueRole): number {
+  switch (role) {
+    case 'callInput':
+      return 0;
+    case 'callOutput':
+      return 1;
+    case 'callError':
+      return 2;
+    default:
+      role satisfies never;
+      return 3;
+  }
+}
+
 function projectPayloadBodyState(
   body: PayloadEvent['body'],
 ): { state: RunTraceLogState; value: BamlJsValue | null; diagnostic: string | null } {
@@ -873,6 +1082,12 @@ function isCallValuePayload(payload: PayloadEvent): payload is CallValuePayloadE
     kind.type === 'capturedValue' &&
     (kind.role === 'callInput' || kind.role === 'callOutput' || kind.role === 'callError')
   );
+}
+
+function isRootInputPayload(
+  payload: PayloadEvent,
+): payload is RootInputPayloadEvent {
+  return payload.kind.type === 'capturedValue' && payload.kind.role === 'rootInput';
 }
 
 function projectValueRef(

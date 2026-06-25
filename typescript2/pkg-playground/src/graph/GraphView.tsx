@@ -27,6 +27,8 @@ import type {
   Run,
 } from '../worker-protocol';
 import type { ResultRendererProps } from '../result-renderers';
+import type { ValueBodyCache } from '../value-body-cache';
+import { runToGraphNodeValues } from '../run-store-projections';
 import { getChrome } from './constants';
 import { cfgToGraphNodes, graphToReactflow } from './convert';
 import { layoutGraph } from './layout';
@@ -53,6 +55,9 @@ interface GraphViewProps {
   functionName?: string | null;
   graphRuntimeOverlay?: GraphRuntimeOverlay | null;
   calls?: CallNode[];
+  run?: Run | null;
+  valueBodyCache?: ValueBodyCache;
+  valueBodyCacheVersion?: number;
   runStatus?: Run['status'];
   runError?: string | null;
   customRenderers?: Record<string, FC<ResultRendererProps>>;
@@ -249,6 +254,9 @@ function GraphViewInner({
   functionName,
   graphRuntimeOverlay,
   calls = EMPTY_CALLS,
+  run,
+  valueBodyCache,
+  valueBodyCacheVersion,
   runStatus,
   runError,
   customRenderers,
@@ -344,18 +352,27 @@ function GraphViewInner({
     });
   }, []);
 
+  const effectiveRunStatus = runStatus ?? run?.status;
+  const effectiveRunError = runError ?? run?.error?.message ?? null;
+  const graphNodeValues = useMemo(
+    () => runToGraphNodeValues(run, graphRuntimeOverlay, valueBodyCache),
+    [run, graphRuntimeOverlay, valueBodyCache, valueBodyCacheVersion],
+  );
+
   const runtimeInputsRef = useRef({
     graphRuntimeOverlay,
     calls,
-    runStatus,
-    runError,
+    runStatus: effectiveRunStatus,
+    runError: effectiveRunError,
+    graphNodeValues,
     customRenderers,
   });
   runtimeInputsRef.current = {
     graphRuntimeOverlay,
     calls,
-    runStatus,
-    runError,
+    runStatus: effectiveRunStatus,
+    runError: effectiveRunError,
+    graphNodeValues,
     customRenderers,
   };
 
@@ -369,6 +386,7 @@ function GraphViewInner({
         calls: latestCalls,
         runStatus: latestRunStatus,
         runError: latestRunError,
+        graphNodeValues: latestGraphNodeValues,
         customRenderers: latestCustomRenderers,
       } = runtimeInputsRef.current;
       const runtimeByNode = collectOverlayNodeRuntime(
@@ -385,21 +403,7 @@ function GraphViewInner({
 
       return baseNodes.map((node) => {
         const runtime = runtimeByNode.get(node.id);
-        if (!runtime) {
-          return {
-            ...node,
-            data: {
-              ...node.data,
-              result: undefined,
-              hasResult: undefined,
-              imageOutputs: [],
-              executionState: 'not-started' as const,
-              errorMessage: undefined,
-              customRenderers: latestCustomRenderers,
-              selected: node.id === selectedId,
-            },
-          };
-        }
+        const valuePreviews = latestGraphNodeValues.get(node.id) ?? [];
 
         return {
           ...node,
@@ -407,9 +411,9 @@ function GraphViewInner({
             ...node.data,
             result: undefined,
             hasResult: undefined,
-            imageOutputs: [],
-            executionState: runtime.executionState,
-            errorMessage: runtime.errorMessage,
+            valuePreviews,
+            executionState: runtime?.executionState ?? ('not-started' as const),
+            errorMessage: runtime?.errorMessage,
             customRenderers: latestCustomRenderers,
             selected: node.id === selectedId,
           },
@@ -449,8 +453,9 @@ function GraphViewInner({
     lodModel,
     graphRuntimeOverlay,
     calls,
-    runStatus,
-    runError,
+    effectiveRunStatus,
+    effectiveRunError,
+    graphNodeValues,
     direction,
     wrap,
     setNodes,
@@ -496,8 +501,9 @@ function GraphViewInner({
   }, [
     graphRuntimeOverlay,
     calls,
-    runStatus,
-    runError,
+    effectiveRunStatus,
+    effectiveRunError,
+    graphNodeValues,
     customRenderers,
     selectedNodeId,
     setNodes,
