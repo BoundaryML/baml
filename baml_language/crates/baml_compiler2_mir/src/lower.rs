@@ -7362,6 +7362,148 @@ impl<'db> LoweringContext<'db> {
         true
     }
 
+    /// Operator-style `recv.to_json()` -> `baml.json.from(recv)` desugar, the json
+    /// analog of [`try_lower_to_string_fallback`]. Fires only for a 0-arg `to_json`
+    /// call with NO resolved method: the only source of a real `to_json` is
+    /// `implements baml.ToJson` (a bare one is banned), handled by the dispatch
+    /// paths in `lower_call`. `baml.json.from` honors any `baml.ToJson` override via
+    /// its runtime shim, so it matches a real call. Unlike `string.from` it throws
+    /// `JsonSerializationError`, so the call's unwind target carries the throw.
+    /// Returns `true` (and emits the call) when it handled the expression.
+    fn try_lower_to_json_fallback(
+        &mut self,
+        expr_id: AstExprId,
+        callee: AstExprId,
+        args: &[AstExprId],
+        dest: &Place,
+    ) -> bool {
+        if !args.is_empty() {
+            return false;
+        }
+        let callee_expr = self.body.exprs[callee].clone();
+        if !baml_compiler2_tir::throws_analysis::is_to_json_call_callee(&callee_expr) {
+            return false;
+        }
+        // Fires only when TIR left the callee untyped (no real `to_json` method).
+        let callee_untyped = self
+            .expr_types
+            .get(&self.expr_metadata_key(callee))
+            .is_none_or(|t| {
+                matches!(
+                    baml_compiler2_tir::narrowing::remove_null(t),
+                    Tir2Ty::Unknown { .. } | Tir2Ty::Error { .. }
+                )
+            });
+        if !callee_untyped {
+            return false;
+        }
+        let (recv_op, recv_tir_ty): (Operand, Option<Tir2Ty>) = match &callee_expr {
+            AstExpr::MemberAccess { base, .. } => {
+                let base_id = *base;
+                let ty = self
+                    .expr_types
+                    .get(&self.expr_metadata_key(base_id))
+                    .cloned();
+                (self.lower_to_operand(base_id), ty)
+            }
+            AstExpr::Path(segments) => {
+                let receiver_segments = &segments[..segments.len() - 1];
+                let recv_op = if receiver_segments.len() == 1 {
+                    if let Some(&recv_local) = self.locals.get(&receiver_segments[0]) {
+                        Operand::Copy(Place::Local(recv_local))
+                    } else if let Some(cap_idx) =
+                        self.capture_index_for_name_at(callee, &receiver_segments[0])
+                    {
+                        Operand::Copy(Place::Capture(cap_idx))
+                    } else {
+                        return false;
+                    }
+                } else {
+                    let recv_ty = self
+                        .path_segment_types
+                        .get(&(
+                            self.current_metadata_scope,
+                            callee,
+                            receiver_segments.len() - 1,
+                        ))
+                        .cloned()
+                        .map(|t| self.convert_tir_ty_for_runtime(&t))
+                        .unwrap_or_else(|| RuntimeTy::BuiltinUnknown {
+                            attr: TyAttr::default(),
+                        });
+                    let recv_local = self.builder.temp(recv_ty);
+                    self.lower_multi_segment_path_as_field_chain(
+                        callee,
+                        receiver_segments,
+                        Place::local(recv_local),
+                    );
+                    Operand::Copy(Place::local(recv_local))
+                };
+                let prefix_idx = segments.len() - 2;
+                let ty = self
+                    .path_segment_types
+                    .get(&(self.current_metadata_scope, callee, prefix_idx))
+                    .cloned();
+                (recv_op, ty)
+            }
+            _ => return false,
+        };
+
+        // `baml.json.from` is the namespace function `from<T>(value: T) -> json`.
+        // Pass the receiver's static type as the leading type arg so `T` binds
+        // under monomorphization (the shim ignores `T` at runtime, so an
+        // out-of-scope typevar / unknown receiver safely drops to ntypeargs=0).
+        let caller_generic_params = self.enclosing_generic_params();
+        let type_arg_ops: Vec<Operand> = match &recv_tir_ty {
+            Some(t)
+                if !matches!(t, Tir2Ty::Unknown { .. })
+                    && !baml_compiler2_tir::generics::contains_typevar_where(t, &|name| {
+                        !caller_generic_params.iter().any(|p| p == name)
+                    }) =>
+            {
+                self.emit_frame_type_arg_ops(std::slice::from_ref(t))
+            }
+            _ => Vec::new(),
+        };
+        let ntypeargs = type_arg_ops.len();
+        let mut all_args = type_arg_ops;
+        all_args.push(recv_op);
+
+        let callee_op = Operand::Constant(Constant::Function(ItemRef::Free {
+            package: Name::new("baml"),
+            namespace: vec![Name::new("json")],
+            name: Name::new("from"),
+        }));
+        let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
+        let target = self.builder.create_block();
+        if let Place::Local(_) = dest {
+            self.builder.call_with_type_args(
+                callee_op,
+                all_args,
+                ntypeargs,
+                dest.clone(),
+                target,
+                unwind,
+            );
+            self.builder.set_current_block(target);
+        } else {
+            let call_ty = self.expr_ty(expr_id);
+            let tmp = self.builder.temp(call_ty);
+            self.builder.call_with_type_args(
+                callee_op,
+                all_args,
+                ntypeargs,
+                Place::local(tmp),
+                target,
+                unwind,
+            );
+            self.builder.set_current_block(target);
+            self.builder
+                .assign(dest.clone(), Rvalue::Use(Operand::Copy(Place::local(tmp))));
+        }
+        true
+    }
+
     fn lower_call(
         &mut self,
         expr_id: AstExprId,
@@ -7691,6 +7833,10 @@ impl<'db> LoweringContext<'db> {
         // has been attempted, so a `baml.ToString` implementor always wins first;
         // only a `to_string` call with no resolved method reaches the fallback.
         if self.try_lower_to_string_fallback(expr_id, callee, args, &dest) {
+            return;
+        }
+        // Same fallback for `recv.to_json()` -> `baml.json.from(recv)`.
+        if self.try_lower_to_json_fallback(expr_id, callee, args, &dest) {
             return;
         }
 

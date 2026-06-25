@@ -20,14 +20,8 @@ function user.pkg.inner.Box.from_json(j: baml.json.json) -> user.pkg.inner.Box<u
     Box { value: baml.json.from_json<T>(baml.json.field(j, "value")) } : user.pkg.inner.Box<T>
   }
 }
-function user.pkg.inner.Box.to_json(self: user.pkg.inner.Box) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "value": baml.json.to_json(self.value) } : map<string, baml.json.json>
-}
 class user.pkg.inner.AutoBox {
   value: T
-}
-function user.pkg.inner.AutoBox.to_json(self: user.pkg.inner.AutoBox) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "value": baml.json.to_json(self.value) } : map<string, baml.json.json>
 }
 function user.pkg.inner.AutoBox.from_json(j: baml.json.json) -> user.pkg.inner.AutoBox<unknown> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   AutoBox { value: baml.json.from_json<T>(baml.json.field(j, "value")) } : user.pkg.inner.AutoBox<T>

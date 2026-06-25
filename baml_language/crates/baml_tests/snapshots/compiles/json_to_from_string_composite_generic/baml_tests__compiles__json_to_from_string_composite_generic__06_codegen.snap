@@ -14,16 +14,6 @@ function user.Container.from_json(j: baml.json.json) -> Container<T> {
     return
 }
 
-function user.Container.to_json(self: Container<T>) -> baml.json.json {
-    load_type #0
-    load_var self
-    load_field .item
-    call baml.json.to_json
-    load_const "item"
-    alloc_map 1
-    return
-}
-
 function user.User.from_json(j: baml.json.json) -> User {
     load_var j
     load_const "name"
@@ -33,16 +23,6 @@ function user.User.from_json(j: baml.json.json) -> User {
     load_var _3
     call baml.json.from_json
     init_instance user.User .name
-    return
-}
-
-function user.User.to_json(self: User) -> baml.json.json {
-    load_type string
-    load_var self
-    load_field .name
-    call baml.json.to_json
-    load_const "name"
-    alloc_map 1
     return
 }
 

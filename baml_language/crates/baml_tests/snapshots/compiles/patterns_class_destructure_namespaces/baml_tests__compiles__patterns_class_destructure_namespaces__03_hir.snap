@@ -66,12 +66,3 @@ function user.llm.openai.from_json(j: baml.json.json) -> user.llm.openai.Box<T> 
 function user.llm.openai.from_json(j: baml.json.json) -> user.llm.openai.Outer<T>  [expr] {
   user.llm.openai.Outer { inner: baml.json.from_json(baml.json.field(j, "inner")) }
 }
-function user.llm.openai.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "value": baml.json.to_json(self.value) }
-}
-function user.llm.openai.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "text": baml.json.to_json(self.text), "score": baml.json.to_json(self.score) }
-}
-function user.llm.openai.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "inner": baml.json.to_json(self.inner) }
-}

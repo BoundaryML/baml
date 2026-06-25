@@ -42,16 +42,6 @@ function user.EdgeFoo.from_json(j: baml.json.json) -> EdgeFoo {
     return
 }
 
-function user.EdgeFoo.to_json(self: EdgeFoo) -> baml.json.json {
-    load_type int
-    load_var self
-    load_field .x
-    call baml.json.to_json
-    load_const "x"
-    alloc_map 1
-    return
-}
-
 function user.Point.from_json(j: baml.json.json) -> Point {
     load_var j
     load_const "x"
@@ -68,21 +58,6 @@ function user.Point.from_json(j: baml.json.json) -> Point {
     load_var _6
     call baml.json.from_json
     init_instance user.Point .x, .y
-    return
-}
-
-function user.Point.to_json(self: Point) -> baml.json.json {
-    load_type int
-    load_var self
-    load_field .x
-    call baml.json.to_json
-    load_type int
-    load_var self
-    load_field .y
-    call baml.json.to_json
-    load_const "x"
-    load_const "y"
-    alloc_map 2
     return
 }
 

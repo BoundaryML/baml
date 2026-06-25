@@ -100,9 +100,6 @@ function user.OptionalFloatLtBigint(x: float | null, y: bigint) -> bool throws n
 class user.BigintHolder {
   count: bigint
 }
-function user.BigintHolder.to_json(self: user.BigintHolder) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "count": baml.json.to_json(self.count) } : map<string, baml.json.json>
-}
 function user.BigintHolder.from_json(j: baml.json.json) -> user.BigintHolder throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   BigintHolder { count: baml.json.from_json<bigint>(baml.json.field(j, "count")) } : user.BigintHolder
 }

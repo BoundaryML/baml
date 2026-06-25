@@ -55,6 +55,3 @@ function user.UseRequiredByName() -> string[]  [expr] {
 function user.from_json(j: baml.json.json) -> user.SearchService  [expr] {
   user.SearchService { base: baml.json.from_json(baml.json.field(j, "base")) }
 }
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "base": baml.json.to_json(self.base) }
-}

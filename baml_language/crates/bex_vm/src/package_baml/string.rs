@@ -1,22 +1,14 @@
-use bex_heap::TlabHolder;
 use bex_str::BexStr;
 use bex_vm_types::types::Value;
 
 use super::{BamlClassString, PackageBamlImpl};
 use crate::{
-    BexVm, VmPanic,
+    VmPanic,
     array_index::{resolve_index, resolve_slice_bound},
     errors::{VmBamlError, VmRustFnError},
 };
 
 impl BamlClassString for PackageBamlImpl {
-    fn to_json(vm: &mut BexVm, string: &BexStr) -> Value {
-        // `string` is already a valid `json` arm — BAML's `json` type alias
-        // includes `string` as one of its union members.  Wrap the BexStr
-        // back into a heap-allocated `Value::object(Object::String(...))`.
-        Value::object(vm.alloc_string(string.clone()))
-    }
-
     #[allow(clippy::cast_possible_wrap)]
     fn length(string: &BexStr) -> i64 {
         string.char_count() as i64

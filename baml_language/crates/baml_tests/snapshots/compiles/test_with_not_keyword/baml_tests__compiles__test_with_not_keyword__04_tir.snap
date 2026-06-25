@@ -5,9 +5,6 @@ source: crates/baml_tests/src/generated_tests.rs
 class user.Foo {
   x: int
 }
-function user.Foo.to_json(self: user.Foo) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "x": baml.json.to_json(self.x) } : map<string, baml.json.json>
-}
 function user.Foo.from_json(j: baml.json.json) -> user.Foo throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Foo { x: baml.json.from_json<int>(baml.json.field(j, "x")) } : user.Foo
 }
@@ -24,9 +21,6 @@ function user.use_with_as_var() -> int throws never {
 }
 class user.HasWith {
   with: int
-}
-function user.HasWith.to_json(self: user.HasWith) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "with": baml.json.to_json(self.with) } : map<string, baml.json.json>
 }
 function user.HasWith.from_json(j: baml.json.json) -> user.HasWith throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   HasWith { with: baml.json.from_json<int>(baml.json.field(j, "with")) } : user.HasWith

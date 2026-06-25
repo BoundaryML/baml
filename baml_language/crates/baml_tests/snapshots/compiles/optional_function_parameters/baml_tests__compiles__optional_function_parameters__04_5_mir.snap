@@ -542,29 +542,3 @@ fn user.SearchService.from_json(j: baml.json.json) -> SearchService {
         return;
     }
 }
-
-fn user.SearchService.to_json(self: SearchService) -> baml.json.json {
-    // Locals:
-    let _0: baml.json.json // _0 // return
-    let _1: SearchService // self // param
-    let _2: baml.json.json
-    let _3: string
-    let _4: SearchService
-    let _5: type
-
-    bb0: {
-        _4 = copy _1;
-        _3 = copy _4.0;
-        _5 = load_type(string);
-        _2 = call const fn baml.json.to_json<copy _5>(copy _3) -> [bb1];
-    }
-
-    bb1: {
-        _0 = { const "base": copy _2 };
-        goto -> bb2;
-    }
-
-    bb2: {
-        return;
-    }
-}

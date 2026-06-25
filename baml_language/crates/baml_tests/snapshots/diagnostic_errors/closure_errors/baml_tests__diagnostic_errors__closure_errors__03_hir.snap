@@ -18,11 +18,11 @@ function user.format(self: ?, text: string) -> string  [expr] {
 function user.from_json(j: baml.json.json) -> user.Formatter  [expr] {
   user.Formatter { prefix: baml.json.from_json(baml.json.field(j, "prefix")) }
 }
-function user.from_json(j: baml.json.json) -> user.Counter  [expr] {
-  user.Counter { value: baml.json.from_json(baml.json.field(j, "value")) }
-}
 function user.from_json(j: baml.json.json) -> user.Employee  [expr] {
   user.Employee { first: baml.json.from_json(baml.json.field(j, "first")), last: baml.json.from_json(baml.json.field(j, "last")) }
+}
+function user.from_json(j: baml.json.json) -> user.Counter  [expr] {
+  user.Counter { value: baml.json.from_json(baml.json.field(j, "value")) }
 }
 function user.full_name(self: ?) -> string  [expr] {
   {  } self.first Add " " Add self.last
@@ -47,13 +47,4 @@ function user.test_err_missing_self() -> string  [expr] {
 }
 function user.test_err_unbound_type_mismatch() -> string  [expr] {
   { let f: () -> string = Employee.full_name } ""
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "prefix": baml.json.to_json(self.prefix) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "value": baml.json.to_json(self.value) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "first": baml.json.to_json(self.first), "last": baml.json.to_json(self.last) }
 }

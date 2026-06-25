@@ -28,6 +28,12 @@ pub(crate) trait ThrowsAnalysisContext {
     /// `$id = e` would silently bypass the throws contract that a direct
     /// `baml.id.set(e)` call is held to.
     fn runtime_id_set_throws(&self) -> Option<BTreeSet<Ty>>;
+
+    /// Throw summary of `baml.json.from` — what a `recv.to_json()` sugar
+    /// fallback lowers to. Unlike `string.from` (`throws never`), `baml.json.from`
+    /// throws `JsonSerializationError`, so the fallback must charge that precise
+    /// type rather than be skipped.
+    fn to_json_fallback_throws(&self) -> Option<BTreeSet<Ty>>;
 }
 
 /// Whether `expr` has the shape of a `recv.to_string()` call callee: a
@@ -55,6 +61,34 @@ fn is_to_string_fallback_callee<C: ThrowsAnalysisContext>(
     body: &ExprBody,
 ) -> bool {
     is_to_string_call_callee(&body.exprs[callee])
+        && context
+            .expression_type(callee)
+            .is_none_or(|t| matches!(t, Ty::Unknown { .. } | Ty::Error { .. }))
+}
+
+/// Whether `expr` has the shape of a `recv.to_json()` call callee: a `to_json`
+/// member access, or a dotted path whose last segment is `to_json`. The
+/// syntactic trigger shared by the `obj.to_json()` sugar across TIR (inference +
+/// this throws pass) and MIR lowering; the json analog of
+/// [`is_to_string_call_callee`].
+pub fn is_to_json_call_callee(expr: &Expr) -> bool {
+    match expr {
+        Expr::MemberAccess { member, .. } => member.as_str() == "to_json",
+        Expr::Path(segs) => segs.len() >= 2 && segs.last().is_some_and(|s| s.as_str() == "to_json"),
+        _ => false,
+    }
+}
+
+/// Whether `callee` is the callee of a `recv.to_json()` sugar fallback — a
+/// `to_json` call shape the type checker left untyped because the receiver has no
+/// real `to_json` method. Such a call lowers to `baml.json.from(recv)`, which
+/// throws `JsonSerializationError`.
+fn is_to_json_fallback_callee<C: ThrowsAnalysisContext>(
+    context: &C,
+    callee: ExprId,
+    body: &ExprBody,
+) -> bool {
+    is_to_json_call_callee(&body.exprs[callee])
         && context
             .expression_type(callee)
             .is_none_or(|t| matches!(t, Ty::Unknown { .. } | Ty::Error { .. }))
@@ -243,6 +277,14 @@ fn collect_from_expr<C: ThrowsAnalysisContext>(
             // function's inferred throws. Skip it — the receiver's own throws were
             // already collected by the `*callee` recursion above.
             if arg_exprs.is_empty() && is_to_string_fallback_callee(context, *callee, body) {
+                return;
+            }
+            // A `recv.to_json()` sugar fallback lowers to `baml.json.from(recv)`,
+            // which throws `JsonSerializationError`. Charge that precise type (not
+            // the unaccounted-callee `unknown` default) and stop — the receiver's
+            // own throws were already collected by the `*callee` recursion above.
+            if arg_exprs.is_empty() && is_to_json_fallback_callee(context, *callee, body) {
+                out.extend(context.to_json_fallback_throws().unwrap_or_default());
                 return;
             }
             // When the callee is an `OptionalMemberAccess` (`obj?.method`), the

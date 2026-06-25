@@ -27,9 +27,6 @@ function user.nested_position(cb: ((value: int) -> int) -> int) -> int  [expr] {
 function user.risky(value: int) -> int  [expr] {
   { throw "boom" }
 }
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  baml.json.parse(baml.json.to_string(self))
-}
 class user.Worker {
   factor: int
 }
@@ -53,7 +50,4 @@ function user.member_map(worker: user.Worker, values: int[]) -> int[]  [expr] {
 }
 function user.scale(self: ?, value: int) -> int  [expr] {
   {  } self.factor Mul value
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "factor": baml.json.to_json(self.factor) }
 }

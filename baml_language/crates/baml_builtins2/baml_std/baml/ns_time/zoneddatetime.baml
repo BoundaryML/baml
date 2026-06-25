@@ -199,11 +199,13 @@ class ZonedDateTime {
             _ => throw root.json.JsonDecodeError { message: "Expected RFC 3339 / RFC 9557 timestamp string" }
         }
     }
-    function to_json(self) -> string throws root.json.JsonSerializationError {
-        self._to_string_impl() catch (_) {
-            root.errors.InvalidArgument { message } => throw root.json.JsonSerializationError { message: message, path: "" },
-            UnknownTimezoneError { timezone } => throw root.json.JsonSerializationError { message: "unknown timezone: " + timezone, path: "" },
-            root.errors.Io { message } => throw root.json.JsonSerializationError { message: message, path: "" },
+    implements baml.ToJson {
+        function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError {
+            self._to_string_impl() catch (_) {
+                root.errors.InvalidArgument { message } => throw baml.json.JsonSerializationError { message: message, path: "" },
+                UnknownTimezoneError { timezone } => throw baml.json.JsonSerializationError { message: "unknown timezone: " + timezone, path: "" },
+                root.errors.Io { message } => throw baml.json.JsonSerializationError { message: message, path: "" },
+            }
         }
     }
 }
