@@ -362,6 +362,47 @@ test "assert-equal-failure" {
     );
 }
 
+/// `assert.approx_equal` lets float assertions pass with a tolerance so normal
+/// floating-point rounding artifacts do not fail tests.
+///
+/// Returns:
+/// - Nothing; this test passes when `baml test` exits successfully.
+///
+/// Panics:
+/// - Panics if `baml test` fails or does not report the passing test case.
+#[test]
+fn test_assert_approx_equal_accepts_float_tolerance() {
+    let built = common::ensure_built();
+    let tmp = tempfile::tempdir().unwrap();
+
+    create_project(
+        tmp.path(),
+        r#"
+test "assert-approx-equal-passes" {
+  let total = 9.99 + 5.50 + 2.00
+  assert.approx_equal(total, 17.49, 0.000001)
+}
+"#,
+    );
+
+    let output = run_baml_cli(built, tmp.path(), &["test", "--from", "."]);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let combined = format!("{stdout}{stderr}");
+
+    assert!(
+        output.status.success(),
+        "Expected assert.approx_equal to tolerate float rounding, got: {:?}\nstdout: {}\nstderr: {}",
+        output.status.code(),
+        stdout,
+        stderr,
+    );
+    assert!(
+        combined.contains("1 passed, 0 failed, 1 total"),
+        "Expected a passing aggregate summary, got:\n{combined}",
+    );
+}
+
 #[test]
 fn test_unfiltered_testset_run_honors_pass_rate_runner() {
     let built = common::ensure_built();
