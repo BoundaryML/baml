@@ -281,7 +281,9 @@ function GraphViewInner({
   const viewportZoom = useStore((s) => s.transform[2]);
   const revealDepth =
     expandMode === 'all'
-      ? Number.POSITIVE_INFINITY
+      ? // Reveal everything with a finite depth (not Infinity) so the LOD pass
+        // still runs and stamps `data.depth` for depth-scaled layout/rendering.
+        maxDepth + 1
       : expandMode === 'click'
         ? 1
         : zoomToRevealDepth(viewportZoom, maxDepth);

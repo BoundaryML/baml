@@ -110,7 +110,11 @@ describe('applyLevelOfDetail', () => {
     expect(applyLevelOfDetail(NODES, EDGES, { revealDepth: 2 }).nodes.map((x) => x.id)).toContain(
       'call',
     );
-    expect(applyLevelOfDetail(NODES, EDGES, { revealDepth: 99 }).nodes).toHaveLength(NODES.length);
+    // Reveal-all via a high finite depth (the path "All" mode uses) keeps every
+    // node AND still stamps depth — so depth-scaled layout/rendering applies.
+    const all = applyLevelOfDetail(NODES, EDGES, { revealDepth: 99 });
+    expect(all.nodes).toHaveLength(NODES.length);
+    expect(all.nodes.find((x) => x.id === 'armA')!.data.depth).toBe(4);
   });
 
   it('is a no-op at infinite depth', () => {
