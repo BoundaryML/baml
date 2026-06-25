@@ -663,9 +663,6 @@ fn calling_class_as_function() {
     class user.Foo {
       name: string
     }
-    function user.Foo.to_json(self: user.Foo) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-      map { "name": baml.json.to_json(self.name) } : map<string, baml.json.json>
-    }
     function user.Foo.from_json(j: baml.json.json) -> user.Foo throws baml.json.JsonParseError | baml.json.JsonDecodeError {
       Foo { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.Foo
     }
@@ -1087,18 +1084,12 @@ function f(x: Cat | Dog) -> string { return x.name; }"#,
       name: string
       legs: int
     }
-    function user.Cat.to_json(self: user.Cat) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-      map { "name": baml.json.to_json(self.name), "legs": baml.json.to_json(self.legs) } : map<string, baml.json.json>
-    }
     function user.Cat.from_json(j: baml.json.json) -> user.Cat throws baml.json.JsonParseError | baml.json.JsonDecodeError {
       Cat { name: baml.json.from_json<string>(baml.json.field(j, "name")), legs: baml.json.from_json<int>(baml.json.field(j, "legs")) } : user.Cat
     }
     class user.Dog {
       name: string
       legs: int
-    }
-    function user.Dog.to_json(self: user.Dog) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-      map { "name": baml.json.to_json(self.name), "legs": baml.json.to_json(self.legs) } : map<string, baml.json.json>
     }
     function user.Dog.from_json(j: baml.json.json) -> user.Dog throws baml.json.JsonParseError | baml.json.JsonDecodeError {
       Dog { name: baml.json.from_json<string>(baml.json.field(j, "name")), legs: baml.json.from_json<int>(baml.json.field(j, "legs")) } : user.Dog
@@ -1135,18 +1126,12 @@ function f(x: Cat | Dog) -> int { return x.whiskers; }"#,
       name: string
       whiskers: int
     }
-    function user.Cat.to_json(self: user.Cat) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-      map { "name": baml.json.to_json(self.name), "whiskers": baml.json.to_json(self.whiskers) } : map<string, baml.json.json>
-    }
     function user.Cat.from_json(j: baml.json.json) -> user.Cat throws baml.json.JsonParseError | baml.json.JsonDecodeError {
       Cat { name: baml.json.from_json<string>(baml.json.field(j, "name")), whiskers: baml.json.from_json<int>(baml.json.field(j, "whiskers")) } : user.Cat
     }
     class user.Dog {
       name: string
       tail: bool
-    }
-    function user.Dog.to_json(self: user.Dog) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-      map { "name": baml.json.to_json(self.name), "tail": baml.json.to_json(self.tail) } : map<string, baml.json.json>
     }
     function user.Dog.from_json(j: baml.json.json) -> user.Dog throws baml.json.JsonParseError | baml.json.JsonDecodeError {
       Dog { name: baml.json.from_json<string>(baml.json.field(j, "name")), tail: baml.json.from_json<bool>(baml.json.field(j, "tail")) } : user.Dog
@@ -1183,26 +1168,17 @@ function f(x: A | B | C) -> string { return x.name; }"#,
     class user.A {
       name: string
     }
-    function user.A.to_json(self: user.A) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-      map { "name": baml.json.to_json(self.name) } : map<string, baml.json.json>
-    }
     function user.A.from_json(j: baml.json.json) -> user.A throws baml.json.JsonParseError | baml.json.JsonDecodeError {
       A { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.A
     }
     class user.B {
       name: string
     }
-    function user.B.to_json(self: user.B) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-      map { "name": baml.json.to_json(self.name) } : map<string, baml.json.json>
-    }
     function user.B.from_json(j: baml.json.json) -> user.B throws baml.json.JsonParseError | baml.json.JsonDecodeError {
       B { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.B
     }
     class user.C {
       age: int
-    }
-    function user.C.to_json(self: user.C) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-      map { "age": baml.json.to_json(self.age) } : map<string, baml.json.json>
     }
     function user.C.from_json(j: baml.json.json) -> user.C throws baml.json.JsonParseError | baml.json.JsonDecodeError {
       C { age: baml.json.from_json<int>(baml.json.field(j, "age")) } : user.C
@@ -1240,26 +1216,17 @@ function f(x: A | B | C) -> string { return x.name; }"#,
     class user.A {
       name: string
     }
-    function user.A.to_json(self: user.A) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-      map { "name": baml.json.to_json(self.name) } : map<string, baml.json.json>
-    }
     function user.A.from_json(j: baml.json.json) -> user.A throws baml.json.JsonParseError | baml.json.JsonDecodeError {
       A { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.A
     }
     class user.B {
       age: string
     }
-    function user.B.to_json(self: user.B) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-      map { "age": baml.json.to_json(self.age) } : map<string, baml.json.json>
-    }
     function user.B.from_json(j: baml.json.json) -> user.B throws baml.json.JsonParseError | baml.json.JsonDecodeError {
       B { age: baml.json.from_json<string>(baml.json.field(j, "age")) } : user.B
     }
     class user.C {
       age: int
-    }
-    function user.C.to_json(self: user.C) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-      map { "age": baml.json.to_json(self.age) } : map<string, baml.json.json>
     }
     function user.C.from_json(j: baml.json.json) -> user.C throws baml.json.JsonParseError | baml.json.JsonDecodeError {
       C { age: baml.json.from_json<int>(baml.json.field(j, "age")) } : user.C
@@ -1297,17 +1264,11 @@ function f(x: A | B) -> string { return x.value; }"#,
     class user.A {
       value: int
     }
-    function user.A.to_json(self: user.A) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-      map { "value": baml.json.to_json(self.value) } : map<string, baml.json.json>
-    }
     function user.A.from_json(j: baml.json.json) -> user.A throws baml.json.JsonParseError | baml.json.JsonDecodeError {
       A { value: baml.json.from_json<int>(baml.json.field(j, "value")) } : user.A
     }
     class user.B {
       value: string
-    }
-    function user.B.to_json(self: user.B) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-      map { "value": baml.json.to_json(self.value) } : map<string, baml.json.json>
     }
     function user.B.from_json(j: baml.json.json) -> user.B throws baml.json.JsonParseError | baml.json.JsonDecodeError {
       B { value: baml.json.from_json<string>(baml.json.field(j, "value")) } : user.B
@@ -1341,17 +1302,11 @@ function f(x: A | B | null) -> string { return x.name; }"#,
     class user.A {
       name: string
     }
-    function user.A.to_json(self: user.A) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-      map { "name": baml.json.to_json(self.name) } : map<string, baml.json.json>
-    }
     function user.A.from_json(j: baml.json.json) -> user.A throws baml.json.JsonParseError | baml.json.JsonDecodeError {
       A { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.A
     }
     class user.B {
       name: string
-    }
-    function user.B.to_json(self: user.B) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-      map { "name": baml.json.to_json(self.name) } : map<string, baml.json.json>
     }
     function user.B.from_json(j: baml.json.json) -> user.B throws baml.json.JsonParseError | baml.json.JsonDecodeError {
       B { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.B

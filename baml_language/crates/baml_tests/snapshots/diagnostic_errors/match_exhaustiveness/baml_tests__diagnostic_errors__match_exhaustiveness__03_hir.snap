@@ -311,11 +311,11 @@ function user.WrongLiteralTypeIntWithString(x: int) -> string  [expr] {
 function user.from_json(j: baml.json.json) -> user.Cat  [expr] {
   user.Cat { name: baml.json.from_json(baml.json.field(j, "name")) }
 }
-function user.from_json(j: baml.json.json) -> user.Pending  [expr] {
-  user.Pending { eta: baml.json.from_json(baml.json.field(j, "eta")) }
-}
 function user.from_json(j: baml.json.json) -> user.Dog  [expr] {
   user.Dog { name: baml.json.from_json(baml.json.field(j, "name")) }
+}
+function user.from_json(j: baml.json.json) -> user.Pending  [expr] {
+  user.Pending { eta: baml.json.from_json(baml.json.field(j, "eta")) }
 }
 function user.from_json(j: baml.json.json) -> user.Failure  [expr] {
   user.Failure { reason: baml.json.from_json(baml.json.field(j, "reason")) }
@@ -328,25 +328,4 @@ function user.from_json(j: baml.json.json) -> user.Fish  [expr] {
 }
 function user.from_json(j: baml.json.json) -> user.Bird  [expr] {
   user.Bird { name: baml.json.from_json(baml.json.field(j, "name")) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "name": baml.json.to_json(self.name) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "name": baml.json.to_json(self.name) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "eta": baml.json.to_json(self.eta) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "reason": baml.json.to_json(self.reason) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "data": baml.json.to_json(self.data) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "name": baml.json.to_json(self.name) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "name": baml.json.to_json(self.name) }
 }

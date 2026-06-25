@@ -27,6 +27,3 @@ function user.MakeJSON(i: user.NotJSON) -> user.JSON  [expr] {
 function user.from_json(j: baml.json.json) -> user.NotJSON  [expr] {
   user.NotJSON { inner: baml.json.from_json(baml.json.field(j, "inner")) }
 }
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "inner": baml.json.to_json(self.inner) }
-}

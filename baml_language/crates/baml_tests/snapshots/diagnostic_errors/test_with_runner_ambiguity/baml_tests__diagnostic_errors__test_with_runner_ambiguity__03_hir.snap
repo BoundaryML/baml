@@ -11,6 +11,3 @@ function user.$init_test_main(registry: testing.TestCollector) -> ?  [expr] {
 function user.from_json(j: baml.json.json) -> user.MyRunner  [expr] {
   user.MyRunner { threshold: baml.json.from_json(baml.json.field(j, "threshold")) }
 }
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "threshold": baml.json.to_json(self.threshold) }
-}

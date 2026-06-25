@@ -20,21 +20,6 @@ function user.User.from_json(j: baml.json.json) -> User {
     return
 }
 
-function user.User.to_json(self: User) -> baml.json.json {
-    load_type string
-    load_var self
-    load_field .name
-    call baml.json.to_json
-    load_type int
-    load_var self
-    load_field .age
-    call baml.json.to_json
-    load_const "name"
-    load_const "age"
-    alloc_map 2
-    return
-}
-
 function user.deserialize_user(s: string) -> User {
     load_type User
     load_var s

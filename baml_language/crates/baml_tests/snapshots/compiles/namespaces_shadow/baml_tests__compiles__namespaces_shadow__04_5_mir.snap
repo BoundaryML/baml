@@ -29,32 +29,6 @@ fn user.foo.from_json(j: baml.json.json) -> foo {
     }
 }
 
-fn user.foo.to_json(self: foo) -> baml.json.json {
-    // Locals:
-    let _0: baml.json.json // _0 // return
-    let _1: foo // self // param
-    let _2: baml.json.json
-    let _3: int
-    let _4: foo
-    let _5: type
-
-    bb0: {
-        _4 = copy _1;
-        _3 = copy _4.0;
-        _5 = load_type(int);
-        _2 = call const fn baml.json.to_json<copy _5>(copy _3) -> [bb1];
-    }
-
-    bb1: {
-        _0 = { const "x": copy _2 };
-        goto -> bb2;
-    }
-
-    bb2: {
-        return;
-    }
-}
-
 fn user.foo.Bar.from_json(j: baml.json.json) -> foo.Bar {
     // Locals:
     let _0: foo.Bar // _0 // return
@@ -78,32 +52,6 @@ fn user.foo.Bar.from_json(j: baml.json.json) -> foo.Bar {
     }
 
     bb3: {
-        return;
-    }
-}
-
-fn user.foo.Bar.to_json(self: foo.Bar) -> baml.json.json {
-    // Locals:
-    let _0: baml.json.json // _0 // return
-    let _1: foo.Bar // self // param
-    let _2: baml.json.json
-    let _3: string
-    let _4: foo.Bar
-    let _5: type
-
-    bb0: {
-        _4 = copy _1;
-        _3 = copy _4.0;
-        _5 = load_type(string);
-        _2 = call const fn baml.json.to_json<copy _5>(copy _3) -> [bb1];
-    }
-
-    bb1: {
-        _0 = { const "y": copy _2 };
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }

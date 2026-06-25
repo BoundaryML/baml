@@ -140,6 +140,10 @@ pub enum Hir2Diagnostic {
     /// is provided by the `baml.ToString` interface, not as a magic method, so
     /// it must live inside an `implements baml.ToString { ... }` block.
     ToStringMustImplementInterface { class_name: Name, span: TextRange },
+    /// A class declares a `to_json` method directly in its body. `to_json` is
+    /// provided by the `baml.ToJson` interface, not as a magic method, so it must
+    /// live inside an `implements baml.ToJson { ... }` block.
+    ToJsonMustImplementInterface { class_name: Name, span: TextRange },
     /// A class field has a different type than the interface declares for
     /// that name.
     InterfaceFieldTypeMismatch {
@@ -591,6 +595,22 @@ impl Hir2Diagnostic {
                     range: *span,
                 },
                 "move this into `implements baml.ToString { ... }`",
+            )
+            .with_phase(DiagnosticPhase::Hir),
+
+            Hir2Diagnostic::ToJsonMustImplementInterface { class_name, span } => Diagnostic::error(
+                DiagnosticId::ToJsonMustImplementInterface,
+                format!(
+                    "`to_json` cannot be defined as a method on class `{class_name}`; \
+                     implement the `baml.ToJson` interface instead"
+                ),
+            )
+            .with_primary(
+                Span {
+                    file_id,
+                    range: *span,
+                },
+                "move this into `implements baml.ToJson { ... }`",
             )
             .with_phase(DiagnosticPhase::Hir),
             Hir2Diagnostic::InterfaceFieldTypeMismatch {

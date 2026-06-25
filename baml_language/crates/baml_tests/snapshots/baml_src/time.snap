@@ -256,25 +256,25 @@ function time.plain_date_to_plain_datetime_with_time() -> string {
     call baml.time.PlainDate.to_plain_datetime
     store_var _3
     load_var _3
-    is_type baml.TypeValue
+    is_type baml.Uint8Array
     pop_jump_if_false L0
     jump L29
 
   L0:
     load_var _3
-    is_type baml.TypeValue
+    is_type baml.Uint8Array
     pop_jump_if_false L1
     jump L28
 
   L1:
     load_var _3
-    is_type baml.Uint8Array
+    is_type baml.TypeValue
     pop_jump_if_false L2
     jump L27
 
   L2:
     load_var _3
-    is_type baml.Uint8Array
+    is_type baml.TypeValue
     pop_jump_if_false L3
     jump L26
 
@@ -414,7 +414,7 @@ function time.plain_date_to_plain_datetime_with_time() -> string {
 
   L27:
     load_var _3
-    call baml.Uint8Array.baml.ToString.to_string
+    call baml.TypeValue.baml.ToString.to_string
     jump L30
 
   L28:
@@ -424,7 +424,7 @@ function time.plain_date_to_plain_datetime_with_time() -> string {
 
   L29:
     load_var _3
-    call baml.TypeValue.baml.ToString.to_string
+    call baml.Uint8Array.baml.ToString.to_string
 
   L30:
     return

@@ -27,9 +27,6 @@ function user.pointArray() -> user.Point[]  [expr] {
 function user.stringArray() -> string[]  [expr] {
   {  } ["hello", "world", "test"]
 }
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "x": baml.json.to_json(self.x), "y": baml.json.to_json(self.y) }
-}
 class user.Point {
   x: int
   y: int
@@ -46,12 +43,6 @@ function user.from_json(j: baml.json.json) -> user.Vec2D  [expr] {
 }
 function user.point() -> user.Point  [expr] {
   {  } user.Point { x: 1, y: 2 }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "p": baml.json.to_json(self.p), "q": baml.json.to_json(self.q) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "x": baml.json.to_json(self.x), "y": baml.json.to_json(self.y) }
 }
 function user.vec2d() -> user.Vec2D  [expr] {
   {  } user.Vec2D { p: user.Point { x: 1, y: 2 }, q: user.Point { x: 3, y: 4 } }

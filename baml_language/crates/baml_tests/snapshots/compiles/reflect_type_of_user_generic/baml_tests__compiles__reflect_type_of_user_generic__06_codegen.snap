@@ -13,16 +13,6 @@ function user.Person.from_json(j: baml.json.json) -> Person {
     return
 }
 
-function user.Person.to_json(self: Person) -> baml.json.json {
-    load_type string
-    load_var self
-    load_field .name
-    call baml.json.to_json
-    load_const "name"
-    alloc_map 1
-    return
-}
-
 function user.reflect_array() -> type {
     load_type #0[]
     return

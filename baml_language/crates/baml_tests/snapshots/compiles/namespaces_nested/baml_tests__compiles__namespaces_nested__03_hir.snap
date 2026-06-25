@@ -11,16 +11,10 @@ function user.CallOpenAI(cfg: user.AppConfig) -> root.llm.openai.OpenAIResponse 
 function user.from_json(j: baml.json.json) -> user.AppConfig  [expr] {
   user.AppConfig { api_key: baml.json.from_json(baml.json.field(j, "api_key")) }
 }
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "api_key": baml.json.to_json(self.api_key) }
-}
 class user.llm.openai.OpenAIResponse {
   text: string
   model: string
 }
 function user.llm.openai.from_json(j: baml.json.json) -> user.llm.openai.OpenAIResponse  [expr] {
   user.llm.openai.OpenAIResponse { text: baml.json.from_json(baml.json.field(j, "text")), model: baml.json.from_json(baml.json.field(j, "model")) }
-}
-function user.llm.openai.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "text": baml.json.to_json(self.text), "model": baml.json.to_json(self.model) }
 }

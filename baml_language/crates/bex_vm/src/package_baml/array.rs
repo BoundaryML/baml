@@ -4,7 +4,7 @@ use bex_heap::TlabHolder;
 use bex_vm_types::{HeapPtr, Object, ObjectType, types::Value};
 use num_bigint::BigInt;
 
-use super::{BamlClassArray, Continuation, NativeCallResult, PackageBamlImpl, make_to_json_callee};
+use super::{BamlClassArray, Continuation, NativeCallResult, PackageBamlImpl};
 use crate::{
     BexVm,
     array_index::{resolve_index, resolve_insert_index, resolve_slice_bound},
@@ -728,44 +728,6 @@ impl Continuation for SortByContinuation {
     }
 }
 
-// ─── Array.to_json continuation ──────────────────────────────────────────────
-
-/// Continuation for `Array.to_json`. Dispatches `v.to_json()` for each element
-/// in order, accumulating json results and finalizing into a `json[]` value.
-struct ToJsonContinuation {
-    /// The original array elements.
-    array: Vec<Value>,
-    /// Index of the element whose `to_json()` callback result we are about to receive.
-    /// Starts at 0 (we yield for index 0 before constructing the continuation).
-    idx: usize,
-    /// Accumulated json results so far (does not include in-flight result).
-    results: Vec<Value>,
-}
-
-impl Continuation for ToJsonContinuation {
-    fn call(mut self: Box<Self>, vm: &mut BexVm, value: Value) -> NativeCallResult {
-        self.results.push(value);
-        self.idx += 1;
-
-        if self.idx >= self.array.len() {
-            return NativeCallResult::Done(Value::object(vm.alloc_array(self.results)));
-        }
-
-        let next_val = self.array[self.idx];
-        match make_to_json_callee(vm, next_val) {
-            Ok(callee) => NativeCallResult::YieldToCall {
-                callee,
-                args: vec![],
-                type_args: vec![],
-                continuation: self,
-            },
-            Err(e) => NativeCallResult::Error(e),
-        }
-    }
-
-    gc_impl_array!(values: [array, results]);
-}
-
 impl BamlClassArray for PackageBamlImpl {
     #[allow(clippy::cast_possible_wrap)]
     fn length(array: &[Value]) -> i64 {
@@ -974,31 +936,6 @@ impl BamlClassArray for PackageBamlImpl {
             type_args: vec![],
             continuation: Box::new(FilterContinuation {
                 f_ptr,
-                array,
-                idx: 0,
-                results: Vec::with_capacity(capacity),
-            }),
-        }
-    }
-
-    fn to_json(vm: &mut BexVm, array: &[Value]) -> NativeCallResult {
-        if array.is_empty() {
-            return NativeCallResult::Done(Value::object(vm.alloc_array(vec![])));
-        }
-
-        let array = array.to_vec();
-        let first_val = array[0];
-        let callee = match make_to_json_callee(vm, first_val) {
-            Ok(c) => c,
-            Err(e) => return NativeCallResult::Error(e),
-        };
-
-        let capacity = array.len();
-        NativeCallResult::YieldToCall {
-            callee,
-            args: vec![],
-            type_args: vec![],
-            continuation: Box::new(ToJsonContinuation {
                 array,
                 idx: 0,
                 results: Vec::with_capacity(capacity),

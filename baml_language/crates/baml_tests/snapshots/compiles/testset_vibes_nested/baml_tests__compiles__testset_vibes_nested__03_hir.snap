@@ -55,9 +55,6 @@ function user.GenerateTests$render_prompt(count: int, topic: string, client: bam
 function user.from_json(j: baml.json.json) -> user.Sentiment  [expr] {
   user.Sentiment { feeling: baml.json.from_json(baml.json.field(j, "feeling")), confidence: baml.json.from_json(baml.json.field(j, "confidence")), reasoning: baml.json.from_json(baml.json.field(j, "reasoning")) }
 }
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "feeling": baml.json.to_json(self.feeling), "confidence": baml.json.to_json(self.confidence), "reasoning": baml.json.to_json(self.reasoning) }
-}
 
 --- captures ---
 lambda (testset) in ?: captures [sentiments]

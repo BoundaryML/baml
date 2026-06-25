@@ -142,6 +142,20 @@ impl BamlPackageBaml for PackageBamlImpl {
     fn _to_string_shim(vm: &mut BexVm, value: &Value) -> NativeCallResult {
         render_to_string_honoring_overrides(vm, *value)
     }
+
+    /// `baml._to_json_default(value)` and `baml._to_json_shim(value)` both render
+    /// `value` to a `json` value for `baml.json.from`, honoring `baml.ToJson`
+    /// overrides at every depth. The json analog of `_to_string_default` /
+    /// `_to_string_shim`; both delegate to the override-honoring walker in
+    /// `json.rs`. Unlike the string shims, this can throw `JsonSerializationError`
+    /// for values with no json representation.
+    fn _to_json_default(vm: &mut BexVm, value: &Value) -> NativeCallResult {
+        super::json::render_to_json_honoring_overrides(vm, *value)
+    }
+
+    fn _to_json_shim(vm: &mut BexVm, value: &Value) -> NativeCallResult {
+        super::json::render_to_json_honoring_overrides(vm, *value)
+    }
 }
 
 /// Whether `value`'s runtime class carries an in-body `baml.ToString` override.

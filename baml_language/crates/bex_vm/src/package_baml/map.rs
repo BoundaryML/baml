@@ -1,90 +1,9 @@
-use std::collections::HashMap;
-
 use bex_heap::TlabHolder;
-use bex_vm_types::{BexStr, HeapPtr, types::Value};
+use bex_vm_types::{BexStr, types::Value};
 use indexmap::IndexMap;
 
-use super::{
-    BamlClassMap, Continuation, NativeCallResult, NativeFunctionResult, PackageBamlImpl,
-    make_to_json_callee,
-};
+use super::{BamlClassMap, NativeCallResult, NativeFunctionResult, PackageBamlImpl};
 use crate::BexVm;
-
-// ─── Map.to_json continuation ────────────────────────────────────────────────
-
-/// Continuation for `Map.to_json`. Dispatches `v.to_json()` for each map entry
-/// in order, accumulating `(key, json_value)` pairs and finalizing into a
-/// `map<string, json>` when the last entry is processed.
-///
-/// Because BAML maps are string-keyed at runtime regardless of the declared `K`
-/// type, this handler can safely use each key as a plain `BexStr`.
-struct MapToJsonContinuation {
-    /// All entries in the original map (key, value).
-    entries: Vec<(BexStr, Value)>,
-    /// Index of the entry whose `to_json()` callback result we are about to receive.
-    /// Starts at 0 (we yield for index 0 before constructing the continuation).
-    idx: usize,
-    /// Accumulated `(key, json_result)` pairs so far (does not include in-flight result).
-    results: IndexMap<BexStr, Value>,
-}
-
-impl Continuation for MapToJsonContinuation {
-    fn call(mut self: Box<Self>, vm: &mut BexVm, value: Value) -> NativeCallResult {
-        // Store the result we just received.
-        let key = self.entries[self.idx].0.clone();
-        self.results.insert(key, value);
-        self.idx += 1;
-
-        if self.idx >= self.entries.len() {
-            // All entries have been processed — return the completed map.
-            return NativeCallResult::Done(Value::object(vm.alloc_map(self.results)));
-        }
-
-        // Yield to call to_json on the next value.
-        let next_val = self.entries[self.idx].1;
-        match make_to_json_callee(vm, next_val) {
-            Ok(callee) => NativeCallResult::YieldToCall {
-                callee,
-                args: vec![],
-                type_args: vec![],
-                continuation: self,
-            },
-            Err(e) => NativeCallResult::Error(e),
-        }
-    }
-
-    fn gc_roots(&self) -> Vec<HeapPtr> {
-        let mut roots = Vec::new();
-        for (_, v) in &self.entries {
-            if let Some(ptr) = v.as_object_ptr() {
-                roots.push(ptr);
-            }
-        }
-        for (_, v) in &self.results {
-            if let Some(ptr) = v.as_object_ptr() {
-                roots.push(ptr);
-            }
-        }
-        roots
-    }
-
-    fn apply_forwarding(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
-        for (_, v) in &mut self.entries {
-            if let Some(ptr) = v.as_object_ptr() {
-                if let Some(&new_ptr) = forwarding.get(&ptr) {
-                    *v = Value::object(new_ptr);
-                }
-            }
-        }
-        for (_, v) in &mut self.results {
-            if let Some(ptr) = v.as_object_ptr() {
-                if let Some(&new_ptr) = forwarding.get(&ptr) {
-                    *v = Value::object(new_ptr);
-                }
-            }
-        }
-    }
-}
 
 // ─── BamlClassMap trait implementation ───────────────────────────────────────
 
@@ -146,33 +65,6 @@ impl BamlClassMap for PackageBamlImpl {
             map.get(k.as_str()).copied()
         } else {
             None
-        }
-    }
-
-    fn to_json(vm: &mut BexVm, map: &IndexMap<BexStr, Value>) -> NativeCallResult {
-        // Collect entries so we can iterate without holding a borrow on vm.
-        let entries: Vec<(BexStr, Value)> = map.iter().map(|(k, v)| (k.clone(), *v)).collect();
-
-        if entries.is_empty() {
-            return NativeCallResult::Done(Value::object(vm.alloc_map(IndexMap::new())));
-        }
-
-        let first_val = entries[0].1;
-        let callee = match make_to_json_callee(vm, first_val) {
-            Ok(c) => c,
-            Err(e) => return NativeCallResult::Error(e),
-        };
-
-        let capacity = entries.len();
-        NativeCallResult::YieldToCall {
-            callee,
-            args: vec![],
-            type_args: vec![],
-            continuation: Box::new(MapToJsonContinuation {
-                entries,
-                idx: 0,
-                results: IndexMap::with_capacity(capacity),
-            }),
         }
     }
 

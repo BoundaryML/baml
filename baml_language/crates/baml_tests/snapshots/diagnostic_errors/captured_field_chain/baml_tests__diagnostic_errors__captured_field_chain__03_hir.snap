@@ -27,12 +27,6 @@ function user.test_deep_map_chain(data: map<string, map<string, map<string, int>
 function user.test_map_chain(data: map<string, map<string, int>>) -> int  [expr] {
   {  } data.a.b
 }
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "inner": baml.json.to_json(self.inner), "name": baml.json.to_json(self.name) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "value": baml.json.to_json(self.value) }
-}
 
 --- captures ---
 lambda (x) in test_captured_chain: captures [outer]

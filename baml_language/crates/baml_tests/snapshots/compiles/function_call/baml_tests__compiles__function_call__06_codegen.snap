@@ -29,16 +29,6 @@ function user.Baz.from_json(j: baml.json.json) -> Baz {
     return
 }
 
-function user.Baz.to_json(self: Baz) -> baml.json.json {
-    load_type string
-    load_var self
-    load_field .name
-    call baml.json.to_json
-    load_const "name"
-    alloc_map 1
-    return
-}
-
 function user.Foo(x: int) -> int {
     load_var x
     load_const 1

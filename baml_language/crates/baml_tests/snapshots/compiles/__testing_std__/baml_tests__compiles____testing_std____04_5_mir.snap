@@ -1386,6 +1386,96 @@ fn testing.TestCollector.find_testset(self: testing.TestCollector, name: string)
     }
 }
 
+fn testing.TestRegistration.from_json(j: baml.json.json) -> testing.TestRegistration {
+    // Locals:
+    let _0: testing.TestRegistration // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: string
+    let _3: baml.json.json
+    let _4: type
+    let _5: () -> void throws unknown
+    let _6: baml.json.json
+    let _7: type
+    let _8: ((() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never) | null
+    let _9: baml.json.json
+    let _10: type
+
+    bb0: {
+        _3 = call const fn baml.json.field(copy _1, const "name") -> [bb1];
+    }
+
+    bb1: {
+        _4 = load_type(string);
+        _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
+    }
+
+    bb2: {
+        _6 = call const fn baml.json.field(copy _1, const "body") -> [bb3];
+    }
+
+    bb3: {
+        _7 = load_type(() -> void throws unknown);
+        _5 = call const fn baml.json.from_json<copy _7>(copy _6) -> [bb4];
+    }
+
+    bb4: {
+        _9 = call const fn baml.json.field(copy _1, const "runner") -> [bb5];
+    }
+
+    bb5: {
+        _10 = load_type(((() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never) | null);
+        _8 = call const fn baml.json.from_json<copy _10>(copy _9) -> [bb6];
+    }
+
+    bb6: {
+        _0 = testing.TestRegistration { copy _2, copy _5, copy _8 };
+        goto -> bb7;
+    }
+
+    bb7: {
+        return;
+    }
+}
+
+fn testing.SerializedTest.from_json(j: baml.json.json) -> testing.SerializedTest {
+    // Locals:
+    let _0: testing.SerializedTest // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: string
+    let _3: baml.json.json
+    let _4: type
+    let _5: string
+    let _6: baml.json.json
+    let _7: type
+
+    bb0: {
+        _3 = call const fn baml.json.field(copy _1, const "type") -> [bb1];
+    }
+
+    bb1: {
+        _4 = load_type(string);
+        _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
+    }
+
+    bb2: {
+        _6 = call const fn baml.json.field(copy _1, const "name") -> [bb3];
+    }
+
+    bb3: {
+        _7 = load_type(string);
+        _5 = call const fn baml.json.from_json<copy _7>(copy _6) -> [bb4];
+    }
+
+    bb4: {
+        _0 = testing.SerializedTest { copy _2, copy _5 };
+        goto -> bb5;
+    }
+
+    bb5: {
+        return;
+    }
+}
+
 fn testing.TestSetRegistration.from_json(j: baml.json.json) -> testing.TestSetRegistration {
     // Locals:
     let _0: testing.TestSetRegistration // _0 // return
@@ -1484,96 +1574,6 @@ fn testing.SerializedTestSet.from_json(j: baml.json.json) -> testing.SerializedT
     }
 
     bb7: {
-        return;
-    }
-}
-
-fn testing.TestRegistration.from_json(j: baml.json.json) -> testing.TestRegistration {
-    // Locals:
-    let _0: testing.TestRegistration // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: string
-    let _3: baml.json.json
-    let _4: type
-    let _5: () -> void throws unknown
-    let _6: baml.json.json
-    let _7: type
-    let _8: ((() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never) | null
-    let _9: baml.json.json
-    let _10: type
-
-    bb0: {
-        _3 = call const fn baml.json.field(copy _1, const "name") -> [bb1];
-    }
-
-    bb1: {
-        _4 = load_type(string);
-        _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
-    }
-
-    bb2: {
-        _6 = call const fn baml.json.field(copy _1, const "body") -> [bb3];
-    }
-
-    bb3: {
-        _7 = load_type(() -> void throws unknown);
-        _5 = call const fn baml.json.from_json<copy _7>(copy _6) -> [bb4];
-    }
-
-    bb4: {
-        _9 = call const fn baml.json.field(copy _1, const "runner") -> [bb5];
-    }
-
-    bb5: {
-        _10 = load_type(((() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never) | null);
-        _8 = call const fn baml.json.from_json<copy _10>(copy _9) -> [bb6];
-    }
-
-    bb6: {
-        _0 = testing.TestRegistration { copy _2, copy _5, copy _8 };
-        goto -> bb7;
-    }
-
-    bb7: {
-        return;
-    }
-}
-
-fn testing.SerializedTest.from_json(j: baml.json.json) -> testing.SerializedTest {
-    // Locals:
-    let _0: testing.SerializedTest // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: string
-    let _3: baml.json.json
-    let _4: type
-    let _5: string
-    let _6: baml.json.json
-    let _7: type
-
-    bb0: {
-        _3 = call const fn baml.json.field(copy _1, const "type") -> [bb1];
-    }
-
-    bb1: {
-        _4 = load_type(string);
-        _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
-    }
-
-    bb2: {
-        _6 = call const fn baml.json.field(copy _1, const "name") -> [bb3];
-    }
-
-    bb3: {
-        _7 = load_type(string);
-        _5 = call const fn baml.json.from_json<copy _7>(copy _6) -> [bb4];
-    }
-
-    bb4: {
-        _0 = testing.SerializedTest { copy _2, copy _5 };
-        goto -> bb5;
-    }
-
-    bb5: {
         return;
     }
 }
@@ -4340,229 +4340,6 @@ fn testing.testset_children(registry: testing.TestRegistry) -> testing.TestSetCh
     }
 }
 
-fn testing.TestSetRegistration.to_json(self: testing.TestSetRegistration) -> baml.json.json {
-    // Locals:
-    let _0: baml.json.json // _0 // return
-    let _1: testing.TestSetRegistration // self // param
-    let _2: string
-    let _3: type
-
-    bb0: {
-        _3 = load_type(testing.TestSetRegistration);
-        _2 = call const fn baml.json.to_string<copy _3>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        _0 = call const fn baml.json.parse(copy _2) -> [bb2];
-    }
-
-    bb2: {
-        return;
-    }
-}
-
-fn testing.SerializedTestSet.to_json(self: testing.SerializedTestSet) -> baml.json.json {
-    // Locals:
-    let _0: baml.json.json // _0 // return
-    let _1: testing.SerializedTestSet // self // param
-    let _2: baml.json.json
-    let _3: string
-    let _4: testing.SerializedTestSet
-    let _5: type
-    let _6: baml.json.json
-    let _7: (testing.SerializedTest | testing.SerializedTestSet)[]
-    let _8: testing.SerializedTestSet
-    let _9: type
-    let _10: baml.json.json
-    let _11: int
-    let _12: testing.SerializedTestSet
-    let _13: type
-
-    bb0: {
-        _4 = copy _1;
-        _3 = copy _4.0;
-        _5 = load_type(string);
-        _2 = call const fn baml.json.to_json<copy _5>(copy _3) -> [bb1];
-    }
-
-    bb1: {
-        _8 = copy _1;
-        _7 = copy _8.1;
-        _9 = load_type(testing.SerializedTest | testing.SerializedTestSet[]);
-        _6 = call const fn baml.json.to_json<copy _9>(copy _7) -> [bb2];
-    }
-
-    bb2: {
-        _12 = copy _1;
-        _11 = copy _12.2;
-        _13 = load_type(int);
-        _10 = call const fn baml.json.to_json<copy _13>(copy _11) -> [bb3];
-    }
-
-    bb3: {
-        _0 = { const "name": copy _2, const "items": copy _6, const "loadingTimeMs": copy _10 };
-        goto -> bb4;
-    }
-
-    bb4: {
-        return;
-    }
-}
-
-fn testing.TestRegistration.to_json(self: testing.TestRegistration) -> baml.json.json {
-    // Locals:
-    let _0: baml.json.json // _0 // return
-    let _1: testing.TestRegistration // self // param
-    let _2: string
-    let _3: type
-
-    bb0: {
-        _3 = load_type(testing.TestRegistration);
-        _2 = call const fn baml.json.to_string<copy _3>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        _0 = call const fn baml.json.parse(copy _2) -> [bb2];
-    }
-
-    bb2: {
-        return;
-    }
-}
-
-fn testing.SerializedTest.to_json(self: testing.SerializedTest) -> baml.json.json {
-    // Locals:
-    let _0: baml.json.json // _0 // return
-    let _1: testing.SerializedTest // self // param
-    let _2: baml.json.json
-    let _3: string
-    let _4: testing.SerializedTest
-    let _5: type
-    let _6: baml.json.json
-    let _7: string
-    let _8: testing.SerializedTest
-    let _9: type
-
-    bb0: {
-        _4 = copy _1;
-        _3 = copy _4.0;
-        _5 = load_type(string);
-        _2 = call const fn baml.json.to_json<copy _5>(copy _3) -> [bb1];
-    }
-
-    bb1: {
-        _8 = copy _1;
-        _7 = copy _8.1;
-        _9 = load_type(string);
-        _6 = call const fn baml.json.to_json<copy _9>(copy _7) -> [bb2];
-    }
-
-    bb2: {
-        _0 = { const "type": copy _2, const "name": copy _6 };
-        goto -> bb3;
-    }
-
-    bb3: {
-        return;
-    }
-}
-
-fn testing.TestCollector.to_json(self: testing.TestCollector) -> baml.json.json {
-    // Locals:
-    let _0: baml.json.json // _0 // return
-    let _1: testing.TestCollector // self // param
-    let _2: baml.json.json
-    let _3: string
-    let _4: testing.TestCollector
-    let _5: type
-    let _6: baml.json.json
-    let _7: testing.TestRegistration[]
-    let _8: testing.TestCollector
-    let _9: type
-    let _10: baml.json.json
-    let _11: testing.TestSetRegistration[]
-    let _12: testing.TestCollector
-    let _13: type
-
-    bb0: {
-        _4 = copy _1;
-        _3 = copy _4.0;
-        _5 = load_type(string);
-        _2 = call const fn baml.json.to_json<copy _5>(copy _3) -> [bb1];
-    }
-
-    bb1: {
-        _8 = copy _1;
-        _7 = copy _8.1;
-        _9 = load_type(testing.TestRegistration[]);
-        _6 = call const fn baml.json.to_json<copy _9>(copy _7) -> [bb2];
-    }
-
-    bb2: {
-        _12 = copy _1;
-        _11 = copy _12.2;
-        _13 = load_type(testing.TestSetRegistration[]);
-        _10 = call const fn baml.json.to_json<copy _13>(copy _11) -> [bb3];
-    }
-
-    bb3: {
-        _0 = { const "prefix": copy _2, const "tests": copy _6, const "testsets": copy _10 };
-        goto -> bb4;
-    }
-
-    bb4: {
-        return;
-    }
-}
-
-fn testing.TestRegistry.to_json(self: testing.TestRegistry) -> baml.json.json {
-    // Locals:
-    let _0: baml.json.json // _0 // return
-    let _1: testing.TestRegistry // self // param
-    let _2: baml.json.json
-    let _3: testing.TestCollector
-    let _4: testing.TestRegistry
-    let _5: type
-    let _6: baml.json.json
-    let _7: map<string, testing.TestRegistry>
-    let _8: testing.TestRegistry
-    let _9: type
-    let _10: baml.json.json
-    let _11: int
-    let _12: testing.TestRegistry
-    let _13: type
-
-    bb0: {
-        _4 = copy _1;
-        _3 = copy _4.0;
-        _5 = load_type(testing.TestCollector);
-        _2 = call const fn baml.json.to_json<copy _5>(copy _3) -> [bb1];
-    }
-
-    bb1: {
-        _8 = copy _1;
-        _7 = copy _8.1;
-        _9 = load_type(map<string, testing.TestRegistry>);
-        _6 = call const fn baml.json.to_json<copy _9>(copy _7) -> [bb2];
-    }
-
-    bb2: {
-        _12 = copy _1;
-        _11 = copy _12.2;
-        _13 = load_type(int);
-        _10 = call const fn baml.json.to_json<copy _13>(copy _11) -> [bb3];
-    }
-
-    bb3: {
-        _0 = { const "collector": copy _2, const "expansions": copy _6, const "loading_time_ms": copy _10 };
-        goto -> bb4;
-    }
-
-    bb4: {
-        return;
-    }
-}
-
 fn testing.FailFast() -> (testing.TestSetChild[]) -> testing.TestSetReport throws never {
     // Locals:
     let _0: (testing.TestSetChild[]) -> testing.TestSetReport throws never // _0 // return
@@ -5699,6 +5476,45 @@ fn testing.RunReport.from_json(j: baml.json.json) -> testing.RunReport {
     }
 }
 
+fn testing.TestSetChild.from_json(j: baml.json.json) -> testing.TestSetChild {
+    // Locals:
+    let _0: testing.TestSetChild // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: string
+    let _3: baml.json.json
+    let _4: type
+    let _5: () -> testing.TestReport | testing.TestSetReport throws never
+    let _6: baml.json.json
+    let _7: type
+
+    bb0: {
+        _3 = call const fn baml.json.field(copy _1, const "name") -> [bb1];
+    }
+
+    bb1: {
+        _4 = load_type(string);
+        _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
+    }
+
+    bb2: {
+        _6 = call const fn baml.json.field(copy _1, const "run") -> [bb3];
+    }
+
+    bb3: {
+        _7 = load_type(() -> testing.TestReport | testing.TestSetReport throws never);
+        _5 = call const fn baml.json.from_json<copy _7>(copy _6) -> [bb4];
+    }
+
+    bb4: {
+        _0 = testing.TestSetChild { copy _2, copy _5 };
+        goto -> bb5;
+    }
+
+    bb5: {
+        return;
+    }
+}
+
 fn testing.NamedChildReport.from_json(j: baml.json.json) -> testing.NamedChildReport {
     // Locals:
     let _0: testing.NamedChildReport // _0 // return
@@ -5730,6 +5546,45 @@ fn testing.NamedChildReport.from_json(j: baml.json.json) -> testing.NamedChildRe
 
     bb4: {
         _0 = testing.NamedChildReport { copy _2, copy _5 };
+        goto -> bb5;
+    }
+
+    bb5: {
+        return;
+    }
+}
+
+fn testing.TestReport.from_json(j: baml.json.json) -> testing.TestReport {
+    // Locals:
+    let _0: testing.TestReport // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: "pass" | "fail" | "error"
+    let _3: baml.json.json
+    let _4: type
+    let _5: testing.RunReport[]
+    let _6: baml.json.json
+    let _7: type
+
+    bb0: {
+        _3 = call const fn baml.json.field(copy _1, const "outcome") -> [bb1];
+    }
+
+    bb1: {
+        _4 = load_type("pass" | "fail" | "error");
+        _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
+    }
+
+    bb2: {
+        _6 = call const fn baml.json.field(copy _1, const "runs") -> [bb3];
+    }
+
+    bb3: {
+        _7 = load_type(testing.RunReport[]);
+        _5 = call const fn baml.json.from_json<copy _7>(copy _6) -> [bb4];
+    }
+
+    bb4: {
+        _0 = testing.TestReport { copy _2, copy _5 };
         goto -> bb5;
     }
 
@@ -5821,324 +5676,6 @@ fn testing.TestSetReport.from_json(j: baml.json.json) -> testing.TestSetReport {
     }
 
     bb13: {
-        return;
-    }
-}
-
-fn testing.TestReport.from_json(j: baml.json.json) -> testing.TestReport {
-    // Locals:
-    let _0: testing.TestReport // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: "pass" | "fail" | "error"
-    let _3: baml.json.json
-    let _4: type
-    let _5: testing.RunReport[]
-    let _6: baml.json.json
-    let _7: type
-
-    bb0: {
-        _3 = call const fn baml.json.field(copy _1, const "outcome") -> [bb1];
-    }
-
-    bb1: {
-        _4 = load_type("pass" | "fail" | "error");
-        _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
-    }
-
-    bb2: {
-        _6 = call const fn baml.json.field(copy _1, const "runs") -> [bb3];
-    }
-
-    bb3: {
-        _7 = load_type(testing.RunReport[]);
-        _5 = call const fn baml.json.from_json<copy _7>(copy _6) -> [bb4];
-    }
-
-    bb4: {
-        _0 = testing.TestReport { copy _2, copy _5 };
-        goto -> bb5;
-    }
-
-    bb5: {
-        return;
-    }
-}
-
-fn testing.TestSetChild.from_json(j: baml.json.json) -> testing.TestSetChild {
-    // Locals:
-    let _0: testing.TestSetChild // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: string
-    let _3: baml.json.json
-    let _4: type
-    let _5: () -> testing.TestReport | testing.TestSetReport throws never
-    let _6: baml.json.json
-    let _7: type
-
-    bb0: {
-        _3 = call const fn baml.json.field(copy _1, const "name") -> [bb1];
-    }
-
-    bb1: {
-        _4 = load_type(string);
-        _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
-    }
-
-    bb2: {
-        _6 = call const fn baml.json.field(copy _1, const "run") -> [bb3];
-    }
-
-    bb3: {
-        _7 = load_type(() -> testing.TestReport | testing.TestSetReport throws never);
-        _5 = call const fn baml.json.from_json<copy _7>(copy _6) -> [bb4];
-    }
-
-    bb4: {
-        _0 = testing.TestSetChild { copy _2, copy _5 };
-        goto -> bb5;
-    }
-
-    bb5: {
-        return;
-    }
-}
-
-fn testing.TestReport.to_json(self: testing.TestReport) -> baml.json.json {
-    // Locals:
-    let _0: baml.json.json // _0 // return
-    let _1: testing.TestReport // self // param
-    let _2: baml.json.json
-    let _3: "pass" | "fail" | "error"
-    let _4: testing.TestReport
-    let _5: type
-    let _6: baml.json.json
-    let _7: testing.RunReport[]
-    let _8: testing.TestReport
-    let _9: type
-
-    bb0: {
-        _4 = copy _1;
-        _3 = copy _4.0;
-        _5 = load_type("pass" | "fail" | "error");
-        _2 = call const fn baml.json.to_json<copy _5>(copy _3) -> [bb1];
-    }
-
-    bb1: {
-        _8 = copy _1;
-        _7 = copy _8.1;
-        _9 = load_type(testing.RunReport[]);
-        _6 = call const fn baml.json.to_json<copy _9>(copy _7) -> [bb2];
-    }
-
-    bb2: {
-        _0 = { const "outcome": copy _2, const "runs": copy _6 };
-        goto -> bb3;
-    }
-
-    bb3: {
-        return;
-    }
-}
-
-fn testing.TestSetChild.to_json(self: testing.TestSetChild) -> baml.json.json {
-    // Locals:
-    let _0: baml.json.json // _0 // return
-    let _1: testing.TestSetChild // self // param
-    let _2: baml.json.json
-    let _3: string
-    let _4: testing.TestSetChild
-    let _5: type
-    let _6: baml.json.json
-    let _7: () -> testing.TestReport | testing.TestSetReport throws never
-    let _8: testing.TestSetChild
-    let _9: type
-
-    bb0: {
-        _4 = copy _1;
-        _3 = copy _4.0;
-        _5 = load_type(string);
-        _2 = call const fn baml.json.to_json<copy _5>(copy _3) -> [bb1];
-    }
-
-    bb1: {
-        _8 = copy _1;
-        _7 = copy _8.1;
-        _9 = load_type(() -> testing.TestReport | testing.TestSetReport throws never);
-        _6 = call const fn baml.json.to_json<copy _9>(copy _7) -> [bb2];
-    }
-
-    bb2: {
-        _0 = { const "name": copy _2, const "run": copy _6 };
-        goto -> bb3;
-    }
-
-    bb3: {
-        return;
-    }
-}
-
-fn testing.RunReport.to_json(self: testing.RunReport) -> baml.json.json {
-    // Locals:
-    let _0: baml.json.json // _0 // return
-    let _1: testing.RunReport // self // param
-    let _2: baml.json.json
-    let _3: "pass" | "fail" | "error"
-    let _4: testing.RunReport
-    let _5: type
-    let _6: baml.json.json
-    let _7: int
-    let _8: testing.RunReport
-    let _9: type
-    let _10: baml.json.json
-    let _11: string | null
-    let _12: testing.RunReport
-    let _13: type
-
-    bb0: {
-        _4 = copy _1;
-        _3 = copy _4.0;
-        _5 = load_type("pass" | "fail" | "error");
-        _2 = call const fn baml.json.to_json<copy _5>(copy _3) -> [bb1];
-    }
-
-    bb1: {
-        _8 = copy _1;
-        _7 = copy _8.1;
-        _9 = load_type(int);
-        _6 = call const fn baml.json.to_json<copy _9>(copy _7) -> [bb2];
-    }
-
-    bb2: {
-        _12 = copy _1;
-        _11 = copy _12.2;
-        _13 = load_type(string | null);
-        _10 = call const fn baml.json.to_json<copy _13>(copy _11) -> [bb3];
-    }
-
-    bb3: {
-        _0 = { const "outcome": copy _2, const "duration_ms": copy _6, const "message": copy _10 };
-        goto -> bb4;
-    }
-
-    bb4: {
-        return;
-    }
-}
-
-fn testing.NamedChildReport.to_json(self: testing.NamedChildReport) -> baml.json.json {
-    // Locals:
-    let _0: baml.json.json // _0 // return
-    let _1: testing.NamedChildReport // self // param
-    let _2: baml.json.json
-    let _3: string
-    let _4: testing.NamedChildReport
-    let _5: type
-    let _6: baml.json.json
-    let _7: testing.TestReport | testing.TestSetReport
-    let _8: testing.NamedChildReport
-    let _9: type
-
-    bb0: {
-        _4 = copy _1;
-        _3 = copy _4.0;
-        _5 = load_type(string);
-        _2 = call const fn baml.json.to_json<copy _5>(copy _3) -> [bb1];
-    }
-
-    bb1: {
-        _8 = copy _1;
-        _7 = copy _8.1;
-        _9 = load_type(testing.TestReport | testing.TestSetReport);
-        _6 = call const fn baml.json.to_json<copy _9>(copy _7) -> [bb2];
-    }
-
-    bb2: {
-        _0 = { const "name": copy _2, const "report": copy _6 };
-        goto -> bb3;
-    }
-
-    bb3: {
-        return;
-    }
-}
-
-fn testing.TestSetReport.to_json(self: testing.TestSetReport) -> baml.json.json {
-    // Locals:
-    let _0: baml.json.json // _0 // return
-    let _1: testing.TestSetReport // self // param
-    let _2: baml.json.json
-    let _3: "pass" | "fail" | "error"
-    let _4: testing.TestSetReport
-    let _5: type
-    let _6: baml.json.json
-    let _7: int
-    let _8: testing.TestSetReport
-    let _9: type
-    let _10: baml.json.json
-    let _11: int
-    let _12: testing.TestSetReport
-    let _13: type
-    let _14: baml.json.json
-    let _15: int
-    let _16: testing.TestSetReport
-    let _17: type
-    let _18: baml.json.json
-    let _19: string[]
-    let _20: testing.TestSetReport
-    let _21: type
-    let _22: baml.json.json
-    let _23: (testing.TestReport | testing.TestSetReport)[]
-    let _24: testing.TestSetReport
-    let _25: type
-
-    bb0: {
-        _4 = copy _1;
-        _3 = copy _4.0;
-        _5 = load_type("pass" | "fail" | "error");
-        _2 = call const fn baml.json.to_json<copy _5>(copy _3) -> [bb1];
-    }
-
-    bb1: {
-        _8 = copy _1;
-        _7 = copy _8.1;
-        _9 = load_type(int);
-        _6 = call const fn baml.json.to_json<copy _9>(copy _7) -> [bb2];
-    }
-
-    bb2: {
-        _12 = copy _1;
-        _11 = copy _12.2;
-        _13 = load_type(int);
-        _10 = call const fn baml.json.to_json<copy _13>(copy _11) -> [bb3];
-    }
-
-    bb3: {
-        _16 = copy _1;
-        _15 = copy _16.3;
-        _17 = load_type(int);
-        _14 = call const fn baml.json.to_json<copy _17>(copy _15) -> [bb4];
-    }
-
-    bb4: {
-        _20 = copy _1;
-        _19 = copy _20.4;
-        _21 = load_type(string[]);
-        _18 = call const fn baml.json.to_json<copy _21>(copy _19) -> [bb5];
-    }
-
-    bb5: {
-        _24 = copy _1;
-        _23 = copy _24.5;
-        _25 = load_type(testing.TestReport | testing.TestSetReport[]);
-        _22 = call const fn baml.json.to_json<copy _25>(copy _23) -> [bb6];
-    }
-
-    bb6: {
-        _0 = { const "outcome": copy _2, const "passed": copy _6, const "failed": copy _10, const "total": copy _14, const "failed_names": copy _18, const "results": copy _22 };
-        goto -> bb7;
-    }
-
-    bb7: {
         return;
     }
 }

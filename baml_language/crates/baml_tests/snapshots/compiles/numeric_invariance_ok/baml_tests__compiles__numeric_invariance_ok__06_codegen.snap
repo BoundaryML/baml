@@ -13,16 +13,6 @@ function user.BigintCounter.from_json(j: baml.json.json) -> BigintCounter {
     return
 }
 
-function user.BigintCounter.to_json(self: BigintCounter) -> baml.json.json {
-    load_type bigint
-    load_var self
-    load_field .count
-    call baml.json.to_json
-    load_const "count"
-    alloc_map 1
-    return
-}
-
 function user.BigintFieldOk() -> BigintCounter {
     load_const 1n
     init_instance user.BigintCounter .count

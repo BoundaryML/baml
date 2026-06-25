@@ -10,17 +10,11 @@ function user.B.greet(self: user.B) -> string throws never {
     self.label : string
   }
 }
-function user.B.to_json(self: user.B) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "label": baml.json.to_json(self.label) } : map<string, baml.json.json>
-}
 function user.B.from_json(j: baml.json.json) -> user.B throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   B { label: baml.json.from_json<string>(baml.json.field(j, "label")) } : user.B
 }
 class user.A {
   b: user.B
-}
-function user.A.to_json(self: user.A) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "b": baml.json.to_json(self.b) } : map<string, baml.json.json>
 }
 function user.A.from_json(j: baml.json.json) -> user.A throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   A { b: baml.json.from_json<B>(baml.json.field(j, "b")) } : user.A

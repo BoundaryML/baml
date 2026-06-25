@@ -21,6 +21,3 @@ function user.HelloWorld$render_prompt(name: string, client: baml.llm.Client = G
 function user.from_json(j: baml.json.json) -> user.User  [expr] {
   user.User { name: baml.json.from_json(baml.json.field(j, "name")), age: baml.json.from_json(baml.json.field(j, "age")) }
 }
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "name": baml.json.to_json(self.name), "age": baml.json.to_json(self.age) }
-}

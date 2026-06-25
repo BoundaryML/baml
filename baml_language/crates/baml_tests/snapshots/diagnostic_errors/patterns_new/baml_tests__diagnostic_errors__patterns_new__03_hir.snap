@@ -51,9 +51,6 @@ function user.enum_with_multiple_missing_variants(d: user.Direction4) -> int  [e
 function user.enum_with_single_missing_variant(c: user.Color3) -> int  [expr] {
   {  } match (c) { user.Color3.Green => 1, user.Color3.Blue => 2 }
 }
-function user.from_json(j: baml.json.json) -> user.Box2  [expr] {
-  user.Box2 { first: baml.json.from_json(baml.json.field(j, "first")), second: baml.json.from_json(baml.json.field(j, "second")) }
-}
 function user.from_json(j: baml.json.json) -> user.Bag  [expr] {
   user.Bag { contents: baml.json.from_json(baml.json.field(j, "contents")) }
 }
@@ -71,6 +68,9 @@ function user.from_json(j: baml.json.json) -> user.IntPair  [expr] {
 }
 function user.from_json(j: baml.json.json) -> user.Mixed  [expr] {
   user.Mixed { value: baml.json.from_json(baml.json.field(j, "value")) }
+}
+function user.from_json(j: baml.json.json) -> user.Box2  [expr] {
+  user.Box2 { first: baml.json.from_json(baml.json.field(j, "first")), second: baml.json.from_json(baml.json.field(j, "second")) }
 }
 function user.int_literal_non_exhaustive(n: int) -> int  [expr] {
   {  } match (n) { 1 => 1 }
@@ -128,25 +128,4 @@ function user.slice_repeated_prefix_unreachable(xs: bool[]) -> int  [expr] {
 }
 function user.slice_repeated_suffix_unreachable(xs: bool[]) -> int  [expr] {
   {  } match (xs) { [.., true] => 1, [.., true] => 2, _ => 3 }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "contents": baml.json.to_json(self.contents) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "flag": baml.json.to_json(self.flag), "note": baml.json.to_json(self.note) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "scores": baml.json.to_json(self.scores) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "kind": baml.json.to_json(self.kind), "payload": baml.json.to_json(self.payload) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "a": baml.json.to_json(self.a), "b": baml.json.to_json(self.b) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "value": baml.json.to_json(self.value) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "first": baml.json.to_json(self.first), "second": baml.json.to_json(self.second) }
 }

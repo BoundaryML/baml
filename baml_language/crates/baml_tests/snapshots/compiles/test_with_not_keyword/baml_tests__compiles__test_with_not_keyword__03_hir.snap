@@ -20,12 +20,6 @@ function user.from_json(j: baml.json.json) -> user.HasWith  [expr] {
 function user.make_foo() -> user.Foo  [expr] {
   {  } user.Foo { x: 1 }
 }
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "with": baml.json.to_json(self.with) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "x": baml.json.to_json(self.x) }
-}
 function user.use_with_as_var() -> int  [expr] {
   { let with = 42 } with
 }

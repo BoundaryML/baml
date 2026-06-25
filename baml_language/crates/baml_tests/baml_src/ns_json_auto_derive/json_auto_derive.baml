@@ -46,8 +46,10 @@ test "simple_class_to_json_roundtrip" {
 class Secret {
     value string
 
-    function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError {
-        "[redacted]"
+    implements baml.ToJson {
+        function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError {
+            "[redacted]"
+        }
     }
 }
 
@@ -119,8 +121,10 @@ test "array_of_int_to_json_returns_json_array" {
 class BArr {
     x int
 
-    function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError {
-        99
+    implements baml.ToJson {
+        function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError {
+            99
+        }
     }
 }
 
@@ -188,8 +192,10 @@ test "array_of_primitive_to_json" {
 class BSecret {
     y int
 
-    function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError {
-        "[secret]"
+    implements baml.ToJson {
+        function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError {
+            "[secret]"
+        }
     }
 }
 
@@ -209,8 +215,10 @@ test "nested_class_override_honored_direct" {
 class BZero {
     y int
 
-    function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError {
-        0
+    implements baml.ToJson {
+        function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError {
+            0
+        }
     }
 }
 
@@ -230,8 +238,10 @@ test "nested_class_override_honored_in_array" {
 class BStr {
     v int
 
-    function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError {
-        "B"
+    implements baml.ToJson {
+        function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError {
+            "B"
+        }
     }
 }
 
@@ -302,8 +312,10 @@ test "generic_class_to_json_array_typearg" {
 class SecretRedact {
     data string
 
-    function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError {
-        "[redacted]"
+    implements baml.ToJson {
+        function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError {
+            "[redacted]"
+        }
     }
 }
 
@@ -347,8 +359,10 @@ test "generic_class_with_optional_typevar_field_null" {
 class SecretRedact2 {
     data string
 
-    function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError {
-        "[redacted]"
+    implements baml.ToJson {
+        function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError {
+            "[redacted]"
+        }
     }
 }
 
@@ -630,8 +644,10 @@ test "independent_synthesis_only_from_json_defined" {
 class BOnlyTo {
     y int
 
-    function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError {
-        "[redacted]"
+    implements baml.ToJson {
+        function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError {
+            "[redacted]"
+        }
     }
 }
 
@@ -652,8 +668,10 @@ test "independent_synthesis_only_to_json_defined" {
 class SecretBoth {
     data string
 
-    function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError {
-        "[redacted]"
+    implements baml.ToJson {
+        function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError {
+            "[redacted]"
+        }
     }
     function from_json(j: baml.json.json) -> SecretBoth throws baml.json.JsonParseError | baml.json.JsonDecodeError {
         SecretBoth { data: "[reset]" }
@@ -677,8 +695,10 @@ test "round_trip_with_overrides_both_directions" {
 class BAliasTo {
     y int
 
-    function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError {
-        42
+    implements baml.ToJson {
+        function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError {
+            42
+        }
     }
 }
 

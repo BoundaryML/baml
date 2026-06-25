@@ -3,20 +3,20 @@ source: crates/baml_cli/src/describe_command_tests.rs
 expression: output
 ---
 class            testing.TestRegistration         <builtin>/testing/registry.baml:5
-class            testing.TestSetRegistration      <builtin>/testing/registry.baml:17
-class            testing.TestCollector            <builtin>/testing/registry.baml:29
-function         testing.$invoke_collector        <builtin>/testing/registry.baml:81
-class            testing.SerializedTest           <builtin>/testing/registry.baml:87
-class            testing.SerializedTestSet        <builtin>/testing/registry.baml:92
-type             testing.SerializedTestDef        <builtin>/testing/registry.baml:98
-class            testing.TestRegistry             <builtin>/testing/registry.baml:102
-function         testing.testset_children         <builtin>/testing/registry.baml:221
-function         testing.test_child               <builtin>/testing/registry.baml:232
-function         testing.testset_child            <builtin>/testing/registry.baml:239
-function         testing.aggregate_reports        <builtin>/testing/registry.baml:259
-function         testing.run_children_parallel    <builtin>/testing/registry.baml:305
-function         testing.run_test                 <builtin>/testing/registry.baml:319
-function         testing.run_testset              <builtin>/testing/registry.baml:354
+class            testing.TestSetRegistration      <builtin>/testing/registry.baml:11
+class            testing.TestCollector            <builtin>/testing/registry.baml:17
+function         testing.$invoke_collector        <builtin>/testing/registry.baml:69
+class            testing.SerializedTest           <builtin>/testing/registry.baml:75
+class            testing.SerializedTestSet        <builtin>/testing/registry.baml:80
+type             testing.SerializedTestDef        <builtin>/testing/registry.baml:86
+class            testing.TestRegistry             <builtin>/testing/registry.baml:90
+function         testing.testset_children         <builtin>/testing/registry.baml:209
+function         testing.test_child               <builtin>/testing/registry.baml:220
+function         testing.testset_child            <builtin>/testing/registry.baml:227
+function         testing.aggregate_reports        <builtin>/testing/registry.baml:247
+function         testing.run_children_parallel    <builtin>/testing/registry.baml:293
+function         testing.run_test                 <builtin>/testing/registry.baml:307
+function         testing.run_testset              <builtin>/testing/registry.baml:342
 function         testing.Quorum                   <builtin>/testing/runners.baml:1
 function         testing.Retry                    <builtin>/testing/runners.baml:34
 function         testing.PassRate                 <builtin>/testing/runners.baml:67

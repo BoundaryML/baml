@@ -53,54 +53,6 @@ fn user.Education.from_json(j: baml.json.json) -> Education {
     }
 }
 
-fn user.Education.to_json(self: Education) -> baml.json.json {
-    // Locals:
-    let _0: baml.json.json // _0 // return
-    let _1: Education // self // param
-    let _2: baml.json.json
-    let _3: string
-    let _4: Education
-    let _5: type
-    let _6: baml.json.json
-    let _7: Degree
-    let _8: Education
-    let _9: type
-    let _10: baml.json.json
-    let _11: int
-    let _12: Education
-    let _13: type
-
-    bb0: {
-        _4 = copy _1;
-        _3 = copy _4.0;
-        _5 = load_type(string);
-        _2 = call const fn baml.json.to_json<copy _5>(copy _3) -> [bb1];
-    }
-
-    bb1: {
-        _8 = copy _1;
-        _7 = copy _8.1;
-        _9 = load_type(Degree);
-        _6 = call const fn baml.json.to_json<copy _9>(copy _7) -> [bb2];
-    }
-
-    bb2: {
-        _12 = copy _1;
-        _11 = copy _12.2;
-        _13 = load_type(int);
-        _10 = call const fn baml.json.to_json<copy _13>(copy _11) -> [bb3];
-    }
-
-    bb3: {
-        _0 = { const "school": copy _2, const "degree": copy _6, const "year": copy _10 };
-        goto -> bb4;
-    }
-
-    bb4: {
-        return;
-    }
-}
-
 fn user.Resume.from_json(j: baml.json.json) -> Resume {
     // Locals:
     let _0: Resume // _0 // return
@@ -160,65 +112,6 @@ fn user.Resume.from_json(j: baml.json.json) -> Resume {
     }
 
     bb9: {
-        return;
-    }
-}
-
-fn user.Resume.to_json(self: Resume) -> baml.json.json {
-    // Locals:
-    let _0: baml.json.json // _0 // return
-    let _1: Resume // self // param
-    let _2: baml.json.json
-    let _3: string
-    let _4: Resume
-    let _5: type
-    let _6: baml.json.json
-    let _7: Education[]
-    let _8: Resume
-    let _9: type
-    let _10: baml.json.json
-    let _11: Degree
-    let _12: Resume
-    let _13: type
-    let _14: baml.json.json
-    let _15: Education[]
-    let _16: Resume
-    let _17: type
-
-    bb0: {
-        _4 = copy _1;
-        _3 = copy _4.0;
-        _5 = load_type(string);
-        _2 = call const fn baml.json.to_json<copy _5>(copy _3) -> [bb1];
-    }
-
-    bb1: {
-        _8 = copy _1;
-        _7 = copy _8.1;
-        _9 = load_type(Education[]);
-        _6 = call const fn baml.json.to_json<copy _9>(copy _7) -> [bb2];
-    }
-
-    bb2: {
-        _12 = copy _1;
-        _11 = copy _12.2;
-        _13 = load_type(Degree);
-        _10 = call const fn baml.json.to_json<copy _13>(copy _11) -> [bb3];
-    }
-
-    bb3: {
-        _16 = copy _1;
-        _15 = copy _16.3;
-        _17 = load_type(Education[]);
-        _14 = call const fn baml.json.to_json<copy _17>(copy _15) -> [bb4];
-    }
-
-    bb4: {
-        _0 = { const "name": copy _2, const "education": copy _6, const "highest_degree": copy _10, const "aliases": copy _14 };
-        goto -> bb5;
-    }
-
-    bb5: {
         return;
     }
 }

@@ -7,9 +7,12 @@ type Item = Table | Item[] | bool | int | float | string | baml.time.ZonedDateTi
 class Table {
     items: map<string, Item>
 
-    function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError {
-        self.items.to_json() catch (_) {
-            root.json.JsonParseError { message } => throw root.json.JsonSerializationError { message: message, path: "" },
+    implements baml.ToJson {
+        function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError {
+            // Render the items map structurally; `baml.json.from` recurses each
+            // `Item` value, honoring the `baml.ToJson` overrides on the nested
+            // `baml.time.*` types (and nested `Table`s).
+            baml.json.from(self.items)
         }
     }
     /// Converts a JSON object to a TOML table.

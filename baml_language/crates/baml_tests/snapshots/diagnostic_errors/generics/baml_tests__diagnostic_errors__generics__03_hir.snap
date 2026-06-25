@@ -117,42 +117,6 @@ function user.peek(self: ?) -> T  [expr] {
 function user.swap(self: ?) -> user.Pair<B, A>  [expr] {
   {  } user.Pair { first: self.second, second: self.first }
 }
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "data": baml.json.to_json(self.data) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "value": baml.json.to_json(self.value) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "data": baml.json.to_json(self.data) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "data": baml.json.to_json(self.data) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "inner": baml.json.to_json(self.inner) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "items": baml.json.to_json(self.items) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "value": baml.json.to_json(self.value) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "data": baml.json.to_json(self.data) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "name": baml.json.to_json(self.name) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "value": baml.json.to_json(self.value) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "first": baml.json.to_json(self.first), "second": baml.json.to_json(self.second) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "value": baml.json.to_json(self.value) }
-}
 function user.unwrap(self: ?) -> T  [expr] {
   {  } self.inner.get()
 }
@@ -209,7 +173,4 @@ function user.GetTodo() -> user.Todo  [expr] {
 }
 function user.from_json(j: baml.json.json) -> user.Todo  [expr] {
   user.Todo { id: baml.json.from_json(baml.json.field(j, "id")), title: baml.json.from_json(baml.json.field(j, "title")), completed: baml.json.from_json(baml.json.field(j, "completed")), userId: baml.json.from_json(baml.json.field(j, "userId")) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "id": baml.json.to_json(self.id), "title": baml.json.to_json(self.title), "completed": baml.json.to_json(self.completed), "userId": baml.json.to_json(self.userId) }
 }

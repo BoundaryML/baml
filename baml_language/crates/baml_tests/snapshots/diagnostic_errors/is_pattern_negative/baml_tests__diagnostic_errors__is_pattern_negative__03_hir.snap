@@ -23,12 +23,6 @@ function user.from_json(j: baml.json.json) -> user.WrapGeneric<T>  [expr] {
 function user.or_pattern_leak() -> int  [expr] {
   { let v: int | string = 7; let _ = v is x: int | x: string } x
 }
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "val": baml.json.to_json(self.val) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "x": baml.json.to_json(self.x) }
-}
 function user.unresolved_class_head(v: user.WrapNonGeneric) -> bool  [expr] {
   {  } v is Frobnitz { x: x }
 }
