@@ -175,7 +175,7 @@ fn print_version() {
     let version = match concrete_version_for_selector(&selector) {
         Ok(version) => version,
         Err(_) if is_channel(&selector.selector) => {
-            println!("baml toolchain not installed");
+            println!("baml toolchain not installed{}", selector_annotation(&selector));
             println!("Run: baml toolchain use {}", selector.selector);
             return;
         }
@@ -186,7 +186,10 @@ fn print_version() {
         }
     };
     if !toolchain_cli_path(&version).exists() {
-        println!("baml toolchain not installed ({version})");
+        println!(
+            "baml toolchain not installed ({version}){}",
+            selector_annotation(&selector)
+        );
         if is_channel(&selector.selector) {
             println!("Run: baml toolchain use {}", selector.selector);
         } else {
@@ -195,11 +198,36 @@ fn print_version() {
         return;
     }
     match verify_toolchain_version_file(&version) {
-        Ok(()) => println!("baml toolchain {version}"),
+        Ok(()) => println!("baml toolchain {version}{}", selector_annotation(&selector)),
         Err(_) => {
             println!("baml toolchain corrupt ({version})");
             println!("Run: baml toolchain install {version} --force");
         }
+    }
+}
+
+/// Where the active selector was resolved from, as a trailing parenthetical
+/// suffix for the `baml toolchain <version>` line (rustup-style, e.g. cargo's
+/// "(overridden by ...)"). Returns `None` for the global default and the
+/// built-in fallback, which need no annotation.
+fn selector_origin(source: &SelectorSource) -> Option<String> {
+    match source {
+        SelectorSource::Env => Some("from $BAML_VERSION".to_string()),
+        SelectorSource::Project(path) => Some(format!("from {}", path.display())),
+        SelectorSource::Config | SelectorSource::Fallback => None,
+    }
+}
+
+/// Build the `(channel, from <source>)` suffix shown after a resolved toolchain
+/// version. The channel name is included only for channel selectors (canary /
+/// nightly), since an exact-version selector already equals the printed version.
+fn selector_annotation(selector: &ResolvedSelector) -> String {
+    let channel = is_channel(&selector.selector).then(|| selector.selector.as_str());
+    match (channel, selector_origin(&selector.source)) {
+        (Some(channel), Some(origin)) => format!(" ({channel}, {origin})"),
+        (Some(channel), None) => format!(" ({channel})"),
+        (None, Some(origin)) => format!(" ({origin})"),
+        (None, None) => String::new(),
     }
 }
 
@@ -966,5 +994,56 @@ mod tests {
             missing,
             FetchPolicy::CacheAllowed
         ));
+    }
+
+    fn resolved(selector: &str, source: SelectorSource) -> ResolvedSelector {
+        ResolvedSelector {
+            selector: selector.to_string(),
+            source,
+        }
+    }
+
+    #[test]
+    fn annotation_shows_channel_and_project_source() {
+        let path = PathBuf::from("/work/demo/baml.toml");
+        assert_eq!(
+            selector_annotation(&resolved("canary", SelectorSource::Project(path))),
+            " (canary, from /work/demo/baml.toml)"
+        );
+    }
+
+    #[test]
+    fn annotation_shows_channel_for_default_source_without_origin() {
+        assert_eq!(
+            selector_annotation(&resolved("canary", SelectorSource::Config)),
+            " (canary)"
+        );
+        assert_eq!(
+            selector_annotation(&resolved("nightly", SelectorSource::Fallback)),
+            " (nightly)"
+        );
+    }
+
+    #[test]
+    fn annotation_omits_channel_for_exact_version() {
+        assert_eq!(
+            selector_annotation(&resolved("0.11.0", SelectorSource::Config)),
+            ""
+        );
+        assert_eq!(
+            selector_annotation(&resolved(
+                "0.11.0",
+                SelectorSource::Project(PathBuf::from("/work/demo/baml.toml"))
+            )),
+            " (from /work/demo/baml.toml)"
+        );
+    }
+
+    #[test]
+    fn annotation_reports_env_override() {
+        assert_eq!(
+            selector_annotation(&resolved("nightly", SelectorSource::Env)),
+            " (nightly, from $BAML_VERSION)"
+        );
     }
 }
