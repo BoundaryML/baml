@@ -827,6 +827,40 @@ pub fn generate_project_bytecode_with_opt(
             let type_tag = bex_vm_types::type_tags::CLASS_BASE + class_type_tag_counter;
             class_type_tag_counter += 1;
 
+            // BEP-042: does this class define a magic `cleanup(self) -> void`
+            // finalizer? This MUST stay in lockstep with the canonical
+            // `cleanup_guard::has_cleanup_shape` (which validates the AST and
+            // emits E0144): same shape — one `self` param with no default, no
+            // generics, `-> void` return, and no propagating `throws` — on the lowered
+            // HIR `Function`. The `throws` part reuses the shared helper; the rest
+            // is mirrored (the two share field types but not the struct).
+            //
+            // Only DIRECT class methods count. `class_data.methods` is flattened
+            // to include `implements`-block methods (recorded in
+            // `method_to_iface_target`), but those are interface members: the AST
+            // guard injector and the `{class_fqn}.cleanup` GC resolution only
+            // cover direct methods, so an `implements`-block `cleanup` must NOT
+            // mark the class finalizable (it would set the flag for a method the
+            // GC can neither guard nor resolve).
+            let has_cleanup = class_data.methods.iter().any(|method_id| {
+                if item_tree.method_to_iface_target.contains_key(method_id) {
+                    return false;
+                }
+                let func = &item_tree[*method_id];
+                func.name.as_str() == baml_compiler2_ast::cleanup_guard::CLEANUP_METHOD
+                    && func.generic_params.is_empty()
+                    && func.params.len() == 1
+                    && func.params[0].name.as_str() == "self"
+                    && func.params[0].default.is_none()
+                    && baml_compiler2_ast::cleanup_guard::throws_is_effectively_none(
+                        func.throws.as_ref(),
+                    )
+                    && matches!(
+                        func.return_type.as_ref().map(|st| &st.expr),
+                        Some(baml_compiler2_ast::ast::TypeExpr::Void { .. })
+                    )
+            });
+
             let class_obj_idx = program.add_object(Object::Class(Box::new(Class {
                 name: fq_to_type_name(&fq_name),
                 fields,
@@ -834,6 +868,7 @@ pub fn generate_project_bytecode_with_opt(
                 alias: class_alias,
                 type_tag,
                 ty_attr: TyAttr::default(),
+                has_cleanup,
             })));
             // Register with fully-qualified name for inter-package lookups.
             class_object_indices.insert(fq_name.clone(), class_obj_idx);

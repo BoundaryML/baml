@@ -1634,6 +1634,9 @@ function baml.Uint8Array.to_hex(self: baml.Uint8Array) -> string {
 function baml.Uint8Array.zeroes(size: int) -> uint8array {
 }
 
+function baml._cleanup_begin(value: T) -> bool {
+}
+
 function baml._compare_shim(a: T, b: T) -> int {
 }
 

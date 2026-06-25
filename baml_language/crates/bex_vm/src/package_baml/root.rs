@@ -164,6 +164,27 @@ impl BamlPackageBaml for PackageBamlImpl {
     fn _from_json_shim(vm: &mut BexVm, j: &Value) -> NativeCallResult {
         super::json::json_to_shim(vm, *j)
     }
+
+    /// `baml._cleanup_begin(value)` — BEP-042 `cleanup` run-once guard.
+    ///
+    /// Atomically test-and-sets `value`'s per-instance "cleaned" latch and
+    /// returns `true` iff this is the first `cleanup` invocation on that
+    /// instance (so the compiled guard runs the body); a later invocation —
+    /// explicit, `defer`, or (Commit 2) the GC finalizer — returns `false` and
+    /// the body is skipped. The latch is set on entry: a `cleanup` that throws
+    /// is still considered cleaned and will not be retried.
+    ///
+    /// A non-instance receiver returns `true` defensively; the guard is only
+    /// emitted for a class `cleanup(self)` method, whose `self` is an instance.
+    fn _cleanup_begin(vm: &BexVm, value: &Value) -> bool {
+        match value.as_object_ptr() {
+            Some(ptr) => match vm.get_object(ptr) {
+                Object::Instance(inst) => inst.cleaned.begin(),
+                _ => true,
+            },
+            None => true,
+        }
+    }
 }
 
 /// Whether `value`'s runtime class carries an in-body `baml.ToString` override.
@@ -537,7 +558,7 @@ fn deep_copy_value_recursive(
                 Object::Instance(instance) => {
                     let placeholder_ptr = vm.tlab.alloc(Object::Instance(Instance::new(
                         instance.class,
-                        instance.class_type_args.clone(),
+                        instance.class_type_args.to_vec(),
                         Vec::new(),
                     )));
                     copied_objects.insert(ptr, placeholder_ptr);
@@ -547,8 +568,11 @@ fn deep_copy_value_recursive(
                         new_fields.push(deep_copy_value_recursive(vm, field, copied_objects));
                     }
 
-                    let new_instance =
-                        Instance::new(instance.class, instance.class_type_args, new_fields);
+                    let new_instance = Instance::new(
+                        instance.class,
+                        instance.class_type_args.to_vec(),
+                        new_fields,
+                    );
                     // no GC write barrier because it is all in gen0
                     *vm.get_object_mut(placeholder_ptr) = Object::Instance(new_instance);
                     placeholder_ptr
