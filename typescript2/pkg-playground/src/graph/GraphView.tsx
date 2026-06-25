@@ -107,6 +107,29 @@ function storeDirection(
   }
 }
 
+const WRAP_STORAGE_KEY = 'baml-graph-wrap';
+
+/** Whether long chains wrap into rows to keep a bounded aspect ratio.
+ *  Off = unbounded single row/column (full horizontal or vertical). Bounded
+ *  is the default; remembered globally across functions and sessions. */
+function storedWrap(): boolean {
+  if (typeof window === 'undefined') return true;
+  try {
+    // Only an explicit opt-out disables wrapping; anything else stays bounded.
+    return window.localStorage.getItem(WRAP_STORAGE_KEY) !== 'false';
+  } catch {
+    return true;
+  }
+}
+
+function storeWrap(wrap: boolean) {
+  try {
+    window.localStorage.setItem(WRAP_STORAGE_KEY, wrap ? 'true' : 'false');
+  } catch {
+    /* private browsing / quota — preference just won't persist */
+  }
+}
+
 interface GraphNodeRuntime {
   executionState: NodeExecutionState;
   errorMessage?: string | null;
@@ -237,6 +260,9 @@ function GraphViewInner({
   const [direction, setDirection] = useState<LayoutDirection>(() =>
     storedDirection(functionName),
   );
+  // Whether long chains wrap into rows (bounded aspect ratio) or extend
+  // unbounded in a single row/column. Remembered globally.
+  const [wrap, setWrap] = useState<boolean>(() => storedWrap());
   // Set when the user toggles layout direction — the next completed layout
   // re-fits the viewport so the rotated graph is fully visible.
   const refitAfterLayoutRef = useRef(false);
@@ -397,7 +423,7 @@ function GraphViewInner({
     const layoutRunId = ++layoutRunIdRef.current;
     const nodesWithRuntime = decorateNodesWithRuntime(lodModel.nodes);
 
-    layoutGraph(nodesWithRuntime, lodModel.edges, direction)
+    layoutGraph(nodesWithRuntime, lodModel.edges, direction, wrap)
       .then(({ nodes: laid, edges: laidEdges }) => {
         if (layoutRunId !== layoutRunIdRef.current) return;
         setNodes(decorateNodesWithRuntime(laid));
@@ -422,6 +448,7 @@ function GraphViewInner({
     runStatus,
     runError,
     direction,
+    wrap,
     setNodes,
     setEdges,
     decorateNodesWithRuntime,
@@ -745,10 +772,8 @@ function GraphViewInner({
       >
         {direction === 'horizontal' ? '\u2195' : '\u2194'}
       </button>
-      {/* Expand mode: how subgraphs are revealed (semantic zoom / click / all). */}
+      {/* Bottom-right layout controls: aspect-ratio wrap toggle + expand mode. */}
       <div
-        role="radiogroup"
-        aria-label="Subgraph expand mode"
         style={{
           position: 'absolute',
           bottom: 10,
@@ -756,18 +781,73 @@ function GraphViewInner({
           zIndex: 10,
           display: 'flex',
           alignItems: 'center',
-          gap: 4,
-          padding: '4px 6px',
-          borderRadius: 10,
-          border: `1px solid ${chrome.button.border}`,
-          background: chrome.button.bg,
-          backdropFilter: 'blur(8px)',
-          WebkitBackdropFilter: 'blur(8px)',
-          boxShadow: chrome.button.shadow,
-          fontFamily:
-            'ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif',
+          gap: 8,
         }}
       >
+        {/* Wrap toggle: bounded aspect ratio (chain wraps into rows) vs.
+            unbounded — full horizontal / full vertical single line. */}
+        <button
+          type="button"
+          role="switch"
+          aria-checked={wrap}
+          aria-label="Wrap long chains into rows"
+          title={
+            wrap
+              ? 'Bounded: long chains wrap into rows. Click for unbounded (full horizontal/vertical).'
+              : 'Unbounded: full horizontal/vertical. Click to wrap long chains into rows.'
+          }
+          onClick={() => {
+            refitAfterLayoutRef.current = true;
+            setWrap((w) => {
+              const next = !w;
+              storeWrap(next);
+              return next;
+            });
+          }}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 5,
+            padding: '5px 10px',
+            borderRadius: 10,
+            border: `1px solid ${wrap ? chrome.selectionRing.color : chrome.button.border}`,
+            background: chrome.button.bg,
+            backdropFilter: 'blur(8px)',
+            WebkitBackdropFilter: 'blur(8px)',
+            boxShadow: chrome.button.shadow,
+            color: wrap ? chrome.selectionRing.color : chrome.button.text,
+            cursor: 'pointer',
+            fontSize: 11.5,
+            fontWeight: wrap ? 700 : 500,
+            fontFamily:
+              'ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif',
+            transition: 'color 120ms ease, border-color 120ms ease',
+          }}
+        >
+          <span aria-hidden="true" style={{ fontSize: 13, lineHeight: 1 }}>
+            {wrap ? '↵' : '→'}
+          </span>
+          Wrap
+        </button>
+        {/* Expand mode: how subgraphs are revealed (semantic zoom / click / all). */}
+        <div
+          role="radiogroup"
+          aria-label="Subgraph expand mode"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 4,
+            padding: '4px 6px',
+            borderRadius: 10,
+            border: `1px solid ${chrome.button.border}`,
+            background: chrome.button.bg,
+            backdropFilter: 'blur(8px)',
+            WebkitBackdropFilter: 'blur(8px)',
+            boxShadow: chrome.button.shadow,
+            fontFamily:
+              'ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif',
+          }}
+        >
         <span
           style={{
             fontSize: 10,
@@ -807,6 +887,7 @@ function GraphViewInner({
             </button>
           );
         })}
+        </div>
       </div>
     </div>
     </GraphThemeContext.Provider>

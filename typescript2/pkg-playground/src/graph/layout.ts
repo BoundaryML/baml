@@ -50,9 +50,16 @@ const WRAP_ASPECT_RATIO = 2.3;
  * small/branching graphs keep their current layout.
  *
  * `dagre` (mermaid's engine) has no equivalent — this is ELK-specific.
+ *
+ * `wrap === false` disables this entirely (returns no options), so a long
+ * chain extends unbounded in a single row/column — full horizontal or full
+ * vertical, no aspect-ratio cap.
  */
-function wrappingOptions(childCount: number): Record<string, string> {
-  if (childCount <= WRAP_CHILD_THRESHOLD) return {};
+function wrappingOptions(
+  childCount: number,
+  wrap: boolean,
+): Record<string, string> {
+  if (!wrap || childCount <= WRAP_CHILD_THRESHOLD) return {};
   return {
     'org.eclipse.elk.layered.wrapping.strategy': 'SINGLE_EDGE',
     // Aspect-ratio-driven cutting honours elk.aspectRatio below.
@@ -116,6 +123,7 @@ function nodeSize(node: WorkflowNode): { w: number; h: number } {
 function buildElkNodes(
   allNodes: WorkflowNode[],
   direction: 'horizontal' | 'vertical',
+  wrap: boolean,
   edgesByOwner: Map<string, ElkExtendedEdge[]>,
   portsByNode: Map<string, { incoming: number; outgoing: number }>,
   parentId?: string,
@@ -136,6 +144,7 @@ function buildElkNodes(
       const children = buildElkNodes(
         allNodes,
         direction,
+        wrap,
         edgesByOwner,
         portsByNode,
         node.id,
@@ -148,7 +157,7 @@ function buildElkNodes(
         'spacing.nodeNode': '30',
         'spacing.nodeNodeBetweenLayers': '40',
         // Wrap long sequential chains (e.g. many //# steps) into rows.
-        ...wrappingOptions(children.length),
+        ...wrappingOptions(children.length, wrap),
       };
       elkNode.labels = [{ text: node.data.label, width: 80, height: 20 }];
       if (children.length > 0) {
@@ -228,6 +237,7 @@ export async function layoutGraph(
   nodes: WorkflowNode[],
   edges: WorkflowEdge[],
   direction: 'horizontal' | 'vertical' = 'horizontal',
+  wrap = true,
 ): Promise<{ nodes: WorkflowNode[]; edges: WorkflowEdge[] }> {
   if (nodes.length === 0) return { nodes, edges };
 
@@ -299,6 +309,7 @@ export async function layoutGraph(
   const rootChildren = buildElkNodes(
     nodes,
     direction,
+    wrap,
     edgesByOwner,
     portsByNode,
   );
@@ -315,7 +326,7 @@ export async function layoutGraph(
       'spacing.edgeEdge': '15',
       'elk.edgeRouting': 'ORTHOGONAL',
       // Wrap a long top-level chain (function with many sequential steps).
-      ...wrappingOptions(rootChildren.length),
+      ...wrappingOptions(rootChildren.length, wrap),
     },
     children: rootChildren,
     edges: edgesByOwner.get('root') ?? [],
