@@ -1082,6 +1082,42 @@ fn render_keyword_spawn() {
 }
 
 #[test]
+fn render_keyword_baml_sdk() {
+    let output = capture_keyword("baml_sdk");
+    insta::assert_snapshot!(output);
+}
+
+#[test]
+fn render_keyword_python() {
+    let output = capture_keyword("python");
+    insta::assert_snapshot!(output);
+}
+
+#[test]
+fn render_keyword_typescript() {
+    let output = capture_keyword("typescript");
+    insta::assert_snapshot!(output);
+}
+
+#[test]
+fn render_keyword_patterns() {
+    let output = capture_keyword("patterns");
+    insta::assert_snapshot!(output);
+}
+
+#[test]
+fn dispatch_language_topic_resolves_to_keyword() {
+    // Language/SDK + pattern topics route to keyword docs, not package resolution.
+    let db = simple_project();
+    for name in ["python", "typescript", "baml_sdk", "patterns", "pattern"] {
+        assert!(
+            matches!(dispatch(&db, name), Some(ResolvedTarget::Keyword(_))),
+            "`{name}` should resolve to a keyword topic"
+        );
+    }
+}
+
+#[test]
 fn render_keyword_interface() {
     let output = capture_keyword("interface");
     insta::assert_snapshot!(output);
