@@ -1459,7 +1459,20 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                             OperandMeta::Const(Self::display_string_operand("data")),
                         );
 
-                        // 6. AllocMap(2) -> { level: "info", data: <user_data> }
+                        // 6. Push the payload map's key/value type tags, then
+                        //    AllocMap(2) -> { level: "info", data: <user_data> }.
+                        //    The event is a `map<string, unknown>` (string keys;
+                        //    heterogeneous values). The VM's `AllocMap` pops the
+                        //    value type (top of stack) then the key type (below it)
+                        //    before draining the entries, so push key first, value
+                        //    second — mirroring the `alloc_map` helper. Omitting
+                        //    these tags makes the VM read the entry keys as types.
+                        unwrap_infallible(
+                            self.load_type(&TyTemplate::Concrete(RuntimeTy::string())),
+                        );
+                        unwrap_infallible(
+                            self.load_type(&TyTemplate::Concrete(RuntimeTy::unknown())),
+                        );
                         self.emit(Instruction::AllocMap(2));
 
                         // 7. Restore call-site span and emit SendEvent

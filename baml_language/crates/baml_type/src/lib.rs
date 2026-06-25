@@ -906,20 +906,6 @@ impl TyRenderStrategy for CanonicalTyRender {
 }
 
 impl Interface {
-    /// Build an interface constraint, sorting `associated_types` by name so the
-    /// derived `Eq`/`Hash`/`Ord` are order-insensitive — the invariant the
-    /// `associated_types` field documents. Normalization sorts the bindings
-    /// identically (`sort_by(|(a, _), (b, _)| a.cmp(b))`), so a constraint built
-    /// here compares equal to its normalized form.
-    pub fn new(name: TypeName, generics: Vec<Ty>, mut associated_types: Vec<(Name, Ty)>) -> Self {
-        associated_types.sort_by(|(a, _), (b, _)| a.cmp(b));
-        Self {
-            name,
-            generics,
-            associated_types,
-        }
-    }
-
     /// The interface *existential* type ([`Ty::Interface`]) denoted by this
     /// constraint, with default attributes. The inverse of
     /// [`Ty::as_interface`].
@@ -951,15 +937,18 @@ impl Interface {
     /// names are preserved. The structure-preserving companion to [`tys`](Self::tys),
     /// for substitution/erasure/normalization passes.
     pub fn map_tys(&self, mut f: impl FnMut(&Ty) -> Ty) -> Interface {
-        Interface {
-            name: self.name.clone(),
-            generics: self.generics.iter().map(&mut f).collect(),
-            associated_types: self
-                .associated_types
+        // Route through `new` so the sort invariant is self-enforcing. `f` maps
+        // only the binding *types*, never the names, so on an already-sorted
+        // constraint the re-sort is a no-op — but it removes the dependence on
+        // every caller having sorted its input.
+        Interface::new(
+            self.name.clone(),
+            self.generics.iter().map(&mut f).collect(),
+            self.associated_types
                 .iter()
                 .map(|(name, ty)| (name.clone(), f(ty)))
                 .collect(),
-        }
+        )
     }
 }
 

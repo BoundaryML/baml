@@ -37,7 +37,7 @@ impl std::fmt::Display for Enum {
     }
 }
 
-/// Same as [`Instance`] but for enums.
+/// Same as [`crate::Instance`] but for enums.
 #[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub struct Variant {
     /// Pointer to the enum object in the heap.

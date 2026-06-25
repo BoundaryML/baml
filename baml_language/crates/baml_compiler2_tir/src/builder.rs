@@ -6529,7 +6529,24 @@ impl<'db> TypeInferenceBuilder<'db> {
                     self.record_expr_type(expr_id, container.clone());
                     container
                 } else {
-                    self.infer_expr(expr_id, body)
+                    // Expected type is not a map: infer, then report the kind
+                    // mismatch like the `Expr::Array` arm does, so a map literal
+                    // checked against a non-map type fails closed instead of
+                    // silently passing as its inferred `EvolvingMap`/`Map`.
+                    let inferred = self.infer_expr(expr_id, body);
+                    if !matches!(expected, Ty::Unknown { .. } | Ty::Error { .. })
+                        && !self.is_subtype(&inferred, expected)
+                    {
+                        self.context.report(
+                            TirTypeError::TypeMismatch {
+                                expected: expected.clone(),
+                                got: inferred.clone(),
+                            },
+                            expr_id,
+                            Vec::new(),
+                        );
+                    }
+                    inferred
                 }
             }
             Expr::Match {

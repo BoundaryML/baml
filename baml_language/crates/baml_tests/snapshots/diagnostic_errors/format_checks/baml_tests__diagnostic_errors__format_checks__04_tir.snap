@@ -761,6 +761,7 @@ function user.ThisIsAnExtremelyLongClientNameThatDefinitelyExceedsTheDefaultLine
 }
 function user.DeeplyNestedClient$new() -> ? throws never {
   baml.llm.PrimitiveClient { name: "DeeplyNestedClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map { "custom_config": map { "retry_on_failure": true, "timeout_ms": 30000, "metadata": map { "team": "platform", "environment": "production" } } }, query_params: map {  }, request_body: map {  } } } : baml.llm.PrimitiveClient
+  !! 5194..5694: type mismatch: expected string, got map<string, bool | int | map<string, string>>
 }
 function user.LongNestedValuesClient$new() -> ? throws never {
   baml.llm.PrimitiveClient { name: "LongNestedValuesC...", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "anthropic/claude-...", base_url: "https://some-extr...", allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } } : baml.llm.PrimitiveClient

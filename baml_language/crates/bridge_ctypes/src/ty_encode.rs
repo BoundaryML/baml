@@ -237,3 +237,109 @@ fn function_param_mode(mode: baml_type::FunctionParamMode) -> BamlTyFunctionPara
         baml_type::FunctionParamMode::Optional => BamlTyFunctionParamMode::Optional,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use baml_type::{Name, RuntimeInterface, RuntimeTy, TyAttr, TypeName};
+
+    use super::runtime_ty_to_proto_ty;
+    use crate::{
+        baml_core::cffi::{
+            BamlTy, BamlTyAssociatedBinding, BamlTyInterface, baml_ty::Ty as TyVariant,
+        },
+        ty_decode::proto_ty_to_runtime_ty,
+    };
+
+    /// Assert the encoder's documented "exact inverse" claim for `rt`:
+    /// `decode(encode(rt)) == rt`.
+    #[track_caller]
+    fn assert_roundtrip(rt: &RuntimeTy) {
+        let proto = runtime_ty_to_proto_ty(rt);
+        let back = proto_ty_to_runtime_ty(&proto).expect("decode should succeed");
+        assert_eq!(&back, rt, "proto round-trip changed the type");
+    }
+
+    #[test]
+    fn roundtrip_primitives_and_containers() {
+        assert_roundtrip(&RuntimeTy::int());
+        assert_roundtrip(&RuntimeTy::string());
+        assert_roundtrip(&RuntimeTy::list(RuntimeTy::int()));
+        assert_roundtrip(&RuntimeTy::map(
+            RuntimeTy::string(),
+            RuntimeTy::list(RuntimeTy::int()),
+        ));
+    }
+
+    #[test]
+    fn roundtrip_interface_and_projection() {
+        // Interface existential with generic args + an associated binding.
+        assert_roundtrip(&RuntimeTy::Interface(
+            TypeName::from_dotted_path("user.Iterator"),
+            vec![RuntimeTy::int()],
+            vec![(Name::new("Item"), RuntimeTy::string())],
+            TyAttr::default(),
+        ));
+        // Projection carrying a full interface constraint (encoded as a
+        // `BamlTy::Interface`, decoded back into a `RuntimeInterface`).
+        assert_roundtrip(&RuntimeTy::AssociatedTypeProjection {
+            base: Box::new(RuntimeTy::int()),
+            interface: Some(Box::new(RuntimeInterface {
+                name: TypeName::from_dotted_path("user.Iterator"),
+                generics: vec![RuntimeTy::int()],
+                associated_types: vec![(Name::new("Item"), RuntimeTy::string())],
+            })),
+            member: Name::new("Item"),
+            attr: TyAttr::default(),
+        });
+        // Projection with no constraint (`interface: None`).
+        assert_roundtrip(&RuntimeTy::AssociatedTypeProjection {
+            base: Box::new(RuntimeTy::string()),
+            interface: None,
+            member: Name::new("Output"),
+            attr: TyAttr::default(),
+        });
+    }
+
+    #[test]
+    fn roundtrip_function() {
+        assert_roundtrip(&RuntimeTy::Function {
+            params: vec![],
+            ret: Box::new(RuntimeTy::int()),
+            throws: Box::new(RuntimeTy::Never {
+                attr: TyAttr::default(),
+            }),
+            attr: TyAttr::default(),
+        });
+    }
+
+    /// The decode boundary sorts interface bindings by name (a non-BAML or future
+    /// producer may send them in any order). Bindings arriving as `Z, A` must
+    /// decode sorted to `A, Z`, so the constraint compares/hashes equal regardless
+    /// of wire order.
+    #[test]
+    fn decode_sorts_interface_bindings() {
+        let unsorted = BamlTy {
+            ty: Some(TyVariant::Interface(BamlTyInterface {
+                name: "user.I".to_string(),
+                type_args: vec![],
+                bindings: vec![
+                    BamlTyAssociatedBinding {
+                        name: "Z".to_string(),
+                        ty: Some(runtime_ty_to_proto_ty(&RuntimeTy::int())),
+                    },
+                    BamlTyAssociatedBinding {
+                        name: "A".to_string(),
+                        ty: Some(runtime_ty_to_proto_ty(&RuntimeTy::string())),
+                    },
+                ],
+            })),
+        };
+        let RuntimeTy::Interface(_, _, bindings, _) =
+            proto_ty_to_runtime_ty(&unsorted).expect("decode")
+        else {
+            panic!("expected interface");
+        };
+        let names: Vec<&str> = bindings.iter().map(|(n, _)| n.as_str()).collect();
+        assert_eq!(names, vec!["A", "Z"], "decode must sort bindings by name");
+    }
+}

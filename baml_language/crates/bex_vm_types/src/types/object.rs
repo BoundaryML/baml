@@ -76,17 +76,17 @@ pub enum Object {
     Bigint(std::sync::Arc<num_bigint::BigInt>),
 
     /// Byte array (uint8array). Wrapped in [`Uint8ArrayContainer`] so the
-    /// underlying `Vec<u8>` is protected by a [`LazyBiasedMutex`] against
+    /// underlying `Vec<u8>` is protected by a [`LazyBiasedMutex`](`crate::lazy_biased_mutex::LazyBiasedMutex`) against
     /// racing mutation under `spawn`.
     Uint8Array(Uint8ArrayContainer),
 
     /// List of values. Wrapped in [`ArrayContainer`] so the underlying
-    /// `Vec<Value>` is protected by a [`LazyBiasedMutex`] against racing
+    /// `Vec<Value>` is protected by a [`LazyBiasedMutex`](`crate::lazy_biased_mutex::LazyBiasedMutex`) against racing
     /// mutation under `spawn`.
     Array(Array),
 
     /// Map of values. Wrapped in [`MapContainer`] so the underlying
-    /// `IndexMap` is protected by a [`LazyBiasedMutex`] against racing
+    /// `IndexMap` is protected by a [`LazyBiasedMutex`](`crate::lazy_biased_mutex::LazyBiasedMutex`) against racing
     /// mutation under `spawn`.
     Map(Map),
 

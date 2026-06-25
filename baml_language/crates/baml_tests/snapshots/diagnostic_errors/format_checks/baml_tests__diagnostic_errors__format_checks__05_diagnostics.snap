@@ -300,6 +300,18 @@ source: crates/baml_tests/src/generated_tests.rs
     │     Note: Error code: E0003
 ────╯
 
+  [type] error: type mismatch: expected string, got map<string, bool | int | map<string, string>>
+     ╭─[ config_decls.baml:198:2 ]
+     │
+ 198 │ ╭─▶ }
+     ┆ ┆   
+ 218 │ ├─▶ }
+     │ │       
+     │ ╰─────── type mismatch: expected string, got map<string, bool | int | map<string, string>>
+     │     
+     │     Note: Error code: E0001
+─────╯
+
   [validation] error: Name `ExtraWhitespace` defined 3 times as: class, enum, type
      ╭─[ class_decls.baml:296:10 ]
      │

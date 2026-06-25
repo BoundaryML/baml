@@ -74,6 +74,22 @@ ty_family! {
         /// part of the interface, never stripped; sorted by name for a
         /// deterministic order.
         pub associated_types: Vec<(Name, Ty)>,
+    } methods {
+        /// Build an interface constraint, sorting `associated_types` by name so the
+        /// invariant the field documents holds and the derived `Eq`/`Hash`/`Ord`
+        /// are order-insensitive. Normalization sorts bindings identically, so a
+        /// constraint built here compares equal to its normalized form. Generated
+        /// for every family member (`Interface`, `RuntimeInterface`, …), so every
+        /// construction site — including the untrusted ctypes decode boundary —
+        /// can route through it instead of sorting by hand.
+        pub fn new(name: TypeName, generics: Vec<Ty>, mut associated_types: Vec<(Name, Ty)>) -> Self {
+            associated_types.sort_by(|(a, _), (b, _)| a.cmp(b));
+            Self {
+                name,
+                generics,
+                associated_types,
+            }
+        }
     }
 
     /// The unified type representation for BAML, used from VIR through runtime.
