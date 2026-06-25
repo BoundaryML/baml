@@ -65,34 +65,49 @@ pub struct DescribeArgs {
 /// Used to power "did you mean?" hints when a path doesn't resolve. Returns up
 /// to `limit` candidates sorted by Jaro-Winkler similarity (descending).
 pub fn suggest_similar(db: &ProjectDatabase, name: &str, limit: usize) -> Vec<String> {
+    suggest_similar_kinded(db, name, limit)
+        .into_iter()
+        .map(|(path, _)| path)
+        .collect()
+}
+
+/// Like [`suggest_similar`], but pairs each suggestion with its definition kind
+/// (`None` for namespace/package paths) so callers can color the leaf by kind.
+pub fn suggest_similar_kinded(
+    db: &ProjectDatabase,
+    name: &str,
+    limit: usize,
+) -> Vec<(String, Option<baml_lsp2_actions::DefinitionKind>)> {
     use baml_compiler2_hir::package::{PackageId, package_items};
 
-    let mut all_paths: Vec<String> = Vec::new();
+    type Kind = Option<baml_lsp2_actions::DefinitionKind>;
+    let mut all_paths: Vec<(String, Kind)> = Vec::new();
 
-    // User package: items + namespace dotted paths.
+    // User package: items (kinded) + namespace dotted paths (no kind).
     let user_pkg = PackageId::new(db, baml_db::Name::new("user"));
     for entry in baml_lsp2_actions::list_package_items(db, user_pkg) {
-        all_paths.push(entry.fqn());
+        all_paths.push((entry.fqn(), Some(entry.kind)));
     }
     let user_pkg_items = package_items(db, user_pkg);
     for ns_path in user_pkg_items.namespaces.keys() {
         if !ns_path.is_empty() {
-            all_paths.push(
+            all_paths.push((
                 ns_path
                     .iter()
                     .map(baml_db::Name::as_str)
                     .collect::<Vec<_>>()
                     .join("."),
-            );
+                None,
+            ));
         }
     }
 
     // Builtin packages: bare package name + item paths + namespaces.
     for pkg_name in baml_lsp2_actions::non_user_package_names(db) {
-        all_paths.push(pkg_name.clone());
+        all_paths.push((pkg_name.clone(), None));
         let pkg = PackageId::new(db, baml_db::Name::new(&pkg_name));
         for entry in baml_lsp2_actions::list_package_items(db, pkg) {
-            all_paths.push(entry.fqn());
+            all_paths.push((entry.fqn(), Some(entry.kind)));
         }
         let pkg_info = package_items(db, pkg);
         for ns_path in pkg_info.namespaces.keys() {
@@ -102,7 +117,7 @@ pub fn suggest_similar(db: &ProjectDatabase, name: &str, limit: usize) -> Vec<St
                     .map(baml_db::Name::as_str)
                     .collect::<Vec<_>>()
                     .join(".");
-                all_paths.push(format!("{pkg_name}.{dotted}"));
+                all_paths.push((format!("{pkg_name}.{dotted}"), None));
             }
         }
     }
@@ -111,9 +126,9 @@ pub fn suggest_similar(db: &ProjectDatabase, name: &str, limit: usize) -> Vec<St
     // get a useful "did you mean?" hint. `strsim::jaro_winkler` is case-
     // sensitive, so we lowercase both sides before scoring.
     let needle_lower = name.to_ascii_lowercase();
-    let mut scored: Vec<(f64, String)> = all_paths
+    let mut scored: Vec<(f64, String, Kind)> = all_paths
         .into_iter()
-        .map(|p| {
+        .map(|(p, kind)| {
             let p_lower = p.to_ascii_lowercase();
             // Jaro-Winkler on lowercased strings handles typos; substring
             // presence is an extra boost for cases like "Confg" → "Config".
@@ -121,9 +136,9 @@ pub fn suggest_similar(db: &ProjectDatabase, name: &str, limit: usize) -> Vec<St
             if p_lower.contains(&needle_lower) {
                 score += 0.15;
             }
-            (score, p)
+            (score, p, kind)
         })
-        .filter(|(s, _)| *s > 0.7)
+        .filter(|(s, _, _)| *s > 0.7)
         .collect();
 
     // Sort by score desc, then alphabetically for stability.
@@ -134,17 +149,32 @@ pub fn suggest_similar(db: &ProjectDatabase, name: &str, limit: usize) -> Vec<St
     });
     // Dedup adjacent duplicates after sort.
     scored.dedup_by(|a, b| a.1 == b.1);
-    scored.into_iter().take(limit).map(|(_, p)| p).collect()
+    scored
+        .into_iter()
+        .take(limit)
+        .map(|(_, p, kind)| (p, kind))
+        .collect()
 }
 
 /// Print a "Did you mean?" hint for `name` to stderr if any similar paths exist.
 fn print_did_you_mean(db: &ProjectDatabase, name: &str) {
-    let suggestions = suggest_similar(db, name, 5);
+    let suggestions = suggest_similar_kinded(db, name, 5);
     if !suggestions.is_empty() {
         eprintln!();
         eprintln!("Did you mean:");
-        for s in suggestions {
-            eprintln!("  {s}");
+        // did-you-mean goes to stderr, so gate on the stderr color flag (not the
+        // stdout one) — otherwise codes leak into a redirected stderr, or color
+        // is dropped when only stdout is redirected.
+        let colors = console::colors_enabled_stderr();
+        for (s, kind) in suggestions {
+            if colors {
+                eprintln!(
+                    "  {}",
+                    crate::describe_highlight::highlight_fqn_opt(&s, kind)
+                );
+            } else {
+                eprintln!("  {s}");
+            }
         }
     }
 }
@@ -445,12 +475,12 @@ impl DescribeArgs {
 /// Render keyword documentation to a writer.
 pub fn write_keyword(w: &mut impl std::io::Write, name: &str) -> std::io::Result<()> {
     if let Some(doc) = BAML_KEYWORDS.get(name) {
-        writeln!(w, "{name} — {}", doc.summary)?;
+        writeln!(w, "{} — {}", console::style(name).magenta(), doc.summary)?;
         if let Some(ref syntax) = doc.syntax {
             writeln!(w)?;
             writeln!(w, "Syntax:")?;
             for line in syntax.trim_end().lines() {
-                writeln!(w, "  {line}")?;
+                writeln!(w, "  {}", crate::describe_highlight::highlight_str(line))?;
             }
         }
         if let Some(ref details) = doc.details {
@@ -458,10 +488,14 @@ pub fn write_keyword(w: &mut impl std::io::Write, name: &str) -> std::io::Result
             writeln!(w, "{details}")?;
         }
     } else if let Some(doc) = TS_KEYWORDS.get(name) {
-        writeln!(w, "{name} — {}", doc.message)?;
+        writeln!(w, "{} — {}", console::style(name).magenta(), doc.message)?;
         if let Some(ref see) = doc.see {
             writeln!(w)?;
-            writeln!(w, "See: baml describe {see}")?;
+            writeln!(
+                w,
+                "See: baml describe {}",
+                crate::describe_highlight::highlight_str(see)
+            )?;
         }
     }
     Ok(())
@@ -526,17 +560,37 @@ pub fn write_description(
     // like `root.ns.Foo`).
     let kind_str = desc.kind.as_str();
     let rel_path = relative_path(&file_path, project_root);
-    let path_display = rel_path.display();
+    let colors = console::colors_enabled();
+    let hl = crate::describe_highlight::Highlighter::new(db);
     let fqn_part = desc
         .canonical_fqn
         .as_deref()
-        .map(|f| format!("  ({f})"))
+        .map(|f| {
+            if colors {
+                format!(
+                    "  ({})",
+                    crate::describe_highlight::highlight_fqn(f, desc.kind)
+                )
+            } else {
+                format!("  ({f})")
+            }
+        })
         .unwrap_or_default();
+    let name_display = if colors {
+        crate::describe_highlight::highlight_fqn(&desc.name, desc.kind)
+    } else {
+        desc.name.clone()
+    };
+    let loc = crate::describe_highlight::location(
+        &file_path,
+        &rel_path.display().to_string(),
+        &format!("{start_line}-{end_line}"),
+    );
 
     writeln!(
         w,
-        "{kind_str} {name}{fqn_part}  {path_display}:{start_line}-{end_line}",
-        name = desc.name
+        "{kind} {name_display}{fqn_part}  {loc}",
+        kind = console::style(kind_str).magenta(),
     )?;
 
     let mut lines_used = 1;
@@ -561,40 +615,48 @@ pub fn write_description(
         // body must fit at budget 5).
         writeln!(w)?;
         let available_for_body = budget.saturating_sub(lines_used);
-        let was_truncated = body_lines.len() > available_for_body;
-        let shown_body_lines;
-        if body_lines.len() <= available_for_body {
-            for line in &body_lines {
-                writeln!(w, "{line}")?;
-            }
-            shown_body_lines = body_lines.len();
-            lines_used += shown_body_lines;
-        } else if available_for_body >= 5 {
-            let truncated = truncate_body(&body_lines, available_for_body);
-            for line in &truncated {
-                writeln!(w, "{line}")?;
-            }
-            shown_body_lines = truncated.len();
-            lines_used += shown_body_lines;
+
+        // Colored TTY output renders the verbatim definition slice through the
+        // compiler's semantic tokens. Plain output (pipes, JSON, tests) keeps
+        // the existing cleaned/truncated behavior byte-for-byte.
+        if console::colors_enabled() {
+            lines_used += write_highlighted_body(w, &hl, desc, available_for_body)?;
         } else {
-            let elided_text = shape_with_elision(&desc.shape, &desc.full_body);
-            let elided_lines: Vec<&str> = elided_text.lines().collect();
-            for line in &elided_lines {
-                writeln!(w, "{line}")?;
+            let was_truncated = body_lines.len() > available_for_body;
+            let shown_body_lines;
+            if body_lines.len() <= available_for_body {
+                for line in &body_lines {
+                    writeln!(w, "{line}")?;
+                }
+                shown_body_lines = body_lines.len();
+                lines_used += shown_body_lines;
+            } else if available_for_body >= 5 {
+                let truncated = truncate_body(&body_lines, available_for_body);
+                for line in &truncated {
+                    writeln!(w, "{line}")?;
+                }
+                shown_body_lines = truncated.len();
+                lines_used += shown_body_lines;
+            } else {
+                let elided_text = shape_with_elision(&desc.shape, &desc.full_body);
+                let elided_lines: Vec<&str> = elided_text.lines().collect();
+                for line in &elided_lines {
+                    writeln!(w, "{line}")?;
+                }
+                shown_body_lines = elided_lines.len();
+                lines_used += shown_body_lines;
             }
-            shown_body_lines = elided_lines.len();
-            lines_used += shown_body_lines;
-        }
-        if was_truncated {
-            writeln!(w)?;
-            writeln!(
-                w,
-                "[INFO] Showing {shown} of {total} lines. Use --budget {needed} for full output.",
-                shown = shown_body_lines,
-                total = body_lines.len(),
-                needed = body_lines.len() + 1,
-            )?;
-            lines_used += 2;
+            if was_truncated {
+                writeln!(w)?;
+                writeln!(
+                    w,
+                    "[INFO] Showing {shown} of {total} lines. Use --budget {needed} for full output.",
+                    shown = shown_body_lines,
+                    total = body_lines.len(),
+                    needed = body_lines.len() + 1,
+                )?;
+                lines_used += 2;
+            }
         }
     }
 
@@ -631,15 +693,16 @@ pub fn write_description(
     if let Some(ref c) = desc.container {
         writeln!(w)?;
         writeln!(w, "container:")?;
-        let c_path = relative_path(&c.file.path(db), project_root);
+        let c_abs = c.file.path(db);
+        let c_path = relative_path(&c_abs, project_root);
         let c_line = line_number_at_offset(c.file.text(db), c.name_span.start().into());
-        writeln!(
+        write_kind_row(
             w,
-            "  {:<16} {:<32} {}:{}",
-            c.kind.as_str(),
-            c.name,
-            c_path.display(),
-            c_line
+            c.kind,
+            &c.name,
+            &c_abs,
+            &c_path.display().to_string(),
+            c_line,
         )?;
         remaining = remaining.saturating_sub(3);
     }
@@ -655,14 +718,15 @@ pub fn write_description(
                 elided += 1;
                 continue;
             }
-            let dep_path = relative_path(&dep.file.path(db), project_root);
+            let dep_abs = dep.file.path(db);
+            let dep_path = relative_path(&dep_abs, project_root);
             let dep_line = line_number_at_offset(dep.file.text(db), dep.name_span.start().into());
-            writeln!(
+            write_kind_row(
                 w,
-                "  {:<16} {:<32} {}:{}",
-                dep.kind.as_str(),
-                dep.name,
-                dep_path.display(),
+                dep.kind,
+                &dep.name,
+                &dep_abs,
+                &dep_path.display().to_string(),
                 dep_line,
             )?;
             remaining -= 1;
@@ -682,19 +746,79 @@ pub fn write_description(
             elided += 1;
             continue;
         }
-        let ref_path = relative_path(&r.file.path(db), project_root);
-        writeln!(
-            w,
-            "  {}:{}  {}",
-            ref_path.display(),
-            r.line_number,
-            r.line_text.trim()
-        )?;
+        let ref_abs = r.file.path(db);
+        let ref_path = relative_path(&ref_abs, project_root);
+        let preview = if colors {
+            let h = hl.enclosing_line(r.file, r.range);
+            if h.is_empty() {
+                r.line_text.trim().to_string()
+            } else {
+                h
+            }
+        } else {
+            r.line_text.trim().to_string()
+        };
+        let loc = crate::describe_highlight::location(
+            &ref_abs,
+            &ref_path.display().to_string(),
+            &r.line_number.to_string(),
+        );
+        writeln!(w, "  {}  {}", loc, preview)?;
         remaining -= 1;
     }
     write_elision_marker(w, elided)?;
 
     Ok(())
+}
+
+/// Render the definition body with ANSI highlighting (colored-output path).
+///
+/// Highlights the verbatim source slice of the item via the compiler's semantic
+/// tokens, then applies the soft line budget by line count (so an ANSI escape
+/// run is never split). Returns the number of output lines consumed.
+fn write_highlighted_body(
+    w: &mut impl std::io::Write,
+    hl: &crate::describe_highlight::Highlighter,
+    desc: &SymbolDescription,
+    available_for_body: usize,
+) -> std::io::Result<usize> {
+    let colored = hl.range(desc.file, desc.item_range);
+    let all: Vec<&str> = colored.lines().collect();
+    // `item_range` can swallow leading doc-comments/blank lines and trailing
+    // whitespace; trim blank edges so the block starts at the declaration.
+    let first = all.iter().position(|l| !l.trim().is_empty()).unwrap_or(0);
+    let last = all
+        .iter()
+        .rposition(|l| !l.trim().is_empty())
+        .map_or(first, |e| e + 1);
+    let lines = &all[first..last];
+
+    if lines.len() <= available_for_body || available_for_body < 3 {
+        for line in lines {
+            writeln!(w, "{line}")?;
+        }
+        return Ok(lines.len());
+    }
+
+    // Head + tail with a skip marker, split purely on line count.
+    let head = (available_for_body - 1) / 2;
+    let tail = (available_for_body - 1) - head;
+    for line in &lines[..head] {
+        writeln!(w, "{line}")?;
+    }
+    writeln!(w, "  [... skipped {} lines ...]", lines.len() - head - tail)?;
+    for line in &lines[lines.len() - tail..] {
+        writeln!(w, "{line}")?;
+    }
+    writeln!(w)?;
+    writeln!(
+        w,
+        "[INFO] Showing {} of {} lines. Use --budget {} for full output.",
+        head + tail + 1,
+        lines.len(),
+        lines.len() + 1,
+    )?;
+    Ok(head + tail + 3)
 }
 
 /// Write the soft-budget elision marker for `elided` hidden lines (no-op when
@@ -782,20 +906,29 @@ fn write_method_section(
             continue;
         }
         if let Some(doc) = &m.docstring {
-            writeln!(w, "  /// {doc}")?;
+            let line = format!("/// {doc}");
+            if console::colors_enabled() {
+                writeln!(w, "  {}", console::style(line).color256(244))?;
+            } else {
+                writeln!(w, "  {line}")?;
+            }
         }
         let text = m.file.text(db);
         let (start, end) =
             definition_line_range(text, m.item_range.start().into(), m.item_range.end().into());
-        let m_path = relative_path(&m.file.path(db), project_root);
-        writeln!(
-            w,
-            "  {}  {}:{}-{}",
-            m.signature,
-            m_path.display(),
-            start,
-            end
-        )?;
+        let m_abs = m.file.path(db);
+        let m_path = relative_path(&m_abs, project_root);
+        let loc = crate::describe_highlight::location(
+            &m_abs,
+            &m_path.display().to_string(),
+            &format!("{start}-{end}"),
+        );
+        let sig = if console::colors_enabled() {
+            crate::describe_highlight::highlight_str(&m.signature)
+        } else {
+            m.signature.clone()
+        };
+        writeln!(w, "  {sig}  {loc}")?;
         remaining = remaining.saturating_sub(unit_cost);
     }
     write_elision_marker(w, elided_lines)?;
@@ -813,18 +946,53 @@ pub fn write_listing(
     entries: &[baml_lsp2_actions::ListingEntry],
     project_root: &std::path::Path,
 ) -> std::io::Result<()> {
+    let colors = console::colors_enabled();
     for entry in entries {
-        let rel = relative_path(std::path::Path::new(&entry.file_path), project_root);
-        writeln!(
-            w,
-            "{:<16} {:<32} {}:{}",
-            entry.kind.as_str(),
-            entry.fqn(),
-            rel.display(),
-            entry.line,
-        )?;
+        let abs = std::path::Path::new(&entry.file_path);
+        let rel = relative_path(abs, project_root);
+        let loc = crate::describe_highlight::location(
+            abs,
+            &rel.display().to_string(),
+            &entry.line.to_string(),
+        );
+        if colors {
+            writeln!(
+                w,
+                "{} {} {}",
+                crate::describe_highlight::kind_style(entry.kind)
+                    .apply_to(format!("{:<16}", entry.kind.as_str())),
+                crate::describe_highlight::highlight_name_padded(&entry.fqn(), entry.kind, 32),
+                loc,
+            )?;
+        } else {
+            writeln!(w, "{:<16} {:<32} {}", entry.kind.as_str(), entry.fqn(), loc)?;
+        }
     }
     Ok(())
+}
+
+/// Write one indented `kind  name  location` row (dependencies / container),
+/// colored by kind on a TTY. `location` is preformatted (e.g. `path:line`).
+fn write_kind_row(
+    w: &mut impl std::io::Write,
+    kind: baml_lsp2_actions::DefinitionKind,
+    name: &str,
+    abs_path: &std::path::Path,
+    rel_display: &str,
+    line: usize,
+) -> std::io::Result<()> {
+    let loc = crate::describe_highlight::location(abs_path, rel_display, &line.to_string());
+    if console::colors_enabled() {
+        writeln!(
+            w,
+            "  {} {} {}",
+            crate::describe_highlight::kind_style(kind).apply_to(format!("{:<16}", kind.as_str())),
+            crate::describe_highlight::highlight_name_padded(name, kind, 32),
+            loc,
+        )
+    } else {
+        writeln!(w, "  {:<16} {:<32} {}", kind.as_str(), name, loc)
+    }
 }
 
 /// Convert listing entries to JSON array.

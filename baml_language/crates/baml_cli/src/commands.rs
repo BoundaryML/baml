@@ -30,6 +30,18 @@ pub(crate) struct RuntimeCli {
     #[arg(long = "features", value_name = "FEATURE", global = true)]
     pub features: Vec<String>,
 
+    /// When to use colored / hyperlinked output: auto (default), always, or never.
+    ///
+    /// `auto` enables color on an interactive terminal and disables it when the
+    /// output is piped or captured by a known AI coding agent.
+    #[arg(
+        long,
+        value_enum,
+        default_value_t = crate::describe_highlight::ColorChoice::Auto,
+        global = true
+    )]
+    pub color: crate::describe_highlight::ColorChoice,
+
     /// Specifies a subcommand to run.
     #[command(subcommand)]
     pub(crate) command: Commands,
@@ -171,6 +183,8 @@ impl RuntimeCli {
     }
 
     pub fn run(&self) -> Result<crate::ExitCode> {
+        // Resolve color/hyperlink output once, before any subcommand writes.
+        crate::describe_highlight::init_color(self.color);
         match &self.command {
             Commands::Init(args) => args.run(),
             Commands::New(args) => args.run(),
