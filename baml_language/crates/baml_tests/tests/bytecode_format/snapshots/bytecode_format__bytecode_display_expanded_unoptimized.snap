@@ -1,42 +1,112 @@
 ---
 source: crates/baml_tests/tests/bytecode_format/main.rs
 ---
+function assert.approx_equal(actual: float, expected: float, eps: float) -> null {
+  77   0    load_var 3             (eps)
+       1    load_const 0           (0.0)
+       2    cmp_float_op <         
+       3    jump_if_false +2       (to 5)
+       4    jump +4                (to 8)
+       5    pop 1                  
+       6    load_var 3             (eps)
+       7    call 128 ntypeargs=0   (baml.Float.is_nan)
+       8    pop_jump_if_false +2   (to 10)
+       9    jump +45               (to 54)
+
+  80   10   load_var2 1 2          
+       11   sub_float              
+       12   call 121 ntypeargs=0   (baml.Float.abs)
+       13   store_var 4            (delta)
+
+  81   14   load_var 4             (delta)
+       15   call 128 ntypeargs=0   (baml.Float.is_nan)
+       16   jump_if_false +2       (to 18)
+       17   jump +4                (to 21)
+       18   pop 1                  
+       19   load_var2 4 3          
+       20   cmp_float_op >         
+       21   pop_jump_if_false +2   (to 23)
+       22   jump +3                (to 25)
+
+  93   23   load_const 1           (null)
+
+  81   24   jump +32               (to 56)
+
+  84   25   load_var 4             (delta)
+       26   call 714 ntypeargs=0   (assert.format_operand)
+       27   store_var 5            (_18)
+
+  86   28   load_var 3             (eps)
+       29   call 714 ntypeargs=0   (assert.format_operand)
+       30   store_var 6            (_20)
+
+  88   31   load_var 1             (actual)
+       32   call 714 ntypeargs=0   (assert.format_operand)
+       33   store_var 7            (_21)
+
+  90   34   load_var 2             (expected)
+       35   call 714 ntypeargs=0   (assert.format_operand)
+       36   store_var 8            (_22)
+
+  84   37   load_const 2           ("assertion failed: |left - right| = ")
+       38   load_var 5             (_18)
+       39   bin_op +               
+       40   load_const 3           (", eps = ")
+       41   bin_op +               
+       42   load_var 6             (_20)
+       43   bin_op +               
+       44   load_const 4           (", left = ")
+       45   bin_op +               
+       46   load_var 7             (_21)
+       47   bin_op +               
+       48   load_const 5           (", right = ")
+       49   bin_op +               
+       50   load_var 8             (_22)
+       51   bin_op +               
+       52   call 233 ntypeargs=0   (baml.sys.panic)
+       53   jump +3                (to 56)
+
+  78   54   load_const 6           ("assertion failed: epsilon must be a non-negative number")
+       55   call 233 ntypeargs=0   (baml.sys.panic)
+       56   return                 
+}
+
 function assert.contains(haystack: string, needle: string) -> null {
-  51   0   load_var2 1 2          
-       1   call 170 ntypeargs=0   (baml.String.includes)
-       2   unary_op !             
-       3   pop_jump_if_false +2   (to 5)
-       4   jump +3                (to 7)
+  100   0   load_var2 1 2          
+        1   call 170 ntypeargs=0   (baml.String.includes)
+        2   unary_op !             
+        3   pop_jump_if_false +2   (to 5)
+        4   jump +3                (to 7)
 
-  54   5   load_const 0           (null)
+  103   5   load_const 0           (null)
 
-  51   6   jump +3                (to 9)
+  100   6   jump +3                (to 9)
 
-  52   7   load_const 1           ("assertion failed: string does not contain expected substring")
-       8   call 233 ntypeargs=0   (baml.sys.panic)
-       9   return                 
+  101   7   load_const 1           ("assertion failed: string does not contain expected substring")
+        8   call 233 ntypeargs=0   (baml.sys.panic)
+        9   return                 
 }
 
 function assert.equal(actual: unknown, expected: unknown) -> null {
-  37   0    load_var2 1 2          
+  50   0    load_var2 1 2          
        1    call 674 ntypeargs=0   (baml.ops.equals_equals)
        2    unary_op !             
        3    pop_jump_if_false +2   (to 5)
        4    jump +3                (to 7)
 
-  45   5    load_const 0           (null)
+  58   5    load_const 0           (null)
 
-  37   6    jump +15               (to 21)
+  50   6    jump +15               (to 21)
 
-  40   7    load_var 1             (actual)
+  53   7    load_var 1             (actual)
        8    call 714 ntypeargs=0   (assert.format_operand)
        9    store_var 3            (_8)
 
-  42   10   load_var 2             (expected)
+  55   10   load_var 2             (expected)
        11   call 714 ntypeargs=0   (assert.format_operand)
        12   store_var 4            (_9)
 
-  40   13   load_const 1           ("assertion failed: left = ")
+  53   13   load_const 1           ("assertion failed: left = ")
        14   load_var 3             (_8)
        15   bin_op +               
        16   load_const 2           (", right = ")
