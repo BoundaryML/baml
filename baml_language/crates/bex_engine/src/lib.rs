@@ -2005,6 +2005,14 @@ impl BexEngine {
         // bridge-generics/streaming/04. `collect_type_var_bindings` only fills
         // keys not already bound, so the explicit `_types=` bindings win on
         // conflict.
+        // Whether the *caller* specified any explicit type binding (subscript /
+        // `_types=`). In explicit/partial mode the wire must be fully bound — an
+        // under-specified (argless) generic instance is a host bug and Gate B
+        // rejects it. In pure-inference mode (no caller bindings) BAML instead
+        // recovers an unbound instance's args from its field values (03b G1), so
+        // Gate B is lenient about its missing wire args. Captured before the
+        // self-receiver / inference sources mutate `type_args`.
+        let caller_specified_types = !type_args.is_empty();
         let mut type_args = type_args;
         if let (Some(self_declared), Some(BexCallArg::Provided(self_value))) =
             (declared_param_types.first(), args.first())
@@ -2055,7 +2063,10 @@ impl BexEngine {
                 .enumerate()
                 .filter_map(|(idx, arg)| match (declared_param_types.get(idx), arg) {
                     (Some(declared), BexCallArg::Provided(value)) => {
-                        let actual = self.synth_ty_from_value(value).into_runtime_ty();
+                        // Formal-aware: a forcing generic-class formal recovers an
+                        // unbound instance's args from its fields (03b G1); every
+                        // other value synthesizes from the value alone.
+                        let actual = self.synth_inference_actual(declared, value);
                         Some((declared.clone(), actual))
                     }
                     _ => None,
@@ -2189,8 +2200,12 @@ impl BexEngine {
                     let coerced =
                         crate::conversion::coerce_arg_to_declared_type(*value, &param_types[idx])?;
                     if callee_is_generic {
-                        crate::conversion::check_generic_arg(&coerced, &param_types[idx])
-                            .map_err(|message| EngineError::TypeMismatch { message })?;
+                        crate::conversion::check_generic_arg(
+                            &coerced,
+                            &param_types[idx],
+                            caller_specified_types,
+                        )
+                        .map_err(|message| EngineError::TypeMismatch { message })?;
                     }
                     Ok(BexCallArg::Provided(Box::new(coerced)))
                 }

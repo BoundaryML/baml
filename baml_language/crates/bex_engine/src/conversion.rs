@@ -326,15 +326,29 @@ impl BexEngine {
                 })
             }
             // A fully-bound generic instance carries its concrete args on the
-            // wire (`GenericBox[int]` → `[int]`). An instance whose class can't
-            // be resolved (e.g. an unbound generic class, 00b3 G3) is treated as
-            // host-only — though the SDK normally encodes those as `HostValue`.
+            // wire (`GenericBox[int]` → `[int]`). An *unbound* generic instance —
+            // a generic class whose wire type-args are EMPTY (Pydantic lets you
+            // build `GenericBox(value=5)` without `[int]`) — carries no readable
+            // BAML type, so it is host-only (03b G2/G3): the var binds `rust_type`
+            // and the instance rides opaquely through the `OpaqueExternalValue`
+            // carrier, staying distinct from a properly-bound instance (G4). A
+            // *non*-generic class legitimately has empty args and types normally.
+            // (Where a forcing formal `GenericPair<int,T>` should recover `T` from
+            // an unbound instance's FIELDS instead — 03b G1 — that is handled
+            // formal-aware in `synth_inference_actual`, not here.) An unresolvable
+            // class name is host-only too.
             BexExternalValue::Instance {
                 class_name,
                 type_args,
                 ..
             } => match self.resolve_class_type_name(class_name) {
-                Some(tn) => SynthTy::Known(RuntimeTy::Class(tn, type_args.clone(), attr())),
+                Some(tn) => {
+                    if type_args.is_empty() && self.class_generic_arity(class_name) > 0 {
+                        SynthTy::HostOnly
+                    } else {
+                        SynthTy::Known(RuntimeTy::Class(tn, type_args.clone(), attr()))
+                    }
+                }
                 None => SynthTy::HostOnly,
             },
             BexExternalValue::Variant { enum_name, .. } => {
@@ -412,6 +426,113 @@ impl BexEngine {
         }
     }
 
+    /// Run `f` against the resolved compile-time [`Object::Class`] for `class_name`.
+    fn with_resolved_class<R>(
+        &self,
+        class_name: &str,
+        f: impl FnOnce(&bex_vm_types::Class) -> R,
+    ) -> Option<R> {
+        let ptr = self
+            .resolved_class_names
+            .get(class_name)
+            .or_else(|| resolve_named_object(&self.resolved_class_names, class_name))?;
+        // SAFETY: registered class names point to compile-time Class objects.
+        match unsafe { ptr.get() } {
+            Object::Class(class) => Some(f(class)),
+            _ => None,
+        }
+    }
+
+    /// The number of class-level generic parameters `class_name` declares, read
+    /// from the highest `TypeArgRef(N)` index across its field templates (`N+1`).
+    /// `0` for a non-generic class — used to tell an *unbound generic* instance
+    /// (empty wire args on a generic class ⇒ host-only) from a plain non-generic
+    /// instance (empty args is correct). See the `Instance` synth arm.
+    fn class_generic_arity(&self, class_name: &str) -> usize {
+        self.with_resolved_class(class_name, |class| {
+            class
+                .fields
+                .iter()
+                .filter_map(|field| template_max_type_arg_ref(&field.field_template))
+                .max()
+                .map_or(0, |max| max as usize + 1)
+        })
+        .unwrap_or(0)
+    }
+
+    /// Reconstruct the type-args of an *unbound* generic instance from its field
+    /// VALUES, by synthesizing the value of each field whose template is a direct
+    /// `TypeArgRef(N)` into slot `N`. Slots with no directly-typed field stay
+    /// `BuiltinUnknown` (the unifier skips them). Returns `None` for a
+    /// non-generic / unresolvable class. This is the call-time recovery a forcing
+    /// formal needs to bind a var from an unbound instance (03b G1); it does NOT
+    /// run for bound instances (they read the wire args) or bare-`T` formals
+    /// (those keep the host-only `rust_type` synth).
+    fn reconstruct_unbound_instance_args(
+        &self,
+        class_name: &str,
+        fields: &indexmap::IndexMap<String, BexExternalValue>,
+    ) -> Option<Vec<RuntimeTy>> {
+        let arity = self.class_generic_arity(class_name);
+        if arity == 0 {
+            return None;
+        }
+        let unknown = || RuntimeTy::BuiltinUnknown {
+            attr: baml_type::TyAttr::default(),
+        };
+        let mut args: Vec<RuntimeTy> = (0..arity).map(|_| unknown()).collect();
+        self.with_resolved_class(class_name, |class| {
+            for field in &class.fields {
+                let slot = match &field.field_template {
+                    baml_type::TyTemplate::TypeArgRef(n)
+                    | baml_type::TyTemplate::TypeArgRefOrWildcard(n) => *n as usize,
+                    _ => continue,
+                };
+                if let Some(value) = fields.get(&field.name) {
+                    if let Some(arg) = args.get_mut(slot) {
+                        *arg = self.synth_ty_from_value(value).into_runtime_ty();
+                    }
+                }
+            }
+        })?;
+        Some(args)
+    }
+
+    /// Synthesize the *actual* `RuntimeTy` for one inference pair, given the
+    /// declared `formal`. Almost always this is just [`Self::synth_ty_from_value`].
+    /// The one formal-aware exception: an **unbound** generic `Instance` (empty
+    /// wire args) met by a generic-**class** formal. The wire carries no
+    /// type-args, but the formal directs inference into specific slots, so we
+    /// reconstruct the instance's args from its field values (03b G1:
+    /// `second_of<T>(p: GenericPair<int,T>)` recovers `T=string`). A bare-`T`
+    /// formal is not a `Class`, so it falls through to the host-only `rust_type`
+    /// synth (G2/G3), keeping the unbound instance opaque on round-trip.
+    pub(crate) fn synth_inference_actual(
+        &self,
+        formal: &RuntimeTy,
+        value: &BexExternalValue,
+    ) -> RuntimeTy {
+        if let (
+            RuntimeTy::Class(..),
+            BexExternalValue::Instance {
+                class_name,
+                type_args,
+                fields,
+            },
+        ) = (formal, value)
+        {
+            if type_args.is_empty() {
+                if let (Some(tn), Some(args)) = (
+                    self.resolve_class_type_name(class_name),
+                    self.reconstruct_unbound_instance_args(class_name, fields),
+                ) {
+                    return RuntimeTy::Class(tn, args, baml_type::TyAttr::default());
+                }
+            }
+        }
+        self.synth_ty_from_value(value).into_runtime_ty()
+    }
+
     /// Convert a `BexExternalValue` result from sys ops back to a VM Value.
     ///
     /// Returns `EngineError::TypeMismatch` for malformed external values
@@ -448,6 +569,19 @@ impl BexEngine {
         external: BexExternalValue,
         expected_ty: Option<&RuntimeTy>,
     ) -> Result<Value, EngineError> {
+        // Structural host-only stash (03b §F/§G): when the declared slot resolves
+        // to `RustType` (the generic var bound to `rust_type`) but the value is a
+        // structural `BexExternalValue` (e.g. an unbound generic instance), ride
+        // it through the VM verbatim as an opaque `Object::RustData` instead of
+        // materializing an introspectable object. `try_convert_rust_data` re-emits
+        // it unchanged on the way out, preserving its identity (an unbound
+        // `GenericBox(value=5)` stays != a bound `GenericBox[int]`, G4). `HostValue`
+        // keeps its dedicated arm below (it carries a release-keyed handle).
+        if expected_ty.and_then(peel_to_rust_type).is_some() && is_structural_host_only(&external) {
+            let arc: std::sync::Arc<dyn std::any::Any + Send + Sync> =
+                std::sync::Arc::new(bex_external_types::OpaqueExternalValue(external));
+            return Ok(Value::object(holder.holder_mut().tlab_mut().alloc_rust_data(arc)));
+        }
         Ok(match external {
             BexExternalValue::Handle(handle) => Value::object(
                 self.resolve_handle(holder.proof(), &handle)
@@ -1176,6 +1310,47 @@ pub(crate) struct ParamVarPositions {
     pub ambiguous_union: std::collections::HashSet<String>,
 }
 
+/// The highest `TypeArgRef(N)` index appearing anywhere in a field template, or
+/// `None` if the template references no class type-arg. Used to compute a
+/// generic class's arity from its fields.
+fn template_max_type_arg_ref(t: &baml_type::TyTemplate) -> Option<u32> {
+    use baml_type::TyTemplate as T;
+    match t {
+        T::Concrete(_) | T::Wildcard => None,
+        T::TypeArgRef(n) | T::TypeArgRefOrWildcard(n) => Some(*n),
+        T::Array(inner) => template_max_type_arg_ref(inner),
+        T::Map(k, v) => template_max_type_arg_ref(k)
+            .into_iter()
+            .chain(template_max_type_arg_ref(v))
+            .max(),
+        T::Union(members) => members.iter().filter_map(template_max_type_arg_ref).max(),
+        T::Class(_, args) => args.iter().filter_map(template_max_type_arg_ref).max(),
+        T::Interface(_, args, assoc) => args
+            .iter()
+            .chain(assoc.iter().map(|(_, t)| t))
+            .filter_map(template_max_type_arg_ref)
+            .max(),
+    }
+}
+
+/// Whether a value is a *structural* host-only carrier — an inline
+/// `BexExternalValue` (instance / map / list / variant / bytes) as opposed to an
+/// opaque handle, host-value, or already-`RustData`. When such a value lands in
+/// a `RustType` slot it is stashed verbatim (`OpaqueExternalValue`) rather than
+/// materialized into an introspectable VM object, so it round-trips unchanged
+/// (03b G2/G3/G4). Handles / host-values / rust-data already have their own
+/// opaque round-trip and are left to their existing arms.
+fn is_structural_host_only(value: &BexExternalValue) -> bool {
+    matches!(
+        value,
+        BexExternalValue::Instance { .. }
+            | BexExternalValue::Map { .. }
+            | BexExternalValue::Array { .. }
+            | BexExternalValue::Variant { .. }
+            | BexExternalValue::Uint8Array(_)
+    )
+}
+
 /// Classify every `TypeVar` occurring in the declared parameter types into
 /// [`ParamVarPositions`]. See that type's docs for the rule mapping.
 pub(crate) fn classify_param_var_positions(params: &[RuntimeTy]) -> ParamVarPositions {
@@ -1646,9 +1821,15 @@ fn runtime_ty_compatible(wire: &RuntimeTy, expected: &RuntimeTy) -> bool {
 /// path (their types aren't comparable at this boundary). Also rejects an
 /// instance smuggling an unbound `TypeVar` in its wire args (the wire must be
 /// fully bound).
+/// `caller_specified_types` selects the mode (see the call site): in explicit /
+/// partial mode (`true`) the wire must be fully bound, so an *unbound* instance
+/// (empty wire args) is rejected; in pure-inference mode (`false`) BAML has
+/// already recovered such an instance's args from its field values (03b G1), so
+/// the missing wire args are admitted.
 pub(crate) fn check_generic_arg(
     value: &BexExternalValue,
     expected: &RuntimeTy,
+    caller_specified_types: bool,
 ) -> Result<(), String> {
     let BexExternalValue::Instance { type_args, .. } = value else {
         return Ok(());
@@ -1658,6 +1839,12 @@ pub(crate) fn check_generic_arg(
             "generic argument carries an unbound type variable `{name}`; the host must \
              send fully-bound generic instances"
         ));
+    }
+    // Pure-inference mode: an *unbound* generic instance (no wire args) was
+    // already reconstructed from its fields and consumed by inference (G1).
+    // Admit it rather than demanding wire args the inference path doesn't need.
+    if !caller_specified_types && type_args.is_empty() {
+        return Ok(());
     }
     // Compare against the expected type, peeling optional/union wrappers so an
     // instance bound for a `T?`/`T | ...` slot still validates against the

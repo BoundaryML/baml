@@ -591,15 +591,11 @@ async fn gatea_class_method_body_only_var_should_reject() {
 }
 
 #[tokio::test]
-#[ignore = "BUG (deferred / not SDK-reachable): an Instance with EMPTY wire \
-            type_args for a *generic* class synthesizes Class(GenericBox, []) and \
-            binds T = `GenericBox<>` instead of the host-only rust_type that M18 / \
-            00b3 T27-T29 require for an unbound generic class. The shipping Python \
-            SDK encodes unbound generic classes as HostValue (→ rust_type), not as \
-            an empty-args Instance, so this path is only reachable by a fabricated \
-            BEX value; the fix needs a decision on the semantics of a zero-arg \
-            generic Instance (reject vs treat-as-host-only)."]
 async fn unbound_generic_instance_should_be_host_only() {
+    // §G G2 (decided): an `Instance` of a *generic* class with EMPTY wire
+    // type_args is an unbound generic ⇒ host-only `rust_type`, NOT a fabricated
+    // `GenericBox<>`. The bare-`T` formal gives inference nothing to descend
+    // into, so `T` defaults to `rust_type`.
     let source = r#"
         class GenericBox<T> { value T }
         function identity<T>(x: T) -> string { reflect.type_of<T>().to_string() }
@@ -611,8 +607,73 @@ async fn unbound_generic_instance_should_be_host_only() {
         indexmap::IndexMap::from_iter([("value", BexExternalValue::Int(5))]),
     );
     let out = call_infer(source, "identity", vec![arg]).await.unwrap();
-    // Expected per M18: T = rust_type (host-only), not `GenericBox<>`.
     assert_eq!(out, BexExternalValue::String("$rust_type".into()));
+}
+
+/// A value-returning identity — proves a value *round-trips* (not just that `T`
+/// reflects), so it exercises the host-only `OpaqueExternalValue` carrier.
+const IDENTITY_VALUE: &str = r#"
+    class GenericBox<T> { value T }
+    function identity<T>(x: T) -> T { x }
+    function main() -> int { 0 }
+"#;
+
+#[tokio::test]
+async fn g2_unbound_generic_instance_round_trips_opaque() {
+    // §G G2: `identity(GenericBox(value=5))` over an UNBOUND instance ⇒ T=rust_type;
+    // the instance rides through the VM opaquely and comes back verbatim.
+    let unbound = BexExternalValue::instance(
+        "GenericBox",
+        indexmap::IndexMap::from_iter([("value", BexExternalValue::Int(5))]),
+    );
+    let out = call_infer(IDENTITY_VALUE, "identity", vec![unbound.clone()])
+        .await
+        .unwrap();
+    assert_eq!(out, unbound, "unbound generic instance must round-trip unchanged");
+}
+
+#[tokio::test]
+async fn g4_bound_and_unbound_generic_instances_are_distinct() {
+    // §G G4 (discriminator): a properly-bound `GenericBox[int]` round-trips as a
+    // real bound instance (wire args `[int]`), while the UNBOUND form rides
+    // opaquely — so the two are NOT equal after a round-trip.
+    let bound = BexExternalValue::instance_generic(
+        "GenericBox",
+        vec![baml_type::RuntimeTy::int()],
+        indexmap::IndexMap::from_iter([("value", BexExternalValue::Int(5))]),
+    );
+    let unbound = BexExternalValue::instance(
+        "GenericBox",
+        indexmap::IndexMap::from_iter([("value", BexExternalValue::Int(5))]),
+    );
+    let bound_out = call_infer(IDENTITY_VALUE, "identity", vec![bound])
+        .await
+        .unwrap();
+    let unbound_out = call_infer(IDENTITY_VALUE, "identity", vec![unbound])
+        .await
+        .unwrap();
+    assert_ne!(
+        bound_out, unbound_out,
+        "a bound `GenericBox[int]` must not equal the unbound `GenericBox(value=5)`"
+    );
+}
+
+#[tokio::test]
+async fn g1_unbound_instance_under_forcing_formal_recovers_field_type() {
+    // §G G1: an UNBOUND `GenericPair(first=1, second="hi")` met by the forcing
+    // formal `GenericPair<int, T>` recovers `T=string` from the field VALUE (the
+    // wire carries no type-args), distinct from the bare-`T` host-only path.
+    let source = r#"
+        class GenericPair<A, B> { first A second B }
+        function second_of<T>(p: GenericPair<int, T>) -> string { reflect.type_of<T>().to_string() }
+        function main() -> int { 0 }
+    "#;
+    let unbound = BexExternalValue::instance(
+        "GenericPair",
+        indexmap::IndexMap::from_iter([("first", BexExternalValue::Int(1)), ("second", s("hi"))]),
+    );
+    let out = call_infer(source, "second_of", vec![unbound]).await.unwrap();
+    assert_eq!(out, BexExternalValue::String("string".into()));
 }
 
 // ── §J: variance soundness at the value seam (02d/02e) ──────────────────────
