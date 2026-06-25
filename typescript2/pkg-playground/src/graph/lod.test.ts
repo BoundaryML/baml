@@ -4,6 +4,7 @@ import type { WorkflowEdge, WorkflowNode } from './types';
 import {
   applyLevelOfDetail,
   computeNodeDepths,
+  depthScale,
   maxNodeDepth,
   zoomToRevealDepth,
 } from './lod';
@@ -68,6 +69,15 @@ describe('zoomToRevealDepth', () => {
   });
 });
 
+describe('depthScale', () => {
+  it('is 1 at the root, shrinks with depth, and clamps', () => {
+    expect(depthScale(0)).toBe(1);
+    expect(depthScale(1)).toBeLessThan(1);
+    expect(depthScale(2)).toBeLessThan(depthScale(1));
+    expect(depthScale(100)).toBeGreaterThanOrEqual(0.7);
+  });
+});
+
 describe('applyLevelOfDetail', () => {
   const EDGES: WorkflowEdge[] = [
     e('split', 'loop'),
@@ -79,6 +89,9 @@ describe('applyLevelOfDetail', () => {
     const { nodes } = applyLevelOfDetail(NODES, EDGES, { revealDepth: 1 });
     const ids = nodes.map((x) => x.id).sort();
     expect(ids).toEqual(['loop', 'root', 'split']);
+    // Each output node carries its nesting depth for depth-based sizing.
+    expect(nodes.find((x) => x.id === 'root')!.data.depth).toBe(0);
+    expect(nodes.find((x) => x.id === 'split')!.data.depth).toBe(1);
     // `loop` is a container with hidden children → rendered as a collapsed leaf.
     const loop = nodes.find((x) => x.id === 'loop')!;
     expect(loop.type).toBe('base');

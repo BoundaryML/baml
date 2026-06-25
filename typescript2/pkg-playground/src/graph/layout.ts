@@ -1,5 +1,6 @@
 import ELK from 'elkjs/lib/elk.bundled.js';
 import type { ElkNode, ElkExtendedEdge } from 'elkjs/lib/elk-api';
+import { depthScale } from './lod';
 import type { WorkflowNode, WorkflowEdge } from './types';
 import {
   NODE_IMAGE_PREVIEW_GAP,
@@ -97,9 +98,13 @@ function nodeSize(node: WorkflowNode): { w: number; h: number } {
 
     return base;
   })();
+  // Deeper nodes lay out smaller (semantic-zoom hierarchy) — matches the
+  // depth-scaled font/padding in BaseNode so content fills the box. The routing
+  // buffer stays constant. Groups auto-size from children, so they shrink too.
+  const s = depthScale(typeof node.data.depth === 'number' ? node.data.depth : 0);
   return {
-    w: visualSize.w + 2 * NODE_BUFFER,
-    h: visualSize.h + 2 * NODE_BUFFER,
+    w: visualSize.w * s + 2 * NODE_BUFFER,
+    h: visualSize.h * s + 2 * NODE_BUFFER,
   };
 }
 

@@ -2,6 +2,7 @@ import { type NodeProps } from '@xyflow/react';
 import { Repeat } from 'lucide-react';
 import { type ComponentType, memo } from 'react';
 import { getChrome, stateStyle } from '../constants';
+import { depthScale } from '../lod';
 import { useGraphThemeContext } from '../theme';
 import type { WorkflowNodeData } from '../types';
 import { NodeHandles } from './NodeHandles';
@@ -20,6 +21,8 @@ export const GroupNode: ComponentType<NodeProps> = memo(({ data, id }) => {
   const isHighlighted = d.selected;
   // Set by the level-of-detail pass when the user expanded this container.
   const expandable = d.expanded === true;
+  // Deeper containers get a smaller label chip (semantic-zoom hierarchy).
+  const s = depthScale(typeof d.depth === 'number' ? d.depth : 0);
   const theme = useGraphThemeContext();
   const chrome = getChrome(theme);
   const style = stateStyle(theme, d.executionState);
@@ -68,10 +71,10 @@ export const GroupNode: ComponentType<NodeProps> = memo(({ data, id }) => {
           alignItems: 'center',
           gap: 6,
           whiteSpace: 'nowrap',
-          padding: '3px 10px',
+          padding: `${3 * s}px ${10 * s}px`,
           borderRadius: 999,
           fontWeight: 600,
-          fontSize: 11,
+          fontSize: 11 * s,
           letterSpacing: '-0.005em',
           color: isHighlighted
             ? chrome.groupLabelTextSelected

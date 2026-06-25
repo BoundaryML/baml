@@ -1,6 +1,7 @@
 import { type NodeProps } from '@xyflow/react';
 import { type ComponentType, memo } from 'react';
 import { getChrome, nodeBackground, nodeShadow, stateStyle } from '../constants';
+import { depthScale } from '../lod';
 import { useGraphThemeContext } from '../theme';
 import type { WorkflowNodeData } from '../types';
 import { NodeHandles } from './NodeHandles';
@@ -94,6 +95,8 @@ export const BaseNode: ComponentType<NodeProps> = memo(({ data }) => {
   const collapsed = d.collapsed === true;
   const collapsedCount =
     typeof d.collapsedCount === 'number' ? d.collapsedCount : 0;
+  // Deeper nodes render smaller (semantic-zoom hierarchy).
+  const s = depthScale(typeof d.depth === 'number' ? d.depth : 0);
 
   return (
     <>
@@ -103,8 +106,8 @@ export const BaseNode: ComponentType<NodeProps> = memo(({ data }) => {
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'stretch',
-          gap: 6,
-          padding: '7px 11px 7px 9px',
+          gap: 6 * s,
+          padding: `${7 * s}px ${11 * s}px ${7 * s}px ${9 * s}px`,
           borderRadius: 8,
           background: nodeBackground(colors, theme),
           border: `1px solid ${isHighlighted ? chrome.selectionRing.color : colors.border}`,
@@ -120,11 +123,11 @@ export const BaseNode: ComponentType<NodeProps> = memo(({ data }) => {
           cursor: collapsed ? 'zoom-in' : undefined,
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 * s }}>
           <div
             style={{
-              width: 20,
-              height: 20,
+              width: 20 * s,
+              height: 20 * s,
               borderRadius: 6,
               background: colors.accent,
               boxShadow: `inset 0 1px 0 rgba(255,255,255,0.18), 0 1px 2px rgba(0,0,0,0.25)`,
@@ -138,7 +141,7 @@ export const BaseNode: ComponentType<NodeProps> = memo(({ data }) => {
           </div>
           <div
             style={{
-              fontSize: 12,
+              fontSize: 12 * s,
               fontWeight: 500,
               color: colors.text,
               flex: 1,
