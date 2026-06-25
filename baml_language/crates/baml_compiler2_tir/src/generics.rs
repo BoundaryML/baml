@@ -349,9 +349,8 @@ pub fn lower_type_expr_with_generics(
                 bindings,
                 diagnostics,
             )),
-            interface: interface
-                .as_ref()
-                .and_then(|interface| {
+            interface: {
+                let interface_ty = interface.as_ref().map(|interface| {
                     lower_type_expr_with_generics(
                         db,
                         interface,
@@ -360,9 +359,14 @@ pub fn lower_type_expr_with_generics(
                         bindings,
                         diagnostics,
                     )
-                    .as_interface()
-                })
-                .map(Box::new),
+                });
+                crate::lower_type_expr::lower_explicit_projection_qualifier(
+                    db,
+                    interface_ty,
+                    member,
+                    diagnostics,
+                )
+            },
             member: member.clone(),
             attr: TyAttr::default(),
         },

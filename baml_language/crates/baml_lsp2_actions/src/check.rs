@@ -2246,6 +2246,10 @@ fn validate_associated_type_bindings_in_type_expr(
                     diagnostics,
                 );
             }
+            // The non-interface qualifier and the unknown-associated-member checks
+            // are now in the TIR lowering (`lower_explicit_projection_qualifier`),
+            // emitted on every compile path. This still validates the
+            // unknown-interface and base-implements-interface cases.
             validate_qualified_associated_type_projection(
                 db,
                 file_id,
@@ -2480,51 +2484,31 @@ fn validate_qualified_associated_type_projection(
     let baml_compiler2_ast::TypeExpr::AssociatedTypeProjection {
         base,
         interface: Some(interface),
-        member,
         ..
     } = expr
     else {
         return;
     };
 
-    let Some(resolved_iface) = resolve_interface_path(db, interface, pkg_items, namespace_path)
-    else {
-        let message = if is_non_interface_type(interface, pkg_items, namespace_path) {
-            "qualified associated type projection must use an interface".to_string()
-        } else {
-            format!("unknown interface `{interface}` in associated type projection")
-        };
-        diagnostics.push(
-            Diagnostic::error(DiagnosticId::TypeMismatch, message)
+    // The qualifier must name an interface. The non-interface case ("must use an
+    // interface") and the unknown-associated-member case are now diagnosed by the
+    // TIR lowering (`lower_explicit_projection_qualifier`), emitted on every
+    // compile path; here we only report a qualifier path that doesn't resolve to
+    // any interface at all.
+    if resolve_interface_path(db, interface, pkg_items, namespace_path).is_none() {
+        if !is_non_interface_type(interface, pkg_items, namespace_path) {
+            diagnostics.push(
+                Diagnostic::error(
+                    DiagnosticId::TypeMismatch,
+                    format!("unknown interface `{interface}` in associated type projection"),
+                )
                 .with_primary_span(Span {
                     file_id,
                     range: span,
                 })
                 .with_phase(DiagnosticPhase::Type),
-        );
-        return;
-    };
-
-    if !resolved_iface
-        .iface
-        .associated_types
-        .iter()
-        .any(|assoc| assoc.name == *member)
-    {
-        diagnostics.push(
-            Diagnostic::error(
-                DiagnosticId::UnknownType,
-                format!(
-                    "unknown associated type `{member}` for interface `{}`",
-                    resolved_iface.display_name()
-                ),
-            )
-            .with_primary_span(Span {
-                file_id,
-                range: span,
-            })
-            .with_phase(DiagnosticPhase::Type),
-        );
+            );
+        }
         return;
     }
 
@@ -6136,6 +6120,9 @@ fn tir_type_error_to_diagnostic_id(
         | TirTypeError::ComparisonAlwaysDisjoint { .. } => DiagnosticId::InvalidOperator,
         TirTypeError::InvalidUnaryOp { .. } => DiagnosticId::InvalidOperator,
         TirTypeError::UnresolvedType { .. } => DiagnosticId::UnknownType,
+        TirTypeError::NonInterfaceProjectionQualifier => DiagnosticId::TypeMismatch,
+        TirTypeError::UnknownAssociatedType { .. } => DiagnosticId::UnknownType,
+        TirTypeError::AmbiguousAssociatedTypeProjection { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::ArgumentCountMismatch { .. }
         | TirTypeError::PositionalArgumentAfterNamed
         | TirTypeError::DuplicateNamedArgument { .. }
