@@ -246,6 +246,28 @@ function f(s: Sentiment) -> string {
 }
 
 #[test]
+fn unknown_field_access_uses_narrowing_diagnostic() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        "\
+function load(raw: unknown) -> string {
+  return raw.email.to_lower_case();
+}",
+    );
+
+    let output = render_tir(&db, file);
+    assert!(
+        output.contains("cannot access field `email` on `unknown`"),
+        "expected unknown-specific field access diagnostic, got:\n{output}"
+    );
+    assert!(
+        !output.contains("type `unknown` has no member `email`"),
+        "unknown field access should not use the generic missing-member wording:\n{output}"
+    );
+}
+
+#[test]
 fn binary_op_int_add() {
     let mut db = make_db();
     let file = db.add_file(
