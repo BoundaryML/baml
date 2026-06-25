@@ -72,10 +72,14 @@ const EXPAND_MODES: { id: ExpandMode; label: string; title: string }[] = [
   {
     id: 'click',
     label: 'Click',
-    title: 'Collapsed by default — click a node to expand its subgraph',
+    title: 'Shows the first 2 levels — click a node to expand deeper',
   },
   { id: 'all', label: 'All', title: 'Expand every subgraph' },
 ];
+
+/** Click mode (the default) reveals this many levels up front; deeper
+ *  subgraphs collapse to leaves until the user clicks one open. */
+const CLICK_REVEAL_DEPTH = 2;
 
 const DIRECTION_STORAGE_PREFIX = 'baml-graph-direction:';
 
@@ -289,11 +293,11 @@ function GraphViewInner({
   // collapse deeper subgraphs into a single leaf. How that depth is chosen is
   // the "Expand" mode (bottom-right menu):
   //   • zoom  — depth follows the viewport zoom (semantic zoom)
-  //   • click — collapsed by default; click a node to expand its subgraph
+  //   • click — first 2 levels shown; click a node to expand deeper
   //   • all   — everything expanded
   // `expanded` holds containers the user clicked open; it layers on any mode.
   const maxDepth = useMemo(() => maxNodeDepth(graphModel.rfNodes), [graphModel]);
-  const [expandMode, setExpandMode] = useState<ExpandMode>('zoom');
+  const [expandMode, setExpandMode] = useState<ExpandMode>('click');
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
@@ -311,7 +315,7 @@ function GraphViewInner({
         // still runs and stamps `data.depth` for depth-scaled layout/rendering.
         maxDepth + 1
       : expandMode === 'click'
-        ? 1
+        ? CLICK_REVEAL_DEPTH
         : zoomToRevealDepth(viewportZoom, maxDepth);
 
   const lodModel = useMemo(

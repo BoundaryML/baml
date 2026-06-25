@@ -1790,7 +1790,8 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
   const onRunFunction = useCallback(async () => {
     if (!selectedFn || !selectedProject || isRunning) return;
 
-    setActiveTab('run');
+    // Don't force the 'run' tab — running keeps the user on whatever tab
+    // they're viewing (graph, trace, prompt, etc.).
     setExpandedLogId(null);
     setRunValidationError(null);
 
