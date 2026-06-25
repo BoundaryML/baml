@@ -1,9 +1,9 @@
+use std::collections::{HashMap, HashSet};
+
 use dir_writer::{FileCollector, GeneratorArgs, IntermediateRepr, LanguageFeatures};
 use functions::{
     render_async_client, render_runtime, render_source_files, render_sync_client, render_type_map,
 };
-use std::collections::{HashMap, HashSet};
-
 use generated_types::render_py_types;
 
 use crate::{
