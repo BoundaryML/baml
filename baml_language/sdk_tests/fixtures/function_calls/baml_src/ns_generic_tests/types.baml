@@ -258,3 +258,63 @@ function triple_choose<T>(a: T, b: T, c: T) -> string {
 function two_in_union<T, U>(x: T | U | int) -> string {
   reflect.type_of<T | U>().to_string()
 }
+
+// ---------------------------------------------------------------------------
+// §I nullable param: the non-null arm of `T?` binds against a present actual
+// (`maybe_id(5)` ⇒ T=int), while a `null`-only actual is no evidence ⇒ T falls
+// to host-only `rust_type` (we do NOT null-strip `T?` to bind `T=null`). Returns
+// the value so the host can assert the round trip.
+// ---------------------------------------------------------------------------
+
+function maybe_id<T>(x: T?) -> T? {
+  x
+}
+
+// ---------------------------------------------------------------------------
+// §B low-evidence free functions: a free function has no wire-arg channel, so an
+// EMPTY collection yields no element/value evidence and the element/value
+// TypeVar falls to host-only `rust_type` (B7/B9). The bodies return the empty
+// container so the host reads back `[]` / `None` rather than a reflected name.
+// (Contrast the *bound instance* path, where an empty field still recovers `T`
+// from the wire type-arg — B6.)
+// ---------------------------------------------------------------------------
+
+function first_or<T>(xs: T[]) -> T? {
+  if (xs.length() > 0) { xs[0] } else { null }
+}
+
+// §B/§D heterogeneous array: the elements of a single `T[]` union-merge while
+// synthesizing the one container's element type, so `elem_type([1, "x"])` binds
+// `T = int | string`. Reflects `T` so the host can read the unified element type
+// directly (distinct from B8, which only reads back the round-tripped values).
+function elem_type<T>(xs: T[]) -> string {
+  reflect.type_of<T>().to_string()
+}
+
+function values_of<T>(m: map<string, T>) -> T[] {
+  m.values()
+}
+
+// ---------------------------------------------------------------------------
+// §J J13 bridge-level reification of function-typed args: a host callable
+// crosses the FFI as an opaque handle, not a structural `(T) -> R`, so the
+// bridge can neither infer `T`/`R` from it nor validate a binding inferred
+// elsewhere against it. Every TypeVar TOUCHED by the callable is therefore
+// poisoned and must be specified up front — `T` is poisoned by `(T)` even though
+// `x` would otherwise pin it, and `R` lives only in the closure's return. The
+// body invokes the callable so the explicit-binding positive case round-trips.
+// ---------------------------------------------------------------------------
+
+function apply<T, R>(f: (T) -> R, x: T) -> R {
+  f(x)
+}
+
+// ---------------------------------------------------------------------------
+// §I enum actual: an enum value binds `T` to the enum TYPE (`identity(SomeEnum.VARIANT)`
+// ⇒ T=SomeEnum), recovered from the resolved variant.
+// ---------------------------------------------------------------------------
+
+enum SomeEnum {
+  VARIANT
+  OTHER
+}

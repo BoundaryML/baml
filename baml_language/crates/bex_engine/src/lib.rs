@@ -1044,6 +1044,19 @@ fn friendly_inference_conflict(function_name: &str, detail: &str) -> String {
     format!("`{name}` was called with arguments whose types can't be reconciled. {detail}")
 }
 
+/// A generic call whose argument value doesn't inhabit its (now concrete)
+/// declared parameter type — e.g. a caller-specified `T=int` contradicted by a
+/// `string` actual (03b C4). `detail` is the structural clash from
+/// [`crate::conversion::check_generic_arg`]; we add the call frame and the
+/// 1-based argument position.
+fn friendly_arg_type_mismatch(function_name: &str, arg_index: usize, detail: &str) -> String {
+    let name = host_display_name(function_name);
+    format!(
+        "`{name}` was called with a value that doesn't match its type: argument {} {detail}.",
+        arg_index + 1
+    )
+}
+
 impl BexEngine {
     fn next_engine_id() -> EngineId {
         static NEXT_ENGINE_ID: AtomicU64 = AtomicU64::new(1);
@@ -2042,15 +2055,36 @@ impl BexEngine {
                 .chain(std::iter::once(&return_type))
                 .any(crate::conversion::contains_type_var);
 
-        // ── VALUE INFERENCE (01a/01b) — source (c). For a generic call whose
-        // wire left some TypeVar unbound, solve it from the argument *values*:
-        // synthesize each provided arg's concrete `RuntimeTy` and unify it
-        // against the declared param type. Accumulate into a fresh, union-merged
-        // map, then fold in with `or_insert` so the explicit `_types=` (source
-        // b) and self-receiver (source a) bindings already in `type_args` WIN.
-        // Inference only ever *adds* bindings — a var no value can carry
-        // (return/body-only, out-of-scope union-param) stays unbound and Gate A
-        // rejects it exactly as before.
+        // ── TYPEVAR BINDING POLICY (inbound value-inference 01a/01b +
+        // `03c-impl-guide`). For each `TypeVar` `T`, after applying explicit
+        // (`_types=` / subscript) bindings:
+        //
+        //   1. Explicit wins. If the caller specified `T`, use it. (This is also
+        //      what satisfies the must-specify cases below.)
+        //   2. Closure poison ⇒ must-specify. If `T` occurs *anywhere inside a
+        //      closure/lambda-typed parameter's signature* (its param types or
+        //      return type, at any nesting depth), `T` MUST be explicitly
+        //      specified; unspecified ⇒ the call ERRORS. This OVERRIDES any
+        //      value-position evidence `T` might also have — a closure occurrence
+        //      poisons `T` globally.
+        //   3. No value position ⇒ must-specify. If `T`'s only occurrences are
+        //      return-only or body-only (no value position anywhere), `T`
+        //      likewise MUST be explicitly specified; errors if not.
+        //   4. Value position, no leaf ⇒ `RustType`. If `T` has ≥1 value
+        //      position, NO closure occurrence, and value-inference still
+        //      produced no concrete leaf (empty collection, `null` actual,
+        //      unbound generic under a non-recursing formal), default
+        //      `T = RustType` and let it ride opaquely as `RustData`.
+        //
+        // The normal path (a value position that *did* yield a leaf) is
+        // unchanged. Steps 2–3 are detectable from the *signature alone*, so the
+        // error is eager, at the call site (Gate A below) — not deferred into the
+        // body.
+        //
+        // Mechanically: inference only ever *adds* bindings — synthesize each
+        // provided arg's concrete `RuntimeTy`, unify against the declared param
+        // type, and fold in with `or_insert` so explicit (source b) and
+        // self-receiver (source a) bindings already in `type_args` WIN.
         if callee_is_generic {
             // Synthesize each provided arg's `RuntimeTy` and pair it with its
             // declared formal, then solve every var across all arguments at once
@@ -2079,17 +2113,15 @@ impl BexEngine {
                     }
                 })?;
 
-            // Classify where each TypeVar occurs across the parameter types so we
-            // can apply the closure-poison (rule 2) and `RustType`-default (rule
-            // 4) policies from `03c-impl-guide`.
+            // Classify where each TypeVar occurs across the parameter types to
+            // drive rules 2 and 4 above.
             let positions = crate::conversion::classify_param_var_positions(&declared_param_types);
 
             for (name, ty) in inferred {
-                // Rule 2 (closure poison): a var occurring inside a function-typed
-                // parameter is opaque to BAML — drop any value-inferred binding so
-                // it is *required explicitly* (Gate A errors if unspecified), even
-                // when another argument would otherwise pin it (`apply<T,R>(f:
-                // (T)->R, x: T)` — `x` must NOT bind `T`).
+                // Rule 2 (closure poison): drop any value-inferred binding so the
+                // var is required explicitly — even when another argument would
+                // otherwise pin it (`apply<T,R>(f: (T)->R, x: T)` — `x` must NOT
+                // bind `T`).
                 if positions.closure.contains(&name) {
                     continue;
                 }
@@ -2097,11 +2129,10 @@ impl BexEngine {
             }
 
             // Rule 4 (RustType default): a var with ≥1 value position, no closure
-            // occurrence, still unbound after inference (empty collection, `null`
-            // actual, union-sibling-absorbed, unbound generic under a non-recursing
-            // formal) defaults to `rust_type` and rides opaquely. Vars with no
-            // value position (return/body-only) and closure-poisoned vars are left
-            // unbound for Gate A's must-specify error.
+            // occurrence, still unbound after inference defaults to `rust_type` and
+            // rides opaquely. Vars with no value position (return/body-only, rule 3)
+            // and closure-poisoned vars (rule 2) are left unbound for Gate A's
+            // must-specify error.
             for var in &positions.value_position {
                 if positions.closure.contains(var) || positions.ambiguous_union.contains(var) {
                     continue;
@@ -2159,7 +2190,19 @@ impl BexEngine {
             //       including an instance method whose receiver failed to supply
             //       its class type args.
             let missing_declared = if self.is_class_method(function_name) {
-                None
+                // Demand the method's OWN generic params (the suffix after the
+                // class prefix). Inherited class params ride on the receiver (an
+                // instance method) or are phantom (a static), so they're never
+                // bound by name and must not be demanded. The method's own params
+                // ARE demanded — so rule 3 (no value position ⇒ must-specify)
+                // fires for a method's body-only own var (`reflect_t<T>()`), which
+                // check (2)'s signature scan misses.
+                let class_prefix = self.enclosing_class_generic_param_count(function_name);
+                declared_generic_params
+                    .iter()
+                    .skip(class_prefix)
+                    .find(|p| !type_args.contains_key(p.as_str()))
+                    .cloned()
             } else {
                 declared_generic_params
                     .iter()
@@ -2208,7 +2251,9 @@ impl BexEngine {
                             &param_types[idx],
                             caller_specified_types,
                         )
-                        .map_err(|message| EngineError::TypeMismatch { message })?;
+                        .map_err(|detail| EngineError::TypeMismatch {
+                            message: friendly_arg_type_mismatch(function_name, idx, &detail),
+                        })?;
                     }
                     Ok(BexCallArg::Provided(Box::new(coerced)))
                 }
@@ -2810,6 +2855,40 @@ impl BexEngine {
             || parent
                 .strip_prefix("user.")
                 .is_some_and(|p| self.resolved_class_names.contains_key(p))
+    }
+
+    /// Number of generic params declared by the class that *encloses*
+    /// `function_name` — the De Bruijn class-prefix length on a method's
+    /// `display_type_params` (`GenericBox<T>.new` ⇒ 1, `Helper.reflect_t` ⇒ 0).
+    /// `0` for free functions or when the parent isn't a registered class. Gate A
+    /// uses it to split a method's *own* generic params (which it must demand —
+    /// rule 3) from inherited class params (which ride on the receiver / are
+    /// phantom on a static, so are never bound by name).
+    fn enclosing_class_generic_param_count(&self, function_name: &str) -> usize {
+        let Some(resolved) = self.resolve_function_name(function_name) else {
+            return 0;
+        };
+        let Some(idx) = resolved.rfind('.') else {
+            return 0;
+        };
+        let parent = &resolved[..idx];
+        let class_ptr = self
+            .resolved_class_names
+            .get(parent)
+            .or_else(|| self.resolved_class_names.get(&format!("user.{parent}")))
+            .or_else(|| {
+                parent
+                    .strip_prefix("user.")
+                    .and_then(|p| self.resolved_class_names.get(p))
+            });
+        let Some(ptr) = class_ptr else {
+            return 0;
+        };
+        // SAFETY: ptr is from resolved_class_names, a compile-time object.
+        match unsafe { ptr.get() } {
+            Object::Class(class) => class.generic_param_count,
+            _ => 0,
+        }
     }
 
     /// Check if a function exists by name (tries exact then "user." prefix).

@@ -86,6 +86,7 @@ class            baml.errors.DevOther             <builtin>/baml/ns_errors/error
 class            baml.errors.HostCallable         <builtin>/baml/ns_errors/errors.baml:53
 class            baml.errors.GenericSdkError      <builtin>/baml/ns_errors/errors.baml:74
 class            baml.errors.CompilationError     <builtin>/baml/ns_errors/errors.baml:80
+class            baml.errors.TypeMismatch         <builtin>/baml/ns_errors/errors.baml:90
 class            baml.errors.StackFrame           <builtin>/baml/ns_errors/stack_trace.baml:2
 class            baml.errors.StackTrace           <builtin>/baml/ns_errors/stack_trace.baml:9
 class            baml.fs.File                     <builtin>/baml/ns_fs/fs.baml:6

@@ -468,10 +468,18 @@ impl BexEngine {
     /// formal needs to bind a var from an unbound instance (03b G1); it does NOT
     /// run for bound instances (they read the wire args) or bare-`T` formals
     /// (those keep the host-only `rust_type` synth).
+    ///
+    /// `formal_args` are the per-slot types from the formal generic-class type
+    /// (`GenericPair<GenericPair<A,B>, …>` ⇒ slot 0 formal is `GenericPair<A,B>`).
+    /// Each field is synthed against its slot's formal via the formal-aware
+    /// [`Self::synth_inference_actual`], so a slot whose value is *itself* an
+    /// unbound nested instance is recursively reconstructed (deep G1) rather than
+    /// flattened to host-only `rust_type`.
     fn reconstruct_unbound_instance_args(
         &self,
         class_name: &str,
         fields: &indexmap::IndexMap<String, BexExternalValue>,
+        formal_args: &[RuntimeTy],
     ) -> Option<Vec<RuntimeTy>> {
         let arity = self.class_generic_arity(class_name);
         if arity == 0 {
@@ -483,6 +491,9 @@ impl BexEngine {
         let mut args: Vec<RuntimeTy> = (0..arity).map(|_| unknown()).collect();
         self.with_resolved_class(class_name, |class| {
             for field in &class.fields {
+                // `TypeArgRefOrWildcard` is a deprecated type-erasure bandaid in
+                // `baml_type`; it's still a live template variant we must match.
+                #[allow(deprecated)]
                 let slot = match &field.field_template {
                     baml_type::TyTemplate::TypeArgRef(n)
                     | baml_type::TyTemplate::TypeArgRefOrWildcard(n) => *n as usize,
@@ -490,7 +501,14 @@ impl BexEngine {
                 };
                 if let Some(value) = fields.get(&field.name) {
                     if let Some(arg) = args.get_mut(slot) {
-                        *arg = self.synth_ty_from_value(value).into_runtime_ty();
+                        // Recurse formal-first: a nested unbound instance under a
+                        // generic-class formal slot is reconstructed in turn; any
+                        // other slot formal (a bare `TypeVar`, a leaf) falls through
+                        // to the value-only synth inside `synth_inference_actual`.
+                        *arg = match formal_args.get(slot) {
+                            Some(slot_formal) => self.synth_inference_actual(slot_formal, value),
+                            None => self.synth_ty_from_value(value).into_runtime_ty(),
+                        };
                     }
                 }
             }
@@ -513,7 +531,7 @@ impl BexEngine {
         value: &BexExternalValue,
     ) -> RuntimeTy {
         if let (
-            RuntimeTy::Class(..),
+            RuntimeTy::Class(_, formal_args, _),
             BexExternalValue::Instance {
                 class_name,
                 type_args,
@@ -524,7 +542,7 @@ impl BexEngine {
             if type_args.is_empty() {
                 if let (Some(tn), Some(args)) = (
                     self.resolve_class_type_name(class_name),
-                    self.reconstruct_unbound_instance_args(class_name, fields),
+                    self.reconstruct_unbound_instance_args(class_name, fields, formal_args),
                 ) {
                     return RuntimeTy::Class(tn, args, baml_type::TyAttr::default());
                 }
@@ -1335,6 +1353,9 @@ pub(crate) struct ParamVarPositions {
 /// The highest `TypeArgRef(N)` index appearing anywhere in a field template, or
 /// `None` if the template references no class type-arg. Used to compute a
 /// generic class's arity from its fields.
+// `TypeArgRefOrWildcard` is a deprecated type-erasure bandaid in `baml_type`;
+// it's still a live template variant this walk must account for.
+#[allow(deprecated)]
 fn template_max_type_arg_ref(t: &baml_type::TyTemplate) -> Option<u32> {
     use baml_type::TyTemplate as T;
     match t {
@@ -1834,50 +1855,104 @@ fn runtime_ty_compatible(wire: &RuntimeTy, expected: &RuntimeTy) -> bool {
     }
 }
 
-/// Structurally check a generic call's **instance** argument against its
-/// now-concrete expected parameter type, returning a human-readable error on a
-/// positive mismatch. Scoped to `BexExternalValue::Instance` — the value kind
-/// whose wire-supplied `type_args` carry generic information that the signature
-/// can check (e.g. a `GenericBox<string>` arriving at a `GenericBox<int>`
-/// param). Opaque handles/Adts/host values and bare maps keep the permissive
-/// path (their types aren't comparable at this boundary). Also rejects an
-/// instance smuggling an unbound `TypeVar` in its wire args (the wire must be
-/// fully bound).
-/// `caller_specified_types` selects the mode (see the call site): in explicit /
-/// partial mode (`true`) the wire must be fully bound, so an *unbound* instance
-/// (empty wire args) is rejected; in pure-inference mode (`false`) BAML has
-/// already recovered such an instance's args from its field values (03b G1), so
-/// the missing wire args are admitted.
+/// Structurally check a generic call's argument against its now-concrete
+/// expected parameter type (Gate B), returning a human-readable mismatch
+/// `detail` on a positive failure (the caller frames it with the function name
+/// and argument position).
+///
+/// By the time this runs, Gate A has guaranteed every `TypeVar` is bound, so
+/// `expected` is a concrete type and the question is simply "does this value
+/// inhabit it?".
+///
+/// Three kinds of value:
+/// - **`Instance`** keeps the stronger comparison: its wire-supplied `type_args`
+///   carry generic information the signature can check (a `GenericBox<string>`
+///   arriving at a `GenericBox<int>` param is rejected), and an instance
+///   smuggling an unbound `TypeVar` in its wire args is rejected (the wire must
+///   be fully bound). `caller_specified_types` selects the mode: in explicit /
+///   partial mode (`true`) the wire must be fully bound, so an *unbound* instance
+///   (empty wire args) is rejected; in pure-inference mode (`false`) BAML has
+///   already recovered such an instance's args from its field values (03b G1),
+///   so the missing wire args are admitted.
+/// - **plain host data** (scalars, lists, maps, enum variants) is checked with
+///   the shared `value_satisfies_ty` shape match (via `validate_host_return`) —
+///   the same strict, recursive check the *return* path uses. This is the seam
+///   the pre-inference version skipped entirely, admitting e.g. a `string`
+///   argument into an `int` slot when the binding was caller-specified (03b C4).
+///   The shared check is lenient exactly where inference is (it accepts any value
+///   against `rust_type`/`unknown`, matches a value against any union arm, and
+///   treats an empty container's element position vacuously), so every value
+///   whose synthesized type produced a binding still passes.
+/// - **opaque / engine-minted typed carriers** (a typed heap handle such as a
+///   `Stream` receiver, a host callable, a reflected type / media / collector /
+///   prompt, a host-only value, a raw handle) stay lenient — they are either
+///   already typed by the engine or ride opaquely through the VM, so a value-shape
+///   check isn't meaningful. This matches the pre-inference behavior for every
+///   non-`Instance` value; only plain host data is newly checked.
 pub(crate) fn check_generic_arg(
     value: &BexExternalValue,
     expected: &RuntimeTy,
     caller_specified_types: bool,
 ) -> Result<(), String> {
-    let BexExternalValue::Instance { type_args, .. } = value else {
-        return Ok(());
-    };
-    if let Some(name) = type_args.iter().find_map(first_unbound_type_var) {
-        return Err(format!(
-            "generic argument carries an unbound type variable `{name}`; the host must \
-             send fully-bound generic instances"
-        ));
-    }
-    // Pure-inference mode: an *unbound* generic instance (no wire args) was
-    // already reconstructed from its fields and consumed by inference (G1).
-    // Admit it rather than demanding wire args the inference path doesn't need.
-    if !caller_specified_types && type_args.is_empty() {
-        return Ok(());
-    }
-    // Compare against the expected type, peeling optional/union wrappers so an
-    // instance bound for a `T?`/`T | ...` slot still validates against the
-    // class member. Lenient where the expected type isn't a concrete class.
-    if expected_admits_instance(value, expected) {
-        Ok(())
-    } else {
-        Err(format!(
-            "argument of runtime type `{}` does not satisfy the expected type `{expected:?}`",
-            value.type_name(),
-        ))
+    match value {
+        BexExternalValue::Instance { type_args, .. } => {
+            if let Some(name) = type_args.iter().find_map(first_unbound_type_var) {
+                return Err(format!(
+                    "is a generic instance carrying an unbound type variable `{name}`; the host \
+                     must send fully-bound generic instances"
+                ));
+            }
+            // Pure-inference mode: an *unbound* generic instance (no wire args)
+            // was already reconstructed from its fields and consumed by inference
+            // (G1). Admit it rather than demanding wire args inference didn't need.
+            if !caller_specified_types && type_args.is_empty() {
+                return Ok(());
+            }
+            // Compare against the expected type, peeling optional/union wrappers
+            // so an instance bound for a `T?`/`T | ...` slot still validates
+            // against the class member. Lenient where the expected type isn't a
+            // concrete class.
+            if expected_admits_instance(value, expected) {
+                Ok(())
+            } else {
+                Err(format!(
+                    "has runtime type `{}`, which doesn't match the expected type `{expected}`",
+                    value.type_name(),
+                ))
+            }
+        }
+
+        // Plain host data — strict structural shape check (the 03b C4 fix).
+        BexExternalValue::Null
+        | BexExternalValue::Int(_)
+        | BexExternalValue::Bigint(_)
+        | BexExternalValue::Float(_)
+        | BexExternalValue::Bool(_)
+        | BexExternalValue::String(_)
+        | BexExternalValue::Uint8Array(_)
+        | BexExternalValue::Array { .. }
+        | BexExternalValue::Map { .. }
+        | BexExternalValue::Variant { .. } => {
+            bex_external_types::validate_host_return(value, expected).map_err(|_| {
+                format!(
+                    "has type `{}`, which doesn't match the expected type `{expected}`",
+                    value.type_name(),
+                )
+            })
+        }
+
+        // The FFI union wrapper: peel and re-check the carried value, so an opaque
+        // inner stays lenient rather than being shape-checked.
+        BexExternalValue::Union { value: inner, .. } => {
+            check_generic_arg(inner, expected, caller_specified_types)
+        }
+
+        // Opaque / engine-minted typed carriers: lenient (see the doc above).
+        BexExternalValue::Adt(_)
+        | BexExternalValue::RustData(_)
+        | BexExternalValue::FunctionRef { .. }
+        | BexExternalValue::Handle(_)
+        | BexExternalValue::HostValue(_) => Ok(()),
     }
 }
 

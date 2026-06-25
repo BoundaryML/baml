@@ -215,7 +215,13 @@ async fn infer_choose_divergent_unions() {
 
 #[tokio::test]
 async fn partial_explicit_seed_then_infer() {
-    // T17: make_triple with A explicit, B/C inferred. Explicit A wins.
+    // C2/T17: make_triple with A explicitly seeded, B/C inferred. The seed must be
+    // consistent with the actual (post-C4 a contradicting seed rejects — see
+    // `explicit_binding_contradicted_by_scalar_actual_rejects`), so we seed a
+    // WIDER type the value still inhabits: A = `int | float` against an int(1)
+    // actual. `float` appears in the render ONLY because the explicit seed shaped
+    // A — inference alone would bind A=int — proving the partial seed is honored
+    // while B=string and C=bool are still inferred.
     let source = r#"
         function make_triple<A, B, C>(a: A, b: B[], c: map<string, C>) -> string {
             reflect.type_of<A | B | C>().to_string()
@@ -231,14 +237,16 @@ async fn partial_explicit_seed_then_infer() {
         value_type: RuntimeTy::bool(),
         entries: indexmap::IndexMap::from_iter([("k".to_string(), BEV::Bool(true))]),
     };
-    // Seed A=string explicitly even though the value is int(1) — explicit wins:
-    // the render must carry `bool` (C inferred) but NOT `int` (A is string, not
-    // the value's int; B is also string).
     let out = call_with_bindings(
         source,
         "make_triple",
         vec![BEV::Int(1), b, c],
-        indexmap! { "A" => RuntimeTy::string() },
+        indexmap! {
+            "A" => RuntimeTy::Union(
+                vec![RuntimeTy::int(), RuntimeTy::float()],
+                baml_type::TyAttr::default(),
+            )
+        },
     )
     .await
     .unwrap();
@@ -247,23 +255,39 @@ async fn partial_explicit_seed_then_infer() {
     };
     let r = rendered.as_str();
     assert!(
-        r.contains("string") && r.contains("bool") && !r.contains("int"),
-        "explicit A=string should win over value int; got {r:?}"
+        r.contains("float") && r.contains("string") && r.contains("bool"),
+        "explicit A=int|float should be honored (render carries float); got {r:?}"
     );
 }
 
 #[tokio::test]
-async fn explicit_binding_wins_over_inference() {
-    // Regression: identity(5) with explicit T=string reports string, not int.
+async fn explicit_binding_widens_inferred_type() {
+    // An explicit binding overrides what inference would pick, but it must still
+    // be inhabited by the actual (post-C4). `identity(5)` with explicit
+    // `T = int | string` renders the wider `int | string` — inference alone would
+    // bind T=int — and the int(5) actual satisfies the wider union. (A
+    // *contradicting* explicit binding, e.g. T=string for an int actual, now
+    // rejects: see `explicit_binding_contradicted_by_scalar_actual_rejects`.)
     let out = call_with_bindings(
         IDENTITY,
         "identity",
         vec![BEV::Int(5)],
-        indexmap! { "T" => RuntimeTy::string() },
+        indexmap! {
+            "T" => RuntimeTy::Union(
+                vec![RuntimeTy::int(), RuntimeTy::string()],
+                baml_type::TyAttr::default(),
+            )
+        },
     )
     .await
     .unwrap();
-    assert_eq!(out, BEV::String("string".into()));
+    let BEV::String(rendered) = &out else {
+        panic!("expected string, got {out:?}");
+    };
+    assert!(
+        rendered.as_str().contains("int") && rendered.as_str().contains("string"),
+        "explicit T=int|string should render the wider union, got {rendered:?}"
+    );
 }
 
 // ── §E: must-specify still rejects (return/body-only vars) ─────────────────
@@ -632,17 +656,18 @@ async fn infer_nonempty_map_binds_key_despite_valueless_values() {
     assert_eq!(out, BEV::String("string".into()));
 }
 
-// ── §H: known-but-deferred Gate A holes (class-method body-only TypeVars) ───
+// ── §H/§E rule 3: class-method body-only own TypeVar must-specify ───────────
 
 #[tokio::test]
-#[ignore = "BUG (deferred): Gate A check(1) is skipped for ALL class methods \
-            (lib.rs:2045), so a method's OWN body-only TypeVar (`T` only in \
-            reflect.type_of<T>, never in a param/return) is never demanded and \
-            silently erases to `unknown`. The free-function analogue IS rejected. \
-            A minimal fix needs the enclosing-class generic-param count to split \
-            display_type_params into class-prefix vs method-own, which is not \
-            carried on the runtime Class/Function objects — plumbing beyond scope."]
 async fn gatea_class_method_body_only_var_should_reject() {
+    // Rule 3 (no value position ⇒ must-specify) for a class method's OWN var:
+    // `reflect_t<T>()` reflects `T` but `T` is body-only (never in a param or the
+    // return), so inference has no evidence and the caller must specify it. Gate A
+    // now splits a method's own params (the suffix after the class prefix, via the
+    // class's `generic_param_count`) from inherited class params and demands the
+    // own ones — so this rejects, matching the free-function analogue
+    // (`body_only_var_still_requires_binding`). Previously check(1) was skipped for
+    // ALL class methods and `T` silently erased to `unknown`.
     let src = r#"
         class Helper {
             function reflect_t<T>() -> string { reflect.type_of<T>().to_string() }
@@ -1083,15 +1108,14 @@ async fn infer_extract_four_vars_from_nested_generic() {
 // ── §C: explicit binding contradicted by a non-instance actual (PINS reality) ─
 
 #[tokio::test]
-async fn explicit_binding_wins_over_contradicting_scalar_actual() {
-    // C4 (pins EXISTING behavior; the 03b doc flags this outcome as "confirm what
-    // the code really does"): seed A=int explicitly but pass a *string* for `a`.
-    // The explicit binding wins and `A` stays `int`; the contradicting scalar `a`
-    // value is NOT re-validated against the now-concrete formal at this value seam
-    // (Gate B only structurally checks *Instance* args — a bare string against an
-    // `int` formal slips through), so the call SUCCEEDS with A=int rather than
-    // rejecting. Documenting the gap: the reflect render carries `int` (from the
-    // explicit A), `string` (B from ["x"]) and `bool` (C from {k:true}).
+async fn explicit_binding_contradicted_by_scalar_actual_rejects() {
+    // C4: seed A=int explicitly but pass a *string* for `a`. Inference is bypassed
+    // for the caller-specified A, so the value seam's per-arg structural check
+    // (Gate B) is the only gate — and it now REJECTS the string against the
+    // now-concrete `int` formal. (Before the Gate B rewrite this seam skipped
+    // every non-Instance arg, so the call slipped through with A=int and the
+    // mismatch only surfaced host-side at decode time — the old "pins the gap"
+    // case.) The friendly error names the function and both types, no jargon.
     let src = r#"
         function make_triple<A, B, C>(a: A, b: B[], c: map<string, C>) -> string {
             reflect.type_of<A | B | C>().to_string()
@@ -1107,21 +1131,24 @@ async fn explicit_binding_wins_over_contradicting_scalar_actual() {
         value_type: RuntimeTy::bool(),
         entries: indexmap::IndexMap::from_iter([("k".to_string(), BEV::Bool(true))]),
     };
-    let out = call_with_bindings(
+    let err = call_with_bindings(
         src,
         "make_triple",
         vec![s("nope"), b, c],
         indexmap! { "A" => RuntimeTy::int() },
     )
     .await
-    .expect("explicit A=int wins; the scalar `a` is not re-validated at this seam");
-    let BEV::String(rendered) = &out else {
-        panic!("expected string, got {out:?}");
+    .expect_err("a string actual must not satisfy the explicit `A=int` binding");
+    let EngineError::TypeMismatch { message } = &err else {
+        panic!("expected TypeMismatch, got {err:?}");
     };
-    let r = rendered.as_str();
     assert!(
-        r.contains("int") && r.contains("string") && r.contains("bool"),
-        "explicit A=int should win (render carries int|string|bool), got {r:?}"
+        message.contains("make_triple") && message.contains("int") && message.contains("string"),
+        "unfriendly C4 message: {message:?}"
+    );
+    assert!(
+        !message.contains("<:") && !message.to_lowercase().contains("variance"),
+        "message leaks type-theory jargon: {message:?}"
     );
 }
 
@@ -1210,5 +1237,513 @@ async fn infer_identity_enum_binds_enum_type() {
     assert!(
         rendered.as_str().contains("SomeEnum"),
         "expected T = SomeEnum, got {rendered:?}"
+    );
+}
+
+// ── §A A3: nested *fully-bound* generic instance ────────────────────────────
+
+/// Build a `RuntimeTy` for `GenericBox<inner>` (the value-level wire type).
+fn box_rt(inner: RuntimeTy) -> RuntimeTy {
+    RuntimeTy::Class(
+        baml_type::TypeName::local(baml_type::Name::new("GenericBox")),
+        vec![inner],
+        baml_type::TyAttr::default(),
+    )
+}
+
+#[tokio::test]
+async fn a3_nested_fully_bound_generic_instance() {
+    // §A A3: identity over a *fully-bound* nested `GenericBox<GenericBox<string>>`
+    // — every param concrete on the wire ⇒ T = GenericBox<GenericBox<string>>;
+    // the render mentions the class twice and the inner `string`. (Contrast
+    // `infer_identity_generic_instance`, the single-level bound box.)
+    let source = r#"
+        class GenericBox<T> { value T }
+        function identity<T>(x: T) -> string { reflect.type_of<T>().to_string() }
+        function main() -> int { 0 }
+    "#;
+    let inner = BEV::instance_generic(
+        "GenericBox",
+        vec![RuntimeTy::string()],
+        indexmap::IndexMap::from_iter([("value", s("hello"))]),
+    );
+    let outer = BEV::instance_generic(
+        "GenericBox",
+        vec![box_rt(RuntimeTy::string())],
+        indexmap::IndexMap::from_iter([("value", inner)]),
+    );
+    let out = call_infer(source, "identity", vec![outer]).await.unwrap();
+    let BEV::String(rendered) = &out else {
+        panic!("expected string, got {out:?}");
+    };
+    let r = rendered.as_str();
+    assert!(
+        r.matches("GenericBox").count() >= 2 && r.contains("string"),
+        "expected nested GenericBox<GenericBox<string>>, got {r:?}"
+    );
+}
+
+// ── §B B3/B6: instance wire-arg recovery (incl. empty fields) ───────────────
+
+/// `read_t<T>(shape: ContainerShapes<T>)` reflects `T` so a test can read what
+/// the instance's single wire type-arg bound to — WITHOUT re-unifying the
+/// individual `item`/`items`/`by_key` field values.
+const READ_T: &str = r#"
+    class ContainerShapes<T> {
+      item T
+      items T[]
+      by_key map<string, T>
+      maybe T?
+      mixed T | string | null
+    }
+    function read_t<T>(shape: ContainerShapes<T>) -> string {
+        reflect.type_of<T>().to_string()
+    }
+    function main() -> int { 0 }
+"#;
+
+#[tokio::test]
+async fn b3_read_items_from_instance_wire_arg() {
+    // §B B3: ContainerShapes[int] — T recovered from the instance's single wire
+    // type-arg, NOT by re-unifying every field.
+    let shape = BEV::instance_generic(
+        "ContainerShapes",
+        vec![RuntimeTy::int()],
+        indexmap::IndexMap::from_iter([
+            ("item", BEV::Int(1)),
+            (
+                "items",
+                arr(
+                    RuntimeTy::int(),
+                    vec![BEV::Int(1), BEV::Int(2), BEV::Int(3)],
+                ),
+            ),
+            ("by_key", int_map(RuntimeTy::int(), &[("k", BEV::Int(4))])),
+            ("maybe", BEV::Null),
+            ("mixed", BEV::Null),
+        ]),
+    );
+    let out = call_infer(READ_T, "read_t", vec![shape]).await.unwrap();
+    assert_eq!(out, BEV::String("int".into()));
+}
+
+#[tokio::test]
+async fn b6_read_items_empty_fields_bound_instance_keeps_wire_arg() {
+    // §B B6: every collection field is empty, but T is still recovered from the
+    // instance's wire type-arg [int] — binding is wire-arg-driven, NOT
+    // synthesized from the (empty) field values. Contrast B7 (free function).
+    let shape = BEV::instance_generic(
+        "ContainerShapes",
+        vec![RuntimeTy::int()],
+        indexmap::IndexMap::from_iter([
+            ("item", BEV::Int(1)),
+            ("items", arr(RuntimeTy::int(), vec![])),
+            ("by_key", int_map(RuntimeTy::int(), &[])),
+            ("maybe", BEV::Null),
+            ("mixed", BEV::Null),
+        ]),
+    );
+    let out = call_infer(READ_T, "read_t", vec![shape]).await.unwrap();
+    assert_eq!(out, BEV::String("int".into()));
+}
+
+// ── §B B4: recursive generic instance ───────────────────────────────────────
+
+#[tokio::test]
+async fn b4_list_head_recursive_generic_wire_arg() {
+    // §B B4: GenericRecursive[int] bottoms out at next=None; T binds from the
+    // wire type-arg.
+    let src = r#"
+        class GenericRecursive<T> { value T next GenericRecursive<T>? }
+        function list_head_t<T>(list: GenericRecursive<T>) -> string {
+            reflect.type_of<T>().to_string()
+        }
+        function main() -> int { 0 }
+    "#;
+    let tail = BEV::instance_generic(
+        "GenericRecursive",
+        vec![RuntimeTy::int()],
+        indexmap::IndexMap::from_iter([("value", BEV::Int(8)), ("next", BEV::Null)]),
+    );
+    let head = BEV::instance_generic(
+        "GenericRecursive",
+        vec![RuntimeTy::int()],
+        indexmap::IndexMap::from_iter([("value", BEV::Int(7)), ("next", tail)]),
+    );
+    let out = call_infer(src, "list_head_t", vec![head]).await.unwrap();
+    assert_eq!(out, BEV::String("int".into()));
+}
+
+// ── §B B7/B9: empty collection on a *free function* ⇒ element T = rust_type ──
+
+#[tokio::test]
+async fn b7_first_or_empty_list_free_fn_binds_rust_type() {
+    // §B B7: a free function has no wire-arg channel and an empty list yields no
+    // element evidence ⇒ the *element* T = rust_type (NOT rust_type[]; that is
+    // identity([]), where T is the whole list). The B6/B7 split is the point.
+    let src = r#"
+        function first_or<T>(xs: T[]) -> string { reflect.type_of<T>().to_string() }
+        function main() -> int { 0 }
+    "#;
+    let out = call_infer(src, "first_or", vec![arr(RuntimeTy::int(), vec![])])
+        .await
+        .unwrap();
+    let BEV::String(rendered) = &out else {
+        panic!("expected string, got {out:?}");
+    };
+    let r = rendered.as_str();
+    assert!(
+        r.contains("rust") && !r.contains("[]"),
+        "expected element T = rust_type, got {r:?}"
+    );
+}
+
+#[tokio::test]
+async fn b9_values_of_empty_map_free_fn_binds_rust_type() {
+    // §B B9: the map-value position is the only evidence channel and the empty
+    // map yields no value ⇒ T = rust_type (the empty-collection rule applies to
+    // `map<_,T>` just as B7 shows for `T[]`).
+    let src = r#"
+        function values_of<T>(m: map<string, T>) -> string {
+            reflect.type_of<T>().to_string()
+        }
+        function main() -> int { 0 }
+    "#;
+    let out = call_infer(src, "values_of", vec![int_map(RuntimeTy::int(), &[])])
+        .await
+        .unwrap();
+    let BEV::String(rendered) = &out else {
+        panic!("expected string, got {out:?}");
+    };
+    let r = rendered.as_str();
+    assert!(
+        r.contains("rust") && !r.contains("map"),
+        "expected value T = rust_type, got {r:?}"
+    );
+}
+
+// ── §L: methods — class T from the receiver, method vars from method args ────
+
+/// `GenericBox<T>` with the §L method set: `get` (class `T` only), `pair_with`
+/// (class `T` + method `U`), and the static `new` (its own `V`).
+const GENERIC_BOX_METHODS: &str = r#"
+    class GenericBox<T> {
+      value T
+      function get(self) -> string { reflect.type_of<T>().to_string() }
+      function pair_with<U>(self, other: U) -> string {
+          reflect.type_of<T | U>().to_string()
+      }
+      function new<V>(value: V) -> GenericBox<V> { GenericBox<V> { value: value } }
+    }
+    function main() -> int { 0 }
+"#;
+
+#[tokio::test]
+async fn l1_method_class_var_from_receiver() {
+    // §L L1: GenericBox[int](value=5).get() == "int" — class T recovered from the
+    // receiver's wire type-args.
+    let recv = BEV::instance_generic(
+        "GenericBox",
+        vec![RuntimeTy::int()],
+        indexmap::IndexMap::from_iter([("value", BEV::Int(5))]),
+    );
+    let out = call_infer(GENERIC_BOX_METHODS, "GenericBox.get", vec![recv])
+        .await
+        .unwrap();
+    assert_eq!(out, BEV::String("int".into()));
+}
+
+#[tokio::test]
+async fn l2_method_class_and_method_vars() {
+    // §L L2: GenericBox[int](value=5).pair_with("hi") == "int | string" — class
+    // T=int from the receiver, method U=string inferred from `other`.
+    let recv = BEV::instance_generic(
+        "GenericBox",
+        vec![RuntimeTy::int()],
+        indexmap::IndexMap::from_iter([("value", BEV::Int(5))]),
+    );
+    let out = call_infer(
+        GENERIC_BOX_METHODS,
+        "GenericBox.pair_with",
+        vec![recv, s("hi")],
+    )
+    .await
+    .unwrap();
+    let BEV::String(r) = &out else {
+        panic!("expected string, got {out:?}");
+    };
+    assert!(
+        r.as_str().contains("int") && r.as_str().contains("string"),
+        "expected `int | string`, got {r:?}"
+    );
+}
+
+#[tokio::test]
+async fn l3_static_method_infers_own_var() {
+    // §L L3: GenericBox.new(value=5) — static method, V=int inferred from `value`
+    // (no subscript); returns a GenericBox carrying value 5. The class var T has
+    // no occurrence in the call's signature, so it is simply not required.
+    let out = call_infer(GENERIC_BOX_METHODS, "GenericBox.new", vec![BEV::Int(5)])
+        .await
+        .unwrap();
+    let BEV::Instance {
+        class_name, fields, ..
+    } = &out
+    else {
+        panic!("expected a GenericBox instance, got {out:?}");
+    };
+    assert!(class_name.contains("GenericBox"), "got {class_name:?}");
+    assert_eq!(fields.get("value"), Some(&BEV::Int(5)));
+}
+
+#[tokio::test]
+async fn l4_named_static_distinct_method_vars() {
+    // §L L4: NamedStatic.make(1, "x") == "int | string" — distinct method var
+    // names D=int, E=string from the args.
+    let src = r#"
+        class NamedStatic<A, B, C> {
+          first A
+          second B
+          third C
+          function make<D, E>(d: D, e: E) -> string {
+              reflect.type_of<D | E>().to_string()
+          }
+        }
+        function main() -> int { 0 }
+    "#;
+    let out = call_infer(src, "NamedStatic.make", vec![BEV::Int(1), s("x")])
+        .await
+        .unwrap();
+    let BEV::String(r) = &out else {
+        panic!("expected string, got {out:?}");
+    };
+    assert!(
+        r.as_str().contains("int") && r.as_str().contains("string"),
+        "expected `int | string`, got {r:?}"
+    );
+}
+
+#[tokio::test]
+async fn l5_unbound_receiver_method_recovers_class_var_from_field() {
+    // §L L5 (pins ACTUAL behavior): an UNBOUND `GenericBox(value=5)` receiver
+    // (no `[...]`) carries no wire type-args, but the method's `self: GenericBox<T>`
+    // formal FORCES recursion into the `value` field — exactly the G1 forcing-formal
+    // path — so the class `T` is recovered from the field VALUE (`5` ⇒ int), NOT
+    // left as host-only rust_type. `reflect.type_of<T | U>` then renders
+    // `int | string` (U=string from `other`). (The 03b L5 sketch guessed rust_type
+    // under uncertainty and told us to assert whatever the implementation renders;
+    // the forcing-formal recovery wins, which is the sounder outcome.)
+    let recv = BEV::instance(
+        "GenericBox",
+        indexmap::IndexMap::from_iter([("value", BEV::Int(5))]),
+    );
+    let out = call_infer(
+        GENERIC_BOX_METHODS,
+        "GenericBox.pair_with",
+        vec![recv, s("x")],
+    )
+    .await
+    .unwrap();
+    let BEV::String(r) = &out else {
+        panic!("expected string, got {out:?}");
+    };
+    assert!(
+        r.as_str().contains("int") && r.as_str().contains("string"),
+        "expected `int | string` (class T recovered from the field), got {r:?}"
+    );
+}
+
+// ── §B/§D: heterogeneous array unifies its element type ──────────────────────
+
+#[tokio::test]
+async fn het_array_element_type_unifies() {
+    // The elements of a single `T[]` union-merge while synthesizing the
+    // container's element type ⇒ elem_type([1, "x"]) binds T = int | string.
+    // Directly asserts the unified element type (distinct from B8, which reads
+    // the union via make_triple's `B[]`).
+    let src = r#"
+        function elem_type<T>(xs: T[]) -> string { reflect.type_of<T>().to_string() }
+        function main() -> int { 0 }
+    "#;
+    let xs = arr(RuntimeTy::int(), vec![BEV::Int(1), s("x")]);
+    let out = call_infer(src, "elem_type", vec![xs]).await.unwrap();
+    let BEV::String(r) = &out else {
+        panic!("expected string, got {out:?}");
+    };
+    assert!(
+        r.as_str().contains("int") && r.as_str().contains("string"),
+        "expected unified `int | string`, got {r:?}"
+    );
+}
+
+// ── §G generalized: UNBOUND instances recovered via a forcing formal ─────────
+//
+// An unbound generic instance (empty wire type-args) normally rides as host-only
+// `rust_type` (G2). But when the parameter's formal is `Container<T>` /
+// `Recursive<T>` / nested `Pair<…>`, inference is DIRECTED into the field values
+// and recovers `T` from them (G1) — so even a wire with no class type-args is
+// inferrable here, which it otherwise would not be.
+
+#[tokio::test]
+async fn unbound_container_shapes_recovers_t_from_fields() {
+    // §G/G1: ContainerShapes with EMPTY wire type-args (an unbound instance) met
+    // by the forcing formal `ContainerShapes<T>` ⇒ T=int recovered from the field
+    // VALUES, not from a wire type-arg.
+    let shape = BEV::instance(
+        "ContainerShapes",
+        indexmap::IndexMap::from_iter([
+            ("item", BEV::Int(1)),
+            (
+                "items",
+                arr(
+                    RuntimeTy::int(),
+                    vec![BEV::Int(1), BEV::Int(2), BEV::Int(3)],
+                ),
+            ),
+            ("by_key", int_map(RuntimeTy::int(), &[("k", BEV::Int(4))])),
+            ("maybe", BEV::Null),
+            ("mixed", BEV::Null),
+        ]),
+    );
+    let out = call_infer(READ_T, "read_t", vec![shape]).await.unwrap();
+    assert_eq!(out, BEV::String("int".into()));
+}
+
+#[tokio::test]
+async fn unbound_recursive_recovers_t_from_fields() {
+    // §G/G1: GenericRecursive with EMPTY wire type-args met by the forcing formal
+    // `GenericRecursive<T>` ⇒ T=int recovered from `value`/`next` field values.
+    let src = r#"
+        class GenericRecursive<T> { value T next GenericRecursive<T>? }
+        function list_head_t<T>(list: GenericRecursive<T>) -> string {
+            reflect.type_of<T>().to_string()
+        }
+        function main() -> int { 0 }
+    "#;
+    let tail = BEV::instance(
+        "GenericRecursive",
+        indexmap::IndexMap::from_iter([("value", BEV::Int(8)), ("next", BEV::Null)]),
+    );
+    let head = BEV::instance(
+        "GenericRecursive",
+        indexmap::IndexMap::from_iter([("value", BEV::Int(7)), ("next", tail)]),
+    );
+    let out = call_infer(src, "list_head_t", vec![head]).await.unwrap();
+    assert_eq!(out, BEV::String("int".into()));
+}
+
+#[tokio::test]
+async fn unbound_outer_pair_with_bound_inner_recovers_all_vars() {
+    // §G/G1 (nested, realistic): the caller forgot the OUTER subscript, so the
+    // outer GenericPair is unbound (empty wire type-args), but its inner pairs are
+    // bound (`GenericPair[int,str]`, `GenericPair[bool,float]`). The forcing formal
+    // `GenericPair<GenericPair<A,B>, GenericPair<C,D>>` recurses into the outer's
+    // field values and recovers A,B,C,D from the inner instances' wire type-args.
+    let src = r#"
+        class GenericPair<A, B> { first A second B }
+        function extract<A, B, C, D>(a: GenericPair<GenericPair<A, B>, GenericPair<C, D>>) -> string {
+            reflect.type_of<A | B | C | D>().to_string()
+        }
+        function main() -> int { 0 }
+    "#;
+    let inner1 = BEV::instance_generic(
+        "GenericPair",
+        vec![RuntimeTy::int(), RuntimeTy::string()],
+        indexmap::IndexMap::from_iter([("first", BEV::Int(1)), ("second", s("a"))]),
+    );
+    let inner2 = BEV::instance_generic(
+        "GenericPair",
+        vec![RuntimeTy::bool(), RuntimeTy::float()],
+        indexmap::IndexMap::from_iter([("first", BEV::Bool(true)), ("second", BEV::Float(1.5))]),
+    );
+    // Outer instance: EMPTY wire type-args (unbound).
+    let arg = BEV::instance(
+        "GenericPair",
+        indexmap::IndexMap::from_iter([("first", inner1), ("second", inner2)]),
+    );
+    let out = call_infer(src, "extract", vec![arg]).await.unwrap();
+    let BEV::String(r) = &out else {
+        panic!("expected string, got {out:?}");
+    };
+    let r = r.as_str();
+    assert!(
+        r.contains("int") && r.contains("string") && r.contains("bool") && r.contains("float"),
+        "expected all four vars recovered, got {r:?}"
+    );
+}
+
+#[tokio::test]
+async fn fully_unbound_nested_pair_recovers_all_vars_deeply() {
+    // §G deep recovery: even when EVERY level is unbound (no wire type-args at the
+    // outer OR inner instances), the forcing formal
+    // `GenericPair<GenericPair<A,B>, GenericPair<C,D>>` drives recursion ALL the
+    // way down — `reconstruct_unbound_instance_args` is formal-aware, so each
+    // nested unbound instance is itself reconstructed against its slot's formal,
+    // recovering A,B,C,D from the leaf field values. (Previously this stopped one
+    // level down and the inner vars fell to `rust_type`.)
+    let src = r#"
+        class GenericPair<A, B> { first A second B }
+        function extract<A, B, C, D>(a: GenericPair<GenericPair<A, B>, GenericPair<C, D>>) -> string {
+            reflect.type_of<A | B | C | D>().to_string()
+        }
+        function main() -> int { 0 }
+    "#;
+    let inner1 = BEV::instance(
+        "GenericPair",
+        indexmap::IndexMap::from_iter([("first", BEV::Int(1)), ("second", s("a"))]),
+    );
+    let inner2 = BEV::instance(
+        "GenericPair",
+        indexmap::IndexMap::from_iter([("first", BEV::Bool(true)), ("second", BEV::Float(1.5))]),
+    );
+    let arg = BEV::instance(
+        "GenericPair",
+        indexmap::IndexMap::from_iter([("first", inner1), ("second", inner2)]),
+    );
+    let out = call_infer(src, "extract", vec![arg]).await.unwrap();
+    let BEV::String(r) = &out else {
+        panic!("expected string, got {out:?}");
+    };
+    let r = r.as_str();
+    assert!(
+        r.contains("int") && r.contains("string") && r.contains("bool") && r.contains("float"),
+        "expected all four vars recovered via deep recursion, got {r:?}"
+    );
+}
+
+// ── §D: covariant join over CONCRETE baml types (enum + class), not just leaves ─
+
+#[tokio::test]
+async fn triple_choose_join_includes_enum_and_concrete_class() {
+    // §D over concrete actuals: the n-ary covariant join merges a primitive, an
+    // ENUM, and a concrete BAML class ⇒ T = int | SomeEnum | StringIntPair. Unlike
+    // the python layer (where a str-enum rides as `string`), a `Variant` actual is
+    // unambiguously the enum type here.
+    let src = r#"
+        enum SomeEnum { VARIANT OTHER }
+        class StringIntPair { my_string string my_int int }
+        function triple_choose<T>(a: T, b: T, c: T) -> string {
+            reflect.type_of<T>().to_string()
+        }
+        function main() -> int { 0 }
+    "#;
+    let enum_val = BEV::Variant {
+        enum_name: "SomeEnum".to_string(),
+        variant_name: "VARIANT".to_string(),
+    };
+    let class_val = BEV::instance(
+        "StringIntPair",
+        indexmap::IndexMap::from_iter([("my_string", s("a")), ("my_int", BEV::Int(1))]),
+    );
+    let out = call_infer(src, "triple_choose", vec![BEV::Int(5), enum_val, class_val])
+        .await
+        .unwrap();
+    let BEV::String(r) = &out else {
+        panic!("expected string, got {out:?}");
+    };
+    let r = r.as_str();
+    assert!(
+        r.contains("int") && r.contains("SomeEnum") && r.contains("StringIntPair"),
+        "expected `int | SomeEnum | StringIntPair`, got {r:?}"
     );
 }

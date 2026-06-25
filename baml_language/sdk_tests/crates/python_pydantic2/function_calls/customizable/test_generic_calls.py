@@ -16,7 +16,6 @@ covered here yet.)
 import pytest
 
 import baml_sdk  # noqa: F401  — initializes the BAML runtime
-from baml_sdk.baml import BamlPanic
 from baml_sdk.generic_tests import (
     StringIntPair,
     GenericPair,
@@ -119,16 +118,20 @@ def test_generic_free_fn_requires_binding():
     # Inbound-inference is now on, so a bare generic call no longer raises in the
     # SDK. But `one_type_arg<T>()` / `two_type_args<A,B>()` are return/body-only:
     # NO argument carries the TypeVar, so inference finds no evidence and the
-    # *engine* (Gate A) rejects the call — surfaced as a `BamlError`. The
-    # rejection moved from the SDK to the engine; it's still a hard error
-    # (a `BamlPanic`/SdkPanic from the engine's bind-time Gate A check).
+    # *engine* (Gate A) rejects the call. The rejection is a value/type mismatch
+    # (`EngineError::TypeMismatch` ⇒ `baml.errors.TypeMismatch`), surfaced to the
+    # client as a native Python `TypeError` whose message names the function and
+    # explains the type parameter couldn't be inferred.
     # (Binding via `_types=` / subscript remains the way to call these — see
     # test_one_type_arg_explicit / test_two_type_args_explicit. Inference of
     # value-carried TypeVars lives in test_generic_inference.py.)
-    with pytest.raises(BamlPanic):
+    with pytest.raises(TypeError) as exc_one:
         one_type_arg()
-    with pytest.raises(BamlPanic):
+    assert "could not infer a type" in str(exc_one.value)
+    assert "one_type_arg" in str(exc_one.value)
+    with pytest.raises(TypeError) as exc_two:
         two_type_args()
+    assert "could not infer a type" in str(exc_two.value)
 
 
 def test_subscript_wrong_arity_raises():

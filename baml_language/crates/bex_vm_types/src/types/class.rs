@@ -53,6 +53,14 @@ pub struct Class {
     /// instance is finalizable — so the common case (no `cleanup`) is a single
     /// flag read and never enters finalization.
     pub has_cleanup: bool,
+
+    /// Number of generic params the class itself declares (`GenericBox<T>` ⇒ 1,
+    /// non-generic ⇒ 0). A method's `display_type_params` are De Bruijn-ordered
+    /// as *class params first, then the method's own*, so this count is the
+    /// length of that class prefix — it lets the engine split a method's own
+    /// generic params (which Gate A must demand) from the inherited class params
+    /// (bound by the receiver, never by name). Set at emit time.
+    pub generic_param_count: usize,
 }
 
 impl std::fmt::Display for Class {
