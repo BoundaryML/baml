@@ -7,9 +7,6 @@ type user.MyList = user.IntList
 class user.WithChainedAlias {
   data: user.MyList | string
 }
-function user.WithChainedAlias.from_json(j: baml.json.json) -> user.WithChainedAlias throws baml.json.JsonDecodeError {
-  baml.json.to<T>(j) : user.WithChainedAlias
-}
 type user.IntList$stream = int[]
 type user.MyList$stream = user.IntList$stream
 class user.WithChainedAlias$stream {

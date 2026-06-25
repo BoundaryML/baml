@@ -168,19 +168,3 @@ fn user.ReturnString() -> baml.json.json {
         return;
     }
 }
-
-fn user.Wrapper.from_json(j: baml.json.json) -> Wrapper {
-    // Locals:
-    let _0: Wrapper // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(Wrapper);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}

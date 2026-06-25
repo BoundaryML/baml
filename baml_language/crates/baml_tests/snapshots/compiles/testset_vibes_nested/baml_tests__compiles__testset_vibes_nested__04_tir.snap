@@ -10,9 +10,6 @@ class user.Sentiment {
   confidence: float
   reasoning: string
 }
-function user.Sentiment.from_json(j: baml.json.json) -> user.Sentiment throws baml.json.JsonDecodeError {
-  baml.json.to<T>(j) : user.Sentiment
-}
 function user.ClassifySentiment(text: string, client: baml.llm.Client = GPT4o) -> user.Sentiment throws never {
   baml.llm.call_llm_function<T>(client, "ClassifySentiment", map { "text": text }) : user.Sentiment
 }

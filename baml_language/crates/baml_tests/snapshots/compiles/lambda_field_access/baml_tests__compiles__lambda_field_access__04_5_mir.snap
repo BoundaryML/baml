@@ -2,38 +2,6 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === MIR2 ===
-fn user.Inner.from_json(j: baml.json.json) -> Inner {
-    // Locals:
-    let _0: Inner // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(Inner);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.Outer.from_json(j: baml.json.json) -> Outer {
-    // Locals:
-    let _0: Outer // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(Outer);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
 fn user.test_captured_field_access(obj: Outer) -> string {
     // Locals:
     let _0: string // _0 // return

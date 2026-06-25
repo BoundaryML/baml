@@ -116,20 +116,11 @@ class user.llm.openai.Response {
   text: string
   score: int
 }
-function user.llm.openai.Response.from_json(j: baml.json.json) -> user.llm.openai.Response throws baml.json.JsonDecodeError {
-  baml.json.to<T>(j) : user.llm.openai.Response
-}
 class user.llm.openai.Box {
   value: T
 }
-function user.llm.openai.Box.from_json(j: baml.json.json) -> user.llm.openai.Box<unknown> throws baml.json.JsonDecodeError {
-  baml.json.to<T>(j) : user.llm.openai.Box<T>
-}
 class user.llm.openai.Outer {
   inner: user.llm.openai.Box<T>
-}
-function user.llm.openai.Outer.from_json(j: baml.json.json) -> user.llm.openai.Outer<unknown> throws baml.json.JsonDecodeError {
-  baml.json.to<T>(j) : user.llm.openai.Outer<T>
 }
 function user.llm.openai.DestructureBareInNamespace(response: user.llm.openai.Response) -> int throws never {
   { : int

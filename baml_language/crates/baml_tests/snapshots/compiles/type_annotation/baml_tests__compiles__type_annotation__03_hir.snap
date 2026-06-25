@@ -16,12 +16,6 @@ class user.RiskFactor {
   severity: float
 }
 enum user.Kind {type, other}
-function user.from_json(j: baml.json.json) -> user.RiskFactor  [expr] {
-  baml.json.to(j)
-}
-function user.from_json(j: baml.json.json) -> user.MetaField  [expr] {
-  baml.json.to(j)
-}
 function user.test_let_binding(function_name: string) -> string  [expr] {
   { let t: type = baml.llm.get_return_type(function_name); return "ok" }
 }

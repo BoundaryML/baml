@@ -67,18 +67,6 @@ function user.RootUsesLlmStatus() -> root.llm.Status  [expr] {
 function user.RootUsesNestedClient(c: root.llm.openai.Client) -> string  [expr] {
   {  } c.api_key
 }
-function user.from_json(j: baml.json.json) -> user.Config  [expr] {
-  baml.json.to(j)
-}
-function user.from_json(j: baml.json.json) -> user.RootWithCrossNsAlias  [expr] {
-  baml.json.to(j)
-}
-function user.from_json(j: baml.json.json) -> user.Error  [expr] {
-  baml.json.to(j)
-}
-function user.from_json(j: baml.json.json) -> user.RootWithCrossNsFields  [expr] {
-  baml.json.to(j)
-}
 class user.auth.Config {
   provider: string
   secret: string
@@ -149,15 +137,6 @@ function user.auth.AuthUsesRootConfig(cfg: root.Config) -> string  [expr] {
 }
 function user.auth.AuthUsesRootStatus() -> root.Status  [expr] {
   {  } root.Status.Pending
-}
-function user.auth.from_json(j: baml.json.json) -> user.auth.Config  [expr] {
-  baml.json.to(j)
-}
-function user.auth.from_json(j: baml.json.json) -> user.auth.Error  [expr] {
-  baml.json.to(j)
-}
-function user.auth.from_json(j: baml.json.json) -> user.auth.Token  [expr] {
-  baml.json.to(j)
 }
 class user.llm.Config {
   model: string
@@ -250,21 +229,6 @@ function user.llm.LlmUsesRootError(e: root.Error) -> string  [expr] {
 function user.llm.LlmUsesRootStatus() -> root.Status  [expr] {
   {  } root.Status.Ok
 }
-function user.llm.from_json(j: baml.json.json) -> user.llm.Config  [expr] {
-  baml.json.to(j)
-}
-function user.llm.from_json(j: baml.json.json) -> user.llm.LlmWithCrossNsFields  [expr] {
-  baml.json.to(j)
-}
-function user.llm.from_json(j: baml.json.json) -> user.llm.Error  [expr] {
-  baml.json.to(j)
-}
-function user.llm.from_json(j: baml.json.json) -> user.llm.LlmWithRootAlias  [expr] {
-  baml.json.to(j)
-}
-function user.llm.from_json(j: baml.json.json) -> user.llm.Response  [expr] {
-  baml.json.to(j)
-}
 class user.llm.openai.Client {
   api_key: string
   org_id: string
@@ -327,10 +291,4 @@ function user.llm.openai.OpenAIUsesRootConfig(cfg: root.Config) -> string  [expr
 }
 function user.llm.openai.OpenAIUsesRootStatus() -> root.Status  [expr] {
   {  } root.Status.Ok
-}
-function user.llm.openai.from_json(j: baml.json.json) -> user.llm.openai.Client  [expr] {
-  baml.json.to(j)
-}
-function user.llm.openai.from_json(j: baml.json.json) -> user.llm.openai.Error  [expr] {
-  baml.json.to(j)
 }

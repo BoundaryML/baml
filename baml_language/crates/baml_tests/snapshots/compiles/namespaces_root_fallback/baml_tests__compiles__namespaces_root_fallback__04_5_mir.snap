@@ -2,22 +2,6 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === MIR2 ===
-fn user.Config.from_json(j: baml.json.json) -> Config {
-    // Locals:
-    let _0: Config // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(Config);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
 fn user.llm.UseConfig(cfg: Config) -> llm.Response {
     // Locals:
     let _0: llm.Response // _0 // return
@@ -28,22 +12,6 @@ fn user.llm.UseConfig(cfg: Config) -> llm.Response {
         _2 = copy _1.0;
         _0 = user.llm.Response { copy _2 };
         goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.llm.Response.from_json(j: baml.json.json) -> llm.Response {
-    // Locals:
-    let _0: llm.Response // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(llm.Response);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
     }
 
     bb1: {

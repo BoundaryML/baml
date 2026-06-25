@@ -57,15 +57,6 @@ function user.for_let_fn_narrow(items: (int) -> int[]) -> int  [expr] {
 function user.for_let_with_narrow(items: int[]) -> int  [expr] {
   { let sum = 0; for n: int in items { sum Add= n } } sum
 }
-function user.from_json(j: baml.json.json) -> user.PatternBucket  [expr] {
-  baml.json.to(j)
-}
-function user.from_json(j: baml.json.json) -> user.AppError  [expr] {
-  baml.json.to(j)
-}
-function user.from_json(j: baml.json.json) -> user.PatternMatrix  [expr] {
-  baml.json.to(j)
-}
 function user.int_widens_to_alias(v: user.Number) -> int  [expr] {
   {  } match (v) { n: user.Number => 1 }
 }

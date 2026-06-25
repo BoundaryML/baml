@@ -9,9 +9,3 @@ class user.A {
   field: string
 }
 type user.A = int
-function user.from_json(j: baml.json.json) -> user.A  [expr] {
-  baml.json.to(j)
-}
-function user.from_json(j: baml.json.json) -> user.A  [expr] {
-  baml.json.to(j)
-}

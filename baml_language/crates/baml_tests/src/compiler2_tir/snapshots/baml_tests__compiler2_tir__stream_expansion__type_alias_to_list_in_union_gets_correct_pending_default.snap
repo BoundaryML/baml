@@ -6,9 +6,6 @@ type user.Ints = int[]
 class user.WithAliasUnion {
   data: user.Ints | string
 }
-function user.WithAliasUnion.from_json(j: baml.json.json) -> user.WithAliasUnion throws baml.json.JsonDecodeError {
-  baml.json.to<T>(j) : user.WithAliasUnion
-}
 type user.Ints$stream = int[]
 class user.WithAliasUnion$stream {
   data: user.Ints$stream | string

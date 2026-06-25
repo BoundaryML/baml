@@ -6,9 +6,6 @@ class user.Point {
   x: int
   y: int
 }
-function user.Point.from_json(j: baml.json.json) -> user.Point throws baml.json.JsonDecodeError {
-  baml.json.to<T>(j) : user.Point
-}
 function user.stringArray() -> string[] throws never {
   { : string[]
     ["hello", "world", "test"] : string[]
@@ -47,15 +44,9 @@ class user.Point {
   x: int
   y: int
 }
-function user.Point.from_json(j: baml.json.json) -> user.Point throws baml.json.JsonDecodeError {
-  baml.json.to<T>(j) : user.Point
-}
 class user.Vec2D {
   p: user.Point
   q: user.Point
-}
-function user.Vec2D.from_json(j: baml.json.json) -> user.Vec2D throws baml.json.JsonDecodeError {
-  baml.json.to<T>(j) : user.Vec2D
 }
 function user.point() -> user.Point throws never {
   { : user.Point

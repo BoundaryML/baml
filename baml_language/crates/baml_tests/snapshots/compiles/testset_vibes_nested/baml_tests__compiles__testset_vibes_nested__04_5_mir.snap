@@ -1279,19 +1279,3 @@ fn user.GenerateTests$render_prompt(count: int, topic: string, client: baml.llm.
         return;
     }
 }
-
-fn user.Sentiment.from_json(j: baml.json.json) -> Sentiment {
-    // Locals:
-    let _0: Sentiment // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(Sentiment);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}

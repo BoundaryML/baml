@@ -5,12 +5,6 @@ source: crates/baml_tests/src/generated_tests.rs
 class user.foo {
   x: int
 }
-function user.from_json(j: baml.json.json) -> user.foo  [expr] {
-  baml.json.to(j)
-}
 class user.foo.Bar {
   y: string
-}
-function user.foo.from_json(j: baml.json.json) -> user.foo.Bar  [expr] {
-  baml.json.to(j)
 }

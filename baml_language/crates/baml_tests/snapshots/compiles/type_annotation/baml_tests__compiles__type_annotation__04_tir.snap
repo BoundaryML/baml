@@ -18,14 +18,8 @@ class user.RiskFactor {
   type: string
   severity: float
 }
-function user.RiskFactor.from_json(j: baml.json.json) -> user.RiskFactor throws baml.json.JsonDecodeError {
-  baml.json.to<T>(j) : user.RiskFactor
-}
 class user.MetaField {
   type: type
-}
-function user.MetaField.from_json(j: baml.json.json) -> user.MetaField throws baml.json.JsonDecodeError {
-  baml.json.to<T>(j) : user.MetaField
 }
 enum user.Kind
 class user.RiskFactor$stream {

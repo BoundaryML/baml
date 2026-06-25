@@ -5,15 +5,9 @@ expression: "render_tir(&db, file)"
 class user.Inner {
   value: string
 }
-function user.Inner.from_json(j: baml.json.json) -> user.Inner throws baml.json.JsonDecodeError {
-  baml.json.to<T>(j) : user.Inner
-}
 class user.WithMaps {
   simple: map<string, int>
   complex: map<string, user.Inner>
-}
-function user.WithMaps.from_json(j: baml.json.json) -> user.WithMaps throws baml.json.JsonDecodeError {
-  baml.json.to<T>(j) : user.WithMaps
 }
 class user.Inner$stream {
   value: string | null

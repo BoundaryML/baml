@@ -8,12 +8,6 @@ class user.A {
 class user.B {
   label: string
 }
-function user.from_json(j: baml.json.json) -> user.B  [expr] {
-  baml.json.to(j)
-}
-function user.from_json(j: baml.json.json) -> user.A  [expr] {
-  baml.json.to(j)
-}
 function user.greet(self: ?) -> string  [expr] {
   {  } self.label
 }

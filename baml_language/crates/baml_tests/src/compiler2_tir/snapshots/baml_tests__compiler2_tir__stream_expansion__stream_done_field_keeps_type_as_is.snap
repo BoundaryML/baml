@@ -6,9 +6,6 @@ class user.WithDone {
   name: string
   age: int
 }
-function user.WithDone.from_json(j: baml.json.json) -> user.WithDone throws baml.json.JsonDecodeError {
-  baml.json.to<T>(j) : user.WithDone
-}
 class user.WithDone$stream {
   name: string
   age: int | null

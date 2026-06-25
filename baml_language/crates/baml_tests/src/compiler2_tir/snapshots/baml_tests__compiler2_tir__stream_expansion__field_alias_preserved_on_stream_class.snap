@@ -6,9 +6,6 @@ class user.WithAlias {
   bar: string @alias("baz")
   count: int @alias("cnt")
 }
-function user.WithAlias.from_json(j: baml.json.json) -> user.WithAlias throws baml.json.JsonDecodeError {
-  baml.json.to<T>(j) : user.WithAlias
-}
 class user.WithAlias$stream {
   bar: string | null @alias("baz")
   count: int | null @alias("cnt")

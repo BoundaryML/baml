@@ -8,6 +8,3 @@ class user.MyRunner {
 function user.$init_test_main(registry: testing.TestCollector) -> ?  [expr] {
   { registry.register_test("simple runner", () -> void { {  } assert.is_true(true) }, my_runner); registry.register_test("call runner", () -> void { {  } assert.is_true(true) }, testing.Quorum(5, 3)); registry.register_test("constructor runner", () -> void { {  } assert.is_true(true) }, user.MyRunner { threshold: 0.5 }) } null
 }
-function user.from_json(j: baml.json.json) -> user.MyRunner  [expr] {
-  baml.json.to(j)
-}

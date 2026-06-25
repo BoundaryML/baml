@@ -32,9 +32,6 @@ function user.BigintMapLiteral() -> map<string, bigint> throws never {
 class user.BigintCounter {
   count: bigint
 }
-function user.BigintCounter.from_json(j: baml.json.json) -> user.BigintCounter throws baml.json.JsonDecodeError {
-  baml.json.to<T>(j) : user.BigintCounter
-}
 function user.BigintFieldOk() -> user.BigintCounter throws never {
   { : user.BigintCounter
     BigintCounter { count: 1n } : user.BigintCounter

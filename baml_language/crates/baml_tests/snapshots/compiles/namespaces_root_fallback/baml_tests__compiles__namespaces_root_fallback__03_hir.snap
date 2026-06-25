@@ -5,15 +5,9 @@ source: crates/baml_tests/src/generated_tests.rs
 class user.Config {
   key: string
 }
-function user.from_json(j: baml.json.json) -> user.Config  [expr] {
-  baml.json.to(j)
-}
 class user.llm.Response {
   text: string
 }
 function user.llm.UseConfig(cfg: root.Config) -> user.llm.Response  [expr] {
   {  } user.llm.Response { text: cfg.key }
-}
-function user.llm.from_json(j: baml.json.json) -> user.llm.Response  [expr] {
-  baml.json.to(j)
 }

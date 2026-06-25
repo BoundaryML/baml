@@ -89,19 +89,3 @@ fn user.IntArrayIdentity() -> int[] {
         return;
     }
 }
-
-fn user.BigintCounter.from_json(j: baml.json.json) -> BigintCounter {
-    // Locals:
-    let _0: BigintCounter // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(BigintCounter);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}

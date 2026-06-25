@@ -1,13 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-function user.User.from_json(j: baml.json.json) -> User {
-    load_type User
-    load_var j
-    call baml.json.to
-    return
-}
-
 function user.deserialize_user(s: string) -> User {
     load_type User
     load_var s

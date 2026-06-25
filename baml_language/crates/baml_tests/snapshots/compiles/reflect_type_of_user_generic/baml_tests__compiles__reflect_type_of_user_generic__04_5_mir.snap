@@ -2,22 +2,6 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === MIR2 ===
-fn user.Person.from_json(j: baml.json.json) -> Person {
-    // Locals:
-    let _0: Person // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(Person);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
 fn user.reflect_array() -> type {
     // Locals:
     let _0: type // _0 // return

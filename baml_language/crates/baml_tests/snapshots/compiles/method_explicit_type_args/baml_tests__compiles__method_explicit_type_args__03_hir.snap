@@ -5,9 +5,6 @@ source: crates/baml_tests/src/generated_tests.rs
 class user.Foo {
   tag: string
 }
-function user.from_json(j: baml.json.json) -> user.Foo  [expr] {
-  baml.json.to(j)
-}
 function user.use_method_type_args() -> int  [expr] {
   { let f = user.Foo { tag: "x" }; let v: int = f.zero() NullCoalesce 5 } v
 }

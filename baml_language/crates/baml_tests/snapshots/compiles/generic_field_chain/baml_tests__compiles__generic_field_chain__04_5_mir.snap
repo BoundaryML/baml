@@ -2,38 +2,6 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === MIR2 ===
-fn user.Box.from_json(j: baml.json.json) -> Box<T> {
-    // Locals:
-    let _0: Box<T> // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(Box<#0>);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.User.from_json(j: baml.json.json) -> User {
-    // Locals:
-    let _0: User // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(User);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
 fn user.test_generic_capture(box: Box<User>) -> string {
     // Locals:
     let _0: string // _0 // return

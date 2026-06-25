@@ -14,12 +14,6 @@ class user.FieldAttributes {
   state: string
   multiple: string?
 }
-function user.from_json(j: baml.json.json) -> user.FieldAttributes  [expr] {
-  baml.json.to(j)
-}
-function user.from_json(j: baml.json.json) -> user.ClassAttributes  [expr] {
-  baml.json.to(j)
-}
 function user.GetMixedList(client: baml.llm.Client = GPT4) -> int | string[]  [llm] {
   baml.llm.call_llm_function(client, "GetMixedList", map {  })
 }
@@ -84,6 +78,3 @@ type user.ReallyLongMapType = map<string, "fieopwaiwjepfoiwajpoweijf" | int | st
 type user.Role = "user" | "assistant" | "system"
 type user.RoleList = "reader"[]
 type user.UnionOfArrays = int[] | string[]
-function user.from_json(j: baml.json.json) -> user.User  [expr] {
-  baml.json.to(j)
-}

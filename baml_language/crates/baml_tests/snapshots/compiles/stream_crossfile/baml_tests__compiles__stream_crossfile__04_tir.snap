@@ -7,9 +7,6 @@ class user.Education {
   degree: user.Degree
   year: int
 }
-function user.Education.from_json(j: baml.json.json) -> user.Education throws baml.json.JsonDecodeError {
-  baml.json.to<T>(j) : user.Education
-}
 enum user.Degree
 type user.EducationList = user.Education[]
 class user.Education$stream {
@@ -23,9 +20,6 @@ class user.Resume {
   education: user.Education[]
   highest_degree: user.Degree
   aliases: user.EducationList
-}
-function user.Resume.from_json(j: baml.json.json) -> user.Resume throws baml.json.JsonDecodeError {
-  baml.json.to<T>(j) : user.Resume
 }
 class user.Resume$stream {
   name: string | null

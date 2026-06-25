@@ -57,12 +57,3 @@ class user.llm.openai.Response {
 function user.llm.openai.DestructureBareInNamespace(response: user.llm.openai.Response) -> int  [expr] {
   { let Response { score: score } = response } score
 }
-function user.llm.openai.from_json(j: baml.json.json) -> user.llm.openai.Response  [expr] {
-  baml.json.to(j)
-}
-function user.llm.openai.from_json(j: baml.json.json) -> user.llm.openai.Box<T>  [expr] {
-  baml.json.to(j)
-}
-function user.llm.openai.from_json(j: baml.json.json) -> user.llm.openai.Outer<T>  [expr] {
-  baml.json.to(j)
-}

@@ -105,13 +105,6 @@ function testing.FailFast() -> (testing.TestSetChild[]) -> testing.TestSetReport
     return
 }
 
-function testing.NamedChildReport.from_json(j: baml.json.json) -> testing.NamedChildReport {
-    load_type testing.NamedChildReport
-    load_var j
-    call baml.json.to
-    return
-}
-
 function testing.PassRate(threshold: float) -> (testing.TestSetChild[]) -> testing.TestSetReport throws never {
     load_var ?1
     make_cell
@@ -202,29 +195,8 @@ function testing.Retry(max_attempts: int) -> (() -> testing.TestReport throws ne
     return
 }
 
-function testing.RunReport.from_json(j: baml.json.json) -> testing.RunReport {
-    load_type testing.RunReport
-    load_var j
-    call baml.json.to
-    return
-}
-
 function testing.Sequential() -> (testing.TestSetChild[]) -> testing.TestSetReport throws never {
     make_closure .<lambda(Sequential, 0)>, 0
-    return
-}
-
-function testing.SerializedTest.from_json(j: baml.json.json) -> testing.SerializedTest {
-    load_type testing.SerializedTest
-    load_var j
-    call baml.json.to
-    return
-}
-
-function testing.SerializedTestSet.from_json(j: baml.json.json) -> testing.SerializedTestSet {
-    load_type testing.SerializedTestSet
-    load_var j
-    call baml.json.to
     return
 }
 
@@ -560,13 +532,6 @@ function testing.TestCollector.find_testset(self: testing.TestCollector, name: s
 
   L22:
     unreachable
-}
-
-function testing.TestCollector.from_json(j: baml.json.json) -> testing.TestCollector {
-    load_type testing.TestCollector
-    load_var j
-    call baml.json.to
-    return
 }
 
 function testing.TestCollector.new(prefix: string) -> testing.TestCollector {
@@ -1061,13 +1026,6 @@ function testing.TestCollector.register_test_set(self: testing.TestCollector, na
     unreachable
 }
 
-function testing.TestRegistration.from_json(j: baml.json.json) -> testing.TestRegistration {
-    load_type testing.TestRegistration
-    load_var j
-    call baml.json.to
-    return
-}
-
 function testing.TestRegistry.expand_set(self: testing.TestRegistry, name: string) -> (testing.SerializedTest | testing.SerializedTestSet)[] {
     load_var self
     load_field .collector
@@ -1460,13 +1418,6 @@ function testing.TestRegistry.expand_testset_registry(self: testing.TestRegistry
     load_var _3
 
   L2:
-    return
-}
-
-function testing.TestRegistry.from_json(j: baml.json.json) -> testing.TestRegistry {
-    load_type testing.TestRegistry
-    load_var j
-    call baml.json.to
     return
 }
 
@@ -2526,34 +2477,6 @@ function testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.
 
   L46:
     unreachable
-}
-
-function testing.TestReport.from_json(j: baml.json.json) -> testing.TestReport {
-    load_type testing.TestReport
-    load_var j
-    call baml.json.to
-    return
-}
-
-function testing.TestSetChild.from_json(j: baml.json.json) -> testing.TestSetChild {
-    load_type testing.TestSetChild
-    load_var j
-    call baml.json.to
-    return
-}
-
-function testing.TestSetRegistration.from_json(j: baml.json.json) -> testing.TestSetRegistration {
-    load_type testing.TestSetRegistration
-    load_var j
-    call baml.json.to
-    return
-}
-
-function testing.TestSetReport.from_json(j: baml.json.json) -> testing.TestSetReport {
-    load_type testing.TestSetReport
-    load_var j
-    call baml.json.to
-    return
 }
 
 function testing._int_to_float(value: int) -> float {
@@ -3791,27 +3714,6 @@ function testing.testset_children(registry: testing.TestRegistry) -> testing.Tes
 
   L44:
     unreachable
-}
-
-function user.ErrorInfo.from_json(j: baml.json.json) -> ErrorInfo {
-    load_type ErrorInfo
-    load_var j
-    call baml.json.to
-    return
-}
-
-function user.Report.from_json(j: baml.json.json) -> Report {
-    load_type Report
-    load_var j
-    call baml.json.to
-    return
-}
-
-function user.User.from_json(j: baml.json.json) -> User {
-    load_type User
-    load_var j
-    call baml.json.to
-    return
 }
 
 function user.User.promote(self: User, bonus: int) -> Report {

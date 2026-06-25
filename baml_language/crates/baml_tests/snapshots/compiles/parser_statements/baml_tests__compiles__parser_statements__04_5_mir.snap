@@ -188,22 +188,6 @@ fn user.edge_type_then_object() -> int {
     }
 }
 
-fn user.EdgeFoo.from_json(j: baml.json.json) -> EdgeFoo {
-    // Locals:
-    let _0: EdgeFoo // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(EdgeFoo);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
 fn user.let_mixed_semicolons() -> int {
     // Locals:
     let _0: int // _0 // return
@@ -1158,22 +1142,6 @@ fn user.ConditionalLogic(age: int) -> string {
     }
 
     bb5: {
-        return;
-    }
-}
-
-fn user.Point.from_json(j: baml.json.json) -> Point {
-    // Locals:
-    let _0: Point // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(Point);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
         return;
     }
 }

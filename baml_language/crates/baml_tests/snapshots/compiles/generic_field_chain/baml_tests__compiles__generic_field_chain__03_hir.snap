@@ -9,12 +9,6 @@ class user.User {
   name: string
   age: int
 }
-function user.from_json(j: baml.json.json) -> user.Box<T>  [expr] {
-  baml.json.to(j)
-}
-function user.from_json(j: baml.json.json) -> user.User  [expr] {
-  baml.json.to(j)
-}
 function user.test_generic_capture(box: user.Box<user.User>) -> string  [expr] {
   { let get_name = () -> string { {  } box.value.name } } get_name()
 }

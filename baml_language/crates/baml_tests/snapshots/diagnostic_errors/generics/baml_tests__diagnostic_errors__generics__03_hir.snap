@@ -48,42 +48,6 @@ function user.bare_in_union_param(f: user.Foo<int> | user.Foo) -> string  [expr]
 function user.create(value: T) -> user.Factory<T>  [expr] {
   {  } user.Factory { data: value }
 }
-function user.from_json(j: baml.json.json) -> user.Foo<T>  [expr] {
-  baml.json.to(j)
-}
-function user.from_json(j: baml.json.json) -> user.Wrapper<T>  [expr] {
-  baml.json.to(j)
-}
-function user.from_json(j: baml.json.json) -> user.Holder<T>  [expr] {
-  baml.json.to(j)
-}
-function user.from_json(j: baml.json.json) -> user.Container<T>  [expr] {
-  baml.json.to(j)
-}
-function user.from_json(j: baml.json.json) -> user.Stack<T>  [expr] {
-  baml.json.to(j)
-}
-function user.from_json(j: baml.json.json) -> user.Box<T>  [expr] {
-  baml.json.to(j)
-}
-function user.from_json(j: baml.json.json) -> user.Maker<T>  [expr] {
-  baml.json.to(j)
-}
-function user.from_json(j: baml.json.json) -> user.Plain  [expr] {
-  baml.json.to(j)
-}
-function user.from_json(j: baml.json.json) -> user.MaybeBox<T>  [expr] {
-  baml.json.to(j)
-}
-function user.from_json(j: baml.json.json) -> user.Pair<A, B>  [expr] {
-  baml.json.to(j)
-}
-function user.from_json(j: baml.json.json) -> user.Shadow<T>  [expr] {
-  baml.json.to(j)
-}
-function user.from_json(j: baml.json.json) -> user.Factory<T>  [expr] {
-  baml.json.to(j)
-}
 function user.from_string(params: string) -> user.Maker<T>  [expr] {
   {  } user.Maker { data: params }
 }
@@ -170,7 +134,4 @@ class user.Todo {
 }
 function user.GetTodo() -> user.Todo  [expr] {
   {  } baml.fetch_as(baml.HttpRequest { method: baml.HttpMethod.Get, url: "dummyjson.com/tod..." })
-}
-function user.from_json(j: baml.json.json) -> user.Todo  [expr] {
-  baml.json.to(j)
 }

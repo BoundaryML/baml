@@ -85,9 +85,6 @@ function user.CatchRecursiveThrow(n: int) -> string throws never {
 class user.BuildError {
   reason: string
 }
-function user.BuildError.from_json(j: baml.json.json) -> user.BuildError throws baml.json.JsonDecodeError {
-  baml.json.to<T>(j) : user.BuildError
-}
 function user.GenerateWithBuildError(ok: bool) -> string throws never {
   { : "ok"
     if (Not ok : bool) : void

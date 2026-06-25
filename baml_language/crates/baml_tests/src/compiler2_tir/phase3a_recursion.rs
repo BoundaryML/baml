@@ -105,9 +105,6 @@ fn class_field_self_reference() {
       next: user.Node
     }
       !! 0..24: class cycle: user.Node
-    function user.Node.from_json(j: baml.json.json) -> user.Node throws baml.json.JsonDecodeError {
-      baml.json.to<T>(j) : user.Node
-    }
     class user.Node$stream {
       next: user.Node$stream | null
     }
@@ -128,16 +125,10 @@ fn class_field_mutual_reference() {
       wife: user.Wife
     }
       !! 0..27: class cycle: user.Husband -> user.Wife -> user.Husband
-    function user.Husband.from_json(j: baml.json.json) -> user.Husband throws baml.json.JsonDecodeError {
-      baml.json.to<T>(j) : user.Husband
-    }
     class user.Wife {
       husband: user.Husband
     }
       !! 27..58: class cycle: user.Husband -> user.Wife -> user.Husband
-    function user.Wife.from_json(j: baml.json.json) -> user.Wife throws baml.json.JsonDecodeError {
-      baml.json.to<T>(j) : user.Wife
-    }
     class user.Husband$stream {
       wife: user.Wife$stream | null
     }
@@ -267,16 +258,10 @@ fn class_required_field_mutual_cycle() {
       b: user.B
     }
       !! 0..15: class cycle: user.A -> user.B -> user.A
-    function user.A.from_json(j: baml.json.json) -> user.A throws baml.json.JsonDecodeError {
-      baml.json.to<T>(j) : user.A
-    }
     class user.B {
       a: user.A
     }
       !! 15..31: class cycle: user.A -> user.B -> user.A
-    function user.B.from_json(j: baml.json.json) -> user.B throws baml.json.JsonDecodeError {
-      baml.json.to<T>(j) : user.B
-    }
     class user.A$stream {
       b: user.B$stream | null
     }
@@ -297,9 +282,6 @@ fn class_required_field_self_cycle() {
       self_ref: user.A
     }
       !! 0..22: class cycle: user.A
-    function user.A.from_json(j: baml.json.json) -> user.A throws baml.json.JsonDecodeError {
-      baml.json.to<T>(j) : user.A
-    }
     class user.A$stream {
       self_ref: user.A$stream | null
     }
@@ -319,23 +301,14 @@ fn class_required_field_three_way_cycle() {
       b: user.B
     }
       !! 0..15: class cycle: user.A -> user.B -> user.C -> user.A
-    function user.A.from_json(j: baml.json.json) -> user.A throws baml.json.JsonDecodeError {
-      baml.json.to<T>(j) : user.A
-    }
     class user.B {
       c: user.C
     }
       !! 15..31: class cycle: user.A -> user.B -> user.C -> user.A
-    function user.B.from_json(j: baml.json.json) -> user.B throws baml.json.JsonDecodeError {
-      baml.json.to<T>(j) : user.B
-    }
     class user.C {
       a: user.A
     }
       !! 31..47: class cycle: user.A -> user.B -> user.C -> user.A
-    function user.C.from_json(j: baml.json.json) -> user.C throws baml.json.JsonDecodeError {
-      baml.json.to<T>(j) : user.C
-    }
     class user.A$stream {
       b: user.B$stream | null
     }
@@ -359,14 +332,8 @@ fn class_optional_field_breaks_cycle() {
     class user.A {
       b: user.B | null
     }
-    function user.A.from_json(j: baml.json.json) -> user.A throws baml.json.JsonDecodeError {
-      baml.json.to<T>(j) : user.A
-    }
     class user.B {
       a: user.A
-    }
-    function user.B.from_json(j: baml.json.json) -> user.B throws baml.json.JsonDecodeError {
-      baml.json.to<T>(j) : user.B
     }
     class user.A$stream {
       b: user.B$stream | null
@@ -388,14 +355,8 @@ fn class_list_field_breaks_cycle() {
     class user.A {
       bs: user.B[]
     }
-    function user.A.from_json(j: baml.json.json) -> user.A throws baml.json.JsonDecodeError {
-      baml.json.to<T>(j) : user.A
-    }
     class user.B {
       a: user.A
-    }
-    function user.B.from_json(j: baml.json.json) -> user.B throws baml.json.JsonDecodeError {
-      baml.json.to<T>(j) : user.B
     }
     class user.A$stream {
       bs: user.B$stream[]
@@ -420,14 +381,8 @@ fn class_map_field_breaks_cycle() {
     class user.A {
       bm: map<string, user.B>
     }
-    function user.A.from_json(j: baml.json.json) -> user.A throws baml.json.JsonDecodeError {
-      baml.json.to<T>(j) : user.A
-    }
     class user.B {
       a: user.A
-    }
-    function user.B.from_json(j: baml.json.json) -> user.B throws baml.json.JsonDecodeError {
-      baml.json.to<T>(j) : user.B
     }
     class user.A$stream {
       bm: map<string, user.B$stream>
@@ -452,17 +407,11 @@ fn class_cycle_through_type_alias() {
       b: user.AliasB
     }
       !! 0..20: class cycle: user.A -> user.B -> user.A
-    function user.A.from_json(j: baml.json.json) -> user.A throws baml.json.JsonDecodeError {
-      baml.json.to<T>(j) : user.A
-    }
     type user.AliasB = user.B
     class user.B {
       a: user.A
     }
       !! 36..52: class cycle: user.A -> user.B -> user.A
-    function user.B.from_json(j: baml.json.json) -> user.B throws baml.json.JsonDecodeError {
-      baml.json.to<T>(j) : user.B
-    }
     class user.A$stream {
       b: user.B$stream | null
     }
@@ -486,15 +435,9 @@ fn class_cycle_broken_by_alias_to_optional() {
     class user.A {
       b: user.AliasB
     }
-    function user.A.from_json(j: baml.json.json) -> user.A throws baml.json.JsonDecodeError {
-      baml.json.to<T>(j) : user.A
-    }
     type user.AliasB = user.B | null
     class user.B {
       a: user.A
-    }
-    function user.B.from_json(j: baml.json.json) -> user.B throws baml.json.JsonDecodeError {
-      baml.json.to<T>(j) : user.B
     }
     class user.A$stream {
       b: user.B$stream | null
@@ -517,16 +460,10 @@ fn class_union_field_all_variants_same_class() {
       b: user.B | user.B
     }
       !! 0..19: class cycle: user.A -> user.B -> user.A
-    function user.A.from_json(j: baml.json.json) -> user.A throws baml.json.JsonDecodeError {
-      baml.json.to<T>(j) : user.A
-    }
     class user.B {
       a: user.A
     }
       !! 19..35: class cycle: user.A -> user.B -> user.A
-    function user.B.from_json(j: baml.json.json) -> user.B throws baml.json.JsonDecodeError {
-      baml.json.to<T>(j) : user.B
-    }
     class user.A$stream {
       b: user.B$stream | user.B$stream | null
     }
@@ -547,14 +484,8 @@ fn class_union_field_different_variants_breaks_cycle() {
     class user.A {
       b: user.B | string
     }
-    function user.A.from_json(j: baml.json.json) -> user.A throws baml.json.JsonDecodeError {
-      baml.json.to<T>(j) : user.A
-    }
     class user.B {
       a: user.A
-    }
-    function user.B.from_json(j: baml.json.json) -> user.B throws baml.json.JsonDecodeError {
-      baml.json.to<T>(j) : user.B
     }
     class user.A$stream {
       b: user.B$stream | string | null

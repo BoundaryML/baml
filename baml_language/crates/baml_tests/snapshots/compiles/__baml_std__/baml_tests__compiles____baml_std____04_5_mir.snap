@@ -8,22 +8,6 @@ fn baml.Bigint.abs = builtin(vm)
 
 fn baml.Bigint.clamp = builtin(vm)
 
-fn baml.Bigint.from_json(j: baml.json.json) -> baml.Bigint {
-    // Locals:
-    let _0: baml.Bigint // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.Bigint);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
 fn baml.Bigint.ilog = builtin(vm)
 
 fn baml.Bigint.isqrt = builtin(vm)
@@ -37,22 +21,6 @@ fn baml.Bigint.parse = builtin(vm)
 fn baml.Bigint.pow = builtin(vm)
 
 fn baml.Bigint.random = builtin(vm)
-
-fn baml.Bool.from_json(j: baml.json.json) -> baml.Bool {
-    // Locals:
-    let _0: baml.Bool // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.Bool);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
 
 fn baml._compare_shim = builtin(vm)
 
@@ -687,38 +655,6 @@ fn baml.Array.for_each(self: baml.Array, fn: (T) -> void throws E) -> void {
     }
 
     bb29: {
-        return;
-    }
-}
-
-fn baml.Map.from_json(j: baml.json.json) -> baml.Map<K, V> {
-    // Locals:
-    let _0: baml.Map<K, V> // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.Map<#0, #1>);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.Array.from_json(j: baml.json.json) -> baml.Array<T> {
-    // Locals:
-    let _0: baml.Array<T> // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.Array<#0>);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
         return;
     }
 }
@@ -1525,22 +1461,6 @@ fn baml.deep_copy = builtin(vm)
 
 fn baml.deep_equals = builtin(vm)
 
-fn baml.TaggedString.from_json(j: baml.json.json) -> baml.TaggedString {
-    // Locals:
-    let _0: baml.TaggedString // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.TaggedString);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
 fn baml.Float.abs = builtin(vm)
 
 fn baml.Float.acos = builtin(vm)
@@ -1570,22 +1490,6 @@ fn baml.Float.e = builtin(vm)
 fn baml.Float.floor = builtin(vm)
 
 fn baml.Float.fract = builtin(vm)
-
-fn baml.Float.from_json(j: baml.json.json) -> baml.Float {
-    // Locals:
-    let _0: baml.Float // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.Float);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
 
 fn baml.Float.golden_ratio = builtin(vm)
 
@@ -1717,22 +1621,6 @@ fn baml.Int.clamp = builtin(vm)
 fn baml.Int.count_ones = builtin(vm)
 
 fn baml.Int.count_zeros = builtin(vm)
-
-fn baml.Int.from_json(j: baml.json.json) -> baml.Int {
-    // Locals:
-    let _0: baml.Int // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.Int);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
 
 fn baml.Int.ilog = builtin(vm)
 
@@ -2494,182 +2382,6 @@ fn baml.csv.CsvWriter.flush(self: baml.csv.CsvWriter) -> null {
     bb0: {
         _0 = const null;
         goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.csv.CsvNeedData.from_json(j: baml.json.json) -> baml.csv.CsvNeedData {
-    // Locals:
-    let _0: baml.csv.CsvNeedData // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.csv.CsvNeedData);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.csv.CsvWriter.from_json(j: baml.json.json) -> baml.csv.CsvWriter {
-    // Locals:
-    let _0: baml.csv.CsvWriter // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.csv.CsvWriter);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.csv.WriterOptions.from_json(j: baml.json.json) -> baml.csv.WriterOptions {
-    // Locals:
-    let _0: baml.csv.WriterOptions // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.csv.WriterOptions);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.csv.CsvRows.from_json(j: baml.json.json) -> baml.csv.CsvRows<T> {
-    // Locals:
-    let _0: baml.csv.CsvRows<T> // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.csv.CsvRows<#0>);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.csv.ReaderOptions.from_json(j: baml.json.json) -> baml.csv.ReaderOptions {
-    // Locals:
-    let _0: baml.csv.ReaderOptions // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.csv.ReaderOptions);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.csv.CsvReader.from_json(j: baml.json.json) -> baml.csv.CsvReader {
-    // Locals:
-    let _0: baml.csv.CsvReader // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.csv.CsvReader);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.csv.CsvPosition.from_json(j: baml.json.json) -> baml.csv.CsvPosition {
-    // Locals:
-    let _0: baml.csv.CsvPosition // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.csv.CsvPosition);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.csv.CsvRecord.from_json(j: baml.json.json) -> baml.csv.CsvRecord {
-    // Locals:
-    let _0: baml.csv.CsvRecord // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.csv.CsvRecord);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.csv.CsvError.from_json(j: baml.json.json) -> baml.csv.CsvError {
-    // Locals:
-    let _0: baml.csv.CsvError // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.csv.CsvError);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.csv.CsvHeaders.from_json(j: baml.json.json) -> baml.csv.CsvHeaders {
-    // Locals:
-    let _0: baml.csv.CsvHeaders // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.csv.CsvHeaders);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.csv.CsvSkip.from_json(j: baml.json.json) -> baml.csv.CsvSkip {
-    // Locals:
-    let _0: baml.csv.CsvSkip // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.csv.CsvSkip);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
     }
 
     bb1: {
@@ -3995,247 +3707,7 @@ fn baml.env.get_or_panic(key: string) -> string {
     }
 }
 
-fn baml.errors.InvalidArgument.from_json(j: baml.json.json) -> baml.errors.InvalidArgument {
-    // Locals:
-    let _0: baml.errors.InvalidArgument // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.errors.InvalidArgument);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.errors.NotImplemented.from_json(j: baml.json.json) -> baml.errors.NotImplemented {
-    // Locals:
-    let _0: baml.errors.NotImplemented // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.errors.NotImplemented);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.errors.GenericSdkError.from_json(j: baml.json.json) -> baml.errors.GenericSdkError {
-    // Locals:
-    let _0: baml.errors.GenericSdkError // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.errors.GenericSdkError);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.errors.Timeout.from_json(j: baml.json.json) -> baml.errors.Timeout {
-    // Locals:
-    let _0: baml.errors.Timeout // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.errors.Timeout);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.errors.HostCallable.from_json(j: baml.json.json) -> baml.errors.HostCallable {
-    // Locals:
-    let _0: baml.errors.HostCallable // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.errors.HostCallable);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.errors.RenderPrompt.from_json(j: baml.json.json) -> baml.errors.RenderPrompt {
-    // Locals:
-    let _0: baml.errors.RenderPrompt // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.errors.RenderPrompt);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.errors.Io.from_json(j: baml.json.json) -> baml.errors.Io {
-    // Locals:
-    let _0: baml.errors.Io // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.errors.Io);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.errors.DevOther.from_json(j: baml.json.json) -> baml.errors.DevOther {
-    // Locals:
-    let _0: baml.errors.DevOther // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.errors.DevOther);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.errors.AccessError.from_json(j: baml.json.json) -> baml.errors.AccessError {
-    // Locals:
-    let _0: baml.errors.AccessError // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.errors.AccessError);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.errors.ParseError.from_json(j: baml.json.json) -> baml.errors.ParseError {
-    // Locals:
-    let _0: baml.errors.ParseError // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.errors.ParseError);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.errors.LlmClient.from_json(j: baml.json.json) -> baml.errors.LlmClient {
-    // Locals:
-    let _0: baml.errors.LlmClient // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.errors.LlmClient);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.errors.CompilationError.from_json(j: baml.json.json) -> baml.errors.CompilationError {
-    // Locals:
-    let _0: baml.errors.CompilationError // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.errors.CompilationError);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.errors.Unsupported.from_json(j: baml.json.json) -> baml.errors.Unsupported {
-    // Locals:
-    let _0: baml.errors.Unsupported // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.errors.Unsupported);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
 fn baml.errors.StackTrace._to_string_impl = builtin(vm)
-
-fn baml.errors.StackFrame.from_json(j: baml.json.json) -> baml.errors.StackFrame {
-    // Locals:
-    let _0: baml.errors.StackFrame // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.errors.StackFrame);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.errors.StackTrace.from_json(j: baml.json.json) -> baml.errors.StackTrace {
-    // Locals:
-    let _0: baml.errors.StackTrace // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.errors.StackTrace);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
 
 fn baml.errors.StackTrace.baml.ToString.to_string(self: null) -> string {
     // Locals:
@@ -4256,54 +3728,6 @@ fn baml.fs.File.bytes = builtin(io)
 fn baml.fs.File.close = builtin(io)
 
 fn baml.fs.exists = builtin(io)
-
-fn baml.fs.File.from_json(j: baml.json.json) -> baml.fs.File {
-    // Locals:
-    let _0: baml.fs.File // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.fs.File);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.fs.DirEntry.from_json(j: baml.json.json) -> baml.fs.DirEntry {
-    // Locals:
-    let _0: baml.fs.DirEntry // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.fs.DirEntry);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.fs.MkdirOptions.from_json(j: baml.json.json) -> baml.fs.MkdirOptions {
-    // Locals:
-    let _0: baml.fs.MkdirOptions // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.fs.MkdirOptions);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
 
 fn baml.fs.mkdir = builtin(io)
 
@@ -4847,38 +4271,6 @@ fn .<lambda(<lambda(any, 0)>, 1)>(g: null) -> null {
 
 fn baml.future.Future.cancel = builtin(vm)
 
-fn baml.future.Future.from_json(j: baml.json.json) -> future<T, E> {
-    // Locals:
-    let _0: future<T, E> // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(future<T, E>);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.future.AllFailed.from_json(j: baml.json.json) -> baml.future.AllFailed<E> {
-    // Locals:
-    let _0: baml.future.AllFailed<E> // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.future.AllFailed<#0>);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
 fn baml.future.Future.is_cancelled = builtin(vm)
 
 fn baml.future.Future.is_error = builtin(vm)
@@ -4966,38 +4358,6 @@ fn .<lambda(<lambda(race, 0)>, 1)>(f: null) -> null {
 
 fn baml.future.Future.state = builtin(vm)
 
-fn baml.glob.ScanOptions.from_json(j: baml.json.json) -> baml.glob.ScanOptions {
-    // Locals:
-    let _0: baml.glob.ScanOptions // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.glob.ScanOptions);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.glob.Glob.from_json(j: baml.json.json) -> baml.glob.Glob {
-    // Locals:
-    let _0: baml.glob.Glob // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.glob.Glob);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
 fn baml.glob.Glob.matches = builtin(io)
 
 fn baml.glob.new = builtin(io)
@@ -5005,22 +4365,6 @@ fn baml.glob.new = builtin(io)
 fn baml.glob.Glob.scan = builtin(io)
 
 fn baml.host.call_host_value = builtin(io)
-
-fn baml.host.HostValue.from_json(j: baml.json.json) -> baml.host.HostValue {
-    // Locals:
-    let _0: baml.host.HostValue // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.host.HostValue);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
 
 fn baml.http._fetch = builtin(io)
 
@@ -5091,54 +4435,6 @@ fn baml.http.fetch(url: string, timeout: baml.time.Duration | null) -> baml.http
 }
 
 fn baml.http.fetch_sse = builtin(io)
-
-fn baml.http.Request.from_json(j: baml.json.json) -> baml.http.Request {
-    // Locals:
-    let _0: baml.http.Request // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.http.Request);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.http.Response.from_json(j: baml.json.json) -> baml.http.Response {
-    // Locals:
-    let _0: baml.http.Response // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.http.Response);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.http.SseStream.from_json(j: baml.json.json) -> baml.http.SseStream {
-    // Locals:
-    let _0: baml.http.SseStream // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.http.SseStream);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
 
 fn baml.http.Response.new = builtin(io)
 
@@ -5211,38 +4507,6 @@ fn baml.http.TlsConfig._new = builtin(io)
 fn baml.http.Server._serve = builtin(io)
 
 fn baml.http.Server.bind = builtin(io)
-
-fn baml.http.Server.from_json(j: baml.json.json) -> baml.http.Server {
-    // Locals:
-    let _0: baml.http.Server // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.http.Server);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.http.TlsConfig.from_json(j: baml.json.json) -> baml.http.TlsConfig {
-    // Locals:
-    let _0: baml.http.TlsConfig // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.http.TlsConfig);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
 
 fn baml.http.TlsConfig.new(cert_pem: uint8array, key_pem: uint8array, allow_tls1_2: bool, handshake_timeout: baml.time.Duration) -> baml.http.TlsConfig {
     // Locals:
@@ -5888,213 +5152,6 @@ fn baml.iter.Iterator.for_each(self: baml.iter.Iterator, fn: (Item) -> void thro
     }
 }
 
-fn baml.iter.Chain.from_json(j: baml.json.json) -> baml.iter.Chain<T, E, E2> {
-    // Locals:
-    let _0: baml.iter.Chain<T, E, E2> // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.iter.Chain<#0, #1, #2>);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.iter.ArrayIterator.from_json(j: baml.json.json) -> baml.iter.ArrayIterator<T> {
-    // Locals:
-    let _0: baml.iter.ArrayIterator<T> // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.iter.ArrayIterator<#0>);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.iter.Map.from_json(j: baml.json.json) -> baml.iter.Map<T, R, E, E2> {
-    // Locals:
-    let _0: baml.iter.Map<T, R, E, E2> // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.iter.Map<#0, #1, #2, #3>);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.iter.FlatMap.from_json(j: baml.json.json) -> baml.iter.FlatMap<T, R, E, E2, E3> {
-    // Locals:
-    let _0: baml.iter.FlatMap<T, R, E, E2, E3> // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.iter.FlatMap<#0, #1, #2, #3, #4>);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.iter.StepBy.from_json(j: baml.json.json) -> baml.iter.StepBy<T, E> {
-    // Locals:
-    let _0: baml.iter.StepBy<T, E> // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.iter.StepBy<#0, #1>);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.iter.Done.from_json(j: baml.json.json) -> baml.iter.Done {
-    // Locals:
-    let _0: baml.iter.Done // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.iter.Done);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.iter.Repeat.from_json(j: baml.json.json) -> baml.iter.Repeat<T> {
-    // Locals:
-    let _0: baml.iter.Repeat<T> // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.iter.Repeat<#0>);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.iter.FilterMap.from_json(j: baml.json.json) -> baml.iter.FilterMap<T, R, E, E2> {
-    // Locals:
-    let _0: baml.iter.FilterMap<T, R, E, E2> // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.iter.FilterMap<#0, #1, #2, #3>);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.iter.Peekable.from_json(j: baml.json.json) -> baml.iter.Peekable<T, E> {
-    // Locals:
-    let _0: baml.iter.Peekable<T, E> // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.iter.Peekable<#0, #1>);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.iter.Range.from_json(j: baml.json.json) -> baml.iter.Range {
-    // Locals:
-    let _0: baml.iter.Range // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.iter.Range);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.iter.Filter.from_json(j: baml.json.json) -> baml.iter.Filter<T, E, E2> {
-    // Locals:
-    let _0: baml.iter.Filter<T, E, E2> // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.iter.Filter<#0, #1, #2>);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.iter.Flatten.from_json(j: baml.json.json) -> baml.iter.Flatten<I, R, E, E3> {
-    // Locals:
-    let _0: baml.iter.Flatten<I, R, E, E3> // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.iter.Flatten<#0, #1, #2, #3>);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.iter.Flatten.Iterable.iter(self: null) -> baml.iter.Iterator<Item = R, Error = E | E3> {
-    // Locals:
-    let _0: baml.iter.Iterator<Item = R, Error = E | E3> // _0 // return
-    let _1: null // self // param
-
-    bb0: {
-        _0 = copy _1;
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
 fn baml.iter.Chain.Iterable.iter(self: null) -> baml.iter.Iterator<Item = T, Error = E | E2> {
     // Locals:
     let _0: baml.iter.Iterator<Item = T, Error = E | E2> // _0 // return
@@ -6249,6 +5306,21 @@ fn baml.iter.Range.Iterable.iter(self: null) -> baml.iter.Iterator<Item = int, E
 fn baml.iter.Filter.Iterable.iter(self: null) -> baml.iter.Iterator<Item = T, Error = E | E2> {
     // Locals:
     let _0: baml.iter.Iterator<Item = T, Error = E | E2> // _0 // return
+    let _1: null // self // param
+
+    bb0: {
+        _0 = copy _1;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn baml.iter.Flatten.Iterable.iter(self: null) -> baml.iter.Iterator<Item = R, Error = E | E3> {
+    // Locals:
+    let _0: baml.iter.Iterator<Item = R, Error = E | E3> // _0 // return
     let _1: null // self // param
 
     bb0: {
@@ -7969,55 +7041,7 @@ fn baml.json.from(value: T) -> baml.json.json {
     }
 }
 
-fn baml.json.JsonParseError.from_json(j: baml.json.json) -> baml.json.JsonParseError {
-    // Locals:
-    let _0: baml.json.JsonParseError // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.json.JsonParseError);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
 fn baml.json.from_json = builtin(vm)
-
-fn baml.json.JsonDecodeError.from_json(j: baml.json.json) -> baml.json.JsonDecodeError {
-    // Locals:
-    let _0: baml.json.JsonDecodeError // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.json.JsonDecodeError);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.json.JsonSerializationError.from_json(j: baml.json.json) -> baml.json.JsonSerializationError {
-    // Locals:
-    let _0: baml.json.JsonSerializationError // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.json.JsonSerializationError);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
 
 fn baml.json.from_string = builtin(vm)
 
@@ -8234,54 +7258,6 @@ fn baml.llm.call_llm_function(client: baml.llm.Client, function_name: string, ar
     }
 
     bb7: {
-        return;
-    }
-}
-
-fn baml.llm.OrchestrationStep.from_json(j: baml.json.json) -> baml.llm.OrchestrationStep {
-    // Locals:
-    let _0: baml.llm.OrchestrationStep // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.llm.OrchestrationStep);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.llm.PlannerState.from_json(j: baml.json.json) -> baml.llm.PlannerState {
-    // Locals:
-    let _0: baml.llm.PlannerState // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.llm.PlannerState);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.llm.ExecutionContext.from_json(j: baml.json.json) -> baml.llm.ExecutionContext {
-    // Locals:
-    let _0: baml.llm.ExecutionContext // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.llm.ExecutionContext);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
         return;
     }
 }
@@ -10700,278 +9676,6 @@ fn baml.llm.Stream.final(self: baml.llm.Stream) -> TFinal {
 
 fn baml.llm.StreamAccumulator.finish_reason = builtin(io)
 
-fn baml.llm.VertexAiOptions.from_json(j: baml.json.json) -> baml.llm.VertexAiOptions {
-    // Locals:
-    let _0: baml.llm.VertexAiOptions // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.llm.VertexAiOptions);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.llm.Context.from_json(j: baml.json.json) -> baml.llm.Context {
-    // Locals:
-    let _0: baml.llm.Context // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.llm.Context);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.llm.AnthropicOptions.from_json(j: baml.json.json) -> baml.llm.AnthropicOptions {
-    // Locals:
-    let _0: baml.llm.AnthropicOptions // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.llm.AnthropicOptions);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.llm.PrimitiveClient.from_json(j: baml.json.json) -> baml.llm.PrimitiveClient {
-    // Locals:
-    let _0: baml.llm.PrimitiveClient // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.llm.PrimitiveClient);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.llm.ContextClient.from_json(j: baml.json.json) -> baml.llm.ContextClient {
-    // Locals:
-    let _0: baml.llm.ContextClient // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.llm.ContextClient);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.llm.AzureOpenAiOptions.from_json(j: baml.json.json) -> baml.llm.AzureOpenAiOptions {
-    // Locals:
-    let _0: baml.llm.AzureOpenAiOptions // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.llm.AzureOpenAiOptions);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.llm.Stream.from_json(j: baml.json.json) -> baml.llm.Stream<TStream, TFinal> {
-    // Locals:
-    let _0: baml.llm.Stream<TStream, TFinal> // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.llm.Stream<#0, #1>);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.llm.Role.from_json(j: baml.json.json) -> baml.llm.Role {
-    // Locals:
-    let _0: baml.llm.Role // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.llm.Role);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.llm.PrimitiveClientOptions.from_json(j: baml.json.json) -> baml.llm.PrimitiveClientOptions {
-    // Locals:
-    let _0: baml.llm.PrimitiveClientOptions // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.llm.PrimitiveClientOptions);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.llm.StreamCache.from_json(j: baml.json.json) -> baml.llm.StreamCache<TStream, TFinal> {
-    // Locals:
-    let _0: baml.llm.StreamCache<TStream, TFinal> // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.llm.StreamCache<#0, #1>);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.llm.OutputFormat.from_json(j: baml.json.json) -> baml.llm.OutputFormat {
-    // Locals:
-    let _0: baml.llm.OutputFormat // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.llm.OutputFormat);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.llm.MediaUrlHandler.from_json(j: baml.json.json) -> baml.llm.MediaUrlHandler {
-    // Locals:
-    let _0: baml.llm.MediaUrlHandler // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.llm.MediaUrlHandler);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.llm.StreamAccumulator.from_json(j: baml.json.json) -> baml.llm.StreamAccumulator {
-    // Locals:
-    let _0: baml.llm.StreamAccumulator // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.llm.StreamAccumulator);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.llm.PromptAst.from_json(j: baml.json.json) -> baml.llm.PromptAst {
-    // Locals:
-    let _0: baml.llm.PromptAst // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.llm.PromptAst);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.llm.Client.from_json(j: baml.json.json) -> baml.llm.Client {
-    // Locals:
-    let _0: baml.llm.Client // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.llm.Client);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.llm.BedrockOptions.from_json(j: baml.json.json) -> baml.llm.BedrockOptions {
-    // Locals:
-    let _0: baml.llm.BedrockOptions // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.llm.BedrockOptions);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.llm.RetryPolicy.from_json(j: baml.json.json) -> baml.llm.RetryPolicy {
-    // Locals:
-    let _0: baml.llm.RetryPolicy // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.llm.RetryPolicy);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
 fn baml.llm.from_shorthand = builtin(io)
 
 fn baml.llm.Client.get_constructor = builtin(io)
@@ -11261,123 +9965,59 @@ fn baml.math.trunc = builtin(vm)
 
 fn baml.media.Video.base64 = builtin(vm)
 
-fn baml.media.Audio.base64 = builtin(vm)
-
 fn baml.media.Pdf.base64 = builtin(vm)
 
 fn baml.media.Image.base64 = builtin(vm)
 
-fn baml.media.Audio.file = builtin(vm)
+fn baml.media.Audio.base64 = builtin(vm)
 
 fn baml.media.Pdf.file = builtin(vm)
 
 fn baml.media.Image.file = builtin(vm)
 
+fn baml.media.Audio.file = builtin(vm)
+
 fn baml.media.Video.file = builtin(vm)
+
+fn baml.media.Video.from_base64 = builtin(vm)
 
 fn baml.media.Pdf.from_base64 = builtin(vm)
 
 fn baml.media.Image.from_base64 = builtin(vm)
 
-fn baml.media.Video.from_base64 = builtin(vm)
-
 fn baml.media.Audio.from_base64 = builtin(vm)
+
+fn baml.media.Video.from_file = builtin(vm)
 
 fn baml.media.Pdf.from_file = builtin(vm)
 
 fn baml.media.Image.from_file = builtin(vm)
 
-fn baml.media.Video.from_file = builtin(vm)
-
 fn baml.media.Audio.from_file = builtin(vm)
 
-fn baml.media.Audio.from_json(j: baml.json.json) -> baml.media.Audio {
-    // Locals:
-    let _0: baml.media.Audio // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.media.Audio);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.media.Pdf.from_json(j: baml.json.json) -> baml.media.Pdf {
-    // Locals:
-    let _0: baml.media.Pdf // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.media.Pdf);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.media.Image.from_json(j: baml.json.json) -> baml.media.Image {
-    // Locals:
-    let _0: baml.media.Image // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.media.Image);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.media.Video.from_json(j: baml.json.json) -> baml.media.Video {
-    // Locals:
-    let _0: baml.media.Video // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.media.Video);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
 fn baml.media.Video.from_url = builtin(vm)
-
-fn baml.media.Audio.from_url = builtin(vm)
 
 fn baml.media.Pdf.from_url = builtin(vm)
 
 fn baml.media.Image.from_url = builtin(vm)
 
+fn baml.media.Audio.from_url = builtin(vm)
+
 fn baml.media.Pdf.mime_type = builtin(vm)
 
 fn baml.media.Image.mime_type = builtin(vm)
 
-fn baml.media.Video.mime_type = builtin(vm)
-
 fn baml.media.Audio.mime_type = builtin(vm)
+
+fn baml.media.Video.mime_type = builtin(vm)
 
 fn baml.media.Pdf.url = builtin(vm)
 
 fn baml.media.Image.url = builtin(vm)
 
-fn baml.media.Video.url = builtin(vm)
-
 fn baml.media.Audio.url = builtin(vm)
+
+fn baml.media.Video.url = builtin(vm)
 
 fn baml.net.TcpStream._connect = builtin(io)
 
@@ -11455,70 +10095,6 @@ fn baml.net.TcpStream.connect(addr: string, timeout: baml.time.Duration | null) 
     }
 
     bb4: {
-        return;
-    }
-}
-
-fn baml.net.TcpStream.from_json(j: baml.json.json) -> baml.net.TcpStream {
-    // Locals:
-    let _0: baml.net.TcpStream // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.net.TcpStream);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.net.Datagram.from_json(j: baml.json.json) -> baml.net.Datagram {
-    // Locals:
-    let _0: baml.net.Datagram // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.net.Datagram);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.net.TcpListener.from_json(j: baml.json.json) -> baml.net.TcpListener {
-    // Locals:
-    let _0: baml.net.TcpListener // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.net.TcpListener);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.net.UdpSocket.from_json(j: baml.json.json) -> baml.net.UdpSocket {
-    // Locals:
-    let _0: baml.net.UdpSocket // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.net.UdpSocket);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
         return;
     }
 }
@@ -11971,317 +10547,13 @@ fn baml.ops.Equals$for$null.neq(self: null, other: Self) -> bool {
     }
 }
 
-fn baml.panics.DivisionByZero.from_json(j: baml.json.json) -> baml.panics.DivisionByZero {
-    // Locals:
-    let _0: baml.panics.DivisionByZero // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.panics.DivisionByZero);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.panics.HostUnavailable.from_json(j: baml.json.json) -> baml.panics.HostUnavailable {
-    // Locals:
-    let _0: baml.panics.HostUnavailable // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.panics.HostUnavailable);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.panics.MapKeyNotFound.from_json(j: baml.json.json) -> baml.panics.MapKeyNotFound {
-    // Locals:
-    let _0: baml.panics.MapKeyNotFound // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.panics.MapKeyNotFound);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.panics.HostContractViolation.from_json(j: baml.json.json) -> baml.panics.HostContractViolation {
-    // Locals:
-    let _0: baml.panics.HostContractViolation // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.panics.HostContractViolation);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.panics.Unreachable.from_json(j: baml.json.json) -> baml.panics.Unreachable {
-    // Locals:
-    let _0: baml.panics.Unreachable // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.panics.Unreachable);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.panics.Exit.from_json(j: baml.json.json) -> baml.panics.Exit {
-    // Locals:
-    let _0: baml.panics.Exit // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.panics.Exit);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.panics.IndexOutOfBounds.from_json(j: baml.json.json) -> baml.panics.IndexOutOfBounds {
-    // Locals:
-    let _0: baml.panics.IndexOutOfBounds // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.panics.IndexOutOfBounds);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.panics.NegativeBitShift.from_json(j: baml.json.json) -> baml.panics.NegativeBitShift {
-    // Locals:
-    let _0: baml.panics.NegativeBitShift // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.panics.NegativeBitShift);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.panics.StackOverflow.from_json(j: baml.json.json) -> baml.panics.StackOverflow {
-    // Locals:
-    let _0: baml.panics.StackOverflow // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.panics.StackOverflow);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.panics.IntegerOverflow.from_json(j: baml.json.json) -> baml.panics.IntegerOverflow {
-    // Locals:
-    let _0: baml.panics.IntegerOverflow // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.panics.IntegerOverflow);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.panics.Cancelled.from_json(j: baml.json.json) -> baml.panics.Cancelled {
-    // Locals:
-    let _0: baml.panics.Cancelled // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.panics.Cancelled);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.panics.AllocFailure.from_json(j: baml.json.json) -> baml.panics.AllocFailure {
-    // Locals:
-    let _0: baml.panics.AllocFailure // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.panics.AllocFailure);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.panics.InvalidFieldAccess.from_json(j: baml.json.json) -> baml.panics.InvalidFieldAccess {
-    // Locals:
-    let _0: baml.panics.InvalidFieldAccess // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.panics.InvalidFieldAccess);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.panics.SdkPanic.from_json(j: baml.json.json) -> baml.panics.SdkPanic {
-    // Locals:
-    let _0: baml.panics.SdkPanic // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.panics.SdkPanic);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.panics.AssertionFailed.from_json(j: baml.json.json) -> baml.panics.AssertionFailed {
-    // Locals:
-    let _0: baml.panics.AssertionFailed // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.panics.AssertionFailed);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.panics.UserPanic.from_json(j: baml.json.json) -> baml.panics.UserPanic {
-    // Locals:
-    let _0: baml.panics.UserPanic // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.panics.UserPanic);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
 fn baml.spawn.TaskGroup.active_count = builtin(vm)
 
 fn baml.spawn.CancelToken.any = builtin(vm)
 
-fn baml.spawn.TaskGroup.cancel = builtin(vm)
-
 fn baml.spawn.CancelToken.cancel = builtin(vm)
 
-fn baml.spawn.SpawnParams.from_json(j: baml.json.json) -> baml.spawn.SpawnParams<T, E> {
-    // Locals:
-    let _0: baml.spawn.SpawnParams<T, E> // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.spawn.SpawnParams<#0, #1>);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.spawn.TaskGroup.from_json(j: baml.json.json) -> baml.spawn.TaskGroup {
-    // Locals:
-    let _0: baml.spawn.TaskGroup // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.spawn.TaskGroup);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.spawn.CancelToken.from_json(j: baml.json.json) -> baml.spawn.CancelToken {
-    // Locals:
-    let _0: baml.spawn.CancelToken // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.spawn.CancelToken);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
+fn baml.spawn.TaskGroup.cancel = builtin(vm)
 
 fn baml.spawn.CancelToken.is_cancelled = builtin(vm)
 
@@ -12412,75 +10684,11 @@ fn baml.spawn.TaskGroup.queued_count = builtin(vm)
 
 fn baml.spawn.TaskGroup.set_limit = builtin(vm)
 
-fn baml.stream.StreamFinished.from_json(j: baml.json.json) -> baml.stream.StreamFinished {
-    // Locals:
-    let _0: baml.stream.StreamFinished // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.stream.StreamFinished);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.stream.StreamNoYield.from_json(j: baml.json.json) -> baml.stream.StreamNoYield {
-    // Locals:
-    let _0: baml.stream.StreamNoYield // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.stream.StreamNoYield);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
 fn baml.sys.argv = builtin(vm)
 
 fn baml.sys.exec = builtin(io)
 
 fn baml.sys.exit = builtin(vm)
-
-fn baml.sys.ProcessOptions.from_json(j: baml.json.json) -> baml.sys.ProcessOptions {
-    // Locals:
-    let _0: baml.sys.ProcessOptions // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.sys.ProcessOptions);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.sys.ShellOutput.from_json(j: baml.json.json) -> baml.sys.ShellOutput {
-    // Locals:
-    let _0: baml.sys.ShellOutput // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.sys.ShellOutput);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
 
 fn baml.sys.now_ms = builtin(vm)
 
@@ -12565,22 +10773,6 @@ fn baml.time.Duration.from_hours(h: int | bigint) -> baml.time.Duration {
     }
 
     bb4: {
-        return;
-    }
-}
-
-fn baml.time.Duration.from_json(j: baml.json.json) -> baml.time.Duration {
-    // Locals:
-    let _0: baml.time.Duration // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.time.Duration);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
         return;
     }
 }
@@ -14327,54 +12519,6 @@ fn baml.time._tz_to_instant = builtin(io)
 
 fn baml.time.TimeZoneOffset.from_duration = builtin(vm)
 
-fn baml.time.UnknownTimezoneError.from_json(j: baml.json.json) -> baml.time.UnknownTimezoneError {
-    // Locals:
-    let _0: baml.time.UnknownTimezoneError // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.time.UnknownTimezoneError);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.time.TimeZoneOffset.from_json(j: baml.json.json) -> baml.time.TimeZoneOffset {
-    // Locals:
-    let _0: baml.time.TimeZoneOffset // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.time.TimeZoneOffset);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.time.AmbiguousTimeError.from_json(j: baml.json.json) -> baml.time.AmbiguousTimeError {
-    // Locals:
-    let _0: baml.time.AmbiguousTimeError // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.time.AmbiguousTimeError);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
 fn baml.time.TimeZoneOffset.from_timezone(timezone: string, at: baml.time.Instant) -> baml.time.TimeZoneOffset {
     // Locals:
     let _0: baml.time.TimeZoneOffset // _0 // return
@@ -15405,22 +13549,6 @@ fn baml.toml.Table.baml.FromJson.from_json(j: baml.json.json) -> Self {
     }
 }
 
-fn baml.toml.TomlParseError.from_json(j: baml.json.json) -> baml.toml.TomlParseError {
-    // Locals:
-    let _0: baml.toml.TomlParseError // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.toml.TomlParseError);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
 fn baml.toml.item_from_json(json: baml.json.json) -> baml.toml.Item {
     // Locals:
     let _0: baml.toml.Item // _0 // return
@@ -16387,39 +14515,7 @@ fn baml.yaml.deserialize(s: string) -> T {
     }
 }
 
-fn baml.yaml.YamlParseError.from_json(j: baml.json.json) -> baml.yaml.YamlParseError {
-    // Locals:
-    let _0: baml.yaml.YamlParseError // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.yaml.YamlParseError);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
 fn baml.yaml.parse = builtin(vm)
-
-fn baml.Null.from_json(j: baml.json.json) -> baml.Null {
-    // Locals:
-    let _0: baml.Null // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.Null);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
 
 fn baml.String.byte_length = builtin(vm)
 
@@ -16446,22 +14542,6 @@ fn baml.String.from(value: T) -> string {
 }
 
 fn baml.String.from_code_points = builtin(vm)
-
-fn baml.String.from_json(j: baml.json.json) -> baml.String {
-    // Locals:
-    let _0: baml.String // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.String);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
 
 fn baml.String.from_utf8 = builtin(vm)
 
@@ -16537,22 +14617,6 @@ fn baml.String.trim_start = builtin(vm)
 
 fn baml.TypeValue._to_string_impl = builtin(vm)
 
-fn baml.TypeValue.from_json(j: baml.json.json) -> baml.TypeValue {
-    // Locals:
-    let _0: baml.TypeValue // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.TypeValue);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
 fn baml.TypeValue.implemented_by = builtin(vm)
 
 fn baml.TypeValue.implementors = builtin(vm)
@@ -16584,22 +14648,6 @@ fn baml.Uint8Array.from_array = builtin(vm)
 fn baml.Uint8Array.from_base64 = builtin(vm)
 
 fn baml.Uint8Array.from_hex = builtin(vm)
-
-fn baml.Uint8Array.from_json(j: baml.json.json) -> baml.Uint8Array {
-    // Locals:
-    let _0: baml.Uint8Array // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(baml.Uint8Array);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
 
 fn baml.Uint8Array.includes = builtin(vm)
 

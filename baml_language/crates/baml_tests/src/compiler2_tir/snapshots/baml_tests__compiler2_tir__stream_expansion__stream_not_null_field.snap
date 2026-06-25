@@ -6,9 +6,6 @@ class user.WithNotNull {
   gpa: float
   name: string
 }
-function user.WithNotNull.from_json(j: baml.json.json) -> user.WithNotNull throws baml.json.JsonDecodeError {
-  baml.json.to<T>(j) : user.WithNotNull
-}
 class user.WithNotNull$stream {
   gpa: float | null
   name: string | null

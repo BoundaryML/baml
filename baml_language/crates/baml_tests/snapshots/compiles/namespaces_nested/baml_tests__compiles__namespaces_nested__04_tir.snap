@@ -5,9 +5,6 @@ source: crates/baml_tests/src/generated_tests.rs
 class user.AppConfig {
   api_key: string
 }
-function user.AppConfig.from_json(j: baml.json.json) -> user.AppConfig throws baml.json.JsonDecodeError {
-  baml.json.to<T>(j) : user.AppConfig
-}
 function user.CallOpenAI(cfg: user.AppConfig) -> user.llm.openai.OpenAIResponse throws never {
   { : user.llm.openai.OpenAIResponse
     root.llm.openai.OpenAIResponse { text: "response", model: "gpt-4" } : user.llm.openai.OpenAIResponse
@@ -19,9 +16,6 @@ class user.AppConfig$stream {
 class user.llm.openai.OpenAIResponse {
   text: string
   model: string
-}
-function user.llm.openai.OpenAIResponse.from_json(j: baml.json.json) -> user.llm.openai.OpenAIResponse throws baml.json.JsonDecodeError {
-  baml.json.to<T>(j) : user.llm.openai.OpenAIResponse
 }
 class user.llm.openai.OpenAIResponse$stream {
   text: string | null

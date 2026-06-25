@@ -903,7 +903,10 @@ function json_auto_derive.array_of_int_to_json_str() -> string {
 function json_auto_derive.array_of_primitive_from_json_sum() -> int {
     load_const "{\"xs\":[1,2,3]}"
     call baml.json.parse
-    call user.json_auto_derive.C4.from_json
+    store_var j
+    load_type json_auto_derive.C4
+    load_var j
+    call baml.json.to
     store_var c
     load_var c
     load_field .xs
@@ -951,9 +954,12 @@ function json_auto_derive.float_to_json_result() -> baml.json.json {
 function json_auto_derive.from_json_wrapper_body_fallback_val() -> int {
     load_const "{\"value\":42}"
     call baml.json.parse
-    call user.json_auto_derive.Holder.from_json
+    store_var j
+    load_type json_auto_derive.Holder
+    load_var j
+    call baml.json.to
     load_field .value
-    store_var_load_var _4
+    store_var_load_var _5
     is_type int
     pop_jump_if_false L0
     jump L1
@@ -964,7 +970,7 @@ function json_auto_derive.from_json_wrapper_body_fallback_val() -> int {
     jump L2
 
   L1:
-    load_var _4
+    load_var _5
 
   L2:
     return
@@ -974,9 +980,9 @@ function json_auto_derive.generic_class_from_json_concrete_val() -> int {
     load_const "{\"value\":42}"
     call baml.json.parse
     store_var j
-    load_type int
+    load_type json_auto_derive.Box6<int>
     load_var j
-    call user.json_auto_derive.Box6.from_json
+    call baml.json.to
     load_field .value
     return
 }
@@ -985,9 +991,9 @@ function json_auto_derive.generic_class_honors_override_from_json_val() -> strin
     load_const "{\"value\":{\"data\":\"hunter2\"}}"
     call baml.json.parse
     store_var j
-    load_type json_auto_derive.SecretReset
+    load_type json_auto_derive.Box7<json_auto_derive.SecretReset>
     load_var j
-    call user.json_auto_derive.Box7.from_json
+    call baml.json.to
     load_field .value
     load_field .0
     return
@@ -1066,7 +1072,10 @@ function json_auto_derive.independent_synthesis_only_from_json_result() -> strin
     call baml.json.from
     call baml.json.stringify
     call baml.json.parse
-    call user.json_auto_derive.AOnlyFrom.from_json
+    store_var _8
+    load_type json_auto_derive.AOnlyFrom
+    load_var _8
+    call baml.json.to
     load_field .b
     load_field .y
     load_const 99
@@ -1088,7 +1097,10 @@ function json_auto_derive.independent_synthesis_only_from_json_result() -> strin
 function json_auto_derive.independent_synthesis_only_to_json_val() -> int {
     load_const "{\"b\":{\"y\":7}}"
     call baml.json.parse
-    call user.json_auto_derive.AOnlyTo.from_json
+    store_var j
+    load_type json_auto_derive.AOnlyTo
+    load_var j
+    call baml.json.to
     load_field .b
     load_field .y
     return
@@ -1116,7 +1128,10 @@ function json_auto_derive.map_of_int_to_json_str() -> string {
 function json_auto_derive.map_of_primitive_from_json_sum() -> int {
     load_const "{\"lookup\":{\"a\":1,\"b\":2,\"c\":3}}"
     call baml.json.parse
-    call user.json_auto_derive.C6.from_json
+    store_var j
+    load_type json_auto_derive.C6
+    load_var j
+    call baml.json.to
     store_var c
     load_var c
     load_field .lookup
@@ -1138,7 +1153,10 @@ function json_auto_derive.map_of_primitive_from_json_sum() -> int {
 function json_auto_derive.nested_class_override_array_from_json_sum() -> int {
     load_const "{\"items\":[{\"y\":1},{\"y\":2}]}"
     call baml.json.parse
-    call user.json_auto_derive.AItemsFrom.from_json
+    store_var j
+    load_type json_auto_derive.AItemsFrom
+    load_var j
+    call baml.json.to
     store_var a
     load_var a
     load_field .items
@@ -1157,7 +1175,10 @@ function json_auto_derive.nested_class_override_array_from_json_sum() -> int {
 function json_auto_derive.nested_class_override_direct_from_json_val() -> int {
     load_const "{\"b\":{\"y\":7}}"
     call baml.json.parse
-    call user.json_auto_derive.AOverride.from_json
+    store_var j
+    load_type json_auto_derive.AOverride
+    load_var j
+    call baml.json.to
     load_field .b
     load_field .y
     return
@@ -1204,7 +1225,10 @@ function json_auto_derive.nested_class_override_in_map_str() -> string {
 function json_auto_derive.nested_class_override_map_from_json_sum() -> int {
     load_const "{\"lookup\":{\"k1\":{\"v\":7},\"k2\":{\"v\":9}}}"
     call baml.json.parse
-    call user.json_auto_derive.ALookupFrom.from_json
+    store_var j
+    load_type json_auto_derive.ALookupFrom
+    load_var j
+    call baml.json.to
     store_var a
     load_var a
     load_field .lookup
@@ -1230,16 +1254,19 @@ function json_auto_derive.null_to_json_result() -> baml.json.json {
 function json_auto_derive.optional_class_override_non_null_val() -> int {
     load_const "{\"b\":{\"y\":7}}"
     call baml.json.parse
-    call user.json_auto_derive.AOptFrom.from_json
+    store_var j
+    load_type json_auto_derive.AOptFrom
+    load_var j
+    call baml.json.to
     load_field .b
-    store_var_load_var _4
+    store_var_load_var _5
     load_const null
     cmp_op ==
     pop_jump_if_false L0
     jump L1
 
   L0:
-    load_var _4
+    load_var _5
     load_field .y
     jump L2
 
@@ -1254,16 +1281,19 @@ function json_auto_derive.optional_class_override_non_null_val() -> int {
 function json_auto_derive.optional_class_override_null_val() -> int {
     load_const "{\"b\":null}"
     call baml.json.parse
-    call user.json_auto_derive.AOptFrom.from_json
+    store_var j
+    load_type json_auto_derive.AOptFrom
+    load_var j
+    call baml.json.to
     load_field .b
-    store_var_load_var _4
+    store_var_load_var _5
     load_const null
     cmp_op ==
     pop_jump_if_false L0
     jump L1
 
   L0:
-    load_var _4
+    load_var _5
     load_field .y
     jump L2
 
@@ -1278,22 +1308,28 @@ function json_auto_derive.optional_class_override_null_val() -> int {
 function json_auto_derive.optional_primitive_field_from_json_sum() -> int {
     load_const "{\"x\":42}"
     call baml.json.parse
-    call user.json_auto_derive.C5.from_json
+    store_var j1
+    load_type json_auto_derive.C5
+    load_var j1
+    call baml.json.to
     store_var c1
     load_const "{\"x\":null}"
     call baml.json.parse
-    call user.json_auto_derive.C5.from_json
+    store_var j2
+    load_type json_auto_derive.C5
+    load_var j2
+    call baml.json.to
     store_var c2
     load_var c1
     load_field .x
-    store_var_load_var _8
+    store_var_load_var _10
     load_const null
     cmp_op ==
     pop_jump_if_false L0
     jump L1
 
   L0:
-    load_var _8
+    load_var _10
     store_var v1
     jump L2
 
@@ -1305,14 +1341,14 @@ function json_auto_derive.optional_primitive_field_from_json_sum() -> int {
   L2:
     load_var c2
     load_field .x
-    store_var_load_var _12
+    store_var_load_var _14
     load_const null
     cmp_op ==
     pop_jump_if_false L3
     jump L4
 
   L3:
-    load_var _12
+    load_var _14
     store_var v2
     jump L5
 
@@ -1322,7 +1358,7 @@ function json_auto_derive.optional_primitive_field_from_json_sum() -> int {
     store_var v2
 
   L5:
-    load_var2 3 5
+    load_var2 5 7
     add_int
     return
 }
@@ -1330,7 +1366,10 @@ function json_auto_derive.optional_primitive_field_from_json_sum() -> int {
 function json_auto_derive.primitive_field_from_json_val() -> int {
     load_const "{\"x\":42}"
     call baml.json.parse
-    call user.json_auto_derive.C3.from_json
+    store_var j
+    load_type json_auto_derive.C3
+    load_var j
+    call baml.json.to
     load_field .x
     return
 }
@@ -1355,7 +1394,10 @@ function json_auto_derive.recursive_class_from_json_sum() -> int {
     call baml.json.from
     call baml.json.stringify
     call baml.json.parse
-    call user.json_auto_derive.Tree.from_json
+    store_var j
+    load_type json_auto_derive.Tree
+    load_var j
+    call baml.json.to
     store_var parsed
     load_var parsed
     load_field .value
@@ -1748,7 +1790,10 @@ function json_auto_derive.simple_class_to_json_roundtrip_name() -> string {
     load_const 30
     init_instance user.json_auto_derive.User .name, .age
     call baml.json.from
-    call user.json_auto_derive.User.from_json
+    store_var j
+    load_type json_auto_derive.User
+    load_var j
+    call baml.json.to
     load_field .name
     return
 }

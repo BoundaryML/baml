@@ -15,14 +15,8 @@ function user.decode_auto(j: baml.json.json) -> user.pkg.inner.AutoBox<int> thro
 class user.pkg.inner.Box {
   value: T
 }
-function user.pkg.inner.Box.from_json(j: baml.json.json) -> user.pkg.inner.Box<unknown> throws baml.json.JsonDecodeError {
-  baml.json.to<T>(j) : user.pkg.inner.Box<T>
-}
 class user.pkg.inner.AutoBox {
   value: T
-}
-function user.pkg.inner.AutoBox.from_json(j: baml.json.json) -> user.pkg.inner.AutoBox<unknown> throws baml.json.JsonDecodeError {
-  baml.json.to<T>(j) : user.pkg.inner.AutoBox<T>
 }
 class user.pkg.inner.Box$stream {
   value: T | null

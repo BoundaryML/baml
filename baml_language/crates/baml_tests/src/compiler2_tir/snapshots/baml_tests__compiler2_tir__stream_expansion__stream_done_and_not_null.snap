@@ -8,9 +8,6 @@ class user.Combined {
   age: int
   score: float
 }
-function user.Combined.from_json(j: baml.json.json) -> user.Combined throws baml.json.JsonDecodeError {
-  baml.json.to<T>(j) : user.Combined
-}
 class user.Combined$stream {
   id: string
   name: string

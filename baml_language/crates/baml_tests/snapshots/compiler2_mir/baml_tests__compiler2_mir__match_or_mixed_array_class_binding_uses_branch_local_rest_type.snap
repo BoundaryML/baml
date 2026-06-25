@@ -1,22 +1,6 @@
 ---
 source: crates/baml_tests/src/compiler2_mir/mod.rs
 ---
-fn user.NumberBag.from_json(j: baml.json.json) -> NumberBag {
-    // Locals:
-    let _0: NumberBag // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(NumberBag);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
 fn user.f(v: NumberBag | int[][]) -> int {
     // Locals:
     let _0: int // _0 // return

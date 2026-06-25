@@ -1,13 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-function user.Person.from_json(j: baml.json.json) -> Person {
-    load_type Person
-    load_var j
-    call baml.json.to
-    return
-}
-
 function user.reflect_array() -> type {
     load_type #0[]
     return

@@ -1,16 +1,4 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-function user.Education.from_json(j: baml.json.json) -> Education {
-    load_type Education
-    load_var j
-    call baml.json.to
-    return
-}
 
-function user.Resume.from_json(j: baml.json.json) -> Resume {
-    load_type Resume
-    load_var j
-    call baml.json.to
-    return
-}

@@ -1,20 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-function user.MetaField.from_json(j: baml.json.json) -> MetaField {
-    load_type MetaField
-    load_var j
-    call baml.json.to
-    return
-}
-
-function user.RiskFactor.from_json(j: baml.json.json) -> RiskFactor {
-    load_type RiskFactor
-    load_var j
-    call baml.json.to
-    return
-}
-
 function user.test_let_binding(function_name: string) -> string {
     load_var function_name
     sys_op baml.llm.get_return_type

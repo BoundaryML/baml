@@ -17,35 +17,3 @@ fn user.decode_container(s: string) -> Container<User> {
         return;
     }
 }
-
-fn user.User.from_json(j: baml.json.json) -> User {
-    // Locals:
-    let _0: User // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(User);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.Container.from_json(j: baml.json.json) -> Container<T> {
-    // Locals:
-    let _0: Container<T> // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(Container<#0>);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}

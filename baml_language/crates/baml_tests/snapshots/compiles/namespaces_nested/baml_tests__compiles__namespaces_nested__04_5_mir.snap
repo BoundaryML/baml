@@ -16,35 +16,3 @@ fn user.CallOpenAI(cfg: AppConfig) -> llm.openai.OpenAIResponse {
         return;
     }
 }
-
-fn user.AppConfig.from_json(j: baml.json.json) -> AppConfig {
-    // Locals:
-    let _0: AppConfig // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(AppConfig);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.llm.openai.OpenAIResponse.from_json(j: baml.json.json) -> llm.openai.OpenAIResponse {
-    // Locals:
-    let _0: llm.openai.OpenAIResponse // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(llm.openai.OpenAIResponse);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}

@@ -11,16 +11,10 @@ class testing.TestRegistration {
   body: testing.TestBody
   runner: testing.TestRunner | null
 }
-function testing.TestRegistration.from_json(j: baml.json.json) -> testing.TestRegistration throws baml.json.JsonDecodeError {
-  baml.json.to<T>(j) : testing.TestRegistration
-}
 class testing.TestSetRegistration {
   name: string
   collector: testing.TestSetBody
   runner: testing.TestSetRunner | null
-}
-function testing.TestSetRegistration.from_json(j: baml.json.json) -> testing.TestSetRegistration throws baml.json.JsonDecodeError {
-  baml.json.to<T>(j) : testing.TestSetRegistration
 }
 class testing.TestCollector {
   prefix: string
@@ -128,9 +122,6 @@ function testing.TestCollector.find_test(self: testing.TestCollector, name: stri
     throw "Test not found: " + name : string
   }
 }
-function testing.TestCollector.from_json(j: baml.json.json) -> testing.TestCollector throws baml.json.JsonDecodeError {
-  baml.json.to<T>(j) : testing.TestCollector
-}
 function testing.$invoke_collector(collector: testing.TestSetBody, c: testing.TestCollector) -> void throws never {
   { : void
     collector(c) : void
@@ -140,16 +131,10 @@ class testing.SerializedTest {
   type: string
   name: string
 }
-function testing.SerializedTest.from_json(j: baml.json.json) -> testing.SerializedTest throws baml.json.JsonDecodeError {
-  baml.json.to<T>(j) : testing.SerializedTest
-}
 class testing.SerializedTestSet {
   name: string
   items: testing.SerializedTestDef[]
   loadingTimeMs: int
-}
-function testing.SerializedTestSet.from_json(j: baml.json.json) -> testing.SerializedTestSet throws baml.json.JsonDecodeError {
-  baml.json.to<T>(j) : testing.SerializedTestSet
 }
 type testing.SerializedTestDef = testing.SerializedTest | testing.SerializedTestSet
 class testing.TestRegistry {
@@ -267,9 +252,6 @@ function testing.TestRegistry.expand_testset_registry(self: testing.TestRegistry
           sub_registry : testing.TestRegistry
         }
   }
-}
-function testing.TestRegistry.from_json(j: baml.json.json) -> testing.TestRegistry throws baml.json.JsonDecodeError {
-  baml.json.to<T>(j) : testing.TestRegistry
 }
 function testing.testset_children(registry: testing.TestRegistry) -> testing.TestSetChild[] throws never {
   { : testing.TestSetChild[]
@@ -656,15 +638,9 @@ class testing.RunReport {
   duration_ms: int
   message: string | null
 }
-function testing.RunReport.from_json(j: baml.json.json) -> testing.RunReport throws baml.json.JsonDecodeError {
-  baml.json.to<T>(j) : testing.RunReport
-}
 class testing.TestReport {
   outcome: testing.Outcome
   runs: testing.RunReport[]
-}
-function testing.TestReport.from_json(j: baml.json.json) -> testing.TestReport throws baml.json.JsonDecodeError {
-  baml.json.to<T>(j) : testing.TestReport
 }
 class testing.TestSetReport {
   outcome: testing.Outcome
@@ -674,16 +650,10 @@ class testing.TestSetReport {
   failed_names: string[]
   results: testing.ChildReport[]
 }
-function testing.TestSetReport.from_json(j: baml.json.json) -> testing.TestSetReport throws baml.json.JsonDecodeError {
-  baml.json.to<T>(j) : testing.TestSetReport
-}
 type testing.ChildReport = testing.TestReport | testing.TestSetReport
 class testing.NamedChildReport {
   name: string
   report: testing.ChildReport
-}
-function testing.NamedChildReport.from_json(j: baml.json.json) -> testing.NamedChildReport throws baml.json.JsonDecodeError {
-  baml.json.to<T>(j) : testing.NamedChildReport
 }
 type testing.TestBody = () -> void throws unknown
 type testing.TestSetBody = (testing.TestCollector) -> void throws unknown
@@ -694,9 +664,6 @@ type testing.TestRunner = (testing.TestReportThunk) -> testing.TestReportThunk t
 class testing.TestSetChild {
   name: string
   run: testing.ChildReportThunk
-}
-function testing.TestSetChild.from_json(j: baml.json.json) -> testing.TestSetChild throws baml.json.JsonDecodeError {
-  baml.json.to<T>(j) : testing.TestSetChild
 }
 type testing.TestSetRunner = (testing.TestSetChild[]) -> testing.TestSetReport throws never
 type testing.Outcome$stream = "pass" | "fail" | "error"

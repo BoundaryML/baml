@@ -1,20 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-function user.Inner.from_json(j: baml.json.json) -> Inner {
-    load_type Inner
-    load_var j
-    call baml.json.to
-    return
-}
-
-function user.Outer.from_json(j: baml.json.json) -> Outer {
-    load_type Outer
-    load_var j
-    call baml.json.to
-    return
-}
-
 function user.test_captured_field_access(obj: Outer) -> string {
     load_var ?1
     make_cell

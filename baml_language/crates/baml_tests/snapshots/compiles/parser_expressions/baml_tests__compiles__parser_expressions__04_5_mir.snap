@@ -59,54 +59,6 @@ fn user.FieldAccess(user: User) -> string {
     }
 }
 
-fn user.User.from_json(j: baml.json.json) -> User {
-    // Locals:
-    let _0: User // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(User);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.Settings.from_json(j: baml.json.json) -> Settings {
-    // Locals:
-    let _0: Settings // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(Settings);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.Profile.from_json(j: baml.json.json) -> Profile {
-    // Locals:
-    let _0: Profile // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(Profile);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
 fn user.IndexAccess(users: IndexUser[]) -> string {
     // Locals:
     let _0: string // _0 // return
@@ -143,22 +95,6 @@ fn user.IndexAccess(users: IndexUser[]) -> string {
         _15 = const 0_i64;
         _0 = copy _7;
         goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.IndexUser.from_json(j: baml.json.json) -> IndexUser {
-    // Locals:
-    let _0: IndexUser // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(IndexUser);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
     }
 
     bb1: {

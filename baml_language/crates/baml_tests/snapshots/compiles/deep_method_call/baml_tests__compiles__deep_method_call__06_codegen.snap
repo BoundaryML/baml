@@ -1,20 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-function user.A.from_json(j: baml.json.json) -> A {
-    load_type A
-    load_var j
-    call baml.json.to
-    return
-}
-
-function user.B.from_json(j: baml.json.json) -> B {
-    load_type B
-    load_var j
-    call baml.json.to
-    return
-}
-
 function user.B.greet(self: B) -> string {
     load_var self
     load_field .label

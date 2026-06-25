@@ -179,29 +179,8 @@ function user.TypePatternQualifiedMatch() -> int {
     return
 }
 
-function user.llm.openai.Box.from_json(j: baml.json.json) -> llm.openai.Box<T> {
-    load_type llm.openai.Box<#0>
-    load_var j
-    call baml.json.to
-    return
-}
-
 function user.llm.openai.DestructureBareInNamespace(response: llm.openai.Response) -> int {
     load_var response
     load_field .score
-    return
-}
-
-function user.llm.openai.Outer.from_json(j: baml.json.json) -> llm.openai.Outer<T> {
-    load_type llm.openai.Outer<#0>
-    load_var j
-    call baml.json.to
-    return
-}
-
-function user.llm.openai.Response.from_json(j: baml.json.json) -> llm.openai.Response {
-    load_type llm.openai.Response
-    load_var j
-    call baml.json.to
     return
 }

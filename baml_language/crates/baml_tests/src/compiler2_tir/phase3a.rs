@@ -663,9 +663,6 @@ fn calling_class_as_function() {
     class user.Foo {
       name: string
     }
-    function user.Foo.from_json(j: baml.json.json) -> user.Foo throws baml.json.JsonDecodeError {
-      baml.json.to<T>(j) : user.Foo
-    }
     function user.f() -> int throws never {
       { : never
         return Foo(1) : unknown
@@ -1084,15 +1081,9 @@ function f(x: Cat | Dog) -> string { return x.name; }"#,
       name: string
       legs: int
     }
-    function user.Cat.from_json(j: baml.json.json) -> user.Cat throws baml.json.JsonDecodeError {
-      baml.json.to<T>(j) : user.Cat
-    }
     class user.Dog {
       name: string
       legs: int
-    }
-    function user.Dog.from_json(j: baml.json.json) -> user.Dog throws baml.json.JsonDecodeError {
-      baml.json.to<T>(j) : user.Dog
     }
     function user.f(x: user.Cat | user.Dog) -> string throws never {
       { : never
@@ -1126,15 +1117,9 @@ function f(x: Cat | Dog) -> int { return x.whiskers; }"#,
       name: string
       whiskers: int
     }
-    function user.Cat.from_json(j: baml.json.json) -> user.Cat throws baml.json.JsonDecodeError {
-      baml.json.to<T>(j) : user.Cat
-    }
     class user.Dog {
       name: string
       tail: bool
-    }
-    function user.Dog.from_json(j: baml.json.json) -> user.Dog throws baml.json.JsonDecodeError {
-      baml.json.to<T>(j) : user.Dog
     }
     function user.f(x: user.Cat | user.Dog) -> int throws never {
       { : never
@@ -1168,20 +1153,11 @@ function f(x: A | B | C) -> string { return x.name; }"#,
     class user.A {
       name: string
     }
-    function user.A.from_json(j: baml.json.json) -> user.A throws baml.json.JsonDecodeError {
-      baml.json.to<T>(j) : user.A
-    }
     class user.B {
       name: string
     }
-    function user.B.from_json(j: baml.json.json) -> user.B throws baml.json.JsonDecodeError {
-      baml.json.to<T>(j) : user.B
-    }
     class user.C {
       age: int
-    }
-    function user.C.from_json(j: baml.json.json) -> user.C throws baml.json.JsonDecodeError {
-      baml.json.to<T>(j) : user.C
     }
     function user.f(x: user.A | user.B | user.C) -> string throws never {
       { : never
@@ -1216,20 +1192,11 @@ function f(x: A | B | C) -> string { return x.name; }"#,
     class user.A {
       name: string
     }
-    function user.A.from_json(j: baml.json.json) -> user.A throws baml.json.JsonDecodeError {
-      baml.json.to<T>(j) : user.A
-    }
     class user.B {
       age: string
     }
-    function user.B.from_json(j: baml.json.json) -> user.B throws baml.json.JsonDecodeError {
-      baml.json.to<T>(j) : user.B
-    }
     class user.C {
       age: int
-    }
-    function user.C.from_json(j: baml.json.json) -> user.C throws baml.json.JsonDecodeError {
-      baml.json.to<T>(j) : user.C
     }
     function user.f(x: user.A | user.B | user.C) -> string throws never {
       { : never
@@ -1264,14 +1231,8 @@ function f(x: A | B) -> string { return x.value; }"#,
     class user.A {
       value: int
     }
-    function user.A.from_json(j: baml.json.json) -> user.A throws baml.json.JsonDecodeError {
-      baml.json.to<T>(j) : user.A
-    }
     class user.B {
       value: string
-    }
-    function user.B.from_json(j: baml.json.json) -> user.B throws baml.json.JsonDecodeError {
-      baml.json.to<T>(j) : user.B
     }
     function user.f(x: user.A | user.B) -> string throws never {
       { : never
@@ -1302,14 +1263,8 @@ function f(x: A | B | null) -> string { return x.name; }"#,
     class user.A {
       name: string
     }
-    function user.A.from_json(j: baml.json.json) -> user.A throws baml.json.JsonDecodeError {
-      baml.json.to<T>(j) : user.A
-    }
     class user.B {
       name: string
-    }
-    function user.B.from_json(j: baml.json.json) -> user.B throws baml.json.JsonDecodeError {
-      baml.json.to<T>(j) : user.B
     }
     function user.f(x: user.A | user.B | null) -> string throws never {
       { : never

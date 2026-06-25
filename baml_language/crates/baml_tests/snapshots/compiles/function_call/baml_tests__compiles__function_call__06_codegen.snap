@@ -17,13 +17,6 @@ function user.Baz.Greeting(self: Baz) -> string {
     return
 }
 
-function user.Baz.from_json(j: baml.json.json) -> Baz {
-    load_type Baz
-    load_var j
-    call baml.json.to
-    return
-}
-
 function user.Foo(x: int) -> int {
     load_var x
     load_const 1

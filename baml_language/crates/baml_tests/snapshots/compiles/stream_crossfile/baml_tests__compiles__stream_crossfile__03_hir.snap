@@ -9,15 +9,9 @@ class user.Education {
 }
 enum user.Degree {Bachelors, Masters, PhD}
 type user.EducationList = user.Education[]
-function user.from_json(j: baml.json.json) -> user.Education  [expr] {
-  baml.json.to(j)
-}
 class user.Resume {
   name: string
   education: Education[]
   highest_degree: Degree
   aliases: EducationList
-}
-function user.from_json(j: baml.json.json) -> user.Resume  [expr] {
-  baml.json.to(j)
 }

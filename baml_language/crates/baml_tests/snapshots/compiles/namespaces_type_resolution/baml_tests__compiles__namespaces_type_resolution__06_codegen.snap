@@ -1,20 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-function user.Config.from_json(j: baml.json.json) -> Config {
-    load_type Config
-    load_var j
-    call baml.json.to
-    return
-}
-
-function user.Error.from_json(j: baml.json.json) -> Error {
-    load_type Error
-    load_var j
-    call baml.json.to
-    return
-}
-
 function user.RootAliasParam(cfg: Config) -> string {
     load_var cfg
     load_field .key
@@ -144,20 +130,6 @@ function user.RootUsesLlmStatus() -> llm.Status {
 function user.RootUsesNestedClient(c: llm.openai.Client) -> string {
     load_var c
     load_field .api_key
-    return
-}
-
-function user.RootWithCrossNsAlias.from_json(j: baml.json.json) -> RootWithCrossNsAlias {
-    load_type RootWithCrossNsAlias
-    load_var j
-    call baml.json.to
-    return
-}
-
-function user.RootWithCrossNsFields.from_json(j: baml.json.json) -> RootWithCrossNsFields {
-    load_type RootWithCrossNsFields
-    load_var j
-    call baml.json.to
     return
 }
 
@@ -387,41 +359,6 @@ function user.auth.AuthUsesRootStatus() -> Status {
     return
 }
 
-function user.auth.Config.from_json(j: baml.json.json) -> auth.Config {
-    load_type auth.Config
-    load_var j
-    call baml.json.to
-    return
-}
-
-function user.auth.Error.from_json(j: baml.json.json) -> auth.Error {
-    load_type auth.Error
-    load_var j
-    call baml.json.to
-    return
-}
-
-function user.auth.Token.from_json(j: baml.json.json) -> auth.Token {
-    load_type auth.Token
-    load_var j
-    call baml.json.to
-    return
-}
-
-function user.llm.Config.from_json(j: baml.json.json) -> llm.Config {
-    load_type llm.Config
-    load_var j
-    call baml.json.to
-    return
-}
-
-function user.llm.Error.from_json(j: baml.json.json) -> llm.Error {
-    load_type llm.Error
-    load_var j
-    call baml.json.to
-    return
-}
-
 function user.llm.LlmAliasParam(cfg: llm.Config) -> string {
     load_var cfg
     load_field .model
@@ -636,41 +573,6 @@ function user.llm.LlmUsesRootError(e: Error) -> string {
 function user.llm.LlmUsesRootStatus() -> Status {
     load_const user.Status.Ok
     alloc_variant user.Status
-    return
-}
-
-function user.llm.LlmWithCrossNsFields.from_json(j: baml.json.json) -> llm.LlmWithCrossNsFields {
-    load_type llm.LlmWithCrossNsFields
-    load_var j
-    call baml.json.to
-    return
-}
-
-function user.llm.LlmWithRootAlias.from_json(j: baml.json.json) -> llm.LlmWithRootAlias {
-    load_type llm.LlmWithRootAlias
-    load_var j
-    call baml.json.to
-    return
-}
-
-function user.llm.Response.from_json(j: baml.json.json) -> llm.Response {
-    load_type llm.Response
-    load_var j
-    call baml.json.to
-    return
-}
-
-function user.llm.openai.Client.from_json(j: baml.json.json) -> llm.openai.Client {
-    load_type llm.openai.Client
-    load_var j
-    call baml.json.to
-    return
-}
-
-function user.llm.openai.Error.from_json(j: baml.json.json) -> llm.openai.Error {
-    load_type llm.openai.Error
-    load_var j
-    call baml.json.to
     return
 }
 

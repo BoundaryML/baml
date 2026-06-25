@@ -1,27 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-function user.AppError.from_json(j: baml.json.json) -> AppError {
-    load_type AppError
-    load_var j
-    call baml.json.to
-    return
-}
-
-function user.PatternBucket.from_json(j: baml.json.json) -> PatternBucket {
-    load_type PatternBucket
-    load_var j
-    call baml.json.to
-    return
-}
-
-function user.PatternMatrix.from_json(j: baml.json.json) -> PatternMatrix {
-    load_type PatternMatrix
-    load_var j
-    call baml.json.to
-    return
-}
-
 function user.bare_type_arm(v: int | string) -> int {
     load_var v
     is_type int

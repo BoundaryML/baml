@@ -100,9 +100,6 @@ function user.OptionalFloatLtBigint(x: float | null, y: bigint) -> bool throws n
 class user.BigintHolder {
   count: bigint
 }
-function user.BigintHolder.from_json(j: baml.json.json) -> user.BigintHolder throws baml.json.JsonDecodeError {
-  baml.json.to<T>(j) : user.BigintHolder
-}
 function user.IntFieldIntoBigintClass() -> user.BigintHolder throws never {
   { : user.BigintHolder
     BigintHolder { count: 1 } : user.BigintHolder

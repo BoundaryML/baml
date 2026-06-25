@@ -20,15 +20,6 @@ class user.User {
 function user.FieldAccess(user: user.User) -> string  [expr] {
   { let name = user.name; let bio = user.profile.bio; let theme = user.profile.settings.theme; let firstTag = user.tags[0]; return theme }
 }
-function user.from_json(j: baml.json.json) -> user.User  [expr] {
-  baml.json.to(j)
-}
-function user.from_json(j: baml.json.json) -> user.Settings  [expr] {
-  baml.json.to(j)
-}
-function user.from_json(j: baml.json.json) -> user.Profile  [expr] {
-  baml.json.to(j)
-}
 class user.IndexUser {
   name: string
   age: int
@@ -36,9 +27,6 @@ class user.IndexUser {
 }
 function user.IndexAccess(users: user.IndexUser[]) -> string  [expr] {
   { let first = users[0]; let idx = 1; let second = users[idx]; let firstName = users[0].name; let tag = users[0].tags[0]; return firstName }
-}
-function user.from_json(j: baml.json.json) -> user.IndexUser  [expr] {
-  baml.json.to(j)
 }
 function user.TestPrecedence() -> bool  [expr] {
   { let a = 2 Add 3 Mul 4; let c = 2 Mul 3 Add 4; let b = a Gt 10 Add 2; let d = true Or false And false; return d }

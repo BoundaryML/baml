@@ -6,33 +6,21 @@ class user.Address {
   street: string
   zip: string | null
 }
-function user.Address.from_json(j: baml.json.json) -> user.Address throws baml.json.JsonDecodeError {
-  baml.json.to<T>(j) : user.Address
-}
 class user.Profile {
   name: string
   address: user.Address | null
   scores: int[] | null
   settings: map<string, string> | null
 }
-function user.Profile.from_json(j: baml.json.json) -> user.Profile throws baml.json.JsonDecodeError {
-  baml.json.to<T>(j) : user.Profile
-}
 class user.User {
   id: int
   profile: user.Profile | null
-}
-function user.User.from_json(j: baml.json.json) -> user.User throws baml.json.JsonDecodeError {
-  baml.json.to<T>(j) : user.User
 }
 class user.Node {
   value: int
   next: user.Node | null
   children: user.Node[] | null
   labels: map<string, user.Node> | null
-}
-function user.Node.from_json(j: baml.json.json) -> user.Node throws baml.json.JsonDecodeError {
-  baml.json.to<T>(j) : user.Node
 }
 function user.OptionalChaining(user: user.User | null, nonNullUser: user.User, node: user.Node | null) -> string throws never {
   { : never

@@ -37,15 +37,3 @@ function user.OptionalChaining(user: user.User?, nonNullUser: user.User, node: u
 function user.OptionalIndex(node: user.Node?, items: int[]?, lookup: map<string, int>?, nonNullItems: int[]) -> int  [expr] {
   { let b1 = items?.[0]; let b2 = node?.children?.[0]; let b3 = node?.children?.[0].value; let b4 = node?.children?.[0].next?.value; let b5 = lookup?.["total"]; let b6 = node?.labels?.["main"]; let b7 = node?.labels?.["main"].value; let b8 = node?.children?.[0]; let b9 = items?.[0].to_string(); let b10 = node?.children?.[node?.value]; let b11 = node?.children?.[items?.[0] NullCoalesce 0]; let b12 = nonNullItems?.[0]; items?.[0] = 42; node?.children?.[0].value = 99; lookup?.["total"] = 100; node?.labels?.["main"].value = 50; items?.[0] Add= 10; lookup?.["total"] Add= 5; let b13 = <missing>; return b1 NullCoalesce 0 }
 }
-function user.from_json(j: baml.json.json) -> user.Address  [expr] {
-  baml.json.to(j)
-}
-function user.from_json(j: baml.json.json) -> user.Node  [expr] {
-  baml.json.to(j)
-}
-function user.from_json(j: baml.json.json) -> user.User  [expr] {
-  baml.json.to(j)
-}
-function user.from_json(j: baml.json.json) -> user.Profile  [expr] {
-  baml.json.to(j)
-}

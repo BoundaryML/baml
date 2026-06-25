@@ -6,15 +6,9 @@ class user.Config {
   key: string
   env: string
 }
-function user.Config.from_json(j: baml.json.json) -> user.Config throws baml.json.JsonDecodeError {
-  baml.json.to<T>(j) : user.Config
-}
 class user.Error {
   code: int
   message: string
-}
-function user.Error.from_json(j: baml.json.json) -> user.Error throws baml.json.JsonDecodeError {
-  baml.json.to<T>(j) : user.Error
 }
 enum user.Status
 type user.ConfigAlias = user.Config
@@ -111,15 +105,9 @@ class user.RootWithCrossNsFields {
   own_status: user.Status
   own_alias: user.ConfigAlias
 }
-function user.RootWithCrossNsFields.from_json(j: baml.json.json) -> user.RootWithCrossNsFields throws baml.json.JsonDecodeError {
-  baml.json.to<T>(j) : user.RootWithCrossNsFields
-}
 class user.RootWithCrossNsAlias {
   llm_alias: user.llm.ResponseAlias
   own_alias: user.ConfigAlias
-}
-function user.RootWithCrossNsAlias.from_json(j: baml.json.json) -> user.RootWithCrossNsAlias throws baml.json.JsonDecodeError {
-  baml.json.to<T>(j) : user.RootWithCrossNsAlias
 }
 class user.Config$stream {
   key: string | null
@@ -147,23 +135,14 @@ class user.auth.Config {
   provider: string
   secret: string
 }
-function user.auth.Config.from_json(j: baml.json.json) -> user.auth.Config throws baml.json.JsonDecodeError {
-  baml.json.to<T>(j) : user.auth.Config
-}
 class user.auth.Error {
   realm: string
   expired: bool
-}
-function user.auth.Error.from_json(j: baml.json.json) -> user.auth.Error throws baml.json.JsonDecodeError {
-  baml.json.to<T>(j) : user.auth.Error
 }
 enum user.auth.Role
 class user.auth.Token {
   value: string
   role: user.auth.Role
-}
-function user.auth.Token.from_json(j: baml.json.json) -> user.auth.Token throws baml.json.JsonDecodeError {
-  baml.json.to<T>(j) : user.auth.Token
 }
 type user.auth.TokenAlias = user.auth.Token
 function user.auth.AuthIdentity(cfg: user.auth.Config) -> user.auth.Config throws never {
@@ -308,24 +287,15 @@ class user.llm.Config {
   model: string
   temperature: float
 }
-function user.llm.Config.from_json(j: baml.json.json) -> user.llm.Config throws baml.json.JsonDecodeError {
-  baml.json.to<T>(j) : user.llm.Config
-}
 class user.llm.Error {
   reason: string
   retryable: bool
-}
-function user.llm.Error.from_json(j: baml.json.json) -> user.llm.Error throws baml.json.JsonDecodeError {
-  baml.json.to<T>(j) : user.llm.Error
 }
 enum user.llm.Status
 enum user.llm.Model
 class user.llm.Response {
   text: string
   tokens: int
-}
-function user.llm.Response.from_json(j: baml.json.json) -> user.llm.Response throws baml.json.JsonDecodeError {
-  baml.json.to<T>(j) : user.llm.Response
 }
 type user.llm.ConfigAlias = user.llm.Config
 type user.llm.ResponseAlias = user.llm.Response
@@ -468,15 +438,9 @@ class user.llm.LlmWithCrossNsFields {
   own_alias: user.llm.ConfigAlias
   root_alias: user.ConfigAlias
 }
-function user.llm.LlmWithCrossNsFields.from_json(j: baml.json.json) -> user.llm.LlmWithCrossNsFields throws baml.json.JsonDecodeError {
-  baml.json.to<T>(j) : user.llm.LlmWithCrossNsFields
-}
 class user.llm.LlmWithRootAlias {
   root_alias: user.ConfigAlias
   own_alias: user.llm.ResponseAlias
-}
-function user.llm.LlmWithRootAlias.from_json(j: baml.json.json) -> user.llm.LlmWithRootAlias throws baml.json.JsonDecodeError {
-  baml.json.to<T>(j) : user.llm.LlmWithRootAlias
 }
 class user.llm.Config$stream {
   model: string | null
@@ -511,15 +475,9 @@ class user.llm.openai.Client {
   api_key: string
   org_id: string
 }
-function user.llm.openai.Client.from_json(j: baml.json.json) -> user.llm.openai.Client throws baml.json.JsonDecodeError {
-  baml.json.to<T>(j) : user.llm.openai.Client
-}
 class user.llm.openai.Error {
   status_code: int
   body: string
-}
-function user.llm.openai.Error.from_json(j: baml.json.json) -> user.llm.openai.Error throws baml.json.JsonDecodeError {
-  baml.json.to<T>(j) : user.llm.openai.Error
 }
 enum user.llm.openai.Model
 function user.llm.openai.OpenAIIdentity(c: user.llm.openai.Client) -> user.llm.openai.Client throws never {

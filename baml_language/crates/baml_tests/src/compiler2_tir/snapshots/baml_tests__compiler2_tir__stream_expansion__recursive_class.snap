@@ -6,9 +6,6 @@ class user.TreeNode {
   value: string
   children: user.TreeNode[]
 }
-function user.TreeNode.from_json(j: baml.json.json) -> user.TreeNode throws baml.json.JsonDecodeError {
-  baml.json.to<T>(j) : user.TreeNode
-}
 class user.TreeNode$stream {
   value: string | null
   children: user.TreeNode$stream[]

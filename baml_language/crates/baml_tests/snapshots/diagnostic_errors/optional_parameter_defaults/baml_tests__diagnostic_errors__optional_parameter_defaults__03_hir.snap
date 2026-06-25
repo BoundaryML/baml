@@ -52,6 +52,3 @@ function user.LambdaDefault() -> int  [expr] {
 function user.OptionalNameMismatch() -> int  [expr] {
   { let f: user.NamedLimit = Filtered } f("cats", limit = "recent")
 }
-function user.from_json(j: baml.json.json) -> user.Counter  [expr] {
-  baml.json.to(j)
-}

@@ -6,9 +6,6 @@ class user.WithDesc {
   name: string @description("The name")
   age: int @description("Age in years")
 }
-function user.WithDesc.from_json(j: baml.json.json) -> user.WithDesc throws baml.json.JsonDecodeError {
-  baml.json.to<T>(j) : user.WithDesc
-}
 class user.WithDesc$stream {
   name: string @description("The name")
   age: int | null @description("Age in years")

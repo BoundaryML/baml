@@ -5,16 +5,10 @@ expression: "render_tir(&db, file)"
 class user.Inner {
   value: string
 }
-function user.Inner.from_json(j: baml.json.json) -> user.Inner throws baml.json.JsonDecodeError {
-  baml.json.to<T>(j) : user.Inner
-}
 class user.WithUnions {
   simple: int | string
   with_class: user.Inner | string
   mixed: int | user.Inner
-}
-function user.WithUnions.from_json(j: baml.json.json) -> user.WithUnions throws baml.json.JsonDecodeError {
-  baml.json.to<T>(j) : user.WithUnions
 }
 class user.Inner$stream {
   value: string | null

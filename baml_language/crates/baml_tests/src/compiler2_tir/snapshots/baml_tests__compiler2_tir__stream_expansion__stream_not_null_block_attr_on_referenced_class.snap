@@ -6,15 +6,9 @@ class user.NotNullEducation {
   school: string
   year: int
 }
-function user.NotNullEducation.from_json(j: baml.json.json) -> user.NotNullEducation throws baml.json.JsonDecodeError {
-  baml.json.to<T>(j) : user.NotNullEducation
-}
 class user.References {
   education: user.NotNullEducation
   educations: user.NotNullEducation[]
-}
-function user.References.from_json(j: baml.json.json) -> user.References throws baml.json.JsonDecodeError {
-  baml.json.to<T>(j) : user.References
 }
 class user.NotNullEducation$stream {
   school: string | null

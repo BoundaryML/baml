@@ -46,27 +46,6 @@ enum user.GRole {Admin, User, Guest}
 enum user.GSeverity {Low, Medium, High}
 enum user.GSize {Small, Medium, Large}
 enum user.GStatus {Active, Inactive, Pending}
-function user.from_json(j: baml.json.json) -> user.GPoint  [expr] {
-  baml.json.to(j)
-}
-function user.from_json(j: baml.json.json) -> user.GAliased  [expr] {
-  baml.json.to(j)
-}
-function user.from_json(j: baml.json.json) -> user.GComplex  [expr] {
-  baml.json.to(j)
-}
-function user.from_json(j: baml.json.json) -> user.GProfile  [expr] {
-  baml.json.to(j)
-}
-function user.from_json(j: baml.json.json) -> user.GCoord  [expr] {
-  baml.json.to(j)
-}
-function user.from_json(j: baml.json.json) -> user.GIncident  [expr] {
-  baml.json.to(j)
-}
-function user.from_json(j: baml.json.json) -> user.GConfig  [expr] {
-  baml.json.to(j)
-}
 enum user.GroupF {F1, F2, F3, F4, F5, F6}
 class user.MFoo {
   x: int
@@ -78,12 +57,6 @@ class user.OrderingModifiers {
   c4: user.MFoo[]
   c5: user.MFoo[]?
   c6: map<string, user.MFoo>
-}
-function user.from_json(j: baml.json.json) -> user.MFoo  [expr] {
-  baml.json.to(j)
-}
-function user.from_json(j: baml.json.json) -> user.OrderingModifiers  [expr] {
-  baml.json.to(j)
 }
 class user.AliasInNestedTypes {
   d1: user.NFoo[]
@@ -102,15 +75,6 @@ class user.NBar {
 }
 class user.NFoo {
   x: int
-}
-function user.from_json(j: baml.json.json) -> user.NFoo  [expr] {
-  baml.json.to(j)
-}
-function user.from_json(j: baml.json.json) -> user.NBar  [expr] {
-  baml.json.to(j)
-}
-function user.from_json(j: baml.json.json) -> user.AliasInNestedTypes  [expr] {
-  baml.json.to(j)
 }
 class user.EA {
   x: int
@@ -140,18 +104,6 @@ function user.E7() -> user.EFoo  [expr] {
 function user.E8() -> user.EFoo  [expr] {
   {  } user.EFoo { x: 1 }
 }
-function user.from_json(j: baml.json.json) -> user.EFoo  [expr] {
-  baml.json.to(j)
-}
-function user.from_json(j: baml.json.json) -> user.EC  [expr] {
-  baml.json.to(j)
-}
-function user.from_json(j: baml.json.json) -> user.EB  [expr] {
-  baml.json.to(j)
-}
-function user.from_json(j: baml.json.json) -> user.EA  [expr] {
-  baml.json.to(j)
-}
 class user.Fizz {
   x: int
 }
@@ -165,12 +117,6 @@ class user.OrderingSimple {
   a7: user.Fizz
   a8: user.Fizz
   a9: user.Fizz
-}
-function user.from_json(j: baml.json.json) -> user.Fizz  [expr] {
-  baml.json.to(j)
-}
-function user.from_json(j: baml.json.json) -> user.OrderingSimple  [expr] {
-  baml.json.to(j)
 }
 class user.OrderingUnions {
   b1: user.UA | user.UB | user.UC
@@ -196,16 +142,4 @@ class user.UB {
 }
 class user.UC {
   x: int
-}
-function user.from_json(j: baml.json.json) -> user.UA  [expr] {
-  baml.json.to(j)
-}
-function user.from_json(j: baml.json.json) -> user.OrderingUnions  [expr] {
-  baml.json.to(j)
-}
-function user.from_json(j: baml.json.json) -> user.UB  [expr] {
-  baml.json.to(j)
-}
-function user.from_json(j: baml.json.json) -> user.UC  [expr] {
-  baml.json.to(j)
 }

@@ -23,6 +23,3 @@ function user.EvolvingRetype() -> bigint[]  [expr] {
 function user.IntArrayIdentity() -> int[]  [expr] {
   { let a = [1, 2] } a
 }
-function user.from_json(j: baml.json.json) -> user.BigintCounter  [expr] {
-  baml.json.to(j)
-}

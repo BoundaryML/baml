@@ -14,15 +14,6 @@ class user.WithBlockAttrs {
   a: int
   b: string
 }
-function user.from_json(j: baml.json.json) -> user.Config  [expr] {
-  baml.json.to(j)
-}
-function user.from_json(j: baml.json.json) -> user.AttrFoo  [expr] {
-  baml.json.to(j)
-}
-function user.from_json(j: baml.json.json) -> user.WithBlockAttrs  [expr] {
-  baml.json.to(j)
-}
 class user.Bar {
   ref: user.Foo
   items: int[]
@@ -35,12 +26,6 @@ class user.Foo {
   b: string
   c: float
   d: bool
-}
-function user.from_json(j: baml.json.json) -> user.Foo  [expr] {
-  baml.json.to(j)
-}
-function user.from_json(j: baml.json.json) -> user.Bar  [expr] {
-  baml.json.to(j)
 }
 class user.ApiCall {
   request: baml.http.Request
@@ -59,18 +44,6 @@ class user.WithResponse {
 class user.WithStreamRef {
   partial: baml.http.Request$stream
 }
-function user.from_json(j: baml.json.json) -> user.ApiCall  [expr] {
-  baml.json.to(j)
-}
-function user.from_json(j: baml.json.json) -> user.WithStreamRef  [expr] {
-  baml.json.to(j)
-}
-function user.from_json(j: baml.json.json) -> user.WithResponse  [expr] {
-  baml.json.to(j)
-}
-function user.from_json(j: baml.json.json) -> user.MixedBuiltin  [expr] {
-  baml.json.to(j)
-}
 class user.Complex {
   color: user.Color
   literal: 5
@@ -87,12 +60,6 @@ class user.Inner {
 enum user.Color {Red, Green, Blue}
 type user.AliasToClass = user.Inner
 type user.StringAlias = string
-function user.from_json(j: baml.json.json) -> user.Inner  [expr] {
-  baml.json.to(j)
-}
-function user.from_json(j: baml.json.json) -> user.Complex  [expr] {
-  baml.json.to(j)
-}
 class user.AllDone {
   a: int
   b: string
@@ -120,27 +87,6 @@ class user.SelfRef {
 }
 class user.UnionWithMustExist {
   mixed: user.MustExistClass | 5
-}
-function user.from_json(j: baml.json.json) -> user.SelfRef  [expr] {
-  baml.json.to(j)
-}
-function user.from_json(j: baml.json.json) -> user.NeverFields  [expr] {
-  baml.json.to(j)
-}
-function user.from_json(j: baml.json.json) -> user.MustExistClass  [expr] {
-  baml.json.to(j)
-}
-function user.from_json(j: baml.json.json) -> user.EdgeFoo  [expr] {
-  baml.json.to(j)
-}
-function user.from_json(j: baml.json.json) -> user.AllMustExist  [expr] {
-  baml.json.to(j)
-}
-function user.from_json(j: baml.json.json) -> user.UnionWithMustExist  [expr] {
-  baml.json.to(j)
-}
-function user.from_json(j: baml.json.json) -> user.AllDone  [expr] {
-  baml.json.to(j)
 }
 class user.AllDefaults {
   name: string
@@ -239,54 +185,6 @@ type user.MixedType = int | user.Education
 type user.OptionalAlias = user.Inner?
 type user.SimpleAlias = string
 type user.UnionAlias = int | user.Inner
-function user.from_json(j: baml.json.json) -> user.Primitives  [expr] {
-  baml.json.to(j)
-}
-function user.from_json(j: baml.json.json) -> user.Education  [expr] {
-  baml.json.to(j)
-}
-function user.from_json(j: baml.json.json) -> user.Inner  [expr] {
-  baml.json.to(j)
-}
-function user.from_json(j: baml.json.json) -> user.TreeNode  [expr] {
-  baml.json.to(j)
-}
-function user.from_json(j: baml.json.json) -> user.WithMaps  [expr] {
-  baml.json.to(j)
-}
-function user.from_json(j: baml.json.json) -> user.WithOptionals  [expr] {
-  baml.json.to(j)
-}
-function user.from_json(j: baml.json.json) -> user.WithEnum  [expr] {
-  baml.json.to(j)
-}
-function user.from_json(j: baml.json.json) -> user.AllDefaults  [expr] {
-  baml.json.to(j)
-}
-function user.from_json(j: baml.json.json) -> user.Outer  [expr] {
-  baml.json.to(j)
-}
-function user.from_json(j: baml.json.json) -> user.Container  [expr] {
-  baml.json.to(j)
-}
-function user.from_json(j: baml.json.json) -> user.WithNested  [expr] {
-  baml.json.to(j)
-}
-function user.from_json(j: baml.json.json) -> user.DynamicClass  [expr] {
-  baml.json.to(j)
-}
-function user.from_json(j: baml.json.json) -> user.WithLiterals  [expr] {
-  baml.json.to(j)
-}
-function user.from_json(j: baml.json.json) -> user.Resume  [expr] {
-  baml.json.to(j)
-}
-function user.from_json(j: baml.json.json) -> user.WithLists  [expr] {
-  baml.json.to(j)
-}
-function user.from_json(j: baml.json.json) -> user.WithUnions  [expr] {
-  baml.json.to(j)
-}
 class user.foo.NsClass {
   value: string
 }
@@ -298,19 +196,10 @@ class user.foo.NsRefToTop {
 }
 enum user.foo.NsEnum {Alpha, Beta}
 type user.foo.NsAlias = string | int
-function user.foo.from_json(j: baml.json.json) -> user.foo.NsClass  [expr] {
-  baml.json.to(j)
-}
-function user.foo.from_json(j: baml.json.json) -> user.foo.NsRefToTop  [expr] {
-  baml.json.to(j)
-}
 class user.TopRefToNs {
   ns_class: root.foo.NsClass
   ns_enum: root.foo.NsEnum
   ns_items: root.foo.NsClass[]
   ns_map: map<string, root.foo.NsClass>
   ns_alias: root.foo.NsAlias
-}
-function user.from_json(j: baml.json.json) -> user.TopRefToNs  [expr] {
-  baml.json.to(j)
 }

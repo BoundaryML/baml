@@ -11,14 +11,8 @@ class user.FieldAttributes {
   state: string
   multiple: string | null @description("Multiple attributes") @alias("multiple_alias")
 }
-function user.FieldAttributes.from_json(j: baml.json.json) -> user.FieldAttributes throws baml.json.JsonDecodeError {
-  baml.json.to<T>(j) : user.FieldAttributes
-}
 class user.ClassAttributes {
   name: string
-}
-function user.ClassAttributes.from_json(j: baml.json.json) -> user.ClassAttributes throws baml.json.JsonDecodeError {
-  baml.json.to<T>(j) : user.ClassAttributes
 }
 class user.FieldAttributes$stream {
   money: int | null @description("In USD")
@@ -141,9 +135,6 @@ class user.User {
   id: int
   name: string
   email: string
-}
-function user.User.from_json(j: baml.json.json) -> user.User throws baml.json.JsonDecodeError {
-  baml.json.to<T>(j) : user.User
 }
 enum user.Status
 type user.Role = "user" | "assistant" | "system"

@@ -51,27 +51,6 @@ function user.enum_with_multiple_missing_variants(d: user.Direction4) -> int  [e
 function user.enum_with_single_missing_variant(c: user.Color3) -> int  [expr] {
   {  } match (c) { user.Color3.Green => 1, user.Color3.Blue => 2 }
 }
-function user.from_json(j: baml.json.json) -> user.Bag  [expr] {
-  baml.json.to(j)
-}
-function user.from_json(j: baml.json.json) -> user.Flagged  [expr] {
-  baml.json.to(j)
-}
-function user.from_json(j: baml.json.json) -> user.Team  [expr] {
-  baml.json.to(j)
-}
-function user.from_json(j: baml.json.json) -> user.Pair  [expr] {
-  baml.json.to(j)
-}
-function user.from_json(j: baml.json.json) -> user.IntPair  [expr] {
-  baml.json.to(j)
-}
-function user.from_json(j: baml.json.json) -> user.Mixed  [expr] {
-  baml.json.to(j)
-}
-function user.from_json(j: baml.json.json) -> user.Box2  [expr] {
-  baml.json.to(j)
-}
 function user.int_literal_non_exhaustive(n: int) -> int  [expr] {
   {  } match (n) { 1 => 1 }
 }

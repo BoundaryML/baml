@@ -20,20 +20,6 @@ function user.$init_test_main(registry: testing.TestCollector) -> null {
     return
 }
 
-function user.Foo.from_json(j: baml.json.json) -> Foo {
-    load_type Foo
-    load_var j
-    call baml.json.to
-    return
-}
-
-function user.HasWith.from_json(j: baml.json.json) -> HasWith {
-    load_type HasWith
-    load_var j
-    call baml.json.to
-    return
-}
-
 function user.make_foo() -> Foo {
     load_const 1
     init_instance user.Foo .x

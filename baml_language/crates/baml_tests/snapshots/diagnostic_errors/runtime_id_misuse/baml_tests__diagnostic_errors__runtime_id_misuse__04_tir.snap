@@ -62,9 +62,6 @@ class user.WithId {
   field_id: string
   $id: string
 }
-function user.WithId.from_json(j: baml.json.json) -> user.WithId throws baml.json.JsonDecodeError {
-  baml.json.to<T>(j) : user.WithId
-}
 function user.shorthand_destructure(w: user.WithId) -> string throws never {
   { : "x"
     let WithId { $id: $id } = w : user.WithId

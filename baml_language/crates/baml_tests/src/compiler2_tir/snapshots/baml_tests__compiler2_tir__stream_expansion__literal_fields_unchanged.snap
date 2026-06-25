@@ -7,9 +7,6 @@ class user.WithLiterals {
   version: 1
   enabled: true
 }
-function user.WithLiterals.from_json(j: baml.json.json) -> user.WithLiterals throws baml.json.JsonDecodeError {
-  baml.json.to<T>(j) : user.WithLiterals
-}
 class user.WithLiterals$stream {
   type: "resume"
   version: 1

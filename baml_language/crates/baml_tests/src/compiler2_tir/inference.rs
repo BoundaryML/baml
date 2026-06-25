@@ -111,9 +111,6 @@ fn class_field_access() {
     class user.Foo {
       name: string
     }
-    function user.Foo.from_json(j: baml.json.json) -> user.Foo throws baml.json.JsonDecodeError {
-      baml.json.to<T>(j) : user.Foo
-    }
     function user.f(x: user.Foo) -> string throws never {
       { : never
         return x.name : string
@@ -150,9 +147,6 @@ fn unresolved_field() {
     class user.Foo {
       name: string
     }
-    function user.Foo.from_json(j: baml.json.json) -> user.Foo throws baml.json.JsonDecodeError {
-      baml.json.to<T>(j) : user.Foo
-    }
     function user.f(x: user.Foo) -> string throws never {
       { : never
         return x.missing : unknown
@@ -184,9 +178,6 @@ function f(data: Data) -> string {
     class user.Data {
       name: string
     }
-    function user.Data.from_json(j: baml.json.json) -> user.Data throws baml.json.JsonDecodeError {
-      baml.json.to<T>(j) : user.Data
-    }
     function user.f(data: user.Data) -> string throws never {
       { : never
         return data.inner.foo : unknown
@@ -217,9 +208,6 @@ function f(s: Sentiment) -> string {
     insta::assert_snapshot!(render_tir(&db, file), @"
     class user.Sentiment {
       feeling: string
-    }
-    function user.Sentiment.from_json(j: baml.json.json) -> user.Sentiment throws baml.json.JsonDecodeError {
-      baml.json.to<T>(j) : user.Sentiment
     }
     function user.f(s: user.Sentiment) -> string throws never {
       { : never
@@ -322,9 +310,6 @@ fn resolve_class_fields_query() {
       y: float
       label: string
     }
-    function user.Point.from_json(j: baml.json.json) -> user.Point throws baml.json.JsonDecodeError {
-      baml.json.to<T>(j) : user.Point
-    }
     class user.Point$stream {
       x: int | null
       y: float | null
@@ -354,9 +339,6 @@ fn class_field_bigint() {
     insta::assert_snapshot!(render_tir(&db, file), @"
     class user.Foo {
       x: bigint
-    }
-    function user.Foo.from_json(j: baml.json.json) -> user.Foo throws baml.json.JsonDecodeError {
-      baml.json.to<T>(j) : user.Foo
     }
     class user.Foo$stream {
       x: bigint | null

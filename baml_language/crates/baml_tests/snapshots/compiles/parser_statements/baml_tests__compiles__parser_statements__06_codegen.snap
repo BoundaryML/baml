@@ -30,20 +30,6 @@ function user.ConditionalLogic(age: int) -> string {
     return
 }
 
-function user.EdgeFoo.from_json(j: baml.json.json) -> EdgeFoo {
-    load_type EdgeFoo
-    load_var j
-    call baml.json.to
-    return
-}
-
-function user.Point.from_json(j: baml.json.json) -> Point {
-    load_type Point
-    load_var j
-    call baml.json.to
-    return
-}
-
 function user.add_assign() -> int {
     load_const 10
     store_var x

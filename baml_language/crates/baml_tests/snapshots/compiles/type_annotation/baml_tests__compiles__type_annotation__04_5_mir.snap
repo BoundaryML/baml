@@ -22,38 +22,6 @@ fn user.test_type_annotation(function_name: string) -> string {
     }
 }
 
-fn user.RiskFactor.from_json(j: baml.json.json) -> RiskFactor {
-    // Locals:
-    let _0: RiskFactor // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(RiskFactor);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.MetaField.from_json(j: baml.json.json) -> MetaField {
-    // Locals:
-    let _0: MetaField // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(MetaField);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
 fn user.test_let_binding(function_name: string) -> string {
     // Locals:
     let _0: string // _0 // return

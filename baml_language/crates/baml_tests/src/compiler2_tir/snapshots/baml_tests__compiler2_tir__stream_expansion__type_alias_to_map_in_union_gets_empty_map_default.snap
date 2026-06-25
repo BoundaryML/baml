@@ -6,9 +6,6 @@ type user.Config = map<string, string>
 class user.WithMapAlias {
   settings: user.Config | int
 }
-function user.WithMapAlias.from_json(j: baml.json.json) -> user.WithMapAlias throws baml.json.JsonDecodeError {
-  baml.json.to<T>(j) : user.WithMapAlias
-}
 type user.Config$stream = map<string, string>
 class user.WithMapAlias$stream {
   settings: user.Config$stream | int

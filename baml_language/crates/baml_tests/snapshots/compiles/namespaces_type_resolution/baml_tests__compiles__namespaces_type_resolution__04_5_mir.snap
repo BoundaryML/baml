@@ -249,70 +249,6 @@ fn user.RootUsesNestedClient(c: llm.openai.Client) -> string {
     }
 }
 
-fn user.Config.from_json(j: baml.json.json) -> Config {
-    // Locals:
-    let _0: Config // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(Config);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.RootWithCrossNsAlias.from_json(j: baml.json.json) -> RootWithCrossNsAlias {
-    // Locals:
-    let _0: RootWithCrossNsAlias // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(RootWithCrossNsAlias);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.Error.from_json(j: baml.json.json) -> Error {
-    // Locals:
-    let _0: Error // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(Error);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.RootWithCrossNsFields.from_json(j: baml.json.json) -> RootWithCrossNsFields {
-    // Locals:
-    let _0: RootWithCrossNsFields // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(RootWithCrossNsFields);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
 fn user.auth.AuthAliasParam(t: auth.Token) -> string {
     // Locals:
     let _0: string // _0 // return
@@ -680,54 +616,6 @@ fn user.auth.AuthUsesRootStatus() -> Status {
     bb0: {
         _0 = const user.Status.Pending;
         goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.auth.Config.from_json(j: baml.json.json) -> auth.Config {
-    // Locals:
-    let _0: auth.Config // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(auth.Config);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.auth.Error.from_json(j: baml.json.json) -> auth.Error {
-    // Locals:
-    let _0: auth.Error // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(auth.Error);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.auth.Token.from_json(j: baml.json.json) -> auth.Token {
-    // Locals:
-    let _0: auth.Token // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(auth.Token);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
     }
 
     bb1: {
@@ -1103,86 +991,6 @@ fn user.llm.LlmUsesRootStatus() -> Status {
     bb0: {
         _0 = const user.Status.Ok;
         goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.llm.Config.from_json(j: baml.json.json) -> llm.Config {
-    // Locals:
-    let _0: llm.Config // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(llm.Config);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.llm.LlmWithCrossNsFields.from_json(j: baml.json.json) -> llm.LlmWithCrossNsFields {
-    // Locals:
-    let _0: llm.LlmWithCrossNsFields // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(llm.LlmWithCrossNsFields);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.llm.Error.from_json(j: baml.json.json) -> llm.Error {
-    // Locals:
-    let _0: llm.Error // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(llm.Error);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.llm.LlmWithRootAlias.from_json(j: baml.json.json) -> llm.LlmWithRootAlias {
-    // Locals:
-    let _0: llm.LlmWithRootAlias // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(llm.LlmWithRootAlias);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.llm.Response.from_json(j: baml.json.json) -> llm.Response {
-    // Locals:
-    let _0: llm.Response // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(llm.Response);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
     }
 
     bb1: {
@@ -1571,38 +1379,6 @@ fn user.llm.openai.OpenAIUsesRootStatus() -> Status {
     bb0: {
         _0 = const user.Status.Ok;
         goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.llm.openai.Client.from_json(j: baml.json.json) -> llm.openai.Client {
-    // Locals:
-    let _0: llm.openai.Client // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(llm.openai.Client);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.llm.openai.Error.from_json(j: baml.json.json) -> llm.openai.Error {
-    // Locals:
-    let _0: llm.openai.Error // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(llm.openai.Error);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
     }
 
     bb1: {

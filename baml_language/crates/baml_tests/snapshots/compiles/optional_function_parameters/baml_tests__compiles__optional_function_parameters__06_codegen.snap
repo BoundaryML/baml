@@ -359,13 +359,6 @@ function user.SearchService.Run(self: SearchService, query: string, limit: int) 
     return
 }
 
-function user.SearchService.from_json(j: baml.json.json) -> SearchService {
-    load_type SearchService
-    load_var j
-    call baml.json.to
-    return
-}
-
 function user.TestClient$new() -> null {
     load_const "TestClient"
     load_const "openai"

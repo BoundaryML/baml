@@ -5,15 +5,9 @@ source: crates/baml_tests/src/generated_tests.rs
 class user.Box {
   value: T
 }
-function user.Box.from_json(j: baml.json.json) -> user.Box<unknown> throws baml.json.JsonDecodeError {
-  baml.json.to<T>(j) : user.Box<T>
-}
 class user.User {
   name: string
   age: int
-}
-function user.User.from_json(j: baml.json.json) -> user.User throws baml.json.JsonDecodeError {
-  baml.json.to<T>(j) : user.User
 }
 function user.test_generic_chain(box: user.Box<user.User>) -> string throws never {
   { : string

@@ -34,27 +34,6 @@ function user.IndexAccess(users: IndexUser[]) -> string {
     return
 }
 
-function user.IndexUser.from_json(j: baml.json.json) -> IndexUser {
-    load_type IndexUser
-    load_var j
-    call baml.json.to
-    return
-}
-
-function user.Profile.from_json(j: baml.json.json) -> Profile {
-    load_type Profile
-    load_var j
-    call baml.json.to
-    return
-}
-
-function user.Settings.from_json(j: baml.json.json) -> Settings {
-    load_type Settings
-    load_var j
-    call baml.json.to
-    return
-}
-
 function user.TestPrecedence() -> bool {
     load_const true
     jump_if_false L0
@@ -68,12 +47,5 @@ function user.TestPrecedence() -> bool {
     load_const false
 
   L1:
-    return
-}
-
-function user.User.from_json(j: baml.json.json) -> User {
-    load_type User
-    load_var j
-    call baml.json.to
     return
 }

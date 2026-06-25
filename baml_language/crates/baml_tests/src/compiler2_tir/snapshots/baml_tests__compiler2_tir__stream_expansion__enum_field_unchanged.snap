@@ -5,9 +5,6 @@ expression: "render_tir(&db, file)"
 class user.WithEnum {
   status: user.Status
 }
-function user.WithEnum.from_json(j: baml.json.json) -> user.WithEnum throws baml.json.JsonDecodeError {
-  baml.json.to<T>(j) : user.WithEnum
-}
 class user.WithEnum$stream {
   status: user.Status | null
 }

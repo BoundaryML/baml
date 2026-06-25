@@ -515,19 +515,3 @@ fn user.UseRequiredByName() -> string[] {
         return;
     }
 }
-
-fn user.SearchService.from_json(j: baml.json.json) -> SearchService {
-    // Locals:
-    let _0: SearchService // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(SearchService);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}

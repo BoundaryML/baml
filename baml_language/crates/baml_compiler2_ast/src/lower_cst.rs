@@ -1149,7 +1149,7 @@ fn lower_class(
         .filter_map(|block| lower_implements_block(&block, diags, env_var_refs))
         .collect();
 
-    let mut class_def = crate::ast::ClassDef {
+    let class_def = crate::ast::ClassDef {
         name: Name::new(name_token.text()),
         generic_params,
         generic_param_bounds,
@@ -1162,9 +1162,10 @@ fn lower_class(
         name_span: name_token.text_range(),
     };
 
-    // Auto-derive `to_json` / `from_json` / `to_string` on every user class.
-    // Each is skipped if the user already defined that method.
-    crate::auto_derive_json::maybe_synthesize_derived_methods(&mut class_def);
+    // No per-class JSON method synthesis: `to_json` / `from_json` are not real
+    // methods. `obj.to_json()` desugars to `baml.json.from(obj)` and
+    // `Type.from_json(j)` desugars to `baml.json.to<Type>(j)` (TIR + MIR);
+    // customization is via `implements baml.ToJson` / `baml.FromJson`.
 
     Some(class_def)
 }

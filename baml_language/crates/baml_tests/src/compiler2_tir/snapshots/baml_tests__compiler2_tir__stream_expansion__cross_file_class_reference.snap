@@ -6,9 +6,6 @@ class user.Resume {
   name: string
   education: user.Education[]
 }
-function user.Resume.from_json(j: baml.json.json) -> user.Resume throws baml.json.JsonDecodeError {
-  baml.json.to<T>(j) : user.Resume
-}
 class user.Resume$stream {
   name: string | null
   education: user.Education$stream[]

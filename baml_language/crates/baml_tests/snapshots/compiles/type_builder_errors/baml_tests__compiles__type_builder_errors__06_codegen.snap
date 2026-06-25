@@ -1,13 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-function user.Resume.from_json(j: baml.json.json) -> Resume {
-    load_type Resume
-    load_var j
-    call baml.json.to
-    return
-}
-
 function user.TypeBuilderFn(from_text: string, client: baml.llm.Client) -> Resume {
     load_var client
     load_const <omitted>

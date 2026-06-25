@@ -25,21 +25,12 @@ class user.User {
   profile: user.Profile
   tags: string[]
 }
-function user.User.from_json(j: baml.json.json) -> user.User throws baml.json.JsonDecodeError {
-  baml.json.to<T>(j) : user.User
-}
 class user.Profile {
   bio: string
   settings: user.Settings
 }
-function user.Profile.from_json(j: baml.json.json) -> user.Profile throws baml.json.JsonDecodeError {
-  baml.json.to<T>(j) : user.Profile
-}
 class user.Settings {
   theme: string
-}
-function user.Settings.from_json(j: baml.json.json) -> user.Settings throws baml.json.JsonDecodeError {
-  baml.json.to<T>(j) : user.Settings
 }
 class user.User$stream {
   name: string | null
@@ -57,9 +48,6 @@ class user.IndexUser {
   name: string
   age: int
   tags: string[]
-}
-function user.IndexUser.from_json(j: baml.json.json) -> user.IndexUser throws baml.json.JsonDecodeError {
-  baml.json.to<T>(j) : user.IndexUser
 }
 function user.IndexAccess(users: user.IndexUser[]) -> string throws never {
   { : never

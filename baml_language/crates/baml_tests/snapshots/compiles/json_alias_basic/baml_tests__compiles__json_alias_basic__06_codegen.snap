@@ -85,10 +85,3 @@ function user.ReturnString() -> baml.json.json {
     load_const "hello"
     return
 }
-
-function user.Wrapper.from_json(j: baml.json.json) -> Wrapper {
-    load_type Wrapper
-    load_var j
-    call baml.json.to
-    return
-}

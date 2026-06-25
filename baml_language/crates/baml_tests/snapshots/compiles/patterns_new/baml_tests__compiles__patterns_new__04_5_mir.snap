@@ -958,54 +958,6 @@ fn user.for_let_with_narrow(items: int[]) -> int {
     }
 }
 
-fn user.PatternBucket.from_json(j: baml.json.json) -> PatternBucket {
-    // Locals:
-    let _0: PatternBucket // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(PatternBucket);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.AppError.from_json(j: baml.json.json) -> AppError {
-    // Locals:
-    let _0: AppError // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(AppError);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.PatternMatrix.from_json(j: baml.json.json) -> PatternMatrix {
-    // Locals:
-    let _0: PatternMatrix // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: type
-
-    bb0: {
-        _2 = load_type(PatternMatrix);
-        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
 fn user.int_widens_to_alias(v: int | float) -> int {
     // Locals:
     let _0: int // _0 // return

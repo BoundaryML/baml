@@ -16,12 +16,3 @@ class user.HasDuplicateFieldAttr {
 enum user.HasDuplicateEnumAttr {ONE, TWO}
 enum user.HasDuplicateVariant {RED, BLUE, RED}
 enum user.HasDuplicateVariantAttr {ACTIVE, INACTIVE}
-function user.from_json(j: baml.json.json) -> user.HasDuplicateDescription  [expr] {
-  baml.json.to(j)
-}
-function user.from_json(j: baml.json.json) -> user.HasDuplicateField  [expr] {
-  baml.json.to(j)
-}
-function user.from_json(j: baml.json.json) -> user.HasDuplicateFieldAttr  [expr] {
-  baml.json.to(j)
-}
