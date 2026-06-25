@@ -255,6 +255,11 @@ impl ThrowsAnalysisContext for CallableThrowsAnalysis<'_, '_> {
         // builder impl.
         lookup_named_throw_summary(self.db, self.pkg_id, &Name::new("id.set"))
     }
+
+    fn to_json_fallback_throws(&self) -> Option<BTreeSet<Ty>> {
+        // `recv.to_json()` lowers to `baml.json.from(recv)` — see the builder impl.
+        lookup_named_throw_summary(self.db, self.pkg_id, &Name::new("json.from"))
+    }
 }
 
 fn callee_uses_method_call_convention(

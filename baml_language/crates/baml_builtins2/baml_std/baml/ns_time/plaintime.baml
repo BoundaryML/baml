@@ -82,7 +82,13 @@ class PlainTime {
             _ => throw root.json.JsonDecodeError { message: "Expected ISO 8601 time string" }
         }
     }
-    function to_json(self) -> string throws never {
-        self.to_string()
+    implements baml.ToJson {
+        function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError {
+            // Route through `baml.json.from` so the body can throw the
+            // `JsonSerializationError` the interface declares (a `string`-returning
+            // `to_string()` is `throws never`, which would trip the extraneous-throws
+            // check on a BAML-bodied impl). The string flows into `json` unchanged.
+            baml.json.from(self.to_string())
+        }
     }
 }

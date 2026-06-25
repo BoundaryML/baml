@@ -1,0 +1,29 @@
+---
+source: crates/baml_cli/src/describe_command_tests.rs
+expression: output
+---
+patterns — Where patterns appear: match arms, the `is` operator, and `if let`.
+
+Syntax:
+  // match — over values and/or types; first matching arm wins, must be exhaustive
+  match (v) {
+    0 => "zero",                          // literal value, no binding
+    1 | 2 | 3 => "small",                 // or-pattern
+    let n: int if n < 0 => "neg",         // typed binding + guard
+    Rect { w: let w, h: let h } => w * h, // class destructure, bind fields
+    [let first, ..] => first,             // array: head + rest
+    let c: Circle => c.r,                 // typed binding (matches + narrows)
+    _ => "other",                         // wildcard
+  }
+  
+  // is — returns bool and narrows inside the branch
+  if (v is Circle) { /* v is Circle here */ }
+  
+  // if let — bind one pattern, else fall through
+  if let r: Rect = v { r.w } else if let c: Circle = v { c.r } else { 0 }
+
+Pattern forms: literals (`0`, `"ok"`); `let x` (bind), `let x: T` (bind +
+narrow), `_` (wildcard); class destructure `T { field: <pattern> }`; array
+`[a, ..]` / `[.., z]`; or-patterns `A | B` (bindings must line up); guards
+`<pattern> if cond`. `match` must be exhaustive — a `_` arm is allowed only
+when earlier arms leave a gap. Same topic: `baml describe match`.

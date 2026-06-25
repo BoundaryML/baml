@@ -1,11 +1,5 @@
-use bex_heap::TlabHolder;
-use bex_vm_types::Value;
-
 use super::{BamlClassFloat, PackageBamlImpl};
-use crate::{
-    BexVm,
-    errors::{VmBamlError, VmPanic, VmRustFnError},
-};
+use crate::errors::{VmBamlError, VmPanic, VmRustFnError};
 
 // BAML int is i63 (the runtime reserves one bit for the tagged-pointer
 // Value tag). Range: `[-2^62, 2^62 - 1]`. `-2^62` and `2^62` are both
@@ -35,10 +29,6 @@ fn float_to_int(value: f64, op: &str) -> Result<i64, VmRustFnError> {
 }
 
 impl BamlClassFloat for PackageBamlImpl {
-    fn to_json(vm: &mut BexVm, float: f64) -> Value {
-        Value::object(vm.alloc_float(float))
-    }
-
     // ── Predicates ────────────────────────────────────────────────────────────
 
     fn is_nan(float: f64) -> bool {

@@ -147,18 +147,6 @@ fn baml_iter_interface_qtn(name: &str) -> crate::ty::QualifiedTypeName {
     crate::ty::QualifiedTypeName::new(Name::new("baml"), vec![Name::new("iter")], Name::new(name))
 }
 
-/// Construct the throws type `JsonSerializationError | JsonParseError`.
-///
-/// Used as the conservative throws clause for the universal `to_json` method on
-/// `Ty::TypeVar` — it is a superset of any concrete type's actual throws, so
-/// call-site throw inference stays sound.
-fn json_serialization_or_parse_error_ty() -> Ty {
-    Ty::Union(
-        vec![json_serialization_error_ty(), json_parse_error_ty()],
-        TyAttr::default(),
-    )
-}
-
 /// Construct the throws type `JsonParseError | JsonSerializationError`.
 ///
 /// Used as the conservative throws clause for the universal `from_json` method
@@ -399,6 +387,14 @@ impl ThrowsAnalysisContext for BuilderThrowsAnalysis<'_, '_> {
         // `id.set` (own-package lookup covers compiling the std lib itself).
         self.builder
             .lookup_named_throw_summary(&Name::new("id.set"))
+    }
+
+    fn to_json_fallback_throws(&self) -> Option<BTreeSet<Ty>> {
+        // The `recv.to_json()` sugar lowers to `baml.json.from(recv)`; charge
+        // that function's throws (`JsonSerializationError`). Namespace-relative
+        // key `json.from` within package `baml`, like `runtime_id_set_throws`.
+        self.builder
+            .lookup_named_throw_summary(&Name::new("json.from"))
     }
 }
 
@@ -5824,6 +5820,130 @@ impl<'db> TypeInferenceBuilder<'db> {
             return result_ty;
         }
 
+        // Operator-style `recv.to_string()` -> `string.from(recv)` fallback. The
+        // AST stays a `Call` (so diagnostics keep saying `.to_string()`, never
+        // `string.from`); MIR lowers it. A 0-arg/0-type-arg `to_string` member or
+        // local-rooted-path call whose receiver has NO real `baml.ToString` method
+        // is typed `string` here. A bare `to_string` method is banned, so the only
+        // source of a real one is an `implements baml.ToString` block — which
+        // resolves cleanly and is left to normal method dispatch. `string.from` is
+        // total (`throws never`, any `T`) and honors overrides via a runtime shim.
+        let to_string_callee = type_args.is_empty()
+            && arg_exprs.is_empty()
+            && crate::throws_analysis::is_to_string_call_callee(&body.exprs[callee])
+            // A dotted-path callee is the sugar only when its root is an in-scope
+            // value (a local), not a package/module path like `Mod.to_string()`.
+            && match &body.exprs[callee] {
+                Expr::Path(segs) => self.locals.contains_key(&segs[0]),
+                _ => true,
+            };
+        if to_string_callee {
+            // Probe whether a real `to_string` resolves. Snapshot the diagnostic
+            // count at the start and again after the receiver: a MemberAccess base
+            // may be a complex expr (`f(bad).to_string()`) that legitimately errors
+            // while still typing to a known type, so infer it first and keep its
+            // errors across a fallback. A Path receiver is a pure dotted name
+            // (errors only by failing to resolve), so it shares the start baseline.
+            let start = self.context.diagnostic_count();
+            let after_recv = match &body.exprs[callee] {
+                Expr::MemberAccess { base, .. } => {
+                    self.infer_expr(*base, body);
+                    self.context.diagnostic_count()
+                }
+                _ => start,
+            };
+            let probe_ty = self.infer_expr(callee, body);
+            // No real `to_string` (only `implements baml.ToString` provides one)
+            // leaves the callee `Unknown`/`Error`; a nullable receiver makes the
+            // member access `Unknown | null`, so test the non-null part.
+            let unresolved = matches!(
+                crate::narrowing::remove_null(&probe_ty),
+                Ty::Unknown { .. } | Ty::Error { .. }
+            );
+            // Fire on any known receiver type, including nullable, since
+            // `string.from` is total and renders `null` as `"null"`. A broken
+            // (`Unknown`/`Error`) receiver is left to its own error.
+            let recv_ty = match &body.exprs[callee] {
+                Expr::MemberAccess { base, .. } => self.expressions.get(base).cloned(),
+                Expr::Path(segs) => self
+                    .path_segment_types
+                    .get(&(callee, segs.len() - 2))
+                    .cloned(),
+                _ => None,
+            };
+            let recv_known = recv_ty
+                .as_ref()
+                .is_some_and(|t| !matches!(t, Ty::Unknown { .. } | Ty::Error { .. }));
+            if unresolved && recv_known {
+                // Drop the `to_string` member-resolution errors (the
+                // `UnresolvedMember`, plus the "handle null first" hint for a
+                // nullable receiver); keep the receiver's own errors (before
+                // `after_recv`).
+                self.context.truncate_diagnostics(after_recv);
+                let ty = Ty::String {
+                    attr: TyAttr::default(),
+                };
+                self.report_result_type_mismatch(expr_id, &ty, expected);
+                self.record_expr_type(expr_id, ty.clone());
+                return ty;
+            }
+            // Not the sugar (real method, or broken receiver): discard everything
+            // the probe emitted and let the normal call machinery below re-infer
+            // the callee once, so a complex receiver's errors are not double-
+            // reported (the explicit receiver infer above would otherwise duplicate
+            // them).
+            self.context.truncate_diagnostics(start);
+        }
+
+        // Operator-style `recv.to_json()` -> `baml.json.from(recv)` fallback, the
+        // json analog of the `to_string` sugar above. The AST stays a `Call`; MIR
+        // lowers it. A 0-arg/0-type-arg `to_json` member or local-rooted-path call
+        // whose receiver has NO real `to_json` method (a bare one is banned; only
+        // `implements baml.ToJson` provides one) is typed `json` here.
+        // `baml.json.from` is total over any `T` (honoring overrides via a runtime
+        // shim) but, unlike `string.from`, throws `JsonSerializationError`.
+        let to_json_callee = type_args.is_empty()
+            && arg_exprs.is_empty()
+            && crate::throws_analysis::is_to_json_call_callee(&body.exprs[callee])
+            && match &body.exprs[callee] {
+                Expr::Path(segs) => self.locals.contains_key(&segs[0]),
+                _ => true,
+            };
+        if to_json_callee {
+            let start = self.context.diagnostic_count();
+            let after_recv = match &body.exprs[callee] {
+                Expr::MemberAccess { base, .. } => {
+                    self.infer_expr(*base, body);
+                    self.context.diagnostic_count()
+                }
+                _ => start,
+            };
+            let probe_ty = self.infer_expr(callee, body);
+            let unresolved = matches!(
+                crate::narrowing::remove_null(&probe_ty),
+                Ty::Unknown { .. } | Ty::Error { .. }
+            );
+            let recv_ty = match &body.exprs[callee] {
+                Expr::MemberAccess { base, .. } => self.expressions.get(base).cloned(),
+                Expr::Path(segs) => self
+                    .path_segment_types
+                    .get(&(callee, segs.len() - 2))
+                    .cloned(),
+                _ => None,
+            };
+            let recv_known = recv_ty
+                .as_ref()
+                .is_some_and(|t| !matches!(t, Ty::Unknown { .. } | Ty::Error { .. }));
+            if unresolved && recv_known {
+                self.context.truncate_diagnostics(after_recv);
+                let ty = json_alias_ty();
+                self.report_result_type_mismatch(expr_id, &ty, expected);
+                self.record_expr_type(expr_id, ty.clone());
+                return ty;
+            }
+            self.context.truncate_diagnostics(start);
+        }
+
         let is_method_call = match &body.exprs[callee] {
             Expr::MemberAccess { base, .. } => match &body.exprs[*base] {
                 Expr::Path(segments) if !segments.is_empty() => {
@@ -10038,22 +10158,9 @@ impl<'db> TypeInferenceBuilder<'db> {
                 }
             }
             Ty::Enum(enum_name, _) => {
-                // `to_json` on an enum: returns the variant name as a JSON string.
-                // BEP-038 specifies the enum JSON representation as its variant name string.
-                // Throws `never` — enum serialization always succeeds.
-                if member.as_str() == "to_json" {
-                    return Ty::Function {
-                        params: vec![FunctionParamTy::required(
-                            Some(Name::new("self")),
-                            base_ty.clone(),
-                        )],
-                        ret: Box::new(json_alias_ty()),
-                        throws: Box::new(Ty::Never {
-                            attr: TyAttr::default(),
-                        }),
-                        attr: TyAttr::default(),
-                    };
-                }
+                // `to_json` is no longer a magic enum method — `enum.to_json()`
+                // desugars to `baml.json.from(enum)` (rendered as the variant name
+                // by the walker). Left unresolved here so the sugar fires.
 
                 // Validate that the variant exists
                 let variants = self.lookup_enum_variants(enum_name);
@@ -10319,15 +10426,13 @@ impl<'db> TypeInferenceBuilder<'db> {
             // `from_json(j: json) -> Self`. When the base type is a type-variable
             // `T` (e.g. inside `class Array<T>`), the compiler cannot look up the
             // concrete companion class; instead we synthesize the expected method
-            // signature directly. The throws clause is conservatively widened to
-            // `JsonSerializationError | JsonParseError` — the actual throws for any
-            // concrete T is a subset, so call-site throw inference stays sound.
-            // BEP-044 generic bound: when `T extends I` is in scope and
-            // the member isn't a universal builtin (`to_json` /
-            // `from_json`), delegate to `I`'s contract.
+            // signature directly. (`to_json` is no longer universal — it desugars
+            // to `baml.json.from`; only `from_json` remains a synthesized builtin.)
+            // BEP-044 generic bound: when `T extends I` is in scope and the member
+            // isn't the synthesized builtin `from_json`, delegate to `I`'s contract
+            // — including `to_json` when `T extends baml.ToJson`.
             Ty::TypeVar(name, _)
-                if member.as_str() != "to_json"
-                    && member.as_str() != "from_json"
+                if member.as_str() != "from_json"
                     && self.generic_param_bounds.contains_key(name) =>
             {
                 let bound_ty = self.generic_param_bounds[name].clone();
@@ -10353,17 +10458,6 @@ impl<'db> TypeInferenceBuilder<'db> {
                     }
                 }
                 self.resolve_member(&bound_ty, member, at, bound)
-            }
-            Ty::TypeVar(_, _) if member.as_str() == "to_json" => {
-                // Type-check: every BAML type has `to_json(self) -> json` after Phase 5b.1.
-                // No MemberResolution stored — the concrete dispatch is deferred to Phase 5b.4
-                // (native Array/Map impls) and never runs with an unresolved TypeVar at runtime.
-                Ty::Function {
-                    params: vec![],
-                    ret: Box::new(json_alias_ty()),
-                    throws: Box::new(json_serialization_or_parse_error_ty()),
-                    attr: TyAttr::default(),
-                }
             }
             Ty::TypeVar(name, _) if member.as_str() == "from_json" => {
                 // Type-check: every BAML type has `from_json(j: json) -> Self` after Phase 5b.1.
@@ -11167,21 +11261,9 @@ impl<'db> TypeInferenceBuilder<'db> {
                 }
             }
             Ty::Enum(enum_name, _) => {
-                // `to_json` on an enum (path-segment form): same as the
-                // `resolve_member_on_ty` arm above — variant name as JSON string.
-                if member.as_str() == "to_json" {
-                    return Ty::Function {
-                        params: vec![FunctionParamTy::required(
-                            Some(Name::new("self")),
-                            base_ty.clone(),
-                        )],
-                        ret: Box::new(json_alias_ty()),
-                        throws: Box::new(Ty::Never {
-                            attr: TyAttr::default(),
-                        }),
-                        attr: TyAttr::default(),
-                    };
-                }
+                // `to_json` is no longer a magic enum method (path-segment form);
+                // `enum.to_json()` desugars to `baml.json.from(enum)`. Left
+                // unresolved so the sugar fires.
 
                 // Use the no-side-effect helper.
                 if self.enum_has_variant(enum_name, member) {
@@ -11268,6 +11350,24 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
             Ty::Unknown { .. } => {
                 // Base type unknown — don't emit another error.
+                Ty::Unknown {
+                    attr: TyAttr::default(),
+                }
+            }
+            Ty::BuiltinUnknown { .. } => {
+                let receiver_seg_idx = seg_idx.saturating_sub(1);
+                self.context.report_at_segment(
+                    TirTypeError::UnresolvedMember {
+                        base_type: base_ty.clone(),
+                        member: member.clone(),
+                    },
+                    path_id,
+                    seg_idx,
+                    vec![RelatedNote::new(
+                        RelatedLocation::ExprSegment(path_id, receiver_seg_idx),
+                        "this value has type `unknown`",
+                    )],
+                );
                 Ty::Unknown {
                     attr: TyAttr::default(),
                 }
@@ -11628,14 +11728,9 @@ impl<'db> TypeInferenceBuilder<'db> {
             Ty::Type { .. } => self
                 .resolve_builtin_method(&["TypeValue"], &[], member)
                 .map(BuiltinResolution::into_ty),
-            // Universal `to_json` / `from_json` on generic type variables.
+            // Synthesized builtin `from_json` on generic type variables (`to_json`
+            // is no longer universal — it desugars to `baml.json.from`).
             // Mirrors the arm in `resolve_member` — no side effects needed here.
-            Ty::TypeVar(_, _) if member.as_str() == "to_json" => Some(Ty::Function {
-                params: vec![],
-                ret: Box::new(json_alias_ty()),
-                throws: Box::new(json_serialization_or_parse_error_ty()),
-                attr: TyAttr::default(),
-            }),
             Ty::TypeVar(name, _) if member.as_str() == "from_json" => Some(Ty::Function {
                 params: vec![FunctionParamTy::required(
                     Some(Name::new("j")),

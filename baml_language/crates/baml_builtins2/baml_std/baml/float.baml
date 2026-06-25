@@ -8,10 +8,6 @@
 class Float {
   /// Serializes this float to a JSON number. NaN and Infinity are serialized as null.
   // mut_vm: Float values are heap-boxed (Object::Float); construction needs a TLAB.
-  //baml:mut_vm
-  function to_json(self) -> baml.json.json throws never {
-    $rust_function
-  }
   // ─── Predicates ───────────────────────────────────────────────────────────
 
   /// Returns `true` if `self` is NaN (a "not a number" sentinel produced by

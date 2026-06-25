@@ -35,20 +35,22 @@ async fn auto_derive_filtered_from_bytecode_by_default() {
 #[tokio::test]
 async fn auto_derive_visible_with_show_auto_derive_flag() {
     // `show_auto_derive: true` opts in to seeing the synthesized methods so
-    // the synthesizer itself can be tested.
+    // the synthesizer itself can be tested. Only `from_json` is auto-derived now;
+    // `to_json` is owned by the `baml.ToJson` interface (`baml.json.from` is the
+    // universal driver), so no per-class `to_json` is synthesized.
     let source = r#"
         class User { name string  age int }
         function main() -> int { 1 }
     "#;
     let output = baml_test!(baml: source, show_auto_derive: true);
     assert!(
-        output.bytecode.contains("to_json"),
-        "show_auto_derive: true should expose to_json in bytecode:\n{}",
+        output.bytecode.contains("from_json"),
+        "show_auto_derive: true should expose from_json in bytecode:\n{}",
         output.bytecode
     );
     assert!(
-        output.bytecode.contains("from_json"),
-        "show_auto_derive: true should expose from_json in bytecode:\n{}",
+        !output.bytecode.contains("to_json"),
+        "to_json is no longer auto-derived (owned by baml.ToJson); none should appear:\n{}",
         output.bytecode
     );
 }

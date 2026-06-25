@@ -54,34 +54,346 @@ use std::collections::HashMap;
 
 use bex_heap::TlabHolder;
 use bex_vm_types::{
-    HeapPtr,
+    HeapPtr, ValueKind,
     types::{Instance, Object, Value},
 };
 use indexmap::IndexMap;
 
 use super::{
-    BamlNamespaceJson, Continuation, NativeCallResult, PackageBamlImpl, make_to_json_callee,
+    BamlNamespaceJson, Continuation, NativeCallResult, PackageBamlImpl,
+    make_to_json_override_callee, to_json_override_fn_name,
 };
 use crate::{
     BexVm,
     errors::{VmInternalError, VmRustFnError},
 };
 
-/// Pass-through continuation for `baml.json.to_json(v)`. The dynamically
-/// dispatched `to_json` produces the json value directly, so we just hand it
-/// back to the caller.
-struct ToJsonDynContinuation;
+// ─── baml.json.from / baml.ToJson default (override-honoring structural json) ──
+//
+// `baml.json.from(value)` and the `baml.ToJson` interface default body both
+// render `value` to a `json` value, honoring `baml.ToJson` overrides at every
+// depth: `value`'s own override (if any) wins, and any *nested* value whose
+// runtime class overrides `to_json` is rendered via that override rather than
+// structurally. The json analog of `string.from` / `baml.ToString` in `root.rs`.
+//
+// Three passes, mirroring `render_to_string_honoring_overrides`:
+//   1. `collect_to_json_overrides` — pre-order DFS recording every sub-value
+//      whose runtime class overrides `baml.ToJson` (allocation-free).
+//   2. one `YieldToCall` per override, dispatching its `to_json`; each result
+//      `json` value is normalized to `serde_json::Value` immediately so the
+//      continuation holds no extra heap roots.
+//   3. `render_to_serde` — structural walk to a `serde_json::Value`, splicing the
+//      override results in by pre-order position, then `serde_to_value` once.
+//
+// Building the structural skeleton in serde space and materializing the `json`
+// value with a single `serde_to_value` at the end keeps the walk allocation-free
+// (no GC can move `pending`/`root` mid-render), unlike a value-kind walk that
+// allocated heap arrays/maps as it descended.
 
-impl Continuation for ToJsonDynContinuation {
-    fn call(self: Box<Self>, _vm: &mut BexVm, value: Value) -> NativeCallResult {
-        NativeCallResult::Done(value)
+/// Entry point for `baml._to_json_default` / `baml._to_json_shim`. Collects the
+/// override-bearing sub-values (pass 1), dispatches `to_json` on each in order
+/// (pass 2), then renders structurally splicing in the override results (pass 3).
+pub(super) fn render_to_json_honoring_overrides(vm: &mut BexVm, value: Value) -> NativeCallResult {
+    let mut pending: Vec<HeapPtr> = Vec::new();
+    collect_to_json_overrides(vm, value, &mut pending);
+
+    let Some(&first_ptr) = pending.first() else {
+        return render_to_json_done(vm, value, &pending, &[]);
+    };
+    match make_to_json_override_callee(vm, Value::object(first_ptr)) {
+        Some(callee) => NativeCallResult::YieldToCall {
+            callee,
+            args: vec![],
+            type_args: vec![],
+            continuation: Box::new(ToJsonWalkContinuation {
+                root: value,
+                pending,
+                results: Vec::new(),
+            }),
+        },
+        None => render_to_json_done(vm, value, &pending, &[]),
+    }
+}
+
+/// Whether `value`'s runtime class carries an in-body `baml.ToJson` override.
+/// Shares `make_to_json_override_callee`'s resolution but allocates nothing on
+/// the VM heap, so it is safe during the allocation-free pre-order collection.
+fn has_to_json_override(vm: &BexVm, value: Value) -> bool {
+    to_json_override_fn_name(vm, value)
+        .and_then(|name| vm.find_function_by_name(&name))
+        .is_some()
+}
+
+/// Pre-order DFS collecting, by heap pointer and in render order, every
+/// sub-value of `value` whose runtime class overrides `baml.ToJson`. An override
+/// node is recorded and *not* descended into — its `to_json` owns its whole
+/// subtree. Immutable and allocation-free so the collector cannot move objects
+/// mid-walk. Matches `render_to_serde`'s traversal order (array elements, then
+/// map values, then instance fields) so the two stay index-aligned. A media
+/// instance is treated as a leaf, matching `render_to_serde`, which emits its
+/// tagged form without descending into the opaque `_data` field.
+fn collect_to_json_overrides(vm: &BexVm, value: Value, out: &mut Vec<HeapPtr>) {
+    let ValueKind::Object(ptr) = value.kind() else {
+        return;
+    };
+    if has_to_json_override(vm, value) {
+        out.push(ptr);
+        return;
+    }
+    // Snapshot children (owned), dropping the heap borrow before recursing.
+    let children: Vec<Value> = match vm.get_object(ptr) {
+        Object::Array(values) => values.to_vec(),
+        Object::Map(map) => map.to_index_map().values().copied().collect(),
+        Object::Instance(inst) => {
+            // Media instances render as a leaf (their tagged form); their single
+            // `_data` field is opaque `RustData` and carries no overrides, so
+            // skipping the descent both matches `render_to_serde` and is sound.
+            if is_media_instance(vm, inst) {
+                Vec::new()
+            } else {
+                inst.field_values().collect()
+            }
+        }
+        _ => Vec::new(),
+    };
+    for v in children {
+        collect_to_json_overrides(vm, v, out);
+    }
+}
+
+/// Whether `inst`'s class is one of the builtin media classes.
+fn is_media_instance(vm: &BexVm, inst: &Instance) -> bool {
+    match vm.get_object(inst.class) {
+        Object::Class(c) => media_kind_from_fqn(c.name.render_dotted(false).as_str()).is_some(),
+        _ => false,
+    }
+}
+
+/// Pass 3: render `root` structurally to a `serde_json::Value` (splicing the
+/// precomputed override `results` by pre-order position), then materialize the
+/// `json` value with a single `serde_to_value`.
+fn render_to_json_done(
+    vm: &mut BexVm,
+    root: Value,
+    pending: &[HeapPtr],
+    results: &[serde_json::Value],
+) -> NativeCallResult {
+    let mut counter = 0;
+    let mut path = String::new();
+    match render_to_serde(vm, root, pending, results, &mut counter, &mut path) {
+        Ok(serde) => NativeCallResult::Done(serde_to_value(vm, &serde)),
+        Err(e) => NativeCallResult::Error(e),
+    }
+}
+
+/// Structural json rendering used by `baml.json.from` / the `baml.ToJson`
+/// default. Mirrors `root.rs`'s `render_to_string`, but produces a
+/// `serde_json::Value` instead of a `String` and can fail: a value with no json
+/// representation (`uint8array` without explicit encoding, functions, futures,
+/// ...) raises `JsonSerializationError`. A node whose runtime class overrides
+/// `baml.ToJson` (recorded pre-order in `pending` by `collect_to_json_overrides`)
+/// is rendered via its precomputed `results[*counter]`. Because collect and
+/// render share the same pre-order, `pending[*counter]` is exactly the next
+/// override node, so the check is a pointer compare. With an empty `pending` this
+/// is a pure structural walk. Allocation-free w.r.t. the VM heap on the success
+/// path (builds only serde + Rust strings), so GC cannot move `pending`/`root`
+/// mid-render.
+fn render_to_serde(
+    vm: &mut BexVm,
+    value: Value,
+    pending: &[HeapPtr],
+    results: &[serde_json::Value],
+    counter: &mut usize,
+    path: &mut String,
+) -> Result<serde_json::Value, VmRustFnError> {
+    let ptr = match value.kind() {
+        ValueKind::Null | ValueKind::OmittedArg => return Ok(serde_json::Value::Null),
+        ValueKind::Bool(b) => return Ok(serde_json::Value::Bool(b)),
+        ValueKind::Int(i) => return Ok(serde_json::Value::Number(i.into())),
+        ValueKind::Object(ptr) => ptr,
+    };
+
+    // Override node: splice its precomputed `to_json` result in.
+    if pending.get(*counter) == Some(&ptr) {
+        let rendered = results
+            .get(*counter)
+            .cloned()
+            .unwrap_or(serde_json::Value::Null);
+        *counter += 1;
+        return Ok(rendered);
+    }
+
+    // Snapshot the node (owned), dropping the heap borrow before recursing.
+    enum Snap {
+        Leaf(serde_json::Value),
+        Seq(Vec<Value>),
+        Entries(Vec<(String, Value)>),
+        Instance {
+            class_ptr: HeapPtr,
+            fields: Vec<Value>,
+        },
+        Variant {
+            enm: HeapPtr,
+            index: usize,
+        },
+        Unserializable(&'static str),
+    }
+    let snap = match vm.get_object(ptr) {
+        Object::Float(f) => Snap::Leaf(
+            serde_json::Number::from_f64(*f)
+                .map(serde_json::Value::Number)
+                .unwrap_or(serde_json::Value::Null),
+        ),
+        Object::String(s) => Snap::Leaf(serde_json::Value::String(s.to_string())),
+        Object::Bigint(b) => Snap::Leaf(serde_json::Value::String(b.to_string())),
+        Object::Array(values) => Snap::Seq(values.to_vec()),
+        Object::Map(map) => Snap::Entries(
+            map.to_index_map()
+                .into_iter()
+                .map(|(k, v)| (k.as_str().to_string(), v))
+                .collect(),
+        ),
+        Object::Instance(inst) => Snap::Instance {
+            class_ptr: inst.class,
+            fields: inst.field_values().collect(),
+        },
+        Object::Variant(var) => Snap::Variant {
+            enm: var.enm,
+            index: var.index,
+        },
+        Object::Uint8Array(_) => Snap::Unserializable(
+            "uint8array requires explicit encoding (use to_base64() or to_hex())",
+        ),
+        _ => Snap::Unserializable("value has no json representation"),
+    };
+
+    match snap {
+        Snap::Leaf(v) => Ok(v),
+        Snap::Seq(values) => {
+            let mut out = Vec::with_capacity(values.len());
+            for (i, v) in values.into_iter().enumerate() {
+                let elem = with_path_segment(path, format_args!("[{i}]"), |p| {
+                    render_to_serde(vm, v, pending, results, counter, p)
+                })?;
+                out.push(elem);
+            }
+            Ok(serde_json::Value::Array(out))
+        }
+        Snap::Entries(entries) => {
+            let mut out = serde_json::Map::with_capacity(entries.len());
+            for (k, v) in entries {
+                let val = with_path_segment(path, format_args!("[{k:?}]"), |p| {
+                    render_to_serde(vm, v, pending, results, counter, p)
+                })?;
+                out.insert(k, val);
+            }
+            Ok(serde_json::Value::Object(out))
+        }
+        Snap::Instance { class_ptr, fields } => {
+            let (class_fqn, field_names) = match vm.get_object(class_ptr) {
+                Object::Class(c) => (
+                    c.name.render_dotted(false),
+                    c.fields.iter().map(|f| f.name.clone()).collect::<Vec<_>>(),
+                ),
+                _ => {
+                    return Err(raise_serialize(
+                        vm,
+                        "instance class pointer is not a class",
+                        path,
+                        "class",
+                    ));
+                }
+            };
+            // Media instances render to their tagged form, not a field map.
+            if let Some(kind) = media_kind_from_fqn(&class_fqn) {
+                return serialize_media(vm, value, kind, path);
+            }
+            let mut out = serde_json::Map::with_capacity(fields.len());
+            for (i, fv) in fields.into_iter().enumerate() {
+                let name = field_names.get(i).cloned().unwrap_or_else(|| i.to_string());
+                let fj = with_path_segment(path, format_args!(".{name}"), |p| {
+                    render_to_serde(vm, fv, pending, results, counter, p)
+                })?;
+                out.insert(name, fj);
+            }
+            Ok(serde_json::Value::Object(out))
+        }
+        Snap::Variant { enm, index } => {
+            let name = match vm.get_object(enm) {
+                Object::Enum(e) => e
+                    .variants
+                    .get(index)
+                    .map(|v| v.name.clone())
+                    .unwrap_or_default(),
+                _ => {
+                    return Err(raise_serialize(
+                        vm,
+                        "enum variant points to non-enum object",
+                        path,
+                        "enum",
+                    ));
+                }
+            };
+            Ok(serde_json::Value::String(name))
+        }
+        Snap::Unserializable(msg) => Err(raise_serialize(vm, msg, path, "unserializable")),
+    }
+}
+
+/// Drives pass 2/3 of `render_to_json_honoring_overrides`: accumulates each
+/// override's `to_json` result (normalized to `serde_json::Value` so no extra
+/// heap roots are held), dispatches the next, and on completion renders the
+/// structural skeleton with the override results spliced in. The number of
+/// results gathered so far IS the index of the next override to dispatch.
+struct ToJsonWalkContinuation {
+    /// The value being rendered (its structural skeleton is walked in pass 3).
+    root: Value,
+    /// Override-bearing sub-values, in render order (pass-1 output).
+    pending: Vec<HeapPtr>,
+    /// Override results so far, as serde values (no heap roots to track).
+    results: Vec<serde_json::Value>,
+}
+
+impl Continuation for ToJsonWalkContinuation {
+    fn call(mut self: Box<Self>, vm: &mut BexVm, value: Value) -> NativeCallResult {
+        // `value` is the override's returned `json` value; normalize to serde now
+        // so we hold no extra heap root for it across the next dispatch.
+        self.results.push(value_to_serde(vm, value));
+
+        // Dispatch the next override, if any (and resolvable); otherwise render.
+        if let Some(&next_ptr) = self.pending.get(self.results.len())
+            && let Some(callee) = make_to_json_override_callee(vm, Value::object(next_ptr))
+        {
+            return NativeCallResult::YieldToCall {
+                callee,
+                args: vec![],
+                type_args: vec![],
+                continuation: self,
+            };
+        }
+        render_to_json_done(vm, self.root, &self.pending, &self.results)
     }
 
     fn gc_roots(&self) -> Vec<HeapPtr> {
-        Vec::new()
+        let mut roots = self.pending.clone();
+        if let Some(ptr) = self.root.as_object_ptr() {
+            roots.push(ptr);
+        }
+        roots
     }
 
-    fn apply_forwarding(&mut self, _forwarding: &HashMap<HeapPtr, HeapPtr>) {}
+    fn apply_forwarding(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
+        if let Some(ptr) = self.root.as_object_ptr()
+            && let Some(&new_ptr) = forwarding.get(&ptr)
+        {
+            self.root = Value::object(new_ptr);
+        }
+        for ptr in &mut self.pending {
+            if let Some(&new_ptr) = forwarding.get(ptr) {
+                *ptr = new_ptr;
+            }
+        }
+    }
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -136,16 +448,11 @@ impl BamlNamespaceJson for PackageBamlImpl {
     }
 
     fn to_json(vm: &mut BexVm, v: &Value) -> NativeCallResult {
-        let v = *v;
-        match make_to_json_callee(vm, v) {
-            Ok(callee) => NativeCallResult::YieldToCall {
-                callee,
-                args: vec![],
-                type_args: vec![],
-                continuation: Box::new(ToJsonDynContinuation),
-            },
-            Err(e) => NativeCallResult::Error(e),
-        }
+        // `baml.json.to_json<T>` is now a thin alias for the override-honoring
+        // structural walker that backs `baml.json.from<T>`. Kept as a stable named
+        // entry point for `baml.json.serialize` and host callers; the magic
+        // per-class `to_json` method it used to dispatch to is gone.
+        render_to_json_honoring_overrides(vm, *v)
     }
 
     fn from_json(vm: &mut BexVm, j: &Value) -> NativeCallResult {

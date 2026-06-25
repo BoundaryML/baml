@@ -178,9 +178,6 @@ function user.for_let_fn_narrow(items: ((int) -> int throws never)[]) -> int thr
 class user.AppError {
   code: int
 }
-function user.AppError.to_json(self: user.AppError) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "code": baml.json.to_json(self.code) } : map<string, baml.json.json>
-}
 function user.AppError.from_json(j: baml.json.json) -> user.AppError throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   AppError { code: baml.json.from_json<int>(baml.json.field(j, "code")) } : user.AppError
 }
@@ -251,17 +248,11 @@ function user.match_nested_paren_union(v: (int | string)[]) -> int throws never 
 class user.PatternBucket {
   values: int[]
 }
-function user.PatternBucket.to_json(self: user.PatternBucket) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "values": baml.json.to_json(self.values) } : map<string, baml.json.json>
-}
 function user.PatternBucket.from_json(j: baml.json.json) -> user.PatternBucket throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   PatternBucket { values: baml.json.from_json<int[]>(baml.json.field(j, "values")) } : user.PatternBucket
 }
 class user.PatternMatrix {
   rows: int[][]
-}
-function user.PatternMatrix.to_json(self: user.PatternMatrix) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "rows": baml.json.to_json(self.rows) } : map<string, baml.json.json>
 }
 function user.PatternMatrix.from_json(j: baml.json.json) -> user.PatternMatrix throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   PatternMatrix { rows: baml.json.from_json<int[][]>(baml.json.field(j, "rows")) } : user.PatternMatrix

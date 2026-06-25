@@ -116,26 +116,17 @@ class user.llm.openai.Response {
   text: string
   score: int
 }
-function user.llm.openai.Response.to_json(self: user.llm.openai.Response) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "text": baml.json.to_json(self.text), "score": baml.json.to_json(self.score) } : map<string, baml.json.json>
-}
 function user.llm.openai.Response.from_json(j: baml.json.json) -> user.llm.openai.Response throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Response { text: baml.json.from_json<string>(baml.json.field(j, "text")), score: baml.json.from_json<int>(baml.json.field(j, "score")) } : user.llm.openai.Response
 }
 class user.llm.openai.Box {
   value: T
 }
-function user.llm.openai.Box.to_json(self: user.llm.openai.Box) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "value": baml.json.to_json(self.value) } : map<string, baml.json.json>
-}
 function user.llm.openai.Box.from_json(j: baml.json.json) -> user.llm.openai.Box<unknown> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Box { value: baml.json.from_json<T>(baml.json.field(j, "value")) } : user.llm.openai.Box<T>
 }
 class user.llm.openai.Outer {
   inner: user.llm.openai.Box<T>
-}
-function user.llm.openai.Outer.to_json(self: user.llm.openai.Outer) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "inner": baml.json.to_json(self.inner) } : map<string, baml.json.json>
 }
 function user.llm.openai.Outer.from_json(j: baml.json.json) -> user.llm.openai.Outer<unknown> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   Outer { inner: baml.json.from_json<Box<T>>(baml.json.field(j, "inner")) } : user.llm.openai.Outer<T>

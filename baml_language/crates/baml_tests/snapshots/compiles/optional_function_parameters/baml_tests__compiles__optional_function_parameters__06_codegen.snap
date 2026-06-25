@@ -371,16 +371,6 @@ function user.SearchService.from_json(j: baml.json.json) -> SearchService {
     return
 }
 
-function user.SearchService.to_json(self: SearchService) -> baml.json.json {
-    load_type string
-    load_var self
-    load_field .base
-    call baml.json.to_json
-    load_const "base"
-    alloc_map 1
-    return
-}
-
 function user.TestClient$new() -> null {
     load_const "TestClient"
     load_const "openai"

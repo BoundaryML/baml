@@ -2,6 +2,7 @@ import { type NodeProps } from '@xyflow/react';
 import { Repeat } from 'lucide-react';
 import { type ComponentType, memo } from 'react';
 import { getChrome, stateStyle } from '../constants';
+import { depthScale } from '../lod';
 import { useGraphThemeContext } from '../theme';
 import type { WorkflowNodeData } from '../types';
 import { NodeHandles } from './NodeHandles';
@@ -18,6 +19,10 @@ import { NodeHandles } from './NodeHandles';
 export const GroupNode: ComponentType<NodeProps> = memo(({ data, id }) => {
   const d = data as WorkflowNodeData;
   const isHighlighted = d.selected;
+  // Set by the level-of-detail pass when the user expanded this container.
+  const expandable = d.expanded === true;
+  // Deeper containers get a smaller label chip (semantic-zoom hierarchy).
+  const s = depthScale(typeof d.depth === 'number' ? d.depth : 0);
   const theme = useGraphThemeContext();
   const chrome = getChrome(theme);
   const style = stateStyle(theme, d.executionState);
@@ -60,14 +65,16 @@ export const GroupNode: ComponentType<NodeProps> = memo(({ data, id }) => {
           transform: 'translateY(-50%)',
           zIndex: 5,
           pointerEvents: 'auto',
+          // Manually-expanded containers collapse on click of this chip.
+          cursor: expandable ? 'zoom-out' : 'pointer',
           display: 'inline-flex',
           alignItems: 'center',
           gap: 6,
           whiteSpace: 'nowrap',
-          padding: '3px 10px',
+          padding: `${3 * s}px ${10 * s}px`,
           borderRadius: 999,
           fontWeight: 600,
-          fontSize: 11,
+          fontSize: 11 * s,
           letterSpacing: '-0.005em',
           color: isHighlighted
             ? chrome.groupLabelTextSelected
@@ -100,6 +107,27 @@ export const GroupNode: ComponentType<NodeProps> = memo(({ data, id }) => {
           />
         )}
         <span>{d.label || id}</span>
+        {expandable && (
+          <span
+            aria-hidden
+            title="Click to collapse"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: 14,
+              height: 14,
+              borderRadius: '50%',
+              fontSize: 13,
+              lineHeight: 1,
+              fontWeight: 700,
+              color: chrome.groupLabelText,
+              border: `1px solid ${chrome.groupLabelBorder}`,
+            }}
+          >
+            {'−'}
+          </span>
+        )}
         {(d.iterationCount ?? 0) > 0 && (
           <span
             style={{

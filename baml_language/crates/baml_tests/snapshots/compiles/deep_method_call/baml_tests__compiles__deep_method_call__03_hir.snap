@@ -26,9 +26,3 @@ function user.test_deep_method(a: user.A) -> string  [expr] {
 function user.test_direct_method(b: user.B) -> string  [expr] {
   {  } b.greet()
 }
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "b": baml.json.to_json(self.b) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "label": baml.json.to_json(self.label) }
-}

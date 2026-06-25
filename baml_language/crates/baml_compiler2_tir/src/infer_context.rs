@@ -397,11 +397,15 @@ impl fmt::Display for TirTypeError {
                 )
             }
             TirTypeError::UnresolvedMember { base_type, member } => {
-                write!(
-                    f,
-                    "type `{}` has no member `{member}`",
-                    base_type.render_user_facing()
-                )
+                if matches!(base_type, Ty::BuiltinUnknown { .. }) {
+                    write!(f, "cannot access field `{member}` on `unknown`")
+                } else {
+                    write!(
+                        f,
+                        "type `{}` has no member `{member}`",
+                        base_type.render_user_facing()
+                    )
+                }
             }
             TirTypeError::UnresolvedName { name } => {
                 write!(f, "unresolved name: {name}")
@@ -659,7 +663,7 @@ impl fmt::Display for TirTypeError {
                 } else {
                     write!(
                         f,
-                        "Add an explicit `throws` to the callback, catch the call, or make the callback non-throwing."
+                        "The callback type does not say what it can throw. If `{callback_name}` is an infallible host callback, annotate it with `throws never`; otherwise catch the call or let the enclosing function declare/propagate the callback's throws."
                     )
                 }
             }
@@ -963,6 +967,8 @@ pub enum DiagnosticSeverity {
 pub enum RelatedLocation<'db> {
     /// Expression in the same scope's `ExprBody`.
     Expr(ExprId),
+    /// A specific segment of a multi-segment `Path` expression.
+    ExprSegment(ExprId, usize),
     /// Statement in the same scope's `ExprBody`.
     Stmt(StmtId),
     /// A function parameter (possibly in another file).
@@ -1080,6 +1086,9 @@ fn resolve_related_location<'db>(
     match location {
         RelatedLocation::Expr(id) => {
             source_map.map(|sm| (scope_file.file_id(db), sm.expr_span(*id)))
+        }
+        RelatedLocation::ExprSegment(id, seg_idx) => {
+            source_map.map(|sm| (scope_file.file_id(db), sm.path_segment_span(*id, *seg_idx)))
         }
         RelatedLocation::Stmt(id) => {
             source_map.map(|sm| (scope_file.file_id(db), sm.stmt_span(*id)))

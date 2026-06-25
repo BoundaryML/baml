@@ -13,16 +13,6 @@ function user.MetaField.from_json(j: baml.json.json) -> MetaField {
     return
 }
 
-function user.MetaField.to_json(self: MetaField) -> baml.json.json {
-    load_type type
-    load_var self
-    load_field .type
-    call baml.json.to_json
-    load_const "type"
-    alloc_map 1
-    return
-}
-
 function user.RiskFactor.from_json(j: baml.json.json) -> RiskFactor {
     load_var j
     load_const "type"
@@ -39,21 +29,6 @@ function user.RiskFactor.from_json(j: baml.json.json) -> RiskFactor {
     load_var _6
     call baml.json.from_json
     init_instance user.RiskFactor .type, .severity
-    return
-}
-
-function user.RiskFactor.to_json(self: RiskFactor) -> baml.json.json {
-    load_type string
-    load_var self
-    load_field .type
-    call baml.json.to_json
-    load_type float
-    load_var self
-    load_field .severity
-    call baml.json.to_json
-    load_const "type"
-    load_const "severity"
-    alloc_map 2
     return
 }
 

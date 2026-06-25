@@ -6,9 +6,6 @@ class user.WithAlias {
   bar: string @alias("baz")
   count: int @alias("cnt")
 }
-function user.WithAlias.to_json(self: user.WithAlias) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "bar": baml.json.to_json(self.bar), "count": baml.json.to_json(self.count) } : map<string, baml.json.json>
-}
 function user.WithAlias.from_json(j: baml.json.json) -> user.WithAlias throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   WithAlias { bar: baml.json.from_json<string>(baml.json.field(j, "bar")), count: baml.json.from_json<int>(baml.json.field(j, "count")) } : user.WithAlias
 }

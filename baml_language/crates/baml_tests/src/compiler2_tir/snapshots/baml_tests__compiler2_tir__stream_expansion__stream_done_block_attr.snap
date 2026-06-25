@@ -6,9 +6,6 @@ class user.AtomicPoint {
   x: float
   y: float
 }
-function user.AtomicPoint.to_json(self: user.AtomicPoint) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "x": baml.json.to_json(self.x), "y": baml.json.to_json(self.y) } : map<string, baml.json.json>
-}
 function user.AtomicPoint.from_json(j: baml.json.json) -> user.AtomicPoint throws baml.json.JsonParseError | baml.json.JsonDecodeError {
   AtomicPoint { x: baml.json.from_json<float>(baml.json.field(j, "x")), y: baml.json.from_json<float>(baml.json.field(j, "y")) } : user.AtomicPoint
 }

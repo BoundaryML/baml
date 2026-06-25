@@ -11,6 +11,3 @@ function user.from_json(j: baml.json.json) -> user.Box<T>  [expr] {
 function user.main() -> int  [expr] {
   { let boxed: user.Box<int> = user.Box { value: 42 }; let Box { value: value } = boxed } value
 }
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "value": baml.json.to_json(self.value) }
-}

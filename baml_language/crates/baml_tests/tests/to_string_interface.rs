@@ -203,6 +203,101 @@ async fn builtin_instant_dispatches_through_interface() {
     );
 }
 
+/// A `Point` with a `to_string` override, reused by the nested-override tests.
+const POINT_OVERRIDE: &str = r#"
+    class Point {
+        x int
+        y int
+        implements baml.ToString {
+            function to_string(self) -> string throws never {
+                "(" + string.from(self.x) + ", " + string.from(self.y) + ")"
+            }
+        }
+    }
+"#;
+
+#[tokio::test]
+async fn nested_override_in_array_is_honored() {
+    // Elements whose runtime class overrides `to_string` render via the override,
+    // not structurally — the whole point of honoring overrides at depth.
+    let out = expect_string(&format!(
+        r#"
+        {POINT_OVERRIDE}
+        function main() -> string {{
+            return string.from([Point {{ x: 1, y: 2 }}, Point {{ x: 3, y: 4 }}])
+        }}
+    "#
+    ))
+    .await;
+    assert_eq!(out, "[(1, 2), (3, 4)]");
+}
+
+#[tokio::test]
+async fn nested_override_in_class_field_is_honored() {
+    // The outer class does NOT implement ToString (renders structurally), but its
+    // fields whose class overrides `to_string` are rendered via the override.
+    let out = expect_string(&format!(
+        r#"
+        {POINT_OVERRIDE}
+        class Line {{ start Point  end Point }}
+        function main() -> string {{
+            return string.from(Line {{ start: Point {{ x: 1, y: 2 }}, end: Point {{ x: 3, y: 4 }} }})
+        }}
+    "#
+    ))
+    .await;
+    assert_eq!(out, "Line { start: (1, 2), end: (3, 4) }");
+}
+
+#[tokio::test]
+async fn override_and_structural_siblings_stay_aligned() {
+    // Mixed override / non-override fields exercise the pre-order counter: the
+    // structural `n` must not consume an override result meant for `p` / `q`.
+    let out = expect_string(&format!(
+        r#"
+        {POINT_OVERRIDE}
+        class Mixed {{ p Point  n int  q Point }}
+        function main() -> string {{
+            return string.from(Mixed {{ p: Point {{ x: 1, y: 2 }}, n: 99, q: Point {{ x: 3, y: 4 }} }})
+        }}
+    "#
+    ))
+    .await;
+    assert_eq!(out, "Mixed { p: (1, 2), n: 99, q: (3, 4) }");
+}
+
+#[tokio::test]
+async fn nested_override_in_map_is_honored() {
+    let out = expect_string(&format!(
+        r#"
+        {POINT_OVERRIDE}
+        function main() -> string {{
+            let m: map<string, Point> = {{ "a": Point {{ x: 1, y: 2 }} }}
+            return string.from(m)
+        }}
+    "#
+    ))
+    .await;
+    assert_eq!(out, "{\"a\": (1, 2)}");
+}
+
+#[tokio::test]
+async fn nested_override_inside_array_inside_class() {
+    // Override two levels down: a non-overriding class holding an array of
+    // overriding elements.
+    let out = expect_string(&format!(
+        r#"
+        {POINT_OVERRIDE}
+        class Path {{ points Point[] }}
+        function main() -> string {{
+            return string.from(Path {{ points: [Point {{ x: 1, y: 2 }}, Point {{ x: 3, y: 4 }}] }})
+        }}
+    "#
+    ))
+    .await;
+    assert_eq!(out, "Path { points: [(1, 2), (3, 4)] }");
+}
+
 #[tokio::test]
 async fn direct_method_call_on_implementor() {
     // The interface method is also directly callable on a concrete implementor.
