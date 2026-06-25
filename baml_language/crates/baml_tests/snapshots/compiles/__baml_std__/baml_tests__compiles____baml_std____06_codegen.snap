@@ -401,12 +401,6 @@ function baml.Array.for_each(self: baml.Array<T>, fn: (T) -> void throws E) -> v
     unreachable
 }
 
-function baml.Array.from_json(j: baml.json.json) -> baml.Array<T> {
-    load_type #0
-    alloc_instance<1> baml.Array
-    return
-}
-
 function baml.Array.includes(self: baml.Array<T>, item: T) -> bool {
 }
 
@@ -1044,11 +1038,6 @@ function baml.Bigint.abs(self: baml.Bigint) -> bigint {
 function baml.Bigint.clamp(self: baml.Bigint, min: bigint, max: bigint) -> bigint {
 }
 
-function baml.Bigint.from_json(j: baml.json.json) -> baml.Bigint {
-    alloc_instance baml.Bigint
-    return
-}
-
 function baml.Bigint.ilog(self: baml.Bigint, base: bigint) -> bigint {
 }
 
@@ -1068,11 +1057,6 @@ function baml.Bigint.pow(self: baml.Bigint, exp: bigint) -> bigint {
 }
 
 function baml.Bigint.random(lower: bigint, upper: bigint) -> bigint {
-}
-
-function baml.Bool.from_json(j: baml.json.json) -> baml.Bool {
-    alloc_instance baml.Bool
-    return
 }
 
 function baml.Comparable$for$bigint.compare(self: bigint, other: bigint) -> int {
@@ -1207,11 +1191,6 @@ function baml.Float.floor(self: baml.Float) -> float {
 function baml.Float.fract(self: baml.Float) -> float {
 }
 
-function baml.Float.from_json(j: baml.json.json) -> baml.Float {
-    alloc_instance baml.Float
-    return
-}
-
 function baml.Float.golden_ratio() -> float {
 }
 
@@ -1331,11 +1310,6 @@ function baml.Int.count_ones(self: baml.Int) -> int {
 function baml.Int.count_zeros(self: baml.Int) -> int {
 }
 
-function baml.Int.from_json(j: baml.json.json) -> baml.Int {
-    alloc_instance baml.Int
-    return
-}
-
 function baml.Int.ilog(self: baml.Int, base: int) -> int {
 }
 
@@ -1385,13 +1359,6 @@ function baml.Map.clear(self: baml.Map<K, V>) -> null {
 function baml.Map.delete(self: baml.Map<K, V>, key: K) -> V | null {
 }
 
-function baml.Map.from_json(j: baml.json.json) -> baml.Map<K, V> {
-    load_type #0
-    load_type #1
-    alloc_instance<2> baml.Map
-    return
-}
-
 function baml.Map.get(self: baml.Map<K, V>, key: K) -> V | null {
 }
 
@@ -1411,11 +1378,6 @@ function baml.Map.set(self: baml.Map<K, V>, key: K, value: V) -> V | null {
 }
 
 function baml.Map.values(self: baml.Map<K, V>) -> V[] {
-}
-
-function baml.Null.from_json(j: baml.json.json) -> baml.Null {
-    alloc_instance baml.Null
-    return
 }
 
 function baml.Sortable$for$T[].sort(self: T[]) -> T[] {
@@ -1463,11 +1425,6 @@ function baml.String.from(value: T) -> string {
 }
 
 function baml.String.from_code_points(unicode: int[]) -> string {
-}
-
-function baml.String.from_json(j: baml.json.json) -> baml.String {
-    alloc_instance baml.String
-    return
 }
 
 function baml.String.from_utf8(utf8: uint8array) -> string {
@@ -1578,16 +1535,6 @@ function baml.String.trim_end(self: baml.String) -> string {
 function baml.String.trim_start(self: baml.String) -> string {
 }
 
-function baml.TaggedString.from_json(j: baml.json.json) -> baml.TaggedString {
-    load_var j
-    call baml.json.stringify
-    store_var _2
-    load_type baml.TaggedString
-    load_var _2
-    call baml.json.from_string
-    return
-}
-
 function baml.ToJson.to_json(self: baml.ToJson) -> baml.json.json {
     load_var self
     call baml._to_json_default
@@ -1612,11 +1559,6 @@ function baml.TypeValue._to_string_impl(self: baml.TypeValue) -> string {
 function baml.TypeValue.baml.ToString.to_string(self: baml.TypeValue) -> string {
     load_var self
     call baml.TypeValue._to_string_impl
-    return
-}
-
-function baml.TypeValue.from_json(j: baml.json.json) -> baml.TypeValue {
-    alloc_instance baml.TypeValue
     return
 }
 
@@ -1659,11 +1601,6 @@ function baml.Uint8Array.from_base64(base64: string) -> uint8array {
 function baml.Uint8Array.from_hex(hex: string) -> uint8array {
 }
 
-function baml.Uint8Array.from_json(j: baml.json.json) -> baml.Uint8Array {
-    alloc_instance baml.Uint8Array
-    return
-}
-
 function baml.Uint8Array.includes(self: baml.Uint8Array, item: int) -> bool {
 }
 
@@ -1703,6 +1640,9 @@ function baml._compare_shim(a: T, b: T) -> int {
 function baml._float_total_cmp(a: float, b: float) -> int {
 }
 
+function baml._from_json_shim(j: baml.json.json) -> T {
+}
+
 function baml._is_primitive_array(arr: T[]) -> bool {
 }
 
@@ -1719,110 +1659,6 @@ function baml._to_string_default(value: T) -> string {
 }
 
 function baml._to_string_shim(value: T) -> string {
-}
-
-function baml.csv.CsvError.from_json(j: baml.json.json) -> baml.csv.CsvError {
-    load_var j
-    load_const "kind"
-    call baml.json.field
-    store_var _3
-    load_type baml.csv.CsvErrorKind
-    load_var _3
-    call baml.json.from_json
-    load_var j
-    load_const "message"
-    call baml.json.field
-    store_var _6
-    load_type string
-    load_var _6
-    call baml.json.from_json
-    load_var j
-    load_const "line"
-    call baml.json.field
-    store_var _9
-    load_type int | null
-    load_var _9
-    call baml.json.from_json
-    load_var j
-    load_const "record"
-    call baml.json.field
-    store_var _12
-    load_type int | null
-    load_var _12
-    call baml.json.from_json
-    load_var j
-    load_const "field"
-    call baml.json.field
-    store_var _15
-    load_type int | null
-    load_var _15
-    call baml.json.from_json
-    load_var j
-    load_const "column"
-    call baml.json.field
-    store_var _18
-    load_type string | null
-    load_var _18
-    call baml.json.from_json
-    load_var j
-    load_const "expected"
-    call baml.json.field
-    store_var _21
-    load_type int | null
-    load_var _21
-    call baml.json.from_json
-    load_var j
-    load_const "found"
-    call baml.json.field
-    store_var _24
-    load_type int | null
-    load_var _24
-    call baml.json.from_json
-    init_instance baml.csv.CsvError .kind, .message, .line, .record, .field, .column, .expected, .found
-    return
-}
-
-function baml.csv.CsvHeaders.from_json(j: baml.json.json) -> baml.csv.CsvHeaders {
-    load_var j
-    load_const "names"
-    call baml.json.field
-    store_var _3
-    load_type string[] | null
-    load_var _3
-    call baml.json.from_json
-    init_instance baml.csv.CsvHeaders .names
-    return
-}
-
-function baml.csv.CsvNeedData.from_json(j: baml.json.json) -> baml.csv.CsvNeedData {
-    alloc_instance baml.csv.CsvNeedData
-    return
-}
-
-function baml.csv.CsvPosition.from_json(j: baml.json.json) -> baml.csv.CsvPosition {
-    load_var j
-    load_const "byte"
-    call baml.json.field
-    store_var _3
-    load_type int
-    load_var _3
-    call baml.json.from_json
-    load_var j
-    load_const "line"
-    call baml.json.field
-    store_var _6
-    load_type int
-    load_var _6
-    call baml.json.from_json
-    load_var j
-    load_const "record"
-    call baml.json.field
-    store_var _9
-    load_type int
-    load_var _9
-    call baml.json.from_json
-    init_instance baml.csv.CsvPosition .byte, .line, .record
-    return
 }
 
 function baml.csv.CsvReader$stream.root.iter.Iterable.iter(self: baml.csv.CsvReader$stream) -> baml.iter.Iterator<Item = baml.csv.CsvRecord, Error = baml.csv.CsvError | baml.errors.Io> {
@@ -2025,16 +1861,6 @@ function baml.csv.CsvReader.close(self: baml.csv.CsvReader) -> null {
     return
 }
 
-function baml.csv.CsvReader.from_json(j: baml.json.json) -> baml.csv.CsvReader {
-    load_var j
-    call baml.json.stringify
-    store_var _2
-    load_type baml.csv.CsvReader
-    load_var _2
-    call baml.json.from_string
-    return
-}
-
 function baml.csv.CsvReader.headers(self: baml.csv.CsvReader) -> string[] | null {
   L0:
     load_const true
@@ -2162,16 +1988,6 @@ function baml.csv.CsvRecord.decode(self: baml.csv.CsvRecord) -> T {
 }
 
 function baml.csv.CsvRecord.fields(self: baml.csv.CsvRecord) -> string[] {
-}
-
-function baml.csv.CsvRecord.from_json(j: baml.json.json) -> baml.csv.CsvRecord {
-    load_var j
-    call baml.json.stringify
-    store_var _2
-    load_type baml.csv.CsvRecord
-    load_var _2
-    call baml.json.from_string
-    return
 }
 
 function baml.csv.CsvRecord.get(self: baml.csv.CsvRecord, column: string) -> T | null {
@@ -2391,19 +2207,6 @@ function baml.csv.CsvRows$stream.root.iter.Iterator.next(self: baml.csv.CsvRows$
     unreachable
 }
 
-function baml.csv.CsvRows.from_json(j: baml.json.json) -> baml.csv.CsvRows<T> {
-    load_var j
-    load_const "reader"
-    call baml.json.field
-    store_var _3
-    load_type baml.csv.CsvReader
-    load_var _3
-    call baml.json.from_json
-    load_type #0
-    init_instance<1> baml.csv.CsvRows .reader
-    return
-}
-
 function baml.csv.CsvRows.root.iter.Iterable.iter(self: baml.csv.CsvRows<T>) -> baml.iter.Iterator<Item = T, Error = baml.csv.CsvError | baml.errors.Io> {
     load_var self
     return
@@ -2598,18 +2401,6 @@ function baml.csv.CsvRows.root.iter.Iterator.next(self: baml.csv.CsvRows<T>) -> 
     unreachable
 }
 
-function baml.csv.CsvSkip.from_json(j: baml.json.json) -> baml.csv.CsvSkip {
-    load_var j
-    load_const "error"
-    call baml.json.field
-    store_var _3
-    load_type baml.csv.CsvError
-    load_var _3
-    call baml.json.from_json
-    init_instance baml.csv.CsvSkip .error
-    return
-}
-
 function baml.csv.CsvWriter._bytes_written(self: baml.csv.CsvWriter) -> int {
 }
 
@@ -2714,16 +2505,6 @@ function baml.csv.CsvWriter.flush(self: baml.csv.CsvWriter) -> null {
     return
 }
 
-function baml.csv.CsvWriter.from_json(j: baml.json.json) -> baml.csv.CsvWriter {
-    load_var j
-    call baml.json.stringify
-    store_var _2
-    load_type baml.csv.CsvWriter
-    load_var _2
-    call baml.json.from_string
-    return
-}
-
 function baml.csv.CsvWriter.records_written(self: baml.csv.CsvWriter) -> int {
 }
 
@@ -2765,91 +2546,6 @@ function baml.csv.CsvWriter.write_rows(self: baml.csv.CsvWriter, rows: T[]) -> n
     store_var _3
     load_var2 1 3
     call baml.csv.CsvWriter._emit
-    return
-}
-
-function baml.csv.ReaderOptions.from_json(j: baml.json.json) -> baml.csv.ReaderOptions {
-    load_var j
-    call baml.json.stringify
-    store_var _2
-    load_type baml.csv.ReaderOptions
-    load_var _2
-    call baml.json.from_string
-    return
-}
-
-function baml.csv.WriterOptions.from_json(j: baml.json.json) -> baml.csv.WriterOptions {
-    load_var j
-    load_const "delimiter"
-    call baml.json.field
-    store_var _3
-    load_type string | null
-    load_var _3
-    call baml.json.from_json
-    load_var j
-    load_const "quote"
-    call baml.json.field
-    store_var _6
-    load_type string | null
-    load_var _6
-    call baml.json.from_json
-    load_var j
-    load_const "quote_style"
-    call baml.json.field
-    store_var _9
-    load_type "minimal" | "all" | "never" | null
-    load_var _9
-    call baml.json.from_json
-    load_var j
-    load_const "escape"
-    call baml.json.field
-    store_var _12
-    load_type string | null
-    load_var _12
-    call baml.json.from_json
-    load_var j
-    load_const "terminator"
-    call baml.json.field
-    store_var _15
-    load_type "lf" | "crlf" | null
-    load_var _15
-    call baml.json.from_json
-    load_var j
-    load_const "write_header"
-    call baml.json.field
-    store_var _18
-    load_type bool | null
-    load_var _18
-    call baml.json.from_json
-    load_var j
-    load_const "headers"
-    call baml.json.field
-    store_var _21
-    load_type string[] | null
-    load_var _21
-    call baml.json.from_json
-    load_var j
-    load_const "null_value"
-    call baml.json.field
-    store_var _24
-    load_type string | null
-    load_var _24
-    call baml.json.from_json
-    load_var j
-    load_const "bom"
-    call baml.json.field
-    store_var _27
-    load_type bool | null
-    load_var _27
-    call baml.json.from_json
-    load_var j
-    load_const "sanitize_formulas"
-    call baml.json.field
-    store_var _30
-    load_type bool | null
-    load_var _30
-    call baml.json.from_json
-    init_instance baml.csv.WriterOptions .delimiter, .quote, .quote_style, .escape, .terminator, .write_header, .headers, .null_value, .bom, .sanitize_formulas
     return
 }
 
@@ -3694,162 +3390,6 @@ function baml.env.get_or_panic(key: string) -> string {
     return
 }
 
-function baml.errors.AccessError.from_json(j: baml.json.json) -> baml.errors.AccessError {
-    load_var j
-    load_const "message"
-    call baml.json.field
-    store_var _3
-    load_type string
-    load_var _3
-    call baml.json.from_json
-    init_instance baml.errors.AccessError .message
-    return
-}
-
-function baml.errors.CompilationError.from_json(j: baml.json.json) -> baml.errors.CompilationError {
-    load_var j
-    load_const "message"
-    call baml.json.field
-    store_var _3
-    load_type string
-    load_var _3
-    call baml.json.from_json
-    init_instance baml.errors.CompilationError .message
-    return
-}
-
-function baml.errors.DevOther.from_json(j: baml.json.json) -> baml.errors.DevOther {
-    load_var j
-    load_const "message"
-    call baml.json.field
-    store_var _3
-    load_type string
-    load_var _3
-    call baml.json.from_json
-    init_instance baml.errors.DevOther .message
-    return
-}
-
-function baml.errors.GenericSdkError.from_json(j: baml.json.json) -> baml.errors.GenericSdkError {
-    load_var j
-    load_const "message"
-    call baml.json.field
-    store_var _3
-    load_type string
-    load_var _3
-    call baml.json.from_json
-    init_instance baml.errors.GenericSdkError .message
-    return
-}
-
-function baml.errors.HostCallable.from_json(j: baml.json.json) -> baml.errors.HostCallable {
-    load_var j
-    call baml.json.stringify
-    store_var _2
-    load_type baml.errors.HostCallable
-    load_var _2
-    call baml.json.from_string
-    return
-}
-
-function baml.errors.InvalidArgument.from_json(j: baml.json.json) -> baml.errors.InvalidArgument {
-    load_var j
-    load_const "message"
-    call baml.json.field
-    store_var _3
-    load_type string
-    load_var _3
-    call baml.json.from_json
-    init_instance baml.errors.InvalidArgument .message
-    return
-}
-
-function baml.errors.Io.from_json(j: baml.json.json) -> baml.errors.Io {
-    load_var j
-    load_const "message"
-    call baml.json.field
-    store_var _3
-    load_type string
-    load_var _3
-    call baml.json.from_json
-    init_instance baml.errors.Io .message
-    return
-}
-
-function baml.errors.LlmClient.from_json(j: baml.json.json) -> baml.errors.LlmClient {
-    load_var j
-    load_const "message"
-    call baml.json.field
-    store_var _3
-    load_type string
-    load_var _3
-    call baml.json.from_json
-    init_instance baml.errors.LlmClient .message
-    return
-}
-
-function baml.errors.NotImplemented.from_json(j: baml.json.json) -> baml.errors.NotImplemented {
-    load_var j
-    load_const "message"
-    call baml.json.field
-    store_var _3
-    load_type string
-    load_var _3
-    call baml.json.from_json
-    init_instance baml.errors.NotImplemented .message
-    return
-}
-
-function baml.errors.ParseError.from_json(j: baml.json.json) -> baml.errors.ParseError {
-    load_var j
-    load_const "message"
-    call baml.json.field
-    store_var _3
-    load_type string
-    load_var _3
-    call baml.json.from_json
-    init_instance baml.errors.ParseError .message
-    return
-}
-
-function baml.errors.RenderPrompt.from_json(j: baml.json.json) -> baml.errors.RenderPrompt {
-    load_var j
-    load_const "message"
-    call baml.json.field
-    store_var _3
-    load_type string
-    load_var _3
-    call baml.json.from_json
-    init_instance baml.errors.RenderPrompt .message
-    return
-}
-
-function baml.errors.StackFrame.from_json(j: baml.json.json) -> baml.errors.StackFrame {
-    load_var j
-    load_const "file"
-    call baml.json.field
-    store_var _3
-    load_type string
-    load_var _3
-    call baml.json.from_json
-    load_var j
-    load_const "line"
-    call baml.json.field
-    store_var _6
-    load_type int
-    load_var _6
-    call baml.json.from_json
-    load_var j
-    load_const "function_name"
-    call baml.json.field
-    store_var _9
-    load_type string
-    load_var _9
-    call baml.json.from_json
-    init_instance baml.errors.StackFrame .file, .line, .function_name
-    return
-}
-
 function baml.errors.StackTrace$stream.baml.ToString.to_string(self: baml.errors.StackTrace$stream) -> string {
     load_var self
     call baml.errors.StackTrace._to_string_impl
@@ -3865,96 +3405,10 @@ function baml.errors.StackTrace.baml.ToString.to_string(self: baml.errors.StackT
     return
 }
 
-function baml.errors.StackTrace.from_json(j: baml.json.json) -> baml.errors.StackTrace {
-    load_var j
-    load_const "frames"
-    call baml.json.field
-    store_var _3
-    load_type baml.errors.StackFrame[]
-    load_var _3
-    call baml.json.from_json
-    init_instance baml.errors.StackTrace .frames
-    return
-}
-
-function baml.errors.Timeout.from_json(j: baml.json.json) -> baml.errors.Timeout {
-    load_var j
-    load_const "message"
-    call baml.json.field
-    store_var _3
-    load_type string
-    load_var _3
-    call baml.json.from_json
-    load_var j
-    load_const "duration_ms"
-    call baml.json.field
-    store_var _6
-    load_type int | null
-    load_var _6
-    call baml.json.from_json
-    init_instance baml.errors.Timeout .message, .duration_ms
-    return
-}
-
-function baml.errors.Unsupported.from_json(j: baml.json.json) -> baml.errors.Unsupported {
-    load_var j
-    load_const "message"
-    call baml.json.field
-    store_var _3
-    load_type string
-    load_var _3
-    call baml.json.from_json
-    init_instance baml.errors.Unsupported .message
-    return
-}
-
-function baml.fs.DirEntry.from_json(j: baml.json.json) -> baml.fs.DirEntry {
-    load_var j
-    load_const "name"
-    call baml.json.field
-    store_var _3
-    load_type string
-    load_var _3
-    call baml.json.from_json
-    load_var j
-    load_const "is_dir"
-    call baml.json.field
-    store_var _6
-    load_type bool
-    load_var _6
-    call baml.json.from_json
-    load_var j
-    load_const "is_file"
-    call baml.json.field
-    store_var _9
-    load_type bool
-    load_var _9
-    call baml.json.from_json
-    load_var j
-    load_const "is_symlink"
-    call baml.json.field
-    store_var _12
-    load_type bool
-    load_var _12
-    call baml.json.from_json
-    init_instance baml.fs.DirEntry .name, .is_dir, .is_file, .is_symlink
-    return
-}
-
 function baml.fs.File.bytes(self: baml.fs.File) -> uint8array {
 }
 
 function baml.fs.File.close(self: baml.fs.File) -> null {
-}
-
-function baml.fs.File.from_json(j: baml.json.json) -> baml.fs.File {
-    load_var j
-    call baml.json.stringify
-    store_var _2
-    load_type baml.fs.File
-    load_var _2
-    call baml.json.from_string
-    return
 }
 
 function baml.fs.File.read(self: baml.fs.File, n: int) -> string {
@@ -3973,18 +3427,6 @@ function baml.fs.File.write(self: baml.fs.File, data: string) -> int {
 }
 
 function baml.fs.File.write_bytes(self: baml.fs.File, data: uint8array) -> int {
-}
-
-function baml.fs.MkdirOptions.from_json(j: baml.json.json) -> baml.fs.MkdirOptions {
-    load_var j
-    load_const "recursive"
-    call baml.json.field
-    store_var _3
-    load_type bool
-    load_var _3
-    call baml.json.from_json
-    init_instance baml.fs.MkdirOptions .recursive
-    return
 }
 
 function baml.fs.exists(path: string) -> bool {
@@ -4014,27 +3456,7 @@ function baml.fs.write(path: string, content: string) -> int {
 function baml.fs.write_bytes(path: string, content: uint8array) -> int {
 }
 
-function baml.future.AllFailed.from_json(j: baml.json.json) -> baml.future.AllFailed<E> {
-    load_var j
-    load_const "errors"
-    call baml.json.field
-    store_var _3
-    load_type #0[]
-    load_var _3
-    call baml.json.from_json
-    load_type #0
-    init_instance<1> baml.future.AllFailed .errors
-    return
-}
-
 function baml.future.Future.cancel(self: future<T, E>) -> bool {
-}
-
-function baml.future.Future.from_json(j: baml.json.json) -> future<T, E> {
-    load_type #0
-    load_type #1
-    alloc_instance<2> Future
-    return
 }
 
 function baml.future.Future.is_cancelled(self: future<T, E>) -> bool {
@@ -4116,127 +3538,22 @@ function baml.future.race(futures: future<T, E>[]) -> future<T, E> {
     return
 }
 
-function baml.glob.Glob.from_json(j: baml.json.json) -> baml.glob.Glob {
-    load_var j
-    call baml.json.stringify
-    store_var _2
-    load_type baml.glob.Glob
-    load_var _2
-    call baml.json.from_string
-    return
-}
-
 function baml.glob.Glob.matches(self: baml.glob.Glob, path: string) -> bool {
 }
 
 function baml.glob.Glob.scan(self: baml.glob.Glob, root: string | baml.glob.ScanOptions) -> string[] {
 }
 
-function baml.glob.ScanOptions.from_json(j: baml.json.json) -> baml.glob.ScanOptions {
-    load_var j
-    load_const "cwd"
-    call baml.json.field
-    store_var _3
-    load_type string | null
-    load_var _3
-    call baml.json.from_json
-    load_var j
-    load_const "dot"
-    call baml.json.field
-    store_var _6
-    load_type bool | null
-    load_var _6
-    call baml.json.from_json
-    load_var j
-    load_const "absolute"
-    call baml.json.field
-    store_var _9
-    load_type bool | null
-    load_var _9
-    call baml.json.from_json
-    load_var j
-    load_const "follow_symlinks"
-    call baml.json.field
-    store_var _12
-    load_type bool | null
-    load_var _12
-    call baml.json.from_json
-    load_var j
-    load_const "throw_error_on_broken_symlink"
-    call baml.json.field
-    store_var _15
-    load_type bool | null
-    load_var _15
-    call baml.json.from_json
-    load_var j
-    load_const "only_files"
-    call baml.json.field
-    store_var _18
-    load_type bool | null
-    load_var _18
-    call baml.json.from_json
-    init_instance baml.glob.ScanOptions .cwd, .dot, .absolute, .follow_symlinks, .throw_error_on_broken_symlink, .only_files
-    return
-}
-
 function baml.glob.new(pattern: string) -> baml.glob.Glob {
 }
 
-function baml.host.HostValue.from_json(j: baml.json.json) -> baml.host.HostValue {
-    alloc_instance baml.host.HostValue
-    return
-}
-
 function baml.host.call_host_value(handle: baml.host.HostValue, args: unknown[]) -> T {
-}
-
-function baml.http.Request.from_json(j: baml.json.json) -> baml.http.Request {
-    load_var j
-    load_const "method"
-    call baml.json.field
-    store_var _3
-    load_type string
-    load_var _3
-    call baml.json.from_json
-    load_var j
-    load_const "url"
-    call baml.json.field
-    store_var _6
-    load_type string
-    load_var _6
-    call baml.json.from_json
-    load_var j
-    load_const "headers"
-    call baml.json.field
-    store_var _9
-    load_type map<string, string>
-    load_var _9
-    call baml.json.from_json
-    load_var j
-    load_const "body"
-    call baml.json.field
-    store_var _12
-    load_type string
-    load_var _12
-    call baml.json.from_json
-    init_instance baml.http.Request .method, .url, .headers, .body
-    return
 }
 
 function baml.http.Response.bytes(self: baml.http.Response) -> uint8array {
 }
 
 function baml.http.Response.end(self: baml.http.Response) -> null {
-}
-
-function baml.http.Response.from_json(j: baml.json.json) -> baml.http.Response {
-    load_var j
-    call baml.json.stringify
-    store_var _2
-    load_type baml.http.Response
-    load_var _2
-    call baml.json.from_string
-    return
 }
 
 function baml.http.Response.new(status_code: int, headers: map<string, string>, body: uint8array) -> baml.http.Response {
@@ -4271,16 +3588,6 @@ function baml.http.Server._serve(self: baml.http.Server, handler: (baml.http.Req
 }
 
 function baml.http.Server.bind(addr: string) -> baml.http.Server {
-}
-
-function baml.http.Server.from_json(j: baml.json.json) -> baml.http.Server {
-    load_var j
-    call baml.json.stringify
-    store_var _2
-    load_type baml.http.Server
-    load_var _2
-    call baml.json.from_string
-    return
 }
 
 function baml.http.Server.serve(self: baml.http.Server, handler: (baml.http.Request) -> baml.http.Response throws never, tls_config: baml.http.TlsConfig | null, allow_http1: bool, allow_http2: bool, max_body_size: int, max_connections: int, header_read_timeout: baml.time.Duration) -> never {
@@ -4347,30 +3654,10 @@ function baml.http.Server.serve(self: baml.http.Server, handler: (baml.http.Requ
 function baml.http.SseStream.close(self: baml.http.SseStream) -> null {
 }
 
-function baml.http.SseStream.from_json(j: baml.json.json) -> baml.http.SseStream {
-    load_var j
-    call baml.json.stringify
-    store_var _2
-    load_type baml.http.SseStream
-    load_var _2
-    call baml.json.from_string
-    return
-}
-
 function baml.http.SseStream.next(self: baml.http.SseStream) -> string | null {
 }
 
 function baml.http.TlsConfig._new(cert_pem: uint8array, key_pem: uint8array, allow_tls1_2: bool, handshake_timeout_nanos: bigint) -> baml.http.TlsConfig {
-}
-
-function baml.http.TlsConfig.from_json(j: baml.json.json) -> baml.http.TlsConfig {
-    load_var j
-    call baml.json.stringify
-    store_var _2
-    load_type baml.http.TlsConfig
-    load_var _2
-    call baml.json.from_string
-    return
 }
 
 function baml.http.TlsConfig.new(cert_pem: uint8array, key_pem: uint8array, allow_tls1_2: bool, handshake_timeout: baml.time.Duration) -> baml.http.TlsConfig {
@@ -4562,26 +3849,6 @@ function baml.iter.ArrayIterator.Iterator.next(self: baml.iter.ArrayIterator<T>)
     return
 }
 
-function baml.iter.ArrayIterator.from_json(j: baml.json.json) -> baml.iter.ArrayIterator<T> {
-    load_var j
-    load_const "arr"
-    call baml.json.field
-    store_var _3
-    load_type #0[]
-    load_var _3
-    call baml.json.from_json
-    load_var j
-    load_const "idx"
-    call baml.json.field
-    store_var _6
-    load_type int
-    load_var _6
-    call baml.json.from_json
-    load_type #0
-    init_instance<1> baml.iter.ArrayIterator .arr, .idx
-    return
-}
-
 function baml.iter.ArrayIterator.new(arr: T[]) -> baml.iter.ArrayIterator<T> {
     load_var arr
     load_const 0
@@ -4678,40 +3945,6 @@ function baml.iter.Chain.Iterator.next(self: baml.iter.Chain<T, E, E2>) -> T | b
     return
 }
 
-function baml.iter.Chain.from_json(j: baml.json.json) -> baml.iter.Chain<T, E, E2> {
-    load_var j
-    load_const "first"
-    call baml.json.field
-    store_var _3
-    load_type baml.iter.Iterator<Item = #0, Error = #1>
-    load_var _3
-    call baml.json.from_json
-    load_var j
-    load_const "other"
-    call baml.json.field
-    store_var _6
-    load_type baml.iter.Iterator<Item = #0, Error = #2>
-    load_var _6
-    call baml.json.from_json
-    load_var j
-    load_const "first_done"
-    call baml.json.field
-    store_var _9
-    load_type bool
-    load_var _9
-    call baml.json.from_json
-    load_type #0
-    load_type #1
-    load_type #2
-    init_instance<3> baml.iter.Chain .first, .other, .first_done
-    return
-}
-
-function baml.iter.Done.from_json(j: baml.json.json) -> baml.iter.Done {
-    alloc_instance baml.iter.Done
-    return
-}
-
 function baml.iter.Filter$stream.Iterable.iter(self: baml.iter.Filter$stream<T, E, E2>) -> baml.iter.Iterator<Item = T, Error = E | E2> {
     load_var self
     return
@@ -4797,16 +4030,6 @@ function baml.iter.Filter.Iterator.next(self: baml.iter.Filter<T, E, E2>) -> T |
     alloc_instance baml.iter.Done
 
   L5:
-    return
-}
-
-function baml.iter.Filter.from_json(j: baml.json.json) -> baml.iter.Filter<T, E, E2> {
-    load_var j
-    call baml.json.stringify
-    store_var _2
-    load_type baml.iter.Filter<#0, #1, #2>
-    load_var _2
-    call baml.json.from_string
     return
 }
 
@@ -4905,16 +4128,6 @@ function baml.iter.FilterMap.Iterator.next(self: baml.iter.FilterMap<T, R, E, E2
     alloc_instance baml.iter.Done
 
   L6:
-    return
-}
-
-function baml.iter.FilterMap.from_json(j: baml.json.json) -> baml.iter.FilterMap<T, R, E, E2> {
-    load_var j
-    call baml.json.stringify
-    store_var _2
-    load_type baml.iter.FilterMap<#0, #1, #2, #3>
-    load_var _2
-    call baml.json.from_string
     return
 }
 
@@ -5880,16 +5093,6 @@ function baml.iter.FlatMap.Iterator.next(self: baml.iter.FlatMap<T, R, E, E2, E3
     unreachable
 }
 
-function baml.iter.FlatMap.from_json(j: baml.json.json) -> baml.iter.FlatMap<T, R, E, E2, E3> {
-    load_var j
-    call baml.json.stringify
-    store_var _2
-    load_type baml.iter.FlatMap<#0, #1, #2, #3, #4>
-    load_var _2
-    call baml.json.from_string
-    return
-}
-
 function baml.iter.Flatten$stream.Iterable.iter(self: baml.iter.Flatten$stream<I, R, E, E3>) -> baml.iter.Iterator<Item = R, Error = E | E3> {
     load_var self
     return
@@ -6846,29 +6049,6 @@ function baml.iter.Flatten.Iterator.next(self: baml.iter.Flatten<I, R, E, E3>) -
     unreachable
 }
 
-function baml.iter.Flatten.from_json(j: baml.json.json) -> baml.iter.Flatten<I, R, E, E3> {
-    load_var j
-    load_const "source"
-    call baml.json.field
-    store_var _3
-    load_type baml.iter.Iterator<Item = #0, Error = #2>
-    load_var _3
-    call baml.json.from_json
-    load_var j
-    load_const "inner"
-    call baml.json.field
-    store_var _6
-    load_type baml.iter.Iterator<Item = #1, Error = #3> | baml.iter.Done
-    load_var _6
-    call baml.json.from_json
-    load_type #0
-    load_type #1
-    load_type #2
-    load_type #3
-    init_instance<4> baml.iter.Flatten .source, .inner
-    return
-}
-
 function baml.iter.Iterable$for$T[].iter(self: T[]) -> baml.iter.Iterator<Item = T, Error = never> {
     load_type #0
     load_var self
@@ -7386,16 +6566,6 @@ function baml.iter.Map.Iterator.next(self: baml.iter.Map<T, R, E, E2>) -> R | ba
     return
 }
 
-function baml.iter.Map.from_json(j: baml.json.json) -> baml.iter.Map<T, R, E, E2> {
-    load_var j
-    call baml.json.stringify
-    store_var _2
-    load_type baml.iter.Map<#0, #1, #2, #3>
-    load_var _2
-    call baml.json.from_string
-    return
-}
-
 function baml.iter.Peekable$stream.Iterable.iter(self: baml.iter.Peekable$stream<T, E>) -> baml.iter.Iterator<Item = T, Error = E> {
     load_var self
     return
@@ -7469,34 +6639,6 @@ function baml.iter.Peekable.Iterator.next(self: baml.iter.Peekable<T, E>) -> T |
 
   L2:
     load_var _0
-    return
-}
-
-function baml.iter.Peekable.from_json(j: baml.json.json) -> baml.iter.Peekable<T, E> {
-    load_var j
-    load_const "source"
-    call baml.json.field
-    store_var _3
-    load_type baml.iter.Iterator<Item = #0, Error = #1>
-    load_var _3
-    call baml.json.from_json
-    load_var j
-    load_const "buffer"
-    call baml.json.field
-    store_var _6
-    load_type #0 | baml.iter.Done
-    load_var _6
-    call baml.json.from_json
-    load_var j
-    load_const "has_buffer"
-    call baml.json.field
-    store_var _9
-    load_type bool
-    load_var _9
-    call baml.json.from_json
-    load_type #0
-    load_type #1
-    init_instance<2> baml.iter.Peekable .source, .buffer, .has_buffer
     return
 }
 
@@ -7596,32 +6738,6 @@ function baml.iter.Range.Iterator.next(self: baml.iter.Range) -> int | baml.iter
     load_var cur
 
   L2:
-    return
-}
-
-function baml.iter.Range.from_json(j: baml.json.json) -> baml.iter.Range {
-    load_var j
-    load_const "i"
-    call baml.json.field
-    store_var _3
-    load_type int
-    load_var _3
-    call baml.json.from_json
-    load_var j
-    load_const "max"
-    call baml.json.field
-    store_var _6
-    load_type int
-    load_var _6
-    call baml.json.from_json
-    load_var j
-    load_const "step"
-    call baml.json.field
-    store_var _9
-    load_type int
-    load_var _9
-    call baml.json.from_json
-    init_instance baml.iter.Range .i, .max, .step
     return
 }
 
@@ -7725,26 +6841,6 @@ function baml.iter.Repeat.Iterator.next(self: baml.iter.Repeat<T>) -> T | baml.i
     load_field .0
 
   L4:
-    return
-}
-
-function baml.iter.Repeat.from_json(j: baml.json.json) -> baml.iter.Repeat<T> {
-    load_var j
-    load_const "value"
-    call baml.json.field
-    store_var _3
-    load_type #0
-    load_var _3
-    call baml.json.from_json
-    load_var j
-    load_const "count"
-    call baml.json.field
-    store_var _6
-    load_type int
-    load_var _6
-    call baml.json.from_json
-    load_type #0
-    init_instance<1> baml.iter.Repeat .value, .count
     return
 }
 
@@ -7909,34 +7005,6 @@ function baml.iter.StepBy.Iterator.next(self: baml.iter.StepBy<T, E>) -> T | bam
     return
 }
 
-function baml.iter.StepBy.from_json(j: baml.json.json) -> baml.iter.StepBy<T, E> {
-    load_var j
-    load_const "source"
-    call baml.json.field
-    store_var _3
-    load_type baml.iter.Iterator<Item = #0, Error = #1>
-    load_var _3
-    call baml.json.from_json
-    load_var j
-    load_const "n"
-    call baml.json.field
-    store_var _6
-    load_type int
-    load_var _6
-    call baml.json.from_json
-    load_var j
-    load_const "first"
-    call baml.json.field
-    store_var _9
-    load_type bool
-    load_var _9
-    call baml.json.from_json
-    load_type #0
-    load_type #1
-    init_instance<2> baml.iter.StepBy .source, .n, .first
-    return
-}
-
 function baml.iter.flatten(src: baml.iter.Iterator<Item = I, Error = E>) -> baml.iter.Iterator<Item = R, Error = E | E3> {
     load_var src
     alloc_instance baml.iter.Done
@@ -7945,63 +7013,6 @@ function baml.iter.flatten(src: baml.iter.Iterator<Item = I, Error = E>) -> baml
     load_type #1
     load_type #2
     init_instance<4> baml.iter.Flatten .source, .inner
-    return
-}
-
-function baml.json.JsonDecodeError.from_json(j: baml.json.json) -> baml.json.JsonDecodeError {
-    load_var j
-    load_const "message"
-    call baml.json.field
-    store_var _3
-    load_type string
-    load_var _3
-    call baml.json.from_json
-    load_var j
-    load_const "path"
-    call baml.json.field
-    store_var _6
-    load_type string
-    load_var _6
-    call baml.json.from_json
-    init_instance baml.json.JsonDecodeError .message, .path
-    return
-}
-
-function baml.json.JsonParseError.from_json(j: baml.json.json) -> baml.json.JsonParseError {
-    load_var j
-    load_const "message"
-    call baml.json.field
-    store_var _3
-    load_type string
-    load_var _3
-    call baml.json.from_json
-    init_instance baml.json.JsonParseError .message
-    return
-}
-
-function baml.json.JsonSerializationError.from_json(j: baml.json.json) -> baml.json.JsonSerializationError {
-    load_var j
-    load_const "message"
-    call baml.json.field
-    store_var _3
-    load_type string
-    load_var _3
-    call baml.json.from_json
-    load_var j
-    load_const "path"
-    call baml.json.field
-    store_var _6
-    load_type string
-    load_var _6
-    call baml.json.from_json
-    load_var j
-    load_const "reason"
-    call baml.json.field
-    store_var _9
-    load_type string
-    load_var _9
-    call baml.json.from_json
-    init_instance baml.json.JsonSerializationError .message, .path, .reason
     return
 }
 
@@ -8048,130 +7059,17 @@ function baml.json.stringify(j: baml.json.json) -> string {
 function baml.json.stringify_pretty(j: baml.json.json) -> string {
 }
 
+function baml.json.to(j: baml.json.json) -> T {
+    load_type #0
+    load_var j
+    call baml._from_json_shim
+    return
+}
+
 function baml.json.to_json(v: T) -> baml.json.json {
 }
 
 function baml.json.to_string(v: T) -> string {
-}
-
-function baml.llm.AnthropicOptions.from_json(j: baml.json.json) -> baml.llm.AnthropicOptions {
-    load_var j
-    load_const "max_tokens"
-    call baml.json.field
-    store_var _3
-    load_type int | null
-    load_var _3
-    call baml.json.from_json
-    init_instance baml.llm.AnthropicOptions .max_tokens
-    return
-}
-
-function baml.llm.AzureOpenAiOptions.from_json(j: baml.json.json) -> baml.llm.AzureOpenAiOptions {
-    load_var j
-    load_const "resource_name"
-    call baml.json.field
-    store_var _3
-    load_type string | null
-    load_var _3
-    call baml.json.from_json
-    load_var j
-    load_const "deployment_id"
-    call baml.json.field
-    store_var _6
-    load_type string | null
-    load_var _6
-    call baml.json.from_json
-    load_var j
-    load_const "api_version"
-    call baml.json.field
-    store_var _9
-    load_type string
-    load_var _9
-    call baml.json.from_json
-    load_var j
-    load_const "max_tokens"
-    call baml.json.field
-    store_var _12
-    load_type int | null
-    load_var _12
-    call baml.json.from_json
-    init_instance baml.llm.AzureOpenAiOptions .resource_name, .deployment_id, .api_version, .max_tokens
-    return
-}
-
-function baml.llm.BedrockOptions.from_json(j: baml.json.json) -> baml.llm.BedrockOptions {
-    load_var j
-    load_const "region"
-    call baml.json.field
-    store_var _3
-    load_type string | null
-    load_var _3
-    call baml.json.from_json
-    load_var j
-    load_const "endpoint_url"
-    call baml.json.field
-    store_var _6
-    load_type string | null
-    load_var _6
-    call baml.json.from_json
-    load_var j
-    load_const "access_key_id"
-    call baml.json.field
-    store_var _9
-    load_type string | null
-    load_var _9
-    call baml.json.from_json
-    load_var j
-    load_const "secret_access_key"
-    call baml.json.field
-    store_var _12
-    load_type string | null
-    load_var _12
-    call baml.json.from_json
-    load_var j
-    load_const "session_token"
-    call baml.json.field
-    store_var _15
-    load_type string | null
-    load_var _15
-    call baml.json.from_json
-    load_var j
-    load_const "profile"
-    call baml.json.field
-    store_var _18
-    load_type string | null
-    load_var _18
-    call baml.json.from_json
-    load_var j
-    load_const "stop_sequences"
-    call baml.json.field
-    store_var _21
-    load_type string[] | null
-    load_var _21
-    call baml.json.from_json
-    load_var j
-    load_const "max_tokens"
-    call baml.json.field
-    store_var _24
-    load_type int | null
-    load_var _24
-    call baml.json.from_json
-    load_var j
-    load_const "temperature"
-    call baml.json.field
-    store_var _27
-    load_type float | null
-    load_var _27
-    call baml.json.from_json
-    load_var j
-    load_const "top_p"
-    call baml.json.field
-    store_var _30
-    load_type float | null
-    load_var _30
-    call baml.json.from_json
-    init_instance baml.llm.BedrockOptions .region, .endpoint_url, .access_key_id, .secret_access_key, .session_token, .profile, .stop_sequences, .max_tokens, .temperature, .top_p
-    return
 }
 
 function baml.llm.Client.__make_stream(self: baml.llm.Client, sse: baml.http.SseStream) -> baml.llm.Stream<TStream, TFinal> {
@@ -9584,46 +8482,6 @@ function baml.llm.Client.execute_stream(self: baml.llm.Client, context: baml.llm
     return
 }
 
-function baml.llm.Client.from_json(j: baml.json.json) -> baml.llm.Client {
-    load_var j
-    load_const "name"
-    call baml.json.field
-    store_var _3
-    load_type string
-    load_var _3
-    call baml.json.from_json
-    load_var j
-    load_const "client_type"
-    call baml.json.field
-    store_var _6
-    load_type baml.llm.ClientType
-    load_var _6
-    call baml.json.from_json
-    load_var j
-    load_const "sub_clients"
-    call baml.json.field
-    store_var _9
-    load_type baml.llm.Client[]
-    load_var _9
-    call baml.json.from_json
-    load_var j
-    load_const "retry"
-    call baml.json.field
-    store_var _12
-    load_type baml.llm.RetryPolicy | null
-    load_var _12
-    call baml.json.from_json
-    load_var j
-    load_const "counter"
-    call baml.json.field
-    store_var _15
-    load_type int
-    load_var _15
-    call baml.json.from_json
-    init_instance baml.llm.Client .name, .client_type, .sub_clients, .retry, .counter
-    return
-}
-
 function baml.llm.Client.get_constructor(self: baml.llm.Client) -> () -> baml.llm.PrimitiveClient throws baml.errors.InvalidArgument {
 }
 
@@ -9650,134 +8508,7 @@ function baml.llm.Client.to_primitive_client(self: baml.llm.Client) -> baml.llm.
     return
 }
 
-function baml.llm.Context.from_json(j: baml.json.json) -> baml.llm.Context {
-    load_var j
-    call baml.json.stringify
-    store_var _2
-    load_type baml.llm.Context
-    load_var _2
-    call baml.json.from_string
-    return
-}
-
 function baml.llm.Context.output_format_with(self: baml.llm.Context, prefix: string | null, or_splitter: string | null, enum_value_prefix: string | null, hoisted_class_prefix: string | null, always_hoist_enums: bool | null, quote_class_fields: bool | null, hoist_classes: string[] | null, map_style: string | null, render_null_as: string | null) -> string {
-}
-
-function baml.llm.ContextClient.from_json(j: baml.json.json) -> baml.llm.ContextClient {
-    load_var j
-    load_const "name"
-    call baml.json.field
-    store_var _3
-    load_type string
-    load_var _3
-    call baml.json.from_json
-    load_var j
-    load_const "provider"
-    call baml.json.field
-    store_var _6
-    load_type string
-    load_var _6
-    call baml.json.from_json
-    load_var j
-    load_const "default_role"
-    call baml.json.field
-    store_var _9
-    load_type string
-    load_var _9
-    call baml.json.from_json
-    load_var j
-    load_const "allowed_roles"
-    call baml.json.field
-    store_var _12
-    load_type string[]
-    load_var _12
-    call baml.json.from_json
-    init_instance baml.llm.ContextClient .name, .provider, .default_role, .allowed_roles
-    return
-}
-
-function baml.llm.ExecutionContext.from_json(j: baml.json.json) -> baml.llm.ExecutionContext {
-    load_var j
-    call baml.json.stringify
-    store_var _2
-    load_type baml.llm.ExecutionContext
-    load_var _2
-    call baml.json.from_string
-    return
-}
-
-function baml.llm.MediaUrlHandler.from_json(j: baml.json.json) -> baml.llm.MediaUrlHandler {
-    load_var j
-    load_const "image"
-    call baml.json.field
-    store_var _3
-    load_type string | null
-    load_var _3
-    call baml.json.from_json
-    load_var j
-    load_const "audio"
-    call baml.json.field
-    store_var _6
-    load_type string | null
-    load_var _6
-    call baml.json.from_json
-    load_var j
-    load_const "video"
-    call baml.json.field
-    store_var _9
-    load_type string | null
-    load_var _9
-    call baml.json.from_json
-    load_var j
-    load_const "pdf"
-    call baml.json.field
-    store_var _12
-    load_type string | null
-    load_var _12
-    call baml.json.from_json
-    init_instance baml.llm.MediaUrlHandler .image, .audio, .video, .pdf
-    return
-}
-
-function baml.llm.OrchestrationStep.from_json(j: baml.json.json) -> baml.llm.OrchestrationStep {
-    load_var j
-    load_const "primitive_client"
-    call baml.json.field
-    store_var _3
-    load_type baml.llm.PrimitiveClient
-    load_var _3
-    call baml.json.from_json
-    load_var j
-    load_const "delay_ms"
-    call baml.json.field
-    store_var _6
-    load_type int
-    load_var _6
-    call baml.json.from_json
-    init_instance baml.llm.OrchestrationStep .primitive_client, .delay_ms
-    return
-}
-
-function baml.llm.OutputFormat.from_json(j: baml.json.json) -> baml.llm.OutputFormat {
-    load_var j
-    call baml.json.stringify
-    store_var _2
-    load_type baml.llm.OutputFormat
-    load_var _2
-    call baml.json.from_string
-    return
-}
-
-function baml.llm.PlannerState.from_json(j: baml.json.json) -> baml.llm.PlannerState {
-    load_var j
-    load_const "rr_client_names"
-    call baml.json.field
-    store_var _3
-    load_type string[]
-    load_var _3
-    call baml.json.from_json
-    init_instance baml.llm.PlannerState .rr_client_names
-    return
 }
 
 function baml.llm.PlannerState.rr_local_offset(self: baml.llm.PlannerState, client_name: string) -> int {
@@ -9970,32 +8701,6 @@ function baml.llm.PrimitiveClient.build_request(self: baml.llm.PrimitiveClient, 
 function baml.llm.PrimitiveClient.build_request_stream(self: baml.llm.PrimitiveClient, prompt: baml.llm.PromptAst, return_type: type) -> baml.http.Request {
 }
 
-function baml.llm.PrimitiveClient.from_json(j: baml.json.json) -> baml.llm.PrimitiveClient {
-    load_var j
-    load_const "name"
-    call baml.json.field
-    store_var _3
-    load_type string
-    load_var _3
-    call baml.json.from_json
-    load_var j
-    load_const "provider"
-    call baml.json.field
-    store_var _6
-    load_type string
-    load_var _6
-    call baml.json.from_json
-    load_var j
-    load_const "options"
-    call baml.json.field
-    store_var _9
-    load_type baml.llm.PrimitiveClientOptions
-    load_var _9
-    call baml.json.from_json
-    init_instance baml.llm.PrimitiveClient .name, .provider, .options
-    return
-}
-
 function baml.llm.PrimitiveClient.new_stream_accumulator(self: baml.llm.PrimitiveClient) -> baml.llm.StreamAccumulator {
 }
 
@@ -10036,69 +8741,6 @@ function baml.llm.PrimitiveClient.specialize_prompt(self: baml.llm.PrimitiveClie
 }
 
 function baml.llm.PrimitiveClient.validate_finish_reason(self: baml.llm.PrimitiveClient, finish_reason: string) -> null {
-}
-
-function baml.llm.PrimitiveClientOptions.from_json(j: baml.json.json) -> baml.llm.PrimitiveClientOptions {
-    load_var j
-    call baml.json.stringify
-    store_var _2
-    load_type baml.llm.PrimitiveClientOptions
-    load_var _2
-    call baml.json.from_string
-    return
-}
-
-function baml.llm.PromptAst.from_json(j: baml.json.json) -> baml.llm.PromptAst {
-    load_var j
-    call baml.json.stringify
-    store_var _2
-    load_type baml.llm.PromptAst
-    load_var _2
-    call baml.json.from_string
-    return
-}
-
-function baml.llm.RetryPolicy.from_json(j: baml.json.json) -> baml.llm.RetryPolicy {
-    load_var j
-    load_const "max_retries"
-    call baml.json.field
-    store_var _3
-    load_type int
-    load_var _3
-    call baml.json.from_json
-    load_var j
-    load_const "initial_delay_ms"
-    call baml.json.field
-    store_var _6
-    load_type int
-    load_var _6
-    call baml.json.from_json
-    load_var j
-    load_const "multiplier"
-    call baml.json.field
-    store_var _9
-    load_type float
-    load_var _9
-    call baml.json.from_json
-    load_var j
-    load_const "max_delay_ms"
-    call baml.json.field
-    store_var _12
-    load_type int
-    load_var _12
-    call baml.json.from_json
-    init_instance baml.llm.RetryPolicy .max_retries, .initial_delay_ms, .multiplier, .max_delay_ms
-    return
-}
-
-function baml.llm.Role.from_json(j: baml.json.json) -> baml.llm.Role {
-    load_var j
-    call baml.json.stringify
-    store_var _2
-    load_type baml.llm.Role
-    load_var _2
-    call baml.json.from_string
-    return
 }
 
 function baml.llm.Stream.final(self: baml.llm.Stream<TStream, TFinal>) -> TFinal {
@@ -10164,41 +8806,6 @@ function baml.llm.Stream.final(self: baml.llm.Stream<TStream, TFinal>) -> TFinal
     load_const "Streaming finished without finish_reason"
     init_instance baml.errors.LlmClient .message
     throw
-}
-
-function baml.llm.Stream.from_json(j: baml.json.json) -> baml.llm.Stream<TStream, TFinal> {
-    load_var j
-    load_const "_client"
-    call baml.json.field
-    store_var _3
-    load_type baml.llm.PrimitiveClient
-    load_var _3
-    call baml.json.from_json
-    load_var j
-    load_const "_acc"
-    call baml.json.field
-    store_var _6
-    load_type baml.llm.StreamAccumulator
-    load_var _6
-    call baml.json.from_json
-    load_var j
-    load_const "_sse"
-    call baml.json.field
-    store_var _9
-    load_type baml.http.SseStream
-    load_var _9
-    call baml.json.from_json
-    load_var j
-    load_const "_cache"
-    call baml.json.field
-    store_var _12
-    load_type baml.llm.StreamCache<#0, #1>
-    load_var _12
-    call baml.json.from_json
-    load_type #0
-    load_type #1
-    init_instance<2> baml.llm.Stream ._client, ._acc, ._sse, ._cache
-    return
 }
 
 function baml.llm.Stream.next(self: baml.llm.Stream<TStream, TFinal>) -> TStream | baml.stream.StreamFinished {
@@ -10278,16 +8885,6 @@ function baml.llm.StreamAccumulator.content(self: baml.llm.StreamAccumulator) ->
 function baml.llm.StreamAccumulator.finish_reason(self: baml.llm.StreamAccumulator) -> string | null {
 }
 
-function baml.llm.StreamAccumulator.from_json(j: baml.json.json) -> baml.llm.StreamAccumulator {
-    load_var j
-    call baml.json.stringify
-    store_var _2
-    load_type baml.llm.StreamAccumulator
-    load_var _2
-    call baml.json.from_string
-    return
-}
-
 function baml.llm.StreamAccumulator.input_tokens(self: baml.llm.StreamAccumulator) -> int | null {
 }
 
@@ -10300,50 +8897,7 @@ function baml.llm.StreamAccumulator.model(self: baml.llm.StreamAccumulator) -> s
 function baml.llm.StreamAccumulator.output_tokens(self: baml.llm.StreamAccumulator) -> int | null {
 }
 
-function baml.llm.StreamCache.from_json(j: baml.json.json) -> baml.llm.StreamCache<TStream, TFinal> {
-    load_var j
-    call baml.json.stringify
-    store_var _2
-    load_type baml.llm.StreamCache<#0, #1>
-    load_var _2
-    call baml.json.from_string
-    return
-}
-
 function baml.llm.StreamCache.new(t_stream: type, t_final: type) -> baml.llm.StreamCache<TStream, TFinal> {
-}
-
-function baml.llm.VertexAiOptions.from_json(j: baml.json.json) -> baml.llm.VertexAiOptions {
-    load_var j
-    load_const "credentials"
-    call baml.json.field
-    store_var _3
-    load_type string | null
-    load_var _3
-    call baml.json.from_json
-    load_var j
-    load_const "credentials_content"
-    call baml.json.field
-    store_var _6
-    load_type string | null
-    load_var _6
-    call baml.json.from_json
-    load_var j
-    load_const "location"
-    call baml.json.field
-    store_var _9
-    load_type string | null
-    load_var _9
-    call baml.json.from_json
-    load_var j
-    load_const "project_id"
-    call baml.json.field
-    store_var _12
-    load_type string | null
-    load_var _12
-    call baml.json.from_json
-    init_instance baml.llm.VertexAiOptions .credentials, .credentials_content, .location, .project_id
-    return
 }
 
 function baml.llm.__sap_parse_final(json: string, cache: baml.llm.StreamCache<TStream, TFinal>) -> TFinal {
@@ -10645,16 +9199,6 @@ function baml.media.Audio.from_base64(base64: string, mime_type: string | null) 
 function baml.media.Audio.from_file(file: string, mime_type: string | null) -> audio {
 }
 
-function baml.media.Audio.from_json(j: baml.json.json) -> baml.media.Audio {
-    load_var j
-    call baml.json.stringify
-    store_var _2
-    load_type baml.media.Audio
-    load_var _2
-    call baml.json.from_string
-    return
-}
-
 function baml.media.Audio.from_url(url: string, mime_type: string | null) -> audio {
 }
 
@@ -10674,16 +9218,6 @@ function baml.media.Image.from_base64(base64: string, mime_type: string | null) 
 }
 
 function baml.media.Image.from_file(file: string, mime_type: string | null) -> image {
-}
-
-function baml.media.Image.from_json(j: baml.json.json) -> baml.media.Image {
-    load_var j
-    call baml.json.stringify
-    store_var _2
-    load_type baml.media.Image
-    load_var _2
-    call baml.json.from_string
-    return
 }
 
 function baml.media.Image.from_url(url: string, mime_type: string | null) -> image {
@@ -10707,16 +9241,6 @@ function baml.media.Pdf.from_base64(base64: string, mime_type: string | null) ->
 function baml.media.Pdf.from_file(file: string, mime_type: string | null) -> pdf {
 }
 
-function baml.media.Pdf.from_json(j: baml.json.json) -> baml.media.Pdf {
-    load_var j
-    call baml.json.stringify
-    store_var _2
-    load_type baml.media.Pdf
-    load_var _2
-    call baml.json.from_string
-    return
-}
-
 function baml.media.Pdf.from_url(url: string, mime_type: string | null) -> pdf {
 }
 
@@ -10738,16 +9262,6 @@ function baml.media.Video.from_base64(base64: string, mime_type: string | null) 
 function baml.media.Video.from_file(file: string, mime_type: string | null) -> video {
 }
 
-function baml.media.Video.from_json(j: baml.json.json) -> baml.media.Video {
-    load_var j
-    call baml.json.stringify
-    store_var _2
-    load_type baml.media.Video
-    load_var _2
-    call baml.json.from_string
-    return
-}
-
 function baml.media.Video.from_url(url: string, mime_type: string | null) -> video {
 }
 
@@ -10757,25 +9271,6 @@ function baml.media.Video.mime_type(self: baml.media.Video) -> string | null {
 function baml.media.Video.url(self: baml.media.Video) -> string | null {
 }
 
-function baml.net.Datagram.from_json(j: baml.json.json) -> baml.net.Datagram {
-    load_var j
-    load_const "data"
-    call baml.json.field
-    store_var _3
-    load_type uint8array
-    load_var _3
-    call baml.json.from_json
-    load_var j
-    load_const "addr"
-    call baml.json.field
-    store_var _6
-    load_type string
-    load_var _6
-    call baml.json.from_json
-    init_instance baml.net.Datagram .data, .addr
-    return
-}
-
 function baml.net.TcpListener.accept(self: baml.net.TcpListener) -> baml.net.TcpStream {
 }
 
@@ -10783,16 +9278,6 @@ function baml.net.TcpListener.bind(addr: string) -> baml.net.TcpListener {
 }
 
 function baml.net.TcpListener.close(self: baml.net.TcpListener) -> null {
-}
-
-function baml.net.TcpListener.from_json(j: baml.json.json) -> baml.net.TcpListener {
-    load_var j
-    call baml.json.stringify
-    store_var _2
-    load_type baml.net.TcpListener
-    load_var _2
-    call baml.json.from_string
-    return
 }
 
 function baml.net.TcpStream._connect(addr: string, timeout_nanos: bigint) -> baml.net.TcpStream {
@@ -10821,16 +9306,6 @@ function baml.net.TcpStream.connect(addr: string, timeout: baml.time.Duration | 
     store_var _4
     load_var2 1 3
     sys_op baml.net.TcpStream._connect
-    return
-}
-
-function baml.net.TcpStream.from_json(j: baml.json.json) -> baml.net.TcpStream {
-    load_var j
-    call baml.json.stringify
-    store_var _2
-    load_type baml.net.TcpStream
-    load_var _2
-    call baml.json.from_string
     return
 }
 
@@ -10879,16 +9354,6 @@ function baml.net.UdpSocket.bind(addr: string) -> baml.net.UdpSocket {
 }
 
 function baml.net.UdpSocket.close(self: baml.net.UdpSocket) -> null {
-}
-
-function baml.net.UdpSocket.from_json(j: baml.json.json) -> baml.net.UdpSocket {
-    load_var j
-    call baml.json.stringify
-    store_var _2
-    load_type baml.net.UdpSocket
-    load_var _2
-    call baml.json.from_string
-    return
 }
 
 function baml.net.UdpSocket.recv_from(self: baml.net.UdpSocket, timeout: baml.time.Duration | null) -> baml.net.Datagram {
@@ -11189,247 +9654,10 @@ function baml.ops.Equals.neq(self: baml.ops.Equals, other: Self) -> bool {
 function baml.ops.equals_equals(a: unknown, b: unknown) -> bool {
 }
 
-function baml.panics.AllocFailure.from_json(j: baml.json.json) -> baml.panics.AllocFailure {
-    load_var j
-    load_const "message"
-    call baml.json.field
-    store_var _3
-    load_type string
-    load_var _3
-    call baml.json.from_json
-    init_instance baml.panics.AllocFailure .message
-    return
-}
-
-function baml.panics.AssertionFailed.from_json(j: baml.json.json) -> baml.panics.AssertionFailed {
-    load_var j
-    load_const "message"
-    call baml.json.field
-    store_var _3
-    load_type string
-    load_var _3
-    call baml.json.from_json
-    init_instance baml.panics.AssertionFailed .message
-    return
-}
-
-function baml.panics.Cancelled.from_json(j: baml.json.json) -> baml.panics.Cancelled {
-    load_var j
-    load_const "message"
-    call baml.json.field
-    store_var _3
-    load_type string
-    load_var _3
-    call baml.json.from_json
-    init_instance baml.panics.Cancelled .message
-    return
-}
-
-function baml.panics.DivisionByZero.from_json(j: baml.json.json) -> baml.panics.DivisionByZero {
-    load_var j
-    load_const "dividend"
-    call baml.json.field
-    store_var _3
-    load_type int
-    load_var _3
-    call baml.json.from_json
-    init_instance baml.panics.DivisionByZero .dividend
-    return
-}
-
-function baml.panics.Exit.from_json(j: baml.json.json) -> baml.panics.Exit {
-    load_var j
-    load_const "code"
-    call baml.json.field
-    store_var _3
-    load_type int
-    load_var _3
-    call baml.json.from_json
-    init_instance baml.panics.Exit .code
-    return
-}
-
-function baml.panics.HostContractViolation.from_json(j: baml.json.json) -> baml.panics.HostContractViolation {
-    load_var j
-    load_const "message"
-    call baml.json.field
-    store_var _3
-    load_type string
-    load_var _3
-    call baml.json.from_json
-    load_var j
-    load_const "class_name"
-    call baml.json.field
-    store_var _6
-    load_type string | null
-    load_var _6
-    call baml.json.from_json
-    load_var j
-    load_const "language"
-    call baml.json.field
-    store_var _9
-    load_type string | null
-    load_var _9
-    call baml.json.from_json
-    init_instance baml.panics.HostContractViolation .message, .class_name, .language
-    return
-}
-
-function baml.panics.HostUnavailable.from_json(j: baml.json.json) -> baml.panics.HostUnavailable {
-    load_var j
-    load_const "resource"
-    call baml.json.field
-    store_var _3
-    load_type string
-    load_var _3
-    call baml.json.from_json
-    load_var j
-    load_const "message"
-    call baml.json.field
-    store_var _6
-    load_type string
-    load_var _6
-    call baml.json.from_json
-    init_instance baml.panics.HostUnavailable .resource, .message
-    return
-}
-
-function baml.panics.IndexOutOfBounds.from_json(j: baml.json.json) -> baml.panics.IndexOutOfBounds {
-    load_var j
-    load_const "index"
-    call baml.json.field
-    store_var _3
-    load_type int
-    load_var _3
-    call baml.json.from_json
-    load_var j
-    load_const "length"
-    call baml.json.field
-    store_var _6
-    load_type int
-    load_var _6
-    call baml.json.from_json
-    init_instance baml.panics.IndexOutOfBounds .index, .length
-    return
-}
-
-function baml.panics.IntegerOverflow.from_json(j: baml.json.json) -> baml.panics.IntegerOverflow {
-    load_var j
-    load_const "message"
-    call baml.json.field
-    store_var _3
-    load_type string
-    load_var _3
-    call baml.json.from_json
-    init_instance baml.panics.IntegerOverflow .message
-    return
-}
-
-function baml.panics.InvalidFieldAccess.from_json(j: baml.json.json) -> baml.panics.InvalidFieldAccess {
-    load_var j
-    load_const "field_index"
-    call baml.json.field
-    store_var _3
-    load_type int
-    load_var _3
-    call baml.json.from_json
-    load_var j
-    load_const "field_count"
-    call baml.json.field
-    store_var _6
-    load_type int
-    load_var _6
-    call baml.json.from_json
-    init_instance baml.panics.InvalidFieldAccess .field_index, .field_count
-    return
-}
-
-function baml.panics.MapKeyNotFound.from_json(j: baml.json.json) -> baml.panics.MapKeyNotFound {
-    load_var j
-    load_const "key"
-    call baml.json.field
-    store_var _3
-    load_type string
-    load_var _3
-    call baml.json.from_json
-    init_instance baml.panics.MapKeyNotFound .key
-    return
-}
-
-function baml.panics.NegativeBitShift.from_json(j: baml.json.json) -> baml.panics.NegativeBitShift {
-    load_var j
-    load_const "message"
-    call baml.json.field
-    store_var _3
-    load_type string
-    load_var _3
-    call baml.json.from_json
-    init_instance baml.panics.NegativeBitShift .message
-    return
-}
-
-function baml.panics.SdkPanic.from_json(j: baml.json.json) -> baml.panics.SdkPanic {
-    load_var j
-    load_const "message"
-    call baml.json.field
-    store_var _3
-    load_type string
-    load_var _3
-    call baml.json.from_json
-    init_instance baml.panics.SdkPanic .message
-    return
-}
-
-function baml.panics.StackOverflow.from_json(j: baml.json.json) -> baml.panics.StackOverflow {
-    load_var j
-    load_const "message"
-    call baml.json.field
-    store_var _3
-    load_type string
-    load_var _3
-    call baml.json.from_json
-    init_instance baml.panics.StackOverflow .message
-    return
-}
-
-function baml.panics.Unreachable.from_json(j: baml.json.json) -> baml.panics.Unreachable {
-    load_var j
-    load_const "message"
-    call baml.json.field
-    store_var _3
-    load_type string
-    load_var _3
-    call baml.json.from_json
-    init_instance baml.panics.Unreachable .message
-    return
-}
-
-function baml.panics.UserPanic.from_json(j: baml.json.json) -> baml.panics.UserPanic {
-    load_var j
-    load_const "message"
-    call baml.json.field
-    store_var _3
-    load_type string
-    load_var _3
-    call baml.json.from_json
-    init_instance baml.panics.UserPanic .message
-    return
-}
-
 function baml.spawn.CancelToken.any(tokens: baml.spawn.CancelToken[]) -> baml.spawn.CancelToken {
 }
 
 function baml.spawn.CancelToken.cancel(self: baml.spawn.CancelToken) -> int {
-}
-
-function baml.spawn.CancelToken.from_json(j: baml.json.json) -> baml.spawn.CancelToken {
-    load_var j
-    call baml.json.stringify
-    store_var _2
-    load_type baml.spawn.CancelToken
-    load_var _2
-    call baml.json.from_string
-    return
 }
 
 function baml.spawn.CancelToken.is_cancelled(self: baml.spawn.CancelToken) -> bool {
@@ -11438,30 +9666,10 @@ function baml.spawn.CancelToken.is_cancelled(self: baml.spawn.CancelToken) -> bo
 function baml.spawn.CancelToken.new() -> baml.spawn.CancelToken {
 }
 
-function baml.spawn.SpawnParams.from_json(j: baml.json.json) -> baml.spawn.SpawnParams<T, E> {
-    load_var j
-    call baml.json.stringify
-    store_var _2
-    load_type baml.spawn.SpawnParams<#0, #1>
-    load_var _2
-    call baml.json.from_string
-    return
-}
-
 function baml.spawn.TaskGroup.active_count(self: baml.spawn.TaskGroup) -> int {
 }
 
 function baml.spawn.TaskGroup.cancel(self: baml.spawn.TaskGroup, pending: bool | null, active: bool | null) -> int {
-}
-
-function baml.spawn.TaskGroup.from_json(j: baml.json.json) -> baml.spawn.TaskGroup {
-    load_var j
-    call baml.json.stringify
-    store_var _2
-    load_type baml.spawn.TaskGroup
-    load_var _2
-    call baml.json.from_string
-    return
 }
 
 function baml.spawn.TaskGroup.limit(self: baml.spawn.TaskGroup) -> int {
@@ -11521,75 +9729,6 @@ function baml.spawn.options(group: baml.spawn.TaskGroup | null, cancel: baml.spa
     return
 }
 
-function baml.stream.StreamFinished.from_json(j: baml.json.json) -> baml.stream.StreamFinished {
-    alloc_instance baml.stream.StreamFinished
-    return
-}
-
-function baml.stream.StreamNoYield.from_json(j: baml.json.json) -> baml.stream.StreamNoYield {
-    alloc_instance baml.stream.StreamNoYield
-    return
-}
-
-function baml.sys.ProcessOptions.from_json(j: baml.json.json) -> baml.sys.ProcessOptions {
-    load_var j
-    load_const "cwd"
-    call baml.json.field
-    store_var _3
-    load_type string | null
-    load_var _3
-    call baml.json.from_json
-    load_var j
-    load_const "env"
-    call baml.json.field
-    store_var _6
-    load_type map<string, string> | null
-    load_var _6
-    call baml.json.from_json
-    load_var j
-    load_const "timeout_ms"
-    call baml.json.field
-    store_var _9
-    load_type int | null
-    load_var _9
-    call baml.json.from_json
-    load_var j
-    load_const "stdin"
-    call baml.json.field
-    store_var _12
-    load_type string | null
-    load_var _12
-    call baml.json.from_json
-    init_instance baml.sys.ProcessOptions .cwd, .env, .timeout_ms, .stdin
-    return
-}
-
-function baml.sys.ShellOutput.from_json(j: baml.json.json) -> baml.sys.ShellOutput {
-    load_var j
-    load_const "stdout"
-    call baml.json.field
-    store_var _3
-    load_type uint8array
-    load_var _3
-    call baml.json.from_json
-    load_var j
-    load_const "stderr"
-    call baml.json.field
-    store_var _6
-    load_type uint8array
-    load_var _6
-    call baml.json.from_json
-    load_var j
-    load_const "exit_code"
-    call baml.json.field
-    store_var _9
-    load_type int
-    load_var _9
-    call baml.json.from_json
-    init_instance baml.sys.ShellOutput .stdout, .stderr, .exit_code
-    return
-}
-
 function baml.sys.ShellOutput.ok(self: baml.sys.ShellOutput) -> bool {
     load_var self
     load_field .exit_code
@@ -11617,18 +9756,6 @@ function baml.sys.shell(command: string, options: baml.sys.ProcessOptions | null
 }
 
 function baml.sys.sleep(delay: baml.time.Duration) -> null {
-}
-
-function baml.time.AmbiguousTimeError.from_json(j: baml.json.json) -> baml.time.AmbiguousTimeError {
-    load_var j
-    load_const "message"
-    call baml.json.field
-    store_var _3
-    load_type string
-    load_var _3
-    call baml.json.from_json
-    init_instance baml.time.AmbiguousTimeError .message
-    return
 }
 
 function baml.time.Duration.abs(self: baml.time.Duration) -> baml.time.Duration {
@@ -11660,18 +9787,6 @@ function baml.time.Duration.from_hours(h: int | bigint) -> baml.time.Duration {
     load_var _3
     load_const 3600000000000n
     mul_bigint
-    init_instance baml.time.Duration ._nanoseconds
-    return
-}
-
-function baml.time.Duration.from_json(j: baml.json.json) -> baml.time.Duration {
-    load_var j
-    load_const "_nanoseconds"
-    call baml.json.field
-    store_var _3
-    load_type bigint
-    load_var _3
-    call baml.json.from_json
     init_instance baml.time.Duration ._nanoseconds
     return
 }
@@ -11842,6 +9957,42 @@ function baml.time.Duration.to_seconds(self: baml.time.Duration) -> bigint {
     return
 }
 
+function baml.time.Instant$stream.baml.FromJson.from_json(j: baml.json.json) -> baml.time.Instant$stream {
+    load_var j
+    is_type string
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "Expected timestamp string"
+    load_const ""
+    init_instance baml.json.JsonDecodeError .message, .path
+    throw
+
+  L1:
+    load_var j
+    call baml.time.Instant.parse
+    jump L4
+    load_var _
+    is_type baml.errors.ParseError
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_var _
+    throw
+
+  L3:
+    load_var _
+    load_field .0
+    load_const ""
+    init_instance baml.json.JsonDecodeError .message, .path
+    throw
+
+  L4:
+    return
+}
+
 function baml.time.Instant$stream.baml.ToJson.to_json(self: baml.time.Instant$stream) -> baml.json.json {
     load_var self
     call baml.time.Instant._to_string_impl
@@ -11902,6 +10053,42 @@ function baml.time.Instant.abs_diff(self: baml.time.Instant, other: baml.time.In
     sub_bigint
     call baml.Bigint.abs
     init_instance baml.time.Duration ._nanoseconds
+    return
+}
+
+function baml.time.Instant.baml.FromJson.from_json(j: baml.json.json) -> baml.time.Instant {
+    load_var j
+    is_type string
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "Expected timestamp string"
+    load_const ""
+    init_instance baml.json.JsonDecodeError .message, .path
+    throw
+
+  L1:
+    load_var j
+    call baml.time.Instant.parse
+    jump L4
+    load_var _
+    is_type baml.errors.ParseError
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_var _
+    throw
+
+  L3:
+    load_var _
+    load_field .0
+    load_const ""
+    init_instance baml.json.JsonDecodeError .message, .path
+    throw
+
+  L4:
     return
 }
 
@@ -11969,42 +10156,6 @@ function baml.time.Instant.elapsed(self: baml.time.Instant) -> baml.time.Duratio
 function baml.time.Instant.epoch() -> baml.time.Instant {
     load_const 0n
     init_instance baml.time.Instant ._nanoseconds
-    return
-}
-
-function baml.time.Instant.from_json(j: baml.json.json) -> baml.time.Instant {
-    load_var j
-    is_type string
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_const "Expected timestamp string"
-    load_const null
-    init_instance baml.json.JsonDecodeError .message, .path
-    throw
-
-  L1:
-    load_var j
-    call baml.time.Instant.parse
-    jump L4
-    load_var _
-    is_type baml.errors.ParseError
-    pop_jump_if_false L2
-    jump L3
-
-  L2:
-    load_var _
-    throw
-
-  L3:
-    load_var _
-    load_field .0
-    load_const ""
-    init_instance baml.json.JsonDecodeError .message, .path
-    throw
-
-  L4:
     return
 }
 
@@ -12114,6 +10265,42 @@ function baml.time.Instant.to_timestamp_seconds(self: baml.time.Instant) -> bigi
     return
 }
 
+function baml.time.PlainDate$stream.baml.FromJson.from_json(j: baml.json.json) -> baml.time.PlainDate$stream {
+    load_var j
+    is_type string
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "Expected ISO 8601 date string"
+    load_const ""
+    init_instance baml.json.JsonDecodeError .message, .path
+    throw
+
+  L1:
+    load_var j
+    call baml.time.PlainDate.parse
+    jump L4
+    load_var _
+    is_type baml.errors.ParseError
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_var _
+    throw
+
+  L3:
+    load_var _
+    load_field .0
+    load_const ""
+    init_instance baml.json.JsonDecodeError .message, .path
+    throw
+
+  L4:
+    return
+}
+
 function baml.time.PlainDate$stream.baml.ToJson.to_json(self: baml.time.PlainDate$stream) -> baml.json.json {
     load_var self
     call baml.time.PlainDate._to_string_impl
@@ -12167,6 +10354,42 @@ function baml.time.PlainDate._to_plain_datetime(self: baml.time.PlainDate, time:
 }
 
 function baml.time.PlainDate._to_string_impl(self: baml.time.PlainDate) -> string {
+}
+
+function baml.time.PlainDate.baml.FromJson.from_json(j: baml.json.json) -> baml.time.PlainDate {
+    load_var j
+    is_type string
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "Expected ISO 8601 date string"
+    load_const ""
+    init_instance baml.json.JsonDecodeError .message, .path
+    throw
+
+  L1:
+    load_var j
+    call baml.time.PlainDate.parse
+    jump L4
+    load_var _
+    is_type baml.errors.ParseError
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_var _
+    throw
+
+  L3:
+    load_var _
+    load_field .0
+    load_const ""
+    init_instance baml.json.JsonDecodeError .message, .path
+    throw
+
+  L4:
+    return
 }
 
 function baml.time.PlainDate.baml.ToJson.to_json(self: baml.time.PlainDate) -> baml.json.json {
@@ -12224,42 +10447,6 @@ function baml.time.PlainDate.day(self: baml.time.PlainDate) -> int {
 function baml.time.PlainDate.from_components(year: int, month: int, day: int) -> baml.time.PlainDate {
 }
 
-function baml.time.PlainDate.from_json(j: baml.json.json) -> baml.time.PlainDate {
-    load_var j
-    is_type string
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_const "Expected ISO 8601 date string"
-    load_const null
-    init_instance baml.json.JsonDecodeError .message, .path
-    throw
-
-  L1:
-    load_var j
-    call baml.time.PlainDate.parse
-    jump L4
-    load_var _
-    is_type baml.errors.ParseError
-    pop_jump_if_false L2
-    jump L3
-
-  L2:
-    load_var _
-    throw
-
-  L3:
-    load_var _
-    load_field .0
-    load_const ""
-    init_instance baml.json.JsonDecodeError .message, .path
-    throw
-
-  L4:
-    return
-}
-
 function baml.time.PlainDate.month(self: baml.time.PlainDate) -> int {
 }
 
@@ -12281,6 +10468,42 @@ function baml.time.PlainDate.to_plain_datetime(self: baml.time.PlainDate, time: 
 }
 
 function baml.time.PlainDate.year(self: baml.time.PlainDate) -> int {
+}
+
+function baml.time.PlainDateTime$stream.baml.FromJson.from_json(j: baml.json.json) -> baml.time.PlainDateTime$stream {
+    load_var j
+    is_type string
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "Expected zoneless ISO 8601 string"
+    load_const ""
+    init_instance baml.json.JsonDecodeError .message, .path
+    throw
+
+  L1:
+    load_var j
+    call baml.time.PlainDateTime.parse
+    jump L4
+    load_var _
+    is_type baml.errors.ParseError
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_var _
+    throw
+
+  L3:
+    load_var _
+    load_field .0
+    load_const ""
+    init_instance baml.json.JsonDecodeError .message, .path
+    throw
+
+  L4:
+    return
 }
 
 function baml.time.PlainDateTime$stream.baml.ToJson.to_json(self: baml.time.PlainDateTime$stream) -> baml.json.json {
@@ -12336,6 +10559,42 @@ function baml.time.PlainDateTime._from_components(year: int, month: int, day: in
 }
 
 function baml.time.PlainDateTime._to_string_impl(self: baml.time.PlainDateTime) -> string {
+}
+
+function baml.time.PlainDateTime.baml.FromJson.from_json(j: baml.json.json) -> baml.time.PlainDateTime {
+    load_var j
+    is_type string
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "Expected zoneless ISO 8601 string"
+    load_const ""
+    init_instance baml.json.JsonDecodeError .message, .path
+    throw
+
+  L1:
+    load_var j
+    call baml.time.PlainDateTime.parse
+    jump L4
+    load_var _
+    is_type baml.errors.ParseError
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_var _
+    throw
+
+  L3:
+    load_var _
+    load_field .0
+    load_const ""
+    init_instance baml.json.JsonDecodeError .message, .path
+    throw
+
+  L4:
+    return
 }
 
 function baml.time.PlainDateTime.baml.ToJson.to_json(self: baml.time.PlainDateTime) -> baml.json.json {
@@ -12445,42 +10704,6 @@ function baml.time.PlainDateTime.from_components(year: int, month: int, day: int
     load_var2 7 8
     load_var nanosecond
     call baml.time.PlainDateTime._from_components
-    return
-}
-
-function baml.time.PlainDateTime.from_json(j: baml.json.json) -> baml.time.PlainDateTime {
-    load_var j
-    is_type string
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_const "Expected zoneless ISO 8601 string"
-    load_const null
-    init_instance baml.json.JsonDecodeError .message, .path
-    throw
-
-  L1:
-    load_var j
-    call baml.time.PlainDateTime.parse
-    jump L4
-    load_var _
-    is_type baml.errors.ParseError
-    pop_jump_if_false L2
-    jump L3
-
-  L2:
-    load_var _
-    throw
-
-  L3:
-    load_var _
-    load_field .0
-    load_const ""
-    init_instance baml.json.JsonDecodeError .message, .path
-    throw
-
-  L4:
     return
 }
 
@@ -12691,6 +10914,42 @@ function baml.time.PlainDateTime.to_zoned(self: baml.time.PlainDateTime, timezon
 function baml.time.PlainDateTime.year(self: baml.time.PlainDateTime) -> int {
 }
 
+function baml.time.PlainTime$stream.baml.FromJson.from_json(j: baml.json.json) -> baml.time.PlainTime$stream {
+    load_var j
+    is_type string
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "Expected ISO 8601 time string"
+    load_const ""
+    init_instance baml.json.JsonDecodeError .message, .path
+    throw
+
+  L1:
+    load_var j
+    call baml.time.PlainTime.parse
+    jump L4
+    load_var _
+    is_type baml.errors.ParseError
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_var _
+    throw
+
+  L3:
+    load_var _
+    load_field .0
+    load_const ""
+    init_instance baml.json.JsonDecodeError .message, .path
+    throw
+
+  L4:
+    return
+}
+
 function baml.time.PlainTime$stream.baml.ToJson.to_json(self: baml.time.PlainTime$stream) -> baml.json.json {
     load_var self
     is_type baml.Uint8Array
@@ -12899,6 +11158,42 @@ function baml.time.PlainTime._from_components(hour: int, minute: int, second: in
 }
 
 function baml.time.PlainTime._to_string_impl(self: baml.time.PlainTime) -> string {
+}
+
+function baml.time.PlainTime.baml.FromJson.from_json(j: baml.json.json) -> baml.time.PlainTime {
+    load_var j
+    is_type string
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "Expected ISO 8601 time string"
+    load_const ""
+    init_instance baml.json.JsonDecodeError .message, .path
+    throw
+
+  L1:
+    load_var j
+    call baml.time.PlainTime.parse
+    jump L4
+    load_var _
+    is_type baml.errors.ParseError
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_var _
+    throw
+
+  L3:
+    load_var _
+    load_field .0
+    load_const ""
+    init_instance baml.json.JsonDecodeError .message, .path
+    throw
+
+  L4:
+    return
 }
 
 function baml.time.PlainTime.baml.ToJson.to_json(self: baml.time.PlainTime) -> baml.json.json {
@@ -13153,42 +11448,6 @@ function baml.time.PlainTime.from_components(hour: int, minute: int, second: int
     return
 }
 
-function baml.time.PlainTime.from_json(j: baml.json.json) -> baml.time.PlainTime {
-    load_var j
-    is_type string
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_const "Expected ISO 8601 time string"
-    load_const null
-    init_instance baml.json.JsonDecodeError .message, .path
-    throw
-
-  L1:
-    load_var j
-    call baml.time.PlainTime.parse
-    jump L4
-    load_var _
-    is_type baml.errors.ParseError
-    pop_jump_if_false L2
-    jump L3
-
-  L2:
-    load_var _
-    throw
-
-  L3:
-    load_var _
-    load_field .0
-    load_const ""
-    init_instance baml.json.JsonDecodeError .message, .path
-    throw
-
-  L4:
-    return
-}
-
 function baml.time.PlainTime.hour(self: baml.time.PlainTime) -> int {
     load_var self
     load_field ._nanoseconds
@@ -13237,18 +11496,6 @@ function baml.time.PlainTime.to_plain_datetime(self: baml.time.PlainTime, date: 
 }
 
 function baml.time.TimeZoneOffset.from_duration(duration: baml.time.Duration) -> baml.time.TimeZoneOffset {
-}
-
-function baml.time.TimeZoneOffset.from_json(j: baml.json.json) -> baml.time.TimeZoneOffset {
-    load_var j
-    load_const "_nanoseconds"
-    call baml.json.field
-    store_var _3
-    load_type int
-    load_var _3
-    call baml.json.from_json
-    init_instance baml.time.TimeZoneOffset ._nanoseconds
-    return
 }
 
 function baml.time.TimeZoneOffset.from_timezone(timezone: string, at: baml.time.Instant) -> baml.time.TimeZoneOffset {
@@ -13399,15 +11646,39 @@ function baml.time.TimeZoneOffset.utc() -> baml.time.TimeZoneOffset {
     return
 }
 
-function baml.time.UnknownTimezoneError.from_json(j: baml.json.json) -> baml.time.UnknownTimezoneError {
+function baml.time.ZonedDateTime$stream.baml.FromJson.from_json(j: baml.json.json) -> baml.time.ZonedDateTime$stream {
     load_var j
-    load_const "timezone"
-    call baml.json.field
-    store_var _3
-    load_type string
-    load_var _3
-    call baml.json.from_json
-    init_instance baml.time.UnknownTimezoneError .timezone
+    is_type string
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "Expected RFC 3339 / RFC 9557 timestamp string"
+    load_const ""
+    init_instance baml.json.JsonDecodeError .message, .path
+    throw
+
+  L1:
+    load_var j
+    call baml.time.ZonedDateTime.parse
+    jump L4
+    load_var _
+    is_type baml.errors.ParseError
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_var _
+    throw
+
+  L3:
+    load_var _
+    load_field .0
+    load_const ""
+    init_instance baml.json.JsonDecodeError .message, .path
+    throw
+
+  L4:
     return
 }
 
@@ -13491,6 +11762,42 @@ function baml.time.ZonedDateTime._to_string_impl(self: baml.time.ZonedDateTime) 
     load_var self
     load_field ._iana
     call baml.time._format_zoned
+    return
+}
+
+function baml.time.ZonedDateTime.baml.FromJson.from_json(j: baml.json.json) -> baml.time.ZonedDateTime {
+    load_var j
+    is_type string
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "Expected RFC 3339 / RFC 9557 timestamp string"
+    load_const ""
+    init_instance baml.json.JsonDecodeError .message, .path
+    throw
+
+  L1:
+    load_var j
+    call baml.time.ZonedDateTime.parse
+    jump L4
+    load_var _
+    is_type baml.errors.ParseError
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_var _
+    throw
+
+  L3:
+    load_var _
+    load_field .0
+    load_const ""
+    init_instance baml.json.JsonDecodeError .message, .path
+    throw
+
+  L4:
     return
 }
 
@@ -13660,42 +11967,6 @@ function baml.time.ZonedDateTime.from_instant(instant: baml.time.Instant, timezo
     init_instance baml.time.ZonedDateTime ._nanoseconds, ._offset_ns, ._iana
 
   L2:
-    return
-}
-
-function baml.time.ZonedDateTime.from_json(j: baml.json.json) -> baml.time.ZonedDateTime {
-    load_var j
-    is_type string
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_const "Expected RFC 3339 / RFC 9557 timestamp string"
-    load_const null
-    init_instance baml.json.JsonDecodeError .message, .path
-    throw
-
-  L1:
-    load_var j
-    call baml.time.ZonedDateTime.parse
-    jump L4
-    load_var _
-    is_type baml.errors.ParseError
-    pop_jump_if_false L2
-    jump L3
-
-  L2:
-    load_var _
-    throw
-
-  L3:
-    load_var _
-    load_field .0
-    load_const ""
-    init_instance baml.json.JsonDecodeError .message, .path
-    throw
-
-  L4:
     return
 }
 
@@ -13976,11 +12247,23 @@ function baml.time._tz_to_instant(timezone: string, civil_ns: bigint, disambigua
 function baml.time.system_timezone() -> string {
 }
 
+function baml.toml.Table$stream.baml.FromJson.from_json(j: baml.json.json) -> baml.toml.Table$stream {
+    load_var j
+    call baml.toml.table_from_json
+    return
+}
+
 function baml.toml.Table$stream.baml.ToJson.to_json(self: baml.toml.Table$stream) -> baml.json.json {
     load_type map<string, baml.toml.Item>
     load_var self
     load_field .0
     call baml.json.from
+    return
+}
+
+function baml.toml.Table.baml.FromJson.from_json(j: baml.json.json) -> baml.toml.Table {
+    load_var j
+    call baml.toml.table_from_json
     return
 }
 
@@ -13992,213 +12275,7 @@ function baml.toml.Table.baml.ToJson.to_json(self: baml.toml.Table) -> baml.json
     return
 }
 
-function baml.toml.Table.from_json(json: baml.json.json) -> baml.toml.Table {
-    load_var json
-    is_type map<string, baml.json.json>
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_const "expected map"
-    load_const ""
-    init_instance baml.json.JsonDecodeError .message, .path
-    throw
-
-  L1:
-    load_const null /* unknown class: map */
-    store_var items
-    load_type string
-    load_type baml.json.json
-    load_var json
-    call baml.Map.keys
-    store_var _4
-    load_type string
-    load_var _4
-    call baml.iter.Iterable$for$T[].iter
-    store_var _7
-
-  L2:
-    load_var _7
-    is_type baml.iter.Flatten<...>
-    pop_jump_if_false L3
-    jump L20
-
-  L3:
-    load_var _7
-    is_type baml.iter.ArrayIterator<...>
-    pop_jump_if_false L4
-    jump L19
-
-  L4:
-    load_var _7
-    is_type baml.iter.StepBy<...>
-    pop_jump_if_false L5
-    jump L18
-
-  L5:
-    load_var _7
-    is_type baml.iter.Chain<...>
-    pop_jump_if_false L6
-    jump L17
-
-  L6:
-    load_var _7
-    is_type baml.iter.Repeat<...>
-    pop_jump_if_false L7
-    jump L16
-
-  L7:
-    load_var _7
-    is_type baml.iter.Map<...>
-    pop_jump_if_false L8
-    jump L15
-
-  L8:
-    load_var _7
-    is_type baml.iter.Filter<...>
-    pop_jump_if_false L9
-    jump L14
-
-  L9:
-    load_var _7
-    is_type baml.iter.FilterMap<...>
-    pop_jump_if_false L10
-    jump L13
-
-  L10:
-    load_var _7
-    is_type baml.iter.FlatMap<...>
-    pop_jump_if_false L11
-    jump L12
-
-  L11:
-    load_var _7
-    is_type baml.iter.Peekable<...>
-    pop_jump_if_false L25
-    load_type string
-    load_type never
-    load_var _7
-    call baml.iter.Peekable.Iterator.next
-    store_var _9
-    jump L21
-
-  L12:
-    load_var _7
-    make_bound_method baml.iter.FlatMap.Iterator.next
-    call_indirect
-    store_var _9
-    jump L21
-
-  L13:
-    load_var _7
-    make_bound_method baml.iter.FilterMap.Iterator.next
-    call_indirect
-    store_var _9
-    jump L21
-
-  L14:
-    load_type string
-    load_type never
-    load_type never
-    load_var _7
-    call baml.iter.Filter.Iterator.next
-    store_var _9
-    jump L21
-
-  L15:
-    load_var _7
-    make_bound_method baml.iter.Map.Iterator.next
-    call_indirect
-    store_var _9
-    jump L21
-
-  L16:
-    load_type string
-    load_var _7
-    call baml.iter.Repeat.Iterator.next
-    store_var _9
-    jump L21
-
-  L17:
-    load_type string
-    load_type never
-    load_type never
-    load_var _7
-    call baml.iter.Chain.Iterator.next
-    store_var _9
-    jump L21
-
-  L18:
-    load_type string
-    load_type never
-    load_var _7
-    call baml.iter.StepBy.Iterator.next
-    store_var _9
-    jump L21
-
-  L19:
-    load_type string
-    load_var _7
-    call baml.iter.ArrayIterator.Iterator.next
-    store_var _9
-    jump L21
-
-  L20:
-    load_var _7
-    make_bound_method baml.iter.Flatten.Iterator.next
-    call_indirect
-    store_var _9
-
-  L21:
-    load_var _9
-    is_type baml.iter.Done
-    pop_jump_if_false L22
-    jump L24
-
-  L22:
-    load_var _9
-    store_var key
-    load_var key
-    store_var _39
-    load_var2 1 6
-    load_map_element
-    store_var_load_var _40
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L23
-    jump L2
-
-  L23:
-    load_var _40
-    call baml.toml.item_from_json
-    store_var _46
-    load_var2 2 7
-    load_var _46
-    store_map_element
-    jump L2
-
-  L24:
-    load_var items
-    init_instance baml.toml.Table .items
-    return
-
-  L25:
-    unreachable
-}
-
 function baml.toml.Table.parse(s: string) -> baml.toml.Table {
-}
-
-function baml.toml.TomlParseError.from_json(j: baml.json.json) -> baml.toml.TomlParseError {
-    load_var j
-    load_const "message"
-    call baml.json.field
-    store_var _3
-    load_type string
-    load_var _3
-    call baml.json.from_json
-    init_instance baml.toml.TomlParseError .message
-    return
 }
 
 function baml.toml.item_from_json(json: baml.json.json) -> baml.toml.Item {
@@ -14217,7 +12294,7 @@ function baml.toml.item_from_json(json: baml.json.json) -> baml.toml.Item {
 
   L1: map
     load_var json
-    call baml.toml.Table.from_json
+    call baml.toml.Table.baml.FromJson.from_json
     jump L4
 
   L2: null
@@ -14906,46 +12983,210 @@ function baml.toml.item_to_json(item: baml.toml.Item) -> baml.json.json {
     unreachable
 }
 
-function baml.unstable.string(value: T) -> string {
+function baml.toml.table_from_json(j: baml.json.json) -> baml.toml.Table {
+    load_var j
+    is_type map<string, baml.json.json>
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "expected map"
+    load_const ""
+    init_instance baml.json.JsonDecodeError .message, .path
+    throw
+
+  L1:
+    load_const null /* unknown class: map */
+    store_var items
+    load_type string
+    load_type baml.json.json
+    load_var j
+    call baml.Map.keys
+    store_var _4
+    load_type string
+    load_var _4
+    call baml.iter.Iterable$for$T[].iter
+    store_var _7
+
+  L2:
+    load_var _7
+    is_type baml.iter.Flatten<...>
+    pop_jump_if_false L3
+    jump L20
+
+  L3:
+    load_var _7
+    is_type baml.iter.ArrayIterator<...>
+    pop_jump_if_false L4
+    jump L19
+
+  L4:
+    load_var _7
+    is_type baml.iter.StepBy<...>
+    pop_jump_if_false L5
+    jump L18
+
+  L5:
+    load_var _7
+    is_type baml.iter.Chain<...>
+    pop_jump_if_false L6
+    jump L17
+
+  L6:
+    load_var _7
+    is_type baml.iter.Repeat<...>
+    pop_jump_if_false L7
+    jump L16
+
+  L7:
+    load_var _7
+    is_type baml.iter.Map<...>
+    pop_jump_if_false L8
+    jump L15
+
+  L8:
+    load_var _7
+    is_type baml.iter.Filter<...>
+    pop_jump_if_false L9
+    jump L14
+
+  L9:
+    load_var _7
+    is_type baml.iter.FilterMap<...>
+    pop_jump_if_false L10
+    jump L13
+
+  L10:
+    load_var _7
+    is_type baml.iter.FlatMap<...>
+    pop_jump_if_false L11
+    jump L12
+
+  L11:
+    load_var _7
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L25
+    load_type string
+    load_type never
+    load_var _7
+    call baml.iter.Peekable.Iterator.next
+    store_var _9
+    jump L21
+
+  L12:
+    load_var _7
+    make_bound_method baml.iter.FlatMap.Iterator.next
+    call_indirect
+    store_var _9
+    jump L21
+
+  L13:
+    load_var _7
+    make_bound_method baml.iter.FilterMap.Iterator.next
+    call_indirect
+    store_var _9
+    jump L21
+
+  L14:
+    load_type string
+    load_type never
+    load_type never
+    load_var _7
+    call baml.iter.Filter.Iterator.next
+    store_var _9
+    jump L21
+
+  L15:
+    load_var _7
+    make_bound_method baml.iter.Map.Iterator.next
+    call_indirect
+    store_var _9
+    jump L21
+
+  L16:
+    load_type string
+    load_var _7
+    call baml.iter.Repeat.Iterator.next
+    store_var _9
+    jump L21
+
+  L17:
+    load_type string
+    load_type never
+    load_type never
+    load_var _7
+    call baml.iter.Chain.Iterator.next
+    store_var _9
+    jump L21
+
+  L18:
+    load_type string
+    load_type never
+    load_var _7
+    call baml.iter.StepBy.Iterator.next
+    store_var _9
+    jump L21
+
+  L19:
+    load_type string
+    load_var _7
+    call baml.iter.ArrayIterator.Iterator.next
+    store_var _9
+    jump L21
+
+  L20:
+    load_var _7
+    make_bound_method baml.iter.Flatten.Iterator.next
+    call_indirect
+    store_var _9
+
+  L21:
+    load_var _9
+    is_type baml.iter.Done
+    pop_jump_if_false L22
+    jump L24
+
+  L22:
+    load_var _9
+    store_var key
+    load_var key
+    store_var _39
+    load_var2 1 6
+    load_map_element
+    store_var_load_var _40
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L23
+    jump L2
+
+  L23:
+    load_var _40
+    call baml.toml.item_from_json
+    store_var _46
+    load_var2 2 7
+    load_var _46
+    store_map_element
+    jump L2
+
+  L24:
+    load_var items
+    init_instance baml.toml.Table .items
+    return
+
+  L25:
+    unreachable
 }
 
-function baml.yaml.YamlParseError.from_json(j: baml.json.json) -> baml.yaml.YamlParseError {
-    load_var j
-    load_const "message"
-    call baml.json.field
-    store_var _3
-    load_type string
-    load_var _3
-    call baml.json.from_json
-    init_instance baml.yaml.YamlParseError .message
-    return
+function baml.unstable.string(value: T) -> string {
 }
 
 function baml.yaml.deserialize(s: string) -> T {
     load_var s
     call baml.yaml.parse
-    store_var _3
+    store_var _2
     load_type #0
-    load_var _3
+    load_var _2
     call baml.json.from_json
-    jump L2
-    load_var e
-    is_type baml.json.JsonParseError
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_var e
-    throw
-
-  L1:
-    load_var e
-    load_field .message
-    load_const ""
-    init_instance baml.json.JsonDecodeError .message, .path
-    throw
-
-  L2:
     return
 }
 

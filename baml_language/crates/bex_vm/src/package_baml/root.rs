@@ -156,6 +156,14 @@ impl BamlPackageBaml for PackageBamlImpl {
     fn _to_json_shim(vm: &mut BexVm, value: &Value) -> NativeCallResult {
         super::json::render_to_json_honoring_overrides(vm, *value)
     }
+
+    /// `baml._from_json_shim<T>(j)` backs `baml.json.to<T>`: decode `j` into the
+    /// target type `T` (read from the call's type-args), dispatching a user
+    /// `implements baml.FromJson` override on `T` and otherwise decoding
+    /// structurally. The deserialize analog of `_to_json_shim`.
+    fn _from_json_shim(vm: &mut BexVm, j: &Value) -> NativeCallResult {
+        super::json::json_to_shim(vm, *j)
+    }
 }
 
 /// Whether `value`'s runtime class carries an in-body `baml.ToString` override.

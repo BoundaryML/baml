@@ -7,9 +7,6 @@ class user.WithLiterals {
   version: 1
   enabled: true
 }
-function user.WithLiterals.from_json(j: baml.json.json) -> user.WithLiterals throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  WithLiterals { type: baml.json.from_json<"resume">(baml.json.field(j, "type")), version: baml.json.from_json<1>(baml.json.field(j, "version")), enabled: baml.json.from_json<true>(baml.json.field(j, "enabled")) } : user.WithLiterals
-}
 class user.WithLiterals$stream {
   type: "resume"
   version: 1

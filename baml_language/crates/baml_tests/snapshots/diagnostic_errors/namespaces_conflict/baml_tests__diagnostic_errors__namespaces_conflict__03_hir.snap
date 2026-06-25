@@ -5,13 +5,7 @@ source: crates/baml_tests/src/generated_tests.rs
 class user.llm.Response {
   text: string
 }
-function user.llm.from_json(j: baml.json.json) -> user.llm.Response  [expr] {
-  user.llm.Response { text: baml.json.from_json(baml.json.field(j, "text")) }
-}
 class user.llm.Response {
   body: string
   status: int
-}
-function user.llm.from_json(j: baml.json.json) -> user.llm.Response  [expr] {
-  user.llm.Response { body: baml.json.from_json(baml.json.field(j, "body")), status: baml.json.from_json(baml.json.field(j, "status")) }
 }

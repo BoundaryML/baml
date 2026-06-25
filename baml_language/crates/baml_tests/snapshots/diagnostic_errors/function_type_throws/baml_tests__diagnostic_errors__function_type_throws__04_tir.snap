@@ -6,9 +6,6 @@ type user.HiddenHandler = (value: int) -> int throws never
 class user.Holder {
   cb: (value: int) -> int throws never
 }
-function user.Holder.from_json(j: baml.json.json) -> user.Holder throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  baml.json.from_string<T>(baml.json.stringify(j)) : user.Holder
-}
 function user.accept_hidden(cb: user.HiddenHandler) -> int throws never {
   { : int
     cb(1) : int
@@ -68,9 +65,6 @@ function user.Worker.scale(self: user.Worker, value: int) -> int throws never {
   { : int
     self.factor * value : int
   }
-}
-function user.Worker.from_json(j: baml.json.json) -> user.Worker throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  Worker { factor: baml.json.from_json<int>(baml.json.field(j, "factor")) } : user.Worker
 }
 function user.direct(cb: (value: int) -> int throws never) -> int throws never {
   { : int

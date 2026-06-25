@@ -512,29 +512,3 @@ function user.GenerateTests$stream(count: int, topic: string, client: baml.llm.C
     call baml.llm.stream_llm_function
     return
 }
-
-function user.Sentiment.from_json(j: baml.json.json) -> Sentiment {
-    load_var j
-    load_const "feeling"
-    call baml.json.field
-    store_var _3
-    load_type string
-    load_var _3
-    call baml.json.from_json
-    load_var j
-    load_const "confidence"
-    call baml.json.field
-    store_var _6
-    load_type float
-    load_var _6
-    call baml.json.from_json
-    load_var j
-    load_const "reasoning"
-    call baml.json.field
-    store_var _9
-    load_type string
-    load_var _9
-    call baml.json.from_json
-    init_instance user.Sentiment .feeling, .confidence, .reasoning
-    return
-}

@@ -5,9 +5,6 @@ source: crates/baml_tests/src/generated_tests.rs
 class user.User {
   name: string
 }
-function user.from_json(j: baml.json.json) -> user.User  [expr] {
-  user.User { name: baml.json.from_json(baml.json.field(j, "name")) }
-}
 function user.reflect_type_to_int() -> int  [expr] {
   { let x: int = reflect.type_of(); return x }
 }

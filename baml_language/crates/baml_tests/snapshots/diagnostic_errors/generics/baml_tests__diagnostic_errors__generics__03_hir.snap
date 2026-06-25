@@ -48,42 +48,6 @@ function user.bare_in_union_param(f: user.Foo<int> | user.Foo) -> string  [expr]
 function user.create(value: T) -> user.Factory<T>  [expr] {
   {  } user.Factory { data: value }
 }
-function user.from_json(j: baml.json.json) -> user.Foo<T>  [expr] {
-  user.Foo { value: baml.json.from_json(baml.json.field(j, "value")) }
-}
-function user.from_json(j: baml.json.json) -> user.Wrapper<T>  [expr] {
-  user.Wrapper { data: baml.json.from_json(baml.json.field(j, "data")) }
-}
-function user.from_json(j: baml.json.json) -> user.Holder<T>  [expr] {
-  user.Holder { data: baml.json.from_json(baml.json.field(j, "data")) }
-}
-function user.from_json(j: baml.json.json) -> user.Container<T>  [expr] {
-  user.Container { inner: baml.json.from_json(baml.json.field(j, "inner")) }
-}
-function user.from_json(j: baml.json.json) -> user.Stack<T>  [expr] {
-  user.Stack { items: baml.json.from_json(baml.json.field(j, "items")) }
-}
-function user.from_json(j: baml.json.json) -> user.Box<T>  [expr] {
-  user.Box { value: baml.json.from_json(baml.json.field(j, "value")) }
-}
-function user.from_json(j: baml.json.json) -> user.Maker<T>  [expr] {
-  user.Maker { data: baml.json.from_json(baml.json.field(j, "data")) }
-}
-function user.from_json(j: baml.json.json) -> user.Plain  [expr] {
-  user.Plain { name: baml.json.from_json(baml.json.field(j, "name")) }
-}
-function user.from_json(j: baml.json.json) -> user.MaybeBox<T>  [expr] {
-  user.MaybeBox { value: baml.json.from_json(baml.json.field(j, "value")) }
-}
-function user.from_json(j: baml.json.json) -> user.Pair<A, B>  [expr] {
-  user.Pair { first: baml.json.from_json(baml.json.field(j, "first")), second: baml.json.from_json(baml.json.field(j, "second")) }
-}
-function user.from_json(j: baml.json.json) -> user.Shadow<T>  [expr] {
-  user.Shadow { value: baml.json.from_json(baml.json.field(j, "value")) }
-}
-function user.from_json(j: baml.json.json) -> user.Factory<T>  [expr] {
-  user.Factory { data: baml.json.from_json(baml.json.field(j, "data")) }
-}
 function user.from_string(params: string) -> user.Maker<T>  [expr] {
   {  } user.Maker { data: params }
 }
@@ -170,7 +134,4 @@ class user.Todo {
 }
 function user.GetTodo() -> user.Todo  [expr] {
   {  } baml.fetch_as(baml.HttpRequest { method: baml.HttpMethod.Get, url: "dummyjson.com/tod..." })
-}
-function user.from_json(j: baml.json.json) -> user.Todo  [expr] {
-  user.Todo { id: baml.json.from_json(baml.json.field(j, "id")), title: baml.json.from_json(baml.json.field(j, "title")), completed: baml.json.from_json(baml.json.field(j, "completed")), userId: baml.json.from_json(baml.json.field(j, "userId")) }
 }

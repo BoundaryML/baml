@@ -1,12 +1,4 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-function user.Union.from_json(j: baml.json.json) -> Union {
-    load_var j
-    call baml.json.stringify
-    store_var _2
-    load_type Union
-    load_var _2
-    call baml.json.from_string
-    return
-}
+

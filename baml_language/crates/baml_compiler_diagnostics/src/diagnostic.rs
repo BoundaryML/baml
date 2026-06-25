@@ -297,6 +297,9 @@ pub enum DiagnosticId {
     /// A class declares a `to_json` method directly; it must be provided by
     /// implementing the `baml.ToJson` interface instead.
     ToJsonMustImplementInterface,
+    /// A class declares a `from_json` method directly; it must be provided by
+    /// implementing the `baml.FromJson` interface instead.
+    FromJsonMustImplementInterface,
 }
 
 impl DiagnosticId {
@@ -490,6 +493,7 @@ impl DiagnosticId {
             DiagnosticId::ToStringMustImplementInterface => "E0140",
             DiagnosticId::DeferControlFlowEscape => "E0141",
             DiagnosticId::ToJsonMustImplementInterface => "E0142",
+            DiagnosticId::FromJsonMustImplementInterface => "E0143",
         }
     }
 }

@@ -172,12 +172,14 @@ class PlainDateTime {
         $rust_function
     }
 
-    function from_json(j: baml.json.json) -> PlainDateTime throws root.json.JsonDecodeError {
-        match (j) {
-            string => PlainDateTime.parse(j) catch (_) {
-                root.errors.ParseError { message } => throw root.json.JsonDecodeError { message: message, path: "" },
-            },
-            _ => throw root.json.JsonDecodeError { message: "Expected zoneless ISO 8601 string" }
+    implements baml.FromJson {
+        function from_json(j: baml.json.json) -> Self throws baml.json.JsonDecodeError {
+            match (j) {
+                string => PlainDateTime.parse(j) catch (_) {
+                    root.errors.ParseError { message } => throw baml.json.JsonDecodeError { message: message, path: "" },
+                },
+                _ => throw baml.json.JsonDecodeError { message: "Expected zoneless ISO 8601 string", path: "" }
+            }
         }
     }
     implements baml.ToJson {

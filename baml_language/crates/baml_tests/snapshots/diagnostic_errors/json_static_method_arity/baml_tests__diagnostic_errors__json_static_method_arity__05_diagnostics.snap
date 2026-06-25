@@ -2,6 +2,26 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
+  [hir] error: `from_json` cannot be defined as a method on class `Box`; implement the `baml.FromJson` interface instead
+    ╭─[ json_static_method_arity.baml:23:14 ]
+    │
+ 23 │     function from_json(j: baml.json.json) -> Box<T> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+    │              ────┬────  
+    │                  ╰────── move this into `implements baml.FromJson { ... }`
+    │ 
+    │ Note: Error code: E0143
+────╯
+
+  [type] warning: extraneous throws declaration: baml.json.JsonParseError
+    ╭─[ json_static_method_arity.baml:23:59 ]
+    │
+ 23 │     function from_json(j: baml.json.json) -> Box<T> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+    │                                                           ──────────────────────────┬──────────────────────────  
+    │                                                                                     ╰──────────────────────────── extraneous throws declaration: baml.json.JsonParseError
+    │ 
+    │ Note: Error code: E0097
+────╯
+
   [type] error: function `from_json` expects 1 type argument(s), got 2
     ╭─[ json_static_method_arity.baml:34:112 ]
     │

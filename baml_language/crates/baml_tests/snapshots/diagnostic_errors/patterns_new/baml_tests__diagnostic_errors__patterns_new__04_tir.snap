@@ -50,9 +50,6 @@ function user.or_multiple_binds_diff_narrows(v: int | string) -> int throws neve
 class user.Team {
   scores: int[]
 }
-function user.Team.from_json(j: baml.json.json) -> user.Team throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  Team { scores: baml.json.from_json<int[]>(baml.json.field(j, "scores")) } : user.Team
-}
 function user.refutable_let_empty_array(xs: int[]) -> int throws never {
   { : 1
     let [] = xs : int[]
@@ -102,9 +99,6 @@ function user.irrefutable_while_let(n: int) -> int throws never {
 class user.Bag {
   contents: int
 }
-function user.Bag.from_json(j: baml.json.json) -> user.Bag throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  Bag { contents: baml.json.from_json<int>(baml.json.field(j, "contents")) } : user.Bag
-}
 function user.class_destructure_unreachable_after_bare(b: user.Bag) -> int throws never {
   { : 1 | 2
     match (b : user.Bag) : 1 | 2
@@ -117,9 +111,6 @@ function user.class_destructure_unreachable_after_bare(b: user.Bag) -> int throw
 }
 class user.Mixed {
   value: int | float | bool
-}
-function user.Mixed.from_json(j: baml.json.json) -> user.Mixed throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  Mixed { value: baml.json.from_json<int | float | bool>(baml.json.field(j, "value")) } : user.Mixed
 }
 function user.class_destructure_field_union_missing_int(m: user.Mixed) -> int throws never {
   { : 1 | 2
@@ -134,9 +125,6 @@ function user.class_destructure_field_union_missing_int(m: user.Mixed) -> int th
 class user.Pair {
   kind: int | bool
   payload: int | string
-}
-function user.Pair.from_json(j: baml.json.json) -> user.Pair throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  Pair { kind: baml.json.from_json<int | bool>(baml.json.field(j, "kind")), payload: baml.json.from_json<int | string>(baml.json.field(j, "payload")) } : user.Pair
 }
 function user.class_destructure_two_field_union_missing_combination(p: user.Pair) -> int throws never {
   { : 1 | 2 | 3
@@ -183,9 +171,6 @@ class user.Flagged {
   flag: bool
   note: string
 }
-function user.Flagged.from_json(j: baml.json.json) -> user.Flagged throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  Flagged { flag: baml.json.from_json<bool>(baml.json.field(j, "flag")), note: baml.json.from_json<string>(baml.json.field(j, "note")) } : user.Flagged
-}
 function user.class_field_bool_narrowing_missing_true(f: user.Flagged) -> int throws never {
   { : 1 | 2
     match (f : user.Flagged) : 1 | 2
@@ -199,9 +184,6 @@ function user.class_field_bool_narrowing_missing_true(f: user.Flagged) -> int th
 class user.Box2 {
   first: bool
   second: int[] | null
-}
-function user.Box2.from_json(j: baml.json.json) -> user.Box2 throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  Box2 { first: baml.json.from_json<bool>(baml.json.field(j, "first")), second: baml.json.from_json<int[]?>(baml.json.field(j, "second")) } : user.Box2
 }
 function user.nested_class_optional_missing_combination(b: user.Box2) -> int throws never {
   { : 1 | 2 | 3
@@ -226,9 +208,6 @@ function user.int_literal_non_exhaustive(n: int) -> int throws never {
 class user.IntPair {
   a: int
   b: int
-}
-function user.IntPair.from_json(j: baml.json.json) -> user.IntPair throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  IntPair { a: baml.json.from_json<int>(baml.json.field(j, "a")), b: baml.json.from_json<int>(baml.json.field(j, "b")) } : user.IntPair
 }
 function user.or_pattern_two_field_non_exhaustive(p: user.IntPair) -> int throws never {
   { : 1

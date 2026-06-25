@@ -117,26 +117,14 @@ fn json_alias_ty() -> Ty {
     )
 }
 
-/// Construct `Ty::Class` for `baml.json.JsonSerializationError`.
-fn json_serialization_error_ty() -> Ty {
+/// Construct `Ty::Class` for `baml.json.JsonDecodeError` — the throws of the
+/// `from_json` / `baml.json.to` decode family (decoding never re-parses).
+fn json_decode_error_ty() -> Ty {
     Ty::Class(
         crate::ty::QualifiedTypeName::new(
             Name::new("baml"),
             vec![Name::new("json")],
-            Name::new("JsonSerializationError"),
-        ),
-        vec![],
-        TyAttr::default(),
-    )
-}
-
-/// Construct `Ty::Class` for `baml.json.JsonParseError`.
-fn json_parse_error_ty() -> Ty {
-    Ty::Class(
-        crate::ty::QualifiedTypeName::new(
-            Name::new("baml"),
-            vec![Name::new("json")],
-            Name::new("JsonParseError"),
+            Name::new("JsonDecodeError"),
         ),
         vec![],
         TyAttr::default(),
@@ -145,19 +133,6 @@ fn json_parse_error_ty() -> Ty {
 
 fn baml_iter_interface_qtn(name: &str) -> crate::ty::QualifiedTypeName {
     crate::ty::QualifiedTypeName::new(Name::new("baml"), vec![Name::new("iter")], Name::new(name))
-}
-
-/// Construct the throws type `JsonParseError | JsonSerializationError`.
-///
-/// Used as the conservative throws clause for the universal `from_json` method
-/// on `Ty::TypeVar`.
-fn json_parse_or_serialization_error_ty() -> Ty {
-    // Same members, different ordering to match the semantic direction of
-    // each method. Could be the same union; keep separate for clarity.
-    Ty::Union(
-        vec![json_parse_error_ty(), json_serialization_error_ty()],
-        TyAttr::default(),
-    )
 }
 
 /// A function declaration's generic-param interface bounds, as `TypeExpr`s in
@@ -395,6 +370,15 @@ impl ThrowsAnalysisContext for BuilderThrowsAnalysis<'_, '_> {
         // key `json.from` within package `baml`, like `runtime_id_set_throws`.
         self.builder
             .lookup_named_throw_summary(&Name::new("json.from"))
+    }
+
+    #[allow(clippy::wrong_self_convention)]
+    fn from_json_fallback_throws(&self) -> Option<BTreeSet<Ty>> {
+        // The `Type.from_json(j)` sugar lowers to `baml.json.to<Type>(j)`; charge
+        // that function's throws (`JsonDecodeError`). Namespace-relative key
+        // `json.to` within package `baml`.
+        self.builder
+            .lookup_named_throw_summary(&Name::new("json.to"))
     }
 }
 
@@ -6042,6 +6026,85 @@ impl<'db> TypeInferenceBuilder<'db> {
             self.context.truncate_diagnostics(start);
         }
 
+        // Static-constructor `Type.from_json(j)` -> `baml.json.to<Type>(j)` sugar,
+        // the deserialize analog of the `recv.to_json()` fallback above. A 1-arg /
+        // 0-type-arg `from_json` call whose receiver is a TYPE NAME with NO real
+        // `from_json` method (a bare one is banned; only `implements baml.FromJson`
+        // provides one) is typed as the receiver type here; MIR lowers it to
+        // `baml.json.to<receiver>(j)` (which dispatches an override or decodes
+        // structurally). The receiver type IS the call's result type, so the
+        // type-arg threads concretely (`Box<int>` decodes to `Box<int>`).
+        let from_json_callee = arg_exprs.len() == 1
+            && crate::throws_analysis::is_from_json_call_callee(&body.exprs[callee])
+            && match &body.exprs[callee] {
+                // Receiver must be a type name (unbound static call), not a value.
+                Expr::MemberAccess { base, .. } => match &body.exprs[*base] {
+                    Expr::Path(segs) if !segs.is_empty() => !self.locals.contains_key(&segs[0]),
+                    _ => false,
+                },
+                Expr::Path(segs) => segs.len() >= 2 && !self.locals.contains_key(&segs[0]),
+                _ => false,
+            };
+        if from_json_callee {
+            let start = self.context.diagnostic_count();
+            // Infer the receiver type expression and the json argument (both kept)
+            // before probing the callee, so only the callee's `UnresolvedMember`
+            // is dropped when the sugar fires.
+            if let Expr::MemberAccess { base, .. } = &body.exprs[callee] {
+                self.infer_expr(*base, body);
+            }
+            self.infer_expr(arg_exprs[0], body);
+            let after_setup = self.context.diagnostic_count();
+            let probe_ty = self.infer_expr(callee, body);
+            let unresolved = matches!(
+                crate::narrowing::remove_null(&probe_ty),
+                Ty::Unknown { .. } | Ty::Error { .. }
+            );
+            if unresolved {
+                // The receiver is the type named by the callee minus `from_json`.
+                // The `<int>` in `Box<int>.from_json` parses as the call's type
+                // args, applied to the (raw) receiver class so the decoded type is
+                // `Box<int>`, not `Box`.
+                let recv_ty = match &body.exprs[callee] {
+                    Expr::MemberAccess { base, .. } => match self.expressions.get(base).cloned() {
+                        Some(Ty::Class(qtn, _, attr)) if !type_args.is_empty() => {
+                            let resolved: Vec<Ty> = type_args
+                                .iter()
+                                .map(|te| self.resolve_type_expr(te, expr_id))
+                                .collect();
+                            Some(Ty::Class(qtn, resolved, attr))
+                        }
+                        other => other,
+                    },
+                    // `path_segment_types` is not populated for package-qualified
+                    // type paths (`root.pkg.Type.from_json`), so resolve the
+                    // receiver segments as a type directly, threading the call's
+                    // type args in as the receiver's generic args.
+                    Expr::Path(segs) => {
+                        let recv_expr = TypeExpr::Path {
+                            segments: segs[..segs.len() - 1].to_vec(),
+                            generic_args: type_args.to_vec(),
+                            associated_type_bindings: vec![],
+                            attrs: vec![],
+                        };
+                        Some(self.resolve_type_expr(&recv_expr, expr_id))
+                    }
+                    _ => None,
+                };
+                let recv_known = recv_ty
+                    .as_ref()
+                    .is_some_and(|t| !matches!(t, Ty::Unknown { .. } | Ty::Error { .. }));
+                if recv_known {
+                    let ty = recv_ty.expect("recv_known implies Some");
+                    self.context.truncate_diagnostics(after_setup);
+                    self.report_result_type_mismatch(expr_id, &ty, expected);
+                    self.record_expr_type(expr_id, ty.clone());
+                    return ty;
+                }
+            }
+            self.context.truncate_diagnostics(start);
+        }
+
         let is_method_call = match &body.exprs[callee] {
             Expr::MemberAccess { base, .. } => match &body.exprs[*base] {
                 Expr::Path(segments) if !segments.is_empty() => {
@@ -10674,7 +10737,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                         json_alias_ty(),
                     )],
                     ret: Box::new(Ty::TypeVar(name.clone(), TyAttr::default())),
-                    throws: Box::new(json_parse_or_serialization_error_ty()),
+                    throws: Box::new(json_decode_error_ty()),
                     attr: TyAttr::default(),
                 }
             }
@@ -11944,7 +12007,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     json_alias_ty(),
                 )],
                 ret: Box::new(Ty::TypeVar(name.clone(), TyAttr::default())),
-                throws: Box::new(json_parse_or_serialization_error_ty()),
+                throws: Box::new(json_decode_error_ty()),
                 attr: TyAttr::default(),
             }),
             Ty::TypeAlias(qtn, _) => {
