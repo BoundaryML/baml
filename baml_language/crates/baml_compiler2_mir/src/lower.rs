@@ -11940,29 +11940,31 @@ impl<'db> LoweringContext<'db> {
         generic_params
             .iter()
             .map(|param| {
-                instantiation
-                    .bindings
+                // The receiver is authoritative for every param its `for` target
+                // pins: `T[]` / `Box<T>` matched against the concrete `self` type
+                // binds `T` directly, so a request for a *different* arg (a
+                // `Box<string>` asked for `I<int>`) must not override it with the
+                // requested `int` — that would seed a mismatched binding instead
+                // of leaving the candidate to be rejected. For a generic caller
+                // (`U[]`) this is the caller's own type var `U`, which lowers to a
+                // `TypeArgRef` — still a faithful type, never erased.
+                for_target_bindings
                     .get(param)
                     .filter(|ty| !Self::is_unresolved_impl_binding_for_param(param, ty))
                     .cloned()
+                    .or_else(|| {
+                        instantiation
+                            .bindings
+                            .get(param)
+                            .filter(|ty| !Self::is_unresolved_impl_binding_for_param(param, ty))
+                            .cloned()
+                    })
                     .or_else(|| {
                         Self::requested_iface_binding_for_impl_param(
                             param,
                             rule_iface_ty,
                             requested_iface_ty,
                         )
-                    })
-                    .or_else(|| {
-                        // The receiver pins params the interface request omits
-                        // (`T` of `Sortable for T[]`): the `for` target matched
-                        // against the concrete `self` type binds `T` directly.
-                        // For a generic caller (`U[]`) this is the caller's own
-                        // type var `U`, which lowers to a `TypeArgRef` — still a
-                        // faithful type, never erased.
-                        for_target_bindings
-                            .get(param)
-                            .filter(|ty| !Self::is_unresolved_impl_binding_for_param(param, ty))
-                            .cloned()
                     })
                     .unwrap_or_else(|| Tir2Ty::BuiltinUnknown {
                         attr: baml_compiler2_tir::ty::TyAttr::default(),

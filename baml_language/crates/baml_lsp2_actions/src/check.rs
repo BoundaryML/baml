@@ -3473,10 +3473,19 @@ fn is_non_interface_type(
         return false;
     };
     let lookup_ns = path_lookup_namespace(head, namespace_path);
-    matches!(
-        pkg_items.lookup_type(lookup_ns, name),
-        Some(Definition::Class(_) | Definition::Enum(_))
-    )
+    // True for any name that resolves to a *non-interface* definition (class,
+    // enum, type alias, …). We exclude the single interface kind rather than
+    // enumerate every non-interface kind: TIR lowering emits
+    // `NonInterfaceProjectionQualifier` for all of them, and an allow-list here
+    // silently regressed type aliases (a duplicate "unknown interface", and the
+    // `requires`/`implement` sites mislabeling an existing alias as "doesn't
+    // exist"). An unresolved name is *not* a non-interface — it's "doesn't
+    // exist" — so `None` stays `false`.
+    match pkg_items.lookup_type(lookup_ns, name) {
+        Some(Definition::Interface(_)) => false,
+        Some(_) => true,
+        None => false,
+    }
 }
 
 fn rendered_type_args(args: &[baml_compiler2_ast::TypeExpr]) -> Vec<String> {
