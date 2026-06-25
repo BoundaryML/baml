@@ -14,6 +14,7 @@ pub use analysis::OptLevel;
 use baml_base::{Name, Span};
 use baml_compiler2_ast::TypeExpr;
 use baml_compiler2_hir::{
+    body::FunctionBody,
     compiler2_all_files,
     contributions::Definition,
     file_package::file_package,
@@ -26,7 +27,7 @@ use baml_compiler2_mir::{
 };
 // Use the PPIR item tree (which includes synthetic *$stream items) rather than
 // the bare HIR item tree, to stay consistent with TIR's LocalItemId indices.
-use baml_compiler2_ppir::file_item_tree;
+use baml_compiler2_ppir::{file_item_tree, function_body};
 use baml_type::{RuntimeTy, TyAttr};
 use bex_vm_types::{
     Bytecode, Class, ClassField, ConstValue, Enum, EnumVariant, Function, FunctionKind,
@@ -704,20 +705,28 @@ pub fn generate_project_bytecode_with_opt(
         let item_tree = file_item_tree(db, *file);
         for local_id in item_tree.functions.keys() {
             let func_loc = FunctionLoc::new(db, *file, *local_id);
-            let mir = lower_function(db, func_loc, opt);
-            // Skip intrinsic and await-any functions — they are never called via
-            // a Call instruction (intrinsics lower to StatementKind::Intrinsic;
+            // Pass 1 only needs each function's global-slot name and whether it
+            // is skipped; both are derivable without lowering the body. Skip
+            // intrinsic and await-any functions — they are never called via a
+            // Call instruction (intrinsics lower to StatementKind::Intrinsic;
             // `__await_any` lowers to a Terminator::AwaitAny). Pass 4 skips them
             // too, so they must be skipped here as well or the Pass-1 indices
             // desync from the program.globals array (off-by-one for everything
-            // after the skipped function).
+            // after the skipped function). The skip set is exactly the
+            // intrinsic/await-any builtins: only a `FunctionBody::Builtin` ever
+            // lowers to `MirFunctionKind::Builtin` (Expr/Missing bodies always
+            // lower to `Bytecode`), so matching the body is equivalent to
+            // matching `mir.kind` — without paying for a full `lower_function`
+            // (which is not memoized, so Pass 4 would re-do it regardless).
             if matches!(
-                mir.kind,
-                MirFunctionKind::Builtin(BuiltinKind::Intrinsic | BuiltinKind::AwaitAny)
+                function_body(db, func_loc).as_ref(),
+                FunctionBody::Builtin(BuiltinKind::Intrinsic | BuiltinKind::AwaitAny)
             ) {
                 continue;
             }
-            let fq_name = mir.item_ref.to_string();
+            // Identical to the old `mir.item_ref.to_string()`: every
+            // `lower_function` branch sets `item_ref` to this exact value.
+            let fq_name = def_to_item_ref(db, Definition::Function(func_loc)).to_string();
             globals.entry(fq_name).or_insert_with(|| {
                 let idx = global_idx;
                 global_idx += 1;
