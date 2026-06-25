@@ -36,11 +36,14 @@ proto_cache_key="$(
     | awk '{print $1 "-" $2}'
 )"
 
-# Must match the modules pkg-proto/src/index.ts imports (the protos moved
-# from package `baml.cffi.v1` to `baml_core.cffi.v1`; checking stale paths
-# here lets an old cache restore skip generation and break the build).
+# Must match the generated modules pkg-proto/src imports. The proto layout has
+# churned (baml_events.proto was deleted, baml_handle.proto was added), and a
+# stale entry here lets an old cache restore satisfy the check and skip
+# generation, leaving a newly-imported module (e.g. baml_handle.ts) absent and
+# breaking the Next build. Keep this in sync with the `./generated/...` imports
+# under pkg-proto/src.
 check_proto_exists() {
-  [[ -s "${proto_dir}/baml_core/cffi/v1/baml_events.ts" ]] &&
+  [[ -s "${proto_dir}/baml_core/cffi/v1/baml_handle.ts" ]] &&
     [[ -s "${proto_dir}/baml_core/cffi/v1/baml_inbound.ts" ]] &&
     [[ -s "${proto_dir}/baml_core/cffi/v1/baml_outbound.ts" ]]
 }
@@ -48,7 +51,7 @@ check_proto_exists() {
 if ! check_proto_exists &&
   [[ -f "${proto_cache_dir}/.cache-key" ]] &&
   [[ "$(cat "${proto_cache_dir}/.cache-key")" == "$proto_cache_key" ]] &&
-  [[ -s "${proto_cache_dir}/baml_core/cffi/v1/baml_events.ts" ]]; then
+  [[ -s "${proto_cache_dir}/baml_core/cffi/v1/baml_handle.ts" ]]; then
   echo "==> [0/5] Restore pkg-proto generated files from Vercel build cache"
   mkdir -p "$proto_dir"
   cp -R "${proto_cache_dir}/." "$proto_dir/"
