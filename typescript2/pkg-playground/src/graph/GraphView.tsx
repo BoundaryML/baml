@@ -263,7 +263,6 @@ function GraphViewInner({
   // `expanded` holds containers the user clicked open; it layers on any mode.
   const maxDepth = useMemo(() => maxNodeDepth(graphModel.rfNodes), [graphModel]);
   const [expandMode, setExpandMode] = useState<ExpandMode>('zoom');
-  const [zoomDepth, setZoomDepth] = useState(2);
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
@@ -271,12 +270,16 @@ function GraphViewInner({
   // initial paint snaps into place instead of flying in from the origin.
   const [layoutReady, setLayoutReady] = useState(false);
 
+  // Live viewport zoom (transform[2]). Driving the reveal depth off this — vs a
+  // separate state updated in onMove — means the initial `fitView` already maps
+  // to the right LOD, instead of showing a default depth until the first move.
+  const viewportZoom = useStore((s) => s.transform[2]);
   const revealDepth =
     expandMode === 'all'
       ? Number.POSITIVE_INFINITY
       : expandMode === 'click'
         ? 1
-        : zoomDepth;
+        : zoomToRevealDepth(viewportZoom, maxDepth);
 
   const lodModel = useMemo(
     () =>
@@ -287,18 +290,12 @@ function GraphViewInner({
     [graphModel, revealDepth, expanded],
   );
 
-  // Map the live zoom to a reveal depth — zoom mode only. State only changes at
-  // depth boundaries, so this re-layouts at most a few times per gesture.
-  const onMove = useCallback(
-    (_event: unknown, viewport: { zoom: number }) => {
-      if (expandMode !== 'zoom') return;
-      setZoomDepth((prev) => {
-        const next = zoomToRevealDepth(viewport.zoom, maxDepth);
-        return next === prev ? prev : next;
-      });
-    },
-    [expandMode, maxDepth],
-  );
+  // Refs so the reveal-on-select effect can read the latest models without
+  // re-firing on every zoom/expand (it should fire on selection change only).
+  const graphModelRef = useRef(graphModel);
+  graphModelRef.current = graphModel;
+  const lodModelRef = useRef(lodModel);
+  lodModelRef.current = lodModel;
 
   // Switching modes clears manual expansions and refits to the new extent.
   const selectExpandMode = useCallback((mode: ExpandMode) => {
@@ -429,6 +426,33 @@ function GraphViewInner({
     setEdges,
     decorateNodesWithRuntime,
   ]);
+
+  // If the editor selects a node that LOD currently hides, reveal it by opening
+  // its ancestor containers — otherwise the highlight and auto-pan have no node
+  // to target. Fires on selection change only (reads models via refs), so it
+  // doesn't fight a later zoom-out that re-collapses things.
+  useEffect(() => {
+    if (selectedNodeId == null) return;
+    const id = String(selectedNodeId);
+    if (lodModelRef.current.nodes.some((n) => n.id === id)) return;
+    const parentById = new Map(
+      graphModelRef.current.rfNodes.map((n) => [n.id, n.parentId]),
+    );
+    const ancestors: string[] = [];
+    let cur = parentById.get(id);
+    let guard = 0;
+    while (cur != null && guard++ < 1000) {
+      ancestors.push(cur);
+      cur = parentById.get(cur);
+    }
+    if (ancestors.length === 0) return;
+    setExpanded((prev) => {
+      if (ancestors.every((a) => prev.has(a))) return prev;
+      const next = new Set(prev);
+      for (const a of ancestors) next.add(a);
+      return next;
+    });
+  }, [selectedNodeId]);
 
   // Keep runtime node data fresh while a new ELK layout is pending.
   useEffect(() => {
@@ -630,7 +654,6 @@ function GraphViewInner({
         nodeTypes={kNodeTypes}
         edgeTypes={kEdgeTypes}
         onNodeClick={handleNodeClick}
-        onMove={onMove}
         nodesDraggable={false}
         nodesFocusable
         edgesFocusable={false}
