@@ -256,9 +256,8 @@ impl BexHeap {
         forwarding: &mut HashMap<HeapPtr, HeapPtr>,
         promoted_to_gen2: &mut usize,
     ) {
-        let seeds = unsafe {
-            self.scan_dead_finalizers(forwarding, &[self.gen0_ref(), self.gen1_ref()])
-        };
+        let seeds =
+            unsafe { self.scan_dead_finalizers(forwarding, &[self.gen0_ref(), self.gen1_ref()]) };
         if seeds.is_empty() {
             return;
         }

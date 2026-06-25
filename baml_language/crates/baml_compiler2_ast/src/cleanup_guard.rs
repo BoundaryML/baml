@@ -27,7 +27,9 @@
 
 use baml_base::Name;
 
-use crate::ast::{CallArg, ClassDef, Expr, FunctionBodyDef, FunctionDef, SpannedTypeExpr, TypeExpr};
+use crate::ast::{
+    CallArg, ClassDef, Expr, FunctionBodyDef, FunctionDef, SpannedTypeExpr, TypeExpr,
+};
 
 /// The reserved magic-method name for the BEP-042 finalizer.
 pub const CLEANUP_METHOD: &str = "cleanup";

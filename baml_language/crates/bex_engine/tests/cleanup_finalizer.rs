@@ -70,7 +70,10 @@ async fn cleanup_runs_when_instance_is_collected() {
         .call_function("make_log", vec![], ctx(), /* copy_objects = */ false)
         .await
         .unwrap();
-    assert!(matches!(log, BexExternalValue::Handle(_)), "expected a Handle");
+    assert!(
+        matches!(log, BexExternalValue::Handle(_)),
+        "expected a Handle"
+    );
 
     // Create a `Resource` aliasing the log; hold it by handle so it is a real,
     // rooted allocation (not optimized away).
