@@ -13,6 +13,7 @@ use std::{
     net::SocketAddr,
     path::{Path, PathBuf},
     sync::{Arc, Mutex},
+    time::Duration,
 };
 
 use axum::{
@@ -142,6 +143,15 @@ fn broadcast_root_trace_attachment(
                 existing.encode()
             );
         }
+    }
+}
+
+fn flush_native_profile_events_before_trace_attach(boundary_id: BoundaryId) {
+    if !bex_events::prof::flush_and_join(Duration::from_secs(1)) {
+        tracing::warn!(
+            "Timed out flushing native profile events before trace attachment for {}",
+            boundary_id.to_wire_string()
+        );
     }
 }
 
@@ -570,6 +580,17 @@ fn drain_captured_values_and_broadcast(
             bex_project::CaptureKind::RootError => {
                 refs.error = Some(value_ref);
             }
+            bex_project::CaptureKind::CallInput => {
+                if let Some(patch) = run_store.ingest_call_value_ref(
+                    encoded.boundary_id,
+                    encoded.call,
+                    CapturedValueRole::CallInput,
+                    Some("inputs".to_string()),
+                    Some(value_ref),
+                ) {
+                    broadcast_run_patch(broadcast_tx, &patch);
+                }
+            }
             bex_project::CaptureKind::CallOutput => {
                 if let Some(patch) = run_store.ingest_call_value_ref(
                     encoded.boundary_id,
@@ -626,6 +647,7 @@ fn value_capture_kind_from_bex(kind: bex_project::CaptureKind) -> ValueCaptureKi
         bex_project::CaptureKind::LogBody => ValueCaptureKind::LogBody,
         bex_project::CaptureKind::CallOutput => ValueCaptureKind::CallOutput,
         bex_project::CaptureKind::CallError => ValueCaptureKind::CallError,
+        bex_project::CaptureKind::CallInput => ValueCaptureKind::CallInput,
     }
 }
 
@@ -1522,6 +1544,7 @@ async fn handle_function_run(
             .await
         {
             Ok(traced) => {
+                flush_native_profile_events_before_trace_attach(boundary_id);
                 broadcast_root_trace_attachment(
                     &broadcast_tx,
                     &run_store,
@@ -1630,6 +1653,7 @@ fn handle_test_run(
             .await
         {
             Ok(traced) => {
+                flush_native_profile_events_before_trace_attach(boundary_id);
                 broadcast_root_trace_attachment(
                     &broadcast_tx,
                     &run_store,

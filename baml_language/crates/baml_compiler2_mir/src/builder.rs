@@ -333,6 +333,29 @@ impl MirBuilder {
         target: BlockId,
         unwind: Option<BlockId>,
     ) {
+        self.call_with_type_args_and_runtime_id(
+            callee,
+            args,
+            ntypeargs,
+            None,
+            destination,
+            target,
+            unwind,
+        );
+    }
+
+    /// Emit a function call with an optional hidden runtime-id operand.
+    #[expect(clippy::too_many_arguments)]
+    pub(crate) fn call_with_type_args_and_runtime_id(
+        &mut self,
+        callee: Operand,
+        args: Vec<Operand>,
+        ntypeargs: usize,
+        runtime_id: Option<Operand>,
+        destination: Place,
+        target: BlockId,
+        unwind: Option<BlockId>,
+    ) {
         debug_assert!(
             matches!(destination, Place::Local(_)),
             "Call destination must be a local place"
@@ -341,6 +364,7 @@ impl MirBuilder {
             callee,
             args,
             ntypeargs,
+            runtime_id,
             destination,
             target,
             unwind,
@@ -362,6 +386,32 @@ impl MirBuilder {
         target: BlockId,
         unwind: Option<BlockId>,
     ) {
+        self.virtual_call_with_runtime_id(
+            iface,
+            method,
+            args,
+            ntypeargs,
+            None,
+            destination,
+            target,
+            unwind,
+        );
+    }
+
+    /// Emit an open-world virtual interface-method call with an optional hidden
+    /// runtime-id operand.
+    #[expect(clippy::too_many_arguments)]
+    pub(crate) fn virtual_call_with_runtime_id(
+        &mut self,
+        iface: baml_type::TyTemplate,
+        method: String,
+        args: Vec<Operand>,
+        ntypeargs: usize,
+        runtime_id: Option<Operand>,
+        destination: Place,
+        target: BlockId,
+        unwind: Option<BlockId>,
+    ) {
         debug_assert!(
             matches!(destination, Place::Local(_)),
             "VirtualCall destination must be a local place"
@@ -375,6 +425,7 @@ impl MirBuilder {
             method,
             args,
             ntypeargs,
+            runtime_id,
             destination,
             target,
             unwind,
@@ -408,6 +459,19 @@ impl MirBuilder {
         target: BlockId,
         unwind: Option<BlockId>,
     ) {
+        self.sys_op_with_runtime_id(callee, args, None, destination, target, unwind);
+    }
+
+    /// BEP-034 phase D′ sys-op call with an optional hidden runtime-id operand.
+    pub(crate) fn sys_op_with_runtime_id(
+        &mut self,
+        callee: Operand,
+        args: Vec<Operand>,
+        runtime_id: Option<Operand>,
+        destination: Place,
+        target: BlockId,
+        unwind: Option<BlockId>,
+    ) {
         debug_assert!(
             matches!(destination, Place::Local(_)),
             "SysOp destination must be a local place"
@@ -415,6 +479,7 @@ impl MirBuilder {
         self.set_terminator(Terminator::SysOp {
             callee,
             args,
+            runtime_id,
             destination,
             target,
             unwind,

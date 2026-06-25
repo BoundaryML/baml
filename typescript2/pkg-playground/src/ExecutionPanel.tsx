@@ -552,6 +552,8 @@ const TraceLogView: FC<{ log: RunTraceLog }> = ({ log }) => {
 
 function traceCallValueRoleLabel(role: RunTraceCallValue['role']): string {
   switch (role) {
+    case 'callInput':
+      return 'input';
     case 'callOutput':
       return 'output';
     case 'callError':
@@ -564,6 +566,8 @@ function traceCallValueRoleLabel(role: RunTraceCallValue['role']): string {
 
 function traceCallValueRoleClass(role: RunTraceCallValue['role']): string {
   switch (role) {
+    case 'callInput':
+      return 'text-vsc-text-muted';
     case 'callOutput':
       return 'text-vsc-accent';
     case 'callError':

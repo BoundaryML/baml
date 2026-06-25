@@ -368,9 +368,11 @@ describe('run-store-projections', () => {
     ]);
   });
 
-  it('attaches call output and error captured values under their owning call nodes', () => {
+  it('attaches call input/output/error captured values under their owning call nodes', () => {
+    const inputBytes = outboundStringBytes('args');
     const outputBytes = outboundStringBytes('ok');
     const errorBytes = outboundStringBytes('boom');
+    const inputRef = valueRefFixture('call_input', inputBytes);
     const outputRef = valueRefFixture('call_output', outputBytes);
     const errorRef = valueRefFixture('call_error', errorBytes);
     const run = runFixture({
@@ -383,10 +385,21 @@ describe('run-store-projections', () => {
           id: 'child',
           parentId: 'root',
           functionName: 'user.leaf',
-          payloadIds: ['payload-error'],
+          payloadIds: ['payload-input', 'payload-error'],
         }),
       ],
       payloads: [
+        payloadFixture({
+          id: 'payload-input',
+          callNodeId: 'child',
+          timestampMs: 100,
+          kind: {
+            type: 'capturedValue',
+            role: 'callInput',
+            label: 'inputs',
+            valueRef: inputRef,
+          },
+        }),
         payloadFixture({
           id: 'payload-output',
           callNodeId: 'child',
@@ -415,6 +428,7 @@ describe('run-store-projections', () => {
     const rows = runToTraceRows(
       run,
       cacheWithEntries({
+        call_input: inputBytes,
         call_output: outputBytes,
         call_error: errorBytes,
       }),
@@ -422,6 +436,13 @@ describe('run-store-projections', () => {
 
     expect(rows.find((row) => row.id === 'root')?.callValues).toEqual([]);
     expect(rows.find((row) => row.id === 'child')?.callValues).toEqual([
+      expect.objectContaining({
+        id: 'payload-input',
+        role: 'callInput',
+        label: 'inputs',
+        state: 'available',
+        value: 'args',
+      }),
       expect.objectContaining({
         id: 'payload-output',
         role: 'callOutput',

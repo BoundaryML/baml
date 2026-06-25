@@ -28,6 +28,7 @@ pub enum CaptureKind {
     LogBody,
     CallOutput,
     CallError,
+    CallInput,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -328,6 +329,7 @@ fn value_capture_kind(kind: CaptureKind) -> ValueCaptureKind {
         CaptureKind::LogBody => ValueCaptureKind::LogBody,
         CaptureKind::CallOutput => ValueCaptureKind::CallOutput,
         CaptureKind::CallError => ValueCaptureKind::CallError,
+        CaptureKind::CallInput => ValueCaptureKind::CallInput,
     }
 }
 
@@ -344,7 +346,8 @@ impl CaptureKind {
             | CaptureKind::RootOutput
             | CaptureKind::RootError
             | CaptureKind::CallOutput
-            | CaptureKind::CallError => CaptureQueueClass::Value,
+            | CaptureKind::CallError
+            | CaptureKind::CallInput => CaptureQueueClass::Value,
             CaptureKind::LogBody => CaptureQueueClass::Log,
         }
     }

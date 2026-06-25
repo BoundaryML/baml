@@ -71,7 +71,7 @@ type LogPayloadEvent = PayloadEvent & {
   kind: Extract<PayloadEvent['kind'], { type: 'log' }>;
 };
 
-export type RunTraceCallValueRole = 'callOutput' | 'callError';
+export type RunTraceCallValueRole = 'callInput' | 'callOutput' | 'callError';
 
 export type RunTraceCallValue = {
   id: string;
@@ -871,7 +871,7 @@ function isCallValuePayload(payload: PayloadEvent): payload is CallValuePayloadE
   const kind = payload.kind;
   return (
     kind.type === 'capturedValue' &&
-    (kind.role === 'callOutput' || kind.role === 'callError')
+    (kind.role === 'callInput' || kind.role === 'callOutput' || kind.role === 'callError')
   );
 }
 

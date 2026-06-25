@@ -102,7 +102,10 @@ use bex_heap::BexHeap;
 // Re-export GcStats for users of the engine
 pub use bex_heap::GcStats;
 pub use bex_heap::{ActiveHeapPermit, HeapGuard, HeapPermitManager, InactiveHeapPermit};
-use bex_vm::{BexVm, VmCallCaptureKind, VmCaptureMask, VmExecState};
+use bex_vm::{
+    BexVm, VmCallCaptureKind, VmCallInputCapture, VmCallInputCaptureHook, VmCaptureMask,
+    VmExecState,
+};
 use bex_vm_types::{
     FunctionMeta, FunctionOrigin, GlobalPool, HeapPtr, Object, SharedGlobals, SysOp,
     TaskGroupInner, Value, ValueKind, VmGlobals,
@@ -263,6 +266,37 @@ struct LogCaptureContext {
 struct CallValueCaptureContext {
     boundary_id: bex_events::ids::BoundaryId,
     producer: TraceCaptureProducer,
+}
+
+impl CallValueCaptureContext {
+    fn input_capture_hook(&self) -> Arc<dyn VmCallInputCaptureHook> {
+        Arc::new(EngineCallInputCaptureHook {
+            boundary_id: self.boundary_id,
+            producer: self.producer.clone(),
+        })
+    }
+}
+
+struct EngineCallInputCaptureHook {
+    boundary_id: bex_events::ids::BoundaryId,
+    producer: TraceCaptureProducer,
+}
+
+impl VmCallInputCaptureHook for EngineCallInputCaptureHook {
+    fn capture_call_input(&self, capture: VmCallInputCapture<'_>) {
+        let _ = self.producer.capture_with(
+            self.boundary_id,
+            capture.call,
+            CaptureKind::CallInput,
+            |trace_heap| {
+                trace_heap.copy_named_values_from_bex_heap(
+                    capture.heap,
+                    capture.permit,
+                    capture.entries,
+                )
+            },
+        );
+    }
 }
 
 /// Internal call argument after host binding has distinguished omission from
@@ -2305,6 +2339,11 @@ impl BexEngine {
                     boundary_id: boundary.boundary_id,
                     producer: value_capture.clone(),
                 });
+        thread.vm.set_call_input_capture_hook(
+            call_capture
+                .as_ref()
+                .map(CallValueCaptureContext::input_capture_hook),
+        );
         if let (Some(capture), Some(entries)) = (root_capture.as_ref(), root_input_values.as_ref())
         {
             let _ = capture.producer.capture_with(
@@ -3551,6 +3590,11 @@ impl BexEngine {
         child_vm.prof_suppressed = prof_suppressed;
         child_vm.bex_ref_seed = Some((self.process_euid, self.engine_id));
         child_vm.set_value_capture_auto_enabled(call_capture.is_some());
+        child_vm.set_call_input_capture_hook(
+            call_capture
+                .as_ref()
+                .map(CallValueCaptureContext::input_capture_hook),
+        );
         // Snapshot on the spawning thread, immediately before the entry
         // frame's CallFunction lands (no await in between); the loop-head
         // refresh re-snapshots on the child task's own thread later. The

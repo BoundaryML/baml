@@ -708,7 +708,9 @@ fn open_boundary_from_segments_with_fallback(
         record.capture.as_ref().is_some_and(|capture| {
             matches!(
                 capture.kind,
-                ValueCaptureKind::CallOutput | ValueCaptureKind::CallError
+                ValueCaptureKind::CallInput
+                    | ValueCaptureKind::CallOutput
+                    | ValueCaptureKind::CallError
             )
         })
     }) {
@@ -716,6 +718,7 @@ fn open_boundary_from_segments_with_fallback(
             continue;
         };
         let role = match capture.kind {
+            ValueCaptureKind::CallInput => crate::run::CapturedValueRole::CallInput,
             ValueCaptureKind::CallOutput => crate::run::CapturedValueRole::CallOutput,
             ValueCaptureKind::CallError => crate::run::CapturedValueRole::CallError,
             _ => continue,
@@ -733,6 +736,7 @@ fn open_boundary_from_segments_with_fallback(
                 role,
                 label: Some(
                     match role {
+                        crate::run::CapturedValueRole::CallInput => "inputs",
                         crate::run::CapturedValueRole::CallOutput => "output",
                         crate::run::CapturedValueRole::CallError => "error",
                         crate::run::CapturedValueRole::RootInput => "inputs",
@@ -1391,6 +1395,7 @@ mod tests {
         let root = root_trace();
         for event in [
             call_event(),
+            child_call_event(2, root.call_id.0),
             child_call_event(3, root.call_id.0),
             child_call_event(4, root.call_id.0),
         ] {
@@ -1417,6 +1422,21 @@ mod tests {
             call_id: BexCallId(4),
             ..root
         };
+        let input_call = TraceCallKey {
+            call_id: BexCallId(2),
+            ..root
+        };
+        let input = store
+            .append_value_body(
+                boundary_id,
+                ValueCapture {
+                    kind: ValueCaptureKind::CallInput,
+                    call: input_call,
+                },
+                ValueCodec::BamlOutboundValue,
+                vec![0, 1],
+            )
+            .unwrap();
         let output = store
             .append_value_body(
                 boundary_id,
@@ -1462,8 +1482,30 @@ mod tests {
         );
         assert_eq!(replayed.error, None);
 
+        let input_call_node_id = call_node_id(&input_call);
         let output_call_node_id = call_node_id(&output_call);
         let error_call_node_id = call_node_id(&error_call);
+        let input_payload = replayed
+            .payloads
+            .iter()
+            .find(|payload| {
+                matches!(
+                    &payload.kind,
+                    crate::run::PayloadKind::CapturedValue(crate::run::CapturedValuePayload {
+                        role: crate::run::CapturedValueRole::CallInput,
+                        ..
+                    })
+                )
+            })
+            .expect("call input payload should replay");
+        assert_eq!(input_payload.call_node_id, Some(input_call_node_id));
+        assert!(matches!(
+            &input_payload.kind,
+            crate::run::PayloadKind::CapturedValue(crate::run::CapturedValuePayload {
+                label: Some(label),
+                ..
+            }) if label == "inputs"
+        ));
         let output_payload = replayed
             .payloads
             .iter()
@@ -1497,6 +1539,15 @@ mod tests {
             replayed
                 .calls
                 .iter()
+                .find(|call| call.id == input_call_node_id)
+                .expect("input call should replay")
+                .payload_ids,
+            vec![input_payload.id]
+        );
+        assert_eq!(
+            replayed
+                .calls
+                .iter()
                 .find(|call| call.id == output_call_node_id)
                 .expect("output call should replay")
                 .payload_ids,
@@ -1510,6 +1561,14 @@ mod tests {
                 .expect("error call should replay")
                 .payload_ids,
             vec![error_payload.id]
+        );
+        assert_eq!(
+            store
+                .read_value(boundary_id, &input.value_ref.id)
+                .unwrap()
+                .unwrap()
+                .body,
+            vec![0, 1]
         );
         assert_eq!(
             store

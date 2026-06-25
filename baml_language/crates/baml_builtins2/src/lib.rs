@@ -132,6 +132,7 @@ pub const ALL: &[BuiltinFile] = &[
     builtin!("baml", "ns_time/zoneddatetime.baml"),
     builtin!("baml", "ns_ops/comparison.baml"),
     // --- boundary package ---
+    builtin!("boundary", "core.baml"),
     builtin!("boundary", "ns_id/id.baml"),
     // --- reflect package (standalone, accessible as `reflect.type_of(...)`) ---
     builtin!("reflect", "reflect.baml"),

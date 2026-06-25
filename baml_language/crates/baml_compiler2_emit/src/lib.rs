@@ -29,9 +29,9 @@ use baml_compiler2_mir::{
 use baml_compiler2_ppir::file_item_tree;
 use baml_type::{RuntimeTy, TyAttr};
 use bex_vm_types::{
-    Bytecode, Class, ClassField, ConstValue, Enum, EnumVariant, Function, FunctionCaptureProps,
-    FunctionKind, FunctionMeta, FunctionOrigin, Instruction, Object, ObjectIndex, ObjectPool,
-    Program,
+    Bytecode, CaptureCategory, Class, ClassField, ConstValue, Enum, EnumVariant, Function,
+    FunctionCaptureProps, FunctionKind, FunctionMeta, FunctionOrigin, Instruction, Object,
+    ObjectIndex, ObjectPool, Program,
 };
 
 /// Build a per-package `ResolvedAliases` cache, keyed by package name.
@@ -482,15 +482,16 @@ pub(crate) use emit::compile_mir_function;
 fn is_builtin_function_name(name: &str) -> bool {
     matches!(
         name.split('.').next(),
-        Some("baml" | "assert" | "testing" | "log" | "env")
+        Some("baml" | "boundary" | "reflect" | "assert" | "testing" | "log" | "env")
     )
 }
 
 fn emitted_function_origin(
     fq_name: &str,
+    is_builtin_file: bool,
     origin: baml_compiler2_ast::FunctionOrigin,
 ) -> FunctionOrigin {
-    if is_builtin_function_name(fq_name) {
+    if is_builtin_file || is_builtin_function_name(fq_name) {
         FunctionOrigin::Builtin
     } else {
         match origin {
@@ -934,6 +935,7 @@ pub fn generate_project_bytecode_with_opt(
         let line_starts = build_line_starts(file.text(db));
         let item_tree = file_item_tree(db, *file);
         let pkg_info_pass4 = file_package(db, *file);
+        let is_builtin_file = file.path(db).to_string_lossy().starts_with("<builtin>/");
         let cache_pass4 = &alias_caches[&pkg_info_pass4.package];
         for (local_id, func_data) in &item_tree.functions {
             let func_loc = FunctionLoc::new(db, *file, *local_id);
@@ -1070,7 +1072,8 @@ pub fn generate_project_bytecode_with_opt(
 
             // Set inferred throws type from TIR throw inference
             compiled_fn.throws_type = compute_throws_type(db, *file, &func_data.name, cache_pass4);
-            compiled_fn.origin = emitted_function_origin(&fq_name, func_data.origin);
+            compiled_fn.origin =
+                emitted_function_origin(&fq_name, is_builtin_file, func_data.origin);
 
             // Set LLM-specific body_meta if this is an LLM function
             if let Some(baml_compiler2_ast::DeclarativeMeta::Llm(llm_meta)) =
@@ -1099,7 +1102,10 @@ pub fn generate_project_bytecode_with_opt(
                         prompt_template,
                         client: client.to_string(),
                     });
-                    compiled_fn.capture = FunctionCaptureProps::auto_output_and_error();
+                    compiled_fn.capture = FunctionCaptureProps::disabled()
+                        .with_auto(CaptureCategory::Input)
+                        .with_auto(CaptureCategory::Output)
+                        .with_auto(CaptureCategory::Error);
                 }
             }
 

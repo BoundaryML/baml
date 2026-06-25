@@ -2059,6 +2059,17 @@ fn drain_wasm_captured_values(
             bex_project::CaptureKind::RootError => {
                 refs.error = Some(value_ref);
             }
+            bex_project::CaptureKind::CallInput => {
+                if let Some(patch) = run_store.ingest_call_value_ref(
+                    encoded.boundary_id,
+                    encoded.call,
+                    CapturedValueRole::CallInput,
+                    Some("inputs".to_string()),
+                    Some(value_ref),
+                ) {
+                    send_run_patch(callback, &patch);
+                }
+            }
             bex_project::CaptureKind::CallOutput => {
                 if let Some(patch) = run_store.ingest_call_value_ref(
                     encoded.boundary_id,
@@ -2115,6 +2126,7 @@ fn value_capture_kind_from_bex(kind: bex_project::CaptureKind) -> ValueCaptureKi
         bex_project::CaptureKind::LogBody => ValueCaptureKind::LogBody,
         bex_project::CaptureKind::CallOutput => ValueCaptureKind::CallOutput,
         bex_project::CaptureKind::CallError => ValueCaptureKind::CallError,
+        bex_project::CaptureKind::CallInput => ValueCaptureKind::CallInput,
     }
 }
 

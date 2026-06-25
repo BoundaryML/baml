@@ -303,6 +303,7 @@ fn payload_kind_to_wire(kind: &PayloadKind) -> Value {
 fn captured_value_role_to_wire(role: CapturedValueRole) -> &'static str {
     match role {
         CapturedValueRole::RootInput => "rootInput",
+        CapturedValueRole::CallInput => "callInput",
         CapturedValueRole::CallOutput => "callOutput",
         CapturedValueRole::CallError => "callError",
     }

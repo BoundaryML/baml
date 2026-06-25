@@ -471,12 +471,14 @@ pub enum CaptureOption {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CaptureCategory {
+    Input,
     Output,
     Error,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
 pub struct FunctionCaptureProps {
+    pub inputs: CaptureOption,
     pub output: CaptureOption,
     pub error: CaptureOption,
 }
@@ -485,25 +487,34 @@ impl FunctionCaptureProps {
     #[must_use]
     pub const fn disabled() -> Self {
         Self {
+            inputs: CaptureOption::Disabled,
             output: CaptureOption::Disabled,
             error: CaptureOption::Disabled,
         }
     }
 
     #[must_use]
-    pub const fn auto_output_and_error() -> Self {
-        Self {
-            output: CaptureOption::Auto,
-            error: CaptureOption::Auto,
+    pub const fn option(self, category: CaptureCategory) -> CaptureOption {
+        match category {
+            CaptureCategory::Input => self.inputs,
+            CaptureCategory::Output => self.output,
+            CaptureCategory::Error => self.error,
         }
     }
 
     #[must_use]
-    pub const fn option(self, category: CaptureCategory) -> CaptureOption {
+    pub const fn with_option(mut self, category: CaptureCategory, option: CaptureOption) -> Self {
         match category {
-            CaptureCategory::Output => self.output,
-            CaptureCategory::Error => self.error,
+            CaptureCategory::Input => self.inputs = option,
+            CaptureCategory::Output => self.output = option,
+            CaptureCategory::Error => self.error = option,
         }
+        self
+    }
+
+    #[must_use]
+    pub const fn with_auto(self, category: CaptureCategory) -> Self {
+        self.with_option(category, CaptureOption::Auto)
     }
 }
 

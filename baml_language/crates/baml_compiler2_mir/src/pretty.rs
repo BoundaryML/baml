@@ -256,6 +256,7 @@ fn write_terminator(f: &mut impl Write, term: &Terminator) -> fmt::Result {
             callee,
             args,
             ntypeargs,
+            runtime_id,
             destination,
             target,
             unwind,
@@ -279,6 +280,10 @@ fn write_terminator(f: &mut impl Write, term: &Terminator) -> fmt::Result {
                 }
                 write_operand(f, arg)?;
             }
+            if let Some(runtime_id) = runtime_id {
+                write!(f, ", $id = ")?;
+                write_operand(f, runtime_id)?;
+            }
             write!(f, ") -> [{target}")?;
             if let Some(u) = unwind {
                 write!(f, ", unwind: {u}")?;
@@ -290,6 +295,7 @@ fn write_terminator(f: &mut impl Write, term: &Terminator) -> fmt::Result {
             method,
             args,
             ntypeargs,
+            runtime_id,
             destination,
             target,
             unwind,
@@ -312,6 +318,10 @@ fn write_terminator(f: &mut impl Write, term: &Terminator) -> fmt::Result {
                 }
                 write_operand(f, arg)?;
             }
+            if let Some(runtime_id) = runtime_id {
+                write!(f, ", $id = ")?;
+                write_operand(f, runtime_id)?;
+            }
             write!(f, ") -> [{target}")?;
             if let Some(u) = unwind {
                 write!(f, ", unwind: {u}")?;
@@ -324,6 +334,7 @@ fn write_terminator(f: &mut impl Write, term: &Terminator) -> fmt::Result {
         Terminator::SysOp {
             callee,
             args,
+            runtime_id,
             destination,
             target,
             unwind,
@@ -336,6 +347,10 @@ fn write_terminator(f: &mut impl Write, term: &Terminator) -> fmt::Result {
                     write!(f, ", ")?;
                 }
                 write_operand(f, arg)?;
+            }
+            if let Some(runtime_id) = runtime_id {
+                write!(f, ", $id = ")?;
+                write_operand(f, runtime_id)?;
             }
             write!(f, ") -> {target}")?;
             if let Some(u) = unwind {

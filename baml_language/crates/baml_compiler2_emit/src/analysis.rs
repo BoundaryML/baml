@@ -806,12 +806,16 @@ fn collect_uses_in_terminator(
         Terminator::Call {
             callee,
             args,
+            runtime_id,
             destination,
             ..
         } => {
             collect_uses_in_operand(callee, block, StatementRef::Terminator, def_use);
             for arg in args {
                 collect_uses_in_operand(arg, block, StatementRef::Terminator, def_use);
+            }
+            if let Some(runtime_id) = runtime_id {
+                collect_uses_in_operand(runtime_id, block, StatementRef::Terminator, def_use);
             }
             // Record the def for the destination (where call result is stored)
             if let Place::Local(local) = destination {
@@ -829,11 +833,17 @@ fn collect_uses_in_terminator(
             }
         }
         Terminator::VirtualCall {
-            args, destination, ..
+            args,
+            runtime_id,
+            destination,
+            ..
         } => {
             // No callee operand — the method is resolved at runtime from `iface`.
             for arg in args {
                 collect_uses_in_operand(arg, block, StatementRef::Terminator, def_use);
+            }
+            if let Some(runtime_id) = runtime_id {
+                collect_uses_in_operand(runtime_id, block, StatementRef::Terminator, def_use);
             }
             // Record the def for the destination (where the call result is stored).
             if let Place::Local(local) = destination {
@@ -850,12 +860,16 @@ fn collect_uses_in_terminator(
         Terminator::SysOp {
             callee,
             args,
+            runtime_id,
             destination,
             ..
         } => {
             collect_uses_in_operand(callee, block, StatementRef::Terminator, def_use);
             for arg in args {
                 collect_uses_in_operand(arg, block, StatementRef::Terminator, def_use);
+            }
+            if let Some(runtime_id) = runtime_id {
+                collect_uses_in_operand(runtime_id, block, StatementRef::Terminator, def_use);
             }
             // Record the def for the destination place
             if let Place::Local(local) = destination {
@@ -1922,6 +1936,7 @@ mod tests {
                         callee: Operand::Constant(Constant::Null),
                         args: vec![],
                         ntypeargs: 0,
+                        runtime_id: None,
                         destination: Place::Local(target),
                         target: BlockId(1),
                         unwind: None,

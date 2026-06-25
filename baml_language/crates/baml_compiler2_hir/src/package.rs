@@ -202,6 +202,14 @@ pub fn package_items<'db>(db: &'db dyn crate::Db, package_id: PackageId<'db>) ->
                 .get(first_segment)
                 .or_else(|| root_ns.values.get(first_segment))
             {
+                if def
+                    .file(db)
+                    .path(db)
+                    .to_string_lossy()
+                    .starts_with("<builtin>/")
+                {
+                    continue;
+                }
                 shadows.push(NamespaceShadow {
                     ns_name: first_segment.clone(),
                     ns_path: ns_path.clone(),

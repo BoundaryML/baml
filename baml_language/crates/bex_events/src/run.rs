@@ -376,6 +376,7 @@ pub struct CapturedValuePayload {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CapturedValueRole {
     RootInput,
+    CallInput,
     CallOutput,
     CallError,
 }
@@ -1274,9 +1275,11 @@ impl InMemoryRunStore {
         debug_assert!(
             matches!(
                 role,
-                CapturedValueRole::CallOutput | CapturedValueRole::CallError
+                CapturedValueRole::CallInput
+                    | CapturedValueRole::CallOutput
+                    | CapturedValueRole::CallError
             ),
-            "call value ingestion only accepts call output/error roles"
+            "call value ingestion only accepts call input/output/error roles"
         );
         let mut inner = self
             .inner
@@ -2398,7 +2401,10 @@ fn recompute_record_profile(
     for payload in &mut record.run.payloads {
         if payload.call_node_id.is_none()
             && let PayloadKind::CapturedValue(CapturedValuePayload {
-                role: CapturedValueRole::CallOutput | CapturedValueRole::CallError,
+                role:
+                    CapturedValueRole::CallInput
+                    | CapturedValueRole::CallOutput
+                    | CapturedValueRole::CallError,
                 trace_call: Some(call),
                 ..
             }) = &payload.kind
@@ -4609,21 +4615,37 @@ mod tests {
 
         let store = InMemoryRunStore::default();
         let start = create_test_run(&store, request("call-values"), RequestId(1));
-        let output_call = TraceCallKey {
+        let input_call = TraceCallKey {
             process_euid: ProcessEuid([1; 16]),
             engine_id: EngineId(2),
             thread_id: BexThreadId(1),
             call_id: BexCallId(2),
         };
-        let error_call = TraceCallKey {
+        let output_call = TraceCallKey {
             process_euid: ProcessEuid([1; 16]),
             engine_id: EngineId(2),
             thread_id: BexThreadId(1),
             call_id: BexCallId(3),
         };
+        let error_call = TraceCallKey {
+            process_euid: ProcessEuid([1; 16]),
+            engine_id: EngineId(2),
+            thread_id: BexThreadId(1),
+            call_id: BexCallId(4),
+        };
+        let input_ref = ValueRef::available("value_input", ValueCodec::BamlOutboundValue, 8, 8);
         let output_ref = ValueRef::available("value_output", ValueCodec::BamlOutboundValue, 6, 6);
         let error_ref = ValueRef::available("value_error", ValueCodec::BamlOutboundValue, 4, 4);
 
+        let input_patch = store
+            .ingest_call_value_ref(
+                start.boundary_id,
+                input_call,
+                CapturedValueRole::CallInput,
+                Some("inputs".to_string()),
+                Some(input_ref),
+            )
+            .expect("run should exist");
         let output_patch = store
             .ingest_call_value_ref(
                 start.boundary_id,
@@ -4643,7 +4665,7 @@ mod tests {
             )
             .expect("run should exist");
 
-        for patch in [output_patch, error_patch] {
+        for patch in [input_patch, output_patch, error_patch] {
             assert!(patch.changes.iter().any(|change| {
                 matches!(
                     change,
@@ -4699,6 +4721,16 @@ mod tests {
                 },
                 40,
             ),
+            envelope(
+                ProfileEventKind::CallFunction {
+                    thread_id: BexThreadId(1),
+                    call_id: BexCallId(4),
+                    parent_call_id: Some(BexCallId(1)),
+                    function_id: FunctionId(4),
+                    call_site_source: None,
+                },
+                50,
+            ),
         ] {
             store.ingest_profile_event(event);
         }
@@ -4708,9 +4740,10 @@ mod tests {
             panic!("root trace should attach");
         };
 
+        let input_call_id = call_node_id(&input_call);
         let output_call_id = call_node_id(&output_call);
         let error_call_id = call_node_id(&error_call);
-        for expected_call_id in [output_call_id, error_call_id] {
+        for expected_call_id in [input_call_id, output_call_id, error_call_id] {
             assert!(patches.iter().any(|patch| {
                 patch.changes.iter().any(|change| {
                     matches!(
@@ -4726,6 +4759,20 @@ mod tests {
         }
 
         let snapshot = store.snapshot(start.boundary_id).unwrap();
+        let input_payload = snapshot
+            .payloads
+            .iter()
+            .find(|payload| {
+                matches!(
+                    &payload.kind,
+                    PayloadKind::CapturedValue(CapturedValuePayload {
+                        role: CapturedValueRole::CallInput,
+                        ..
+                    })
+                )
+            })
+            .expect("input payload");
+        assert_eq!(input_payload.call_node_id, Some(input_call_id));
         let output_payload = snapshot
             .payloads
             .iter()
@@ -4756,6 +4803,7 @@ mod tests {
         assert_eq!(error_payload.call_node_id, Some(error_call_id));
 
         for (expected_call_id, expected_payload) in [
+            (input_call_id, input_payload),
             (output_call_id, output_payload),
             (error_call_id, error_payload),
         ] {
@@ -4768,6 +4816,14 @@ mod tests {
         }
 
         let wire = run_to_wire(&snapshot);
+        let input_wire = wire["payloads"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|payload| payload["kind"]["role"] == "callInput")
+            .expect("call input wire payload");
+        assert_eq!(input_wire["kind"]["label"], "inputs");
+        assert_eq!(input_wire["kind"]["valueRef"]["id"], "value_input");
         let output_wire = wire["payloads"]
             .as_array()
             .unwrap()
