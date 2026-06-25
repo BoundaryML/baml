@@ -263,6 +263,196 @@ mod tests {
         );
     }
 
+    /// Stage 1 dual-write invariant: the unified `impls` map holds exactly one
+    /// `ImplBlock` per legacy impl entry (in-body `Class::implements` +
+    /// out-of-body `implements_for`), partitioned correctly by subject, and
+    /// `class_to_impls` indexes every `InClass` impl.
+    #[test]
+    fn impls_map_is_consistent_with_legacy_representation() {
+        use baml_compiler2_hir::item_tree::ImplSubject;
+
+        let mut db = make_db();
+        let file = db.add_file(
+            "impls.baml",
+            r#"
+            interface Show {
+                function show(self) -> string
+            }
+            class Dog {
+                breed: string
+                implements Show {
+                    function show(self) -> string { return self.breed }
+                }
+            }
+            class Cat {
+                name: string
+            }
+            implements Show for Cat {
+                function show(self) -> string { return self.name }
+            }
+            class Box<T> {
+                value: T
+            }
+            implements<T> Show for Box<T> {
+                function show(self) -> string { return "box" }
+            }
+            "#,
+        );
+
+        let item_tree = baml_compiler2_hir::file_item_tree(&db, file);
+
+        let legacy_in_class: usize = item_tree.classes.values().map(|c| c.implements.len()).sum();
+        let legacy_out_of_body = item_tree.implements_for.len();
+
+        // One ImplBlock per legacy entry.
+        assert_eq!(
+            item_tree.impls.len(),
+            legacy_in_class + legacy_out_of_body,
+            "expected one ImplBlock per legacy impl entry"
+        );
+
+        // Subject partition matches the legacy split.
+        let in_class = item_tree
+            .impls
+            .values()
+            .filter(|b| matches!(b.subject, ImplSubject::InClass { .. }))
+            .count();
+        assert_eq!(in_class, legacy_in_class, "InClass count mismatch");
+        assert_eq!(
+            item_tree.impls.len() - in_class,
+            legacy_out_of_body,
+            "Free count mismatch"
+        );
+
+        // `class_to_impls` indexes exactly the InClass impls.
+        let indexed: usize = item_tree.class_to_impls.values().map(|v| v.len()).sum();
+        assert_eq!(indexed, legacy_in_class, "class_to_impls coverage mismatch");
+
+        // Every impl carries its lowered method ids (here, `show`).
+        for block in item_tree.impls.values() {
+            assert!(
+                !block.methods.is_empty(),
+                "impl block should carry its method ids"
+            );
+        }
+    }
+
+    /// The canonical `get_implements_block` resolver enforces a blanket impl's
+    /// generic bounds and restricts a bare blanket `for T` to concrete
+    /// receivers: a receiver that fails the bound resolves to no impl, and an
+    /// interface-existential never binds a bare blanket.
+    #[test]
+    fn get_implements_block_enforces_bounds_and_blanket_concreteness() {
+        use baml_compiler2_hir::contributions::Definition;
+        use baml_type::{Ty, TyAttr};
+
+        let mut db = make_db();
+        let file = db.add_file(
+            "resolver.baml",
+            r#"
+            interface Printable { function p(self) -> string }
+            interface Loud { function loud(self) -> string }
+            implements<T extends Printable> Loud for T {
+                function loud(self) -> string { return "loud" }
+            }
+            class Widget {
+                implements Printable {
+                    function p(self) -> string { return "w" }
+                }
+            }
+            class Plain {
+                name: string
+            }
+            "#,
+        );
+
+        let pkg_id = PackageId::new(&db, Name::new("user"));
+        let tree = baml_compiler2_hir::file_item_tree(&db, file);
+        let aliases = std::collections::HashMap::new();
+
+        let class_ty = |class_name: &str| {
+            let (id, data) = tree
+                .classes
+                .iter()
+                .find(|(_, c)| c.name == Name::new(class_name))
+                .expect("class in item tree");
+            let loc = baml_compiler2_hir::loc::ClassLoc::new(&db, file, *id);
+            let qtn = baml_compiler2_tir::lower_type_expr::qualify_def(
+                &db,
+                Definition::Class(loc),
+                &data.name,
+            );
+            Ty::Class(qtn, vec![], TyAttr::default())
+        };
+        let iface = |iface_name: &str| {
+            let (id, _) = tree
+                .interfaces
+                .iter()
+                .find(|(_, i)| i.name == Name::new(iface_name))
+                .expect("interface in item tree");
+            let loc = baml_compiler2_hir::loc::InterfaceLoc::new(&db, file, *id);
+            let qtn = baml_compiler2_tir::interfaces::interface_loc_qtn(&db, loc)
+                .expect("interface loc resolves to a qtn");
+            baml_type::Interface {
+                name: qtn,
+                generics: vec![],
+                associated_types: vec![],
+            }
+        };
+
+        let loud = iface("Loud");
+
+        // H2: Widget implements Printable, so the bounded blanket
+        // `Loud for T extends Printable` applies.
+        assert!(
+            baml_compiler2_tir::interfaces::get_implements_block(
+                &db,
+                pkg_id,
+                &class_ty("Widget"),
+                &loud,
+                &aliases,
+            )
+            .is_some(),
+            "Widget satisfies `T extends Printable`, so the blanket Loud impl applies"
+        );
+
+        // H2: Plain does not implement Printable, so the bound fails and the
+        // blanket must not apply.
+        assert!(
+            baml_compiler2_tir::interfaces::get_implements_block(
+                &db,
+                pkg_id,
+                &class_ty("Plain"),
+                &loud,
+                &aliases,
+            )
+            .is_none(),
+            "Plain does not implement Printable, so the bounded blanket Loud impl is rejected"
+        );
+
+        // H3: a bare blanket `for T` applies only to concrete receivers. An
+        // interface-existential is typevar-free (so it passes the realized
+        // precondition) yet must not bind the blanket.
+        let printable = iface("Printable");
+        let printable_existential = Ty::Interface(
+            printable.name,
+            printable.generics,
+            printable.associated_types,
+            TyAttr::default(),
+        );
+        assert!(
+            baml_compiler2_tir::interfaces::get_implements_block(
+                &db,
+                pkg_id,
+                &printable_existential,
+                &loud,
+                &aliases,
+            )
+            .is_none(),
+            "a bare blanket `for T` must not bind an interface-existential receiver"
+        );
+    }
+
     // ── 4. scope_bindings via FileSemanticIndex ───────────────────────────────
 
     /// Per-scope bindings are accessible from the FileSemanticIndex.

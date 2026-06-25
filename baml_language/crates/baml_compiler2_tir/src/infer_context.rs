@@ -407,6 +407,9 @@ pub enum TirTypeError {
     /// the representable `int` range `[-2^62, 2^62-1]`. `int` is 63-bit; larger
     /// magnitudes need a `bigint` literal (`n` suffix).
     IntegerLiteralOutOfRange { value: i64 },
+    /// BEP-044: a generic parameter's bound (`<T extends X>`) resolved to a
+    /// concrete non-interface type. Generic bounds must be interfaces.
+    GenericBoundNotInterface { bound: Ty },
 }
 
 impl fmt::Display for TirTypeError {
@@ -1003,6 +1006,11 @@ impl fmt::Display for TirTypeError {
                 "integer literal `{value}` is out of range for `int` \
                  (which holds -4611686018427387904 to 4611686018427387903); \
                  append `n` to write it as a `bigint`"
+            ),
+            TirTypeError::GenericBoundNotInterface { bound } => write!(
+                f,
+                "generic bound `{}` is not an interface; bounds must be interfaces",
+                bound.render_user_facing()
             ),
         }
     }
