@@ -276,10 +276,10 @@ function lineRange(from: number, to: number): number[] {
   return Array.from({ length: to - from + 1 }, (_, i) => from + i);
 }
 
+type WorkflowExampleId = (typeof WORKFLOW_EXAMPLES)[number]['id'];
+
 function WorkflowPlayground() {
-  const [id, setId] = useState<(typeof WORKFLOW_EXAMPLES)[number]['id']>(
-    WORKFLOW_EXAMPLES[0].id,
-  );
+  const [id, setId] = useState<WorkflowExampleId>(WORKFLOW_EXAMPLES[0].id);
   const ex = WORKFLOW_EXAMPLES.find((e) => e.id === id) ?? WORKFLOW_EXAMPLES[0];
   return (
     <div className="l6-breakout l6-breakout--xl">
@@ -297,6 +297,8 @@ function WorkflowPlayground() {
           </button>
         ))}
       </div>
+      {/* Switching remounts the playground; LivePlayground veils only its graph
+          pane (not the editor) until the new graph is ready. */}
       <LivePlayground
         filename={ex.filename}
         highlightLines={lineRange(ex.from, ex.to)}
@@ -304,6 +306,7 @@ function WorkflowPlayground() {
         initialFunction={ex.fn}
         initialSidebarOpen={false}
         key={ex.id}
+        loadingLabel={`Loading ${ex.label}…`}
       />
     </div>
   );

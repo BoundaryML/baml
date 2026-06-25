@@ -35,6 +35,13 @@ interface LivePlaygroundProps {
   initialSidebarOpen?: boolean;
   /** Lines to tint (whole-line) on the initial code — e.g. the entry function. */
   highlightLines?: number[];
+  /** Fires once the runtime has produced the first graph for this code — used
+   *  by callers (e.g. a tabbed switcher) to clear a "loading" indicator. */
+  onReady?: () => void;
+  /** Text for the loading veil shown over the result/graph pane (not the
+   *  editor) until the first graph for this code is ready. Defaults to
+   *  "Loading…". Pass to label which workflow is loading. */
+  loadingLabel?: string;
 }
 
 type EditorInstance = Parameters<OnMount>[0];
@@ -82,16 +89,34 @@ export default function LivePlayground({
   fill,
   initialSidebarOpen,
   highlightLines,
+  onReady,
+  loadingLabel = 'Loading…',
 }: LivePlaygroundProps) {
   const [port, setPort] = useState<RuntimePort | null>(null);
   const [version, setVersion] = useState(0);
   const [failed, setFailed] = useState(false);
+  // The result/graph pane is veiled until the first graph for this code is
+  // ready (only the pane — never the editor).
+  const [ready, setReady] = useState(false);
   const portRef = useRef<RuntimePort | null>(null);
   const codeRef = useRef(initialCode);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cursorDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const editorRef = useRef<EditorInstance | null>(null);
   const monacoRef = useRef<MonacoNs | null>(null);
+  // `onReady` fires once, on the first graph result for this mount. Keep it in
+  // a ref so the stable onMount callback always sees the latest prop.
+  const onReadyRef = useRef(onReady);
+  onReadyRef.current = onReady;
+  const readyFiredRef = useRef(false);
+  // Worker + the exact listener this mount attached, so we can detach on
+  // unmount (the worker is shared, so leaking listeners across tab switches
+  // piles up zombie handlers and slows every later switch).
+  const workerRef = useRef<Worker | null>(null);
+  const msgHandlerRef = useRef<((e: MessageEvent) => void) | null>(null);
+  // Don't treat the worker's pre-existing (previous example's) project state as
+  // "ready" — only fire onReady once we've pushed THIS mount's code.
+  const nudgedRef = useRef(false);
   const lensRef = useRef<DecorationsCollection | null>(null);
 
   const applyDiagnostics = useCallback((publish: LspPublish) => {
@@ -218,30 +243,51 @@ export default function LivePlayground({
 
       getBamlWorker(codeRef.current)
         .then((worker) => {
-          worker.addEventListener('message', (e: MessageEvent) => {
+          const onMessage = (e: MessageEvent) => {
             if (e.data?.type === 'lspDiagnostics') {
               applyDiagnostics(e.data.params as LspPublish);
+            } else if (
+              nudgedRef.current &&
+              !readyFiredRef.current &&
+              (e.data?.type === 'controlFlowGraphResult' ||
+                e.data?.notification?.type === 'updateProject')
+            ) {
+              // First graph/project state for THIS mount's code has arrived
+              // (gated on the nudge so we don't latch the previous example's
+              // stale state) — lift the pane veil and notify callers.
+              readyFiredRef.current = true;
+              setReady(true);
+              onReadyRef.current?.();
             }
-          });
+          };
+          worker.addEventListener('message', onMessage);
+          workerRef.current = worker;
+          msgHandlerRef.current = onMessage;
 
           const p = new WorkerRuntimePort(worker);
           portRef.current = p;
           setPort(p);
           setVersion((v) => v + 1);
-          // The worker emits its project state during init — before the panel
-          // is listening — so the function/test list can start empty. Nudge a
-          // re-eval once mounted so functions + diagnostics show without an edit.
+          // The shared worker still holds the previous example's project. Push
+          // this mount's code so it re-evaluates to the right graph; the panel
+          // subscribes on the next render, so a short delay avoids the race.
           setTimeout(() => {
             p.postMessage({
               files: { 'baml_src/main.baml': codeRef.current },
               type: 'filesChanged',
             });
+            nudgedRef.current = true;
             // Seed the panel selection from the initial caret (best-effort —
             // the project may still be collecting; the first click corrects it).
             postCursor();
-          }, 200);
+          }, 120);
+          // Safety net: never leave the veil up forever if no graph arrives.
+          setTimeout(() => setReady(true), 6000);
         })
-        .catch(() => setFailed(true));
+        .catch(() => {
+          setFailed(true);
+          setReady(true);
+        });
     },
     [applyDiagnostics, postCursor, highlightLines],
   );
@@ -259,9 +305,30 @@ export default function LivePlayground({
     }, 200);
   }, []);
 
+  // On unmount (e.g. switching workflow tabs) detach this mount's worker
+  // listener and dispose its port, so the shared worker isn't left serving
+  // zombie panels that slow every later switch. Ref-cleanup, no useEffect.
+  const teardownRef = useCallback((node: HTMLDivElement | null) => {
+    if (!node) return undefined;
+    return () => {
+      try {
+        portRef.current?.dispose();
+      } catch {
+        /* already gone */
+      }
+      portRef.current = null;
+      const w = workerRef.current;
+      const h = msgHandlerRef.current;
+      if (w && h) w.removeEventListener('message', h);
+      workerRef.current = null;
+      msgHandlerRef.current = null;
+    };
+  }, []);
+
   return (
     <div
       className={`baml-playground-root l2-live${fill ? ' l2-live--fill' : ''}`}
+      ref={teardownRef}
     >
       <ResizablePanelGroup direction="horizontal">
         {/* `nokey` opts the editor out of React Flow's global key capture
@@ -321,22 +388,31 @@ export default function LivePlayground({
         </ResizablePanel>
         <ResizableHandle className="l2-live-splitter" withHandle />
         <ResizablePanel className="l2-live-panel" defaultSize={44} minSize={22}>
-          {failed ? (
-            <div className="l2-live-loading">runtime failed to start</div>
-          ) : port ? (
-            <ExecutionPanel
-              argsByFunction={argsByFunction}
-              connectionVersion={version}
-              initialArgsJson="{}"
-              initialFunctionName={initialFunction}
-              initialSidebarOpen={initialSidebarOpen}
-              initialTab={initialTab}
-              onNavigateToSource={onNavigateToSource}
-              port={port}
-            />
-          ) : (
-            <div className="l2-live-loading">starting runtime…</div>
-          )}
+          <div className="l2-live-pane">
+            {failed ? (
+              <div className="l2-live-loading">runtime failed to start</div>
+            ) : port ? (
+              <ExecutionPanel
+                argsByFunction={argsByFunction}
+                connectionVersion={version}
+                initialArgsJson="{}"
+                initialFunctionName={initialFunction}
+                initialSidebarOpen={initialSidebarOpen}
+                initialTab={initialTab}
+                onNavigateToSource={onNavigateToSource}
+                port={port}
+              />
+            ) : (
+              <div className="l2-live-loading">starting runtime…</div>
+            )}
+            {/* Veil over the graph pane only (never the editor) until ready. */}
+            {!failed && !ready ? (
+              <div aria-live="polite" className="l2-live-veil">
+                <span aria-hidden className="l2-live-spinner" />
+                {loadingLabel}
+              </div>
+            ) : null}
+          </div>
         </ResizablePanel>
       </ResizablePanelGroup>
     </div>

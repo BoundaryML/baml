@@ -595,7 +595,7 @@
 .l6-wf-hl {
   background: rgba(109, 40, 217, 0.1);
 }
-
+/* loading veil shown while a switched workflow's graph compiles + lays out */
 /* =========================================================================
    Recursive self-improvement — "the sweep". Ripples of refinement radiate
    from the center (per-cell animation-delay = distance from center); the

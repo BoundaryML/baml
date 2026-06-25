@@ -21,6 +21,12 @@
   inset: 0;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
+  /* terminal register: monospace throughout the deck */
+  font-family: var(--font-geist-mono), ui-monospace, "SF Mono", monospace;
+  font-weight: 300;
+  color: var(--l2-body);
+  outline: none;
   background-color: var(--background, #fbf7ed);
   background-image: radial-gradient(
     circle at 1px 1px,
@@ -28,40 +34,34 @@
     transparent 0
   );
   background-size: 20px 20px;
-  color: var(--l2-body);
-  /* terminal register: monospace throughout the deck */
-  font-family: var(--font-geist-mono), ui-monospace, "SF Mono", monospace;
-  font-weight: 300;
-  overflow: hidden;
-  outline: none;
 }
 
 /* ---- chrome: header ---- */
 .l2-deck-head {
   display: flex;
+  gap: 1rem;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
   padding: 0.85rem 1.5rem;
-  border-bottom: 1px solid var(--l2-rule);
   font-size: 12px;
+  border-bottom: 1px solid var(--l2-rule);
 }
 .l2-wordmark {
   font-weight: 600;
-  letter-spacing: 0.06em;
   color: var(--l2-ink);
+  letter-spacing: 0.06em;
   text-decoration: none;
 }
 .l2-wordmark span {
-  color: var(--l2-soft);
-  font-weight: 400;
   margin-left: 0.35rem;
+  font-weight: 400;
+  color: var(--l2-soft);
 }
 .l2-section-tag {
-  text-transform: uppercase;
-  letter-spacing: 0.16em;
   font-size: 11px;
   color: var(--l2-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
 }
 .l2-counter {
   color: var(--l2-muted);
@@ -70,21 +70,21 @@
 
 /* ---- stage ---- */
 .l2-stage {
-  flex: 1;
-  min-height: 0;
   display: flex;
+  flex: 1;
   flex-direction: column;
   align-items: center;
   /* `safe center` keeps tall slides scrollable instead of clipping the top */
   justify-content: safe center;
+  min-height: 0;
+  padding: clamp(1.25rem, 4vw, 3.5rem);
   overflow-x: hidden;
   overflow-y: auto;
-  padding: clamp(1.25rem, 4vw, 3.5rem);
 }
 .l2-slide {
   width: 100%;
-  max-width: 1040px;
   min-width: 0;
+  max-width: 1040px;
   animation: l2-slide-in 420ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
 }
 @keyframes l2-slide-in {
@@ -101,23 +101,23 @@
 /* ---- chrome: footer ---- */
 .l2-deck-foot {
   display: flex;
+  gap: 1rem;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
   padding: 0.6rem 1.5rem;
   border-top: 1px solid var(--l2-rule);
 }
 .l2-nav-btn {
-  width: 2rem;
-  height: 2rem;
   display: grid;
   place-items: center;
+  width: 2rem;
+  height: 2rem;
+  font-size: 14px;
+  color: var(--l2-ink);
+  cursor: pointer;
+  background: #fffdf6;
   border: 1px solid var(--l2-rule-strong);
   border-radius: 8px;
-  background: #fffdf6;
-  color: var(--l2-ink);
-  font-size: 14px;
-  cursor: pointer;
   transition:
     background 120ms ease,
     border-color 120ms ease;
@@ -126,24 +126,24 @@
   background: #f4eee0;
 }
 .l2-nav-btn:disabled {
-  opacity: 0.35;
   cursor: default;
+  opacity: 0.35;
 }
 .l2-dots {
   display: flex;
+  flex: 1;
   flex-wrap: wrap;
   gap: 6px;
   justify-content: center;
-  flex: 1;
 }
 .l2-dot {
   width: 7px;
   height: 7px;
   padding: 0;
+  cursor: pointer;
+  background: var(--l2-rule-strong);
   border: none;
   border-radius: 999px;
-  background: var(--l2-rule-strong);
-  cursor: pointer;
   transition:
     transform 120ms ease,
     background 120ms ease;
@@ -168,51 +168,51 @@
   margin: 0.6rem 0 1.4rem;
   font-size: clamp(25px, 3.6vw, 40px);
   font-weight: 600;
-  letter-spacing: -0.01em;
   line-height: 1.1;
   color: var(--l2-ink);
+  letter-spacing: -0.01em;
 }
 .l2-slide-body {
   font-size: 17px;
   line-height: 1.7;
 }
 .l2-lead {
+  max-width: 46ch;
+  margin: 0 0 1.1rem;
   font-size: clamp(18px, 2.2vw, 22px);
   line-height: 1.55;
   color: var(--l2-ink);
-  margin: 0 0 1.1rem;
-  max-width: 46ch;
 }
 
 .l2-quote {
-  margin: 0 0 1.4rem;
   padding-left: 1.1rem;
+  margin: 0 0 1.4rem;
   border-left: 2px solid var(--l2-violet);
 }
 .l2-quote p {
+  margin: 0;
   font-family: inherit;
   font-size: clamp(20px, 2.6vw, 28px);
   font-weight: 300;
   line-height: 1.4;
   color: var(--l2-ink);
-  margin: 0;
 }
 .l2-quote-cite {
   display: block;
   margin-top: 0.7rem;
   font-size: 12px;
-  letter-spacing: 0.04em;
-  color: var(--l2-soft);
   font-style: normal;
+  color: var(--l2-soft);
+  letter-spacing: 0.04em;
 }
 
 .l2-bullets {
-  list-style: none;
-  margin: 0;
-  padding: 0;
   display: flex;
   flex-direction: column;
   gap: 0.7rem;
+  padding: 0;
+  margin: 0;
+  list-style: none;
 }
 .l2-bullets li {
   position: relative;
@@ -222,14 +222,14 @@
   color: var(--l2-body);
 }
 .l2-bullets li::before {
-  content: "";
   position: absolute;
-  left: 0;
   top: 0.62em;
+  left: 0;
   width: 6px;
   height: 6px;
-  border-radius: 999px;
+  content: "";
   background: var(--l2-violet);
+  border-radius: 999px;
 }
 
 /* two-pane */
@@ -267,31 +267,31 @@
   min-width: 0;
 }
 .l2-example-label {
-  font-size: 11px;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--l2-soft);
   margin: 0 0 0.45rem;
+  font-size: 11px;
+  color: var(--l2-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
 }
 
 /* section divider */
 .l2-section-divider {
-  text-align: center;
   padding: 2rem 0;
+  text-align: center;
 }
 .l2-section-index {
   display: inline-block;
   font-size: 12px;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
   color: var(--l2-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.22em;
 }
 .l2-section-title {
   margin: 0.8rem 0 0.6rem;
   font-size: clamp(30px, 5vw, 52px);
   font-weight: 600;
-  letter-spacing: -0.01em;
   color: var(--l2-ink);
+  letter-spacing: -0.01em;
 }
 .l2-section-blurb {
   font-family: inherit;
@@ -301,71 +301,71 @@
 
 /* callouts */
 .l2-callout {
-  border: 1px solid var(--l2-rule-strong);
-  border-radius: 10px;
   padding: 0.7rem 0.9rem;
   font-size: 13.5px;
   line-height: 1.5;
   background: #fffdf6;
+  border: 1px solid var(--l2-rule-strong);
+  border-radius: 10px;
 }
 .l2-callout--warn {
-  border-color: #ecd9b0;
-  background: #fbf3df;
   color: #7a5a16;
+  background: #fbf3df;
+  border-color: #ecd9b0;
 }
 .l2-callout--good {
-  border-color: #bfe3d2;
-  background: #eafaf2;
   color: #0c5e42;
+  background: #eafaf2;
+  border-color: #bfe3d2;
 }
 .l2-callout--note {
   color: var(--l2-muted);
 }
 
 .l2-key {
+  padding: 1px 6px;
   font-family: var(--font-geist-mono), monospace;
   font-size: 11px;
-  padding: 1px 6px;
+  background: #fffdf6;
   border: 1px solid var(--l2-rule-strong);
   border-bottom-width: 2px;
   border-radius: 5px;
-  background: #fffdf6;
 }
 
 /* cover / closing */
 .l2-cover {
-  text-align: center;
   padding: 2rem 0;
+  text-align: center;
 }
 .l2-cover-kicker {
-  font-size: 12px;
-  letter-spacing: 0.24em;
-  text-transform: uppercase;
-  color: var(--l2-soft);
   margin: 0 0 1.2rem;
+  font-size: 12px;
+  color: var(--l2-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.24em;
 }
 .l2-cover-mark {
   display: flex;
+  gap: clamp(0.5rem, 2vw, 1.3rem);
   align-items: center;
   justify-content: center;
-  gap: clamp(0.5rem, 2vw, 1.3rem);
 }
 .l2-cover-sheep {
   width: clamp(52px, 11vw, 116px);
   height: auto;
 }
 .l2-cover-title {
+  margin: 0;
   font-family: var(--font-geist-mono), ui-monospace, monospace;
   font-size: clamp(52px, 11vw, 120px);
-  line-height: 0.95;
   font-weight: 500;
-  letter-spacing: -0.04em;
+  line-height: 0.95;
   color: var(--l2-ink);
-  margin: 0;
+  letter-spacing: -0.04em;
 }
 .l2-cover-sub {
-  margin: 1.4rem auto 0;
   max-width: 52ch;
+  margin: 1.4rem auto 0;
   font-size: clamp(16px, 2vw, 20px);
   line-height: 1.5;
   color: var(--l2-muted);
@@ -373,27 +373,27 @@
 .l2-cover-hint {
   margin-top: 2.4rem;
   font-size: 12px;
-  letter-spacing: 0.12em;
   color: var(--l2-soft);
+  letter-spacing: 0.12em;
 }
 
 /* =================== code blocks =================== */
 .l2-code {
-  margin: 0;
   min-width: 0;
   max-width: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: #fffdf7;
   border: 1px solid var(--l2-rule-strong);
   border-radius: 10px;
-  background: #fffdf7;
-  overflow: hidden;
 }
 .l2-code-head {
   display: flex;
-  align-items: center;
   gap: 0.6rem;
+  align-items: center;
   padding: 0.5rem 0.8rem;
-  border-bottom: 1px solid var(--l2-rule);
   background: #f6f0e2;
+  border-bottom: 1px solid var(--l2-rule);
 }
 .l2-code-dots {
   display: inline-flex;
@@ -402,8 +402,8 @@
 .l2-code-dots i {
   width: 9px;
   height: 9px;
-  border-radius: 999px;
   background: #d8cfbd;
+  border-radius: 999px;
 }
 .l2-code-name {
   font-size: 11.5px;
@@ -414,8 +414,8 @@
   overflow-x: auto;
 }
 .l2-pre {
-  margin: 0;
   padding: 0.7rem 0;
+  margin: 0;
   font-family: var(--font-geist-mono), ui-monospace, monospace;
   font-size: 13px;
   line-height: 1.65;
@@ -438,22 +438,22 @@
   flex: 0 0 auto;
   width: 2.2em;
   margin-right: 0.8em;
-  text-align: right;
-  color: #b9b2a3;
-  user-select: none;
   font-size: 11.5px;
+  color: #b9b2a3;
+  text-align: right;
+  user-select: none;
 }
 .l2-lc {
   white-space: pre;
 }
 .l2-note {
-  margin-left: auto;
-  padding-left: 1.2rem;
-  color: var(--l2-violet);
-  font-style: italic;
-  white-space: normal;
-  font-size: 11.5px;
   max-width: 22ch;
+  padding-left: 1.2rem;
+  margin-left: auto;
+  font-size: 11.5px;
+  font-style: italic;
+  color: var(--l2-violet);
+  white-space: normal;
 }
 .l2-note-arrow {
   margin-right: 0.3rem;
@@ -463,10 +463,10 @@
 /* error-lens inline diagnostics */
 .l2-errorlens {
   margin-left: 1.6em;
-  font-style: italic;
   font-size: 11.5px;
-  opacity: 0.95;
+  font-style: italic;
   white-space: pre-wrap;
+  opacity: 0.95;
 }
 .l2-line-diag.l2-sev-error {
   background: rgba(180, 35, 24, 0.07);
@@ -488,10 +488,10 @@
 
 /* =================== spawn race =================== */
 .l2-race {
+  padding: 1.1rem 1.2rem 1.4rem;
+  background: #fffdf7;
   border: 1px solid var(--l2-rule-strong);
   border-radius: 12px;
-  background: #fffdf7;
-  padding: 1.1rem 1.2rem 1.4rem;
 }
 .l2-race-head {
   display: flex;
@@ -511,8 +511,8 @@
 }
 .l2-lane-meta {
   display: flex;
-  align-items: baseline;
   gap: 0.7rem;
+  align-items: baseline;
 }
 .l2-lane-label {
   font-size: 13px;
@@ -530,9 +530,9 @@
 }
 .l2-bar {
   flex: 1;
+  overflow: hidden;
   background: #efe8d8;
   border-radius: 3px;
-  overflow: hidden;
 }
 .l2-bar-fill {
   display: block;
@@ -565,15 +565,15 @@
 }
 
 .l2-btn {
+  padding: 0.35rem 0.7rem;
   font-family: var(--font-geist-mono), monospace;
   font-size: 11px;
+  color: var(--l2-ink);
   letter-spacing: 0.04em;
-  padding: 0.35rem 0.7rem;
+  cursor: pointer;
+  background: #fffdf6;
   border: 1px solid var(--l2-rule-strong);
   border-radius: 8px;
-  background: #fffdf6;
-  color: var(--l2-ink);
-  cursor: pointer;
   transition: background 120ms ease;
 }
 .l2-btn:hover {
@@ -585,8 +585,8 @@
   inset: 0;
   display: grid;
   place-items: center;
-  color: #8a8580;
   font-size: 13px;
+  color: #8a8580;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -600,12 +600,12 @@
 /* =================== live playground (Monaco + ExecutionPanel) =================== */
 .l2-live {
   display: flex;
-  height: min(58vh, 440px);
   min-width: 0;
-  border: 1px solid var(--l2-rule-strong);
-  border-radius: 10px;
+  height: min(58vh, 440px);
   overflow: hidden;
   background: #fffdf7;
+  border: 1px solid var(--l2-rule-strong);
+  border-radius: 10px;
 }
 /* Panes are sized by the shadcn Resizable (react-resizable-panels) group;
    these classes only handle inner layout + the handle's paper styling. */
@@ -618,14 +618,14 @@
   transition: background 120ms ease;
 }
 .l2-live-splitter:hover,
-.l2-live-splitter[data-resize-handle-state='hover'],
-.l2-live-splitter[data-resize-handle-state='drag'] {
+.l2-live-splitter[data-resize-handle-state="hover"],
+.l2-live-splitter[data-resize-handle-state="drag"] {
   background: var(--l2-violet, #6d28d9);
 }
 .l2-live-panel {
-  min-width: 0;
   display: flex;
   flex-direction: column;
+  min-width: 0;
 }
 .l2-live-panel > * {
   flex: 1 1 auto;
@@ -634,10 +634,54 @@
 .l2-live-loading {
   display: grid;
   place-items: center;
-  height: 100%;
   width: 100%;
-  color: var(--l2-soft);
+  height: 100%;
   font-size: 12px;
+  color: var(--l2-soft);
+}
+/* result/graph pane wrapper — hosts the absolutely-positioned loading veil so
+   it covers only this pane (never the editor). */
+.l2-live-pane {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.l2-live-pane > * {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.l2-live-veil {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  gap: 0.55rem;
+  align-items: center;
+  justify-content: center;
+  font-size: 12.5px;
+  color: var(--l2-soft);
+  background: rgba(255, 255, 255, 0.72);
+  -webkit-backdrop-filter: blur(2px);
+  backdrop-filter: blur(2px);
+}
+.l2-live-spinner {
+  width: 15px;
+  height: 15px;
+  border: 2px solid rgba(128, 128, 128, 0.25);
+  border-top-color: rgba(128, 128, 128, 0.75);
+  border-radius: 50%;
+  animation: l2-live-spin 0.7s linear infinite;
+}
+@keyframes l2-live-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .l2-live-spinner {
+    animation: none;
+  }
 }
 /* Hero/full-bleed embeds (homepage): fill the parent box instead of the
    deck-slide height cap, and let the parent own the frame. */
@@ -654,26 +698,26 @@
   padding: clamp(0.75rem, 1.5vw, 1.25rem);
 }
 .l2-slide:has(.l2-live) {
-  max-width: none;
-  flex: 1 1 auto;
-  min-height: 0;
   display: flex;
+  flex: 1 1 auto;
   flex-direction: column;
+  max-width: none;
+  min-height: 0;
 }
 .l2-slide:has(.l2-live) .l2-slide-shell {
-  max-width: none;
-  width: 100%;
-  margin: 0;
-  flex: 1 1 auto;
-  min-height: 0;
   display: flex;
+  flex: 1 1 auto;
   flex-direction: column;
+  width: 100%;
+  max-width: none;
+  min-height: 0;
+  margin: 0;
 }
 .l2-slide:has(.l2-live) .l2-slide-body {
-  flex: 1 1 auto;
-  min-height: 0;
   display: flex;
+  flex: 1 1 auto;
   flex-direction: column;
+  min-height: 0;
 }
 .l2-slide:has(.l2-live) .l2-live {
   flex: 1 1 auto;
@@ -686,10 +730,10 @@
    box sits flush inside it, so a framed BamlEditor matches the deck's static
    code blocks (.l2-code). */
 .l2-bamled-frame {
-  border: 1px solid var(--l2-rule-strong);
-  border-radius: 10px;
   overflow: hidden;
   background: #fffdf7;
+  border: 1px solid var(--l2-rule-strong);
+  border-radius: 10px;
 }
 .l2-bamled {
   overflow: hidden;
@@ -699,8 +743,8 @@
   display: grid;
   place-items: center;
   min-height: 120px;
-  color: var(--l2-soft);
   font-size: 12px;
+  color: var(--l2-soft);
 }
 .l2-bamled-wrap {
   display: flex;
@@ -708,12 +752,12 @@
 }
 .l2-term {
   margin-top: 6px;
-  border: 1px solid #2a2620;
-  border-radius: 8px;
   overflow: hidden;
-  background: #141210;
   font-family: var(--font-geist-mono), ui-monospace, monospace;
   font-size: 12px;
+  background: #141210;
+  border: 1px solid #2a2620;
+  border-radius: 8px;
 }
 .l2-term-bar {
   display: flex;
@@ -724,38 +768,38 @@
   border-bottom: 1px solid #2a2620;
 }
 .l2-term-title {
-  color: #8a8580;
   font-size: 11px;
+  color: #8a8580;
   text-transform: uppercase;
   letter-spacing: 0.12em;
 }
 .l2-term-x {
-  border: none;
-  background: none;
-  color: #8a8580;
-  cursor: pointer;
+  padding: 0 4px;
   font-size: 16px;
   line-height: 1;
-  padding: 0 4px;
+  color: #8a8580;
+  cursor: pointer;
+  background: none;
+  border: none;
 }
 .l2-term-x:hover {
   color: #f3ede0;
 }
 .l2-term-body {
-  padding: 8px 10px;
   max-height: 170px;
+  padding: 8px 10px;
   overflow: auto;
   color: #f3ede0;
 }
 .l2-term-line {
   display: flex;
-  align-items: baseline;
   gap: 0.6rem;
+  align-items: baseline;
   padding: 1px 0;
 }
 .l2-term-check {
-  width: 1em;
   flex: 0 0 auto;
+  width: 1em;
 }
 .l2-term-pass .l2-term-check {
   color: #7ee787;
@@ -773,16 +817,19 @@
   color: #f3ede0;
 }
 .l2-term-meta {
-  color: #8a8580;
   font-size: 11px;
+  color: #8a8580;
 }
 .l2-term-err {
   color: #ff7b72;
-  white-space: pre-wrap;
   word-break: break-word;
+  white-space: pre-wrap;
 }
 .l2-editors-demo {
   min-height: 100vh;
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-weight: 300;
+  color: #2b2520;
   background-color: #fbf7ed;
   background-image: radial-gradient(
     circle at 1px 1px,
@@ -790,18 +837,15 @@
     transparent 0
   );
   background-size: 20px 20px;
-  color: #2b2520;
-  font-family: var(--font-geist-mono), ui-monospace, monospace;
-  font-weight: 300;
 }
 .l2-editors-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 0.85rem 1.5rem;
-  border-bottom: 1px solid #e2ddcf;
   font-size: 12px;
   color: #6f6a63;
+  border-bottom: 1px solid #e2ddcf;
 }
 .l2-editors-head a {
   color: #6d28d9;
@@ -809,43 +853,43 @@
 }
 .l2-editors-main {
   max-width: 820px;
-  margin: 0 auto;
   padding: 2rem 1.5rem 6rem;
+  margin: 0 auto;
 }
 .l2-editors-intro {
+  margin: 0 0 2rem;
   font-size: 14px;
   line-height: 1.6;
   color: #6f6a63;
-  margin: 0 0 2rem;
 }
 .l2-editors-intro code {
-  background: rgba(0, 0, 0, 0.06);
   padding: 1px 5px;
+  background: rgba(0, 0, 0, 0.06);
   border-radius: 4px;
 }
 .l2-editors-cell {
   margin-bottom: 2.2rem;
 }
 .l2-editors-cell-title {
+  margin: 0 0 0.5rem;
   font-size: 11px;
+  color: #8a8580;
   text-transform: uppercase;
   letter-spacing: 0.14em;
-  color: #8a8580;
-  margin: 0 0 0.5rem;
 }
 
 /* ---- editor header Run button + in-frame results panel ---- */
 .l2-run-btn {
+  padding: 3px 12px;
   margin-left: auto;
   font-size: 11.5px;
   font-weight: 600;
+  color: #fffdf6;
   letter-spacing: 0.05em;
-  padding: 3px 12px;
+  cursor: pointer;
+  background: #047857;
   border: none;
   border-radius: 6px;
-  background: #047857;
-  color: #fffdf6;
-  cursor: pointer;
   transition:
     background 120ms ease,
     transform 80ms ease;
@@ -857,15 +901,15 @@
   transform: translateY(1px);
 }
 .l2-run-btn:disabled {
-  opacity: 0.6;
   cursor: default;
+  opacity: 0.6;
 }
 
 /* results live INSIDE the editor frame, under the code — same paper, not a
    detached terminal */
 .l2-runs {
-  border-top: 1px solid var(--l2-rule, #e2ddcf);
   background: #faf6ea;
+  border-top: 1px solid var(--l2-rule, #e2ddcf);
   animation: l2-runs-in 200ms ease;
 }
 @keyframes l2-runs-in {
@@ -880,28 +924,28 @@
 }
 .l2-runs-head {
   display: flex;
-  align-items: center;
   gap: 0.8rem;
+  align-items: center;
   padding: 5px 12px;
   font-size: 10.5px;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
   color: #8a8580;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
   border-bottom: 1px dashed #e2ddcf;
 }
 .l2-runs-summary {
   margin-left: auto;
+  color: #6f6a63;
   text-transform: none;
   letter-spacing: 0.03em;
-  color: #6f6a63;
 }
 .l2-runs-clear {
-  border: none;
-  background: none;
   padding: 0;
   font: inherit;
   color: #8a8580;
   cursor: pointer;
+  background: none;
+  border: none;
 }
 .l2-runs-clear:hover {
   color: #1a1612;
@@ -909,8 +953,8 @@
 .l2-runs-row {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
   gap: 0.55rem;
+  align-items: baseline;
   padding: 5px 12px;
   font-family: var(--font-geist-mono), ui-monospace, monospace;
   font-size: 12.5px;
@@ -919,8 +963,8 @@
   border-top: 1px solid rgba(26, 22, 18, 0.05);
 }
 .l2-runs-check {
-  width: 1em;
   flex: 0 0 auto;
+  width: 1em;
 }
 .l2-runs--pass .l2-runs-check {
   color: #047857;
@@ -939,8 +983,8 @@
 }
 .l2-runs-meta {
   margin-left: auto;
-  color: #8a8580;
   font-size: 11px;
+  color: #8a8580;
 }
 .l2-runs-meta + .l2-runs-meta {
   margin-left: 0.6rem;
@@ -948,10 +992,10 @@
 .l2-runs-err {
   flex-basis: 100%;
   padding-left: 1.55em;
-  color: #b42318;
   font-size: 11.5px;
-  white-space: pre-wrap;
+  color: #b42318;
   word-break: break-word;
+  white-space: pre-wrap;
 }
 
 /* showcase line highlight inside the Monaco editor (BamlEditor highlightLines) */
@@ -987,11 +1031,11 @@
 .l2-terminal {
   max-width: 520px;
   margin: 0 auto;
-  border: 1px solid #2a2620;
-  border-radius: 10px;
   overflow: hidden;
   text-align: left;
   background: #141210;
+  border: 1px solid #2a2620;
+  border-radius: 10px;
   box-shadow: 0 8px 30px rgba(20, 18, 16, 0.18);
 }
 .l2-terminal-bar {
@@ -1004,34 +1048,34 @@
 .l2-terminal-bar i {
   width: 10px;
   height: 10px;
-  border-radius: 999px;
   background: #4a443c;
+  border-radius: 999px;
 }
 .l2-terminal-body {
-  margin: 0;
   padding: 16px 18px;
+  margin: 0;
   font-family: var(--font-geist-mono), ui-monospace, monospace;
   font-size: 15px;
   line-height: 1.7;
   color: #f3ede0;
 }
 .l2-terminal-prompt {
+  margin-right: 0.35rem;
   color: #7ee787;
   user-select: none;
-  margin-right: 0.35rem;
 }
 
 /* closing slide */
 .l2-close {
   display: flex;
   flex-direction: column;
-  align-items: center;
   gap: 1.6rem;
+  align-items: center;
 }
 .l2-close-link {
   font-size: 14px;
-  letter-spacing: 0.02em;
   color: var(--l2-violet);
+  letter-spacing: 0.02em;
   text-decoration: none;
   border-bottom: 1px solid transparent;
 }
