@@ -290,13 +290,6 @@ function GraphViewInner({
     [graphModel, revealDepth, expanded],
   );
 
-  // Refs so the reveal-on-select effect can read the latest models without
-  // re-firing on every zoom/expand (it should fire on selection change only).
-  const graphModelRef = useRef(graphModel);
-  graphModelRef.current = graphModel;
-  const lodModelRef = useRef(lodModel);
-  lodModelRef.current = lodModel;
-
   // Switching modes clears manual expansions and refits to the new extent.
   const selectExpandMode = useCallback((mode: ExpandMode) => {
     setExpandMode(mode);
@@ -427,16 +420,16 @@ function GraphViewInner({
     decorateNodesWithRuntime,
   ]);
 
-  // If the editor selects a node that LOD currently hides, reveal it by opening
-  // its ancestor containers — otherwise the highlight and auto-pan have no node
-  // to target. Fires on selection change only (reads models via refs), so it
-  // doesn't fight a later zoom-out that re-collapses things.
+  // Keep the selected node visible under LOD: if it's currently hidden, open
+  // its ancestor containers. Re-runs when the selection OR the graph/LOD model
+  // changes, so a graph update that would hide the selection re-reveals it
+  // (converges — once the ancestors are expanded the node stays visible).
   useEffect(() => {
     if (selectedNodeId == null) return;
     const id = String(selectedNodeId);
-    if (lodModelRef.current.nodes.some((n) => n.id === id)) return;
+    if (lodModel.nodes.some((n) => n.id === id)) return;
     const parentById = new Map(
-      graphModelRef.current.rfNodes.map((n) => [n.id, n.parentId]),
+      graphModel.rfNodes.map((n) => [n.id, n.parentId]),
     );
     const ancestors: string[] = [];
     let cur = parentById.get(id);
@@ -452,7 +445,7 @@ function GraphViewInner({
       for (const a of ancestors) next.add(a);
       return next;
     });
-  }, [selectedNodeId]);
+  }, [selectedNodeId, lodModel, graphModel]);
 
   // Keep runtime node data fresh while a new ELK layout is pending.
   useEffect(() => {
@@ -482,18 +475,33 @@ function GraphViewInner({
   const { setCenter, getNode, getViewport, fitView } = useReactFlow();
   const containerWidth = useStore((s) => s.width);
   const containerHeight = useStore((s) => s.height);
+  // Auto-pan to the selected node — but the node may not be laid out yet (e.g.
+  // the LOD reveal effect above surfaces it only on a later layout). So record
+  // the request on selection change, then fulfill it once the node actually
+  // exists (the fulfill effect re-runs as `nodes` updates).
   const prevGraphRef = useRef(graph);
+  const panRequestRef = useRef<string | null>(null);
   useEffect(() => {
-    if (selectedNodeId == null) return;
-    // Skip auto-pan when the graph itself just changed (fitView handles that)
-    if (prevGraphRef.current !== graph) {
-      prevGraphRef.current = graph;
+    if (selectedNodeId == null) {
+      panRequestRef.current = null;
       return;
     }
-    const target = getNode(String(selectedNodeId));
-    if (!target) return;
+    // Skip auto-pan when the graph itself just changed (fitView handles that).
+    if (prevGraphRef.current !== graph) {
+      prevGraphRef.current = graph;
+      panRequestRef.current = null;
+      return;
+    }
+    panRequestRef.current = String(selectedNodeId);
+  }, [selectedNodeId, graph]);
 
-    // Compute absolute position by walking up parentId chain
+  useEffect(() => {
+    const id = panRequestRef.current;
+    if (id == null) return;
+    const target = getNode(id);
+    if (!target) return; // not laid out yet — a later layout re-runs this
+
+    // Absolute position by walking up the parentId chain.
     let absX = target.position.x;
     let absY = target.position.y;
     let current = target;
@@ -510,7 +518,6 @@ function GraphViewInner({
     const centerX = absX + w / 2;
     const centerY = absY + h / 2;
 
-    // Check if node center is already visible in the viewport
     const { x: vx, y: vy, zoom } = getViewport();
     const screenX = centerX * zoom + vx;
     const screenY = centerY * zoom + vy;
@@ -520,15 +527,15 @@ function GraphViewInner({
       screenX <= containerWidth - pad &&
       screenY >= pad &&
       screenY <= containerHeight - pad;
-
     if (!isVisible) {
-      // Pan to the node; if over-zoomed, ease back to 1.0
+      // Pan to the node; if over-zoomed, ease back to 1.0.
       const targetZoom = Math.min(zoom, 1.0);
       setCenter(centerX, centerY, { duration: 300, zoom: targetZoom });
     }
+    panRequestRef.current = null; // fulfilled
   }, [
+    nodes,
     selectedNodeId,
-    graph,
     setCenter,
     getNode,
     getViewport,
