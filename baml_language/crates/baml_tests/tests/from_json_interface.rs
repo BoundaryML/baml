@@ -128,6 +128,32 @@ async fn from_to_roundtrip_with_override() {
     assert_eq!(output.result.unwrap(), BexExternalValue::Bool(true));
 }
 
+#[tokio::test]
+async fn nested_field_override_is_honored() {
+    // `Outer` has no FromJson impl, so it decodes via the per-field Rust decoder;
+    // its `Inner` field implements FromJson and must decode via its override
+    // (which reads "wrapped", not a structural "v").
+    let output = baml_test!(
+        r#"
+        class Inner {
+            v int
+            implements baml.FromJson {
+                function from_json(j: baml.json.json) -> Self throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+                    Inner { v: baml.json.to<int>(baml.json.field(j, "wrapped")) }
+                }
+            }
+        }
+        class Outer { inner Inner  tag string }
+        function main() -> int throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+            let j = baml.json.parse("{\"inner\": {\"wrapped\": 7}, \"tag\": \"x\"}")
+            let o: Outer = baml.json.to<Outer>(j)
+            o.inner.v
+        }
+        "#
+    );
+    assert_eq!(output.result.unwrap(), BexExternalValue::Int(7));
+}
+
 #[test]
 fn empty_implementor_is_rejected() {
     // `from_json` is a required method (no default body), so an empty

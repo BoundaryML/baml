@@ -1534,12 +1534,211 @@ pub(super) fn json_to_shim(vm: &mut BexVm, j: Value) -> NativeCallResult {
     json_to_dispatch(vm, j, &ty)
 }
 
-/// Dispatch `json.to<T>`: a `baml.FromJson` override on `T`'s class wins;
-/// otherwise fall back to the structural decode path.
+/// Dispatch `json.to<T>(j)` — the override-honoring structural decode.
+///
+/// - nullable union: `null` short-circuits, else decode the non-null payload;
+/// - list / map: decode each element/value through the driver (honoring nested
+///   overrides);
+/// - class / interface (non-media): a `baml.FromJson` override on the runtime
+///   target wins; otherwise decode per-field via [`class_from_json_start`];
+/// - everything else (primitives, enums, media, literals, type-aliases): a
+///   structural decode (no overrides possible).
 fn json_to_dispatch(vm: &mut BexVm, j: Value, ty: &RuntimeTy) -> NativeCallResult {
-    match try_yield_interface_from_json(vm, j, ty) {
-        Some(yld) => yld,
-        None => json_from_json_dispatch(vm, j, ty),
+    match ty {
+        RuntimeTy::Union(members, _) if members.iter().any(RuntimeTy::is_null) => {
+            if j.is_null() {
+                NativeCallResult::Done(Value::NULL)
+            } else {
+                json_to_dispatch(vm, j, &ty.strip_null())
+            }
+        }
+        RuntimeTy::List(elem, _) => list_from_json_start(vm, j, elem),
+        RuntimeTy::Map { value: vty, .. } => map_from_json_start(vm, j, vty),
+        RuntimeTy::Class(qtn, type_args, _) | RuntimeTy::Interface(qtn, type_args, _, _)
+            if media_kind_from_fqn(qtn.display_name().as_str()).is_none() =>
+        {
+            match try_yield_interface_from_json(vm, j, ty) {
+                Some(yld) => yld,
+                None => class_from_json_start(vm, j, qtn, type_args),
+            }
+        }
+        _ => structural_decode_value(vm, j, ty),
+    }
+}
+
+/// Decode `j` into an instance of class `qtn` (instantiated with `type_args`) by
+/// decoding each field through the `baml.json.to<FieldType>` driver and then
+/// constructing the instance. The Rust counterpart of the per-field auto-derived
+/// `from_json` body: a trampoline that yields once per field (so a field whose
+/// type implements `baml.FromJson` is decoded via its override), which composes
+/// with the surrounding list/map/class trampolines because each field is a
+/// single driver dispatch.
+fn class_from_json_start(
+    vm: &mut BexVm,
+    j: Value,
+    qtn: &TypeName,
+    type_args: &[RuntimeTy],
+) -> NativeCallResult {
+    let map: IndexMap<bex_vm_types::BexStr, Value> = match j.as_object_ptr() {
+        Some(p) => match vm.get_object(p) {
+            Object::Map(m) => m.lock().iter().map(|(k, v)| (k.clone(), *v)).collect(),
+            _ => {
+                return NativeCallResult::Error(raise_decode(
+                    vm,
+                    format!("expected JSON object for class `{qtn}`"),
+                    "",
+                ));
+            }
+        },
+        None => {
+            return NativeCallResult::Error(raise_decode(
+                vm,
+                format!("expected JSON object for class `{qtn}`"),
+                "",
+            ));
+        }
+    };
+    let class_ptr = match vm.resolved_class_names.get(&class_lookup_key(qtn)).copied() {
+        Some(p) => p,
+        None => {
+            return NativeCallResult::Error(raise_decode(
+                vm,
+                format!("class `{qtn}` not found"),
+                "",
+            ));
+        }
+    };
+    let class_fields = match vm.get_object(class_ptr) {
+        Object::Class(c) => c.fields.clone(),
+        _ => {
+            return NativeCallResult::Error(raise_decode(
+                vm,
+                format!("`{qtn}` is not a class"),
+                "",
+            ));
+        }
+    };
+    // Resolve each field's json value + its (type-arg-substituted) field type.
+    let mut fields: Vec<(Value, RuntimeTy)> = Vec::with_capacity(class_fields.len());
+    for cf in &class_fields {
+        let field_ty = cf.field_template.substitute(type_args);
+        let field_json = match map.get(cf.name.as_str()) {
+            Some(v) => *v,
+            // Optional (`T?` == `T | null`) fields may be absent → null.
+            None if field_ty.is_nullable_union() => Value::NULL,
+            None => {
+                return NativeCallResult::Error(raise_decode(
+                    vm,
+                    format!("missing required field `{}`", cf.name),
+                    "",
+                ));
+            }
+        };
+        fields.push((field_json, field_ty));
+    }
+    class_drive(vm, class_ptr, type_args.to_vec(), fields, Vec::new(), 0)
+}
+
+/// Drive the per-field decode from field `idx`, yielding to `baml.json.to` for
+/// the next field that needs decoding and constructing the instance once every
+/// field is decoded. `null` optional fields short-circuit without yielding.
+fn class_drive(
+    vm: &mut BexVm,
+    class_ptr: HeapPtr,
+    class_type_args: Vec<RuntimeTy>,
+    fields: Vec<(Value, RuntimeTy)>,
+    mut results: Vec<Value>,
+    mut idx: usize,
+) -> NativeCallResult {
+    let to_fn = match vm.find_function_by_name("baml.json.to") {
+        Some(f) => f,
+        None => {
+            return NativeCallResult::Error(VmRustFnError::InternalError(
+                VmInternalError::MissingNativeFunction {
+                    name: "baml.json.to not found".to_string(),
+                },
+            ));
+        }
+    };
+    while idx < fields.len() {
+        let (field_json, field_ty) = fields[idx].clone();
+        if let Some(v) = optional_null_short_circuit(field_json, &field_ty) {
+            results.push(v);
+            idx += 1;
+            continue;
+        }
+        return NativeCallResult::YieldToCall {
+            callee: to_fn,
+            args: vec![field_json],
+            type_args: vec![field_ty],
+            continuation: Box::new(ClassFromJsonCont {
+                class_ptr,
+                class_type_args,
+                fields,
+                results,
+                idx,
+            }),
+        };
+    }
+    NativeCallResult::Done(Value::object(vm.tlab.alloc(Object::Instance(
+        Instance::new(class_ptr, class_type_args, results),
+    ))))
+}
+
+/// Resumes [`class_drive`] after one field's `baml.json.to` decode returns.
+struct ClassFromJsonCont {
+    class_ptr: HeapPtr,
+    class_type_args: Vec<RuntimeTy>,
+    fields: Vec<(Value, RuntimeTy)>,
+    results: Vec<Value>,
+    idx: usize,
+}
+
+impl Continuation for ClassFromJsonCont {
+    fn call(mut self: Box<Self>, vm: &mut BexVm, value: Value) -> NativeCallResult {
+        self.results.push(value);
+        let next = self.idx + 1;
+        class_drive(
+            vm,
+            self.class_ptr,
+            self.class_type_args,
+            self.fields,
+            self.results,
+            next,
+        )
+    }
+    fn gc_roots(&self) -> Vec<HeapPtr> {
+        let mut roots = vec![self.class_ptr];
+        for (fj, _) in &self.fields {
+            if let Some(p) = fj.as_object_ptr() {
+                roots.push(p);
+            }
+        }
+        for v in &self.results {
+            if let Some(p) = v.as_object_ptr() {
+                roots.push(p);
+            }
+        }
+        roots
+    }
+    fn apply_forwarding(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
+        if let Some(&new) = forwarding.get(&self.class_ptr) {
+            self.class_ptr = new;
+        }
+        for (fj, _) in &mut self.fields {
+            if let Some(p) = fj.as_object_ptr() {
+                if let Some(&new) = forwarding.get(&p) {
+                    *fj = Value::object(new);
+                }
+            }
+        }
+        for v in &mut self.results {
+            if let Some(p) = v.as_object_ptr() {
+                if let Some(&new) = forwarding.get(&p) {
+                    *v = Value::object(new);
+                }
+            }
+        }
     }
 }
 
