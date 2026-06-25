@@ -102,7 +102,7 @@ use bex_heap::BexHeap;
 // Re-export GcStats for users of the engine
 pub use bex_heap::GcStats;
 pub use bex_heap::{ActiveHeapPermit, HeapGuard, HeapPermitManager, InactiveHeapPermit};
-use bex_vm::{BexVm, VmExecState};
+use bex_vm::{BexVm, VmCallCaptureKind, VmCaptureMask, VmExecState};
 use bex_vm_types::{
     FunctionMeta, FunctionOrigin, GlobalPool, HeapPtr, Object, SharedGlobals, SysOp,
     TaskGroupInner, Value, ValueKind, VmGlobals,
@@ -255,6 +255,12 @@ struct RootValueCaptureContext {
 
 #[derive(Clone)]
 struct LogCaptureContext {
+    boundary_id: bex_events::ids::BoundaryId,
+    producer: TraceCaptureProducer,
+}
+
+#[derive(Clone)]
+struct CallValueCaptureContext {
     boundary_id: bex_events::ids::BoundaryId,
     producer: TraceCaptureProducer,
 }
@@ -1534,11 +1540,13 @@ impl BexEngine {
         &self,
         vm: &mut bex_vm::BexVm,
         status: bex_events::prof::record::FunctionEndStatus,
-    ) {
+    ) -> Option<u64> {
+        let call_id = vm.pending_sysop_call_id.take();
+        vm.pending_sysop_capture_mask = VmCaptureMask::disabled();
         if vm.prof_ring.is_none() {
-            return;
+            return call_id;
         }
-        if let Some(call_id) = vm.pending_sysop_call_id.take() {
+        if let Some(call_id) = call_id {
             self.prof_emit(&bex_events::prof::record::RawRecord::EndFunction {
                 status,
                 thread_id: BexThreadId(vm.prof_thread_id),
@@ -1546,6 +1554,7 @@ impl BexEngine {
                 ts_ticks: bex_events::prof::clock::now_ticks(),
             });
         }
+        call_id
     }
 
     /// §7 decision 2: terminated threads never strand open calls. Closes
@@ -1564,11 +1573,13 @@ impl BexEngine {
         status: bex_events::prof::record::FunctionEndStatus,
     ) {
         use bex_events::prof::record::RawRecord;
+        let thread_id = BexThreadId(vm.prof_thread_id);
+        let pending_sysop_call_id = vm.pending_sysop_call_id.take();
+        vm.pending_sysop_capture_mask = VmCaptureMask::disabled();
         if vm.prof_ring.is_none() {
             return;
         }
-        let thread_id = BexThreadId(vm.prof_thread_id);
-        if let Some(call_id) = vm.pending_sysop_call_id.take() {
+        if let Some(call_id) = pending_sysop_call_id {
             self.prof_emit(&RawRecord::EndFunction {
                 status,
                 thread_id,
@@ -2246,6 +2257,9 @@ impl BexEngine {
                 name: b"",
             });
         }
+        thread
+            .vm
+            .set_value_capture_auto_enabled(boundary.capture_defaults.values_enabled);
         // The call's named type args are lowered to positional De Bruijn slots
         // against the callee's generic params. An empty map seeds nothing
         // (non-generic callee) or all-unbound slots (generic callee with no
@@ -2283,6 +2297,14 @@ impl BexEngine {
                 boundary_id: boundary.boundary_id,
                 producer: value_capture.clone(),
             });
+        let call_capture =
+            boundary
+                .capture_defaults
+                .values_enabled
+                .then(|| CallValueCaptureContext {
+                    boundary_id: boundary.boundary_id,
+                    producer: value_capture.clone(),
+                });
         if let (Some(capture), Some(entries)) = (root_capture.as_ref(), root_input_values.as_ref())
         {
             let _ = capture.producer.capture_with(
@@ -2303,6 +2325,7 @@ impl BexEngine {
                 thread,
                 host_call_id,
                 root_capture.clone(),
+                call_capture,
                 log_capture,
                 &cancel,
                 copy_objects,
@@ -3046,6 +3069,34 @@ impl BexEngine {
                 });
     }
 
+    fn drain_vm_call_captures(
+        &self,
+        thread: &mut ActiveHeapPermit<BexThread>,
+        capture: Option<&CallValueCaptureContext>,
+    ) {
+        let events = thread.vm.drain_call_capture_events();
+        let Some(capture) = capture else {
+            return;
+        };
+        for event in events {
+            let kind = match event.kind {
+                VmCallCaptureKind::Output => CaptureKind::CallOutput,
+                VmCallCaptureKind::Error => CaptureKind::CallError,
+            };
+            let call = bex_events::run::TraceCallKey {
+                process_euid: self.process_euid,
+                engine_id: self.engine_id,
+                thread_id: BexThreadId(event.thread_id),
+                call_id: BexCallId(event.call_id),
+            };
+            let _ = capture
+                .producer
+                .capture_with(capture.boundary_id, call, kind, |trace_heap| {
+                    trace_heap.copy_value_from_bex_heap(&self.heap, thread.proof(), event.value)
+                });
+        }
+    }
+
     fn capture_baml_log_event(
         &self,
         thread: &ActiveHeapPermit<BexThread>,
@@ -3233,6 +3284,8 @@ impl BexEngine {
         throws_type: Option<&RuntimeTy>,
         host_callable_throws_contract: Option<&RuntimeTy>,
         root_capture: Option<&RootValueCaptureContext>,
+        call_capture: Option<&CallValueCaptureContext>,
+        origin_call_capture: Option<(u64, VmCaptureMask)>,
     ) -> Result<Option<ThreadOutcome>, EngineError> {
         let materialized = match op_err.payload {
             sys_types::OpErrorPayload::HostThrown(thrown) => {
@@ -3246,7 +3299,15 @@ impl BexEngine {
         } else {
             materialized
         };
-        match thread.vm.try_handle_external_exception(vm_value) {
+        if let Some((call_id, mask)) = origin_call_capture {
+            thread
+                .vm
+                .queue_engine_call_error_origin_capture(call_id, mask, vm_value);
+            self.drain_vm_call_captures(thread, call_capture);
+        }
+        let unwind_result = thread.vm.try_handle_external_exception(vm_value);
+        self.drain_vm_call_captures(thread, call_capture);
+        match unwind_result {
             // A handler caught the injected exception. `crossed` cannot be
             // true here: this entry point runs from the engine's sysop arm,
             // never inside a watch-filter mini-runner.
@@ -3394,6 +3455,7 @@ impl BexEngine {
         future_id: FutureId,
         prof_thread_id: u64,
         prof_suppressed: bool,
+        call_capture: Option<CallValueCaptureContext>,
         log_capture: Option<LogCaptureContext>,
     ) -> std::pin::Pin<
         Box<dyn std::future::Future<Output = Result<(), EngineError>> + Send + 'static>,
@@ -3410,6 +3472,7 @@ impl BexEngine {
             future_id,
             prof_thread_id,
             prof_suppressed,
+            call_capture,
             log_capture,
         ))
     }
@@ -3437,6 +3500,7 @@ impl BexEngine {
         future_id: FutureId,
         prof_thread_id: u64,
         prof_suppressed: bool,
+        call_capture: Option<CallValueCaptureContext>,
         log_capture: Option<LogCaptureContext>,
     ) -> Result<(), EngineError> {
         // BEP-034 spawn options: link a user-provided `CancelToken`
@@ -3486,6 +3550,7 @@ impl BexEngine {
         child_vm.prof_thread_id = prof_thread_id;
         child_vm.prof_suppressed = prof_suppressed;
         child_vm.bex_ref_seed = Some((self.process_euid, self.engine_id));
+        child_vm.set_value_capture_auto_enabled(call_capture.is_some());
         // Snapshot on the spawning thread, immediately before the entry
         // frame's CallFunction lands (no await in between); the loop-head
         // refresh re-snapshots on the child task's own thread later. The
@@ -3569,6 +3634,7 @@ impl BexEngine {
                     permit,
                     call_id,
                     None,
+                    call_capture,
                     log_capture,
                     &child_cancel,
                     true,
@@ -3639,6 +3705,7 @@ impl BexEngine {
         thread: ActiveHeapPermit<BexThread>,
         call_id: CallId,
         root_capture: Option<RootValueCaptureContext>,
+        call_capture: Option<CallValueCaptureContext>,
         log_capture: Option<LogCaptureContext>,
         cancel: &CancellationToken,
         copy_objects: bool,
@@ -3658,6 +3725,7 @@ impl BexEngine {
                 thread,
                 call_id,
                 root_capture,
+                call_capture,
                 log_capture,
                 cancel,
                 copy_objects,
@@ -3714,6 +3782,7 @@ impl BexEngine {
         mut thread: ActiveHeapPermit<BexThread>,
         call_id: CallId,
         root_capture: Option<RootValueCaptureContext>,
+        call_capture: Option<CallValueCaptureContext>,
         log_capture: Option<LogCaptureContext>,
         cancel: &CancellationToken,
         copy_objects: bool,
@@ -3727,7 +3796,10 @@ impl BexEngine {
             // model must be revisited).
             self.prof_refresh_vm_ring(&mut thread.vm);
 
-            let exec_result = match thread.vm.exec() {
+            let vm_exec_result = thread.vm.exec();
+            self.drain_vm_call_captures(&mut thread, call_capture.as_ref());
+
+            let exec_result = match vm_exec_result {
                 Ok(state) => state,
                 Err(bex_vm::errors::VmError::ThrownUnhandled { value, trace }) => {
                     return self
@@ -4005,13 +4077,16 @@ impl BexEngine {
                     // op (CompletionHandle dropped → cancel-classed payload,
                     // no token fired) closes Cancelled, matching the
                     // Cancelled frames its injected throw then unwinds.
-                    self.prof_end_sysop(
+                    let sysop_capture_mask = thread.vm.pending_sysop_capture_mask;
+                    let sysop_capture_call = self.prof_end_sysop(
                         &mut thread.vm,
                         match &outcome {
                             Ok(_) => bex_events::prof::record::FunctionEndStatus::Ok,
                             Err(op_err) => Self::prof_sysop_error_status(op_err),
                         },
                     );
+                    let sysop_origin_capture =
+                        sysop_capture_call.map(|call_id| (call_id, sysop_capture_mask));
 
                     match outcome {
                         Ok(external) => {
@@ -4054,6 +4129,8 @@ impl BexEngine {
                                         throws_type.as_ref(),
                                         host_throws_ty.as_ref(),
                                         root_capture.as_ref(),
+                                        call_capture.as_ref(),
+                                        sysop_origin_capture,
                                     )
                                     .await?
                                 {
@@ -4075,6 +4152,12 @@ impl BexEngine {
                                 // expression expected — no implicit await.
                                 let value =
                                     self.convert_external_to_vm_value(&mut thread, external)?;
+                                if let Some((call_id, mask)) = sysop_origin_capture {
+                                    thread
+                                        .vm
+                                        .queue_engine_call_output_capture(call_id, mask, value);
+                                    self.drain_vm_call_captures(&mut thread, call_capture.as_ref());
+                                }
                                 thread.vm.stack.push(value);
                             }
                         }
@@ -4097,6 +4180,8 @@ impl BexEngine {
                                     throws_type.as_ref(),
                                     host_throws_ty.as_ref(),
                                     root_capture.as_ref(),
+                                    call_capture.as_ref(),
+                                    sysop_origin_capture,
                                 )
                                 .await?
                             {
@@ -4211,6 +4296,7 @@ impl BexEngine {
                                 future_id,
                                 child_prof_thread_id,
                                 thread.vm.prof_suppressed,
+                                call_capture.clone(),
                                 log_capture.clone(),
                             )
                             .await?;

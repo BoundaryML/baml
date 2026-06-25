@@ -41,6 +41,7 @@ export type RunTraceRow = {
   spanWidthPct: number;
   sourceLine: number | null;
   logs: RunTraceLog[];
+  callValues: RunTraceCallValue[];
 };
 
 export type RunTraceLogState =
@@ -68,6 +69,28 @@ export type RunTraceLog = {
 
 type LogPayloadEvent = PayloadEvent & {
   kind: Extract<PayloadEvent['kind'], { type: 'log' }>;
+};
+
+export type RunTraceCallValueRole = 'callOutput' | 'callError';
+
+export type RunTraceCallValue = {
+  id: string;
+  timestampMs: number;
+  role: RunTraceCallValueRole;
+  label: string | null;
+  valueRef: ValueRef | null;
+  value: BamlJsValue | null;
+  state: RunTraceLogState;
+  diagnostic: string | null;
+};
+
+type CapturedValuePayloadKind = Extract<
+  PayloadEvent['kind'],
+  { type: 'capturedValue' }
+>;
+
+type CallValuePayloadEvent = PayloadEvent & {
+  kind: CapturedValuePayloadKind & { role: RunTraceCallValueRole };
 };
 
 export type ExecutionProfileOrigin = 'user' | 'library' | 'system' | 'unknown';
@@ -148,6 +171,7 @@ export function runToTraceRows(
   const callsById = new Map(run.calls.map((call) => [call.id, call]));
   const threadParentCallIds = threadParentCallIdsByThread(run, callsById);
   const logsByCallId = traceLogsByCallId(run, valueBodyCache);
+  const callValuesByCallId = traceCallValuesByCallId(run, valueBodyCache);
   const starts = calls
     .map((call) => parseNs(call.startedAtNs))
     .filter((value): value is bigint => value !== null);
@@ -183,6 +207,7 @@ export function runToTraceRows(
       spanWidthPct: Math.min(widthPct, 100 - leftPct),
       sourceLine: call.callSiteSource?.line ?? call.calleeSource?.line ?? null,
       logs: logsByCallId.get(call.id) ?? [],
+      callValues: callValuesByCallId.get(call.id) ?? [],
     };
   });
 }
@@ -697,25 +722,11 @@ function traceLogsByCallId(
   valueBodyCache?: ValueBodyCache,
 ): Map<string, RunTraceLog[]> {
   const logsByCallId = new Map<string, RunTraceLog[]>();
-  const callsByPayloadId = new Map<string, string[]>();
-  for (const call of run.calls) {
-    for (const payloadId of call.payloadIds) {
-      const ids = callsByPayloadId.get(payloadId);
-      if (ids) {
-        ids.push(call.id);
-      } else {
-        callsByPayloadId.set(payloadId, [call.id]);
-      }
-    }
-  }
+  const callsByPayloadId = callIdsByPayloadId(run);
 
   for (const payload of run.payloads) {
     if (!isLogPayload(payload)) continue;
-    const callIds = new Set<string>();
-    if (payload.callNodeId) callIds.add(payload.callNodeId);
-    for (const callId of callsByPayloadId.get(payload.id) ?? []) {
-      callIds.add(callId);
-    }
+    const callIds = callIdsForPayload(payload, callsByPayloadId);
     if (callIds.size === 0) continue;
     const log = payloadToTraceLog(run.boundaryId, payload, valueBodyCache);
     for (const callId of callIds) {
@@ -734,6 +745,61 @@ function traceLogsByCallId(
   return logsByCallId;
 }
 
+function traceCallValuesByCallId(
+  run: Run,
+  valueBodyCache?: ValueBodyCache,
+): Map<string, RunTraceCallValue[]> {
+  const valuesByCallId = new Map<string, RunTraceCallValue[]>();
+  const callsByPayloadId = callIdsByPayloadId(run);
+
+  for (const payload of run.payloads) {
+    if (!isCallValuePayload(payload)) continue;
+    const callIds = callIdsForPayload(payload, callsByPayloadId);
+    if (callIds.size === 0) continue;
+    const value = payloadToTraceCallValue(run.boundaryId, payload, valueBodyCache);
+    for (const callId of callIds) {
+      const values = valuesByCallId.get(callId);
+      if (values) {
+        values.push(value);
+      } else {
+        valuesByCallId.set(callId, [value]);
+      }
+    }
+  }
+
+  for (const values of valuesByCallId.values()) {
+    values.sort((a, b) => a.timestampMs - b.timestampMs || a.id.localeCompare(b.id));
+  }
+  return valuesByCallId;
+}
+
+function callIdsByPayloadId(run: Run): Map<string, string[]> {
+  const callsByPayloadId = new Map<string, string[]>();
+  for (const call of run.calls) {
+    for (const payloadId of call.payloadIds) {
+      const ids = callsByPayloadId.get(payloadId);
+      if (ids) {
+        ids.push(call.id);
+      } else {
+        callsByPayloadId.set(payloadId, [call.id]);
+      }
+    }
+  }
+  return callsByPayloadId;
+}
+
+function callIdsForPayload(
+  payload: PayloadEvent,
+  callsByPayloadId: Map<string, string[]>,
+): Set<string> {
+  const callIds = new Set<string>();
+  if (payload.callNodeId) callIds.add(payload.callNodeId);
+  for (const callId of callsByPayloadId.get(payload.id) ?? []) {
+    callIds.add(callId);
+  }
+  return callIds;
+}
+
 function payloadToTraceLog(
   boundaryId: BoundaryId,
   payload: LogPayloadEvent,
@@ -748,6 +814,26 @@ function payloadToTraceLog(
     level: payload.kind.level,
     message: payload.kind.message,
     sourceLine: payload.kind.source?.line ?? null,
+    valueRef: payload.kind.valueRef,
+    value: projected.value,
+    state: projected.state,
+    diagnostic: projected.diagnostic,
+  };
+}
+
+function payloadToTraceCallValue(
+  boundaryId: BoundaryId,
+  payload: CallValuePayloadEvent,
+  valueBodyCache?: ValueBodyCache,
+): RunTraceCallValue {
+  const projected = payload.kind.valueRef
+    ? projectValueRef(boundaryId, payload.kind.valueRef, valueBodyCache)
+    : projectPayloadBodyState(payload.body);
+  return {
+    id: payload.id,
+    timestampMs: payload.timestampMs,
+    role: payload.kind.role,
+    label: payload.kind.label,
     valueRef: payload.kind.valueRef,
     value: projected.value,
     state: projected.state,
@@ -779,6 +865,14 @@ function projectPayloadBodyState(
 
 function isLogPayload(payload: PayloadEvent): payload is LogPayloadEvent {
   return payload.kind.type === 'log';
+}
+
+function isCallValuePayload(payload: PayloadEvent): payload is CallValuePayloadEvent {
+  const kind = payload.kind;
+  return (
+    kind.type === 'capturedValue' &&
+    (kind.role === 'callOutput' || kind.role === 'callError')
+  );
 }
 
 function projectValueRef(

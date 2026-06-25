@@ -66,6 +66,7 @@ import {
   decodeRunResultValue,
   runToTraceRows,
   runToDisplayRun,
+  type RunTraceCallValue,
   type RunTraceLog,
   type RunStoreDisplayRun,
 } from './run-store-projections';
@@ -482,8 +483,8 @@ function traceLogLevelClass(level: string | null): string {
   }
 }
 
-function traceLogStateLabel(log: RunTraceLog): string | null {
-  switch (log.state) {
+function traceValueStateLabel(value: { state: RunTraceLog['state'] }): string | null {
+  switch (value.state) {
     case 'available':
       return null;
     case 'loading':
@@ -503,13 +504,13 @@ function traceLogStateLabel(log: RunTraceLog): string | null {
     case 'unavailable':
       return 'unavailable';
     default:
-      log.state satisfies never;
+      value.state satisfies never;
       return null;
   }
 }
 
 const TraceLogView: FC<{ log: RunTraceLog }> = ({ log }) => {
-  const stateLabel = traceLogStateLabel(log);
+  const stateLabel = traceValueStateLabel(log);
   return (
     <div className="rounded border border-vsc-border-subtle bg-vsc-surface/60 px-2 py-1">
       <div className="flex min-w-0 items-center gap-1.5">
@@ -543,6 +544,68 @@ const TraceLogView: FC<{ log: RunTraceLog }> = ({ log }) => {
       {log.diagnostic && (
         <div className="mt-1 text-[10px] text-vsc-text-faint">
           {log.diagnostic}
+        </div>
+      )}
+    </div>
+  );
+};
+
+function traceCallValueRoleLabel(role: RunTraceCallValue['role']): string {
+  switch (role) {
+    case 'callOutput':
+      return 'output';
+    case 'callError':
+      return 'error';
+    default:
+      role satisfies never;
+      return 'value';
+  }
+}
+
+function traceCallValueRoleClass(role: RunTraceCallValue['role']): string {
+  switch (role) {
+    case 'callOutput':
+      return 'text-vsc-accent';
+    case 'callError':
+      return 'text-vsc-red';
+    default:
+      role satisfies never;
+      return 'text-vsc-text-muted';
+  }
+}
+
+const TraceCallValueView: FC<{ value: RunTraceCallValue }> = ({ value }) => {
+  const stateLabel = traceValueStateLabel(value);
+  return (
+    <div className="rounded border border-vsc-border-subtle bg-vsc-surface/60 px-2 py-1">
+      <div className="flex min-w-0 items-center gap-1.5">
+        <span
+          className={cn(
+            'font-vsc-mono text-[10px] uppercase',
+            traceCallValueRoleClass(value.role),
+          )}
+        >
+          {traceCallValueRoleLabel(value.role)}
+        </span>
+        {value.label && (
+          <span className="min-w-0 truncate text-vsc-text-muted text-[11px]">
+            {value.label}
+          </span>
+        )}
+        {stateLabel && (
+          <span className="ml-auto shrink-0 rounded border border-vsc-border-subtle px-1 py-0.5 text-[10px] text-vsc-text-faint">
+            {stateLabel}
+          </span>
+        )}
+      </div>
+      {value.value !== null && (
+        <div className="mt-1 overflow-x-auto">
+          <ValueRenderer value={value.value} displayMode="inline" />
+        </div>
+      )}
+      {value.diagnostic && (
+        <div className="mt-1 text-[10px] text-vsc-text-faint">
+          {value.diagnostic}
         </div>
       )}
     </div>
@@ -609,6 +672,16 @@ const TraceTimelineView: FC<{
                 >
                   {row.logs.map((log) => (
                     <TraceLogView key={log.id} log={log} />
+                  ))}
+                </div>
+              )}
+              {row.callValues.length > 0 && (
+                <div
+                  className="mt-1.5 space-y-1"
+                  style={{ paddingLeft: Math.min(row.depth, 12) * 12 + 10 }}
+                >
+                  {row.callValues.map((value) => (
+                    <TraceCallValueView key={value.id} value={value} />
                   ))}
                 </div>
               )}

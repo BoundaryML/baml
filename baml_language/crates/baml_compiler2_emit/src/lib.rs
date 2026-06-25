@@ -29,8 +29,9 @@ use baml_compiler2_mir::{
 use baml_compiler2_ppir::file_item_tree;
 use baml_type::{RuntimeTy, TyAttr};
 use bex_vm_types::{
-    Bytecode, Class, ClassField, ConstValue, Enum, EnumVariant, Function, FunctionKind,
-    FunctionMeta, FunctionOrigin, Instruction, Object, ObjectIndex, ObjectPool, Program,
+    Bytecode, Class, ClassField, ConstValue, Enum, EnumVariant, Function, FunctionCaptureProps,
+    FunctionKind, FunctionMeta, FunctionOrigin, Instruction, Object, ObjectIndex, ObjectPool,
+    Program,
 };
 
 /// Build a per-package `ResolvedAliases` cache, keyed by package name.
@@ -1018,6 +1019,7 @@ pub fn generate_project_bytecode_with_opt(
                         throws_type: None,
                         origin: FunctionOrigin::Builtin,
                         body_meta: None,
+                        capture: FunctionCaptureProps::disabled(),
                         function_id: 0, // assigned at engine init (interim provider)
                     }
                 }
@@ -1043,6 +1045,7 @@ pub fn generate_project_bytecode_with_opt(
                     throws_type: None,
                     origin: FunctionOrigin::Builtin,
                     body_meta: None,
+                    capture: FunctionCaptureProps::disabled(),
                     function_id: 0, // assigned at engine init (interim provider)
                 },
             };
@@ -1096,6 +1099,7 @@ pub fn generate_project_bytecode_with_opt(
                         prompt_template,
                         client: client.to_string(),
                     });
+                    compiled_fn.capture = FunctionCaptureProps::auto_output_and_error();
                 }
             }
 
@@ -1286,6 +1290,7 @@ pub fn generate_project_bytecode_with_opt(
                 throws_type: None,
                 origin: FunctionOrigin::Internal,
                 body_meta: None,
+                capture: FunctionCaptureProps::disabled(),
                 function_id: 0, // assigned at engine init (interim provider)
             };
 
@@ -2340,6 +2345,7 @@ fn compile_init_function<'db>(
                     throws_type: None,
                     origin: FunctionOrigin::Internal,
                     body_meta: None,
+                    capture: FunctionCaptureProps::disabled(),
                     function_id: 0, // assigned at engine init (interim provider)
                 }
             }
@@ -2412,6 +2418,7 @@ fn compile_init_function<'db>(
         throws_type: None,
         origin: FunctionOrigin::Internal,
         body_meta: None,
+        capture: FunctionCaptureProps::disabled(),
         function_id: 0, // assigned at engine init (interim provider)
     })
 }

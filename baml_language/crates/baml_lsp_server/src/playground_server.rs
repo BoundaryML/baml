@@ -30,10 +30,10 @@ use axum::{
 use base64::Engine as _;
 use bex_events::history::{HistoryObserverRegistration, HistoryStore, register_history_observer};
 use bex_events::run::{
-    AttachRootTraceResult, BoundaryId, CancellationState, DiagnosticSeverity, ExecutionRequest,
-    HostCallId, InMemoryRunStore, ProjectGeneration, ProjectId, RequestId, RunCursor,
-    RunCursorExpiredReason, RunDiagnostic, RunError, RunErrorClass, RunFilter, RunKind, RunOutcome,
-    RunResult, RunSubscription, RunTarget, RunVisibilityFilter, StartedHostRun,
+    AttachRootTraceResult, BoundaryId, CancellationState, CapturedValueRole, DiagnosticSeverity,
+    ExecutionRequest, HostCallId, InMemoryRunStore, ProjectGeneration, ProjectId, RequestId,
+    RunCursor, RunCursorExpiredReason, RunDiagnostic, RunError, RunErrorClass, RunFilter, RunKind,
+    RunOutcome, RunResult, RunSubscription, RunTarget, RunVisibilityFilter, StartedHostRun,
 };
 use bex_events::value::{
     ByteValueArtifactSink, CaptureLossKind, CaptureLossReason, CaptureLossRecord, LogEventRecord,
@@ -570,6 +570,28 @@ fn drain_captured_values_and_broadcast(
             bex_project::CaptureKind::RootError => {
                 refs.error = Some(value_ref);
             }
+            bex_project::CaptureKind::CallOutput => {
+                if let Some(patch) = run_store.ingest_call_value_ref(
+                    encoded.boundary_id,
+                    encoded.call,
+                    CapturedValueRole::CallOutput,
+                    Some("output".to_string()),
+                    Some(value_ref),
+                ) {
+                    broadcast_run_patch(broadcast_tx, &patch);
+                }
+            }
+            bex_project::CaptureKind::CallError => {
+                if let Some(patch) = run_store.ingest_call_value_ref(
+                    encoded.boundary_id,
+                    encoded.call,
+                    CapturedValueRole::CallError,
+                    Some("error".to_string()),
+                    Some(value_ref),
+                ) {
+                    broadcast_run_patch(broadcast_tx, &patch);
+                }
+            }
             bex_project::CaptureKind::LogBody => {}
         }
     }
@@ -602,6 +624,8 @@ fn value_capture_kind_from_bex(kind: bex_project::CaptureKind) -> ValueCaptureKi
         bex_project::CaptureKind::RootOutput => ValueCaptureKind::RootOutput,
         bex_project::CaptureKind::RootError => ValueCaptureKind::RootError,
         bex_project::CaptureKind::LogBody => ValueCaptureKind::LogBody,
+        bex_project::CaptureKind::CallOutput => ValueCaptureKind::CallOutput,
+        bex_project::CaptureKind::CallError => ValueCaptureKind::CallError,
     }
 }
 

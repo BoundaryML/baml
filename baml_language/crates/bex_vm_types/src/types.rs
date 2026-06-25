@@ -461,6 +461,52 @@ impl FunctionOrigin {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
+pub enum CaptureOption {
+    #[default]
+    Disabled,
+    Auto,
+    Enabled,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CaptureCategory {
+    Output,
+    Error,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
+pub struct FunctionCaptureProps {
+    pub output: CaptureOption,
+    pub error: CaptureOption,
+}
+
+impl FunctionCaptureProps {
+    #[must_use]
+    pub const fn disabled() -> Self {
+        Self {
+            output: CaptureOption::Disabled,
+            error: CaptureOption::Disabled,
+        }
+    }
+
+    #[must_use]
+    pub const fn auto_output_and_error() -> Self {
+        Self {
+            output: CaptureOption::Auto,
+            error: CaptureOption::Auto,
+        }
+    }
+
+    #[must_use]
+    pub const fn option(self, category: CaptureCategory) -> CaptureOption {
+        match category {
+            CaptureCategory::Output => self.output,
+            CaptureCategory::Error => self.error,
+        }
+    }
+}
+
 /// Represents any Baml function.
 #[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub struct Function {
@@ -541,6 +587,10 @@ pub struct Function {
 
     /// LLM-specific metadata (prompt template, client name). `None` for non-LLM functions.
     pub body_meta: Option<FunctionMeta>,
+
+    /// Capture policy hints for this function. Hosts resolve `Auto` against
+    /// boundary defaults; ordinary functions default to disabled.
+    pub capture: FunctionCaptureProps,
 
     /// Per-run profiling id (`0` = unassigned), written into the BEX event
     /// stream's `CallFunction` records and resolved through the per-run

@@ -103,6 +103,8 @@ pub enum ValueCaptureKind {
     RootOutput,
     RootError,
     LogBody,
+    CallOutput,
+    CallError,
 }
 
 impl ValueCaptureKind {
@@ -113,6 +115,8 @@ impl ValueCaptureKind {
             Self::RootOutput => "rootOutput",
             Self::RootError => "rootError",
             Self::LogBody => "logBody",
+            Self::CallOutput => "callOutput",
+            Self::CallError => "callError",
         }
     }
 }
@@ -337,6 +341,8 @@ impl TryFrom<crate::value::pb::ValueCaptureV1> for ValueCapture {
             crate::value::pb::ValueCaptureKind::RootOutput => ValueCaptureKind::RootOutput,
             crate::value::pb::ValueCaptureKind::RootError => ValueCaptureKind::RootError,
             crate::value::pb::ValueCaptureKind::LogBody => ValueCaptureKind::LogBody,
+            crate::value::pb::ValueCaptureKind::CallOutput => ValueCaptureKind::CallOutput,
+            crate::value::pb::ValueCaptureKind::CallError => ValueCaptureKind::CallError,
             crate::value::pb::ValueCaptureKind::Unspecified => {
                 return Err(io::Error::new(
                     io::ErrorKind::InvalidData,
@@ -364,6 +370,10 @@ impl From<&ValueCapture> for crate::value::pb::ValueCaptureV1 {
                 }
                 ValueCaptureKind::RootError => crate::value::pb::ValueCaptureKind::RootError as i32,
                 ValueCaptureKind::LogBody => crate::value::pb::ValueCaptureKind::LogBody as i32,
+                ValueCaptureKind::CallOutput => {
+                    crate::value::pb::ValueCaptureKind::CallOutput as i32
+                }
+                ValueCaptureKind::CallError => crate::value::pb::ValueCaptureKind::CallError as i32,
             },
             call: Some(value.call.into()),
         }

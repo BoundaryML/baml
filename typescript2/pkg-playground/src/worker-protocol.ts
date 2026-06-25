@@ -413,7 +413,7 @@ export interface PayloadEvent {
       }
     | {
         type: 'capturedValue';
-        role: 'rootInput';
+        role: 'rootInput' | 'callOutput' | 'callError';
         label: string | null;
         valueRef: ValueRef | null;
       };

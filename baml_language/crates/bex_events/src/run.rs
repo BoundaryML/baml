@@ -370,11 +370,14 @@ pub struct CapturedValuePayload {
     pub role: CapturedValueRole,
     pub label: Option<String>,
     pub value_ref: Option<ValueRef>,
+    pub trace_call: Option<TraceCallKey>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CapturedValueRole {
     RootInput,
+    CallOutput,
+    CallError,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -1252,6 +1255,51 @@ impl InMemoryRunStore {
                 role: CapturedValueRole::RootInput,
                 label: Some("inputs".to_string()),
                 value_ref,
+                trace_call: None,
+            }),
+            redaction: RedactionMetadata::display_safe(),
+            body: None,
+        };
+        Some(push_payload_patch(record, &retention, payload, None))
+    }
+
+    pub fn ingest_call_value_ref(
+        &self,
+        boundary_id: BoundaryId,
+        call: TraceCallKey,
+        role: CapturedValueRole,
+        label: Option<String>,
+        value_ref: Option<ValueRef>,
+    ) -> Option<RunPatch> {
+        debug_assert!(
+            matches!(
+                role,
+                CapturedValueRole::CallOutput | CapturedValueRole::CallError
+            ),
+            "call value ingestion only accepts call output/error roles"
+        );
+        let mut inner = self
+            .inner
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let payload_id = inner.allocate_payload_id();
+        let retention = inner.retention.clone();
+        let record = inner.runs.get_mut(&boundary_id)?;
+        let call_node_id = record
+            .run
+            .calls
+            .iter()
+            .any(|node| node.trace_key == call)
+            .then(|| call_node_id(&call));
+        let payload = PayloadEvent {
+            id: payload_id,
+            call_node_id,
+            timestamp_ms: epoch_ms(),
+            kind: PayloadKind::CapturedValue(CapturedValuePayload {
+                role,
+                label,
+                value_ref,
+                trace_call: Some(call),
             }),
             redaction: RedactionMetadata::display_safe(),
             body: None,
@@ -2345,6 +2393,19 @@ fn recompute_record_profile(
                 payload.call_node_id = Some(root_call_node_id);
                 payload_updates.push(payload.clone());
             }
+        }
+    }
+    for payload in &mut record.run.payloads {
+        if payload.call_node_id.is_none()
+            && let PayloadKind::CapturedValue(CapturedValuePayload {
+                role: CapturedValueRole::CallOutput | CapturedValueRole::CallError,
+                trace_call: Some(call),
+                ..
+            }) = &payload.kind
+            && record.run.calls.iter().any(|node| node.trace_key == *call)
+        {
+            payload.call_node_id = Some(call_node_id(call));
+            payload_updates.push(payload.clone());
         }
     }
     for payload in &mut record.run.payloads {
@@ -4540,6 +4601,189 @@ mod tests {
         assert_eq!(payload["kind"]["message"], "watch this");
         assert_eq!(payload["kind"]["source"]["line"], 12);
         assert_eq!(payload["kind"]["valueRef"]["id"], "value_log");
+    }
+
+    #[test]
+    fn run_store_backfills_call_value_payloads_to_reconstructed_calls() {
+        use crate::value::{ValueCodec, ValueRef};
+
+        let store = InMemoryRunStore::default();
+        let start = create_test_run(&store, request("call-values"), RequestId(1));
+        let output_call = TraceCallKey {
+            process_euid: ProcessEuid([1; 16]),
+            engine_id: EngineId(2),
+            thread_id: BexThreadId(1),
+            call_id: BexCallId(2),
+        };
+        let error_call = TraceCallKey {
+            process_euid: ProcessEuid([1; 16]),
+            engine_id: EngineId(2),
+            thread_id: BexThreadId(1),
+            call_id: BexCallId(3),
+        };
+        let output_ref = ValueRef::available("value_output", ValueCodec::BamlOutboundValue, 6, 6);
+        let error_ref = ValueRef::available("value_error", ValueCodec::BamlOutboundValue, 4, 4);
+
+        let output_patch = store
+            .ingest_call_value_ref(
+                start.boundary_id,
+                output_call,
+                CapturedValueRole::CallOutput,
+                Some("output".to_string()),
+                Some(output_ref),
+            )
+            .expect("run should exist");
+        let error_patch = store
+            .ingest_call_value_ref(
+                start.boundary_id,
+                error_call,
+                CapturedValueRole::CallError,
+                Some("error".to_string()),
+                Some(error_ref),
+            )
+            .expect("run should exist");
+
+        for patch in [output_patch, error_patch] {
+            assert!(patch.changes.iter().any(|change| {
+                matches!(
+                    change,
+                    RunPatchChange::UpsertPayload(PayloadEvent {
+                        call_node_id: None,
+                        kind: PayloadKind::CapturedValue(CapturedValuePayload {
+                            trace_call: Some(_),
+                            ..
+                        }),
+                        ..
+                    })
+                )
+            }));
+        }
+
+        for event in [
+            envelope(
+                ProfileEventKind::StartThread {
+                    thread_id: BexThreadId(1),
+                    parent_thread_id: None,
+                    parent_call_id: None,
+                    name: None,
+                },
+                10,
+            ),
+            envelope(
+                ProfileEventKind::CallFunction {
+                    thread_id: BexThreadId(1),
+                    call_id: BexCallId(1),
+                    parent_call_id: None,
+                    function_id: FunctionId(1),
+                    call_site_source: None,
+                },
+                20,
+            ),
+            envelope(
+                ProfileEventKind::CallFunction {
+                    thread_id: BexThreadId(1),
+                    call_id: BexCallId(2),
+                    parent_call_id: Some(BexCallId(1)),
+                    function_id: FunctionId(2),
+                    call_site_source: None,
+                },
+                30,
+            ),
+            envelope(
+                ProfileEventKind::CallFunction {
+                    thread_id: BexThreadId(1),
+                    call_id: BexCallId(3),
+                    parent_call_id: Some(BexCallId(1)),
+                    function_id: FunctionId(3),
+                    call_site_source: None,
+                },
+                40,
+            ),
+        ] {
+            store.ingest_profile_event(event);
+        }
+        let AttachRootTraceResult::Attached { patches } =
+            store.attach_root_trace(start.boundary_id, root_call_ref(1, 1))
+        else {
+            panic!("root trace should attach");
+        };
+
+        let output_call_id = call_node_id(&output_call);
+        let error_call_id = call_node_id(&error_call);
+        for expected_call_id in [output_call_id, error_call_id] {
+            assert!(patches.iter().any(|patch| {
+                patch.changes.iter().any(|change| {
+                    matches!(
+                        change,
+                        RunPatchChange::UpsertPayload(PayloadEvent {
+                            call_node_id: Some(call_id),
+                            kind: PayloadKind::CapturedValue(CapturedValuePayload { .. }),
+                            ..
+                        }) if *call_id == expected_call_id
+                    )
+                })
+            }));
+        }
+
+        let snapshot = store.snapshot(start.boundary_id).unwrap();
+        let output_payload = snapshot
+            .payloads
+            .iter()
+            .find(|payload| {
+                matches!(
+                    &payload.kind,
+                    PayloadKind::CapturedValue(CapturedValuePayload {
+                        role: CapturedValueRole::CallOutput,
+                        ..
+                    })
+                )
+            })
+            .expect("output payload");
+        assert_eq!(output_payload.call_node_id, Some(output_call_id));
+        let error_payload = snapshot
+            .payloads
+            .iter()
+            .find(|payload| {
+                matches!(
+                    &payload.kind,
+                    PayloadKind::CapturedValue(CapturedValuePayload {
+                        role: CapturedValueRole::CallError,
+                        ..
+                    })
+                )
+            })
+            .expect("error payload");
+        assert_eq!(error_payload.call_node_id, Some(error_call_id));
+
+        for (expected_call_id, expected_payload) in [
+            (output_call_id, output_payload),
+            (error_call_id, error_payload),
+        ] {
+            let call = snapshot
+                .calls
+                .iter()
+                .find(|call| call.id == expected_call_id)
+                .expect("call node");
+            assert_eq!(call.payload_ids, vec![expected_payload.id]);
+        }
+
+        let wire = run_to_wire(&snapshot);
+        let output_wire = wire["payloads"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|payload| payload["kind"]["role"] == "callOutput")
+            .expect("call output wire payload");
+        assert_eq!(output_wire["kind"]["label"], "output");
+        assert_eq!(output_wire["kind"]["valueRef"]["id"], "value_output");
+        let error_wire = wire["payloads"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|payload| payload["kind"]["role"] == "callError")
+            .expect("call error wire payload");
+        assert_eq!(error_wire["kind"]["label"], "error");
+        assert_eq!(error_wire["kind"]["valueRef"]["id"], "value_error");
     }
 
     #[test]

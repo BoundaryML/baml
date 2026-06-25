@@ -368,6 +368,77 @@ describe('run-store-projections', () => {
     ]);
   });
 
+  it('attaches call output and error captured values under their owning call nodes', () => {
+    const outputBytes = outboundStringBytes('ok');
+    const errorBytes = outboundStringBytes('boom');
+    const outputRef = valueRefFixture('call_output', outputBytes);
+    const errorRef = valueRefFixture('call_error', errorBytes);
+    const run = runFixture({
+      calls: [
+        callFixture({
+          id: 'root',
+          payloadIds: [],
+        }),
+        callFixture({
+          id: 'child',
+          parentId: 'root',
+          functionName: 'user.leaf',
+          payloadIds: ['payload-error'],
+        }),
+      ],
+      payloads: [
+        payloadFixture({
+          id: 'payload-output',
+          callNodeId: 'child',
+          timestampMs: 101,
+          kind: {
+            type: 'capturedValue',
+            role: 'callOutput',
+            label: 'output',
+            valueRef: outputRef,
+          },
+        }),
+        payloadFixture({
+          id: 'payload-error',
+          callNodeId: null,
+          timestampMs: 102,
+          kind: {
+            type: 'capturedValue',
+            role: 'callError',
+            label: 'error',
+            valueRef: errorRef,
+          },
+        }),
+      ],
+    });
+
+    const rows = runToTraceRows(
+      run,
+      cacheWithEntries({
+        call_output: outputBytes,
+        call_error: errorBytes,
+      }),
+    );
+
+    expect(rows.find((row) => row.id === 'root')?.callValues).toEqual([]);
+    expect(rows.find((row) => row.id === 'child')?.callValues).toEqual([
+      expect.objectContaining({
+        id: 'payload-output',
+        role: 'callOutput',
+        label: 'output',
+        state: 'available',
+        value: 'ok',
+      }),
+      expect.objectContaining({
+        id: 'payload-error',
+        role: 'callError',
+        label: 'error',
+        state: 'available',
+        value: 'boom',
+      }),
+    ]);
+  });
+
   it('projects explicit log body availability states', () => {
     const run = runFixture({
       calls: [
@@ -788,15 +859,23 @@ function valueRefFixture(id: string, bytes: Uint8Array): ValueRef {
 }
 
 function cacheWith(valueRefId: string, bytes: Uint8Array): ValueBodyCache {
+  return cacheWithEntries({ [valueRefId]: bytes });
+}
+
+function cacheWithEntries(entries: Record<string, Uint8Array>): ValueBodyCache {
   return {
-    get: () => ({
-      boundaryId: 'run-1',
-      valueRefId,
-      codec: 'bamlOutboundValue',
-      availability: 'available',
-      bytes,
-      diagnostic: null,
-    }),
+    get: (_boundaryId, valueRef) => {
+      const bytes = entries[valueRef.id];
+      if (!bytes) return undefined;
+      return {
+        boundaryId: 'run-1',
+        valueRefId: valueRef.id,
+        codec: 'bamlOutboundValue',
+        availability: 'available',
+        bytes,
+        diagnostic: null,
+      };
+    },
     read: async () => {
       throw new Error('cache hit should not read');
     },

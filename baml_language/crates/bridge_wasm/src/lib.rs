@@ -73,12 +73,12 @@ use bex_events::{
     },
     prof::{CooperativeProfileDrain, CooperativeProfileDrainOptions},
     run::{
-        AttachRootTraceResult, BoundaryId, CancellationState, EnvResolutionStatus,
-        ExecutionRequest, HostCallId, InMemoryRunStore, ProjectGeneration, ProjectId, RequestId,
-        RunCursor, RunCursorExpiredReason, RunDiagnostic, RunError, RunErrorClass, RunFilter,
-        RunKind, RunOutcome, RunRequestState, RunResult, RunSubscription, RunSummary, RunTarget,
-        RunVisibilityFilter, RuntimeTarget, StartRunContext, StartedHostRun, TraceCallKey,
-        patch_to_wire, run_summary_to_wire, run_to_wire,
+        AttachRootTraceResult, BoundaryId, CancellationState, CapturedValueRole,
+        EnvResolutionStatus, ExecutionRequest, HostCallId, InMemoryRunStore, ProjectGeneration,
+        ProjectId, RequestId, RunCursor, RunCursorExpiredReason, RunDiagnostic, RunError,
+        RunErrorClass, RunFilter, RunKind, RunOutcome, RunRequestState, RunResult, RunSubscription,
+        RunSummary, RunTarget, RunVisibilityFilter, RuntimeTarget, StartRunContext, StartedHostRun,
+        TraceCallKey, patch_to_wire, run_summary_to_wire, run_to_wire,
     },
     value::{
         ByteValueArtifactSink, CaptureLossKind, CaptureLossReason, CaptureLossRecord,
@@ -2059,6 +2059,28 @@ fn drain_wasm_captured_values(
             bex_project::CaptureKind::RootError => {
                 refs.error = Some(value_ref);
             }
+            bex_project::CaptureKind::CallOutput => {
+                if let Some(patch) = run_store.ingest_call_value_ref(
+                    encoded.boundary_id,
+                    encoded.call,
+                    CapturedValueRole::CallOutput,
+                    Some("output".to_string()),
+                    Some(value_ref),
+                ) {
+                    send_run_patch(callback, &patch);
+                }
+            }
+            bex_project::CaptureKind::CallError => {
+                if let Some(patch) = run_store.ingest_call_value_ref(
+                    encoded.boundary_id,
+                    encoded.call,
+                    CapturedValueRole::CallError,
+                    Some("error".to_string()),
+                    Some(value_ref),
+                ) {
+                    send_run_patch(callback, &patch);
+                }
+            }
             bex_project::CaptureKind::LogBody => {}
         }
     }
@@ -2091,6 +2113,8 @@ fn value_capture_kind_from_bex(kind: bex_project::CaptureKind) -> ValueCaptureKi
         bex_project::CaptureKind::RootOutput => ValueCaptureKind::RootOutput,
         bex_project::CaptureKind::RootError => ValueCaptureKind::RootError,
         bex_project::CaptureKind::LogBody => ValueCaptureKind::LogBody,
+        bex_project::CaptureKind::CallOutput => ValueCaptureKind::CallOutput,
+        bex_project::CaptureKind::CallError => ValueCaptureKind::CallError,
     }
 }
 

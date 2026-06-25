@@ -152,8 +152,9 @@ use bex_events::{
 };
 use bex_heap::{BexHeap, Tlab};
 use bex_vm_types::{
-    BinOp, CmpOp, FunctionKind, FutureRead, GlobalIndex, HeapPtr, Object, ObjectIndex, ObjectPool,
-    ObjectType, PanicClass, PermitProof, StackIndex, UnaryOp, Value, Variant, VmGlobals,
+    BinOp, CaptureCategory, CaptureOption, CmpOp, FunctionCaptureProps, FunctionKind, FutureRead,
+    GlobalIndex, HeapPtr, Object, ObjectIndex, ObjectPool, ObjectType, PanicClass, PermitProof,
+    StackIndex, UnaryOp, Value, Variant, VmGlobals,
     bytecode::{self, Instruction},
     types::{
         BoundMethod, Closure, ConstValue, Function, FunctionOrigin, FunctionType, Instance, Type,
@@ -172,6 +173,52 @@ use crate::{
 
 /// Max call stack size.
 pub const MAX_FRAMES: usize = 256;
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct VmCaptureMask {
+    pub output: bool,
+    pub error: bool,
+}
+
+impl VmCaptureMask {
+    #[must_use]
+    pub const fn disabled() -> Self {
+        Self {
+            output: false,
+            error: false,
+        }
+    }
+
+    #[must_use]
+    pub fn from_props(props: FunctionCaptureProps, auto_enabled: bool) -> Self {
+        Self {
+            output: resolve_capture_option(props.option(CaptureCategory::Output), auto_enabled),
+            error: resolve_capture_option(props.option(CaptureCategory::Error), auto_enabled),
+        }
+    }
+}
+
+fn resolve_capture_option(option: CaptureOption, auto_enabled: bool) -> bool {
+    match option {
+        CaptureOption::Disabled => false,
+        CaptureOption::Auto => auto_enabled,
+        CaptureOption::Enabled => true,
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum VmCallCaptureKind {
+    Output,
+    Error,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct VmCallCaptureEvent {
+    pub thread_id: u64,
+    pub call_id: u64,
+    pub kind: VmCallCaptureKind,
+    pub value: Value,
+}
 
 /// Bytecode call frame — pushed when entering a bytecode function.
 #[derive(Clone, Debug)]
@@ -203,6 +250,8 @@ pub struct BytecodeFrame {
     /// than recomputed from the frame below) so frameless native calls in
     /// progress can't be skipped over.
     pub(crate) parent_call_id: u64,
+    /// Resolved output/error capture behavior for this bytecode call.
+    pub(crate) capture_mask: VmCaptureMask,
 }
 
 impl RootHaver for BytecodeFrame {
@@ -337,6 +386,10 @@ mod tests {
             call_id_counter: 0,
             current_call_id: 0,
             pending_sysop_call_id: None,
+            pending_sysop_capture_mask: VmCaptureMask::disabled(),
+            value_capture_auto_enabled: false,
+            pending_call_captures: Vec::new(),
+            seen_throw_values: Vec::new(),
             bex_ref_seed: None,
             id_overrides: Vec::new(),
             argv: Arc::from([]),
@@ -754,6 +807,21 @@ pub struct BexVm {
     /// matching `EndFunction` once the op completes — possibly on a
     /// different OS thread, hence engine-side via its TLS ring lookup.
     pub pending_sysop_call_id: Option<u64>,
+
+    /// Resolved output/error capture behavior for the sys-op call currently
+    /// yielded to the engine.
+    pub pending_sysop_capture_mask: VmCaptureMask,
+
+    /// Host/boundary default used to resolve function-level `Auto` capture.
+    pub value_capture_auto_enabled: bool,
+
+    /// Values observed at call return/throw boundaries. The engine drains
+    /// these into TraceHeap while holding a heap permit.
+    pub pending_call_captures: Vec<VmCallCaptureEvent>,
+
+    /// Thrown values already observed at their origin call. Stored as values
+    /// instead of raw bits so GC forwarding can preserve rethrow identity.
+    seen_throw_values: Vec<Value>,
 
     /// Constants for building BEX `CallRef`s on demand (the `$id` surface):
     /// `(process_euid, engine_id)`, set once by the engine when it attaches
@@ -1185,6 +1253,10 @@ impl BexVm {
             call_id_counter: 0,
             current_call_id: 0,
             pending_sysop_call_id: None,
+            pending_sysop_capture_mask: VmCaptureMask::disabled(),
+            value_capture_auto_enabled: false,
+            pending_call_captures: Vec::new(),
+            seen_throw_values: Vec::new(),
             bex_ref_seed: None,
             id_overrides: Vec::new(),
             argv,
@@ -1204,6 +1276,87 @@ impl BexVm {
     /// any call dispatch context.
     pub fn current_call_type_args(&self) -> &[baml_type::RuntimeTy] {
         &self.pending_call_type_args
+    }
+
+    pub fn set_value_capture_auto_enabled(&mut self, enabled: bool) {
+        self.value_capture_auto_enabled = enabled;
+    }
+
+    pub fn drain_call_capture_events(&mut self) -> Vec<VmCallCaptureEvent> {
+        std::mem::take(&mut self.pending_call_captures)
+    }
+
+    pub fn queue_engine_call_output_capture(
+        &mut self,
+        call_id: u64,
+        mask: VmCaptureMask,
+        value: Value,
+    ) {
+        if !mask.output {
+            return;
+        }
+        self.queue_call_capture(call_id, VmCallCaptureKind::Output, value);
+    }
+
+    pub fn queue_engine_call_error_origin_capture(
+        &mut self,
+        call_id: u64,
+        mask: VmCaptureMask,
+        value: Value,
+    ) {
+        if !self.note_throw_origin(value) || !mask.error {
+            return;
+        }
+        self.queue_call_capture(call_id, VmCallCaptureKind::Error, value);
+    }
+
+    fn queue_call_capture(&mut self, call_id: u64, kind: VmCallCaptureKind, value: Value) {
+        if call_id == 0 {
+            return;
+        }
+        self.pending_call_captures.push(VmCallCaptureEvent {
+            thread_id: self.prof_thread_id,
+            call_id,
+            kind,
+            value,
+        });
+    }
+
+    fn maybe_queue_call_output(
+        &mut self,
+        call_id: u64,
+        parent_call_id: u64,
+        mask: VmCaptureMask,
+        value: Value,
+    ) {
+        if parent_call_id == 0 || !mask.output {
+            return;
+        }
+        self.queue_call_capture(call_id, VmCallCaptureKind::Output, value);
+    }
+
+    fn note_throw_origin(&mut self, value: Value) -> bool {
+        if self.seen_throw_values.contains(&value) {
+            return false;
+        }
+        self.seen_throw_values.push(value);
+        true
+    }
+
+    fn maybe_queue_call_error_origin(
+        &mut self,
+        call_id: u64,
+        parent_call_id: u64,
+        mask: VmCaptureMask,
+        value: Value,
+    ) {
+        if !self.note_throw_origin(value) {
+            return;
+        }
+        if parent_call_id == 0 || !mask.error {
+            return;
+        }
+        self.queue_call_capture(call_id, VmCallCaptureKind::Error, value);
     }
 
     /// Read an object from the heap via `HeapPtr`.
@@ -1759,6 +1912,7 @@ impl BexVm {
                     faulting_pc: 0,
                     call_id,
                     parent_call_id,
+                    capture_mask: VmCaptureMask::disabled(),
                 }));
 
                 // Entry functions need the same frame-local pre-allocation as normal
@@ -1890,6 +2044,7 @@ impl BexVm {
             throws_type,
             origin: FunctionOrigin::Internal,
             body_meta: None,
+            capture: bex_vm_types::FunctionCaptureProps::disabled(),
             function_id: 0, // synthetic; not in the profiling function table
         };
         let entry_ptr = self.tlab.alloc(Object::Function(Box::new(entry_function)));
@@ -1905,6 +2060,7 @@ impl BexVm {
             faulting_pc: 0,
             call_id,
             parent_call_id,
+            capture_mask: VmCaptureMask::disabled(),
         }));
     }
 
@@ -1916,6 +2072,10 @@ impl BexVm {
         // stack and call stack should be empty.
         self.stack.clear();
         self.frames.clear();
+        self.pending_call_captures.clear();
+        self.seen_throw_values.clear();
+        self.pending_sysop_call_id = None;
+        self.pending_sysop_capture_mask = VmCaptureMask::disabled();
     }
 
     /// Returns a reference to the unscheduled future at `future_ptr`.
@@ -2406,6 +2566,7 @@ impl BexVm {
             faulting_pc: 0,
             call_id,
             parent_call_id,
+            capture_mask: VmCaptureMask::disabled(),
         }));
         self.allocate_real_locals_for_frame(function_ptr)?;
 
@@ -3001,6 +3162,7 @@ impl BexVm {
         // The innermost (first) bytecode frame's faulting PC is the live
         // `cur_pc`; outer frames use the call-site PC they recorded at call time.
         let mut innermost_bc = true;
+        let mut origin_checked = false;
 
         // Walk the call stack from the current frame outward looking for an
         // exception table entry that covers the faulting PC.
@@ -3039,15 +3201,42 @@ impl BexVm {
             let Frame::Bytecode(frame) = frame else {
                 unreachable!("non-Native frames already handled above");
             };
+            let (
+                frame_faulting_pc,
+                frame_call_id,
+                frame_parent_call_id,
+                frame_capture_mask,
+                frame_locals_offset,
+            ) = (
+                frame.faulting_pc,
+                frame.call_id,
+                frame.parent_call_id,
+                frame.capture_mask,
+                frame.locals_offset,
+            );
 
             // Innermost bytecode frame uses the live `cur_pc`; outer frames use
             // the call-site PC recorded in `faulting_pc` when they descended.
             let faulting_pc = if innermost_bc {
                 self.cur_pc
             } else {
-                frame.faulting_pc
+                frame_faulting_pc
             };
+            let origin_capture = (!origin_checked).then_some((
+                frame_call_id,
+                frame_parent_call_id,
+                frame_capture_mask,
+            ));
             innermost_bc = false;
+            if let Some((call_id, parent_call_id, capture_mask)) = origin_capture {
+                self.maybe_queue_call_error_origin(
+                    call_id,
+                    parent_call_id,
+                    capture_mask,
+                    exception_value,
+                );
+                origin_checked = true;
+            }
 
             // Load the function for this frame to access its exception table.
             // SAFETY: See `load_function` doc comment.
@@ -3087,7 +3276,7 @@ impl BexVm {
                 // Found a handler in this frame. Truncate the eval stack back
                 // to just after the frame's locals region (removes stale
                 // temporaries from interrupted expressions).
-                let locals_offset = frame.locals_offset;
+                let locals_offset = frame_locals_offset;
                 let locals_end =
                     locals_offset.raw() + frame_function.arity + frame_function.real_local_count;
                 self.stack.truncate(locals_end);
@@ -3451,9 +3640,16 @@ impl BexVm {
     /// [`BexVm::pending_sysop_call_id`]). `current_call_id` is left alone —
     /// a sys-op makes no nested VM calls.
     #[inline]
-    fn prof_enter_sysop(&mut self, function_id: u32, call_site: Option<CallSiteSourceSpan>) {
+    fn prof_enter_sysop(
+        &mut self,
+        function_id: u32,
+        call_site: Option<CallSiteSourceSpan>,
+        capture_mask: VmCaptureMask,
+    ) {
         let parent_call_id = self.current_call_id;
         let call_id = self.mint_call_id();
+        self.pending_sysop_call_id = Some(call_id);
+        self.pending_sysop_capture_mask = capture_mask;
         if let Some(ring) = self.prof_ring {
             Self::prof_push_record(
                 ring,
@@ -3467,7 +3663,6 @@ impl BexVm {
                     ts_ticks: bex_events::prof::clock::now_ticks(),
                 },
             );
-            self.pending_sysop_call_id = Some(call_id);
         }
     }
 
@@ -3501,12 +3696,14 @@ impl BexVm {
         start_ticks: u64,
         status: bex_events::prof::record::FunctionEndStatus,
         call_site: Option<CallSiteSourceSpan>,
-    ) {
+    ) -> u64 {
         // Mint before the ring gate: call ids are `$id` semantics and must
         // not depend on whether profiling is on (plan §6, invariant 5).
         let parent_call_id = self.current_call_id;
         let call_id = self.mint_call_id();
-        let Some(ring) = self.prof_ring else { return };
+        let Some(ring) = self.prof_ring else {
+            return call_id;
+        };
         // Both records in one push: one bounds check + one Release store
         // for the pair (the ring moves whole records; two at once is fine).
         let mut buf = [0u8; bex_events::prof::record::CALL_FUNCTION_LEN
@@ -3533,6 +3730,7 @@ impl BexVm {
         unsafe {
             ring.push(&buf[..call_len + end_len]);
         }
+        call_id
     }
 
     /// Build the single-yield `SysOp::BamlHostCallHostValue` dispatch for
@@ -3620,7 +3818,7 @@ impl BexVm {
         let throws_ty_ptr = self.tlab.alloc(Object::Type(Box::new(throws_ty)));
         // PR4b: host-closure calls ride the sys-op pair too. No Function
         // object backs them, so function_id 0 (unassigned).
-        self.prof_enter_sysop(0, call_site);
+        self.prof_enter_sysop(0, call_site, VmCaptureMask::disabled());
         VmExecState::SysOp {
             operation: bex_vm_types::SysOp::BamlHostCallHostValue,
             args: vec![
@@ -3786,6 +3984,8 @@ impl BexVm {
             }
             .into());
         }
+        let capture_mask =
+            VmCaptureMask::from_props(callee.capture, self.value_capture_auto_enabled);
 
         // Check if we've reached the max call stack size.
         if self.frames.len() >= MAX_FRAMES {
@@ -3851,11 +4051,17 @@ impl BexVm {
                 // Run Rust native function, converting NativeCallResult → VmError.
                 match native_result {
                     NativeCallResult::Done(v) => {
-                        self.prof_emit_native_pair(
+                        let call_id = self.prof_emit_native_pair(
                             callee_function_id,
                             native_ticks_start,
                             bex_events::prof::record::FunctionEndStatus::Ok,
                             call_site_source,
+                        );
+                        self.maybe_queue_call_output(
+                            call_id,
+                            self.current_call_id,
+                            capture_mask,
+                            v,
                         );
                         self.stack.push(v);
                     }
@@ -3863,13 +4069,23 @@ impl BexVm {
                         // Status by error class: baml.sys.exit's own pair
                         // closes Exited, a cancel panic Cancelled (§7 1–3).
                         let status = self.prof_native_error_status(&e);
-                        self.prof_emit_native_pair(
+                        let call_id = self.prof_emit_native_pair(
                             callee_function_id,
                             native_ticks_start,
                             status,
                             call_site_source,
                         );
-                        return Err(self.native_error_to_vm_error(e));
+                        let vm_error = self.native_error_to_vm_error(e);
+                        if let VmError::Thrown(value) = vm_error {
+                            self.maybe_queue_call_error_origin(
+                                call_id,
+                                self.current_call_id,
+                                capture_mask,
+                                value,
+                            );
+                            return Err(VmError::Thrown(value));
+                        }
+                        return Err(vm_error);
                     }
                     NativeCallResult::YieldToCall {
                         callee,
@@ -3979,6 +4195,7 @@ impl BexVm {
                     faulting_pc: 0,
                     call_id,
                     parent_call_id,
+                    capture_mask,
                 }));
                 self.allocate_real_locals_for_frame(callee_ptr)?;
 
@@ -5480,16 +5697,22 @@ impl BexVm {
                         .into());
                     };
                     let sysop_function_id = callable_future.function_id;
-                    let args_offset = self.stack.len().checked_sub(callable_future.arity).ok_or(
-                        VmInternalError::NotEnoughItemsOnStack(callable_future.arity),
-                    )?;
+                    let sysop_arity = callable_future.arity;
+                    let sysop_capture = callable_future.capture;
+                    let args_offset = self
+                        .stack
+                        .len()
+                        .checked_sub(sysop_arity)
+                        .ok_or(VmInternalError::NotEnoughItemsOnStack(sysop_arity))?;
                     let args_offset = StackIndex::from_raw(args_offset);
                     let call_args: Vec<Value> = self.stack.drain(args_offset..).collect();
                     // PR4b: sys-op calls (LLM calls included) appear on the
                     // timeline as a CallFunction here; the engine emits the
                     // matching EndFunction once the op completes.
                     let call_site_source = self.call_site_source_for_frame(*frame_idx, self.cur_pc);
-                    self.prof_enter_sysop(sysop_function_id, call_site_source);
+                    let capture_mask =
+                        VmCaptureMask::from_props(sysop_capture, self.value_capture_auto_enabled);
+                    self.prof_enter_sysop(sysop_function_id, call_site_source, capture_mask);
                     return Ok(Some(VmExecState::SysOp {
                         operation: sys_op,
                         args: call_args,
@@ -5966,8 +6189,19 @@ impl BexVm {
                     let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
                         unreachable!()
                     };
-                    let (popped_call_id, popped_parent_call_id) = (bf.call_id, bf.parent_call_id);
-                    self.stack.drain(bf.locals_offset..);
+                    let (popped_call_id, popped_parent_call_id, capture_mask, locals_offset) = (
+                        bf.call_id,
+                        bf.parent_call_id,
+                        bf.capture_mask,
+                        bf.locals_offset,
+                    );
+                    self.maybe_queue_call_output(
+                        popped_call_id,
+                        popped_parent_call_id,
+                        capture_mask,
+                        result,
+                    );
+                    self.stack.drain(locals_offset..);
                     self.stack.push(result);
                     self.frames.pop();
                     self.prof_exit_call(
@@ -7317,6 +7551,17 @@ impl ::bex_vm_types::RootHaver for BexVm {
         // Watch state (last_assigned/last_notified values that aren't on the stack)
         self.watch.collect_roots(roots);
 
+        roots.extend(
+            self.pending_call_captures
+                .iter()
+                .filter_map(|event| event.value.as_object_ptr()),
+        );
+        roots.extend(
+            self.seen_throw_values
+                .iter()
+                .filter_map(Value::as_object_ptr),
+        );
+
         // Frame function pointers (needed once closures are heap-allocated)
         roots.extend(self.collect_frame_roots());
 
@@ -7343,6 +7588,21 @@ impl ::bex_vm_types::RootHaver for BexVm {
 
         // Watch state (last_assigned/last_notified values that aren't on the stack)
         self.watch.forward_roots(roots);
+
+        for event in &mut self.pending_call_captures {
+            if let Some(ptr) = event.value.as_object_ptr()
+                && let Some(&new_ptr) = roots.get(&ptr)
+            {
+                event.value = Value::object(new_ptr);
+            }
+        }
+        for value in &mut self.seen_throw_values {
+            if let Some(ptr) = value.as_object_ptr()
+                && let Some(&new_ptr) = roots.get(&ptr)
+            {
+                *value = Value::object(new_ptr);
+            }
+        }
 
         // Frame function pointers (needed once closures are heap-allocated)
         for frame in &mut self.frames {

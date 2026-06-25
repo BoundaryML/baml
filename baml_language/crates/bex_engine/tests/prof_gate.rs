@@ -36,8 +36,12 @@ use bex_events::{
     run::{
         self, CallNodeId, CallStatus, ReconstructedProfile, TraceCallKey, TraceThreadKey, bamlprof,
     },
-    value::{ByteValueArtifactSink, ValueFileRecord, ValueWriter, read_bamlvalue_from_bytes},
+    value::{
+        ByteValueArtifactSink, ValueCaptureKind, ValueFileRecord, ValueWriter,
+        read_bamlvalue_from_bytes,
+    },
 };
+use bex_vm_types::{FunctionCaptureProps, Object};
 use common::compile_for_engine;
 use pb::disk_event_v1::Event;
 use sys_native::SysOpsExt;
@@ -410,6 +414,367 @@ async fn log_capture_attributes_repeated_nested_calls() {
         previews_by_function.get("user.log_phase4_leaf").cloned(),
         Some(vec!["leaf".to_string(), "leaf".to_string()])
     );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn call_output_capture_attributes_repeated_enabled_calls() {
+    let _guard = test_lock().await;
+    init_prof_env();
+    let source = r#"
+        function capture_phase5_leaf(n: int) -> int {
+            n + 1
+        }
+
+        function capture_phase5_branch(n: int) -> int {
+            capture_phase5_leaf(n) + 10
+        }
+
+        function capture_phase5_plain(n: int) -> int {
+            n + 100
+        }
+
+        function main() -> int {
+            capture_phase5_branch(1) + capture_phase5_branch(10) + capture_phase5_plain(0)
+        }
+    "#;
+    let mut program = compile_for_engine(source);
+    for object in program.objects.iter_mut() {
+        let Object::Function(function) = object else {
+            continue;
+        };
+        if matches!(
+            function.name.as_str(),
+            "user.capture_phase5_branch" | "user.capture_phase5_leaf"
+        ) {
+            function.capture = FunctionCaptureProps::auto_output_and_error();
+        }
+    }
+
+    let engine = Arc::new(
+        BexEngine::new(program, Arc::new(sys_native::SysOps::native()), Vec::new())
+            .expect("engine construction"),
+    );
+    let boundary_id = BoundaryId::from_bytes([5; 16]);
+    let value_capture = TraceCaptureProducer::new(TraceCaptureConfig::enabled(16));
+    let call_ctx = FunctionCallContextBuilder::new(sys_types::CallId::next())
+        .with_boundary_id(boundary_id)
+        .with_capture_defaults(bex_engine::CaptureDefaults {
+            values_enabled: true,
+            logs_enabled: false,
+        })
+        .with_value_capture(value_capture.clone())
+        .build();
+    let result = engine
+        .call_function_with_trace("main", vec![], call_ctx, true)
+        .await
+        .expect("captured-output program runs");
+    assert_eq!(result.value.unwrap(), BexExternalValue::Int(133));
+    drop(engine);
+
+    let mut writer =
+        ValueWriter::new(ByteValueArtifactSink::new(), boundary_id).expect("value writer");
+    let captured = value_capture
+        .drain_to_value_writer(&mut writer)
+        .expect("call output drafts encode");
+    assert_eq!(value_capture.trace_heap().retained_snapshot_count(), 0);
+
+    let call_outputs = captured
+        .iter()
+        .filter(|encoded| encoded.kind == bex_engine::value_capture::CaptureKind::CallOutput)
+        .collect::<Vec<_>>();
+    assert_eq!(
+        call_outputs.len(),
+        4,
+        "expected two branch outputs and two leaf outputs: {captured:#?}"
+    );
+
+    let parsed = read_bamlvalue_from_bytes(writer.sink().bytes()).expect("value bytes parse");
+    let mut call_output_records = 0;
+    for record in parsed.records {
+        if let ValueFileRecord::CapturedValue(value) = record
+            && value.capture.as_ref().is_some_and(|capture| {
+                capture.kind == bex_events::value::ValueCaptureKind::CallOutput
+            })
+        {
+            call_output_records += 1;
+        }
+    }
+    assert_eq!(call_output_records, 4);
+
+    let (header, events) = load_profile("user.capture_phase5_leaf");
+    assert_balance(&header, &events);
+    let contents = bex_events::prof::file::BamlprofContents {
+        header,
+        events: events
+            .into_iter()
+            .map(|event| pb::DiskEventV1 { event: Some(event) })
+            .collect(),
+        truncated: false,
+    };
+    let reconstructed =
+        bamlprof::reconstruct_bamlprof(&contents).expect("call output profile reconstructs");
+    assert!(
+        reconstructed.diagnostics.is_empty(),
+        "profile reconstruction diagnostics: {:#?}",
+        reconstructed.diagnostics
+    );
+    let function_by_call = reconstructed
+        .calls
+        .iter()
+        .filter_map(|call| {
+            call.function_name
+                .as_ref()
+                .map(|name| (call.trace_key, name))
+        })
+        .collect::<HashMap<_, _>>();
+    let mut outputs_by_function = HashMap::<String, usize>::new();
+    for encoded in call_outputs {
+        let function = function_by_call
+            .get(&encoded.call)
+            .unwrap_or_else(|| panic!("captured output call not in profile: {:?}", encoded.call));
+        *outputs_by_function.entry((*function).clone()).or_default() += 1;
+    }
+
+    assert_eq!(
+        outputs_by_function.get("user.capture_phase5_branch"),
+        Some(&2),
+        "branch outputs should attach to repeated branch calls"
+    );
+    assert_eq!(
+        outputs_by_function.get("user.capture_phase5_leaf"),
+        Some(&2),
+        "leaf outputs should attach to repeated nested leaf calls"
+    );
+    assert!(
+        !outputs_by_function.contains_key("user.capture_phase5_plain"),
+        "ordinary helper without capture props should not emit call output"
+    );
+    assert!(
+        !outputs_by_function.contains_key("user.main"),
+        "root outcome stays on RunResult and should not duplicate as a call payload"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn call_output_capture_attributes_enabled_native_calls() {
+    let _guard = test_lock().await;
+    init_prof_env();
+    let source = r#"
+        function capture_phase5_native_wrapper() -> string {
+            baml.json.to_string(7)
+        }
+
+        function main() -> string {
+            capture_phase5_native_wrapper()
+        }
+    "#;
+    let mut program = compile_for_engine(source);
+    for object in program.objects.iter_mut() {
+        let Object::Function(function) = object else {
+            continue;
+        };
+        if function.name == "baml.json.to_string" {
+            function.capture = FunctionCaptureProps::auto_output_and_error();
+        }
+    }
+
+    let engine = Arc::new(
+        BexEngine::new(program, Arc::new(sys_native::SysOps::native()), Vec::new())
+            .expect("engine construction"),
+    );
+    let boundary_id = BoundaryId::from_bytes([7; 16]);
+    let value_capture = TraceCaptureProducer::new(TraceCaptureConfig::enabled(16));
+    let call_ctx = FunctionCallContextBuilder::new(sys_types::CallId::next())
+        .with_boundary_id(boundary_id)
+        .with_capture_defaults(bex_engine::CaptureDefaults {
+            values_enabled: true,
+            logs_enabled: false,
+        })
+        .with_value_capture(value_capture.clone())
+        .build();
+    let result = engine
+        .call_function_with_trace("main", vec![], call_ctx, true)
+        .await
+        .expect("captured-native-output program runs");
+    assert_eq!(result.value.unwrap(), BexExternalValue::String("7".into()));
+    drop(engine);
+
+    let mut writer =
+        ValueWriter::new(ByteValueArtifactSink::new(), boundary_id).expect("value writer");
+    let captured = value_capture
+        .drain_to_value_writer(&mut writer)
+        .expect("native call output drafts encode");
+    assert_eq!(value_capture.trace_heap().retained_snapshot_count(), 0);
+
+    let call_outputs = captured
+        .iter()
+        .filter(|encoded| encoded.kind == bex_engine::value_capture::CaptureKind::CallOutput)
+        .collect::<Vec<_>>();
+    assert_eq!(
+        call_outputs.len(),
+        1,
+        "expected only the capture-enabled native output: {captured:#?}"
+    );
+
+    let (header, events) = load_profile("user.capture_phase5_native_wrapper");
+    assert_balance(&header, &events);
+    let contents = bex_events::prof::file::BamlprofContents {
+        header,
+        events: events
+            .into_iter()
+            .map(|event| pb::DiskEventV1 { event: Some(event) })
+            .collect(),
+        truncated: false,
+    };
+    let reconstructed =
+        bamlprof::reconstruct_bamlprof(&contents).expect("native call profile reconstructs");
+    assert!(
+        reconstructed.diagnostics.is_empty(),
+        "profile reconstruction diagnostics: {:#?}",
+        reconstructed.diagnostics
+    );
+    let function_by_call = reconstructed
+        .calls
+        .iter()
+        .filter_map(|call| {
+            call.function_name
+                .as_ref()
+                .map(|name| (call.trace_key, name))
+        })
+        .collect::<HashMap<_, _>>();
+    let native_function = function_by_call
+        .get(&call_outputs[0].call)
+        .unwrap_or_else(|| {
+            panic!(
+                "captured native output call not in profile: {:?}",
+                captured[0]
+            )
+        });
+    assert_eq!(*native_function, "baml.json.to_string");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn call_error_capture_records_throw_origin_without_rethrow_duplicate() {
+    let _guard = test_lock().await;
+    init_prof_env();
+    let source = r#"
+        function capture_phase5_boom() -> int throws string {
+            throw "boom"
+        }
+
+        function capture_phase5_rethrow() -> int throws string {
+            capture_phase5_boom() catch (e) {
+                _ => throw e
+            }
+        }
+
+        function main() -> int throws string {
+            capture_phase5_rethrow()
+        }
+    "#;
+    let mut program = compile_for_engine(source);
+    for object in program.objects.iter_mut() {
+        let Object::Function(function) = object else {
+            continue;
+        };
+        if matches!(
+            function.name.as_str(),
+            "user.capture_phase5_boom" | "user.capture_phase5_rethrow"
+        ) {
+            function.capture = FunctionCaptureProps::auto_output_and_error();
+        }
+    }
+
+    let engine = Arc::new(
+        BexEngine::new(program, Arc::new(sys_native::SysOps::native()), Vec::new())
+            .expect("engine construction"),
+    );
+    let boundary_id = BoundaryId::from_bytes([6; 16]);
+    let value_capture = TraceCaptureProducer::new(TraceCaptureConfig::enabled(16));
+    let call_ctx = FunctionCallContextBuilder::new(sys_types::CallId::next())
+        .with_boundary_id(boundary_id)
+        .with_capture_defaults(bex_engine::CaptureDefaults {
+            values_enabled: true,
+            logs_enabled: false,
+        })
+        .with_value_capture(value_capture.clone())
+        .build();
+    let result = engine
+        .call_function_with_trace("main", vec![], call_ctx, true)
+        .await
+        .expect("runtime throw should still return a traced call result");
+    assert!(
+        result.value.is_err(),
+        "main should rethrow the string error"
+    );
+    drop(engine);
+
+    let mut writer =
+        ValueWriter::new(ByteValueArtifactSink::new(), boundary_id).expect("value writer");
+    let captured = value_capture
+        .drain_to_value_writer(&mut writer)
+        .expect("call error drafts encode");
+    assert_eq!(value_capture.trace_heap().retained_snapshot_count(), 0);
+
+    let call_errors = captured
+        .iter()
+        .filter(|encoded| encoded.kind == bex_engine::value_capture::CaptureKind::CallError)
+        .collect::<Vec<_>>();
+    assert_eq!(
+        call_errors.len(),
+        1,
+        "rethrowing the same caught value must not duplicate wrapper errors: {captured:#?}"
+    );
+
+    let parsed = read_bamlvalue_from_bytes(writer.sink().bytes()).expect("value bytes parse");
+    let call_error_records = parsed
+        .records
+        .iter()
+        .filter(|record| {
+            matches!(
+                record,
+                ValueFileRecord::CapturedValue(value)
+                    if value.capture.as_ref().is_some_and(|capture| capture.kind == ValueCaptureKind::CallError)
+            )
+        })
+        .count();
+    assert_eq!(call_error_records, 1);
+
+    let (header, events) = load_profile("user.capture_phase5_boom");
+    assert_balance(&header, &events);
+    let contents = bex_events::prof::file::BamlprofContents {
+        header,
+        events: events
+            .into_iter()
+            .map(|event| pb::DiskEventV1 { event: Some(event) })
+            .collect(),
+        truncated: false,
+    };
+    let reconstructed =
+        bamlprof::reconstruct_bamlprof(&contents).expect("call error profile reconstructs");
+    assert!(
+        reconstructed.diagnostics.is_empty(),
+        "profile reconstruction diagnostics: {:#?}",
+        reconstructed.diagnostics
+    );
+    let function_by_call = reconstructed
+        .calls
+        .iter()
+        .filter_map(|call| {
+            call.function_name
+                .as_ref()
+                .map(|name| (call.trace_key, name))
+        })
+        .collect::<HashMap<_, _>>();
+    let origin_function = function_by_call
+        .get(&call_errors[0].call)
+        .unwrap_or_else(|| {
+            panic!(
+                "captured error call not in profile: {:?}",
+                call_errors[0].call
+            )
+        });
+    assert_eq!(*origin_function, "user.capture_phase5_boom");
 }
 
 fn assert_canonical_profile_parity_shape(reconstructed: &ReconstructedProfile) {

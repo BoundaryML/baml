@@ -26,6 +26,8 @@ pub enum CaptureKind {
     RootOutput,
     RootError,
     LogBody,
+    CallOutput,
+    CallError,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -324,6 +326,8 @@ fn value_capture_kind(kind: CaptureKind) -> ValueCaptureKind {
         CaptureKind::RootOutput => ValueCaptureKind::RootOutput,
         CaptureKind::RootError => ValueCaptureKind::RootError,
         CaptureKind::LogBody => ValueCaptureKind::LogBody,
+        CaptureKind::CallOutput => ValueCaptureKind::CallOutput,
+        CaptureKind::CallError => ValueCaptureKind::CallError,
     }
 }
 
@@ -336,9 +340,11 @@ enum CaptureQueueClass {
 impl CaptureKind {
     fn queue_class(self) -> CaptureQueueClass {
         match self {
-            CaptureKind::RootInput | CaptureKind::RootOutput | CaptureKind::RootError => {
-                CaptureQueueClass::Value
-            }
+            CaptureKind::RootInput
+            | CaptureKind::RootOutput
+            | CaptureKind::RootError
+            | CaptureKind::CallOutput
+            | CaptureKind::CallError => CaptureQueueClass::Value,
             CaptureKind::LogBody => CaptureQueueClass::Log,
         }
     }

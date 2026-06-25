@@ -636,7 +636,17 @@ fn open_boundary_from_segments_with_fallback(
 
     let root_trace = captured_values
         .iter()
-        .find_map(|record| record.capture.as_ref().map(|capture| capture.call))
+        .find_map(|record| {
+            record.capture.as_ref().and_then(|capture| {
+                matches!(
+                    capture.kind,
+                    ValueCaptureKind::RootInput
+                        | ValueCaptureKind::RootOutput
+                        | ValueCaptureKind::RootError
+                )
+                .then_some(capture.call)
+            })
+        })
         .or_else(|| {
             reconstructed
                 .calls
@@ -687,6 +697,50 @@ fn open_boundary_from_segments_with_fallback(
                 role: crate::run::CapturedValueRole::RootInput,
                 label: Some("inputs".to_string()),
                 value_ref: Some(value_ref),
+                trace_call: None,
+            }),
+            redaction: RedactionMetadata::display_safe(),
+            body: None,
+        });
+        next_payload_id = next_payload_id.saturating_add(1);
+    }
+    for record in captured_values.iter().filter(|record| {
+        record.capture.as_ref().is_some_and(|capture| {
+            matches!(
+                capture.kind,
+                ValueCaptureKind::CallOutput | ValueCaptureKind::CallError
+            )
+        })
+    }) {
+        let Some(capture) = record.capture.as_ref() else {
+            continue;
+        };
+        let role = match capture.kind {
+            ValueCaptureKind::CallOutput => crate::run::CapturedValueRole::CallOutput,
+            ValueCaptureKind::CallError => crate::run::CapturedValueRole::CallError,
+            _ => continue,
+        };
+        let call_node = reconstructed
+            .calls
+            .iter()
+            .any(|call| call.trace_key == capture.call)
+            .then(|| call_node_id(&capture.call));
+        payloads.push(PayloadEvent {
+            id: PayloadId(next_payload_id),
+            call_node_id: call_node,
+            timestamp_ms: started.created_at_ms,
+            kind: crate::run::PayloadKind::CapturedValue(crate::run::CapturedValuePayload {
+                role,
+                label: Some(
+                    match role {
+                        crate::run::CapturedValueRole::CallOutput => "output",
+                        crate::run::CapturedValueRole::CallError => "error",
+                        crate::run::CapturedValueRole::RootInput => "inputs",
+                    }
+                    .to_string(),
+                ),
+                value_ref: Some(record.value_ref.clone()),
+                trace_call: Some(capture.call),
             }),
             redaction: RedactionMetadata::display_safe(),
             body: None,
@@ -1105,6 +1159,22 @@ mod tests {
         }
     }
 
+    fn child_call_event(call_id: u64, parent_call_id: u64) -> pb::DiskEventV1 {
+        pb::DiskEventV1 {
+            event: Some(pb::disk_event_v1::Event::CallFunction(pb::CallFunction {
+                thread_id: 1,
+                call_id,
+                parent_call_id: Some(parent_call_id),
+                function_id: call_id as u32,
+                timestamp_ns: 5 + call_id,
+                call_site_file_id: None,
+                call_site_start_offset: None,
+                call_site_end_offset: None,
+                call_site_line: None,
+            })),
+        }
+    }
+
     fn write_basic_history_run(
         project: &Path,
         boundary_id: BoundaryId,
@@ -1305,6 +1375,157 @@ mod tests {
                 .unwrap()
                 .body,
             vec![4, 5, 6]
+        );
+
+        let _ = std::fs::remove_dir_all(project);
+    }
+
+    #[test]
+    fn history_replays_call_value_payloads_without_root_outcome_refs() {
+        let project = temp_project("call-value-replay");
+        let boundary_id = BoundaryId::from_bytes([12; 16]);
+        let store = HistoryStore::new(vec![project.clone()]);
+        let start = start_context(boundary_id);
+        store.begin(&project, &start).unwrap();
+
+        let root = root_trace();
+        for event in [
+            call_event(),
+            child_call_event(3, root.call_id.0),
+            child_call_event(4, root.call_id.0),
+        ] {
+            let envelope = crate::run::profile_event_envelope_from_disk_event(
+                crate::run::ProfileEventSource::Replay {
+                    artifact_id: "test".to_string(),
+                },
+                root.process_euid,
+                root.engine_id,
+                &event,
+            )
+            .unwrap();
+            store.ingest_history_profile_event(envelope, event);
+        }
+        store
+            .attach_root_trace(boundary_id, root.call_ref())
+            .unwrap();
+
+        let output_call = TraceCallKey {
+            call_id: BexCallId(3),
+            ..root
+        };
+        let error_call = TraceCallKey {
+            call_id: BexCallId(4),
+            ..root
+        };
+        let output = store
+            .append_value_body(
+                boundary_id,
+                ValueCapture {
+                    kind: ValueCaptureKind::CallOutput,
+                    call: output_call,
+                },
+                ValueCodec::BamlOutboundValue,
+                vec![1, 2, 3],
+            )
+            .unwrap();
+        let error = store
+            .append_value_body(
+                boundary_id,
+                ValueCapture {
+                    kind: ValueCaptureKind::CallError,
+                    call: error_call,
+                },
+                ValueCodec::BamlOutboundValue,
+                vec![4, 5],
+            )
+            .unwrap();
+        store
+            .complete(
+                boundary_id,
+                &RunOutcome::Succeeded(RunResult {
+                    value_ref: None,
+                    renderer_hint: None,
+                    supporting_payload_ids: Vec::new(),
+                }),
+                20,
+            )
+            .unwrap();
+
+        let replayed = store.open(boundary_id).unwrap();
+        assert_eq!(replayed.status, RunStatus::Succeeded);
+        assert_eq!(
+            replayed
+                .result
+                .as_ref()
+                .and_then(|result| result.value_ref.as_ref()),
+            None
+        );
+        assert_eq!(replayed.error, None);
+
+        let output_call_node_id = call_node_id(&output_call);
+        let error_call_node_id = call_node_id(&error_call);
+        let output_payload = replayed
+            .payloads
+            .iter()
+            .find(|payload| {
+                matches!(
+                    &payload.kind,
+                    crate::run::PayloadKind::CapturedValue(crate::run::CapturedValuePayload {
+                        role: crate::run::CapturedValueRole::CallOutput,
+                        ..
+                    })
+                )
+            })
+            .expect("call output payload should replay");
+        assert_eq!(output_payload.call_node_id, Some(output_call_node_id));
+        let error_payload = replayed
+            .payloads
+            .iter()
+            .find(|payload| {
+                matches!(
+                    &payload.kind,
+                    crate::run::PayloadKind::CapturedValue(crate::run::CapturedValuePayload {
+                        role: crate::run::CapturedValueRole::CallError,
+                        ..
+                    })
+                )
+            })
+            .expect("call error payload should replay");
+        assert_eq!(error_payload.call_node_id, Some(error_call_node_id));
+
+        assert_eq!(
+            replayed
+                .calls
+                .iter()
+                .find(|call| call.id == output_call_node_id)
+                .expect("output call should replay")
+                .payload_ids,
+            vec![output_payload.id]
+        );
+        assert_eq!(
+            replayed
+                .calls
+                .iter()
+                .find(|call| call.id == error_call_node_id)
+                .expect("error call should replay")
+                .payload_ids,
+            vec![error_payload.id]
+        );
+        assert_eq!(
+            store
+                .read_value(boundary_id, &output.value_ref.id)
+                .unwrap()
+                .unwrap()
+                .body,
+            vec![1, 2, 3]
+        );
+        assert_eq!(
+            store
+                .read_value(boundary_id, &error.value_ref.id)
+                .unwrap()
+                .unwrap()
+                .body,
+            vec![4, 5]
         );
 
         let _ = std::fs::remove_dir_all(project);
