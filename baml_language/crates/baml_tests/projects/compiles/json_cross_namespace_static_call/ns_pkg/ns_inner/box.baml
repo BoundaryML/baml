@@ -1,15 +1,21 @@
 // Generic class `Box<T>` in nested namespace `pkg.inner`, referenced from
-// the root namespace via `root.pkg.inner.Box<...>`.  `from_json` is the
-// auto-derived `baml.FromJson` delegate, so the multi-segment static call
-// `root.pkg.inner.Box<int>.from_json(j)` has something to dispatch to.
+// the root namespace via `root.pkg.inner.Box<...>`. `Box<int>.from_json(j)`
+// desugars to `baml.json.to<Box<int>>(j)` (the `<int>` parses as the call's
+// type args and is applied to the receiver class).
 class Box<T> {
     value T
 }
 
-// Same shape as `Box<T>`; both rely on the auto-derived `from_json` delegate.
-// Confirms the cross-namespace + receiver-type-arg fix (`builder.rs`
-// `Expr::MemberAccess` `base_is_value` heuristic) flows the receiver's `<T>`
-// through the delegate's frame.
+// Same shape as `Box<T>`; both exercise the generic `MemberAccess`-form
+// receiver of the `from_json` sugar, threading the receiver's `<int>`.
 class AutoBox<T> {
     value T
+}
+
+// Non-generic class decoded via the qualified PATH form
+// `root.pkg.inner.Plain.from_json(j)` — with no type-args this parses as a flat
+// `Expr::Path`, exercising the Path branch of the sugar's receiver-type lookup
+// (distinct from the generic `MemberAccess` form above).
+class Plain {
+    n int
 }

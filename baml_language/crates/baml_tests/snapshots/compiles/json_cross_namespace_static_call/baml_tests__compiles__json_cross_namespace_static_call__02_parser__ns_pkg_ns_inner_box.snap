@@ -31,6 +31,15 @@ SOURCE_FILE
       TYPE_EXPR "T"
         WORD "T"
     R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "Plain"
+    L_BRACE "{"
+    FIELD
+      WORD "n"
+      TYPE_EXPR "int"
+        WORD "int"
+    R_BRACE "}"
 
 === ERRORS ===
 None

@@ -7523,6 +7523,26 @@ impl<'db> LoweringContext<'db> {
         if !baml_compiler2_tir::throws_analysis::is_from_json_call_callee(&callee_expr) {
             return false;
         }
+        // Fire only for a type-name receiver (`Type.from_json`), never a value
+        // call (`x.from_json`) — rewriting the latter would silently drop `x`.
+        // Mirrors the guard in the TIR sugar that types this call.
+        let static_receiver = match &callee_expr {
+            AstExpr::MemberAccess { base, .. } => match &self.body.exprs[*base] {
+                AstExpr::Path(segs) if !segs.is_empty() => {
+                    !self.locals.contains_key(&segs[0])
+                        && self.capture_index_for_name_at(*base, &segs[0]).is_none()
+                }
+                _ => false,
+            },
+            AstExpr::Path(segs) if segs.len() >= 2 => {
+                !self.locals.contains_key(&segs[0])
+                    && self.capture_index_for_name_at(callee, &segs[0]).is_none()
+            }
+            _ => false,
+        };
+        if !static_receiver {
+            return false;
+        }
         let callee_untyped = self
             .expr_types
             .get(&self.expr_metadata_key(callee))

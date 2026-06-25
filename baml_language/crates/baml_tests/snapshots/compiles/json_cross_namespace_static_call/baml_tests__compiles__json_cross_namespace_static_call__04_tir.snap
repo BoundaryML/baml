@@ -12,15 +12,26 @@ function user.decode_auto(j: baml.json.json) -> user.pkg.inner.AutoBox<int> thro
     root.pkg.inner.AutoBox.from_json(j) : user.pkg.inner.AutoBox<int>
   }
 }
+function user.decode_plain(j: baml.json.json) -> user.pkg.inner.Plain throws baml.json.JsonDecodeError {
+  { : user.pkg.inner.Plain
+    root.pkg.inner.Plain.from_json(j) : user.pkg.inner.Plain
+  }
+}
 class user.pkg.inner.Box {
   value: T
 }
 class user.pkg.inner.AutoBox {
   value: T
 }
+class user.pkg.inner.Plain {
+  n: int
+}
 class user.pkg.inner.Box$stream {
   value: T | null
 }
 class user.pkg.inner.AutoBox$stream {
   value: T | null
+}
+class user.pkg.inner.Plain$stream {
+  n: int | null
 }

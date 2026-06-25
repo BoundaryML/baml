@@ -5946,36 +5946,47 @@ impl<'db> TypeInferenceBuilder<'db> {
                 crate::narrowing::remove_null(&probe_ty),
                 Ty::Unknown { .. } | Ty::Error { .. }
             );
-            let recv_ty = match &body.exprs[callee] {
-                Expr::MemberAccess { base, .. } => self.expressions.get(base).cloned(),
-                Expr::Path(segs) => self
-                    .path_segment_types
-                    .get(&(callee, segs.len() - 2))
-                    .cloned(),
-                _ => None,
-            };
-            // The `<int>` in `Box<int>.from_json(j)` parses as the call's type
-            // args; apply them to the (otherwise raw) receiver class so the
-            // decoded type is `Box<int>`, not `Box`.
-            let recv_ty = match recv_ty {
-                Some(Ty::Class(qtn, _, attr)) if !type_args.is_empty() => {
-                    let resolved: Vec<Ty> = type_args
-                        .iter()
-                        .map(|te| self.resolve_type_expr(te, expr_id))
-                        .collect();
-                    Some(Ty::Class(qtn, resolved, attr))
+            if unresolved {
+                // The receiver is the type named by the callee minus `from_json`.
+                // The `<int>` in `Box<int>.from_json` parses as the call's type
+                // args, applied to the (raw) receiver class so the decoded type is
+                // `Box<int>`, not `Box`.
+                let recv_ty = match &body.exprs[callee] {
+                    Expr::MemberAccess { base, .. } => match self.expressions.get(base).cloned() {
+                        Some(Ty::Class(qtn, _, attr)) if !type_args.is_empty() => {
+                            let resolved: Vec<Ty> = type_args
+                                .iter()
+                                .map(|te| self.resolve_type_expr(te, expr_id))
+                                .collect();
+                            Some(Ty::Class(qtn, resolved, attr))
+                        }
+                        other => other,
+                    },
+                    // `path_segment_types` is not populated for package-qualified
+                    // type paths (`root.pkg.Type.from_json`), so resolve the
+                    // receiver segments as a type directly, threading the call's
+                    // type args in as the receiver's generic args.
+                    Expr::Path(segs) => {
+                        let recv_expr = TypeExpr::Path {
+                            segments: segs[..segs.len() - 1].to_vec(),
+                            generic_args: type_args.to_vec(),
+                            associated_type_bindings: vec![],
+                            attrs: vec![],
+                        };
+                        Some(self.resolve_type_expr(&recv_expr, expr_id))
+                    }
+                    _ => None,
+                };
+                let recv_known = recv_ty
+                    .as_ref()
+                    .is_some_and(|t| !matches!(t, Ty::Unknown { .. } | Ty::Error { .. }));
+                if recv_known {
+                    let ty = recv_ty.expect("recv_known implies Some");
+                    self.context.truncate_diagnostics(after_setup);
+                    self.report_result_type_mismatch(expr_id, &ty, expected);
+                    self.record_expr_type(expr_id, ty.clone());
+                    return ty;
                 }
-                other => other,
-            };
-            let recv_known = recv_ty
-                .as_ref()
-                .is_some_and(|t| !matches!(t, Ty::Unknown { .. } | Ty::Error { .. }));
-            if unresolved && recv_known {
-                let ty = recv_ty.expect("recv_known implies Some");
-                self.context.truncate_diagnostics(after_setup);
-                self.report_result_type_mismatch(expr_id, &ty, expected);
-                self.record_expr_type(expr_id, ty.clone());
-                return ty;
             }
             self.context.truncate_diagnostics(start);
         }

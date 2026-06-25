@@ -5,6 +5,9 @@ source: crates/baml_tests/src/generated_tests.rs
 function user.decode_auto(j: baml.json.json) -> root.pkg.inner.AutoBox<int>  [expr] {
   {  } root.pkg.inner.AutoBox.from_json(j)
 }
+function user.decode_plain(j: baml.json.json) -> root.pkg.inner.Plain  [expr] {
+  {  } root.pkg.inner.Plain.from_json(j)
+}
 function user.decode_root(j: baml.json.json) -> root.pkg.inner.Box<int>  [expr] {
   {  } root.pkg.inner.Box.from_json(j)
 }
@@ -13,4 +16,7 @@ class user.pkg.inner.AutoBox {
 }
 class user.pkg.inner.Box {
   value: T
+}
+class user.pkg.inner.Plain {
+  n: int
 }

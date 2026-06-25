@@ -8,6 +8,13 @@ function user.decode_auto(j: baml.json.json) -> pkg.inner.AutoBox<int> {
     return
 }
 
+function user.decode_plain(j: baml.json.json) -> pkg.inner.Plain {
+    load_type pkg.inner.Plain
+    load_var j
+    call baml.json.to
+    return
+}
+
 function user.decode_root(j: baml.json.json) -> pkg.inner.Box<int> {
     load_type pkg.inner.Box<int>
     load_var j
