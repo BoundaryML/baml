@@ -120,3 +120,51 @@ function _to_json_default<T>(value: T) -> baml.json.json throws baml.json.JsonSe
 function _to_json_shim<T>(value: T) -> baml.json.json throws baml.json.JsonSerializationError {
   $rust_function
 }
+
+/// Opt-in JSON deserialization — the inverse of `baml.ToJson`.
+///
+/// A type implements `baml.FromJson` to control how `baml.json.to<T>(j)` (and
+/// JSON deserialization generally) constructs it from a `json` value. Unlike
+/// `to_json`, `from_json` has no `self`: it is an associated constructor that
+/// takes a `json` and returns `Self`. `baml.json.to` provides a default
+/// structural decode for non-implementors (per-field, honoring nested
+/// `baml.FromJson` overrides), so a type need only implement `baml.FromJson`
+/// when its JSON shape differs from its structural field layout.
+///
+/// ```
+/// class Temp {
+///   celsius float
+///   implements baml.FromJson {
+///     function from_json(j: baml.json.json) -> Self throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+///       Temp { celsius: baml.json.to<float>(baml.json.field(j, "c")) }
+///     }
+///   }
+/// }
+/// ```
+///
+/// `from_json` is a *required* method (no default body): a type either
+/// implements `baml.FromJson` to customize decoding, or relies on the structural
+/// decode that `baml.json.to` provides for non-implementors. (Unlike `to_json`,
+/// it can't have a default body — an interface default method may not return
+/// `Self`; the structural fallback lives in `baml.json.to` instead.)
+interface FromJson {
+  function from_json(j: baml.json.json) -> Self throws baml.json.JsonParseError | baml.json.JsonDecodeError
+}
+
+/// Internal: dispatch `from_json` on the target type `T`, honoring a
+/// user-defined override. `baml.json.to` routes through this rather than a
+/// static `match` for the same package-boundary reason `baml.json.from` uses
+/// [`_to_json_shim`]: static interface dispatch from this (stdlib) package can
+/// only see implementors visible here, not downstream user classes. Resolving on
+/// the runtime target type instead picks up a user `implements baml.FromJson {
+/// function from_json ... }` override; a type that inherits the structural
+/// default body falls back to [`_from_json_default`].
+///
+/// TODO: temporary. Once Kai's TIR rework moves interface conformance checks to
+/// runtime, `baml.json.to` can use the literal `is baml.FromJson` form and this
+/// shim can be removed.
+//baml:mut_vm
+//baml:may_yield
+function _from_json_shim<T>(j: baml.json.json) -> T throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+  $rust_function
+}

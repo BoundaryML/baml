@@ -8,6 +8,7 @@ namespace baml:
   class Bool { methods: [from_json] }
   type Comparable
   class Float { methods: [is_nan, is_infinite, is_finite, abs, min, max, clamp, floor, ceil, round, trunc, fract, ifloor, iceil, iround, itrunc, sqrt, pow, log, hypot, sin, cos, tan, asin, acos, atan, atan2, sinh, cosh, tanh, asinh, acosh, atanh, to_radians, to_degrees, parse, random, pi, e, golden_ratio, nan, inf, from_json] }
+  type FromJson
   class Int { methods: [abs, min, max, clamp, isqrt, pow, ilog, leading_zeros, leading_ones, trailing_zeros, trailing_ones, count_zeros, count_ones, parse, random, max_value, min_value, from_json] }
   class Map<K, V> { methods: [length, has, keys, values, set, get, delete, get_or_insert, clear, from_json] }
   class Null { methods: [from_json] }
@@ -20,6 +21,7 @@ namespace baml:
   class Uint8Array { methods: [length, at, push, pop, concat, includes, reverse, slice, zeroes, from_array, to_array, from_hex, to_hex, from_base64, to_base64, _to_string_impl, sort, from_json, to_string] }
   function _compare_shim<T>
   function _float_total_cmp
+  function _from_json_shim<T>
   function _is_primitive_array<T>
   function _rust_sort<A>
   function _to_json_default<T>
@@ -171,6 +173,7 @@ namespace baml.json:
   function serialize<T>
   function stringify
   function stringify_pretty
+  function to<T>
   function to_json<T>
   function to_string<T>
 namespace baml.llm:

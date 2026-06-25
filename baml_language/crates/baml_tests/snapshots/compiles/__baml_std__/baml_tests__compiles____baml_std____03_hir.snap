@@ -112,6 +112,7 @@ function baml.values(self: ?) -> V[]  [builtin]
 lambda (i, j) in sort_by_key: captures [keys]
 
 --- <builtin>/baml/conversions.baml ---
+function baml._from_json_shim(j: baml.json.json) -> T  [builtin]
 function baml._to_json_default(value: T) -> baml.json.json  [builtin]
 function baml._to_json_shim(value: T) -> baml.json.json  [builtin]
 function baml._to_string_default(value: T) -> string  [builtin]
@@ -1011,11 +1012,11 @@ function baml.json.from_json(j: baml.json.json) -> baml.json.JsonParseError  [ex
   baml.json.JsonParseError { message: baml.json.from_json(baml.json.field(j, "message")) }
 }
 function baml.json.from_json(j: baml.json.json) -> T  [builtin]
-function baml.json.from_json(j: baml.json.json) -> baml.json.JsonSerializationError  [expr] {
-  baml.json.JsonSerializationError { message: baml.json.from_json(baml.json.field(j, "message")), path: baml.json.from_json(baml.json.field(j, "path")), reason: baml.json.from_json(baml.json.field(j, "reason")) }
-}
 function baml.json.from_json(j: baml.json.json) -> baml.json.JsonDecodeError  [expr] {
   baml.json.JsonDecodeError { message: baml.json.from_json(baml.json.field(j, "message")), path: baml.json.from_json(baml.json.field(j, "path")) }
+}
+function baml.json.from_json(j: baml.json.json) -> baml.json.JsonSerializationError  [expr] {
+  baml.json.JsonSerializationError { message: baml.json.from_json(baml.json.field(j, "message")), path: baml.json.from_json(baml.json.field(j, "path")), reason: baml.json.from_json(baml.json.field(j, "reason")) }
 }
 function baml.json.from_string(s: string) -> T  [builtin]
 function baml.json.parse(s: string) -> baml.json.json  [builtin]
@@ -1024,6 +1025,9 @@ function baml.json.serialize(v: T) -> string  [expr] {
 }
 function baml.json.stringify(j: baml.json.json) -> string  [builtin]
 function baml.json.stringify_pretty(j: baml.json.json) -> string  [builtin]
+function baml.json.to(j: baml.json.json) -> T  [expr] {
+  {  } root._from_json_shim(j)
+}
 function baml.json.to_json(v: T) -> baml.json.json  [builtin]
 function baml.json.to_string(v: T) -> string  [builtin]
 

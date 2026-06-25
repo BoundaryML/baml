@@ -1507,6 +1507,72 @@ impl Continuation for IdentityFromJsonCont {
     fn apply_forwarding(&mut self, _: &HashMap<HeapPtr, HeapPtr>) {}
 }
 
+// ── baml.json.to<T> / baml.FromJson dispatch ───────────────────────────────────
+//
+// The deserialize counterpart of `baml.json.from` / `baml.ToJson`. `json.to<T>`
+// resolves a user `implements baml.FromJson { function from_json ... }` override
+// on the target type `T` and dispatches it; otherwise it decodes structurally.
+//
+// F1 (additive): the structural fallback delegates to `json_from_json_dispatch`
+// (the existing magic path — auto-derived per-field bodies still exist and honor
+// nested overrides). F2 will retire the magic path and move the per-field
+// override-honoring decode into the default itself.
+
+/// Reads the target type `T` from the call's type-args and dispatches
+/// `baml.json.to<T>(j)` — the `baml._from_json_shim` native.
+pub(super) fn json_to_shim(vm: &mut BexVm, j: Value) -> NativeCallResult {
+    let ty = match vm.current_call_type_args().first().cloned() {
+        Some(t) => t,
+        None => {
+            return NativeCallResult::Error(VmRustFnError::InternalError(
+                VmInternalError::MissingNativeFunction {
+                    name: "baml.json.to: missing type argument".to_string(),
+                },
+            ));
+        }
+    };
+    json_to_dispatch(vm, j, &ty)
+}
+
+/// Dispatch `json.to<T>`: a `baml.FromJson` override on `T`'s class wins;
+/// otherwise fall back to the structural decode path.
+fn json_to_dispatch(vm: &mut BexVm, j: Value, ty: &RuntimeTy) -> NativeCallResult {
+    match try_yield_interface_from_json(vm, j, ty) {
+        Some(yld) => yld,
+        None => json_from_json_dispatch(vm, j, ty),
+    }
+}
+
+/// If `ty` is a class/interface type whose runtime type carries an in-body
+/// `implements baml.FromJson { function from_json ... }` override, returns a
+/// `YieldToCall` dispatching `{fqn}.baml.FromJson.from_json(j)`. The deserialize
+/// analog of `try_yield_user_from_json`, but keyed on the interface method name
+/// rather than the magic `{fqn}.from_json`. Returns `None` for non-class types,
+/// media, and types without the override (→ structural fallback).
+fn try_yield_interface_from_json(
+    vm: &mut BexVm,
+    j: Value,
+    ty: &RuntimeTy,
+) -> Option<NativeCallResult> {
+    let (qtn, type_args) = match ty {
+        RuntimeTy::Class(qtn, type_args, _) | RuntimeTy::Interface(qtn, type_args, _, _) => {
+            (qtn, type_args)
+        }
+        _ => return None,
+    };
+    if media_kind_from_fqn(qtn.display_name().as_str()).is_some() {
+        return None;
+    }
+    let from_json_name = format!("{}.baml.FromJson.from_json", class_lookup_key(qtn));
+    let callee = vm.find_function_by_name(&from_json_name)?;
+    Some(NativeCallResult::YieldToCall {
+        callee,
+        args: vec![j],
+        type_args: type_args.clone(),
+        continuation: Box::new(IdentityFromJsonCont),
+    })
+}
+
 // ── List dispatch ─────────────────────────────────────────────────────────────
 
 fn list_from_json_start(vm: &mut BexVm, j: Value, elem_ty: &RuntimeTy) -> NativeCallResult {

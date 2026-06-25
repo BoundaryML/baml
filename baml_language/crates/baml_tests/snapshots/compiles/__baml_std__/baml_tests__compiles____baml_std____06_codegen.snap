@@ -1699,6 +1699,9 @@ function baml._compare_shim(a: T, b: T) -> int {
 function baml._float_total_cmp(a: float, b: float) -> int {
 }
 
+function baml._from_json_shim(j: baml.json.json) -> T {
+}
+
 function baml._is_primitive_array(arr: T[]) -> bool {
 }
 
@@ -8040,6 +8043,13 @@ function baml.json.stringify(j: baml.json.json) -> string {
 }
 
 function baml.json.stringify_pretty(j: baml.json.json) -> string {
+}
+
+function baml.json.to(j: baml.json.json) -> T {
+    load_type #0
+    load_var j
+    call baml._from_json_shim
+    return
 }
 
 function baml.json.to_json(v: T) -> baml.json.json {
