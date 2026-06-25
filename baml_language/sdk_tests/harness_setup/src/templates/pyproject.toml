@@ -5,11 +5,13 @@ requires-python = ">=3.10"
 dependencies = [
     "baml_core",
     "pydantic>=2",
-    "typing-extensions",
+    # `UNSET` is a `typing_extensions.Sentinel` (PEP 661); recognizing a
+    # sentinel in a type expression needs pyright >= 1.1.410.
+    "typing-extensions>=4.14.0",
     "pytest>=7",
     "pytest-asyncio>=0.23",
     "ruff",
-    "pyright>=1.1",
+    "pyright>=1.1.410",
 ]
 
 [dependency-groups]
