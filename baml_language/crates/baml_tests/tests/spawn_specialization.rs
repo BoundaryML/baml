@@ -145,6 +145,7 @@ async fn captured_float_array_element_arithmetic_uses_generic_binop() {
         make_cell
         store_var ?1
         load_const 1.0
+        load_type float
         alloc_array 1
         store_deref ?1
         load_var values

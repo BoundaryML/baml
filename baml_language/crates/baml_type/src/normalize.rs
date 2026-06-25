@@ -33,7 +33,8 @@
 use std::collections::HashSet;
 
 use crate::{
-    FunctionParamMode, FunctionParamTy, Literal, MediaKind, Name, QualifiedTypeName, Ty, TyAttr,
+    FunctionParamMode, FunctionParamTy, Interface, Literal, MediaKind, Name, QualifiedTypeName, Ty,
+    TyAttr,
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -67,28 +68,27 @@ pub trait TypeContext {
     fn alias_def(&self, name: &QualifiedTypeName) -> Option<Ty>;
 
     /// Whether the non-interface, non-type-variable `concrete` type implements
-    /// `interface` (a [`Ty::Interface`]), accounting for the interface's generic
+    /// `interface`, accounting for the interface's generic
     /// arguments, associated-type bindings, and the impl's bounds.
     ///
     /// Powers `C <: I` subtyping and the `C | I == I` union absorption (a
     /// concrete member subsumed by an existential member). `false` ⇒ no
     /// membership is claimed.
-    fn implements_interface(&self, concrete: &Ty, interface: &Ty) -> bool;
+    fn implements_interface(&self, concrete: &Ty, interface: &Interface) -> bool;
 
     /// The declared bound of type variable `name` (an interface or a union of
     /// interfaces), or `None` if it is unbounded or unknown.
     ///
     /// Powers `T <: I` (and the `T | I == I` absorption) when `T`'s bound
     /// is — or transitively requires — `I`.
-    fn type_var_bound(&self, name: &Name) -> Option<Ty>;
+    fn type_var_bound(&self, name: &Name) -> Vec<Interface>;
 
     /// Whether interface `sub` requires interface `sup` (reflexively and
-    /// transitively), accounting for generic arguments. Both are
-    /// [`Ty::Interface`] values.
+    /// transitively), accounting for generic arguments.
     ///
     /// Powers `A <: B` subtyping and the `A | B == B` absorption for
     /// existentials. `false` ⇒ no requirement is claimed.
-    fn interface_requires(&self, sub: &Ty, sup: &Ty) -> bool;
+    fn interface_requires(&self, sub: &Interface, sup: &Interface) -> bool;
 
     /// The complete set of variant names of an enum, or `None` if the enum is
     /// unknown.
@@ -622,7 +622,7 @@ impl NormalTy {
                 base: Box::new(Self::from_ty(base, ctx, expanding)),
                 interface: interface
                     .as_ref()
-                    .map(|i| Box::new(Self::from_ty(i, ctx, expanding))),
+                    .map(|i| Box::new(Self::from_ty(&i.to_ty(), ctx, expanding))),
                 member: member.clone(),
             },
             Ty::TypeAlias(qn, _) => {
@@ -896,20 +896,32 @@ impl NormalTy {
                 .iter()
                 .any(|m| self.is_subtype_of(m, ctx, assumptions)),
 
-            // A type variable is a subtype of `sup` if its bound is. (Same-var
-            // reflexivity and `T <: T | U` are handled by the rules above.)
-            (NormalTy::TypeVar(name), _) => ctx.type_var_bound(name).is_some_and(|bound| {
-                NormalTy::canonical(&bound, ctx).is_subtype_of(sup, ctx, assumptions)
+            // A type variable is a subtype of `sup` if *any* of its bounds is.
+            // The bounds are a conjunction (Rust's `T: A + B`): a value filling
+            // `T` implements every listed interface, so it suffices that one bound
+            // already proves membership in `sup`. (Same-var reflexivity and
+            // `T <: T | U` are handled by the rules above.)
+            (NormalTy::TypeVar(name), _) => ctx.type_var_bound(name).iter().any(|bound| {
+                NormalTy::canonical(&bound.to_ty(), ctx).is_subtype_of(sup, ctx, assumptions)
             }),
 
             // Concrete (or any non-interface) type implementing an interface.
-            (sub, NormalTy::Interface(..)) if !matches!(sub, NormalTy::Interface(..)) => {
-                ctx.implements_interface(&sub.clone().into_ty(), &sup.clone().into_ty())
+            (sub, NormalTy::Interface(qn, args, bindings))
+                if !matches!(sub, NormalTy::Interface(..)) =>
+            {
+                ctx.implements_interface(
+                    &sub.clone().into_ty(),
+                    &Self::interface_constraint(qn, args, bindings),
+                )
             }
             // Interface-to-interface: `A <: B` iff `A` requires `B`.
-            (NormalTy::Interface(..), NormalTy::Interface(..)) => {
-                ctx.interface_requires(&self.clone().into_ty(), &sup.clone().into_ty())
-            }
+            (
+                NormalTy::Interface(sub_qn, sub_args, sub_bindings),
+                NormalTy::Interface(sup_qn, sup_args, sup_bindings),
+            ) => ctx.interface_requires(
+                &Self::interface_constraint(sub_qn, sub_args, sub_bindings),
+                &Self::interface_constraint(sup_qn, sup_args, sup_bindings),
+            ),
 
             // Generic arguments are invariant — for classes, lists, and maps
             // alike. This is load-bearing for soundness: with covariant elements
@@ -1044,7 +1056,7 @@ impl NormalTy {
                 member,
             } => Ty::AssociatedTypeProjection {
                 base: Box::new(base.into_ty()),
-                interface: interface.map(|i| Box::new(i.into_ty())),
+                interface: interface.and_then(|i| i.into_interface()).map(Box::new),
                 member,
                 attr,
             },
@@ -1059,6 +1071,44 @@ impl NormalTy {
 impl NormalTy {
     fn into_tys(tys: Vec<NormalTy>) -> Vec<Ty> {
         tys.into_iter().map(NormalTy::into_ty).collect()
+    }
+
+    /// The [`Interface`] constraint denoted by a `NormalTy::Interface`'s parts —
+    /// its name, generic input arguments, and associated-type bindings, converted
+    /// back to `Ty`. This is the precise interface shape handed to the
+    /// [`TypeContext`] membership (`implements_interface`) and requires
+    /// (`interface_requires`) oracles, so they never have to re-destructure a
+    /// loose `Ty` to recover it.
+    fn interface_constraint(
+        name: &QualifiedTypeName,
+        generics: &[NormalTy],
+        bindings: &[(Name, NormalTy)],
+    ) -> Interface {
+        Interface {
+            name: name.clone(),
+            generics: generics.iter().cloned().map(NormalTy::into_ty).collect(),
+            associated_types: bindings
+                .iter()
+                .map(|(name, ty)| (name.clone(), ty.clone().into_ty()))
+                .collect(),
+        }
+    }
+
+    /// Consume a normalized interface (`NormalTy::Interface`) and rebuild the
+    /// [`Interface`] constraint; `None` for any other variant. Used to put the
+    /// `as I` annotation of an associated-type projection back into a `Ty`.
+    fn into_interface(self) -> Option<Interface> {
+        match self {
+            NormalTy::Interface(name, generics, bindings) => Some(Interface {
+                name,
+                generics: Self::into_tys(generics),
+                associated_types: bindings
+                    .into_iter()
+                    .map(|(name, ty)| (name, ty.into_ty()))
+                    .collect(),
+            }),
+            _ => None,
+        }
     }
 
     /// An error-recovery sentinel, excluded from union absorption (it would

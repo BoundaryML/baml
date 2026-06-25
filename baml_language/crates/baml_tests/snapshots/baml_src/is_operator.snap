@@ -489,6 +489,7 @@ function is_operator.is_array_type_pattern_fn() -> bool {
     load_const 1
     load_const 2
     load_const 3
+    load_type int
     alloc_array 3
     is_type int[]
     pop_jump_if_false L0
@@ -1018,6 +1019,7 @@ function is_operator.is_inside_array_literal_fn() -> bool[] {
 
   L5:
     load_var2 1 2
+    load_type bool
     alloc_array 2
     return
 }

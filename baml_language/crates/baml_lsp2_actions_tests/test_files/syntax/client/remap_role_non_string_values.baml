@@ -18,4 +18,14 @@ client<llm> MyClient {
 
 //----
 //- diagnostics
-// <no-diagnostics-expected>
+// error: type mismatch: expected string, got 123
+//     ╭─[ client_remap_role_non_string_values.baml:1:1 ]
+//     │
+//   1 │ ╭─▶ client<llm> MyClient {
+//     ┆ ┆
+//  10 │ ├─▶ }
+//     │ │
+//     │ ╰─────── type mismatch: expected string, got 123
+//     │
+//     │     Note: Error code: E0001
+// ────╯

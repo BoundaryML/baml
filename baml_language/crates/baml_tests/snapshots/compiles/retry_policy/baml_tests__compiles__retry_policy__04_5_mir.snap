@@ -11,9 +11,9 @@ fn user.MyClient$new() -> null {
     let _4: map<string, unknown>
 
     bb0: {
-        _2 = {  };
-        _3 = {  };
-        _4 = {  };
+        _2 = {  }: map<string, string>;
+        _3 = {  }: map<string, string>;
+        _4 = {  }: map<string, unknown>;
         _1 = baml.llm.PrimitiveClientOptions { const "gpt-4", const null, const null, const null, const null, const null, const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
         _0 = baml.llm.PrimitiveClient { const "MyClient", const "openai", copy _1 };
         goto -> bb1;

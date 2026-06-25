@@ -23,8 +23,14 @@ function user.TestClient$new() -> null {
     load_const "test-key"
     load_const null
     load_const null
+    load_type string
+    load_type string
     alloc_map 0
+    load_type string
+    load_type string
     alloc_map 0
+    load_type string
+    load_type unknown
     alloc_map 0
     init_instance baml.llm.PrimitiveClientOptions .model, .base_url, .allowed_role_metadata, .finish_reason_allow_list, .finish_reason_deny_list, .supports_streaming, .default_role, .allowed_roles, .remap_roles, .api_key, .provider_options, .media_url_handler, .headers, .query_params, .request_body
     init_instance baml.llm.PrimitiveClient .name, .provider, .options
@@ -45,6 +51,8 @@ function user.TestFunc(input: string, client: baml.llm.Client) -> string {
     load_const "TestFunc"
     load_var input
     load_const "input"
+    load_type string
+    load_type unknown
     alloc_map 1
     load_const <omitted>
     call baml.llm.call_llm_function
@@ -64,6 +72,8 @@ function user.TestFunc$build_request(input: string, client: baml.llm.Client) -> 
     load_const "TestFunc"
     load_var input
     load_const "input"
+    load_type string
+    load_type unknown
     alloc_map 1
     load_const <omitted>
     call baml.llm.build_request
@@ -83,6 +93,8 @@ function user.TestFunc$build_request_stream(input: string, client: baml.llm.Clie
     load_const "TestFunc"
     load_var input
     load_const "input"
+    load_type string
+    load_type unknown
     alloc_map 1
     load_const <omitted>
     call baml.llm.build_request_stream
@@ -134,6 +146,8 @@ function user.TestFunc$render_prompt(input: string, client: baml.llm.Client) -> 
     load_const "TestFunc"
     load_var input
     load_const "input"
+    load_type string
+    load_type unknown
     alloc_map 1
     load_const <omitted>
     call baml.llm.render_prompt
@@ -155,6 +169,8 @@ function user.TestFunc$stream(input: string, client: baml.llm.Client) -> baml.ll
     load_const "TestFunc"
     load_var input
     load_const "input"
+    load_type string
+    load_type unknown
     alloc_map 1
     load_const <omitted>
     call baml.llm.stream_llm_function
@@ -168,6 +184,8 @@ function user.call_stream_inferred() -> baml.llm.Stream<null | string, string> {
     load_const "TestFunc"
     load_const "world"
     load_const "input"
+    load_type string
+    load_type unknown
     alloc_map 1
     load_const <omitted>
     call baml.llm.stream_llm_function

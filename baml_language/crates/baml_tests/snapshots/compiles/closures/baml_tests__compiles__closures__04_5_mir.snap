@@ -247,7 +247,7 @@ fn user.test_bound_mapper() -> string[] {
     bb0: {
         _1 = user.Formatter { const ">> " };
         _2 = make_bound_method user.Formatter.format(copy _1);
-        _3 = [const "hello", const "world"];
+        _3 = [const "hello", const "world"]: string[];
         _4 = copy _2;
         _5 = load_type(string);
         _6 = load_type(never);
@@ -274,7 +274,7 @@ fn user.test_bound_validator() -> bool[] {
     bb0: {
         _1 = user.RangeCheck { const 10_i64, const 50_i64 };
         _2 = make_bound_method user.RangeCheck.is_valid(copy _1);
-        _3 = [const 5_i64, const 15_i64, const 25_i64, const 75_i64];
+        _3 = [const 5_i64, const 15_i64, const 25_i64, const 75_i64]: int[];
         _4 = copy _2;
         _5 = load_type(bool);
         _6 = load_type(never);
@@ -406,7 +406,7 @@ fn user.test_strategy() -> int[] {
     }
 
     bb2: {
-        _0 = [copy _5, copy _7];
+        _0 = [copy _5, copy _7]: int[];
         goto -> bb3;
     }
 
@@ -424,7 +424,7 @@ fn user.test_unbound_higher_order() -> string[] {
 
     bb0: {
         _2 = user.Employee { const "Alice", const "Smith" };
-        _1 = [copy _2];
+        _1 = [copy _2]: Employee[];
         _3 = copy _1;
         _0 = call const fn user.apply_to_each(copy _3, const fn user.Employee.full_name) -> [bb1];
     }
@@ -447,7 +447,7 @@ fn user.test_unbound_in_map() -> string[] {
     bb0: {
         _2 = user.Employee { const "Alice", const "Smith" };
         _3 = user.Employee { const "Bob", const "Jones" };
-        _1 = [copy _2, copy _3];
+        _1 = [copy _2, copy _3]: Employee[];
         _4 = load_type(string);
         _5 = load_type(never);
         _6 = load_type(Employee);

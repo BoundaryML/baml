@@ -192,6 +192,7 @@ function closures.closures_bound_formatter_mapper() -> string[] {
     load_type never
     load_const "a"
     load_const "b"
+    load_type string
     alloc_array 2
     load_const ">> "
     init_instance user.closures.ClsFormatter .prefix
@@ -255,6 +256,7 @@ function closures.closures_bound_validator_mapped() -> bool[] {
     load_const 15
     load_const 25
     load_const 75
+    load_type int
     alloc_array 4
     load_const 10
     load_const 50
@@ -330,6 +332,7 @@ function closures.closures_strategy_swap() -> int[] {
     call user.closures.closures_apply
     store_var _7
     load_var2 1 2
+    load_type int
     alloc_array 2
     return
 }
@@ -344,6 +347,7 @@ function closures.closures_unbound_in_map() -> string[] {
     load_const "Bob"
     load_const "Jones"
     init_instance user.closures.ClsEmployee .first, .last
+    load_type closures.ClsEmployee
     alloc_array 2
     load_global user.closures.ClsEmployee.full_name
     call baml.Array.map

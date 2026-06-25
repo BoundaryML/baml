@@ -21,6 +21,7 @@ function user.test_capture_in_map_inferred() -> int[] {
     load_const 1
     load_const 2
     load_const 3
+    load_type int
     alloc_array 3
     load_var factor
     make_closure .<lambda(test_capture_in_map_inferred, 0)>, 1
@@ -48,6 +49,7 @@ function user.test_chained_map() -> int[] {
     load_const 1
     load_const 2
     load_const 3
+    load_type int
     alloc_array 3
     make_closure .<lambda(test_chained_map, 0)>, 0
     call baml.Array.map
@@ -68,6 +70,7 @@ function user.test_compose_inferred() -> int[] {
     load_const 1
     load_const 2
     load_const 3
+    load_type int
     alloc_array 3
     make_closure .<lambda(test_compose_inferred, 0)>, 0
     call baml.Array.map
@@ -114,6 +117,7 @@ function user.test_fully_inferred_map() -> int[] {
     load_const 1
     load_const 2
     load_const 3
+    load_type int
     alloc_array 3
     make_closure .<lambda(test_fully_inferred_map, 0)>, 0
     call baml.Array.map
@@ -206,6 +210,7 @@ function user.test_lambda_variable_then_pass() -> int[] {
     load_const 10
     load_const 20
     load_const 30
+    load_type int
     alloc_array 3
     make_closure .<lambda(test_lambda_variable_then_pass, 0)>, 0
     call baml.Array.map
@@ -233,6 +238,7 @@ function user.test_literal_return_inference() -> int[] {
     load_const 1
     load_const 2
     load_const 3
+    load_type int
     alloc_array 3
     make_closure .<lambda(test_literal_return_inference, 0)>, 0
     call baml.Array.map
@@ -246,6 +252,7 @@ function user.test_map_multi_statement() -> int[] {
     load_const 1
     load_const 2
     load_const 3
+    load_type int
     alloc_array 3
     make_closure .<lambda(test_map_multi_statement, 0)>, 0
     call baml.Array.map
@@ -259,6 +266,7 @@ function user.test_map_optional_inferred() -> int[] {
     load_const 1
     load_const null
     load_const 3
+    load_type int | null
     alloc_array 3
     make_closure .<lambda(test_map_optional_inferred, 0)>, 0
     call baml.Array.map
@@ -271,6 +279,7 @@ function user.test_map_string_to_int() -> int[] {
     load_type never
     load_const "hello"
     load_const "world"
+    load_type string
     alloc_array 2
     make_closure .<lambda(test_map_string_to_int, 0)>, 0
     call baml.Array.map
@@ -284,6 +293,7 @@ function user.test_map_type_change_inferred() -> string[] {
     load_const 1
     load_const 2
     load_const 3
+    load_type int
     alloc_array 3
     make_closure .<lambda(test_map_type_change_inferred, 0)>, 0
     call baml.Array.map
@@ -302,6 +312,7 @@ function user.test_map_with_capture() -> int[] {
     load_const 1
     load_const 2
     load_const 3
+    load_type int
     alloc_array 3
     load_var factor
     make_closure .<lambda(test_map_with_capture, 0)>, 1
@@ -315,10 +326,13 @@ function user.test_nested_map() -> int[][] {
     load_type never
     load_const 1
     load_const 2
+    load_type int
     alloc_array 2
     load_const 3
     load_const 4
+    load_type int
     alloc_array 2
+    load_type int[]
     alloc_array 2
     make_closure .<lambda(test_nested_map, 0)>, 0
     call baml.Array.map
@@ -341,6 +355,7 @@ function user.test_shadowing() -> string {
     load_const 1
     load_const 2
     load_const 3
+    load_type int
     alloc_array 3
     make_closure .<lambda(test_shadowing, 0)>, 0
     call baml.Array.map
@@ -535,6 +550,7 @@ function user.test_shadowing_inferred() -> int[] {
     load_const 1
     load_const 2
     load_const 3
+    load_type int
     alloc_array 3
     make_closure .<lambda(test_shadowing_inferred, 0)>, 0
     call baml.Array.map

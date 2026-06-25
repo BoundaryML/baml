@@ -129,8 +129,8 @@ fn testing.aggregate_reports(named_results: testing.NamedChildReport[]) -> testi
         _2 = const 0_i64;
         _3 = const 0_i64;
         _4 = const false;
-        _5 = [];
-        _6 = [];
+        _5 = []: string[];
+        _6 = []: testing.TestReport | testing.TestSetReport[];
         goto -> bb1;
     }
 
@@ -309,7 +309,7 @@ fn testing.aggregate_reports(named_results: testing.NamedChildReport[]) -> testi
 
     bb33: {
         _55 = copy _38.0;
-        _48 = [copy _55];
+        _48 = [copy _55]: string[];
         goto -> bb36;
     }
 
@@ -320,7 +320,7 @@ fn testing.aggregate_reports(named_results: testing.NamedChildReport[]) -> testi
 
     bb35: {
         _50 = copy _38.0;
-        _48 = [copy _50];
+        _48 = [copy _50]: string[];
         goto -> bb36;
     }
 
@@ -961,8 +961,8 @@ fn testing.TestRegistry.expand_testset_registry(self: testing.TestRegistry, ts: 
 
     bb3: {
         _12 = copy _2.0;
-        _13 = [];
-        _14 = [];
+        _13 = []: testing.TestRegistration[];
+        _14 = []: testing.TestSetRegistration[];
         _11 = testing.TestCollector { copy _12, copy _13, copy _14 };
         _16 = copy _2.1;
         _17 = copy _11;
@@ -977,7 +977,7 @@ fn testing.TestRegistry.expand_testset_registry(self: testing.TestRegistry, ts: 
         _20 = copy _10;
         _18 = copy _19 - copy _20;
         _22 = copy _11;
-        _23 = {  };
+        _23 = {  }: map<string, testing.TestRegistry>;
         _24 = copy _18;
         _21 = testing.TestRegistry { copy _22, copy _23, copy _24 };
         _26 = copy _1.1;
@@ -1393,7 +1393,7 @@ fn testing.TestRegistry.new(collector: testing.TestCollector) -> testing.TestReg
     let _2: map<string, testing.TestRegistry>
 
     bb0: {
-        _2 = {  };
+        _2 = {  }: map<string, testing.TestRegistry>;
         _0 = testing.TestRegistry { copy _1, copy _2, const 0_i64 };
         goto -> bb1;
     }
@@ -1411,8 +1411,8 @@ fn testing.TestCollector.new(prefix: string) -> testing.TestCollector {
     let _3: testing.TestSetRegistration[]
 
     bb0: {
-        _2 = [];
-        _3 = [];
+        _2 = []: testing.TestRegistration[];
+        _3 = []: testing.TestSetRegistration[];
         _0 = testing.TestCollector { copy _1, copy _2, copy _3 };
         goto -> bb1;
     }
@@ -2057,7 +2057,7 @@ fn testing.run_children_parallel(children: testing.TestSetChild[]) -> testing.Te
     let _45: testing.NamedChildReport[]
 
     bb0: {
-        _2 = [];
+        _2 = []: future<testing.NamedChildReport, null>[];
         goto -> bb1;
     }
 
@@ -2753,7 +2753,7 @@ fn .<lambda(run_test, 0)>() -> null {
         _15 = copy _16 - copy _17;
         _18 = copy _2.2;
         _13 = testing.RunReport { copy _14, copy _15, copy _18 };
-        _12 = [copy _13];
+        _12 = [copy _13]: testing.RunReport[];
         _0 = testing.TestReport { copy _11, copy _12 };
         goto -> bb11;
     }
@@ -3275,7 +3275,7 @@ fn testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.Serial
     let _85: string
 
     bb0: {
-        _2 = [];
+        _2 = []: testing.SerializedTest | testing.SerializedTestSet[];
         _3 = copy _1.0.1;
         goto -> bb1;
     }
@@ -3668,8 +3668,8 @@ fn .<lambda(testset_child, 0)>() -> null {
 
     bb4: {
         _7 = copy capture[1].0;
-        _6 = [copy _7];
-        _8 = [];
+        _6 = [copy _7]: string[];
+        _8 = []: testing.TestReport | testing.TestSetReport[];
         _0 = testing.TestSetReport { const "error", const 0_i64, const 1_i64, const 1_i64, copy _6, copy _8 };
         goto -> bb5;
     }
@@ -3760,7 +3760,7 @@ fn testing.testset_children(registry: testing.TestRegistry) -> testing.TestSetCh
     let _76: testing.TestSetRegistration
 
     bb0: {
-        _2 = [];
+        _2 = []: testing.TestSetChild[];
         _3 = copy _1.0.1;
         goto -> bb1;
     }
@@ -4322,7 +4322,7 @@ fn .<lambda(<lambda(Quorum, 0)>, 1)>() -> null {
     let _51: testing.RunReport[]
 
     bb0: {
-        _1 = [];
+        _1 = []: testing.RunReport[];
         _2 = const 0_i64;
         _3 = const 0_i64;
         goto -> bb1;
@@ -4625,7 +4625,7 @@ fn .<lambda(<lambda(Retry, 0)>, 1)>() -> null {
     let _51: testing.RunReport[]
 
     bb0: {
-        _1 = [];
+        _1 = []: testing.RunReport[];
         _2 = const false;
         _3 = const 0_i64;
         goto -> bb1;
@@ -4942,7 +4942,7 @@ fn testing.run_children_sequential(children: testing.TestSetChild[], fail_fast: 
     let _50: testing.NamedChildReport[]
 
     bb0: {
-        _3 = [];
+        _3 = []: testing.NamedChildReport[];
         goto -> bb1;
     }
 

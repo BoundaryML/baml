@@ -883,6 +883,7 @@ function json_auto_derive.array_of_class_to_json_str() -> string {
     init_instance user.json_auto_derive.BArr .x
     load_const 2
     init_instance user.json_auto_derive.BArr .x
+    load_type json_auto_derive.BArr
     alloc_array 2
     call baml.json.from
     call baml.json.stringify
@@ -894,6 +895,7 @@ function json_auto_derive.array_of_int_to_json_str() -> string {
     load_const 1
     load_const 2
     load_const 3
+    load_type int
     alloc_array 3
     call baml.json.from
     call baml.json.stringify
@@ -930,6 +932,7 @@ function json_auto_derive.array_of_primitive_to_json_str() -> string {
     load_const 1
     load_const 2
     load_const 3
+    load_type int
     alloc_array 3
     init_instance user.json_auto_derive.C2 .xs
     call baml.json.from
@@ -1046,6 +1049,7 @@ function json_auto_derive.generic_class_to_json_array_typearg_str() -> string {
     load_const 1
     load_const 2
     load_const 3
+    load_type int
     alloc_array 3
     load_type int[]
     init_instance<1> user.json_auto_derive.Box2 .value
@@ -1119,6 +1123,8 @@ function json_auto_derive.map_of_int_to_json_str() -> string {
     load_const 2
     load_const "a"
     load_const "b"
+    load_type string
+    load_type int
     alloc_map 2
     call baml.json.from
     call baml.json.stringify
@@ -1200,6 +1206,7 @@ function json_auto_derive.nested_class_override_in_array_str() -> string {
     init_instance user.json_auto_derive.BZero .y
     load_const 2
     init_instance user.json_auto_derive.BZero .y
+    load_type json_auto_derive.BZero
     alloc_array 2
     init_instance user.json_auto_derive.AItems .items
     call baml.json.from
@@ -1215,6 +1222,8 @@ function json_auto_derive.nested_class_override_in_map_str() -> string {
     init_instance user.json_auto_derive.BStr .v
     load_const "k1"
     load_const "k2"
+    load_type string
+    load_type json_auto_derive.BStr
     alloc_map 2
     init_instance user.json_auto_derive.ALookup .lookup
     call baml.json.from
@@ -1387,8 +1396,10 @@ function json_auto_derive.recursive_class_from_json_sum() -> int {
     load_type json_auto_derive.Tree
     load_const 1
     load_const 2
+    load_type json_auto_derive.Tree
     alloc_array 0
     init_instance user.json_auto_derive.Tree .value, .children
+    load_type json_auto_derive.Tree
     alloc_array 1
     init_instance user.json_auto_derive.Tree .value, .children
     call baml.json.from
@@ -1414,8 +1425,10 @@ function json_auto_derive.recursive_class_to_json_str() -> string {
     load_type json_auto_derive.Tree
     load_const 1
     load_const 2
+    load_type json_auto_derive.Tree
     alloc_array 0
     init_instance user.json_auto_derive.Tree .value, .children
+    load_type json_auto_derive.Tree
     alloc_array 1
     init_instance user.json_auto_derive.Tree .value, .children
     call baml.json.from

@@ -588,7 +588,7 @@ fn user.iterator_style_for_loop() -> int {
 
     bb0: {
         _1 = const 0_i64;
-        _2 = [const 1_i64, const 2_i64, const 3_i64];
+        _2 = [const 1_i64, const 2_i64, const 3_i64]: int[];
         goto -> bb1;
     }
 
@@ -818,7 +818,7 @@ fn user.nested_for_loop() -> int {
 
     bb0: {
         _1 = const 0_i64;
-        _2 = [const 1_i64, const 2_i64, const 3_i64];
+        _2 = [const 1_i64, const 2_i64, const 3_i64]: int[];
         goto -> bb1;
     }
 
@@ -955,7 +955,7 @@ fn user.nested_for_loop() -> int {
         _34 = copy _5;
         fresh_cell(_35);
         _35 = copy _34;
-        _36 = [const 4_i64, const 5_i64, const 6_i64];
+        _36 = [const 4_i64, const 5_i64, const 6_i64]: int[];
         goto -> bb27;
     }
 

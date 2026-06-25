@@ -189,7 +189,7 @@ function user.risky_error(mode: int) -> int throws user.AppError | string {
 }
 function user.catch_chain_union(mode: int) -> int throws never {
   { : int | 1
-    catch (risky_error(mode) : int) : unknown
+    catch (risky_error(mode) : int) : int | 1
       catch (e)
         AppError | string =>
           1 : 1
@@ -197,7 +197,7 @@ function user.catch_chain_union(mode: int) -> int throws never {
 }
 function user.catch_paren_or_chain(mode: int) -> int throws never {
   { : int | 1
-    catch (risky_error(mode) : int) : unknown
+    catch (risky_error(mode) : int) : int | 1
       catch (e)
         AppError | string =>
           1 : 1
@@ -205,7 +205,7 @@ function user.catch_paren_or_chain(mode: int) -> int throws never {
 }
 function user.catch_widening_chain(mode: int) -> int throws never {
   { : int | 1 | 2
-    catch (risky_error(mode) : int) : unknown
+    catch (risky_error(mode) : int) : int | 1 | 2
       catch (e)
         s: string =>
           1 : 1

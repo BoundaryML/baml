@@ -11,7 +11,7 @@ function user.callee() -> bool throws user.Errors {
 }
 function user.caller() -> bool throws never {
   { : bool
-    catch (callee() : bool) : unknown
+    catch (callee() : bool) : bool
       catch (e)
         Errors.AuthenticationError =>
           { : never

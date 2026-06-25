@@ -861,15 +861,20 @@ pub fn tir2_to_template(
             .map(|n| {
                 TyTemplate::TypeArgRef(u32::try_from(n).expect("generic param index fits in u32"))
             })
+            // The member is a frame generic only inside interface-default-method
+            // bodies (where `enclosing_generic_params` adds the interface's
+            // associated types). Otherwise the projection — e.g. `T.CompareError`
+            // passed as a call's type argument — is kept faithfully, exactly like
+            // `Self` below: `convert` resolves it against the bound, or preserves
+            // it for the runtime to resolve from the receiver's actual type. Never
+            // an error, never erased.
             .unwrap_or_else(|| TyTemplate::Concrete(resolved.convert(ty))),
+        Tir2Ty::TypeVar(name, _) if name == "Self" => TyTemplate::Concrete(resolved.convert(ty)),
         Tir2Ty::TypeVar(name, _) => {
-            if let Some(n) = generic_params.iter().position(|p| p == name) {
-                TyTemplate::TypeArgRef(u32::try_from(n).expect("generic param index fits in u32"))
-            } else {
-                TyTemplate::Concrete(RuntimeTy::Void {
-                    attr: baml_type::TyAttr::default(),
-                })
-            }
+            let Some(n) = generic_params.iter().position(|p| p == name) else {
+                unreachable!("type variable not found in type args: {}", name)
+            };
+            TyTemplate::TypeArgRef(u32::try_from(n).expect("generic param index fits in u32"))
         }
         Tir2Ty::List(inner, _) => {
             TyTemplate::Array(Box::new(tir2_to_template(inner, resolved, generic_params)))
@@ -3495,7 +3500,13 @@ impl<'db> LoweringContext<'db> {
                 attr,
             } => Tir2Ty::AssociatedTypeProjection {
                 base: Box::new(Self::erase_compiler_only_ty(*base)),
-                interface: interface.map(|ty| Box::new(Self::erase_compiler_only_ty(*ty))),
+                // The interface annotation carries component types (generics and
+                // associated-type bindings); erase compiler-only types within them
+                // too, matching the `Tir2Ty::Interface` arm above. (The field is an
+                // `Interface` after the interface-object refactor, not a `Ty`.)
+                interface: interface.map(|iface| {
+                    Box::new(iface.map_tys(|ty| Self::erase_compiler_only_ty(ty.clone())))
+                }),
                 member,
                 attr,
             },
@@ -4064,6 +4075,39 @@ impl<'db> LoweringContext<'db> {
                 .map(|t| self.ty_to_template(t, &generic_params))
                 .collect(),
             _ => vec![],
+        }
+    }
+
+    /// The element-type template for an array-literal expression — the `T` of
+    /// its `T[]` static type — for [`Rvalue::Array`]. A generic element maps to
+    /// a `TypeArgRef` so it resolves against the frame's type args at runtime.
+    /// Falls back to `unknown` when the recorded type is not a list (error
+    /// recovery).
+    fn array_element_template(&self, expr_id: AstExprId) -> TyTemplate {
+        let generic_params = self.enclosing_generic_params();
+        match self.expr_types.get(&self.expr_metadata_key(expr_id)) {
+            Some(Tir2Ty::List(elem, _) | Tir2Ty::EvolvingList(elem, _)) => {
+                self.ty_to_template(elem, &generic_params)
+            }
+            _ => TyTemplate::Concrete(RuntimeTy::unknown()),
+        }
+    }
+
+    /// The key/value type templates for a map-literal expression — the `K`/`V`
+    /// of its `map<K, V>` static type — for [`Rvalue::Map`]. Falls back to
+    /// `map<string, unknown>` when the recorded type is not a map (error
+    /// recovery); map keys are always strings.
+    fn map_kv_templates(&self, expr_id: AstExprId) -> (TyTemplate, TyTemplate) {
+        let generic_params = self.enclosing_generic_params();
+        match self.expr_types.get(&self.expr_metadata_key(expr_id)) {
+            Some(Tir2Ty::Map { key, value, .. } | Tir2Ty::EvolvingMap(key, value, _)) => (
+                self.ty_to_template(key, &generic_params),
+                self.ty_to_template(value, &generic_params),
+            ),
+            _ => (
+                TyTemplate::Concrete(RuntimeTy::string()),
+                TyTemplate::Concrete(RuntimeTy::unknown()),
+            ),
         }
     }
 
@@ -5204,8 +5248,11 @@ impl LoweringContext<'_> {
                     None,
                     false,
                 );
-                self.builder
-                    .assign(Place::local(parts_local), Rvalue::Array(parts_ops));
+                self.builder.assign(
+                    Place::local(parts_local),
+                    // Tagged-template literal parts are always strings.
+                    Rvalue::Array(TyTemplate::Concrete(RuntimeTy::string()), parts_ops),
+                );
 
                 // Interps lower in the closure scope (body-param refs →
                 // Place::Local, enclosing-local refs → Place::Capture), but
@@ -5234,8 +5281,11 @@ impl LoweringContext<'_> {
                     None,
                     false,
                 );
-                self.builder
-                    .assign(Place::local(values_local), Rvalue::Array(value_ops));
+                self.builder.assign(
+                    Place::local(values_local),
+                    // Tagged-template interpolated values are heterogeneous.
+                    Rvalue::Array(TyTemplate::Concrete(RuntimeTy::unknown()), value_ops),
+                );
 
                 self.builder.assign(
                     Place::local(ret),
@@ -5584,7 +5634,9 @@ impl LoweringContext<'_> {
             AstExpr::Array { elements } => {
                 let operands: Vec<Operand> =
                     elements.iter().map(|&e| self.lower_to_operand(e)).collect();
-                self.builder.assign(dest, Rvalue::Array(operands));
+                let element_ty = self.array_element_template(expr_id);
+                self.builder
+                    .assign(dest, Rvalue::Array(element_ty, operands));
             }
 
             AstExpr::Map { entries } => {
@@ -5592,7 +5644,9 @@ impl LoweringContext<'_> {
                     .iter()
                     .map(|&(k, v)| (self.lower_to_operand(k), self.lower_to_operand(v)))
                     .collect();
-                self.builder.assign(dest, Rvalue::Map(pairs));
+                let (key_ty, value_ty) = self.map_kv_templates(expr_id);
+                self.builder
+                    .assign(dest, Rvalue::Map(key_ty, value_ty, pairs));
             }
 
             AstExpr::Object {
@@ -11565,20 +11619,25 @@ impl<'db> LoweringContext<'db> {
                         origin: baml_compiler2_tir::interfaces::InterfaceImplOrigin::OutOfBody,
                         source_span: None,
                     };
+                    // Bindings of the impl's generic params from the receiver
+                    // class (`for` target matched against the concrete class),
+                    // so a param that lives only in the `for` target seeds the
+                    // callee frame faithfully instead of erasing to `unknown`.
+                    let for_target_bindings = baml_compiler2_tir::interfaces::match_ty_pattern(
+                        &rule.for_ty_pattern,
+                        &candidate_class_ty,
+                        &rule.generic_params,
+                        &self.resolved_aliases.aliases,
+                    );
                     let candidate_ty =
                         if matches!(rule.for_ty_pattern, baml_compiler2_tir::ty::Ty::TypeVar(..))
-                            || baml_compiler2_tir::interfaces::match_ty_pattern(
-                                &rule.for_ty_pattern,
-                                &candidate_class_ty,
-                                &rule.generic_params,
-                                &self.resolved_aliases.aliases,
-                            )
-                            .is_some()
+                            || for_target_bindings.is_some()
                         {
                             Some(&candidate_class_ty)
                         } else {
                             None
                         };
+                    let for_target_bindings = for_target_bindings.unwrap_or_default();
                     let registry = baml_compiler2_tir::interfaces::package_implements_registry(
                         self.db,
                         PackageId::new(self.db, file_pkg_info.package.clone()),
@@ -11709,6 +11768,7 @@ impl<'db> LoweringContext<'db> {
                                     &instantiation,
                                     &rule.interface_ty,
                                     &requested_iface_ty,
+                                    &for_target_bindings,
                                 );
                                 out.push((
                                     requested_idx,
@@ -11875,15 +11935,30 @@ impl<'db> LoweringContext<'db> {
         instantiation: &baml_compiler2_tir::interfaces::InterfaceImplInstantiation,
         rule_iface_ty: &Tir2Ty,
         requested_iface_ty: &Tir2Ty,
+        for_target_bindings: &baml_compiler2_tir::interfaces::TypeBindings,
     ) -> Vec<Tir2Ty> {
         generic_params
             .iter()
             .map(|param| {
-                instantiation
-                    .bindings
+                // The receiver is authoritative for every param its `for` target
+                // pins: `T[]` / `Box<T>` matched against the concrete `self` type
+                // binds `T` directly, so a request for a *different* arg (a
+                // `Box<string>` asked for `I<int>`) must not override it with the
+                // requested `int` — that would seed a mismatched binding instead
+                // of leaving the candidate to be rejected. For a generic caller
+                // (`U[]`) this is the caller's own type var `U`, which lowers to a
+                // `TypeArgRef` — still a faithful type, never erased.
+                for_target_bindings
                     .get(param)
                     .filter(|ty| !Self::is_unresolved_impl_binding_for_param(param, ty))
                     .cloned()
+                    .or_else(|| {
+                        instantiation
+                            .bindings
+                            .get(param)
+                            .filter(|ty| !Self::is_unresolved_impl_binding_for_param(param, ty))
+                            .cloned()
+                    })
                     .or_else(|| {
                         Self::requested_iface_binding_for_impl_param(
                             param,
@@ -12044,24 +12119,34 @@ impl<'db> LoweringContext<'db> {
                     &mut diags,
                 );
 
-                let target_matches_implementor = if imp.generic_params.is_empty() {
-                    baml_compiler2_tir::normalize::is_same_normalized_type(
+                // Bindings of the impl's generic params recovered from the
+                // receiver (`for` target `T[]` matched against the concrete
+                // `self` type, e.g. `bigint[]`, binds `T = bigint`). This is the
+                // authoritative source for params the requested interface does
+                // not itself carry — `Sortable for T[]` is the canonical case:
+                // `T` lives only in the `for` target and `SortError =
+                // T.CompareError`, never in `Sortable`'s own (empty) args, so
+                // without this the seeded `T` would erase to `unknown`.
+                let for_target_bindings = if imp.generic_params.is_empty() {
+                    if !baml_compiler2_tir::normalize::is_same_normalized_type(
                         &target_ty_tir,
                         impl_ty_tir,
                         &self.resolved_aliases.aliases,
-                    )
+                    ) {
+                        continue;
+                    }
+                    baml_compiler2_tir::interfaces::TypeBindings::default()
                 } else {
-                    baml_compiler2_tir::interfaces::match_ty_pattern(
+                    let Some(bindings) = baml_compiler2_tir::interfaces::match_ty_pattern(
                         &target_ty_tir,
                         impl_ty_tir,
                         &imp.generic_params,
                         &self.resolved_aliases.aliases,
-                    )
-                    .is_some()
+                    ) else {
+                        continue;
+                    };
+                    bindings
                 };
-                if !target_matches_implementor {
-                    continue;
-                }
 
                 let Some(root_iface_loc) =
                     baml_compiler2_tir::interfaces::resolve_path_to_interface(
@@ -12253,6 +12338,7 @@ impl<'db> LoweringContext<'db> {
                                 &instantiation,
                                 &rule.interface_ty,
                                 &requested_iface_ty,
+                                &for_target_bindings,
                             );
                             return Some((
                                 def_to_item_ref(self.db, Definition::Function(func_loc)),

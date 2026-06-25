@@ -343,12 +343,12 @@ fn collect_place_index_locals(body: &MirFunctionBody) -> HashSet<Local> {
             }
             crate::Rvalue::UnaryOp { operand, .. } => scan_operand(operand, set),
             crate::Rvalue::Uint8Array(_) => {}
-            crate::Rvalue::Array(elems) => {
+            crate::Rvalue::Array(_, elems) => {
                 for e in elems {
                     scan_operand(e, set);
                 }
             }
-            crate::Rvalue::Map(entries) => {
+            crate::Rvalue::Map(_, _, entries) => {
                 for (k, v) in entries {
                     scan_operand(k, set);
                     scan_operand(v, set);
@@ -579,12 +579,12 @@ fn count_in_rvalue(rv: &crate::Rvalue, uses: &mut [usize]) {
         }
         crate::Rvalue::UnaryOp { operand, .. } => count_in_operand(operand, uses),
         crate::Rvalue::Uint8Array(_) => {}
-        crate::Rvalue::Array(elems) => {
+        crate::Rvalue::Array(_, elems) => {
             for e in elems {
                 count_in_operand(e, uses);
             }
         }
-        crate::Rvalue::Map(entries) => {
+        crate::Rvalue::Map(_, _, entries) => {
             for (k, v) in entries {
                 count_in_operand(k, uses);
                 count_in_operand(v, uses);
@@ -926,12 +926,12 @@ fn apply_subst_to_rvalue(rv: &mut crate::Rvalue, subst: &HashMap<Local, Operand>
         }
         crate::Rvalue::UnaryOp { operand, .. } => apply_subst_to_operand(operand, subst),
         crate::Rvalue::Uint8Array(_) => {}
-        crate::Rvalue::Array(elems) => {
+        crate::Rvalue::Array(_, elems) => {
             for e in elems {
                 apply_subst_to_operand(e, subst);
             }
         }
-        crate::Rvalue::Map(entries) => {
+        crate::Rvalue::Map(_, _, entries) => {
             for (k, v) in entries {
                 apply_subst_to_operand(k, subst);
                 apply_subst_to_operand(v, subst);
@@ -1172,12 +1172,12 @@ fn remap_rvalue(rv: &mut crate::Rvalue, map: &[Option<Local>]) {
         }
         crate::Rvalue::UnaryOp { operand, .. } => remap_operand(operand, map),
         crate::Rvalue::Uint8Array(_) => {}
-        crate::Rvalue::Array(elems) => {
+        crate::Rvalue::Array(_, elems) => {
             for e in elems {
                 remap_operand(e, map);
             }
         }
-        crate::Rvalue::Map(entries) => {
+        crate::Rvalue::Map(_, _, entries) => {
             for (k, v) in entries {
                 remap_operand(k, map);
                 remap_operand(v, map);
@@ -1412,12 +1412,12 @@ fn verify_mir(body: &MirFunctionBody, name: &crate::ItemRef) {
                         }
                         crate::Rvalue::UnaryOp { operand, .. } => check_operand(operand, &blk),
                         crate::Rvalue::Uint8Array(_) => {}
-                        crate::Rvalue::Array(elems) => {
+                        crate::Rvalue::Array(_, elems) => {
                             for e in elems {
                                 check_operand(e, &blk);
                             }
                         }
-                        crate::Rvalue::Map(entries) => {
+                        crate::Rvalue::Map(_, _, entries) => {
                             for (k, v) in entries {
                                 check_operand(k, &blk);
                                 check_operand(v, &blk);

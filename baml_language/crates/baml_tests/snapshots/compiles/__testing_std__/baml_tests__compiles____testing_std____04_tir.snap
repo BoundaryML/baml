@@ -624,7 +624,7 @@ function testing.run_children_sequential(children: testing.TestSetChild[], fail_
 }
 function testing._int_to_float(value: int) -> float throws never {
   { : float
-    catch (float.parse(baml.unstable.string(value)) : float) : unknown
+    catch (float.parse(baml.unstable.string(value)) : float) : float
       catch_all (e)
         _ =>
           baml.sys.panic("failed to convert...") : never

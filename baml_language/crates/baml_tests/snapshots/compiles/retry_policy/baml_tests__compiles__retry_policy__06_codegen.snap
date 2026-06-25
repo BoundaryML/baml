@@ -25,8 +25,14 @@ function user.MyClient$new() -> null {
     load_const null
     load_const null
     load_const null
+    load_type string
+    load_type string
     alloc_map 0
+    load_type string
+    load_type string
     alloc_map 0
+    load_type string
+    load_type unknown
     alloc_map 0
     init_instance baml.llm.PrimitiveClientOptions .model, .base_url, .allowed_role_metadata, .finish_reason_allow_list, .finish_reason_deny_list, .supports_streaming, .default_role, .allowed_roles, .remap_roles, .api_key, .provider_options, .media_url_handler, .headers, .query_params, .request_body
     init_instance baml.llm.PrimitiveClient .name, .provider, .options

@@ -155,7 +155,7 @@ fn user.for_loop_restores_outer() -> int {
 
     bb0: {
         _1 = const 1_i64;
-        _2 = [const 2_i64, const 3_i64];
+        _2 = [const 2_i64, const 3_i64]: int[];
         goto -> bb1;
     }
 
