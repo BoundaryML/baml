@@ -1724,7 +1724,7 @@ function baml.time.epoch() -> baml.time.Instant  [expr] {
   {  } baml.time.Instant { _nanoseconds: 0n }
 }
 function baml.time.from_json(j: baml.json.json) -> Self  [expr] {
-  {  } match (j) { string => Instant.parse(j) catch (_) { root.errors.ParseError { message: message } => throw baml.json.JsonDecodeError { message: message, path: "" } }, _ => throw baml.json.JsonDecodeError { message: "Expected timestam..." } }
+  {  } match (j) { string => Instant.parse(j) catch (_) { root.errors.ParseError { message: message } => throw baml.json.JsonDecodeError { message: message, path: "" } }, _ => throw baml.json.JsonDecodeError { message: "Expected timestam...", path: "" } }
 }
 function baml.time.from_timestamp_microseconds(us: bigint) -> baml.time.Instant  [expr] {
   {  } baml.time.Instant { _nanoseconds: us Mul 1000 }
@@ -1774,7 +1774,7 @@ function baml.time._to_string_impl(self: ?) -> string  [builtin]
 function baml.time.day(self: ?) -> int  [builtin]
 function baml.time.from_components(year: int, month: int, day: int) -> baml.time.PlainDate  [builtin]
 function baml.time.from_json(j: baml.json.json) -> Self  [expr] {
-  {  } match (j) { string => PlainDate.parse(j) catch (_) { root.errors.ParseError { message: message } => throw baml.json.JsonDecodeError { message: message, path: "" } }, _ => throw baml.json.JsonDecodeError { message: "Expected ISO 8601..." } }
+  {  } match (j) { string => PlainDate.parse(j) catch (_) { root.errors.ParseError { message: message } => throw baml.json.JsonDecodeError { message: message, path: "" } }, _ => throw baml.json.JsonDecodeError { message: "Expected ISO 8601...", path: "" } }
 }
 function baml.time.month(self: ?) -> int  [builtin]
 function baml.time.parse(s: string) -> baml.time.PlainDate  [builtin]
@@ -1800,7 +1800,7 @@ function baml.time.from_components(year: int, month: int, day: int, hour: int = 
   {  } PlainDateTime._from_components(year, month, day, hour, minute, second, millisecond, microsecond, nanosecond)
 }
 function baml.time.from_json(j: baml.json.json) -> Self  [expr] {
-  {  } match (j) { string => PlainDateTime.parse(j) catch (_) { root.errors.ParseError { message: message } => throw baml.json.JsonDecodeError { message: message, path: "" } }, _ => throw baml.json.JsonDecodeError { message: "Expected zoneless..." } }
+  {  } match (j) { string => PlainDateTime.parse(j) catch (_) { root.errors.ParseError { message: message } => throw baml.json.JsonDecodeError { message: message, path: "" } }, _ => throw baml.json.JsonDecodeError { message: "Expected zoneless...", path: "" } }
 }
 function baml.time.hour(self: ?) -> int  [builtin]
 function baml.time.max(self: ?, other: baml.time.PlainDateTime) -> baml.time.PlainDateTime  [expr] {
@@ -1837,7 +1837,7 @@ function baml.time.from_components(hour: int, minute: int = 0, second: int = 0, 
   {  } PlainTime._from_components(hour, minute, second, millisecond, microsecond, nanosecond)
 }
 function baml.time.from_json(j: baml.json.json) -> Self  [expr] {
-  {  } match (j) { string => PlainTime.parse(j) catch (_) { root.errors.ParseError { message: message } => throw baml.json.JsonDecodeError { message: message, path: "" } }, _ => throw baml.json.JsonDecodeError { message: "Expected ISO 8601..." } }
+  {  } match (j) { string => PlainTime.parse(j) catch (_) { root.errors.ParseError { message: message } => throw baml.json.JsonDecodeError { message: message, path: "" } }, _ => throw baml.json.JsonDecodeError { message: "Expected ISO 8601...", path: "" } }
 }
 function baml.time.hour(self: ?) -> int  [expr] {
   {  } self._nanoseconds Div 3600000000000
@@ -1928,7 +1928,7 @@ function baml.time.from_instant(instant: Instant, timezone: TimeZoneOffset | str
   {  } match (timezone) { TimeZoneOffset => baml.time.ZonedDateTime { _nanoseconds: instant._nanoseconds, _offset_ns: timezone._nanoseconds, _iana: null }, string => baml.time.ZonedDateTime { _nanoseconds: instant._nanoseconds, _offset_ns: null, _iana: timezone } }
 }
 function baml.time.from_json(j: baml.json.json) -> Self  [expr] {
-  {  } match (j) { string => ZonedDateTime.parse(j) catch (_) { root.errors.ParseError { message: message } => throw baml.json.JsonDecodeError { message: message, path: "" } }, _ => throw baml.json.JsonDecodeError { message: "Expected RFC 3339..." } }
+  {  } match (j) { string => ZonedDateTime.parse(j) catch (_) { root.errors.ParseError { message: message } => throw baml.json.JsonDecodeError { message: message, path: "" } }, _ => throw baml.json.JsonDecodeError { message: "Expected RFC 3339...", path: "" } }
 }
 function baml.time.hour(self: ?) -> int  [expr] {
   {  } self.to_plain().hour()

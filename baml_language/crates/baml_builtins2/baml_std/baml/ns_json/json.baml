@@ -120,7 +120,8 @@ function from_string<T>(s: string) -> T throws JsonParseError | JsonDecodeError 
 /// - Primitives, enums, media, type-aliases: structural decode equivalent
 ///   to `from_string<T>(stringify(j))`.
 ///
-/// Throws `JsonParseError` / `JsonDecodeError` on shape mismatch.
+/// Throws `JsonDecodeError` on shape mismatch (decoding an already-parsed
+/// `json` value never re-parses, so no `JsonParseError` arises here).
 //baml:mut_vm
 //baml:may_yield
 function from_json<T>(j: json) -> T throws JsonDecodeError {
@@ -138,7 +139,8 @@ function from_json<T>(j: json) -> T throws JsonDecodeError {
 /// is constructed via its override; everything else decodes structurally
 /// (per-field, walking lists/maps/optionals and honoring nested overrides).
 ///
-/// Throws `JsonParseError` / `JsonDecodeError` on shape mismatch.
+/// Throws `JsonDecodeError` on shape mismatch (decoding an already-parsed
+/// `json` value never re-parses, so no `JsonParseError` arises here).
 //baml:mut_vm
 //baml:may_yield
 function to<T>(j: json) -> T throws JsonDecodeError {

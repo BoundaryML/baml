@@ -10774,7 +10774,7 @@ function baml.time.Instant$stream.baml.FromJson.from_json(j: baml.json.json) -> 
 
   L0:
     load_const "Expected timestamp string"
-    load_const null
+    load_const ""
     init_instance baml.json.JsonDecodeError .message, .path
     throw
 
@@ -10873,7 +10873,7 @@ function baml.time.Instant.baml.FromJson.from_json(j: baml.json.json) -> baml.ti
 
   L0:
     load_const "Expected timestamp string"
-    load_const null
+    load_const ""
     init_instance baml.json.JsonDecodeError .message, .path
     throw
 
@@ -11082,7 +11082,7 @@ function baml.time.PlainDate$stream.baml.FromJson.from_json(j: baml.json.json) -
 
   L0:
     load_const "Expected ISO 8601 date string"
-    load_const null
+    load_const ""
     init_instance baml.json.JsonDecodeError .message, .path
     throw
 
@@ -11173,7 +11173,7 @@ function baml.time.PlainDate.baml.FromJson.from_json(j: baml.json.json) -> baml.
 
   L0:
     load_const "Expected ISO 8601 date string"
-    load_const null
+    load_const ""
     init_instance baml.json.JsonDecodeError .message, .path
     throw
 
@@ -11287,7 +11287,7 @@ function baml.time.PlainDateTime$stream.baml.FromJson.from_json(j: baml.json.jso
 
   L0:
     load_const "Expected zoneless ISO 8601 string"
-    load_const null
+    load_const ""
     init_instance baml.json.JsonDecodeError .message, .path
     throw
 
@@ -11378,7 +11378,7 @@ function baml.time.PlainDateTime.baml.FromJson.from_json(j: baml.json.json) -> b
 
   L0:
     load_const "Expected zoneless ISO 8601 string"
-    load_const null
+    load_const ""
     init_instance baml.json.JsonDecodeError .message, .path
     throw
 
@@ -11731,7 +11731,7 @@ function baml.time.PlainTime$stream.baml.FromJson.from_json(j: baml.json.json) -
 
   L0:
     load_const "Expected ISO 8601 time string"
-    load_const null
+    load_const ""
     init_instance baml.json.JsonDecodeError .message, .path
     throw
 
@@ -11977,7 +11977,7 @@ function baml.time.PlainTime.baml.FromJson.from_json(j: baml.json.json) -> baml.
 
   L0:
     load_const "Expected ISO 8601 time string"
-    load_const null
+    load_const ""
     init_instance baml.json.JsonDecodeError .message, .path
     throw
 
@@ -12477,7 +12477,7 @@ function baml.time.ZonedDateTime$stream.baml.FromJson.from_json(j: baml.json.jso
 
   L0:
     load_const "Expected RFC 3339 / RFC 9557 timestamp string"
-    load_const null
+    load_const ""
     init_instance baml.json.JsonDecodeError .message, .path
     throw
 
@@ -12596,7 +12596,7 @@ function baml.time.ZonedDateTime.baml.FromJson.from_json(j: baml.json.json) -> b
 
   L0:
     load_const "Expected RFC 3339 / RFC 9557 timestamp string"
-    load_const null
+    load_const ""
     init_instance baml.json.JsonDecodeError .message, .path
     throw
 

@@ -19,7 +19,7 @@ interface        baml.ToJson                      <builtin>/baml/conversions.bam
 function         baml._to_json_default            <builtin>/baml/conversions.baml:102
 function         baml._to_json_shim               <builtin>/baml/conversions.baml:120
 interface        baml.FromJson                    <builtin>/baml/conversions.baml:150
-function         baml._from_json_shim             <builtin>/baml/conversions.baml:168
+function         baml._from_json_shim             <builtin>/baml/conversions.baml:169
 function         baml.deep_copy                   <builtin>/baml/core.baml:3
 function         baml.deep_equals                 <builtin>/baml/core.baml:9
 class            baml.TaggedString                <builtin>/baml/core.baml:20
@@ -157,11 +157,11 @@ function         baml.json.to_string              <builtin>/baml/ns_json/json.ba
 function         baml.json.to_json                <builtin>/baml/ns_json/json.baml:68
 function         baml.json.from                   <builtin>/baml/ns_json/json.baml:86
 function         baml.json.from_string            <builtin>/baml/ns_json/json.baml:100
-function         baml.json.from_json              <builtin>/baml/ns_json/json.baml:126
-function         baml.json.to                     <builtin>/baml/ns_json/json.baml:144
-function         baml.json.field                  <builtin>/baml/ns_json/json.baml:155
-function         baml.json.serialize              <builtin>/baml/ns_json/json.baml:175
-function         baml.json.deserialize            <builtin>/baml/ns_json/json.baml:194
+function         baml.json.from_json              <builtin>/baml/ns_json/json.baml:127
+function         baml.json.to                     <builtin>/baml/ns_json/json.baml:146
+function         baml.json.field                  <builtin>/baml/ns_json/json.baml:157
+function         baml.json.serialize              <builtin>/baml/ns_json/json.baml:177
+function         baml.json.deserialize            <builtin>/baml/ns_json/json.baml:196
 class            baml.llm.OrchestrationStep       <builtin>/baml/ns_llm/llm.baml:1
 class            baml.llm.ExecutionContext        <builtin>/baml/ns_llm/llm.baml:6
 class            baml.llm.PlannerState            <builtin>/baml/ns_llm/llm.baml:16

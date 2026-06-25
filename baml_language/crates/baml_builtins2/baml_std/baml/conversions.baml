@@ -135,7 +135,7 @@ function _to_json_shim<T>(value: T) -> baml.json.json throws baml.json.JsonSeria
 /// class Temp {
 ///   celsius float
 ///   implements baml.FromJson {
-///     function from_json(j: baml.json.json) -> Self throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+///     function from_json(j: baml.json.json) -> Self throws baml.json.JsonDecodeError {
 ///       Temp { celsius: baml.json.to<float>(baml.json.field(j, "c")) }
 ///     }
 ///   }
@@ -157,8 +157,9 @@ interface FromJson {
 /// [`_to_json_shim`]: static interface dispatch from this (stdlib) package can
 /// only see implementors visible here, not downstream user classes. Resolving on
 /// the runtime target type instead picks up a user `implements baml.FromJson {
-/// function from_json ... }` override; a type that inherits the structural
-/// default body falls back to [`_from_json_default`].
+/// function from_json ... }` override; a non-implementor falls back to the
+/// per-field structural decode `baml.json.to` provides (there is no default
+/// body — `FromJson.from_json` is a required method).
 ///
 /// TODO: temporary. Once Kai's TIR rework moves interface conformance checks to
 /// runtime, `baml.json.to` can use the literal `is baml.FromJson` form and this

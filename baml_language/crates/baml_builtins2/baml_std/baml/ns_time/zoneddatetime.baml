@@ -197,7 +197,7 @@ class ZonedDateTime {
                 string => ZonedDateTime.parse(j) catch (_) {
                     root.errors.ParseError { message } => throw baml.json.JsonDecodeError { message: message, path: "" },
                 },
-                _ => throw baml.json.JsonDecodeError { message: "Expected RFC 3339 / RFC 9557 timestamp string" }
+                _ => throw baml.json.JsonDecodeError { message: "Expected RFC 3339 / RFC 9557 timestamp string", path: "" }
             }
         }
     }

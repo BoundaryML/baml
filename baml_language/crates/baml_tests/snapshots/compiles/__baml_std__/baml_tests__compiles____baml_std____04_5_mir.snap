@@ -12971,7 +12971,7 @@ fn baml.time.Instant.baml.FromJson.from_json(j: baml.json.json) -> Self {
     }
 
     bb1: {
-        _9 = baml.json.JsonDecodeError { const "Expected timestamp string", const null };
+        _9 = baml.json.JsonDecodeError { const "Expected timestamp string", const "" };
         throw copy _9;
     }
 
@@ -13300,7 +13300,7 @@ fn baml.time.PlainDate.baml.FromJson.from_json(j: baml.json.json) -> Self {
     }
 
     bb1: {
-        _9 = baml.json.JsonDecodeError { const "Expected ISO 8601 date string", const null };
+        _9 = baml.json.JsonDecodeError { const "Expected ISO 8601 date string", const "" };
         throw copy _9;
     }
 
@@ -13549,7 +13549,7 @@ fn baml.time.PlainDateTime.baml.FromJson.from_json(j: baml.json.json) -> Self {
     }
 
     bb1: {
-        _9 = baml.json.JsonDecodeError { const "Expected zoneless ISO 8601 string", const null };
+        _9 = baml.json.JsonDecodeError { const "Expected zoneless ISO 8601 string", const "" };
         throw copy _9;
     }
 
@@ -14005,7 +14005,7 @@ fn baml.time.PlainTime.baml.FromJson.from_json(j: baml.json.json) -> Self {
     }
 
     bb1: {
-        _9 = baml.json.JsonDecodeError { const "Expected ISO 8601 time string", const null };
+        _9 = baml.json.JsonDecodeError { const "Expected ISO 8601 time string", const "" };
         throw copy _9;
     }
 
@@ -14815,7 +14815,7 @@ fn baml.time.ZonedDateTime.baml.FromJson.from_json(j: baml.json.json) -> Self {
     }
 
     bb1: {
-        _9 = baml.json.JsonDecodeError { const "Expected RFC 3339 / RFC 9557 timestamp string", const null };
+        _9 = baml.json.JsonDecodeError { const "Expected RFC 3339 / RFC 9557 timestamp string", const "" };
         throw copy _9;
     }
 

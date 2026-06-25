@@ -178,7 +178,7 @@ class PlainDateTime {
                 string => PlainDateTime.parse(j) catch (_) {
                     root.errors.ParseError { message } => throw baml.json.JsonDecodeError { message: message, path: "" },
                 },
-                _ => throw baml.json.JsonDecodeError { message: "Expected zoneless ISO 8601 string" }
+                _ => throw baml.json.JsonDecodeError { message: "Expected zoneless ISO 8601 string", path: "" }
             }
         }
     }

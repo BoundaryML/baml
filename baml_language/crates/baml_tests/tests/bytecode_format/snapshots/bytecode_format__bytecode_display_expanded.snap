@@ -91,7 +91,7 @@ function testing.$invoke_collector(collector: (testing.TestCollector) -> void th
 }
 
 function testing.FailFast() -> (testing.TestSetChild[]) -> testing.TestSetReport throws never {
-  101   0   make_closure 1339 0   
+  101   0   make_closure 1349 0   
         1   return                
 }
 
@@ -123,7 +123,7 @@ function testing.PassRate(threshold: float) -> (testing.TestSetChild[]) -> testi
        15   pop 1                  
 
   74   16   load_var 1             (threshold)
-       17   make_closure 1350 1    
+       17   make_closure 1360 1    
        18   return                 
 }
 
@@ -162,7 +162,7 @@ function testing.Quorum(n: int, m: int) -> (() -> testing.TestReport throws neve
        27   pop 1                  
 
   10   28   load_var2 1 2          
-       29   make_closure 1364 2    
+       29   make_closure 1374 2    
        30   return                 
 }
 
@@ -181,7 +181,7 @@ function testing.Retry(max_attempts: int) -> (() -> testing.TestReport throws ne
        9    pop 1                  
 
   41   10   load_var 1             (max_attempts)
-       11   make_closure 1357 1    
+       11   make_closure 1367 1    
        12   return                 
 }
 
@@ -193,7 +193,7 @@ function testing.RunReport.from_json(j: baml.json.json) -> testing.RunReport {
 }
 
 function testing.Sequential() -> (testing.TestSetChild[]) -> testing.TestSetReport throws never {
-  95   0   make_closure 1343 0   
+  95   0   make_closure 1353 0   
        1   return                
 }
 
@@ -2492,7 +2492,7 @@ function testing.run_children_parallel(children: testing.TestSetChild[]) -> test
         111   store_deref 5           
 
   296   112   load_var 5              (child)
-        113   make_closure 1327 1     
+        113   make_closure 1337 1     
         114   load_const 13           (null)
         115   load_const 13           (null)
         116   spawn                   
@@ -2676,7 +2676,7 @@ function testing.run_test(body: () -> void throws unknown, runner: ((() -> testi
         2    store_var 1            
 
   308   3    load_var 1             (body)
-        4    make_closure 1336 1    
+        4    make_closure 1346 1    
         5    store_var 3            (base_run)
 
   332   6    load_var 2             (runner)
@@ -2723,7 +2723,7 @@ function testing.test_child(name: string, body: () -> void throws unknown, runne
   221   6    load_var2 1 2         
 
   223   7    load_var 3            (runner)
-        8    make_closure 1296 2   
+        8    make_closure 1306 2   
         9    init_instance 0       (testing.TestSetChild .name, .run)
         10   return                
 }
@@ -2740,7 +2740,7 @@ function testing.testset_child(registry: testing.TestRegistry, ts: testing.TestS
         7    load_field 0          (name)
 
   230   8    load_var2 1 2         
-        9    make_closure 1319 2   
+        9    make_closure 1329 2   
         10   init_instance 0       (testing.TestSetChild .name, .run)
         11   return                
 }

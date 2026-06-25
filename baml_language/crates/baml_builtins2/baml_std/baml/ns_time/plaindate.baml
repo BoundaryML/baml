@@ -71,7 +71,7 @@ class PlainDate {
                 string => PlainDate.parse(j) catch (_) {
                     root.errors.ParseError { message } => throw baml.json.JsonDecodeError { message: message, path: "" },
                 },
-                _ => throw baml.json.JsonDecodeError { message: "Expected ISO 8601 date string" }
+                _ => throw baml.json.JsonDecodeError { message: "Expected ISO 8601 date string", path: "" }
             }
         }
     }

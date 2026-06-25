@@ -3669,7 +3669,7 @@ function baml.time.Instant.from_json(j: baml.json.json) -> unknown throws baml.j
             root.errors.ParseError { message: message } =>
               throw baml.json.JsonDecodeError { message: message, path: "" } : never
       _ =>
-        throw baml.json.JsonDecodeError { message: "Expected timestam..." } : never
+        throw baml.json.JsonDecodeError { message: "Expected timestam...", path: "" } : never
   }
 }
 function baml.time.Instant.to_json(self: baml.time.Instant) -> baml.json.json throws baml.json.JsonSerializationError {
@@ -3702,9 +3702,9 @@ function baml.time.Instant$stream.from_json(j: baml.json.json) -> unknown throws
             root.errors.ParseError { message: message } =>
               throw baml.json.JsonDecodeError { message: message, path: "" } : never
       _ =>
-        throw baml.json.JsonDecodeError { message: "Expected timestam..." } : never
+        throw baml.json.JsonDecodeError { message: "Expected timestam...", path: "" } : never
   }
-  !! 3681..4009: type mismatch: expected baml.time.Instant$stream, got baml.time.Instant
+  !! 3681..4019: type mismatch: expected baml.time.Instant$stream, got baml.time.Instant
 }
 function baml.time.Instant$stream.to_json(self: baml.time.Instant$stream) -> baml.json.json throws baml.json.JsonSerializationError {
   { : unknown
@@ -3713,8 +3713,8 @@ function baml.time.Instant$stream.to_json(self: baml.time.Instant$stream) -> bam
         root.errors.InvalidArgument { message: message } =>
           throw baml.json.JsonSerializationError { message: message, path: "" } : never
   }
-  !! 4163..4178: type `baml.time.Instant$stream` has no member `_to_string_impl`
-  !! 4110..4143: declared throws is `baml.json.JsonSerializationError`, but this function may also throw `unknown`
+  !! 4173..4188: type `baml.time.Instant$stream` has no member `_to_string_impl`
+  !! 4120..4153: declared throws is `baml.json.JsonSerializationError`, but this function may also throw `unknown`
 }
 
 --- <builtin>/baml/ns_time/plaindate.baml ---
@@ -3743,7 +3743,7 @@ function baml.time.PlainDate.from_json(j: baml.json.json) -> unknown throws baml
             root.errors.ParseError { message: message } =>
               throw baml.json.JsonDecodeError { message: message, path: "" } : never
       _ =>
-        throw baml.json.JsonDecodeError { message: "Expected ISO 8601..." } : never
+        throw baml.json.JsonDecodeError { message: "Expected ISO 8601...", path: "" } : never
   }
 }
 function baml.time.PlainDate.to_json(self: baml.time.PlainDate) -> baml.json.json throws baml.json.JsonSerializationError {
@@ -3776,9 +3776,9 @@ function baml.time.PlainDate$stream.from_json(j: baml.json.json) -> unknown thro
             root.errors.ParseError { message: message } =>
               throw baml.json.JsonDecodeError { message: message, path: "" } : never
       _ =>
-        throw baml.json.JsonDecodeError { message: "Expected ISO 8601..." } : never
+        throw baml.json.JsonDecodeError { message: "Expected ISO 8601...", path: "" } : never
   }
-  !! 2733..3067: type mismatch: expected baml.time.PlainDate$stream, got baml.time.PlainDate
+  !! 2733..3077: type mismatch: expected baml.time.PlainDate$stream, got baml.time.PlainDate
 }
 function baml.time.PlainDate$stream.to_json(self: baml.time.PlainDate$stream) -> baml.json.json throws baml.json.JsonSerializationError {
   { : unknown
@@ -3787,8 +3787,8 @@ function baml.time.PlainDate$stream.to_json(self: baml.time.PlainDate$stream) ->
         root.errors.InvalidArgument { message: message } =>
           throw baml.json.JsonSerializationError { message: message, path: "" } : never
   }
-  !! 3221..3236: type `baml.time.PlainDate$stream` has no member `_to_string_impl`
-  !! 3168..3201: declared throws is `baml.json.JsonSerializationError`, but this function may also throw `unknown`
+  !! 3231..3246: type `baml.time.PlainDate$stream` has no member `_to_string_impl`
+  !! 3178..3211: declared throws is `baml.json.JsonSerializationError`, but this function may also throw `unknown`
 }
 
 --- <builtin>/baml/ns_time/plaindatetime.baml ---
@@ -3876,7 +3876,7 @@ function baml.time.PlainDateTime.from_json(j: baml.json.json) -> unknown throws 
             root.errors.ParseError { message: message } =>
               throw baml.json.JsonDecodeError { message: message, path: "" } : never
       _ =>
-        throw baml.json.JsonDecodeError { message: "Expected zoneless..." } : never
+        throw baml.json.JsonDecodeError { message: "Expected zoneless...", path: "" } : never
   }
 }
 function baml.time.PlainDateTime.to_json(self: baml.time.PlainDateTime) -> baml.json.json throws baml.json.JsonSerializationError {
@@ -3909,9 +3909,9 @@ function baml.time.PlainDateTime$stream.from_json(j: baml.json.json) -> unknown 
             root.errors.ParseError { message: message } =>
               throw baml.json.JsonDecodeError { message: message, path: "" } : never
       _ =>
-        throw baml.json.JsonDecodeError { message: "Expected zoneless..." } : never
+        throw baml.json.JsonDecodeError { message: "Expected zoneless...", path: "" } : never
   }
-  !! 7356..7698: type mismatch: expected baml.time.PlainDateTime$stream, got baml.time.PlainDateTime
+  !! 7356..7708: type mismatch: expected baml.time.PlainDateTime$stream, got baml.time.PlainDateTime
 }
 function baml.time.PlainDateTime$stream.to_json(self: baml.time.PlainDateTime$stream) -> baml.json.json throws baml.json.JsonSerializationError {
   { : unknown
@@ -3920,8 +3920,8 @@ function baml.time.PlainDateTime$stream.to_json(self: baml.time.PlainDateTime$st
         root.errors.InvalidArgument { message: message } =>
           throw baml.json.JsonSerializationError { message: message, path: "" } : never
   }
-  !! 7852..7867: type `baml.time.PlainDateTime$stream` has no member `_to_string_impl`
-  !! 7799..7832: declared throws is `baml.json.JsonSerializationError`, but this function may also throw `unknown`
+  !! 7862..7877: type `baml.time.PlainDateTime$stream` has no member `_to_string_impl`
+  !! 7809..7842: declared throws is `baml.json.JsonSerializationError`, but this function may also throw `unknown`
 }
 
 --- <builtin>/baml/ns_time/plaintime.baml ---
@@ -3972,7 +3972,7 @@ function baml.time.PlainTime.from_json(j: baml.json.json) -> unknown throws baml
             root.errors.ParseError { message: message } =>
               throw baml.json.JsonDecodeError { message: message, path: "" } : never
       _ =>
-        throw baml.json.JsonDecodeError { message: "Expected ISO 8601..." } : never
+        throw baml.json.JsonDecodeError { message: "Expected ISO 8601...", path: "" } : never
   }
 }
 function baml.time.PlainTime.to_json(self: baml.time.PlainTime) -> baml.json.json throws baml.json.JsonSerializationError {
@@ -3999,9 +3999,9 @@ function baml.time.PlainTime$stream.from_json(j: baml.json.json) -> unknown thro
             root.errors.ParseError { message: message } =>
               throw baml.json.JsonDecodeError { message: message, path: "" } : never
       _ =>
-        throw baml.json.JsonDecodeError { message: "Expected ISO 8601..." } : never
+        throw baml.json.JsonDecodeError { message: "Expected ISO 8601...", path: "" } : never
   }
-  !! 2817..3151: type mismatch: expected baml.time.PlainTime$stream, got baml.time.PlainTime
+  !! 2817..3161: type mismatch: expected baml.time.PlainTime$stream, got baml.time.PlainTime
 }
 function baml.time.PlainTime$stream.to_json(self: baml.time.PlainTime$stream) -> baml.json.json throws baml.json.JsonSerializationError {
   { : baml.json.json
@@ -4236,7 +4236,7 @@ function baml.time.ZonedDateTime.from_json(j: baml.json.json) -> unknown throws 
             root.errors.ParseError { message: message } =>
               throw baml.json.JsonDecodeError { message: message, path: "" } : never
       _ =>
-        throw baml.json.JsonDecodeError { message: "Expected RFC 3339..." } : never
+        throw baml.json.JsonDecodeError { message: "Expected RFC 3339...", path: "" } : never
   }
 }
 function baml.time.ZonedDateTime.to_json(self: baml.time.ZonedDateTime) -> baml.json.json throws baml.json.JsonSerializationError {
@@ -4274,9 +4274,9 @@ function baml.time.ZonedDateTime$stream.from_json(j: baml.json.json) -> unknown 
             root.errors.ParseError { message: message } =>
               throw baml.json.JsonDecodeError { message: message, path: "" } : never
       _ =>
-        throw baml.json.JsonDecodeError { message: "Expected RFC 3339..." } : never
+        throw baml.json.JsonDecodeError { message: "Expected RFC 3339...", path: "" } : never
   }
-  !! 9091..9445: type mismatch: expected baml.time.ZonedDateTime$stream, got baml.time.ZonedDateTime
+  !! 9091..9455: type mismatch: expected baml.time.ZonedDateTime$stream, got baml.time.ZonedDateTime
 }
 function baml.time.ZonedDateTime$stream.to_json(self: baml.time.ZonedDateTime$stream) -> baml.json.json throws baml.json.JsonSerializationError {
   { : unknown
@@ -4289,8 +4289,8 @@ function baml.time.ZonedDateTime$stream.to_json(self: baml.time.ZonedDateTime$st
         root.errors.Io { message: message } =>
           throw baml.json.JsonSerializationError { message: message, path: "" } : never
   }
-  !! 9599..9614: type `baml.time.ZonedDateTime$stream` has no member `_to_string_impl`
-  !! 9546..9579: declared throws is `baml.json.JsonSerializationError`, but this function may also throw `unknown`
+  !! 9609..9624: type `baml.time.ZonedDateTime$stream` has no member `_to_string_impl`
+  !! 9556..9589: declared throws is `baml.json.JsonSerializationError`, but this function may also throw `unknown`
 }
 
 --- <builtin>/baml/ns_toml/toml.baml ---
