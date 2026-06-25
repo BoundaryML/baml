@@ -124,10 +124,35 @@ function main() -> int {{
     assert_eq!(expect_int(output.result.unwrap()), 2);
 }
 
-// ── Reserved-name shape enforcement (E0142) ───────────────────────────────
+#[tokio::test]
+async fn cleanup_with_explicit_throws_never_is_accepted() {
+    // `throws never` is the language-blessed "provably cannot fail" spelling and
+    // is equivalent to no throws clause — it must be ACCEPTED as the magic shape
+    // (latch injected), not rejected. If it were treated as malformed, no guard
+    // would be injected and the body would run twice → ["cleaned", "cleaned"].
+    let output = baml_test!(
+        r#"
+class R {
+  log string[]
+  function cleanup(self) -> void throws never {
+    self.log.push("cleaned")
+  }
+}
+function main() -> string[] {
+  let r = R { log: [] }
+  r.cleanup()
+  r.cleanup()
+  r.log
+}
+"#
+    );
+    assert_eq!(expect_strings(output.result.unwrap()), vec!["cleaned"]);
+}
+
+// ── Reserved-name shape enforcement (E0144) ───────────────────────────────
 
 #[tokio::test]
-#[should_panic(expected = "[E0142]")]
+#[should_panic(expected = "[E0144]")]
 async fn cleanup_with_extra_param_is_compile_error() {
     // `cleanup` is reserved for the magic finalizer shape `(self) -> void`; an
     // extra parameter is rejected rather than silently treated as an ordinary
@@ -144,7 +169,7 @@ function main() -> int { 0 }
 }
 
 #[tokio::test]
-#[should_panic(expected = "[E0142]")]
+#[should_panic(expected = "[E0144]")]
 async fn cleanup_with_non_void_return_is_compile_error() {
     // A non-`void` return type is not the reserved finalizer shape.
     let _ = baml_test!(
@@ -152,6 +177,25 @@ async fn cleanup_with_non_void_return_is_compile_error() {
 class Bad {
   x int
   function cleanup(self) -> string { "nope" }
+}
+function main() -> int { 0 }
+"#
+    );
+}
+
+#[tokio::test]
+#[should_panic(expected = "[E0144]")]
+async fn cleanup_with_throws_is_compile_error() {
+    // A finalizer must not declare a `throws` contract — on the GC path the
+    // error has no caller and is swallowed, so a propagating `cleanup` is the
+    // wrong shape.
+    let _ = baml_test!(
+        r#"
+class Bad {
+  x int
+  function cleanup(self) -> void throws baml.json.JsonParseError {
+    throw baml.json.JsonParseError { message: "boom" }
+  }
 }
 function main() -> int { 0 }
 "#

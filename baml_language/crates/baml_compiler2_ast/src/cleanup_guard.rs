@@ -27,10 +27,26 @@
 
 use baml_base::Name;
 
-use crate::ast::{CallArg, ClassDef, Expr, FunctionBodyDef, FunctionDef, TypeExpr};
+use crate::ast::{CallArg, ClassDef, Expr, FunctionBodyDef, FunctionDef, SpannedTypeExpr, TypeExpr};
 
 /// The reserved magic-method name for the BEP-042 finalizer.
 pub const CLEANUP_METHOD: &str = "cleanup";
+
+/// `true` if a `throws` clause is absent **or** is explicitly `throws never` —
+/// both mean the function provably cannot fail. The reserved `cleanup` shape
+/// requires this (a finalizer must not propagate errors), and `throws never` is
+/// the language-blessed spelling of "cannot fail" (the stdlib uses it widely,
+/// including on `_cleanup_begin` itself), so it must be accepted, not rejected.
+///
+/// Takes `Option<&SpannedTypeExpr>` so the AST guard/HIR check and the emit-side
+/// `has_cleanup` detection (which holds an HIR `Function`, whose `throws` is the
+/// same `ast::SpannedTypeExpr`) share one source of truth.
+pub fn throws_is_effectively_none(throws: Option<&SpannedTypeExpr>) -> bool {
+    match throws {
+        None => true,
+        Some(st) => matches!(st.expr, TypeExpr::Never { .. }),
+    }
+}
 
 /// `true` if `func` is the magic `cleanup` finalizer: named `cleanup` *and*
 /// having the required shape (see [`has_cleanup_shape`]). A method named
@@ -41,14 +57,23 @@ pub fn is_cleanup_magic_method(func: &FunctionDef) -> bool {
 }
 
 /// The required shape of the magic `cleanup` method: exactly one parameter
-/// `self`, no generic parameters, and an explicit `-> void` return. Shared by
-/// the guard injector (which only rewrites well-shaped finalizers) and the HIR
-/// signature check (which reports a method named `cleanup` that fails this).
-/// The name itself is checked by [`is_cleanup_magic_method`] / the HIR pass.
+/// `self`, no generic parameters, an explicit `-> void` return, and no `throws`
+/// clause. Shared by the guard injector (which only rewrites well-shaped
+/// finalizers) and the HIR signature check (which reports a method named
+/// `cleanup` that fails this). The name itself is checked by
+/// [`is_cleanup_magic_method`] / the HIR pass.
+///
+/// A propagating `throws` is disallowed because a finalizer must not have an
+/// error contract: on the GC path the error has no caller and is swallowed, so a
+/// declared `throws Foo` would be silently dropped. A `cleanup` that needs to
+/// handle errors must do so internally (`... catch { ... }`). An explicit
+/// `throws never` is fine — it provably has no error to drop (see
+/// [`throws_is_effectively_none`]).
 pub fn has_cleanup_shape(func: &FunctionDef) -> bool {
     func.generic_params.is_empty()
         && func.params.len() == 1
         && func.params[0].name.as_str() == "self"
+        && throws_is_effectively_none(func.throws.as_ref())
         && matches!(
             func.return_type.as_ref().map(|st| &st.expr),
             Some(TypeExpr::Void { .. })

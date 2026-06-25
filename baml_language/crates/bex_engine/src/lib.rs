@@ -2896,10 +2896,12 @@ impl BexEngine {
     /// BEP-042: run the `cleanup` finalizer for each instance the GC kept alive
     /// during the collection that just completed.
     ///
-    /// Called at the GC safepoint immediately after a collection, while
-    /// `checking_gc` is still held — so no nested collection can move the queued
-    /// pointers, and each instance is still alive (the GC copied it into the
-    /// survivor space). Each `cleanup` runs as an ordinary function call on the
+    /// Called immediately after a collection (the GC copied each pending instance
+    /// into the survivor space, so it is alive). The queued instances are rooted
+    /// into handles before the first `await` (see the body), so they stay valid
+    /// across any nested or concurrent collection — `collect_garbage` is `pub` and
+    /// can be called directly, where the `checking_gc` guard is NOT held, so we do
+    /// not rely on it. Each `cleanup` runs as an ordinary function call on the
     /// real instance (passed by handle, never copied), so it sets the instance's
     /// run-once latch; a `cleanup` racing on another fiber via an explicit call
     /// or `defer` is deduped by that latch.
@@ -2908,8 +2910,19 @@ impl BexEngine {
     /// propagate to on the GC path, and a bad finalizer must not break the GC
     /// (BEP-042; matches Python's `__del__`).
     async fn drain_finalizers(self: &Arc<Self>) {
-        for (ptr, cleanup_fn) in self.heap.take_pending_finalizers() {
-            let handle = self.heap.create_handle(ptr);
+        // Root the entire queue into handles BEFORE the first `await`. The queued
+        // pointers are raw `HeapPtr`s; if a `cleanup` body yields and a nested or
+        // concurrent collection runs (possible when `collect_garbage` is called
+        // directly, where `checking_gc` is not held), the not-yet-processed
+        // pointers would be moved. Handles are GC roots and are fixed up across a
+        // collection, so converting up front keeps every pending instance valid.
+        let pending: Vec<_> = self
+            .heap
+            .take_pending_finalizers()
+            .into_iter()
+            .map(|(ptr, cleanup_fn)| (self.heap.create_handle(ptr), cleanup_fn))
+            .collect();
+        for (handle, cleanup_fn) in pending {
             let ctx = FunctionCallContextBuilder::new(sys_types::CallId::next())
                 .with_profile_enabled(false)
                 .build();
