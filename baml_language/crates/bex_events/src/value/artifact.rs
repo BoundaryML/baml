@@ -1,10 +1,106 @@
 //! Target-neutral value artifact sink abstractions.
 
 use std::{
+    fmt::Write as _,
     fs::{self, File},
     io::{self, Write},
     path::{Path, PathBuf},
 };
+
+use sha2::{Digest, Sha256};
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct BlobRef {
+    pub algorithm: String,
+    pub digest: String,
+    pub size_bytes: usize,
+}
+
+impl BlobRef {
+    pub const ALGORITHM_SHA256: &'static str = "sha256";
+
+    #[must_use]
+    pub fn sha256(bytes: &[u8]) -> Self {
+        let digest = Sha256::digest(bytes);
+        let mut hex = String::with_capacity(digest.len() * 2);
+        for byte in digest {
+            let _ = write!(&mut hex, "{byte:02x}");
+        }
+        Self {
+            algorithm: Self::ALGORITHM_SHA256.to_string(),
+            digest: hex,
+            size_bytes: bytes.len(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct BlobStore {
+    root: PathBuf,
+}
+
+impl BlobStore {
+    #[must_use]
+    pub fn new(root: impl AsRef<Path>) -> Self {
+        Self {
+            root: root.as_ref().to_path_buf(),
+        }
+    }
+
+    #[must_use]
+    pub fn for_boundary_dir(boundary_dir: impl AsRef<Path>) -> Self {
+        Self::new(boundary_dir.as_ref().join("blobs"))
+    }
+
+    #[must_use]
+    pub fn root(&self) -> &Path {
+        &self.root
+    }
+
+    #[must_use]
+    pub fn path_for(&self, blob_ref: &BlobRef) -> PathBuf {
+        let prefix = blob_ref.digest.get(..2).unwrap_or("xx");
+        self.root
+            .join(&blob_ref.algorithm)
+            .join(prefix)
+            .join(format!("{}.blob", blob_ref.digest))
+    }
+
+    pub fn write_blob(&self, bytes: &[u8]) -> io::Result<BlobRef> {
+        let blob_ref = BlobRef::sha256(bytes);
+        let path = self.path_for(&blob_ref);
+        if path.is_file() {
+            return Ok(blob_ref);
+        }
+
+        let parent = path.parent().ok_or_else(|| {
+            io::Error::new(io::ErrorKind::InvalidInput, "blob path has no parent")
+        })?;
+        fs::create_dir_all(parent)?;
+        let tmp_path = parent.join(format!(".{}.{}.tmp", blob_ref.digest, std::process::id()));
+        {
+            let mut tmp = File::create(&tmp_path)?;
+            tmp.write_all(bytes)?;
+            tmp.flush()?;
+            tmp.sync_all()?;
+        }
+        if path.is_file() {
+            let _ = fs::remove_file(&tmp_path);
+            return Ok(blob_ref);
+        }
+        fs::rename(&tmp_path, &path)?;
+        Ok(blob_ref)
+    }
+
+    pub fn read_blob(&self, blob_ref: &BlobRef) -> io::Result<Option<Vec<u8>>> {
+        let path = self.path_for(blob_ref);
+        match fs::read(path) {
+            Ok(bytes) => Ok(Some(bytes)),
+            Err(err) if err.kind() == io::ErrorKind::NotFound => Ok(None),
+            Err(err) => Err(err),
+        }
+    }
+}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ValueArtifactRef {
@@ -145,7 +241,8 @@ impl ValueArtifactSink for ByteValueArtifactSink {
 #[cfg(test)]
 mod tests {
     use super::{
-        ByteValueArtifactSink, FileValueArtifactSink, ValueArtifactRef, ValueArtifactSink,
+        BlobRef, BlobStore, ByteValueArtifactSink, FileValueArtifactSink, ValueArtifactRef,
+        ValueArtifactSink,
     };
 
     #[test]
@@ -184,5 +281,46 @@ mod tests {
         );
         assert_eq!(std::fs::read(&path).unwrap(), b"abc");
         let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn blob_store_dedupes_by_sha256_digest() {
+        let root = std::env::temp_dir().join(format!(
+            "bamlvalue-blob-store-{}-{:?}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let store = BlobStore::new(&root);
+
+        let first = store.write_blob(b"large body").unwrap();
+        let second = store.write_blob(b"large body").unwrap();
+
+        assert_eq!(first, second);
+        assert_eq!(first.algorithm, BlobRef::ALGORITHM_SHA256);
+        assert_eq!(first.size_bytes, "large body".len());
+        assert_eq!(
+            store.read_blob(&first).unwrap(),
+            Some(b"large body".to_vec())
+        );
+
+        let mut blob_files = 0;
+        for algorithm_entry in std::fs::read_dir(root.join("sha256")).unwrap() {
+            let algorithm_entry = algorithm_entry.unwrap();
+            for blob_entry in std::fs::read_dir(algorithm_entry.path()).unwrap() {
+                let blob_entry = blob_entry.unwrap();
+                if blob_entry
+                    .path()
+                    .extension()
+                    .is_some_and(|ext| ext == "blob")
+                {
+                    blob_files += 1;
+                }
+            }
+        }
+        assert_eq!(blob_files, 1);
+        let _ = std::fs::remove_dir_all(root);
     }
 }

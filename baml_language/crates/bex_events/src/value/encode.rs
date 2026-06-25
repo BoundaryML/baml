@@ -66,6 +66,7 @@ pub fn encode_file_record(
             run_completed: None,
             log_event: None,
             capture_loss: None,
+            blob: record.blob_ref.as_ref().map(Into::into),
         },
         ValueFileRecord::LogEvent(record) => pb::ValueRecordV1 {
             metadata: Some((&record.value_ref).into()),
@@ -75,6 +76,7 @@ pub fn encode_file_record(
             run_completed: None,
             log_event: Some((&record.event).into()),
             capture_loss: None,
+            blob: record.blob_ref.as_ref().map(Into::into),
         },
         ValueFileRecord::CaptureLoss(record) => pb::ValueRecordV1 {
             metadata: None,
@@ -84,6 +86,7 @@ pub fn encode_file_record(
             run_completed: None,
             log_event: None,
             capture_loss: Some(record.into()),
+            blob: None,
         },
         ValueFileRecord::RunStarted(record) => pb::ValueRecordV1 {
             metadata: None,
@@ -93,6 +96,7 @@ pub fn encode_file_record(
             run_completed: None,
             log_event: None,
             capture_loss: None,
+            blob: None,
         },
         ValueFileRecord::RunCompleted(record) => pb::ValueRecordV1 {
             metadata: None,
@@ -102,6 +106,7 @@ pub fn encode_file_record(
             run_completed: Some(record.into()),
             log_event: None,
             capture_loss: None,
+            blob: None,
         },
     }
     .encode_length_delimited(out)
@@ -127,6 +132,7 @@ mod tests {
         let record = ValueRecord {
             value_ref: value_ref.clone(),
             body: vec![1, 2, 3],
+            blob_ref: None,
             capture: None,
         };
         let mut bytes = Vec::new();
@@ -158,6 +164,7 @@ mod tests {
         let record = LogRecord {
             value_ref: ValueRef::available("value_log", ValueCodec::BamlOutboundValue, 3, 3),
             body: vec![4, 5, 6],
+            blob_ref: None,
             event: LogEventRecord {
                 call: TraceCallKey {
                     process_euid: ProcessEuid([1; 16]),
@@ -225,6 +232,7 @@ mod tests {
             run_completed: None,
             log_event: None,
             capture_loss: None,
+            blob: None,
         };
         let mut bytes = Vec::new();
         record.encode_length_delimited(&mut bytes).unwrap();

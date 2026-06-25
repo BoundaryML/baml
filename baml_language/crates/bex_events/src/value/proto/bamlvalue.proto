@@ -64,6 +64,12 @@ message ValueMetadataV1 {
   optional string diagnostic = 6;
 }
 
+message BlobRefV1 {
+  string algorithm = 1;
+  string digest = 2;
+  uint64 size_bytes = 3;
+}
+
 message TraceCallKeyV1 {
   bytes process_id = 1;
   uint64 engine_id = 2;
@@ -180,4 +186,5 @@ message ValueRecordV1 {
   RunCompletedV1 run_completed = 11;
   LogEventV1 log_event = 12;
   CaptureLossV1 capture_loss = 13;
+  BlobRefV1 blob = 14;
 }

@@ -1,17 +1,18 @@
 //! Artifact-safe encoding for trace-owned value snapshots.
 
 use num_bigint::BigInt;
-use prost::Message;
+use prost::{Enumeration, Message};
 
 use crate::trace_heap::{
-    TraceOmissionDescriptor, TraceOmissionReason, TraceSnapshot, TraceValue, TraceValueRef,
+    TraceMediaContent, TraceMediaValue, TraceOmissionDescriptor, TraceOmissionReason,
+    TraceSnapshot, TraceValue, TraceValueRef,
 };
 
 #[derive(Clone, PartialEq, Message)]
 struct BamlOutboundValue {
     #[prost(
         oneof = "BamlValueVariant",
-        tags = "2, 3, 4, 5, 6, 7, 8, 11, 12, 19, 20"
+        tags = "2, 3, 4, 5, 6, 7, 8, 11, 12, 17, 19, 20"
     )]
     value: Option<BamlValueVariant>,
 }
@@ -36,6 +37,8 @@ enum BamlValueVariant {
     ListValue(BamlValueList),
     #[prost(message, tag = "12")]
     MapValue(BamlValueMap),
+    #[prost(message, tag = "17")]
+    MediaValue(BamlValueMedia),
     #[prost(bytes, tag = "19")]
     Uint8arrayValue(Vec<u8>),
     #[prost(string, tag = "20")]
@@ -83,6 +86,37 @@ struct BamlValueEnum {
     is_dynamic: bool,
 }
 
+#[derive(Clone, PartialEq, Message)]
+struct BamlValueMedia {
+    #[prost(enumeration = "MediaTypeEnum", tag = "1")]
+    media: i32,
+    #[prost(string, optional, tag = "2")]
+    mime_type: Option<String>,
+    #[prost(oneof = "BamlValueMediaValue", tags = "3, 4, 5")]
+    value: Option<BamlValueMediaValue>,
+}
+
+#[derive(Clone, PartialEq, ::prost::Oneof)]
+enum BamlValueMediaValue {
+    #[prost(string, tag = "3")]
+    Url(String),
+    #[prost(string, tag = "4")]
+    Base64(String),
+    #[prost(string, tag = "5")]
+    File(String),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Enumeration)]
+#[repr(i32)]
+enum MediaTypeEnum {
+    Unspecified = 0,
+    Image = 1,
+    Audio = 2,
+    Pdf = 3,
+    Video = 4,
+    Other = 5,
+}
+
 pub(crate) fn encode_trace_snapshot_body(snapshot: &TraceSnapshot) -> Result<Vec<u8>, String> {
     let value = encode_value(snapshot, snapshot.root())?;
     Ok(value.encode_to_vec())
@@ -121,6 +155,7 @@ fn encode_value(
                 })
                 .collect::<Result<_, String>>()?,
         })),
+        TraceValue::Media(media) => Some(BamlValueVariant::MediaValue(media_to_proto(media))),
         TraceValue::Instance {
             type_name,
             type_args: _,
@@ -149,6 +184,28 @@ fn encode_value(
         }
     };
     Ok(BamlOutboundValue { value: variant })
+}
+
+fn media_to_proto(media: &TraceMediaValue) -> BamlValueMedia {
+    BamlValueMedia {
+        media: media_kind_to_proto_enum(media.kind) as i32,
+        mime_type: media.mime_type.clone(),
+        value: Some(match &media.content {
+            TraceMediaContent::Url(url) => BamlValueMediaValue::Url(url.clone()),
+            TraceMediaContent::Base64(base64) => BamlValueMediaValue::Base64(base64.clone()),
+            TraceMediaContent::File(file) => BamlValueMediaValue::File(file.clone()),
+        }),
+    }
+}
+
+fn media_kind_to_proto_enum(kind: bex_external_types::MediaKind) -> MediaTypeEnum {
+    match kind {
+        bex_external_types::MediaKind::Image => MediaTypeEnum::Image,
+        bex_external_types::MediaKind::Audio => MediaTypeEnum::Audio,
+        bex_external_types::MediaKind::Pdf => MediaTypeEnum::Pdf,
+        bex_external_types::MediaKind::Video => MediaTypeEnum::Video,
+        bex_external_types::MediaKind::Generic => MediaTypeEnum::Other,
+    }
 }
 
 fn omission_to_class(descriptor: &TraceOmissionDescriptor) -> BamlValueClass {
@@ -239,5 +296,30 @@ mod tests {
         };
         assert_eq!(class.name, "baml.trace.OmittedValue");
         assert_eq!(class.fields[0].key, "reason");
+    }
+
+    #[test]
+    fn media_trace_values_encode_as_media_values() {
+        let snapshot = TraceSnapshot::for_test(
+            TraceValueRef::for_test(0),
+            vec![TraceValue::Media(crate::trace_heap::TraceMediaValue {
+                kind: bex_external_types::MediaKind::Image,
+                mime_type: Some("image/png".to_string()),
+                content: crate::trace_heap::TraceMediaContent::Base64(
+                    "aW1hZ2UtYnl0ZXM=".to_string(),
+                ),
+            })],
+        );
+
+        let bytes = super::encode_trace_snapshot_body(&snapshot).unwrap();
+        let decoded = BamlOutboundValue::decode(bytes.as_slice()).unwrap();
+        let Some(BamlValueVariant::MediaValue(media)) = decoded.value else {
+            panic!("root should encode as media");
+        };
+        assert_eq!(media.mime_type.as_deref(), Some("image/png"));
+        assert!(matches!(
+            media.value,
+            Some(bridge_ctypes::baml_core::cffi::baml_value_media::Value::Base64(_))
+        ));
     }
 }

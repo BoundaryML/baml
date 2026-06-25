@@ -13,7 +13,7 @@ use crate::{
     },
     run::{ProfileEventEnvelope, ProfileEventKind},
     value::{
-        CaptureLossRecord, FileValueArtifactSink, LogEventRecord, RunCompletedRecord,
+        BlobStore, CaptureLossRecord, FileValueArtifactSink, LogEventRecord, RunCompletedRecord,
         RunStartedRecord, ValueCapture, ValueCodec, ValueWriteOutcome, ValueWriter,
     },
 };
@@ -29,6 +29,8 @@ pub struct BoundaryWriter {
     run_started_written: bool,
     run_completed_written: bool,
 }
+
+const VALUE_INLINE_THRESHOLD_BYTES: usize = 64 * 1024;
 
 impl BoundaryWriter {
     pub fn create(
@@ -148,7 +150,12 @@ impl BoundaryWriter {
     ) -> io::Result<&mut ValueWriter<FileValueArtifactSink>> {
         if !self.value_writers.contains_key(&thread_id) {
             let sink = FileValueArtifactSink::create(self.path.value_segment_path(thread_id, 0))?;
-            let writer = ValueWriter::new(sink, self.boundary_id)?;
+            let writer = ValueWriter::with_blob_store(
+                sink,
+                self.boundary_id,
+                BlobStore::for_boundary_dir(&self.path.boundary_dir),
+                VALUE_INLINE_THRESHOLD_BYTES,
+            )?;
             self.value_writers.insert(thread_id, writer);
         }
         Ok(self

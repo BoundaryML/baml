@@ -5,8 +5,9 @@ use std::io;
 use crate::{
     ids::BoundaryId,
     value::{
-        CaptureLossRecord, LogEventRecord, LogRecord, RunCompletedRecord, RunStartedRecord,
-        ValueArtifactRef, ValueArtifactSink, ValueCapture, ValueCodec, ValueRecord, ValueRef,
+        BlobRef, BlobStore, CaptureLossRecord, LogEventRecord, LogRecord, RunCompletedRecord,
+        RunStartedRecord, ValueArtifactRef, ValueArtifactSink, ValueCapture, ValueCodec,
+        ValueRecord, ValueRef,
         encode::{
             encode_capture_loss, encode_header, encode_log_event, encode_record,
             encode_run_completed, encode_run_started,
@@ -18,6 +19,8 @@ use crate::{
 pub struct ValueWriter<S> {
     sink: S,
     next_value_id: u64,
+    blob_store: Option<BlobStore>,
+    inline_threshold_bytes: Option<usize>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -34,6 +37,26 @@ impl<S: ValueArtifactSink> ValueWriter<S> {
         Ok(Self {
             sink,
             next_value_id: 1,
+            blob_store: None,
+            inline_threshold_bytes: None,
+        })
+    }
+
+    pub fn with_blob_store(
+        mut sink: S,
+        boundary_id: BoundaryId,
+        blob_store: BlobStore,
+        inline_threshold_bytes: usize,
+    ) -> io::Result<Self> {
+        let mut header = Vec::new();
+        encode_header(&mut header, boundary_id)
+            .map_err(|err| io::Error::new(io::ErrorKind::InvalidData, err))?;
+        sink.write_chunk(&header)?;
+        Ok(Self {
+            sink,
+            next_value_id: 1,
+            blob_store: Some(blob_store),
+            inline_threshold_bytes: Some(inline_threshold_bytes),
         })
     }
 
@@ -53,10 +76,14 @@ impl<S: ValueArtifactSink> ValueWriter<S> {
     ) -> io::Result<ValueWriteOutcome> {
         let id = format!("value_{}", self.next_value_id);
         self.next_value_id = self.next_value_id.saturating_add(1);
-        let value_ref = ValueRef::available(id, codec, body.len(), body.len());
+        let original_size = body.len();
+        let (body, blob_ref) = self.store_body(body)?;
+        let retained_size = blob_ref.as_ref().map_or(body.len(), |blob| blob.size_bytes);
+        let value_ref = ValueRef::available(id, codec, original_size, retained_size);
         let record = ValueRecord {
             value_ref: value_ref.clone(),
             body,
+            blob_ref,
             capture,
         };
         let mut encoded = Vec::new();
@@ -74,10 +101,14 @@ impl<S: ValueArtifactSink> ValueWriter<S> {
     ) -> io::Result<ValueWriteOutcome> {
         let id = format!("value_{}", self.next_value_id);
         self.next_value_id = self.next_value_id.saturating_add(1);
-        let value_ref = ValueRef::available(id, codec, body.len(), body.len());
+        let original_size = body.len();
+        let (body, blob_ref) = self.store_body(body)?;
+        let retained_size = blob_ref.as_ref().map_or(body.len(), |blob| blob.size_bytes);
+        let value_ref = ValueRef::available(id, codec, original_size, retained_size);
         let record = LogRecord {
             value_ref: value_ref.clone(),
             body,
+            blob_ref,
             event,
         };
         let mut encoded = Vec::new();
@@ -119,6 +150,20 @@ impl<S: ValueArtifactSink> ValueWriter<S> {
     pub fn into_sink(self) -> S {
         self.sink
     }
+
+    fn store_body(&self, body: Vec<u8>) -> io::Result<(Vec<u8>, Option<BlobRef>)> {
+        let Some(blob_store) = &self.blob_store else {
+            return Ok((body, None));
+        };
+        let Some(threshold) = self.inline_threshold_bytes else {
+            return Ok((body, None));
+        };
+        if body.len() <= threshold {
+            return Ok((body, None));
+        }
+        let blob_ref = blob_store.write_blob(&body)?;
+        Ok((Vec::new(), Some(blob_ref)))
+    }
 }
 
 #[cfg(test)]
@@ -126,8 +171,8 @@ mod tests {
     use crate::{
         ids::BoundaryId,
         value::{
-            ByteValueArtifactSink, ValueArtifactRef, ValueCodec, ValueFileRecord, ValueWriter,
-            read_bamlvalue_from_bytes,
+            BlobStore, ByteValueArtifactSink, ValueArtifactRef, ValueCodec, ValueFileRecord,
+            ValueWriter, read_bamlvalue_from_bytes,
         },
     };
 
@@ -155,5 +200,42 @@ mod tests {
             panic!("expected value record");
         };
         assert_eq!(record.body, vec![1, 2, 3]);
+        assert!(record.blob_ref.is_none());
+    }
+
+    #[test]
+    fn blob_writer_externalizes_bodies_above_threshold() {
+        let root = std::env::temp_dir().join(format!(
+            "bamlvalue-writer-blob-{}-{:?}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let blob_store = BlobStore::new(&root);
+        let sink = ByteValueArtifactSink::new();
+        let mut writer =
+            ValueWriter::with_blob_store(sink, BoundaryId::from_bytes([2; 16]), blob_store, 3)
+                .unwrap();
+        let outcome = writer
+            .append_body(ValueCodec::BamlOutboundValue, b"abcdef".to_vec())
+            .unwrap();
+
+        assert_eq!(outcome.value_ref.id, "value_1");
+        assert_eq!(outcome.value_ref.original_size_bytes, Some(6));
+        assert_eq!(outcome.value_ref.retained_size_bytes, Some(6));
+
+        let parsed = read_bamlvalue_from_bytes(writer.sink().bytes()).unwrap();
+        let ValueFileRecord::CapturedValue(record) = &parsed.records[0] else {
+            panic!("expected value record");
+        };
+        assert!(record.body.is_empty());
+        let blob_ref = record.blob_ref.as_ref().expect("blob ref recorded");
+        assert_eq!(
+            std::fs::read(BlobStore::new(&root).path_for(blob_ref)).unwrap(),
+            b"abcdef"
+        );
+        let _ = std::fs::remove_dir_all(root);
     }
 }

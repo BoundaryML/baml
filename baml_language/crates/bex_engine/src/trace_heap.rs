@@ -13,6 +13,8 @@ use std::{
     },
 };
 
+use baml_builtins2::{MediaContent, MediaValue};
+use bex_external_types::{BexExternalAdt, BexExternalValue, MediaKind, try_convert_rust_data};
 use bex_heap::{BexHeap, PermitProof};
 use bex_vm_types::{HeapPtr, Object, Value, ValueKind};
 
@@ -57,6 +59,7 @@ pub enum TraceValue {
     Bytes(Vec<u8>),
     Array(Vec<TraceValueRef>),
     Map(Vec<(String, TraceValueRef)>),
+    Media(TraceMediaValue),
     Instance {
         type_name: String,
         type_args: Vec<baml_type::RuntimeTy>,
@@ -67,6 +70,20 @@ pub enum TraceValue {
         variant: String,
     },
     Omitted(TraceOmissionDescriptor),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TraceMediaValue {
+    pub kind: MediaKind,
+    pub mime_type: Option<String>,
+    pub content: TraceMediaContent,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum TraceMediaContent {
+    Url(String),
+    Base64(String),
+    File(String),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -331,16 +348,59 @@ impl TraceSnapshotBuilder {
                 TraceOmissionReason::UnsupportedValue,
                 unsupported_object_message(object),
             ),
-            Object::HostClosure(_) | Object::RustData(_) => self.omitted(
+            Object::HostClosure(_) => self.omitted(
                 TraceOmissionReason::HostOwnedValue,
                 unsupported_object_message(object),
             ),
+            Object::RustData(data) => match try_convert_rust_data(data) {
+                Some(value) => self.copy_external_value(value),
+                None => self.omitted(
+                    TraceOmissionReason::HostOwnedValue,
+                    unsupported_object_message(object),
+                ),
+            },
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => self.omitted(
                 TraceOmissionReason::InvalidRuntimeValue,
                 unsupported_object_message(object),
             ),
         }
+    }
+
+    fn copy_external_value(&mut self, value: BexExternalValue) -> TraceValueRef {
+        match value {
+            BexExternalValue::Adt(BexExternalAdt::Media(media)) => self.copy_media(&media),
+            BexExternalValue::HostValue(host) => self.omitted(
+                TraceOmissionReason::HostOwnedValue,
+                match host.kind {
+                    bex_external_types::HostValueKind::Callable => "host-owned callable",
+                    bex_external_types::HostValueKind::Opaque => "host-owned opaque value",
+                },
+            ),
+            BexExternalValue::RustData(_) => {
+                self.omitted(TraceOmissionReason::HostOwnedValue, "host-owned rust data")
+            }
+            BexExternalValue::Adt(BexExternalAdt::PromptAst(_)) => {
+                self.omitted(TraceOmissionReason::UnsupportedValue, "prompt AST")
+            }
+            _ => self.omitted(
+                TraceOmissionReason::UnsupportedValue,
+                "unsupported rust data conversion",
+            ),
+        }
+    }
+
+    fn copy_media(&mut self, media: &MediaValue) -> TraceValueRef {
+        let content = media.read_content(|content| match content {
+            MediaContent::Url { url, .. } => TraceMediaContent::Url(url.clone()),
+            MediaContent::Base64 { base64_data } => TraceMediaContent::Base64(base64_data.clone()),
+            MediaContent::File { file, .. } => TraceMediaContent::File(file.clone()),
+        });
+        self.alloc(TraceValue::Media(TraceMediaValue {
+            kind: media.kind,
+            mime_type: media.mime_type(),
+            content,
+        }))
     }
 
     fn omitted(
@@ -388,10 +448,12 @@ fn unsupported_object_message(object: &Object) -> String {
 mod tests {
     use std::{collections::HashMap, sync::Arc};
 
+    use baml_builtins2::MediaValue;
+    use bex_external_types::MediaKind;
     use bex_heap::{BexHeap, HeapPermit as _, HeapPermitManager, Tlab, TlabHolder};
     use bex_vm_types::{Object, RootHaver, Value};
 
-    use super::{TraceHeap, TraceOmissionReason, TraceValue};
+    use super::{TraceHeap, TraceMediaContent, TraceOmissionReason, TraceValue};
 
     struct EmptyRoots {
         tlab: Tlab,
@@ -483,5 +545,36 @@ mod tests {
             panic!("second item should be omitted");
         };
         assert_eq!(host_owned.reason, TraceOmissionReason::HostOwnedValue);
+    }
+
+    #[tokio::test]
+    async fn trace_heap_snapshots_media_rust_data() {
+        let heap = BexHeap::new(Vec::new());
+        let manager = HeapPermitManager::new();
+        let mut permit = manager
+            .new_permit(EmptyRoots {
+                tlab: Tlab::new(Arc::clone(&heap)),
+            })
+            .await
+            .acquire()
+            .await;
+        let media =
+            MediaValue::from_base64(MediaKind::Image, "aW1hZ2UtYnl0ZXM=", Some("image/png"));
+        let media_ptr = permit.tlab_mut().alloc(Object::RustData(media));
+        let trace_heap = TraceHeap::new();
+
+        let handle =
+            trace_heap.copy_value_from_bex_heap(&heap, permit.proof(), Value::object(media_ptr));
+        let snapshot = trace_heap.release(handle).expect("snapshot retained");
+
+        let Some(TraceValue::Media(media)) = snapshot.value(snapshot.root()) else {
+            panic!("root should be media");
+        };
+        assert_eq!(media.kind, MediaKind::Image);
+        assert_eq!(media.mime_type.as_deref(), Some("image/png"));
+        assert_eq!(
+            media.content,
+            TraceMediaContent::Base64("aW1hZ2UtYnl0ZXM=".to_string())
+        );
     }
 }

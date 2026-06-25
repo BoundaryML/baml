@@ -94,12 +94,14 @@ fn file_record_from_proto(record: pb::ValueRecordV1) -> io::Result<ValueFileReco
         return Ok(ValueFileRecord::LogEvent(LogRecord {
             value_ref: metadata.try_into()?,
             body: record.body,
+            blob_ref: record.blob.map(TryInto::try_into).transpose()?,
             event: log_event.try_into()?,
         }));
     }
     Ok(ValueFileRecord::CapturedValue(ValueRecord {
         value_ref: metadata.try_into()?,
         body: record.body,
+        blob_ref: record.blob.map(TryInto::try_into).transpose()?,
         capture: record.capture.map(TryInto::try_into).transpose()?,
     }))
 }
@@ -121,6 +123,7 @@ mod tests {
         let record = ValueRecord {
             value_ref: ValueRef::available("value_1", ValueCodec::BamlOutboundValue, 3, 3),
             body: vec![1, 2, 3],
+            blob_ref: None,
             capture: None,
         };
         let start = bytes.len();

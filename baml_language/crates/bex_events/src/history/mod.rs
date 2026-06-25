@@ -24,8 +24,8 @@ use crate::{
         reconstruct_with_function_table,
     },
     value::{
-        CaptureLossRecord, RunCompletedRecord, RunStartedRecord, ValueCaptureKind, ValueCodec,
-        ValueFileRecord, ValueRef, read_bamlvalue_from_bytes,
+        BlobRef, BlobStore, CaptureLossRecord, RunCompletedRecord, RunStartedRecord,
+        ValueCaptureKind, ValueCodec, ValueFileRecord, ValueRef, read_bamlvalue_from_bytes,
     },
 };
 
@@ -449,7 +449,8 @@ impl HistoryStore {
                 })
             })
             .collect::<Vec<_>>();
-        read_value_from_segments(&value_segments, value_ref_id)
+        let blob_store = BlobStore::for_boundary_dir(&dir);
+        read_value_from_segments_with_blobs(&value_segments, value_ref_id, Some(&blob_store))
     }
 
     fn open_from_dir(&self, dir: &Path) -> io::Result<Run> {
@@ -814,17 +815,32 @@ pub fn read_value_from_segments(
     value_segments: &[HistoryValueSegment],
     value_ref_id: &str,
 ) -> io::Result<Option<HistoryValueBody>> {
+    read_value_from_segments_with_blobs(value_segments, value_ref_id, None)
+}
+
+pub fn read_value_from_segments_with_blobs(
+    value_segments: &[HistoryValueSegment],
+    value_ref_id: &str,
+    blob_store: Option<&BlobStore>,
+) -> io::Result<Option<HistoryValueBody>> {
     for segment in value_segments {
         let parsed = read_bamlvalue_from_bytes(&segment.bytes)?;
         for record in parsed.records {
-            let (value_ref, body) = match record {
-                ValueFileRecord::CapturedValue(record) => (record.value_ref, record.body),
-                ValueFileRecord::LogEvent(record) => (record.value_ref, record.body),
+            let (value_ref, body, blob_ref) = match record {
+                ValueFileRecord::CapturedValue(record) => {
+                    (record.value_ref, record.body, record.blob_ref)
+                }
+                ValueFileRecord::LogEvent(record) => {
+                    (record.value_ref, record.body, record.blob_ref)
+                }
                 ValueFileRecord::CaptureLoss(_)
                 | ValueFileRecord::RunStarted(_)
                 | ValueFileRecord::RunCompleted(_) => continue,
             };
             if value_ref.id == value_ref_id {
+                let Some(body) = hydrate_value_body(body, blob_ref.as_ref(), blob_store)? else {
+                    return Ok(None);
+                };
                 return Ok(Some(HistoryValueBody {
                     codec: value_ref.codec,
                     body,
@@ -833,6 +849,20 @@ pub fn read_value_from_segments(
         }
     }
     Ok(None)
+}
+
+fn hydrate_value_body(
+    inline_body: Vec<u8>,
+    blob_ref: Option<&BlobRef>,
+    blob_store: Option<&BlobStore>,
+) -> io::Result<Option<Vec<u8>>> {
+    let Some(blob_ref) = blob_ref else {
+        return Ok(Some(inline_body));
+    };
+    let Some(blob_store) = blob_store else {
+        return Ok(None);
+    };
+    blob_store.read_blob(blob_ref)
 }
 
 fn outcome_fields_from_replay(
@@ -1379,6 +1409,60 @@ mod tests {
                 .unwrap()
                 .body,
             vec![4, 5, 6]
+        );
+
+        let _ = std::fs::remove_dir_all(project);
+    }
+
+    #[test]
+    fn history_blob_value_hydrates_from_boundary_blob_store_and_reports_missing() {
+        let project = temp_project("blob-hydrate");
+        let boundary_id = BoundaryId::from_bytes([27; 16]);
+        let store = HistoryStore::new(vec![project.clone()]);
+        let start = start_context(boundary_id);
+        store.begin(&project, &start).unwrap();
+        let trace = root_trace();
+        store
+            .attach_root_trace(boundary_id, trace.call_ref())
+            .unwrap();
+
+        let large_body = vec![9; 70 * 1024];
+        let outcome = store
+            .append_value_body(
+                boundary_id,
+                ValueCapture {
+                    kind: ValueCaptureKind::RootOutput,
+                    call: trace,
+                },
+                ValueCodec::BamlOutboundValue,
+                large_body.clone(),
+            )
+            .unwrap();
+
+        assert_eq!(
+            store
+                .read_value(boundary_id, &outcome.value_ref.id)
+                .unwrap()
+                .unwrap()
+                .body,
+            large_body
+        );
+
+        let boundary_dir = find_boundary_dir(&[project.clone()], boundary_id).unwrap();
+        let blob_paths = std::fs::read_dir(boundary_dir.join("blobs").join("sha256"))
+            .unwrap()
+            .flatten()
+            .flat_map(|entry| std::fs::read_dir(entry.path()).unwrap().flatten())
+            .map(|entry| entry.path())
+            .filter(|path| path.extension().is_some_and(|ext| ext == "blob"))
+            .collect::<Vec<_>>();
+        assert_eq!(blob_paths.len(), 1);
+        std::fs::remove_file(&blob_paths[0]).unwrap();
+        assert!(
+            store
+                .read_value(boundary_id, &outcome.value_ref.id)
+                .unwrap()
+                .is_none()
         );
 
         let _ = std::fs::remove_dir_all(project);

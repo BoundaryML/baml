@@ -8,6 +8,8 @@ use crate::{
     },
 };
 
+use super::BlobRef;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ValueCodec {
     BamlOutboundValue,
@@ -149,6 +151,7 @@ pub struct RunCompletedRecord {
 pub struct ValueRecord {
     pub value_ref: ValueRef,
     pub body: Vec<u8>,
+    pub blob_ref: Option<BlobRef>,
     pub capture: Option<ValueCapture>,
 }
 
@@ -165,6 +168,7 @@ pub struct LogEventRecord {
 pub struct LogRecord {
     pub value_ref: ValueRef,
     pub body: Vec<u8>,
+    pub blob_ref: Option<BlobRef>,
     pub event: LogEventRecord,
 }
 
@@ -297,6 +301,31 @@ impl From<&ValueRef> for crate::value::pb::ValueMetadataV1 {
                 .retained_size_bytes
                 .and_then(|value| u64::try_from(value).ok()),
             diagnostic: value_ref.diagnostic.clone(),
+        }
+    }
+}
+
+impl TryFrom<crate::value::pb::BlobRefV1> for BlobRef {
+    type Error = io::Error;
+
+    fn try_from(value: crate::value::pb::BlobRefV1) -> Result<Self, Self::Error> {
+        let size_bytes = usize::try_from(value.size_bytes).map_err(|_| {
+            io::Error::new(io::ErrorKind::InvalidData, "blob size does not fit usize")
+        })?;
+        Ok(Self {
+            algorithm: value.algorithm,
+            digest: value.digest,
+            size_bytes,
+        })
+    }
+}
+
+impl From<&BlobRef> for crate::value::pb::BlobRefV1 {
+    fn from(value: &BlobRef) -> Self {
+        Self {
+            algorithm: value.algorithm.clone(),
+            digest: value.digest.clone(),
+            size_bytes: u64::try_from(value.size_bytes).unwrap_or(u64::MAX),
         }
     }
 }

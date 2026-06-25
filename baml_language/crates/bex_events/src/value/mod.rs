@@ -21,7 +21,8 @@ pub mod pb {
 }
 
 pub use artifact::{
-    ByteValueArtifactSink, FileValueArtifactSink, ValueArtifactRef, ValueArtifactSink,
+    BlobRef, BlobStore, ByteValueArtifactSink, FileValueArtifactSink, ValueArtifactRef,
+    ValueArtifactSink,
 };
 pub use read::{BamlvalueContents, read_bamlvalue_from_bytes, read_bamlvalue_from_reader};
 pub use record::{
