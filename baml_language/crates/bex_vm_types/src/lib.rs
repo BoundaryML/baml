@@ -28,8 +28,9 @@ pub use indexable::{
 pub use roots::{PermitProof, RootHaver, WriteBarrier};
 pub use task_group::{TaskGroupInner, TaskGroupPermit, TaskGroupTicket};
 pub use types::{
-    ArrayContainer, ArrayReadGuard, ArrayWriteGuard, AtomicValueSlot, BoundMethod, Class,
-    ClassField, ClientBuildMeta, ClientBuildType, CollectorRef, ConstValue, Enum, EnumVariant,
+    ArrayContainer, ArrayReadGuard, ArrayWriteGuard, AtomicValueSlot, BoundMethod, CleanupLatch,
+    Class, ClassField, ClientBuildMeta, ClientBuildType, CollectorRef, ConstValue, Enum,
+    EnumVariant,
     Function, FunctionKind, FunctionMeta, FunctionOrigin, Future, FutureRead, GenericFunction,
     HostClosure, Instance, LockedContainer, LockedReadGuard, LockedWriteGuard, MapContainer,
     MapReadGuard, MapWriteGuard, MediaValue, Object, ObjectType, PanicClass, Program, PromptAst,

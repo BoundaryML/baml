@@ -969,7 +969,7 @@ fn render_describe_methods_respect_budget() {
 
     // A generous budget renders every method, with no elision marker.
     for needle in [
-        "function to_json(self) -> json",
+        "function to_upper_case(self) -> string",
         "static_methods:",
         "function from_code_points(unicode: int[]) -> string",
     ] {
@@ -983,11 +983,11 @@ fn render_describe_methods_respect_budget() {
         "no elision marker expected at budget 1000:\n{full}"
     );
     assert!(
-        !tight.contains("function to_json(self) -> json"),
+        !tight.contains("function to_upper_case(self) -> string"),
         "late methods should be elided under budget 5:\n{tight}"
     );
     assert!(
-        full.contains("function to_json(self) -> json")
+        full.contains("function to_upper_case(self) -> string")
             && full.contains("function from_code_points(unicode: int[]) -> string"),
         "generous budgets should still show full method details:\n{full}"
     );
@@ -1079,6 +1079,42 @@ fn render_keyword_if() {
 fn render_keyword_spawn() {
     let output = capture_keyword("spawn");
     insta::assert_snapshot!(output);
+}
+
+#[test]
+fn render_keyword_baml_sdk() {
+    let output = capture_keyword("baml_sdk");
+    insta::assert_snapshot!(output);
+}
+
+#[test]
+fn render_keyword_python() {
+    let output = capture_keyword("python");
+    insta::assert_snapshot!(output);
+}
+
+#[test]
+fn render_keyword_typescript() {
+    let output = capture_keyword("typescript");
+    insta::assert_snapshot!(output);
+}
+
+#[test]
+fn render_keyword_patterns() {
+    let output = capture_keyword("patterns");
+    insta::assert_snapshot!(output);
+}
+
+#[test]
+fn dispatch_language_topic_resolves_to_keyword() {
+    // Language/SDK + pattern topics route to keyword docs, not package resolution.
+    let db = simple_project();
+    for name in ["python", "typescript", "baml_sdk", "patterns", "pattern"] {
+        assert!(
+            matches!(dispatch(&db, name), Some(ResolvedTarget::Keyword(_))),
+            "`{name}` should resolve to a keyword topic"
+        );
+    }
 }
 
 #[test]

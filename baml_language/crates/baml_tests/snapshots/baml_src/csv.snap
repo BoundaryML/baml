@@ -583,6 +583,7 @@ function csv.csv_bom_stripped_by_default() -> string {
     load_const null
     cmp_op ==
     pop_jump_if_false L0
+    load_type never
     alloc_array 0
     store_var h
 
@@ -622,6 +623,7 @@ function csv.csv_caller_owned_handles_stay_open() -> string {
     load_var w
     load_const "x"
     load_const 1
+    load_type null | bool | int | bigint | float | string
     alloc_array 2
     call baml.csv.CsvWriter.write_record
     pop 1
@@ -723,12 +725,14 @@ function csv.csv_create_then_fs_read() -> string {
     load_var w
     load_const "k"
     load_const "v"
+    load_type string
     alloc_array 2
     call baml.csv.CsvWriter.write_header
     pop 1
     load_var w
     load_const "x"
     load_const 1
+    load_type null | bool | int | bigint | float | string
     alloc_array 2
     call baml.csv.CsvWriter.write_record
     pop 1
@@ -765,6 +769,7 @@ function csv.csv_decode_all_cell_types() -> string {
   L0:
     load_var _2
     store_var r
+    load_type string
     alloc_array 0
     store_var parts
     load_var2 4 3
@@ -825,25 +830,25 @@ function csv.csv_decode_all_cell_types() -> string {
     load_var r
     load_field .at
     store_var_load_var _31
-    is_type baml.TypeValue
+    is_type baml.Uint8Array
     pop_jump_if_false L4
     jump L33
 
   L4:
     load_var _31
-    is_type baml.TypeValue
+    is_type baml.Uint8Array
     pop_jump_if_false L5
     jump L32
 
   L5:
     load_var _31
-    is_type baml.Uint8Array
+    is_type baml.TypeValue
     pop_jump_if_false L6
     jump L31
 
   L6:
     load_var _31
-    is_type baml.Uint8Array
+    is_type baml.TypeValue
     pop_jump_if_false L7
     jump L30
 
@@ -996,7 +1001,7 @@ function csv.csv_decode_all_cell_types() -> string {
 
   L31:
     load_var _31
-    call baml.Uint8Array.baml.ToString.to_string
+    call baml.TypeValue.baml.ToString.to_string
     store_var _30
     jump L34
 
@@ -1008,7 +1013,7 @@ function csv.csv_decode_all_cell_types() -> string {
 
   L33:
     load_var _31
-    call baml.TypeValue.baml.ToString.to_string
+    call baml.Uint8Array.baml.ToString.to_string
     store_var _30
 
   L34:
@@ -1135,6 +1140,7 @@ function csv.csv_decode_headers_override() -> string {
     load_const null
     load_const "first"
     load_const "second"
+    load_type string
     alloc_array 2
     load_const null
     load_const null
@@ -1191,6 +1197,7 @@ function csv.csv_decode_headers_override() -> string {
     load_const false
     load_const "second"
     load_const "first"
+    load_type string
     alloc_array 2
     load_const null
     load_const null
@@ -1953,7 +1960,9 @@ function csv.csv_excel_profile() -> string {
     call baml.csv.parse
     store_var rows
     load_const "x"
+    load_type null | bool | int | bigint | float | string
     alloc_array 1
+    load_type null | bool | int | bigint | float | string[]
     alloc_array 1
     load_const null
     load_const null
@@ -2017,6 +2026,7 @@ function csv.csv_file_roundtrip() -> string {
     load_const 2
     load_const null
     init_instance user.csv.OutRow .id, .note
+    load_type csv.OutRow
     alloc_array 2
     load_const <omitted>
     call baml.csv.write
@@ -2467,6 +2477,7 @@ function csv.csv_headers_variants() -> string {
     cmp_op ==
     pop_jump_if_false L0
     load_const "<null>"
+    load_type string
     alloc_array 1
     store_var _2
 
@@ -3594,6 +3605,7 @@ function csv.csv_null_values_option() -> string {
     load_const null
     load_const null
     load_const "N/A"
+    load_type string
     alloc_array 1
     load_const null
     load_const null
@@ -3734,6 +3746,7 @@ function csv.csv_on_skip_observer() -> string {
     load_var ?1
     make_cell
     store_var ?1
+    load_type string
     alloc_array 0
     store_deref ?1
     load_const "a,b\n1\n2,3\n"
@@ -4751,25 +4764,25 @@ function csv.csv_plaindate_cells_roundtrip() -> string {
     load_var r
     load_field .day
     store_var_load_var _10
-    is_type baml.TypeValue
+    is_type baml.Uint8Array
     pop_jump_if_false L1
     jump L30
 
   L1:
     load_var _10
-    is_type baml.TypeValue
+    is_type baml.Uint8Array
     pop_jump_if_false L2
     jump L29
 
   L2:
     load_var _10
-    is_type baml.Uint8Array
+    is_type baml.TypeValue
     pop_jump_if_false L3
     jump L28
 
   L3:
     load_var _10
-    is_type baml.Uint8Array
+    is_type baml.TypeValue
     pop_jump_if_false L4
     jump L27
 
@@ -4909,7 +4922,7 @@ function csv.csv_plaindate_cells_roundtrip() -> string {
 
   L28:
     load_var _10
-    call baml.Uint8Array.baml.ToString.to_string
+    call baml.TypeValue.baml.ToString.to_string
     jump L31
 
   L29:
@@ -4919,7 +4932,7 @@ function csv.csv_plaindate_cells_roundtrip() -> string {
 
   L30:
     load_var _10
-    call baml.TypeValue.baml.ToString.to_string
+    call baml.Uint8Array.baml.ToString.to_string
 
   L31:
     load_const " "
@@ -4928,25 +4941,25 @@ function csv.csv_plaindate_cells_roundtrip() -> string {
     load_var r
     load_field .at
     store_var_load_var _28
-    is_type baml.TypeValue
+    is_type baml.Uint8Array
     pop_jump_if_false L32
     jump L61
 
   L32:
     load_var _28
-    is_type baml.TypeValue
+    is_type baml.Uint8Array
     pop_jump_if_false L33
     jump L60
 
   L33:
     load_var _28
-    is_type baml.Uint8Array
+    is_type baml.TypeValue
     pop_jump_if_false L34
     jump L59
 
   L34:
     load_var _28
-    is_type baml.Uint8Array
+    is_type baml.TypeValue
     pop_jump_if_false L35
     jump L58
 
@@ -5099,7 +5112,7 @@ function csv.csv_plaindate_cells_roundtrip() -> string {
 
   L59:
     load_var _28
-    call baml.Uint8Array.baml.ToString.to_string
+    call baml.TypeValue.baml.ToString.to_string
     store_var _27
     jump L62
 
@@ -5111,7 +5124,7 @@ function csv.csv_plaindate_cells_roundtrip() -> string {
 
   L61:
     load_var _28
-    call baml.TypeValue.baml.ToString.to_string
+    call baml.Uint8Array.baml.ToString.to_string
     store_var _27
 
   L62:
@@ -5898,6 +5911,7 @@ function csv.csv_reader_resumes_after_throw() -> string {
     load_const <omitted>
     call baml.csv.reader
     store_var r
+    load_type string
     alloc_array 0
     store_var seen
     load_const 0
@@ -6247,6 +6261,7 @@ function csv.csv_record_api() -> string {
   L19:
     load_var _2
     store_var rec
+    load_type string
     alloc_array 0
     store_var parts
     load_var rec
@@ -6894,6 +6909,7 @@ function csv.csv_record_snapshot_outlives_reader() -> string {
     load_const <omitted>
     call baml.csv.reader
     store_var r
+    load_type baml.csv.CsvRecord
     alloc_array 0
     store_var kept
     load_var r
@@ -7163,6 +7179,7 @@ function csv.csv_record_snapshot_outlives_reader() -> string {
     jump L18
 
   L39:
+    load_type string
     alloc_array 0
     store_var parts
     load_type baml.csv.CsvRecord
@@ -8183,10 +8200,13 @@ function csv.csv_spectrum_core_fixtures() -> string {
 function csv.csv_stringify_records_roundtrip() -> string {
     load_const "a"
     load_const "b"
+    load_type null | bool | int | bigint | float | string
     alloc_array 2
     load_const "1"
     load_const "x\ny"
+    load_type null | bool | int | bigint | float | string
     alloc_array 2
+    load_type null | bool | int | bigint | float | string[]
     alloc_array 2
     load_const <omitted>
     call baml.csv.stringify_records
@@ -8229,6 +8249,7 @@ function csv.csv_to_markdown_nonfinite() -> string {
     load_const "nan"
     load_var _3
     init_instance user.csv.MdRow .metric, .value
+    load_type csv.MdRow
     alloc_array 1
     load_const <omitted>
     call baml.csv.to_markdown
@@ -8238,7 +8259,9 @@ function csv.csv_to_markdown_nonfinite() -> string {
 function csv.csv_to_markdown_records_default_headers() -> string {
     load_const "1"
     load_const "x"
+    load_type string
     alloc_array 2
+    load_type string[]
     alloc_array 1
     load_const <omitted>
     load_const <omitted>
@@ -8249,10 +8272,13 @@ function csv.csv_to_markdown_records_default_headers() -> string {
 function csv.csv_to_markdown_records_with_headers() -> string {
     load_const "1"
     load_const "x"
+    load_type string
     alloc_array 2
+    load_type string[]
     alloc_array 1
     load_const "id"
     load_const "name"
+    load_type string
     alloc_array 2
     load_const <omitted>
     call baml.csv.to_markdown_records
@@ -8270,6 +8296,7 @@ function csv.csv_to_markdown_truncation() -> string {
     load_const "c"
     load_const 3.0
     init_instance user.csv.MdRow .metric, .value
+    load_type csv.MdRow
     alloc_array 3
     load_const 2
     call baml.csv.to_markdown
@@ -8308,6 +8335,7 @@ function csv.csv_trim_all() -> string {
     load_const null
     cmp_op ==
     pop_jump_if_false L0
+    load_type never
     alloc_array 0
     store_var _4
 
@@ -9026,6 +9054,7 @@ function csv.csv_write_rows_batch_is_atomic() -> string {
     load_const "bad"
     load_var _8
     init_instance user.csv.MdRow .metric, .value
+    load_type csv.MdRow
     alloc_array 2
     call baml.csv.CsvWriter.write_rows
     pop 1
@@ -9084,6 +9113,7 @@ function csv.csv_writer_bom() -> string {
     store_var w
     load_var w
     load_const "x"
+    load_type null | bool | int | bigint | float | string
     alloc_array 1
     call baml.csv.CsvWriter.write_record
     pop 1
@@ -9149,6 +9179,7 @@ function csv.csv_writer_bom_survives_encode_error() -> string {
     store_var w
     load_var w
     load_const "a,b"
+    load_type null | bool | int | bigint | float | string
     alloc_array 1
     call baml.csv.CsvWriter.write_record
     pop 1
@@ -9176,6 +9207,7 @@ function csv.csv_writer_bom_survives_encode_error() -> string {
   L3:
     load_var w
     load_const "x"
+    load_type null | bool | int | bigint | float | string
     alloc_array 1
     call baml.csv.CsvWriter.write_record
     pop 1
@@ -9215,6 +9247,7 @@ function csv.csv_writer_buffer_basics() -> string {
     load_const 2
     load_const null
     init_instance user.csv.OutRow .id, .note
+    load_type csv.OutRow
     alloc_array 2
     call baml.csv.CsvWriter.write_rows
     pop 1
@@ -9294,6 +9327,7 @@ function csv.csv_writer_crlf_and_null_value() -> string {
     load_const 1
     load_const null
     init_instance user.csv.OutRow .id, .note
+    load_type csv.OutRow
     alloc_array 1
     load_const null
     load_const null
@@ -9317,6 +9351,7 @@ function csv.csv_writer_explicit_header() -> string {
     load_var w
     load_const "a"
     load_const "b"
+    load_type string
     alloc_array 2
     call baml.csv.CsvWriter.write_header
     pop 1
@@ -9329,6 +9364,7 @@ function csv.csv_writer_explicit_header() -> string {
     pop 1
     load_var w
     load_const "x"
+    load_type string
     alloc_array 1
     call baml.csv.CsvWriter.write_header
     pop 1
@@ -9380,6 +9416,7 @@ function csv.csv_writer_float_canonical() -> string {
     load_var w
     load_const 2.0
     load_const 0.1
+    load_type null | bool | int | bigint | float | string
     alloc_array 2
     call baml.csv.CsvWriter.write_record
     pop 1
@@ -9393,6 +9430,7 @@ function csv.csv_writer_headers_override() -> string {
     load_const 1
     load_const "x"
     init_instance user.csv.OutRow .id, .note
+    load_type csv.OutRow
     alloc_array 1
     load_const null
     load_const null
@@ -9402,6 +9440,7 @@ function csv.csv_writer_headers_override() -> string {
     load_const null
     load_const "ID"
     load_const "Note"
+    load_type string
     alloc_array 2
     load_const null
     load_const null
@@ -9428,6 +9467,7 @@ function csv.csv_writer_nonfinite_float_throws() -> string {
     call baml.Float.nan
     store_var _4
     load_var2 1 2
+    load_type null | bool | int | bigint | float | string
     alloc_array 1
     call baml.csv.CsvWriter.write_record
     pop 1
@@ -9459,6 +9499,7 @@ function csv.csv_writer_quote_styles() -> string {
     load_const 1
     load_const "x"
     init_instance user.csv.OutRow .id, .note
+    load_type csv.OutRow
     alloc_array 1
     load_const null
     load_const null
@@ -9477,6 +9518,7 @@ function csv.csv_writer_quote_styles() -> string {
     load_const 1
     load_const "a,b"
     init_instance user.csv.OutRow .id, .note
+    load_type csv.OutRow
     alloc_array 1
     load_const null
     load_const null
@@ -9538,6 +9580,7 @@ function csv.csv_writer_sanitize_formulas() -> string {
     load_var w
     load_const "=SUM(A1)"
     load_const "safe"
+    load_type null | bool | int | bigint | float | string
     alloc_array 2
     call baml.csv.CsvWriter.write_record
     pop 1
@@ -9677,6 +9720,7 @@ function csv.csv_writer_write_record_raw() -> string {
     load_const 12345678901234567890123n
     load_const 2.5
     load_const "txt"
+    load_type null | bool | int | bigint | float | string
     alloc_array 6
     call baml.csv.CsvWriter.write_record
     pop 1
@@ -9686,6 +9730,7 @@ function csv.csv_writer_write_record_raw() -> string {
 }
 
 function csv.grid(rows: string[][]) -> string {
+    load_type string
     alloc_array 0
     store_var out
     load_type string[]

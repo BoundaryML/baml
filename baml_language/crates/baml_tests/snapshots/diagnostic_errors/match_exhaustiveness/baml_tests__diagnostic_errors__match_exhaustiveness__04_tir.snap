@@ -5,20 +5,8 @@ source: crates/baml_tests/src/generated_tests.rs
 class user.Success {
   data: string
 }
-function user.Success.to_json(self: user.Success) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "data": baml.json.to_json(self.data) } : map<string, baml.json.json>
-}
-function user.Success.from_json(j: baml.json.json) -> user.Success throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  Success { data: baml.json.from_json<string>(baml.json.field(j, "data")) } : user.Success
-}
 class user.Failure {
   reason: string
-}
-function user.Failure.to_json(self: user.Failure) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "reason": baml.json.to_json(self.reason) } : map<string, baml.json.json>
-}
-function user.Failure.from_json(j: baml.json.json) -> user.Failure throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  Failure { reason: baml.json.from_json<string>(baml.json.field(j, "reason")) } : user.Failure
 }
 function user.UnreachableAfterCatchAll(x: int) -> string throws never {
   { : "catch all" | "never reached"
@@ -158,12 +146,6 @@ function user.UnionPatternCoversAll(r: user.Result) -> string throws never {
 }
 class user.Pending {
   eta: int
-}
-function user.Pending.to_json(self: user.Pending) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "eta": baml.json.to_json(self.eta) } : map<string, baml.json.json>
-}
-function user.Pending.from_json(j: baml.json.json) -> user.Pending throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  Pending { eta: baml.json.from_json<int>(baml.json.field(j, "eta")) } : user.Pending
 }
 type user.FullResult = user.Success | user.Failure | user.Pending
 function user.PartialUnionPlusCatchAll(r: user.FullResult) -> string throws never {
@@ -929,38 +911,14 @@ function user.JumpTableTypeTag(value: int | string | bool | float) -> string thr
 class user.Cat {
   name: string
 }
-function user.Cat.to_json(self: user.Cat) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "name": baml.json.to_json(self.name) } : map<string, baml.json.json>
-}
-function user.Cat.from_json(j: baml.json.json) -> user.Cat throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  Cat { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.Cat
-}
 class user.Dog {
   name: string
-}
-function user.Dog.to_json(self: user.Dog) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "name": baml.json.to_json(self.name) } : map<string, baml.json.json>
-}
-function user.Dog.from_json(j: baml.json.json) -> user.Dog throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  Dog { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.Dog
 }
 class user.Bird {
   name: string
 }
-function user.Bird.to_json(self: user.Bird) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "name": baml.json.to_json(self.name) } : map<string, baml.json.json>
-}
-function user.Bird.from_json(j: baml.json.json) -> user.Bird throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  Bird { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.Bird
-}
 class user.Fish {
   name: string
-}
-function user.Fish.to_json(self: user.Fish) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "name": baml.json.to_json(self.name) } : map<string, baml.json.json>
-}
-function user.Fish.from_json(j: baml.json.json) -> user.Fish throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  Fish { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.Fish
 }
 function user.JumpTableClassTypeTag(pet: user.Cat | user.Dog | user.Bird | user.Fish) -> string throws never {
   { : "cat" | "dog" | "bird" | "fish"

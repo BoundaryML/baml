@@ -9,7 +9,6 @@ class String  (string)  string.baml:5
 /// All methods returning a new string do not mutate `self` unless noted otherwise.
 shape: class String {}
 methods:
-  function to_json(self) -> json
   /// Returns the number of **Unicode code points** (characters) in the string.
   function length(self) -> int
   /// Alias for `length()`.

@@ -106,6 +106,7 @@ function typed_outputs.array_of_unions_main() -> (int | string)[] {
     load_const 1
     load_const "two"
     load_const 3
+    load_type int | string
     alloc_array 3
     return
 }
@@ -128,6 +129,8 @@ function typed_outputs.map_with_union_values_main() -> map<string, int | string>
     load_const "test"
     load_const "count"
     load_const "name"
+    load_type string
+    load_type int | string
     alloc_map 2
     return
 }
@@ -210,6 +213,7 @@ function typed_outputs.union_of_array_with_union_elements_main() -> (int | bool)
     load_const 1
     load_const true
     load_const 2
+    load_type int | bool
     alloc_array 3
     return
 }
@@ -218,6 +222,7 @@ function typed_outputs.union_of_arrays_main() -> int[] | string[] {
     load_const 1
     load_const 2
     load_const 3
+    load_type int
     alloc_array 3
     return
 }

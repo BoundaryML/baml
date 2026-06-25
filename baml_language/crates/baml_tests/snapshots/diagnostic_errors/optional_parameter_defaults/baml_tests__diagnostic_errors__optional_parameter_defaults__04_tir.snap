@@ -75,12 +75,6 @@ function user.Counter.Current(self: user.Counter = null) -> int throws never {
   }
   !! 245..249: `self` cannot have a default value
 }
-function user.Counter.to_json(self: user.Counter) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "value": baml.json.to_json(self.value) } : map<string, baml.json.json>
-}
-function user.Counter.from_json(j: baml.json.json) -> user.Counter throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  Counter { value: baml.json.from_json<int>(baml.json.field(j, "value")) } : user.Counter
-}
 function user.LambdaDefault() -> int throws never {
   { : int
     let f = : (x: int) -> int throws never

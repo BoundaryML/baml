@@ -15,9 +15,6 @@ function user.call_site_label() -> int  [expr] {
 function user.compound_assignment() -> string  [expr] {
   { $id Add= "-suffix" } $id
 }
-function user.from_json(j: baml.json.json) -> user.WithId  [expr] {
-  user.WithId { field_id: baml.json.from_json(baml.json.field(j, "field_id")), $id: baml.json.from_json(baml.json.field(j, "$id")) }
-}
 function user.member_access() -> int  [expr] {
   {  } $id.len()
 }
@@ -41,7 +38,4 @@ function user.shorthand_destructure(w: user.WithId) -> string  [expr] {
 }
 function user.takes_int(x: int) -> int  [expr] {
   {  } x
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "field_id": baml.json.to_json(self.field_id), "$id": baml.json.to_json(self.$id) }
 }

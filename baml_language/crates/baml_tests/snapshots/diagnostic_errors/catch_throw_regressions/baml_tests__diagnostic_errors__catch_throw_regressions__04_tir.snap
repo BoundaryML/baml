@@ -19,7 +19,7 @@ function user.WrapperAlwaysThrows(n: int) -> user.Status throws never {
 }
 function user.CatchAlwaysThrows(n: int) -> string throws never {
   { : user.Status | "http!" | "index!"
-    catch (WrapperAlwaysThrows(n) : user.Status) : unknown
+    catch (WrapperAlwaysThrows(n) : user.Status) : user.Status | "http!" | "index!"
       catch (e)
         string =>
           "http!" : "http!"
@@ -44,7 +44,7 @@ function user.ThrowsAllStatusVariants(n: int) -> user.Status throws never {
 }
 function user.CatchAllStatusVariants(n: int) -> string throws never {
   { : user.Status | "http!" | "index!" | "auth!" | "other!"
-    catch (ThrowsAllStatusVariants(n) : user.Status) : unknown
+    catch (ThrowsAllStatusVariants(n) : user.Status) : user.Status | "http!" | "index!" | "auth!" | "other!"
       catch (e)
         Status.HttpError =>
           "http!" : "http!"
@@ -76,7 +76,7 @@ function user.RecB(n: int) -> string throws never {
 }
 function user.CatchRecursiveThrow(n: int) -> string throws never {
   { : string | "handled"
-    catch (RecB(n) : string) : unknown
+    catch (RecB(n) : string) : string | "handled"
       catch (e)
         string =>
           "handled" : "handled"
@@ -84,12 +84,6 @@ function user.CatchRecursiveThrow(n: int) -> string throws never {
 }
 class user.BuildError {
   reason: string
-}
-function user.BuildError.to_json(self: user.BuildError) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "reason": baml.json.to_json(self.reason) } : map<string, baml.json.json>
-}
-function user.BuildError.from_json(j: baml.json.json) -> user.BuildError throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  BuildError { reason: baml.json.from_json<string>(baml.json.field(j, "reason")) } : user.BuildError
 }
 function user.GenerateWithBuildError(ok: bool) -> string throws never {
   { : "ok"
@@ -111,7 +105,7 @@ function user.BuildWithBuildError(ok: bool) -> string throws never {
 }
 function user.CatchAllMissingString(ok: bool) -> string throws never {
   { : string
-    catch (BuildWithBuildError(ok) : string) : unknown
+    catch (BuildWithBuildError(ok) : string) : string
       catch_all (e)
         BuildError =>
           "recovered: " + e.reason : string

@@ -20,7 +20,7 @@
 //! projection used for every outbound type position, including a tagged
 //! handle's `BamlOutboundHandle.ty`.
 
-use baml_type::{Literal, MediaKind, RuntimeTy};
+use baml_type::{Literal, MediaKind, Name, RuntimeTy, TypeName};
 
 use crate::baml_core::cffi::{
     BamlTy, BamlTyAssociatedBinding, BamlTyAssociatedTypeProjection, BamlTyClass, BamlTyEnum,
@@ -39,6 +39,29 @@ pub fn runtime_ty_to_proto_ty(ty: &RuntimeTy) -> BamlTy {
 
 fn primitive(kind: BamlTyPrimitiveKind) -> TyVariant {
     TyVariant::Primitive(BamlTyPrimitive { kind: kind as i32 })
+}
+
+/// Encode an interface constraint — its name, generic input arguments, and
+/// associated-type bindings — into the wire `BamlTyInterface`. Shared by the
+/// `RuntimeTy::Interface` existential and an associated-type projection's
+/// declaring interface (`Interface` after the interface-object refactor) so the
+/// two encodings never drift.
+fn interface_to_proto(
+    name: &TypeName,
+    type_args: &[RuntimeTy],
+    bindings: &[(Name, RuntimeTy)],
+) -> BamlTyInterface {
+    BamlTyInterface {
+        name: name.render_dotted(false),
+        type_args: type_args.iter().map(runtime_ty_to_proto_ty).collect(),
+        bindings: bindings
+            .iter()
+            .map(|(n, t)| BamlTyAssociatedBinding {
+                name: n.as_str().to_string(),
+                ty: Some(runtime_ty_to_proto_ty(t)),
+            })
+            .collect(),
+    }
 }
 
 fn runtime_ty_to_variant(ty: &RuntimeTy) -> TyVariant {
@@ -99,17 +122,9 @@ fn runtime_ty_to_variant(ty: &RuntimeTy) -> TyVariant {
         RuntimeTy::Media(kind, _) => TyVariant::Media(crate::baml_core::cffi::BamlTyMedia {
             kind: media_kind_to_proto(*kind) as i32,
         }),
-        RuntimeTy::Interface(name, args, bindings, _) => TyVariant::Interface(BamlTyInterface {
-            name: name.render_dotted(false),
-            type_args: args.iter().map(runtime_ty_to_proto_ty).collect(),
-            bindings: bindings
-                .iter()
-                .map(|(n, t)| BamlTyAssociatedBinding {
-                    name: n.as_str().to_string(),
-                    ty: Some(runtime_ty_to_proto_ty(t)),
-                })
-                .collect(),
-        }),
+        RuntimeTy::Interface(name, args, bindings, _) => {
+            TyVariant::Interface(interface_to_proto(name, args, bindings))
+        }
 
         // A function/arrow type. In practice a function never crosses the
         // boundary as outbound *type metadata* (the old `ty_to_field_type`
@@ -161,9 +176,15 @@ fn runtime_ty_to_variant(ty: &RuntimeTy) -> TyVariant {
             ..
         } => TyVariant::AssociatedTypeProjection(Box::new(BamlTyAssociatedTypeProjection {
             base: Some(Box::new(runtime_ty_to_proto_ty(base))),
-            interface: interface
-                .as_deref()
-                .map(|i| Box::new(runtime_ty_to_proto_ty(i))),
+            interface: interface.as_deref().map(|iface| {
+                Box::new(BamlTy {
+                    ty: Some(TyVariant::Interface(interface_to_proto(
+                        &iface.name,
+                        &iface.generics,
+                        &iface.associated_types,
+                    ))),
+                })
+            }),
             member: member.as_str().to_string(),
         })),
 
@@ -214,5 +235,111 @@ fn function_param_mode(mode: baml_type::FunctionParamMode) -> BamlTyFunctionPara
     match mode {
         baml_type::FunctionParamMode::Required => BamlTyFunctionParamMode::Required,
         baml_type::FunctionParamMode::Optional => BamlTyFunctionParamMode::Optional,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use baml_type::{Name, RuntimeInterface, RuntimeTy, TyAttr, TypeName};
+
+    use super::runtime_ty_to_proto_ty;
+    use crate::{
+        baml_core::cffi::{
+            BamlTy, BamlTyAssociatedBinding, BamlTyInterface, baml_ty::Ty as TyVariant,
+        },
+        ty_decode::proto_ty_to_runtime_ty,
+    };
+
+    /// Assert the encoder's documented "exact inverse" claim for `rt`:
+    /// `decode(encode(rt)) == rt`.
+    #[track_caller]
+    fn assert_roundtrip(rt: &RuntimeTy) {
+        let proto = runtime_ty_to_proto_ty(rt);
+        let back = proto_ty_to_runtime_ty(&proto).expect("decode should succeed");
+        assert_eq!(&back, rt, "proto round-trip changed the type");
+    }
+
+    #[test]
+    fn roundtrip_primitives_and_containers() {
+        assert_roundtrip(&RuntimeTy::int());
+        assert_roundtrip(&RuntimeTy::string());
+        assert_roundtrip(&RuntimeTy::list(RuntimeTy::int()));
+        assert_roundtrip(&RuntimeTy::map(
+            RuntimeTy::string(),
+            RuntimeTy::list(RuntimeTy::int()),
+        ));
+    }
+
+    #[test]
+    fn roundtrip_interface_and_projection() {
+        // Interface existential with generic args + an associated binding.
+        assert_roundtrip(&RuntimeTy::Interface(
+            TypeName::from_dotted_path("user.Iterator"),
+            vec![RuntimeTy::int()],
+            vec![(Name::new("Item"), RuntimeTy::string())],
+            TyAttr::default(),
+        ));
+        // Projection carrying a full interface constraint (encoded as a
+        // `BamlTy::Interface`, decoded back into a `RuntimeInterface`).
+        assert_roundtrip(&RuntimeTy::AssociatedTypeProjection {
+            base: Box::new(RuntimeTy::int()),
+            interface: Some(Box::new(RuntimeInterface {
+                name: TypeName::from_dotted_path("user.Iterator"),
+                generics: vec![RuntimeTy::int()],
+                associated_types: vec![(Name::new("Item"), RuntimeTy::string())],
+            })),
+            member: Name::new("Item"),
+            attr: TyAttr::default(),
+        });
+        // Projection with no constraint (`interface: None`).
+        assert_roundtrip(&RuntimeTy::AssociatedTypeProjection {
+            base: Box::new(RuntimeTy::string()),
+            interface: None,
+            member: Name::new("Output"),
+            attr: TyAttr::default(),
+        });
+    }
+
+    #[test]
+    fn roundtrip_function() {
+        assert_roundtrip(&RuntimeTy::Function {
+            params: vec![],
+            ret: Box::new(RuntimeTy::int()),
+            throws: Box::new(RuntimeTy::Never {
+                attr: TyAttr::default(),
+            }),
+            attr: TyAttr::default(),
+        });
+    }
+
+    /// The decode boundary sorts interface bindings by name (a non-BAML or future
+    /// producer may send them in any order). Bindings arriving as `Z, A` must
+    /// decode sorted to `A, Z`, so the constraint compares/hashes equal regardless
+    /// of wire order.
+    #[test]
+    fn decode_sorts_interface_bindings() {
+        let unsorted = BamlTy {
+            ty: Some(TyVariant::Interface(BamlTyInterface {
+                name: "user.I".to_string(),
+                type_args: vec![],
+                bindings: vec![
+                    BamlTyAssociatedBinding {
+                        name: "Z".to_string(),
+                        ty: Some(runtime_ty_to_proto_ty(&RuntimeTy::int())),
+                    },
+                    BamlTyAssociatedBinding {
+                        name: "A".to_string(),
+                        ty: Some(runtime_ty_to_proto_ty(&RuntimeTy::string())),
+                    },
+                ],
+            })),
+        };
+        let RuntimeTy::Interface(_, _, bindings, _) =
+            proto_ty_to_runtime_ty(&unsorted).expect("decode")
+        else {
+            panic!("expected interface");
+        };
+        let names: Vec<&str> = bindings.iter().map(|(n, _)| n.as_str()).collect();
+        assert_eq!(names, vec!["A", "Z"], "decode must sort bindings by name");
     }
 }

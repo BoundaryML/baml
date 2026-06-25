@@ -57,8 +57,8 @@ pub fn has_cleanup_shape(func: &FunctionDef) -> bool {
 
 /// Wrap the body of a class's magic `cleanup` method in the run-once guard. A
 /// no-op for classes without a (well-shaped) `cleanup`. Runs as a pure AST
-/// transform alongside `auto_derive_json`, so the guard is type-checked by the
-/// normal pipeline.
+/// transform during CST lowering, so the guard is type-checked by the normal
+/// pipeline.
 pub fn maybe_inject_cleanup_guard(class: &mut ClassDef) {
     for method in &mut class.methods {
         if !is_cleanup_magic_method(method) {
@@ -75,14 +75,14 @@ pub fn maybe_inject_cleanup_guard(class: &mut ClassDef) {
             continue;
         };
 
-        // Build `if (root._cleanup_begin(self)) { <orig body> }`. Allocate into
+        // Build `if (baml._cleanup_begin(self)) { <orig body> }`. Allocate into
         // the body's expr arena while keeping the source map's `expr_spans`
         // arena index-aligned (one span per allocated expr), exactly as the
-        // parser and `auto_derive_json` maintain the two in lockstep. All four
-        // synthesized nodes carry the method-name span.
+        // parser maintains the two in lockstep. All four synthesized nodes carry
+        // the method-name span.
         // `baml._cleanup_begin` — the fully-qualified public path, as seen from
         // user code (the stdlib's internal `root.` self-reference is not in
-        // scope here, the same way `auto_derive_json` calls `baml.json.*`).
+        // scope here; user code reaches stdlib functions via `baml.*`).
         let callee = body.exprs.alloc(Expr::Path(vec![
             Name::new("baml"),
             Name::new("_cleanup_begin"),

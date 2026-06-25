@@ -1162,9 +1162,10 @@ fn lower_class(
         name_span: name_token.text_range(),
     };
 
-    // Auto-derive `to_json` / `from_json` / `to_string` on every user class.
-    // Each is skipped if the user already defined that method.
-    crate::auto_derive_json::maybe_synthesize_derived_methods(&mut class_def);
+    // No per-class JSON method synthesis: `to_json` / `from_json` are not real
+    // methods. `obj.to_json()` desugars to `baml.json.from(obj)` and
+    // `Type.from_json(j)` desugars to `baml.json.to<Type>(j)` (TIR + MIR);
+    // customization is via `implements baml.ToJson` / `baml.FromJson`.
 
     // BEP-042: wrap a magic `cleanup(self) -> void` method in its run-once guard.
     crate::cleanup_guard::maybe_inject_cleanup_guard(&mut class_def);

@@ -423,7 +423,7 @@ fn write_rvalue(f: &mut impl Write, rvalue: &Rvalue) -> fmt::Result {
             write!(f, "{op}")?;
             write_operand(f, operand)
         }
-        Rvalue::Array(elements) => {
+        Rvalue::Array(element_template, elements) => {
             write!(f, "[")?;
             for (i, elem) in elements.iter().enumerate() {
                 if i > 0 {
@@ -431,10 +431,12 @@ fn write_rvalue(f: &mut impl Write, rvalue: &Rvalue) -> fmt::Result {
                 }
                 write_operand(f, elem)?;
             }
-            write!(f, "]")
+            // Show the emitted element-type template so MIR snapshots can catch a
+            // wrong array element type (not just the later bytecode `load_type`).
+            write!(f, "]: {element_template}[]")
         }
         Rvalue::Uint8Array(bytes) => write!(f, "b\"<{} bytes>\"", bytes.len()),
-        Rvalue::Map(entries) => {
+        Rvalue::Map(key_template, value_template, entries) => {
             write!(f, "{{ ")?;
             for (i, (key, value)) in entries.iter().enumerate() {
                 if i > 0 {
@@ -444,7 +446,7 @@ fn write_rvalue(f: &mut impl Write, rvalue: &Rvalue) -> fmt::Result {
                 write!(f, ": ")?;
                 write_operand(f, value)?;
             }
-            write!(f, " }}")
+            write!(f, " }}: map<{key_template}, {value_template}>")
         }
         Rvalue::Aggregate { kind, fields } => {
             match kind {

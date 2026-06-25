@@ -279,6 +279,7 @@ function iter.iter_array_as_iterable_param() -> int[] {
     load_const 10
     load_const 20
     load_const 30
+    load_type int
     alloc_array 3
     call user.iter.iter_array_as_iterable_param_inner
     return
@@ -445,6 +446,7 @@ function iter.iter_array_chain_fluent() -> int[] {
     load_type int
     load_const 1
     load_const 2
+    load_type int
     alloc_array 2
     call baml.iter.Iterable$for$T[].iter
     store_var _2
@@ -452,6 +454,7 @@ function iter.iter_array_chain_fluent() -> int[] {
     load_var _2
     load_const 3
     load_const 4
+    load_type int
     alloc_array 2
     load_type baml.iter.Iterator<Item = int, Error = never>
     load_const "chain"
@@ -470,6 +473,7 @@ function iter.iter_array_collect_count() -> bool {
     load_const 4
     load_const 5
     load_const 6
+    load_type int
     alloc_array 3
     store_var xs
     load_type int
@@ -484,6 +488,7 @@ function iter.iter_array_collect_count() -> bool {
     load_const 4
     load_const 5
     load_const 6
+    load_type int
     alloc_array 3
     call baml.deep_equals
     jump_if_false L0
@@ -511,6 +516,7 @@ function iter.iter_array_eager_filter_map() -> int[] {
     load_const 2
     load_const 3
     load_const 4
+    load_type int
     alloc_array 4
     make_closure .<lambda(iter_array_eager_filter_map, 0)>, 0
     call baml.Array.filter_map
@@ -524,6 +530,7 @@ function iter.iter_array_eager_filter_map_without_collect() -> int[] {
     load_const 2
     load_const 3
     load_const 4
+    load_type int
     alloc_array 4
     make_closure .<lambda(iter_array_eager_filter_map_without_collect, 0)>, 0
     call baml.Array.filter
@@ -543,6 +550,7 @@ function iter.iter_array_filter_map_fluent() -> int[] {
     load_const 2
     load_const 3
     load_const 4
+    load_type int
     alloc_array 4
     call baml.iter.Iterable$for$T[].iter
     store_var _2
@@ -571,6 +579,7 @@ function iter.iter_array_filter_step_by() -> int[] {
     load_const 4
     load_const 5
     load_const 6
+    load_type int
     alloc_array 6
     call baml.iter.ArrayIterator.new
     store_var _3
@@ -754,6 +763,7 @@ function iter.iter_array_first_adapter_defaults() -> bool {
     load_const 2
     load_const 3
     load_const 4
+    load_type int
     alloc_array 4
     call baml.iter.ArrayIterator.new
     store_var _4
@@ -939,6 +949,7 @@ function iter.iter_array_first_adapter_defaults() -> bool {
     load_const 1
     load_const 2
     load_const 3
+    load_type int
     alloc_array 3
     call baml.iter.ArrayIterator.new
     store_var _48
@@ -1126,6 +1137,7 @@ function iter.iter_array_first_adapter_defaults() -> bool {
     load_const 2
     load_const 3
     load_const 4
+    load_type int
     alloc_array 4
     call baml.iter.ArrayIterator.new
     store_var _92
@@ -1303,12 +1315,14 @@ function iter.iter_array_first_adapter_defaults() -> bool {
     load_const "reduce"
     virtual_call nargs=3 ntypeargs=2
     store_var reduced
+    load_type int
     alloc_array 0
     store_deref ?18
     load_type int
     load_const 1
     load_const 2
     load_const 3
+    load_type int
     alloc_array 3
     call baml.iter.ArrayIterator.new
     store_var _136
@@ -1488,6 +1502,7 @@ function iter.iter_array_first_adapter_defaults() -> bool {
     load_var mapped
     load_const 20
     load_const 40
+    load_type int
     alloc_array 2
     call baml.deep_equals
     jump_if_false L84
@@ -1498,6 +1513,7 @@ function iter.iter_array_first_adapter_defaults() -> bool {
     load_const 11
     load_const 2
     load_const 12
+    load_type int
     alloc_array 4
     call baml.deep_equals
 
@@ -1515,6 +1531,7 @@ function iter.iter_array_first_adapter_defaults() -> bool {
     load_deref ?18
     load_const 3
     load_const 9
+    load_type int
     alloc_array 2
     call baml.deep_equals
 
@@ -1532,6 +1549,7 @@ function iter.iter_array_first_native_methods() -> bool {
     load_const 1
     load_const 2
     load_const 3
+    load_type int
     alloc_array 3
     make_closure .<lambda(iter_array_first_native_methods, 0)>, 0
     call baml.Array.map
@@ -1541,6 +1559,7 @@ function iter.iter_array_first_native_methods() -> bool {
     load_type never
     load_const 1
     load_const 2
+    load_type int
     alloc_array 2
     make_closure .<lambda(iter_array_first_native_methods, 1)>, 0
     call baml.Array.flat_map
@@ -1552,6 +1571,7 @@ function iter.iter_array_first_native_methods() -> bool {
     load_const 2
     load_const 3
     load_const 4
+    load_type int
     alloc_array 4
     make_closure .<lambda(iter_array_first_native_methods, 2)>, 0
     load_const 0
@@ -1562,6 +1582,7 @@ function iter.iter_array_first_native_methods() -> bool {
     load_const 2
     load_const 4
     load_const 6
+    load_type int
     alloc_array 3
     call baml.deep_equals
     jump_if_false L0
@@ -1572,6 +1593,7 @@ function iter.iter_array_first_native_methods() -> bool {
     load_const 11
     load_const 2
     load_const 12
+    load_type int
     alloc_array 4
     call baml.deep_equals
 
@@ -1590,6 +1612,7 @@ function iter.iter_array_for_each() -> int[] {
     load_var ?1
     make_cell
     store_var ?1
+    load_type int
     alloc_array 0
     store_deref ?1
     load_type int
@@ -1597,6 +1620,7 @@ function iter.iter_array_for_each() -> int[] {
     load_const 3
     load_const 6
     load_const 9
+    load_type int
     alloc_array 3
     load_var out
     make_closure .<lambda(iter_array_for_each, 0)>, 1
@@ -1611,6 +1635,7 @@ function iter.iter_array_iter() -> int[] {
     load_const 1
     load_const 2
     load_const 3
+    load_type int
     alloc_array 3
     call baml.iter.Iterable$for$T[].iter
     load_type baml.iter.Iterator<Item = int, Error = never>
@@ -1627,6 +1652,7 @@ function iter.iter_array_iter_lazy_over_source_details() -> int[] {
     store_var ?2
     load_const 1
     load_const 2
+    load_type int
     alloc_array 2
     store_var xs
     load_const 0
@@ -1654,6 +1680,7 @@ function iter.iter_array_iter_lazy_over_source_details() -> int[] {
     load_deref ?2
     load_var out
     container_len
+    load_type int
     alloc_array 2
     store_var details
     load_type int
@@ -1831,6 +1858,7 @@ function iter.iter_array_lazy_filter_map_collect() -> int[] {
     load_const 2
     load_const 3
     load_const 4
+    load_type int
     alloc_array 4
     call baml.iter.Iterable$for$T[].iter
     store_var _3
@@ -1862,6 +1890,7 @@ function iter.iter_array_nullable_elements_details() -> int[] {
     load_const 1
     load_const null
     load_const 3
+    load_type int | null
     alloc_array 3
     store_var xs
     load_const 0
@@ -2055,6 +2084,7 @@ function iter.iter_array_nullable_elements_details() -> int[] {
     store_var _44
     load_var2 8 9
     load_var2 10 11
+    load_type int
     alloc_array 4
     return
 
@@ -2066,12 +2096,14 @@ function iter.iter_array_peekable_fluent() -> int[] {
     load_type int
     load_const 8
     load_const 9
+    load_type int
     alloc_array 2
     call baml.iter.Iterable$for$T[].iter
     load_type baml.iter.Iterator<Item = int, Error = never>
     load_const "peekable"
     virtual_call nargs=1 ntypeargs=0
     store_var p
+    load_type int
     alloc_array 0
     store_var out
     load_type int
@@ -2411,12 +2443,14 @@ function iter.iter_chain() -> int[] {
     load_type int
     load_const 1
     load_const 2
+    load_type int
     alloc_array 2
     call baml.iter.ArrayIterator.new
     store_var a
     load_type int
     load_const 3
     load_const 4
+    load_type int
     alloc_array 2
     call baml.iter.ArrayIterator.new
     store_var b
@@ -2440,6 +2474,7 @@ function iter.iter_collect() -> int[] {
     load_const 5
     load_const 6
     load_const 7
+    load_type int
     alloc_array 3
     call baml.iter.ArrayIterator.new
     load_type baml.iter.Iterator<Item = int, Error = never>
@@ -2455,6 +2490,7 @@ function iter.iter_count() -> int {
     load_const 9
     load_const 9
     load_const 9
+    load_type int
     alloc_array 3
     call baml.iter.ArrayIterator.new
     load_type baml.iter.Iterator<Item = int, Error = never>
@@ -2470,6 +2506,7 @@ function iter.iter_explicit_map_coerces_to_iterator() -> int[] {
     load_const 1
     load_const 2
     load_const 3
+    load_type int
     alloc_array 3
     call baml.iter.ArrayIterator.new
     store_var it
@@ -2494,6 +2531,7 @@ function iter.iter_filter() -> int[] {
     load_const 2
     load_const 3
     load_const 4
+    load_type int
     alloc_array 4
     call baml.iter.ArrayIterator.new
     store_var it
@@ -2519,6 +2557,7 @@ function iter.iter_filter_implicit_source() -> int[] {
     load_const 2
     load_const 3
     load_const 4
+    load_type int
     alloc_array 4
     call baml.iter.ArrayIterator.new
     store_var _2
@@ -2693,6 +2732,7 @@ function iter.iter_filter_map() -> int[] {
     load_const 2
     load_const 3
     load_const 4
+    load_type int
     alloc_array 4
     call baml.iter.ArrayIterator.new
     store_var it
@@ -2719,6 +2759,7 @@ function iter.iter_filter_map_implicit_source() -> int[] {
     load_const 2
     load_const 3
     load_const 4
+    load_type int
     alloc_array 4
     call baml.iter.ArrayIterator.new
     store_var _2
@@ -2893,6 +2934,7 @@ function iter.iter_flat_map() -> int[] {
     load_type int
     load_const 1
     load_const 2
+    load_type int
     alloc_array 2
     call baml.iter.ArrayIterator.new
     store_var it
@@ -2918,6 +2960,7 @@ function iter.iter_flat_map_implicit_source() -> int[] {
     load_type int
     load_const 1
     load_const 2
+    load_type int
     alloc_array 2
     call baml.iter.ArrayIterator.new
     store_var _2
@@ -3105,17 +3148,20 @@ function iter.iter_flatten() -> int[] {
     load_type int
     load_const 1
     load_const 2
+    load_type int
     alloc_array 2
     call baml.iter.ArrayIterator.new
     store_var _2
     load_type int
     load_const 3
     load_const 4
+    load_type int
     alloc_array 2
     call baml.iter.ArrayIterator.new
     store_var _5
     load_type baml.iter.Iterable<Item = int, Error = never>
     load_var2 2 3
+    load_type baml.iter.Iterable<Item = int, Error = never>
     alloc_array 2
     call baml.iter.ArrayIterator.new
     store_var outer
@@ -3134,12 +3180,14 @@ function iter.iter_flatten() -> int[] {
 }
 
 function iter.iter_for_in_array_iterator() -> int[] {
+    load_type int
     alloc_array 0
     store_var out
     load_type int
     load_const 2
     load_const 4
     load_const 6
+    load_type int
     alloc_array 3
     call baml.iter.ArrayIterator.new
     store_var _2
@@ -3464,11 +3512,13 @@ function iter.iter_for_in_array_iterator() -> int[] {
 }
 
 function iter.iter_for_in_array_literal() -> int[] {
+    load_type int
     alloc_array 0
     store_var out
     load_type int
     load_const 10
     load_const 12
+    load_type int
     alloc_array 2
     call baml.iter.Iterable$for$T[].iter
     store_var _3
@@ -3645,6 +3695,7 @@ function iter.iter_for_in_array_of_classes() -> int {
     init_instance user.iter.IterLoopBox .value
     load_const 8
     init_instance user.iter.IterLoopBox .value
+    load_type iter.IterLoopBox
     alloc_array 2
     call baml.iter.Iterable$for$T[].iter
     store_var _5
@@ -3809,6 +3860,7 @@ function iter.iter_for_in_array_of_unions() -> int {
     load_const 1
     load_const "two"
     load_const 3
+    load_type int | string
     alloc_array 3
     call baml.iter.Iterable$for$T[].iter
     store_var _4
@@ -3984,6 +4036,7 @@ function iter.iter_for_in_array_of_unions() -> int {
 }
 
 function iter.iter_for_in_range() -> int[] {
+    load_type int
     alloc_array 0
     store_var out
     load_const 1
@@ -4312,6 +4365,7 @@ function iter.iter_for_in_range() -> int[] {
 }
 
 function iter.iter_for_in_repeat() -> int[] {
+    load_type int
     alloc_array 0
     store_var out
     load_const 7
@@ -4643,8 +4697,10 @@ function iter.iter_for_loop_pop_during_iteration() -> int[] {
     load_const 2
     load_const 3
     load_const 4
+    load_type int
     alloc_array 4
     store_var xs
+    load_type int
     alloc_array 0
     store_var visited
     load_type int
@@ -4823,8 +4879,10 @@ function iter.iter_for_loop_pop_during_iteration() -> int[] {
 function iter.iter_for_loop_sees_push_during_iteration() -> int[] {
     load_const 1
     load_const 2
+    load_type int
     alloc_array 2
     store_var xs
+    load_type int
     alloc_array 0
     store_var visited
     load_type int
@@ -5011,6 +5069,7 @@ function iter.iter_map() -> int[] {
     load_const 1
     load_const 2
     load_const 3
+    load_type int
     alloc_array 3
     call baml.iter.ArrayIterator.new
     store_var it
@@ -5036,6 +5095,7 @@ function iter.iter_map_implicit_source() -> int[] {
     load_const 1
     load_const 2
     load_const 3
+    load_type int
     alloc_array 3
     call baml.iter.ArrayIterator.new
     store_var _2
@@ -5210,6 +5270,7 @@ function iter.iter_peekable() -> int[] {
     load_type int
     load_const 4
     load_const 5
+    load_type int
     alloc_array 2
     call baml.iter.ArrayIterator.new
     store_var _2
@@ -5363,6 +5424,7 @@ function iter.iter_peekable() -> int[] {
     store_var p
 
   L20:
+    load_type int
     alloc_array 0
     store_var out
     load_type int
@@ -5878,6 +5940,7 @@ function iter.iter_reduce() -> int {
     load_const 2
     load_const 3
     load_const 4
+    load_type int
     alloc_array 4
     call baml.iter.ArrayIterator.new
     store_var it
@@ -6045,11 +6108,13 @@ function iter.iter_repeat() -> int[] {
 }
 
 function iter.iter_shadowed_param_for_in(source: baml.iter.Iterable<Item = int, Error = never>) -> string[] {
+    load_type string
     alloc_array 0
     store_var out
     load_type string
     load_const "a"
     load_const "b"
+    load_type string
     alloc_array 2
     call baml.iter.Iterable$for$T[].iter
     store_var _5
@@ -6217,6 +6282,7 @@ function iter.iter_some_every_find() -> bool {
     load_const 1
     load_const 2
     load_const 3
+    load_type int
     alloc_array 3
     call baml.iter.ArrayIterator.new
     store_var _2
@@ -6389,6 +6455,7 @@ function iter.iter_some_every_find() -> bool {
     load_const 1
     load_const 2
     load_const 3
+    load_type int
     alloc_array 3
     call baml.iter.ArrayIterator.new
     store_var _41
@@ -6562,6 +6629,7 @@ function iter.iter_some_every_find() -> bool {
     load_const 2
     load_const 3
     load_const 4
+    load_type int
     alloc_array 4
     call baml.iter.ArrayIterator.new
     store_var _80

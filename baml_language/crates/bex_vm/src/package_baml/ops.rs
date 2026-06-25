@@ -364,7 +364,7 @@ impl EqualsDriver {
                 Cmp::Continue
             }
             (Object::Array(x), Object::Array(y)) => {
-                let (xs, ys) = lock_pair_ordered(pa, x, pb, y);
+                let (xs, ys) = lock_pair_ordered(pa, &x.data, pb, &y.data);
                 if xs.len() != ys.len() {
                     return Cmp::NotEqual;
                 }
@@ -380,7 +380,7 @@ impl EqualsDriver {
                 Cmp::Continue
             }
             (Object::Map(x), Object::Map(y)) => {
-                let (xs, ys) = lock_pair_ordered(pa, x, pb, y);
+                let (xs, ys) = lock_pair_ordered(pa, &x.data, pb, &y.data);
                 if xs.len() != ys.len() {
                     return Cmp::NotEqual;
                 }

@@ -720,3 +720,106 @@ with:
       do_work()
     }
   details: "`with` is a contextual keyword, not a general operator — it is only special right after a `test`/`testset` name (selecting the test runner expression) or after `spawn` (passing `baml.spawn.options(...)`). Everywhere else `with` is an ordinary identifier and may be used as a variable or field name."
+
+# ── Cross-language SDKs (baml generate) ──────────────────────────────────────
+
+baml_sdk:
+  summary: "Call your BAML functions from another language via a generated SDK."
+  syntax: |
+    # 1. declare a generator in baml.toml
+    [generator.app]
+    output_type = "python/pydantic"   # python/pydantic | python/pydantic/v1 | typescript/node
+    output_dir  = "../app"
+    naming_convention = "preserve-case"   # preserve-case | language
+
+    # 2. generate the typed client
+    baml generate
+  details: |
+    `baml generate` reads every [generator.<name>] section in baml.toml and emits
+    a typed `baml_sdk` package into each output_dir. Install the runtime for your
+    language, import the generated package, and call your functions with native
+    types. Per-language install + usage:
+
+      baml describe python
+      baml describe typescript
+
+python:
+  summary: "Use BAML from Python via a generated Pydantic v2 SDK."
+  syntax: |
+    pip install baml_core                  # the runtime (Python 3.10+)
+
+    # baml.toml — declare a generator:
+    [generator.app]
+    output_type = "python/pydantic"        # or "python/pydantic/v1"
+    output_dir  = "../app"
+    naming_convention = "preserve-case"
+
+    baml generate                          # emits the `baml_sdk` package into output_dir
+  details: |
+    You install `baml_core` (the runtime); you import `baml_sdk` (the generated
+    code). Functions become top-level Python functions; classes/enums become
+    Pydantic models:
+
+      import baml_sdk                       # initializes the BAML runtime
+      from baml_sdk import ClassifyTicket
+      ticket = ClassifyTicket("login is broken")   # typed in, typed Pydantic out
+
+    See also: `baml describe baml_sdk`, `baml describe typescript`.
+
+typescript:
+  summary: "Use BAML from TypeScript / Node.js via a generated SDK."
+  syntax: |
+    npm install @boundaryml/baml-core-node   # the runtime
+
+    # baml.toml — declare a generator:
+    [generator.app]
+    output_type = "typescript/node"
+    output_dir  = "../app"
+    naming_convention = "preserve-case"
+
+    baml generate                            # emits the `baml_sdk` package into output_dir
+  details: |
+    Import the generated package (its index initializes the runtime), then call
+    the exported functions with native TypeScript types (LLM calls are async):
+
+      import "./app/baml_sdk/index.js";
+      import { ClassifyTicket } from "./app/baml_sdk/index.js";
+      const ticket = await ClassifyTicket("login is broken");
+
+    See also: `baml describe baml_sdk`, `baml describe python`.
+
+# ── Pattern matching (alias topics for `match`) ──────────────────────────────
+
+patterns:
+  summary: "Where patterns appear: match arms, the `is` operator, and `if let`."
+  syntax: |
+    // match — over values and/or types; first matching arm wins, must be exhaustive
+    match (v) {
+      0 => "zero",                          // literal value, no binding
+      1 | 2 | 3 => "small",                 // or-pattern
+      let n: int if n < 0 => "neg",         // typed binding + guard
+      Rect { w: let w, h: let h } => w * h, // class destructure, bind fields
+      [let first, ..] => first,             // array: head + rest
+      let c: Circle => c.r,                 // typed binding (matches + narrows)
+      _ => "other",                         // wildcard
+    }
+
+    // is — returns bool and narrows inside the branch
+    if (v is Circle) { /* v is Circle here */ }
+
+    // if let — bind one pattern, else fall through
+    if let r: Rect = v { r.w } else if let c: Circle = v { c.r } else { 0 }
+  details: |
+    Pattern forms: literals (`0`, `"ok"`); `let x` (bind), `let x: T` (bind +
+    narrow), `_` (wildcard); class destructure `T { field: <pattern> }`; array
+    `[a, ..]` / `[.., z]`; or-patterns `A | B` (bindings must line up); guards
+    `<pattern> if cond`. `match` must be exhaustive — a `_` arm is allowed only
+    when earlier arms leave a gap. Same topic: `baml describe match`.
+
+pattern:
+  summary: "Pattern matching — see `baml describe patterns` (or `match`)."
+  syntax: |
+    match (v) { let x: T => ..., A { f: let y } => y, _ => ... }
+    if (v is T) { ... }
+    if let x: T = v { ... } else { ... }
+  details: "Full guide: `baml describe patterns`. Match-arm reference: `baml describe match`."

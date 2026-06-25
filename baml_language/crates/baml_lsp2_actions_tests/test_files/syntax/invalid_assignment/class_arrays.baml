@@ -45,21 +45,21 @@ function ClassArrayAssignments() -> int {
 
 //----
 //- diagnostics
-// error: type mismatch: expected Person[], got Animal[]
-//     ╭─[ invalid_assignment_class_arrays.baml:25:6 ]
+// error: type mismatch: expected Person, got Animal
+//     ╭─[ invalid_assignment_class_arrays.baml:25:8 ]
 //     │
 //  25 │     p1 = [Animal { species: "Bird", legs: 2 }];
-//     │         ───────────────────┬──────────────────
-//     │                            ╰──────────────────── type mismatch: expected Person[], got Animal[]
+//     │           ─────────────────┬─────────────────
+//     │                            ╰─────────────────── type mismatch: expected Person, got Animal
 //     │
 //     │ Note: Error code: E0001
 // ────╯
-// error: type mismatch: expected Animal[], got Person[]
-//     ╭─[ invalid_assignment_class_arrays.baml:29:6 ]
+// error: type mismatch: expected Animal, got Person
+//     ╭─[ invalid_assignment_class_arrays.baml:29:8 ]
 //     │
 //  29 │     a1 = [Person { name: "D", age: 4 }];
-//     │         ───────────────┬───────────────
-//     │                        ╰───────────────── type mismatch: expected Animal[], got Person[]
+//     │           ──────────────┬─────────────
+//     │                         ╰─────────────── type mismatch: expected Animal, got Person
 //     │
 //     │ Note: Error code: E0001
 // ────╯

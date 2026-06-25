@@ -34,8 +34,8 @@ use std::{
 use sdkgen_python_pydantic2::NamingConvention;
 
 use crate::{
-    BuildDiagnostics, discover_fixtures, fixtures_root_from_manifest, load_fixture,
-    symlink_customizable, watch_dir,
+    BuildDiagnostics, discover_fixtures, emit_cargo_line, fixtures_root_from_manifest,
+    load_fixture, symlink_customizable, watch_dir,
 };
 
 /// uv-friendly pyproject template. Each fixture's pyproject gets a
@@ -87,7 +87,7 @@ pub fn run_all() {
     write_fixtures_tests_rs(&out_dir, &fixtures);
     diagnostics.finalize();
 
-    println!("cargo:rerun-if-changed=build.rs");
+    emit_cargo_line(format_args!("cargo:rerun-if-changed=build.rs"));
     watch_dir(&fixtures_root);
     for fixture in &fixtures {
         watch_dir(&manifest_dir.join(fixture).join("customizable"));

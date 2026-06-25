@@ -1,28 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-function user.Foo.from_json(j: baml.json.json) -> Foo {
-    load_var j
-    load_const "tag"
-    call baml.json.field
-    store_var _3
-    load_type string
-    load_var _3
-    call baml.json.from_json
-    init_instance user.Foo .tag
-    return
-}
-
-function user.Foo.to_json(self: Foo) -> baml.json.json {
-    load_type string
-    load_var self
-    load_field .tag
-    call baml.json.to_json
-    load_const "tag"
-    alloc_map 1
-    return
-}
-
 function user.Foo.zero(self: Foo) -> T | null {
     load_const null
     return

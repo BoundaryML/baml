@@ -20,50 +20,6 @@ function user.$init_test_main(registry: testing.TestCollector) -> null {
     return
 }
 
-function user.Foo.from_json(j: baml.json.json) -> Foo {
-    load_var j
-    load_const "x"
-    call baml.json.field
-    store_var _3
-    load_type int
-    load_var _3
-    call baml.json.from_json
-    init_instance user.Foo .x
-    return
-}
-
-function user.Foo.to_json(self: Foo) -> baml.json.json {
-    load_type int
-    load_var self
-    load_field .x
-    call baml.json.to_json
-    load_const "x"
-    alloc_map 1
-    return
-}
-
-function user.HasWith.from_json(j: baml.json.json) -> HasWith {
-    load_var j
-    load_const "with"
-    call baml.json.field
-    store_var _3
-    load_type int
-    load_var _3
-    call baml.json.from_json
-    init_instance user.HasWith .with
-    return
-}
-
-function user.HasWith.to_json(self: HasWith) -> baml.json.json {
-    load_type int
-    load_var self
-    load_field .with
-    call baml.json.to_json
-    load_const "with"
-    alloc_map 1
-    return
-}
-
 function user.make_foo() -> Foo {
     load_const 1
     init_instance user.Foo .x

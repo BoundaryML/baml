@@ -298,3 +298,34 @@ fn method_frame_type_args_seeded_string() {
         other => panic!("expected Object::Type, got {other:?}"),
     }
 }
+
+// ─── Regression ── `map`/`flat_map` tag the result with `U`, not the receiver `T`
+
+/// `[int].map(x -> string)` must stamp the result array's runtime `element_ty`
+/// with the closure return type `U` (= `string`), NOT the receiver element type
+/// `T` (= `int`). MIR prepends the receiver's class type args ahead of the
+/// method's own `<U, E>`, so the frame's type args are `[T, U, E]`; the result
+/// element type is the second-to-last (`U`), not `.first()` (`T`).
+#[test]
+fn map_result_element_ty_is_closure_return_not_receiver() {
+    let program = compile_source(
+        r#"
+function f() -> string[] {
+    [1, 2].map((x: int) -> string { "s" })
+}
+"#,
+    );
+    let (result, vm) = run_fn(program, "user.f");
+    let ptr = result
+        .as_object_ptr()
+        .expect("map result should be an array object");
+    match vm.get_object(ptr) {
+        Object::Array(arr) => assert!(
+            matches!(&*arr.element_ty, RuntimeTy::String { .. }),
+            "map result element_ty should be `string` (closure return `U`), not `{:?}` \
+             (the receiver `T`)",
+            arr.element_ty
+        ),
+        other => panic!("expected Object::Array result, got {other:?}"),
+    }
+}

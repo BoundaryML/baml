@@ -101,9 +101,9 @@ impl<'a, 'db, B: TypeVarBounds + ?Sized> AssociatedProjectionResolver<'a, 'db, B
             } => {
                 let projected = Ty::AssociatedTypeProjection {
                     base: Box::new(self.resolve_deep_inner(base, resolving)),
-                    interface: interface
-                        .as_ref()
-                        .map(|interface| Box::new(self.resolve_deep_inner(interface, resolving))),
+                    interface: interface.as_ref().map(|interface| {
+                        Box::new(interface.map_tys(|t| self.resolve_deep_inner(t, resolving)))
+                    }),
                     member: member.clone(),
                     attr: attr.clone(),
                 };
@@ -351,7 +351,7 @@ impl<'a, 'db, B: TypeVarBounds + ?Sized> AssociatedProjectionResolver<'a, 'db, B
     fn resolve_primitive_projection(
         &self,
         base_ty: &Ty,
-        projected_interface: Option<&Ty>,
+        projected_interface: Option<&baml_type::Interface>,
         member: &Name,
     ) -> Option<Ty> {
         let candidate_ty = crate::interfaces::implementation_key_for_ty(base_ty)
@@ -416,7 +416,7 @@ impl<'a, 'db, B: TypeVarBounds + ?Sized> AssociatedProjectionResolver<'a, 'db, B
         iface_qtn: &QualifiedTypeName,
         iface_args: &[Ty],
         associated_bindings: &[(Name, Ty)],
-        projected_interface: Option<&Ty>,
+        projected_interface: Option<&baml_type::Interface>,
         member: &Name,
     ) -> Option<Ty> {
         let pkg_items = self.package_items_for(iface_qtn.package())?;
@@ -478,7 +478,7 @@ impl<'a, 'db, B: TypeVarBounds + ?Sized> AssociatedProjectionResolver<'a, 'db, B
         iface_qtn: &QualifiedTypeName,
         iface_args: &[Ty],
         associated_bindings: &[(Name, Ty)],
-        projected_interface: Option<&Ty>,
+        projected_interface: Option<&baml_type::Interface>,
         member: &Name,
     ) -> Option<Ty> {
         let pkg_items = self.package_items_for(iface_qtn.package())?;
@@ -572,7 +572,7 @@ impl<'a, 'db, B: TypeVarBounds + ?Sized> AssociatedProjectionResolver<'a, 'db, B
         &self,
         class_qtn: &QualifiedTypeName,
         class_args: &[Ty],
-        projected_interface: Option<&Ty>,
+        projected_interface: Option<&baml_type::Interface>,
         member: &Name,
     ) -> Option<Ty> {
         let pkg_items = self.package_items_for(class_qtn.package())?;
@@ -682,9 +682,8 @@ impl<'a, 'db, B: TypeVarBounds + ?Sized> AssociatedProjectionResolver<'a, 'db, B
                     })
                 })
                 .collect();
-            if let Some(Ty::Interface(_, _, projected_associated_bindings, _)) = projected_interface
-            {
-                for (projected_name, projected_ty) in projected_associated_bindings {
+            if let Some(projected) = projected_interface {
+                for (projected_name, projected_ty) in &projected.associated_types {
                     let Some((_, actual_ty)) = associated_bindings
                         .iter()
                         .find(|(actual_name, _)| actual_name == projected_name)
@@ -727,7 +726,7 @@ impl<'a, 'db, B: TypeVarBounds + ?Sized> AssociatedProjectionResolver<'a, 'db, B
         &self,
         class_qtn: &QualifiedTypeName,
         class_args: &[Ty],
-        projected_interface: Option<&Ty>,
+        projected_interface: Option<&baml_type::Interface>,
         member: &Name,
     ) -> Option<Ty> {
         let pkg_items = self.package_items_for(class_qtn.package())?;
@@ -829,7 +828,7 @@ impl<'a, 'db, B: TypeVarBounds + ?Sized> AssociatedProjectionResolver<'a, 'db, B
         &self,
         class_qtn: &QualifiedTypeName,
         class_args: &[Ty],
-        projected_interface: Option<&Ty>,
+        projected_interface: Option<&baml_type::Interface>,
         member: &Name,
         matches: &mut Vec<Ty>,
     ) {
@@ -858,7 +857,7 @@ impl<'a, 'db, B: TypeVarBounds + ?Sized> AssociatedProjectionResolver<'a, 'db, B
         &self,
         registry: &crate::interfaces::ImplementsRegistry,
         candidate_ty: &Ty,
-        projected_interface: Option<&Ty>,
+        projected_interface: Option<&baml_type::Interface>,
         member: &Name,
         matches: &mut Vec<Ty>,
     ) {
@@ -871,7 +870,7 @@ impl<'a, 'db, B: TypeVarBounds + ?Sized> AssociatedProjectionResolver<'a, 'db, B
             }
 
             let requested_iface_ty = projected_interface
-                .cloned()
+                .map(baml_type::Interface::to_ty)
                 .unwrap_or_else(|| rule.interface_ty.clone());
             let Some(instantiation) = registry.instantiate_rule_for_requested_interface(
                 rule,
@@ -904,19 +903,16 @@ impl<'a, 'db, B: TypeVarBounds + ?Sized> AssociatedProjectionResolver<'a, 'db, B
         &self,
         iface_qtn: &QualifiedTypeName,
         iface_args: &[Ty],
-        projected_interface: Option<&Ty>,
+        projected_interface: Option<&baml_type::Interface>,
     ) -> bool {
         let Some(projected_interface) = projected_interface else {
             return true;
         };
-        let Ty::Interface(projected_qtn, projected_args, _, _) = projected_interface else {
-            return false;
-        };
-        iface_qtn == projected_qtn
-            && iface_args.len() == projected_args.len()
+        iface_qtn == &projected_interface.name
+            && iface_args.len() == projected_interface.generics.len()
             && iface_args
                 .iter()
-                .zip(projected_args.iter())
+                .zip(projected_interface.generics.iter())
                 .all(|(a, b)| self.types_equivalent(a, b))
     }
 
@@ -961,15 +957,16 @@ impl<'a, 'db, B: TypeVarBounds + ?Sized> AssociatedProjectionResolver<'a, 'db, B
         iface_qtn: &QualifiedTypeName,
         iface_args: &[Ty],
         iface_assoc: &[(Name, Ty)],
-        projected_interface: Option<&Ty>,
+        projected_interface: Option<&baml_type::Interface>,
     ) -> bool {
         if !self.projection_interface_matches(iface_qtn, iface_args, projected_interface) {
             return false;
         }
-        let Some(Ty::Interface(_, _, projected_assoc, _)) = projected_interface else {
+        let Some(projected) = projected_interface else {
             return true;
         };
-        projected_assoc
+        projected
+            .associated_types
             .iter()
             .all(|(projected_name, projected_ty)| {
                 iface_assoc
@@ -987,12 +984,14 @@ impl<'a, 'db, B: TypeVarBounds + ?Sized> AssociatedProjectionResolver<'a, 'db, B
         &self,
         base: &Ty,
         member: &Name,
-        a: Option<&Ty>,
-        b: Option<&Ty>,
+        a: Option<&baml_type::Interface>,
+        b: Option<&baml_type::Interface>,
     ) -> bool {
         match (a, b) {
             (None, None) => true,
-            (Some(a), Some(b)) => self.types_equivalent_without_projection_views(a, b),
+            (Some(a), Some(b)) => {
+                self.types_equivalent_without_projection_views(&a.to_ty(), &b.to_ty())
+            }
             (None, Some(projected)) | (Some(projected), None) => self
                 .unqualified_projection_source_matches_projected_interface(base, member, projected),
         }
@@ -1002,7 +1001,7 @@ impl<'a, 'db, B: TypeVarBounds + ?Sized> AssociatedProjectionResolver<'a, 'db, B
         &self,
         base: &Ty,
         member: &Name,
-        projected_interface: &Ty,
+        projected_interface: &baml_type::Interface,
     ) -> bool {
         let Ty::TypeVar(name, _) = base else {
             return false;

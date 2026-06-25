@@ -9,21 +9,9 @@ class user.Education {
 }
 enum user.Degree {Bachelors, Masters, PhD}
 type user.EducationList = user.Education[]
-function user.from_json(j: baml.json.json) -> user.Education  [expr] {
-  user.Education { school: baml.json.from_json(baml.json.field(j, "school")), degree: baml.json.from_json(baml.json.field(j, "degree")), year: baml.json.from_json(baml.json.field(j, "year")) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "school": baml.json.to_json(self.school), "degree": baml.json.to_json(self.degree), "year": baml.json.to_json(self.year) }
-}
 class user.Resume {
   name: string
   education: Education[]
   highest_degree: Degree
   aliases: EducationList
-}
-function user.from_json(j: baml.json.json) -> user.Resume  [expr] {
-  user.Resume { name: baml.json.from_json(baml.json.field(j, "name")), education: baml.json.from_json(baml.json.field(j, "education")), highest_degree: baml.json.from_json(baml.json.field(j, "highest_degree")), aliases: baml.json.from_json(baml.json.field(j, "aliases")) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "name": baml.json.to_json(self.name), "education": baml.json.to_json(self.education), "highest_degree": baml.json.to_json(self.highest_degree), "aliases": baml.json.to_json(self.aliases) }
 }

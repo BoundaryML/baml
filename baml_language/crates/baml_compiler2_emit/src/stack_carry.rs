@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use baml_compiler2_mir::{
     BinOp, Constant, Local, MirFunctionBody, Operand, Place, Rvalue, StatementKind, Terminator,
 };
-use baml_type::{Literal, RuntimeTy};
+use baml_type::{Literal, RuntimeTy, TyTemplate};
 
 use crate::{
     analysis::{LocalClassification, LocalDefUse, StatementRef, UseLocation},
@@ -839,7 +839,7 @@ fn simulate_aggregate_operand_pull_stack(
     def_use: &HashMap<Local, LocalDefUse>,
 ) -> Option<bool> {
     match rvalue {
-        Rvalue::Array(elements) => {
+        Rvalue::Array(_, elements) => {
             let values = elements.iter().collect::<Vec<_>>();
             Some(simulate_stack_consuming_aggregate(
                 AggregateStackShape {
@@ -854,7 +854,7 @@ fn simulate_aggregate_operand_pull_stack(
                 def_use,
             ))
         }
-        Rvalue::Map(entries) => {
+        Rvalue::Map(_, _, entries) => {
             // Map keys are trailing operands in VM order. A call result carried
             // from the block entry would be below emitted values, so keys are
             // simulated only as normal operands after the value prefix.
@@ -990,10 +990,10 @@ fn simulate_stack_consuming_aggregate(
 
 fn aggregate_value_operand_index(rvalue: &Rvalue, local: Local) -> Option<usize> {
     let operands: Vec<&Operand> = match rvalue {
-        Rvalue::Array(elements) => elements.iter().collect(),
+        Rvalue::Array(_, elements) => elements.iter().collect(),
         // See `simulate_aggregate_operand_pull_stack`: only map values are
         // valid stack-carry prefix operands for the current VM stack layout.
-        Rvalue::Map(entries) => entries.iter().map(|(_key, value)| value).collect(),
+        Rvalue::Map(_, _, entries) => entries.iter().map(|(_key, value)| value).collect(),
         Rvalue::Aggregate {
             kind: baml_compiler2_mir::AggregateKind::Array,
             fields,
@@ -1201,7 +1201,9 @@ impl PullSink for StackCarryPullSink<'_> {
         Ok(())
     }
 
-    fn alloc_array(&mut self, len: usize) -> Result<(), Self::Error> {
+    fn alloc_array(&mut self, _element_ty: &TyTemplate, len: usize) -> Result<(), Self::Error> {
+        // `load_type` pushes the element type and `AllocArray` pops it again, so
+        // the net stack effect (pop `len`, push the array) is unchanged.
         if !self.sim.pop_n(len) {
             return Err(());
         }
@@ -1215,7 +1217,14 @@ impl PullSink for StackCarryPullSink<'_> {
         Ok(())
     }
 
-    fn alloc_map(&mut self, len: usize) -> Result<(), Self::Error> {
+    fn alloc_map(
+        &mut self,
+        _key_ty: &TyTemplate,
+        _value_ty: &TyTemplate,
+        len: usize,
+    ) -> Result<(), Self::Error> {
+        // `load_type` pushes the key/value types and `AllocMap` pops them again,
+        // so the net stack effect (pop `2 * len`, push the map) is unchanged.
         if !self.sim.pop_n(len * 2) {
             return Err(());
         }
@@ -1482,11 +1491,14 @@ mod tests {
         };
 
         let ok = simulate_aggregate_operand_pull_stack(
-            &Rvalue::Array(vec![
-                Operand::copy_local(carried),
-                Operand::copy_local(sibling),
-                Operand::Constant(Constant::Int(1)),
-            ]),
+            &Rvalue::Array(
+                TyTemplate::Concrete(RuntimeTy::unknown()),
+                vec![
+                    Operand::copy_local(carried),
+                    Operand::copy_local(sibling),
+                    Operand::Constant(Constant::Int(1)),
+                ],
+            ),
             &mut sim,
             carried,
             &classifications,
@@ -1533,16 +1545,20 @@ mod tests {
         };
 
         let ok = simulate_aggregate_operand_pull_stack(
-            &Rvalue::Map(vec![
-                (
-                    Operand::Constant(Constant::String("a".to_string())),
-                    Operand::copy_local(carried),
-                ),
-                (
-                    Operand::Constant(Constant::String("b".to_string())),
-                    Operand::copy_local(sibling),
-                ),
-            ]),
+            &Rvalue::Map(
+                TyTemplate::Concrete(RuntimeTy::string()),
+                TyTemplate::Concrete(RuntimeTy::unknown()),
+                vec![
+                    (
+                        Operand::Constant(Constant::String("a".to_string())),
+                        Operand::copy_local(carried),
+                    ),
+                    (
+                        Operand::Constant(Constant::String("b".to_string())),
+                        Operand::copy_local(sibling),
+                    ),
+                ],
+            ),
             &mut sim,
             carried,
             &classifications,
@@ -1557,7 +1573,11 @@ mod tests {
     fn map_key_is_not_an_aggregate_value_operand() {
         let key = Local(1);
         let value = Local(2);
-        let rvalue = Rvalue::Map(vec![(Operand::copy_local(key), Operand::copy_local(value))]);
+        let rvalue = Rvalue::Map(
+            TyTemplate::Concrete(RuntimeTy::string()),
+            TyTemplate::Concrete(RuntimeTy::unknown()),
+            vec![(Operand::copy_local(key), Operand::copy_local(value))],
+        );
 
         assert_eq!(aggregate_value_operand_index(&rvalue, value), Some(0));
         assert_eq!(aggregate_value_operand_index(&rvalue, key), None);
@@ -1573,10 +1593,13 @@ mod tests {
         };
 
         let ok = simulate_aggregate_operand_pull_stack(
-            &Rvalue::Array(vec![
-                Operand::copy_local(real_prefix),
-                Operand::copy_local(carried),
-            ]),
+            &Rvalue::Array(
+                TyTemplate::Concrete(RuntimeTy::unknown()),
+                vec![
+                    Operand::copy_local(real_prefix),
+                    Operand::copy_local(carried),
+                ],
+            ),
             &mut sim,
             carried,
             &HashMap::new(),

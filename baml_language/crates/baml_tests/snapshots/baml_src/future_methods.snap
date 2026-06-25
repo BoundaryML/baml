@@ -72,6 +72,7 @@ function future_methods.methods_after_successful_settle() -> bool[] {
     call baml.future.Future.is_cancelled
     load_var f
     call baml.future.Future.cancel
+    load_type bool
     alloc_array 5
     return
 }

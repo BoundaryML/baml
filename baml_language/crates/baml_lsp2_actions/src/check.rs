@@ -2246,6 +2246,10 @@ fn validate_associated_type_bindings_in_type_expr(
                     diagnostics,
                 );
             }
+            // The non-interface qualifier and the unknown-associated-member checks
+            // are now in the TIR lowering (`lower_explicit_projection_qualifier`),
+            // emitted on every compile path. This still validates the
+            // unknown-interface and base-implements-interface cases.
             validate_qualified_associated_type_projection(
                 db,
                 file_id,
@@ -2480,51 +2484,31 @@ fn validate_qualified_associated_type_projection(
     let baml_compiler2_ast::TypeExpr::AssociatedTypeProjection {
         base,
         interface: Some(interface),
-        member,
         ..
     } = expr
     else {
         return;
     };
 
-    let Some(resolved_iface) = resolve_interface_path(db, interface, pkg_items, namespace_path)
-    else {
-        let message = if is_non_interface_type(interface, pkg_items, namespace_path) {
-            "qualified associated type projection must use an interface".to_string()
-        } else {
-            format!("unknown interface `{interface}` in associated type projection")
-        };
-        diagnostics.push(
-            Diagnostic::error(DiagnosticId::TypeMismatch, message)
+    // The qualifier must name an interface. The non-interface case ("must use an
+    // interface") and the unknown-associated-member case are now diagnosed by the
+    // TIR lowering (`lower_explicit_projection_qualifier`), emitted on every
+    // compile path; here we only report a qualifier path that doesn't resolve to
+    // any interface at all.
+    if resolve_interface_path(db, interface, pkg_items, namespace_path).is_none() {
+        if !is_non_interface_type(interface, pkg_items, namespace_path) {
+            diagnostics.push(
+                Diagnostic::error(
+                    DiagnosticId::TypeMismatch,
+                    format!("unknown interface `{interface}` in associated type projection"),
+                )
                 .with_primary_span(Span {
                     file_id,
                     range: span,
                 })
                 .with_phase(DiagnosticPhase::Type),
-        );
-        return;
-    };
-
-    if !resolved_iface
-        .iface
-        .associated_types
-        .iter()
-        .any(|assoc| assoc.name == *member)
-    {
-        diagnostics.push(
-            Diagnostic::error(
-                DiagnosticId::UnknownType,
-                format!(
-                    "unknown associated type `{member}` for interface `{}`",
-                    resolved_iface.display_name()
-                ),
-            )
-            .with_primary_span(Span {
-                file_id,
-                range: span,
-            })
-            .with_phase(DiagnosticPhase::Type),
-        );
+            );
+        }
         return;
     }
 
@@ -3489,10 +3473,19 @@ fn is_non_interface_type(
         return false;
     };
     let lookup_ns = path_lookup_namespace(head, namespace_path);
-    matches!(
-        pkg_items.lookup_type(lookup_ns, name),
-        Some(Definition::Class(_) | Definition::Enum(_))
-    )
+    // True for any name that resolves to a *non-interface* definition (class,
+    // enum, type alias, …). We exclude the single interface kind rather than
+    // enumerate every non-interface kind: TIR lowering emits
+    // `NonInterfaceProjectionQualifier` for all of them, and an allow-list here
+    // silently regressed type aliases (a duplicate "unknown interface", and the
+    // `requires`/`implement` sites mislabeling an existing alias as "doesn't
+    // exist"). An unresolved name is *not* a non-interface — it's "doesn't
+    // exist" — so `None` stays `false`.
+    match pkg_items.lookup_type(lookup_ns, name) {
+        Some(Definition::Interface(_)) => false,
+        Some(_) => true,
+        None => false,
+    }
 }
 
 fn rendered_type_args(args: &[baml_compiler2_ast::TypeExpr]) -> Vec<String> {
@@ -4094,7 +4087,9 @@ fn expand_type_alias_rec(
             attr,
         } => Ty::AssociatedTypeProjection {
             base: Box::new(recurse(base, seen)),
-            interface: interface.as_ref().map(|i| Box::new(recurse(i, seen))),
+            interface: interface
+                .as_ref()
+                .map(|i| Box::new(i.map_tys(|t| recurse(t, seen)))),
             member: member.clone(),
             attr: attr.clone(),
         },
@@ -5908,6 +5903,13 @@ fn tir_rendered_to_diagnostic(
     rendered: baml_compiler2_tir::infer_context::RenderedTirDiagnostic,
     file_id: FileId,
 ) -> Diagnostic {
+    let unknown_member_access_member = match &rendered.error {
+        TirTypeError::UnresolvedMember {
+            base_type: Ty::BuiltinUnknown { .. },
+            member,
+        } => Some(member.clone()),
+        _ => None,
+    };
     let span = Span {
         file_id,
         range: rendered.range,
@@ -5922,17 +5924,29 @@ fn tir_rendered_to_diagnostic(
             rendered.message,
         ),
     };
+    let diag = if let Some(member) = &unknown_member_access_member {
+        diag.with_primary(
+            span,
+            format!("use `match` to narrow this value before accessing `{member}`"),
+        )
+    } else {
+        diag.with_primary_span(span)
+    };
     rendered
         .related
         .into_iter()
-        .fold(diag.with_primary_span(span), |diag, related| {
-            diag.with_related(
-                Span {
-                    file_id: related.file_id,
-                    range: related.range,
-                },
-                related.message,
-            )
+        .fold(diag, |diag, related| {
+            let span = Span {
+                file_id: related.file_id,
+                range: related.range,
+            };
+            let message = related.message;
+            let diag = if unknown_member_access_member.is_some() {
+                diag.with_secondary(span, message.clone())
+            } else {
+                diag
+            };
+            diag.with_related(span, message)
         })
         .with_phase(DiagnosticPhase::Type)
 }
@@ -5955,6 +5969,12 @@ fn source_aware_tir_type_error_message(
     match error {
         TirTypeError::TypeMismatch { expected, got } => {
             format!("type mismatch: expected {}, got {}", ty(expected), ty(got))
+        }
+        TirTypeError::UnresolvedMember {
+            base_type: Ty::BuiltinUnknown { .. },
+            member,
+        } => {
+            format!("cannot access field `{member}` on `unknown`")
         }
         TirTypeError::UnresolvedMember { base_type, member } => {
             format!("type `{}` has no member `{member}`", ty(base_type))
@@ -6072,7 +6092,7 @@ fn source_aware_tir_type_error_message(
                 )
             } else {
                 format!(
-                    "this body may throw through callback `{callback_name}`, but declared throws is `{}`. Add an explicit `throws` to the callback, catch the call, or make the callback non-throwing.",
+                    "this body may throw through callback `{callback_name}`, but declared throws is `{}`. The callback type does not say what it can throw. If `{callback_name}` is an infallible host callback, annotate it with `throws never`; otherwise catch the call or let the enclosing function declare/propagate the callback's throws.",
                     ty(declared)
                 )
             }
@@ -6109,6 +6129,9 @@ fn tir_type_error_to_diagnostic_id(
         | TirTypeError::ComparisonAlwaysDisjoint { .. } => DiagnosticId::InvalidOperator,
         TirTypeError::InvalidUnaryOp { .. } => DiagnosticId::InvalidOperator,
         TirTypeError::UnresolvedType { .. } => DiagnosticId::UnknownType,
+        TirTypeError::NonInterfaceProjectionQualifier => DiagnosticId::TypeMismatch,
+        TirTypeError::UnknownAssociatedType { .. } => DiagnosticId::UnknownType,
+        TirTypeError::AmbiguousAssociatedTypeProjection { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::ArgumentCountMismatch { .. }
         | TirTypeError::PositionalArgumentAfterNamed
         | TirTypeError::DuplicateNamedArgument { .. }

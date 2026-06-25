@@ -10,6 +10,7 @@ function user.sum_array(arr: int[]) -> int {
     store_var ?6
     load_const 0
     store_deref ?2
+    load_type never
     alloc_array 0
     store_var total
     load_type int

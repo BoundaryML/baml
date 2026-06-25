@@ -443,6 +443,67 @@ fn into_owned_expr(
     }
 }
 
+/// Emit a `baml_type::RuntimeTy` expression describing `ty`, for tagging a
+/// `BexExternalValue::Array`/`Map` with its declared element/key/value type.
+///
+/// The owned→external conversion runs without a `vm` or call type-args in
+/// scope, so a generic parameter cannot be resolved to its instantiation here
+/// and degrades to `unknown`. Every concrete position — primitives, nested
+/// containers, media, and named classes — is recovered exactly (never erased).
+fn runtime_ty_tokens(ty: &BamlType) -> TokenStream {
+    match ty {
+        BamlType::String => quote! { baml_type::RuntimeTy::string() },
+        BamlType::Int => quote! { baml_type::RuntimeTy::int() },
+        BamlType::Bigint => quote! { baml_type::RuntimeTy::bigint() },
+        BamlType::Float => quote! { baml_type::RuntimeTy::float() },
+        BamlType::Bool => quote! { baml_type::RuntimeTy::bool() },
+        BamlType::Null => quote! { baml_type::RuntimeTy::null() },
+        BamlType::Uint8Array => quote! { baml_type::RuntimeTy::uint8array() },
+        BamlType::List(inner) => {
+            let inner = runtime_ty_tokens(inner);
+            quote! { baml_type::RuntimeTy::list(#inner) }
+        }
+        BamlType::Map(key, value) => {
+            let key = runtime_ty_tokens(key);
+            let value = runtime_ty_tokens(value);
+            quote! { baml_type::RuntimeTy::map(#key, #value) }
+        }
+        BamlType::Optional(inner) => {
+            let inner = runtime_ty_tokens(inner);
+            quote! { baml_type::RuntimeTy::optional(#inner) }
+        }
+        BamlType::Media(kind) => {
+            let kind = media_kind_tokens(kind);
+            quote! { baml_type::RuntimeTy::Media(#kind, baml_type::TyAttr::default()) }
+        }
+        BamlType::RustType => {
+            quote! { baml_type::RuntimeTy::RustType { attr: baml_type::TyAttr::default() } }
+        }
+        // `Named` is a lossy catch-all: the type parser discards a class's
+        // generic arguments (`Box<int>` → `Named("Box")`) and also funnels
+        // unions/unresolved types through it (`Named("union")`,
+        // `Named("unknown")`). Reconstructing a `RuntimeTy::class(name)` here
+        // would both drop generics and fabricate a class for the placeholder
+        // names, so this static-`BamlType` path cannot recover a named type — the
+        // complete type lives only on the runtime value's stored `element_ty`.
+        BamlType::Named(_) | BamlType::Generic(_) => {
+            quote! { baml_type::RuntimeTy::unknown() }
+        }
+    }
+}
+
+/// The `baml_base::MediaKind` token for a `Media(name)` BAML type. Unknown names
+/// degrade to the catch-all `Generic` media kind (never an erased type).
+fn media_kind_tokens(name: &str) -> TokenStream {
+    match name {
+        "Image" => quote! { baml_base::MediaKind::Image },
+        "Audio" => quote! { baml_base::MediaKind::Audio },
+        "Video" => quote! { baml_base::MediaKind::Video },
+        "Pdf" => quote! { baml_base::MediaKind::Pdf },
+        _ => quote! { baml_base::MediaKind::Generic },
+    }
+}
+
 /// Generate the `BexExternalValue` conversion expression for an owned field.
 #[allow(clippy::only_used_in_recursion)]
 fn owned_to_external_expr(
@@ -462,19 +523,22 @@ fn owned_to_external_expr(
         BamlType::Null => quote! { BexExternalValue::Null },
         BamlType::List(inner) => {
             let inner_conv = owned_to_external_expr(&quote! { __v }, inner, class_ns_map);
+            let element_type = runtime_ty_tokens(inner);
             quote! {
                 BexExternalValue::Array {
-                    element_type: baml_type::RuntimeTy::unknown(),
+                    element_type: #element_type,
                     items: #field_expr.into_iter().map(|__v| #inner_conv).collect(),
                 }
             }
         }
-        BamlType::Map(_k, v) => {
+        BamlType::Map(k, v) => {
             let v_conv = owned_to_external_expr(&quote! { __v }, v, class_ns_map);
+            let key_type = runtime_ty_tokens(k);
+            let value_type = runtime_ty_tokens(v);
             quote! {
                 BexExternalValue::Map {
-                    key_type: baml_type::RuntimeTy::string(),
-                    value_type: baml_type::RuntimeTy::unknown(),
+                    key_type: #key_type,
+                    value_type: #value_type,
                     entries: #field_expr.into_iter().map(|(__k, __v)| (__k, #v_conv)).collect(),
                 }
             }
@@ -1664,6 +1728,9 @@ fn emit_into_result_call(
                     #call_expr
                         .into_result_mapped(SysOp::#variant_ident, |v| {
                             BexExternalValue::Array {
+                                // `#name` is a real class, but `BamlType` drops
+                                // its generic args, so the complete element type
+                                // is only recoverable from the runtime value.
                                 element_type: baml_type::RuntimeTy::unknown(),
                                 items: v.into_iter()
                                     .map(|item| <#owned::#ns_ident::#name_ident as AsBexExternalValue>::into_bex_external_value(item))

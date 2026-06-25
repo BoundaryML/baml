@@ -5,24 +5,12 @@ source: crates/baml_tests/src/generated_tests.rs
 class user.llm.Response {
   text: string
 }
-function user.llm.Response.to_json(self: user.llm.Response) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "text": baml.json.to_json(self.text) } : map<string, baml.json.json>
-}
-function user.llm.Response.from_json(j: baml.json.json) -> user.llm.Response throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  Response { text: baml.json.from_json<string>(baml.json.field(j, "text")) } : user.llm.Response
-}
 class user.llm.Response$stream {
   text: string | null
 }
 class user.llm.Response {
   body: string
   status: int
-}
-function user.llm.Response.to_json(self: user.llm.Response) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "body": baml.json.to_json(self.body), "status": baml.json.to_json(self.status) } : map<string, baml.json.json>
-}
-function user.llm.Response.from_json(j: baml.json.json) -> user.llm.Response throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  Response { body: baml.json.from_json<string>(baml.json.field(j, "body")), status: baml.json.from_json<int>(baml.json.field(j, "status")) } : user.llm.Response
 }
 class user.llm.Response$stream {
   body: string | null

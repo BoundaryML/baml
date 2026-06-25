@@ -1353,7 +1353,10 @@ mod tests {
         let str_obj = tlab.alloc_string("referenced".to_string());
 
         // Allocate an array that references the string
-        let arr = tlab.alloc_array(vec![Value::object(str_obj)]);
+        let arr = tlab.alloc_array(
+            baml_type::RuntimeTy::unknown(),
+            vec![Value::object(str_obj)],
+        );
 
         // Allocate another unreferenced string
         let _unreferenced = tlab.alloc_string("unreferenced".to_string());
@@ -1510,7 +1513,11 @@ mod tests {
         // Allocate a map that references the string
         let mut map = indexmap::IndexMap::new();
         map.insert(bex_str::BexStr::from("key"), Value::object(str_obj));
-        let map_obj = tlab.alloc_map(map);
+        let map_obj = tlab.alloc_map(
+            baml_type::RuntimeTy::string(),
+            baml_type::RuntimeTy::unknown(),
+            map,
+        );
 
         // Allocate unreferenced garbage
         let _garbage = tlab.alloc_string("garbage".to_string());
@@ -1631,13 +1638,23 @@ mod tests {
         // Create a chain: array -> map -> array -> string
         let leaf_str = tlab.alloc_string("leaf".to_string());
 
-        let inner_array = tlab.alloc_array(vec![Value::object(leaf_str)]);
+        let inner_array = tlab.alloc_array(
+            baml_type::RuntimeTy::unknown(),
+            vec![Value::object(leaf_str)],
+        );
 
         let mut map = indexmap::IndexMap::new();
         map.insert(bex_str::BexStr::from("nested"), Value::object(inner_array));
-        let middle_map = tlab.alloc_map(map);
+        let middle_map = tlab.alloc_map(
+            baml_type::RuntimeTy::string(),
+            baml_type::RuntimeTy::unknown(),
+            map,
+        );
 
-        let outer_array = tlab.alloc_array(vec![Value::object(middle_map)]);
+        let outer_array = tlab.alloc_array(
+            baml_type::RuntimeTy::unknown(),
+            vec![Value::object(middle_map)],
+        );
 
         // Allocate garbage between the chain objects
         let _g1 = tlab.alloc_string("garbage".to_string());
@@ -2233,8 +2250,12 @@ mod tests {
         let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new(Arc::clone(&heap));
 
-        let arr = tlab.alloc_array(vec![]);
-        let map = tlab.alloc_map(indexmap::IndexMap::new());
+        let arr = tlab.alloc_array(baml_type::RuntimeTy::unknown(), vec![]);
+        let map = tlab.alloc_map(
+            baml_type::RuntimeTy::string(),
+            baml_type::RuntimeTy::unknown(),
+            indexmap::IndexMap::new(),
+        );
 
         let (stats, new_roots, _) = unsafe { heap.collect_garbage(&[arr, map]) };
         assert_eq!(stats.live_count, 2);
@@ -2261,9 +2282,9 @@ mod tests {
 
         // D -> C -> B -> A (leaf string wrapped in nested arrays)
         let a = tlab.alloc_string("a".to_string());
-        let b = tlab.alloc_array(vec![Value::object(a)]);
-        let c = tlab.alloc_array(vec![Value::object(b)]);
-        let d = tlab.alloc_array(vec![Value::object(c)]);
+        let b = tlab.alloc_array(baml_type::RuntimeTy::unknown(), vec![Value::object(a)]);
+        let c = tlab.alloc_array(baml_type::RuntimeTy::unknown(), vec![Value::object(b)]);
+        let d = tlab.alloc_array(baml_type::RuntimeTy::unknown(), vec![Value::object(c)]);
 
         let (stats, new_roots, _) = unsafe { heap.collect_garbage(&[d]) };
         assert_eq!(stats.live_count, 4);
@@ -2301,7 +2322,7 @@ mod tests {
         let children: Vec<Value> = (0..5)
             .map(|i| Value::object(tlab.alloc_string(format!("child_{i}"))))
             .collect();
-        let parent = tlab.alloc_array(children);
+        let parent = tlab.alloc_array(baml_type::RuntimeTy::unknown(), children);
 
         // Also allocate explicit garbage
         let _garbage = tlab.alloc_string("garbage".to_string());
@@ -2318,8 +2339,10 @@ mod tests {
         let mut tlab = Tlab::new(Arc::clone(&heap));
 
         let shared = tlab.alloc_string("shared".to_string());
-        let parent_a = tlab.alloc_array(vec![Value::object(shared)]);
-        let parent_b = tlab.alloc_array(vec![Value::object(shared)]);
+        let parent_a =
+            tlab.alloc_array(baml_type::RuntimeTy::unknown(), vec![Value::object(shared)]);
+        let parent_b =
+            tlab.alloc_array(baml_type::RuntimeTy::unknown(), vec![Value::object(shared)]);
 
         let (stats, new_roots, _) = unsafe { heap.collect_garbage(&[parent_a, parent_b]) };
         // 2 parents + 1 shared child (not 4 — shared object copied only once)
@@ -2352,9 +2375,12 @@ mod tests {
 
         // root -> [B, C], B -> [D], C -> [D]
         let d = tlab.alloc_string("diamond_bottom".to_string());
-        let b = tlab.alloc_array(vec![Value::object(d)]);
-        let c = tlab.alloc_array(vec![Value::object(d)]);
-        let root = tlab.alloc_array(vec![Value::object(b), Value::object(c)]);
+        let b = tlab.alloc_array(baml_type::RuntimeTy::unknown(), vec![Value::object(d)]);
+        let c = tlab.alloc_array(baml_type::RuntimeTy::unknown(), vec![Value::object(d)]);
+        let root = tlab.alloc_array(
+            baml_type::RuntimeTy::unknown(),
+            vec![Value::object(b), Value::object(c)],
+        );
 
         let (stats, new_roots, _) = unsafe { heap.collect_garbage(&[root]) };
         // root + B + C + D (D is shared between B and C — copied only once)
@@ -2395,13 +2421,16 @@ mod tests {
         let mut tlab = Tlab::new(Arc::clone(&heap));
 
         // Create A (array placeholder) and B (cell pointing to A), then patch A -> B
-        let a = tlab.alloc_array(vec![]); // placeholder, will be patched
+        let a = tlab.alloc_array(baml_type::RuntimeTy::unknown(), vec![]); // placeholder, will be patched
         let b = tlab.alloc(Object::Cell(bex_vm_types::types::Cell::new(Value::object(
             a,
         ))));
         // Patch A to reference B, forming a cycle
         unsafe {
-            *a.get_mut() = Object::Array(vec![Value::object(b)].into());
+            *a.get_mut() = Object::Array(bex_vm_types::types::Array::new(
+                baml_type::RuntimeTy::unknown(),
+                vec![Value::object(b)],
+            ));
         }
 
         let (stats, new_roots, _) = unsafe { heap.collect_garbage(&[a]) };
@@ -2433,11 +2462,14 @@ mod tests {
         let mut tlab = Tlab::new(Arc::clone(&heap));
 
         // Island: three mutually-referencing objects, none reachable from roots
-        let x = tlab.alloc_array(vec![]); // placeholder
-        let y = tlab.alloc_array(vec![Value::object(x)]);
-        let z = tlab.alloc_array(vec![Value::object(y)]);
+        let x = tlab.alloc_array(baml_type::RuntimeTy::unknown(), vec![]); // placeholder
+        let y = tlab.alloc_array(baml_type::RuntimeTy::unknown(), vec![Value::object(x)]);
+        let z = tlab.alloc_array(baml_type::RuntimeTy::unknown(), vec![Value::object(y)]);
         unsafe {
-            *x.get_mut() = Object::Array(vec![Value::object(z)].into());
+            *x.get_mut() = Object::Array(bex_vm_types::types::Array::new(
+                baml_type::RuntimeTy::unknown(),
+                vec![Value::object(z)],
+            ));
         }
 
         // Separate rooted survivor
@@ -2457,7 +2489,10 @@ mod tests {
         // Build a 100-deep chain: root -> array -> array -> ... -> leaf string
         let mut current = tlab.alloc_string("leaf".to_string());
         for _ in 0..99 {
-            current = tlab.alloc_array(vec![Value::object(current)]);
+            current = tlab.alloc_array(
+                baml_type::RuntimeTy::unknown(),
+                vec![Value::object(current)],
+            );
         }
 
         let (stats, _, _) = unsafe { heap.collect_garbage(&[current]) };
@@ -2560,12 +2595,19 @@ mod tests {
         let leaf_func = tlab.alloc_string("func_placeholder".to_string());
 
         // --- Container: Object::Array ---
-        let array_container = tlab.alloc_array(vec![Value::object(leaf_for_array)]);
+        let array_container = tlab.alloc_array(
+            baml_type::RuntimeTy::unknown(),
+            vec![Value::object(leaf_for_array)],
+        );
 
         // --- Container: Object::Map ---
         let mut map_data = indexmap::IndexMap::new();
         map_data.insert(bex_str::BexStr::from("k"), Value::object(leaf_for_map));
-        let map_container = tlab.alloc_map(map_data);
+        let map_container = tlab.alloc_map(
+            baml_type::RuntimeTy::string(),
+            baml_type::RuntimeTy::unknown(),
+            map_data,
+        );
 
         // --- Container: Object::Closure ---
         let closure_container = tlab.alloc(Object::Closure(Closure {

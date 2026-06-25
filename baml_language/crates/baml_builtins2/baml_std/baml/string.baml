@@ -40,12 +40,6 @@ class String {
     root._to_string_shim(value)
   }
 
-  /// Serializes this string to a JSON value.
-  //baml:mut_vm
-  function to_json(self) -> baml.json.json throws never {
-    $rust_function
-  }
-
   /// Returns the number of **Unicode code points** (characters) in the string.
   ///
   /// This is `O(1)` — the count is cached at construction time. For ASCII

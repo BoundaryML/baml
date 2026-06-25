@@ -668,15 +668,20 @@ pub enum Rvalue {
     /// Unary operation: `!_1`, `-_1`
     UnaryOp { op: UnaryOp, operand: Operand },
 
-    /// Create an array: `[_1, _2, _3]`
-    Array(Vec<Operand>),
+    /// Create an array: `[_1, _2, _3]`. The first field is the static element
+    /// type (a [`TyTemplate`] so a generic `T[]` resolves against the frame's
+    /// type args at runtime), carried so the heap array records its declared
+    /// element type.
+    Array(TyTemplate, Vec<Operand>),
 
     /// Create a byte array from a literal: `b"hello"`
     Uint8Array(Vec<u8>),
 
-    /// Create a map: `{ key1: value1, key2: value2, ... }`
-    /// Each entry is a (key, value) pair.
-    Map(Vec<(Operand, Operand)>),
+    /// Create a map: `{ key1: value1, key2: value2, ... }`. Each entry is a
+    /// (key, value) pair. The first two fields are the static key and value
+    /// types (as [`TyTemplate`]s), carried so the heap map records its declared
+    /// key/value types.
+    Map(TyTemplate, TyTemplate, Vec<(Operand, Operand)>),
 
     /// Create an aggregate (class instance, enum variant): `ClassName { _1, _2 }`
     Aggregate {

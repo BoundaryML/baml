@@ -18,7 +18,7 @@ use baml_compiler2_hir::{
 };
 use text_size::TextRange;
 
-use crate::ty::Ty;
+use crate::ty::{QualifiedTypeName, Ty};
 
 // ── Error kinds ──────────────────────────────────────────────────────────────
 
@@ -98,6 +98,30 @@ pub enum TirTypeError {
     UnresolvedType {
         name: Name,
         suggestions: Vec<String>,
+    },
+    /// An associated-type projection's explicit `as X` qualifier resolved to a
+    /// non-interface type (a class, alias, etc.). The qualifier must name an
+    /// interface; without one the projection cannot be resolved, so it must not
+    /// silently fall back to an unqualified projection.
+    NonInterfaceProjectionQualifier,
+    /// An associated-type projection references `member`, but the interface or
+    /// class it projects through does not declare it as an associated type.
+    ///
+    /// Interfaces do not inherit associated types through `requires` (it is a
+    /// bound, not inheritance), so a member declared on a *required* interface
+    /// must be projected through that interface directly: `(Foo as Iterator).Item`,
+    /// not `(Foo as RequiresIterator).Item`.
+    UnknownAssociatedType {
+        member: Name,
+        container: QualifiedTypeName,
+        container_is_interface: bool,
+    },
+    /// An unqualified associated-type projection `Base.member` matches more than
+    /// one interface that declares `member`; it must be disambiguated with an
+    /// explicit `(Base as Interface).member` qualifier.
+    AmbiguousAssociatedTypeProjection {
+        member: Name,
+        candidates: Vec<QualifiedTypeName>,
     },
     /// Wrong number of arguments in a function call.
     ArgumentCountMismatch { expected: usize, got: usize },
@@ -397,11 +421,15 @@ impl fmt::Display for TirTypeError {
                 )
             }
             TirTypeError::UnresolvedMember { base_type, member } => {
-                write!(
-                    f,
-                    "type `{}` has no member `{member}`",
-                    base_type.render_user_facing()
-                )
+                if matches!(base_type, Ty::BuiltinUnknown { .. }) {
+                    write!(f, "cannot access field `{member}` on `unknown`")
+                } else {
+                    write!(
+                        f,
+                        "type `{}` has no member `{member}`",
+                        base_type.render_user_facing()
+                    )
+                }
             }
             TirTypeError::UnresolvedName { name } => {
                 write!(f, "unresolved name: {name}")
@@ -489,6 +517,40 @@ impl fmt::Display for TirTypeError {
                     f,
                     "operator `{op}` cannot be applied to `{}`",
                     operand.render_user_facing()
+                )
+            }
+            TirTypeError::NonInterfaceProjectionQualifier => {
+                write!(
+                    f,
+                    "qualified associated type projection must use an interface"
+                )
+            }
+            TirTypeError::UnknownAssociatedType {
+                member,
+                container,
+                container_is_interface,
+            } => {
+                let kind = if *container_is_interface {
+                    "interface"
+                } else {
+                    "class"
+                };
+                write!(
+                    f,
+                    "unknown associated type `{member}` for {kind} `{}`",
+                    container.render_user_facing()
+                )
+            }
+            TirTypeError::AmbiguousAssociatedTypeProjection { member, candidates } => {
+                let names = candidates
+                    .iter()
+                    .map(|c| format!("`{}`", c.render_user_facing()))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                write!(
+                    f,
+                    "ambiguous associated type `{member}`: declared by multiple interfaces \
+                     ({names}); qualify the projection with `(... as Interface).{member}`"
                 )
             }
             TirTypeError::UnresolvedType { name, suggestions } => {
@@ -659,7 +721,7 @@ impl fmt::Display for TirTypeError {
                 } else {
                     write!(
                         f,
-                        "Add an explicit `throws` to the callback, catch the call, or make the callback non-throwing."
+                        "The callback type does not say what it can throw. If `{callback_name}` is an infallible host callback, annotate it with `throws never`; otherwise catch the call or let the enclosing function declare/propagate the callback's throws."
                     )
                 }
             }
@@ -963,6 +1025,8 @@ pub enum DiagnosticSeverity {
 pub enum RelatedLocation<'db> {
     /// Expression in the same scope's `ExprBody`.
     Expr(ExprId),
+    /// A specific segment of a multi-segment `Path` expression.
+    ExprSegment(ExprId, usize),
     /// Statement in the same scope's `ExprBody`.
     Stmt(StmtId),
     /// A function parameter (possibly in another file).
@@ -1080,6 +1144,9 @@ fn resolve_related_location<'db>(
     match location {
         RelatedLocation::Expr(id) => {
             source_map.map(|sm| (scope_file.file_id(db), sm.expr_span(*id)))
+        }
+        RelatedLocation::ExprSegment(id, seg_idx) => {
+            source_map.map(|sm| (scope_file.file_id(db), sm.path_segment_span(*id, *seg_idx)))
         }
         RelatedLocation::Stmt(id) => {
             source_map.map(|sm| (scope_file.file_id(db), sm.stmt_span(*id)))

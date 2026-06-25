@@ -1223,13 +1223,32 @@ impl<'db> SemanticIndexBuilder<'db> {
                 });
         }
         for method in &c.methods {
-            // `to_string` is not a magic method: it must be provided by
-            // implementing `baml.ToString`, never declared directly on the
-            // class. (Methods inside `implements I { ... }` blocks live in
-            // `c.implements`, not `c.methods`, so an interface impl is fine.)
+            // `to_string` / `to_json` are not magic methods: each must be provided
+            // by implementing `baml.ToString` / `baml.ToJson`, never declared
+            // directly on the class. (Methods inside `implements I { ... }` blocks
+            // live in `c.implements`, not `c.methods`, so an interface impl is fine.)
             if method.name.as_str() == "to_string" {
                 self.diagnostics
                     .push(Hir2Diagnostic::ToStringMustImplementInterface {
+                        class_name: c.name.clone(),
+                        span: method.name_span,
+                    });
+            }
+            if method.name.as_str() == "to_json" {
+                self.diagnostics
+                    .push(Hir2Diagnostic::ToJsonMustImplementInterface {
+                        class_name: c.name.clone(),
+                        span: method.name_span,
+                    });
+            }
+            // `from_json` likewise belongs to `baml.FromJson`. The auto-derived
+            // structural-default delegate (origin `AutoDerive`) is exempt — it is
+            // synthesized, not user-written, and is `baml.FromJson`'s default.
+            if method.name.as_str() == "from_json"
+                && method.origin != ast::FunctionOrigin::AutoDerive
+            {
+                self.diagnostics
+                    .push(Hir2Diagnostic::FromJsonMustImplementInterface {
                         class_name: c.name.clone(),
                         span: method.name_span,
                     });

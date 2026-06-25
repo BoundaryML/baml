@@ -353,14 +353,26 @@ impl BexEngine {
             BexExternalValue::String(s) => {
                 Value::object(holder.holder_mut().tlab_mut().alloc_string(s))
             }
-            BexExternalValue::Array { items, .. } => {
+            BexExternalValue::Array {
+                element_type,
+                items,
+            } => {
                 let values = items
                     .into_iter()
                     .map(|v| self.convert_external_to_vm_value(holder, v))
                     .collect::<Result<Vec<_>, _>>()?;
-                Value::object(holder.holder_mut().tlab_mut().alloc_array(values))
+                Value::object(
+                    holder
+                        .holder_mut()
+                        .tlab_mut()
+                        .alloc_array(element_type, values),
+                )
             }
-            BexExternalValue::Map { entries, .. } => {
+            BexExternalValue::Map {
+                key_type,
+                value_type,
+                entries,
+            } => {
                 let values = entries
                     .into_iter()
                     .map(|(k, v)| {
@@ -368,7 +380,12 @@ impl BexEngine {
                             .map(|v| (bex_vm_types::BexStr::from(k.as_str()), v))
                     })
                     .collect::<Result<indexmap::IndexMap<bex_vm_types::BexStr, Value>, _>>()?;
-                Value::object(holder.holder_mut().tlab_mut().alloc_map(values))
+                Value::object(
+                    holder
+                        .holder_mut()
+                        .tlab_mut()
+                        .alloc_map(key_type, value_type, values),
+                )
             }
             BexExternalValue::Uint8Array(bytes) => {
                 Value::object(holder.holder_mut().tlab_mut().alloc_uint8array(bytes))

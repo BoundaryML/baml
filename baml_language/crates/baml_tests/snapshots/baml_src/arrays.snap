@@ -1017,6 +1017,7 @@ function arrays.array_index_read(idx: int) -> int {
     load_const 10
     load_const 20
     load_const 30
+    load_type int
     alloc_array 3
     load_var idx
     load_array_element
@@ -1027,6 +1028,7 @@ function arrays.array_index_write(idx: int) -> int[] {
     load_const 10
     load_const 20
     load_const 30
+    load_type int
     alloc_array 3
     store_var xs
     load_var2 2 1
@@ -1041,55 +1043,56 @@ function arrays.run_sort_generic_ints() -> int[] {
     load_const 3
     load_const 1
     load_const 2
+    load_type int
     alloc_array 3
     call user.arrays.sort_generic
     return
 }
 
 function arrays.sort_bigints(xs: bigint[]) -> bigint[] {
-    load_type unknown
+    load_type bigint
     load_var xs
     call baml.Sortable$for$T[].sort
     return
 }
 
 function arrays.sort_flaky(xs: arrays.ComparableFlaky[]) -> arrays.ComparableFlaky[] {
-    load_type unknown
+    load_type arrays.ComparableFlaky
     load_var xs
     call baml.Sortable$for$T[].sort
     return
 }
 
 function arrays.sort_floats(xs: float[]) -> float[] {
-    load_type unknown
+    load_type float
     load_var xs
     call baml.Sortable$for$T[].sort
     return
 }
 
 function arrays.sort_generic(xs: U[]) -> U[] {
-    load_type unknown
+    load_type #0
     load_var xs
     call baml.Sortable$for$T[].sort
     return
 }
 
 function arrays.sort_ints(xs: int[]) -> int[] {
-    load_type unknown
+    load_type int
     load_var xs
     call baml.Sortable$for$T[].sort
     return
 }
 
 function arrays.sort_items(xs: arrays.SortableItem[]) -> arrays.SortableItem[] {
-    load_type unknown
+    load_type arrays.SortableItem
     load_var xs
     call baml.Sortable$for$T[].sort
     return
 }
 
 function arrays.sort_strings(xs: string[]) -> string[] {
-    load_type unknown
+    load_type string
     load_var xs
     call baml.Sortable$for$T[].sort
     return
