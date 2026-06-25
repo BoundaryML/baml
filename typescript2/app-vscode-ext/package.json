@@ -94,7 +94,7 @@
     }
   },
   "scripts": {
-    "sync:grammar": "node ../pkg-grammar/scripts/sync.mjs",
+    "sync:grammar": "pnpm --filter @b/pkg-grammar build",
     "predev": "pnpm run sync:grammar",
     "dev": "tsup --watch --sourcemap",
     "prebuild": "pnpm run sync:grammar",

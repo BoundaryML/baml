@@ -13,7 +13,17 @@
     "*.tmLanguage.json"
   ],
   "scripts": {
+    "build": "tsx scripts/build.ts && node scripts/sync.mjs",
     "sync": "node scripts/sync.mjs",
-    "check": "node scripts/sync.mjs --check"
+    "check": "node scripts/sync.mjs --check",
+    "preview": "vite",
+    "test": "vitest run --config vitest.config.ts"
+  },
+  "devDependencies": {
+    "shiki": "^3.0.0",
+    "tmlanguage-generator": "^0.6.8",
+    "tsx": "^4.19.2",
+    "vite": "^6.0.0",
+    "vitest": "^3.0.0"
   }
 }
