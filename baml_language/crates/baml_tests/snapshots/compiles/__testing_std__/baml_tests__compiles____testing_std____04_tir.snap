@@ -483,7 +483,7 @@ function testing.collect_subtree_leaves(registry: testing.TestRegistry, ts: test
 }
 function testing.expansion_error_leaf(name: string) -> testing.FlatLeaf throws never {
   { : testing.FlatLeaf
-    FlatLeaf { name: name, body: () -> void throws unknown { ... }, runner: null } : testing.FlatLeaf
+    FlatLeaf { name: name + "/(failed to expand)", body: () -> void throws unknown { ... }, runner: null } : testing.FlatLeaf
   }
 }
 lambda testing.expansion_error_leaf {

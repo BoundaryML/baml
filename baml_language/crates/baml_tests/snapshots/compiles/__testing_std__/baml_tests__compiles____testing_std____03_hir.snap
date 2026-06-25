@@ -78,7 +78,7 @@ function testing.expand_testset_registry(self: ?, ts: testing.TestSetRegistratio
   {  } match (self.expansions.get(ts.name)) { existing: testing.TestRegistry => existing, null => { let start = baml.sys.now_ms(); let sub_collector = testing.TestCollector { prefix: ts.name, tests: [], testsets: [] }; ts.collector(sub_collector); let elapsed = baml.sys.now_ms() Sub start; let sub_registry = testing.TestRegistry { collector: sub_collector, expansions: map {  }, loading_time_ms: elapsed }; self.expansions.set(ts.name, sub_registry) } sub_registry }
 }
 function testing.expansion_error_leaf(name: string) -> testing.FlatLeaf  [expr] {
-  {  } testing.FlatLeaf { name: name, body: () -> void throws unknown { {  } baml.sys.panic("testset failed to...") }, runner: null }
+  {  } testing.FlatLeaf { name: name Add "/(failed to expand)", body: () -> void throws unknown { {  } baml.sys.panic("testset failed to...") }, runner: null }
 }
 function testing.expansion_error_report(name: string) -> TestSetReport  [expr] {
   {  } TestSetReport { outcome: "error", passed: 0, failed: 1, total: 1, failed_names: [name], results: [] }

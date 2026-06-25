@@ -2456,11 +2456,13 @@ fn testing.expansion_error_leaf(name: string) -> testing.FlatLeaf {
     // Locals:
     let _0: testing.FlatLeaf // _0 // return
     let _1: string // name // param
-    let _2: () -> void throws unknown
+    let _2: string
+    let _3: () -> void throws unknown
 
     bb0: {
-        _2 = make_closure lambda[0]();
-        _0 = testing.FlatLeaf { copy _1, copy _2, const null };
+        _2 = copy _1 + const "/(failed to expand)";
+        _3 = make_closure lambda[0]();
+        _0 = testing.FlatLeaf { copy _2, copy _3, const null };
         goto -> bb1;
     }
 

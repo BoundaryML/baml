@@ -150,8 +150,12 @@ impl TestArgs {
                     None
                 }
                 Err(e) => {
-                    reporter.warning(format_args!("testset discovery failed: {e:?}"));
-                    None
+                    // A failure resolving the registry (vs. a project with no
+                    // tests, which returns Null) is a real error — don't silently
+                    // continue as if there were no testset tests.
+                    reporter.abandon();
+                    crate::reporter::print_error(format_args!("testset discovery failed: {e}"));
+                    return Ok(crate::ExitCode::Other);
                 }
             };
 
@@ -539,9 +543,11 @@ fn parse_flat_report(value: &BexExternalValue) -> Option<FlatReport> {
         .get("outcome")
         .and_then(|v| as_string(unwrap_union(v)))?
         .to_string();
-    let passed = fields.get("passed").and_then(as_usize).unwrap_or(0);
-    let failed = fields.get("failed").and_then(as_usize).unwrap_or(0);
-    let total = fields.get("total").and_then(as_usize).unwrap_or(0);
+    // Counts are always present in a well-formed FlatTestReport; treat a missing
+    // one as an FFI contract break (parse fails -> reported, not silently zeroed).
+    let passed = fields.get("passed").and_then(as_usize)?;
+    let failed = fields.get("failed").and_then(as_usize)?;
+    let total = fields.get("total").and_then(as_usize)?;
     let failed_names = fields
         .get("failed_names")
         .map(string_array_values)

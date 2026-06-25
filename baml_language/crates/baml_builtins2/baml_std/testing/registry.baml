@@ -444,10 +444,12 @@ function collect_subtree_leaves(registry: TestRegistry, ts: TestSetRegistration)
 }
 
 // A synthetic leaf standing in for a testset that failed to expand. Running it
-// re-throws so run_test records a failure named after the testset.
+// re-throws so run_test records a failure. The name is slash-qualified under
+// the testset (e.g. "suite/(failed to expand)") so split_top keeps it under the
+// testset segment and `-i suite::*` / `-x suite::*` select it like a real leaf.
 function expansion_error_leaf(name: string) -> FlatLeaf {
   FlatLeaf {
-    name: name,
+    name: name + "/(failed to expand)",
     body: () -> void throws unknown { baml.sys.panic("testset failed to expand") },
     runner: null,
   }
@@ -590,8 +592,8 @@ function run_selected_leaves(leaves: FlatLeaf[]) -> FlatTestReport {
   }
 }
 
-// Convert a single leaf's TestReport into a flat row. Surfaces the first
-// failing run's message and sums run durations.
+// Convert a single leaf's TestReport into a flat row. Surfaces every failing
+// run's message and sums run durations.
 function flatten_leaf_report(name: string, report: TestReport) -> FlatTestResult {
   let messages: string[] = []
   let duration = 0

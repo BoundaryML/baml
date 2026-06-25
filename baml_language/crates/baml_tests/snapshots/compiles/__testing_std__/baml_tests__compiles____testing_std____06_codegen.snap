@@ -4479,6 +4479,8 @@ function testing.collect_subtree_leaves(registry: testing.TestRegistry, ts: test
 
 function testing.expansion_error_leaf(name: string) -> testing.FlatLeaf {
     load_var name
+    load_const "/(failed to expand)"
+    bin_op +
     make_closure .<lambda(expansion_error_leaf, 0)>, 0
     load_const null
     init_instance testing.FlatLeaf .name, .body, .runner
