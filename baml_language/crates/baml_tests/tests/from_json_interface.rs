@@ -175,3 +175,91 @@ fn empty_implementor_is_rejected() {
         errors.join("\n  ")
     );
 }
+
+// ── The `Type.from_json(j)` static-call sugar ──────────────────────────────
+// These exercise the sugar form directly (the tests above use the `baml.json.to`
+// driver). `Type.from_json(j)` desugars to `baml.json.to<Type>(j)`: there is no
+// synthesized `from_json` method on the class.
+
+#[tokio::test]
+async fn static_from_json_decodes_non_implementor() {
+    // `User.from_json(j)` (no FromJson impl) desugars to `baml.json.to<User>(j)`
+    // and decodes structurally.
+    let output = baml_test!(
+        r#"
+        class User { name string  age int }
+        function main() -> string throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+            let j = baml.json.parse("{\"name\": \"Ada\", \"age\": 30}")
+            let u: User = User.from_json(j)
+            u.name
+        }
+        "#
+    );
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("Ada".into())
+    );
+}
+
+#[tokio::test]
+async fn static_from_json_dispatches_override() {
+    // An implementor's `Temp.from_json(j)` resolves Temp's own `baml.FromJson`
+    // override (not the sugar) — it reads "c", not a structural "celsius".
+    let output = baml_test!(
+        r#"
+        class Temp {
+            celsius float
+            implements baml.FromJson {
+                function from_json(j: baml.json.json) -> Self throws baml.json.JsonDecodeError {
+                    Temp { celsius: baml.json.to<float>(baml.json.field(j, "c")) }
+                }
+            }
+        }
+        function main() -> float throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+            let j = baml.json.parse("{\"c\": 20.5}")
+            let t: Temp = Temp.from_json(j)
+            t.celsius
+        }
+        "#
+    );
+    assert_eq!(output.result.unwrap(), BexExternalValue::Float(20.5));
+}
+
+#[tokio::test]
+async fn static_from_json_threads_generic_type_arg() {
+    // `Box<int>.from_json(j)` — the `<int>` parses as the call's type args and is
+    // applied to the receiver, so it desugars to `baml.json.to<Box<int>>(j)` and
+    // the field decodes as int (the case the `-> Self` delegate could not thread).
+    let output = baml_test!(
+        r#"
+        class Box<T> { value T }
+        function main() -> int throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+            let j = baml.json.parse("{\"value\": 42}")
+            let b: Box<int> = Box<int>.from_json(j)
+            b.value
+        }
+        "#
+    );
+    assert_eq!(output.result.unwrap(), BexExternalValue::Int(42));
+}
+
+#[test]
+fn static_from_json_charges_only_json_decode_error() {
+    // The sugar charges exactly `JsonDecodeError` (not the unaccounted-callee
+    // `unknown`): a wrapper declaring only that throws compiles clean, and a
+    // structural decode needs no `JsonParseError`.
+    let errors = compile_errors(
+        r#"
+        class User { name string  age int }
+        function decode(j: baml.json.json) -> User throws baml.json.JsonDecodeError {
+            User.from_json(j)
+        }
+        function main() -> int { 1 }
+        "#,
+    );
+    assert!(
+        errors.is_empty(),
+        "Type.from_json should charge only JsonDecodeError; got:\n  {}",
+        errors.join("\n  ")
+    );
+}
