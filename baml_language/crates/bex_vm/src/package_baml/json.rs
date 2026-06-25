@@ -456,6 +456,9 @@ impl BamlNamespaceJson for PackageBamlImpl {
     }
 
     fn from_json(vm: &mut BexVm, j: &Value) -> NativeCallResult {
+        // `baml.json.from_json<T>` is now a thin alias for `baml.json.to<T>` (the
+        // override-honoring decoder). Kept for back-compat / the `deserialize`
+        // wrapper; the magic per-class `from_json` it used to dispatch is gone.
         let ty = match vm.current_call_type_args().first().cloned() {
             Some(t) => t,
             None => {
@@ -466,7 +469,7 @@ impl BamlNamespaceJson for PackageBamlImpl {
                 ));
             }
         };
-        json_from_json_dispatch(vm, *j, &ty)
+        json_to_dispatch(vm, *j, &ty)
     }
 
     fn field(vm: &mut BexVm, j: &Value, key: &bex_str::BexStr) -> Value {
@@ -1421,43 +1424,10 @@ fn deserialize_media(
 
 // ─── from_json dispatcher ────────────────────────────────────────────────────
 
-/// Top-level dispatch for `baml.json.from_json<T>(j)`.
-///
-/// Produces a `NativeCallResult` so that user `from_json` overrides on user
-/// classes are dispatched via `YieldToCall`. For class fields nested inside
-/// `List<C>` / `Map<string, C>` / `Optional<C>` the walker uses continuation
-/// trampolines so each element / value goes through `<fqn>.from_json` to
-/// honor user overrides.
-///
-/// Generic class dispatch: when `T = RuntimeTy::Class(qtn, type_args, _)` with
-/// non-empty `type_args`, the dispatched `<fqn>.from_json` frame is seeded
-/// with `type_args` via the `YieldToCall { type_args, .. }` channel, so the
-/// auto-derived body (e.g. `Box<T> { value: baml.json.from_json<T>(...) }`)
-/// sees `T` substituted to the concrete type at runtime.
-pub fn json_from_json_dispatch(vm: &mut BexVm, j: Value, ty: &RuntimeTy) -> NativeCallResult {
-    match ty {
-        // A nullable union (`T?` == `T | null`): null short-circuits, otherwise
-        // dispatch into the non-null payload so a class's `from_json` override
-        // is still honored for optional fields.
-        RuntimeTy::Union(members, _) if members.iter().any(RuntimeTy::is_null) => {
-            if j.is_null() {
-                NativeCallResult::Done(Value::NULL)
-            } else {
-                json_from_json_dispatch(vm, j, &ty.strip_null())
-            }
-        }
-        RuntimeTy::List(elem, _) => list_from_json_start(vm, j, elem),
-        RuntimeTy::Map { value: vty, .. } => map_from_json_start(vm, j, vty),
-        _ => match try_yield_user_from_json(vm, j, ty) {
-            Some(yld) => yld,
-            None => structural_decode_value(vm, j, ty),
-        },
-    }
-}
-
 /// Structural decode by converting `j` (a VM `json` value) to
-/// `serde_json::Value` and running `ty_serde_to_value`. Used as the
-/// fallback when no override path applies.
+/// `serde_json::Value` and running `ty_serde_to_value`. Used by
+/// [`json_to_dispatch`] for leaf types (primitives, enums, media, literals)
+/// that can never carry a `baml.FromJson` override.
 fn structural_decode_value(vm: &mut BexVm, j: Value, ty: &RuntimeTy) -> NativeCallResult {
     let serde = value_to_serde(vm, j);
     let mut path = String::new();
@@ -1465,32 +1435,6 @@ fn structural_decode_value(vm: &mut BexVm, j: Value, ty: &RuntimeTy) -> NativeCa
         Ok(v) => NativeCallResult::Done(v),
         Err(e) => NativeCallResult::Error(e),
     }
-}
-
-/// If `ty` is a class type with a registered `<fqn>.from_json` function,
-/// returns a `YieldToCall` that dispatches it. Threads the class's own
-/// `type_args` into the frame so generic class instantiations like
-/// `Box<Secret>.from_json` see `T = Secret` inside their auto-derived body.
-/// Returns `None` for non-class types, media classes, and classes without a
-/// `from_json`.
-fn try_yield_user_from_json(vm: &mut BexVm, j: Value, ty: &RuntimeTy) -> Option<NativeCallResult> {
-    let (qtn, type_args) = match ty {
-        RuntimeTy::Class(qtn, type_args, _) | RuntimeTy::Interface(qtn, type_args, _, _) => {
-            (qtn, type_args)
-        }
-        _ => return None,
-    };
-    if media_kind_from_fqn(qtn.display_name().as_str()).is_some() {
-        return None;
-    }
-    let from_json_name = format!("{}.from_json", class_lookup_key(qtn));
-    let callee = vm.find_function_by_name(&from_json_name)?;
-    Some(NativeCallResult::YieldToCall {
-        callee,
-        args: vec![j],
-        type_args: type_args.clone(),
-        continuation: Box::new(IdentityFromJsonCont),
-    })
 }
 
 /// Pass-through continuation used when dispatching `<fqn>.from_json(j)`: the
@@ -1807,9 +1751,25 @@ fn list_drive(
             idx += 1;
             continue;
         }
-        let inner_ty = peel_optional(&elem_ty);
-        if let Some(yld) = try_yield_user_from_json(vm, curr, inner_ty) {
-            return wrap_list_yield(yld, array, elem_ty, results, idx);
+        // Elements that may contain overrides decode via the `baml.json.to`
+        // driver (one dispatch each, composing with this trampoline); leaf
+        // elements decode structurally without yielding.
+        if needs_driver_decode(&elem_ty) {
+            let to_fn = match vm.find_function_by_name("baml.json.to") {
+                Some(f) => f,
+                None => return missing_to_driver(),
+            };
+            return NativeCallResult::YieldToCall {
+                callee: to_fn,
+                args: vec![curr],
+                type_args: vec![elem_ty.clone()],
+                continuation: Box::new(ListFromJsonCont {
+                    array,
+                    elem_ty,
+                    results,
+                    idx,
+                }),
+            };
         }
         match decode_value_sync(vm, curr, &elem_ty) {
             Ok(v) => {
@@ -1823,33 +1783,29 @@ fn list_drive(
     NativeCallResult::Done(arr_val)
 }
 
-fn wrap_list_yield(
-    yld: NativeCallResult,
-    array: Vec<Value>,
-    elem_ty: RuntimeTy,
-    results: Vec<Value>,
-    idx: usize,
-) -> NativeCallResult {
-    let (callee, args, type_args) = match yld {
-        NativeCallResult::YieldToCall {
-            callee,
-            args,
-            type_args,
-            ..
-        } => (callee, args, type_args),
-        other => return other,
-    };
-    NativeCallResult::YieldToCall {
-        callee,
-        args,
-        type_args,
-        continuation: Box::new(ListFromJsonCont {
-            array,
-            elem_ty,
-            results,
-            idx,
-        }),
-    }
+/// Whether decoding `ty` may need to dispatch a `baml.FromJson` override, so the
+/// caller must yield to the `baml.json.to` driver rather than decode in place.
+/// True for class/interface/list/map (after peeling an optional wrapper); false
+/// for leaf types (primitives, enums, media, literals) — which decode
+/// structurally and can never carry an override.
+fn needs_driver_decode(ty: &RuntimeTy) -> bool {
+    matches!(
+        peel_optional(ty),
+        RuntimeTy::Class(..)
+            | RuntimeTy::Interface(..)
+            | RuntimeTy::List(..)
+            | RuntimeTy::Map { .. }
+    )
+}
+
+/// The `baml.json.to` driver function should always be registered; this is the
+/// defensive error if it is somehow missing.
+fn missing_to_driver() -> NativeCallResult {
+    NativeCallResult::Error(VmRustFnError::InternalError(
+        VmInternalError::MissingNativeFunction {
+            name: "baml.json.to not found".to_string(),
+        },
+    ))
 }
 
 struct ListFromJsonCont {
@@ -1917,9 +1873,22 @@ fn map_drive(
             idx += 1;
             continue;
         }
-        let inner_ty = peel_optional(&val_ty);
-        if let Some(yld) = try_yield_user_from_json(vm, curr, inner_ty) {
-            return wrap_map_yield(yld, entries, val_ty, results, idx);
+        if needs_driver_decode(&val_ty) {
+            let to_fn = match vm.find_function_by_name("baml.json.to") {
+                Some(f) => f,
+                None => return missing_to_driver(),
+            };
+            return NativeCallResult::YieldToCall {
+                callee: to_fn,
+                args: vec![curr],
+                type_args: vec![val_ty.clone()],
+                continuation: Box::new(MapFromJsonCont {
+                    entries,
+                    val_ty,
+                    results,
+                    idx,
+                }),
+            };
         }
         match decode_value_sync(vm, curr, &val_ty) {
             Ok(v) => {
@@ -1931,35 +1900,6 @@ fn map_drive(
     }
     let map_val = Value::object(vm.tlab.alloc(Object::Map(results.into())));
     NativeCallResult::Done(map_val)
-}
-
-fn wrap_map_yield(
-    yld: NativeCallResult,
-    entries: Vec<(bex_vm_types::BexStr, Value)>,
-    val_ty: RuntimeTy,
-    results: IndexMap<bex_vm_types::BexStr, Value>,
-    idx: usize,
-) -> NativeCallResult {
-    let (callee, args, type_args) = match yld {
-        NativeCallResult::YieldToCall {
-            callee,
-            args,
-            type_args,
-            ..
-        } => (callee, args, type_args),
-        other => return other,
-    };
-    NativeCallResult::YieldToCall {
-        callee,
-        args,
-        type_args,
-        continuation: Box::new(MapFromJsonCont {
-            entries,
-            val_ty,
-            results,
-            idx,
-        }),
-    }
 }
 
 struct MapFromJsonCont {
