@@ -30,6 +30,7 @@ import type { ResultRendererProps } from '../result-renderers';
 import { getChrome } from './constants';
 import { cfgToGraphNodes, graphToReactflow } from './convert';
 import { layoutGraph } from './layout';
+import { applyLevelOfDetail, maxNodeDepth, zoomToRevealDepth } from './lod';
 import { kNodeTypes } from './nodes';
 import { kEdgeTypes, ColorfulMarkerDefinitions } from './edges';
 import { GraphThemeContext, useGraphTheme } from './theme';
@@ -57,6 +58,19 @@ interface GraphViewProps {
 const EMPTY_CALLS: CallNode[] = [];
 
 type LayoutDirection = 'horizontal' | 'vertical';
+
+/** How the graph decides which subgraphs to reveal vs. collapse. */
+type ExpandMode = 'zoom' | 'click' | 'all';
+
+const EXPAND_MODES: { id: ExpandMode; label: string; title: string }[] = [
+  { id: 'zoom', label: 'Zoom', title: 'Reveal subgraphs as you zoom in' },
+  {
+    id: 'click',
+    label: 'Click',
+    title: 'Collapsed by default — click a node to expand its subgraph',
+  },
+  { id: 'all', label: 'All', title: 'Expand every subgraph' },
+];
 
 const DIRECTION_STORAGE_PREFIX = 'baml-graph-direction:';
 
@@ -239,6 +253,70 @@ function GraphViewInner({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [graph, theme]);
 
+  // ── Level of detail: semantic zoom + click-to-expand ─────────────────────
+  // The full CFG is deeply nested; we render only down to a reveal depth and
+  // collapse deeper subgraphs into a single leaf. How that depth is chosen is
+  // the "Expand" mode (bottom-right menu):
+  //   • zoom  — depth follows the viewport zoom (semantic zoom)
+  //   • click — collapsed by default; click a node to expand its subgraph
+  //   • all   — everything expanded
+  // `expanded` holds containers the user clicked open; it layers on any mode.
+  const maxDepth = useMemo(() => maxNodeDepth(graphModel.rfNodes), [graphModel]);
+  const [expandMode, setExpandMode] = useState<ExpandMode>('zoom');
+  const [zoomDepth, setZoomDepth] = useState(2);
+  const [expanded, setExpanded] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+  // Enables node position/size transitions only after the first layout, so the
+  // initial paint snaps into place instead of flying in from the origin.
+  const [layoutReady, setLayoutReady] = useState(false);
+
+  const revealDepth =
+    expandMode === 'all'
+      ? Number.POSITIVE_INFINITY
+      : expandMode === 'click'
+        ? 1
+        : zoomDepth;
+
+  const lodModel = useMemo(
+    () =>
+      applyLevelOfDetail(graphModel.rfNodes, graphModel.rfEdges, {
+        revealDepth,
+        expanded,
+      }),
+    [graphModel, revealDepth, expanded],
+  );
+
+  // Map the live zoom to a reveal depth — zoom mode only. State only changes at
+  // depth boundaries, so this re-layouts at most a few times per gesture.
+  const onMove = useCallback(
+    (_event: unknown, viewport: { zoom: number }) => {
+      if (expandMode !== 'zoom') return;
+      setZoomDepth((prev) => {
+        const next = zoomToRevealDepth(viewport.zoom, maxDepth);
+        return next === prev ? prev : next;
+      });
+    },
+    [expandMode, maxDepth],
+  );
+
+  // Switching modes clears manual expansions and refits to the new extent.
+  const selectExpandMode = useCallback((mode: ExpandMode) => {
+    setExpandMode(mode);
+    setExpanded(new Set());
+    refitAfterLayoutRef.current = true;
+  }, []);
+
+  // Click a collapsed node to reveal its subgraph; click again to collapse.
+  const toggleExpanded = useCallback((nodeId: string) => {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(nodeId)) next.delete(nodeId);
+      else next.add(nodeId);
+      return next;
+    });
+  }, []);
+
   const runtimeInputsRef = useRef({
     graphRuntimeOverlay,
     calls,
@@ -320,18 +398,20 @@ function GraphViewInner({
   // Runtime overlay can affect geometry when an error preview is visible.
   useEffect(() => {
     const layoutRunId = ++layoutRunIdRef.current;
-    const nodesWithRuntime = decorateNodesWithRuntime(graphModel.rfNodes);
+    const nodesWithRuntime = decorateNodesWithRuntime(lodModel.nodes);
 
-    layoutGraph(nodesWithRuntime, graphModel.rfEdges, direction)
+    layoutGraph(nodesWithRuntime, lodModel.edges, direction)
       .then(({ nodes: laid, edges: laidEdges }) => {
         if (layoutRunId !== layoutRunIdRef.current) return;
         setNodes(decorateNodesWithRuntime(laid));
         setEdges(laidEdges);
+        // Arm transitions for subsequent (expand/collapse) re-layouts.
+        setLayoutReady(true);
         if (refitAfterLayoutRef.current) {
           refitAfterLayoutRef.current = false;
           // Wait a frame so ReactFlow has measured the re-laid nodes.
           requestAnimationFrame(() => {
-            fitView({ padding: 0.2, minZoom: 0.3, maxZoom: 0.85, duration: 250 });
+            fitView({ padding: 0.2, minZoom: 0.3, maxZoom: 1.5, duration: 250 });
           });
         }
       })
@@ -339,7 +419,7 @@ function GraphViewInner({
         console.error('[GraphView] Layout failed:', err);
       });
   }, [
-    graphModel,
+    lodModel,
     graphRuntimeOverlay,
     calls,
     runStatus,
@@ -434,14 +514,24 @@ function GraphViewInner({
 
   const handleNodeClick: NodeMouseHandler<WorkflowNode> = useCallback(
     (_event, node) => {
+      // Click-to-expand / collapse: a collapsed node reveals its subgraph; a
+      // node the user previously expanded collapses again. Both short-circuit
+      // the normal navigate/select.
+      if (node.data?.collapsed || expanded.has(node.id)) {
+        toggleExpanded(node.id);
+        return;
+      }
       onNodeClick(Number(node.id));
     },
-    [onNodeClick],
+    [onNodeClick, expanded, toggleExpanded],
   );
 
   return (
     <GraphThemeContext.Provider value={theme}>
-    <div style={{ width: '100%', height: '100%', position: 'relative' }}>
+    <div
+      className={layoutReady ? 'baml-graph baml-graph--animate' : 'baml-graph'}
+      style={{ width: '100%', height: '100%', position: 'relative' }}
+    >
       {/* Override @xyflow/react defaults:
             - .react-flow__node-group has a built-in light gray fill + 1px
               border (so nested groups stack into visible gray patches).
@@ -508,6 +598,29 @@ function GraphViewInner({
           to { transform: rotate(360deg); }
         }
         .react-flow__attribution { display: none !important; }
+        /* Level-of-detail transitions: when expand/collapse re-layouts, nodes
+           glide to their new spot and containers grow/shrink, and freshly
+           revealed nodes fade in. Armed only after the first layout so the
+           initial paint doesn't fly in from the origin. */
+        .baml-graph--animate .react-flow__node {
+          transition:
+            transform 280ms cubic-bezier(0.4, 0, 0.2, 1),
+            width 280ms cubic-bezier(0.4, 0, 0.2, 1),
+            height 280ms cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .baml-graph--animate .react-flow__node {
+          animation: baml-lod-in 280ms ease both;
+        }
+        @keyframes baml-lod-in {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .baml-graph--animate .react-flow__node {
+            transition: none;
+            animation: none;
+          }
+        }
       `}</style>
       <ReactFlow
         nodes={nodes}
@@ -517,6 +630,7 @@ function GraphViewInner({
         nodeTypes={kNodeTypes}
         edgeTypes={kEdgeTypes}
         onNodeClick={handleNodeClick}
+        onMove={onMove}
         nodesDraggable={false}
         nodesFocusable
         edgesFocusable={false}
@@ -528,7 +642,7 @@ function GraphViewInner({
         panOnScroll
         panActivationKeyCode={null}
         fitView
-        fitViewOptions={{ minZoom: 0.3, maxZoom: 0.85, padding: 0.2 }}
+        fitViewOptions={{ minZoom: 0.3, maxZoom: 1.5, padding: 0.2 }}
         proOptions={{ hideAttribution: true }}
         colorMode={theme}
       >
@@ -589,6 +703,69 @@ function GraphViewInner({
       >
         {direction === 'horizontal' ? '\u2195' : '\u2194'}
       </button>
+      {/* Expand mode: how subgraphs are revealed (semantic zoom / click / all). */}
+      <div
+        role="radiogroup"
+        aria-label="Subgraph expand mode"
+        style={{
+          position: 'absolute',
+          bottom: 10,
+          right: 10,
+          zIndex: 10,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 4,
+          padding: '4px 6px',
+          borderRadius: 10,
+          border: `1px solid ${chrome.button.border}`,
+          background: chrome.button.bg,
+          backdropFilter: 'blur(8px)',
+          WebkitBackdropFilter: 'blur(8px)',
+          boxShadow: chrome.button.shadow,
+          fontFamily:
+            'ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif',
+        }}
+      >
+        <span
+          style={{
+            fontSize: 10,
+            fontWeight: 600,
+            letterSpacing: '0.05em',
+            textTransform: 'uppercase',
+            color: chrome.button.text,
+            opacity: 0.55,
+            padding: '0 2px',
+          }}
+        >
+          Expand
+        </span>
+        {EXPAND_MODES.map((m) => {
+          const on = expandMode === m.id;
+          return (
+            <button
+              key={m.id}
+              type="button"
+              role="radio"
+              aria-checked={on}
+              title={m.title}
+              onClick={() => selectExpandMode(m.id)}
+              style={{
+                padding: '3px 9px',
+                borderRadius: 7,
+                fontSize: 11.5,
+                fontWeight: on ? 700 : 500,
+                cursor: 'pointer',
+                color: on ? chrome.selectionRing.color : chrome.button.text,
+                background: 'transparent',
+                border: `1px solid ${on ? chrome.selectionRing.color : 'transparent'}`,
+                transition: 'color 120ms ease, border-color 120ms ease',
+              }}
+            >
+              {m.label}
+            </button>
+          );
+        })}
+      </div>
     </div>
     </GraphThemeContext.Provider>
   );
