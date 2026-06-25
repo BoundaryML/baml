@@ -30,7 +30,12 @@ import type { ResultRendererProps } from '../result-renderers';
 import { getChrome } from './constants';
 import { cfgToGraphNodes, graphToReactflow } from './convert';
 import { layoutGraph } from './layout';
-import { applyLevelOfDetail, maxNodeDepth, zoomToRevealDepth } from './lod';
+import {
+  applyLevelOfDetail,
+  computeNodeDepths,
+  maxNodeDepth,
+  zoomToRevealDepth,
+} from './lod';
 import { kNodeTypes } from './nodes';
 import { kEdgeTypes, ColorfulMarkerDefinitions } from './edges';
 import { GraphThemeContext, useGraphTheme } from './theme';
@@ -431,6 +436,7 @@ function GraphViewInner({
     const parentById = new Map(
       graphModel.rfNodes.map((n) => [n.id, n.parentId]),
     );
+    const depths = computeNodeDepths(graphModel.rfNodes);
     const ancestors: string[] = [];
     let cur = parentById.get(id);
     let guard = 0;
@@ -438,14 +444,18 @@ function GraphViewInner({
       ancestors.push(cur);
       cur = parentById.get(cur);
     }
-    if (ancestors.length === 0) return;
+    // Only open ancestors that are actually closed at this zoom (depth past the
+    // reveal threshold) and not already manually expanded — leave open ones be.
+    const toOpen = ancestors.filter(
+      (a) => (depths.get(a) ?? 0) >= revealDepth && !expanded.has(a),
+    );
+    if (toOpen.length === 0) return;
     setExpanded((prev) => {
-      if (ancestors.every((a) => prev.has(a))) return prev;
       const next = new Set(prev);
-      for (const a of ancestors) next.add(a);
+      for (const a of toOpen) next.add(a);
       return next;
     });
-  }, [selectedNodeId, lodModel, graphModel]);
+  }, [selectedNodeId, lodModel, graphModel, revealDepth, expanded]);
 
   // Keep runtime node data fresh while a new ELK layout is pending.
   useEffect(() => {

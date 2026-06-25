@@ -99,9 +99,14 @@ function nodeSize(node: WorkflowNode): { w: number; h: number } {
     return base;
   })();
   // Deeper nodes lay out smaller (semantic-zoom hierarchy) — matches the
-  // depth-scaled font/padding in BaseNode so content fills the box. The routing
-  // buffer stays constant. Groups auto-size from children, so they shrink too.
-  const s = depthScale(typeof node.data.depth === 'number' ? node.data.depth : 0);
+  // depth-scaled font/padding in the node components. Skip scaling for nodes
+  // that render a result/image/error preview, whose content doesn't shrink, so
+  // the box stays sized to it. Groups auto-size from children. Buffer is fixed.
+  const hasPreview =
+    imageCount > 0 || !!node.data.errorMessage || !!node.data.hasResult;
+  const s = hasPreview
+    ? 1
+    : depthScale(typeof node.data.depth === 'number' ? node.data.depth : 0);
   return {
     w: visualSize.w * s + 2 * NODE_BUFFER,
     h: visualSize.h * s + 2 * NODE_BUFFER,
