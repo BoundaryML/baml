@@ -55,7 +55,7 @@ impl CheckArgs {
 
         reporter.spin("Compiling", format!("{} file(s)", baml_files.len()));
         if let Err(err) = db
-            .get_bytecode()
+            .get_bytecode_with_prefix(baml_builtins2_prebuilt::stdlib_prefix())
             .with_context(|| format!("failed to compile BAML project at {}", from.display()))
         {
             reporter.abandon();

@@ -145,8 +145,13 @@ impl TestArgs {
         let compile_options = baml_compiler2_emit::CompileOptions {
             emit_test_cases: true,
         };
-        let bytecode = baml_compiler2_emit::generate_project_bytecode(&db, &compile_options)
-            .map_err(|e| anyhow!("Compilation failed: {e:?}"))?;
+        let bytecode = baml_compiler2_emit::generate_project_bytecode_with_prefix(
+            &db,
+            &compile_options,
+            baml_compiler2_emit::OptLevel::Two,
+            baml_builtins2_prebuilt::stdlib_prefix(),
+        )
+        .map_err(|e| anyhow!("Compilation failed: {e:?}"))?;
 
         let engine = Arc::new(
             BexEngine::new(bytecode, Arc::new(sys_native::SysOps::native()), Vec::new())

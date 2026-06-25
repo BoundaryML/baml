@@ -671,6 +671,36 @@ fn fq_to_type_name(fq: &str) -> baml_type::TypeName {
     baml_type::QualifiedTypeName::from_dotted_path(fq)
 }
 
+/// Reusable result of the expensive "core" emit passes (globals + object pool:
+/// Passes 1-4) over a set of files, plus the cursors needed to resume emission
+/// of more files on top. Serialized as the precompiled-stdlib artifact (see
+/// `baml_builtins2_prebuilt`): building it once at compile time lets a normal
+/// compile skip re-lowering and re-emitting the entire stdlib.
+///
+/// Captures state *after Pass 4 and before the trailing passes* (let/$init,
+/// template macros, recursive aliases, interface impls, test cases) — those are
+/// cheap, index-free or name-keyed, and always re-run over all files, so they
+/// are never part of the artifact (which would otherwise double-append `$init`).
+#[derive(Clone, borsh::BorshSerialize, borsh::BorshDeserialize)]
+pub struct EmitState {
+    /// Program with the block's objects and function globals appended.
+    pub program: Program,
+    /// Function/let fully-qualified name -> global slot.
+    pub globals: HashMap<String, usize>,
+    /// Next free global slot (== `program.globals.len()` at the Pass-4 boundary).
+    pub global_idx: usize,
+    /// Class fq-name -> (field name -> field index).
+    pub classes: HashMap<String, HashMap<String, usize>>,
+    /// Class fq-name -> object-pool index.
+    pub class_object_indices: HashMap<String, usize>,
+    /// Monotonic class type-tag counter (relative to `type_tags::CLASS_BASE`).
+    pub class_type_tag_counter: i64,
+    /// Enum fq-name -> (variant name -> variant index).
+    pub enum_variants: HashMap<String, HashMap<String, usize>>,
+    /// Enum fq-name -> object-pool index.
+    pub enum_object_indices: HashMap<String, usize>,
+}
+
 /// Generate bytecode for the entire project (default: `OptLevel::Two`).
 pub fn generate_project_bytecode(
     db: &dyn baml_compiler2_mir::Db,
@@ -685,23 +715,128 @@ pub fn generate_project_bytecode_with_opt(
     options: &CompileOptions,
     opt: OptLevel,
 ) -> Result<Program, LoweringError> {
-    let mut program = Program::new();
+    emit_with_prefix(db, options, opt, None)
+}
+
+/// Like [`generate_project_bytecode_with_opt`] but resumes from a precompiled
+/// stdlib [`EmitState`]: the stdlib's Passes 1-4 (its globals, object pool, and
+/// type tags) are taken from `prefix` instead of recompiled, and only user
+/// files are emitted on top. Requires `prefix` to have been produced by
+/// [`precompile_stdlib`] with the *same* compiler/stdlib (the stable-prefix
+/// invariant guarantees stdlib indices/tags match this DB's).
+pub fn generate_project_bytecode_with_prefix(
+    db: &dyn baml_compiler2_mir::Db,
+    options: &CompileOptions,
+    opt: OptLevel,
+    prefix: EmitState,
+) -> Result<Program, LoweringError> {
+    emit_with_prefix(db, options, opt, Some(prefix))
+}
+
+/// Run the core emit passes (1-4) over the stdlib (`<builtin>/`) files only and
+/// return the resulting [`EmitState`]. This is the precompiled artifact; a
+/// builtins-only database produces a stdlib-only prefix.
+pub fn precompile_stdlib(db: &dyn baml_compiler2_mir::Db, opt: OptLevel) -> EmitState {
+    let all_files = compiler2_all_files(db);
+    let (stdlib_files, user_files): (Vec<baml_base::SourceFile>, Vec<baml_base::SourceFile>) =
+        all_files
+            .iter()
+            .copied()
+            .partition(|f| f.path(db).to_string_lossy().starts_with("<builtin>/"));
+    let alias_caches = build_alias_caches(db, &all_files);
+    emit_core(db, opt, &stdlib_files, &user_files, &alias_caches, None)
+}
+
+fn emit_with_prefix(
+    db: &dyn baml_compiler2_mir::Db,
+    options: &CompileOptions,
+    opt: OptLevel,
+    prefix: Option<EmitState>,
+) -> Result<Program, LoweringError> {
     let all_files = compiler2_all_files(db);
     let alias_caches = build_alias_caches(db, &all_files);
+
+    // Stdlib (`<builtin>/`) files form a stable object/global/type-tag prefix
+    // (see `emit_core`); the trailing passes below run once over all files.
+    let (stdlib_files, user_files): (Vec<baml_base::SourceFile>, Vec<baml_base::SourceFile>) =
+        all_files
+            .iter()
+            .copied()
+            .partition(|f| f.path(db).to_string_lossy().starts_with("<builtin>/"));
+
+    let state = emit_core(db, opt, &stdlib_files, &user_files, &alias_caches, prefix);
+    emit_trailing(db, options, opt, state)
+}
+
+/// Core emit passes (1-4): global-slot assignment (Pass 1) and the object pool
+/// (Passes 2-4). Stdlib (`<builtin>/`) files are processed as a contiguous block
+/// before user files so the stdlib's globals, object indices, and class type
+/// tags form a stable prefix independent of user code. When `prefix` is `Some`,
+/// the stdlib block is taken from it and only user files are emitted on top.
+fn emit_core(
+    db: &dyn baml_compiler2_mir::Db,
+    opt: OptLevel,
+    stdlib_files: &[baml_base::SourceFile],
+    user_files: &[baml_base::SourceFile],
+    alias_caches: &HashMap<Name, ResolvedAliases>,
+    prefix: Option<EmitState>,
+) -> EmitState {
+    let skip_stdlib = prefix.is_some();
+    let (
+        mut program,
+        mut globals,
+        mut global_idx,
+        mut classes,
+        mut class_object_indices,
+        mut class_type_tag_counter,
+        mut enum_variants,
+        mut enum_object_indices,
+    ) = match prefix {
+        Some(p) => (
+            p.program,
+            p.globals,
+            p.global_idx,
+            p.classes,
+            p.class_object_indices,
+            p.class_type_tag_counter,
+            p.enum_variants,
+            p.enum_object_indices,
+        ),
+        None => (
+            Program::new(),
+            HashMap::new(),
+            0usize,
+            HashMap::new(),
+            HashMap::new(),
+            0i64,
+            HashMap::new(),
+            HashMap::new(),
+        ),
+    };
 
     // --- Pass 1: Build globals map (function name -> global index) ---
     // Functions are allocated first (slots 0..N-1), then let bindings (slots N..M-1).
     // This ensures function slots match the order they're appended to program.globals
-    // in Pass 4, and let binding slots don't interleave with function slots.
-    let mut globals: HashMap<String, usize> = HashMap::new();
-    let mut global_idx = 0usize;
+    // in Pass 4, and let binding slots don't interleave with function slots. On a
+    // resume (`skip_stdlib`), the stdlib slots are already in `globals`/`global_idx`
+    // from the prefix, so Pass 1 only assigns user slots (continuing the cursor).
+    let ordered_files: Vec<baml_base::SourceFile> = if skip_stdlib {
+        user_files.to_vec()
+    } else {
+        stdlib_files
+            .iter()
+            .chain(user_files.iter())
+            .copied()
+            .collect()
+    };
 
-    // First sub-pass: assign slots to all functions across all files.
+    // First sub-pass: assign slots to all functions across all files (stdlib
+    // first, via `ordered_files`, so stdlib function slots are `0..N_stdlib`).
     // Intrinsic functions are skipped: they are lowered to StatementKind::Intrinsic
     // at call sites and never appear as callable objects in the globals pool.
     // Including them here would create a mismatch between Pass-1 indices and the
     // actual program.globals array built in Pass 4 (which also skips intrinsics).
-    for file in &all_files {
+    for file in &ordered_files {
         let item_tree = file_item_tree(db, *file);
         for local_id in item_tree.functions.keys() {
             let func_loc = FunctionLoc::new(db, *file, *local_id);
@@ -737,7 +872,7 @@ pub fn generate_project_bytecode_with_opt(
 
     // Second sub-pass: assign slots to all let bindings across all files,
     // after all function slots have been reserved.
-    for file in &all_files {
+    for file in &ordered_files {
         let item_tree = file_item_tree(db, *file);
         for local_id in item_tree.lets.keys() {
             let let_loc = LetLoc::new(db, *file, *local_id);
@@ -753,265 +888,300 @@ pub fn generate_project_bytecode_with_opt(
     // --- Pass 2: Build classes table ---
     // Maps fully-qualified class name -> (field name -> field index).
     // Also builds class_object_indices: class fq_name -> object index in program.objects.
-    let mut classes: HashMap<String, HashMap<String, usize>> = HashMap::new();
-    let mut class_object_indices: HashMap<String, usize> = HashMap::new();
-    let mut class_type_tag_counter = 0i64;
-
-    for file in &all_files {
-        let item_tree = file_item_tree(db, *file);
-        let pkg_info = file_package(db, *file);
-        let pkg_id = PackageId::new(db, pkg_info.package.clone());
-        let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
-        let cache = &alias_caches[&pkg_info.package];
-        for class_data in item_tree.classes.values() {
-            // Build fully-qualified name: "user.MyClass" or "baml.ns.MyClass"
-            let fq_name = if pkg_info.namespace_path.is_empty() {
-                format!("{}.{}", pkg_info.package, class_data.name)
-            } else {
-                let ns: Vec<&str> = pkg_info
-                    .namespace_path
-                    .iter()
-                    .map(baml_base::Name::as_str)
-                    .collect();
-                format!("{}.{}.{}", pkg_info.package, ns.join("."), class_data.name)
-            };
-
-            let mut field_indices = HashMap::new();
-            let mut fields = Vec::new();
-            // Class-level generic params, used to resolve `T`-references in
-            // field type expressions to `TyTemplate::TypeArgRef(N)`.  When
-            // empty, `tir2_to_template` produces `TyTemplate::Concrete(...)`
-            // for every leaf and `field_template == Concrete(field_type)`.
-            let class_generic_params: Vec<baml_base::Name> = class_data.generic_params.clone();
-            // BEP-044: collect only the class's actual runtime fields.
-            // Interface fields are typed views over class storage, and the
-            // validator enforces/link-checks them before emit.
-            let merged_fields =
-                collect_class_fields_with_implements(&pkg_info.namespace_path, class_data);
-            for (idx, (name, type_expr, attrs, gen_params, ns)) in merged_fields.iter().enumerate()
-            {
-                field_indices.insert(name.clone(), idx);
-                let (field_type, field_template) = match type_expr {
-                    Some(te) => {
-                        let mut diags = Vec::new();
-                        // Pass `class_generic_params` as the binding context so
-                        // `T`-references inside `class Container<T> { item: T }`
-                        // lower to `Tir2Ty::TypeVar("T")` rather than
-                        // `Tir2Ty::Unknown`.  This is the input both to the
-                        // erased-`Ty` (TypeVar→BuiltinUnknown) used by codegen and to
-                        // the `TyTemplate` (TypeVar→TypeArgRef(N)) used by
-                        // typed runtime walking.
-                        let tir_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
-                            db, &te.expr, pkg_items, ns, gen_params, &mut diags,
-                        );
-                        let resolved_ty = cache.convert(&tir_ty);
-                        let template = baml_compiler2_mir::tir2_to_template(
-                            &tir_ty,
-                            cache,
-                            &class_generic_params,
-                        );
-                        (resolved_ty, template)
-                    }
-                    None => {
-                        let null_ty = baml_type::RuntimeTy::Null {
-                            attr: baml_type::TyAttr::default(),
-                        };
-                        (null_ty.clone(), baml_type::TyTemplate::Concrete(null_ty))
-                    }
-                };
-                let (field_desc, field_alias, field_skip) = extract_schema_attrs(attrs.as_slice());
-                fields.push(ClassField {
-                    name: name.clone(),
-                    field_type,
-                    field_template,
-                    description: field_desc,
-                    alias: field_alias,
-                    skip: field_skip,
-                });
-            }
-
-            let (class_desc, class_alias, _class_skip) =
-                extract_schema_attrs(&class_data.attributes);
-
-            let type_tag = bex_vm_types::type_tags::CLASS_BASE + class_type_tag_counter;
-            class_type_tag_counter += 1;
-
-            let class_obj_idx = program.add_object(Object::Class(Box::new(Class {
-                name: fq_to_type_name(&fq_name),
-                fields,
-                description: class_desc,
-                alias: class_alias,
-                type_tag,
-                ty_attr: TyAttr::default(),
-            })));
-            // Register with fully-qualified name for inter-package lookups.
-            class_object_indices.insert(fq_name.clone(), class_obj_idx);
-            classes.insert(fq_name.clone(), field_indices);
-            // MIR TypeName display for user-defined classes omits the `user.`
-            // package prefix in diagnostics/snapshots. Register the same key
-            // so emit-time type checks can do a direct display-name lookup.
-            let display_name = if pkg_info.package.as_str() == "user" {
-                if pkg_info.namespace_path.is_empty() {
-                    class_data.name.to_string()
+    // (classes / class_object_indices / class_type_tag_counter / enum_variants /
+    // enum_object_indices are declared above so they seed from / persist into the
+    // returned `EmitState`.)
+    //
+    // Passes 2-4 run once per file block (stdlib, then user). Per-block emission
+    // keeps each block's objects contiguous in the pool: all stdlib
+    // classes+enums+functions form a stable prefix, then all user objects. A
+    // single kind-grouped pass over every file would instead append all classes,
+    // then all enums, then all functions, interleaving stdlib enum/function
+    // objects *after* user classes and shifting stdlib object indices by user
+    // counts. The maps above accumulate across both calls, so the user block
+    // resolves references to stdlib classes/enums/functions.
+    let mut emit_object_block = |block_files: &[baml_base::SourceFile]| {
+        for file in block_files {
+            let item_tree = file_item_tree(db, *file);
+            let pkg_info = file_package(db, *file);
+            let pkg_id = PackageId::new(db, pkg_info.package.clone());
+            let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
+            let cache = &alias_caches[&pkg_info.package];
+            for class_data in item_tree.classes.values() {
+                // Build fully-qualified name: "user.MyClass" or "baml.ns.MyClass"
+                let fq_name = if pkg_info.namespace_path.is_empty() {
+                    format!("{}.{}", pkg_info.package, class_data.name)
                 } else {
                     let ns: Vec<&str> = pkg_info
                         .namespace_path
                         .iter()
                         .map(baml_base::Name::as_str)
                         .collect();
-                    format!("{}.{}", ns.join("."), class_data.name)
-                }
-            } else {
-                fq_name.clone()
-            };
-            class_object_indices
-                .entry(display_name.clone())
-                .or_insert(class_obj_idx);
-            // Also register with the short (unqualified) class name so that MIR aggregates,
-            // which store only the local name (e.g., "Point" not "user.Point"), can find it.
-            let short_name = class_data.name.to_string();
-            class_object_indices
-                .entry(short_name.clone())
-                .or_insert(class_obj_idx);
-            // The display- and short-name maps must agree with the emitted
-            // runtime field indices used by the Class object above. Use a
-            // closure that rebuilds the same ordering.
-            let rebuild_indices = || {
-                let merged =
+                    format!("{}.{}.{}", pkg_info.package, ns.join("."), class_data.name)
+                };
+
+                let mut field_indices = HashMap::new();
+                let mut fields = Vec::new();
+                // Class-level generic params, used to resolve `T`-references in
+                // field type expressions to `TyTemplate::TypeArgRef(N)`.  When
+                // empty, `tir2_to_template` produces `TyTemplate::Concrete(...)`
+                // for every leaf and `field_template == Concrete(field_type)`.
+                let class_generic_params: Vec<baml_base::Name> = class_data.generic_params.clone();
+                // BEP-044: collect only the class's actual runtime fields.
+                // Interface fields are typed views over class storage, and the
+                // validator enforces/link-checks them before emit.
+                let merged_fields =
                     collect_class_fields_with_implements(&pkg_info.namespace_path, class_data);
-                let mut m = HashMap::new();
-                for (idx, (name, _, _, _, _)) in merged.iter().enumerate() {
-                    m.insert(name.clone(), idx);
-                }
-                m
-            };
-            classes.entry(display_name).or_insert_with(rebuild_indices);
-            classes.entry(short_name).or_insert_with(rebuild_indices);
-        }
-    }
-
-    // --- Pass 3: Build enums table ---
-    // Maps fully-qualified enum name -> (variant name -> variant index).
-    let mut enum_variants: HashMap<String, HashMap<String, usize>> = HashMap::new();
-    let mut enum_object_indices: HashMap<String, usize> = HashMap::new();
-
-    for file in &all_files {
-        let item_tree = file_item_tree(db, *file);
-        let pkg_info = file_package(db, *file);
-        for enum_data in item_tree.enums.values() {
-            let fq_name = if pkg_info.namespace_path.is_empty() {
-                format!("{}.{}", pkg_info.package, enum_data.name)
-            } else {
-                let ns: Vec<&str> = pkg_info
-                    .namespace_path
-                    .iter()
-                    .map(baml_base::Name::as_str)
-                    .collect();
-                format!("{}.{}.{}", pkg_info.package, ns.join("."), enum_data.name)
-            };
-
-            let mut variant_map = HashMap::new();
-            let mut variants = Vec::new();
-            for (idx, variant) in enum_data.variants.iter().enumerate() {
-                let (var_desc, var_alias, var_skip) = extract_schema_attrs(&variant.attributes);
-                variant_map.insert(variant.name.to_string(), idx);
-                variants.push(EnumVariant {
-                    name: variant.name.to_string(),
-                    description: var_desc,
-                    alias: var_alias,
-                    skip: var_skip,
-                });
-            }
-
-            let (enum_desc, enum_alias, _enum_skip) = extract_schema_attrs(&enum_data.attributes);
-
-            let enum_obj_idx = program.add_object(Object::Enum(Box::new(Enum {
-                name: fq_to_type_name(&fq_name),
-                variants,
-                description: enum_desc,
-                alias: enum_alias,
-                ty_attr: TyAttr::default(),
-            })));
-            enum_object_indices.insert(fq_name.clone(), enum_obj_idx);
-            enum_variants.insert(fq_name, variant_map);
-        }
-    }
-
-    // --- Pass 4: Compile each function ---
-    for file in &all_files {
-        let line_starts = build_line_starts(file.text(db));
-        let item_tree = file_item_tree(db, *file);
-        let pkg_info_pass4 = file_package(db, *file);
-        let cache_pass4 = &alias_caches[&pkg_info_pass4.package];
-        for (local_id, func_data) in &item_tree.functions {
-            let func_loc = FunctionLoc::new(db, *file, *local_id);
-            let mir = lower_function(db, func_loc, opt);
-            let fq_name = mir.item_ref.to_string();
-
-            let mut compiled_fn = match &mir.kind {
-                MirFunctionKind::Bytecode(body) => {
-                    // Compile lambda children first, collecting their ObjectPool indices.
-                    let source_file = file.path(db).display().to_string();
-                    let empty_capture_types = Vec::new();
-                    let empty_spawn_capture_indices = HashSet::new();
-                    let lambda_info = compile_lambdas_flat(
-                        &mir.lambdas,
-                        Some(body),
-                        &empty_capture_types,
-                        &empty_spawn_capture_indices,
-                        &line_starts,
-                        &source_file,
-                        &globals,
-                        &classes,
-                        &class_object_indices,
-                        &enum_object_indices,
-                        &enum_variants,
-                        &mut program.objects,
-                        opt,
-                    );
-                    let lambda_obj_indices: Vec<usize> =
-                        lambda_info.iter().map(|(idx, _)| *idx).collect();
-                    let lambda_names_vec: Vec<String> =
-                        lambda_info.iter().map(|(_, name)| name.clone()).collect();
-                    let ctx = MirCodegenContext {
-                        globals: &globals,
-                        classes: &classes,
-                        class_object_indices: &class_object_indices,
-                        enum_object_indices: &enum_object_indices,
-                        enum_variants: &enum_variants,
-                        objects: &mut program.objects,
-                        lambda_object_indices: &lambda_obj_indices,
-                        lambda_names: &lambda_names_vec,
-                        capture_types: &empty_capture_types,
-                        spawn_capture_indices: &empty_spawn_capture_indices,
+                for (idx, (name, type_expr, attrs, gen_params, ns)) in
+                    merged_fields.iter().enumerate()
+                {
+                    field_indices.insert(name.clone(), idx);
+                    let (field_type, field_template) = match type_expr {
+                        Some(te) => {
+                            let mut diags = Vec::new();
+                            // Pass `class_generic_params` as the binding context so
+                            // `T`-references inside `class Container<T> { item: T }`
+                            // lower to `Tir2Ty::TypeVar("T")` rather than
+                            // `Tir2Ty::Unknown`.  This is the input both to the
+                            // erased-`Ty` (TypeVar→BuiltinUnknown) used by codegen and to
+                            // the `TyTemplate` (TypeVar→TypeArgRef(N)) used by
+                            // typed runtime walking.
+                            let tir_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
+                                db, &te.expr, pkg_items, ns, gen_params, &mut diags,
+                            );
+                            let resolved_ty = cache.convert(&tir_ty);
+                            let template = baml_compiler2_mir::tir2_to_template(
+                                &tir_ty,
+                                cache,
+                                &class_generic_params,
+                            );
+                            (resolved_ty, template)
+                        }
+                        None => {
+                            let null_ty = baml_type::RuntimeTy::Null {
+                                attr: baml_type::TyAttr::default(),
+                            };
+                            (null_ty.clone(), baml_type::TyTemplate::Concrete(null_ty))
+                        }
                     };
-                    let mut f =
-                        compile_mir_function(body, mir.arity, mir.span, &line_starts, ctx, opt);
-                    f.name.clone_from(&fq_name);
-                    f.source_file.clone_from(&source_file);
-                    f
+                    let (field_desc, field_alias, field_skip) =
+                        extract_schema_attrs(attrs.as_slice());
+                    fields.push(ClassField {
+                        name: name.clone(),
+                        field_type,
+                        field_template,
+                        description: field_desc,
+                        alias: field_alias,
+                        skip: field_skip,
+                    });
                 }
-                MirFunctionKind::Builtin(BuiltinKind::Intrinsic) => {
-                    // Intrinsic functions have no callable body — call sites use
-                    // StatementKind::Intrinsic directly. Skip compilation entirely.
-                    continue;
+
+                let (class_desc, class_alias, _class_skip) =
+                    extract_schema_attrs(&class_data.attributes);
+
+                let type_tag = bex_vm_types::type_tags::CLASS_BASE + class_type_tag_counter;
+                class_type_tag_counter += 1;
+
+                let class_obj_idx = program.add_object(Object::Class(Box::new(Class {
+                    name: fq_to_type_name(&fq_name),
+                    fields,
+                    description: class_desc,
+                    alias: class_alias,
+                    type_tag,
+                    ty_attr: TyAttr::default(),
+                })));
+                // Register with fully-qualified name for inter-package lookups.
+                class_object_indices.insert(fq_name.clone(), class_obj_idx);
+                classes.insert(fq_name.clone(), field_indices);
+                // MIR TypeName display for user-defined classes omits the `user.`
+                // package prefix in diagnostics/snapshots. Register the same key
+                // so emit-time type checks can do a direct display-name lookup.
+                let display_name = if pkg_info.package.as_str() == "user" {
+                    if pkg_info.namespace_path.is_empty() {
+                        class_data.name.to_string()
+                    } else {
+                        let ns: Vec<&str> = pkg_info
+                            .namespace_path
+                            .iter()
+                            .map(baml_base::Name::as_str)
+                            .collect();
+                        format!("{}.{}", ns.join("."), class_data.name)
+                    }
+                } else {
+                    fq_name.clone()
+                };
+                class_object_indices
+                    .entry(display_name.clone())
+                    .or_insert(class_obj_idx);
+                // Also register with the short (unqualified) class name so that MIR aggregates,
+                // which store only the local name (e.g., "Point" not "user.Point"), can find it.
+                let short_name = class_data.name.to_string();
+                class_object_indices
+                    .entry(short_name.clone())
+                    .or_insert(class_obj_idx);
+                // The display- and short-name maps must agree with the emitted
+                // runtime field indices used by the Class object above. Use a
+                // closure that rebuilds the same ordering.
+                let rebuild_indices = || {
+                    let merged =
+                        collect_class_fields_with_implements(&pkg_info.namespace_path, class_data);
+                    let mut m = HashMap::new();
+                    for (idx, (name, _, _, _, _)) in merged.iter().enumerate() {
+                        m.insert(name.clone(), idx);
+                    }
+                    m
+                };
+                classes.entry(display_name).or_insert_with(rebuild_indices);
+                classes.entry(short_name).or_insert_with(rebuild_indices);
+            }
+        }
+
+        // --- Pass 3: Build enums table ---
+        // Maps fully-qualified enum name -> (variant name -> variant index).
+        // (enum_variants / enum_object_indices are hoisted above the closure.)
+        for file in block_files {
+            let item_tree = file_item_tree(db, *file);
+            let pkg_info = file_package(db, *file);
+            for enum_data in item_tree.enums.values() {
+                let fq_name = if pkg_info.namespace_path.is_empty() {
+                    format!("{}.{}", pkg_info.package, enum_data.name)
+                } else {
+                    let ns: Vec<&str> = pkg_info
+                        .namespace_path
+                        .iter()
+                        .map(baml_base::Name::as_str)
+                        .collect();
+                    format!("{}.{}.{}", pkg_info.package, ns.join("."), enum_data.name)
+                };
+
+                let mut variant_map = HashMap::new();
+                let mut variants = Vec::new();
+                for (idx, variant) in enum_data.variants.iter().enumerate() {
+                    let (var_desc, var_alias, var_skip) = extract_schema_attrs(&variant.attributes);
+                    variant_map.insert(variant.name.to_string(), idx);
+                    variants.push(EnumVariant {
+                        name: variant.name.to_string(),
+                        description: var_desc,
+                        alias: var_alias,
+                        skip: var_skip,
+                    });
                 }
-                MirFunctionKind::Builtin(BuiltinKind::AwaitAny) => {
-                    // BEP-034 `__await_any` has no callable body — call sites
-                    // lower to a `Terminator::AwaitAny` suspend point directly.
-                    // Skip compilation entirely (like an intrinsic).
-                    continue;
-                }
-                MirFunctionKind::Builtin(BuiltinKind::Io) => {
-                    let sys_op = bex_vm_types::sys_op_for_path(&fq_name)
-                        .unwrap_or_else(|| panic!("unknown sys_op path: {fq_name}"));
-                    Function {
+
+                let (enum_desc, enum_alias, _enum_skip) =
+                    extract_schema_attrs(&enum_data.attributes);
+
+                let enum_obj_idx = program.add_object(Object::Enum(Box::new(Enum {
+                    name: fq_to_type_name(&fq_name),
+                    variants,
+                    description: enum_desc,
+                    alias: enum_alias,
+                    ty_attr: TyAttr::default(),
+                })));
+                enum_object_indices.insert(fq_name.clone(), enum_obj_idx);
+                enum_variants.insert(fq_name, variant_map);
+            }
+        }
+
+        // --- Pass 4: Compile each function ---
+        for file in block_files {
+            let line_starts = build_line_starts(file.text(db));
+            let item_tree = file_item_tree(db, *file);
+            let pkg_info_pass4 = file_package(db, *file);
+            let cache_pass4 = &alias_caches[&pkg_info_pass4.package];
+            for (local_id, func_data) in &item_tree.functions {
+                let func_loc = FunctionLoc::new(db, *file, *local_id);
+                let mir = lower_function(db, func_loc, opt);
+                let fq_name = mir.item_ref.to_string();
+
+                let mut compiled_fn = match &mir.kind {
+                    MirFunctionKind::Bytecode(body) => {
+                        // Compile lambda children first, collecting their ObjectPool indices.
+                        let source_file = file.path(db).display().to_string();
+                        let empty_capture_types = Vec::new();
+                        let empty_spawn_capture_indices = HashSet::new();
+                        let lambda_info = compile_lambdas_flat(
+                            &mir.lambdas,
+                            Some(body),
+                            &empty_capture_types,
+                            &empty_spawn_capture_indices,
+                            &line_starts,
+                            &source_file,
+                            &globals,
+                            &classes,
+                            &class_object_indices,
+                            &enum_object_indices,
+                            &enum_variants,
+                            &mut program.objects,
+                            opt,
+                        );
+                        let lambda_obj_indices: Vec<usize> =
+                            lambda_info.iter().map(|(idx, _)| *idx).collect();
+                        let lambda_names_vec: Vec<String> =
+                            lambda_info.iter().map(|(_, name)| name.clone()).collect();
+                        let ctx = MirCodegenContext {
+                            globals: &globals,
+                            classes: &classes,
+                            class_object_indices: &class_object_indices,
+                            enum_object_indices: &enum_object_indices,
+                            enum_variants: &enum_variants,
+                            objects: &mut program.objects,
+                            lambda_object_indices: &lambda_obj_indices,
+                            lambda_names: &lambda_names_vec,
+                            capture_types: &empty_capture_types,
+                            spawn_capture_indices: &empty_spawn_capture_indices,
+                        };
+                        let mut f =
+                            compile_mir_function(body, mir.arity, mir.span, &line_starts, ctx, opt);
+                        f.name.clone_from(&fq_name);
+                        f.source_file.clone_from(&source_file);
+                        f
+                    }
+                    MirFunctionKind::Builtin(BuiltinKind::Intrinsic) => {
+                        // Intrinsic functions have no callable body — call sites use
+                        // StatementKind::Intrinsic directly. Skip compilation entirely.
+                        continue;
+                    }
+                    MirFunctionKind::Builtin(BuiltinKind::AwaitAny) => {
+                        // BEP-034 `__await_any` has no callable body — call sites
+                        // lower to a `Terminator::AwaitAny` suspend point directly.
+                        // Skip compilation entirely (like an intrinsic).
+                        continue;
+                    }
+                    MirFunctionKind::Builtin(BuiltinKind::Io) => {
+                        let sys_op = bex_vm_types::sys_op_for_path(&fq_name)
+                            .unwrap_or_else(|| panic!("unknown sys_op path: {fq_name}"));
+                        Function {
+                            name: fq_name.clone(),
+                            source_file: String::new(), // builtins have no source file
+                            arity: mir.arity,
+                            real_local_count: 0,
+                            bytecode: Bytecode::default(),
+                            kind: FunctionKind::SysOp(sys_op),
+                            local_names: Vec::new(),
+                            debug_locals: Vec::new(),
+                            span: Span::fake(),
+                            return_type: baml_type::RuntimeTy::Null {
+                                attr: baml_type::TyAttr::default(),
+                            },
+                            param_names: Vec::new(),
+                            param_types: Vec::new(),
+                            param_has_default: Vec::new(),
+                            display_type_params: Vec::new(),
+                            display_param_types: Vec::new(),
+                            display_return_type: "null".to_string(),
+                            throws_type: None,
+                            origin: FunctionOrigin::Builtin,
+                            body_meta: None,
+                            function_id: 0, // assigned at engine init (interim provider)
+                        }
+                    }
+                    MirFunctionKind::Builtin(BuiltinKind::Vm) => Function {
                         name: fq_name.clone(),
                         source_file: String::new(), // builtins have no source file
                         arity: mir.arity,
                         real_local_count: 0,
                         bytecode: Bytecode::default(),
-                        kind: FunctionKind::SysOp(sys_op),
+                        kind: FunctionKind::NativeUnresolved,
                         local_names: Vec::new(),
                         debug_locals: Vec::new(),
                         span: Span::fake(),
@@ -1028,94 +1198,120 @@ pub fn generate_project_bytecode_with_opt(
                         origin: FunctionOrigin::Builtin,
                         body_meta: None,
                         function_id: 0, // assigned at engine init (interim provider)
+                    },
+                };
+
+                // Set function metadata from signature
+                let parameter_defaults =
+                    baml_compiler2_ppir::function_parameter_defaults(db, func_loc);
+                let signature_metadata = compute_function_metadata_from_item_tree(
+                    db,
+                    *file,
+                    *local_id,
+                    func_data,
+                    &parameter_defaults,
+                    cache_pass4,
+                );
+                compiled_fn.return_type = signature_metadata.return_type;
+                compiled_fn.param_names = signature_metadata.param_names;
+                compiled_fn.param_types = signature_metadata.param_types;
+                compiled_fn.param_has_default = signature_metadata.param_has_default;
+                compiled_fn.display_type_params = signature_metadata.display_type_params;
+                compiled_fn.display_param_types = signature_metadata.display_param_types;
+                compiled_fn.display_return_type = signature_metadata.display_return_type;
+
+                // Set inferred throws type from TIR throw inference
+                compiled_fn.throws_type =
+                    compute_throws_type(db, *file, &func_data.name, cache_pass4);
+                compiled_fn.origin = emitted_function_origin(&fq_name, func_data.origin);
+
+                // Set LLM-specific body_meta if this is an LLM function
+                if let Some(baml_compiler2_ast::DeclarativeMeta::Llm(llm_meta)) =
+                    &func_data.declarative_meta
+                {
+                    // NOTE (canary merge): canary removed the runtime `Function.stream_return_type`
+                    // field and its plumbing (the pre-existing streaming infra from PRs #3362/#3755).
+                    // The stream return type is now carried by the synthesized `$stream` companion's
+                    // own `return_type` (see ppir's `companion_stream_return_type`), so the old
+                    // emit-side pre-computation block was dropped. BEP-049 M5e stream-path rendering
+                    // of `ctx.output_format` should be re-verified against canary's streaming.
+                    if let Some(client) = &llm_meta.client {
+                        // New-mode (BEP-049 M5) functions have no Jinja `prompt`
+                        // text — the compiled closure renders it — but they still
+                        // need a registry entry so `get_return_type` /
+                        // `get_stream_return_type` (used by `__make_stream` and the
+                        // streaming `Context`) resolve by name. The empty template
+                        // is never read for them (their `prompt_closure` is non-null,
+                        // so the Jinja `get_jinja_template` branch is skipped).
+                        let prompt_template = llm_meta
+                            .prompt
+                            .as_ref()
+                            .map(|p| p.text.clone())
+                            .unwrap_or_default();
+                        compiled_fn.body_meta = Some(FunctionMeta::Llm {
+                            prompt_template,
+                            client: client.to_string(),
+                        });
                     }
                 }
-                MirFunctionKind::Builtin(BuiltinKind::Vm) => Function {
-                    name: fq_name.clone(),
-                    source_file: String::new(), // builtins have no source file
-                    arity: mir.arity,
-                    real_local_count: 0,
-                    bytecode: Bytecode::default(),
-                    kind: FunctionKind::NativeUnresolved,
-                    local_names: Vec::new(),
-                    debug_locals: Vec::new(),
-                    span: Span::fake(),
-                    return_type: baml_type::RuntimeTy::Null {
-                        attr: baml_type::TyAttr::default(),
-                    },
-                    param_names: Vec::new(),
-                    param_types: Vec::new(),
-                    param_has_default: Vec::new(),
-                    display_type_params: Vec::new(),
-                    display_param_types: Vec::new(),
-                    display_return_type: "null".to_string(),
-                    throws_type: None,
-                    origin: FunctionOrigin::Builtin,
-                    body_meta: None,
-                    function_id: 0, // assigned at engine init (interim provider)
-                },
-            };
 
-            // Set function metadata from signature
-            let parameter_defaults = baml_compiler2_ppir::function_parameter_defaults(db, func_loc);
-            let signature_metadata = compute_function_metadata_from_item_tree(
-                db,
-                *file,
-                *local_id,
-                func_data,
-                &parameter_defaults,
-                cache_pass4,
-            );
-            compiled_fn.return_type = signature_metadata.return_type;
-            compiled_fn.param_names = signature_metadata.param_names;
-            compiled_fn.param_types = signature_metadata.param_types;
-            compiled_fn.param_has_default = signature_metadata.param_has_default;
-            compiled_fn.display_type_params = signature_metadata.display_type_params;
-            compiled_fn.display_param_types = signature_metadata.display_param_types;
-            compiled_fn.display_return_type = signature_metadata.display_return_type;
-
-            // Set inferred throws type from TIR throw inference
-            compiled_fn.throws_type = compute_throws_type(db, *file, &func_data.name, cache_pass4);
-            compiled_fn.origin = emitted_function_origin(&fq_name, func_data.origin);
-
-            // Set LLM-specific body_meta if this is an LLM function
-            if let Some(baml_compiler2_ast::DeclarativeMeta::Llm(llm_meta)) =
-                &func_data.declarative_meta
-            {
-                // NOTE (canary merge): canary removed the runtime `Function.stream_return_type`
-                // field and its plumbing (the pre-existing streaming infra from PRs #3362/#3755).
-                // The stream return type is now carried by the synthesized `$stream` companion's
-                // own `return_type` (see ppir's `companion_stream_return_type`), so the old
-                // emit-side pre-computation block was dropped. BEP-049 M5e stream-path rendering
-                // of `ctx.output_format` should be re-verified against canary's streaming.
-                if let Some(client) = &llm_meta.client {
-                    // New-mode (BEP-049 M5) functions have no Jinja `prompt`
-                    // text — the compiled closure renders it — but they still
-                    // need a registry entry so `get_return_type` /
-                    // `get_stream_return_type` (used by `__make_stream` and the
-                    // streaming `Context`) resolve by name. The empty template
-                    // is never read for them (their `prompt_closure` is non-null,
-                    // so the Jinja `get_jinja_template` branch is skipped).
-                    let prompt_template = llm_meta
-                        .prompt
-                        .as_ref()
-                        .map(|p| p.text.clone())
-                        .unwrap_or_default();
-                    compiled_fn.body_meta = Some(FunctionMeta::Llm {
-                        prompt_template,
-                        client: client.to_string(),
-                    });
-                }
+                let fn_obj_idx = program.add_object(Object::Function(Box::new(compiled_fn)));
+                program.function_indices.insert(fq_name.clone(), fn_obj_idx);
+                program
+                    .function_global_indices
+                    .insert(fq_name, program.globals.len());
+                program.add_global(ConstValue::Object(ObjectIndex::from_raw(fn_obj_idx)));
             }
-
-            let fn_obj_idx = program.add_object(Object::Function(Box::new(compiled_fn)));
-            program.function_indices.insert(fq_name.clone(), fn_obj_idx);
-            program
-                .function_global_indices
-                .insert(fq_name, program.globals.len());
-            program.add_global(ConstValue::Object(ObjectIndex::from_raw(fn_obj_idx)));
         }
+    };
+
+    // Emit the stdlib object block first so its objects occupy a stable prefix
+    // (`0..N_stdlib`), then the user block. On a resume the stdlib block is
+    // already in the seeded state (from the prefix), so it is skipped. The
+    // closure's borrows of `program` and the index maps end at its last call
+    // (NLL), so they are free to move into `EmitState` below.
+    if !skip_stdlib {
+        emit_object_block(stdlib_files);
     }
+    emit_object_block(user_files);
+
+    EmitState {
+        program,
+        globals,
+        global_idx,
+        classes,
+        class_object_indices,
+        class_type_tag_counter,
+        enum_variants,
+        enum_object_indices,
+    }
+}
+
+/// Trailing emit passes (4.5-8): let/`$init`, `$init_test`, template-string
+/// macros, recursive type aliases, interface impls, and test cases. These are
+/// all index-free or name-keyed, so they run over every file and produce
+/// identical output whether the stdlib core was freshly emitted or restored
+/// from a prefix.
+/// `all_files` / `alias_caches` are recomputed here (both salsa-cached) so the
+/// pass bodies below are unchanged from the single-pass form.
+fn emit_trailing(
+    db: &dyn baml_compiler2_mir::Db,
+    options: &CompileOptions,
+    opt: OptLevel,
+    state: EmitState,
+) -> Result<Program, LoweringError> {
+    let all_files = compiler2_all_files(db);
+    let alias_caches = build_alias_caches(db, &all_files);
+    let EmitState {
+        mut program,
+        globals,
+        global_idx: _,
+        classes,
+        class_object_indices,
+        class_type_tag_counter: _,
+        enum_variants,
+        enum_object_indices,
+    } = state;
 
     // --- Pass 4.5: Populate let-binding global slots and synthesize $init ---
     // Collect all let bindings grouped by package.

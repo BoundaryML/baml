@@ -396,26 +396,20 @@ impl ProjectDatabase {
         })
     }
 
-    /// Get the compiled bytecode for the project using the compiler2 pipeline.
-    pub fn get_bytecode(
-        &self,
-    ) -> Result<bex_vm_types::Program, baml_compiler2_emit::LoweringError> {
-        // Bytecode generation lowers types through the runtime-conversion
-        // boundary (`ResolvedAliases::convert`), which deliberately panics on
-        // inference-only `Unknown`/`Error` types. Those are legitimate
-        // error-recovery types in a program that does not type-check, so do not
-        // attempt codegen on an error-bearing project: surface the failure as a
-        // recoverable `LoweringError`. The diagnostics themselves are reported
-        // through the normal check path. (CLI commands gate before calling
-        // `generate_project_bytecode` directly; this protects the in-process /
-        // runtime-eval callers that go through `get_bytecode`.) The error filter
-        // matches `testing::assert_no_diagnostic_errors` — user-file errors only.
+    /// Count user-file (non-builtin) compiler2 errors. Bytecode generation
+    /// lowers types through the runtime-conversion boundary
+    /// (`ResolvedAliases::convert`), which deliberately panics on inference-only
+    /// `Unknown`/`Error` types. Those are legitimate error-recovery types in a
+    /// program that does not type-check, so callers must not attempt codegen on
+    /// an error-bearing project. The filter matches
+    /// `testing::assert_no_diagnostic_errors` — user-file errors only.
+    fn compiler2_user_error_count(&self) -> usize {
         let user_file_ids: std::collections::HashSet<_> = self
             .get_source_files()
             .iter()
             .map(|f| f.file_id(self))
             .collect();
-        let error_count = crate::check::collect_compiler2_diagnostics(self)
+        crate::check::collect_compiler2_diagnostics(self)
             .iter()
             .filter(|d| matches!(d.severity, baml_compiler_diagnostics::Severity::Error))
             .filter(|d| {
@@ -423,7 +417,17 @@ impl ProjectDatabase {
                     .map(|span| user_file_ids.contains(&span.file_id))
                     .unwrap_or(false)
             })
-            .count();
+            .count()
+    }
+
+    /// Get the compiled bytecode for the project using the compiler2 pipeline.
+    ///
+    /// Surfaces an error-bearing project as a recoverable `LoweringError` rather
+    /// than attempting codegen (see [`Self::compiler2_user_error_count`]).
+    pub fn get_bytecode(
+        &self,
+    ) -> Result<bex_vm_types::Program, baml_compiler2_emit::LoweringError> {
+        let error_count = self.compiler2_user_error_count();
         if error_count > 0 {
             return Err(baml_compiler2_emit::LoweringError::ProjectHasErrors { error_count });
         }
@@ -431,6 +435,30 @@ impl ProjectDatabase {
             emit_test_cases: false,
         };
         baml_compiler2_emit::generate_project_bytecode(self, &opts)
+    }
+
+    /// Like [`Self::get_bytecode`] but resumes from a precompiled stdlib
+    /// [`baml_compiler2_emit::EmitState`] prefix (built at `OptLevel::Two`,
+    /// matching `generate_project_bytecode`'s default), skipping recompilation of
+    /// the stdlib. Callers (CLI/LSP) obtain the prefix from `baml_builtins2_prebuilt`
+    /// and inject it here — `baml_project` does not depend on that crate.
+    pub fn get_bytecode_with_prefix(
+        &self,
+        prefix: baml_compiler2_emit::EmitState,
+    ) -> Result<bex_vm_types::Program, baml_compiler2_emit::LoweringError> {
+        let error_count = self.compiler2_user_error_count();
+        if error_count > 0 {
+            return Err(baml_compiler2_emit::LoweringError::ProjectHasErrors { error_count });
+        }
+        let opts = baml_compiler2_emit::CompileOptions {
+            emit_test_cases: false,
+        };
+        baml_compiler2_emit::generate_project_bytecode_with_prefix(
+            self,
+            &opts,
+            baml_compiler2_emit::OptLevel::Two,
+            prefix,
+        )
     }
 
     /// Build a control flow graph for the given function using the compiler2 AST builder.

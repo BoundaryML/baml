@@ -1,0 +1,32 @@
+[package]
+name = "baml_builtins2_prebuilt"
+version = { workspace = true }
+publish = false
+authors = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+homepage = { workspace = true }
+documentation = { workspace = true }
+repository = { workspace = true }
+license = { workspace = true }
+description = "Build-time precompiled BAML stdlib emit artifact"
+
+[lib]
+doctest = false
+
+[lints]
+workspace = true
+
+# Compiler interfaces are accessed via baml_db / baml_project (per the workspace
+# crate-dependency policy), not baml_compiler2_emit / bex_vm_types directly.
+[dependencies]
+baml_db = { workspace = true }
+borsh = { workspace = true }
+
+# build.rs compiles the stdlib once into an EmitState prefix. Nothing in the
+# normal dependency graph depends on this crate's compiler usage, so there is no
+# build-dependency cycle. Consumers (CLI/LSP) inject the deserialized artifact.
+[build-dependencies]
+baml_db = { workspace = true }
+baml_project = { workspace = true }
+borsh = { workspace = true }

@@ -716,11 +716,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "baml_builtins2_prebuilt"
+version = "0.0.0-beta"
+dependencies = [
+ "baml_db",
+ "baml_project",
+ "borsh",
+]
+
+[[package]]
 name = "baml_cli"
 version = "0.0.0-beta"
 dependencies = [
  "anyhow",
  "baml_builtins2",
+ "baml_builtins2_prebuilt",
  "baml_db",
  "baml_exec",
  "baml_fmt",
@@ -797,6 +807,7 @@ dependencies = [
  "baml_type",
  "baml_workspace",
  "bex_vm_types",
+ "borsh",
  "indexmap",
  "log",
  "rustc-hash 2.1.2",

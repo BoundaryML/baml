@@ -2521,16 +2521,31 @@ impl<'db> LoweringContext<'db> {
         }
     }
 
-    /// Build `class_type_tags` by iterating `compiler2_all_files` in the same order as the
+    /// Build `class_type_tags` by iterating files in the same order as the
     /// emitter (`generate_project_bytecode` in `baml_compiler2_emit`). This guarantees that
     /// the integer type tags stored in Switch arms exactly match the `class.type_tag` values
     /// assigned to runtime Class objects.
+    ///
+    /// The emitter processes stdlib (`<builtin>/`) files as a contiguous block
+    /// before user files (so stdlib type tags form a stable prefix); this
+    /// iteration must use the identical builtins-first order or type-tag Switch
+    /// arms desync from runtime `class.type_tag`, making type switches miss and
+    /// throw `Unreachable`.
     fn build_class_type_tags(db: &'db dyn crate::Db) -> IndexMap<TypeName, i64> {
         let all_files = compiler2_all_files(db);
+        let (stdlib_files, user_files): (Vec<_>, Vec<_>) = all_files
+            .iter()
+            .copied()
+            .partition(|f| f.path(db).to_string_lossy().starts_with("<builtin>/"));
+        let ordered_files: Vec<_> = stdlib_files
+            .iter()
+            .chain(user_files.iter())
+            .copied()
+            .collect();
         let mut class_type_tags: IndexMap<TypeName, i64> = IndexMap::new();
         let mut class_type_tag_counter = 0i64;
 
-        for file in &all_files {
+        for file in &ordered_files {
             let item_tree = file_item_tree(db, *file);
             let pkg_info = file_package(db, *file);
 
