@@ -37,10 +37,10 @@ pub(crate) struct RuntimeCli {
     #[arg(
         long,
         value_enum,
-        default_value_t = crate::describe_highlight::ColorChoice::Auto,
+        default_value_t = crate::paint::ColorChoice::Auto,
         global = true
     )]
-    pub color: crate::describe_highlight::ColorChoice,
+    pub color: crate::paint::ColorChoice,
 
     /// Specifies a subcommand to run.
     #[command(subcommand)]
@@ -184,7 +184,7 @@ impl RuntimeCli {
 
     pub fn run(&self) -> Result<crate::ExitCode> {
         // Resolve color/hyperlink output once, before any subcommand writes.
-        crate::describe_highlight::init_color(self.color);
+        crate::paint::init_color(self.color);
         match &self.command {
             Commands::Init(args) => args.run(),
             Commands::New(args) => args.run(),

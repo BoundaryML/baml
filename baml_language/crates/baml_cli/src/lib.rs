@@ -15,7 +15,6 @@ pub(crate) mod commands;
 pub(crate) mod describe_command;
 #[cfg(test)]
 mod describe_command_tests;
-pub(crate) mod describe_highlight;
 pub(crate) mod format;
 pub(crate) mod generate;
 pub(crate) mod grep_command;
@@ -25,12 +24,14 @@ pub(crate) mod lsp;
 pub(crate) mod manifest;
 pub(crate) mod pack_command;
 pub(crate) mod pack_elf;
+pub(crate) mod paint;
 pub(crate) mod playground_command;
 pub(crate) mod project_load;
 pub mod reporter;
 pub(crate) mod run_command;
 pub(crate) mod test_command;
 pub(crate) mod test_filter;
+pub(crate) mod util;
 
 // TODO: These modules are disabled for now as they depend on baml_runtime
 // pub(crate) mod api_client;

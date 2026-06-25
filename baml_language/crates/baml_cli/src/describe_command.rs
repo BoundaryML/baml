@@ -8,7 +8,10 @@ use baml_lsp2_actions::{ResolvedTarget, SymbolDescription, describe};
 use baml_project::ProjectDatabase;
 use clap::Args;
 
-use crate::project_load::load_project_or_default;
+use crate::{
+    project_load::load_project_or_default,
+    util::{line_number_at_offset, relative_path},
+};
 
 /// Parsed documentation entry for a BAML keyword topic.
 #[derive(serde::Deserialize)]
@@ -162,19 +165,11 @@ fn print_did_you_mean(db: &ProjectDatabase, name: &str) {
     if !suggestions.is_empty() {
         eprintln!();
         eprintln!("Did you mean:");
-        // did-you-mean goes to stderr, so gate on the stderr color flag (not the
-        // stdout one) — otherwise codes leak into a redirected stderr, or color
-        // is dropped when only stdout is redirected.
-        let colors = console::colors_enabled_stderr();
+        // did-you-mean writes to stderr, so use a stderr-bound painter (gets the
+        // stderr color decision, never stdout's).
+        let painter = crate::paint::Painter::stderr();
         for (s, kind) in suggestions {
-            if colors {
-                eprintln!(
-                    "  {}",
-                    crate::describe_highlight::highlight_fqn_opt(&s, kind)
-                );
-            } else {
-                eprintln!("  {s}");
-            }
+            eprintln!("  {}", painter.fqn_opt(&s, kind));
         }
     }
 }
@@ -474,13 +469,14 @@ impl DescribeArgs {
 
 /// Render keyword documentation to a writer.
 pub fn write_keyword(w: &mut impl std::io::Write, name: &str) -> std::io::Result<()> {
+    let painter = crate::paint::Painter::stdout();
     if let Some(doc) = BAML_KEYWORDS.get(name) {
-        writeln!(w, "{} — {}", console::style(name).magenta(), doc.summary)?;
+        writeln!(w, "{} — {}", painter.keyword(name), doc.summary)?;
         if let Some(ref syntax) = doc.syntax {
             writeln!(w)?;
             writeln!(w, "Syntax:")?;
             for line in syntax.trim_end().lines() {
-                writeln!(w, "  {}", crate::describe_highlight::highlight_str(line))?;
+                writeln!(w, "  {}", painter.fragment(line))?;
             }
         }
         if let Some(ref details) = doc.details {
@@ -488,14 +484,10 @@ pub fn write_keyword(w: &mut impl std::io::Write, name: &str) -> std::io::Result
             writeln!(w, "{details}")?;
         }
     } else if let Some(doc) = TS_KEYWORDS.get(name) {
-        writeln!(w, "{} — {}", console::style(name).magenta(), doc.message)?;
+        writeln!(w, "{} — {}", painter.keyword(name), doc.message)?;
         if let Some(ref see) = doc.see {
             writeln!(w)?;
-            writeln!(
-                w,
-                "See: baml describe {}",
-                crate::describe_highlight::highlight_str(see)
-            )?;
+            writeln!(w, "See: baml describe {}", painter.fragment(see))?;
         }
     }
     Ok(())
@@ -560,28 +552,16 @@ pub fn write_description(
     // like `root.ns.Foo`).
     let kind_str = desc.kind.as_str();
     let rel_path = relative_path(&file_path, project_root);
-    let colors = console::colors_enabled();
-    let hl = crate::describe_highlight::Highlighter::new(db);
+    let painter = crate::paint::Painter::stdout();
+    let colors = painter.enabled();
+    let hl = crate::paint::Highlighter::new(db);
     let fqn_part = desc
         .canonical_fqn
         .as_deref()
-        .map(|f| {
-            if colors {
-                format!(
-                    "  ({})",
-                    crate::describe_highlight::highlight_fqn(f, desc.kind)
-                )
-            } else {
-                format!("  ({f})")
-            }
-        })
+        .map(|f| format!("  ({})", painter.fqn(f, desc.kind)))
         .unwrap_or_default();
-    let name_display = if colors {
-        crate::describe_highlight::highlight_fqn(&desc.name, desc.kind)
-    } else {
-        desc.name.clone()
-    };
-    let loc = crate::describe_highlight::location(
+    let name_display = painter.fqn(&desc.name, desc.kind);
+    let loc = painter.location(
         &file_path,
         &rel_path.display().to_string(),
         &format!("{start_line}-{end_line}"),
@@ -589,8 +569,8 @@ pub fn write_description(
 
     writeln!(
         w,
-        "{kind} {name_display}{fqn_part}  {loc}",
-        kind = console::style(kind_str).magenta(),
+        "{} {name_display}{fqn_part}  {loc}",
+        painter.keyword(kind_str)
     )?;
 
     let mut lines_used = 1;
@@ -671,6 +651,7 @@ pub fn write_description(
     remaining = write_method_section(
         w,
         db,
+        &painter,
         project_root,
         "methods",
         &desc.instance_methods,
@@ -681,6 +662,7 @@ pub fn write_description(
     remaining = write_method_section(
         w,
         db,
+        &painter,
         project_root,
         "static_methods",
         &desc.static_methods,
@@ -698,6 +680,7 @@ pub fn write_description(
         let c_line = line_number_at_offset(c.file.text(db), c.name_span.start().into());
         write_kind_row(
             w,
+            &painter,
             c.kind,
             &c.name,
             &c_abs,
@@ -723,6 +706,7 @@ pub fn write_description(
             let dep_line = line_number_at_offset(dep.file.text(db), dep.name_span.start().into());
             write_kind_row(
                 w,
+                &painter,
                 dep.kind,
                 &dep.name,
                 &dep_abs,
@@ -758,12 +742,12 @@ pub fn write_description(
         } else {
             r.line_text.trim().to_string()
         };
-        let loc = crate::describe_highlight::location(
+        let loc = painter.location(
             &ref_abs,
             &ref_path.display().to_string(),
             &r.line_number.to_string(),
         );
-        writeln!(w, "  {}  {}", loc, preview)?;
+        writeln!(w, "  {loc}  {preview}")?;
         remaining -= 1;
     }
     write_elision_marker(w, elided)?;
@@ -778,7 +762,7 @@ pub fn write_description(
 /// run is never split). Returns the number of output lines consumed.
 fn write_highlighted_body(
     w: &mut impl std::io::Write,
-    hl: &crate::describe_highlight::Highlighter,
+    hl: &crate::paint::Highlighter,
     desc: &SymbolDescription,
     available_for_body: usize,
 ) -> std::io::Result<usize> {
@@ -887,6 +871,7 @@ pub(crate) fn definition_line_range(
 fn write_method_section(
     w: &mut impl std::io::Write,
     db: &ProjectDatabase,
+    painter: &crate::paint::Painter,
     project_root: &std::path::Path,
     label: &str,
     methods: &[describe::MethodRef],
@@ -906,8 +891,8 @@ fn write_method_section(
             continue;
         }
         if let Some(doc) = &m.docstring {
-            // `highlight_str` self-gates on color and renders `///` lines as comments.
-            let doc_line = crate::describe_highlight::highlight_str(&format!("/// {doc}"));
+            // `fragment` renders `///` lines as comments (and self-gates on color).
+            let doc_line = painter.fragment(&format!("/// {doc}"));
             writeln!(w, "  {doc_line}")?;
         }
         let text = m.file.text(db);
@@ -915,12 +900,12 @@ fn write_method_section(
             definition_line_range(text, m.item_range.start().into(), m.item_range.end().into());
         let m_abs = m.file.path(db);
         let m_path = relative_path(&m_abs, project_root);
-        let loc = crate::describe_highlight::location(
+        let loc = painter.location(
             &m_abs,
             &m_path.display().to_string(),
             &format!("{start}-{end}"),
         );
-        let sig = crate::describe_highlight::highlight_str(&m.signature);
+        let sig = painter.fragment(&m.signature);
         writeln!(w, "  {sig}  {loc}")?;
         remaining = remaining.saturating_sub(unit_cost);
     }
@@ -939,51 +924,46 @@ pub fn write_listing(
     entries: &[baml_lsp2_actions::ListingEntry],
     project_root: &std::path::Path,
 ) -> std::io::Result<()> {
+    let painter = crate::paint::Painter::stdout();
     for entry in entries {
         let abs = std::path::Path::new(&entry.file_path);
         let rel = relative_path(abs, project_root);
-        let loc = crate::describe_highlight::location(
-            abs,
-            &rel.display().to_string(),
-            &entry.line.to_string(),
-        );
-        write_symbol_row(w, "", entry.kind, &entry.fqn(), &loc)?;
+        let loc = painter.location(abs, &rel.display().to_string(), &entry.line.to_string());
+        write_symbol_row(w, &painter, "", entry.kind, &entry.fqn(), &loc)?;
     }
     Ok(())
 }
 
-/// Write one `kind  name  location` row, colored by kind on a TTY. `indent` is
-/// prepended verbatim and `location` is preformatted (e.g. `path:line`).
+/// Write one `kind  name  location` row, colored by kind. `indent` is prepended
+/// verbatim and `location` is preformatted (e.g. `path:line`).
 fn write_symbol_row(
     w: &mut impl std::io::Write,
+    painter: &crate::paint::Painter,
     indent: &str,
     kind: baml_lsp2_actions::DefinitionKind,
     name: &str,
     location: &str,
 ) -> std::io::Result<()> {
-    if console::colors_enabled() {
-        writeln!(
-            w,
-            "{indent}{} {} {location}",
-            crate::describe_highlight::kind_style(kind).apply_to(format!("{:<16}", kind.as_str())),
-            crate::describe_highlight::highlight_name_padded(name, kind, 32),
-        )
-    } else {
-        writeln!(w, "{indent}{:<16} {:<32} {location}", kind.as_str(), name)
-    }
+    writeln!(
+        w,
+        "{indent}{} {} {location}",
+        painter.kind_label(kind, 16),
+        painter.name_padded(name, kind, 32),
+    )
 }
 
-/// Write an indented dependency / container row, colored by kind on a TTY.
+/// Write an indented dependency / container row, colored by kind.
 fn write_kind_row(
     w: &mut impl std::io::Write,
+    painter: &crate::paint::Painter,
     kind: baml_lsp2_actions::DefinitionKind,
     name: &str,
     abs_path: &std::path::Path,
     rel_display: &str,
     line: usize,
 ) -> std::io::Result<()> {
-    let loc = crate::describe_highlight::location(abs_path, rel_display, &line.to_string());
-    write_symbol_row(w, "  ", kind, name, &loc)
+    let loc = painter.location(abs_path, rel_display, &line.to_string());
+    write_symbol_row(w, painter, "  ", kind, name, &loc)
 }
 
 /// Convert listing entries to JSON array.
@@ -1005,17 +985,6 @@ fn listing_to_json(
             })
         })
         .collect()
-}
-
-/// Compute 1-based line number from byte offset.
-fn line_number_at_offset(text: &str, offset: usize) -> usize {
-    let offset = offset.min(text.len());
-    text[..offset].chars().filter(|&c| c == '\n').count() + 1
-}
-
-/// Make a path relative to the project root.
-fn relative_path(path: &std::path::Path, root: &std::path::Path) -> std::path::PathBuf {
-    path.strip_prefix(root).unwrap_or(path).to_path_buf()
 }
 
 /// Find the 0-based line index within a body where a span starts.

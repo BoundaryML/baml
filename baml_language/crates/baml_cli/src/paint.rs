@@ -1,4 +1,6 @@
-//! ANSI syntax highlighting (and terminal hyperlinks) for `baml describe`.
+//! Colored, hyperlinked terminal output: a stream-bound [`Painter`] that owns
+//! the color decision, plus the BAML syntax highlighting it renders (used by
+//! `baml describe`).
 //!
 //! Reuses the compiler's own semantic-token classifier
 //! (`baml_lsp2_actions::semantic_tokens`) instead of a separate TextMate/Sublime
@@ -112,7 +114,7 @@ fn style_for(token_type: SemanticTokenType) -> Style {
 
 /// Color for a definition kind, used to highlight listing rows (which have no
 /// source slice to tokenize). Maps each kind onto the same palette as the body.
-pub fn kind_style(kind: DefinitionKind) -> Style {
+fn kind_style(kind: DefinitionKind) -> Style {
     use DefinitionKind as K;
     use SemanticTokenType as T;
     style_for(match kind {
@@ -133,13 +135,13 @@ pub fn kind_style(kind: DefinitionKind) -> Style {
 /// Highlight a (possibly dotted) name as it would appear in source: each
 /// qualifier segment in the namespace color, the `.` separators as punctuation,
 /// and the final segment in `leaf_kind`'s color.
-pub fn highlight_fqn(name: &str, leaf_kind: DefinitionKind) -> String {
+fn highlight_fqn(name: &str, leaf_kind: DefinitionKind) -> String {
     highlight_fqn_opt(name, Some(leaf_kind))
 }
 
 /// Like [`highlight_fqn`] but the leaf kind is optional; `None` (a namespace or
 /// package path) colors the whole path in the namespace color.
-pub fn highlight_fqn_opt(name: &str, leaf_kind: Option<DefinitionKind>) -> String {
+fn highlight_fqn_opt(name: &str, leaf_kind: Option<DefinitionKind>) -> String {
     let namespace = style_for(SemanticTokenType::Namespace);
     let dot = style_for(SemanticTokenType::Operator);
     let leaf = leaf_kind.map_or_else(|| namespace.clone(), kind_style);
@@ -161,7 +163,7 @@ pub fn highlight_fqn_opt(name: &str, leaf_kind: Option<DefinitionKind>) -> Strin
 
 /// Like [`highlight_fqn`], padded with plain trailing spaces so the *visible*
 /// text occupies `width` columns (ANSI escapes don't count toward width).
-pub fn highlight_name_padded(name: &str, leaf_kind: DefinitionKind, width: usize) -> String {
+fn highlight_name_padded(name: &str, leaf_kind: DefinitionKind, width: usize) -> String {
     let pad = width.saturating_sub(name.chars().count());
     format!("{}{}", highlight_fqn(name, leaf_kind), " ".repeat(pad))
 }
@@ -254,10 +256,9 @@ fn is_keyword(kind: TokenKind) -> bool {
 /// names introduced by a declaration keyword, strings, line comments, numbers,
 /// and operators. It cannot tell a user type from a variable the way the
 /// type-aware [`Highlighter`] (used for real source ranges) can.
-pub fn highlight_str(text: &str) -> String {
-    if !console::colors_enabled() {
-        return text.to_string();
-    }
+///
+/// Always emits color; callers go through [`Painter::fragment`], which gates.
+fn highlight_str(text: &str) -> String {
     let toks = lex_lossless(text, FileId::new(0));
     let mut out = String::new();
     let mut i = 0;
@@ -361,16 +362,106 @@ fn file_uri(path: &Path) -> String {
     s
 }
 
-/// A `display:line_label` location, rendered as a clickable `file://` hyperlink
-/// on a TTY when `abs_path` is a real (absolute) file, and plain text otherwise
-/// (pipes / JSON / tests / builtin `<...>` paths). `line_label` is the suffix
-/// after the path, e.g. `"55"` or `"55-66"`.
-pub fn location(abs_path: &Path, display: &str, line_label: &str) -> String {
-    let text = format!("{display}:{line_label}");
-    if console::colors_enabled() && abs_path.is_absolute() {
-        osc8(&file_uri(abs_path), &text)
-    } else {
-        text
+// ── Painter ─────────────────────────────────────────────────────────────────────
+
+/// Owns the color decision for one output stream and produces colored-or-plain
+/// text accordingly.
+///
+/// Construct [`Painter::stdout`] / [`Painter::stderr`] so the decision matches
+/// where the text is written; call sites then never branch on color and the
+/// helpers never have to guess which stream they're feeding (which previously
+/// risked leaking codes into a redirected sibling stream).
+pub struct Painter {
+    enabled: bool,
+}
+
+impl Painter {
+    /// Painter for stdout-bound output.
+    pub fn stdout() -> Self {
+        Self {
+            enabled: console::colors_enabled(),
+        }
+    }
+
+    /// Painter for stderr-bound output.
+    pub fn stderr() -> Self {
+        Self {
+            enabled: console::colors_enabled_stderr(),
+        }
+    }
+
+    /// Whether this stream renders color. Also gates the verbatim-vs-cleaned body
+    /// rendering fork in `describe` (a behavior choice, not just a color toggle).
+    pub fn enabled(&self) -> bool {
+        self.enabled
+    }
+
+    /// A dotted name: namespace-colored qualifiers, leaf colored by `leaf_kind`.
+    pub fn fqn(&self, name: &str, leaf_kind: DefinitionKind) -> String {
+        self.fqn_opt(name, Some(leaf_kind))
+    }
+
+    /// Like [`Painter::fqn`] but the leaf kind is optional (`None` => namespace).
+    pub fn fqn_opt(&self, name: &str, leaf_kind: Option<DefinitionKind>) -> String {
+        if self.enabled {
+            highlight_fqn_opt(name, leaf_kind)
+        } else {
+            name.to_string()
+        }
+    }
+
+    /// A name whose *visible* width is padded to `width` columns.
+    pub fn name_padded(&self, name: &str, leaf_kind: DefinitionKind, width: usize) -> String {
+        if self.enabled {
+            highlight_name_padded(name, leaf_kind, width)
+        } else {
+            format!("{name:<width$}")
+        }
+    }
+
+    /// A definition-kind label padded to `width` columns, colored by kind.
+    pub fn kind_label(&self, kind: DefinitionKind, width: usize) -> String {
+        let label = kind.as_str();
+        if self.enabled {
+            kind_style(kind)
+                .apply_to(format!("{label:<width$}"))
+                .to_string()
+        } else {
+            format!("{label:<width$}")
+        }
+    }
+
+    /// An arbitrary BAML fragment with no source backing (signatures, examples).
+    pub fn fragment(&self, text: &str) -> String {
+        if self.enabled {
+            highlight_str(text)
+        } else {
+            text.to_string()
+        }
+    }
+
+    /// `text` styled as a keyword (for keyword-doc headers).
+    pub fn keyword(&self, text: &str) -> String {
+        if self.enabled {
+            style_for(SemanticTokenType::Keyword)
+                .apply_to(text)
+                .to_string()
+        } else {
+            text.to_string()
+        }
+    }
+
+    /// A `display:line_label` location, rendered as a clickable `file://`
+    /// hyperlink when this stream is colored and `abs_path` is a real (absolute)
+    /// file. Plain `display:line_label` otherwise (pipes / JSON / tests / builtin
+    /// `<...>` paths).
+    pub fn location(&self, abs_path: &Path, display: &str, line_label: &str) -> String {
+        let text = format!("{display}:{line_label}");
+        if self.enabled && abs_path.is_absolute() {
+            osc8(&file_uri(abs_path), &text)
+        } else {
+            text
+        }
     }
 }
 
