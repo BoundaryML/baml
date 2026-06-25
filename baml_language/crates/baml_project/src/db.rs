@@ -1494,6 +1494,7 @@ function Workflow(input: string) -> string {
     }
 
     #[test]
+    #[allow(clippy::cast_possible_truncation)] // tiny test fixtures fit in u32
     fn cursor_in_header_region_selects_governing_header() {
         use baml_compiler2_visualization::control_flow::{NodeType, STMT_SOURCE_EXPR_TAG};
 
