@@ -2,7 +2,6 @@
 
 import { createHighlighter, type ThemedToken } from "shiki";
 import bamlGrammar from "../baml.tmLanguage.json";
-import jinjaGrammar from "../jinja.tmLanguage.json";
 
 const DEFAULT_THEME = "github-dark";
 const THEMES = [
@@ -20,7 +19,7 @@ const THEME_IDS = new Set<ThemeId>(THEMES.map((theme) => theme.id));
 
 const highlighter = await createHighlighter({
   themes: THEMES.map((theme) => theme.id),
-  langs: [bamlGrammar as never, jinjaGrammar as never],
+  langs: [bamlGrammar as never],
 });
 
 const STATE_KEY = "baml-grammar-preview-state";

@@ -51,17 +51,17 @@
 16:48-49     "\""               source.baml meta.type-alias.baml string.quoted.double.baml punctuation.definition.string.end.baml
 16:49-50     ";"                source.baml meta.type-alias.baml punctuation.terminator.statement.baml
 18:1-6       "class"            source.baml meta.class.baml keyword.declaration.class.baml
-18:7-14      "Verdict"          source.baml meta.class.baml entity.name.type.class.baml
-18:15-16     "{"                source.baml meta.class.baml punctuation.definition.block.begin.baml
-19:5-10      "label"            source.baml meta.class.baml meta.field.baml variable.other.property.baml
-19:10-11     ":"                source.baml meta.class.baml meta.field.baml punctuation.separator.colon.baml
-19:12-17     "Label"            source.baml meta.class.baml meta.field.baml meta.type-reference.baml entity.name.type.baml
-19:17-18     ","                source.baml meta.class.baml meta.field.baml punctuation.definition.type.baml
-20:5-15      "confidence"       source.baml meta.class.baml meta.field.baml variable.other.property.baml
-20:15-16     ":"                source.baml meta.class.baml meta.field.baml punctuation.separator.colon.baml
-20:17-22     "float"            source.baml meta.class.baml meta.field.baml support.type.primitive.baml
-20:22-23     ","                source.baml meta.class.baml meta.field.baml punctuation.definition.type.baml
-21:1-2       "}"                source.baml meta.class.baml punctuation.definition.block.end.baml
+18:7-14      "Verdict"          source.baml meta.class.baml meta.class.header.baml entity.name.type.class.baml
+18:15-16     "{"                source.baml meta.class.baml meta.class.body.baml punctuation.definition.block.begin.baml
+19:5-10      "label"            source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
+19:10-11     ":"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.separator.colon.baml
+19:12-17     "Label"            source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-reference.baml entity.name.type.baml
+19:17-18     ","                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
+20:5-15      "confidence"       source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
+20:15-16     ":"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.separator.colon.baml
+20:17-22     "float"            source.baml meta.class.baml meta.class.body.baml meta.field.baml support.type.primitive.baml
+20:22-23     ","                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
+21:1-2       "}"                source.baml meta.class.baml meta.class.body.baml punctuation.definition.block.end.baml
 23:1-28      "// The function under test." source.baml comment.line.double-slash.baml
 24:1-9       "function"         source.baml meta.function.baml keyword.declaration.function.baml
 24:10-18     "classify"         source.baml meta.function.baml entity.name.function.baml
@@ -78,13 +78,20 @@
 25:13-17     "Mini"             source.baml meta.function.baml meta.block.function.baml meta.field.llm.client.baml meta.dotted-expression.baml variable.other.readwrite.baml
 26:5-11      "prompt"           source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml keyword.other.llm.prompt.baml
 26:11-12     ":"                source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml punctuation.separator.colon.baml
-26:13-14     "#"                source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.baml punctuation.definition.string.begin.baml
-26:14-15     "\""               source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.baml
-27:1-75      "        Classify the sentiment of the text below as positive, negative, or" source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.baml
-28:1-77      "        neutral. Sarcasm counts as the sentiment actually expressed, not the" source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.baml
-29:1-61      "        literal words. Plain statements of fact are neutral." source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.baml
-31:1-25      "        Text: {{ text }}" source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.baml
-33:1-32      "        {{ ctx.output_format }}" source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.baml
-34:5-6       "\""               source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.baml
-34:6-7       "#"                source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.baml punctuation.definition.string.end.baml
+26:13-14     "#"                source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml punctuation.definition.string.begin.baml
+26:14-15     "\""               source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml punctuation.definition.string.begin.baml
+27:1-75      "        Classify the sentiment of the text below as positive, negative, or" source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml
+28:1-77      "        neutral. Sarcasm counts as the sentiment actually expressed, not the" source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml
+29:1-61      "        literal words. Plain statements of fact are neutral." source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml
+31:1-15      "        Text: "   source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml
+31:15-17     "{{"               source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.begin.baml
+31:18-22     "text"             source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.dotted-expression.baml variable.other.readwrite.baml
+31:23-25     "}}"               source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.end.baml
+33:9-11      "{{"               source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.begin.baml
+33:12-15     "ctx"              source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.dotted-expression.baml variable.other.readwrite.baml
+33:15-16     "."                source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.dotted-expression.baml punctuation.accessor.baml
+33:16-29     "output_format"    source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.dotted-expression.baml variable.other.readwrite.baml
+33:30-32     "}}"               source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.end.baml
+34:5-6       "\""               source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml punctuation.definition.string.end.baml
+34:6-7       "#"                source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml punctuation.definition.string.end.baml
 35:1-2       "}"                source.baml meta.function.baml meta.block.function.baml punctuation.definition.block.end.baml

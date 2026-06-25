@@ -3,7 +3,6 @@ import { join, relative, sep } from "node:path";
 import { describe, expect, it } from "vitest";
 import { createHighlighter, type ThemedToken } from "shiki";
 import bamlGrammar from "../baml.tmLanguage.json";
-import jinjaGrammar from "../jinja.tmLanguage.json";
 
 const THEME = "github-dark";
 
@@ -14,7 +13,7 @@ type ScopeExplanation = {
 
 const highlighter = await createHighlighter({
   themes: [THEME],
-  langs: [bamlGrammar as never, jinjaGrammar as never],
+  langs: [bamlGrammar as never],
 });
 
 const fixturesDir = join(import.meta.dirname, "fixtures");

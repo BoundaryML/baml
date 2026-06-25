@@ -255,11 +255,11 @@
 114:9-55     "// This will alternate between the two clients" source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml comment.line.double-slash.baml
 115:9-17     "strategy"         source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml variable.other.property.baml
 115:17-18    ":"                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml punctuation.separator.colon.baml
-115:19-20    "["                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml meta.expression.array.baml punctuation.definition.array.begin.baml
-115:20-34    "CustomGPT5Mini"   source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml meta.expression.array.baml meta.dotted-expression.baml variable.other.readwrite.baml
-115:34-35    ","                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml meta.expression.array.baml punctuation.separator.comma.baml
-115:36-47    "CustomHaiku"      source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml meta.expression.array.baml meta.dotted-expression.baml variable.other.readwrite.baml
-115:47-48    "]"                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml meta.expression.array.baml punctuation.definition.array.end.baml
+115:19-20    "["                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml meta.config.array.baml punctuation.definition.array.begin.baml
+115:20-34    "CustomGPT5Mini"   source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml meta.config.array.baml meta.dotted-expression.baml variable.other.readwrite.baml
+115:34-35    ","                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml meta.config.array.baml punctuation.separator.comma.baml
+115:36-47    "CustomHaiku"      source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml meta.config.array.baml meta.dotted-expression.baml variable.other.readwrite.baml
+115:47-48    "]"                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml meta.config.array.baml punctuation.definition.array.end.baml
 115:48-49    ","                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml punctuation.separator.comma.baml
 116:5-6      "}"                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml punctuation.definition.block.end.baml
 116:6-7      ","                source.baml meta.client.baml meta.config.block.baml punctuation.separator.comma.baml
@@ -281,11 +281,11 @@
 123:9-65     "// This will try the clients in order until one succeeds" source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml comment.line.double-slash.baml
 124:9-17     "strategy"         source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml variable.other.property.baml
 124:17-18    ":"                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml punctuation.separator.colon.baml
-124:19-20    "["                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml meta.expression.array.baml punctuation.definition.array.begin.baml
-124:20-34    "CustomGPT5Mini"   source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml meta.expression.array.baml meta.dotted-expression.baml variable.other.readwrite.baml
-124:34-35    ","                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml meta.expression.array.baml punctuation.separator.comma.baml
-124:36-46    "CustomGPT5"       source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml meta.expression.array.baml meta.dotted-expression.baml variable.other.readwrite.baml
-124:46-47    "]"                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml meta.expression.array.baml punctuation.definition.array.end.baml
+124:19-20    "["                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml meta.config.array.baml punctuation.definition.array.begin.baml
+124:20-34    "CustomGPT5Mini"   source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml meta.config.array.baml meta.dotted-expression.baml variable.other.readwrite.baml
+124:34-35    ","                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml meta.config.array.baml punctuation.separator.comma.baml
+124:36-46    "CustomGPT5"       source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml meta.config.array.baml meta.dotted-expression.baml variable.other.readwrite.baml
+124:46-47    "]"                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml meta.config.array.baml punctuation.definition.array.end.baml
 124:47-48    ","                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml punctuation.separator.comma.baml
 125:5-6      "}"                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml punctuation.definition.block.end.baml
 125:6-7      ","                source.baml meta.client.baml meta.config.block.baml punctuation.separator.comma.baml
@@ -372,23 +372,23 @@
 152:24-25    ","                source.baml meta.function.baml meta.block.function.baml meta.statement.let.baml meta.expression.array.baml punctuation.separator.comma.baml
 152:26-27    "3"                source.baml meta.function.baml meta.block.function.baml meta.statement.let.baml meta.expression.array.baml constant.numeric.integer.baml
 152:27-28    "]"                source.baml meta.function.baml meta.block.function.baml meta.statement.let.baml meta.expression.array.baml punctuation.definition.array.end.baml
-152:28-29    "."                source.baml meta.function.baml meta.block.function.baml meta.statement.let.baml punctuation.accessor.baml
-152:29-32    "map"              source.baml meta.function.baml meta.block.function.baml meta.statement.let.baml meta.function-call.baml entity.name.function.baml
-152:32-33    "("                source.baml meta.function.baml meta.block.function.baml meta.statement.let.baml meta.function-call.baml meta.function-call.arguments.baml punctuation.definition.arguments.begin.baml
-152:33-44    "will_double"      source.baml meta.function.baml meta.block.function.baml meta.statement.let.baml meta.function-call.baml meta.function-call.arguments.baml meta.dotted-expression.baml variable.other.readwrite.baml
-152:44-45    ")"                source.baml meta.function.baml meta.block.function.baml meta.statement.let.baml meta.function-call.baml meta.function-call.arguments.baml punctuation.definition.arguments.end.baml
+152:28-29    "."                source.baml meta.function.baml meta.block.function.baml meta.statement.let.baml meta.function-call.member.baml punctuation.accessor.baml
+152:29-32    "map"              source.baml meta.function.baml meta.block.function.baml meta.statement.let.baml meta.function-call.member.baml entity.name.function.baml
+152:32-33    "("                source.baml meta.function.baml meta.block.function.baml meta.statement.let.baml meta.function-call.member.baml meta.function-call.arguments.baml punctuation.definition.arguments.begin.baml
+152:33-44    "will_double"      source.baml meta.function.baml meta.block.function.baml meta.statement.let.baml meta.function-call.member.baml meta.function-call.arguments.baml meta.dotted-expression.baml variable.other.readwrite.baml
+152:44-45    ")"                source.baml meta.function.baml meta.block.function.baml meta.statement.let.baml meta.function-call.member.baml meta.function-call.arguments.baml punctuation.definition.arguments.end.baml
 152:45-46    ";"                source.baml meta.function.baml meta.block.function.baml punctuation.terminator.statement.baml
 153:5-8      "log"              source.baml meta.function.baml meta.block.function.baml meta.function-call.baml variable.other.readwrite.baml
 153:8-9      "."                source.baml meta.function.baml meta.block.function.baml meta.function-call.baml punctuation.accessor.baml
 153:9-13     "info"             source.baml meta.function.baml meta.block.function.baml meta.function-call.baml entity.name.function.baml
 153:13-14    "("                source.baml meta.function.baml meta.block.function.baml meta.function-call.baml meta.function-call.arguments.baml punctuation.definition.arguments.begin.baml
-153:14-16    "{ "               source.baml meta.function.baml meta.block.function.baml meta.function-call.baml meta.function-call.arguments.baml
-153:16-17    "\""               source.baml meta.function.baml meta.block.function.baml meta.function-call.baml meta.function-call.arguments.baml string.quoted.double.baml punctuation.definition.string.begin.baml
-153:17-24    "doubled"          source.baml meta.function.baml meta.block.function.baml meta.function-call.baml meta.function-call.arguments.baml string.quoted.double.baml
-153:24-25    "\""               source.baml meta.function.baml meta.block.function.baml meta.function-call.baml meta.function-call.arguments.baml string.quoted.double.baml punctuation.definition.string.end.baml
-153:25-27    ": "               source.baml meta.function.baml meta.block.function.baml meta.function-call.baml meta.function-call.arguments.baml
-153:27-34    "doubled"          source.baml meta.function.baml meta.block.function.baml meta.function-call.baml meta.function-call.arguments.baml meta.dotted-expression.baml variable.other.readwrite.baml
-153:34-36    " }"               source.baml meta.function.baml meta.block.function.baml meta.function-call.baml meta.function-call.arguments.baml
+153:14-15    "{"                source.baml meta.function.baml meta.block.function.baml meta.function-call.baml meta.function-call.arguments.baml meta.expression.map.baml punctuation.definition.map.begin.baml
+153:16-17    "\""               source.baml meta.function.baml meta.block.function.baml meta.function-call.baml meta.function-call.arguments.baml meta.expression.map.baml meta.map.entry.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+153:17-24    "doubled"          source.baml meta.function.baml meta.block.function.baml meta.function-call.baml meta.function-call.arguments.baml meta.expression.map.baml meta.map.entry.baml string.quoted.double.baml
+153:24-25    "\""               source.baml meta.function.baml meta.block.function.baml meta.function-call.baml meta.function-call.arguments.baml meta.expression.map.baml meta.map.entry.baml string.quoted.double.baml punctuation.definition.string.end.baml
+153:25-26    ":"                source.baml meta.function.baml meta.block.function.baml meta.function-call.baml meta.function-call.arguments.baml meta.expression.map.baml meta.map.entry.baml punctuation.separator.colon.baml
+153:27-34    "doubled"          source.baml meta.function.baml meta.block.function.baml meta.function-call.baml meta.function-call.arguments.baml meta.expression.map.baml meta.map.entry.baml meta.dotted-expression.baml variable.other.readwrite.baml
+153:35-36    "}"                source.baml meta.function.baml meta.block.function.baml meta.function-call.baml meta.function-call.arguments.baml meta.expression.map.baml punctuation.definition.map.end.baml
 153:36-37    ")"                source.baml meta.function.baml meta.block.function.baml meta.function-call.baml meta.function-call.arguments.baml punctuation.definition.arguments.end.baml
 153:37-38    ";"                source.baml meta.function.baml meta.block.function.baml punctuation.terminator.statement.baml
 154:1-2      "}"                source.baml meta.function.baml meta.block.function.baml punctuation.definition.block.end.baml

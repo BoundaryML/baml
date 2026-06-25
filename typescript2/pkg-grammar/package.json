@@ -6,7 +6,6 @@
   "description": "Canonical TextMate grammars for the BAML language (single source of truth, consumed by app-vscode-ext and app-promptfiddle).",
   "exports": {
     "./baml.tmLanguage.json": "./baml.tmLanguage.json",
-    "./jinja.tmLanguage.json": "./jinja.tmLanguage.json",
     "./package.json": "./package.json"
   },
   "files": [

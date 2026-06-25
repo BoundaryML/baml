@@ -7,14 +7,12 @@ The grammars are authored in TypeScript with
 [`tmlanguage-generator`](https://www.npmjs.com/package/tmlanguage-generator)
 and compiled to JSON. You edit the typed sources, never the JSON.
 
-- `src/baml.ts` — the BAML grammar (`source.baml`)
-- `src/jinja.ts` — the Jinja sub-grammar embedded in prompt blocks
-  (`source.baml-jinja`)
+- `src/baml.ts` — the BAML grammar (`source.baml`), including prompt template
+  highlighting.
 
 Generated artifacts (do not edit by hand):
 
-- `baml.tmLanguage.json`, `jinja.tmLanguage.json` — emitted by the build,
-  imported directly by consumers.
+- `baml.tmLanguage.json` — emitted by the build, imported directly by consumers.
 
 ## Authoring
 

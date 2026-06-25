@@ -23,27 +23,13 @@
         "aliases": ["BAML", "baml"],
         "extensions": [".baml"],
         "configuration": "./language-configuration.json"
-      },
-      {
-        "id": "baml-jinja",
-        "aliases": ["Jinja baml"],
-        "extensions": [".baml.jinja"]
       }
     ],
     "grammars": [
       {
         "language": "baml",
         "scopeName": "source.baml",
-        "path": "./syntaxes/baml.tmLanguage.json",
-        "embeddedLanguages": {
-          "source.baml-jinja": "baml-jinja",
-          "string.quoted.block.baml.prompt": "baml-jinja"
-        }
-      },
-      {
-        "language": "baml-jinja",
-        "scopeName": "source.baml-jinja",
-        "path": "./syntaxes/jinja.tmLanguage.json"
+        "path": "./syntaxes/baml.tmLanguage.json"
       }
     ],
     "commands": [

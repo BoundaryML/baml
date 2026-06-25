@@ -1,27 +1,27 @@
 1:1-6        "class"            source.baml meta.class.baml keyword.declaration.class.baml
-1:7-20       "PatternRecord"    source.baml meta.class.baml entity.name.type.class.baml
-1:21-22      "{"                source.baml meta.class.baml punctuation.definition.block.begin.baml
-2:3-5        "id"               source.baml meta.class.baml meta.field.baml variable.other.property.baml
-2:6-9        "int"              source.baml meta.class.baml meta.field.baml support.type.primitive.baml
-3:3-8        "label"            source.baml meta.class.baml meta.field.baml variable.other.property.baml
-3:9-15       "string"           source.baml meta.class.baml meta.field.baml support.type.primitive.baml
-4:1-2        "}"                source.baml meta.class.baml punctuation.definition.block.end.baml
+1:7-20       "PatternRecord"    source.baml meta.class.baml meta.class.header.baml entity.name.type.class.baml
+1:21-22      "{"                source.baml meta.class.baml meta.class.body.baml punctuation.definition.block.begin.baml
+2:3-5        "id"               source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
+2:6-9        "int"              source.baml meta.class.baml meta.class.body.baml meta.field.baml support.type.primitive.baml
+3:3-8        "label"            source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
+3:9-15       "string"           source.baml meta.class.baml meta.class.body.baml meta.field.baml support.type.primitive.baml
+4:1-2        "}"                source.baml meta.class.baml meta.class.body.baml punctuation.definition.block.end.baml
 6:1-6        "class"            source.baml meta.class.baml keyword.declaration.class.baml
-6:7-22       "PatternEnvelope"  source.baml meta.class.baml entity.name.type.class.baml
-6:23-24      "{"                source.baml meta.class.baml punctuation.definition.block.begin.baml
-7:3-9        "record"           source.baml meta.class.baml meta.field.baml variable.other.property.baml
-7:10-23      "PatternRecord"    source.baml meta.class.baml meta.field.baml meta.type-reference.baml entity.name.type.baml
-8:3-7        "tags"             source.baml meta.class.baml meta.field.baml variable.other.property.baml
-8:8-14       "string"           source.baml meta.class.baml meta.field.baml support.type.primitive.baml
-8:14-15      "["                source.baml meta.class.baml meta.field.baml punctuation.definition.type.baml
-8:15-16      "]"                source.baml meta.class.baml meta.field.baml punctuation.definition.type.baml
-9:1-2        "}"                source.baml meta.class.baml punctuation.definition.block.end.baml
+6:7-22       "PatternEnvelope"  source.baml meta.class.baml meta.class.header.baml entity.name.type.class.baml
+6:23-24      "{"                source.baml meta.class.baml meta.class.body.baml punctuation.definition.block.begin.baml
+7:3-9        "record"           source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
+7:10-23      "PatternRecord"    source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-reference.baml entity.name.type.baml
+8:3-7        "tags"             source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
+8:8-14       "string"           source.baml meta.class.baml meta.class.body.baml meta.field.baml support.type.primitive.baml
+8:14-15      "["                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
+8:15-16      "]"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
+9:1-2        "}"                source.baml meta.class.baml meta.class.body.baml punctuation.definition.block.end.baml
 11:1-6       "class"            source.baml meta.class.baml keyword.declaration.class.baml
-11:7-18      "Destructure"      source.baml meta.class.baml entity.name.type.class.baml
-11:19-20     "{"                source.baml meta.class.baml punctuation.definition.block.begin.baml
-12:3-8       "field"            source.baml meta.class.baml meta.field.baml variable.other.property.baml
-12:9-15      "string"           source.baml meta.class.baml meta.field.baml support.type.primitive.baml
-13:1-2       "}"                source.baml meta.class.baml punctuation.definition.block.end.baml
+11:7-18      "Destructure"      source.baml meta.class.baml meta.class.header.baml entity.name.type.class.baml
+11:19-20     "{"                source.baml meta.class.baml meta.class.body.baml punctuation.definition.block.begin.baml
+12:3-8       "field"            source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
+12:9-15      "string"           source.baml meta.class.baml meta.class.body.baml meta.field.baml support.type.primitive.baml
+13:1-2       "}"                source.baml meta.class.baml meta.class.body.baml punctuation.definition.block.end.baml
 15:1-5       "type"             source.baml meta.type-alias.baml keyword.declaration.type-alias.baml
 15:6-18      "PatternInput"     source.baml meta.type-alias.baml entity.name.type.alias.baml
 15:19-20     "="                source.baml meta.type-alias.baml keyword.operator.assignment.baml

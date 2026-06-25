@@ -1,0 +1,6 @@
+// Phase 1: Verify that nested map/array literals type-check against the
+// recursive `json` alias body.
+
+function NestedMapLiteral() -> json {
+  {"a": 1, "b": [2, 3], "c": {"nested": null}}
+}

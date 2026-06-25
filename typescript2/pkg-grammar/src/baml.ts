@@ -25,6 +25,8 @@ type IncludeRule = tm.IncludeRule<BamlScope>;
 const IDENT = String.raw`\$?[A-Za-z_][A-Za-z0-9_-]*(?:\$[A-Za-z_][A-Za-z0-9_-]*)*`;
 const ACCESSOR = String.raw`\s*\.\s*`;
 const DOTTED_IDENT = String.raw`${IDENT}(?:${ACCESSOR}${IDENT})*`;
+const TYPE_ARGS_BEFORE_BLOCK = String.raw`(?:<[^{}=;\r\n]*>\s*)?`;
+const BINDING_INTRO = String.raw`(?:let|const)`;
 
 // --- Builtins --------------------------------------------------------------
 //
@@ -35,12 +37,16 @@ const DOTTED_IDENT = String.raw`${IDENT}(?:${ACCESSOR}${IDENT})*`;
 const BUILTIN_TYPES = [
   "int",
   "float",
+  "bigint",
   "string",
   "bool",
   "image",
   "audio",
   "map",
   "json",
+  "unknown",
+  "never",
+  "Self",
 ];
 
 // Reserved root namespaces. Highlighted as builtins when they lead a path.
@@ -54,7 +60,12 @@ const TOP_LEVEL_ITEMS = [
   "client",
   "retry_policy",
   "generator",
+  "template_string",
   "class",
+  "enum",
+  "interface",
+  "implements",
+  "implement",
   "function",
   "testset",
   "test",
@@ -62,6 +73,7 @@ const TOP_LEVEL_ITEMS = [
 ];
 
 const TOP_LEVEL_ITEM_START = String.raw`^\s*${oneOf(TOP_LEVEL_ITEMS)}\b`;
+const STATEMENT_START = String.raw`(?:^\s*|\G\s*|(?<=[{;}])\s*)`;
 
 // `root` / `baml` are reserved root namespaces; when one leads a path it is a
 // builtin, not a user namespace. Capture re-tokenization keeps the original
@@ -165,13 +177,90 @@ const numericLiteral: Rule = {
   patterns: [bigintLiteral, floatLiteral, integerLiteral],
 };
 
-// `\<char>` escape inside quoted strings. The lexer treats a quote preceded by
-// an odd number of backslashes as still inside the string, which this matches:
-// the escape consumes `\"` before the closing-quote rule can see it.
+const standardControlEscape: Rule = {
+  key: "string-escape-control",
+  scope: "constant.character.escape.control.baml",
+  match: String.raw`\\[ntr0bvf]`,
+};
+
+const quotedDelimiterEscape: Rule = {
+  key: "string-escape-quoted-delimiter",
+  scope: "constant.character.escape.delimiter.baml",
+  match: String.raw`\\["\\]`,
+};
+
+const unknownStringEscape: Rule = {
+  key: "string-escape-unknown",
+  scope: "constant.character.escape.unknown.baml",
+  match: String.raw`\\.`,
+};
+
+// Quoted strings decode the standard control escapes plus `\\` and `\"`.
+// Unknown escapes are preserved by the lowerer, so scope them distinctly rather
+// than marking them invalid.
 const stringEscape: Rule = {
   key: "string-escape",
-  scope: "constant.character.escape.baml",
+  patterns: [standardControlEscape, quotedDelimiterEscape, unknownStringEscape],
+};
+
+const byteStringControlEscape: Rule = {
+  key: "byte-string-escape-control",
+  scope: "constant.character.escape.control.baml",
+  match: String.raw`\\[ntr0]`,
+};
+
+const byteStringHexEscape: Rule = {
+  key: "byte-string-escape-hex",
+  scope: "constant.character.escape.hex.baml",
+  match: String.raw`\\x[0-9A-Fa-f]{2}`,
+};
+
+const byteStringInvalidHexEscape: Rule = {
+  key: "byte-string-escape-invalid-hex",
+  scope: "invalid.illegal.escape.hex.baml",
+  match: String.raw`\\x(?:[0-9A-Fa-f]{0,1}(?=["\\]|$)|[0-9A-Fa-f]?[^0-9A-Fa-f"\\])`,
+};
+
+const byteStringInvalidEscape: Rule = {
+  key: "byte-string-escape-invalid",
+  scope: "invalid.illegal.escape.baml",
   match: String.raw`\\.`,
+};
+
+// Byte strings decode `\n`, `\t`, `\r`, `\0`, `\\`, `\"`, and `\xHH`.
+// Everything else is a lowering error.
+const byteStringEscape: Rule = {
+  key: "byte-string-escape",
+  patterns: [
+    byteStringHexEscape,
+    byteStringControlEscape,
+    quotedDelimiterEscape,
+    byteStringInvalidHexEscape,
+    byteStringInvalidEscape,
+  ],
+};
+
+const backtickDelimiterEscape: Rule = {
+  key: "backtick-string-escape-delimiter",
+  scope: "constant.character.escape.delimiter.baml",
+  match: String.raw`\\[` + "`" + String.raw`$]`,
+};
+
+// Backtick strings share normal string escapes and add \` plus \$ for literal
+// backticks and literal interpolation starts.
+const backtickStringEscape: Rule = {
+  key: "backtick-string-escape",
+  patterns: [
+    standardControlEscape,
+    quotedDelimiterEscape,
+    backtickDelimiterEscape,
+    unknownStringEscape,
+  ],
+};
+
+const backtickInterpolation: IncludeRule = {
+  key: "backtick-interpolation",
+  patterns: [],
 };
 
 // Plain double-quoted string: `"..."`.
@@ -187,6 +276,23 @@ const stringLiteral: Rule = {
     "0": { scope: "punctuation.definition.string.end.baml" },
   },
   patterns: [stringEscape],
+};
+
+// Byte string literal: `b"..."`. The parser only treats the prefix as special
+// when it is adjacent to the quote; `b "..."` remains an identifier plus string.
+const byteStringLiteral: Rule = {
+  key: "byte-string-literal",
+  scope: "string.quoted.binary.double.baml",
+  begin: String.raw`\b(b)(")`,
+  beginCaptures: {
+    "1": { scope: "storage.type.string.baml" },
+    "2": { scope: "punctuation.definition.string.begin.baml" },
+  },
+  end: String.raw`"`,
+  endCaptures: {
+    "0": { scope: "punctuation.definition.string.end.baml" },
+  },
+  patterns: [byteStringEscape],
 };
 
 // Raw and backtick strings use a balanced run of delimiters (`##"..."##`,
@@ -220,8 +326,7 @@ const rawStringLiteral: Rule = {
 
 // Backticks have no terminator character, so each rule is pinned to exactly N
 // with lookarounds on both sides (`(?<!\`)...(?!\`)`); a shorter run inside (a
-// lone `` ` ``) is just string content. Interpolation (`${...}`) is not split
-// out yet -- the whole body is string.
+// lone `` ` ``) is just string content.
 function backtickStringRules(max: number): Rule[] {
   return Array.from({ length: max }, (_, i) => max - i).map((n) => ({
     key: `backtick-string-${n}`,
@@ -234,6 +339,7 @@ function backtickStringRules(max: number): Rule[] {
     endCaptures: {
       "1": { scope: "punctuation.definition.string.end.baml" },
     },
+    patterns: [backtickInterpolation, backtickStringEscape],
   }));
 }
 
@@ -242,9 +348,9 @@ const backtickStringLiteral: Rule = {
   patterns: backtickStringRules(MAX_DELIMITER),
 };
 
-// Every literal form, in one reusable group.
-const literal: Rule = {
-  key: "literal",
+// Type literals are also valid value literals; byte strings are value-only.
+const typeLiteral: Rule = {
+  key: "type-literal",
   patterns: [
     booleanLiteral,
     nullLiteral,
@@ -253,6 +359,11 @@ const literal: Rule = {
     rawStringLiteral,
     backtickStringLiteral,
   ],
+};
+
+const literal: Rule = {
+  key: "literal",
+  patterns: [byteStringLiteral, typeLiteral],
 };
 
 const expression: IncludeRule = {
@@ -303,6 +414,116 @@ const codeBlock: Rule = {
   patterns: [comments, blockContents],
 };
 
+const templateComment: Rule = {
+  key: "template-comment",
+  scope: "comment.block.template.baml",
+  begin: String.raw`\{#`,
+  beginCaptures: {
+    "0": { scope: "punctuation.definition.comment.begin.baml" },
+  },
+  end: String.raw`#\}`,
+  endCaptures: {
+    "0": { scope: "punctuation.definition.comment.end.baml" },
+  },
+};
+
+const TEMPLATE_KEYWORDS = [
+  "for",
+  "endfor",
+  "if",
+  "elif",
+  "else",
+  "endif",
+  "in",
+  "set",
+  "filter",
+  "endfilter",
+  "macro",
+  "endmacro",
+  "raw",
+  "endraw",
+];
+
+const templateKeyword: Rule = {
+  key: "template-keyword",
+  scope: "keyword.control.template.baml",
+  match: String.raw`\b${oneOf(TEMPLATE_KEYWORDS)}\b`,
+};
+
+const templateInterpolation: Rule = {
+  key: "template-interpolation",
+  scope: "meta.template.interpolation.baml",
+  begin: String.raw`\{\{`,
+  beginCaptures: {
+    "0": { scope: "punctuation.section.interpolation.begin.baml" },
+  },
+  end: String.raw`\}\}`,
+  endCaptures: {
+    "0": { scope: "punctuation.section.interpolation.end.baml" },
+  },
+  patterns: [comments, templateKeyword, expression],
+};
+
+const templateControl: Rule = {
+  key: "template-control",
+  scope: "meta.template.control.baml",
+  begin: String.raw`\{%`,
+  beginCaptures: {
+    "0": { scope: "punctuation.section.template.begin.baml" },
+  },
+  end: String.raw`%\}`,
+  endCaptures: {
+    "0": { scope: "punctuation.section.template.end.baml" },
+  },
+  patterns: [comments, templateKeyword, expression],
+};
+
+const templateStringBodyPatterns = [
+  templateComment,
+  templateControl,
+  templateInterpolation,
+] satisfies Rule[];
+
+const templateQuotedStringBody: Rule = {
+  key: "template-quoted-string-body",
+  scope: "string.quoted.double.template.baml",
+  begin: String.raw`"`,
+  beginCaptures: {
+    "0": { scope: "punctuation.definition.string.begin.baml" },
+  },
+  end: String.raw`"`,
+  endCaptures: {
+    "0": { scope: "punctuation.definition.string.end.baml" },
+  },
+  patterns: [...templateStringBodyPatterns, stringEscape],
+};
+
+function templateRawStringBodyRules(max: number): Rule[] {
+  return Array.from({ length: max }, (_, i) => max - i).map((n) => ({
+    key: `template-raw-string-body-${n}`,
+    scope: "string.quoted.raw.template.baml",
+    begin: String.raw`(?<!#)(#{${n}})(")`,
+    beginCaptures: {
+      "1": { scope: "punctuation.definition.string.begin.baml" },
+      "2": { scope: "punctuation.definition.string.begin.baml" },
+    },
+    end: String.raw`(")(#{${n}})`,
+    endCaptures: {
+      "1": { scope: "punctuation.definition.string.end.baml" },
+      "2": { scope: "punctuation.definition.string.end.baml" },
+    },
+    patterns: templateStringBodyPatterns,
+  }));
+}
+
+const templateStringBody: Rule = {
+  key: "template-string-body",
+  patterns: [
+    ...templateRawStringBodyRules(MAX_DELIMITER),
+    templateQuotedStringBody,
+  ],
+};
+
 const arrayExpression: Rule = {
   key: "array-expression",
   scope: "meta.expression.array.baml",
@@ -325,10 +546,86 @@ const arrayExpression: Rule = {
   ],
 };
 
+const mapExpression: Rule = {
+  key: "map-expression",
+  scope: "meta.expression.map.baml",
+  begin: String.raw`\{(?=\s*(?:\}|["#]|${DOTTED_IDENT}\s*:))`,
+  beginCaptures: {
+    "0": { scope: "punctuation.definition.map.begin.baml" },
+  },
+  end: String.raw`\}`,
+  endCaptures: {
+    "0": { scope: "punctuation.definition.map.end.baml" },
+  },
+  patterns: [
+    comments,
+    {
+      key: "map-entry",
+      scope: "meta.map.entry.baml",
+      begin: String.raw`\s*(?=(?:"|#|${DOTTED_IDENT}\s*:))`,
+      end: String.raw`(?=,|\})`,
+      patterns: [
+        comments,
+        {
+          key: "map-entry-key",
+          scope: tm.meta,
+          match: String.raw`\b(${IDENT})((?:${ACCESSOR}${IDENT})*)\b(?=\s*:)`,
+          captures: {
+            "1": { scope: "variable.other.property.baml" },
+            "2": {
+              patterns: [
+                {
+                  key: "map-entry-key-accessor",
+                  scope: "punctuation.accessor.baml",
+                  match: String.raw`\.`,
+                },
+                {
+                  key: "map-entry-key-segment",
+                  scope: "variable.other.property.baml",
+                  match: String.raw`\b${IDENT}\b`,
+                },
+              ],
+            },
+          },
+        },
+        stringLiteral,
+        rawStringLiteral,
+        {
+          key: "map-entry-colon",
+          scope: "punctuation.separator.colon.baml",
+          match: String.raw`:`,
+        },
+        expression,
+      ],
+    },
+    {
+      key: "map-comma",
+      scope: "punctuation.separator.comma.baml",
+      match: String.raw`,`,
+    },
+  ],
+};
+
+function typeArgumentsRule(key: string, endLookahead: string): Rule {
+  return {
+    key,
+    scope: "meta.type-arguments.baml",
+    begin: String.raw`<`,
+    beginCaptures: {
+      "0": { scope: "punctuation.definition.type-arguments.begin.baml" },
+    },
+    end: String.raw`>` + endLookahead,
+    endCaptures: {
+      "0": { scope: "punctuation.definition.type-arguments.end.baml" },
+    },
+    patterns: [comments, typeExpression],
+  };
+}
+
 const constructorExpression: Rule = {
   key: "constructor-expression",
   scope: "meta.constructor.expression.baml",
-  begin: String.raw`\b${DOTTED_IDENT}\b\s*(?=\{)`,
+  begin: String.raw`\b${DOTTED_IDENT}\b(?=\s*${TYPE_ARGS_BEFORE_BLOCK}\{)`,
   beginCaptures: {
     "0": {
       patterns: [
@@ -347,6 +644,8 @@ const constructorExpression: Rule = {
   },
   end: String.raw`(?<=\})`,
   patterns: [
+    comments,
+    typeArgumentsRule("constructor-type-arguments", String.raw`(?=\s*\{)`),
     {
       key: "constructor-body",
       scope: "meta.constructor.body.baml",
@@ -441,19 +740,7 @@ const functionCallExpression: Rule = {
   end: String.raw`(?<=\))`,
   patterns: [
     comments,
-    {
-      key: "function-call-type-arguments",
-      scope: "meta.type-arguments.baml",
-      begin: String.raw`<`,
-      beginCaptures: {
-        "0": { scope: "punctuation.definition.type-arguments.begin.baml" },
-      },
-      end: String.raw`>(?=\s*\()`,
-      endCaptures: {
-        "0": { scope: "punctuation.definition.type-arguments.end.baml" },
-      },
-      patterns: [comments, typeExpression],
-    },
+    typeArgumentsRule("function-call-type-arguments", String.raw`(?=\s*\()`),
     {
       key: "function-call-arguments",
       scope: "meta.function-call.arguments.baml",
@@ -476,6 +763,158 @@ const functionCallExpression: Rule = {
       ],
     },
   ],
+};
+
+const optionalCallExpression: Rule = {
+  key: "optional-call-expression",
+  scope: "meta.function-call.optional.baml",
+  begin: String.raw`(\?\.)\s*(?=\()`,
+  beginCaptures: {
+    "1": { scope: "punctuation.accessor.baml" },
+  },
+  end: String.raw`(?<=\))`,
+  patterns: [
+    comments,
+    {
+      key: "optional-call-arguments",
+      scope: "meta.function-call.arguments.baml",
+      begin: String.raw`\(`,
+      beginCaptures: {
+        "0": { scope: "punctuation.definition.arguments.begin.baml" },
+      },
+      end: String.raw`\)`,
+      endCaptures: {
+        "0": { scope: "punctuation.definition.arguments.end.baml" },
+      },
+      patterns: [
+        comments,
+        expression,
+        {
+          key: "optional-call-argument-comma",
+          scope: "punctuation.separator.comma.baml",
+          match: String.raw`,`,
+        },
+      ],
+    },
+  ],
+};
+
+const optionalIndexExpression: Rule = {
+  key: "optional-index-expression",
+  scope: "meta.index.optional.baml",
+  begin: String.raw`(\?\.)\s*(?=\[)`,
+  beginCaptures: {
+    "1": { scope: "punctuation.accessor.baml" },
+  },
+  end: String.raw`(?<=\])`,
+  patterns: [
+    comments,
+    {
+      key: "optional-index-arguments",
+      scope: "meta.index.arguments.baml",
+      begin: String.raw`\[`,
+      beginCaptures: {
+        "0": { scope: "punctuation.definition.bracket.begin.baml" },
+      },
+      end: String.raw`\]`,
+      endCaptures: {
+        "0": { scope: "punctuation.definition.bracket.end.baml" },
+      },
+      patterns: [comments, expression],
+    },
+  ],
+};
+
+const optionalMethodCallExpression: Rule = {
+  key: "optional-method-call-expression",
+  scope: "meta.function-call.optional.member.baml",
+  begin: String.raw`(\?\.)\s*(${IDENT})\b(?=\s*(?:<[^(){};]*>\s*)?\()`,
+  beginCaptures: {
+    "1": { scope: "punctuation.accessor.baml" },
+    "2": { scope: "entity.name.function.baml" },
+  },
+  end: String.raw`(?<=\))`,
+  patterns: [
+    comments,
+    typeArgumentsRule("optional-method-call-type-arguments", String.raw`(?=\s*\()`),
+    {
+      key: "optional-method-call-arguments",
+      scope: "meta.function-call.arguments.baml",
+      begin: String.raw`\(`,
+      beginCaptures: {
+        "0": { scope: "punctuation.definition.arguments.begin.baml" },
+      },
+      end: String.raw`\)`,
+      endCaptures: {
+        "0": { scope: "punctuation.definition.arguments.end.baml" },
+      },
+      patterns: [
+        comments,
+        expression,
+        {
+          key: "optional-method-call-argument-comma",
+          scope: "punctuation.separator.comma.baml",
+          match: String.raw`,`,
+        },
+      ],
+    },
+  ],
+};
+
+const optionalFieldAccessExpression: Rule = {
+  key: "optional-field-access-expression",
+  scope: "meta.field-access.optional.baml",
+  match: String.raw`(\?\.)\s*(${IDENT})\b`,
+  captures: {
+    "1": { scope: "punctuation.accessor.baml" },
+    "2": { scope: "variable.other.readwrite.baml" },
+  },
+};
+
+const postfixMethodCallExpression: Rule = {
+  key: "postfix-method-call-expression",
+  scope: "meta.function-call.member.baml",
+  begin: String.raw`([.$])\s*(${IDENT})\b(?=\s*(?:<[^(){};]*>\s*)?\()`,
+  beginCaptures: {
+    "1": { scope: "punctuation.accessor.baml" },
+    "2": { scope: "entity.name.function.baml" },
+  },
+  end: String.raw`(?<=\))`,
+  patterns: [
+    comments,
+    typeArgumentsRule("postfix-method-call-type-arguments", String.raw`(?=\s*\()`),
+    {
+      key: "postfix-method-call-arguments",
+      scope: "meta.function-call.arguments.baml",
+      begin: String.raw`\(`,
+      beginCaptures: {
+        "0": { scope: "punctuation.definition.arguments.begin.baml" },
+      },
+      end: String.raw`\)`,
+      endCaptures: {
+        "0": { scope: "punctuation.definition.arguments.end.baml" },
+      },
+      patterns: [
+        comments,
+        expression,
+        {
+          key: "postfix-method-call-argument-comma",
+          scope: "punctuation.separator.comma.baml",
+          match: String.raw`,`,
+        },
+      ],
+    },
+  ],
+};
+
+const fieldAccessExpression: Rule = {
+  key: "field-access-expression",
+  scope: "meta.field-access.baml",
+  match: String.raw`([.$])\s*(${IDENT})\b`,
+  captures: {
+    "1": { scope: "punctuation.accessor.baml" },
+    "2": { scope: "variable.other.readwrite.baml" },
+  },
 };
 
 const dottedExpression: Rule = {
@@ -506,15 +945,29 @@ const spawnExpression: Rule = {
       patterns: [
         comments,
         {
-          key: "spawn-with-keyword",
-          scope: "keyword.operator.with.baml",
-          match: String.raw`\bwith\b`,
+          key: "spawn-name",
+          scope: "meta.spawn.name.baml",
+          begin: String.raw`\G\s*(?!with\b)(?=[^\{\r\n])`,
+          end: String.raw`(?=\s+with\b|\s*\{)`,
+          patterns: [comments, conditionExpression],
         },
-        conditionExpression,
         {
-          key: "spawn-header-comma",
-          scope: "punctuation.separator.comma.baml",
-          match: String.raw`,`,
+          key: "spawn-with-clause",
+          scope: "meta.spawn.options.baml",
+          begin: String.raw`\b(with)\b`,
+          beginCaptures: {
+            "1": { scope: "keyword.operator.with.baml" },
+          },
+          end: String.raw`(?=\{)`,
+          patterns: [
+            comments,
+            conditionExpression,
+            {
+              key: "spawn-options-comma",
+              scope: "punctuation.separator.comma.baml",
+              match: String.raw`,`,
+            },
+          ],
         },
       ],
     },
@@ -524,24 +977,14 @@ const spawnExpression: Rule = {
 
 const awaitExpression: Rule = {
   key: "await-expression",
-  scope: "meta.expression.await.baml",
-  begin: String.raw`\b(await)\b`,
-  beginCaptures: {
-    "1": { scope: "keyword.operator.await.baml" },
-  },
-  end: String.raw`(?=,|\}|;|$)`,
-  patterns: [comments, expression],
+  scope: "keyword.operator.await.baml",
+  match: String.raw`\bawait\b`,
 };
 
 const throwExpression: Rule = {
   key: "throw-expression",
-  scope: "meta.expression.throw.baml",
-  begin: String.raw`\b(throw)\b`,
-  beginCaptures: {
-    "1": { scope: "keyword.control.flow.throw.baml" },
-  },
-  end: String.raw`(?=,|\}|;|$)`,
-  patterns: [comments, expression],
+  scope: "keyword.control.flow.throw.baml",
+  match: String.raw`\bthrow\b`,
 };
 
 const catchExpression: Rule = {
@@ -687,6 +1130,34 @@ const typeThrowsOperator: Rule = {
   match: String.raw`\bthrows\b`,
 };
 
+const typeAsOperator: Rule = {
+  key: "type-as-operator",
+  scope: "keyword.operator.as.baml",
+  match: String.raw`\bas\b`,
+};
+
+const typeAssignmentOperator: Rule = {
+  key: "type-assignment-operator",
+  scope: "keyword.operator.assignment.baml",
+  match: String.raw`=`,
+};
+
+const associatedTypeProjection: Rule = {
+  key: "associated-type-projection",
+  scope: "meta.type.associated-projection.baml",
+  begin: String.raw`\((?=[^)\r\n]*\bas\b)`,
+  beginCaptures: {
+    "0": { scope: "punctuation.definition.type.begin.baml" },
+  },
+  end: String.raw`(\))\s*(\.)\s*(${IDENT})\b`,
+  endCaptures: {
+    "1": { scope: "punctuation.definition.type.end.baml" },
+    "2": { scope: "punctuation.accessor.baml" },
+    "3": { scope: "entity.name.type.associated.baml" },
+  },
+  patterns: [comments, typeAsOperator, typeExpression],
+};
+
 // Brackets, angles, and commas are pure punctuation.
 const typePunctuation: Rule = {
   key: "type-punctuation",
@@ -706,16 +1177,121 @@ const semicolon: Rule = {
   match: String.raw`;`,
 };
 
+const attributePathAccessor: Rule = {
+  key: "attribute-path-accessor",
+  scope: "punctuation.accessor.baml",
+  match: String.raw`\.`,
+};
+
+const attributePathSegment: Rule = {
+  key: "attribute-path-segment",
+  scope: "storage.type.annotation.baml",
+  match: String.raw`\b${IDENT}\b`,
+};
+
+const DOTTED_ATTRIBUTE_IDENT = String.raw`${IDENT}${ACCESSOR}${IDENT}(?:${ACCESSOR}${IDENT})*`;
+
+const attributeExpressionBlock: Rule = {
+  key: "attribute-expression-block",
+  scope: "meta.attribute.expression.baml",
+  begin: String.raw`\{\{`,
+  beginCaptures: {
+    "0": { scope: "punctuation.section.expression.begin.baml" },
+  },
+  end: String.raw`\}\}`,
+  endCaptures: {
+    "0": { scope: "punctuation.section.expression.end.baml" },
+  },
+  patterns: [comments, expression],
+};
+
+const attributeArguments: Rule = {
+  key: "attribute-arguments",
+  scope: "meta.attribute.arguments.baml",
+  begin: String.raw`\(`,
+  beginCaptures: {
+    "0": {
+      scope: "punctuation.definition.annotation-arguments.begin.bracket.round.baml",
+    },
+  },
+  end: String.raw`\)`,
+  endCaptures: {
+    "0": {
+      scope: "punctuation.definition.annotation-arguments.end.bracket.round.baml",
+    },
+  },
+  patterns: [
+    comments,
+    attributeExpressionBlock,
+    literal,
+    {
+      key: "attribute-unquoted-string",
+      scope: "string.unquoted.baml",
+      match: String.raw`\b${IDENT}\b`,
+    },
+    {
+      key: "attribute-argument-comma",
+      scope: "punctuation.separator.comma.baml",
+      match: String.raw`,`,
+    },
+  ],
+};
+
+const attribute: Rule = {
+  key: "attribute",
+  scope: "meta.attribute.baml",
+  begin: String.raw`(@)(?!@)\s*(${DOTTED_IDENT})\b`,
+  beginCaptures: {
+    "1": {
+      scope: "punctuation.definition.annotation.baml storage.type.annotation.baml",
+    },
+    "2": { patterns: [attributePathAccessor, attributePathSegment] },
+  },
+  end: String.raw`(?<=\))|(?=\s*@|\s*,|\s*\}|\s+${IDENT}\b|\r?\n\s*(?:${IDENT}\b|@@|\}))`,
+  patterns: [comments, attributeArguments],
+};
+
+const bareAttribute: Rule = {
+  key: "bare-attribute",
+  scope: "meta.attribute.baml",
+  match: String.raw`(@)(?!@)\s*(${DOTTED_ATTRIBUTE_IDENT}|skip)\b(?=\s*(?:@|,|\}|$|//|/\*))`,
+  captures: {
+    "1": {
+      scope: "punctuation.definition.annotation.baml storage.type.annotation.baml",
+    },
+    "2": { patterns: [attributePathAccessor, attributePathSegment] },
+  },
+};
+
+const blockAttribute: Rule = {
+  key: "block-attribute",
+  scope: "meta.attribute.block.baml",
+  begin: String.raw`(@@)\s*(${DOTTED_IDENT})\b`,
+  beginCaptures: {
+    "1": {
+      scope: "punctuation.definition.annotation.baml storage.type.annotation.baml",
+    },
+    "2": { patterns: [attributePathAccessor, attributePathSegment] },
+  },
+  end: String.raw`(?<=\))|(?=\s*@@|\s*@|\s*,|\s*\}|\s+${IDENT}\b|\r?\n\s*(?:${IDENT}\b|@@|\}))`,
+  patterns: [comments, attributeArguments],
+};
+
 // A field's type. Order matters: primitives and literals are claimed before the
 // catch-all `typeReference`, so `string` is a primitive and `true` / `"active"`
 // / `42` are literal types rather than bare identifiers.
 typeExpression.patterns = [
   comments,
   primitiveType,
-  literal,
+  typeLiteral,
   typeArrowOperator,
   typeThrowsOperator,
+  associatedTypeProjection,
   typeReference,
+  bareAttribute,
+  attribute,
+  typeAsOperator,
+  typeAssignmentOperator,
   optionalOperator,
   unionOperator,
   typePunctuation,
@@ -736,7 +1312,7 @@ const wildcardPattern: Rule = {
 const wildcardBindingPattern: Rule = {
   key: "wildcard-binding-pattern",
   scope: "meta.pattern.wildcard.baml",
-  match: String.raw`\b(let)\s+(_)\b`,
+  match: String.raw`\b(${BINDING_INTRO})\s+(_)\b`,
   captures: {
     "1": { scope: "keyword.declaration.binding.baml" },
     "2": { scope: "variable.language.wildcard.baml" },
@@ -746,7 +1322,7 @@ const wildcardBindingPattern: Rule = {
 const typedBindingPattern: Rule = {
   key: "typed-binding-pattern",
   scope: "meta.pattern.binding.baml",
-  match: String.raw`\b(let)\s+(${IDENT})\b\s*(:)`,
+  match: String.raw`\b(${BINDING_INTRO})\s+(${IDENT})\b\s*(:)`,
   captures: {
     "1": { scope: "keyword.declaration.binding.baml" },
     "2": { scope: "variable.other.binding.baml" },
@@ -757,7 +1333,7 @@ const typedBindingPattern: Rule = {
 const bareBindingPattern: Rule = {
   key: "bare-binding-pattern",
   scope: "meta.pattern.binding.baml",
-  match: String.raw`\b(let)\s+(${IDENT})\b`,
+  match: String.raw`\b(${BINDING_INTRO})\s+(${IDENT})\b`,
   captures: {
     "1": { scope: "keyword.declaration.binding.baml" },
     "2": { scope: "variable.other.binding.baml" },
@@ -767,7 +1343,7 @@ const bareBindingPattern: Rule = {
 const classDestructurePattern: Rule = {
   key: "class-destructure-pattern",
   scope: "meta.pattern.destructure.class.baml",
-  begin: String.raw`\b(?:(let)\s+)?(${DOTTED_IDENT})\b\s*(?=(?:<[^{}]*>\s*)?\{)`,
+  begin: String.raw`\b(?:(${BINDING_INTRO})\s+)?(${DOTTED_IDENT})\b\s*(?=${TYPE_ARGS_BEFORE_BLOCK}\{)`,
   beginCaptures: {
     "1": { scope: "keyword.declaration.binding.baml" },
     "2": { patterns: [typeReference] },
@@ -817,7 +1393,7 @@ const classDestructurePattern: Rule = {
 const arrayDestructurePattern: Rule = {
   key: "array-destructure-pattern",
   scope: "meta.pattern.destructure.array.baml",
-  begin: String.raw`(?:\b(let)\b\s*)?(\[)`,
+  begin: String.raw`(?:\b(${BINDING_INTRO})\b\s*)?(\[)`,
   beginCaptures: {
     "1": { scope: "keyword.declaration.binding.baml" },
     "2": { scope: "punctuation.definition.array.begin.baml" },
@@ -855,7 +1431,28 @@ pattern.patterns = [
   typeExpression,
 ];
 
+const isPatternExpression: Rule = {
+  key: "is-pattern-expression",
+  scope: "meta.expression.is.baml",
+  begin: String.raw`\b(is)\b`,
+  beginCaptures: {
+    "1": { scope: "keyword.operator.is.baml" },
+  },
+  end: String.raw`(?=\s*(?:&&|\|\||=>|[,);\]}]|$))`,
+  patterns: [comments, pattern],
+};
+
 const ifExpressionEnd = String.raw`(?!\s*else\b)(?:(?<=\})(?=\s*(?:[,);]|$))|(?=,|\)|;|$))`;
+
+function ifConditionPattern(key: string, end: string, avoidElse = false): Rule {
+  return {
+    key,
+    scope: "meta.if.condition.baml",
+    begin: avoidElse ? String.raw`\G(?!\s*else\b)\s*` : String.raw`\G\s*`,
+    end,
+    patterns: [comments, conditionExpression],
+  };
+}
 
 const ifExpression: Rule = {
   key: "if-expression",
@@ -868,12 +1465,23 @@ const ifExpression: Rule = {
   patterns: [],
 };
 
+const elseClause: Rule = {
+  key: "if-else-clause",
+  scope: "meta.else.baml",
+  begin: String.raw`${STATEMENT_START}(else)\b`,
+  beginCaptures: {
+    "1": { scope: "keyword.control.conditional.baml" },
+  },
+  end: ifExpressionEnd,
+  patterns: [comments, ifExpression, codeBlock],
+};
+
 ifExpression.patterns = [
   comments,
   {
     key: "if-let-pattern",
     scope: "meta.pattern.if-let.baml",
-    begin: String.raw`\G\s*(?=let\b)`,
+    begin: String.raw`\G\s*(?=${BINDING_INTRO}\b)`,
     end: String.raw`(?=\s*=)`,
     patterns: [comments, pattern],
   },
@@ -882,24 +1490,9 @@ ifExpression.patterns = [
     scope: "keyword.operator.assignment.baml",
     match: String.raw`=`,
   },
-  {
-    key: "if-condition",
-    scope: "meta.if.condition.baml",
-    begin: String.raw`\G(?!\s*else\b)\s*`,
-    end: String.raw`(?=\{)`,
-    patterns: [comments, conditionExpression],
-  },
+  ifConditionPattern("if-condition", String.raw`(?=\{)`, true),
   codeBlock,
-  {
-    key: "if-else-clause",
-    scope: "meta.else.baml",
-    begin: String.raw`\b(else)\b`,
-    beginCaptures: {
-      "1": { scope: "keyword.control.conditional.baml" },
-    },
-    end: ifExpressionEnd,
-    patterns: [comments, ifExpression, codeBlock],
-  },
+  elseClause,
 ];
 
 const matchScrutineeGroup: Rule = {
@@ -964,7 +1557,6 @@ const matchArm: Rule = {
       scope: "keyword.operator.arrow.baml",
       match: String.raw`=>`,
     },
-    codeBlock,
     expression,
   ],
 };
@@ -1052,26 +1644,6 @@ const matchExpression: Rule = {
   patterns: [comments, matchScrutineeGroup, matchBlock, matchScrutinee],
 };
 
-expression.patterns = [
-  literal,
-  arrayExpression,
-  parenthesizedExpression,
-  ifExpression,
-  matchExpression,
-  spawnExpression,
-  constructorExpression,
-  awaitExpression,
-  throwExpression,
-  catchExpression,
-  expressionOperator,
-  functionCallExpression,
-  dottedExpression,
-];
-
-conditionExpression.patterns = expression.patterns.filter(
-  (rule) => rule !== constructorExpression,
-);
-
 const loopStatementEnd = String.raw`(?<=\})(?=\s*(?:;|$))|(?=;|$)`;
 
 const whileStatement: Rule = {
@@ -1087,7 +1659,7 @@ const whileStatement: Rule = {
     {
       key: "while-let-pattern",
       scope: "meta.pattern.while-let.baml",
-      begin: String.raw`\G\s*(?=let\b)`,
+      begin: String.raw`\G\s*(?=${BINDING_INTRO}\b)`,
       end: String.raw`(?=\s*=)`,
       patterns: [comments, pattern],
     },
@@ -1107,6 +1679,100 @@ const whileStatement: Rule = {
   ],
 };
 
+const letElseClause: Rule = {
+  key: "let-else-clause",
+  scope: "meta.statement.let.else.baml",
+  begin: String.raw`\b(else)\b(?=\s*\{)`,
+  beginCaptures: {
+    "1": { scope: "keyword.control.conditional.else.baml" },
+  },
+  end: String.raw`(?<=\})`,
+  patterns: [comments, codeBlock],
+};
+
+function forHeaderPatterns(
+  keyPrefix: string,
+  parenthesizedEnd: string,
+  unparenthesizedEnd: string,
+): Rule[] {
+  return [
+    {
+      key: `${keyPrefix}-parenthesized-in-header`,
+      scope: "meta.for.header.baml",
+      begin: String.raw`\G\s*(\()(?=\s*${BINDING_INTRO}\b(?:(?![=;]).)*\bin\b)`,
+      beginCaptures: {
+        "1": { scope: "punctuation.definition.for-header.begin.baml" },
+      },
+      end: parenthesizedEnd,
+      endCaptures: {
+        "0": { scope: "punctuation.definition.for-header.end.baml" },
+      },
+      patterns: [
+        comments,
+        {
+          key: `${keyPrefix}-in-pattern`,
+          scope: "meta.pattern.for-in.baml",
+          begin: String.raw`(?=${BINDING_INTRO}\b)`,
+          end: String.raw`(?=\s+in\b)`,
+          patterns: [comments, pattern],
+        },
+        {
+          key: `${keyPrefix}-in-keyword`,
+          scope: "keyword.operator.in.baml",
+          match: String.raw`\bin\b`,
+        },
+        expression,
+      ],
+    },
+    {
+      key: `${keyPrefix}-parenthesized-c-style-header`,
+      scope: "meta.for.header.baml",
+      begin: String.raw`\G\s*(\()`,
+      beginCaptures: {
+        "1": { scope: "punctuation.definition.for-header.begin.baml" },
+      },
+      end: parenthesizedEnd,
+      endCaptures: {
+        "0": { scope: "punctuation.definition.for-header.end.baml" },
+      },
+      patterns: [
+        comments,
+        {
+          key: `${keyPrefix}-c-style-let-initializer`,
+          scope: "meta.for.initializer.baml",
+          begin: String.raw`(?=${BINDING_INTRO}\b)`,
+          end: String.raw`(?=;)`,
+          patterns: [comments, pattern, letElseClause, expression],
+        },
+        semicolon,
+        expression,
+      ],
+    },
+    {
+      key: `${keyPrefix}-unparenthesized-header`,
+      scope: "meta.for.header.baml",
+      begin: String.raw`\G\s*(?=${BINDING_INTRO}\b)`,
+      end: unparenthesizedEnd,
+      patterns: [
+        comments,
+        {
+          key: `${keyPrefix}-unparenthesized-in-pattern`,
+          scope: "meta.pattern.for-in.baml",
+          begin: String.raw`(?=${BINDING_INTRO}\b)`,
+          end: String.raw`(?=\s+in\b)`,
+          patterns: [comments, pattern],
+        },
+        {
+          key: `${keyPrefix}-unparenthesized-in-keyword`,
+          scope: "keyword.operator.in.baml",
+          match: String.raw`\bin\b`,
+        },
+        conditionExpression,
+      ],
+    },
+  ];
+}
+
 const forStatement: Rule = {
   key: "for-statement",
   scope: "meta.statement.for.baml",
@@ -1117,99 +1783,160 @@ const forStatement: Rule = {
   end: loopStatementEnd,
   patterns: [
     comments,
-    {
-      key: "for-parenthesized-in-header",
-      scope: "meta.for.header.baml",
-      begin: String.raw`\G\s*(\()(?=\s*let\b(?:(?![=;]).)*\bin\b)`,
-      beginCaptures: {
-        "1": { scope: "punctuation.definition.for-header.begin.baml" },
-      },
-      end: String.raw`\)(?=\s*\{)`,
-      endCaptures: {
-        "0": { scope: "punctuation.definition.for-header.end.baml" },
-      },
-      patterns: [
-        comments,
-        {
-          key: "for-in-pattern",
-          scope: "meta.pattern.for-in.baml",
-          begin: String.raw`(?=let\b)`,
-          end: String.raw`(?=\s+in\b)`,
-          patterns: [comments, pattern],
-        },
-        {
-          key: "for-in-keyword",
-          scope: "keyword.operator.in.baml",
-          match: String.raw`\bin\b`,
-        },
-        expression,
-      ],
-    },
-    {
-      key: "for-parenthesized-c-style-header",
-      scope: "meta.for.header.baml",
-      begin: String.raw`\G\s*(\()`,
-      beginCaptures: {
-        "1": { scope: "punctuation.definition.for-header.begin.baml" },
-      },
-      end: String.raw`\)(?=\s*\{)`,
-      endCaptures: {
-        "0": { scope: "punctuation.definition.for-header.end.baml" },
-      },
-      patterns: [
-        comments,
-        {
-          key: "for-c-style-let-initializer",
-          scope: "meta.for.initializer.baml",
-          begin: String.raw`(?=let\b)`,
-          end: String.raw`(?=;)`,
-          patterns: [comments, pattern, expression],
-        },
-        semicolon,
-        expression,
-      ],
-    },
-    {
-      key: "for-unparenthesized-header",
-      scope: "meta.for.header.baml",
-      begin: String.raw`\G\s*(?=let\b)`,
-      end: String.raw`(?=\{)`,
-      patterns: [
-        comments,
-        {
-          key: "for-unparenthesized-in-pattern",
-          scope: "meta.pattern.for-in.baml",
-          begin: String.raw`(?=let\b)`,
-          end: String.raw`(?=\s+in\b)`,
-          patterns: [comments, pattern],
-        },
-        {
-          key: "for-unparenthesized-in-keyword",
-          scope: "keyword.operator.in.baml",
-          match: String.raw`\bin\b`,
-        },
-        conditionExpression,
-      ],
-    },
+    ...forHeaderPatterns(
+      "for",
+      String.raw`\)(?=\s*\{)`,
+      String.raw`(?=\{)`,
+    ),
     codeBlock,
   ],
 };
 
+backtickInterpolation.patterns = [
+  {
+    key: "backtick-for-open",
+    scope: "meta.interpolation.control.for.baml",
+    begin: String.raw`(\$\{)\s*(for)\b`,
+    beginCaptures: {
+      "1": { scope: "punctuation.section.interpolation.begin.baml" },
+      "2": { scope: "keyword.control.loop.for.baml" },
+    },
+    end: String.raw`\}`,
+    endCaptures: {
+      "0": { scope: "punctuation.section.interpolation.end.baml" },
+    },
+    patterns: [
+      comments,
+      ...forHeaderPatterns(
+        "backtick-for",
+        String.raw`\)(?=\s*\})`,
+        String.raw`(?=\})`,
+      ),
+    ],
+  },
+  {
+    key: "backtick-else-if",
+    scope: "meta.interpolation.control.else-if.baml",
+    begin: String.raw`(\$\{)\s*(else)\b\s*(if)\b`,
+    beginCaptures: {
+      "1": { scope: "punctuation.section.interpolation.begin.baml" },
+      "2": { scope: "keyword.control.conditional.baml" },
+      "3": { scope: "keyword.control.conditional.baml" },
+    },
+    end: String.raw`\}`,
+    endCaptures: {
+      "0": { scope: "punctuation.section.interpolation.end.baml" },
+    },
+    patterns: [
+      comments,
+      ifConditionPattern("backtick-else-if-condition", String.raw`(?=\})`),
+    ],
+  },
+  {
+    key: "backtick-if-open",
+    scope: "meta.interpolation.control.if.baml",
+    begin: String.raw`(\$\{)\s*(if)\b(?=(?:(?![\{\}]).)*\})`,
+    beginCaptures: {
+      "1": { scope: "punctuation.section.interpolation.begin.baml" },
+      "2": { scope: "keyword.control.conditional.baml" },
+    },
+    end: String.raw`\}`,
+    endCaptures: {
+      "0": { scope: "punctuation.section.interpolation.end.baml" },
+    },
+    patterns: [
+      comments,
+      ifConditionPattern("backtick-if-condition", String.raw`(?=\})`),
+    ],
+  },
+  {
+    key: "backtick-else",
+    scope: "meta.interpolation.control.else.baml",
+    match: String.raw`(\$\{)\s*(else)\s*(\})`,
+    captures: {
+      "1": { scope: "punctuation.section.interpolation.begin.baml" },
+      "2": { scope: "keyword.control.conditional.baml" },
+      "3": { scope: "punctuation.section.interpolation.end.baml" },
+    },
+  },
+  {
+    key: "backtick-endfor",
+    scope: "meta.interpolation.control.endfor.baml",
+    match: String.raw`(\$\{)\s*(endfor)\s*(\})`,
+    captures: {
+      "1": { scope: "punctuation.section.interpolation.begin.baml" },
+      "2": { scope: "keyword.control.loop.endfor.baml" },
+      "3": { scope: "punctuation.section.interpolation.end.baml" },
+    },
+  },
+  {
+    key: "backtick-endif",
+    scope: "meta.interpolation.control.endif.baml",
+    match: String.raw`(\$\{)\s*(endif)\s*(\})`,
+    captures: {
+      "1": { scope: "punctuation.section.interpolation.begin.baml" },
+      "2": { scope: "keyword.control.conditional.endif.baml" },
+      "3": { scope: "punctuation.section.interpolation.end.baml" },
+    },
+  },
+  {
+    key: "backtick-expression-interpolation",
+    scope: "meta.interpolation.baml",
+    begin: String.raw`(\$\{)`,
+    beginCaptures: {
+      "1": { scope: "punctuation.section.interpolation.begin.baml" },
+    },
+    end: String.raw`\}`,
+    endCaptures: {
+      "0": { scope: "punctuation.section.interpolation.end.baml" },
+    },
+    patterns: [
+      comments,
+      {
+        key: "backtick-interpolation-let-statement",
+        scope: "meta.statement.let.baml",
+        begin: String.raw`(?=${BINDING_INTRO}\b)`,
+        end: String.raw`(?=;|\})`,
+        patterns: [
+          comments,
+          {
+            key: "backtick-interpolation-let-pattern",
+            scope: "meta.pattern.statement.baml",
+            begin: String.raw`\G\s*`,
+            end: String.raw`(?=\s*=)`,
+            patterns: [comments, pattern],
+          },
+          {
+            key: "backtick-interpolation-let-assignment-operator",
+            scope: "keyword.operator.assignment.baml",
+            match: String.raw`=`,
+          },
+          expression,
+        ],
+      },
+      blockContents,
+      expression,
+      semicolon,
+    ],
+  },
+];
+
 // --- Classes ---------------------------------------------------------------
 
-// `<name> <type>` on its own line inside a class body. The colon is optional:
-// the parser accepts both `name string` and `name: string` (parse_field eats an
-// optional Colon), so scope it only when present.
+// `<name> <type>` inside a class body. The colon is optional: the parser accepts
+// both `name string` and `name: string` (parse_field eats an optional Colon), so
+// scope it only when present. Inline one-field classes (`class E { code int }`)
+// need the `{` branch in addition to the normal start-of-line branch.
 const field: Rule = {
   key: "field",
   scope: "meta.field.baml",
-  begin: String.raw`^\s*(?!@)(${IDENT})\s*(:)?`,
+  begin: String.raw`(?:^\s*|(?<=\{)\s*)(?!@)(${IDENT})\s*(:)?`,
   beginCaptures: {
     "1": { scope: "variable.other.property.baml" },
     "2": { scope: "punctuation.separator.colon.baml" },
   },
-  end: String.raw`$`,
-  patterns: [comments, typeExpression], // TODO: attributes
+  end: String.raw`(?=\})|$`,
+  patterns: [comments, typeExpression],
 };
 
 const functionParameters: Rule = {
@@ -1244,7 +1971,46 @@ const functionParameters: Rule = {
         "2": { scope: "punctuation.separator.colon.baml" },
       },
       end: String.raw`(?=,|\))`,
-      patterns: [comments, typeExpression],
+      patterns: [
+        comments,
+        {
+          key: "parameter-type-parens",
+          scope: "meta.group.type.baml",
+          begin: String.raw`\(`,
+          beginCaptures: {
+            "0": { scope: "punctuation.definition.type.begin.baml" },
+          },
+          end: String.raw`\)`,
+          endCaptures: {
+            "0": { scope: "punctuation.definition.type.end.baml" },
+          },
+          patterns: [comments, typeExpression],
+        },
+        {
+          key: "parameter-type-arguments",
+          scope: "meta.type-arguments.baml",
+          begin: String.raw`<`,
+          beginCaptures: {
+            "0": { scope: "punctuation.definition.type-arguments.begin.baml" },
+          },
+          end: String.raw`>`,
+          endCaptures: {
+            "0": { scope: "punctuation.definition.type-arguments.end.baml" },
+          },
+          patterns: [comments, typeExpression],
+        },
+        {
+          key: "parameter-default",
+          scope: "meta.parameter.default.baml",
+          begin: String.raw`=`,
+          beginCaptures: {
+            "0": { scope: "keyword.operator.assignment.baml" },
+          },
+          end: String.raw`(?=,|\))`,
+          patterns: [comments, expression],
+        },
+        typeExpression,
+      ],
     },
     {
       key: "parameter-comma",
@@ -1253,6 +2019,70 @@ const functionParameters: Rule = {
     },
   ],
 };
+
+const lambdaExpression: Rule = {
+  key: "lambda-expression",
+  scope: "meta.expression.lambda.baml",
+  begin: String.raw`(?=\((?:[^()]|\([^()]*\))*\)\s*(?:->|=>))`,
+  end: String.raw`(?<=\})`,
+  patterns: [
+    comments,
+    functionParameters,
+    {
+      key: "lambda-arrow",
+      scope: "keyword.operator.arrow.baml",
+      match: String.raw`->|=>`,
+    },
+    {
+      key: "lambda-return-type",
+      scope: "meta.return-type.lambda.baml",
+      begin: String.raw`(?<=->|=>)\s*(?!throws\b)(?=[^\s\{])`,
+      end: String.raw`(?=\s*(?:throws\b|\{))`,
+      patterns: [comments, typeExpression],
+    },
+    {
+      key: "lambda-throws-clause",
+      scope: "meta.throws.lambda.baml",
+      begin: String.raw`\b(throws)\b`,
+      beginCaptures: {
+        "1": { scope: "keyword.operator.throws.baml" },
+      },
+      end: String.raw`(?=\{)`,
+      patterns: [comments, typeExpression],
+    },
+    codeBlock,
+  ],
+};
+
+expression.patterns = [
+  literal,
+  arrayExpression,
+  lambdaExpression,
+  parenthesizedExpression,
+  ifExpression,
+  matchExpression,
+  spawnExpression,
+  constructorExpression,
+  mapExpression,
+  codeBlock,
+  awaitExpression,
+  throwExpression,
+  catchExpression,
+  isPatternExpression,
+  optionalCallExpression,
+  optionalIndexExpression,
+  optionalMethodCallExpression,
+  optionalFieldAccessExpression,
+  postfixMethodCallExpression,
+  fieldAccessExpression,
+  expressionOperator,
+  functionCallExpression,
+  dottedExpression,
+];
+
+conditionExpression.patterns = expression.patterns.filter(
+  (rule) => rule !== constructorExpression,
+);
 
 const functionReturnType: Rule = {
   key: "function-return-type",
@@ -1265,10 +2095,54 @@ const functionReturnType: Rule = {
   patterns: [comments, typeExpression],
 };
 
+const declarationTypeParameters: Rule = {
+  key: "declaration-type-parameters",
+  scope: "meta.type-parameters.baml",
+  begin: String.raw`<`,
+  beginCaptures: {
+    "0": { scope: "punctuation.definition.type-parameters.begin.baml" },
+  },
+  end: String.raw`>(?=\s*(?:\(|\{|requires\b|${IDENT}))`,
+  endCaptures: {
+    "0": { scope: "punctuation.definition.type-parameters.end.baml" },
+  },
+  patterns: [
+    comments,
+    {
+      key: "declaration-type-parameter",
+      scope: "meta.type-parameter.baml",
+      begin: String.raw`\b(${IDENT})\b`,
+      beginCaptures: {
+        "1": { scope: "entity.name.type.parameter.baml" },
+      },
+      end: String.raw`(?=,|>(?=\s*(?:\(|\{|requires\b|${IDENT})))`,
+      patterns: [
+        comments,
+        {
+          key: "declaration-type-parameter-extends",
+          scope: "keyword.operator.extends.baml",
+          match: String.raw`\bextends\b`,
+        },
+        {
+          key: "declaration-type-parameter-intersection",
+          scope: "keyword.operator.type.baml",
+          match: String.raw`&`,
+        },
+        typeExpression,
+      ],
+    },
+    {
+      key: "declaration-type-parameter-comma",
+      scope: "punctuation.separator.comma.baml",
+      match: String.raw`,`,
+    },
+  ],
+};
+
 const returnStatement: Rule = {
   key: "return-statement",
   scope: "meta.statement.return.baml",
-  begin: String.raw`^\s*(return)\b`,
+  begin: String.raw`${STATEMENT_START}(return)\b`,
   beginCaptures: {
     "1": { scope: "keyword.control.flow.return.baml" },
   },
@@ -1279,7 +2153,7 @@ const returnStatement: Rule = {
 const breakStatement: Rule = {
   key: "break-statement",
   scope: "meta.statement.break.baml",
-  begin: String.raw`^\s*(break)\b`,
+  begin: String.raw`${STATEMENT_START}(break)\b`,
   beginCaptures: {
     "1": { scope: "keyword.control.flow.break.baml" },
   },
@@ -1290,7 +2164,7 @@ const breakStatement: Rule = {
 const continueStatement: Rule = {
   key: "continue-statement",
   scope: "meta.statement.continue.baml",
-  begin: String.raw`^\s*(continue)\b`,
+  begin: String.raw`${STATEMENT_START}(continue)\b`,
   beginCaptures: {
     "1": { scope: "keyword.control.flow.continue.baml" },
   },
@@ -1298,10 +2172,21 @@ const continueStatement: Rule = {
   patterns: [comments],
 };
 
+const deferStatement: Rule = {
+  key: "defer-statement",
+  scope: "meta.statement.defer.baml",
+  begin: String.raw`${STATEMENT_START}(defer)\b`,
+  beginCaptures: {
+    "1": { scope: "keyword.control.flow.defer.baml" },
+  },
+  end: String.raw`(?<=\})`,
+  patterns: [comments, codeBlock],
+};
+
 const letStatement: Rule = {
   key: "let-statement",
   scope: "meta.statement.let.baml",
-  begin: String.raw`^\s*(?=let\b)`,
+  begin: String.raw`${STATEMENT_START}(?=${BINDING_INTRO}\b)`,
   end: String.raw`(?=$|;)`,
   patterns: [
     comments,
@@ -1317,12 +2202,44 @@ const letStatement: Rule = {
       scope: "keyword.operator.assignment.baml",
       match: String.raw`=`,
     },
+    letElseClause,
+    expression,
+  ],
+};
+
+const watchStatement: Rule = {
+  key: "watch-statement",
+  scope: "meta.statement.watch.baml",
+  begin: String.raw`${STATEMENT_START}(watch)\b`,
+  beginCaptures: {
+    "1": { scope: "keyword.control.watch.baml" },
+  },
+  end: String.raw`(?=$|;)`,
+  patterns: [
+    comments,
+    {
+      key: "watch-statement-pattern",
+      scope: "meta.pattern.watch.baml",
+      begin: String.raw`\G\s*(?=${BINDING_INTRO}\b)`,
+      end: String.raw`(?=\s*=)`,
+      patterns: [comments, pattern],
+    },
+    {
+      key: "watch-statement-assignment-operator",
+      scope: "keyword.operator.assignment.baml",
+      match: String.raw`=`,
+    },
     expression,
   ],
 };
 
 const configBlock: IncludeRule = {
   key: "config-block",
+  patterns: [],
+};
+
+const configArray: IncludeRule = {
+  key: "config-array",
   patterns: [],
 };
 
@@ -1343,16 +2260,43 @@ configBlock.patterns = [
       {
         key: "config-field",
         scope: "meta.field.config.baml",
-        begin: String.raw`^\s*(${IDENT})\b\s*(:)?`,
+        begin: String.raw`(?:^\s*|(?<=[\{,])\s*)(?:(${IDENT})\b|("(?:\\.|[^"\\])*"))\s*(:)?`,
         beginCaptures: {
           "1": { scope: "variable.other.property.baml" },
-          "2": { scope: "punctuation.separator.colon.baml" },
+          "2": { patterns: [stringLiteral] },
+          "3": { scope: "punctuation.separator.colon.baml" },
         },
         end: String.raw`(?=,|\r?\n|\})`,
-        patterns: [comments, configBlock, expression],
+        patterns: [comments, configBlock, configArray, expression],
       },
       {
         key: "config-comma",
+        scope: "punctuation.separator.comma.baml",
+        match: String.raw`,`,
+      },
+    ],
+  },
+];
+
+configArray.patterns = [
+  {
+    key: "config-array-body",
+    scope: "meta.config.array.baml",
+    begin: String.raw`\[`,
+    beginCaptures: {
+      "0": { scope: "punctuation.definition.array.begin.baml" },
+    },
+    end: String.raw`\]`,
+    endCaptures: {
+      "0": { scope: "punctuation.definition.array.end.baml" },
+    },
+    patterns: [
+      comments,
+      configBlock,
+      configArray,
+      expression,
+      {
+        key: "config-array-comma",
         scope: "punctuation.separator.comma.baml",
         match: String.raw`,`,
       },
@@ -1397,6 +2341,86 @@ const generatorItem: Rule = {
   },
   end: String.raw`(?<=\})`,
   patterns: [comments, configBlock],
+};
+
+const templateStringItem: Rule = {
+  key: "template-string",
+  scope: "meta.template-string.baml",
+  begin: String.raw`^\s*(template_string)\b`,
+  beginCaptures: {
+    "1": { scope: "keyword.declaration.template-string.baml" },
+  },
+  end: String.raw`(?:(?<=#)|(?<="))(?=\s*(?:\r?\n|$))|(?=${TOP_LEVEL_ITEM_START})`,
+  patterns: [
+    comments,
+    {
+      key: "template-string-name",
+      scope: "entity.name.function.template-string.baml",
+      match: String.raw`\b${IDENT}\b`,
+    },
+    functionParameters,
+    templateStringBody,
+  ],
+};
+
+const enumHeader: Rule = {
+  key: "enum-header",
+  scope: "meta.enum.header.baml",
+  begin: String.raw`\G\s*`,
+  end: String.raw`(?=\{)|(?=${TOP_LEVEL_ITEM_START})`,
+  patterns: [
+    comments,
+    {
+      key: "enum-name",
+      scope: "entity.name.type.enum.baml",
+      match: String.raw`\b${IDENT}\b`,
+    },
+  ],
+};
+
+const enumVariant: Rule = {
+  key: "enum-variant",
+  scope: "meta.enum.variant.baml",
+  begin: String.raw`(?:^\s*|(?<=[\{,])\s*|\s+)(${IDENT})\b`,
+  beginCaptures: {
+    "1": { scope: "variable.other.enummember.baml" },
+  },
+  end: String.raw`(?=,|\s+@@|\s*\}|\s+${IDENT}\b|\r?\n\s*(?:${IDENT}\b|@@|\}))`,
+  patterns: [comments, bareAttribute, attribute],
+};
+
+const enumBody: Rule = {
+  key: "enum-body",
+  scope: "meta.enum.body.baml",
+  begin: String.raw`\{`,
+  beginCaptures: {
+    "0": { scope: "punctuation.definition.block.begin.baml" },
+  },
+  end: String.raw`\}|(?=${TOP_LEVEL_ITEM_START})`,
+  endCaptures: {
+    "0": { scope: "punctuation.definition.block.end.baml" },
+  },
+  patterns: [
+    comments,
+    blockAttribute,
+    enumVariant,
+    {
+      key: "enum-comma",
+      scope: "punctuation.separator.comma.baml",
+      match: String.raw`,`,
+    },
+  ],
+};
+
+const enumItem: Rule = {
+  key: "enum",
+  scope: "meta.enum.baml",
+  begin: String.raw`^\s*(enum)\b`,
+  beginCaptures: {
+    "1": { scope: "keyword.declaration.enum.baml" },
+  },
+  end: String.raw`(?<=\})|(?=${TOP_LEVEL_ITEM_START})`,
+  patterns: [comments, enumHeader, enumBody],
 };
 
 const typeAliasItem: Rule = {
@@ -1488,10 +2512,13 @@ blockContents.patterns = [
   comments,
   testsetItem,
   testItem,
+  watchStatement,
   letStatement,
   returnStatement,
   breakStatement,
   continueStatement,
+  deferStatement,
+  elseClause,
   forStatement,
   whileStatement,
   expression,
@@ -1530,7 +2557,7 @@ const functionBlock: Rule = {
         "2": { scope: "punctuation.separator.colon.baml" },
       },
       end: String.raw`$`,
-      patterns: [comments, expression],
+      patterns: [comments, templateStringBody, backtickStringLiteral, expression],
     },
     blockContents,
   ],
@@ -1545,23 +2572,270 @@ const functionItem: Rule = {
     "2": { scope: "entity.name.function.baml" },
   },
   end: String.raw`(?<=\})`,
-  patterns: [comments, functionParameters, functionReturnType, functionBlock],
+  patterns: [
+    comments,
+    declarationTypeParameters,
+    functionParameters,
+    functionReturnType,
+    functionBlock,
+  ],
 };
 
-const classItem: Rule = {
-  key: "class",
-  scope: "meta.class.baml",
-  begin: String.raw`\b(class)\s+(${IDENT})\s*(\{)`,
+const associatedTypeItem: Rule = {
+  key: "associated-type",
+  scope: "meta.associated-type.baml",
+  begin: String.raw`(?:^\s*|(?<=\{)\s*)(type)\s+(${IDENT})\b`,
   beginCaptures: {
-    "1": { scope: "keyword.declaration.class.baml" },
-    "2": { scope: "entity.name.type.class.baml" },
-    "3": { scope: "punctuation.definition.block.begin.baml" },
+    "1": { scope: "keyword.declaration.associated-type.baml" },
+    "2": { scope: "entity.name.type.associated.baml" },
+  },
+  end: String.raw`(?<=;)|(?=\r?\n|\})`,
+  patterns: [
+    comments,
+    {
+      key: "associated-type-extends",
+      scope: "keyword.operator.extends.baml",
+      match: String.raw`\bextends\b`,
+    },
+    {
+      key: "associated-type-assignment",
+      scope: "keyword.operator.assignment.baml",
+      match: String.raw`=`,
+    },
+    typeExpression,
+    semicolon,
+  ],
+};
+
+const interfaceMethodSignature: Rule = {
+  key: "interface-method-signature",
+  scope: "meta.function.signature.baml",
+  begin: String.raw`^\s*(function)\s+(${IDENT})\b(?=[^{\r\n]*(?:\r?\n|;|\}))`,
+  beginCaptures: {
+    "1": { scope: "keyword.declaration.function.baml" },
+    "2": { scope: "entity.name.function.baml" },
+  },
+  end: String.raw`(?<=;)|(?=\r?\n|\})`,
+  patterns: [
+    comments,
+    declarationTypeParameters,
+    functionParameters,
+    {
+      key: "interface-method-return-type",
+      scope: "meta.return-type.baml",
+      begin: String.raw`(->)`,
+      beginCaptures: {
+        "1": { scope: "keyword.operator.arrow.baml" },
+      },
+      end: String.raw`(?=;|\r?\n|\})`,
+      patterns: [comments, typeExpression],
+    },
+    semicolon,
+  ],
+};
+
+const interfaceRequiresClause: Rule = {
+  key: "interface-requires-clause",
+  scope: "meta.interface.requires.baml",
+  begin: String.raw`\b(requires)\b`,
+  beginCaptures: {
+    "1": { scope: "keyword.declaration.requires.baml" },
+  },
+  end: String.raw`(?=\{)`,
+  patterns: [
+    comments,
+    typeExpression,
+    {
+      key: "interface-requires-comma",
+      scope: "punctuation.separator.comma.baml",
+      match: String.raw`,`,
+    },
+  ],
+};
+
+const interfaceFieldLink: Rule = {
+  key: "interface-field-link",
+  scope: "meta.interface-field-link.baml",
+  begin: String.raw`(?:^\s*|(?<=\{)\s*)(${IDENT})\s+(as)\s+(${IDENT})\b`,
+  beginCaptures: {
+    "1": { scope: "variable.other.property.interface.baml" },
+    "2": { scope: "keyword.operator.as.baml" },
+    "3": { scope: "variable.other.property.baml" },
+  },
+  end: String.raw`(?<=;)|(?=\r?\n|\})`,
+  patterns: [comments, semicolon],
+};
+
+const implementsBody: Rule = {
+  key: "implements-body",
+  scope: "meta.implements.body.baml",
+  begin: String.raw`\{`,
+  beginCaptures: {
+    "0": { scope: "punctuation.definition.block.begin.baml" },
   },
   end: String.raw`\}`,
   endCaptures: {
     "0": { scope: "punctuation.definition.block.end.baml" },
   },
-  patterns: [comments, functionItem, field], // TODO: attributes
+  patterns: [
+    comments,
+    functionItem,
+    associatedTypeItem,
+    interfaceFieldLink,
+    field,
+    semicolon,
+    {
+      key: "implements-body-comma",
+      scope: "punctuation.separator.comma.baml",
+      match: String.raw`,`,
+    },
+  ],
+};
+
+const implementsBlock: Rule = {
+  key: "implements-block",
+  scope: "meta.implements.baml",
+  begin: String.raw`^\s*(implements|implement)\b`,
+  beginCaptures: {
+    "1": { scope: "keyword.declaration.implements.baml" },
+  },
+  end: String.raw`(?<=\})`,
+  patterns: [
+    comments,
+    {
+      key: "implements-target",
+      scope: "meta.implements.target.baml",
+      begin: String.raw`\G\s*`,
+      end: String.raw`(?=\{)`,
+      patterns: [comments, typeExpression],
+    },
+    implementsBody,
+  ],
+};
+
+const implementsForItem: Rule = {
+  key: "implements-for",
+  scope: "meta.implements-for.baml",
+  begin: String.raw`^\s*(implements|implement)\b`,
+  beginCaptures: {
+    "1": { scope: "keyword.declaration.implements.baml" },
+  },
+  end: String.raw`(?<=\})`,
+  patterns: [
+    comments,
+    declarationTypeParameters,
+    {
+      key: "implements-for-interface-target",
+      scope: "meta.implements.target.baml",
+      begin: String.raw`\G\s*`,
+      end: String.raw`(?=\s+\bfor\b)`,
+      patterns: [comments, typeExpression],
+    },
+    {
+      key: "implements-for-keyword",
+      scope: "keyword.declaration.for.baml",
+      match: String.raw`\bfor\b`,
+    },
+    {
+      key: "implements-for-target",
+      scope: "meta.implements.for-target.baml",
+      begin: String.raw`\G\s*`,
+      end: String.raw`(?=\{)`,
+      patterns: [comments, typeExpression],
+    },
+    implementsBody,
+  ],
+};
+
+const interfaceItem: Rule = {
+  key: "interface",
+  scope: "meta.interface.baml",
+  begin: String.raw`^\s*(interface)\s+(${IDENT})\b`,
+  beginCaptures: {
+    "1": { scope: "keyword.declaration.interface.baml" },
+    "2": { scope: "entity.name.type.interface.baml" },
+  },
+  end: String.raw`(?<=\})`,
+  patterns: [
+    comments,
+    declarationTypeParameters,
+    interfaceRequiresClause,
+    {
+      key: "interface-body",
+      scope: "meta.interface.body.baml",
+      begin: String.raw`\{`,
+      beginCaptures: {
+        "0": { scope: "punctuation.definition.block.begin.baml" },
+      },
+      end: String.raw`\}`,
+      endCaptures: {
+        "0": { scope: "punctuation.definition.block.end.baml" },
+      },
+      patterns: [
+        comments,
+    interfaceMethodSignature,
+    functionItem,
+    associatedTypeItem,
+    field,
+    semicolon,
+        {
+          key: "interface-body-comma",
+          scope: "punctuation.separator.comma.baml",
+          match: String.raw`,`,
+        },
+      ],
+    },
+  ],
+};
+
+const classHeader: Rule = {
+  key: "class-header",
+  scope: "meta.class.header.baml",
+  begin: String.raw`\G\s*`,
+  end: String.raw`(?=\{)|(?=${TOP_LEVEL_ITEM_START})`,
+  patterns: [
+    comments,
+    declarationTypeParameters,
+    {
+      key: "class-name",
+      scope: "entity.name.type.class.baml",
+      match: String.raw`\b${IDENT}\b`,
+    },
+  ],
+};
+
+const classBody: Rule = {
+  key: "class-body",
+  scope: "meta.class.body.baml",
+  begin: String.raw`\{`,
+  beginCaptures: {
+    "0": { scope: "punctuation.definition.block.begin.baml" },
+  },
+  end: String.raw`\}`,
+  endCaptures: {
+    "0": { scope: "punctuation.definition.block.end.baml" },
+  },
+  patterns: [
+    comments,
+    blockAttribute,
+    bareAttribute,
+    attribute,
+    implementsBlock,
+    functionItem,
+    field,
+    semicolon,
+  ],
+};
+
+const classItem: Rule = {
+  key: "class",
+  scope: "meta.class.baml",
+  begin: String.raw`^\s*(class)\b`,
+  beginCaptures: {
+    "1": { scope: "keyword.declaration.class.baml" },
+  },
+  end: String.raw`(?<=\})|(?=${TOP_LEVEL_ITEM_START})`,
+  patterns: [comments, classHeader, classBody],
 };
 
 export const baml: Grammar = {
@@ -1569,5 +2843,20 @@ export const baml: Grammar = {
   name: "baml",
   scopeName: "source.baml",
   fileTypes: ["baml"],
-  patterns: [comments, clientItem, retryPolicyItem, generatorItem, typeAliasItem, classItem, functionItem, testsetItem, testItem] satisfies Rule[],
+  patterns: [
+    comments,
+    clientItem,
+    retryPolicyItem,
+    generatorItem,
+    templateStringItem,
+    blockAttribute,
+    enumItem,
+    typeAliasItem,
+    implementsForItem,
+    interfaceItem,
+    classItem,
+    functionItem,
+    testsetItem,
+    testItem,
+  ] satisfies Rule[],
 };
