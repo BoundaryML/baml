@@ -90,6 +90,10 @@ export const BaseNode: ComponentType<NodeProps> = memo(({ data }) => {
   const theme = useGraphThemeContext();
   const chrome = getChrome(theme);
   const colors = stateStyle(theme, d.executionState);
+  // Set by the level-of-detail pass when this node hides a collapsed subgraph.
+  const collapsed = d.collapsed === true;
+  const collapsedCount =
+    typeof d.collapsedCount === 'number' ? d.collapsedCount : 0;
 
   return (
     <>
@@ -112,6 +116,8 @@ export const BaseNode: ComponentType<NodeProps> = memo(({ data }) => {
           fontFamily:
             'ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif',
           transition: 'box-shadow 120ms ease, border-color 120ms ease',
+          // A collapsed node hides a subgraph — hint that clicking expands it.
+          cursor: collapsed ? 'zoom-in' : undefined,
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -146,6 +152,30 @@ export const BaseNode: ComponentType<NodeProps> = memo(({ data }) => {
           >
             {d.label}
           </div>
+          {collapsed ? (
+            <div
+              title={`Click to expand ${collapsedCount} hidden node${
+                collapsedCount === 1 ? '' : 's'
+              }`}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 3,
+                flexShrink: 0,
+                padding: '1px 6px',
+                borderRadius: 999,
+                fontSize: 10.5,
+                fontWeight: 600,
+                lineHeight: 1.4,
+                color: chrome.button.text,
+                background: chrome.button.bg,
+                border: `1px solid ${chrome.button.border}`,
+              }}
+            >
+              <span style={{ fontSize: 11, lineHeight: 1 }}>+</span>
+              {collapsedCount > 0 ? collapsedCount : null}
+            </div>
+          ) : null}
         </div>
         <NodeOutputPreview
           result={d.result}

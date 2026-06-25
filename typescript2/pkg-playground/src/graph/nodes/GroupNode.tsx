@@ -18,6 +18,8 @@ import { NodeHandles } from './NodeHandles';
 export const GroupNode: ComponentType<NodeProps> = memo(({ data, id }) => {
   const d = data as WorkflowNodeData;
   const isHighlighted = d.selected;
+  // Set by the level-of-detail pass when the user expanded this container.
+  const expandable = d.expanded === true;
   const theme = useGraphThemeContext();
   const chrome = getChrome(theme);
   const style = stateStyle(theme, d.executionState);
@@ -60,6 +62,8 @@ export const GroupNode: ComponentType<NodeProps> = memo(({ data, id }) => {
           transform: 'translateY(-50%)',
           zIndex: 5,
           pointerEvents: 'auto',
+          // Manually-expanded containers collapse on click of this chip.
+          cursor: expandable ? 'zoom-out' : 'pointer',
           display: 'inline-flex',
           alignItems: 'center',
           gap: 6,
@@ -100,6 +104,27 @@ export const GroupNode: ComponentType<NodeProps> = memo(({ data, id }) => {
           />
         )}
         <span>{d.label || id}</span>
+        {expandable && (
+          <span
+            aria-hidden
+            title="Click to collapse"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: 14,
+              height: 14,
+              borderRadius: '50%',
+              fontSize: 13,
+              lineHeight: 1,
+              fontWeight: 700,
+              color: chrome.groupLabelText,
+              border: `1px solid ${chrome.groupLabelBorder}`,
+            }}
+          >
+            {'−'}
+          </span>
+        )}
         {(d.iterationCount ?? 0) > 0 && (
           <span
             style={{
