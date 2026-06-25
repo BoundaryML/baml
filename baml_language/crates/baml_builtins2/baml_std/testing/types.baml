@@ -59,3 +59,37 @@ class TestSetChild {
 
 // TestSetRunner receives lazy children and returns the aggregate report.
 type TestSetRunner = (TestSetChild[]) -> TestSetReport throws never
+
+// --- Flat report types for the CLI test runner ---
+//
+// The CLI driver calls `TestRegistry.run_filtered` / `list_filtered` and reads
+// these flat, primitive-row shapes directly, instead of walking the nested,
+// union-wrapped `TestReport | TestSetReport` tree across the FFI boundary.
+
+/// One leaf test's result, flattened for the CLI driver. `messages` holds one
+/// entry per failing run (Quorum/Retry tests run the body multiple times), so
+/// the filtered path can surface every failure, matching the unfiltered path.
+class FlatTestResult {
+  name string
+  outcome Outcome
+  messages string[]
+  duration_ms int
+  run_count int
+}
+
+/// Aggregated, already-flattened report returned to the CLI driver.
+///
+/// `outcome` is the aggregate verdict (it honors testset runners on the
+/// unfiltered path). `passed`/`failed`/`total` are leaf-level counts.
+/// `failed_names` and `messages` back the aggregate display lines the CLI
+/// prints for unfiltered runs; `results` carries one row per leaf and is
+/// populated for filtered runs (where the CLI prints each leaf individually).
+class FlatTestReport {
+  outcome Outcome
+  passed int
+  failed int
+  total int
+  failed_names string[]
+  messages string[]
+  results FlatTestResult[]
+}

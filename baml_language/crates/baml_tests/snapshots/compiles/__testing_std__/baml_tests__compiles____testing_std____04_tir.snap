@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 4663
 ---
 === TIR2 ===
 
@@ -215,6 +216,44 @@ function testing.TestRegistry.run_all(self: testing.TestRegistry) -> testing.Tes
     root.run_testset(root.testset_children(self), null) : testing.TestSetReport
   }
 }
+function testing.TestRegistry.run_filtered(self: testing.TestRegistry, include: string[], exclude: string[]) -> testing.FlatTestReport throws never {
+  { : testing.FlatTestReport
+    let has_filters = include.length() > 0 || exclude.length() > 0 : bool
+    if (Not has_filters : bool) : testing.FlatTestReport
+      { : testing.FlatTestReport
+        root.flatten_testset_report(self.run_all()) : testing.FlatTestReport
+      }
+    else
+      { : testing.FlatTestReport
+        let inc = root.parse_filter_patterns(include) : testing.FilterPat[]
+        let exc = root.parse_filter_patterns(exclude) : testing.FilterPat[]
+        let selected: FlatLeaf[] = [] : testing.FlatLeaf[]
+        for leaf in root.collect_leaves(self)
+          { : void
+            if (root.leaf_selected(leaf.name, inc, exc) : bool) : void
+              { : void
+                selected.push(leaf) : int
+              }
+          }
+        root.run_selected_leaves(selected) : testing.FlatTestReport
+      }
+  }
+}
+function testing.TestRegistry.list_filtered(self: testing.TestRegistry, include: string[], exclude: string[]) -> string[] throws never {
+  { : string[]
+    let inc = root.parse_filter_patterns(include) : testing.FilterPat[]
+    let exc = root.parse_filter_patterns(exclude) : testing.FilterPat[]
+    let names: string[] = [] : string[]
+    for leaf in root.collect_leaves(self)
+      { : void
+        if (root.leaf_selected(leaf.name, inc, exc) : bool) : void
+          { : void
+            names.push(leaf.name) : int
+          }
+      }
+    names : string[]
+  }
+}
 function testing.TestRegistry.expand_set(self: testing.TestRegistry, name: string) -> testing.SerializedTestDef[] throws never {
   { : never
     for ts in self.collector.testsets
@@ -280,6 +319,11 @@ function testing.testset_child(registry: testing.TestRegistry, ts: testing.TestS
   }
 }
 lambda testing.testset_child {
+}
+function testing.expansion_error_report(name: string) -> testing.TestSetReport throws never {
+  { : testing.TestSetReport
+    TestSetReport { outcome: "error", passed: 0, failed: 1, total: 1, failed_names: [name], results: [] } : testing.TestSetReport
+  }
 }
 function testing.aggregate_reports(named_results: testing.NamedChildReport[]) -> testing.TestSetReport throws never {
   { : testing.TestSetReport
@@ -397,6 +441,327 @@ function testing.run_testset(children: testing.TestSetChild[], runner: testing.T
         r(children) : testing.TestSetReport
   }
 }
+class testing.FlatLeaf {
+  name: string
+  body: testing.TestBody
+  runner: testing.TestRunner | null
+}
+class testing.FilterPat {
+  func_pat: string
+  test_pat: string
+}
+class testing.NameSplit {
+  head: string
+  tail: string
+}
+function testing.collect_leaves(registry: testing.TestRegistry) -> testing.FlatLeaf[] throws never {
+  { : testing.FlatLeaf[]
+    let out: FlatLeaf[] = [] : testing.FlatLeaf[]
+    for t in registry.collector.tests
+      { : int
+        out.push(FlatLeaf { name: t.name, body: t.body, runner: t.runner }) : int
+      }
+    for ts in registry.collector.testsets
+      { : void
+        for leaf in root.collect_subtree_leaves(registry, ts)
+          { : int
+            out.push(leaf) : int
+          }
+      }
+    out : testing.FlatLeaf[]
+  }
+}
+function testing.collect_subtree_leaves(registry: testing.TestRegistry, ts: testing.TestSetRegistration) -> testing.FlatLeaf[] throws never {
+  { : testing.FlatLeaf[]
+    catch (root.collect_leaves(registry.expand_testset_registry(ts)) : testing.FlatLeaf[]) : testing.FlatLeaf[]
+      catch_all (e)
+        baml.panics.Panic =>
+          [root.expansion_error_leaf(ts.name)] : testing.FlatLeaf[]
+        _ =>
+          [root.expansion_error_leaf(ts.name)] : testing.FlatLeaf[]
+  }
+}
+function testing.expansion_error_leaf(name: string) -> testing.FlatLeaf throws never {
+  { : testing.FlatLeaf
+    FlatLeaf { name: name, body: () -> void throws unknown { ... }, runner: null } : testing.FlatLeaf
+  }
+}
+lambda testing.expansion_error_leaf {
+}
+function testing.split_top(path: string) -> testing.NameSplit throws never {
+  { : testing.NameSplit
+    let idx = path.index_of("/") : int
+    if (idx < 0 : bool) : testing.NameSplit
+      { : testing.NameSplit
+        NameSplit { head: "", tail: path } : testing.NameSplit
+      }
+    else
+      { : testing.NameSplit
+        NameSplit { head: path.substring(0, idx), tail: path.substring(idx + 1, path.length()) } : testing.NameSplit
+      }
+  }
+}
+function testing.parse_filter_patterns(raw: string[]) -> testing.FilterPat[] throws never {
+  { : testing.FilterPat[]
+    let out: FilterPat[] = [] : testing.FilterPat[]
+    for s in raw
+      { : int
+        let idx = s.index_of("::") : int
+        if (idx < 0 : bool) : int
+          { : int
+            out.push(FilterPat { func_pat: s, test_pat: "" }) : int
+            out.push(FilterPat { func_pat: "", test_pat: s }) : int
+          }
+        else
+          { : int
+            out.push(FilterPat { func_pat: s.substring(0, idx), test_pat: s.substring(idx + 2, s.length()) }) : int
+          }
+      }
+    out : testing.FilterPat[]
+  }
+}
+function testing.glob_match(subject: string, pattern: string) -> bool throws never {
+  { : true
+    let parts = pattern.split("*") : string[]
+    let n = parts.length() : int
+    if (n == 1 : bool) : void
+      { : never
+        return subject == pattern : bool
+      }
+    let first = parts[0] : string
+    let last = parts[n - 1] : string
+    if (Not subject.starts_with(first) : bool) : void
+      { : never
+        return false : false
+      }
+    if (Not subject.ends_with(last) : bool) : void
+      { : never
+        return false : false
+      }
+    let start = first.length() : int
+    let end_limit = subject.length() - last.length() : int
+    if (start > end_limit : bool) : void
+      { : never
+        return false : false
+      }
+    let pos = start : int
+    { : void
+      let i = 1 : 1 -> int
+      while i < n - 1
+        { : void
+          let part = parts[i] : string
+          if (part != "" : bool) : void
+            { : void
+              let idx = subject.substring(pos, end_limit).index_of(part) : int
+              if (idx < 0 : bool) : void
+                { : never
+                  return false : false
+                }
+              pos = pos + idx + part.length() : int
+            }
+        }
+    }
+    true : true
+  }
+}
+function testing.filter_match(expr: string, subject: string) -> bool throws never {
+  { : true | bool
+    if (expr == "" : bool) : true | bool
+      { : true
+        true : true
+      }
+    else
+      { : bool
+        root.glob_match(subject, expr) : bool
+      }
+  }
+}
+function testing.any_pattern_matches(pats: testing.FilterPat[], function_name: string, test_name: string) -> bool throws never {
+  { : false
+    for p in pats
+      { : void
+        if (root.filter_match(p.func_pat, function_name) && root.filter_match(p.test_pat, test_name) : bool) : void
+          { : never
+            return true : true
+          }
+      }
+    false : false
+  }
+}
+function testing.leaf_selected(name: string, include: testing.FilterPat[], exclude: testing.FilterPat[]) -> bool throws never {
+  { : bool
+    let split = root.split_top(name) : testing.NameSplit
+    if (root.any_pattern_matches(exclude, split.head, split.tail) : bool) : void
+      { : never
+        return false : false
+      }
+    if (include.length() == 0 : bool) : void
+      { : never
+        return true : true
+      }
+    root.any_pattern_matches(include, split.head, split.tail) : bool
+  }
+}
+function testing.run_selected_leaves(leaves: testing.FlatLeaf[]) -> testing.FlatTestReport throws never {
+  { : testing.FlatTestReport
+    let futures: baml.future.Future<FlatTestResult, null>[] = [] : Future<testing.FlatTestResult, null>[]
+    for leaf in leaves
+      { : int
+        futures.push(spawn { () -> { ... } }) : int
+      }
+    let results = : testing.FlatTestResult[]
+      catch (await baml.future.all_complete(futures) : testing.FlatTestResult[]) : testing.FlatTestResult[]
+        catch_all (e)
+          _ =>
+            baml.sys.panic("unexpected test c...") : never
+    let passed = 0 : 0 -> int
+    let failed = 0 : 0 -> int
+    let has_error = false : false -> bool
+    let failed_names: string[] = [] : string[]
+    let messages: string[] = [] : string[]
+    for r in results
+      { : void
+        if (r.outcome == "pass" : bool) : void
+          { : void
+            passed Add= 1 : int
+          }
+        else
+          { : void
+            failed Add= 1 : int
+            failed_names.push(r.name) : int
+            for m in r.messages
+              { : void
+                messages.push(m) : int
+              }
+            if (r.outcome == "error" : bool) : void
+              { : void
+                has_error = true : true
+              }
+          }
+      }
+    let outcome: Outcome = : "error" | "pass" | "fail" -> "pass" | "fail" | "error"
+      if (has_error : bool) : "error" | "pass" | "fail"
+        { : "error"
+          "error" : "error"
+        }
+      else
+        if (failed == 0 : bool) : "pass" | "fail"
+          { : "pass"
+            "pass" : "pass"
+          }
+        else
+          { : "fail"
+            "fail" : "fail"
+          }
+    FlatTestReport { outcome: outcome, passed: passed, failed: failed, total: results.length(), failed_names: failed_names, messages: messages, results: results } : testing.FlatTestReport
+  }
+}
+lambda testing.run_selected_leaves {
+}
+function testing.flatten_leaf_report(name: string, report: testing.TestReport) -> testing.FlatTestResult throws never {
+  { : testing.FlatTestResult
+    let messages: string[] = [] : string[]
+    let duration = 0 : 0 -> int
+    for run in report.runs
+      { : void
+        duration Add= run.duration_ms : int
+        if (run.outcome != "pass" : bool) : void
+          { : void
+            if let <pat> = run.message { 1 stmts } : void
+          }
+      }
+    FlatTestResult { name: name, outcome: report.outcome, messages: messages, duration_ms: duration, run_count: report.runs.length() } : testing.FlatTestResult
+  }
+}
+function testing.flatten_testset_report(report: testing.TestSetReport) -> testing.FlatTestReport throws never {
+  { : testing.FlatTestReport
+    let outcomes: string[] = [] : string[]
+    root.collect_leaf_outcomes(report.results, outcomes) : void
+    let passed = 0 : 0 -> int
+    let failed = 0 : 0 -> int
+    for o in outcomes
+      { : void
+        if (o == "pass" : bool) : void
+          { : void
+            passed Add= 1 : int
+          }
+        else
+          { : void
+            failed Add= 1 : int
+          }
+      }
+    let messages: string[] = [] : string[]
+    root.collect_leaf_messages(report.results, messages) : void
+    let no_rows: FlatTestResult[] = [] : testing.FlatTestResult[]
+    FlatTestReport { outcome: report.outcome, passed: passed, failed: failed, total: outcomes.length(), failed_names: report.failed_names, messages: messages, results: no_rows } : testing.FlatTestReport
+  }
+}
+function testing.collect_leaf_outcomes(results: testing.ChildReport[], out: string[]) -> void throws never {
+  { : void
+    for r in results
+      { : void
+        match (r : testing.ChildReport) : void
+          tr: TestReport =>
+            { : void
+              out.push(if (tr.outcome == "pass") { 0 stmts + tail } else { 0 stmts + tail }) : int
+                if (tr.outcome == "pass" : bool) : "pass" | "fail"
+                  { : "pass"
+                    "pass" : "pass"
+                  }
+                else
+                  { : "fail"
+                    "fail" : "fail"
+                  }
+            }
+          tsr: TestSetReport =>
+            { : void
+              if (tsr.results.length() == 0 : bool) : void
+                { : void
+                  { : void
+                    let i = 0 : 0 -> int
+                    while i < tsr.passed
+                      { : void
+                        out.push("pass") : int
+                      }
+                  }
+                  { : void
+                    let i = 0 : 0 -> int
+                    while i < tsr.failed
+                      { : void
+                        out.push("fail") : int
+                      }
+                  }
+                }
+              else
+                { : void
+                  root.collect_leaf_outcomes(tsr.results, out) : void
+                }
+            }
+      }
+  }
+}
+function testing.collect_leaf_messages(results: testing.ChildReport[], out: string[]) -> void throws never {
+  { : void
+    for r in results
+      { : void
+        match (r : testing.ChildReport) : void
+          tr: TestReport =>
+            { : void
+              for run in tr.runs
+                { : void
+                  if (run.outcome != "pass" : bool) : void
+                    { : void
+                      if let <pat> = run.message { 1 stmts } : void
+                    }
+                }
+            }
+          tsr: TestSetReport =>
+            { : void
+              root.collect_leaf_messages(tsr.results, out) : void
+            }
+      }
+  }
+}
 class testing.TestRegistration$stream {
   name: string | null
   body: testing.TestBody$stream | null
@@ -426,6 +791,19 @@ class testing.TestRegistry$stream {
   collector: testing.TestCollector$stream | null
   expansions: map<string, testing.TestRegistry$stream>
   loading_time_ms: int | null
+}
+class testing.FlatLeaf$stream {
+  name: string | null
+  body: testing.TestBody$stream | null
+  runner: testing.TestRunner$stream | null
+}
+class testing.FilterPat$stream {
+  func_pat: string | null
+  test_pat: string | null
+}
+class testing.NameSplit$stream {
+  head: string | null
+  tail: string | null
 }
 
 --- <builtin>/testing/runners.baml ---
@@ -666,6 +1044,22 @@ class testing.TestSetChild {
   run: testing.ChildReportThunk
 }
 type testing.TestSetRunner = (testing.TestSetChild[]) -> testing.TestSetReport throws never
+class testing.FlatTestResult {
+  name: string
+  outcome: testing.Outcome
+  messages: string[]
+  duration_ms: int
+  run_count: int
+}
+class testing.FlatTestReport {
+  outcome: testing.Outcome
+  passed: int
+  failed: int
+  total: int
+  failed_names: string[]
+  messages: string[]
+  results: testing.FlatTestResult[]
+}
 type testing.Outcome$stream = "pass" | "fail" | "error"
 class testing.RunReport$stream {
   outcome: testing.Outcome$stream | null
@@ -700,3 +1094,19 @@ class testing.TestSetChild$stream {
   run: testing.ChildReportThunk$stream | null
 }
 type testing.TestSetRunner$stream = unknown
+class testing.FlatTestResult$stream {
+  name: string | null
+  outcome: testing.Outcome$stream | null
+  messages: string[]
+  duration_ms: int | null
+  run_count: int | null
+}
+class testing.FlatTestReport$stream {
+  outcome: testing.Outcome$stream | null
+  passed: int | null
+  failed: int | null
+  total: int | null
+  failed_names: string[]
+  messages: string[]
+  results: testing.FlatTestResult$stream[]
+}
