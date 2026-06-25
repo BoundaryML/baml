@@ -185,6 +185,14 @@ pub struct BexHeap {
     /// to dispatch.
     pending_finalizers: Mutex<Vec<(HeapPtr, String)>>,
 
+    /// BEP-042 fast path: `true` iff at least one compile-time `Class` opts into
+    /// a `cleanup` finalizer (`has_cleanup`). Classes are fixed at compile time,
+    /// so this is computed once at construction. When `false`, the per-collection
+    /// finalizer scan ([`scan_dead_finalizers`](Self::scan_dead_finalizers)) is
+    /// skipped entirely — programs that define no `cleanup` (the common case) pay
+    /// no per-GC scan cost.
+    pub(crate) has_finalizable_classes: bool,
+
     /// TLAB chunk size for new allocations.
     tlab_size: usize,
 
@@ -290,6 +298,12 @@ impl BexHeap {
         // This converts ConstValue (with ObjectIndex) to Value (with HeapPtr).
         Self::resolve_function_constants(&mut compile_time_objects);
 
+        // BEP-042: precompute whether any class opts into a `cleanup` finalizer,
+        // so the per-collection finalizer scan can be skipped when none do.
+        let has_finalizable_classes = compile_time_objects
+            .iter()
+            .any(|o| matches!(o, Object::Class(c) if c.has_cleanup));
+
         Arc::new(Self {
             compile_time: compile_time_objects,
             gen0: UnsafeCell::new(ChunkedVec::new()),
@@ -301,6 +315,7 @@ impl BexHeap {
             handles: RwLock::new(HashMap::new()),
             next_handle_key: AtomicUsize::new(0),
             pending_finalizers: Mutex::new(Vec::new()),
+            has_finalizable_classes,
             tlab_size,
             growth_lock: Mutex::new(()),
             allocs_since_gc: AtomicUsize::new(0),

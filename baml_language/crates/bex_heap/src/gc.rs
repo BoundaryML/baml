@@ -177,6 +177,11 @@ impl BexHeap {
         forwarding: &HashMap<HeapPtr, HeapPtr>,
         gens: &[&ChunkedVec<Object>],
     ) -> Vec<(HeapPtr, String)> {
+        // Fast path: if no class defines `cleanup`, no instance can ever be
+        // finalizable, so skip the O(heap) from-space walk on every collection.
+        if !self.has_finalizable_classes {
+            return Vec::new();
+        }
         let mut seeds = Vec::new();
         for space in gens {
             for i in 0..space.len() {
