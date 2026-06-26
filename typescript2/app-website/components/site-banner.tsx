@@ -87,9 +87,9 @@ export function SiteBanner() {
         New
       </span>
       <span style={{ color: MUTED }}>
-        We raised XM from _ at XXM to build{' '}
+        T-minus 45 days until{' '}
         <span style={{ color: INK, fontWeight: 600 }}>
-          the language for agents
+          launch
         </span>
         .
       </span>

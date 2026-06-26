@@ -197,6 +197,9 @@ export type SlimIssue = {
   fixSlackTs?: string | null;
   notionSyncStatus?: string;
   evidenceCount: number;
+  // Slim evidence refs (trophy + cited call) so list/run views can link an issue
+  // back to the runs that produced it without fetching the full issue doc.
+  evidence?: Array<{ trophyId?: string; call_index?: number | null }>;
   firstSeenAt: number;
   lastSeenAt: number;
   createdAt: number;

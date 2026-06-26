@@ -6,7 +6,7 @@ import { useAtbState } from "@/app/atb/_lib/api";
 import { RunsTable, joinRuns } from "@/app/atb/_components/runs-table";
 import { EASE } from "@/app/atb/_components/ui";
 
-const OUTCOMES = ["all", "success", "partial", "failed", "feedback"] as const;
+const OUTCOMES = ["all", "success", "partial", "failed"] as const;
 
 export default function RunsPage() {
   const state = useAtbState();

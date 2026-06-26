@@ -1411,7 +1411,7 @@ const installOptions: {
   label: string;
 }[] = [
   {
-    command: 'claude plugin add boundaryml/baml',
+    command: 'claude plugin marketplace add BoundaryML/baml-skill',
     icon: '/Claude Color SVG.svg',
     id: 'claude',
     label: 'Claude plugin',

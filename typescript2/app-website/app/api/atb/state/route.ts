@@ -82,6 +82,10 @@ function slimIssue(i: Issue): SlimIssue {
     fixSlackTs: i.fixSlackTs ?? null,
     notionSyncStatus: i.notionSyncStatus,
     evidenceCount: i.evidence?.length ?? 0,
+    evidence: (i.evidence ?? []).map((e) => ({
+      trophyId: e.trophyId,
+      call_index: e.call_index ?? null,
+    })),
     firstSeenAt: i.firstSeenAt,
     lastSeenAt: i.lastSeenAt,
     createdAt: i.createdAt,

@@ -65,6 +65,20 @@ export default function RunPage({
 
   const files = Object.entries(trophy.filesCreated ?? {});
 
+  // Issues this run produced — any issue whose evidence cites this trophy. Used to
+  // deep-link the run to its tracked issues, and each finding to its issue by call.
+  const runIssues = (state?.issues ?? []).filter((i) =>
+    i.evidence?.some((e) => e.trophyId === trophy._id),
+  );
+  const issueByCall = new Map(
+    runIssues.flatMap((i) =>
+      (i.evidence ?? [])
+        .filter((e) => e.trophyId === trophy._id && e.call_index != null)
+        .map((e) => [e.call_index as number, i] as const),
+    ),
+  );
+  const soleRunIssue = runIssues.length === 1 ? runIssues[0] : null;
+
   return (
     <div className="pt-12">
       {/* ---- header ---- */}
@@ -186,36 +200,83 @@ export default function RunPage({
             hint="these feed issue dedup"
           />
           <div className="space-y-3">
-            {trophy.findings!.map((f, i) => (
-              <Card key={i} className="px-6 py-5">
-                <div className="flex items-start gap-3">
-                  <KindChip kind={f.kind} />
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-atb-ink leading-snug">
-                      {f.title}
-                    </p>
-                    <div className="mt-2">
-                      <Markdown>{f.description}</Markdown>
-                    </div>
-                    {f.suggestion && (
-                      <div className="mt-3 border-l-2 border-atb-accent pl-4 text-sm text-atb-ink-2 leading-relaxed">
-                        <span className="text-atb-accent-deep font-medium">
-                          suggested fix:{" "}
-                        </span>
-                        {f.suggestion}
+            {trophy.findings!.map((f, i) => {
+              const fIssue =
+                (f.anchor?.call_index != null
+                  ? issueByCall.get(f.anchor.call_index)
+                  : undefined) ?? soleRunIssue;
+              return (
+                <Card key={i} className="px-6 py-5">
+                  <div className="flex items-start gap-3">
+                    <KindChip kind={f.kind} />
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-atb-ink leading-snug">
+                        {f.title}
+                      </p>
+                      <div className="mt-2">
+                        <Markdown>{f.description}</Markdown>
                       </div>
-                    )}
-                    {f.anchor?.turn_index != null && (
-                      <a
-                        href={`#turn-${f.anchor.turn_index}`}
-                        className="inline-block mt-3 text-xs font-atb-mono text-atb-accent-deep hover:text-atb-accent transition-colors"
-                      >
-                        ↓ jump to turn {f.anchor.turn_index}
-                      </a>
-                    )}
+                      {f.suggestion && (
+                        <div className="mt-3 border-l-2 border-atb-accent pl-4 text-sm text-atb-ink-2 leading-relaxed">
+                          <span className="text-atb-accent-deep font-medium">
+                            suggested fix:{" "}
+                          </span>
+                          {f.suggestion}
+                        </div>
+                      )}
+                      <div className="mt-3 flex items-center gap-4">
+                        {fIssue && (
+                          <Link
+                            href={`/atb/issues/${fIssue._id}`}
+                            className="text-xs font-atb-mono text-atb-accent-deep hover:text-atb-accent transition-colors"
+                          >
+                            tracked as issue →
+                          </Link>
+                        )}
+                        {f.anchor?.turn_index != null && (
+                          <a
+                            href={`#turn-${f.anchor.turn_index}`}
+                            className="text-xs font-atb-mono text-atb-accent-deep hover:text-atb-accent transition-colors"
+                          >
+                            ↓ jump to turn {f.anchor.turn_index}
+                          </a>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </Card>
+                </Card>
+              );
+            })}
+          </div>
+        </Reveal>
+      )}
+
+      {/* ---- issues this run produced ---- */}
+      {runIssues.length > 0 && (
+        <Reveal className="mt-10">
+          <SectionHeader
+            title={`Issues from this run (${runIssues.length})`}
+            hint="deduped findings tracked on the board"
+          />
+          <div className="space-y-2">
+            {runIssues.map((iss) => (
+              <Link
+                key={iss._id}
+                href={`/atb/issues/${iss._id}`}
+                className="block"
+              >
+                <Card className="px-5 py-3.5 hover:border-atb-accent/40 transition-colors">
+                  <div className="flex items-center gap-3">
+                    <KindChip kind={iss.kind} />
+                    <span className="flex-1 min-w-0 text-sm text-atb-ink leading-snug">
+                      {iss.title}
+                    </span>
+                    <span className="font-atb-mono text-[11px] text-atb-ink-3 shrink-0">
+                      {iss.status}
+                    </span>
+                  </div>
+                </Card>
+              </Link>
             ))}
           </div>
         </Reveal>
