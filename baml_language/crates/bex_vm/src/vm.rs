@@ -302,6 +302,7 @@ mod tests {
             type_tag: 100,
             ty_attr: TyAttr::default(),
             has_cleanup: false,
+            generic_param_count: 0,
         }))
     }
 

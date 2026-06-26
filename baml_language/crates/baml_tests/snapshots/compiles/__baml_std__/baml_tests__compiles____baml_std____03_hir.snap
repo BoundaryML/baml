@@ -455,6 +455,9 @@ class baml.errors.Timeout {
   message: string
   duration_ms: int?
 }
+class baml.errors.TypeMismatch {
+  message: string
+}
 class baml.errors.Unsupported {
   message: string
 }
