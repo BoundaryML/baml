@@ -211,12 +211,38 @@ function cursor_api_key() -> string {
     return env_or("CURSOR_API_KEY", "");
 }
 
+// The baml language repo (default branch canary) — where `language`-kind fixes go.
 function cursor_branch() -> string {
     return env_or("CURSOR_BRANCH", "canary");
 }
 
 function cursor_repo_url() -> string {
     return env_or("CURSOR_REPO_URL", "https://github.com/BoundaryML/baml");
+}
+
+// The baml-skill repo (default branch main) — where `skill`-kind fixes go.
+function cursor_skill_branch() -> string {
+    return env_or("CURSOR_SKILL_BRANCH", "main");
+}
+
+function cursor_skill_repo_url() -> string {
+    return env_or("CURSOR_SKILL_REPO_URL", "https://github.com/BoundaryML/baml-skill");
+}
+
+// Route a fix to the repo/branch that owns the issue: skill issues -> baml-skill,
+// everything else (language) -> the baml language repo. Replaces the old hard pin.
+function cursor_repo_for_kind(kind: string) -> string {
+    if (kind == "skill") {
+        return cursor_skill_repo_url();
+    }
+    return cursor_repo_url();
+}
+
+function cursor_branch_for_kind(kind: string) -> string {
+    if (kind == "skill") {
+        return cursor_skill_branch();
+    }
+    return cursor_branch();
 }
 
 // ---- cursor-tracker (PR-monitor sweep) ------------------------------------

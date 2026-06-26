@@ -111,8 +111,6 @@ function RunFixDispatch() -> int {
         wid: "fix_dispatch-" + baml.id.new(),
         svc: svc_from_env(),
         cursor_key: cursor_api_key(),
-        cursor_branch: cursor_branch(),
-        repo_url: cursor_repo_url(),
     };
     let pp: Processor = p;
     return pp.run();
@@ -129,8 +127,6 @@ function RunLinearSync() -> int {
         wid: "fix_dispatch-" + baml.id.new(),
         svc: svc_from_env(),
         cursor_key: cursor_api_key(),
-        cursor_branch: cursor_branch(),
-        repo_url: cursor_repo_url(),
     };
     // The cursor PR tracker: a periodic sweep (not a claim loop) that follows each
     // dispatched fix agent through to a mergeable PR. Runs alongside the two claim

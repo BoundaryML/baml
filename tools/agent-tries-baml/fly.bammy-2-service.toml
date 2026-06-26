@@ -25,10 +25,10 @@ primary_region = 'sjc'
   CLAUDE_MODEL      = 'claude-opus-4-8'
   CLAUDE_MAX_TURNS  = '100'
   BAML_DEDUP_MODEL  = 'claude-sonnet-4-6'
-  # cursor fix dispatch + PR-tracker. Pointed at baml-skill (not baml) so test PRs
-  # land on a disposable repo. baml-skill's default branch is `main`.
-  CURSOR_REPO_URL         = 'https://github.com/BoundaryML/baml-skill'
-  CURSOR_BRANCH           = 'main'
+  # cursor fix dispatch + PR-tracker. Repo/branch are chosen per issue kind in
+  # core/env.baml (skill -> baml-skill@main, language -> baml@canary); no hard pin.
+  # Override the defaults with CURSOR_SKILL_REPO_URL/CURSOR_SKILL_BRANCH or
+  # CURSOR_REPO_URL/CURSOR_BRANCH if a run needs a disposable target.
   CURSOR_TRACK_SECS       = '30'
   CURSOR_MAX_FIX_ATTEMPTS = '3'
   # Linear board mirror (LinearPush) + tracker status moves. Empty allowlist =

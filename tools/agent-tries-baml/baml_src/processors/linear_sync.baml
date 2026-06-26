@@ -163,8 +163,6 @@ class FixDispatchProcessor {
     wid: string,
     svc: ServiceClient,
     cursor_key: string,
-    cursor_branch: string,
-    repo_url: string,
 
     implements Processor {
         function config(self) -> ProcessorConfig {
@@ -206,6 +204,15 @@ class FixDispatchProcessor {
             if (self.cursor_key == "") {
                 throw ProcessError { message: "no cursor key configured; cannot dispatch" };
             }
+            // Route the fix to the repo that owns this issue's kind: skill issues ->
+            // the baml-skill repo, language issues -> the baml language repo (each on
+            // its own default branch). No hard-pinned target.
+            let kind = match (issue.kind) {
+                let k: string => k,
+                null => "skill",
+            };
+            let repo = cursor_repo_for_kind(kind);
+            let branch = cursor_branch_for_kind(kind);
 
             let existing = match (issue.fixSlackTs) {
                 let v: string => v,
@@ -264,8 +271,8 @@ class FixDispatchProcessor {
             let resp = cursor_launch_agent(
                 self.cursor_key,
                 prompt,
-                self.repo_url,
-                self.cursor_branch,
+                repo,
+                branch,
                 agent_id,
                 cursor_model(),
                 "",
@@ -303,9 +310,9 @@ class FixDispatchProcessor {
                 + "*\n<https://cursor.com/agents/"
                 + ref
                 + "|view agent>  ·  "
-                + self.repo_url
+                + repo
                 + " @ "
-                + self.cursor_branch;
+                + branch;
             let thread_ts = slack_post_message(slack_bot_token(), slack_fix_channel(), note, "");
             let patch = "{\"cursorAgentId\":"
                 + jesc(ref)
