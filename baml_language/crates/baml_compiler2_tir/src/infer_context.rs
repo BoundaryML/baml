@@ -484,7 +484,7 @@ impl fmt::Display for TirTypeError {
             TirTypeError::InvalidMapKeyType { key } => {
                 write!(
                     f,
-                    "map keys must be `string`; got `{}`. Convert non-string keys with `.to_string()` before `.set()` or `.get()`",
+                    "map keys must be `string`; got `{}`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`",
                     key.render_user_facing()
                 )
             }

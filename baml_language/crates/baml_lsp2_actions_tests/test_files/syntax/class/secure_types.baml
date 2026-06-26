@@ -37,21 +37,21 @@ class ComplexTypes {
 //    │
 //    │ Note: Error code: E0002
 // ───╯
-// error: map keys must be `string`; got `string[]`. Convert non-string keys with `.to_string()` before `.set()` or `.get()`
+// error: map keys must be `string`; got `string[]`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
 //    ╭─[ class_secure_types.baml:3:4 ]
 //    │
 //  3 │   a map<string[], (int | bool[]) | apple_pie[][]>
 //    │    ───────────────────────┬──────────────────────
-//    │                           ╰──────────────────────── map keys must be `string`; got `string[]`. Convert non-string keys with `.to_string()` before `.set()` or `.get()`
+//    │                           ╰──────────────────────── map keys must be `string`; got `string[]`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
 //    │
 //    │ Note: Error code: E0067
 // ───╯
-// error: map keys must be `string`; got `bool`. Convert non-string keys with `.to_string()` before `.set()` or `.get()`
+// error: map keys must be `string`; got `bool`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
 //    ╭─[ class_secure_types.baml:4:4 ]
 //    │
 //  4 │   b (int, map<bool, string?>, (char | float)[][] | long_word_123.foobar[])
 //    │    ───────────────────────────────────┬───────────────────────────────────
-//    │                                       ╰───────────────────────────────────── map keys must be `string`; got `bool`. Convert non-string keys with `.to_string()` before `.set()` or `.get()`
+//    │                                       ╰───────────────────────────────────── map keys must be `string`; got `bool`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
 //    │
 //    │ Note: Error code: E0067
 // ───╯
@@ -100,12 +100,12 @@ class ComplexTypes {
 //    │
 //    │ Note: Error code: E0002
 // ───╯
-// error: map keys must be `string`; got `int[][]`. Convert non-string keys with `.to_string()` before `.set()` or `.get()`
+// error: map keys must be `string`; got `int[][]`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
 //    ╭─[ class_secure_types.baml:6:4 ]
 //    │
 //  6 │   d map<int[][], ((int | float) | char[])>
 //    │    ───────────────────┬───────────────────
-//    │                       ╰───────────────────── map keys must be `string`; got `int[][]`. Convert non-string keys with `.to_string()` before `.set()` or `.get()`
+//    │                       ╰───────────────────── map keys must be `string`; got `int[][]`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
 //    │
 //    │ Note: Error code: E0067
 // ───╯
@@ -145,12 +145,12 @@ class ComplexTypes {
 //     │
 //     │ Note: Error code: E0002
 // ────╯
-// error: map keys must be `string`; got `bool[][]`. Convert non-string keys with `.to_string()` before `.set()` or `.get()`
+// error: map keys must be `string`; got `bool[][]`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
 //     ╭─[ class_secure_types.baml:10:4 ]
 //     │
 //  10 │   h (((int | string)[]) | map<bool[][], char[]>)
 //     │    ──────────────────────┬──────────────────────
-//     │                          ╰──────────────────────── map keys must be `string`; got `bool[][]`. Convert non-string keys with `.to_string()` before `.set()` or `.get()`
+//     │                          ╰──────────────────────── map keys must be `string`; got `bool[][]`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
 //     │
 //     │ Note: Error code: E0067
 // ────╯
@@ -226,12 +226,12 @@ class ComplexTypes {
 //     │
 //     │ Note: Error code: E0002
 // ────╯
-// error: map keys must be `string`; got `string[]`. Convert non-string keys with `.to_string()` before `.set()` or `.get()`
+// error: map keys must be `string`; got `string[]`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
 //     ╭─[ class_secure_types.baml:13:4 ]
 //     │
 //  13 │   k map<string[], (int | long[])> | map<float[][], double[][]>
 //     │    ─────────────────────────────┬─────────────────────────────
-//     │                                 ╰─────────────────────────────── map keys must be `string`; got `string[]`. Convert non-string keys with `.to_string()` before `.set()` or `.get()`
+//     │                                 ╰─────────────────────────────── map keys must be `string`; got `string[]`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
 //     │
 //     │ Note: Error code: E0067
 // ────╯
@@ -244,12 +244,12 @@ class ComplexTypes {
 //     │
 //     │ Note: Error code: E0002
 // ────╯
-// error: map keys must be `string`; got `float[][]`. Convert non-string keys with `.to_string()` before `.set()` or `.get()`
+// error: map keys must be `string`; got `float[][]`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
 //     ╭─[ class_secure_types.baml:13:4 ]
 //     │
 //  13 │   k map<string[], (int | long[])> | map<float[][], double[][]>
 //     │    ─────────────────────────────┬─────────────────────────────
-//     │                                 ╰─────────────────────────────── map keys must be `string`; got `float[][]`. Convert non-string keys with `.to_string()` before `.set()` or `.get()`
+//     │                                 ╰─────────────────────────────── map keys must be `string`; got `float[][]`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
 //     │
 //     │ Note: Error code: E0067
 // ────╯
@@ -334,12 +334,12 @@ class ComplexTypes {
 //     │
 //     │ Note: Error code: E0002
 // ────╯
-// error: map keys must be `string`; got `unknown[]`. Convert non-string keys with `.to_string()` before `.set()` or `.get()`
+// error: map keys must be `string`; got `unknown[]`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
 //     ╭─[ class_secure_types.baml:16:4 ]
 //     │
 //  16 │   n map<complex_key_type[], map<another_key, (int | string[])>>
 //     │    ──────────────────────────────┬─────────────────────────────
-//     │                                  ╰─────────────────────────────── map keys must be `string`; got `unknown[]`. Convert non-string keys with `.to_string()` before `.set()` or `.get()`
+//     │                                  ╰─────────────────────────────── map keys must be `string`; got `unknown[]`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
 //     │
 //     │ Note: Error code: E0067
 // ────╯

@@ -54,12 +54,12 @@ function UseMapTypecheck() -> int {
 //    │
 //    │ Note: Error code: E0010
 // ───╯
-// error: map keys must be `string`; got `int`. Convert non-string keys with `.to_string()` before `.set()` or `.get()`
+// error: map keys must be `string`; got `int`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
 //    ╭─[ maps_key_and_value_typecheck.baml:2:28 ]
 //    │
 //  2 │ function CreateMapExpr() -> map<int, string> {
 //    │                            ────────┬────────
-//    │                                    ╰────────── map keys must be `string`; got `int`. Convert non-string keys with `.to_string()` before `.set()` or `.get()`
+//    │                                    ╰────────── map keys must be `string`; got `int`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
 //    │
 //    │ Note: Error code: E0067
 // ───╯
