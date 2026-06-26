@@ -317,8 +317,11 @@ export default function WarScene() {
         }}
       />
 
-      {/* caption — scaled down on mobile so the pill doesn't dominate the short band */}
-      <div className="absolute left-0 top-0 flex justify-start p-2 sm:p-3">
+      {/* caption — scaled down on mobile so the pill doesn't dominate the short
+          band; vertically centred on the short mobile band so it reads as a title
+          card on the scene instead of jammed in the top corner, top-left on the
+          taller desktop band. z-20 keeps it above the marching column. */}
+      <div className="absolute inset-y-0 left-0 z-20 flex items-center justify-start p-2 sm:items-start sm:p-3">
         <span key={scene} className="rounded-full border border-[#a98e61]/45 bg-[#d8c39a]/90 px-2.5 py-0.5 text-xs font-bold tracking-wide text-ink shadow-sm sm:px-4 sm:py-1 sm:text-sm" style={{ fontFamily: "ui-monospace, 'SFMono-Regular', Menlo, monospace" }}>
           {CAPTIONS[scene]}
         </span>
