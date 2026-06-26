@@ -2,7 +2,7 @@ app            = 'bammy-2-proxy'
 primary_region = 'sjc'
 
 [build]
-  dockerfile = 'Dockerfile.proxy'
+  dockerfile = '../Dockerfile.proxy'
 
 [env]
   PROXY_LISTEN_PORT = '9090'

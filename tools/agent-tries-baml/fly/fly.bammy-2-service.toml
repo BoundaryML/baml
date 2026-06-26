@@ -2,7 +2,7 @@ app            = 'bammy-2-service'
 primary_region = 'sjc'
 
 [build]
-  dockerfile = 'Dockerfile'
+  dockerfile = '../Dockerfile'
 
 [processes]
   app = 'baml run Supervisor'

@@ -30,12 +30,13 @@ jobs:
       - uses: actions/checkout@v4
       - uses: superfly/flyctl-actions/setup-flyctl@master
 
-      # Proxy first — the service & cron route their LLM calls through it.
+      # `.` is the build context (project root, where the Dockerfiles live); the
+      # fly configs live under fly/. Proxy first — service & cron route LLM calls through it.
       - name: Deploy proxy
-        run: flyctl deploy --config fly.bammy-2-proxy.toml --remote-only --ha=false --yes
+        run: flyctl deploy . --config fly/fly.bammy-2-proxy.toml --remote-only --ha=false --yes
       - name: Deploy service
-        run: flyctl deploy --config fly.bammy-2-service.toml --remote-only --ha=false --yes
+        run: flyctl deploy . --config fly/fly.bammy-2-service.toml --remote-only --ha=false --yes
       - name: Deploy ingress
-        run: flyctl deploy --config fly.bammy-2-ingress.toml --remote-only --ha=false --yes
+        run: flyctl deploy . --config fly/fly.bammy-2-ingress.toml --remote-only --ha=false --yes
       - name: Deploy cron
-        run: flyctl deploy --config fly.bammy-2-cron.toml --remote-only --ha=false --yes
+        run: flyctl deploy . --config fly/fly.bammy-2-cron.toml --remote-only --ha=false --yes
