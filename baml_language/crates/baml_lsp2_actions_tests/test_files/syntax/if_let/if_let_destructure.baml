@@ -30,11 +30,11 @@ function DestructureRefutable(u: User | Admin) -> string {
 //----
 //- diagnostics
 // warning: irrefutable `if let` pattern; the `else` branch is unreachable — use a plain `let` binding instead
-//     ╭─[ if_let_if_let_destructure.baml:10:5 ]
+//     ╭─[ if_let_if_let_destructure.baml:10:6 ]
 //     │
 //  10 │   if let User { name, age } = u {
-//     │     ───────────┬───────────  
-//     │                ╰───────────── irrefutable `if let` pattern; the `else` branch is unreachable — use a plain `let` binding instead
-//     │ 
+//     │      ───────────┬──────────
+//     │                 ╰──────────── irrefutable `if let` pattern; the `else` branch is unreachable — use a plain `let` binding instead
+//     │
 //     │ Note: Error code: E0112
 // ────╯

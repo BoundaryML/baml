@@ -63,35 +63,35 @@ function InputAndOutput(i1: map<string, string>, i2: map<MapDummy, string>) -> m
 //     ╭─[ class_map_types2.baml:26:10 ]
 //     │
 //  26 │   d1 map<>
-//     │          ┬  
+//     │          ┬
 //     │          ╰── Expected type, found '>'
-//     │ 
+//     │
 //     │ Note: Error code: E0010
 // ────╯
 // error: unresolved type: map
-//     ╭─[ class_map_types2.baml:26:5 ]
+//     ╭─[ class_map_types2.baml:26:6 ]
 //     │
 //  26 │   d1 map<>
-//     │     ───┬──  
+//     │      ──┬──
 //     │        ╰──── unresolved type: map
-//     │ 
+//     │
 //     │ Note: Error code: E0002
 // ────╯
 // error: unresolved type: map
-//     ╭─[ class_map_types2.baml:27:5 ]
+//     ╭─[ class_map_types2.baml:27:6 ]
 //     │
 //  27 │   d2 map<string>
-//     │     ──────┬─────  
+//     │      ─────┬─────
 //     │           ╰─────── unresolved type: map
-//     │ 
+//     │
 //     │ Note: Error code: E0002
 // ────╯
 // error: unresolved type: map
-//     ╭─[ class_map_types2.baml:28:5 ]
+//     ╭─[ class_map_types2.baml:28:6 ]
 //     │
 //  28 │   d3 map<string, string, string>
-//     │     ──────────────┬─────────────  
+//     │      ─────────────┬─────────────
 //     │                   ╰─────────────── unresolved type: map
-//     │ 
+//     │
 //     │ Note: Error code: E0002
 // ────╯

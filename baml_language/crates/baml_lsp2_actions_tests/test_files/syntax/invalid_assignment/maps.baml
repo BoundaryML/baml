@@ -85,11 +85,11 @@ function MapAssignments() -> int {
 //     │ Note: Error code: E0001
 // ────╯
 // error: type mismatch: expected string, got map<string, int>
-//     ╭─[ invalid_assignment_maps.baml:44:5 ]
+//     ╭─[ invalid_assignment_maps.baml:44:6 ]
 //     │
 //  44 │     h = {"k": 7};
-//     │        ────┬────
-//     │            ╰────── type mismatch: expected string, got map<string, int>
+//     │         ────┬───
+//     │             ╰───── type mismatch: expected string, got map<string, int>
 //     │
 //     │ Note: Error code: E0001
 // ────╯

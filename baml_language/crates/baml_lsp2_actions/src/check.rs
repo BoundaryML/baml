@@ -6120,7 +6120,7 @@ fn tir_type_error_to_diagnostic_id(
         TirTypeError::TypeMismatch { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::UnresolvedMember { .. } => DiagnosticId::NoSuchField,
         TirTypeError::UnresolvedName { .. } => DiagnosticId::UnknownVariable,
-        TirTypeError::DeadCode { .. } => DiagnosticId::TypeMismatch,
+        TirTypeError::DeadCode { .. } => DiagnosticId::UnreachableCode,
         TirTypeError::VoidUsedAsValue => DiagnosticId::TypeMismatch,
         TirTypeError::VoidFunctionResultUsed => DiagnosticId::TypeMismatch,
         TirTypeError::SpawnWithNotATransformer { .. } => DiagnosticId::TypeMismatch,

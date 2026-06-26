@@ -23,14 +23,13 @@ source: crates/baml_tests/src/generated_tests.rs
 ────╯
 
   [type] error: `$id` is a value, not a binding; bind it to a local before accessing `.len` (e.g. `let id = $id; id.len`)
-    ╭─[ runtime_id.baml:20:34 ]
+    ╭─[ runtime_id.baml:21:5 ]
     │
- 20 │ ╭─▶ function member_access() -> int {
- 21 │ ├─▶     $id.len()
-    │ │                   
-    │ ╰─────────────────── `$id` is a value, not a binding; bind it to a local before accessing `.len` (e.g. `let id = $id; id.len`)
-    │     
-    │     Note: Error code: E0001
+ 21 │     $id.len()
+    │     ───┬───  
+    │        ╰───── `$id` is a value, not a binding; bind it to a local before accessing `.len` (e.g. `let id = $id; id.len`)
+    │ 
+    │ Note: Error code: E0001
 ────╯
 
   [type] error: missing required argument `x`
@@ -44,10 +43,10 @@ source: crates/baml_tests/src/generated_tests.rs
 ────╯
 
   [type] error: `$id` cannot be set at the call site; assign `$id = ...` inside the function body instead
-    ╭─[ runtime_id.baml:30:20 ]
+    ╭─[ runtime_id.baml:30:21 ]
     │
  30 │     takes_int($id = baml.id.new())
-    │                    ───────┬──────  
+    │                     ──────┬──────  
     │                           ╰──────── `$id` cannot be set at the call site; assign `$id = ...` inside the function body instead
     │ 
     │ Note: Error code: E0001
@@ -74,10 +73,10 @@ source: crates/baml_tests/src/generated_tests.rs
 ────╯
 
   [type] error: declared throws is `never`, but this function may also throw `baml.errors.InvalidArgument`
-    ╭─[ runtime_id.baml:47:50 ]
+    ╭─[ runtime_id.baml:47:51 ]
     │
  47 │ function setter_never(s: string) -> string throws never {
-    │                                                  ───┬──  
+    │                                                   ──┬──  
     │                                                     ╰──── declared throws is `never`, but this function may also throw `baml.errors.InvalidArgument`
     │ 
     │ Note: Error code: E0096

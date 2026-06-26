@@ -86,7 +86,7 @@ function user.Holder.get_data(self: user.Holder<T>) -> T throws never {
   { : string
     self.data : string
   }
-  !! 2283..2371: type mismatch: expected T, got string
+  !! 2362..2371: type mismatch: expected T, got string
 }
 function user.use_holder() -> int throws never {
   { : int
@@ -101,7 +101,7 @@ function user.Shadow.bad<T>(x: T) -> T throws never {
   { : T
     x : T
   }
-  !! 2686..2799: type parameter `T` on method shadows the same parameter on class `Shadow`. Please use a different name for the type parameter.
+  !! 2755..2799: type parameter `T` on method shadows the same parameter on class `Shadow`. Please use a different name for the type parameter.
 }
 function user.wrong_arity_missing() -> user.Box throws never {
   { : user.Box
@@ -112,15 +112,15 @@ function user.wrong_arity_extra() -> user.Box<int, string> throws never {
   { : user.Box<int, string>
     Box { value: 42 } : user.Box<int, string>
   }
-  !! 3129..3146: type `Box` expects 1 type argument(s), got 2
-  !! 3149..3183: type `Box` expects 1 type argument(s), got 2
+  !! 3130..3146: type `Box` expects 1 type argument(s), got 2
+  !! 3153..3183: type `Box` expects 1 type argument(s), got 2
 }
 function user.wrong_arity_partial() -> user.Pair<int> throws never {
   { : user.Pair<int>
     Pair { first: 1, second: "two" } : user.Pair<int>
   }
-  !! 3256..3266: type `Pair` expects 2 type argument(s), got 1
-  !! 3269..3310: type `Pair` expects 2 type argument(s), got 1
+  !! 3257..3266: type `Pair` expects 2 type argument(s), got 1
+  !! 3273..3310: type `Pair` expects 2 type argument(s), got 1
   !! 3303..3308: type mismatch: expected B, got "two"
 }
 class user.Plain {
@@ -130,8 +130,8 @@ function user.wrong_arity_on_non_generic() -> user.Plain<int> throws never {
   { : user.Plain<int>
     Plain { name: "hello" } : user.Plain<int>
   }
-  !! 3570..3581: type `Plain` expects 0 type argument(s), got 1
-  !! 3584..3616: type `Plain` expects 0 type argument(s), got 1
+  !! 3571..3581: type `Plain` expects 0 type argument(s), got 1
+  !! 3588..3616: type `Plain` expects 0 type argument(s), got 1
 }
 class user.Container {
   inner: user.Box<T>
@@ -258,9 +258,9 @@ function user.GetTodo() -> user.Todo throws never {
   { : unknown
     baml.fetch_as(baml.HttpRequest { method: baml.HttpMethod.Get, url: "dummyjson.com/tod..." }) : unknown
   }
-  !! 106..124: unresolved name: fetch_as
+  !! 111..124: unresolved name: fetch_as
   !! 131..230: unresolved type: baml.HttpRequest
-  !! 165..185: unresolved name: HttpMethod
+  !! 166..185: unresolved name: HttpMethod
 }
 class user.Todo$stream {
   id: int | null

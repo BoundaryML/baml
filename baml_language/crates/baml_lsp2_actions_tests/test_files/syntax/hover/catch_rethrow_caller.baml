@@ -27,21 +27,21 @@ function getProfile(req: int) -> bool throws Errors {
 //----
 //- diagnostics
 // warning: unreachable arm
-//     ╭─[ hover_catch_rethrow_caller.baml:16:27 ]
+//     ╭─[ hover_catch_rethrow_caller.baml:16:28 ]
 //     │
 //  16 │     AuthenticationError => { throw e }
-//     │                           ──────┬─────  
+//     │                            ─────┬─────
 //     │                                 ╰─────── unreachable arm
-//     │ 
+//     │
 //     │ Note: Error code: E0063
 // ────╯
 // warning: extraneous throws declaration: Errors
-//     ╭─[ hover_catch_rethrow_caller.baml:23:45 ]
+//     ╭─[ hover_catch_rethrow_caller.baml:23:46 ]
 //     │
 //  23 │ function getProfile(req: int) -> bool throws Errors {
-//     │                                             ───┬───  
-//     │                                                ╰───── extraneous throws declaration: Errors
-//     │ 
+//     │                                              ───┬──
+//     │                                                 ╰──── extraneous throws declaration: Errors
+//     │
 //     │ Note: Error code: E0097
 // ────╯
 //

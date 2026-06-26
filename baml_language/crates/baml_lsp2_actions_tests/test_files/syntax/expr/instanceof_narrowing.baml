@@ -89,19 +89,19 @@ function test_multiple_classes(x: Foo | Bar | Baz) -> string {
 //     │ Note: Error code: E0007
 // ────╯
 // error: did you mean `x?.field`? `x.field` does not handle the case when `x` is null
-//     ╭─[ expr_instanceof_narrowing.baml:23:15 ]
+//     ╭─[ expr_instanceof_narrowing.baml:23:16 ]
 //     │
 //  23 │         return x.field;
-//     │               ────┬───
+//     │                ───┬───
 //     │                   ╰───── did you mean `x?.field`? `x.field` does not handle the case when `x` is null
 //     │
 //     │ Note: Error code: E0001
 // ────╯
 // error: type mismatch: expected string, got string | null
-//     ╭─[ expr_instanceof_narrowing.baml:23:15 ]
+//     ╭─[ expr_instanceof_narrowing.baml:23:16 ]
 //     │
 //  23 │         return x.field;
-//     │               ────┬───
+//     │                ───┬───
 //     │                   ╰───── type mismatch: expected string, got string | null
 //     │
 //     │ Note: Error code: E0001
