@@ -2853,7 +2853,7 @@ fn testing.expansion_error_report(name: string) -> testing.TestSetReport {
     let _4: (testing.TestReport | testing.TestSetReport)[]
 
     bb0: {
-        _3 = copy _1 + const "/(failed to expand)";
+        _3 = copy _1 + const "/(testset error)";
         _2 = [copy _3]: string[];
         _4 = []: testing.TestReport | testing.TestSetReport[];
         _0 = testing.TestSetReport { const "error", const 0_i64, const 1_i64, const 1_i64, copy _2, copy _4 };
@@ -7057,10 +7057,6 @@ fn testing.testset_children_selected(registry: testing.TestRegistry, names: stri
     let _79: string
     let _80: testing.TestSetChild
     let _81: testing.TestSetRegistration
-    let _82: bool
-    let _83: string
-    let _84: testing.TestSetChild
-    let _85: testing.TestSetRegistration
 
     bb0: {
         _3 = []: testing.TestSetChild[];
@@ -7338,7 +7334,7 @@ fn testing.testset_children_selected(registry: testing.TestRegistry, names: stri
 
     bb52: {
         _74 = is_type(copy _47, baml.iter.Done);
-        branch copy _74 -> [bb62, bb53];
+        branch copy _74 -> [bb58, bb53];
     }
 
     bb53: {
@@ -7346,51 +7342,33 @@ fn testing.testset_children_selected(registry: testing.TestRegistry, names: stri
         fresh_cell(_76);
         _76 = copy _75;
         _79 = copy _76.0;
-        _78 = call const fn testing._name_selected(copy _79, copy _2) -> [bb54];
+        _78 = call const fn testing._has_selected_descendant(copy _79, copy _2) -> [bb54];
     }
 
     bb54: {
-        branch copy _78 -> [bb60, bb55];
+        branch copy _78 -> [bb56, bb55];
     }
 
     bb55: {
-        _83 = copy _76.0;
-        _82 = call const fn testing._has_selected_descendant(copy _83, copy _2) -> [bb56];
-    }
-
-    bb56: {
-        branch copy _82 -> [bb58, bb57];
-    }
-
-    bb57: {
         _77 = const null;
         goto -> bb31;
     }
 
-    bb58: {
-        _85 = copy _76;
-        _84 = call const fn testing.testset_child_selected(copy _1, copy _85, copy _2) -> [bb59];
-    }
-
-    bb59: {
-        _77 = call const fn baml.Array.push(copy _3, copy _84) -> [bb31];
-    }
-
-    bb60: {
+    bb56: {
         _81 = copy _76;
-        _80 = call const fn testing.testset_child(copy _1, copy _81) -> [bb61];
+        _80 = call const fn testing.testset_child_selected(copy _1, copy _81, copy _2) -> [bb57];
     }
 
-    bb61: {
+    bb57: {
         _77 = call const fn baml.Array.push(copy _3, copy _80) -> [bb31];
     }
 
-    bb62: {
+    bb58: {
         _0 = copy _3;
-        goto -> bb63;
+        goto -> bb59;
     }
 
-    bb63: {
+    bb59: {
         return;
     }
 }

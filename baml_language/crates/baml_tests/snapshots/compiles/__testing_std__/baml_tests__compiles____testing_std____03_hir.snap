@@ -84,7 +84,7 @@ function testing.expand_testset_registry(self: ?, ts: testing.TestSetRegistratio
   {  } match (self.expansions.get(ts.name)) { existing: testing.TestRegistry => existing, null => { let start = baml.sys.now_ms(); let sub_collector = testing.TestCollector { prefix: ts.name, tests: [], testsets: [] }; ts.collector(sub_collector); let elapsed = baml.sys.now_ms() Sub start; let sub_registry = testing.TestRegistry { collector: sub_collector, expansions: map {  }, loading_time_ms: elapsed }; self.expansions.set(ts.name, sub_registry) } sub_registry }
 }
 function testing.expansion_error_report(name: string) -> TestSetReport  [expr] {
-  {  } TestSetReport { outcome: "error", passed: 0, failed: 1, total: 1, failed_names: [name Add "/(failed to expand)"], results: [] }
+  {  } TestSetReport { outcome: "error", passed: 0, failed: 1, total: 1, failed_names: [name Add "/(testset error)"], results: [] }
 }
 function testing.filter_match(expr: string, subject: string) -> bool  [expr] {
   {  } if (expr Eq "") {  } true else {  } root.glob_match(subject, expr)
@@ -168,7 +168,7 @@ function testing.testset_children(registry: testing.TestRegistry) -> TestSetChil
   { let children: TestSetChild[] = []; for t in registry.collector.tests {  } children.push(root.test_child(t.name, t.body, t.runner)); for ts in registry.collector.testsets {  } children.push(root.testset_child(registry, ts)) } children
 }
 function testing.testset_children_selected(registry: testing.TestRegistry, names: string[]) -> TestSetChild[]  [expr] {
-  { let children: TestSetChild[] = []; for t in registry.collector.tests {  } if (root._name_selected(t.name, names)) {  } children.push(root.test_child(t.name, t.body, t.runner)) else {  } null; for ts in registry.collector.testsets {  } if (root._name_selected(ts.name, names)) {  } children.push(root.testset_child(registry, ts)) else if (root._has_selected_descendant(ts.name, names)) {  } children.push(root.testset_child_selected(registry, ts, names)) else {  } null } children
+  { let children: TestSetChild[] = []; for t in registry.collector.tests {  } if (root._name_selected(t.name, names)) {  } children.push(root.test_child(t.name, t.body, t.runner)) else {  } null; for ts in registry.collector.testsets {  } if (root._has_selected_descendant(ts.name, names)) {  } children.push(root.testset_child_selected(registry, ts, names)) else {  } null } children
 }
 
 --- captures ---

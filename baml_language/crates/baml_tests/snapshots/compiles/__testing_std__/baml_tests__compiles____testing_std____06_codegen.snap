@@ -4515,7 +4515,7 @@ function testing.expansion_error_report(name: string) -> testing.TestSetReport {
     load_const 1
     load_const 1
     load_var name
-    load_const "/(failed to expand)"
+    load_const "/(testset error)"
     bin_op +
     load_type string
     alloc_array 1
@@ -6091,7 +6091,7 @@ function testing.testset_children_selected(registry: testing.TestRegistry, names
   L9:
     load_var _5
     is_type baml.iter.Peekable<...>
-    pop_jump_if_false L46
+    pop_jump_if_false L44
     load_type testing.TestRegistration
     load_type never
     load_var _5
@@ -6259,7 +6259,7 @@ function testing.testset_children_selected(registry: testing.TestRegistry, names
   L31:
     load_var _45
     is_type baml.iter.Peekable<...>
-    pop_jump_if_false L46
+    pop_jump_if_false L44
     load_type testing.TestSetRegistration
     load_type never
     load_var _45
@@ -6338,19 +6338,11 @@ function testing.testset_children_selected(registry: testing.TestRegistry, names
     load_var _47
     is_type baml.iter.Done
     pop_jump_if_false L42
-    jump L45
+    jump L43
 
   L42:
     load_var _47
     store_var_load_var ts
-    load_field .name
-    load_var names
-    call testing._name_selected
-    pop_jump_if_false L43
-    jump L44
-
-  L43:
-    load_var ts
     load_field .name
     load_var names
     call testing._has_selected_descendant
@@ -6358,25 +6350,16 @@ function testing.testset_children_selected(registry: testing.TestRegistry, names
     load_var2 1 12
     load_var names
     call testing.testset_child_selected
-    store_var _84
-    load_var2 3 14
-    call baml.Array.push
-    pop 1
-    jump L22
-
-  L44:
-    load_var2 1 12
-    call testing.testset_child
     store_var _80
     load_var2 3 13
     call baml.Array.push
     pop 1
     jump L22
 
-  L45:
+  L43:
     load_var children
     return
 
-  L46:
+  L44:
     unreachable
 }

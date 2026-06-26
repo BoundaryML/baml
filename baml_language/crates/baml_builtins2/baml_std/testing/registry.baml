@@ -250,9 +250,12 @@ function testset_children_selected(registry: TestRegistry, names: string[]) -> T
     }
   }
   for (let ts in registry.collector.testsets) {
-    if (root._name_selected(ts.name, names)) {
-      children.push(root.testset_child(registry, ts))
-    } else if (root._has_selected_descendant(ts.name, names)) {
+    // Select testsets by descendant match only. `names` holds leaf paths, and a
+    // testset contributes only "name/..." descendants — never a bare "name" — so
+    // an exact ts.name match can happen only when a same-named top-level `test`
+    // was selected (tests and testsets dedupe in separate collections, so the
+    // names can collide). Honoring that would wrongly run the whole testset.
+    if (root._has_selected_descendant(ts.name, names)) {
       children.push(root.testset_child_selected(registry, ts, names))
     } else {
       null
@@ -431,10 +434,13 @@ function expansion_error_report(name: string) -> TestSetReport {
     passed: 0,
     failed: 1,
     total: 1,
-    // Match the sentinel leaf name from collect_subtree_names so the reported
-    // failure reads "suite/(failed to expand)" — distinguishing an expansion
-    // failure from an ordinary test failure and aligning select/report naming.
-    failed_names: [name + "/(failed to expand)"],
+    // Slash-qualified so split_top keeps it under the testset segment (filters
+    // can still select/exclude it). The catch in testset_child(_selected) routes
+    // runner/execution panics here too — not just expansion failures — so the
+    // label stays generic ("testset error") rather than claiming an expansion
+    // failure specifically. (collect_subtree_names, which is purely an expansion
+    // step, keeps the more precise "failed to expand".)
+    failed_names: [name + "/(testset error)"],
     results: [],
   }
 }

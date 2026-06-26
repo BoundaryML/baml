@@ -307,19 +307,14 @@ function testing.testset_children_selected(registry: testing.TestRegistry, names
       }
     for ts in registry.collector.testsets
       { : int | null
-        if (root._name_selected(ts.name, names) : bool) : int | null
+        if (root._has_selected_descendant(ts.name, names) : bool) : int | null
           { : int
-            children.push(root.testset_child(registry, ts)) : int
+            children.push(root.testset_child_selected(registry, ts, names)) : int
           }
         else
-          if (root._has_selected_descendant(ts.name, names) : bool) : int | null
-            { : int
-              children.push(root.testset_child_selected(registry, ts, names)) : int
-            }
-          else
-            { : null
-              null : null
-            }
+          { : null
+            null : null
+          }
       }
     children : testing.TestSetChild[]
   }
@@ -496,7 +491,7 @@ function testing.run_testset(children: testing.TestSetChild[], runner: testing.T
 }
 function testing.expansion_error_report(name: string) -> testing.TestSetReport throws never {
   { : testing.TestSetReport
-    TestSetReport { outcome: "error", passed: 0, failed: 1, total: 1, failed_names: [name + "/(failed to expand)"], results: [] } : testing.TestSetReport
+    TestSetReport { outcome: "error", passed: 0, failed: 1, total: 1, failed_names: [name + "/(testset error)"], results: [] } : testing.TestSetReport
   }
 }
 class testing.FilterPat {
