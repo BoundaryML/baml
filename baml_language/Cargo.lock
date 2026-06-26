@@ -871,6 +871,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "baml_compiler2_tir2"
+version = "0.1.0"
+dependencies = [
+ "baml_base",
+ "baml_compiler2_ast",
+ "baml_compiler2_hir",
+ "baml_compiler2_ppir",
+ "baml_type",
+ "baml_type_runtime",
+ "baml_workspace",
+ "indexmap",
+ "num-bigint",
+ "rustc-hash 2.1.2",
+ "salsa",
+ "smol_str 0.3.6",
+ "text-size",
+]
+
+[[package]]
 name = "baml_compiler2_visualization"
 version = "0.0.0-beta"
 dependencies = [
