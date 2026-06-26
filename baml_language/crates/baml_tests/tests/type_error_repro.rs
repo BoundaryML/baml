@@ -166,3 +166,38 @@ async fn map_with_int_key_is_rejected_at_compile_time() {
     "#
     );
 }
+
+#[tokio::test]
+async fn map_with_string_alias_key_is_accepted() {
+    let output = baml_test!(
+        r#"
+        type Key = string
+
+        function main() -> int {
+            let counts: map<Key, int> = {};
+            let _ = counts.set("x", 1);
+            counts.get("x") ?? 0
+        }
+    "#
+    );
+    assert!(
+        matches!(output.result, Ok(BexExternalValue::Int(1))),
+        "expected aliased string key map to work, got: {:?}",
+        output.result
+    );
+}
+
+#[tokio::test]
+#[should_panic(expected = "map keys must be `string`; got `IntKey`")]
+async fn map_with_int_alias_key_is_rejected_at_compile_time() {
+    let _ = baml_test!(
+        r#"
+        type IntKey = int
+
+        function main() -> int {
+            let counts: map<IntKey, int> = {};
+            0
+        }
+    "#
+    );
+}
