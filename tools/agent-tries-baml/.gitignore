@@ -1,0 +1,16 @@
+# BAML build cache
+.baml/
+# node / convex
+node_modules/
+# python
+__pycache__/
+*.pyc
+.venv/
+# secrets & local env
+.env
+.env.local
+.env.*.local
+# fly
+.fly/
+# misc
+.DS_Store

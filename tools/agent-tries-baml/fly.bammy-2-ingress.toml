@@ -1,0 +1,33 @@
+app            = 'bammy-2-ingress'
+primary_region = 'sjc'
+
+[build]
+  dockerfile = 'Dockerfile'
+
+[processes]
+  app = 'baml run Ingress'
+
+[env]
+  INGRESS_PORT = '8080'
+  HOST         = '::'
+  SERVICE_URL  = 'http://bammy-2-service.internal:8080'
+  LLM_BASE_URL = 'http://bammy-2-proxy.internal:9090'
+  # LLM_API_KEY (proxy token) + ATB_SERVICE_TOKEN come from secrets.
+  # Status-group label ids for /linear/webhook (label change -> issue lifecycle).
+  # Only the labels the handler routes on are needed (no token, no STATE ids).
+  LINEAR_STATUS_APPROVED = 'd85aa831-7a1e-42d0-839c-1f5e69df24b0'
+  LINEAR_STATUS_REDRAFT  = 'f23b1672-4871-4fc4-b005-3ba735086595'
+  LINEAR_STATUS_PR_PREP  = '434a1075-568a-4cc6-b3a5-c7ec055479f0'
+  LINEAR_STATUS_REJECTED = '5bacdd11-2388-40f2-a3d9-cb809fc7d479'
+
+[http_service]
+  internal_port        = 8080
+  force_https          = true
+  processes            = ['app']
+  auto_stop_machines   = 'off'
+  auto_start_machines  = true
+  min_machines_running = 1
+
+[[vm]]
+  size   = 'shared-cpu-1x'
+  memory = '1gb'

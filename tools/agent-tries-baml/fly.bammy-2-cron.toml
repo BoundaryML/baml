@@ -1,0 +1,20 @@
+app            = 'bammy-2-cron'
+primary_region = 'sjc'
+
+[build]
+  dockerfile = 'Dockerfile'
+
+[processes]
+  app = 'baml run RunCron'
+
+[env]
+  SERVICE_URL    = 'http://bammy-2-service.internal:8080'
+  LLM_BASE_URL   = 'http://bammy-2-proxy.internal:9090'
+  CRON_INTERVAL_SECS = '86400'
+  GEN_TASK_COUNT     = '3'
+  GEN_TASK_MODEL     = 'claude-sonnet-4-6'
+  # LLM_API_KEY (proxy token) + ATB_SERVICE_TOKEN via secrets.
+
+[[vm]]
+  size   = 'shared-cpu-1x'
+  memory = '512mb'

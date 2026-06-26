@@ -1,0 +1,30 @@
+# Proxy image — the LLM + agent gateway. Adds node + the Claude Code CLI (the
+# proxy sys.execs `claude` for /run-agent and /v1/messages on the subscription).
+FROM debian:trixie-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        ca-certificates curl git xz-utils \
+    && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y --no-install-recommends nodejs \
+    && npm install -g @anthropic-ai/claude-code@2.1.139 \
+    && curl -1sLf 'https://artifacts-cli.infisical.com/setup.deb.sh' | bash \
+    && apt-get update && apt-get install -y --no-install-recommends infisical \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV BAML_HOME=/opt/baml
+RUN curl -fsSL https://pkg.boundaryml.com/install.sh | sh -s -- --channel nightly --no-modify-path --yes
+ENV PATH="/opt/baml/bin:${PATH}"
+
+WORKDIR /app
+COPY baml.toml ./
+COPY baml_src ./baml_src
+COPY docker/with-infisical /usr/local/bin/with-infisical
+RUN chmod +x /usr/local/bin/with-infisical && baml check
+
+# Claude Code persists its OAuth login here (mounted volume keeps it across deploys).
+ENV STAGING_ROOT=/tmp/staging BAML_CACHE_DIR=/var/baml-cache HOME=/root
+RUN mkdir -p /root/.claude /var/baml-cache /tmp/staging
+
+EXPOSE 9090
+ENTRYPOINT ["/usr/local/bin/with-infisical"]
+CMD ["baml", "run", "Proxy"]

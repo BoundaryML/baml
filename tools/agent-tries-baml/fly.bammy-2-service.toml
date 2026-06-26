@@ -1,0 +1,72 @@
+app            = 'bammy-2-service'
+primary_region = 'sjc'
+
+[build]
+  dockerfile = 'Dockerfile'
+
+[processes]
+  app = 'baml run Supervisor'
+
+[env]
+  PORT              = '8080'
+  HOST              = '::'
+  # PROD Convex (charming-terrier-498) — the same DB the website reads, so new v2
+  # runs show up there. (Was the dev deployment kindly-tortoise-64 during testing.)
+  CONVEX_URL        = 'https://charming-terrier-498.convex.cloud'
+  # Promo codes live in their own Convex project (atb-promo-codes) so inventory is
+  # separate from the main DB. The /promo/claim route targets this deployment.
+  PROMO_CONVEX_URL  = 'https://precious-porpoise-556.convex.cloud'
+  SERVICE_URL       = 'http://localhost:8080'
+  CLAUDE_PROXY_URLS = 'http://bammy-2-proxy.internal:9090'
+  # Route all native LLM calls through the proxy gateway (subscription path).
+  LLM_BASE_URL      = 'http://bammy-2-proxy.internal:9090'
+  BAML_REPO_SLUG    = 'BoundaryML/baml'
+  BAML_REF          = 'canary'
+  CLAUDE_MODEL      = 'claude-opus-4-8'
+  CLAUDE_MAX_TURNS  = '100'
+  BAML_DEDUP_MODEL  = 'claude-sonnet-4-6'
+  # cursor fix dispatch + PR-tracker. Pointed at baml-skill (not baml) so test PRs
+  # land on a disposable repo. baml-skill's default branch is `main`.
+  CURSOR_REPO_URL         = 'https://github.com/BoundaryML/baml-skill'
+  CURSOR_BRANCH           = 'main'
+  CURSOR_TRACK_SECS       = '30'
+  CURSOR_MAX_FIX_ATTEMPTS = '3'
+  # Linear board mirror (LinearPush) + tracker status moves. CONTAINED: with an
+  # allowlist set, LinearPush only ever creates a card for these issue ids; every
+  # other dirty issue is drained without touching the shared board. (Clear the
+  # allowlist to enable full production mirroring.)
+  LINEAR_TEAM_ID               = '179250f3-902f-491e-94f8-8256292e8386'
+  LINEAR_PUSH_ALLOWLIST        = 'jh73fkz4rr3f6b5yxhkxeymmx989az5c'
+  LINEAR_STATUS_NOT_STARTED    = '700b8d57-8a43-4186-b472-cb0339138d09'
+  LINEAR_STATUS_APPROVED       = 'd85aa831-7a1e-42d0-839c-1f5e69df24b0'
+  LINEAR_STATUS_TO_CURSOR      = '3f97173c-f313-4252-a22f-0162086cb6b9'
+  LINEAR_STATUS_PR_PREP        = '434a1075-568a-4cc6-b3a5-c7ec055479f0'
+  LINEAR_STATUS_READY_TO_MERGE = 'fd0bc873-0a3e-4e1f-8657-d9288bcd4fab'
+  LINEAR_STATUS_NEEDS_HUMAN    = '8678b003-ae70-4e19-ab30-ab3a12805178'
+  LINEAR_STATUS_REDRAFT        = 'f23b1672-4871-4fc4-b005-3ba735086595'
+  LINEAR_STATUS_MERGED         = '3e52a59e-30c0-4cc8-b9d1-12fd658f00c0'
+  LINEAR_STATUS_REJECTED       = '5bacdd11-2388-40f2-a3d9-cb809fc7d479'
+  LINEAR_STATE_UNCOMMITTED     = '15871ce8-3eeb-4871-96b3-fa33beacee16'
+  LINEAR_STATE_IN_PROGRESS     = 'a3308f6c-8e09-4e10-968d-e735c8bae3d6'
+  LINEAR_STATE_IN_REVIEW       = '48ea44f9-0f1c-42db-ba2f-a0ff01b5ae82'
+  LINEAR_STATE_DONE            = '4e8e62a3-f68d-4e88-9a6e-0a5a3acee33e'
+  LINEAR_STATE_CANCELED        = '89740c4e-66ce-4a7f-9716-56ba51908553'
+  # The supervisor runs the api (web) + ingress + every claim processor.
+  SUPERVISE = 'web,ingress,baml_worker,baml_dedup,baml_redraft,bug_verify,linear_sync,cohort_compare,changelog_worker,baml_builder'
+  # LLM_API_KEY (= the proxy token) and the integration tokens come from secrets.
+
+[http_service]
+  internal_port        = 8080
+  force_https          = true
+  processes            = ['app']
+  auto_stop_machines   = 'off'
+  auto_start_machines  = true
+  min_machines_running = 1
+
+[[mounts]]
+  source      = 'bammy_2_data'
+  destination = '/data'
+
+[[vm]]
+  size   = 'shared-cpu-4x'
+  memory = '4gb'

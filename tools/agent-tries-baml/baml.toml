@@ -1,0 +1,12 @@
+[package]
+name = "agent-tries-baml-v2"
+
+# Pure-BAML rewrite of ../agent-tries-baml (the "bammy" benchmark pipeline).
+# See /Users/dhilanshah/.claude/plans/we-are-beginning-the-lucky-eich.md
+#
+# Target toolchain: nightly 0.12.2 (selected for server-side SSE streaming —
+# Response.new_streaming/write/end, which canary 0.12.1 lacks). The whole fleet
+# must run on ONE pinned toolchain — the systems stdlib (http.Server, sys, spawn,
+# net) is the newest surface and moves fast (the canary->nightly switch changed
+# sys.sleep to take a Duration and made String.substring infallible).
+# Select with: `baml toolchain use nightly`.
