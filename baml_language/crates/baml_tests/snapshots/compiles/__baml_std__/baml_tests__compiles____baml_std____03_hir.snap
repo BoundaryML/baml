@@ -735,6 +735,9 @@ function baml.iter.iter(self: ?) -> Iterator<Item = R, Error = E | E2 | E3>  [ex
 function baml.iter.iter(self: ?) -> Iterator<Item = T, Error = E>  [expr] {
   {  } self
 }
+function baml.iter.iter(self: ?) -> Iterator<Item = string, Error = never>  [expr] {
+  {  } self.split("").iter()
+}
 function baml.iter.iter(self: ?) -> Iterator<Item = T, Error = never>  [expr] {
   {  } self
 }

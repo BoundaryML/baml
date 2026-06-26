@@ -12,6 +12,15 @@ use crate::{
     ty::{Freshness, FunctionParamMode, FunctionParamTy, MediaKind, QualifiedTypeName, Ty, TyAttr},
 };
 
+fn is_supported_map_key_type(ty: &Ty) -> bool {
+    match ty {
+        Ty::String { .. } | Ty::Never { .. } | Ty::Unknown { .. } | Ty::Error { .. } => true,
+        Ty::Literal(baml_base::Literal::String(_), _, _) => true,
+        Ty::Union(members, _) => members.iter().all(is_supported_map_key_type),
+        _ => false,
+    }
+}
+
 /// Resolve an AST `TypeExpr` to a `Ty` using package-level name resolution.
 ///
 /// Names are resolved against `package_items`: classes, enums, and type aliases
@@ -966,25 +975,34 @@ pub fn lower_type_expr_in_ns(
             )),
             TyAttr::default(),
         ),
-        TypeExpr::Map { key, value, .. } => Ty::Map {
-            key: Box::new(lower_type_expr_in_ns(
+        TypeExpr::Map { key, value, .. } => {
+            let key_ty = lower_type_expr_in_ns(
                 db,
                 key,
                 package_items,
                 ns_context,
                 generic_params,
                 diagnostics,
-            )),
-            value: Box::new(lower_type_expr_in_ns(
+            );
+            let value_ty = lower_type_expr_in_ns(
                 db,
                 value,
                 package_items,
                 ns_context,
                 generic_params,
                 diagnostics,
-            )),
-            attr: TyAttr::default(),
-        },
+            );
+            if !is_supported_map_key_type(&key_ty) {
+                diagnostics.push(TirTypeError::InvalidMapKeyType {
+                    key: key_ty.clone(),
+                });
+            }
+            Ty::Map {
+                key: Box::new(key_ty),
+                value: Box::new(value_ty),
+                attr: TyAttr::default(),
+            }
+        }
         TypeExpr::Union {
             variants: members, ..
         } => Ty::Union(

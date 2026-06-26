@@ -78,6 +78,12 @@ impl BamlClassString for PackageBamlImpl {
     fn split(string: &BexStr, delimiter: &BexStr) -> Vec<BexStr> {
         let s = string.as_str();
         let d = delimiter.as_str();
+        if d.is_empty() {
+            return s
+                .char_indices()
+                .map(|(start, ch)| string.substring(start, start + ch.len_utf8()))
+                .collect();
+        }
         let base = s.as_ptr() as usize;
         s.split(d)
             .map(|part| {

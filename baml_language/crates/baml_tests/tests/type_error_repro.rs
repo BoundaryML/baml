@@ -144,3 +144,25 @@ async fn negated_int_min_literal_is_valid() {
         output.result
     );
 }
+
+// ============================================================================
+// §N+1 — Non-string map keys are rejected at compile time (B-533)
+// ============================================================================
+
+/// Runtime maps are string-keyed, so `map<int, V>` must fail during type
+/// checking instead of compiling and crashing when `.set()` coerces the key.
+#[tokio::test]
+#[should_panic(expected = "map keys must be `string`; got `int`")]
+async fn map_with_int_key_is_rejected_at_compile_time() {
+    let _ = baml_test!(
+        r#"
+        function main(nums: int[]) -> int {
+            let counts: map<int, int> = {};
+            for (let n in nums) {
+                let _ = counts.set(n, (counts.get(n) ?? 0) + 1);
+            }
+            0
+        }
+    "#
+    );
+}

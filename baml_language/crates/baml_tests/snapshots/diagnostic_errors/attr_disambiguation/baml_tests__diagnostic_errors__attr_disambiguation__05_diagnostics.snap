@@ -12,6 +12,16 @@ source: crates/baml_tests/src/generated_tests.rs
     │ Note: Error code: E0106
 ────╯
 
+  [type] error: map keys must be `string`; got `NFoo`. Convert non-string keys with `.to_string()` before `.set()` or `.get()`
+    ╭─[ nested.baml:18:5 ]
+    │
+ 18 │   d4 map<NFoo @alias("d4_alias"), NBar>
+    │     ─────────────────┬─────────────────  
+    │                      ╰─────────────────── map keys must be `string`; got `NFoo`. Convert non-string keys with `.to_string()` before `.set()` or `.get()`
+    │ 
+    │ Note: Error code: E0067
+────╯
+
   [hir] error: `@alias` is only allowed on class fields and enum variants; remove it here
     ╭─[ nested.baml:18:15 ]
     │
@@ -20,6 +30,16 @@ source: crates/baml_tests/src/generated_tests.rs
     │                        ╰────────── field attribute here
     │ 
     │ Note: Error code: E0106
+────╯
+
+  [type] error: map keys must be `string`; got `NFoo`. Convert non-string keys with `.to_string()` before `.set()` or `.get()`
+    ╭─[ nested.baml:21:5 ]
+    │
+ 21 │   d5 map<NFoo @stream.done, NBar>
+    │     ──────────────┬──────────────  
+    │                   ╰──────────────── map keys must be `string`; got `NFoo`. Convert non-string keys with `.to_string()` before `.set()` or `.get()`
+    │ 
+    │ Note: Error code: E0067
 ────╯
 
   [hir] error: `@alias` is only allowed on class fields and enum variants; remove it here
@@ -40,6 +60,16 @@ source: crates/baml_tests/src/generated_tests.rs
     │                     ╰────────── field attribute here
     │ 
     │ Note: Error code: E0106
+────╯
+
+  [type] error: map keys must be `string`; got `NFoo`. Convert non-string keys with `.to_string()` before `.set()` or `.get()`
+    ╭─[ nested.baml:36:6 ]
+    │
+ 36 │   d10 map<string, map<NFoo @alias("d10_alias"), NBar>>
+    │      ────────────────────────┬────────────────────────  
+    │                              ╰────────────────────────── map keys must be `string`; got `NFoo`. Convert non-string keys with `.to_string()` before `.set()` or `.get()`
+    │ 
+    │ Note: Error code: E0067
 ────╯
 
   [hir] error: `@alias` is only allowed on class fields and enum variants; remove it here
