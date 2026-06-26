@@ -94,6 +94,37 @@ class LinearClient {
         return 0;
     }
 
+    // issueUpdate that also rewrites the card's title + body, not just the status
+    // label/state. LinearPush uses this so a (re)drafted issue's new write-up
+    // actually lands on the Linear card instead of only its status moving.
+    function update_card(
+        self,
+        issue_id: string,
+        title: string,
+        body_md: string,
+        status_label_id: string,
+    ) -> int throws LinearError | baml.errors.Io | baml.errors.Timeout {
+        let current = self.current_label_ids(issue_id);
+        let label_ids = swap_status_label(current, status_label_id);
+        let vars = "{\"id\":"
+            + jesc(issue_id)
+            + ",\"input\":{\"title\":"
+            + jesc(title)
+            + ",\"description\":"
+            + jesc(body_md)
+            + ",\"labelIds\":"
+            + json_str_array(label_ids)
+            + ",\"stateId\":"
+            + jesc(state_id_for_label(status_label_id))
+            + "}}";
+        let _ = self
+            .gql(
+                "mutation($id: String!, $input: IssueUpdateInput!) { issueUpdate(id: $id, input: $input) { success } }",
+                vars,
+            );
+        return 0;
+    }
+
     function add_comment(
         self,
         issue_id: string,

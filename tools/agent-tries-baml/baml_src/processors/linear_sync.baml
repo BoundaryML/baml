@@ -123,10 +123,11 @@ class LinearPushProcessor {
             );
             let approved_label = linear_status_id("NOT_STARTED");
 
-            // Create on first sync; otherwise update in place.
+            // Create on first sync; otherwise update in place — title + body + status,
+            // so a redrafted write-up actually lands on the existing card.
             match (issue.linearIssueId) {
                 let lid: string => {
-                    let _ = self.linear.set_status(lid, approved_label) catch (_) {
+                    let _ = self.linear.update_card(lid, title, body, approved_label) catch (_) {
                         _ => 0
                     };
                 },
