@@ -29,7 +29,7 @@ const CAPTIONS = [
 ];
 // a distinct hand-drawn backdrop scene per battle (1526×654 panoramas whose
 // foreground/ground sits along the bottom edge — where the column marches)
-const BACKDROPS = ['/scene_design.png', '/scene_arch.png', '/scene_deploy.png'];
+const BACKDROPS = ['/scene_deploy.png', '/scene_design.png', '/scene_arch.png'];
 
 const GROUND = 8;
 const WALK_MS = 480;       // one stride of the leg cycle

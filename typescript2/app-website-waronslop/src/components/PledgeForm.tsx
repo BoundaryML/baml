@@ -38,7 +38,7 @@ export default function PledgeForm() {
   if (status === 'done') {
     return (
       <div className="tweet-font bg-transparent py-2 text-left">
-        <p className="text-lg font-bold text-ink">Enlisted. ⚔️</p>
+        <p className="text-lg font-bold text-ink">Enlisted.</p>
         <p className="mt-1 text-ink-2">
           Your pledge is on the wall below. Welcome to the war on slop.
         </p>
