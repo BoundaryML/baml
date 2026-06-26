@@ -21,10 +21,7 @@ export default function Home() {
 
       {/* the bet we're making at baml */}
       <section className="mx-auto max-w-2xl px-6 py-24 sm:py-32">
-        <p
-          className="text-center text-2xl leading-relaxed text-ink sm:text-[2rem] sm:leading-snug"
-          style={{ fontFamily: "'Times New Roman', Times, serif" }}
-        >
+        <p className="tweet-font text-center text-2xl font-medium leading-relaxed text-ink sm:text-[2rem] sm:leading-snug">
           {"We're making a bet at "}
           <span className="font-bold text-accent">baml</span>
           {': the best way to reduce slop is by developing core constructs at the language level.'}
