@@ -679,12 +679,12 @@ function payloadsToFetchLogs(payloads: PayloadEvent[]): FetchLogEntry[] {
 }
 
 function headersToRecord(
-  headers: Array<{ name: string; valueRedacted: boolean }>,
+  headers: Array<{ name: string; valueRedacted: boolean; value?: string | null }>,
 ): Record<string, string> {
   return Object.fromEntries(
     headers.map((header) => [
       header.name,
-      header.valueRedacted ? '<redacted>' : '',
+      header.value != null ? header.value : header.valueRedacted ? '<redacted>' : '',
     ]),
   );
 }

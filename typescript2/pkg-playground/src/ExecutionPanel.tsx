@@ -27,6 +27,8 @@ import { CodeBlock } from './components/ui/code-block';
 import { ToggleGroup } from './components/ui/toggle-group';
 import { cn } from './lib/utils';
 import { ApiKeysDialog } from './components/ApiKeysDialog';
+import { BOUNDARY_PROXY_URL_KEY, getProxyEnvVarConfig } from './proxy-config';
+import { setGatewayEnabled } from './gateway';
 import { useEnvVars } from './envAtoms';
 import { CopyButton } from './components/CopyButton';
 import { ErrorDisplay } from './components/ErrorDisplay';
@@ -302,6 +304,52 @@ export interface ExecutionPanelProps {
 }
 
 // ---------------------------------------------------------------------------
+// RequestUrlLabel — for requests routed through the playground proxy, show the
+// original upstream URL (carried in the baml-original-url header) and note the
+// proxy it went through, e.g. "https://api.anthropic.com/v1/messages
+// (via https://proxy.promptfiddle.com)".
+// ---------------------------------------------------------------------------
+
+const ORIGINAL_URL_HEADER = 'baml-original-url';
+
+function findHeaderValue(
+  headers: Record<string, string> | null | undefined,
+  name: string,
+): string | undefined {
+  if (!headers) return undefined;
+  const lower = name.toLowerCase();
+  for (const key of Object.keys(headers)) {
+    if (key.toLowerCase() === lower) return headers[key];
+  }
+  return undefined;
+}
+
+const RequestUrlLabel: FC<{
+  url: string;
+  requestHeaders: Record<string, string> | null | undefined;
+}> = ({ url, requestHeaders }) => {
+  const original = findHeaderValue(requestHeaders, ORIGINAL_URL_HEADER);
+  let display = url;
+  let via: string | null = null;
+  // Only de-proxy when the original URL came through unredacted.
+  if (original && original !== '<redacted>') {
+    try {
+      const parsed = new URL(url);
+      display = `${original.replace(/\/+$/, '')}${parsed.pathname}${parsed.search}`;
+      via = parsed.origin;
+    } catch {
+      /* malformed URL — fall back to showing it verbatim */
+    }
+  }
+  return (
+    <span className="text-vsc-text flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-[11px]">
+      {display}
+      {via && <span className="text-vsc-text-faint"> (via {via})</span>}
+    </span>
+  );
+};
+
+// ---------------------------------------------------------------------------
 // CollectionDebugView — renders project/test discovery diagnostics without
 // modeling discovery as a playground execution run.
 // ---------------------------------------------------------------------------
@@ -387,9 +435,10 @@ const CollectionDebugView: FC<CollectionDebugViewProps> = ({
                 <span className="text-vsc-text-faint text-[10px]">
                   {log.method}
                 </span>
-                <span className="text-vsc-text flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-[11px]">
-                  {log.url}
-                </span>
+                <RequestUrlLabel
+                  url={log.url}
+                  requestHeaders={log.requestHeaders}
+                />
                 {log.durationMs != null && (
                   <span className="text-vsc-text-faint text-[10px]">
                     {log.durationMs}ms
@@ -2556,9 +2605,10 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                               <span className="text-vsc-text-faint text-[10px]">
                                 {log.method}
                               </span>
-                              <span className="text-vsc-text flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-[11px]">
-                                {log.url}
-                              </span>
+                              <RequestUrlLabel
+                                url={log.url}
+                                requestHeaders={log.requestHeaders}
+                              />
                               {log.durationMs != null && (
                                 <span className="text-vsc-text-faint text-[10px]">
                                   {log.durationMs}ms
@@ -2950,9 +3000,10 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                                   <span className="text-vsc-text-faint text-[10px]">
                                     {log.method}
                                   </span>
-                                  <span className="text-vsc-text flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-[11px]">
-                                    {log.url}
-                                  </span>
+                                  <RequestUrlLabel
+                                    url={log.url}
+                                    requestHeaders={log.requestHeaders}
+                                  />
                                   {log.durationMs != null && (
                                     <span className="text-vsc-text-faint text-[10px]">
                                       {log.durationMs}ms
@@ -3130,6 +3181,9 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
         shellEnvVars={shellEnvVars}
         shellOverriddenKeys={shellOverriddenKeys}
         shellDeletedKeys={shellDeletedKeys}
+        showProxyEnvVar={getProxyEnvVarConfig().visible}
+        proxyEnabled={BOUNDARY_PROXY_URL_KEY in envVars}
+        onToggleProxy={setGatewayEnabled}
         onOpenChange={(open) => {
           setShowApiKeysDialog(open);
           showApiKeysDialogRef.current = open;
