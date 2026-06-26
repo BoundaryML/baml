@@ -39,16 +39,38 @@ pub struct LetMarker;
 /// Upper 16 bits = name hash, lower 16 bits = collision index.
 /// Following rust-analyzer's approach: hash for position-independence,
 /// index for collision handling.
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct LocalItemId<T> {
     /// Upper 16 bits: hash, lower 16 bits: collision index.
+    // Empty bound overrides borsh's default `T: Borsh` bound on the generated
+    // impl (`T` is a phantom marker, never serialized); only `packed` is on the
+    // wire.
+    #[borsh(bound(serialize = "", deserialize = ""))]
     packed: u32,
+    #[borsh(skip)]
     _phantom: PhantomData<T>,
 }
 
 impl<T> std::fmt::Debug for LocalItemId<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "LocalItemId({:#010x})", self.packed)
+    }
+}
+
+// Manual `Ord`/`PartialOrd` over `packed` (no `T: Ord` bound, unlike `derive`):
+// borsh serializes `HashMap` by sorting keys, so `LocalItemId` map keys must be
+// `Ord` once `ItemTree` derives Borsh.
+// Bounds mirror the derived `Eq`/`PartialEq` (which bound `T`), satisfying the
+// `Ord: Eq` / `PartialOrd: PartialEq` supertraits; the markers are all `Eq`.
+impl<T: Eq> Ord for LocalItemId<T> {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.packed.cmp(&other.packed)
+    }
+}
+
+impl<T: PartialEq> PartialOrd for LocalItemId<T> {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.packed.cmp(&other.packed))
     }
 }
 
@@ -81,7 +103,18 @@ pub fn hash_name(name: &baml_base::Name) -> u16 {
 // ── ItemKind ─────────────────────────────────────────────────────────────────
 
 /// Item kinds for collision tracking in the `ItemTree`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    borsh::BorshSerialize,
+    borsh::BorshDeserialize,
+)]
 pub enum ItemKind {
     Function,
     Class,

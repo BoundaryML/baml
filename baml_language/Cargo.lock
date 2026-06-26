@@ -824,6 +824,7 @@ dependencies = [
  "baml_compiler_diagnostics",
  "baml_compiler_parser",
  "baml_workspace",
+ "borsh",
  "indexmap",
  "la-arena",
  "rustc-hash 2.1.2",

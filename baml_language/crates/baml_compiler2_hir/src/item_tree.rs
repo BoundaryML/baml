@@ -20,14 +20,14 @@ use crate::ids::{
 
 /// A span-free attribute for position-independent storage in the `ItemTree`.
 /// Derived from `ast::RawAttribute` with all `TextRange`s stripped.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct Attribute {
     pub name: Name,
     pub args: Vec<AttributeArg>,
 }
 
 /// A span-free attribute argument.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct AttributeArg {
     pub key: Option<Name>,
     pub value: String,
@@ -56,7 +56,7 @@ impl From<&ast::RawAttributeArg> for AttributeArg {
 /// Full function data stored in the `ItemTree`.
 /// Params and return type are stored for signature queries.
 /// Body is stored for body queries (no CST re-parsing needed).
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct Function {
     pub name: Name,
     /// Generic type parameters (e.g., `["T", "U"]`).
@@ -86,26 +86,34 @@ pub struct Function {
     /// tagged-template tags without re-reading the CST.
     pub is_tagged_template_tag: bool,
     /// Full source span of the function.
+    #[borsh(
+        serialize_with = "baml_compiler2_ast::borsh_helpers::serialize_text_range",
+        deserialize_with = "baml_compiler2_ast::borsh_helpers::deserialize_text_range"
+    )]
     pub span: TextRange,
 }
 
 /// A function parameter entry in the `ItemTree`.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct FunctionParam {
     pub name: Name,
     pub type_expr: Option<ast::SpannedTypeExpr>,
     pub default: Option<DefaultExprRef>,
+    #[borsh(
+        serialize_with = "baml_compiler2_ast::borsh_helpers::serialize_text_range",
+        deserialize_with = "baml_compiler2_ast::borsh_helpers::deserialize_text_range"
+    )]
     pub span: TextRange,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct DefaultExprRef {
     pub function: LocalItemId<FunctionMarker>,
     pub expr: ast::DefaultExprId,
 }
 
 /// A class field stored in the `ItemTree`.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct ClassField {
     pub name: Name,
     pub type_expr: Option<ast::SpannedTypeExpr>,
@@ -114,7 +122,7 @@ pub struct ClassField {
     pub docstring: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct Class {
     pub name: Name,
     /// Generic type parameters (e.g., `["T"]` for `Array<T>`).
@@ -140,19 +148,27 @@ pub struct Class {
     /// Joined `///` doc-comment lines preceding this declaration.
     pub docstring: Option<String>,
     /// Full source span of the class declaration.
+    #[borsh(
+        serialize_with = "baml_compiler2_ast::borsh_helpers::serialize_text_range",
+        deserialize_with = "baml_compiler2_ast::borsh_helpers::deserialize_text_range"
+    )]
     pub span: TextRange,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct ImplementsBlock {
     pub target: ast::SpannedTypeExpr,
     pub field_links: Vec<InterfaceFieldLink>,
     pub associated_type_bindings: Vec<ast::AssociatedTypeBindingDef>,
     pub is_out_of_body: bool,
+    #[borsh(
+        serialize_with = "baml_compiler2_ast::borsh_helpers::serialize_text_range",
+        deserialize_with = "baml_compiler2_ast::borsh_helpers::deserialize_text_range"
+    )]
     pub span: TextRange,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct ImplementsFor {
     pub generic_params: Vec<Name>,
     pub generic_param_bounds: Vec<Option<ast::TypeExpr>>,
@@ -161,20 +177,36 @@ pub struct ImplementsFor {
     pub field_links: Vec<InterfaceFieldLink>,
     pub associated_type_bindings: Vec<ast::AssociatedTypeBindingDef>,
     pub methods: Vec<LocalItemId<FunctionMarker>>,
+    #[borsh(
+        serialize_with = "baml_compiler2_ast::borsh_helpers::serialize_text_range",
+        deserialize_with = "baml_compiler2_ast::borsh_helpers::deserialize_text_range"
+    )]
     pub span: TextRange,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct InterfaceFieldLink {
     pub interface_field: Name,
     pub class_field: Name,
+    #[borsh(
+        serialize_with = "baml_compiler2_ast::borsh_helpers::serialize_text_range",
+        deserialize_with = "baml_compiler2_ast::borsh_helpers::deserialize_text_range"
+    )]
     pub span: TextRange,
+    #[borsh(
+        serialize_with = "baml_compiler2_ast::borsh_helpers::serialize_text_range",
+        deserialize_with = "baml_compiler2_ast::borsh_helpers::deserialize_text_range"
+    )]
     pub interface_field_span: TextRange,
+    #[borsh(
+        serialize_with = "baml_compiler2_ast::borsh_helpers::serialize_text_range",
+        deserialize_with = "baml_compiler2_ast::borsh_helpers::deserialize_text_range"
+    )]
     pub class_field_span: TextRange,
 }
 
 /// An enum variant stored in the `ItemTree`.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct EnumVariant {
     pub name: Name,
     /// Field-level attributes (@description, @alias, @skip, etc.).
@@ -183,7 +215,7 @@ pub struct EnumVariant {
     pub docstring: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct Enum {
     pub name: Name,
     /// Variants of the enum, in declaration order.
@@ -193,11 +225,15 @@ pub struct Enum {
     /// Joined `///` doc-comment lines preceding this declaration.
     pub docstring: Option<String>,
     /// Full source span of the enum declaration.
+    #[borsh(
+        serialize_with = "baml_compiler2_ast::borsh_helpers::serialize_text_range",
+        deserialize_with = "baml_compiler2_ast::borsh_helpers::deserialize_text_range"
+    )]
     pub span: TextRange,
 }
 
 /// A required (no-body) method signature on an interface (BEP-044).
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct InterfaceMethodSig {
     pub name: Name,
     /// Generic type parameters local to this method.
@@ -209,6 +245,10 @@ pub struct InterfaceMethodSig {
     pub throws: Option<ast::SpannedTypeExpr>,
     pub attributes: Vec<Attribute>,
     pub docstring: Option<String>,
+    #[borsh(
+        serialize_with = "baml_compiler2_ast::borsh_helpers::serialize_text_range",
+        deserialize_with = "baml_compiler2_ast::borsh_helpers::deserialize_text_range"
+    )]
     pub span: TextRange,
 }
 
@@ -216,7 +256,7 @@ pub struct InterfaceMethodSig {
 ///
 /// Default methods are stored as full `FunctionMarker` entries in `methods`
 /// (same as `Class::methods`). Required signatures live in `required_methods`.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct Interface {
     pub name: Name,
     /// Generic type parameters declared on the interface.
@@ -236,19 +276,27 @@ pub struct Interface {
     pub required_methods: Vec<InterfaceMethodSig>,
     pub attributes: Vec<Attribute>,
     pub docstring: Option<String>,
+    #[borsh(
+        serialize_with = "baml_compiler2_ast::borsh_helpers::serialize_text_range",
+        deserialize_with = "baml_compiler2_ast::borsh_helpers::deserialize_text_range"
+    )]
     pub span: TextRange,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct TypeAlias {
     pub name: Name,
     /// The type expression on the RHS of the alias, if present.
     pub type_expr: Option<ast::SpannedTypeExpr>,
     /// Full source span of the type alias declaration.
+    #[borsh(
+        serialize_with = "baml_compiler2_ast::borsh_helpers::serialize_text_range",
+        deserialize_with = "baml_compiler2_ast::borsh_helpers::deserialize_text_range"
+    )]
     pub span: TextRange,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct Client {
     pub name: Name,
     /// Provider name (e.g., "openai", "anthropic", "fallback", "round-robin").
@@ -264,7 +312,7 @@ pub struct Client {
 /// A test argument value stored in the `ItemTree`.
 ///
 /// Floats are stored as bit patterns (via `f64::to_bits`) to allow `Eq` and `Hash`.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub enum TestArgValue {
     Null,
     Int(i64),
@@ -289,7 +337,7 @@ impl TestArgValue {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct Test {
     pub name: Name,
     /// The function(s) this test exercises.
@@ -298,7 +346,7 @@ pub struct Test {
     pub args: Vec<(Name, TestArgValue)>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct TemplateString {
     pub name: Name,
     /// Template parameters with optional type annotations and spans.
@@ -306,10 +354,14 @@ pub struct TemplateString {
     /// Template body text (Jinja template).
     pub body: Option<String>,
     /// Full source span of the template string declaration.
+    #[borsh(
+        serialize_with = "baml_compiler2_ast::borsh_helpers::serialize_text_range",
+        deserialize_with = "baml_compiler2_ast::borsh_helpers::deserialize_text_range"
+    )]
     pub span: TextRange,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct RetryPolicy {
     pub name: Name,
     /// Raw string value of `max_retries` (parsed at emit time).
@@ -324,12 +376,20 @@ pub struct RetryPolicy {
 
 /// A top-level let binding stored in the `ItemTree`.
 /// Carries the optional initializer `ExprBody` for body queries.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct Let {
     pub name: Name,
     pub initializer: Option<(ast::ExprBody, ast::AstSourceMap)>,
     pub origin: ast::LetOrigin,
+    #[borsh(
+        serialize_with = "baml_compiler2_ast::borsh_helpers::serialize_text_range",
+        deserialize_with = "baml_compiler2_ast::borsh_helpers::deserialize_text_range"
+    )]
     pub span: TextRange,
+    #[borsh(
+        serialize_with = "baml_compiler2_ast::borsh_helpers::serialize_text_range",
+        deserialize_with = "baml_compiler2_ast::borsh_helpers::deserialize_text_range"
+    )]
     pub name_span: TextRange,
 }
 
@@ -341,13 +401,20 @@ pub struct Let {
 ///
 /// Follows the same body/signature source-map pattern used by
 /// `function_body` / `function_body_source_map`.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct ItemTreeSourceMap {
+    // Diagnostic name-span side-tables. Skipped from borsh (like AstSourceMap's
+    // secondary spans): only used to point diagnostics at field/variant/function
+    // names, never consulted for the frozen, error-free stdlib the precompiled
+    // artifact is built from. Default to empty on load.
     /// `name_span` for each class's fields, parallel to `Class::fields`.
+    #[borsh(skip)]
     pub class_field_spans: FxHashMap<LocalItemId<ClassMarker>, Vec<TextRange>>,
     /// `name_span` for each enum's variants, parallel to `Enum::variants`.
+    #[borsh(skip)]
     pub enum_variant_spans: FxHashMap<LocalItemId<EnumMarker>, Vec<TextRange>>,
     /// `name_span` for each function.
+    #[borsh(skip)]
     pub function_name_spans: FxHashMap<LocalItemId<FunctionMarker>, TextRange>,
 }
 
@@ -358,7 +425,7 @@ pub struct ItemTreeSourceMap {
 /// Items are stored in hash maps keyed by name-based IDs.
 /// The `next_index` map tracks the next available collision index
 /// per `(ItemKind, hash)`.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct ItemTree {
     pub functions: FxHashMap<LocalItemId<FunctionMarker>, Function>,
     pub classes: FxHashMap<LocalItemId<ClassMarker>, Class>,
