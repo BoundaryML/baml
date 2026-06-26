@@ -10886,6 +10886,9 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
     }
 
+    #[deprecated = "Redundant: the canonical type equality is `baml_type::normalize::equivalent`, \
+        already fed by the `NormalizeCtx` adapter. This bespoke check duplicates it; route callers \
+        through the canonical algebra and delete."]
     fn types_equivalent(&self, a: &Ty, b: &Ty) -> bool {
         crate::associated_projection::AssociatedProjectionResolver::with_resolution_context(
             self.context.db(),
@@ -11665,6 +11668,9 @@ impl<'db> TypeInferenceBuilder<'db> {
     ///
     /// Returns `(class_name, formatted_sources)` for the E0121 diagnostic, or
     /// `None` when no shared implementor makes the call ambiguous.
+    #[deprecated = "Detects union interface-method ambiguity by walking the L2 registry and matching \
+        only `Ty::Class` members — misses generic/primitive members and per-instantiation differences \
+        (`Foo<int>` vs `Foo<string>`). Rebuild on `impls_for_type` membership over each union member."]
     fn union_interface_method_ambiguity(
         &self,
         members: &[Ty],
@@ -12058,6 +12064,11 @@ impl<'db> TypeInferenceBuilder<'db> {
     /// transitively implements and that has the short name `member`. Used to
     /// emit a targeted diagnostic for the removed `obj.InterfaceName` projection
     /// syntax.
+    #[deprecated = "Finds the interface declaring `member` on a *class* by reading legacy \
+        in-body `class_data.implements` and walking the `requires` closure. `requires` is a \
+        bound, not inheritance: a concrete type's members come from its own per-interface impl \
+        blocks (incl. blanket/out-of-body) via `impl_data`/`impls_for_type`; the closure walk is \
+        valid only for type-var/existential receivers. Rebuild per-instantiation."]
     fn lookup_implemented_interface_by_name(
         &self,
         class_name: &crate::ty::QualifiedTypeName,
@@ -13278,6 +13289,10 @@ impl<'db> TypeInferenceBuilder<'db> {
     /// For an exact interface instantiation that a class implements, find the
     /// concrete class field backing one interface field. Side-effect-free
     /// counterpart to `qualified_interface_field_for_construction`.
+    #[deprecated = "Maps an interface field to a class field via legacy `class_data.implements` + \
+        the `requires` closure (class-only, in-body-only). Rebuild on `impl_data`/`impls_for_type`: \
+        `requires` is a bound (closure only for type-var/existential), the link comes from the \
+        concrete type's own per-interface impl `field_links` (incl. blanket/out-of-body)."]
     fn class_field_name_for_interface_field(
         &self,
         class_name: &crate::ty::QualifiedTypeName,
@@ -13396,6 +13411,10 @@ impl<'db> TypeInferenceBuilder<'db> {
     /// so it has no diagnostic side-effects.  Used by `resolve_member_for_path_segment`
     /// to decide which error location to use without double-emitting field-type
     /// diagnostics.
+    #[deprecated = "Tests class membership of a name via legacy `class_data.implements` + the \
+        `requires` closure (class-only, type-arg-unaware, blanket/out-of-body-blind). Rebuild on \
+        `impl_data`/`impls_for_type`: `requires` is a bound (closure only for type-var/existential), \
+        concrete members come from the type's own per-interface impls."]
     fn class_has_member(&self, class_name: &crate::ty::QualifiedTypeName, member: &Name) -> bool {
         let Some(pkg_items) = self.resolve_class_pkg_items(class_name.package()) else {
             return false;
@@ -13457,6 +13476,10 @@ impl<'db> TypeInferenceBuilder<'db> {
         self.lookup_class_method(class_name, &[], member).is_some()
     }
 
+    #[deprecated = "Resolves an interface field for construction via legacy `class_data.implements` \
+        + the `requires` closure (class-only, in-body-only). Rebuild on `impl_data`/`impls_for_type`: \
+        `requires` is a bound (closure only for type-var/existential), the field comes from the \
+        concrete type's own per-interface impl (incl. blanket/out-of-body)."]
     fn qualified_interface_field_for_construction(
         &self,
         class_name: &crate::ty::QualifiedTypeName,
@@ -13583,6 +13606,10 @@ impl<'db> TypeInferenceBuilder<'db> {
         None
     }
 
+    #[deprecated = "Finds a class's interface-field sources via legacy `class_data.implements` + \
+        the `requires` closure (class-only, in-body-only, blanket/out-of-body-blind). Rebuild on \
+        `impl_data`/`impls_for_type`: `requires` is a bound (closure only for type-var/existential), \
+        a concrete type's interface fields come from its own per-interface impls' `field_links`."]
     fn class_interface_field_sources(
         &self,
         class_name: &crate::ty::QualifiedTypeName,
@@ -13660,6 +13687,9 @@ impl<'db> TypeInferenceBuilder<'db> {
     /// Container<int>`. Falls back to the bare name when no matching `implements`
     /// is found or it carries no type args. Used to make the deprecated
     /// `.Interface` projection hint name the exact instantiation.
+    #[deprecated = "Renders a class's implemented interface (diagnostic) from legacy \
+        `class_data.implements` (class-only, in-body-only). Rebuild on `impl_data`/`impls_for_type` \
+        so the rendered set matches real per-instantiation membership (incl. blanket/out-of-body)."]
     fn implemented_interface_display(
         &self,
         class_name: &crate::ty::QualifiedTypeName,
@@ -13706,6 +13736,10 @@ impl<'db> TypeInferenceBuilder<'db> {
     /// It powers two BEP-044 rules at once: unqualified-call ambiguity (when
     /// two interfaces contribute the same method name → E0121) and inherited
     /// default-method visibility on the concrete class (when exactly one does).
+    #[deprecated = "Finds a class's interface-method sources via legacy `class_data.implements` + \
+        the `requires` closure (class-only, in-body-only, blanket/out-of-body-blind; conflates \
+        membership with enumeration). Rebuild on `impl_data`/`impls_for_type`: `requires` is a bound \
+        (closure only for type-var/existential), methods come from the type's own per-interface impls."]
     fn implemented_interface_method_sources(
         &self,
         class_name: &crate::ty::QualifiedTypeName,
@@ -13928,6 +13962,9 @@ impl<'db> TypeInferenceBuilder<'db> {
     /// (e.g. `Getter<L>`+`Getter<R>` at `Pair<int,int>`), so coercing to that
     /// interface is ambiguous (BEP-044 wf3 #18). Per-instantiation, so
     /// `Pair<int,string>` with `Slot<L,R>`/`Slot<R,L>` is fine (counts 1).
+    #[deprecated = "Counts a class's interface instantiations from legacy `class_data.implements` \
+        (class-only, in-body-only; conflates membership enumeration with resolution). Rebuild on \
+        `impl_data`/`impls_for_type` so the count reflects real per-instantiation membership."]
     fn class_interface_instantiation_count(
         &self,
         class_name: &crate::ty::QualifiedTypeName,
@@ -15284,6 +15321,9 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
     }
 
+    #[deprecated = "Redundant: the canonical subtype relation is `baml_type::normalize::is_subtype`, \
+        already fed by the `NormalizeCtx` adapter. This bespoke oracle (nominal short-circuit + \
+        structural fallback) duplicates it; route callers through the canonical algebra and delete."]
     fn is_subtype(&self, sub: &Ty, sup: &Ty) -> bool {
         if sub == sup {
             return true;
