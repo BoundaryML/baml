@@ -1,0 +1,76 @@
+@import url('https://fonts.googleapis.com/css2?family=Bitcount+Grid+Double:wght@400;700&display=swap');
+@import 'tailwindcss';
+
+@theme {
+  --font-mono: 'Bitcount Grid Double', ui-monospace, monospace;
+  --font-display: 'Bitcount Grid Double', ui-monospace, monospace;
+  --font-serif: 'Bitcount Grid Double', ui-monospace, monospace;
+
+  /* boundaryml.com palette */
+  --color-cream: #fbf7ed;
+  --color-cream-hi: #fffdf6;
+  --color-ink: #1f1e1b;
+  --color-ink-2: #5e5a4f;
+  --color-accent: #7c3aed;
+  --color-accent-deep: #6d28d9;
+  --color-line: #e3dfd3;
+}
+
+html {
+  scroll-behavior: smooth;
+  background-color: var(--color-cream);
+}
+
+/* Warm cream background with a subtle dot-grid + gradient — matches
+   new.boundaryml.com's body styling. */
+body {
+  min-height: 100vh;
+  background-color: var(--color-cream);
+  background-image:
+    radial-gradient(circle at 1px 1px, #2a252009 1px, transparent 0),
+    linear-gradient(#fffdf6d1, #fbf7edd1);
+  background-size: 18px 18px, 100% 100%;
+  color: var(--color-ink);
+  font-family: 'Bitcount Grid Double', ui-monospace, monospace;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Tweets read in a normal system sans, not the display font. */
+.tweet-font,
+.tweet-font * {
+  font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto,
+    Helvetica, Arial, sans-serif;
+}
+
+/* Tailwind v4 doesn't ship the legacy `size-full` shorthand by default here. */
+.size-full {
+  width: 100%;
+  height: 100%;
+}
+
+/* Sliding tweet carousel. */
+@keyframes marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.marquee-track {
+  animation: marquee 45s linear infinite;
+}
+
+.marquee-track:hover {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  .marquee-track {
+    animation: none;
+  }
+}
