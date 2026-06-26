@@ -1,3 +1,9 @@
+// Re-enable the `deprecated` lint the parent `interfaces` module silences for its own
+// internal self-use so the transitional seam body (`type_implements_interface`) still
+// flags its single remaining legacy `package_implements_registry` use — the point to
+// re-base onto `impl_data`.
+#![warn(deprecated)]
+
 use std::collections::HashMap;
 
 use baml_base::{Name, Span, TyAttr};
@@ -608,6 +614,50 @@ pub fn get_implements_block<'db>(
         requested_iface,
         aliases,
         BLANKET_IMPL_BOUND_DEPTH,
+    )
+}
+
+/// Universal (∀) interface membership — the single seam every membership consumer calls.
+/// True iff EVERY realized instantiation of `concrete` (rigid vars per their bounds)
+/// implements `interface`. Realized→`get_implements_block` (unique by coherence);
+/// symbolic→`type_implements_interface`. `concrete` must be non-interface.
+/// FROZEN CONTRACT: callers depend only on this signature.
+pub fn implements_interface(
+    db: &dyn crate::Db,
+    concrete: &Ty,
+    interface: &baml_type::Interface,
+    aliases: &HashMap<QualifiedTypeName, Ty>,
+    is_subtype: impl FnMut(&Ty, &Ty) -> bool,
+) -> bool {
+    let pkg = match concrete {
+        Ty::Class(class_qtn, ..) => class_qtn.package().clone(),
+        _ => interface.name.package().clone(),
+    };
+    let pkg_id = PackageId::new(db, pkg);
+    if baml_type::RealizedTy::try_from(concrete).is_ok()
+        && baml_type::RealizedTy::try_from(&interface.to_ty()).is_ok()
+    {
+        return get_implements_block(db, pkg_id, concrete, interface, aliases).is_some();
+    }
+    type_implements_interface(db, pkg_id, concrete, interface, aliases, is_subtype)
+}
+
+/// Symbolic universal membership — the type-var-bearing backend.
+/// MIGRATION SEAM: today via the `InterfaceImplRule` registry; the single point to
+/// re-base onto an `impl_data`-driven symbolic resolver. Callers depend only on this sig.
+pub fn type_implements_interface<'db>(
+    db: &'db dyn crate::Db,
+    pkg_id: PackageId<'db>,
+    concrete: &Ty,
+    interface: &baml_type::Interface,
+    aliases: &HashMap<QualifiedTypeName, Ty>,
+    is_subtype: impl FnMut(&Ty, &Ty) -> bool,
+) -> bool {
+    crate::interfaces::package_implements_registry(db, pkg_id).type_implements_interface_via_rule(
+        concrete,
+        &interface.to_ty(),
+        aliases,
+        is_subtype,
     )
 }
 

@@ -521,14 +521,15 @@ impl baml_type::normalize::TypeContext for NormalizeCtx<'_, '_> {
 
     fn implements_interface(&self, concrete: &Ty, interface: &baml_type::Interface) -> bool {
         let b = self.0;
-        let db = b.context.db();
-        let registry_pkg = b.registry_package_for_interface_check(concrete, &interface.name);
-        let registry = crate::interfaces::package_implements_registry(db, registry_pkg);
-        // The registry matcher keys off the interface *existential* `Ty`; rebuild
-        // it from the constraint (a lossless add of default attributes).
-        registry.type_implements_interface_via_rule(
+        // The canonical membership seam: realized inputs resolve through L1's
+        // `get_implements_block` (unique by coherence); non-realized inputs fall to
+        // the symbolic backend. Bound obligations on the realized path are
+        // discharged inside L1, so the `is_subtype` closure is consulted only by
+        // the symbolic fallback.
+        crate::interfaces::implements_interface(
+            b.context.db(),
             concrete,
-            &interface.to_ty(),
+            interface,
             &b.aliases,
             |actual, bound| b.is_subtype(actual, bound),
         )
@@ -11127,9 +11128,13 @@ impl<'db> TypeInferenceBuilder<'db> {
                 else {
                     continue;
                 };
-                if !registry.type_implements_interface_via_rule(
+                let Some(requested) = implemented_iface.as_interface() else {
+                    continue;
+                };
+                if !crate::interfaces::implements_interface(
+                    db,
                     &actual_ty,
-                    &implemented_iface,
+                    &requested,
                     &self.aliases,
                     |actual, bound| self.is_subtype(actual, bound),
                 ) {
@@ -14088,15 +14093,15 @@ impl<'db> TypeInferenceBuilder<'db> {
                 if !self.interface_closure_declares_method(&iface_qtn, member) {
                     continue;
                 }
-                // Confirm via the full rule check so generic bounds are honored
-                // (e.g. `implements<T extends Named> Printable for Box<T>`).
-                let requested = Ty::Interface(
-                    iface_qtn.clone(),
-                    iface_args.clone(),
-                    vec![],
-                    TyAttr::default(),
-                );
-                if !registry.type_implements_interface_via_rule(
+                // Confirm via the canonical membership seam so generic bounds are
+                // honored (e.g. `implements<T extends Named> Printable for Box<T>`).
+                let requested = baml_type::Interface {
+                    name: iface_qtn.clone(),
+                    generics: iface_args.clone(),
+                    associated_types: vec![],
+                };
+                if !crate::interfaces::implements_interface(
+                    db,
                     base_ty,
                     &requested,
                     &self.aliases,
@@ -15246,21 +15251,6 @@ impl<'db> TypeInferenceBuilder<'db> {
             .unwrap_or_default()
     }
 
-    fn package_id_for_qtn(&self, qtn: &crate::ty::QualifiedTypeName) -> PackageId<'db> {
-        PackageId::new(self.context.db(), qtn.package().clone())
-    }
-
-    fn registry_package_for_interface_check(
-        &self,
-        sub: &Ty,
-        sup_iface_qtn: &crate::ty::QualifiedTypeName,
-    ) -> PackageId<'db> {
-        match sub {
-            Ty::Class(class_qtn, _, _) => self.package_id_for_qtn(class_qtn),
-            _ => self.package_id_for_qtn(sup_iface_qtn),
-        }
-    }
-
     fn associated_projection_views_equivalent(&self, a: &Ty, b: &Ty) -> bool {
         crate::associated_projection::AssociatedProjectionResolver::with_resolution_context(
             self.context.db(),
@@ -15402,18 +15392,15 @@ impl<'db> TypeInferenceBuilder<'db> {
         if let Ty::Interface(iface_qtn, iface_args, associated_bindings, _) = sup
             && !matches!(sub, Ty::Interface(..))
         {
-            let db = self.context.db();
-            let registry_pkg = self.registry_package_for_interface_check(sub, iface_qtn);
-            let registry = crate::interfaces::package_implements_registry(db, registry_pkg);
-            let requested_iface_ty = Ty::Interface(
-                iface_qtn.clone(),
-                iface_args.clone(),
-                associated_bindings.clone(),
-                TyAttr::default(),
-            );
-            return registry.type_implements_interface_via_rule(
+            let requested = baml_type::Interface {
+                name: iface_qtn.clone(),
+                generics: iface_args.clone(),
+                associated_types: associated_bindings.clone(),
+            };
+            return crate::interfaces::implements_interface(
+                self.context.db(),
                 sub,
-                &requested_iface_ty,
+                &requested,
                 &self.aliases,
                 |actual, bound| self.is_subtype(actual, bound),
             );

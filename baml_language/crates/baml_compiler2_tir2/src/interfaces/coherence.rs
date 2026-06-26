@@ -1,3 +1,8 @@
+// Re-enable the `deprecated` lint the parent `interfaces` module silences for its own
+// internal self-use: this kept module still reads legacy L2 items (the `InterfaceImplRule`
+// rule vec) that must migrate to `impl_data`, and those uses should stay visible.
+#![warn(deprecated)]
+
 use baml_base::{Literal, Name, Span, TyAttr};
 use baml_compiler2_hir::{contributions::Definition, package::PackageId};
 use baml_type::{FunctionParamTy, Ty, TypeName};

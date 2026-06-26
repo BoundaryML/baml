@@ -10,6 +10,13 @@
 //!
 //! Salsa-tracked so subtype calls don't rebuild the closure on each check.
 
+// Legacy L2 interface registry, slated for wholesale deletion in favour of the
+// `impl_rules` substrate (`impl_data` / `get_implements_block`). Its own items are
+// `#[deprecated]` and reference each other densely, so silence the lint for this
+// file's internal self-use; the kept child modules (`coherence`, `impl_rules`)
+// re-enable it so their remaining legacy uses still surface as migration work.
+#![allow(deprecated)]
+
 mod coherence;
 mod impl_rules;
 
@@ -73,6 +80,8 @@ pub enum InterfaceImplOrigin {
 /// - `interface_ty`: the implemented interface, e.g. `Printable` or
 ///   `Container<T>`.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[deprecated = "L2 per-impl rule. Use the canonical `ImplData` + `get_implements_block` \
+    from `impl_rules` (keyed per `ImplLoc`)."]
 pub struct InterfaceImplRule {
     pub generic_params: Vec<Name>,
     pub generic_param_bounds: Vec<Option<Ty>>,
@@ -85,6 +94,7 @@ pub struct InterfaceImplRule {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[deprecated = "L2 match result. Use `ResolvedImpl { impl_loc, bindings }` from `impl_rules`."]
 pub struct InterfaceImplInstantiation {
     pub bindings: TypeBindings,
     pub for_ty: Ty,
@@ -94,6 +104,7 @@ pub struct InterfaceImplInstantiation {
 /// Compatibility view for old callers while rule-based matching is being
 /// plumbed through the compiler.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[deprecated = "L2 compatibility view. Use `impl_data` / `get_implements_block` from `impl_rules`."]
 pub struct BlanketClassImpl {
     pub class_qtn: QualifiedTypeName,
     pub generic_params: Vec<Name>,
@@ -104,6 +115,7 @@ pub struct BlanketClassImpl {
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[deprecated = "L2 lookup index. `impl_data` is keyed per `ImplLoc`; `get_implements_block` resolves."]
 pub struct InterfaceImplRuleIndex {
     /// Interface QTN -> all rules that can possibly satisfy that interface.
     pub by_interface: FxHashMap<QualifiedTypeName, Vec<usize>>,
@@ -163,6 +175,8 @@ impl InterfaceImplRuleIndex {
 
 /// For every class in a package, the set of interfaces it implements directly.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[deprecated = "L2 per-package registry. Use `package_impl_locs` + `impl_data` / \
+    `get_implements_block` from `impl_rules`."]
 pub struct ImplementsRegistry {
     /// Canonical implementation rules. New interface semantics should be
     /// expressed in terms of these rules rather than the compatibility maps
@@ -196,6 +210,7 @@ pub struct ImplementsRegistry {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[deprecated = "L2 resolution helper. Resolve via `impl_data` / `interface_loc_qtn` from `impl_rules`."]
 pub struct ResolvedInterface<'db> {
     pub loc: baml_compiler2_hir::loc::InterfaceLoc<'db>,
     pub qtn: QualifiedTypeName,
@@ -437,6 +452,9 @@ impl ImplementsRegistry {
         None
     }
 
+    #[deprecated = "L2 matcher. Realized `C <: I` now resolves through L1 \
+        `get_implements_block` via `NormalizeCtx::implements_interface`; the only \
+        remaining callers are the non-realized symbolic fallback to migrate."]
     pub fn type_implements_interface_via_rule(
         &self,
         actual_ty: &Ty,
@@ -949,6 +967,9 @@ fn contains_rule_match_symbolic_ty(ty: &Ty) -> bool {
     }
 }
 
+#[deprecated = "L2 single-pair rule unifier. The kept multi-pair matcher is \
+    `match_ty_patterns` (used by L1 `get_implements_block`); this single-pair form \
+    serves only the registry rule-walks being migrated off `package_implements_registry`."]
 pub fn match_ty_pattern(
     pattern: &Ty,
     concrete: &Ty,
@@ -1184,6 +1205,7 @@ fn contains_bound_typevar(ty: &Ty, generic_params: &[Name]) -> bool {
     }
 }
 
+#[deprecated = "L2 index helper; removed with `ImplementsRegistry`."]
 pub fn implementation_key_for_ty(ty: &Ty) -> Option<Ty> {
     match ty {
         Ty::Int { .. } => Some(Ty::Int {
@@ -1258,6 +1280,7 @@ pub fn implementation_key_for_ty(ty: &Ty) -> Option<Ty> {
 /// builtin `Equals`/`Compare` impls for primitives and containers live in the
 /// `baml` package — so a query from user code (or any dependent) must also
 /// consult the dependency registries, `baml` above all.
+#[deprecated = "use `implements_interface` instead"]
 pub fn type_implements_with_deps<'db>(
     db: &'db dyn crate::Db,
     package_id: PackageId<'db>,
@@ -1278,6 +1301,9 @@ pub fn type_implements_with_deps<'db>(
 /// Empty for packages without interfaces; cheap to keep around as a Salsa
 /// result.
 #[salsa::tracked(returns(ref))]
+#[deprecated = "L2 registry. Being replaced by `impl_data`-derived rules; \
+    coherence and the non-realized interface-membership fallback are the \
+    remaining callers to migrate before deletion."]
 pub fn package_implements_registry<'db>(
     db: &'db dyn crate::Db,
     pkg_id: PackageId<'db>,

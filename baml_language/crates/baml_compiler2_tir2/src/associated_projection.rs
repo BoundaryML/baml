@@ -927,24 +927,15 @@ impl<'a, 'db, B: TypeVarBounds + ?Sized> AssociatedProjectionResolver<'a, 'db, B
                     let Ty::Interface(iface_qtn, iface_args, associated_bindings, _) = bound else {
                         return false;
                     };
-                    let registry_pkg = match actual {
-                        Ty::Class(class_qtn, _, _) => class_qtn.package().clone(),
-                        Ty::Interface(actual_qtn, _, _, _) => actual_qtn.package().clone(),
-                        _ => iface_qtn.package().clone(),
+                    let requested = baml_type::Interface {
+                        name: iface_qtn.clone(),
+                        generics: iface_args.clone(),
+                        associated_types: associated_bindings.clone(),
                     };
-                    let registry = crate::interfaces::package_implements_registry(
+                    crate::interfaces::implements_interface(
                         self.db,
-                        PackageId::new(self.db, registry_pkg),
-                    );
-                    let requested_iface_ty = Ty::Interface(
-                        iface_qtn.clone(),
-                        iface_args.clone(),
-                        associated_bindings.clone(),
-                        crate::ty::TyAttr::default(),
-                    );
-                    registry.type_implements_interface_via_rule(
                         actual,
-                        &requested_iface_ty,
+                        &requested,
                         self.aliases,
                         |actual, bound| self.type_satisfies_bound(actual, bound),
                     )
