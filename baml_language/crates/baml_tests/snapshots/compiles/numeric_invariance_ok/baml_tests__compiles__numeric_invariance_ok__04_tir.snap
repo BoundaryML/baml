@@ -14,7 +14,7 @@ function user.EmptyBigintArray() -> bigint[] throws never {
 }
 function user.EvolvingRetype() -> bigint[] throws never {
   { : bigint[]
-    let a = [] : never[] -> bigint[] (evolving)
+    let a = [] : _[] -> bigint[] (evolving)
     a : bigint[]
   }
 }

@@ -2,18 +2,18 @@ use bex_heap::TlabHolder;
 use bex_vm_types::{BexStr, types::Value};
 use indexmap::IndexMap;
 
-use super::{BamlClassMap, NativeCallResult, NativeFunctionResult, PackageBamlImpl};
+use super::{BamlClassMap, MapView, NativeCallResult, NativeFunctionResult, PackageBamlImpl};
 use crate::BexVm;
 
 // ─── BamlClassMap trait implementation ───────────────────────────────────────
 
 impl BamlClassMap for PackageBamlImpl {
     #[allow(clippy::cast_possible_wrap)]
-    fn length(map: &IndexMap<BexStr, Value>) -> i64 {
+    fn length(map: MapView<'_>) -> i64 {
         map.len() as i64
     }
 
-    fn has(vm: &BexVm, map: &IndexMap<BexStr, Value>, key: &Value) -> bool {
+    fn has(vm: &BexVm, map: MapView<'_>, key: &Value) -> bool {
         if let Ok(k) = vm.as_string(key) {
             map.contains_key(k.as_str())
         } else {
@@ -21,13 +21,13 @@ impl BamlClassMap for PackageBamlImpl {
         }
     }
 
-    fn keys(vm: &mut BexVm, map: &IndexMap<BexStr, Value>) -> Vec<Value> {
+    fn keys(vm: &mut BexVm, map: MapView<'_>) -> Vec<Value> {
         map.keys()
             .map(|k| Value::object(vm.alloc_string(k.clone())))
             .collect()
     }
 
-    fn values(map: &IndexMap<BexStr, Value>) -> Vec<Value> {
+    fn values(map: MapView<'_>) -> Vec<Value> {
         map.values().copied().collect()
     }
 
@@ -60,7 +60,7 @@ impl BamlClassMap for PackageBamlImpl {
         unreachable!("Map.set: should be dispatched via __glue_set")
     }
 
-    fn get(vm: &BexVm, map: &IndexMap<BexStr, Value>, key: &Value) -> Option<Value> {
+    fn get(vm: &BexVm, map: MapView<'_>, key: &Value) -> Option<Value> {
         if let Ok(k) = vm.as_string(key) {
             map.get(k.as_str()).copied()
         } else {

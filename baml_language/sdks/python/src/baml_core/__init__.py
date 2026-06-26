@@ -9,6 +9,8 @@ import asyncio
 import functools
 from typing import Any, Callable, Dict, List, Literal, Optional, Sequence
 
+from typing_extensions import Sentinel
+
 from .baml_py import (
     BamlCallContext,
     BamlPyHandle,
@@ -213,21 +215,14 @@ async def call_function(rt, function_name, kwargs, ctx=None, collectors=None, _c
 Mode = Literal["sync", "async"]
 
 
-class Unset:
-    """Sentinel type for explicitly omitted generated SDK arguments."""
-    __slots__ = ()
-    _instance: "Unset | None" = None
-
-    def __new__(cls) -> "Unset":
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
-        return cls._instance
-
-    def __repr__(self) -> str:
-        return "baml.UNSET"
-
-
-UNSET = Unset()
+# Sentinel for explicitly omitted generated SDK arguments. `Sentinel`
+# (PEP 661, via `typing_extensions`) yields a single value that doubles as
+# its own type, so generated `.pyi` stubs can write
+# `opt: typing.Union[int, None, UNSET] = UNSET` — both the annotation and
+# the default are this one object. Type checkers only recognize a sentinel
+# in a type expression when it is referenced by a *bare name*, so generated
+# code imports `UNSET` directly rather than reaching it via attribute access.
+UNSET = Sentinel("UNSET")
 
 
 def _build_kwargs(
@@ -261,14 +256,18 @@ def _build_kwargs(
 
 def _resolve_types_kwarg(types_kwarg: Any, type_params: List[str]) -> List[Any]:
     """Map the user-facing `_types=` value onto the callee's own generic params,
-    in declaration order.
+    in declaration order. Each slot is the bound type, or `None` when the caller
+    left it for the engine to **infer** from the argument values.
 
-    `_types=` is a `{param_name: type}` dict and is **required iff** the callee
-    declares its own generic params (`type_params`); it is the *only* accepted
-    shape (the legacy single-type / positional tuple/list forms are gone — one
-    name-keyed shape keeps binding unambiguous and matches the named `BamlTyArg`
-    wire). Class type params (bound from a generic receiver) are *not* part of
-    `_types=`.
+    `_types=` is a `{param_name: type}` dict and is now **optional**: the engine
+    solves any TypeVar a value can carry (inbound-inference, 01a/01b), so a bare
+    generic call (no `_types=`, no subscript) is legal. `_types=` is still the
+    *only* way to bind a TypeVar no value carries (return/body-only params) and
+    the only accepted *shape* (the legacy single-type / positional tuple/list
+    forms are gone). A partial dict is allowed: named params bind explicitly, the
+    rest infer. Class type params (bound from a generic receiver) are *not* part
+    of `_types=`. An omitted/partial binding that leaves a genuinely
+    uninferable TypeVar unbound is rejected by the **engine** (Gate A), not here.
     """
     if not type_params:
         # No own generic params: `_types=` must not be supplied. (Class type
@@ -281,21 +280,13 @@ def _resolve_types_kwarg(types_kwarg: Any, type_params: List[str]) -> List[Any]:
         return []
     example = f"{{{type_params[0]!r}: int}}"
     if types_kwarg is None:
-        raise TypeError(
-            f"_types= is required for this generic call: bind every type parameter "
-            f"in {type_params!r} with a dict, e.g. _types={example}"
-        )
+        # No explicit bindings — infer every param from the argument values.
+        return [None for _ in type_params]
     if not isinstance(types_kwarg, dict):
         raise TypeError(
             f"_types= must be a dict mapping type-parameter names to types "
             f"(e.g. _types={example}); got {type(types_kwarg).__name__}. The "
             f"single-type and positional tuple/list forms are no longer accepted."
-        )
-    missing = [n for n in type_params if n not in types_kwarg]
-    if missing:
-        raise TypeError(
-            f"_types= is missing binding(s) for {missing!r}: every type parameter "
-            f"in {type_params!r} must be bound."
         )
     extra = [k for k in types_kwarg if k not in type_params]
     if extra:
@@ -303,7 +294,9 @@ def _resolve_types_kwarg(types_kwarg: Any, type_params: List[str]) -> List[Any]:
             f"_types= has unknown type parameter(s) {extra!r}; expected exactly "
             f"{type_params!r}."
         )
-    return [types_kwarg[name] for name in type_params]
+    # Missing params are inferred by the engine, not an error: a partial dict
+    # binds what it names and leaves the rest (`None`) to inference.
+    return [types_kwarg.get(name) for name in type_params]
 
 
 def _build_type_args(
@@ -334,19 +327,22 @@ def _build_type_args(
             wire.append((name, python_type_to_wire_ty(arg)))
 
     resolved = _resolve_types_kwarg(types_kwarg, type_params)
-    if any(r is not None for r in resolved):
+    # Send only the *explicitly* bound params (non-`None`); the rest are inferred
+    # engine-side from the argument values. A partially-bound generic call sends
+    # a partial `BamlTyArg` list and the engine fills the gaps.
+    bound = [(name, r) for name, r in zip(type_params, resolved) if r is not None]
+    if bound:
         if class_type_params and not class_args:
             # The method's own params sit *after* the class prefix in De Bruijn
-            # order; without recovered class args we can't position them. This
-            # combined shape (a method-level TypeVar on a non-Pydantic generic
-            # receiver, bound via `_types=`) isn't supported yet.
+            # order; without recovered class args we can't position an
+            # explicitly-bound one. This combined shape (a method-level TypeVar
+            # bound via `_types=` on a non-Pydantic generic receiver) isn't
+            # supported yet. (A *bare* such call infers fine — `bound` is empty.)
             raise TypeError(
                 "_types= on a generic method requires a Pydantic generic "
                 "receiver so the class type args can be recovered"
             )
-        wire.extend(
-            (name, python_type_to_wire_ty(r)) for name, r in zip(type_params, resolved)
-        )
+        wire.extend((name, python_type_to_wire_ty(r)) for name, r in bound)
     return wire
 
 
@@ -512,7 +508,6 @@ __all__ = [
     "HostSpanManager",
     "LLMCall",
     "Timing",
-    "Unset",
     "UNSET",
     "Usage",
     "BamlCtxManager",

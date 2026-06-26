@@ -1123,27 +1123,64 @@ pub(crate) mod support {
                         let sig = baml_compiler2_ppir::function_signature(db, func_loc);
                         let ns = &pkg_info.namespace_path;
 
-                        let enclosing_class_ty: Option<baml_compiler2_tir::ty::Ty> =
+                        // The enclosing class/interface and its declared generic
+                        // params, if this function is a method. A method signature
+                        // can reference an enclosing generic (e.g. a synthesized
+                        // `from_json` returning `Box<T>` on `class Box<T>`), so
+                        // those params must be in scope when lowering the signature
+                        // — otherwise `T` erases to `unknown`. (Interfaces share the
+                        // `Class` scope kind; both must be handled, or an interface
+                        // method's unannotated `self` would erase to `unknown`.)
+                        let enclosing: Option<(baml_compiler2_tir::ty::Ty, Vec<baml_base::Name>)> =
                             scope.parent.and_then(|parent_idx| {
                                 let parent = &index.scopes[parent_idx.index() as usize];
-                                if matches!(parent.kind, ScopeKind::Class) {
-                                    parent.name.as_ref().and_then(|cn| {
-                                        pkg_items.lookup_type(ns, cn).map(|def| {
-                                            baml_compiler2_tir::ty::Ty::Class(
-                                                baml_compiler2_tir::lower_type_expr::qualify_def(
-                                                    db, def, cn,
-                                                ),
-                                                vec![],
+                                if !matches!(parent.kind, ScopeKind::Class) {
+                                    return None;
+                                }
+                                let cn = parent.name.as_ref()?;
+                                let def = pkg_items.lookup_type(ns, cn)?;
+                                let generics = match def {
+                                    Definition::Class(class_loc) => {
+                                        baml_compiler2_ppir::file_item_tree(db, class_loc.file(db))
+                                            [class_loc.id(db)]
+                                        .generic_params
+                                        .clone()
+                                    }
+                                    Definition::Interface(iface_loc) => {
+                                        baml_compiler2_ppir::file_item_tree(db, iface_loc.file(db))
+                                            .interfaces
+                                            .get(&iface_loc.id(db))?
+                                            .generic_params
+                                            .clone()
+                                    }
+                                    _ => return None,
+                                };
+                                let class_ty = baml_compiler2_tir::ty::Ty::Class(
+                                    baml_compiler2_tir::lower_type_expr::qualify_def(db, def, cn),
+                                    generics
+                                        .iter()
+                                        .map(|n| {
+                                            baml_compiler2_tir::ty::Ty::TypeVar(
+                                                n.clone(),
                                                 Default::default(),
                                             )
                                         })
-                                    })
-                                } else {
-                                    None
-                                }
+                                        .collect(),
+                                    Default::default(),
+                                );
+                                Some((class_ty, generics))
                             });
+                        let (enclosing_class_ty, enclosing_class_generics) = match enclosing {
+                            Some((ty, generics)) => (Some(ty), generics),
+                            None => (None, Vec::new()),
+                        };
 
                         let gp = &func_data.generic_params;
+                        // Type-lowering scope for the signature: the enclosing
+                        // class's generics plus the function's own. (The displayed
+                        // `<...>` below still shows only the function's own.)
+                        let mut sig_generics: Vec<baml_base::Name> = enclosing_class_generics;
+                        sig_generics.extend(gp.iter().cloned());
                         let generics_display = if gp.is_empty() {
                             String::new()
                         } else {
@@ -1171,7 +1208,12 @@ pub(crate) mod support {
                                 } else {
                                     let mut diags = Vec::new();
                                     lower_type_expr_in_ns(
-                                        db, &param.ty, pkg_items, ns, gp, &mut diags,
+                                        db,
+                                        &param.ty,
+                                        pkg_items,
+                                        ns,
+                                        &sig_generics,
+                                        &mut diags,
                                     )
                                 };
                                 let default_suffix = default_ref_suffix(
@@ -1191,8 +1233,15 @@ pub(crate) mod support {
                             .as_ref()
                             .map(|t| {
                                 let mut diags = Vec::new();
-                                lower_type_expr_in_ns(db, t, pkg_items, ns, gp, &mut diags)
-                                    .render_canonical()
+                                lower_type_expr_in_ns(
+                                    db,
+                                    t,
+                                    pkg_items,
+                                    ns,
+                                    &sig_generics,
+                                    &mut diags,
+                                )
+                                .render_canonical()
                             })
                             .unwrap_or_else(|| "?".into());
                         // Compute inferred throws from transitive throw set
@@ -1210,9 +1259,15 @@ pub(crate) mod support {
 
                         let throws = if let Some(t) = &sig.throws {
                             let mut diags = Vec::new();
-                            let declared =
-                                lower_type_expr_in_ns(db, t, pkg_items, ns, gp, &mut diags)
-                                    .render_canonical();
+                            let declared = lower_type_expr_in_ns(
+                                db,
+                                t,
+                                pkg_items,
+                                ns,
+                                &sig_generics,
+                                &mut diags,
+                            )
+                            .render_canonical();
                             match &inferred_throws {
                                 Some(inferred) => {
                                     format!(" throws {declared} infers {inferred}")

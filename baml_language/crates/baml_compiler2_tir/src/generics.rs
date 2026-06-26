@@ -88,7 +88,7 @@ pub fn substitute_ty(ty: &Ty, bindings: &FxHashMap<Name, Ty>) -> Ty {
             base: Box::new(substitute_ty(base, bindings)),
             interface: interface
                 .as_ref()
-                .map(|interface| Box::new(substitute_ty(interface, bindings))),
+                .map(|interface| Box::new(interface.map_tys(|t| substitute_ty(t, bindings)))),
             member: member.clone(),
             attr: attr.clone(),
         },
@@ -349,16 +349,24 @@ pub fn lower_type_expr_with_generics(
                 bindings,
                 diagnostics,
             )),
-            interface: interface.as_ref().map(|interface| {
-                Box::new(lower_type_expr_with_generics(
+            interface: {
+                let interface_ty = interface.as_ref().map(|interface| {
+                    lower_type_expr_with_generics(
+                        db,
+                        interface,
+                        package_items,
+                        ns_context,
+                        bindings,
+                        diagnostics,
+                    )
+                });
+                crate::lower_type_expr::lower_explicit_projection_qualifier(
                     db,
-                    interface,
-                    package_items,
-                    ns_context,
-                    bindings,
+                    interface_ty,
+                    member,
                     diagnostics,
-                ))
-            }),
+                )
+            },
             member: member.clone(),
             attr: TyAttr::default(),
         },
@@ -422,7 +430,7 @@ pub fn contains_typevar(ty: &Ty) -> bool {
             contains_typevar(base)
                 || interface
                     .as_ref()
-                    .is_some_and(|interface| contains_typevar(interface))
+                    .is_some_and(|interface| interface.tys().any(contains_typevar))
         }
         Ty::List(inner, _) | Ty::EvolvingList(inner, _) => contains_typevar(inner),
         Ty::Map {
@@ -524,276 +532,25 @@ pub fn contains_typevar_where(ty: &Ty, pred: &dyn Fn(&Name) -> bool) -> bool {
             base, interface, ..
         } => {
             contains_typevar_where(base, pred)
-                || interface
-                    .as_ref()
-                    .is_some_and(|interface| contains_typevar_where(interface, pred))
+                || interface.as_ref().is_some_and(|interface| {
+                    interface.tys().any(|t| contains_typevar_where(t, pred))
+                })
         }
         _ => false,
     }
 }
 
-/// Infer type variable bindings by walking formal and actual types in parallel.
-///
-/// When `formal` is `Ty::TypeVar("T", TyAttr::default())` and `actual` is `Ty::Int { attr: TyAttr::default() }`,
-/// records `T → int` in `bindings`. For structural types, recurses into
-/// matching structures. Conflicting inferences are merged via `union_ty`.
-fn infer_bindings_inner(
-    formal: &Ty,
-    actual: &Ty,
-    bindings: &mut FxHashMap<Name, Ty>,
-    allow_typevar_actuals: bool,
-    // A *rigid* type variable that must never be bound from an argument — the
-    // pinned `Self` of an interface method call (mirrors rustc's `ty::Param`,
-    // which unification never instantiates). `None` = no rigid variable (the
-    // historical behavior). This is the only thing that distinguishes a
-    // Self-pinned call from any other; ordinary calls pass `None`, so their
-    // inference is completely unchanged.
-    rigid: Option<&Name>,
-) {
-    fn nullable_non_null_part(ty: &Ty) -> Option<Ty> {
-        let Ty::Union(members, attr) = ty else {
-            return None;
-        };
-        if !members.iter().any(Ty::is_null) {
-            return None;
-        }
-        let non_null: Vec<Ty> = members
-            .iter()
-            .filter(|member| !member.is_null())
-            .cloned()
-            .collect();
-        match non_null.as_slice() {
-            [] => None,
-            [single] => Some(single.clone()),
-            _ => Some(Ty::Union(non_null, attr.clone())),
-        }
-    }
-
-    match (formal, actual) {
-        (Ty::TypeVar(name, _), actual_ty) => {
-            if rigid == Some(name) {
-                return;
-            }
-            // Skip TypeVar-to-TypeVar bindings by default — they usually provide
-            // no information for ordinary call inference. Some higher-order
-            // callable-summary paths opt into preserving them explicitly.
-            if !allow_typevar_actuals && matches!(actual_ty, Ty::TypeVar(_, _)) {
-                return;
-            }
-            // An `Unknown` actual carries NO information: binding it (or
-            // unioning it into an existing binding) only poisons the result —
-            // e.g. an expected return of `SpawnParams<unknown, unknown>`
-            // driving phase-0 must not turn a param-bound `T = int` into
-            // `int | unknown`.
-            if matches!(actual_ty, Ty::Unknown { .. }) {
-                return;
-            }
-            bindings
-                .entry(name.clone())
-                .and_modify(|existing| *existing = union_ty(existing, actual_ty))
-                .or_insert_with(|| actual_ty.clone());
-        }
-        (Ty::List(f, _), Ty::List(a, _)) => {
-            infer_bindings_inner(f, a, bindings, allow_typevar_actuals, rigid);
-        }
-        (
-            Ty::Map {
-                key: fk, value: fv, ..
-            },
-            Ty::Map {
-                key: ak, value: av, ..
-            },
-        ) => {
-            infer_bindings_inner(fk, ak, bindings, allow_typevar_actuals, rigid);
-            infer_bindings_inner(fv, av, bindings, allow_typevar_actuals, rigid);
-        }
-        (Ty::Union(_, _), _) if nullable_non_null_part(formal).is_some() => {
-            let formal_inner = nullable_non_null_part(formal).expect("checked above");
-            let actual_inner = nullable_non_null_part(actual).unwrap_or_else(|| actual.clone());
-            infer_bindings_inner(
-                &formal_inner,
-                &actual_inner,
-                bindings,
-                allow_typevar_actuals,
-                rigid,
-            );
-        }
-        (Ty::Union(f_members, _), Ty::Union(a_members, _))
-            if f_members.len() == a_members.len() =>
-        {
-            for (formal_member, actual_member) in f_members.iter().zip(a_members.iter()) {
-                infer_bindings_inner(
-                    formal_member,
-                    actual_member,
-                    bindings,
-                    allow_typevar_actuals,
-                    rigid,
-                );
-            }
-        }
-        (
-            Ty::Function {
-                params: fp,
-                ret: fr,
-                throws: fth,
-                ..
-            },
-            Ty::Function {
-                params: ap,
-                ret: ar,
-                throws: ath,
-                ..
-            },
-        ) => {
-            for (fp, ap) in fp.iter().zip(ap.iter()) {
-                infer_bindings_inner(&fp.ty, &ap.ty, bindings, allow_typevar_actuals, rigid);
-            }
-            infer_bindings_inner(fr, ar, bindings, allow_typevar_actuals, rigid);
-            infer_bindings_inner(fth, ath, bindings, allow_typevar_actuals, rigid);
-        }
-        (Ty::Class(fn_name, f_args, _), Ty::Class(an_name, a_args, _)) if fn_name == an_name => {
-            for (ft, at) in f_args.iter().zip(a_args.iter()) {
-                infer_bindings_inner(ft, at, bindings, allow_typevar_actuals, rigid);
-            }
-        }
-        // `Future<T, E>` is its own variant — descend into both params so the
-        // future combinators can infer `<T, E>` from a `Future<T, E>[]` arg.
-        (Ty::Future(f_value, f_error, _), Ty::Future(a_value, a_error, _)) => {
-            infer_bindings_inner(f_value, a_value, bindings, allow_typevar_actuals, rigid);
-            infer_bindings_inner(f_error, a_error, bindings, allow_typevar_actuals, rigid);
-        }
-        // A heterogeneous future array — e.g. `[spawn { 1 }, spawn { 2 }]` —
-        // types as `(Future<A, EA> | Future<B, EB>)[]` because `Future` is
-        // invariant. Match the `Future<T, E>` formal against each union member
-        // so `T`/`E` bind to the union of the member value/error types (the
-        // TypeVar arm merges the per-member bindings via `union_ty`).
-        (Ty::Future(_, _, _), Ty::Union(members, _)) => {
-            for member in members {
-                infer_bindings_inner(formal, member, bindings, allow_typevar_actuals, rigid);
-            }
-        }
-        (
-            Ty::Interface(fn_name, f_args, f_assoc, _),
-            Ty::Interface(an_name, a_args, a_assoc, _),
-        ) if fn_name == an_name => {
-            for (ft, at) in f_args.iter().zip(a_args.iter()) {
-                infer_bindings_inner(ft, at, bindings, allow_typevar_actuals, rigid);
-            }
-            for (formal_name, formal_ty) in f_assoc {
-                if let Some((_, actual_ty)) = a_assoc
-                    .iter()
-                    .find(|(actual_name, _)| actual_name == formal_name)
-                {
-                    infer_bindings_inner(
-                        formal_ty,
-                        actual_ty,
-                        bindings,
-                        allow_typevar_actuals,
-                        rigid,
-                    );
-                }
-            }
-        }
-        // Builtin container bridging: Array<T> ↔ List(T), Map<K,V> ↔ Map(K,V)
-        // This enables UFCS calls like `Array.length(arr)` where the formal self
-        // type is Class(Array, [T]) and the actual is List(int).
-        (Ty::Class(class_name, f_args, _), Ty::List(actual_inner, _))
-            if class_name.is_builtin_root_type("Array") && f_args.len() == 1 =>
-        {
-            infer_bindings_inner(
-                &f_args[0],
-                actual_inner,
-                bindings,
-                allow_typevar_actuals,
-                rigid,
-            );
-        }
-        (
-            Ty::Class(class_name, f_args, _),
-            Ty::Map {
-                key: actual_key,
-                value: actual_val,
-                ..
-            },
-        ) if class_name.is_builtin_root_type("Map") && f_args.len() == 2 => {
-            infer_bindings_inner(
-                &f_args[0],
-                actual_key,
-                bindings,
-                allow_typevar_actuals,
-                rigid,
-            );
-            infer_bindings_inner(
-                &f_args[1],
-                actual_val,
-                bindings,
-                allow_typevar_actuals,
-                rigid,
-            );
-        }
-        _ => {} // Concrete types: nothing to infer
-    }
-}
-
-pub fn infer_bindings(formal: &Ty, actual: &Ty, bindings: &mut FxHashMap<Name, Ty>) {
-    infer_bindings_inner(formal, actual, bindings, false, None);
-}
-
-pub fn infer_bindings_allow_typevars(formal: &Ty, actual: &Ty, bindings: &mut FxHashMap<Name, Ty>) {
-    infer_bindings_inner(formal, actual, bindings, true, None);
-}
-
-/// Like [`infer_bindings`] but treats `rigid` (when `Some`) as a rigid type
-/// variable that is never bound from an argument — the pinned `Self` of an
-/// interface method call. Every other variable infers exactly as before.
-pub fn infer_bindings_rigid_self(
-    formal: &Ty,
-    actual: &Ty,
-    bindings: &mut FxHashMap<Name, Ty>,
-    rigid: Option<&Name>,
-) {
-    infer_bindings_inner(formal, actual, bindings, false, rigid);
-}
-
-/// Combine two types into a union, deduplicating members.
-///
-/// Used when the same type variable is inferred from multiple arguments
-/// (e.g., `deep_equals(myInt, myString)` → `T` gets `int` then `string`).
-pub fn union_ty(a: &Ty, b: &Ty) -> Ty {
-    normalize_union_members([a.clone(), b.clone()], TyAttr::default())
-}
-
-fn normalize_union_members(members: impl IntoIterator<Item = Ty>, attr: TyAttr) -> Ty {
-    let mut normalized = Vec::new();
-    for member in members {
-        match member {
-            Ty::Never { .. } => {}
-            Ty::Union(inner, _) => {
-                for inner_member in inner {
-                    if !matches!(inner_member, Ty::Never { .. })
-                        && !normalized.contains(&inner_member)
-                    {
-                        normalized.push(inner_member);
-                    }
-                }
-            }
-            other if !normalized.contains(&other) => normalized.push(other),
-            _ => {}
-        }
-    }
-
-    match normalized.len() {
-        0 => Ty::Never { attr },
-        1 => normalized.pop().expect("length checked"),
-        _ => {
-            // TODO(TyAttr): This union is synthesized from multiple input types — there's no
-            // single "original attr" to preserve. If inputs carry different attrs, which one
-            // wins? May need a merge/lattice operation on TyAttr, or default may be correct if
-            // attrs describe declaration sites rather than computed types.
-            Ty::Union(normalized, attr)
-        }
-    }
-}
+// ── Type variable inference & union normalization ──────────────────────────────
+//
+// The pure `Ty`-walking inference/union primitives now live in `baml_type` so the
+// runtime engine can share the single algorithm (it widens `RuntimeTy` → `Ty`,
+// runs the unifier, narrows back) without a runtime → compiler dependency. They
+// are re-exported here so every existing `crate::generics::…` caller is
+// unchanged. See `01c-inbound-inference-reuse.md`.
+pub use baml_type_runtime::{
+    infer_bindings, infer_bindings_allow_typevars, infer_bindings_rigid_self,
+    normalize_union_members, union_ty,
+};
 
 /// Replace any remaining `Ty::TypeVar` with `Ty::Unknown` and emit diagnostics.
 ///
@@ -872,7 +629,7 @@ pub fn erase_typevars_where(ty: &Ty, pred: &dyn Fn(&Name) -> bool) -> Ty {
             base: Box::new(erase_typevars_where(base, pred)),
             interface: interface
                 .as_ref()
-                .map(|interface| Box::new(erase_typevars_where(interface, pred))),
+                .map(|interface| Box::new(interface.map_tys(|t| erase_typevars_where(t, pred)))),
             member: member.clone(),
             attr: attr.clone(),
         },
@@ -939,9 +696,9 @@ pub fn erase_unresolved_typevars(
             attr,
         } => Ty::AssociatedTypeProjection {
             base: Box::new(erase_unresolved_typevars(base, diagnostics)),
-            interface: interface
-                .as_ref()
-                .map(|interface| Box::new(erase_unresolved_typevars(interface, diagnostics))),
+            interface: interface.as_ref().map(|interface| {
+                Box::new(interface.map_tys(|t| erase_unresolved_typevars(t, diagnostics)))
+            }),
             member: member.clone(),
             attr: attr.clone(),
         },
@@ -1053,9 +810,9 @@ pub fn erase_typevars_matching(ty: &Ty, should_erase: &impl Fn(&Name) -> bool) -
             attr,
         } => Ty::AssociatedTypeProjection {
             base: Box::new(erase_typevars_matching(base, should_erase)),
-            interface: interface
-                .as_ref()
-                .map(|interface| Box::new(erase_typevars_matching(interface, should_erase))),
+            interface: interface.as_ref().map(|interface| {
+                Box::new(interface.map_tys(|t| erase_typevars_matching(t, should_erase)))
+            }),
             member: member.clone(),
             attr: attr.clone(),
         },

@@ -6,7 +6,7 @@
 //! a typed `Expr::Object` rather than hand-parsing each field.
 
 use baml_base::{Literal, Name};
-use baml_compiler_syntax::{SyntaxKind, ast as cst};
+use baml_compiler_syntax::{SyntaxKind, SyntaxNode, ast as cst};
 use rowan::ast::AstNode;
 
 use crate::{
@@ -31,57 +31,100 @@ pub(crate) fn lower_config_value_with_env_refs(
         return lower_config_block_to_map_with_env_refs(&nested, alloc, env_var_refs);
     }
 
-    // 2. Array literal
-    if item.is_array() {
-        return lower_array_value(item, alloc);
-    }
-
-    // 3. Scalar value — look at the raw tokens inside CONFIG_VALUE
+    // 2. Value node — array literal (recursing per element) or scalar.
     let Some(cv_node) = item.config_value_node() else {
         return alloc(Expr::Null);
     };
+    lower_config_value_node(&cv_node, item.syntax().text_range(), alloc, env_var_refs)
+}
 
-    // Check whether *all* meaningful tokens are a single numeric literal.
-    // Using `.all()` ensures that mixed-token values like
-    // `"anthropic.claude-3-haiku-20240307-v1:0"` (which contains an
-    // INTEGER_LITERAL `0` among other tokens) are NOT misclassified as int.
-    let is_int = cv_node
-        .descendants_with_tokens()
-        .filter_map(rowan::NodeOrToken::into_token)
-        .filter(|t| !t.kind().is_trivia())
-        .all(|t| t.kind() == SyntaxKind::INTEGER_LITERAL);
-
-    let is_float = cv_node
-        .descendants_with_tokens()
-        .filter_map(rowan::NodeOrToken::into_token)
-        .filter(|t| !t.kind().is_trivia())
-        .all(|t| t.kind() == SyntaxKind::FLOAT_LITERAL);
-
-    if is_float {
-        if let Some(cv) = item.config_value() {
-            if let Some(text) = cv.scalar_text() {
-                return alloc(Expr::Literal(Literal::Float(text)));
-            }
-        }
+/// Lower a `CONFIG_VALUE` node into an `Expr`.
+///
+/// Handles array literals (recursing per element) and scalars: integers,
+/// floats, `env.VAR` references, bool literals, and quoted / bare-word strings.
+/// Shared by a config item's value and every array element so that a non-string
+/// element — e.g. the `123` in `allowed_roles ["user", 123]` — keeps its real
+/// type instead of being erased to `Expr::Null` (which would surface to the user
+/// as a spurious `got null` type error).
+///
+/// `env_range` is the span recorded for an `env.VAR` reference found directly at
+/// this node; array elements pass their own element span.
+fn lower_config_value_node(
+    cv_node: &SyntaxNode,
+    env_range: rowan::TextRange,
+    alloc: &mut impl FnMut(Expr) -> ExprId,
+    env_var_refs: &mut Vec<EnvVarRef>,
+) -> ExprId {
+    // Array literal → recurse per element so each keeps its real type.
+    if let Some(array_literal) = cv_node
+        .children()
+        .find(|child| child.kind() == SyntaxKind::ARRAY_LITERAL)
+    {
+        let elements: Vec<ExprId> = array_literal
+            .children()
+            .filter_map(|element| match element.kind() {
+                SyntaxKind::CONFIG_VALUE => {
+                    let element_range = element.text_range();
+                    Some(lower_config_value_node(
+                        &element,
+                        element_range,
+                        alloc,
+                        env_var_refs,
+                    ))
+                }
+                // A `{ … }` array element (e.g. `tools [{ url "…" }]`) is a bare
+                // `CONFIG_BLOCK`; lower it to an untyped map like a nested block
+                // value, instead of silently dropping it.
+                SyntaxKind::CONFIG_BLOCK => cst::ConfigBlock::cast(element).map(|block| {
+                    lower_config_block_to_map_with_env_refs(&block, alloc, env_var_refs)
+                }),
+                _ => None,
+            })
+            .collect();
+        return alloc(Expr::Array { elements });
     }
 
-    if is_int {
-        if let Some(v) = item.value_int() {
-            return alloc(Expr::Literal(Literal::Int(v)));
-        }
+    // Scalar — classify by token kind. Using `.all()` ensures mixed-token values
+    // like `"anthropic.claude-3-haiku-20240307-v1:0"` (which contains an
+    // INTEGER_LITERAL `0` among other tokens) are NOT misclassified as numbers.
+    //
+    // BUG: a few scalar forms still lower to a wrong-typed string rather than
+    // their literal because the config grammar/lexer doesn't surface them here:
+    // a negative number (`-5`) tokenizes as `MINUS` + `INTEGER_LITERAL`, so
+    // `is_int` is false and it becomes `String("-5")`; a bigint literal (`42n`)
+    // and an out-of-`i64`-range integer also fall through to a string; and an
+    // `env.X` reference *inside an array* mis-parses upstream. Fixing these
+    // belongs in the parser/lexer, not this lowering.
+    let non_trivia = || {
+        cv_node
+            .descendants_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| !token.kind().is_trivia())
+    };
+    let is_int = non_trivia().all(|token| token.kind() == SyntaxKind::INTEGER_LITERAL);
+    let is_float = non_trivia().all(|token| token.kind() == SyntaxKind::FLOAT_LITERAL);
+    let scalar_text = cst::ConfigValue::cast(cv_node.clone()).and_then(|cv| cv.scalar_text());
+
+    if is_float && let Some(text) = &scalar_text {
+        return alloc(Expr::Literal(Literal::Float(text.clone())));
     }
 
-    // Fall through to text-based analysis
-    let text = item
-        .config_value()
-        .and_then(|cv| cv.scalar_text())
-        .unwrap_or_default();
+    if is_int
+        && let Some(value) = non_trivia()
+            .find(|token| token.kind() == SyntaxKind::INTEGER_LITERAL)
+            .and_then(|token| token.text().parse::<i64>().ok())
+    {
+        return alloc(Expr::Literal(Literal::Int(value)));
+    }
+
+    // Fall through to text-based analysis.
+    let text = scalar_text.unwrap_or_default();
 
     // env.VAR_NAME → baml.env.get_or_panic("VAR_NAME")
     if let Some(var_name) = text.strip_prefix("env.") {
         env_var_refs.push(EnvVarRef {
             name: var_name.to_string(),
-            range: item.syntax().text_range(),
+            range: env_range,
         });
         let callee = alloc(Expr::Path(vec![
             Name::new("baml"),
@@ -130,26 +173,6 @@ fn lower_config_block_to_map_with_env_refs(
         .collect();
 
     alloc(Expr::Map { entries })
-}
-
-/// Lower an array config value into `Expr::Array`.
-fn lower_array_value(item: &cst::ConfigItem, alloc: &mut impl FnMut(Expr) -> ExprId) -> ExprId {
-    // Use array_string_elements which gives us each element
-    if let Some(elements) = item.array_string_elements() {
-        let exprs: Vec<ExprId> = elements
-            .into_iter()
-            .map(|(maybe_str, _range)| {
-                if let Some(s) = maybe_str {
-                    alloc(Expr::Literal(Literal::String(s)))
-                } else {
-                    alloc(Expr::Null)
-                }
-            })
-            .collect();
-        return alloc(Expr::Array { elements: exprs });
-    }
-
-    alloc(Expr::Array { elements: vec![] })
 }
 
 #[cfg(test)]
@@ -309,5 +332,79 @@ client MyClient {
 
         assert_eq!(exprs[max_retries_id], Expr::Literal(Literal::Int(3)));
         assert_eq!(exprs[max_delay_ms_id], Expr::Literal(Literal::Int(1000)));
+    }
+
+    #[test]
+    fn array_keeps_non_string_element_types() {
+        // Regression: a non-string array element (`123`) must lower to its real
+        // literal, not `Expr::Null`. Erasing it to null makes the type checker
+        // report a bogus `got null` rather than `got 123` for the bad value.
+        let source = r#"
+client MyClient {
+  provider openai
+  options {
+    allowed_roles ["user", 123, "assistant"]
+  }
+}
+"#;
+        let root = parse(source);
+        let allowed_roles = find_config_item(&root, "allowed_roles");
+
+        let mut exprs: la_arena::Arena<Expr> = la_arena::Arena::new();
+        let mut alloc = |expr: Expr| -> ExprId { exprs.alloc(expr) };
+
+        let result_id =
+            lower_config_value_with_env_refs(&allowed_roles, &mut alloc, &mut Vec::new());
+
+        let elements = match &exprs[result_id] {
+            Expr::Array { elements } => elements.clone(),
+            other => panic!("expected Expr::Array, got {other:?}"),
+        };
+        assert_eq!(elements.len(), 3);
+        assert_eq!(
+            exprs[elements[0]],
+            Expr::Literal(Literal::String("user".to_string()))
+        );
+        assert_eq!(exprs[elements[1]], Expr::Literal(Literal::Int(123)));
+        assert_eq!(
+            exprs[elements[2]],
+            Expr::Literal(Literal::String("assistant".to_string()))
+        );
+    }
+
+    #[test]
+    fn array_keeps_config_block_elements() {
+        // Regression (M7): a `{ … }` array element is a bare CONFIG_BLOCK; it must
+        // lower to an untyped map, not be silently dropped from the array.
+        let source = r#"
+client MyClient {
+  provider openai
+  options {
+    tools [{ url "https://example.com" }, "plain"]
+  }
+}
+"#;
+        let root = parse(source);
+        let tools = find_config_item(&root, "tools");
+
+        let mut exprs: la_arena::Arena<Expr> = la_arena::Arena::new();
+        let mut alloc = |expr: Expr| -> ExprId { exprs.alloc(expr) };
+
+        let result_id = lower_config_value_with_env_refs(&tools, &mut alloc, &mut Vec::new());
+
+        let elements = match &exprs[result_id] {
+            Expr::Array { elements } => elements.clone(),
+            other => panic!("expected Expr::Array, got {other:?}"),
+        };
+        assert_eq!(elements.len(), 2, "the block element must not be dropped");
+        assert!(
+            matches!(exprs[elements[0]], Expr::Map { .. }),
+            "block array element should lower to a map, got {:?}",
+            exprs[elements[0]]
+        );
+        assert_eq!(
+            exprs[elements[1]],
+            Expr::Literal(Literal::String("plain".to_string()))
+        );
     }
 }

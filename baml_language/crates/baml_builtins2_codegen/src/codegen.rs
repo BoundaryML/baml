@@ -1183,6 +1183,55 @@ fn emit_immut_receiver_extraction_indented(
     arraymap_needs_owned: bool,
 ) {
     match recv.class_name.as_str() {
+        // A read array receiver is passed as an `ArrayView` carrying its element
+        // type alongside the data. The data is owned (`to_vec`) when the glue
+        // later needs `&mut vm` (may_yield / mut_vm), else a cheap read guard;
+        // both deref to `&[Value]` so slice-only builtins are unchanged.
+        "Array" => {
+            writeln!(
+                out,
+                "{indent}let __{name}_ty = vm.array_element_ty(&args[{idx}]);"
+            )
+            .unwrap();
+            let data_expr = if arraymap_needs_owned {
+                format!("vm.as_array(&args[{idx}])?.to_vec()")
+            } else {
+                format!("vm.as_array(&args[{idx}])?")
+            };
+            writeln!(out, "{indent}let __{name}_data = {data_expr};").unwrap();
+            writeln!(
+                out,
+                "{indent}let {name} = ArrayView {{ ty: &__{name}_ty, data: &__{name}_data }};"
+            )
+            .unwrap();
+        }
+        // A read map receiver is passed as a `MapView` carrying its key/value
+        // types alongside the data. The data is owned (`to_index_map`) when the
+        // glue later needs `&mut vm` (may_yield / mut_vm), else a cheap read
+        // guard; both deref to the `IndexMap` so map-only builtins are unchanged.
+        "Map" => {
+            writeln!(
+                out,
+                "{indent}let __{name}_kty = vm.map_key_ty(&args[{idx}]);"
+            )
+            .unwrap();
+            writeln!(
+                out,
+                "{indent}let __{name}_vty = vm.map_value_ty(&args[{idx}]);"
+            )
+            .unwrap();
+            let data_expr = if arraymap_needs_owned {
+                format!("vm.as_map(&args[{idx}])?.to_index_map()")
+            } else {
+                format!("vm.as_map(&args[{idx}])?")
+            };
+            writeln!(out, "{indent}let __{name}_data = {data_expr};").unwrap();
+            writeln!(
+                out,
+                "{indent}let {name} = MapView {{ key_ty: &__{name}_kty, value_ty: &__{name}_vty, data: &__{name}_data }};"
+            )
+            .unwrap();
+        }
         cls if is_media_class(cls) => {
             if needs_owned {
                 // `//baml:mut_vm` media methods: pass the raw `Value` copy so the
@@ -1571,6 +1620,11 @@ fn call_arg_list(b: &NativeBuiltin, needs_owned: bool, arraymap_needs_owned: boo
                 // Instance-backed receiver extracted as a `view::<ns>::<Class>`
                 // value; the trait method takes it by reference.
                 args.push(format!("&{name}"));
+            } else if recv.class_name == "Array" || recv.class_name == "Map" {
+                // A read array/map receiver is materialized as an `ArrayView` /
+                // `MapView` value (element or key/value types + data) and the
+                // trait method takes it by value.
+                args.push(name);
             } else {
                 let recv_is_ref = match recv.class_name.as_str() {
                     "Array" | "Map" | "Uint8Array" => arraymap_is_ref,
@@ -1683,12 +1737,12 @@ fn emit_result_conversion_ok(out: &mut String, b: &NativeBuiltin, indent: &str) 
         .unwrap();
         writeln!(
             out,
-            "{indent}Ok(Value::object(vm.alloc_array(result_values)))"
+            "{indent}Ok(Value::object(vm.alloc_array(baml_type::RuntimeTy::string(), result_values)))"
         )
         .unwrap();
         return;
     }
-    let conversion = result_conversion_expr("result", &b.return_type);
+    let conversion = result_conversion_expr("result", &b.return_type, &b.generics);
     writeln!(out, "{indent}Ok({conversion})").unwrap();
 }
 
@@ -1763,6 +1817,92 @@ fn reads_multiple_containers(b: &NativeBuiltin) -> bool {
     receiver_containers + param_containers >= 2
 }
 
+/// Emit a Rust expression that constructs the `baml_type::RuntimeTy` describing
+/// `ty` at VM runtime, used to tag `vm.alloc_array` / `vm.alloc_map`
+/// allocations with their declared element/key/value types.
+///
+/// - Leaf primitives map to their exact `RuntimeTy` constructor.
+/// - A **generic parameter** resolves to the call's instantiated type argument,
+///   read from `vm.current_call_type_args()` at the parameter's declaration
+///   index (the call-instruction handler records the leading `LoadType`s there,
+///   in `generics` order). This is sound for these non-yielding result
+///   conversions: the native body makes no nested call that could overwrite the
+///   pending args before the result is built.
+/// - **Media / named / `$rust_type`** positions map to their concrete
+///   `RuntimeTy`.
+///
+/// `unknown` appears only when a generic name is absent from `generics` or its
+/// type argument was not supplied at the call — never as a lazy fallback for a
+/// type that is statically recoverable.
+fn runtime_ty_expr(ty: &BamlType, generics: &[String]) -> String {
+    match ty {
+        BamlType::String => "baml_type::RuntimeTy::string()".to_string(),
+        BamlType::Int => "baml_type::RuntimeTy::int()".to_string(),
+        BamlType::Bigint => "baml_type::RuntimeTy::bigint()".to_string(),
+        BamlType::Float => "baml_type::RuntimeTy::float()".to_string(),
+        BamlType::Bool => "baml_type::RuntimeTy::bool()".to_string(),
+        BamlType::Null => "baml_type::RuntimeTy::null()".to_string(),
+        BamlType::Uint8Array => "baml_type::RuntimeTy::uint8array()".to_string(),
+        BamlType::List(inner) => {
+            format!(
+                "baml_type::RuntimeTy::list({})",
+                runtime_ty_expr(inner, generics)
+            )
+        }
+        BamlType::Map(key, value) => format!(
+            "baml_type::RuntimeTy::map({}, {})",
+            runtime_ty_expr(key, generics),
+            runtime_ty_expr(value, generics)
+        ),
+        BamlType::Optional(inner) => {
+            format!(
+                "baml_type::RuntimeTy::optional({})",
+                runtime_ty_expr(inner, generics)
+            )
+        }
+        BamlType::Generic(name) => match generics.iter().position(|g| g == name) {
+            // The frame's call type args are populated by MIR's
+            // receiver-class-type-arg prepend, which fires for `Class`/`List`/
+            // `Map` receivers. If a container method is ever reached with the arg
+            // absent (an unforeseen dispatch / unknown-typed receiver), degrade to
+            // `unknown` rather than aborting the VM — the element type is a
+            // best-effort tag, not a correctness invariant worth a hard panic.
+            Some(idx) => format!(
+                "vm.current_call_type_args().get({idx}).cloned()\
+                    .unwrap_or_else(baml_type::RuntimeTy::unknown)"
+            ),
+            None => format!("compile_error!(\"unknown type arg `{name}`\")"),
+        },
+        BamlType::Media(kind) => format!(
+            "baml_type::RuntimeTy::Media({}, baml_type::TyAttr::default())",
+            media_kind_path(kind)
+        ),
+        BamlType::RustType => {
+            "baml_type::RuntimeTy::RustType { attr: baml_type::TyAttr::default() }".to_string()
+        }
+        // `Named` is a lossy catch-all: the type parser discards a class's
+        // generic arguments (`Box<int>` → `Named("Box")`) and also funnels
+        // unions/unresolved types through it (`Named("union")`,
+        // `Named("unknown")`). Reconstructing `RuntimeTy::class(name)` would both
+        // drop generics and fabricate a class for the placeholder names, so this
+        // static-`BamlType` path cannot recover a named type — the complete type
+        // lives only on the runtime value's stored `element_ty`.
+        BamlType::Named(_) => "baml_type::RuntimeTy::unknown()".to_string(),
+    }
+}
+
+/// The `baml_base::MediaKind` path for a `Media(name)` BAML type. Unknown names
+/// degrade to the catch-all `Generic` media kind (never an erased type).
+fn media_kind_path(name: &str) -> &'static str {
+    match name {
+        "Image" => "baml_base::MediaKind::Image",
+        "Audio" => "baml_base::MediaKind::Audio",
+        "Video" => "baml_base::MediaKind::Video",
+        "Pdf" => "baml_base::MediaKind::Pdf",
+        _ => "baml_base::MediaKind::Generic",
+    }
+}
+
 /// Emit a Rust expression that converts a native method's return value into a
 /// `Value` for the surrounding `Ok({conversion})` line in the glue closure.
 ///
@@ -1773,7 +1913,7 @@ fn reads_multiple_containers(b: &NativeBuiltin) -> bool {
 /// `Bigint` arm uses `try_alloc_bigint(...)?` so a `VmPanic::AllocFailure`
 /// from a too-large bigint is promoted to `VmRustFnError::Panic` via the
 /// `#[from]` on `VmRustFnError`.
-fn result_conversion_expr(name: &str, ty: &BamlType) -> String {
+fn result_conversion_expr(name: &str, ty: &BamlType, generics: &[String]) -> String {
     match ty {
         BamlType::String => format!("Value::object(vm.alloc_string({name}))"),
         BamlType::Uint8Array => format!("Value::object(vm.alloc_uint8array({name}))"),
@@ -1790,10 +1930,17 @@ fn result_conversion_expr(name: &str, ty: &BamlType) -> String {
         BamlType::Float => format!("Value::object(vm.alloc_float({name}))"),
         BamlType::Bool => format!("Value::bool({name})"),
         BamlType::Null => "Value::NULL".to_string(),
-        BamlType::List(_) => format!("Value::object(vm.alloc_array({name}))"),
-        BamlType::Map(_, _) => format!("Value::object(vm.alloc_map({name}))"),
+        BamlType::List(inner) => {
+            let element_ty = runtime_ty_expr(inner, generics);
+            format!("Value::object(vm.alloc_array({element_ty}, {name}))")
+        }
+        BamlType::Map(key, value) => {
+            let key_ty = runtime_ty_expr(key, generics);
+            let value_ty = runtime_ty_expr(value, generics);
+            format!("Value::object(vm.alloc_map({key_ty}, {value_ty}, {name}))")
+        }
         BamlType::Optional(inner) => {
-            let inner_conversion = result_conversion_expr("v", inner);
+            let inner_conversion = result_conversion_expr("v", inner, generics);
             format!("match {name} {{ Some(v) => {inner_conversion}, None => Value::NULL }}")
         }
         BamlType::Generic(_) | BamlType::Named(_) | BamlType::Media(_) | BamlType::RustType => {
@@ -1914,7 +2061,9 @@ fn receiver_input_type_with_vm_usage(recv: &Receiver, vm_usage: VmUsage) -> Stri
             } else if recv.receiver_type.is_mut() {
                 "&mut Vec<Value>".to_string()
             } else {
-                "&[Value]".to_string()
+                // A read receiver carries its element type via `ArrayView`, which
+                // derefs to `[Value]` so slice-only builtins are unaffected.
+                "ArrayView<'_>".to_string()
             }
         }
         "Map" => {
@@ -1923,7 +2072,9 @@ fn receiver_input_type_with_vm_usage(recv: &Receiver, vm_usage: VmUsage) -> Stri
             } else if recv.receiver_type.is_mut() {
                 "&mut IndexMap<bex_str::BexStr, Value>".to_string()
             } else {
-                "&IndexMap<bex_str::BexStr, Value>".to_string()
+                // A read receiver carries its key/value types via `MapView`,
+                // which derefs to `IndexMap` so map-only builtins are unaffected.
+                "MapView<'_>".to_string()
             }
         }
         "String" => {
@@ -2110,7 +2261,7 @@ mod tests {
         let output = generate_native_trait(&builtins, &class_defs);
 
         assert!(
-            output.contains("fn length(array: &[Value]) -> i64;"),
+            output.contains("fn length(array: ArrayView<'_>) -> i64;"),
             "BamlClassArray should have bare `length` method:\n{output}"
         );
         assert!(
@@ -2118,8 +2269,8 @@ mod tests {
             "BamlClassString should have bare `to_lower_case` method:\n{output}"
         );
         assert!(
-            output.contains("fn trunc(value: f64) -> i64;"),
-            "BamlNamespaceMath should have bare `trunc` method:\n{output}"
+            output.contains("fn trunc(float: f64) -> f64;"),
+            "BamlClassFloat should have bare `trunc` method:\n{output}"
         );
     }
 

@@ -1896,6 +1896,7 @@ function patterns_new_runtime.score_empty_prefix_rest(xs: int[]) -> int {
 function patterns_new_runtime.score_exact_length_45() -> int {
     load_const 4
     load_const 5
+    load_type int
     alloc_array 2
     store_var_load_var _1
     is_type int[]
@@ -3071,10 +3072,12 @@ function patterns_new_runtime.test_five_levels_or_flipped() -> int {
     init_instance user.patterns_new_runtime.Atom1 .value
     store_var_load_var stuffer_atom
     load_var2 1 1
+    load_type patterns_new_runtime.Atom1
     alloc_array 3
     init_instance user.patterns_new_runtime.Slot1 .atoms
     store_var_load_var stuffer_slot
     load_var2 2 2
+    load_type patterns_new_runtime.Slot1
     alloc_array 3
     init_instance user.patterns_new_runtime.Row1 .slots
     store_var_load_var stuffer_row
@@ -3082,12 +3085,15 @@ function patterns_new_runtime.test_five_levels_or_flipped() -> int {
     load_const 42
     init_instance user.patterns_new_runtime.Atom1 .value
     load_var stuffer_atom
+    load_type patterns_new_runtime.Atom1
     alloc_array 3
     init_instance user.patterns_new_runtime.Slot1 .atoms
     load_var stuffer_slot
+    load_type patterns_new_runtime.Slot1
     alloc_array 3
     init_instance user.patterns_new_runtime.Row1 .slots
     load_var stuffer_row
+    load_type patterns_new_runtime.Row1
     alloc_array 3
     init_instance user.patterns_new_runtime.Sheet1 .rows
     call user.patterns_new_runtime.pick_sheet
@@ -3110,6 +3116,7 @@ function patterns_new_runtime.test_for_class_binds_inner_zip() -> int {
     init_instance user.patterns_new_runtime.Coord .zip
     init_instance user.patterns_new_runtime.Addr .coordinate
     init_instance user.patterns_new_runtime.UserCoord .address
+    load_type patterns_new_runtime.UserCoord
     alloc_array 3
     call baml.iter.Iterable$for$T[].iter
     store_var _13
@@ -3273,6 +3280,7 @@ function patterns_new_runtime.test_for_deep_class_capture_fresh() -> int {
     load_var ?4
     make_cell
     store_var ?4
+    load_type () -> int throws never
     alloc_array 0
     store_var funcs
     load_type patterns_new_runtime.UserCoord
@@ -3288,6 +3296,7 @@ function patterns_new_runtime.test_for_deep_class_capture_fresh() -> int {
     init_instance user.patterns_new_runtime.Coord .zip
     init_instance user.patterns_new_runtime.Addr .coordinate
     init_instance user.patterns_new_runtime.UserCoord .address
+    load_type patterns_new_runtime.UserCoord
     alloc_array 3
     call baml.iter.Iterable$for$T[].iter
     store_var _13
@@ -3492,6 +3501,7 @@ function patterns_new_runtime.test_for_deep_class_sums() -> int {
     init_instance user.patterns_new_runtime.Coord .zip
     init_instance user.patterns_new_runtime.Addr .coordinate
     init_instance user.patterns_new_runtime.UserCoord .address
+    load_type patterns_new_runtime.UserCoord
     alloc_array 3
     call baml.iter.Iterable$for$T[].iter
     store_var _13
@@ -3657,13 +3667,17 @@ function patterns_new_runtime.test_for_inside_class_destruct() -> int {
     load_type patterns_new_runtime.Team1
     load_const 1
     load_const 2
+    load_type int
     alloc_array 2
     init_instance user.patterns_new_runtime.Team1 .scores
+    load_type int
     alloc_array 0
     init_instance user.patterns_new_runtime.Team1 .scores
     load_const 3
+    load_type int
     alloc_array 1
     init_instance user.patterns_new_runtime.Team1 .scores
+    load_type patterns_new_runtime.Team1
     alloc_array 3
     call baml.iter.Iterable$for$T[].iter
     store_var _10
@@ -3828,12 +3842,14 @@ function patterns_new_runtime.test_for_let_chain_alias_capture() -> int {
     load_var ?6
     make_cell
     store_var ?6
+    load_type () -> int throws never
     alloc_array 0
     store_var funcs
     load_type int
     load_const 1
     load_const 2
     load_const 3
+    load_type int
     alloc_array 3
     call baml.iter.Iterable$for$T[].iter
     store_var _3
@@ -4042,6 +4058,7 @@ function patterns_new_runtime.test_for_let_chain_of_bindings() -> int {
     load_const 1
     load_const 2
     load_const 3
+    load_type int
     alloc_array 3
     call baml.iter.Iterable$for$T[].iter
     store_var _3
@@ -4220,11 +4237,14 @@ function patterns_new_runtime.test_for_let_chain_trailing_type() -> int {
     load_type int[]
     load_const 4
     load_const 5
+    load_type int
     alloc_array 2
     load_const 6
     load_const 7
     load_const 8
+    load_type int
     alloc_array 3
+    load_type int[]
     alloc_array 2
     call baml.iter.Iterable$for$T[].iter
     store_var _5
@@ -4405,6 +4425,7 @@ function patterns_new_runtime.test_for_let_or_same_binding() -> int {
     load_const 2
     load_const 3
     load_const 4
+    load_type int
     alloc_array 4
     call baml.iter.Iterable$for$T[].iter
     store_var _3
@@ -4582,6 +4603,7 @@ function patterns_new_runtime.test_for_let_or_six_bindings() -> int {
     load_const 1
     load_const 2
     load_const 3
+    load_type int
     alloc_array 3
     call baml.iter.Iterable$for$T[].iter
     store_var _3
@@ -4757,11 +4779,15 @@ function patterns_new_runtime.test_for_nested_rest_irrefutable() -> int {
     store_var total
     load_type int[] | never[]
     load_const 1
+    load_type int
     alloc_array 1
     load_const 2
     load_const 3
+    load_type int
     alloc_array 2
+    load_type never
     alloc_array 0
+    load_type int[] | never[]
     alloc_array 3
     call baml.iter.Iterable$for$T[].iter
     store_var _6
@@ -4912,18 +4938,23 @@ function patterns_new_runtime.test_for_rest_capture_fresh_cell() -> int {
     load_var ?4
     make_cell
     store_var ?4
+    load_type () -> int throws never
     alloc_array 0
     store_var funcs
     load_type int[]
     load_const 1
+    load_type int
     alloc_array 1
     load_const 2
     load_const 3
+    load_type int
     alloc_array 2
     load_const 4
     load_const 5
     load_const 6
+    load_type int
     alloc_array 3
+    load_type int[]
     alloc_array 3
     call baml.iter.Iterable$for$T[].iter
     store_var _7
@@ -5116,10 +5147,14 @@ function patterns_new_runtime.test_for_rest_sums_rows() -> int {
     load_const 1
     load_const 2
     load_const 3
+    load_type int
     alloc_array 3
+    load_type int
     alloc_array 0
     load_const 4
+    load_type int
     alloc_array 1
+    load_type int[]
     alloc_array 3
     call baml.iter.Iterable$for$T[].iter
     store_var _7
@@ -5284,11 +5319,15 @@ function patterns_new_runtime.test_for_rest_wildcard_irrefutable() -> int {
     store_var count
     load_type int[]
     load_const 1
+    load_type int
     alloc_array 1
+    load_type int
     alloc_array 0
     load_const 2
     load_const 3
+    load_type int
     alloc_array 2
+    load_type int[]
     alloc_array 3
     call baml.iter.Iterable$for$T[].iter
     store_var _7
@@ -5446,6 +5485,7 @@ function patterns_new_runtime.test_generic_backfills_wrapped() -> int {
     call user.patterns_new_runtime.from_union_box
     store_var _5
     load_var boxed
+    load_type patterns_new_runtime.BoxT<int>
     alloc_array 1
     call user.patterns_new_runtime.from_array_boxes
     store_var _7
@@ -5589,6 +5629,7 @@ function patterns_new_runtime.test_match_alphabet() -> int {
     load_const 24
     load_const 25
     load_const 26
+    load_type int
     alloc_array 26
     store_var_load_var _1
     is_type int[]
@@ -5716,6 +5757,7 @@ function patterns_new_runtime.test_match_alphabet() -> int {
 function patterns_new_runtime.test_match_array_shadows_outer() -> int {
     load_const 4
     load_const 5
+    load_type int
     alloc_array 2
     store_var_load_var _3
     is_type int[]
@@ -5789,7 +5831,9 @@ function patterns_new_runtime.test_match_chain_of_bindings() -> int {
 
 function patterns_new_runtime.test_match_chain_trailing_binding() -> int {
     load_const 9
+    load_type int
     alloc_array 1
+    load_type int[]
     alloc_array 1
     store_var_load_var _1
     is_type int[][]
@@ -5928,7 +5972,9 @@ function patterns_new_runtime.test_match_generic_union_field() -> int {
 
 function patterns_new_runtime.test_match_nested_array_projects_inner() -> int {
     load_const 4
+    load_type int
     alloc_array 1
+    load_type int[]
     alloc_array 1
     store_var_load_var _1
     is_type int[][]
@@ -6008,6 +6054,7 @@ function patterns_new_runtime.test_match_wildcard_chained_array() -> int {
     load_const 4
     load_const 5
     load_const 6
+    load_type int
     alloc_array 3
     container_len
     return
@@ -6017,20 +6064,26 @@ function patterns_new_runtime.test_or_2d_vs_class() -> int {
     load_const 7
     load_const 1
     load_const 2
+    load_type int
     alloc_array 3
     load_const 8
     load_const 9
+    load_type int
     alloc_array 2
+    load_type int[]
     alloc_array 2
     call user.patterns_new_runtime.score_wrap2
     store_var bare
     load_const 1
     load_const 2
+    load_type int
     alloc_array 2
     load_const 3
     load_const 11
     load_const 5
+    load_type int
     alloc_array 3
+    load_type int[]
     alloc_array 2
     init_instance user.patterns_new_runtime.Wrap2 .grid
     call user.patterns_new_runtime.score_wrap2
@@ -6047,20 +6100,24 @@ function patterns_new_runtime.test_or_four_alternates() -> int {
     load_const 99
     load_const 7
     load_const 100
+    load_type int
     alloc_array 3
     init_instance user.patterns_new_runtime.Wrap1 .inner
     load_const 0
+    load_type int
     alloc_array 1
     init_instance user.patterns_new_runtime.Pair1 .left, .right
     call user.patterns_new_runtime.pick_pair
     store_var a
     load_const 99
+    load_type int
     alloc_array 1
     init_instance user.patterns_new_runtime.Wrap1 .inner
     load_const 99
     load_const 99
     load_const 8
     load_const 99
+    load_type int
     alloc_array 4
     init_instance user.patterns_new_runtime.Pair1 .left, .right
     call user.patterns_new_runtime.pick_pair
@@ -6069,18 +6126,23 @@ function patterns_new_runtime.test_or_four_alternates() -> int {
     load_const 9
     load_const 99
     load_const 99
+    load_type int
     alloc_array 4
     init_instance user.patterns_new_runtime.Wrap1 .inner
     call user.patterns_new_runtime.pick_pair
     store_var c
     load_const 99
+    load_type int
     alloc_array 1
     load_const 4
     load_const 5
     load_const 6
+    load_type int
     alloc_array 3
     load_const 99
+    load_type int
     alloc_array 1
+    load_type int[]
     alloc_array 3
     call user.patterns_new_runtime.pick_pair
     store_var d

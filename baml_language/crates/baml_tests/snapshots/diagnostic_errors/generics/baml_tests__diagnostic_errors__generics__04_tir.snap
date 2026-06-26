@@ -5,7 +5,7 @@ source: crates/baml_tests/src/generated_tests.rs
 class user.Box {
   value: T
 }
-function user.Box.get(self: user.Box) -> unknown throws never {
+function user.Box.get(self: user.Box<T>) -> T throws never {
   { : T
     self.value : T
   }
@@ -19,7 +19,7 @@ function user.use_box() -> int throws never {
 class user.Wrapper {
   data: T
 }
-function user.Wrapper.of(value: unknown) -> user.Wrapper<unknown> throws never {
+function user.Wrapper.of(value: T) -> user.Wrapper<T> throws never {
   { : user.Wrapper<T>
     Wrapper { data: value } : user.Wrapper<T>
   }
@@ -33,17 +33,17 @@ class user.Pair {
   first: A
   second: B
 }
-function user.Pair.get_first(self: user.Pair) -> unknown throws never {
+function user.Pair.get_first(self: user.Pair<A, B>) -> A throws never {
   { : A
     self.first : A
   }
 }
-function user.Pair.get_second(self: user.Pair) -> unknown throws never {
+function user.Pair.get_second(self: user.Pair<A, B>) -> B throws never {
   { : B
     self.second : B
   }
 }
-function user.Pair.swap(self: user.Pair) -> user.Pair<unknown, unknown> throws never {
+function user.Pair.swap(self: user.Pair<A, B>) -> user.Pair<B, A> throws never {
   { : user.Pair<B, A>
     Pair { first: self.second, second: self.first } : user.Pair<B, A>
   }
@@ -63,13 +63,13 @@ function user.use_pair_swap() -> user.Pair<string, int> throws never {
 class user.Maker {
   data: T
 }
-function user.Maker.from_string(params: string) -> user.Maker<unknown> throws never {
+function user.Maker.from_string(params: string) -> user.Maker<T> throws never {
   { : user.Maker<T>
     Maker { data: params } : user.Maker<T>
   }
   !! 1848..1854: type mismatch: expected T, got string
 }
-function user.Maker.from_value(params: unknown) -> user.Maker<unknown> throws never {
+function user.Maker.from_value(params: T) -> user.Maker<T> throws never {
   { : user.Maker<T>
     Maker { data: params } : user.Maker<T>
   }
@@ -82,7 +82,7 @@ function user.use_maker_static() -> user.Maker<int> throws never {
 class user.Holder {
   data: string
 }
-function user.Holder.get_data(self: user.Holder) -> unknown throws never {
+function user.Holder.get_data(self: user.Holder<T>) -> T throws never {
   { : string
     self.data : string
   }
@@ -136,7 +136,7 @@ function user.wrong_arity_on_non_generic() -> user.Plain<int> throws never {
 class user.Container {
   inner: user.Box<T>
 }
-function user.Container.unwrap(self: user.Container) -> unknown throws never {
+function user.Container.unwrap(self: user.Container<T>) -> T throws never {
   { : T
     self.inner.get<T>() : T
   }
@@ -150,12 +150,12 @@ function user.use_nested() -> int throws never {
 class user.Factory {
   data: T
 }
-function user.Factory.create(value: unknown) -> user.Factory<unknown> throws never {
+function user.Factory.create(value: T) -> user.Factory<T> throws never {
   { : user.Factory<T>
     Factory { data: value } : user.Factory<T>
   }
 }
-function user.Factory.get(self: user.Factory) -> unknown throws never {
+function user.Factory.get(self: user.Factory<T>) -> T throws never {
   { : T
     self.data : T
   }
@@ -169,7 +169,7 @@ function user.use_factory() -> int throws never {
 class user.MaybeBox {
   value: T | null
 }
-function user.MaybeBox.get_or_default(self: user.MaybeBox, default: unknown) -> unknown throws never {
+function user.MaybeBox.get_or_default(self: user.MaybeBox<T>, default: T) -> T throws never {
   { : T
     match (self.value : T | null) : T
       v: T =>
@@ -188,7 +188,7 @@ function user.use_maybe_box() -> int throws never {
 class user.Stack {
   items: T[]
 }
-function user.Stack.peek(self: user.Stack) -> unknown throws never {
+function user.Stack.peek(self: user.Stack<T>) -> T throws never {
   { : T
     self.items[0] : T
   }

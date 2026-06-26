@@ -891,7 +891,7 @@ fn value_runtime_baml_ty(value: Value, _proof: bex_heap::PermitProof<'_>) -> Opt
                     };
                     Some(RuntimeTy::Class(
                         class.name.clone(),
-                        instance.class_type_args.clone(),
+                        instance.class_type_args.to_vec(),
                         TyAttr::default(),
                     ))
                 }
@@ -992,6 +992,69 @@ fn derive_lambda_metadata(fqn: &str) -> (Option<bex_events::DefinitionKey>, Opti
         (!parent.is_empty()).then(|| bex_events::DefinitionKey(format!("function:{parent}")));
     let lambda_path = Some(fqn[lambda_start..].to_string());
     (parent_function, lambda_path)
+}
+
+// ── Friendly generic-inference errors ───────────────────────────────────────
+//
+// Inbound generic-call failures are surfaced to host callers, so their messages
+// must read for someone with no type-theory background. Two distinct shapes:
+//
+//   - *must-specify* — BAML found no evidence to infer `var` (a return-/body-only
+//     var, or a value position that came up empty). The fix is for the caller to
+//     name the type, so the message shows how.
+//   - *conflict* — the arguments demand mutually incompatible types for `var`;
+//     naming a type would not help (the args still wouldn't match), so the
+//     message explains the clash instead of suggesting a binding.
+//
+// Host call syntax is Python for now (subscript `f[int](...)` / `_types=`); a
+// per-host renderer is future work (see `03c-impl-guide`).
+
+/// The bare name the host caller used (e.g. `one_type_arg`), stripped of the
+/// engine's namespace/package qualification (`user.generic_tests.one_type_arg`)
+/// so the call examples in an error message match what the user actually typed.
+fn host_display_name(function_name: &str) -> &str {
+    function_name.rsplit('.').next().unwrap_or(function_name)
+}
+
+/// A generic call whose `var` could not be inferred from the arguments — tell the
+/// caller to specify it, with the Python subscript and `_types=` forms.
+fn friendly_must_specify(function_name: &str, generic_params: &[String], var: &str) -> String {
+    let name = host_display_name(function_name);
+    let placeholders = if generic_params.is_empty() {
+        "int".to_string()
+    } else {
+        generic_params
+            .iter()
+            .map(|_| "int")
+            .collect::<Vec<_>>()
+            .join(", ")
+    };
+    format!(
+        "`{name}` is a generic BAML function, and BAML could not infer a type for its type \
+         parameter `{var}` from the call arguments. Python callers must specify it explicitly \
+         as a subscript — e.g. `{name}[{placeholders}](...)`."
+    )
+}
+
+/// A generic call whose arguments demand incompatible types for some `TypeVar`.
+/// `detail` is the plain-language clash from the unifier; we only add the call
+/// frame.
+fn friendly_inference_conflict(function_name: &str, detail: &str) -> String {
+    let name = host_display_name(function_name);
+    format!("`{name}` was called with arguments whose types can't be reconciled. {detail}")
+}
+
+/// A generic call whose argument value doesn't inhabit its (now concrete)
+/// declared parameter type — e.g. a caller-specified `T=int` contradicted by a
+/// `string` actual (03b C4). `detail` is the structural clash from
+/// [`crate::conversion::check_generic_arg`]; we add the call frame and the
+/// 1-based argument position.
+fn friendly_arg_type_mismatch(function_name: &str, arg_index: usize, detail: &str) -> String {
+    let name = host_display_name(function_name);
+    format!(
+        "`{name}` was called with a value that doesn't match its type: argument {} {detail}.",
+        arg_index + 1
+    )
 }
 
 impl BexEngine {
@@ -1715,7 +1778,10 @@ impl BexEngine {
     /// # Returns
     ///
     /// Statistics about the collection (live count, collected count, etc.)
-    pub async fn collect_garbage(&self, level: bex_heap::CollectionLevel) -> bex_heap::GcStats {
+    pub async fn collect_garbage(
+        self: &Arc<Self>,
+        level: bex_heap::CollectionLevel,
+    ) -> bex_heap::GcStats {
         #[cfg(not(target_arch = "wasm32"))]
         self.park_requested.store(true, Ordering::Relaxed);
         let mut heap_guard = self.heap_permit_manager.request_park().await;
@@ -1792,6 +1858,14 @@ impl BexEngine {
         // *after* `collect_garbage` returns; both `maybe_collect_garbage` call
         // sites release their permit before calling.)
         bex_external_types::host_value::host_release_dispatch::drain();
+
+        // BEP-042: run the `cleanup` finalizer for every instance this
+        // collection kept alive. The `heap_guard` is dropped (so `call_function`
+        // can acquire a permit), the queued pointers are valid (drained at this
+        // same safepoint, before any other collection), and a caller that holds
+        // `checking_gc` (the engine GC paths) blocks a nested collection from
+        // moving them mid-drain.
+        self.drain_finalizers().await;
 
         tracing::debug!(
             "GC completed: {} live, {} collected",
@@ -1944,6 +2018,14 @@ impl BexEngine {
         // bridge-generics/streaming/04. `collect_type_var_bindings` only fills
         // keys not already bound, so the explicit `_types=` bindings win on
         // conflict.
+        // Whether the *caller* specified any explicit type binding (subscript /
+        // `_types=`). In explicit/partial mode the wire must be fully bound — an
+        // under-specified (argless) generic instance is a host bug and Gate B
+        // rejects it. In pure-inference mode (no caller bindings) BAML instead
+        // recovers an unbound instance's args from its field values (03b G1), so
+        // Gate B is lenient about its missing wire args. Captured before the
+        // self-receiver / inference sources mutate `type_args`.
+        let caller_specified_types = !type_args.is_empty();
         let mut type_args = type_args;
         if let (Some(self_declared), Some(BexCallArg::Provided(self_value))) =
             (declared_param_types.first(), args.first())
@@ -1956,26 +2038,121 @@ impl BexEngine {
                 );
             }
         }
-        let type_args = type_args;
-
-        // Always fold the recovered bindings into the return type. This is the
-        // pre-existing streaming fix (a generic `self` method's return type
-        // carries the class's type vars; the receiver binds them concretely)
-        // and is a no-op when `type_args` is empty.
-        return_type = crate::conversion::substitute_type_vars(&return_type, &type_args);
-
         // A call is generic iff the callee declares any generic params, OR a
         // TypeVar appears in a parameter / the return type. The declared-params
         // list also catches type params used only in the body (e.g.
         // `one_type_arg<T>()` reflecting `T`), which a signature scan misses.
         // Non-generic calls bypass all type-var work and keep the existing
         // permissive coercion path untouched (no regression, zero extra cost).
+        // Computed here (before the `type_args` freeze) because the inference
+        // step below mutates `type_args` and is gated on this flag. The
+        // (unsubstituted) `return_type` is used; self-receiver substitution does
+        // not change whether the callee is generic.
         let declared_generic_params = self.function_generic_params(function_name);
         let callee_is_generic = !declared_generic_params.is_empty()
             || declared_param_types
                 .iter()
                 .chain(std::iter::once(&return_type))
                 .any(crate::conversion::contains_type_var);
+
+        // ── TYPEVAR BINDING POLICY (inbound value-inference 01a/01b +
+        // `03c-impl-guide`). For each `TypeVar` `T`, after applying explicit
+        // (`_types=` / subscript) bindings:
+        //
+        //   1. Explicit wins. If the caller specified `T`, use it. (This is also
+        //      what satisfies the must-specify cases below.)
+        //   2. Closure poison ⇒ must-specify. If `T` occurs *anywhere inside a
+        //      closure/lambda-typed parameter's signature* (its param types or
+        //      return type, at any nesting depth), `T` MUST be explicitly
+        //      specified; unspecified ⇒ the call ERRORS. This OVERRIDES any
+        //      value-position evidence `T` might also have — a closure occurrence
+        //      poisons `T` globally.
+        //   3. No value position ⇒ must-specify. If `T`'s only occurrences are
+        //      return-only or body-only (no value position anywhere), `T`
+        //      likewise MUST be explicitly specified; errors if not.
+        //   4. Value position, no leaf ⇒ `RustType`. If `T` has ≥1 value
+        //      position, NO closure occurrence, and value-inference still
+        //      produced no concrete leaf (empty collection, `null` actual,
+        //      unbound generic under a non-recursing formal), default
+        //      `T = RustType` and let it ride opaquely as `RustData`.
+        //
+        // The normal path (a value position that *did* yield a leaf) is
+        // unchanged. Steps 2–3 are detectable from the *signature alone*, so the
+        // error is eager, at the call site (Gate A below) — not deferred into the
+        // body.
+        //
+        // Mechanically: inference only ever *adds* bindings — synthesize each
+        // provided arg's concrete `RuntimeTy`, unify against the declared param
+        // type, and fold in with `or_insert` so explicit (source b) and
+        // self-receiver (source a) bindings already in `type_args` WIN.
+        if callee_is_generic {
+            // Synthesize each provided arg's `RuntimeTy` and pair it with its
+            // declared formal, then solve every var across all arguments at once
+            // with variance tracking (`02d`/`02e`): a `TypeVar` used at
+            // conflicting variances — contravariant function params, invariant
+            // container/class args — has no consistent binding and is rejected
+            // here rather than fabricated into an unsound union.
+            let pairs: Vec<(RuntimeTy, RuntimeTy)> = args
+                .iter()
+                .enumerate()
+                .filter_map(|(idx, arg)| match (declared_param_types.get(idx), arg) {
+                    (Some(declared), BexCallArg::Provided(value)) => {
+                        // Formal-aware: a forcing generic-class formal recovers an
+                        // unbound instance's args from its fields (03b G1); every
+                        // other value synthesizes from the value alone.
+                        let actual = self.synth_inference_actual(declared, value);
+                        Some((declared.clone(), actual))
+                    }
+                    _ => None,
+                })
+                .collect();
+            let inferred =
+                crate::conversion::infer_bindings_runtime_checked(&pairs).map_err(|detail| {
+                    EngineError::TypeMismatch {
+                        message: friendly_inference_conflict(function_name, &detail),
+                    }
+                })?;
+
+            // Classify where each TypeVar occurs across the parameter types to
+            // drive rules 2 and 4 above.
+            let positions = crate::conversion::classify_param_var_positions(&declared_param_types);
+
+            for (name, ty) in inferred {
+                // Rule 2 (closure poison): drop any value-inferred binding so the
+                // var is required explicitly — even when another argument would
+                // otherwise pin it (`apply<T,R>(f: (T)->R, x: T)` — `x` must NOT
+                // bind `T`).
+                if positions.closure.contains(&name) {
+                    continue;
+                }
+                type_args.entry(name).or_insert(ty);
+            }
+
+            // Rule 4 (RustType default): a var with ≥1 value position, no closure
+            // occurrence, still unbound after inference defaults to `rust_type` and
+            // rides opaquely. Vars with no value position (return/body-only, rule 3)
+            // and closure-poisoned vars (rule 2) are left unbound for Gate A's
+            // must-specify error.
+            for var in &positions.value_position {
+                if positions.closure.contains(var) || positions.ambiguous_union.contains(var) {
+                    continue;
+                }
+                type_args
+                    .entry(var.clone())
+                    .or_insert_with(|| RuntimeTy::RustType {
+                        attr: baml_type::TyAttr::default(),
+                    });
+            }
+        }
+
+        let type_args = type_args;
+
+        // Always fold the recovered bindings into the return type. This is the
+        // pre-existing streaming fix (a generic `self` method's return type
+        // carries the class's type vars; the receiver binds them concretely),
+        // now also applying any inferred bindings, and is a no-op when
+        // `type_args` is empty.
+        return_type = crate::conversion::substitute_type_vars(&return_type, &type_args);
 
         // Strict generic handling — substitution + full-binding enforcement
         // (Gate A) + per-arg structural check (Gate B) — applies to *every*
@@ -2013,7 +2190,19 @@ impl BexEngine {
             //       including an instance method whose receiver failed to supply
             //       its class type args.
             let missing_declared = if self.is_class_method(function_name) {
-                None
+                // Demand the method's OWN generic params (the suffix after the
+                // class prefix). Inherited class params ride on the receiver (an
+                // instance method) or are phantom (a static), so they're never
+                // bound by name and must not be demanded. The method's own params
+                // ARE demanded — so rule 3 (no value position ⇒ must-specify)
+                // fires for a method's body-only own var (`reflect_t<T>()`), which
+                // check (2)'s signature scan misses.
+                let class_prefix = self.enclosing_class_generic_param_count(function_name);
+                declared_generic_params
+                    .iter()
+                    .skip(class_prefix)
+                    .find(|p| !type_args.contains_key(p.as_str()))
+                    .cloned()
             } else {
                 declared_generic_params
                     .iter()
@@ -2028,10 +2217,10 @@ impl BexEngine {
             });
             if let Some(name) = unbound {
                 return Err(EngineError::TypeMismatch {
-                    message: format!(
-                        "generic function `{function_name}` is missing a type binding for \
-                         type parameter `{name}` (every TypeVar must be bound, e.g. via \
-                         `_types=`)"
+                    message: friendly_must_specify(
+                        function_name,
+                        &declared_generic_params,
+                        name.as_str(),
                     ),
                 });
             }
@@ -2057,8 +2246,14 @@ impl BexEngine {
                     let coerced =
                         crate::conversion::coerce_arg_to_declared_type(*value, &param_types[idx])?;
                     if callee_is_generic {
-                        crate::conversion::check_generic_arg(&coerced, &param_types[idx])
-                            .map_err(|message| EngineError::TypeMismatch { message })?;
+                        crate::conversion::check_generic_arg(
+                            &coerced,
+                            &param_types[idx],
+                            caller_specified_types,
+                        )
+                        .map_err(|detail| EngineError::TypeMismatch {
+                            message: friendly_arg_type_mismatch(function_name, idx, &detail),
+                        })?;
                     }
                     Ok(BexCallArg::Provided(Box::new(coerced)))
                 }
@@ -2313,7 +2508,7 @@ impl BexEngine {
                 let class_type_args = receiver
                     .as_object_ptr()
                     .and_then(|ptr| match thread.vm.get_object(ptr) {
-                        Object::Instance(inst) => Some(inst.class_type_args.clone()),
+                        Object::Instance(inst) => Some(inst.class_type_args.to_vec()),
                         _ => None,
                     })
                     .unwrap_or_default();
@@ -2662,6 +2857,40 @@ impl BexEngine {
                 .is_some_and(|p| self.resolved_class_names.contains_key(p))
     }
 
+    /// Number of generic params declared by the class that *encloses*
+    /// `function_name` — the De Bruijn class-prefix length on a method's
+    /// `display_type_params` (`GenericBox<T>.new` ⇒ 1, `Helper.reflect_t` ⇒ 0).
+    /// `0` for free functions or when the parent isn't a registered class. Gate A
+    /// uses it to split a method's *own* generic params (which it must demand —
+    /// rule 3) from inherited class params (which ride on the receiver / are
+    /// phantom on a static, so are never bound by name).
+    fn enclosing_class_generic_param_count(&self, function_name: &str) -> usize {
+        let Some(resolved) = self.resolve_function_name(function_name) else {
+            return 0;
+        };
+        let Some(idx) = resolved.rfind('.') else {
+            return 0;
+        };
+        let parent = &resolved[..idx];
+        let class_ptr = self
+            .resolved_class_names
+            .get(parent)
+            .or_else(|| self.resolved_class_names.get(&format!("user.{parent}")))
+            .or_else(|| {
+                parent
+                    .strip_prefix("user.")
+                    .and_then(|p| self.resolved_class_names.get(p))
+            });
+        let Some(ptr) = class_ptr else {
+            return 0;
+        };
+        // SAFETY: ptr is from resolved_class_names, a compile-time object.
+        match unsafe { ptr.get() } {
+            Object::Class(class) => class.generic_param_count,
+            _ => 0,
+        }
+    }
+
     /// Check if a function exists by name (tries exact then "user." prefix).
     pub fn function_exists(&self, name: &str) -> bool {
         self.resolve_function_name(name).is_some()
@@ -2839,7 +3068,7 @@ impl BexEngine {
     /// collection level (Minor or Major) based on live object counts and
     /// allocation pressure.
     async fn gc_safepoint<T: RootHaver>(
-        &self,
+        self: &Arc<Self>,
         mut permit: ActiveHeapPermit<T>,
     ) -> ActiveHeapPermit<T> {
         let i_am_checking = self
@@ -2866,7 +3095,7 @@ impl BexEngine {
     /// permit-released state (e.g., the engine's `Await` branch waiting on
     /// a `SetOnce`) — calling [`Self::gc_safepoint`] there would do an
     /// extra release-and-reacquire pair around the heuristic for nothing.
-    async fn maybe_collect_garbage(&self) {
+    async fn maybe_collect_garbage(self: &Arc<Self>) {
         let i_am_checking = self
             .checking_gc
             .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
@@ -2880,6 +3109,54 @@ impl BexEngine {
         // If we are not the checker, the actual checker (some other VM) is
         // either already waiting in `request_park` or about to. Our caller
         // is permit-released, so they're not blocking that wait.
+    }
+
+    /// BEP-042: run the `cleanup` finalizer for each instance the GC kept alive
+    /// during the collection that just completed.
+    ///
+    /// Called immediately after a collection (the GC copied each pending instance
+    /// into the survivor space, so it is alive). The queued instances are rooted
+    /// into handles before the first `await` (see the body), so they stay valid
+    /// across any nested or concurrent collection — `collect_garbage` is `pub` and
+    /// can be called directly, where the `checking_gc` guard is NOT held, so we do
+    /// not rely on it. Each `cleanup` runs as an ordinary function call on the
+    /// real instance (passed by handle, never copied), so it sets the instance's
+    /// run-once latch; a `cleanup` racing on another fiber via an explicit call
+    /// or `defer` is deduped by that latch.
+    ///
+    /// A throwing `cleanup` is logged and swallowed — there is no caller to
+    /// propagate to on the GC path, and a bad finalizer must not break the GC
+    /// (BEP-042; matches Python's `__del__`).
+    async fn drain_finalizers(self: &Arc<Self>) {
+        // Root the entire queue into handles BEFORE the first `await`. The queued
+        // pointers are raw `HeapPtr`s; if a `cleanup` body yields and a nested or
+        // concurrent collection runs (possible when `collect_garbage` is called
+        // directly, where `checking_gc` is not held), the not-yet-processed
+        // pointers would be moved. Handles are GC roots and are fixed up across a
+        // collection, so converting up front keeps every pending instance valid.
+        let pending: Vec<_> = self
+            .heap
+            .take_pending_finalizers()
+            .into_iter()
+            .map(|(ptr, cleanup_fn)| (self.heap.create_handle(ptr), cleanup_fn))
+            .collect();
+        for (handle, cleanup_fn) in pending {
+            let ctx = FunctionCallContextBuilder::new(sys_types::CallId::next())
+                .with_profile_enabled(false)
+                .build();
+            // `Box::pin` breaks the async-recursion cycle: a `cleanup` body can
+            // allocate and trigger another collection, which re-enters this
+            // drain — boxing erases the otherwise-infinite future size.
+            let call = Box::pin(self.call_function(
+                &cleanup_fn,
+                vec![BexExternalValue::Handle(handle)],
+                ctx,
+                /* copy_objects = */ false,
+            ));
+            if let Err(e) = call.await {
+                tracing::warn!("BEP-042 cleanup finalizer `{cleanup_fn}` failed: {e}");
+            }
+        }
     }
 
     /// Transition the child future settled by `thread` to `Cancelled`

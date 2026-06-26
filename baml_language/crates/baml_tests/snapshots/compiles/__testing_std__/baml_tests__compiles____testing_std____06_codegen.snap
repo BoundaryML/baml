@@ -443,7 +443,9 @@ function testing.TestCollector.find_testset(self: testing.TestCollector, name: s
 
 function testing.TestCollector.new(prefix: string) -> testing.TestCollector {
     load_var prefix
+    load_type testing.TestRegistration
     alloc_array 0
+    load_type testing.TestSetRegistration
     alloc_array 0
     init_instance testing.TestCollector .prefix, .tests, .testsets
     return
@@ -1293,7 +1295,9 @@ function testing.TestRegistry.expand_testset_registry(self: testing.TestRegistry
     store_var start
     load_var ts
     load_field .name
+    load_type testing.TestRegistration
     alloc_array 0
+    load_type testing.TestSetRegistration
     alloc_array 0
     init_instance testing.TestCollector .prefix, .tests, .testsets
     store_var_load_var sub_collector
@@ -1304,6 +1308,8 @@ function testing.TestRegistry.expand_testset_registry(self: testing.TestRegistry
     call baml.sys.now_ms
     store_var _19
     load_var sub_collector
+    load_type string
+    load_type testing.TestRegistry
     alloc_map 0
     load_var2 6 4
     sub_int
@@ -1330,6 +1336,8 @@ function testing.TestRegistry.expand_testset_registry(self: testing.TestRegistry
 
 function testing.TestRegistry.new(collector: testing.TestCollector) -> testing.TestRegistry {
     load_var collector
+    load_type string
+    load_type testing.TestRegistry
     alloc_map 0
     load_const 0
     init_instance testing.TestRegistry .collector, .expansions, .loading_time_ms
@@ -2036,6 +2044,7 @@ function testing.TestRegistry.run_testset(self: testing.TestRegistry, name: stri
 }
 
 function testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.SerializedTest | testing.SerializedTestSet)[] {
+    load_type testing.SerializedTest | testing.SerializedTestSet
     alloc_array 0
     store_var items
     load_var self
@@ -2740,8 +2749,10 @@ function testing.aggregate_reports(named_results: testing.NamedChildReport[]) ->
     store_var failed
     load_const false
     store_var has_error
+    load_type string
     alloc_array 0
     store_var failed_names
+    load_type testing.TestReport | testing.TestSetReport
     alloc_array 0
     store_var results
     load_type testing.NamedChildReport
@@ -2943,6 +2954,7 @@ function testing.aggregate_reports(named_results: testing.NamedChildReport[]) ->
   L26:
     load_var named_result
     load_field .name
+    load_type string
     alloc_array 1
     jump L29
 
@@ -2954,6 +2966,7 @@ function testing.aggregate_reports(named_results: testing.NamedChildReport[]) ->
   L28:
     load_var named_result
     load_field .name
+    load_type string
     alloc_array 1
 
   L29:
@@ -3167,6 +3180,7 @@ function testing.run_children_parallel(children: testing.TestSetChild[]) -> test
     load_var ?5
     make_cell
     store_var ?5
+    load_type future<testing.NamedChildReport, null>
     alloc_array 0
     store_var futures
     load_type testing.TestSetChild
@@ -3350,6 +3364,7 @@ function testing.run_children_parallel(children: testing.TestSetChild[]) -> test
 }
 
 function testing.run_children_sequential(children: testing.TestSetChild[], fail_fast: bool) -> testing.TestSetReport {
+    load_type testing.NamedChildReport
     alloc_array 0
     store_var named_results
     load_type testing.TestSetChild
@@ -3645,6 +3660,7 @@ function testing.testset_child_selected(registry: testing.TestRegistry, ts: test
 }
 
 function testing.testset_children(registry: testing.TestRegistry) -> testing.TestSetChild[] {
+    load_type testing.TestSetChild
     alloc_array 0
     store_var children
     load_var registry
@@ -3975,6 +3991,7 @@ function testing.testset_children(registry: testing.TestRegistry) -> testing.Tes
 }
 
 function testing.testset_children_selected(registry: testing.TestRegistry, names: string[]) -> testing.TestSetChild[] {
+    load_type testing.TestSetChild
     alloc_array 0
     store_var children
     load_var registry

@@ -300,6 +300,18 @@ source: crates/baml_tests/src/generated_tests.rs
     │     Note: Error code: E0003
 ────╯
 
+  [type] error: type mismatch: expected string, got map<string, bool | int | map<string, string>>
+     ╭─[ config_decls.baml:198:2 ]
+     │
+ 198 │ ╭─▶ }
+     ┆ ┆   
+ 218 │ ├─▶ }
+     │ │       
+     │ ╰─────── type mismatch: expected string, got map<string, bool | int | map<string, string>>
+     │     
+     │     Note: Error code: E0001
+─────╯
+
   [validation] error: Name `ExtraWhitespace` defined 3 times as: class, enum, type
      ╭─[ class_decls.baml:296:10 ]
      │
@@ -333,35 +345,11 @@ source: crates/baml_tests/src/generated_tests.rs
 ────╯
 
   [type] error: unresolved name: GPT4
-     ╭─[ function_decls.baml:450:2 ]
-     │
- 450 │ ╭─▶ }
-     ┆ ┆   
- 456 │ ├─▶ }
-     │ │       
-     │ ╰─────── unresolved name: GPT4
-     │     
-     │     Note: Error code: E0003
-─────╯
-
-  [type] error: unresolved name: GPT4
      ╭─[ function_decls.baml:453:42 ]
      │
  453 │ ╭─▶ function LlmBasic(name: string) -> string {
      ┆ ┆   
  456 │ ├─▶ }
-     │ │       
-     │ ╰─────── unresolved name: GPT4
-     │     
-     │     Note: Error code: E0003
-─────╯
-
-  [type] error: unresolved name: GPT4
-     ╭─[ function_decls.baml:456:2 ]
-     │
- 456 │ ╭─▶ }
-     ┆ ┆   
- 471 │ ├─▶ }
      │ │       
      │ ╰─────── unresolved name: GPT4
      │     
@@ -381,35 +369,11 @@ source: crates/baml_tests/src/generated_tests.rs
 ─────╯
 
   [type] error: unresolved name: GPT4
-     ╭─[ function_decls.baml:477:2 ]
-     │
- 477 │ ╭─▶ }
-     ┆ ┆   
- 483 │ ├─▶ }
-     │ │       
-     │ ╰─────── unresolved name: GPT4
-     │     
-     │     Note: Error code: E0003
-─────╯
-
-  [type] error: unresolved name: GPT4
      ╭─[ function_decls.baml:480:50 ]
      │
  480 │ ╭─▶ function LlmReversedOrder(text: string) -> string {
      ┆ ┆   
  483 │ ├─▶ }
-     │ │       
-     │ ╰─────── unresolved name: GPT4
-     │     
-     │     Note: Error code: E0003
-─────╯
-
-  [type] error: unresolved name: GPT4
-     ╭─[ function_decls.baml:483:2 ]
-     │
- 483 │ ╭─▶ }
-     ┆ ┆   
- 494 │ ├─▶ }
      │ │       
      │ ╰─────── unresolved name: GPT4
      │     
@@ -592,15 +556,13 @@ source: crates/baml_tests/src/generated_tests.rs
 ─────╯
 
   [type] error: type mismatch: expected string, got 0
-     ╭─[ match_exprs.baml:416:6 ]
+     ╭─[ match_exprs.baml:420:68 ]
      │
- 416 │ ╭─▶     }
-     ┆ ┆   
- 421 │ ├─▶     }
-     │ │           
-     │ ╰─────────── type mismatch: expected string, got 0
-     │     
-     │     Note: Error code: E0001
+ 420 │         (1 /* inner1 */ | 2 /* inner2 */) /* outer-trail */ | 3 => 0
+     │                                                                    ┬  
+     │                                                                    ╰── type mismatch: expected string, got 0
+     │ 
+     │ Note: Error code: E0001
 ─────╯
 
   [validation] error: Name `ManyParams` defined 2 times as: function, template_string

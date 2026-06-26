@@ -56,7 +56,7 @@ function user.Encoder.encode(self: user.Encoder, data: string) -> string throws 
 class user.Box {
   value: T
 }
-function user.Box.unwrap(self: user.Box) -> unknown throws never {
+function user.Box.unwrap(self: user.Box<T>) -> T throws never {
   { : T
     self.value : T
   }

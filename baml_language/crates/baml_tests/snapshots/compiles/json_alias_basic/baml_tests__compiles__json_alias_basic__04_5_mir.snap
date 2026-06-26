@@ -76,7 +76,7 @@ fn user.ReturnArray() -> baml.json.json {
     let _0: baml.json.json // _0 // return
 
     bb0: {
-        _0 = [const 1_i64, const 2_i64, const 3_i64];
+        _0 = [const 1_i64, const 2_i64, const 3_i64]: int[];
         goto -> bb1;
     }
 
@@ -132,7 +132,7 @@ fn user.ReturnMap() -> baml.json.json {
     let _0: baml.json.json // _0 // return
 
     bb0: {
-        _0 = { const "key": const "value" };
+        _0 = { const "key": const "value" }: map<string, string>;
         goto -> bb1;
     }
 

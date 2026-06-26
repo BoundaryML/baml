@@ -637,6 +637,47 @@ fn check_interfaces<'db>(
         );
     }
 
+    // E0145 + impl-resolution lowering errors: `impl_data` owns these (the
+    // single compiler-side source); check.rs only surfaces them, mapping each
+    // diagnostic's span-free origin to a precise source range.
+    {
+        use baml_compiler2_tir::interfaces::{ImplDataError, ImplDiagnosticLocation};
+        let item_tree = baml_compiler2_hir::file_item_tree(db, file);
+        for impl_id in item_tree.impls.keys() {
+            let impl_loc = baml_compiler2_hir::loc::ImplLoc::new(db, file, *impl_id);
+            // `impl_data` owns an impl's diagnostics whether or not it fully
+            // resolves: an unresolved interface target still carries the
+            // diagnostics it lowered (the bad interface target, the for-target,
+            // the bounds), so surface those too.
+            let impl_diags = match baml_compiler2_tir::interfaces::impl_data(db, impl_loc).as_ref()
+            {
+                Ok(data) => &data.diagnostics,
+                Err(ImplDataError::InterfaceUnresolved { diagnostics }) => diagnostics,
+                Err(ImplDataError::Malformed) => continue,
+            };
+            if impl_diags.is_empty() {
+                continue;
+            }
+            let Some(sm) =
+                baml_compiler2_tir::interfaces::impl_data_source_map(db, impl_loc).as_ref()
+            else {
+                continue;
+            };
+            for (error, loc) in impl_diags {
+                let span = match loc {
+                    ImplDiagnosticLocation::InterfaceTarget => sm.interface_target_span,
+                    ImplDiagnosticLocation::ForTarget => sm.for_target_span.unwrap_or(sm.impl_span),
+                    ImplDiagnosticLocation::Bound => sm.impl_span,
+                };
+                diagnostics.push(
+                    Diagnostic::error(tir_type_error_to_diagnostic_id(error), error.to_string())
+                        .with_primary_span(span)
+                        .with_phase(DiagnosticPhase::Type),
+                );
+            }
+        }
+    }
+
     for item in items {
         if let baml_compiler2_ast::Item::Interface(iface) = item {
             for method in &iface.default_methods {
@@ -1785,14 +1826,16 @@ fn validate_associated_type_bindings_in_items(
                     .iter()
                     .map(|(name, _)| name.clone())
                     .collect();
+                // Single-bound view (first `&`-bound only) — unchanged behavior;
+                // the full bound set lives on the new HIR `ImplBlock`.
                 let impl_bound_exprs: Vec<Option<baml_compiler2_ast::TypeExpr>> = imp
                     .generic_params
                     .iter()
-                    .map(|(_, bound)| bound.clone())
+                    .map(|(_, bounds)| bounds.first().cloned())
                     .collect();
                 let impl_bounds = generic_bound_expr_map(&impl_generics, &impl_bound_exprs);
-                for (_, bound) in &imp.generic_params {
-                    if let Some(bound) = bound {
+                for (_, bounds) in &imp.generic_params {
+                    if let Some(bound) = bounds.first() {
                         validate_associated_type_bindings_in_type_expr(
                             db,
                             file_id,
@@ -2246,6 +2289,10 @@ fn validate_associated_type_bindings_in_type_expr(
                     diagnostics,
                 );
             }
+            // The non-interface qualifier and the unknown-associated-member checks
+            // are now in the TIR lowering (`lower_explicit_projection_qualifier`),
+            // emitted on every compile path. This still validates the
+            // unknown-interface and base-implements-interface cases.
             validate_qualified_associated_type_projection(
                 db,
                 file_id,
@@ -2480,51 +2527,31 @@ fn validate_qualified_associated_type_projection(
     let baml_compiler2_ast::TypeExpr::AssociatedTypeProjection {
         base,
         interface: Some(interface),
-        member,
         ..
     } = expr
     else {
         return;
     };
 
-    let Some(resolved_iface) = resolve_interface_path(db, interface, pkg_items, namespace_path)
-    else {
-        let message = if is_non_interface_type(interface, pkg_items, namespace_path) {
-            "qualified associated type projection must use an interface".to_string()
-        } else {
-            format!("unknown interface `{interface}` in associated type projection")
-        };
-        diagnostics.push(
-            Diagnostic::error(DiagnosticId::TypeMismatch, message)
+    // The qualifier must name an interface. The non-interface case ("must use an
+    // interface") and the unknown-associated-member case are now diagnosed by the
+    // TIR lowering (`lower_explicit_projection_qualifier`), emitted on every
+    // compile path; here we only report a qualifier path that doesn't resolve to
+    // any interface at all.
+    if resolve_interface_path(db, interface, pkg_items, namespace_path).is_none() {
+        if !is_non_interface_type(interface, pkg_items, namespace_path) {
+            diagnostics.push(
+                Diagnostic::error(
+                    DiagnosticId::TypeMismatch,
+                    format!("unknown interface `{interface}` in associated type projection"),
+                )
                 .with_primary_span(Span {
                     file_id,
                     range: span,
                 })
                 .with_phase(DiagnosticPhase::Type),
-        );
-        return;
-    };
-
-    if !resolved_iface
-        .iface
-        .associated_types
-        .iter()
-        .any(|assoc| assoc.name == *member)
-    {
-        diagnostics.push(
-            Diagnostic::error(
-                DiagnosticId::UnknownType,
-                format!(
-                    "unknown associated type `{member}` for interface `{}`",
-                    resolved_iface.display_name()
-                ),
-            )
-            .with_primary_span(Span {
-                file_id,
-                range: span,
-            })
-            .with_phase(DiagnosticPhase::Type),
-        );
+            );
+        }
         return;
     }
 
@@ -3489,10 +3516,19 @@ fn is_non_interface_type(
         return false;
     };
     let lookup_ns = path_lookup_namespace(head, namespace_path);
-    matches!(
-        pkg_items.lookup_type(lookup_ns, name),
-        Some(Definition::Class(_) | Definition::Enum(_))
-    )
+    // True for any name that resolves to a *non-interface* definition (class,
+    // enum, type alias, …). We exclude the single interface kind rather than
+    // enumerate every non-interface kind: TIR lowering emits
+    // `NonInterfaceProjectionQualifier` for all of them, and an allow-list here
+    // silently regressed type aliases (a duplicate "unknown interface", and the
+    // `requires`/`implement` sites mislabeling an existing alias as "doesn't
+    // exist"). An unresolved name is *not* a non-interface — it's "doesn't
+    // exist" — so `None` stays `false`.
+    match pkg_items.lookup_type(lookup_ns, name) {
+        Some(Definition::Interface(_)) => false,
+        Some(_) => true,
+        None => false,
+    }
 }
 
 fn rendered_type_args(args: &[baml_compiler2_ast::TypeExpr]) -> Vec<String> {
@@ -4094,7 +4130,9 @@ fn expand_type_alias_rec(
             attr,
         } => Ty::AssociatedTypeProjection {
             base: Box::new(recurse(base, seen)),
-            interface: interface.as_ref().map(|i| Box::new(recurse(i, seen))),
+            interface: interface
+                .as_ref()
+                .map(|i| Box::new(i.map_tys(|t| recurse(t, seen)))),
             member: member.clone(),
             attr: attr.clone(),
         },
@@ -4196,10 +4234,11 @@ fn validate_implements_for<'db>(
     let target_name = Name::new(format!("{}", imp.for_target.expr));
     let generic_param_names: Vec<Name> =
         imp.generic_params.iter().map(|(n, _)| n.clone()).collect();
+    // Single-bound view (first `&`-bound only) — unchanged behavior.
     let generic_param_bounds: Vec<Option<baml_compiler2_ast::TypeExpr>> = imp
         .generic_params
         .iter()
-        .map(|(_, bound)| bound.clone())
+        .map(|(_, bounds)| bounds.first().cloned())
         .collect();
     let generic_bounds = generic_bound_expr_map(&generic_param_names, &generic_param_bounds);
     let ctx = InterfaceValidationCtx {
@@ -4208,6 +4247,11 @@ fn validate_implements_for<'db>(
         namespace_path,
         aliases,
     };
+    // Lower the for-target purely to drive the concreteness/orphan logic below.
+    // Lowering diagnostics (unresolved types, etc.) are emitted by `impl_data`
+    // (the single source for impl type-expr diagnostics) and surfaced once at the
+    // impl span — so they are collected into a throwaway sink here, not re-emitted.
+    // An unresolvable target can't be orphan-checked, so bail.
     let mut target_type_errors = Vec::new();
     let target_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
         db,
@@ -4218,16 +4262,6 @@ fn validate_implements_for<'db>(
         &mut target_type_errors,
     );
     if !target_type_errors.is_empty() {
-        for error in target_type_errors {
-            diagnostics.push(
-                Diagnostic::error(tir_type_error_to_diagnostic_id(&error), error.to_string())
-                    .with_primary_span(Span {
-                        file_id,
-                        range: imp.for_target.span,
-                    })
-                    .with_phase(DiagnosticPhase::Type),
-            );
-        }
         return;
     }
 
@@ -4334,22 +4368,11 @@ fn validate_implements_for<'db>(
             &generic_param_names,
             &mut iface_lower_errs,
         );
-        // Surface errors lowering the interface target (unknown type, wrong generic
-        // arity, …) and stop — exactly as the for-target does above. Otherwise an
-        // out-of-body `implement BadIface<a, b> for Bar` would silently swallow these
-        // and run the orphan check on a degraded `iface_ty` (the in-body path reports
-        // them, so this kept the two paths inconsistent).
+        // Interface-target lowering errors (unknown type, wrong generic arity, …)
+        // are owned + surfaced by `impl_data` (the impl-diagnostics loop). Here we
+        // only bail when the target is ill-formed so the orphan check doesn't run
+        // on a degraded `iface_ty`; the error sink is intentionally discarded.
         if !iface_lower_errs.is_empty() {
-            for error in iface_lower_errs {
-                diagnostics.push(
-                    Diagnostic::error(tir_type_error_to_diagnostic_id(&error), error.to_string())
-                        .with_primary_span(Span {
-                            file_id,
-                            range: imp.interface_target.span,
-                        })
-                        .with_phase(DiagnosticPhase::Type),
-                );
-            }
             return;
         }
         let iface_args: Vec<Ty> = match expand_type_alias(&iface_ty, aliases) {
@@ -4689,33 +4712,9 @@ fn validate_class_implements<'db>(
             }
             continue;
         };
-        // E0002: the interface name resolved, but its generic type arguments
-        // must themselves be resolvable types. `implements Container<Bogus>`
-        // is rejected here just like a field type `x: Bogus` is. Without this,
-        // an unresolvable type argument in an `implements` clause is silently
-        // dropped — the only code that lowers the target (dispatch-source
-        // collection) discards these diagnostics.
-        {
-            let mut arg_errors = Vec::new();
-            baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
-                db,
-                &block.target.expr,
-                pkg_items,
-                namespace_path,
-                &class.generic_params,
-                &mut arg_errors,
-            );
-            for error in arg_errors {
-                diagnostics.push(
-                    Diagnostic::error(tir_type_error_to_diagnostic_id(&error), error.to_string())
-                        .with_primary_span(Span {
-                            file_id,
-                            range: block.target.span,
-                        })
-                        .with_phase(DiagnosticPhase::Type),
-                );
-            }
-        }
+        // Interface-target lowering errors (e.g. `implements Container<Bogus>`,
+        // an unresolvable type argument) are owned by `impl_data` and surfaced by
+        // the impl-diagnostics loop above; this validator no longer re-emits them.
         let iface_display_name = resolved_iface.display_name();
         let iface_qtn = resolved_iface.qtn.clone();
         let iface_file = resolved_iface.loc.file(db);
@@ -6134,6 +6133,9 @@ fn tir_type_error_to_diagnostic_id(
         | TirTypeError::ComparisonAlwaysDisjoint { .. } => DiagnosticId::InvalidOperator,
         TirTypeError::InvalidUnaryOp { .. } => DiagnosticId::InvalidOperator,
         TirTypeError::UnresolvedType { .. } => DiagnosticId::UnknownType,
+        TirTypeError::NonInterfaceProjectionQualifier => DiagnosticId::TypeMismatch,
+        TirTypeError::UnknownAssociatedType { .. } => DiagnosticId::UnknownType,
+        TirTypeError::AmbiguousAssociatedTypeProjection { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::ArgumentCountMismatch { .. }
         | TirTypeError::PositionalArgumentAfterNamed
         | TirTypeError::DuplicateNamedArgument { .. }
@@ -6205,6 +6207,7 @@ fn tir_type_error_to_diagnostic_id(
         | TirTypeError::RuntimeIdMemberAccess { .. }
         | TirTypeError::RuntimeIdCallSiteArgument => DiagnosticId::TypeMismatch,
         TirTypeError::IntegerLiteralOutOfRange { .. } => DiagnosticId::IntegerLiteralOutOfRange,
+        TirTypeError::GenericBoundNotInterface { .. } => DiagnosticId::GenericBoundNotInterface,
     }
 }
 

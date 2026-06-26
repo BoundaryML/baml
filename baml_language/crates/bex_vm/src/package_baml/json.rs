@@ -23,6 +23,17 @@ use baml_type::{MediaKind, RuntimeTy, TypeName};
 /// avoid dragging the whole `baml_base` crate into `bex_vm` deps.
 const BAML_JSON_JSON: &str = "baml.json.json";
 
+/// The runtime type of an untyped `json` value: the recursive `baml.json.json`
+/// alias (`null | bool | int | float | string | json[] | map<string, json>`).
+/// Recursive aliases stay opaque in `RuntimeTy`, so this is the most precise
+/// element/value type available for containers parsed from untyped JSON.
+pub(super) fn json_alias_ty() -> RuntimeTy {
+    RuntimeTy::TypeAlias(
+        TypeName::from_dotted_path(BAML_JSON_JSON),
+        baml_type::TyAttr::default(),
+    )
+}
+
 /// Run `f` with `seg` appended to `path`, then restore `path` to its prior
 /// length. Used to track the JSON pointer during recursive (de)serialization
 /// without mutating the buffer's owner contract.
@@ -55,7 +66,7 @@ use std::collections::HashMap;
 use bex_heap::TlabHolder;
 use bex_vm_types::{
     HeapPtr, ValueKind,
-    types::{Instance, Object, Value},
+    types::{Array, Instance, Map, Object, Value},
 };
 use indexmap::IndexMap;
 
@@ -627,7 +638,11 @@ pub fn serde_to_value(vm: &mut BexVm, v: &serde_json::Value) -> Value {
         serde_json::Value::String(s) => Value::object(vm.alloc_string(s.clone())),
         serde_json::Value::Array(arr) => {
             let items: Vec<Value> = arr.iter().map(|elem| serde_to_value(vm, elem)).collect();
-            Value::object(vm.tlab.alloc(Object::Array(items.into())))
+            // Untyped JSON: elements are `json` values.
+            Value::object(
+                vm.tlab
+                    .alloc(Object::Array(Array::new(json_alias_ty(), items))),
+            )
         }
         serde_json::Value::Object(map) => {
             let entries: IndexMap<bex_vm_types::BexStr, Value> = map
@@ -639,7 +654,12 @@ pub fn serde_to_value(vm: &mut BexVm, v: &serde_json::Value) -> Value {
                     )
                 })
                 .collect();
-            Value::object(vm.tlab.alloc(Object::Map(entries.into())))
+            // Untyped JSON object: string keys, `json` values.
+            Value::object(vm.tlab.alloc(Object::Map(Map::new(
+                RuntimeTy::string(),
+                json_alias_ty(),
+                entries,
+            ))))
         }
     }
 }
@@ -1121,7 +1141,10 @@ fn ty_serde_to_value(
                     })?;
                     items.push(v);
                 }
-                Ok(Value::object(vm.tlab.alloc(Object::Array(items.into()))))
+                Ok(Value::object(
+                    vm.tlab
+                        .alloc(Object::Array(Array::new((**elem).clone(), items))),
+                ))
             }
             _ => Err(raise_decode(vm, "expected array", path)),
         },
@@ -1136,7 +1159,12 @@ fn ty_serde_to_value(
                     })?;
                     entries.insert(bex_vm_types::BexStr::from(k.as_str()), v);
                 }
-                Ok(Value::object(vm.tlab.alloc(Object::Map(entries.into()))))
+                // BAML maps are always string-keyed at runtime.
+                Ok(Value::object(vm.tlab.alloc(Object::Map(Map::new(
+                    RuntimeTy::string(),
+                    (**vty).clone(),
+                    entries,
+                )))))
             }
             _ => Err(raise_decode(vm, "expected object", path)),
         },
@@ -1779,7 +1807,8 @@ fn list_drive(
             Err(e) => return NativeCallResult::Error(e),
         }
     }
-    let arr_val = Value::object(vm.tlab.alloc(Object::Array(results.into())));
+    // Type-directed: the result list carries the decode element type.
+    let arr_val = Value::object(vm.tlab.alloc(Object::Array(Array::new(elem_ty, results))));
     NativeCallResult::Done(arr_val)
 }
 
@@ -1898,7 +1927,12 @@ fn map_drive(
             Err(e) => return NativeCallResult::Error(e),
         }
     }
-    let map_val = Value::object(vm.tlab.alloc(Object::Map(results.into())));
+    // Type-directed: string keys, decode value type carried from `val_ty`.
+    let map_val = Value::object(vm.tlab.alloc(Object::Map(Map::new(
+        RuntimeTy::string(),
+        val_ty,
+        results,
+    ))));
     NativeCallResult::Done(map_val)
 }
 

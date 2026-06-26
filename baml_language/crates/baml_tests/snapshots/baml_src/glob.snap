@@ -169,6 +169,7 @@ function glob.glob_matches_alternation_fn() -> bool[] {
     load_var g
     load_const "app.js"
     sys_op baml.glob.Glob.matches
+    load_type bool
     alloc_array 3
     return
 }
@@ -189,6 +190,7 @@ function glob.glob_matches_bracket_character_class_fn() -> bool[] {
     load_var g
     load_const "d.txt"
     sys_op baml.glob.Glob.matches
+    load_type bool
     alloc_array 4
     return
 }
@@ -206,6 +208,7 @@ function glob.glob_matches_bracket_range_fn() -> bool[] {
     load_var g
     load_const "d.txt"
     sys_op baml.glob.Glob.matches
+    load_type bool
     alloc_array 3
     return
 }
@@ -220,6 +223,7 @@ function glob.glob_matches_negated_bracket_fn() -> bool[] {
     load_var g
     load_const "d.txt"
     sys_op baml.glob.Glob.matches
+    load_type bool
     alloc_array 2
     return
 }
@@ -234,6 +238,7 @@ function glob.glob_matches_negated_pattern_fn() -> bool[] {
     load_var g
     load_const "index.ts"
     sys_op baml.glob.Glob.matches
+    load_type bool
     alloc_array 2
     return
 }
@@ -323,6 +328,7 @@ function glob.scan_default_prunes_dot_directories_checks() -> bool[] {
     load_const 1
     cmp_int_op ==
     load_var _28
+    load_type bool
     alloc_array 2
     return
 }
@@ -479,6 +485,7 @@ function glob.scan_follows_symlinked_directory_checks() -> bool[] {
     load_const 1
     cmp_int_op ==
     load_var _26
+    load_type bool
     alloc_array 2
     return
 }
@@ -529,6 +536,7 @@ function glob.scan_matches_absolute_pattern_checks() -> bool[] {
     load_const 1
     cmp_int_op ==
     load_var _18
+    load_type bool
     alloc_array 2
     return
 }
@@ -606,6 +614,7 @@ function glob.scan_only_files_by_default_checks() -> bool[] {
     load_const 1
     cmp_int_op ==
     load_var _18
+    load_type bool
     alloc_array 2
     return
 }
@@ -680,6 +689,7 @@ function glob.scan_opts_include_dot_absolute_and_dirs_checks() -> bool[] {
     cmp_int_op ==
     load_var2 4 5
     load_var _30
+    load_type bool
     alloc_array 4
     return
 }

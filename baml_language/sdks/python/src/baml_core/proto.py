@@ -161,6 +161,19 @@ def _set_inbound_value(
     if value is None:
         return  # oneof unset ≡ null
 
+    # `enum.Enum` must precede the primitive arms. Codegen emits enums as
+    # mixin subclasses of their backing primitive — `SomeEnum(str, enum.Enum)`
+    # (and likewise `int`-backed enums) — so a bare `isinstance(value, str)` /
+    # `isinstance(value, int)` check would otherwise swallow an enum member and
+    # encode it as `string_value` / `int_value`, losing the `T = SomeEnum`
+    # binding the engine recovers from an `EnumVariant`. Same precedence logic
+    # as `bool` before `int`: dispatch on the most specific runtime shape first.
+    if isinstance(value, enum.Enum):
+        ev = inbound_value.enum_value
+        ev.name = get_type_map().py_type_to_baml_type(_base_class_for_fqn(type(value)))
+        ev.value = value.name
+        return
+
     # bool must precede int — bool is an int subclass in Python.
     if isinstance(value, bool):
         inbound_value.bool_value = value
@@ -207,11 +220,6 @@ def _set_inbound_value(
             _set_inbound_map_entry(
                 map_val.entries.add(), k, v, kwarg_name=kwarg_name, registered=registered
             )
-        return
-    if isinstance(value, enum.Enum):
-        ev = inbound_value.enum_value
-        ev.name = get_type_map().py_type_to_baml_type(_base_class_for_fqn(type(value)))
-        ev.value = value.name
         return
 
     # `BamlPyHandle` is its own top-level inbound variant — peer to
@@ -339,14 +347,17 @@ def _set_inbound_map_entry(
     rollback (see that function)."""
     if isinstance(key, bool):
         entry.bool_key = key
+    elif isinstance(key, enum.Enum):
+        # Precede `str`/`int`: codegen enums mix in their backing primitive
+        # (`SomeEnum(str, enum.Enum)`), so an enum member must be matched here
+        # before the `str`/`int` arms would swallow it as a plain scalar key.
+        ek = entry.enum_key
+        ek.name = get_type_map().py_type_to_baml_type(_base_class_for_fqn(type(key)))
+        ek.value = key.name
     elif isinstance(key, str):
         entry.string_key = key
     elif isinstance(key, int):
         entry.int_key = key
-    elif isinstance(key, enum.Enum):
-        ek = entry.enum_key
-        ek.name = get_type_map().py_type_to_baml_type(type(key))
-        ek.value = key.name
     else:
         entry.string_key = str(key)  # best-effort fallback
     _set_inbound_value(entry.value, value, kwarg_name=kwarg_name, registered=registered)
@@ -931,6 +942,21 @@ def decode_call_result(data: bytes) -> Any:
     if which == "error":
         msg = result.error
         decoded = decode_value(msg.value, type_map)
+        # A value/type mismatch at the call boundary (`baml.errors.TypeMismatch`,
+        # synthesized host-side from `EngineError::TypeMismatch`) is a *caller*
+        # type error — surface it as Python's native `TypeError` rather than a
+        # `BamlError` wrapper. Covers inbound-generics Gate-A failures (a
+        # `TypeVar` that can't be inferred and must be specified, conflicting
+        # variance occurrences) and ordinary argument-type mismatches.
+        if _outbound_class_fqn(msg.value) == "baml.errors.TypeMismatch":
+            message = getattr(decoded, "message", None)
+            if message is None and isinstance(decoded, dict):
+                message = decoded.get("message")
+            err = TypeError(message if message is not None else str(decoded))
+            # Let `attach_baml_traceback` splice the BAML frames onto the
+            # native exception (exception instances accept ad-hoc attributes).
+            err.baml_trace = list(msg.trace)  # type: ignore[attr-defined]
+            raise attach_baml_traceback(err)
         # Same-host rehydration: a `baml.errors.HostCallable` carrying a
         # `_handle` that still resolves in this runtime's host-value
         # registry re-raises the *original* native exception object the

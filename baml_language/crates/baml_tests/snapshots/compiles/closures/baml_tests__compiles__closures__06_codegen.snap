@@ -135,6 +135,7 @@ function user.test_bound_mapper() -> string[] {
     load_type never
     load_const "hello"
     load_const "world"
+    load_type string
     alloc_array 2
     load_const ">> "
     init_instance user.Formatter .prefix
@@ -151,6 +152,7 @@ function user.test_bound_validator() -> bool[] {
     load_const 15
     load_const 25
     load_const 75
+    load_type int
     alloc_array 4
     load_const 10
     load_const 50
@@ -224,6 +226,7 @@ function user.test_strategy() -> int[] {
     call user.apply
     store_var _7
     load_var2 1 2
+    load_type int
     alloc_array 2
     return
 }
@@ -232,6 +235,7 @@ function user.test_unbound_higher_order() -> string[] {
     load_const "Alice"
     load_const "Smith"
     init_instance user.Employee .first, .last
+    load_type Employee
     alloc_array 1
     load_global user.Employee.full_name
     call user.apply_to_each
@@ -248,6 +252,7 @@ function user.test_unbound_in_map() -> string[] {
     load_const "Bob"
     load_const "Jones"
     init_instance user.Employee .first, .last
+    load_type Employee
     alloc_array 2
     load_global user.Employee.full_name
     call baml.Array.map

@@ -216,6 +216,7 @@ function user.iterator_style_for_loop() -> int {
     load_const 1
     load_const 2
     load_const 3
+    load_type int
     alloc_array 3
     call baml.iter.Iterable$for$T[].iter
     store_var _3
@@ -458,6 +459,7 @@ function user.nested_for_loop() -> int {
     load_const 1
     load_const 2
     load_const 3
+    load_type int
     alloc_array 3
     call baml.iter.Iterable$for$T[].iter
     store_var _3
@@ -619,6 +621,7 @@ function user.nested_for_loop() -> int {
     load_const 4
     load_const 5
     load_const 6
+    load_type int
     alloc_array 3
     call baml.iter.Iterable$for$T[].iter
     store_var _37
