@@ -1,18 +1,27 @@
-//! Precompiled BAML stdlib emit artifact.
+//! Precompiled BAML stdlib artifacts.
 //!
-//! `build.rs` runs the compiler's core emit passes (1-4) over the embedded
-//! stdlib once and serializes the resulting [`EmitState`] prefix to
-//! `$OUT_DIR/stdlib_prefix.bin`. This crate embeds those bytes and exposes a
-//! deserialize helper so a normal compile can resume from the stdlib prefix
-//! (via `generate_project_bytecode_with_prefix`) instead of recompiling the
-//! ~676-function stdlib from source on every invocation.
+//! `build.rs` compiles the embedded, frozen stdlib once and serializes two
+//! artifacts that a normal `baml` invocation loads instead of recompiling:
+//!
+//! - the emit [`EmitState`] prefix (`stdlib_prefix.bin`) — reused via
+//!   `generate_project_bytecode_with_prefix` to skip re-lowering/re-emitting the
+//!   stdlib's bytecode.
+//! - the per-file pre-lowered HIR (`stdlib_hir.bin`) — installed via
+//!   [`install_precompiled_hir`] so `file_semantic_index` skips lex/parse/lower
+//!   for builtin files.
+//!
+//! Compiler types are reached through `baml_db`'s re-exports (workspace policy).
 
-// Compiler types are reached through baml_db's re-export (workspace policy).
-use baml_db::baml_compiler2_emit::EmitState;
+use std::collections::HashMap;
+
+use baml_db::{baml_compiler2_emit::EmitState, baml_compiler2_hir::precompiled};
 
 /// Borsh-serialized stdlib [`EmitState`] prefix, produced at build time.
 pub static STDLIB_PREFIX_BYTES: &[u8] =
     include_bytes!(concat!(env!("OUT_DIR"), "/stdlib_prefix.bin"));
+
+/// Borsh-serialized per-file stdlib HIR prefix, produced at build time.
+pub static STDLIB_HIR_BYTES: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/stdlib_hir.bin"));
 
 /// Deserialize the precompiled stdlib [`EmitState`] prefix.
 ///
@@ -20,4 +29,28 @@ pub static STDLIB_PREFIX_BYTES: &[u8] =
 /// `ProjectDatabase::get_bytecode_with_prefix`) to skip recompiling the stdlib.
 pub fn stdlib_prefix() -> EmitState {
     borsh::from_slice(STDLIB_PREFIX_BYTES).expect("decode precompiled stdlib EmitState")
+}
+
+/// Deserialize and install the precompiled stdlib HIR cache, so
+/// `file_semantic_index` skips lex/parse/lower for builtin files. Idempotent
+/// (first call wins); call once at startup. No-op safe: if not called, the
+/// compiler parses the stdlib from source as before.
+pub fn install_precompiled_hir() {
+    let map: HashMap<String, precompiled::PrecompiledFile> =
+        borsh::from_slice(STDLIB_HIR_BYTES).expect("decode precompiled stdlib HIR");
+    precompiled::set_precompiled_builtins(map);
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn artifacts_load_and_lookup() {
+        // EmitState prefix round-trips.
+        let _ = super::stdlib_prefix();
+        // HIR cache installs and a known builtin path resolves.
+        super::install_precompiled_hir();
+        let pc = super::precompiled::precompiled_builtin("<builtin>/baml/string.baml")
+            .expect("string.baml precompiled");
+        assert!(!pc.items.is_empty(), "string.baml should have items");
+    }
 }

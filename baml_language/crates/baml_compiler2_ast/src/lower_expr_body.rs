@@ -22,11 +22,15 @@ use crate::{
 };
 
 /// A reference to an environment variable found in source code (`env.VAR_NAME`).
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct EnvVarRef {
     /// The variable name (e.g., `"OPENAI_API_KEY"`).
     pub name: String,
     /// The text range of the entire `env.VAR_NAME` expression in the source.
+    #[borsh(
+        serialize_with = "crate::borsh_helpers::serialize_text_range",
+        deserialize_with = "crate::borsh_helpers::deserialize_text_range"
+    )]
     pub range: TextRange,
 }
 

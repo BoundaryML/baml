@@ -107,6 +107,10 @@ impl From<ExitCode> for u32 {
 /// `format`, or `language-server`. `baml run` is the top-level entry for
 /// standalone execution.
 pub fn run_cli(argv: Vec<String>) -> Result<ExitCode> {
+    // Install the precompiled stdlib HIR so `file_semantic_index` skips
+    // lex/parse/lower for builtin files (paired with the bytecode prefix that
+    // `get_bytecode_with_prefix` uses). Idempotent; no-op safe.
+    baml_builtins2_prebuilt::install_precompiled_hir();
     let cli = commands::RuntimeCli::parse_from_smart(argv);
     cli.run()
 }

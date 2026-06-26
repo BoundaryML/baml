@@ -61,6 +61,15 @@ pub fn collect_compiler2_diagnostics(db: &ProjectDatabase) -> Vec<Diagnostic> {
     let source_files = baml_compiler2_hir::compiler2_all_files(db);
     let mut diagnostics: Vec<Diagnostic> = Vec::new();
     for file in &source_files {
+        // Skip per-file diagnostics for the frozen stdlib (`<builtin>/`). Its
+        // bodies are validated when the precompiled artifact is built (it must
+        // lower + emit cleanly), so re-running TIR body inference + lints over
+        // them on every user compile is wasted work -- user typechecking needs
+        // the stdlib's declared signatures, not its body diagnostics. This is the
+        // dominant stdlib cost in `check` (the parse/build is comparatively cheap).
+        if file.path(db).to_string_lossy().starts_with("<builtin>/") {
+            continue;
+        }
         diagnostics.extend(lsp2_check_file(db, *file));
     }
 

@@ -22,6 +22,7 @@ pub mod item_tree;
 pub mod loc;
 pub mod namespace;
 pub mod package;
+pub mod precompiled;
 pub mod scope;
 pub mod semantic_index;
 pub mod signature;
@@ -96,9 +97,21 @@ pub fn compiler2_all_files(db: &dyn Db) -> Vec<baml_base::SourceFile> {
 /// `scope_bindings`) provide Salsa early-cutoff via `Arc` equality.
 #[salsa::tracked(returns(ref), no_eq)]
 pub fn file_semantic_index(db: &dyn Db, file: SourceFile) -> FileSemanticIndex<'_> {
+    let path = file.path(db);
+
+    // Fast path: a frozen stdlib file with precompiled AST. Skip lex/parse/lower
+    // and re-run only the builder (which re-interns `'db` handles in this DB), so
+    // the result is identical to the from-source path. Falls through to parsing
+    // when the cache is not installed.
+    if let Some(pc) = crate::precompiled::precompiled_builtin(&path.to_string_lossy()) {
+        return SemanticIndexBuilder::new(db, file)
+            .with_lowering_diagnostics(Vec::new())
+            .with_env_var_refs(pc.env_var_refs.clone())
+            .build(&pc.items, pc.file_range());
+    }
+
     let tree = baml_compiler_parser::syntax_tree(db, file);
     let file_range = tree.text_range();
-    let path = file.path(db);
     let (items, lowering_diags, env_var_refs) =
         baml_compiler2_ast::lower_file_with_path(&tree, Some(path.as_path()));
 
