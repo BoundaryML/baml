@@ -274,8 +274,12 @@ export default function WarScene() {
   const strip = Math.round(22 * scale);
 
   return (
-    <div ref={stageRef} className="warscene relative size-full overflow-hidden">
+    <div ref={stageRef} className="warscene relative size-full">
       <style>{STYLES}</style>
+
+      {/* scene layer — clipped to the band. The caption lives OUTSIDE this clip
+          so on the short mobile band it can lift above the cloud line. */}
+      <div className="absolute inset-0 overflow-hidden">
 
       {/* hand-drawn backdrop scene — full-bleed width, anchored to the TOP so the
           top of the clouds always shows. height:auto gives it its natural
@@ -317,16 +321,6 @@ export default function WarScene() {
         }}
       />
 
-      {/* caption — scaled down on mobile so the pill doesn't dominate the short
-          band; vertically centred on the short mobile band so it reads as a title
-          card on the scene instead of jammed in the top corner, top-left on the
-          taller desktop band. z-20 keeps it above the marching column. */}
-      <div className="absolute inset-y-0 left-0 z-20 flex items-start justify-start p-2 sm:p-3">
-        <span key={scene} className="rounded-full border border-[#a98e61]/45 bg-[#d8c39a]/90 px-2.5 py-0.5 text-xs font-bold tracking-wide text-ink shadow-sm sm:px-4 sm:py-1 sm:text-sm" style={{ fontFamily: "ui-monospace, 'SFMono-Regular', Menlo, monospace" }}>
-          {CAPTIONS[scene]}
-        </span>
-      </div>
-
       {assembling && (
         <div key={marchKey} className="absolute inset-0">
           <Tank scale={scale} ground={ground} />
@@ -355,6 +349,15 @@ export default function WarScene() {
         </div>
       )}
       {!leadGone && <Lead size={Math.round(LEAD_SIZE * scale)} ground={ground} />}
+      </div>
+
+      {/* caption — outside the scene clip so on mobile it lifts above the cloud
+          line (−top); top-left on the taller desktop band. z-20 above the column. */}
+      <div className="absolute inset-x-0 z-20 flex justify-center p-2 -top-8 sm:top-0 sm:justify-start sm:p-3">
+        <span key={scene} className="rounded-full border border-[#a98e61]/45 bg-[#d8c39a]/90 px-2.5 py-0.5 text-xs font-bold tracking-wide text-ink shadow-sm sm:px-4 sm:py-1 sm:text-sm" style={{ fontFamily: "ui-monospace, 'SFMono-Regular', Menlo, monospace" }}>
+          {CAPTIONS[scene]}
+        </span>
+      </div>
     </div>
   );
 }

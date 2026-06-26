@@ -37,7 +37,7 @@ export default function Home() {
           the bottom foreground while keeping the full-width image and its top
           clouds — identically in every browser. Clamped so it never eats a tall
           page or vanishes on a very narrow one. */}
-      <div className="relative h-[38vw] min-h-[120px] max-h-[80vh] w-full overflow-hidden lg:fixed lg:inset-x-0 lg:bottom-0">
+      <div className="relative h-[38vw] min-h-[120px] max-h-[80vh] w-full lg:fixed lg:inset-x-0 lg:bottom-0">
         <WarScene />
       </div>
     </main>
