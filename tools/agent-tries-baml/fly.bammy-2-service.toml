@@ -31,12 +31,12 @@ primary_region = 'sjc'
   CURSOR_BRANCH           = 'main'
   CURSOR_TRACK_SECS       = '30'
   CURSOR_MAX_FIX_ATTEMPTS = '3'
-  # Linear board mirror (LinearPush) + tracker status moves. CONTAINED: with an
-  # allowlist set, LinearPush only ever creates a card for these issue ids; every
-  # other dirty issue is drained without touching the shared board. (Clear the
-  # allowlist to enable full production mirroring.)
+  # Linear board mirror (LinearPush) + tracker status moves. Empty allowlist =
+  # full production mirroring: LinearPush mirrors every dirty issue's status to the
+  # shared board (and creates cards for issues without one). Set a comma-separated
+  # list of Convex issue ids here to contain it to just those during testing.
   LINEAR_TEAM_ID               = '179250f3-902f-491e-94f8-8256292e8386'
-  LINEAR_PUSH_ALLOWLIST        = 'jh73fkz4rr3f6b5yxhkxeymmx989az5c'
+  LINEAR_PUSH_ALLOWLIST        = ''
   LINEAR_STATUS_NOT_STARTED    = '700b8d57-8a43-4186-b472-cb0339138d09'
   LINEAR_STATUS_APPROVED       = 'd85aa831-7a1e-42d0-839c-1f5e69df24b0'
   LINEAR_STATUS_TO_CURSOR      = '3f97173c-f313-4252-a22f-0162086cb6b9'
