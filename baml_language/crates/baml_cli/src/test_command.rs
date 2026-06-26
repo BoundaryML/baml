@@ -202,11 +202,17 @@ impl TestArgs {
         }
 
         // ── 7. Execute ─────────────────────────────────────────────────────
-        let aggregate_new_style = !has_filters
-            && selected
-                .iter()
-                .any(|t| matches!(&t.kind, TestKind::Testset { .. }));
-        let mut total = if aggregate_new_style {
+        let selected_testset_paths: Vec<String> = selected
+            .iter()
+            .filter_map(|t| match &t.kind {
+                TestKind::Testset { full_path } => Some(full_path.clone()),
+                TestKind::Legacy { .. } => None,
+            })
+            .collect();
+        let has_selected_testsets = !selected_testset_paths.is_empty();
+        let aggregate_new_style = !has_filters && has_selected_testsets;
+        let aggregate_filtered_new_style = has_filters && has_selected_testsets;
+        let mut total = if aggregate_new_style || aggregate_filtered_new_style {
             selected
                 .iter()
                 .filter(|t| matches!(&t.kind, TestKind::Legacy { .. }))
@@ -216,6 +222,7 @@ impl TestArgs {
         };
         let mut passed = 0usize;
         let mut failed = 0usize;
+        let mut tolerated = 0usize;
         let mut command_failed = false;
 
         let run_ctx = RunCtx {
@@ -237,7 +244,7 @@ impl TestArgs {
                     command_failed |= failed > failed_before;
                 }
                 TestKind::Testset { full_path } => {
-                    if aggregate_new_style {
+                    if aggregate_new_style || aggregate_filtered_new_style {
                         continue;
                     }
                     let Some(reg_value) = registry_value.as_ref() else {
@@ -265,11 +272,47 @@ impl TestArgs {
                 crate::reporter::print_error(format_args!("test failures — {summary}"));
                 return Ok(crate::ExitCode::TestFailure);
             };
-            command_failed |=
-                run_testset_registry(&run_ctx, reg_value, &mut passed, &mut failed, &mut total);
+            command_failed |= run_testset_registry(
+                &run_ctx,
+                reg_value,
+                &mut passed,
+                &mut failed,
+                &mut tolerated,
+                &mut total,
+            );
+        } else if aggregate_filtered_new_style {
+            let Some(reg_value) = registry_value.as_ref() else {
+                eprintln!("FAIL testing::* - testset registry unavailable");
+                failed += 1;
+                total += 1;
+                let summary = format!("{passed} passed, {failed} failed, {total} total");
+                crate::reporter::print_error(format_args!("test failures — {summary}"));
+                return Ok(crate::ExitCode::TestFailure);
+            };
+            command_failed |= run_selected_testset_registry(
+                &run_ctx,
+                reg_value,
+                &selected_testset_paths,
+                &mut passed,
+                &mut failed,
+                &mut tolerated,
+                &mut total,
+            );
         }
 
-        let summary = format!("{passed} passed, {failed} failed, {total} total");
+        let summary = if command_failed && tolerated > 0 {
+            format!(
+                "{passed} passed, {failed} failed, {tolerated} tolerated {}, {total} total",
+                pluralize(tolerated, "failure", "failures")
+            )
+        } else if !command_failed && tolerated > 0 {
+            format!(
+                "aggregate passed — {passed} passed, {tolerated} tolerated {}, {total} total",
+                pluralize(tolerated, "failure", "failures")
+            )
+        } else {
+            format!("{passed} passed, {failed} failed, {total} total")
+        };
         if command_failed {
             // `reporter.finish` styles success — print as an error so
             // the bold-red `Error:` carries the visual weight of "tests
@@ -637,6 +680,7 @@ fn run_testset_registry(
     registry: &BexExternalValue,
     passed: &mut usize,
     failed: &mut usize,
+    tolerated: &mut usize,
     total: &mut usize,
 ) -> bool {
     let call_ctx = FunctionCallContextBuilder::new(CallId::next())
@@ -648,48 +692,7 @@ fn run_testset_registry(
         call_ctx,
         true,
     )) {
-        Ok(report) => {
-            let outcome = extract_outcome(&report).unwrap_or_else(|| "unknown".to_string());
-            let aggregate_failed = outcome != "pass";
-            if let Some((report_passed, report_failed, report_total)) =
-                extract_leaf_summary(&report).or_else(|| {
-                    extract_testset_summary(&report)
-                        .map(|(_, passed, failed, total)| (passed, failed, total))
-                })
-            {
-                *passed += report_passed;
-                *failed += report_failed;
-                *total += report_total;
-                if !aggregate_failed {
-                    println!("PASS testing::*");
-                } else {
-                    println!("FAIL testing::* [outcome={outcome}]");
-                    print_failed_names(&report);
-                    print_failure_messages(&report);
-                    // A testset runner can fail the aggregate without marking
-                    // individual children failed. Count that runner-level
-                    // verdict as one displayed failure so the summary does not
-                    // say "0 failed" when the aggregate itself failed.
-                    if report_failed == 0 {
-                        *failed += 1;
-                        *total += 1;
-                    }
-                }
-                aggregate_failed
-            } else {
-                *total += 1;
-                if !aggregate_failed {
-                    println!("PASS testing::*");
-                    *passed += 1;
-                } else {
-                    println!("FAIL testing::* [outcome={outcome}]");
-                    print_failed_names(&report);
-                    print_failure_messages(&report);
-                    *failed += 1;
-                }
-                aggregate_failed
-            }
-        }
+        Ok(report) => record_testset_registry_report(&report, passed, failed, tolerated, total),
         Err(e) => {
             eprintln!("FAIL testing::*");
             eprintln!("  => {e:?}");
@@ -697,6 +700,89 @@ fn run_testset_registry(
             *total += 1;
             true
         }
+    }
+}
+
+fn run_selected_testset_registry(
+    ctx: &RunCtx,
+    registry: &BexExternalValue,
+    full_paths: &[String],
+    passed: &mut usize,
+    failed: &mut usize,
+    tolerated: &mut usize,
+    total: &mut usize,
+) -> bool {
+    let call_ctx = FunctionCallContextBuilder::new(CallId::next())
+        .with_cancel_token(ctx.cancel.clone())
+        .build();
+    match ctx.rt.block_on(ctx.engine.call_function(
+        "testing.TestRegistry.run_selected",
+        vec![registry.clone(), string_array(full_paths)],
+        call_ctx,
+        true,
+    )) {
+        Ok(report) => record_testset_registry_report(&report, passed, failed, tolerated, total),
+        Err(e) => {
+            eprintln!("FAIL testing::*");
+            eprintln!("  => {e:?}");
+            *failed += 1;
+            *total += 1;
+            true
+        }
+    }
+}
+
+fn record_testset_registry_report(
+    report: &BexExternalValue,
+    passed: &mut usize,
+    failed: &mut usize,
+    tolerated: &mut usize,
+    total: &mut usize,
+) -> bool {
+    let outcome = extract_outcome(report).unwrap_or_else(|| "unknown".to_string());
+    let aggregate_failed = outcome != "pass";
+    if let Some(summary) = extract_leaf_summary(report) {
+        *passed += summary.passed;
+        *failed += summary.failed;
+        *tolerated += summary.tolerated;
+        *total += summary.total;
+        if !aggregate_failed {
+            if summary.tolerated > 0 {
+                println!(
+                    "PASS testing::* [outcome=pass; {} tolerated {}]",
+                    summary.tolerated,
+                    pluralize(summary.tolerated, "failure", "failures")
+                );
+                print_tolerated_names(report);
+            } else {
+                println!("PASS testing::*");
+            }
+        } else {
+            println!("FAIL testing::* [outcome={outcome}]");
+            print_failed_names(report);
+            print_failure_messages(report);
+            // A testset runner can fail the aggregate without marking
+            // individual children failed. Count that runner-level
+            // verdict as one displayed failure so the summary does not
+            // say "0 failed" when the aggregate itself failed.
+            if summary.failed == 0 {
+                *failed += 1;
+                *total += 1;
+            }
+        }
+        aggregate_failed
+    } else {
+        *total += 1;
+        if !aggregate_failed {
+            println!("PASS testing::*");
+            *passed += 1;
+        } else {
+            println!("FAIL testing::* [outcome={outcome}]");
+            print_failed_names(report);
+            print_failure_messages(report);
+            *failed += 1;
+        }
+        aggregate_failed
     }
 }
 
@@ -737,51 +823,120 @@ fn extract_testset_summary(value: &BexExternalValue) -> Option<(String, usize, u
     }
 }
 
-fn extract_leaf_summary(value: &BexExternalValue) -> Option<(usize, usize, usize)> {
-    let v = unwrap_union(value);
-    if let BexExternalValue::Instance {
-        class_name, fields, ..
-    } = v
-    {
-        if class_matches(class_name, "TestReport") {
-            let outcome = fields
-                .get("outcome")
-                .and_then(|v| as_string(unwrap_union(v)))?;
-            return Some(if outcome == "pass" {
-                (1, 0, 1)
-            } else {
-                (0, 1, 1)
-            });
-        }
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+struct LeafSummary {
+    passed: usize,
+    failed: usize,
+    tolerated: usize,
+    total: usize,
+}
 
-        if class_matches(class_name, "TestSetReport") {
-            if let Some(results) = fields.get("results") {
-                if let BexExternalValue::Array { items, .. } = unwrap_union(results) {
-                    if !items.is_empty() {
-                        let mut passed = 0usize;
-                        let mut failed = 0usize;
-                        let mut total = 0usize;
-                        for item in items {
-                            let (child_passed, child_failed, child_total) =
-                                extract_leaf_summary(item)?;
-                            passed += child_passed;
-                            failed += child_failed;
-                            total += child_total;
+impl LeafSummary {
+    fn add(&mut self, other: LeafSummary) {
+        self.passed += other.passed;
+        self.failed += other.failed;
+        self.tolerated += other.tolerated;
+        self.total += other.total;
+    }
+}
+
+fn extract_leaf_summary(value: &BexExternalValue) -> Option<LeafSummary> {
+    extract_leaf_summary_inner(value, false)
+}
+
+fn extract_leaf_summary_inner(
+    value: &BexExternalValue,
+    tolerated_by_parent: bool,
+) -> Option<LeafSummary> {
+    let v = unwrap_union(value);
+    match v {
+        BexExternalValue::Array { items, .. } => {
+            let mut summary = LeafSummary::default();
+            for item in items {
+                summary.add(extract_leaf_summary_inner(item, tolerated_by_parent)?);
+            }
+            Some(summary)
+        }
+        BexExternalValue::Instance {
+            class_name, fields, ..
+        } => {
+            if class_matches(class_name, "TestReport") {
+                let outcome = fields
+                    .get("outcome")
+                    .and_then(|v| as_string(unwrap_union(v)))?;
+                return Some(if outcome == "pass" {
+                    LeafSummary {
+                        passed: 1,
+                        total: 1,
+                        ..LeafSummary::default()
+                    }
+                } else if tolerated_by_parent {
+                    LeafSummary {
+                        tolerated: 1,
+                        total: 1,
+                        ..LeafSummary::default()
+                    }
+                } else {
+                    LeafSummary {
+                        failed: 1,
+                        total: 1,
+                        ..LeafSummary::default()
+                    }
+                });
+            }
+
+            if class_matches(class_name, "TestSetReport") {
+                let outcome = fields
+                    .get("outcome")
+                    .and_then(|v| as_string(unwrap_union(v)))?;
+                let failures_are_tolerated = tolerated_by_parent || outcome == "pass";
+                if let Some(results) = fields.get("results") {
+                    if let BexExternalValue::Array { items, .. } = unwrap_union(results) {
+                        if !items.is_empty() {
+                            let mut summary = LeafSummary::default();
+                            for item in items {
+                                summary
+                                    .add(extract_leaf_summary_inner(item, failures_are_tolerated)?);
+                            }
+                            return Some(summary);
                         }
-                        return Some((passed, failed, total));
                     }
                 }
+                return extract_testset_summary(value).map(|(_, passed, failed, total)| {
+                    if failures_are_tolerated {
+                        LeafSummary {
+                            passed,
+                            tolerated: failed,
+                            total,
+                            ..LeafSummary::default()
+                        }
+                    } else {
+                        LeafSummary {
+                            passed,
+                            failed,
+                            total,
+                            ..LeafSummary::default()
+                        }
+                    }
+                });
             }
-            return extract_testset_summary(value)
-                .map(|(_, passed, failed, total)| (passed, failed, total));
+            None
         }
+        _ => None,
     }
-    None
 }
 
 fn print_failed_names(value: &BexExternalValue) {
+    print_names(value, "failed");
+}
+
+fn print_tolerated_names(value: &BexExternalValue) {
+    print_names(value, "tolerated");
+}
+
+fn print_names(value: &BexExternalValue, label: &str) {
     for name in extract_failed_names(value) {
-        println!("  failed: {name}");
+        println!("  {label}: {name}");
     }
 }
 
@@ -876,6 +1031,16 @@ fn as_usize(value: &BexExternalValue) -> Option<usize> {
     }
 }
 
+fn string_array(values: &[String]) -> BexExternalValue {
+    BexExternalValue::Array {
+        element_type: baml_type::RuntimeTy::string(),
+        items: values
+            .iter()
+            .map(|value| BexExternalValue::String(value.clone().into()))
+            .collect(),
+    }
+}
+
 /// Match the last segment of a namespaced class name, ignoring any leading
 /// `testing.` / `user.` / similar prefix. `testing.SerializedTest` and
 /// `SerializedTest` both match `"SerializedTest"`.
@@ -895,6 +1060,10 @@ fn split_top(full_path: &str) -> (String, String) {
         Some((head, tail)) => (head.to_string(), tail.to_string()),
         None => (String::new(), full_path.to_string()),
     }
+}
+
+fn pluralize<'a>(count: usize, singular: &'a str, plural: &'a str) -> &'a str {
+    if count == 1 { singular } else { plural }
 }
 
 #[cfg(test)]
@@ -980,11 +1149,29 @@ mod tests {
         )
     }
 
+    fn summary(passed: usize, failed: usize, tolerated: usize, total: usize) -> LeafSummary {
+        LeafSummary {
+            passed,
+            failed,
+            tolerated,
+            total,
+        }
+    }
+
     #[test]
     fn extract_leaf_summary_counts_test_reports() {
-        assert_eq!(extract_leaf_summary(&test_report("pass")), Some((1, 0, 1)));
-        assert_eq!(extract_leaf_summary(&test_report("fail")), Some((0, 1, 1)));
-        assert_eq!(extract_leaf_summary(&test_report("error")), Some((0, 1, 1)));
+        assert_eq!(
+            extract_leaf_summary(&test_report("pass")),
+            Some(summary(1, 0, 0, 1))
+        );
+        assert_eq!(
+            extract_leaf_summary(&test_report("fail")),
+            Some(summary(0, 1, 0, 1))
+        );
+        assert_eq!(
+            extract_leaf_summary(&test_report("error")),
+            Some(summary(0, 1, 0, 1))
+        );
     }
 
     #[test]
@@ -1006,14 +1193,39 @@ mod tests {
             vec![test_report("pass"), nested],
         );
 
-        assert_eq!(extract_leaf_summary(&root), Some((1, 2, 3)));
+        assert_eq!(extract_leaf_summary(&root), Some(summary(1, 2, 0, 3)));
+    }
+
+    #[test]
+    fn extract_leaf_summary_counts_failures_under_passing_testsets_as_tolerated() {
+        let report = testset_report(
+            "pass",
+            2,
+            1,
+            3,
+            Vec::new(),
+            vec![
+                test_report("pass"),
+                test_report("pass"),
+                test_report("fail"),
+            ],
+        );
+
+        assert_eq!(extract_leaf_summary(&report), Some(summary(2, 0, 1, 3)));
     }
 
     #[test]
     fn extract_leaf_summary_falls_back_to_testset_totals_without_results() {
         let report = testset_report("fail", 2, 1, 3, Vec::new(), Vec::new());
 
-        assert_eq!(extract_leaf_summary(&report), Some((2, 1, 3)));
+        assert_eq!(extract_leaf_summary(&report), Some(summary(2, 1, 0, 3)));
+    }
+
+    #[test]
+    fn extract_leaf_summary_fallback_treats_passing_testset_failures_as_tolerated() {
+        let report = testset_report("pass", 2, 1, 3, Vec::new(), Vec::new());
+
+        assert_eq!(extract_leaf_summary(&report), Some(summary(2, 0, 1, 3)));
     }
 
     #[test]
