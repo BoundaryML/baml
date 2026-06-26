@@ -479,6 +479,44 @@ testset "suite" with testing.PassRate(0.0) {
 }
 
 #[test]
+fn test_mixed_testset_run_keeps_tolerated_failures_out_of_failed_total() {
+    let built = common::ensure_built();
+    let tmp = tempfile::tempdir().unwrap();
+
+    create_project(
+        tmp.path(),
+        r#"
+testset "tolerant" with testing.PassRate(0.0) {
+  test "tolerated failure" { assert.is_true(false) }
+}
+
+testset "hard" {
+  test "passes" { assert.is_true(true) }
+  test "fails" { assert.is_true(false) }
+}
+"#,
+    );
+
+    let output = run_baml_cli(built, tmp.path(), &["test", "--from", "."]);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let combined = format!("{stdout}{stderr}");
+
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "Expected hard failing sibling testset to fail the command, got: {:?}\nstdout: {}\nstderr: {}",
+        output.status.code(),
+        stdout,
+        stderr,
+    );
+    assert!(
+        combined.contains("1 passed, 1 failed, 1 tolerated failure, 3 total"),
+        "Expected tolerated leaf to stay out of hard failure count, got:\n{combined}"
+    );
+}
+
+#[test]
 fn test_unfiltered_testset_run_reports_failed_child_name() {
     let built = common::ensure_built();
     let tmp = tempfile::tempdir().unwrap();
