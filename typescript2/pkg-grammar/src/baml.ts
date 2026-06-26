@@ -188,9 +188,6 @@ const HEADER_END = String.raw`(?=\{)|(?=${TOP_LEVEL_ITEM_START})`;
 // Trailing alternation that ends an attribute / enum-variant at the next item.
 const ITEM_END_TAIL = String.raw`\s*\}|\s+${IDENT}\b|\r?\n\s*(?:${IDENT}\b|@@|\})`;
 
-// Generic `{ ... }` block for code-ish regions.
-const block: Rule = braceBlock("block", "meta.block.baml", [comments]);
-
 // --- Literals --------------------------------------------------------------
 //
 // Derived from the BAML lexer (baml_compiler_lexer/src/tokens.rs). Every literal
@@ -712,10 +709,51 @@ const callArguments: Rule = {
   patterns: [comments, expression, comma],
 };
 
+// The lookahead every call begin uses to require `(` (optionally after a
+// type-argument list) without consuming it.
+const CALL_ARGS_LOOKAHEAD = String.raw`(?=\s*(?:<[^(){};]*>\s*)?\()`;
+
+// `obj.method(...)` and `obj?.method(...)` differ only by the accessor.
+function memberCall(
+  key: string,
+  scope: BamlScope,
+  accessor: string,
+  typeArgsKey: string,
+): Rule {
+  return {
+    key,
+    scope,
+    begin: accessor + String.raw`\s*(${IDENT})\b` + CALL_ARGS_LOOKAHEAD,
+    beginCaptures: {
+      "1": { scope: "punctuation.accessor.baml" },
+      "2": { scope: "entity.name.function.baml" },
+    },
+    end: String.raw`(?<=\))`,
+    patterns: [
+      comments,
+      typeArgumentsRule(typeArgsKey, String.raw`(?=\s*\()`),
+      callArguments,
+    ],
+  };
+}
+
+// `obj.field` and `obj?.field` differ only by the accessor.
+function memberAccess(key: string, scope: BamlScope, accessor: string): Rule {
+  return {
+    key,
+    scope,
+    match: accessor + String.raw`\s*(${IDENT})\b`,
+    captures: {
+      "1": { scope: "punctuation.accessor.baml" },
+      "2": { scope: "variable.other.readwrite.baml" },
+    },
+  };
+}
+
 const functionCallExpression: Rule = {
   key: "function-call-expression",
   scope: "meta.function-call.baml",
-  begin: DOTTED_REF + String.raw`(?=\s*(?:<[^(){};]*>\s*)?\()`,
+  begin: DOTTED_REF + CALL_ARGS_LOOKAHEAD,
   beginCaptures: {
     "1": expressionPathRootCapture,
     "2": { scope: "punctuation.accessor.baml" },
@@ -766,57 +804,31 @@ const optionalIndexExpression: Rule = {
   ],
 };
 
-const optionalMethodCallExpression: Rule = {
-  key: "optional-method-call-expression",
-  scope: "meta.function-call.optional.member.baml",
-  begin: String.raw`(\?\.)\s*(${IDENT})\b(?=\s*(?:<[^(){};]*>\s*)?\()`,
-  beginCaptures: {
-    "1": { scope: "punctuation.accessor.baml" },
-    "2": { scope: "entity.name.function.baml" },
-  },
-  end: String.raw`(?<=\))`,
-  patterns: [
-    comments,
-    typeArgumentsRule("optional-method-call-type-arguments", String.raw`(?=\s*\()`),
-    callArguments,
-  ],
-};
+const optionalMethodCallExpression: Rule = memberCall(
+  "optional-method-call-expression",
+  "meta.function-call.optional.member.baml",
+  String.raw`(\?\.)`,
+  "optional-method-call-type-arguments",
+);
 
-const optionalFieldAccessExpression: Rule = {
-  key: "optional-field-access-expression",
-  scope: "meta.field-access.optional.baml",
-  match: String.raw`(\?\.)\s*(${IDENT})\b`,
-  captures: {
-    "1": { scope: "punctuation.accessor.baml" },
-    "2": { scope: "variable.other.readwrite.baml" },
-  },
-};
+const optionalFieldAccessExpression: Rule = memberAccess(
+  "optional-field-access-expression",
+  "meta.field-access.optional.baml",
+  String.raw`(\?\.)`,
+);
 
-const postfixMethodCallExpression: Rule = {
-  key: "postfix-method-call-expression",
-  scope: "meta.function-call.member.baml",
-  begin: String.raw`([.$])\s*(${IDENT})\b(?=\s*(?:<[^(){};]*>\s*)?\()`,
-  beginCaptures: {
-    "1": { scope: "punctuation.accessor.baml" },
-    "2": { scope: "entity.name.function.baml" },
-  },
-  end: String.raw`(?<=\))`,
-  patterns: [
-    comments,
-    typeArgumentsRule("postfix-method-call-type-arguments", String.raw`(?=\s*\()`),
-    callArguments,
-  ],
-};
+const postfixMethodCallExpression: Rule = memberCall(
+  "postfix-method-call-expression",
+  "meta.function-call.member.baml",
+  String.raw`([.$])`,
+  "postfix-method-call-type-arguments",
+);
 
-const fieldAccessExpression: Rule = {
-  key: "field-access-expression",
-  scope: "meta.field-access.baml",
-  match: String.raw`([.$])\s*(${IDENT})\b`,
-  captures: {
-    "1": { scope: "punctuation.accessor.baml" },
-    "2": { scope: "variable.other.readwrite.baml" },
-  },
-};
+const fieldAccessExpression: Rule = memberAccess(
+  "field-access-expression",
+  "meta.field-access.baml",
+  String.raw`([.$])`,
+);
 
 const dottedExpression: Rule = {
   key: "dotted-expression",
@@ -1282,16 +1294,20 @@ pattern.patterns = [
   typeExpression,
 ];
 
-const isPatternExpression: Rule = {
-  key: "is-pattern-expression",
-  scope: "meta.expression.is.baml",
-  begin: String.raw`\b(is)\b`,
-  beginCaptures: {
-    "1": { scope: "keyword.operator.is.baml" },
-  },
-  end: String.raw`(?=\s*(?:&&|\|\||=>|[,);\]}]|$))`,
-  patterns: [comments, pattern],
-};
+// `is <pattern>` ends before the next operator/delimiter; `extra` appends to the
+// end char class so the condition-position variant also stops at `{`.
+function isPatternRule(key: string, inner: Rule, extra = ""): Rule {
+  return {
+    key,
+    scope: "meta.expression.is.baml",
+    begin: String.raw`\b(is)\b`,
+    beginCaptures: { "1": { scope: "keyword.operator.is.baml" } },
+    end: String.raw`(?=\s*(?:&&|\|\||=>|[,);\]}${extra}]|$))`,
+    patterns: [comments, inner],
+  };
+}
+
+const isPatternExpression: Rule = isPatternRule("is-pattern-expression", pattern);
 
 // In condition position (`if` / `while` / `else if`) a `{` opens the block, so
 // `if r is Empty { ... }` must read `{` as the block, not as a class-destructure
@@ -1307,16 +1323,11 @@ conditionPattern.patterns = pattern.patterns.filter(
   (rule) => rule !== classDestructurePattern,
 );
 
-const conditionIsPatternExpression: Rule = {
-  key: "condition-is-pattern-expression",
-  scope: "meta.expression.is.baml",
-  begin: String.raw`\b(is)\b`,
-  beginCaptures: {
-    "1": { scope: "keyword.operator.is.baml" },
-  },
-  end: String.raw`(?=\s*(?:&&|\|\||=>|[,);\]}{]|$))`,
-  patterns: [comments, conditionPattern],
-};
+const conditionIsPatternExpression: Rule = isPatternRule(
+  "condition-is-pattern-expression",
+  conditionPattern,
+  "{",
+);
 
 // `let`/`const` binding pattern that ends at the `=`. requireIntro gates the
 // lookahead for the contexts that must see a binding keyword first.
@@ -1603,6 +1614,25 @@ const forStatement: Rule = {
   ],
 };
 
+// A bare `${ keyword }` interpolation control (else / endfor / endif).
+function interpolationKeyword(
+  key: string,
+  metaScope: BamlScope,
+  keyword: string,
+  kwScope: BamlScope,
+): Rule {
+  return {
+    key,
+    scope: metaScope,
+    match: String.raw`(\$\{)\s*(${keyword})\s*(\})`,
+    captures: {
+      "1": { scope: "punctuation.section.interpolation.begin.baml" },
+      "2": { scope: kwScope },
+      "3": { scope: "punctuation.section.interpolation.end.baml" },
+    },
+  };
+}
+
 backtickInterpolation.patterns = [
   {
     key: "backtick-for-open",
@@ -1662,36 +1692,24 @@ backtickInterpolation.patterns = [
       ),
     ],
   },
-  {
-    key: "backtick-else",
-    scope: "meta.interpolation.control.else.baml",
-    match: String.raw`(\$\{)\s*(else)\s*(\})`,
-    captures: {
-      "1": { scope: "punctuation.section.interpolation.begin.baml" },
-      "2": { scope: "keyword.control.conditional.baml" },
-      "3": { scope: "punctuation.section.interpolation.end.baml" },
-    },
-  },
-  {
-    key: "backtick-endfor",
-    scope: "meta.interpolation.control.endfor.baml",
-    match: String.raw`(\$\{)\s*(endfor)\s*(\})`,
-    captures: {
-      "1": { scope: "punctuation.section.interpolation.begin.baml" },
-      "2": { scope: "keyword.control.loop.endfor.baml" },
-      "3": { scope: "punctuation.section.interpolation.end.baml" },
-    },
-  },
-  {
-    key: "backtick-endif",
-    scope: "meta.interpolation.control.endif.baml",
-    match: String.raw`(\$\{)\s*(endif)\s*(\})`,
-    captures: {
-      "1": { scope: "punctuation.section.interpolation.begin.baml" },
-      "2": { scope: "keyword.control.conditional.endif.baml" },
-      "3": { scope: "punctuation.section.interpolation.end.baml" },
-    },
-  },
+  interpolationKeyword(
+    "backtick-else",
+    "meta.interpolation.control.else.baml",
+    "else",
+    "keyword.control.conditional.baml",
+  ),
+  interpolationKeyword(
+    "backtick-endfor",
+    "meta.interpolation.control.endfor.baml",
+    "endfor",
+    "keyword.control.loop.endfor.baml",
+  ),
+  interpolationKeyword(
+    "backtick-endif",
+    "meta.interpolation.control.endif.baml",
+    "endif",
+    "keyword.control.conditional.endif.baml",
+  ),
   {
     key: "backtick-expression-interpolation",
     scope: "meta.interpolation.baml",
@@ -1915,49 +1933,56 @@ const declarationTypeParameters: Rule = {
   ],
 };
 
-const returnStatement: Rule = {
-  key: "return-statement",
-  scope: "meta.statement.return.baml",
-  begin: String.raw`${STATEMENT_START}(return)\b`,
-  beginCaptures: {
-    "1": { scope: "keyword.control.flow.return.baml" },
-  },
-  end: STATEMENT_END,
-  patterns: [comments, expression],
-};
+// A `<keyword> ...` statement: STATEMENT_START + the keyword, ending at the
+// statement terminator. `patterns`/`end` default to a bare keyword statement.
+function keywordStatement(
+  key: string,
+  metaScope: BamlScope,
+  keyword: string,
+  kwScope: BamlScope,
+  patterns: Rule[] = [comments],
+  end: string = STATEMENT_END,
+): Rule {
+  return {
+    key,
+    scope: metaScope,
+    begin: String.raw`${STATEMENT_START}(${keyword})\b`,
+    beginCaptures: { "1": { scope: kwScope } },
+    end,
+    patterns,
+  };
+}
 
-const breakStatement: Rule = {
-  key: "break-statement",
-  scope: "meta.statement.break.baml",
-  begin: String.raw`${STATEMENT_START}(break)\b`,
-  beginCaptures: {
-    "1": { scope: "keyword.control.flow.break.baml" },
-  },
-  end: STATEMENT_END,
-  patterns: [comments],
-};
+const returnStatement: Rule = keywordStatement(
+  "return-statement",
+  "meta.statement.return.baml",
+  "return",
+  "keyword.control.flow.return.baml",
+  [comments, expression],
+);
 
-const continueStatement: Rule = {
-  key: "continue-statement",
-  scope: "meta.statement.continue.baml",
-  begin: String.raw`${STATEMENT_START}(continue)\b`,
-  beginCaptures: {
-    "1": { scope: "keyword.control.flow.continue.baml" },
-  },
-  end: STATEMENT_END,
-  patterns: [comments],
-};
+const breakStatement: Rule = keywordStatement(
+  "break-statement",
+  "meta.statement.break.baml",
+  "break",
+  "keyword.control.flow.break.baml",
+);
 
-const deferStatement: Rule = {
-  key: "defer-statement",
-  scope: "meta.statement.defer.baml",
-  begin: String.raw`${STATEMENT_START}(defer)\b`,
-  beginCaptures: {
-    "1": { scope: "keyword.control.flow.defer.baml" },
-  },
-  end: String.raw`(?<=\})`,
-  patterns: [comments, codeBlock],
-};
+const continueStatement: Rule = keywordStatement(
+  "continue-statement",
+  "meta.statement.continue.baml",
+  "continue",
+  "keyword.control.flow.continue.baml",
+);
+
+const deferStatement: Rule = keywordStatement(
+  "defer-statement",
+  "meta.statement.defer.baml",
+  "defer",
+  "keyword.control.flow.defer.baml",
+  [comments, codeBlock],
+  String.raw`(?<=\})`,
+);
 
 const letStatement: Rule = {
   key: "let-statement",
@@ -1973,21 +1998,18 @@ const letStatement: Rule = {
   ],
 };
 
-const watchStatement: Rule = {
-  key: "watch-statement",
-  scope: "meta.statement.watch.baml",
-  begin: String.raw`${STATEMENT_START}(watch)\b`,
-  beginCaptures: {
-    "1": { scope: "keyword.control.watch.baml" },
-  },
-  end: STATEMENT_END,
-  patterns: [
+const watchStatement: Rule = keywordStatement(
+  "watch-statement",
+  "meta.statement.watch.baml",
+  "watch",
+  "keyword.control.watch.baml",
+  [
     comments,
     bindingPatternRule("watch-statement-pattern", "meta.pattern.watch.baml", true),
     assignmentOperator,
     expression,
   ],
-};
+);
 
 const configBlock: IncludeRule = {
   key: "config-block",
