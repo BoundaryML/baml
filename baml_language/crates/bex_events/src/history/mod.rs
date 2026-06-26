@@ -135,6 +135,35 @@ pub struct HistoryValueBody {
     pub body: Vec<u8>,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum HistoryValueBodyUnavailableReason {
+    BlobStoreUnavailable,
+    BlobMissing,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct HistoryValueBodyUnavailable {
+    pub reason: HistoryValueBodyUnavailableReason,
+    pub diagnostic: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum HistoryValueReadResult {
+    Available(HistoryValueBody),
+    Missing,
+    BodyUnavailable(HistoryValueBodyUnavailable),
+}
+
+impl HistoryValueReadResult {
+    #[must_use]
+    pub fn into_body(self) -> Option<HistoryValueBody> {
+        match self {
+            Self::Available(body) => Some(body),
+            Self::Missing | Self::BodyUnavailable(_) => None,
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct HistoryProfileSegment {
     pub label: String,
@@ -423,6 +452,15 @@ impl HistoryStore {
         boundary_id: BoundaryId,
         value_ref_id: &str,
     ) -> io::Result<Option<HistoryValueBody>> {
+        self.read_value_result(boundary_id, value_ref_id)
+            .map(HistoryValueReadResult::into_body)
+    }
+
+    pub fn read_value_result(
+        &self,
+        boundary_id: BoundaryId,
+        value_ref_id: &str,
+    ) -> io::Result<HistoryValueReadResult> {
         let (known_dir, search_roots) = {
             let inner = self
                 .inner
@@ -437,7 +475,7 @@ impl HistoryStore {
             )
         };
         let Some(dir) = known_dir.or_else(|| find_boundary_dir(&search_roots, boundary_id)) else {
-            return Ok(None);
+            return Ok(HistoryValueReadResult::Missing);
         };
         let value_segments = value_segment_paths(&dir)
             .into_iter()
@@ -449,7 +487,7 @@ impl HistoryStore {
             })
             .collect::<Vec<_>>();
         let blob_store = BlobStore::for_boundary_dir(&dir);
-        read_value_from_segments_with_blobs(&value_segments, value_ref_id, Some(&blob_store))
+        read_value_from_segments_with_blobs_result(&value_segments, value_ref_id, Some(&blob_store))
     }
 
     fn open_from_dir(dir: &Path) -> io::Result<Run> {
@@ -814,7 +852,15 @@ pub fn read_value_from_segments(
     value_segments: &[HistoryValueSegment],
     value_ref_id: &str,
 ) -> io::Result<Option<HistoryValueBody>> {
-    read_value_from_segments_with_blobs(value_segments, value_ref_id, None)
+    read_value_from_segments_result(value_segments, value_ref_id)
+        .map(HistoryValueReadResult::into_body)
+}
+
+pub fn read_value_from_segments_result(
+    value_segments: &[HistoryValueSegment],
+    value_ref_id: &str,
+) -> io::Result<HistoryValueReadResult> {
+    read_value_from_segments_with_blobs_result(value_segments, value_ref_id, None)
 }
 
 pub fn read_value_from_segments_with_blobs(
@@ -822,6 +868,15 @@ pub fn read_value_from_segments_with_blobs(
     value_ref_id: &str,
     blob_store: Option<&BlobStore>,
 ) -> io::Result<Option<HistoryValueBody>> {
+    read_value_from_segments_with_blobs_result(value_segments, value_ref_id, blob_store)
+        .map(HistoryValueReadResult::into_body)
+}
+
+pub fn read_value_from_segments_with_blobs_result(
+    value_segments: &[HistoryValueSegment],
+    value_ref_id: &str,
+    blob_store: Option<&BlobStore>,
+) -> io::Result<HistoryValueReadResult> {
     for segment in value_segments {
         let parsed = read_bamlvalue_from_bytes(&segment.bytes)?;
         for record in parsed.records {
@@ -837,31 +892,50 @@ pub fn read_value_from_segments_with_blobs(
                 | ValueFileRecord::RunCompleted(_) => continue,
             };
             if value_ref.id == value_ref_id {
-                let Some(body) = hydrate_value_body(body, blob_ref.as_ref(), blob_store)? else {
-                    return Ok(None);
+                return match hydrate_value_body(body, blob_ref.as_ref(), blob_store)? {
+                    Ok(body) => Ok(HistoryValueReadResult::Available(HistoryValueBody {
+                        codec: value_ref.codec,
+                        body,
+                    })),
+                    Err(unavailable) => Ok(HistoryValueReadResult::BodyUnavailable(unavailable)),
                 };
-                return Ok(Some(HistoryValueBody {
-                    codec: value_ref.codec,
-                    body,
-                }));
             }
         }
     }
-    Ok(None)
+    Ok(HistoryValueReadResult::Missing)
 }
 
 fn hydrate_value_body(
     inline_body: Vec<u8>,
     blob_ref: Option<&BlobRef>,
     blob_store: Option<&BlobStore>,
-) -> io::Result<Option<Vec<u8>>> {
+) -> io::Result<Result<Vec<u8>, HistoryValueBodyUnavailable>> {
     let Some(blob_ref) = blob_ref else {
-        return Ok(Some(inline_body));
+        return Ok(Ok(inline_body));
     };
     let Some(blob_store) = blob_store else {
-        return Ok(None);
+        return Ok(Err(HistoryValueBodyUnavailable {
+            reason: HistoryValueBodyUnavailableReason::BlobStoreUnavailable,
+            diagnostic: format!(
+                "value body is blob-backed but no blob store is available for {}",
+                blob_ref_label(blob_ref)
+            ),
+        }));
     };
-    blob_store.read_blob(blob_ref)
+    match blob_store.read_blob(blob_ref)? {
+        Some(body) => Ok(Ok(body)),
+        None => Ok(Err(HistoryValueBodyUnavailable {
+            reason: HistoryValueBodyUnavailableReason::BlobMissing,
+            diagnostic: format!("value body blob {} is missing", blob_ref_label(blob_ref)),
+        })),
+    }
+}
+
+fn blob_ref_label(blob_ref: &BlobRef) -> String {
+    format!(
+        "{}:{} ({} bytes)",
+        blob_ref.algorithm, blob_ref.digest, blob_ref.size_bytes
+    )
 }
 
 fn outcome_fields_from_replay(
@@ -1448,6 +1522,28 @@ mod tests {
         );
 
         let boundary_dir = find_boundary_dir(std::slice::from_ref(&project), boundary_id).unwrap();
+        let value_segments = value_segment_paths(&boundary_dir)
+            .into_iter()
+            .map(|path| HistoryValueSegment {
+                label: path.display().to_string(),
+                bytes: std::fs::read(path).unwrap(),
+            })
+            .collect::<Vec<_>>();
+        let no_store = read_value_from_segments_with_blobs_result(
+            &value_segments,
+            &outcome.value_ref.id,
+            None,
+        )
+        .unwrap();
+        let HistoryValueReadResult::BodyUnavailable(unavailable) = no_store else {
+            panic!("expected blob-store unavailable result");
+        };
+        assert_eq!(
+            unavailable.reason,
+            HistoryValueBodyUnavailableReason::BlobStoreUnavailable
+        );
+        assert!(unavailable.diagnostic.contains("blob-backed"));
+
         let blob_paths = std::fs::read_dir(boundary_dir.join("blobs").join("sha256"))
             .unwrap()
             .flatten()
@@ -1457,12 +1553,18 @@ mod tests {
             .collect::<Vec<_>>();
         assert_eq!(blob_paths.len(), 1);
         std::fs::remove_file(&blob_paths[0]).unwrap();
-        assert!(
-            store
-                .read_value(boundary_id, &outcome.value_ref.id)
-                .unwrap()
-                .is_none()
+        let missing_blob = store
+            .read_value_result(boundary_id, &outcome.value_ref.id)
+            .unwrap();
+        let HistoryValueReadResult::BodyUnavailable(unavailable) = missing_blob else {
+            panic!("expected missing blob result");
+        };
+        assert_eq!(
+            unavailable.reason,
+            HistoryValueBodyUnavailableReason::BlobMissing
         );
+        assert!(unavailable.diagnostic.contains("is missing"));
+        assert!(unavailable.diagnostic.contains("sha256:"));
 
         let _ = std::fs::remove_dir_all(project);
     }

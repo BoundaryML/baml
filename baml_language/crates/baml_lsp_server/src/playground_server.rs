@@ -30,7 +30,10 @@ use axum::{
 };
 use base64::Engine as _;
 use bex_events::{
-    history::{HistoryObserverRegistration, HistoryStore, register_history_observer},
+    history::{
+        HistoryObserverRegistration, HistoryStore, HistoryValueReadResult,
+        register_history_observer,
+    },
     run::{
         AttachRootTraceResult, BoundaryId, CancellationState, CapturedValueRole,
         DiagnosticSeverity, ExecutionRequest, HostCallId, InMemoryRunStore, ProjectGeneration,
@@ -1945,8 +1948,11 @@ async fn handle_ws_in_message(
                 .lock()
                 .ok()
                 .and_then(|store| store.get(&(boundary_id, value_ref_id.clone())).cloned());
-            let history_stored = if stored.is_none() {
-                match state.history_store.read_value(boundary_id, &value_ref_id) {
+            let history_result = if stored.is_none() {
+                match state
+                    .history_store
+                    .read_value_result(boundary_id, &value_ref_id)
+                {
                     Ok(value) => value,
                     Err(err) => {
                         tracing::warn!(
@@ -1954,11 +1960,11 @@ async fn handle_ws_in_message(
                             boundary_id.to_wire_string(),
                             value_ref_id
                         );
-                        None
+                        HistoryValueReadResult::Missing
                     }
                 }
             } else {
-                None
+                HistoryValueReadResult::Missing
             };
             let response = if let Some(stored) = stored {
                 WsOutMessage::ValueBody {
@@ -1972,29 +1978,42 @@ async fn handle_ws_in_message(
                     ),
                     diagnostic: None,
                 }
-            } else if let Some(stored) = history_stored {
-                WsOutMessage::ValueBody {
-                    request_id,
-                    boundary_id: boundary_id.to_wire_string(),
-                    value_ref_id,
-                    codec: stored.codec.as_wire_str().to_string(),
-                    availability: "available".to_string(),
-                    body_base64: Some(
-                        base64::engine::general_purpose::STANDARD.encode(stored.body),
-                    ),
-                    diagnostic: None,
-                }
             } else {
-                WsOutMessage::ValueBody {
-                    request_id,
-                    boundary_id: boundary_id.to_wire_string(),
-                    value_ref_id,
-                    codec: value_ref
-                        .codec
-                        .unwrap_or_else(|| ValueCodec::BamlOutboundValue.as_wire_str().to_string()),
-                    availability: "missing".to_string(),
-                    body_base64: None,
-                    diagnostic: Some("value body is not available".to_string()),
+                let requested_codec = value_ref
+                    .codec
+                    .unwrap_or_else(|| ValueCodec::BamlOutboundValue.as_wire_str().to_string());
+                match history_result {
+                    HistoryValueReadResult::Available(stored) => WsOutMessage::ValueBody {
+                        request_id,
+                        boundary_id: boundary_id.to_wire_string(),
+                        value_ref_id,
+                        codec: stored.codec.as_wire_str().to_string(),
+                        availability: "available".to_string(),
+                        body_base64: Some(
+                            base64::engine::general_purpose::STANDARD.encode(stored.body),
+                        ),
+                        diagnostic: None,
+                    },
+                    HistoryValueReadResult::Missing => WsOutMessage::ValueBody {
+                        request_id,
+                        boundary_id: boundary_id.to_wire_string(),
+                        value_ref_id,
+                        codec: requested_codec,
+                        availability: "missing".to_string(),
+                        body_base64: None,
+                        diagnostic: Some("value body is not available".to_string()),
+                    },
+                    HistoryValueReadResult::BodyUnavailable(unavailable) => {
+                        WsOutMessage::ValueBody {
+                            request_id,
+                            boundary_id: boundary_id.to_wire_string(),
+                            value_ref_id,
+                            codec: requested_codec,
+                            availability: "missing".to_string(),
+                            body_base64: None,
+                            diagnostic: Some(unavailable.diagnostic),
+                        }
+                    }
                 }
             };
             send_ws(sink, &response).await;

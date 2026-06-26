@@ -66,8 +66,8 @@ mod wasm_time;
 use base64::Engine as _;
 use bex_events::{
     history::{
-        HistoryProfileSegment, HistoryValueBody, HistoryValueSegment, history_run_matches_filter,
-        open_boundary_from_segments, read_value_from_segments,
+        HistoryProfileSegment, HistoryValueReadResult, HistoryValueSegment,
+        history_run_matches_filter, open_boundary_from_segments, read_value_from_segments_result,
         router::{BoundaryTraceRouter, HistoryProfileRecord},
         summarize_history_run,
     },
@@ -358,11 +358,11 @@ impl WasmHistoryStoreInner {
         &self,
         boundary_id: BoundaryId,
         value_ref_id: &str,
-    ) -> io::Result<Option<HistoryValueBody>> {
+    ) -> io::Result<HistoryValueReadResult> {
         let Some(boundary) = self.boundaries.get(&boundary_id) else {
-            return Ok(None);
+            return Ok(HistoryValueReadResult::Missing);
         };
-        read_value_from_segments(&boundary.value_segments(), value_ref_id)
+        read_value_from_segments_result(&boundary.value_segments(), value_ref_id)
     }
 
     fn route_claimed(&mut self, boundary_id: BoundaryId) -> io::Result<()> {
@@ -1317,18 +1317,6 @@ impl BamlWasmRuntime {
             .borrow()
             .get(&(parsed, value_ref_id.clone()))
             .cloned();
-        let stored = match stored {
-            Some(stored) => Some(stored),
-            None => self
-                .history_store
-                .borrow()
-                .read_value(parsed, &value_ref_id)
-                .map_err(|err| JsError::new(&format!("Failed to read retained value: {err}")))?
-                .map(|body| WasmLiveValueBody {
-                    codec: body.codec,
-                    body: body.body,
-                }),
-        };
         if let Some(stored) = stored {
             send_wasm_notification(
                 &self.playground_callback,
@@ -1344,21 +1332,56 @@ impl BamlWasmRuntime {
                     diagnostic: None,
                 },
             );
-        } else {
-            send_wasm_notification(
+            return Ok(());
+        }
+
+        let requested_codec = value_ref
+            .codec
+            .unwrap_or_else(|| ValueCodec::BamlOutboundValue.as_wire_str().to_string());
+        match self
+            .history_store
+            .borrow()
+            .read_value(parsed, &value_ref_id)
+            .map_err(|err| JsError::new(&format!("Failed to read retained value: {err}")))?
+        {
+            HistoryValueReadResult::Available(stored) => send_wasm_notification(
                 &self.playground_callback,
                 wasm_playground::PlaygroundNotification::ValueBody {
                     request_id: u64::from(request_id),
                     boundary_id,
                     value_ref_id,
-                    codec: value_ref
-                        .codec
-                        .unwrap_or_else(|| ValueCodec::BamlOutboundValue.as_wire_str().to_string()),
+                    codec: stored.codec.as_wire_str().to_string(),
+                    availability: "available".to_string(),
+                    body_base64: Some(
+                        base64::engine::general_purpose::STANDARD.encode(stored.body),
+                    ),
+                    diagnostic: None,
+                },
+            ),
+            HistoryValueReadResult::Missing => send_wasm_notification(
+                &self.playground_callback,
+                wasm_playground::PlaygroundNotification::ValueBody {
+                    request_id: u64::from(request_id),
+                    boundary_id,
+                    value_ref_id,
+                    codec: requested_codec,
                     availability: "missing".to_string(),
                     body_base64: None,
                     diagnostic: Some("value body is not available".to_string()),
                 },
-            );
+            ),
+            HistoryValueReadResult::BodyUnavailable(unavailable) => send_wasm_notification(
+                &self.playground_callback,
+                wasm_playground::PlaygroundNotification::ValueBody {
+                    request_id: u64::from(request_id),
+                    boundary_id,
+                    value_ref_id,
+                    codec: requested_codec,
+                    availability: "missing".to_string(),
+                    body_base64: None,
+                    diagnostic: Some(unavailable.diagnostic),
+                },
+            ),
         }
         Ok(())
     }
