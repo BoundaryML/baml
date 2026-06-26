@@ -1,0 +1,43 @@
+1:1-67       "// BEP-044: interface fields are linked to class-owned fields with" source.baml comment.line.double-slash.baml
+2:1-37       "// `interface_field as class_field`." source.baml comment.line.double-slash.baml
+4:1-10       "interface"        source.baml meta.interface.baml keyword.declaration.interface.baml
+4:11-16      "Named"            source.baml meta.interface.baml entity.name.type.interface.baml
+4:17-18      "{"                source.baml meta.interface.baml meta.interface.body.baml punctuation.definition.block.begin.baml
+5:3-7        "name"             source.baml meta.interface.baml meta.interface.body.baml meta.field.baml variable.other.property.baml
+5:7-8        ":"                source.baml meta.interface.baml meta.interface.body.baml meta.field.baml punctuation.separator.colon.baml
+5:9-15       "string"           source.baml meta.interface.baml meta.interface.body.baml meta.field.baml support.type.primitive.baml
+6:1-2        "}"                source.baml meta.interface.baml meta.interface.body.baml punctuation.definition.block.end.baml
+8:1-6        "class"            source.baml meta.class.baml keyword.declaration.class.baml
+8:7-13       "Person"           source.baml meta.class.baml meta.class.header.baml entity.name.type.class.baml
+8:14-15      "{"                source.baml meta.class.baml meta.class.body.baml punctuation.definition.block.begin.baml
+9:3-15       "display_name"     source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
+9:15-16      ":"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.separator.colon.baml
+9:17-23      "string"           source.baml meta.class.baml meta.class.body.baml meta.field.baml support.type.primitive.baml
+11:3-13      "implements"       source.baml meta.class.baml meta.class.body.baml meta.implements.baml keyword.declaration.implements.baml
+11:14-19     "Named"            source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.target.baml meta.type-reference.baml entity.name.type.baml
+11:20-21     "{"                source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml punctuation.definition.block.begin.baml
+12:5-9       "name"             source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.interface-field-link.baml variable.other.property.interface.baml
+12:10-12     "as"               source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.interface-field-link.baml keyword.operator.as.baml
+12:13-25     "display_name"     source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml meta.interface-field-link.baml variable.other.property.baml
+13:3-4       "}"                source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml punctuation.definition.block.end.baml
+14:1-2       "}"                source.baml meta.class.baml meta.class.body.baml punctuation.definition.block.end.baml
+16:1-9       "function"         source.baml meta.function.baml keyword.declaration.function.baml
+16:10-19     "read_name"        source.baml meta.function.baml entity.name.function.baml
+16:19-20     "("                source.baml meta.function.baml meta.parameters.baml punctuation.definition.parameters.begin.baml
+16:20-21     "p"                source.baml meta.function.baml meta.parameters.baml meta.parameter.baml variable.parameter.baml
+16:21-22     ":"                source.baml meta.function.baml meta.parameters.baml meta.parameter.baml punctuation.separator.colon.baml
+16:23-29     "Person"           source.baml meta.function.baml meta.parameters.baml meta.parameter.baml meta.type-reference.baml entity.name.type.baml
+16:29-30     ")"                source.baml meta.function.baml meta.parameters.baml punctuation.definition.parameters.end.baml
+16:31-33     "->"               source.baml meta.function.baml meta.return-type.baml keyword.operator.arrow.baml
+16:34-40     "string"           source.baml meta.function.baml meta.return-type.baml support.type.primitive.baml
+16:41-42     "{"                source.baml meta.function.baml meta.block.function.baml punctuation.definition.block.begin.baml
+17:3-9       "return"           source.baml meta.function.baml meta.block.function.baml meta.statement.return.baml keyword.control.flow.return.baml
+17:10-11     "p"                source.baml meta.function.baml meta.block.function.baml meta.statement.return.baml meta.dotted-expression.baml variable.other.readwrite.baml
+17:11-12     "."                source.baml meta.function.baml meta.block.function.baml meta.statement.return.baml meta.expression.upcast.baml punctuation.accessor.baml
+17:12-14     "as"               source.baml meta.function.baml meta.block.function.baml meta.statement.return.baml meta.expression.upcast.baml keyword.operator.as.baml
+17:14-15     "<"                source.baml meta.function.baml meta.block.function.baml meta.statement.return.baml meta.expression.upcast.baml meta.type-arguments.baml punctuation.definition.type-arguments.begin.baml
+17:15-20     "Named"            source.baml meta.function.baml meta.block.function.baml meta.statement.return.baml meta.expression.upcast.baml meta.type-arguments.baml meta.type-reference.baml entity.name.type.baml
+17:20-21     ">"                source.baml meta.function.baml meta.block.function.baml meta.statement.return.baml meta.expression.upcast.baml meta.type-arguments.baml punctuation.definition.type-arguments.end.baml
+17:21-22     "."                source.baml meta.function.baml meta.block.function.baml meta.statement.return.baml meta.field-access.baml punctuation.accessor.baml
+17:22-26     "name"             source.baml meta.function.baml meta.block.function.baml meta.statement.return.baml meta.field-access.baml variable.other.readwrite.baml
+18:1-2       "}"                source.baml meta.function.baml meta.block.function.baml punctuation.definition.block.end.baml

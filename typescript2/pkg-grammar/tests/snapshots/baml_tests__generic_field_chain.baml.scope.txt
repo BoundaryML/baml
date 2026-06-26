@@ -1,0 +1,98 @@
+1:1-75       "// Test: generic type substitution preserved through chained field access." source.baml comment.line.double-slash.baml
+2:1-79       "// Issue #3: class_field_ty() should apply concrete type arguments, not return" source.baml comment.line.double-slash.baml
+3:1-65       "// the raw unsubstituted type from the generic class definition." source.baml comment.line.double-slash.baml
+5:1-6        "class"            source.baml meta.class.baml keyword.declaration.class.baml
+5:7-10       "Box"              source.baml meta.class.baml meta.class.header.baml entity.name.type.class.baml
+5:10-11      "<"                source.baml meta.class.baml meta.class.header.baml meta.type-parameters.baml punctuation.definition.type-parameters.begin.baml
+5:11-12      "T"                source.baml meta.class.baml meta.class.header.baml meta.type-parameters.baml meta.type-parameter.baml entity.name.type.parameter.baml
+5:12-13      ">"                source.baml meta.class.baml meta.class.header.baml meta.type-parameters.baml punctuation.definition.type-parameters.end.baml
+5:14-15      "{"                source.baml meta.class.baml meta.class.body.baml punctuation.definition.block.begin.baml
+6:3-8        "value"            source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
+6:9-10       "T"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-reference.baml entity.name.type.baml
+7:1-2        "}"                source.baml meta.class.baml meta.class.body.baml punctuation.definition.block.end.baml
+9:1-6        "class"            source.baml meta.class.baml keyword.declaration.class.baml
+9:7-11       "User"             source.baml meta.class.baml meta.class.header.baml entity.name.type.class.baml
+9:12-13      "{"                source.baml meta.class.baml meta.class.body.baml punctuation.definition.block.begin.baml
+10:3-7       "name"             source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
+10:8-14      "string"           source.baml meta.class.baml meta.class.body.baml meta.field.baml support.type.primitive.baml
+11:3-6       "age"              source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
+11:7-10      "int"              source.baml meta.class.baml meta.class.body.baml meta.field.baml support.type.primitive.baml
+12:1-2       "}"                source.baml meta.class.baml meta.class.body.baml punctuation.definition.block.end.baml
+14:1-61      "// box.value should be typed as User (not Unknown/type-var)," source.baml comment.line.double-slash.baml
+15:1-48      "// so box.value.name should be typed as string." source.baml comment.line.double-slash.baml
+16:1-9       "function"         source.baml meta.function.baml keyword.declaration.function.baml
+16:10-28     "test_generic_chain" source.baml meta.function.baml entity.name.function.baml
+16:28-29     "("                source.baml meta.function.baml meta.parameters.baml punctuation.definition.parameters.begin.baml
+16:29-32     "box"              source.baml meta.function.baml meta.parameters.baml meta.parameter.baml variable.parameter.baml
+16:32-33     ":"                source.baml meta.function.baml meta.parameters.baml meta.parameter.baml punctuation.separator.colon.baml
+16:34-37     "Box"              source.baml meta.function.baml meta.parameters.baml meta.parameter.baml meta.type-reference.baml entity.name.type.baml
+16:37-38     "<"                source.baml meta.function.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml punctuation.definition.type-arguments.begin.baml
+16:38-42     "User"             source.baml meta.function.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml meta.type-reference.baml entity.name.type.baml
+16:42-43     ">"                source.baml meta.function.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml punctuation.definition.type-arguments.end.baml
+16:43-44     ")"                source.baml meta.function.baml meta.parameters.baml punctuation.definition.parameters.end.baml
+16:45-47     "->"               source.baml meta.function.baml meta.return-type.baml keyword.operator.arrow.baml
+16:48-54     "string"           source.baml meta.function.baml meta.return-type.baml support.type.primitive.baml
+16:55-56     "{"                source.baml meta.function.baml meta.block.function.baml punctuation.definition.block.begin.baml
+17:3-6       "box"              source.baml meta.function.baml meta.block.function.baml meta.dotted-expression.baml variable.other.readwrite.baml
+17:6-7       "."                source.baml meta.function.baml meta.block.function.baml meta.dotted-expression.baml punctuation.accessor.baml
+17:7-12      "value"            source.baml meta.function.baml meta.block.function.baml meta.dotted-expression.baml variable.other.readwrite.baml
+17:12-13     "."                source.baml meta.function.baml meta.block.function.baml meta.dotted-expression.baml punctuation.accessor.baml
+17:13-17     "name"             source.baml meta.function.baml meta.block.function.baml meta.dotted-expression.baml variable.other.readwrite.baml
+18:1-2       "}"                source.baml meta.function.baml meta.block.function.baml punctuation.definition.block.end.baml
+20:1-52      "// Nested generics: Box<Box<User>>.value.value.name" source.baml comment.line.double-slash.baml
+21:1-9       "function"         source.baml meta.function.baml keyword.declaration.function.baml
+21:10-35     "test_nested_generic_chain" source.baml meta.function.baml entity.name.function.baml
+21:35-36     "("                source.baml meta.function.baml meta.parameters.baml punctuation.definition.parameters.begin.baml
+21:36-39     "box"              source.baml meta.function.baml meta.parameters.baml meta.parameter.baml variable.parameter.baml
+21:39-40     ":"                source.baml meta.function.baml meta.parameters.baml meta.parameter.baml punctuation.separator.colon.baml
+21:41-44     "Box"              source.baml meta.function.baml meta.parameters.baml meta.parameter.baml meta.type-reference.baml entity.name.type.baml
+21:44-45     "<"                source.baml meta.function.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml punctuation.definition.type-arguments.begin.baml
+21:45-48     "Box"              source.baml meta.function.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml meta.type-reference.baml entity.name.type.baml
+21:48-49     "<"                source.baml meta.function.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml punctuation.definition.type.baml
+21:49-53     "User"             source.baml meta.function.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml meta.type-reference.baml entity.name.type.baml
+21:53-54     ">"                source.baml meta.function.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml punctuation.definition.type-arguments.end.baml
+21:54-55     ">"                source.baml meta.function.baml meta.parameters.baml meta.parameter.baml punctuation.definition.type.baml
+21:55-56     ")"                source.baml meta.function.baml meta.parameters.baml punctuation.definition.parameters.end.baml
+21:57-59     "->"               source.baml meta.function.baml meta.return-type.baml keyword.operator.arrow.baml
+21:60-66     "string"           source.baml meta.function.baml meta.return-type.baml support.type.primitive.baml
+21:67-68     "{"                source.baml meta.function.baml meta.block.function.baml punctuation.definition.block.begin.baml
+22:3-6       "box"              source.baml meta.function.baml meta.block.function.baml meta.dotted-expression.baml variable.other.readwrite.baml
+22:6-7       "."                source.baml meta.function.baml meta.block.function.baml meta.dotted-expression.baml punctuation.accessor.baml
+22:7-12      "value"            source.baml meta.function.baml meta.block.function.baml meta.dotted-expression.baml variable.other.readwrite.baml
+22:12-13     "."                source.baml meta.function.baml meta.block.function.baml meta.dotted-expression.baml punctuation.accessor.baml
+22:13-18     "value"            source.baml meta.function.baml meta.block.function.baml meta.dotted-expression.baml variable.other.readwrite.baml
+22:18-19     "."                source.baml meta.function.baml meta.block.function.baml meta.dotted-expression.baml punctuation.accessor.baml
+22:19-23     "name"             source.baml meta.function.baml meta.block.function.baml meta.dotted-expression.baml variable.other.readwrite.baml
+23:1-2       "}"                source.baml meta.function.baml meta.block.function.baml punctuation.definition.block.end.baml
+25:1-82      "// Generic in lambda capture: lambda captures a Box<User> and accesses value.name" source.baml comment.line.double-slash.baml
+26:1-9       "function"         source.baml meta.function.baml keyword.declaration.function.baml
+26:10-30     "test_generic_capture" source.baml meta.function.baml entity.name.function.baml
+26:30-31     "("                source.baml meta.function.baml meta.parameters.baml punctuation.definition.parameters.begin.baml
+26:31-34     "box"              source.baml meta.function.baml meta.parameters.baml meta.parameter.baml variable.parameter.baml
+26:34-35     ":"                source.baml meta.function.baml meta.parameters.baml meta.parameter.baml punctuation.separator.colon.baml
+26:36-39     "Box"              source.baml meta.function.baml meta.parameters.baml meta.parameter.baml meta.type-reference.baml entity.name.type.baml
+26:39-40     "<"                source.baml meta.function.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml punctuation.definition.type-arguments.begin.baml
+26:40-44     "User"             source.baml meta.function.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml meta.type-reference.baml entity.name.type.baml
+26:44-45     ">"                source.baml meta.function.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml punctuation.definition.type-arguments.end.baml
+26:45-46     ")"                source.baml meta.function.baml meta.parameters.baml punctuation.definition.parameters.end.baml
+26:47-49     "->"               source.baml meta.function.baml meta.return-type.baml keyword.operator.arrow.baml
+26:50-56     "string"           source.baml meta.function.baml meta.return-type.baml support.type.primitive.baml
+26:57-58     "{"                source.baml meta.function.baml meta.block.function.baml punctuation.definition.block.begin.baml
+27:3-6       "let"              source.baml meta.function.baml meta.block.function.baml meta.statement.let.baml meta.pattern.statement.baml meta.pattern.binding.baml keyword.declaration.binding.baml
+27:7-15      "get_name"         source.baml meta.function.baml meta.block.function.baml meta.statement.let.baml meta.pattern.statement.baml meta.pattern.binding.baml variable.other.binding.baml
+27:16-17     "="                source.baml meta.function.baml meta.block.function.baml meta.statement.let.baml keyword.operator.assignment.baml
+27:18-19     "("                source.baml meta.function.baml meta.block.function.baml meta.statement.let.baml meta.expression.lambda.baml meta.parameters.baml punctuation.definition.parameters.begin.baml
+27:19-20     ")"                source.baml meta.function.baml meta.block.function.baml meta.statement.let.baml meta.expression.lambda.baml meta.parameters.baml punctuation.definition.parameters.end.baml
+27:21-23     "->"               source.baml meta.function.baml meta.block.function.baml meta.statement.let.baml meta.expression.lambda.baml keyword.operator.arrow.baml
+27:24-30     "string"           source.baml meta.function.baml meta.block.function.baml meta.statement.let.baml meta.expression.lambda.baml meta.return-type.lambda.baml support.type.primitive.baml
+27:31-32     "{"                source.baml meta.function.baml meta.block.function.baml meta.statement.let.baml meta.expression.lambda.baml meta.block.code.baml punctuation.definition.block.begin.baml
+27:33-36     "box"              source.baml meta.function.baml meta.block.function.baml meta.statement.let.baml meta.expression.lambda.baml meta.block.code.baml meta.dotted-expression.baml variable.other.readwrite.baml
+27:36-37     "."                source.baml meta.function.baml meta.block.function.baml meta.statement.let.baml meta.expression.lambda.baml meta.block.code.baml meta.dotted-expression.baml punctuation.accessor.baml
+27:37-42     "value"            source.baml meta.function.baml meta.block.function.baml meta.statement.let.baml meta.expression.lambda.baml meta.block.code.baml meta.dotted-expression.baml variable.other.readwrite.baml
+27:42-43     "."                source.baml meta.function.baml meta.block.function.baml meta.statement.let.baml meta.expression.lambda.baml meta.block.code.baml meta.dotted-expression.baml punctuation.accessor.baml
+27:43-47     "name"             source.baml meta.function.baml meta.block.function.baml meta.statement.let.baml meta.expression.lambda.baml meta.block.code.baml meta.dotted-expression.baml variable.other.readwrite.baml
+27:48-49     "}"                source.baml meta.function.baml meta.block.function.baml meta.statement.let.baml meta.expression.lambda.baml meta.block.code.baml punctuation.definition.block.end.baml
+28:3-11      "get_name"         source.baml meta.function.baml meta.block.function.baml meta.function-call.baml entity.name.function.baml
+28:11-12     "("                source.baml meta.function.baml meta.block.function.baml meta.function-call.baml meta.function-call.arguments.baml punctuation.definition.arguments.begin.baml
+28:12-13     ")"                source.baml meta.function.baml meta.block.function.baml meta.function-call.baml meta.function-call.arguments.baml punctuation.definition.arguments.end.baml
+29:1-2       "}"                source.baml meta.function.baml meta.block.function.baml punctuation.definition.block.end.baml

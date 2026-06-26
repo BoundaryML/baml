@@ -122,7 +122,7 @@ function run_children_sequential(children: TestSetChild[], fail_fast: bool) -> T
 }
 
 function _int_to_float(value: int) -> float {
-  float.parse(baml.unstable.string(value)) catch_all (e) {
+  float.parse(string.from(value)) catch_all (e) {
     _ => baml.sys.panic("failed to convert int to float")
   }
 }

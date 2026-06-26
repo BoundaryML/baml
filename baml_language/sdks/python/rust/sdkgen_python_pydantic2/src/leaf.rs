@@ -1251,7 +1251,7 @@ pub(crate) fn render_leaf_body(body: &LeafBody) -> String {
     }
     // Generic functions emit `T = typing.TypeVar("T")` lines below; the
     // `Class`/`TypeAlias` rule in `stdlib_imports` doesn't catch the
-    // function-only-but-generic case (e.g. stdlib `baml.unstable.string<T>`).
+    // function-only-but-generic case (e.g. stdlib `string.from<T>`).
     if !body.generic_typevars().is_empty() && !stdlibs.contains(&"typing") {
         stdlibs.push("typing");
     }

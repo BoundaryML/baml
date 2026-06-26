@@ -10,7 +10,6 @@
 //! - `math` — `BamlNamespaceMath` (trunc)
 //! - `media` — `BamlClassMedia{Pdf,Audio,Video,Image}` + `BamlNamespaceMedia`
 //! - `ops` — `BamlClassOps*` (`Equals`/`Compare` for primitives + containers)
-//! - `unstable` — `BamlNamespaceUnstable` (string)
 //! - `root` — `BamlPackageBaml` (`deep_copy`, `deep_equals`, and the
 //!   `Sortable.sort` shims `_compare_shim` / `_is_primitive_array` /
 //!   `_rust_sort` / `_float_total_cmp`)
@@ -43,7 +42,6 @@ mod time;
 mod toml;
 mod type_class;
 mod uint8array;
-mod unstable;
 mod yaml;
 
 use std::collections::HashMap;

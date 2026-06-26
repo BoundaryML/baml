@@ -1,0 +1,56 @@
+1:1-6        "class"            source.baml meta.class.baml keyword.declaration.class.baml
+1:7-9        "Hi"               source.baml meta.class.baml meta.class.header.baml entity.name.type.class.baml
+1:10-11      "{"                source.baml meta.class.baml meta.class.body.baml punctuation.definition.block.begin.baml
+2:5-9        "name"             source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
+2:10-16      "string"           source.baml meta.class.baml meta.class.body.baml meta.field.baml support.type.primitive.baml
+3:1-2        "}"                source.baml meta.class.baml meta.class.body.baml punctuation.definition.block.end.baml
+5:1-7        "client"           source.baml meta.client.baml keyword.declaration.client.baml
+5:7-8        "<"                source.baml meta.client.baml punctuation.definition.type-parameters.begin.baml
+5:8-11       "llm"              source.baml meta.client.baml support.type.client.baml
+5:11-12      ">"                source.baml meta.client.baml punctuation.definition.type-parameters.end.baml
+5:13-22      "VertexGCP"        source.baml meta.client.baml entity.name.client.baml
+5:23-24      "{"                source.baml meta.client.baml meta.config.block.baml punctuation.definition.block.begin.baml
+6:5-13       "provider"         source.baml meta.client.baml meta.config.block.baml meta.field.config.baml variable.other.property.baml
+6:14-15      "\""               source.baml meta.client.baml meta.config.block.baml meta.field.config.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+6:15-24      "vertex-ai"        source.baml meta.client.baml meta.config.block.baml meta.field.config.baml string.quoted.double.baml
+6:24-25      "\""               source.baml meta.client.baml meta.config.block.baml meta.field.config.baml string.quoted.double.baml punctuation.definition.string.end.baml
+7:5-12       "options"          source.baml meta.client.baml meta.config.block.baml meta.field.config.baml variable.other.property.baml
+7:13-14      "{"                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml punctuation.definition.block.begin.baml
+8:9-14       "model"            source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml variable.other.property.baml
+8:15-16      "\""               source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+8:16-32      "gemini-2.0-flash" source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml string.quoted.double.baml
+8:32-33      "\""               source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml string.quoted.double.baml punctuation.definition.string.end.baml
+9:9-17       "location"         source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml variable.other.property.baml
+9:18-19      "\""               source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+9:19-30      "us-central1"      source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml string.quoted.double.baml
+9:30-31      "\""               source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml string.quoted.double.baml punctuation.definition.string.end.baml
+10:5-6       "}"                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml punctuation.definition.block.end.baml
+11:1-2       "}"                source.baml meta.client.baml meta.config.block.baml punctuation.definition.block.end.baml
+13:1-9       "function"         source.baml meta.function.baml keyword.declaration.function.baml
+13:10-20     "FetchDatax"       source.baml meta.function.baml entity.name.function.baml
+13:20-21     "("                source.baml meta.function.baml meta.parameters.baml punctuation.definition.parameters.begin.baml
+13:21-28     "user_id"          source.baml meta.function.baml meta.parameters.baml meta.parameter.baml variable.parameter.baml
+13:28-29     ":"                source.baml meta.function.baml meta.parameters.baml meta.parameter.baml punctuation.separator.colon.baml
+13:30-36     "string"           source.baml meta.function.baml meta.parameters.baml meta.parameter.baml support.type.primitive.baml
+13:36-37     ")"                source.baml meta.function.baml meta.parameters.baml punctuation.definition.parameters.end.baml
+13:38-40     "->"               source.baml meta.function.baml meta.return-type.baml keyword.operator.arrow.baml
+13:41-43     "Hi"               source.baml meta.function.baml meta.return-type.baml meta.type-reference.baml entity.name.type.baml
+13:44-45     "{"                source.baml meta.function.baml meta.block.function.baml punctuation.definition.block.begin.baml
+14:5-32      "//# collect source material" source.baml meta.function.baml meta.block.function.baml comment.line.double-slash.baml
+15:5-11      "client"           source.baml meta.function.baml meta.block.function.baml meta.field.llm.client.baml keyword.other.llm.client.baml
+15:12-21     "VertexGCP"        source.baml meta.function.baml meta.block.function.baml meta.field.llm.client.baml meta.dotted-expression.baml variable.other.readwrite.baml
+17:5-11      "prompt"           source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml keyword.other.llm.prompt.baml
+17:12-13     "#"                source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml punctuation.definition.string.begin.baml
+17:13-14     "\""               source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml punctuation.definition.string.begin.baml
+18:9-11      "{#"               source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml comment.block.template.baml punctuation.definition.comment.begin.baml
+18:11-104    " You are the collection stage for the debugging workflow. Write a long story of 4 setnences. " source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml comment.block.template.baml
+18:104-106   "#}"               source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml comment.block.template.baml punctuation.definition.comment.end.baml
+19:1-38      "        give short story 10 sentences" source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml
+20:9-11      "{#"               source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml comment.block.template.baml punctuation.definition.comment.begin.baml
+20:11-94     " Provide a compact JSON object (max 4 keys) called 'profile' that captures the most" source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml comment.block.template.baml
+21:1-127     "        relevant public details you can infer for the candidate. Make one field 4 sentences long.  make up datea{{ user_id }}." source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml comment.block.template.baml
+23:1-33      "        {{ ctx.output_format }} " source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml comment.block.template.baml
+23:33-35     "#}"               source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml comment.block.template.baml punctuation.definition.comment.end.baml
+24:5-6       "\""               source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml punctuation.definition.string.end.baml
+24:6-7       "#"                source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml punctuation.definition.string.end.baml
+25:1-2       "}"                source.baml meta.function.baml meta.block.function.baml punctuation.definition.block.end.baml

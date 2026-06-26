@@ -1,0 +1,25 @@
+1:1-73       "// Minimal repro: retry_policy inside client block causes parsing errors" source.baml comment.line.double-slash.baml
+3:1-7        "client"           source.baml meta.client.baml keyword.declaration.client.baml
+3:7-8        "<"                source.baml meta.client.baml punctuation.definition.type-parameters.begin.baml
+3:8-11       "llm"              source.baml meta.client.baml support.type.client.baml
+3:11-12      ">"                source.baml meta.client.baml punctuation.definition.type-parameters.end.baml
+3:13-21      "MyClient"         source.baml meta.client.baml entity.name.client.baml
+3:22-23      "{"                source.baml meta.client.baml meta.config.block.baml punctuation.definition.block.begin.baml
+4:3-11       "provider"         source.baml meta.client.baml meta.config.block.baml meta.field.config.baml variable.other.property.baml
+4:12-18      "openai"           source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.dotted-expression.baml variable.other.readwrite.baml
+5:3-15       "retry_policy"     source.baml meta.client.baml meta.config.block.baml meta.field.config.baml variable.other.property.baml
+5:16-23      "MyRetry"          source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.dotted-expression.baml variable.other.readwrite.baml
+6:3-10       "options"          source.baml meta.client.baml meta.config.block.baml meta.field.config.baml variable.other.property.baml
+6:11-12      "{"                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml punctuation.definition.block.begin.baml
+7:5-10       "model"            source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml variable.other.property.baml
+7:11-12      "\""               source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+7:12-17      "gpt-4"            source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml string.quoted.double.baml
+7:17-18      "\""               source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml string.quoted.double.baml punctuation.definition.string.end.baml
+8:3-4        "}"                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml punctuation.definition.block.end.baml
+9:1-2        "}"                source.baml meta.client.baml meta.config.block.baml punctuation.definition.block.end.baml
+11:1-13      "retry_policy"     source.baml meta.retry-policy.baml keyword.declaration.retry-policy.baml
+11:14-21     "MyRetry"          source.baml meta.retry-policy.baml entity.name.retry-policy.baml
+11:22-23     "{"                source.baml meta.retry-policy.baml meta.config.block.baml punctuation.definition.block.begin.baml
+12:3-14      "max_retries"      source.baml meta.retry-policy.baml meta.config.block.baml meta.field.config.baml variable.other.property.baml
+12:15-16     "3"                source.baml meta.retry-policy.baml meta.config.block.baml meta.field.config.baml constant.numeric.integer.baml
+13:1-2       "}"                source.baml meta.retry-policy.baml meta.config.block.baml punctuation.definition.block.end.baml
