@@ -10,11 +10,22 @@ export default function Home() {
           <h1 className="text-2xl font-bold leading-none tracking-tight text-ink sm:text-4xl">
             fight slop with slop
           </h1>
+          <p className="tweet-font mt-2 text-sm text-accent">
+            by{' '}
+            <a
+              href="https://x.com/boundaryml"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:underline"
+            >
+              @boundaryml
+            </a>
+          </p>
           <div className="mt-10 sm:mt-14">
             <PledgeWall />
           </div>
         </div>
-        <div className="min-w-0 lg:pl-4 xl:pl-6">
+        <div className="min-w-0 lg:mt-6 lg:pl-4 xl:pl-6">
           <PledgeForm />
         </div>
       </section>
