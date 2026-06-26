@@ -121,7 +121,7 @@ export default function PledgeForm() {
 
       {status === 'error' && <p className="mt-3 text-sm text-red-700">{error}</p>}
 
-      <div className="mt-2 flex justify-end">
+      <div className="-mt-4 flex justify-center sm:mt-2 sm:justify-end">
         <button
           type="submit"
           disabled={status === 'sending'}
@@ -131,7 +131,7 @@ export default function PledgeForm() {
           <svg
             aria-hidden="true"
             viewBox="0 0 24 24"
-            className={`h-4 w-4 fill-none stroke-current stroke-2 ${status === 'sending' ? 'animate-paper-plane-send' : 'transition group-hover:translate-x-0.5 group-hover:-translate-y-0.5'}`}
+            className={`hidden h-4 w-4 fill-none stroke-current stroke-2 sm:block ${status === 'sending' ? 'animate-paper-plane-send' : 'transition group-hover:translate-x-0.5 group-hover:-translate-y-0.5'}`}
           >
             <path d="M3.5 11.5 20 4l-7.5 16-2-7-7-1.5Z" />
             <path d="m10.5 13 4-4" />
