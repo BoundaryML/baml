@@ -53,7 +53,7 @@ function testing.TestCollector.register_test(self: testing.TestCollector, name: 
     let final_name = : string
       if (count > 0 : bool) : string
         { : string
-          full_name + "#" + baml.unstable.string(count + 1) : string
+          full_name + "#" + string.from(count + 1) : string
         }
       else
         { : string
@@ -89,7 +89,7 @@ function testing.TestCollector.register_test_set(self: testing.TestCollector, na
     let final_name = : string
       if (count > 0 : bool) : string
         { : string
-          full_name + "#" + baml.unstable.string(count + 1) : string
+          full_name + "#" + string.from(count + 1) : string
         }
       else
         { : string
@@ -1000,7 +1000,7 @@ function testing.run_children_sequential(children: testing.TestSetChild[], fail_
 }
 function testing._int_to_float(value: int) -> float throws never {
   { : float
-    catch (float.parse(baml.unstable.string(value)) : float) : float
+    catch (float.parse(string.from(value)) : float) : float
       catch_all (e)
         _ =>
           baml.sys.panic("failed to convert...") : never

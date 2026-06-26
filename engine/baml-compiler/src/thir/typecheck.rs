@@ -228,12 +228,6 @@ pub fn typecheck_returning_context<'a>(
                     TypeIR::bool(),
                 )
             }
-            "baml.unstable.string" => {
-                // baml.unstable.string<T>(T) -> string
-                // Takes any type and returns string representation
-                TypeIR::arrow(vec![TypeIR::Top(Default::default())], TypeIR::string())
-            }
-
             _ => {
                 // Generic function type for other natives
                 let param_types = vec![TypeIR::null(); arity];
@@ -1750,7 +1744,6 @@ pub fn typecheck_expression(
                     ("audio", "from_base64") => Some("baml.media.audio.from_base64"),
                     ("video", "from_base64") => Some("baml.media.video.from_base64"),
                     ("pdf", "from_base64") => Some("baml.media.pdf.from_base64"),
-                    ("baml.unstable", "string") => Some("baml.unstable.string"),
                     _ => None,
                 };
 
@@ -1811,20 +1804,6 @@ pub fn typecheck_expression(
                             ));
                             return_type = Some(TypeIR::bool());
                         }
-                        "baml.unstable.string" => {
-                            // baml.unstable.string<T>(T) -> string
-                            if let Some(arg) = typed_args.first() {
-                                if let Some(arg_type) = &arg.meta().1 {
-                                    // Specialize the function type for this specific call
-                                    func_type = Some(TypeIR::arrow(
-                                        vec![arg_type.clone()],
-                                        TypeIR::string(),
-                                    ));
-                                    return_type = Some(TypeIR::string());
-                                }
-                            }
-                        }
-
                         "baml.fetch_as" => {
                             let has_type_args = !type_args.is_empty();
 
@@ -2055,8 +2034,6 @@ pub fn typecheck_expression(
 
                             ("baml", "fetch_as") => Some("baml.fetch_as".to_string()),
 
-                            ("baml.unstable", "string") => Some("baml.unstable.string".to_string()),
-
                             ("env", "get") => Some("env.get".to_string()),
 
                             _ => {
@@ -2180,14 +2157,6 @@ pub fn typecheck_expression(
                                             TypeIR::Top(Default::default()),
                                         ],
                                         TypeIR::bool(),
-                                    ));
-                                }
-                                "baml.unstable.string" => {
-                                    generic_return_type_inferred = Some(TypeIR::string());
-
-                                    func_type = Some(TypeIR::arrow(
-                                        vec![arg_type.clone()],
-                                        TypeIR::string(),
                                     ));
                                 }
                                 "baml.fetch_as" => {
@@ -2737,13 +2706,6 @@ pub fn typecheck_expression(
                             match field.as_str() {
                                 // Typecheck as var and then next thing is MethodCall.
                                 // MethodCall figures out this is function on namespace.
-                                "unstable" => {
-                                    return thir::Expr::Var(
-                                        "baml.unstable".to_string(),
-                                        (base.span(), None),
-                                    );
-                                }
-
                                 "HttpRequest" => {
                                     return thir::Expr::Var(
                                         "baml.HttpRequest".to_string(),

@@ -192,6 +192,4 @@ function WithStack(x: int) -> int {
 //
 // Function: baml.deep_equals
 //
-// Function: baml.unstable.string
-//
 // Function: baml.fetch_as
