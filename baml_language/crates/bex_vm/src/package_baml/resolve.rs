@@ -165,7 +165,7 @@ pub(crate) fn realize_frame(template: &[TyTemplate], bound_args: &[RuntimeTy]) -
 /// impl's interface args/assoc — concretised with its bindings — equal the
 /// request. Used both by reflection's membership queries and to discharge a
 /// bounded impl's nested obligations.
-pub(super) fn type_implements(
+pub(crate) fn type_implements(
     vm: &BexVm,
     concrete_ty: &RuntimeTy,
     iface: &TypeName,

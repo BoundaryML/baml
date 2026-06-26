@@ -431,6 +431,7 @@ mod tests {
             argv: Arc::from([]),
             pending_call_type_args: Vec::new(),
             interface_impls: Arc::new(indexmap::IndexMap::new()),
+            recursive_type_alias_defs: Arc::new(indexmap::IndexMap::new()),
         }
     }
 
@@ -903,6 +904,14 @@ pub struct BexVm {
     /// `type.implementors()` / `type.implemented_by()` reflection methods. Shared
     /// `Arc` so spawned VMs (lambdas, futures) don't duplicate the map.
     pub interface_impls: Arc<InterfaceImplsByPackage>,
+
+    /// Recursive type-alias definitions (`type JSON = … | JSON[]`). Only
+    /// recursive aliases survive to runtime; non-recursive ones were expanded
+    /// inline at lowering. Shared `Arc` across spawned VMs like `interface_impls`.
+    /// Read by the canonical type algebra (`RuntimeTypeContext`) to expand an
+    /// alias, and by output-format rendering.
+    pub recursive_type_alias_defs:
+        Arc<indexmap::IndexMap<baml_type::TypeName, baml_type::RuntimeTy>>,
 }
 
 /// VM execution state.
@@ -1247,6 +1256,9 @@ impl BexVm {
         #[cfg(not(target_arch = "wasm32"))] park_requested: Arc<AtomicBool>,
         argv: Arc<[String]>,
         interface_impls: Arc<InterfaceImplsByPackage>,
+        recursive_type_alias_defs: Arc<
+            indexmap::IndexMap<baml_type::TypeName, baml_type::RuntimeTy>,
+        >,
     ) -> Self {
         // Defer the first TLAB chunk reservation until the first `tlab.alloc`,
         // which the engine reaches only after the VM has been registered as a
@@ -1312,6 +1324,7 @@ impl BexVm {
             argv,
             pending_call_type_args: Vec::new(),
             interface_impls,
+            recursive_type_alias_defs,
         }
     }
 
@@ -1971,6 +1984,7 @@ impl BexVm {
         );
 
         let interface_impls = Arc::new(bytecode.interface_impls);
+        let recursive_type_alias_defs = Arc::new(bytecode.recursive_type_alias_defs);
 
         Ok(Self::new(
             heap,
@@ -1980,6 +1994,7 @@ impl BexVm {
             park_requested,
             Arc::from(Vec::<String>::new()),
             interface_impls,
+            recursive_type_alias_defs,
         ))
     }
 

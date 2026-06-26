@@ -692,6 +692,10 @@ pub struct BexEngine {
     /// reflection.
     interface_impls: Arc<InterfaceImplsByPackage>,
 
+    /// Recursive type-alias definitions, shared with every VM (mirrors
+    /// `interface_impls`). Drives the canonical type algebra at runtime.
+    recursive_type_alias_defs: Arc<indexmap::IndexMap<baml_type::TypeName, baml_type::RuntimeTy>>,
+
     /// Snapshot of the `BAML_PROFILE` master switch, taken once at
     /// construction (the config is read-once per process). Gates every
     /// profiling emission and the per-resume ring refresh.
@@ -1421,6 +1425,7 @@ impl BexEngine {
 
         let interface_impls: Arc<InterfaceImplsByPackage> =
             Arc::new(bytecode.interface_impls.clone());
+        let recursive_type_alias_defs = Arc::new(bytecode.recursive_type_alias_defs.clone());
 
         // Run $init for each package in dependency order.
         // $init evaluates top-level let-binding initializers and stores their
@@ -1440,6 +1445,7 @@ impl BexEngine {
                     Arc::clone(&park_requested),
                     Arc::clone(&argv),
                     Arc::clone(&interface_impls),
+                    Arc::clone(&recursive_type_alias_defs),
                 );
                 vm.set_entry_point(*init_ptr, &[]);
                 // Drive the VM to completion. $init only contains synchronous
@@ -1567,6 +1573,7 @@ impl BexEngine {
             active_calls: Mutex::new(HashMap::new()),
             futures: FutureManager::new(futures_permit),
             interface_impls,
+            recursive_type_alias_defs,
             prof_enabled,
         })
     }
@@ -2420,6 +2427,7 @@ impl BexEngine {
             Arc::clone(&self.park_requested),
             Arc::clone(&self.argv),
             Arc::clone(&self.interface_impls),
+            Arc::clone(&self.recursive_type_alias_defs),
         );
         // BEP-034: wrap the root VM in a `BexThread` from the outset so the
         // permit's `RootHaver` is the thread (delegating to the inner VM).
@@ -3872,6 +3880,7 @@ impl BexEngine {
             Arc::clone(&self.park_requested),
             Arc::clone(&self.argv),
             Arc::clone(&self.interface_impls),
+            Arc::clone(&self.recursive_type_alias_defs),
         );
         child_vm.prof_thread_id = prof_thread_id;
         child_vm.prof_suppressed = prof_suppressed;
