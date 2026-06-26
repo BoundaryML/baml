@@ -12,96 +12,46 @@ use crate::{
     ty::{Freshness, FunctionParamMode, FunctionParamTy, MediaKind, QualifiedTypeName, Ty, TyAttr},
 };
 
-fn is_supported_map_key_type(ty: &Ty) -> bool {
-    match ty {
-        Ty::String { .. } | Ty::Never { .. } | Ty::Unknown { .. } | Ty::Error { .. } => true,
-        Ty::Literal(baml_base::Literal::String(_), _, _) => true,
-        Ty::Union(members, _) => members.iter().all(is_supported_map_key_type),
-        _ => false,
-    }
-}
-
-fn lookup_type_path<'db>(
-    db: &'db dyn crate::Db,
-    package_items: &PackageItems<'db>,
-    ns_context: &[baml_base::Name],
-    segments: &[baml_base::Name],
-) -> Option<Definition<'db>> {
-    let item = segments.last().expect("non-empty path");
-    let seg_ns = &segments[..segments.len() - 1];
-    let resolved = if !ns_context.is_empty() {
-        let ns: Vec<baml_base::Name> = ns_context.iter().chain(seg_ns.iter()).cloned().collect();
-        package_items.lookup_type(&ns, item)
-    } else {
-        package_items.lookup_type(seg_ns, item)
-    };
-    resolved.or_else(|| {
-        if segments.len() >= 2 {
-            if segments[0].as_str() == "root" {
-                package_items.lookup_type(&segments[1..segments.len() - 1], item)
-            } else {
-                let pkg_id = PackageId::new(db, segments[0].clone());
-                let pkg = baml_compiler2_ppir::package_items(db, pkg_id);
-                pkg.lookup_type(&segments[1..segments.len() - 1], item)
-            }
-        } else {
-            None
-        }
-    })
-}
-
-fn is_supported_map_key_type_expr<'db>(
-    db: &'db dyn crate::Db,
-    type_expr: &TypeExpr,
-    package_items: &PackageItems<'db>,
-    ns_context: &[baml_base::Name],
+fn is_supported_map_key_type(
+    db: &dyn crate::Db,
+    ty: &Ty,
     seen_aliases: &mut FxHashSet<QualifiedTypeName>,
 ) -> bool {
-    match type_expr {
-        TypeExpr::String { .. }
-        | TypeExpr::Never { .. }
-        | TypeExpr::BuiltinUnknown { .. }
-        | TypeExpr::Error { .. }
-        | TypeExpr::Unknown { .. } => true,
-        TypeExpr::Literal {
-            value: baml_base::Literal::String(_),
-            ..
-        } => true,
-        TypeExpr::Union { variants, .. } => variants.iter().all(|variant| {
-            is_supported_map_key_type_expr(db, variant, package_items, ns_context, seen_aliases)
-        }),
-        TypeExpr::Path {
-            segments,
-            generic_args,
-            associated_type_bindings,
-            ..
-        } if generic_args.is_empty() && associated_type_bindings.is_empty() => {
-            let Some(Definition::TypeAlias(alias_loc)) =
-                lookup_type_path(db, package_items, ns_context, segments)
-            else {
-                return false;
-            };
-            let item_tree = baml_compiler2_ppir::file_item_tree(db, alias_loc.file(db));
-            let alias_data = &item_tree[alias_loc.id(db)];
-            let qtn = qualify_def(db, Definition::TypeAlias(alias_loc), &alias_data.name);
-            if !seen_aliases.insert(qtn) {
+    match ty {
+        Ty::String { .. }
+        | Ty::Never { .. }
+        | Ty::Unknown { .. }
+        | Ty::Error { .. }
+        | Ty::TypeVar(..) => true,
+        Ty::Literal(baml_base::Literal::String(_), _, _) => true,
+        Ty::Union(members, _) => members
+            .iter()
+            .all(|member| is_supported_map_key_type(db, member, seen_aliases)),
+        Ty::TypeAlias(qtn, _) => {
+            if !seen_aliases.insert(qtn.clone()) {
                 return false;
             }
-            let pkg_info = baml_compiler2_hir::file_package::file_package(db, alias_loc.file(db));
-            let pkg_id = PackageId::new(db, pkg_info.package.clone());
-            let alias_pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
-            alias_data.type_expr.as_ref().is_some_and(|te| {
-                is_supported_map_key_type_expr(
-                    db,
-                    &te.expr,
-                    alias_pkg_items,
-                    &pkg_info.namespace_path,
-                    seen_aliases,
-                )
-            })
+            let supported = resolve_type_alias_target(db, qtn)
+                .is_some_and(|expanded| is_supported_map_key_type(db, &expanded, seen_aliases));
+            seen_aliases.remove(qtn);
+            supported
         }
         _ => false,
     }
+}
+
+fn resolve_type_alias_target(db: &dyn crate::Db, qtn: &QualifiedTypeName) -> Option<Ty> {
+    let pkg_id = PackageId::new(db, qtn.package().clone());
+    let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
+    let Some(Definition::TypeAlias(alias_loc)) = pkg_items.lookup_type(qtn.namespace(), qtn.name())
+    else {
+        return None;
+    };
+    Some(
+        crate::inference::resolve_type_alias(db, alias_loc)
+            .ty
+            .clone(),
+    )
 }
 
 /// Resolve an AST `TypeExpr` to a `Ty` using package-level name resolution.
@@ -1075,14 +1025,8 @@ pub fn lower_type_expr_in_ns<'db>(
                 generic_params,
                 diagnostics,
             );
-            let supported_key_type = is_supported_map_key_type(&key_ty)
-                || is_supported_map_key_type_expr(
-                    db,
-                    key,
-                    package_items,
-                    ns_context,
-                    &mut FxHashSet::default(),
-                );
+            let supported_key_type =
+                is_supported_map_key_type(db, &key_ty, &mut FxHashSet::default());
             if !supported_key_type {
                 diagnostics.push(TirTypeError::InvalidMapKeyType {
                     key: key_ty.clone(),
