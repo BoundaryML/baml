@@ -1,0 +1,29 @@
+// BEP-049 backtick string literals in the declarative slots that the formatter
+// used to reject (it only knew the quoted and raw string tokens there). Both
+// slots below compile cleanly and format without error.
+//
+// Backtick interiors are printed verbatim by `baml fmt`: a backtick string is
+// auto-dedented at lower time (BEP-049 §12), so re-indenting it the way raw
+// strings are re-indented would change the string's runtime value. This file is
+// already in canonical formatted form, so `baml fmt` leaves it unchanged.
+
+client<llm> Fast {
+    provider: openai,
+    options: {
+        model: "gpt-4o-mini",
+        api_key: env.OPENAI_API_KEY,
+    },
+}
+
+// Backtick value in `prompt:` position (the originally reported crash).
+function Greet(name: string) -> string {
+    client: Fast
+    prompt: `
+        Say hello to ${name}.
+    `
+}
+
+// Backtick body in a `template_string`.
+template_string Header(title: string) `
+    # ${title}
+`
