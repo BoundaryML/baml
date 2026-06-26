@@ -21,7 +21,7 @@ export default function Home() {
               @boundaryml
             </a>
           </p>
-          <div className="mt-10 sm:mt-14">
+          <div className="mt-8">
             <PledgeWall />
           </div>
         </div>

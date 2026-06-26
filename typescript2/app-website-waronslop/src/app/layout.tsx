@@ -4,7 +4,7 @@ import ConvexClientProvider from '@/components/ConvexClientProvider';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'The War on Slop',
+  title: 'fight slop with slop',
   description:
     'A standing legion against the great unwashed tide of AI slop. Order, craft, and the hand-made — marching east to meet the Slopmonsters.',
   metadataBase: new URL('https://waronslop.com'),
