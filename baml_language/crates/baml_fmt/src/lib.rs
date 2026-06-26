@@ -206,12 +206,13 @@ implements<T extends Named> Printable for Box<T> {
 mod backtick_format_tests {
     use super::*;
 
-    /// BEP-049: backtick string literals round-trip through the formatter, always
-    /// printed verbatim. Unlike raw `#"..."#` strings, the formatter must NOT
-    /// re-indent a backtick interior: a backtick string is auto-dedented at lower
-    /// time (BEP-049 §12 `preprocess_template`, with `${...}` interps placeholdered
-    /// and §13 whitespace control), so any re-indent that does not replicate that
-    /// pipeline silently changes the string's runtime value. See `BacktickString`.
+    /// BEP-049: backtick string literals round-trip through the formatter. A
+    /// multi-line interior is re-indented to sit one level past the surrounding
+    /// block, but ONLY when that is provably value-preserving: a backtick string
+    /// is auto-dedented at lower time (BEP-049 §12), so the formatter strips the
+    /// same common prefix, re-emits at the block indent, and verifies the runtime
+    /// value is unchanged before applying. Single-line literals, tick ladders,
+    /// `${for}`/`${if}` block tags, and multi-line interpolations stay verbatim.
     #[test]
     fn backtick_one_liner_round_trips() {
         let source = "function Demo() -> string {\n    `hello ${name} world`\n}\n";
@@ -251,14 +252,13 @@ mod backtick_format_tests {
     }
 
     /// The reported bug: a backtick string as a `prompt:` value used to make
-    /// `baml fmt` bail on the whole file, because the prompt slot only knew the
-    /// quoted and raw string tokens. It is now accepted. The over-indented
-    /// interior is preserved byte-for-byte (verbatim), not re-indented, so the
-    /// §12-dedented value is unchanged.
+    /// `baml fmt` bail on the whole file. It is now accepted, and its
+    /// over-indented interior is re-indented to one level past the field (8
+    /// spaces), dedented by the common leading indent.
     #[test]
-    fn backtick_prompt_value_accepted_verbatim() {
+    fn backtick_prompt_multiline_dedents() {
         let source = "function Demo(name: string) -> string {\n    client \"openai/gpt-4o\"\n    prompt `\n            Hello ${name}\n            Goodbye\n    `\n}\n";
-        let expected = "function Demo(name: string) -> string {\n    client: \"openai/gpt-4o\"\n    prompt: `\n            Hello ${name}\n            Goodbye\n    `\n}\n";
+        let expected = "function Demo(name: string) -> string {\n    client: \"openai/gpt-4o\"\n    prompt: `\n        Hello ${name}\n        Goodbye\n    `\n}\n";
         let options = FormatOptions::default();
         let formatted = format(source, &options).expect("formatter should succeed");
         assert_eq!(formatted, expected, "got:\n{formatted}");
@@ -278,50 +278,87 @@ mod backtick_format_tests {
         assert_eq!(formatted, second);
     }
 
-    /// A backtick string is accepted as an attribute argument (same slot raw and
-    /// quoted strings use) and its interior is preserved verbatim.
+    /// A backtick string is accepted as an attribute argument and re-indented
+    /// relative to the wrapped attribute layout.
     #[test]
-    fn backtick_attribute_arg_accepted_verbatim() {
+    fn backtick_attribute_arg_dedents() {
         let source = "class Foo {\n    bar string @description(`\n        some desc\n        more\n    `)\n}\n";
+        let expected = "class Foo {\n    bar: string @description(\n        `\n            some desc\n            more\n        `,\n    ),\n}\n";
         let options = FormatOptions::default();
         let formatted = format(source, &options).expect("formatter should succeed");
-        assert!(
-            formatted.contains("`\n        some desc\n        more\n    `"),
-            "backtick interior must be verbatim, got:\n{formatted}"
-        );
+        assert_eq!(formatted, expected, "got:\n{formatted}");
         let second = format(&formatted, &options).expect("formatter should be idempotent");
         assert_eq!(formatted, second);
     }
 
-    /// A backtick string is accepted as a `template_string` body and printed
-    /// verbatim.
+    /// A backtick `template_string` body is accepted and its interior re-indented
+    /// (closing backtick at column 0, like a raw-string body).
     #[test]
-    fn backtick_template_string_accepted_verbatim() {
+    fn backtick_template_string_dedents() {
         let source = "template_string Foo(name: string) `\n        Hello ${name}\n        Bye\n`\n";
+        let expected = "template_string Foo(name: string) `\n    Hello ${name}\n    Bye\n`\n";
         let options = FormatOptions::default();
         let formatted = format(source, &options).expect("formatter should succeed");
-        assert!(
-            formatted.contains("`\n        Hello ${name}\n        Bye\n`"),
-            "backtick interior must be verbatim, got:\n{formatted}"
-        );
+        assert_eq!(formatted, expected, "got:\n{formatted}");
         let second = format(&formatted, &options).expect("formatter should be idempotent");
         assert_eq!(formatted, second);
     }
 
-    /// Value-preservation guard. The first content line is less-indented than the
-    /// rest, so under §12 dedent (common prefix over ALL non-blank lines incl. the
-    /// first) the deeper indentation is part of the value. A raw-style re-indent
-    /// would flatten the lines and change the value, so the interior must be left
-    /// byte-for-byte unchanged.
+    /// Backtick string in expression position re-indents its over-indented
+    /// interior to the surrounding block.
     #[test]
-    fn backtick_interior_not_reindented() {
+    fn backtick_expr_multiline_dedents() {
+        let source = "function Demo() -> string {\n    let x = `\n            line one\n            line two\n    `;\n    x\n}\n";
+        let expected = "function Demo() -> string {\n    let x = `\n        line one\n        line two\n    `;\n    x\n}\n";
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).expect("formatter should succeed");
+        assert_eq!(formatted, expected, "got:\n{formatted}");
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second);
+    }
+
+    /// Value preservation: the first content line is less-indented than the
+    /// second, so under §12 dedent the second line's extra indent is part of the
+    /// string's value. The re-indent moves the block to the canonical position
+    /// but preserves that relative indent (second line stays 6 spaces deeper).
+    #[test]
+    fn backtick_relative_indent_preserved() {
         let source =
             "function D() -> string {\n    let x = `first line\n      second line`;\n    x\n}\n";
+        let expected = "function D() -> string {\n    let x = `\n        first line\n              second line\n    `;\n    x\n}\n";
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).expect("formatter should succeed");
+        assert_eq!(formatted, expected, "got:\n{formatted}");
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second);
+    }
+
+    /// A `${for}`/`${if}` block tag triggers §13 whitespace control, so the
+    /// interior is left verbatim (re-indenting could change the value).
+    #[test]
+    fn backtick_block_tag_stays_verbatim() {
+        let source = "function F(xs: string[]) -> string {\n    `${for (let x in xs)}- ${x}\n${endfor}`\n}\n";
         let options = FormatOptions::default();
         let formatted = format(source, &options).expect("formatter should succeed");
         assert!(
-            formatted.contains("`first line\n      second line`"),
-            "backtick interior must be verbatim (value-preserving), got:\n{formatted}"
+            formatted.contains("`${for (let x in xs)}- ${x}\n${endfor}`"),
+            "block-tag template must stay verbatim, got:\n{formatted}"
+        );
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second);
+    }
+
+    /// A multi-line `${...}` interpolation is placeholdered before the runtime
+    /// §12 min-indent (its inner lines are not re-indented), so the formatter
+    /// leaves the whole literal verbatim rather than risk changing the value.
+    #[test]
+    fn backtick_multiline_interp_stays_verbatim() {
+        let source = "function D() -> string {\n    let x = `\n        a ${\n            foo()\n        } b\n    `;\n    x\n}\n";
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).expect("formatter should succeed");
+        assert!(
+            formatted.contains("`\n        a ${\n            foo()\n        } b\n    `"),
+            "multi-line interp must stay verbatim, got:\n{formatted}"
         );
         let second = format(&formatted, &options).expect("formatter should be idempotent");
         assert_eq!(formatted, second);
