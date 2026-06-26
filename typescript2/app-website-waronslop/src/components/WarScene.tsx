@@ -317,9 +317,9 @@ export default function WarScene() {
         }}
       />
 
-      {/* caption */}
-      <div className="absolute left-0 top-0 flex justify-start p-3">
-        <span key={scene} className="rounded-full border border-[#a98e61]/45 bg-[#d8c39a]/90 px-4 py-1 text-sm font-bold tracking-wide text-ink shadow-sm" style={{ fontFamily: "ui-monospace, 'SFMono-Regular', Menlo, monospace" }}>
+      {/* caption — scaled down on mobile so the pill doesn't dominate the short band */}
+      <div className="absolute left-0 top-0 flex justify-start p-2 sm:p-3">
+        <span key={scene} className="rounded-full border border-[#a98e61]/45 bg-[#d8c39a]/90 px-2.5 py-0.5 text-xs font-bold tracking-wide text-ink shadow-sm sm:px-4 sm:py-1 sm:text-sm" style={{ fontFamily: "ui-monospace, 'SFMono-Regular', Menlo, monospace" }}>
           {CAPTIONS[scene]}
         </span>
       </div>
