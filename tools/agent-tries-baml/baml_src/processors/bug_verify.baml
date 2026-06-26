@@ -31,9 +31,14 @@ class BugVerifyProcessor {
     implements Processor {
         function config(self) -> ProcessorConfig {
             return ProcessorConfig {
+                // Verify NEW issues once (open -> verifying -> confirmed). Do NOT
+                // claim "confirmed": redrafted issues land there, and re-verifying
+                // a confirmed issue (which transitions back to confirmed when not
+                // "fixed") re-claims it forever -- a tight loop that strands the
+                // issue in `verifying` and blocks human redraft/approve.
                 role: "bug_verify",
                 table: "issues",
-                claim_value: "confirmed",
+                claim_value: "open",
                 claim_into: "verifying",
                 claim_field: "status",
                 claim_index: "by_status_created",
