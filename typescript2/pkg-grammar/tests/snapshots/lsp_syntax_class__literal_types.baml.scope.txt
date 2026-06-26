@@ -1,0 +1,66 @@
+1:1-6        "class"            source.baml meta.class.baml keyword.declaration.class.baml
+1:7-19       "TestLiterals"     source.baml meta.class.baml meta.class.header.baml entity.name.type.class.baml
+1:20-21      "{"                source.baml meta.class.baml meta.class.body.baml punctuation.definition.block.begin.baml
+2:3-4        "a"                source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
+2:5-6        "\""               source.baml meta.class.baml meta.class.body.baml meta.field.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+2:6-19       "SingleLiteral"    source.baml meta.class.baml meta.class.body.baml meta.field.baml string.quoted.double.baml
+2:19-20      "\""               source.baml meta.class.baml meta.class.body.baml meta.field.baml string.quoted.double.baml punctuation.definition.string.end.baml
+3:3-4        "b"                source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
+3:5-6        "\""               source.baml meta.class.baml meta.class.body.baml meta.field.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+3:6-11       "Field"            source.baml meta.class.baml meta.class.body.baml meta.field.baml string.quoted.double.baml
+3:11-12      "\""               source.baml meta.class.baml meta.class.body.baml meta.field.baml string.quoted.double.baml punctuation.definition.string.end.baml
+3:13-14      "|"                source.baml meta.class.baml meta.class.body.baml meta.field.baml keyword.operator.type.baml
+3:15-16      "\""               source.baml meta.class.baml meta.class.body.baml meta.field.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+3:16-20      "With"             source.baml meta.class.baml meta.class.body.baml meta.field.baml string.quoted.double.baml
+3:20-21      "\""               source.baml meta.class.baml meta.class.body.baml meta.field.baml string.quoted.double.baml punctuation.definition.string.end.baml
+3:22-23      "|"                source.baml meta.class.baml meta.class.body.baml meta.field.baml keyword.operator.type.baml
+3:24-25      "\""               source.baml meta.class.baml meta.class.body.baml meta.field.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+3:25-33      "Multiple"         source.baml meta.class.baml meta.class.body.baml meta.field.baml string.quoted.double.baml
+3:33-34      "\""               source.baml meta.class.baml meta.class.body.baml meta.field.baml string.quoted.double.baml punctuation.definition.string.end.baml
+3:35-36      "|"                source.baml meta.class.baml meta.class.body.baml meta.field.baml keyword.operator.type.baml
+3:37-38      "\""               source.baml meta.class.baml meta.class.body.baml meta.field.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+3:38-46      "Literals"         source.baml meta.class.baml meta.class.body.baml meta.field.baml string.quoted.double.baml
+3:46-47      "\""               source.baml meta.class.baml meta.class.body.baml meta.field.baml string.quoted.double.baml punctuation.definition.string.end.baml
+4:3-4        "c"                source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
+4:5-6        "\""               source.baml meta.class.baml meta.class.body.baml meta.field.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+4:6-11       "Field"            source.baml meta.class.baml meta.class.body.baml meta.field.baml string.quoted.double.baml
+4:11-12      "\""               source.baml meta.class.baml meta.class.body.baml meta.field.baml string.quoted.double.baml punctuation.definition.string.end.baml
+4:13-14      "|"                source.baml meta.class.baml meta.class.body.baml meta.field.baml keyword.operator.type.baml
+4:15-16      "\""               source.baml meta.class.baml meta.class.body.baml meta.field.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+4:16-20      "With"             source.baml meta.class.baml meta.class.body.baml meta.field.baml string.quoted.double.baml
+4:20-21      "\""               source.baml meta.class.baml meta.class.body.baml meta.field.baml string.quoted.double.baml punctuation.definition.string.end.baml
+4:22-23      "|"                source.baml meta.class.baml meta.class.body.baml meta.field.baml keyword.operator.type.baml
+4:24-25      "\""               source.baml meta.class.baml meta.class.body.baml meta.field.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+4:25-29      "Some"             source.baml meta.class.baml meta.class.body.baml meta.field.baml string.quoted.double.baml
+4:29-30      "\""               source.baml meta.class.baml meta.class.body.baml meta.field.baml string.quoted.double.baml punctuation.definition.string.end.baml
+4:31-32      "@"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.attribute.baml punctuation.definition.annotation.baml storage.type.annotation.baml
+4:32-43      "description"      source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.attribute.baml storage.type.annotation.baml
+4:43-44      "("                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.attribute.baml meta.attribute.arguments.baml punctuation.definition.annotation-arguments.begin.bracket.round.baml
+4:44-45      "\""               source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.attribute.baml meta.attribute.arguments.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+4:45-56      "Description"      source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.attribute.baml meta.attribute.arguments.baml string.quoted.double.baml
+4:56-57      "\""               source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.attribute.baml meta.attribute.arguments.baml string.quoted.double.baml punctuation.definition.string.end.baml
+4:57-58      ")"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.attribute.baml meta.attribute.arguments.baml punctuation.definition.annotation-arguments.end.bracket.round.baml
+5:3-4        "d"                source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
+5:5-6        "2"                source.baml meta.class.baml meta.class.body.baml meta.field.baml constant.numeric.integer.baml
+5:7-8        "|"                source.baml meta.class.baml meta.class.body.baml meta.field.baml keyword.operator.type.baml
+5:9-10       "3"                source.baml meta.class.baml meta.class.body.baml meta.field.baml constant.numeric.integer.baml
+6:3-4        "e"                source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
+6:5-6        "\""               source.baml meta.class.baml meta.class.body.baml meta.field.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+6:6-14       "Optional"         source.baml meta.class.baml meta.class.body.baml meta.field.baml string.quoted.double.baml
+6:14-15      "\""               source.baml meta.class.baml meta.class.body.baml meta.field.baml string.quoted.double.baml punctuation.definition.string.end.baml
+6:15-16      "?"                source.baml meta.class.baml meta.class.body.baml meta.field.baml keyword.operator.optional.baml
+7:3-4        "f"                source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
+7:5-6        "2"                source.baml meta.class.baml meta.class.body.baml meta.field.baml constant.numeric.integer.baml
+7:7-8        "|"                source.baml meta.class.baml meta.class.body.baml meta.field.baml keyword.operator.type.baml
+7:9-10       "\""               source.baml meta.class.baml meta.class.body.baml meta.field.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+7:10-20      "SomeString"       source.baml meta.class.baml meta.class.body.baml meta.field.baml string.quoted.double.baml
+7:20-21      "\""               source.baml meta.class.baml meta.class.body.baml meta.field.baml string.quoted.double.baml punctuation.definition.string.end.baml
+8:3-4        "g"                source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
+8:5-6        "\""               source.baml meta.class.baml meta.class.body.baml meta.field.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+8:6-13       "boolean"          source.baml meta.class.baml meta.class.body.baml meta.field.baml string.quoted.double.baml
+8:13-14      "\""               source.baml meta.class.baml meta.class.body.baml meta.field.baml string.quoted.double.baml punctuation.definition.string.end.baml
+8:15-16      "|"                source.baml meta.class.baml meta.class.body.baml meta.field.baml keyword.operator.type.baml
+8:17-21      "true"             source.baml meta.class.baml meta.class.body.baml meta.field.baml constant.language.boolean.baml
+8:22-23      "|"                source.baml meta.class.baml meta.class.body.baml meta.field.baml keyword.operator.type.baml
+8:24-29      "false"            source.baml meta.class.baml meta.class.body.baml meta.field.baml constant.language.boolean.baml
+9:1-2        "}"                source.baml meta.class.baml meta.class.body.baml punctuation.definition.block.end.baml

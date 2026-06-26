@@ -47,6 +47,12 @@
     },
     {
       "include": "#test"
+    },
+    {
+      "include": "#let-statement"
+    },
+    {
+      "include": "#semicolon"
     }
   ],
   "repository": {
@@ -995,7 +1001,7 @@
           "name": "keyword.control.flow.break.baml"
         }
       },
-      "end": "(?=$|;)",
+      "end": "(?=[;}]|$)",
       "patterns": [
         {
           "include": "#comments"
@@ -1430,7 +1436,7 @@
           "include": "#catch-expression"
         },
         {
-          "include": "#is-pattern-expression"
+          "include": "#condition-is-pattern-expression"
         },
         {
           "include": "#optional-call-expression"
@@ -1443,6 +1449,9 @@
         },
         {
           "include": "#optional-field-access-expression"
+        },
+        {
+          "include": "#upcast-expression"
         },
         {
           "include": "#postfix-method-call-expression"
@@ -1458,6 +1467,49 @@
         },
         {
           "include": "#dotted-expression"
+        }
+      ]
+    },
+    "condition-is-pattern-expression": {
+      "name": "meta.expression.is.baml",
+      "begin": "\\b(is)\\b",
+      "beginCaptures": {
+        "1": {
+          "name": "keyword.operator.is.baml"
+        }
+      },
+      "end": "(?=\\s*(?:&&|\\|\\||=>|[,);\\]}{]|$))",
+      "patterns": [
+        {
+          "include": "#comments"
+        },
+        {
+          "include": "#condition-pattern"
+        }
+      ]
+    },
+    "condition-pattern": {
+      "patterns": [
+        {
+          "include": "#comments"
+        },
+        {
+          "include": "#wildcard-binding-pattern"
+        },
+        {
+          "include": "#typed-binding-pattern"
+        },
+        {
+          "include": "#array-destructure-pattern"
+        },
+        {
+          "include": "#bare-binding-pattern"
+        },
+        {
+          "include": "#wildcard-pattern"
+        },
+        {
+          "include": "#type-expression"
         }
       ]
     },
@@ -1677,7 +1729,7 @@
           "name": "keyword.control.flow.continue.baml"
         }
       },
-      "end": "(?=$|;)",
+      "end": "(?=[;}]|$)",
       "patterns": [
         {
           "include": "#comments"
@@ -1762,7 +1814,7 @@
     },
     "dotted-expression": {
       "name": "meta.dotted-expression.baml",
-      "match": "\\b(\\$?[A-Za-z_][A-Za-z0-9_-]*(?:\\$[A-Za-z_][A-Za-z0-9_-]*)*)((?:\\s*\\.\\s*\\$?[A-Za-z_][A-Za-z0-9_-]*(?:\\$[A-Za-z_][A-Za-z0-9_-]*)*)*)\\b",
+      "match": "\\b(\\$?[A-Za-z_][A-Za-z0-9_-]*(?:\\$[A-Za-z_][A-Za-z0-9_-]*)*)((?:\\s*\\.\\s*(?!as\\b\\s*<)\\$?[A-Za-z_][A-Za-z0-9_-]*(?:\\$[A-Za-z_][A-Za-z0-9_-]*)*)*)\\b",
       "captures": {
         "1": {
           "patterns": [
@@ -1939,6 +1991,9 @@
         },
         {
           "include": "#optional-field-access-expression"
+        },
+        {
+          "include": "#upcast-expression"
         },
         {
           "include": "#postfix-method-call-expression"
@@ -2889,7 +2944,7 @@
     "let-statement": {
       "name": "meta.statement.let.baml",
       "begin": "(?:^\\s*|\\G\\s*|(?<=[{;}])\\s*)(?=(?:let|const)\\b)",
-      "end": "(?=$|;)",
+      "end": "(?=[;}]|$)",
       "patterns": [
         {
           "include": "#comments"
@@ -3747,7 +3802,7 @@
           "name": "keyword.control.flow.return.baml"
         }
       },
-      "end": "(?=$|;)",
+      "end": "(?=[;}]|$)",
       "patterns": [
         {
           "include": "#comments"
@@ -4565,6 +4620,50 @@
       "name": "keyword.operator.type.baml",
       "match": "\\|"
     },
+    "upcast-expression": {
+      "name": "meta.expression.upcast.baml",
+      "begin": "(\\.)\\s*(as)\\b(?=\\s*<)",
+      "beginCaptures": {
+        "1": {
+          "name": "punctuation.accessor.baml"
+        },
+        "2": {
+          "name": "keyword.operator.as.baml"
+        }
+      },
+      "end": "(?<=>)",
+      "patterns": [
+        {
+          "include": "#comments"
+        },
+        {
+          "include": "#upcast-type-arguments"
+        }
+      ]
+    },
+    "upcast-type-arguments": {
+      "name": "meta.type-arguments.baml",
+      "begin": "<",
+      "beginCaptures": {
+        "0": {
+          "name": "punctuation.definition.type-arguments.begin.baml"
+        }
+      },
+      "end": ">",
+      "endCaptures": {
+        "0": {
+          "name": "punctuation.definition.type-arguments.end.baml"
+        }
+      },
+      "patterns": [
+        {
+          "include": "#comments"
+        },
+        {
+          "include": "#type-expression"
+        }
+      ]
+    },
     "watch-statement": {
       "name": "meta.statement.watch.baml",
       "begin": "(?:^\\s*|\\G\\s*|(?<=[{;}])\\s*)(watch)\\b",
@@ -4573,7 +4672,7 @@
           "name": "keyword.control.watch.baml"
         }
       },
-      "end": "(?=$|;)",
+      "end": "(?=[;}]|$)",
       "patterns": [
         {
           "include": "#comments"

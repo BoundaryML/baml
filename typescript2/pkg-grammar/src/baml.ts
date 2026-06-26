@@ -177,7 +177,11 @@ function braceBlock(
 // Repeated end-pattern fragments, named once (mirrors loopStatementEnd below).
 const EXPRESSION_BODY_END = String.raw`(?<=\})|(?=,|;|$)`;
 const MEMBER_SIGNATURE_END = String.raw`(?<=;)|(?=\r?\n|\})`;
-const STATEMENT_END = String.raw`(?=$|;)`;
+// Also stop at `}`: a statement that is the last in an inline block (e.g.
+// `{ return "hello" }`) has no `;`/newline before the block close, and must not
+// swallow it. A `}` inside the statement's own value is consumed by a sub-rule
+// (codeBlock/constructor/...) first, so this only ever matches the block close.
+const STATEMENT_END = String.raw`(?=[;}]|$)`;
 const ITEM_BODY_END = String.raw`(?<=\})|(?=${TOP_LEVEL_ITEM_START})`;
 const HEADER_END = String.raw`(?=\{)|(?=${TOP_LEVEL_ITEM_START})`;
 
@@ -817,11 +821,30 @@ const fieldAccessExpression: Rule = {
 const dottedExpression: Rule = {
   key: "dotted-expression",
   scope: tm.meta,
-  match: DOTTED_PATH,
+  // Like DOTTED_PATH, but a path segment never absorbs an `.as<` projection, so
+  // `self.as<T>` leaves `.as<T>` for upcastExpression instead of reading `as`
+  // as a member and `<`/`>` as comparisons.
+  match: String.raw`\b(${IDENT})((?:${ACCESSOR}(?!as\b\s*<)${IDENT})*)\b`,
   captures: {
     "1": expressionPathRootCapture,
     "2": expressionPathMemberCapture,
   },
+};
+
+// `base.as<Interface>` is a static interface projection / upcast -- a dedicated
+// expression form, not a method call: `as` is a contextual keyword and the
+// angle brackets hold the target type. Matched only when a `<` follows, so plain
+// `.as` field access and `.as(...)` calls are unaffected.
+const upcastExpression: Rule = {
+  key: "upcast-expression",
+  scope: "meta.expression.upcast.baml",
+  begin: String.raw`(\.)\s*(as)\b(?=\s*<)`,
+  beginCaptures: {
+    "1": { scope: "punctuation.accessor.baml" },
+    "2": { scope: "keyword.operator.as.baml" },
+  },
+  end: String.raw`(?<=>)`,
+  patterns: [comments, typeArgumentsRule("upcast-type-arguments", "")],
 };
 
 const spawnExpression: Rule = {
@@ -1268,6 +1291,31 @@ const isPatternExpression: Rule = {
   },
   end: String.raw`(?=\s*(?:&&|\|\||=>|[,);\]}]|$))`,
   patterns: [comments, pattern],
+};
+
+// In condition position (`if` / `while` / `else if`) a `{` opens the block, so
+// `if r is Empty { ... }` must read `{` as the block, not as a class-destructure
+// `Empty { ... }` that swallows it. Mirror the parser's Rust-style restriction:
+// drop classDestructurePattern from the `is` pattern and stop the `is`
+// expression at `{`. (conditionExpression already drops constructorExpression
+// for the same `X { }`-vs-block ambiguity.)
+const conditionPattern: IncludeRule = {
+  key: "condition-pattern",
+  patterns: [],
+};
+conditionPattern.patterns = pattern.patterns.filter(
+  (rule) => rule !== classDestructurePattern,
+);
+
+const conditionIsPatternExpression: Rule = {
+  key: "condition-is-pattern-expression",
+  scope: "meta.expression.is.baml",
+  begin: String.raw`\b(is)\b`,
+  beginCaptures: {
+    "1": { scope: "keyword.operator.is.baml" },
+  },
+  end: String.raw`(?=\s*(?:&&|\|\||=>|[,);\]}{]|$))`,
+  patterns: [comments, conditionPattern],
 };
 
 // `let`/`const` binding pattern that ends at the `=`. requireIntro gates the
@@ -1800,6 +1848,7 @@ expression.patterns = [
   optionalIndexExpression,
   optionalMethodCallExpression,
   optionalFieldAccessExpression,
+  upcastExpression,
   postfixMethodCallExpression,
   fieldAccessExpression,
   expressionOperator,
@@ -1807,9 +1856,11 @@ expression.patterns = [
   dottedExpression,
 ];
 
-conditionExpression.patterns = expression.patterns.filter(
-  (rule) => rule !== constructorExpression,
-);
+conditionExpression.patterns = expression.patterns
+  .filter((rule) => rule !== constructorExpression)
+  .map((rule) =>
+    rule === isPatternExpression ? conditionIsPatternExpression : rule,
+  );
 
 // `-> Type` return clause; only the end differs between sites.
 function returnTypeRule(key: string, end: string): Rule {
@@ -2411,5 +2462,10 @@ export const baml: Grammar = {
     functionItem,
     testsetItem,
     testItem,
+    // Top-level `let` / `const` bindings are not valid BAML, but highlighting
+    // them (rather than leaving them as bare text) is friendlier while editing.
+    // `semicolon` is their statement terminator, mirroring `blockContents`.
+    letStatement,
+    semicolon,
   ] satisfies Rule[],
 };
