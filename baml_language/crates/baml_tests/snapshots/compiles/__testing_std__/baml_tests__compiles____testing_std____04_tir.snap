@@ -215,6 +215,11 @@ function testing.TestRegistry.run_all(self: testing.TestRegistry) -> testing.Tes
     root.run_testset(root.testset_children(self), null) : testing.TestSetReport
   }
 }
+function testing.TestRegistry.run_selected(self: testing.TestRegistry, names: string[]) -> testing.TestSetReport throws never {
+  { : testing.TestSetReport
+    root.run_testset(root.testset_children_selected(self, names), null) : testing.TestSetReport
+  }
+}
 function testing.TestRegistry.expand_set(self: testing.TestRegistry, name: string) -> testing.SerializedTestDef[] throws never {
   { : never
     for ts in self.collector.testsets
@@ -267,6 +272,39 @@ function testing.testset_children(registry: testing.TestRegistry) -> testing.Tes
     children : testing.TestSetChild[]
   }
 }
+function testing.testset_children_selected(registry: testing.TestRegistry, names: string[]) -> testing.TestSetChild[] throws never {
+  { : testing.TestSetChild[]
+    let children: TestSetChild[] = [] : testing.TestSetChild[]
+    for t in registry.collector.tests
+      { : int | null
+        if (root._name_selected(t.name, names) : bool) : int | null
+          { : int
+            children.push(root.test_child(t.name, t.body, t.runner)) : int
+          }
+        else
+          { : null
+            null : null
+          }
+      }
+    for ts in registry.collector.testsets
+      { : int | null
+        if (root._name_selected(ts.name, names) : bool) : int | null
+          { : int
+            children.push(root.testset_child(registry, ts)) : int
+          }
+        else
+          if (root._has_selected_descendant(ts.name, names) : bool) : int | null
+            { : int
+              children.push(root.testset_child_selected(registry, ts, names)) : int
+            }
+          else
+            { : null
+              null : null
+            }
+      }
+    children : testing.TestSetChild[]
+  }
+}
 function testing.test_child(name: string, body: testing.TestBody, runner: testing.TestRunner | null) -> testing.TestSetChild throws never {
   { : testing.TestSetChild
     TestSetChild { name: name, run: () -> ChildReport { ... } } : testing.TestSetChild
@@ -280,6 +318,46 @@ function testing.testset_child(registry: testing.TestRegistry, ts: testing.TestS
   }
 }
 lambda testing.testset_child {
+}
+function testing.testset_child_selected(registry: testing.TestRegistry, ts: testing.TestSetRegistration, names: string[]) -> testing.TestSetChild throws never {
+  { : testing.TestSetChild
+    TestSetChild { name: ts.name, run: () -> ChildReport { ... } } : testing.TestSetChild
+  }
+}
+lambda testing.testset_child_selected {
+}
+function testing._name_selected(name: string, names: string[]) -> bool throws never {
+  { : false
+    for selected in names
+      { : null
+        if (selected == name : bool) : null
+          { : never
+            return true : true
+          }
+        else
+          { : null
+            null : null
+          }
+      }
+    false : false
+  }
+}
+function testing._has_selected_descendant(prefix: string, names: string[]) -> bool throws never {
+  { : false
+    let descendant_prefix = prefix + "/" : string
+    for selected in names
+      { : null
+        if (selected.starts_with(descendant_prefix) : bool) : null
+          { : never
+            return true : true
+          }
+        else
+          { : null
+            null : null
+          }
+      }
+    false : false
+  }
 }
 function testing.aggregate_reports(named_results: testing.NamedChildReport[]) -> testing.TestSetReport throws never {
   { : testing.TestSetReport
