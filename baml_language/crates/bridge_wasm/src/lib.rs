@@ -2246,8 +2246,8 @@ mod history_tests {
         ids::{BexCallId, BexThreadId, EngineId, ProcessEuid},
         prof::pb,
         run::{
-            ProfileEventSource, ProjectGeneration, RunRequestSummary, RunStatus, RunTimeAnchor,
-            StartGuard, profile_event_envelope_from_disk_event,
+            PayloadKind, ProfileEventSource, ProjectGeneration, RunRequestSummary, RunStatus,
+            RunTimeAnchor, StartGuard, profile_event_envelope_from_disk_event,
         },
     };
 
@@ -2368,13 +2368,90 @@ mod history_tests {
                 .id,
             outcome.value_ref.id
         );
+        let HistoryValueReadResult::Available(body) = store
+            .read_value(boundary_id, &outcome.value_ref.id)
+            .unwrap()
+        else {
+            panic!("expected replayed value body");
+        };
+        assert_eq!(body.body, vec![1, 2, 3]);
+    }
+
+    #[test]
+    fn warm_history_replays_log_payload_and_body_without_live_runstore() {
+        let boundary_id = BoundaryId::from_bytes([5; 16]);
+        let start = start_context(boundary_id);
+        let trace = root_trace();
+        let event = call_event();
+        let envelope = profile_event_envelope_from_disk_event(
+            ProfileEventSource::Replay {
+                artifact_id: "wasm-log-history-test".to_string(),
+            },
+            trace.process_euid,
+            trace.engine_id,
+            &event,
+        )
+        .unwrap();
+
+        let mut store = WasmHistoryStoreInner::default();
+        store.begin(&start).unwrap();
+        store
+            .ingest_profile_records(vec![HistoryProfileRecord {
+                envelope,
+                disk_event: event,
+            }])
+            .unwrap();
+        store
+            .attach_root_trace(boundary_id, trace.call_ref())
+            .unwrap();
+        let outcome = store
+            .append_log_body(
+                boundary_id,
+                LogEventRecord {
+                    call: trace,
+                    level: Some("warn".to_string()),
+                    source: None,
+                    timestamp_ms: 12,
+                    message_preview: Some("warm log".to_string()),
+                },
+                ValueCodec::BamlOutboundValue,
+                vec![7, 8, 9],
+            )
+            .unwrap();
+        store
+            .complete(
+                boundary_id,
+                &RunOutcome::Succeeded(RunResult {
+                    value_ref: None,
+                    renderer_hint: None,
+                    supporting_payload_ids: Vec::new(),
+                }),
+                20,
+            )
+            .unwrap();
+
+        let replayed = store.open(boundary_id).unwrap();
+        assert_eq!(replayed.status, RunStatus::Succeeded);
+        let log = replayed
+            .payloads
+            .iter()
+            .find_map(|payload| match &payload.kind {
+                PayloadKind::Log(log) => Some(log),
+                _ => None,
+            })
+            .expect("log payload should replay");
+        assert_eq!(log.level.as_deref(), Some("warn"));
+        assert_eq!(log.message, "warm log");
         assert_eq!(
-            store
-                .read_value(boundary_id, &outcome.value_ref.id)
-                .unwrap()
-                .unwrap()
-                .body,
-            vec![1, 2, 3]
+            log.value_ref.as_ref().expect("log value ref").id,
+            outcome.value_ref.id
         );
+        let HistoryValueReadResult::Available(body) = store
+            .read_value(boundary_id, &outcome.value_ref.id)
+            .unwrap()
+        else {
+            panic!("expected replayed log body");
+        };
+        assert_eq!(body.body, vec![7, 8, 9]);
     }
 }

@@ -2610,6 +2610,14 @@ fn content_type_for_path(path: &Path) -> Option<&'static str> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Arc;
+
+    use bex_events::{
+        ids::{BexCallId, BexThreadId, EngineId, ProcessEuid},
+        run::{PayloadKind, ProjectId, RunTimeAnchor, TraceCallKey},
+    };
+    use bex_heap::{BexHeap, HeapPermit as _, HeapPermitManager, Tlab, TlabHolder};
+    use bex_vm_types::{RootHaver, Value};
 
     fn unique_temp_dir(name: &str) -> PathBuf {
         std::env::temp_dir().join(format!(
@@ -2620,6 +2628,51 @@ mod tests {
                 .unwrap()
                 .as_nanos()
         ))
+    }
+
+    struct EmptyRoots {
+        tlab: Tlab,
+    }
+
+    impl RootHaver for EmptyRoots {
+        fn collect_roots(&self, _roots: &mut Vec<bex_vm_types::HeapPtr>) {}
+
+        fn forward_roots(
+            &mut self,
+            _forward: &std::collections::HashMap<bex_vm_types::HeapPtr, bex_vm_types::HeapPtr>,
+        ) {
+        }
+    }
+
+    impl TlabHolder for EmptyRoots {
+        fn tlab(&self) -> &Tlab {
+            &self.tlab
+        }
+
+        fn tlab_mut(&mut self) -> &mut Tlab {
+            &mut self.tlab
+        }
+    }
+
+    fn test_execution_request() -> ExecutionRequest {
+        ExecutionRequest {
+            project_id: ProjectId("native-project".to_string()),
+            project_generation: ProjectGeneration(1),
+            target: RunTarget::Function {
+                function_name: "user.LogIt".to_string(),
+            },
+            args_summary: None,
+            options_summary: None,
+        }
+    }
+
+    fn test_trace_key() -> TraceCallKey {
+        TraceCallKey {
+            process_euid: ProcessEuid([8; 16]),
+            engine_id: EngineId(2),
+            thread_id: BexThreadId(1),
+            call_id: BexCallId(3),
+        }
     }
 
     #[test]
@@ -2680,5 +2733,103 @@ mod tests {
         );
 
         let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[tokio::test]
+    async fn native_drain_persists_identified_log_and_retains_live_body() {
+        let project = unique_temp_dir("baml-native-log-history");
+        std::fs::create_dir_all(&project).expect("project dir should be created");
+        std::fs::write(project.join("baml.toml"), "").expect("manifest should be created");
+
+        let boundary_id = BoundaryId::from_bytes([13; 16]);
+        let run_store = InMemoryRunStore::default();
+        let start = run_store.create_run_at(
+            boundary_id,
+            test_execution_request(),
+            RequestId(1),
+            RunTimeAnchor {
+                epoch_created_at_ms: 20,
+                trace_zero_ns: 0,
+            },
+        );
+        let history_store = HistoryStore::new(vec![project.clone()]);
+        history_store.begin(&project, &start).unwrap();
+        let value_store = Arc::new(Mutex::new(HashMap::new()));
+        let (broadcast_tx, mut broadcast_rx) = broadcast::channel(8);
+
+        let producer =
+            bex_project::TraceCaptureProducer::new(bex_project::TraceCaptureConfig::enabled(4));
+        let heap = BexHeap::new(Vec::new());
+        let manager = HeapPermitManager::new();
+        let permit = manager
+            .new_permit(EmptyRoots {
+                tlab: Tlab::new(Arc::clone(&heap)),
+            })
+            .await
+            .acquire()
+            .await;
+        producer
+            .capture_log_with(boundary_id, test_trace_key(), |trace_heap| {
+                let snapshot =
+                    trace_heap.copy_value_from_bex_heap(&heap, permit.proof(), Value::int(42));
+                (
+                    bex_project::TraceLogMetadata {
+                        level: Some("info".to_string()),
+                        source: None,
+                        timestamp_ms: 21,
+                        message_preview: Some("hello from log".to_string()),
+                    },
+                    snapshot,
+                )
+            })
+            .unwrap();
+
+        let refs = drain_captured_values_and_broadcast(
+            &broadcast_tx,
+            &run_store,
+            &history_store,
+            &value_store,
+            boundary_id,
+            &producer,
+        );
+
+        assert!(refs.output.is_none());
+        assert!(refs.error.is_none());
+        let snapshot = run_store.snapshot(boundary_id).expect("run should exist");
+        let payload = snapshot
+            .payloads
+            .iter()
+            .find_map(|payload| match &payload.kind {
+                PayloadKind::Log(log) => Some(log),
+                _ => None,
+            })
+            .expect("log payload should be ingested");
+        assert_eq!(payload.level.as_deref(), Some("info"));
+        assert_eq!(payload.message, "hello from log");
+        let value_ref = payload.value_ref.as_ref().expect("log value ref");
+
+        let live = value_store
+            .lock()
+            .unwrap()
+            .get(&(boundary_id, value_ref.id.clone()))
+            .cloned()
+            .expect("live value body should be retained");
+        assert_eq!(live.codec, ValueCodec::BamlOutboundValue);
+        assert!(!live.body.is_empty());
+        assert_eq!(
+            history_store
+                .read_value(boundary_id, &value_ref.id)
+                .unwrap()
+                .unwrap()
+                .body,
+            live.body
+        );
+
+        let patch = broadcast_rx
+            .try_recv()
+            .expect("drain should broadcast a RunStore patch");
+        assert!(matches!(patch, WsOutMessage::RunPatch { .. }));
+
+        let _ = std::fs::remove_dir_all(project);
     }
 }

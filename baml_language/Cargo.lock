@@ -1020,6 +1020,7 @@ dependencies = [
  "bex_events",
  "bex_heap",
  "bex_project",
+ "bex_vm_types",
  "bridge_ctypes",
  "crossbeam-channel",
  "futures",
