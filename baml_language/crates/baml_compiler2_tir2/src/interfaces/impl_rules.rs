@@ -490,7 +490,7 @@ pub struct ResolvedImpl<'db> {
 /// Every `implements` block id declared in a package, as stable [`ImplLoc`]s.
 /// Uniform over in-body and out-of-body impls (both live in
 /// [`file_item_tree`](baml_compiler2_hir::file_item_tree)`.impls`).
-fn package_impl_locs<'db>(
+pub(crate) fn package_impl_locs<'db>(
     db: &'db dyn crate::Db,
     pkg_id: PackageId<'db>,
 ) -> Vec<baml_compiler2_hir::loc::ImplLoc<'db>> {

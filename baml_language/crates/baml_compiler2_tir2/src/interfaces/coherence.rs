@@ -1,6 +1,6 @@
-// Re-enable the `deprecated` lint the parent `interfaces` module silences for its own
-// internal self-use: this kept module still reads legacy L2 items (the `InterfaceImplRule`
-// rule vec) that must migrate to `impl_data`, and those uses should stay visible.
+// The parent `interfaces` module silences `deprecated` for its own internal self-use;
+// re-enable it here so this kept module can never silently fall back onto a deprecated
+// L2 item — coherence now reasons entirely on the `impl_data` substrate.
 #![warn(deprecated)]
 
 use baml_base::{Literal, Name, Span, TyAttr};
@@ -8,9 +8,8 @@ use baml_compiler2_hir::{contributions::Definition, package::PackageId};
 use baml_type::{FunctionParamTy, Ty, TypeName};
 
 use crate::interfaces::{
-    InterfaceImplRule, TypeBindings, contains_bound_typevar, interface_qtn,
-    package_implements_registry, same_in_body_origin, strip_interface_assoc,
-    type_implements_with_deps,
+    ImplData, InterfaceImplOrigin, TypeBindings, contains_bound_typevar, impl_data,
+    impl_data_source_map, interface_loc_qtn, package_impl_locs,
 };
 
 /// Three-valued result of an overlap decision. Overlap is undecidable in general
@@ -106,23 +105,18 @@ pub fn package_coherence_diagnostics<'db>(
     db: &'db dyn crate::Db,
     pkg_id: PackageId<'db>,
 ) -> Vec<CoherenceViolation> {
-    let mut own_rules: Vec<&InterfaceImplRule> = package_implements_registry(db, pkg_id)
-        .interface_impl_rules
-        .iter()
-        .collect();
+    let mut own = package_impls_with_spans(db, pkg_id);
     // Sort by source position so the overlap attribution tracks a stable textual order
-    // rather than registry (hash) iteration order, and stays stable when an unrelated
-    // item is added. Key on `(file_id, start, end)`: a package spans multiple files, and
-    // keying on the start offset alone makes two impls at the same offset in *different*
-    // files tie and fall back to hash order (nondeterministic across runs).
-    own_rules.sort_by_key(|r| {
-        r.source_span.map(|s| {
-            (
-                s.file_id.as_u32(),
-                u32::from(s.range.start()),
-                u32::from(s.range.end()),
-            )
-        })
+    // rather than query iteration order, and stays stable when an unrelated item is
+    // added. Key on `(file_id, start, end)`: a package spans multiple files, and keying
+    // on the start offset alone makes two impls at the same offset in *different* files
+    // tie and fall back to a nondeterministic order.
+    own.sort_by_key(|(_, s)| {
+        (
+            s.file_id.as_u32(),
+            u32::from(s.range.start()),
+            u32::from(s.range.end()),
+        )
     });
     let deps = baml_compiler2_hir::package::package_dependency_closure(db, pkg_id);
 
@@ -138,27 +132,17 @@ pub fn package_coherence_diagnostics<'db>(
         }
     }
 
-    let dep_rules: Vec<&InterfaceImplRule> = deps
+    let dep_impls: Vec<(&ImplData, Span)> = deps
         .iter()
-        .flat_map(|dep| {
-            package_implements_registry(db, *dep)
-                .interface_impl_rules
-                .iter()
-        })
+        .flat_map(|dep| package_impls_with_spans(db, *dep))
         .collect();
 
     let mut violations = Vec::new();
-    for (i, own) in own_rules.iter().enumerate() {
-        let Some(own_span) = own.source_span else {
-            continue;
-        };
+    for (i, &(own_data, own_span)) in own.iter().enumerate() {
         // own × own — each unordered pair once; the later impl carries the error.
-        for other in &own_rules[i + 1..] {
-            let Some(other_span) = other.source_span else {
-                continue;
-            };
+        for &(other_data, other_span) in &own[i + 1..] {
             if let Some(indeterminate) =
-                overlap_violation(impls_conflict(db, pkg_id, own, other, &aliases))
+                overlap_violation(impls_conflict(db, pkg_id, own_data, other_data, &aliases))
             {
                 violations.push(CoherenceViolation {
                     primary: other_span,
@@ -168,12 +152,9 @@ pub fn package_coherence_diagnostics<'db>(
             }
         }
         // own × dependency — the owning package's impl carries the error.
-        for dep_rule in &dep_rules {
-            let Some(dep_span) = dep_rule.source_span else {
-                continue;
-            };
+        for &(dep_data, dep_span) in &dep_impls {
             if let Some(indeterminate) =
-                overlap_violation(impls_conflict(db, pkg_id, own, dep_rule, &aliases))
+                overlap_violation(impls_conflict(db, pkg_id, own_data, dep_data, &aliases))
             {
                 violations.push(CoherenceViolation {
                     primary: own_span,
@@ -184,6 +165,26 @@ pub fn package_coherence_diagnostics<'db>(
         }
     }
     violations
+}
+
+/// The impls of `pkg` the overlap check compares: each resolved [`ImplData`] paired
+/// with its source span, drawn from the canonical `impl_data` substrate. Span-less
+/// (synthesized) impls and unresolved interface targets are dropped — neither can
+/// carry a coherence diagnostic.
+fn package_impls_with_spans<'db>(
+    db: &'db dyn crate::Db,
+    pkg_id: PackageId<'db>,
+) -> Vec<(&'db ImplData<'db>, Span)> {
+    package_impl_locs(db, pkg_id)
+        .into_iter()
+        .filter_map(|loc| {
+            let data = impl_data(db, loc).as_ref().ok()?;
+            let span = impl_data_source_map(db, loc)
+                .as_ref()
+                .map(|sm| sm.impl_span)?;
+            Some((data, span))
+        })
+        .collect()
 }
 
 /// Resolve a chain of top-level type aliases to the underlying type via `aliases`,
@@ -212,13 +213,13 @@ fn expand_alias_head(ty: &Ty, aliases: &std::collections::HashMap<TypeName, Ty>)
 pub fn impls_conflict<'db>(
     db: &'db dyn crate::Db,
     pkg_id: PackageId<'db>,
-    a: &InterfaceImplRule,
-    b: &InterfaceImplRule,
+    a: &ImplData<'db>,
+    b: &ImplData<'db>,
     aliases: &std::collections::HashMap<TypeName, Ty>,
 ) -> Overlap {
     let (Some(a_qtn), Some(b_qtn)) = (
-        interface_qtn(&a.interface_ty),
-        interface_qtn(&b.interface_ty),
+        interface_loc_qtn(db, a.interface),
+        interface_loc_qtn(db, b.interface),
     ) else {
         return Overlap::No;
     };
@@ -239,16 +240,41 @@ pub fn impls_conflict<'db>(
     {
         return Overlap::No;
     }
+    // Two in-body blocks of the same class implementing the same interface (same
+    // args, ignoring associated outputs) are a duplicate reported elsewhere, not an
+    // overlap. Compare assoc-stripped interface heads through alias normalization.
     if same_in_body_origin(a, b)
         && crate::normalize::is_same_normalized_type(
-            &strip_interface_assoc(&a.interface_ty),
-            &strip_interface_assoc(&b.interface_ty),
+            &Ty::Interface(
+                a_qtn,
+                a.interface_args.clone(),
+                Vec::new(),
+                TyAttr::default(),
+            ),
+            &Ty::Interface(
+                b_qtn,
+                b.interface_args.clone(),
+                Vec::new(),
+                TyAttr::default(),
+            ),
             aliases,
         )
     {
         return Overlap::No;
     }
     impls_overlap(db, pkg_id, a, b, aliases)
+}
+
+/// Two in-body `implements` blocks of the *same* class — a duplicate-impl case the
+/// overlap check excludes (reported as a duplicate elsewhere, not a coherence overlap).
+fn same_in_body_origin(a: &ImplData, b: &ImplData) -> bool {
+    matches!(
+        (&a.origin, &b.origin),
+        (
+            InterfaceImplOrigin::InBodyClass { class_qtn: ca },
+            InterfaceImplOrigin::InBodyClass { class_qtn: cb },
+        ) if ca == cb
+    )
 }
 
 /// Conservative symmetric overlap test over two impls of the same interface.
@@ -264,16 +290,17 @@ pub fn impls_conflict<'db>(
 /// Associated bindings are interface *outputs*, so only the args participate.
 ///
 /// Once the subjects unify, a bound on a param the unifier pinned to a *ground*
-/// type is decided precisely (`type_implements_with_deps`): if that type
-/// provably does not satisfy the bound, the bounded impl cannot apply to the
-/// common instance, so the impls are disjoint. Bounds on params that remain
-/// variables (blanket-vs-blanket) stay conservative — without negative impls we
-/// cannot prove two bounded blankets disjoint, so they are assumed to overlap.
+/// type is checked against the *specific* bound interface (args included) via the
+/// canonical `get_implements_block` resolver: if that type does not implement the
+/// instantiated bound, the bounded impl cannot apply to the common instance, so the
+/// impls are disjoint. Bounds on params that remain variables — or whose own args
+/// stay unresolved — are conservative: without negative impls we cannot prove two
+/// bounded blankets disjoint, so they are assumed to overlap.
 fn impls_overlap<'db>(
     db: &'db dyn crate::Db,
     pkg_id: PackageId<'db>,
-    a: &InterfaceImplRule,
-    b: &InterfaceImplRule,
+    a: &ImplData<'db>,
+    b: &ImplData<'db>,
     aliases: &std::collections::HashMap<TypeName, Ty>,
 ) -> Overlap {
     let enum_variants = |qtn: &TypeName| enum_variant_names(db, qtn);
@@ -308,8 +335,10 @@ fn impls_overlap<'db>(
     // `Unknown`, so it can override to `No`.
     let a_subject: Vec<&Ty> = std::iter::once(&a_for).chain(a_args.iter()).collect();
     let b_subject: Vec<&Ty> = std::iter::once(&b_for).chain(b_args.iter()).collect();
-    if !bounds_hold_at_common_instance(db, pkg_id, a, 'a', &vars, &bindings, &a_subject)
-        || !bounds_hold_at_common_instance(db, pkg_id, b, 'b', &vars, &bindings, &b_subject)
+    if !bounds_hold_at_common_instance(db, pkg_id, a, 'a', &vars, &bindings, &a_subject, aliases)
+        || !bounds_hold_at_common_instance(
+            db, pkg_id, b, 'b', &vars, &bindings, &b_subject, aliases,
+        )
     {
         return Overlap::No;
     }
@@ -327,33 +356,75 @@ fn impls_overlap<'db>(
 /// for-type and interface args) is instead bound by `cover_search` to *one* of several
 /// possible witnesses, so disproving its bound against that single witness would
 /// unsoundly reject an overlap that a different witness satisfies — those are skipped.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "one cohesive overlap-check context: query (db, pkg), this impl (rule, prefix, \
+              subject), and the unifier state (vars, bindings, aliases)"
+)]
 fn bounds_hold_at_common_instance<'db>(
     db: &'db dyn crate::Db,
     pkg_id: PackageId<'db>,
-    rule: &InterfaceImplRule,
+    rule: &ImplData<'db>,
     prefix: char,
     vars: &[Name],
     bindings: &TypeBindings,
     subject: &[&Ty],
+    aliases: &std::collections::HashMap<TypeName, Ty>,
 ) -> bool {
-    for i in 0..rule.generic_params.len() {
-        let Some(Some(bound)) = rule.generic_param_bounds.get(i) else {
+    // Each of this impl's params, resolved to the ground type it takes at the common
+    // instance (following the unifier's binding chains). Used both to read a param's own
+    // witness and to instantiate a bound whose args mention sibling params.
+    let param_witnesses: TypeBindings = rule
+        .generic_params
+        .iter()
+        .enumerate()
+        .map(|(j, (name, _))| {
+            (
+                name.clone(),
+                chase_var(
+                    &Ty::TypeVar(renamed_var(prefix, j), TyAttr::default()),
+                    vars,
+                    bindings,
+                ),
+            )
+        })
+        .collect();
+
+    for (i, (param_name, bounds)) in rule.generic_params.iter().enumerate() {
+        if bounds.is_empty() {
             continue;
-        };
-        let Some(bound_qtn) = interface_qtn(bound) else {
-            continue;
-        };
+        }
         let var_i = renamed_var(prefix, i);
         // Non-principal (union-cover) binding ⇒ the witness is arbitrary; don't disprove.
         if subject.iter().any(|t| var_under_union(&var_i, t)) {
             continue;
         }
-        let subject = chase_var(&Ty::TypeVar(var_i, TyAttr::default()), vars, bindings);
-        if contains_bound_typevar(&subject, vars) {
+        let witness = &param_witnesses[param_name];
+        // An unpinned witness (still a coherence var, or otherwise not fully realized) is
+        // undecidable in an open world — `get_implements_block` needs realized inputs.
+        if contains_bound_typevar(witness, vars)
+            || baml_type::RealizedTy::try_from(witness).is_err()
+        {
             continue;
         }
-        if !type_implements_with_deps(db, pkg_id, &subject, bound_qtn) {
-            return false;
+        // The impl applies only if the witness satisfies *every* bound on the param, so a
+        // single provably-unsatisfied bound makes the two impls disjoint at this instance.
+        // Instantiate each bound at the common instance and check the *specific* interface
+        // (args included) via the canonical resolver. We may conclude "disjoint" only when
+        // the instantiated bound is itself fully realized: a `None` from `get_implements_block`
+        // then means the witness genuinely does not implement it, whereas an unresolved bound
+        // arg keeps the bound conservatively assumed-to-hold (a wrong negative would admit an
+        // overlapping pair).
+        for bound in bounds {
+            let bound = bound.map_tys(|t| crate::generics::substitute_ty(t, &param_witnesses));
+            if bound
+                .tys()
+                .all(|t| baml_type::RealizedTy::try_from(t).is_ok())
+                && crate::interfaces::get_implements_block(db, pkg_id, witness, &bound, aliases)
+                    .is_none()
+            {
+                return false;
+            }
         }
     }
     true
@@ -630,7 +701,7 @@ fn enum_variant_names(db: &dyn crate::Db, enum_qtn: &TypeName) -> Option<Vec<Nam
 /// params renamed to side-`prefix` unification variables. Associated bindings are
 /// dropped (interface outputs, not part of overlap).
 fn renamed_subject(
-    rule: &InterfaceImplRule,
+    rule: &ImplData<'_>,
     prefix: char,
     enum_variants: EnumVariants,
 ) -> (Ty, Vec<Ty>) {
@@ -638,9 +709,9 @@ fn renamed_subject(
         .generic_params
         .iter()
         .enumerate()
-        .map(|(i, p)| {
+        .map(|(i, (name, _bounds))| {
             (
-                p.clone(),
+                name.clone(),
                 Ty::TypeVar(renamed_var(prefix, i), TyAttr::default()),
             )
         })
@@ -649,13 +720,11 @@ fn renamed_subject(
         &crate::generics::substitute_ty(&rule.for_ty_pattern, &rename),
         enum_variants,
     );
-    let args = match &rule.interface_ty {
-        Ty::Interface(_, args, _, _) => args
-            .iter()
-            .map(|arg| nf(&crate::generics::substitute_ty(arg, &rename), enum_variants))
-            .collect(),
-        _ => Vec::new(),
-    };
+    let args = rule
+        .interface_args
+        .iter()
+        .map(|arg| nf(&crate::generics::substitute_ty(arg, &rename), enum_variants))
+        .collect();
     (for_ty, args)
 }
 

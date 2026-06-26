@@ -1472,25 +1472,6 @@ pub fn package_implements_registry<'db>(
     }
 }
 
-fn strip_interface_assoc(ty: &Ty) -> Ty {
-    match ty {
-        Ty::Interface(qtn, args, _, attr) => {
-            Ty::Interface(qtn.clone(), args.clone(), Vec::new(), attr.clone())
-        }
-        other => other.clone(),
-    }
-}
-
-fn same_in_body_origin(a: &InterfaceImplRule, b: &InterfaceImplRule) -> bool {
-    matches!(
-        (&a.origin, &b.origin),
-        (
-            InterfaceImplOrigin::InBodyClass { class_qtn: ca },
-            InterfaceImplOrigin::InBodyClass { class_qtn: cb },
-        ) if ca == cb
-    )
-}
-
 /// Resolve a `TypeExpr::Path` to an interface declaration and its fully
 /// qualified identity. Returns `None` when the path doesn't resolve to an
 /// interface.
