@@ -5,16 +5,32 @@ import { api } from '../../convex/_generated/api';
 
 type Pledge = { id: string; name: string; description: string; createdAt: number };
 
+const FALLBACK_PLEDGES: Pledge[] = [
+  {
+    id: 'fallback-1',
+    name: 'Frontier Engineer',
+    description: 'Replacing vague AI sludge with small, sharp tools that actually ship.',
+    createdAt: 0,
+  },
+  {
+    id: 'fallback-2',
+    name: 'Design Infantry',
+    description: 'Holding the line against disposable interfaces and beige autocomplete.',
+    createdAt: 0,
+  },
+  {
+    id: 'fallback-3',
+    name: 'Build Cavalry',
+    description: 'Turning model chaos into typed workflows, tests, and real product surfaces.',
+    createdAt: 0,
+  },
+];
+
 function PledgeCard({ pledge, clone }: { pledge: Pledge; clone?: boolean }) {
   return (
-    <div aria-hidden={clone || undefined} className="tweet-font w-72 shrink-0 rounded-xl border border-black/10 bg-white p-3">
-      <div className="flex items-center gap-2">
-        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-black/[0.06] text-sm font-bold text-black/60">
-          {pledge.name.charAt(0).toUpperCase()}
-        </div>
-        <div className="text-[14px] font-bold leading-tight text-black">{pledge.name}</div>
-      </div>
-      <p className="mt-2 text-[13px] leading-snug text-black">{pledge.description}</p>
+    <div aria-hidden={clone || undefined} className="tweet-font w-72 shrink-0 rounded-lg border border-ink/10 bg-white/10 px-4 py-3 shadow-sm backdrop-blur-sm">
+      <div className="text-[15px] font-bold leading-tight text-ink">{pledge.name}</div>
+      <p className="mt-1.5 text-[13px] leading-snug text-ink-2">{pledge.description}</p>
     </div>
   );
 }
@@ -22,16 +38,13 @@ function PledgeCard({ pledge, clone }: { pledge: Pledge; clone?: boolean }) {
 export default function PledgeWall() {
   const pledges = useQuery(api.submissions.list);
 
-  // Nothing to show yet (loading or empty) — render nothing.
-  if (pledges === undefined || pledges.length === 0) {
-    return null;
-  }
+  const visiblePledges = pledges && pledges.length > 0 ? pledges : FALLBACK_PLEDGES;
 
   // Repeat the list until it's wide enough to fill the row, THEN duplicate that
   // whole block once. The marquee scrolls exactly -50% (one block), so it loops
   // seamlessly for any number of pledges — no mid-set jump.
-  let filled = [...pledges];
-  while (filled.length < 6) filled = [...filled, ...pledges];
+  let filled = [...visiblePledges];
+  while (filled.length < 6) filled = [...filled, ...visiblePledges];
   const loop = [...filled, ...filled];
 
   return (

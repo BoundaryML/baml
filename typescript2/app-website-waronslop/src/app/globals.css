@@ -66,11 +66,37 @@ body {
   animation-play-state: paused;
 }
 
+@keyframes paper-plane-send {
+  0% {
+    transform: translate(0, 0) rotate(0deg);
+    opacity: 1;
+  }
+  45% {
+    transform: translate(8px, -8px) rotate(8deg);
+    opacity: 1;
+  }
+  46% {
+    transform: translate(-10px, 10px) rotate(8deg);
+    opacity: 0;
+  }
+  100% {
+    transform: translate(0, 0) rotate(0deg);
+    opacity: 1;
+  }
+}
+
+.animate-paper-plane-send {
+  animation: paper-plane-send 900ms ease-in-out infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;
   }
   .marquee-track {
+    animation: none;
+  }
+  .animate-paper-plane-send {
     animation: none;
   }
 }

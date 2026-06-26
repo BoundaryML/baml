@@ -33,18 +33,18 @@ export default function PledgeForm() {
   }
 
   const inputClass =
-    'w-full rounded-lg border border-black/15 bg-white/70 px-3 py-2 text-[15px] text-black outline-none transition-colors focus:border-black/40';
+    'w-full border-0 border-b border-ink/25 bg-transparent px-0 py-3 text-[17px] text-ink outline-none transition placeholder:text-ink-2/70 focus:border-accent';
 
   if (status === 'done') {
     return (
-      <div className="rounded-2xl border border-black/10 bg-white/70 p-6 text-center">
-        <p className="text-lg font-bold text-black">Enlisted. ⚔️</p>
-        <p className="mt-1 text-black/60">
+      <div className="tweet-font bg-transparent py-2 text-left">
+        <p className="text-lg font-bold text-ink">Enlisted. ⚔️</p>
+        <p className="mt-1 text-ink-2">
           Your pledge is on the wall below. Welcome to the war on slop.
         </p>
         <button
           onClick={() => setStatus('idle')}
-          className="mt-4 text-sm font-bold text-black/50 underline underline-offset-4 hover:text-black"
+          className="mt-4 text-sm font-bold text-accent underline underline-offset-4 hover:text-accent-deep"
         >
           Add another
         </button>
@@ -55,9 +55,9 @@ export default function PledgeForm() {
   return (
     <form
       onSubmit={onSubmit}
-      className="tweet-font space-y-3 rounded-2xl border border-black/10 bg-white/60 p-5"
+      className="tweet-font w-full bg-transparent"
     >
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid gap-5 sm:grid-cols-2">
         <label htmlFor="pledge-name">
           <span className="sr-only">Name</span>
           <input
@@ -88,13 +88,13 @@ export default function PledgeForm() {
           />
         </label>
       </div>
-      <div>
+      <div className="mt-5">
         <label htmlFor="pledge-description">
           <span className="sr-only">How are you fighting slop with slop?</span>
           <textarea
             id="pledge-description"
             name="description"
-            className={`${inputClass} min-h-[88px] resize-none`}
+            className={`${inputClass} min-h-[128px] resize-none`}
             placeholder="How are you fighting slop with slop?"
             value={description}
             onChange={(e) => setDescription(e.target.value.slice(0, MAX_DESC))}
@@ -102,7 +102,7 @@ export default function PledgeForm() {
             required
           />
         </label>
-        <div className="mt-1 text-right text-xs text-black/35">
+        <div className="mt-1 text-right text-xs text-ink-2/60">
           {description.length}/{MAX_DESC}
         </div>
       </div>
@@ -119,15 +119,25 @@ export default function PledgeForm() {
         aria-hidden="true"
       />
 
-      {status === 'error' && <p className="text-sm text-red-700">{error}</p>}
+      {status === 'error' && <p className="mt-3 text-sm text-red-700">{error}</p>}
 
-      <button
-        type="submit"
-        disabled={status === 'sending'}
-        className="w-full rounded-lg bg-black px-4 py-2.5 text-[15px] font-bold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
-      >
-        {status === 'sending' ? 'Sharing…' : 'Share'}
-      </button>
+      <div className="mt-2 flex justify-end">
+        <button
+          type="submit"
+          disabled={status === 'sending'}
+          className="group inline-flex items-center gap-2 bg-transparent py-1 text-[15px] font-bold text-accent transition hover:text-accent-deep disabled:opacity-60"
+        >
+          {status === 'sending' ? 'Sharing' : 'Share'}
+          <svg
+            aria-hidden="true"
+            viewBox="0 0 24 24"
+            className={`h-4 w-4 fill-none stroke-current stroke-2 ${status === 'sending' ? 'animate-paper-plane-send' : 'transition group-hover:translate-x-0.5 group-hover:-translate-y-0.5'}`}
+          >
+            <path d="M3.5 11.5 20 4l-7.5 16-2-7-7-1.5Z" />
+            <path d="m10.5 13 4-4" />
+          </svg>
+        </button>
+      </div>
     </form>
   );
 }
