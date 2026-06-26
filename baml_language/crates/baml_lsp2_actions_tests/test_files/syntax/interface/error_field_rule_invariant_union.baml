@@ -13,11 +13,11 @@ class Count {
 //----
 //- diagnostics
 // error: class `Count` declares field `value: int` but interface `Measured` requires `value` to have type `int | string`
-//    ╭─[ interface_error_field_rule_invariant_union.baml:9:9 ]
+//    ╭─[ interface_error_field_rule_invariant_union.baml:9:10 ]
 //    │
 //  9 │   value: int
-//    │         ──┬─  
+//    │          ─┬─
 //    │           ╰─── expected `int | string`, found `int`
-//    │ 
+//    │
 //    │ Note: Error code: E0116
 // ───╯

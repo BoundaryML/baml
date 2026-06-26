@@ -50,19 +50,17 @@ function Nested() -> int {
 //    ╭─[ loops_break.baml:6:14 ]
 //    │
 //  6 │     res.push("hi");
-//    │              ──┬─  
+//    │              ──┬─
 //    │                ╰─── type mismatch: expected int, got string
-//    │ 
+//    │
 //    │ Note: Error code: E0001
 // ───╯
 // warning: unreachable code: 1 statement(s) after diverging statement
-//     ╭─[ loops_break.baml:20:32 ]
+//     ╭─[ loops_break.baml:22:5 ]
 //     │
-//  20 │ ╭─▶ function OutsideLoop() -> int {
-//     ┆ ┆   
-//  22 │ ├─▶     break;
-//     │ │                
-//     │ ╰──────────────── unreachable code: 1 statement(s) after diverging statement
-//     │     
-//     │     Note: Error code: E0001
+//  22 │     break;
+//     │     ───┬──
+//     │        ╰──── unreachable code: 1 statement(s) after diverging statement
+//     │
+//     │ Note: Error code: E0001
 // ────╯

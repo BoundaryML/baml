@@ -70,7 +70,7 @@ function ExtractName(text: string) -> string {
 //----
 //- diagnostics
 // error: unresolved name: openai
-//     ╭─[ functions_v2_shorthand_clients.baml:62:45 ]
+//     ╭─[ functions_v2_shorthand_clients.baml:62:46 ]
 //     │
 //  62 │ ╭─▶ function ExtractName(text: string) -> string {
 //     ┆ ┆
