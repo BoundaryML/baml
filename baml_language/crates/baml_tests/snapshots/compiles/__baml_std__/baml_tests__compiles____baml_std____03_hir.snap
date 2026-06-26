@@ -1690,7 +1690,7 @@ function baml.from(value: T) -> string  [expr] {
 function baml.from_code_points(unicode: int[]) -> string  [builtin]
 function baml.from_utf8(utf8: uint8array) -> string  [builtin]
 function baml.includes(self: ?, search: string) -> bool  [builtin]
-function baml.index_of(self: ?, search: string) -> int  [builtin]
+function baml.index_of(self: ?, search: string) -> int?  [builtin]
 function baml.is_alphabetic(self: ?) -> bool  [builtin]
 function baml.is_alphanumeric(self: ?) -> bool  [builtin]
 function baml.is_ascii(self: ?) -> bool  [builtin]
