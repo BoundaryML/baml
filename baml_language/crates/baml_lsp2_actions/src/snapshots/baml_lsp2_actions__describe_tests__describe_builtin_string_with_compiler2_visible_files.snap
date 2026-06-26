@@ -33,6 +33,8 @@ methods:
   function ends_with(self, suffix: string) -> bool
   /// Splits the string by `delimiter` and returns an array of substrings.
   function split(self, delimiter: string) -> string[]
+  /// Returns the string's Unicode code points as one-character strings.
+  function chars(self) -> string[]
   /// Splits the string into lines, recognizing both `\n` and `\r\n` as line
   function lines(self) -> string[]
   /// Returns the substring between two **character** offsets `[start, end)`.
