@@ -1414,6 +1414,9 @@ function baml.String.char_at(self: baml.String, index: int) -> string {
 function baml.String.char_count(self: baml.String) -> int {
 }
 
+function baml.String.chars(self: baml.String) -> string[] {
+}
+
 function baml.String.ends_with(self: baml.String, suffix: string) -> bool {
 }
 
@@ -6109,8 +6112,7 @@ function baml.iter.Iterable$for$T[].iter(self: T[]) -> baml.iter.Iterator<Item =
 
 function baml.iter.Iterable$for$string.iter(self: string) -> baml.iter.Iterator<Item = string, Error = never> {
     load_var self
-    load_const ""
-    call baml.String.split
+    call baml.String.chars
     store_var _2
     load_type string
     load_var _2

@@ -57,3 +57,19 @@ async fn string_is_iterable_by_character() {
         ok_string("[a][é][😀]")
     );
 }
+
+#[tokio::test]
+async fn chars_returns_character_array() {
+    let output = baml_test!(
+        r#"
+        function main() -> string {
+            let chars = "aé😀".chars();
+            baml.json.stringify(chars.length()) + ":" + chars[0] + chars[1] + chars[2]
+        }
+    "#
+    );
+    assert_eq!(
+        output.result.map_err(|e| format!("{e:?}")),
+        ok_string("3:aé😀")
+    );
+}

@@ -1673,7 +1673,7 @@ function baml.iter.iter(self: unknown) -> baml.iter.Iterator<Item = unknown, Err
 }
 function baml.iter.iter(self: unknown) -> baml.iter.Iterator<Item = string, Error = never> throws never {
   { : baml.iter.Iterator<Item = string, Error = never>
-    self.split("").iter() : baml.iter.Iterator<Item = string, Error = never>
+    self.chars().iter() : baml.iter.Iterator<Item = string, Error = never>
   }
 }
 class baml.iter.Done$stream {

@@ -509,6 +509,6 @@ implements Iterable for string {
   type Error = never
 
   function iter(self) -> Iterator<Item = string, Error = never> throws never {
-    self.split("").iter()
+    self.chars().iter()
   }
 }

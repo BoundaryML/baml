@@ -5247,7 +5247,7 @@ fn baml.iter.Iterable$for$string.iter(self: string) -> baml.iter.Iterator<Item =
     let _3: type
 
     bb0: {
-        _2 = call const fn baml.String.split(copy _1, const "") -> [bb1];
+        _2 = call const fn baml.String.chars(copy _1) -> [bb1];
     }
 
     bb1: {
@@ -14571,6 +14571,8 @@ fn baml.String.byte_length = builtin(vm)
 fn baml.String.char_at = builtin(vm)
 
 fn baml.String.char_count = builtin(vm)
+
+fn baml.String.chars = builtin(vm)
 
 fn baml.String.ends_with = builtin(vm)
 

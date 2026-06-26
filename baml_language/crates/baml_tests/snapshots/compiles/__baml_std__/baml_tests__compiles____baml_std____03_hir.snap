@@ -736,7 +736,7 @@ function baml.iter.iter(self: ?) -> Iterator<Item = T, Error = E>  [expr] {
   {  } self
 }
 function baml.iter.iter(self: ?) -> Iterator<Item = string, Error = never>  [expr] {
-  {  } self.split("").iter()
+  {  } self.chars().iter()
 }
 function baml.iter.iter(self: ?) -> Iterator<Item = T, Error = never>  [expr] {
   {  } self
@@ -1686,6 +1686,7 @@ class baml.String {
 function baml.byte_length(self: ?) -> int  [builtin]
 function baml.char_at(self: ?, index: int) -> string  [builtin]
 function baml.char_count(self: ?) -> int  [builtin]
+function baml.chars(self: ?) -> string[]  [builtin]
 function baml.ends_with(self: ?, suffix: string) -> bool  [builtin]
 function baml.from(value: T) -> string  [expr] {
   {  } root._to_string_shim(value)

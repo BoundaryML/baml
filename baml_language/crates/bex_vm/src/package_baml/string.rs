@@ -8,6 +8,14 @@ use crate::{
     errors::{VmBamlError, VmRustFnError},
 };
 
+fn char_substrings(string: &BexStr) -> Vec<BexStr> {
+    string
+        .as_str()
+        .char_indices()
+        .map(|(start, ch)| string.substring(start, start + ch.len_utf8()))
+        .collect()
+}
+
 impl BamlClassString for PackageBamlImpl {
     #[allow(clippy::cast_possible_wrap)]
     fn length(string: &BexStr) -> i64 {
@@ -79,10 +87,7 @@ impl BamlClassString for PackageBamlImpl {
         let s = string.as_str();
         let d = delimiter.as_str();
         if d.is_empty() {
-            return s
-                .char_indices()
-                .map(|(start, ch)| string.substring(start, start + ch.len_utf8()))
-                .collect();
+            return char_substrings(string);
         }
         let base = s.as_ptr() as usize;
         s.split(d)
@@ -91,6 +96,10 @@ impl BamlClassString for PackageBamlImpl {
                 string.substring(start, start + part.len())
             })
             .collect()
+    }
+
+    fn chars(string: &BexStr) -> Vec<BexStr> {
+        char_substrings(string)
     }
 
     fn lines(string: &BexStr) -> Vec<BexStr> {
