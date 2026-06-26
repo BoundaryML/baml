@@ -520,15 +520,15 @@ impl baml_type::normalize::TypeContext for NormalizeCtx<'_, '_> {
     }
 
     fn implements_interface(&self, concrete: &Ty, interface: &baml_type::Interface) -> bool {
+        // The realized-vs-symbolic membership dispatch lives behind this single
+        // seam (owned by interface resolution), so the algebra just asks "does it
+        // implement?". `is_subtype` is the boundary the seam calls back through to
+        // discharge interface-argument equivalence and generic bounds.
         let b = self.0;
-        let db = b.context.db();
-        let registry_pkg = b.registry_package_for_interface_check(concrete, &interface.name);
-        let registry = crate::interfaces::package_implements_registry(db, registry_pkg);
-        // The registry matcher keys off the interface *existential* `Ty`; rebuild
-        // it from the constraint (a lossless add of default attributes).
-        registry.type_implements_interface_via_rule(
+        crate::interfaces::implements_interface(
+            b.context.db(),
             concrete,
-            &interface.to_ty(),
+            interface,
             &b.aliases,
             |actual, bound| b.is_subtype(actual, bound),
         )
