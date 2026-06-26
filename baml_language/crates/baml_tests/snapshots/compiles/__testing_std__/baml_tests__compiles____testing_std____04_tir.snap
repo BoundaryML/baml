@@ -220,6 +220,25 @@ function testing.TestRegistry.run_selected(self: testing.TestRegistry, names: st
     root.run_testset(root.testset_children_selected(self, names), null) : testing.TestSetReport
   }
 }
+function testing.TestRegistry.run_filtered(self: testing.TestRegistry, include: string[], exclude: string[]) -> testing.FlatTestReport throws never {
+  { : testing.FlatTestReport
+    let report = : testing.TestSetReport
+      if (include.length() == 0 && exclude.length() == 0 : bool) : testing.TestSetReport
+        { : testing.TestSetReport
+          self.run_all() : testing.TestSetReport
+        }
+      else
+        { : testing.TestSetReport
+          self.run_selected(root.select_names(self, include, exclude)) : testing.TestSetReport
+        }
+    root.flatten_with_tolerated(report) : testing.FlatTestReport
+  }
+}
+function testing.TestRegistry.list_filtered(self: testing.TestRegistry, include: string[], exclude: string[]) -> string[] throws never {
+  { : string[]
+    root.select_names(self, include, exclude) : string[]
+  }
+}
 function testing.TestRegistry.expand_set(self: testing.TestRegistry, name: string) -> testing.SerializedTestDef[] throws never {
   { : never
     for ts in self.collector.testsets
@@ -288,19 +307,14 @@ function testing.testset_children_selected(registry: testing.TestRegistry, names
       }
     for ts in registry.collector.testsets
       { : int | null
-        if (root._name_selected(ts.name, names) : bool) : int | null
+        if (root._has_selected_descendant(ts.name, names) : bool) : int | null
           { : int
-            children.push(root.testset_child(registry, ts)) : int
+            children.push(root.testset_child_selected(registry, ts, names)) : int
           }
         else
-          if (root._has_selected_descendant(ts.name, names) : bool) : int | null
-            { : int
-              children.push(root.testset_child_selected(registry, ts, names)) : int
-            }
-          else
-            { : null
-              null : null
-            }
+          { : null
+            null : null
+          }
       }
     children : testing.TestSetChild[]
   }
@@ -475,6 +489,276 @@ function testing.run_testset(children: testing.TestSetChild[], runner: testing.T
         r(children) : testing.TestSetReport
   }
 }
+function testing.expansion_error_report(name: string) -> testing.TestSetReport throws never {
+  { : testing.TestSetReport
+    TestSetReport { outcome: "error", passed: 0, failed: 1, total: 1, failed_names: [name + "/(testset error)"], results: [] } : testing.TestSetReport
+  }
+}
+class testing.FilterPat {
+  func_pat: string
+  test_pat: string
+}
+class testing.NameSplit {
+  head: string
+  tail: string
+}
+function testing.split_top(path: string) -> testing.NameSplit throws never {
+  { : testing.NameSplit
+    let idx = path.index_of("/") : int
+    if (idx < 0 : bool) : testing.NameSplit
+      { : testing.NameSplit
+        NameSplit { head: "", tail: path } : testing.NameSplit
+      }
+    else
+      { : testing.NameSplit
+        NameSplit { head: path.substring(0, idx), tail: path.substring(idx + 1, path.length()) } : testing.NameSplit
+      }
+  }
+}
+function testing.parse_filter_patterns(raw: string[]) -> testing.FilterPat[] throws never {
+  { : testing.FilterPat[]
+    let out: FilterPat[] = [] : testing.FilterPat[]
+    for s in raw
+      { : int
+        let idx = s.index_of("::") : int
+        if (idx < 0 : bool) : int
+          { : int
+            out.push(FilterPat { func_pat: s, test_pat: "" }) : int
+            out.push(FilterPat { func_pat: "", test_pat: s }) : int
+          }
+        else
+          { : int
+            out.push(FilterPat { func_pat: s.substring(0, idx), test_pat: s.substring(idx + 2, s.length()) }) : int
+          }
+      }
+    out : testing.FilterPat[]
+  }
+}
+function testing.glob_match(subject: string, pattern: string) -> bool throws never {
+  { : true
+    let parts = pattern.split("*") : string[]
+    let n = parts.length() : int
+    if (n == 1 : bool) : void
+      { : never
+        return subject == pattern : bool
+      }
+    let first = parts[0] : string
+    let last = parts[n - 1] : string
+    if (Not subject.starts_with(first) : bool) : void
+      { : never
+        return false : false
+      }
+    if (Not subject.ends_with(last) : bool) : void
+      { : never
+        return false : false
+      }
+    let start = first.length() : int
+    let end_limit = subject.length() - last.length() : int
+    if (start > end_limit : bool) : void
+      { : never
+        return false : false
+      }
+    let pos = start : int
+    { : void
+      let i = 1 : 1 -> int
+      while i < n - 1
+        { : void
+          let part = parts[i] : string
+          if (part != "" : bool) : void
+            { : void
+              let idx = subject.substring(pos, end_limit).index_of(part) : int
+              if (idx < 0 : bool) : void
+                { : never
+                  return false : false
+                }
+              pos = pos + idx + part.length() : int
+            }
+        }
+    }
+    true : true
+  }
+}
+function testing.filter_match(expr: string, subject: string) -> bool throws never {
+  { : true | bool
+    if (expr == "" : bool) : true | bool
+      { : true
+        true : true
+      }
+    else
+      { : bool
+        root.glob_match(subject, expr) : bool
+      }
+  }
+}
+function testing.any_pattern_matches(pats: testing.FilterPat[], function_name: string, test_name: string) -> bool throws never {
+  { : false
+    for p in pats
+      { : void
+        if (root.filter_match(p.func_pat, function_name) && root.filter_match(p.test_pat, test_name) : bool) : void
+          { : never
+            return true : true
+          }
+      }
+    false : false
+  }
+}
+function testing.leaf_selected(name: string, include: testing.FilterPat[], exclude: testing.FilterPat[]) -> bool throws never {
+  { : bool
+    let split = root.split_top(name) : testing.NameSplit
+    if (root.any_pattern_matches(exclude, split.head, split.tail) : bool) : void
+      { : never
+        return false : false
+      }
+    if (include.length() == 0 : bool) : void
+      { : never
+        return true : true
+      }
+    root.any_pattern_matches(include, split.head, split.tail) : bool
+  }
+}
+function testing.select_names(registry: testing.TestRegistry, include: string[], exclude: string[]) -> string[] throws never {
+  { : string[]
+    let inc = root.parse_filter_patterns(include) : testing.FilterPat[]
+    let exc = root.parse_filter_patterns(exclude) : testing.FilterPat[]
+    let out: string[] = [] : string[]
+    for name in root.collect_leaf_names(registry)
+      { : void
+        if (root.leaf_selected(name, inc, exc) : bool) : void
+          { : void
+            out.push(name) : int
+          }
+      }
+    out : string[]
+  }
+}
+function testing.collect_leaf_names(registry: testing.TestRegistry) -> string[] throws never {
+  { : string[]
+    let out: string[] = [] : string[]
+    for t in registry.collector.tests
+      { : void
+        out.push(t.name) : int
+      }
+    for ts in registry.collector.testsets
+      { : void
+        for name in root.collect_subtree_names(registry, ts)
+          { : void
+            out.push(name) : int
+          }
+      }
+    out : string[]
+  }
+}
+function testing.collect_subtree_names(registry: testing.TestRegistry, ts: testing.TestSetRegistration) -> string[] throws never {
+  { : string[]
+    catch (root.collect_leaf_names(registry.expand_testset_registry(ts)) : string[]) : string[]
+      catch_all (e)
+        baml.panics.Panic =>
+          [ts.name + "/(failed to expand)"] : string[]
+        _ =>
+          [ts.name + "/(failed to expand)"] : string[]
+  }
+}
+class testing.LeafCounts {
+  passed: int
+  failed: int
+  tolerated: int
+  total: int
+}
+function testing.count_leaves(results: testing.ChildReport[], tolerated_by_parent: bool) -> testing.LeafCounts throws never {
+  { : testing.LeafCounts
+    let passed = 0 : 0 -> int
+    let failed = 0 : 0 -> int
+    let tolerated = 0 : 0 -> int
+    let total = 0 : 0 -> int
+    for r in results
+      { : void
+        let delta = : testing.LeafCounts
+          match (r : testing.ChildReport) : testing.LeafCounts
+            tr: TestReport =>
+              { : testing.LeafCounts
+                if (tr.outcome == "pass" : bool) : testing.LeafCounts
+                  { : testing.LeafCounts
+                    LeafCounts { passed: 1, failed: 0, tolerated: 0, total: 1 } : testing.LeafCounts
+                  }
+                else
+                  if (tolerated_by_parent : bool) : testing.LeafCounts
+                    { : testing.LeafCounts
+                      LeafCounts { passed: 0, failed: 0, tolerated: 1, total: 1 } : testing.LeafCounts
+                    }
+                  else
+                    { : testing.LeafCounts
+                      LeafCounts { passed: 0, failed: 1, tolerated: 0, total: 1 } : testing.LeafCounts
+                    }
+              }
+            tsr: TestSetReport =>
+              { : testing.LeafCounts
+                let ft = tolerated_by_parent || tsr.outcome == "pass" : bool
+                if (tsr.results.length() > 0 : bool) : testing.LeafCounts
+                  { : testing.LeafCounts
+                    root.count_leaves(tsr.results, ft) : testing.LeafCounts
+                  }
+                else
+                  if (ft : bool) : testing.LeafCounts
+                    { : testing.LeafCounts
+                      LeafCounts { passed: tsr.passed, failed: 0, tolerated: tsr.failed, total: tsr.total } : testing.LeafCounts
+                    }
+                  else
+                    { : testing.LeafCounts
+                      LeafCounts { passed: tsr.passed, failed: tsr.failed, tolerated: 0, total: tsr.total } : testing.LeafCounts
+                    }
+              }
+        passed Add= delta.passed : int
+        failed Add= delta.failed : int
+        tolerated Add= delta.tolerated : int
+        total Add= delta.total : int
+      }
+    LeafCounts { passed: passed, failed: failed, tolerated: tolerated, total: total } : testing.LeafCounts
+  }
+}
+function testing.flatten_with_tolerated(report: testing.TestSetReport) -> testing.FlatTestReport throws never {
+  { : testing.FlatTestReport
+    let top_tolerated = report.outcome == "pass" : bool
+    let counts = : testing.LeafCounts
+      if (report.results.length() > 0 : bool) : testing.LeafCounts
+        { : testing.LeafCounts
+          root.count_leaves(report.results, top_tolerated) : testing.LeafCounts
+        }
+      else
+        if (top_tolerated : bool) : testing.LeafCounts
+          { : testing.LeafCounts
+            LeafCounts { passed: report.passed, failed: 0, tolerated: report.failed, total: report.total } : testing.LeafCounts
+          }
+        else
+          { : testing.LeafCounts
+            LeafCounts { passed: report.passed, failed: report.failed, tolerated: 0, total: report.total } : testing.LeafCounts
+          }
+    let messages: string[] = [] : string[]
+    root.collect_leaf_messages(report.results, messages) : void
+    FlatTestReport { outcome: report.outcome, passed: counts.passed, failed: counts.failed, tolerated: counts.tolerated, total: counts.total, failed_names: report.failed_names, messages: messages } : testing.FlatTestReport
+  }
+}
+function testing.collect_leaf_messages(results: testing.ChildReport[], out: string[]) -> void throws never {
+  { : void
+    for r in results
+      { : void
+        match (r : testing.ChildReport) : void
+          tr: TestReport =>
+            { : void
+              for run in tr.runs
+                { : void
+                  if (run.outcome != "pass" : bool) : void
+                    { : void
+                      if let <pat> = run.message { 1 stmts } : void
+                    }
+                }
+            }
+          tsr: TestSetReport =>
+            { : void
+              root.collect_leaf_messages(tsr.results, out) : void
+            }
+      }
+  }
+}
 class testing.TestRegistration$stream {
   name: string | null
   body: testing.TestBody$stream | null
@@ -504,6 +788,20 @@ class testing.TestRegistry$stream {
   collector: testing.TestCollector$stream | null
   expansions: map<string, testing.TestRegistry$stream>
   loading_time_ms: int | null
+}
+class testing.FilterPat$stream {
+  func_pat: string | null
+  test_pat: string | null
+}
+class testing.NameSplit$stream {
+  head: string | null
+  tail: string | null
+}
+class testing.LeafCounts$stream {
+  passed: int | null
+  failed: int | null
+  tolerated: int | null
+  total: int | null
 }
 
 --- <builtin>/testing/runners.baml ---
@@ -744,6 +1042,15 @@ class testing.TestSetChild {
   run: testing.ChildReportThunk
 }
 type testing.TestSetRunner = (testing.TestSetChild[]) -> testing.TestSetReport throws never
+class testing.FlatTestReport {
+  outcome: testing.Outcome
+  passed: int
+  failed: int
+  tolerated: int
+  total: int
+  failed_names: string[]
+  messages: string[]
+}
 type testing.Outcome$stream = "pass" | "fail" | "error"
 class testing.RunReport$stream {
   outcome: testing.Outcome$stream | null
@@ -778,3 +1085,12 @@ class testing.TestSetChild$stream {
   run: testing.ChildReportThunk$stream | null
 }
 type testing.TestSetRunner$stream = unknown
+class testing.FlatTestReport$stream {
+  outcome: testing.Outcome$stream | null
+  passed: int | null
+  failed: int | null
+  tolerated: int | null
+  total: int | null
+  failed_names: string[]
+  messages: string[]
+}
