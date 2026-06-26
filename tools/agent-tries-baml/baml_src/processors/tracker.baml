@@ -896,16 +896,24 @@ function tracker_dispatch_fix(
     branch: string,
     prompt: string,
 ) -> string {
-    let new_id = "bc-" + baml.id.new();
+    // Cursor requires bc-<uuid>; mint from /proc like FixDispatch. A plain
+    // "bc-" + baml.id.new() is rejected with 400 "Agent ID must be in the format
+    // 'bc-<uuid>'", so the refix silently never launched. Return the id Cursor
+    // confirmed (its response "id"), falling back to the minted id.
+    let agent_id = mint_agent_id();
     let repo_url = repo_url_from_pr(loc.owner, loc.repo);
     let ref = match (branch) {
         "" => "main",
         _ => branch,
     };
-    let _ = cursor_launch_agent(ctx.cursor_key, prompt, repo_url, ref, new_id, ctx.model, pr_url, true) catch (_) {
+    let resp = cursor_launch_agent(ctx.cursor_key, prompt, repo_url, ref, agent_id, ctx.model, pr_url, true) catch (_) {
         _ => "{}"
     };
-    return new_id;
+    let id_field = extract_field(resp, "id");
+    if (id_field != "") {
+        return id_field;
+    }
+    return agent_id;
 }
 
 function tracker_refix_prompt(
