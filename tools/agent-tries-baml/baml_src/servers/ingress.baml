@@ -545,7 +545,10 @@ function redraft_from(cur: string) -> bool {
         || cur == "confirmed"
         || cur == "needs_human"
         || cur == "approved"
-        || cur == "failed";
+        || cur == "failed"
+        // A human redraft drag should win even mid-verify (a transient auto-state
+        // that can also strand an issue if its claim is orphaned by a redeploy).
+        || cur == "verifying";
 }
 
 // ---- handlers / helpers ----------------------------------------------------
