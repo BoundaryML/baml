@@ -752,9 +752,16 @@ impl Printable for RawString {
     }
 }
 
-/// BEP-049 backtick-interpolated string literal. M1: printed verbatim — no
-/// re-indenting, no re-emission of escapes. Richer formatting (auto-choosing
-/// tick count, normalizing dedent) is deferred until there is real corpus.
+/// BEP-049 backtick-interpolated string literal. Printed verbatim: no
+/// re-indenting, no re-emission of escapes, no delimiter rewrite.
+///
+/// Unlike raw `#"..."#` strings, a backtick string is auto-dedented at lower
+/// time (`baml_base::dedent::preprocess_template`, BEP-049 §12) with its `${...}`
+/// interpolations replaced by placeholders and §13 whitespace control applied,
+/// so its runtime *value* depends on the interior's exact indentation. A naive
+/// raw-style re-indent does not preserve that dedent and silently changes the
+/// string's value, so we leave the interior untouched. A value-preserving
+/// re-indent would have to replicate the §12/§13 pipeline and is deferred.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct BacktickString {
     pub token_span: TextRange,

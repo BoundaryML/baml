@@ -206,9 +206,12 @@ implements<T extends Named> Printable for Box<T> {
 mod backtick_format_tests {
     use super::*;
 
-    /// BEP-049: backtick string literals must round-trip through the formatter
-    /// verbatim — no re-indenting, no escape re-emission, no delimiter rewrite.
-    /// Richer formatting can land later when there's real corpus.
+    /// BEP-049: backtick string literals round-trip through the formatter, always
+    /// printed verbatim. Unlike raw `#"..."#` strings, the formatter must NOT
+    /// re-indent a backtick interior: a backtick string is auto-dedented at lower
+    /// time (BEP-049 §12 `preprocess_template`, with `${...}` interps placeholdered
+    /// and §13 whitespace control), so any re-indent that does not replicate that
+    /// pipeline silently changes the string's runtime value. See `BacktickString`.
     #[test]
     fn backtick_one_liner_round_trips() {
         let source = "function Demo() -> string {\n    `hello ${name} world`\n}\n";
@@ -243,6 +246,83 @@ mod backtick_format_tests {
         let formatted = format(source, &options).expect("formatter should succeed");
         assert!(formatted.contains("line one"));
         assert!(formatted.contains("line two"));
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second);
+    }
+
+    /// The reported bug: a backtick string as a `prompt:` value used to make
+    /// `baml fmt` bail on the whole file, because the prompt slot only knew the
+    /// quoted and raw string tokens. It is now accepted. The over-indented
+    /// interior is preserved byte-for-byte (verbatim), not re-indented, so the
+    /// §12-dedented value is unchanged.
+    #[test]
+    fn backtick_prompt_value_accepted_verbatim() {
+        let source = "function Demo(name: string) -> string {\n    client \"openai/gpt-4o\"\n    prompt `\n            Hello ${name}\n            Goodbye\n    `\n}\n";
+        let expected = "function Demo(name: string) -> string {\n    client: \"openai/gpt-4o\"\n    prompt: `\n            Hello ${name}\n            Goodbye\n    `\n}\n";
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).expect("formatter should succeed");
+        assert_eq!(formatted, expected, "got:\n{formatted}");
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second);
+    }
+
+    /// A single-line backtick prompt is accepted and printed verbatim.
+    #[test]
+    fn backtick_prompt_one_liner_accepted() {
+        let source = "function Demo() -> string {\n    client \"openai/gpt-4o\"\n    prompt `Just one line`\n}\n";
+        let expected = "function Demo() -> string {\n    client: \"openai/gpt-4o\"\n    prompt: `Just one line`\n}\n";
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).expect("formatter should succeed");
+        assert_eq!(formatted, expected, "got:\n{formatted}");
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second);
+    }
+
+    /// A backtick string is accepted as an attribute argument (same slot raw and
+    /// quoted strings use) and its interior is preserved verbatim.
+    #[test]
+    fn backtick_attribute_arg_accepted_verbatim() {
+        let source = "class Foo {\n    bar string @description(`\n        some desc\n        more\n    `)\n}\n";
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).expect("formatter should succeed");
+        assert!(
+            formatted.contains("`\n        some desc\n        more\n    `"),
+            "backtick interior must be verbatim, got:\n{formatted}"
+        );
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second);
+    }
+
+    /// A backtick string is accepted as a `template_string` body and printed
+    /// verbatim.
+    #[test]
+    fn backtick_template_string_accepted_verbatim() {
+        let source = "template_string Foo(name: string) `\n        Hello ${name}\n        Bye\n`\n";
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).expect("formatter should succeed");
+        assert!(
+            formatted.contains("`\n        Hello ${name}\n        Bye\n`"),
+            "backtick interior must be verbatim, got:\n{formatted}"
+        );
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second);
+    }
+
+    /// Value-preservation guard. The first content line is less-indented than the
+    /// rest, so under §12 dedent (common prefix over ALL non-blank lines incl. the
+    /// first) the deeper indentation is part of the value. A raw-style re-indent
+    /// would flatten the lines and change the value, so the interior must be left
+    /// byte-for-byte unchanged.
+    #[test]
+    fn backtick_interior_not_reindented() {
+        let source =
+            "function D() -> string {\n    let x = `first line\n      second line`;\n    x\n}\n";
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).expect("formatter should succeed");
+        assert!(
+            formatted.contains("`first line\n      second line`"),
+            "backtick interior must be verbatim (value-preserving), got:\n{formatted}"
+        );
         let second = format(&formatted, &options).expect("formatter should be idempotent");
         assert_eq!(formatted, second);
     }
