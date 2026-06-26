@@ -1,0 +1,156 @@
+1:1-39       "// `else if let` and `else if` chains." source.baml comment.line.double-slash.baml
+2:1-6        "class"            source.baml meta.class.baml keyword.declaration.class.baml
+2:7-9        "Ok"               source.baml meta.class.baml meta.class.header.baml entity.name.type.class.baml
+2:10-11      "{"                source.baml meta.class.baml meta.class.body.baml punctuation.definition.block.begin.baml
+3:3-8        "value"            source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
+3:9-15       "string"           source.baml meta.class.baml meta.class.body.baml meta.field.baml support.type.primitive.baml
+4:1-2        "}"                source.baml meta.class.baml meta.class.body.baml punctuation.definition.block.end.baml
+5:1-6        "class"            source.baml meta.class.baml keyword.declaration.class.baml
+5:7-10       "Err"              source.baml meta.class.baml meta.class.header.baml entity.name.type.class.baml
+5:11-12      "{"                source.baml meta.class.baml meta.class.body.baml punctuation.definition.block.begin.baml
+6:3-10       "message"          source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
+6:11-17      "string"           source.baml meta.class.baml meta.class.body.baml meta.field.baml support.type.primitive.baml
+7:1-2        "}"                source.baml meta.class.baml meta.class.body.baml punctuation.definition.block.end.baml
+8:1-6        "class"            source.baml meta.class.baml keyword.declaration.class.baml
+8:7-12       "Empty"            source.baml meta.class.baml meta.class.header.baml entity.name.type.class.baml
+8:13-14      "{"                source.baml meta.class.baml meta.class.body.baml punctuation.definition.block.begin.baml
+8:14-15      "}"                source.baml meta.class.baml meta.class.body.baml punctuation.definition.block.end.baml
+10:1-69      "// Plain `else if` after `if let`. The `is Empty { ... }` form is no" source.baml comment.line.double-slash.baml
+11:1-68      "// longer ambiguous with the then-block in condition position — the" source.baml comment.line.double-slash.baml
+12:1-74      "// parser suppresses destructure patterns there (Rust-style restriction)." source.baml comment.line.double-slash.baml
+13:1-9       "function"         source.baml meta.function.baml keyword.declaration.function.baml
+13:10-25     "MixedChainPlain"  source.baml meta.function.baml entity.name.function.baml
+13:25-26     "("                source.baml meta.function.baml meta.parameters.baml punctuation.definition.parameters.begin.baml
+13:26-27     "r"                source.baml meta.function.baml meta.parameters.baml meta.parameter.baml variable.parameter.baml
+13:27-28     ":"                source.baml meta.function.baml meta.parameters.baml meta.parameter.baml punctuation.separator.colon.baml
+13:29-31     "Ok"               source.baml meta.function.baml meta.parameters.baml meta.parameter.baml meta.type-reference.baml entity.name.type.baml
+13:32-33     "|"                source.baml meta.function.baml meta.parameters.baml meta.parameter.baml keyword.operator.type.baml
+13:34-37     "Err"              source.baml meta.function.baml meta.parameters.baml meta.parameter.baml meta.type-reference.baml entity.name.type.baml
+13:38-39     "|"                source.baml meta.function.baml meta.parameters.baml meta.parameter.baml keyword.operator.type.baml
+13:40-45     "Empty"            source.baml meta.function.baml meta.parameters.baml meta.parameter.baml meta.type-reference.baml entity.name.type.baml
+13:45-46     ")"                source.baml meta.function.baml meta.parameters.baml punctuation.definition.parameters.end.baml
+13:47-49     "->"               source.baml meta.function.baml meta.return-type.baml keyword.operator.arrow.baml
+13:50-56     "string"           source.baml meta.function.baml meta.return-type.baml support.type.primitive.baml
+13:57-58     "{"                source.baml meta.function.baml meta.block.function.baml punctuation.definition.block.begin.baml
+14:3-5       "if"               source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml keyword.control.conditional.baml
+14:6-9       "let"              source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml meta.pattern.if-let.baml meta.pattern.binding.baml keyword.declaration.binding.baml
+14:10-11     "o"                source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml meta.pattern.if-let.baml meta.pattern.binding.baml variable.other.binding.baml
+14:11-12     ":"                source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml meta.pattern.if-let.baml meta.pattern.binding.baml punctuation.separator.colon.baml
+14:13-15     "Ok"               source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml meta.pattern.if-let.baml meta.type-reference.baml entity.name.type.baml
+14:16-17     "="                source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml keyword.operator.assignment.baml
+14:17-20     " r "              source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml
+14:20-21     "{"                source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml meta.block.code.baml punctuation.definition.block.begin.baml
+15:5-6       "o"                source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml meta.block.code.baml meta.dotted-expression.baml variable.other.readwrite.baml
+15:6-7       "."                source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml meta.block.code.baml meta.dotted-expression.baml punctuation.accessor.baml
+15:7-12      "value"            source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml meta.block.code.baml meta.dotted-expression.baml variable.other.readwrite.baml
+16:3-4       "}"                source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml meta.block.code.baml punctuation.definition.block.end.baml
+16:5-9       "else"             source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml meta.else.baml keyword.control.conditional.baml
+16:10-12     "if"               source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml meta.else.baml meta.expression.if.baml keyword.control.conditional.baml
+16:13-14     "r"                source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml meta.else.baml meta.expression.if.baml meta.if.condition.baml meta.dotted-expression.baml variable.other.readwrite.baml
+16:15-17     "is"               source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml meta.else.baml meta.expression.if.baml meta.if.condition.baml meta.expression.is.baml keyword.operator.is.baml
+16:18-23     "Empty"            source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml meta.else.baml meta.expression.if.baml meta.if.condition.baml meta.expression.is.baml meta.type-reference.baml entity.name.type.baml
+16:24-25     "{"                source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml meta.else.baml meta.expression.if.baml meta.block.code.baml punctuation.definition.block.begin.baml
+17:5-6       "\""               source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml meta.else.baml meta.expression.if.baml meta.block.code.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+17:6-11      "empty"            source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml meta.else.baml meta.expression.if.baml meta.block.code.baml string.quoted.double.baml
+17:11-12     "\""               source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml meta.else.baml meta.expression.if.baml meta.block.code.baml string.quoted.double.baml punctuation.definition.string.end.baml
+18:3-4       "}"                source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml meta.else.baml meta.expression.if.baml meta.block.code.baml punctuation.definition.block.end.baml
+18:5-9       "else"             source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml meta.else.baml meta.expression.if.baml meta.else.baml keyword.control.conditional.baml
+18:10-11     "{"                source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml meta.else.baml meta.expression.if.baml meta.else.baml meta.block.code.baml punctuation.definition.block.begin.baml
+19:5-6       "\""               source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml meta.else.baml meta.expression.if.baml meta.else.baml meta.block.code.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+19:6-11      "other"            source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml meta.else.baml meta.expression.if.baml meta.else.baml meta.block.code.baml string.quoted.double.baml
+19:11-12     "\""               source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml meta.else.baml meta.expression.if.baml meta.else.baml meta.block.code.baml string.quoted.double.baml punctuation.definition.string.end.baml
+20:3-4       "}"                source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml meta.else.baml meta.expression.if.baml meta.else.baml meta.block.code.baml punctuation.definition.block.end.baml
+21:1-2       "}"                source.baml meta.function.baml meta.block.function.baml punctuation.definition.block.end.baml
+23:1-57      "// `else if let` chain — each branch binds its own name." source.baml comment.line.double-slash.baml
+24:1-9       "function"         source.baml meta.function.baml keyword.declaration.function.baml
+24:10-20     "IfLetChain"       source.baml meta.function.baml entity.name.function.baml
+24:20-21     "("                source.baml meta.function.baml meta.parameters.baml punctuation.definition.parameters.begin.baml
+24:21-22     "r"                source.baml meta.function.baml meta.parameters.baml meta.parameter.baml variable.parameter.baml
+24:22-23     ":"                source.baml meta.function.baml meta.parameters.baml meta.parameter.baml punctuation.separator.colon.baml
+24:24-26     "Ok"               source.baml meta.function.baml meta.parameters.baml meta.parameter.baml meta.type-reference.baml entity.name.type.baml
+24:27-28     "|"                source.baml meta.function.baml meta.parameters.baml meta.parameter.baml keyword.operator.type.baml
+24:29-32     "Err"              source.baml meta.function.baml meta.parameters.baml meta.parameter.baml meta.type-reference.baml entity.name.type.baml
+24:33-34     "|"                source.baml meta.function.baml meta.parameters.baml meta.parameter.baml keyword.operator.type.baml
+24:35-40     "Empty"            source.baml meta.function.baml meta.parameters.baml meta.parameter.baml meta.type-reference.baml entity.name.type.baml
+24:40-41     ")"                source.baml meta.function.baml meta.parameters.baml punctuation.definition.parameters.end.baml
+24:42-44     "->"               source.baml meta.function.baml meta.return-type.baml keyword.operator.arrow.baml
+24:45-51     "string"           source.baml meta.function.baml meta.return-type.baml support.type.primitive.baml
+24:52-53     "{"                source.baml meta.function.baml meta.block.function.baml punctuation.definition.block.begin.baml
+25:3-5       "if"               source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml keyword.control.conditional.baml
+25:6-9       "let"              source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml meta.pattern.if-let.baml meta.pattern.binding.baml keyword.declaration.binding.baml
+25:10-11     "o"                source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml meta.pattern.if-let.baml meta.pattern.binding.baml variable.other.binding.baml
+25:11-12     ":"                source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml meta.pattern.if-let.baml meta.pattern.binding.baml punctuation.separator.colon.baml
+25:13-15     "Ok"               source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml meta.pattern.if-let.baml meta.type-reference.baml entity.name.type.baml
+25:16-17     "="                source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml keyword.operator.assignment.baml
+25:17-20     " r "              source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml
+25:20-21     "{"                source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml meta.block.code.baml punctuation.definition.block.begin.baml
+26:5-6       "o"                source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml meta.block.code.baml meta.dotted-expression.baml variable.other.readwrite.baml
+26:6-7       "."                source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml meta.block.code.baml meta.dotted-expression.baml punctuation.accessor.baml
+26:7-12      "value"            source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml meta.block.code.baml meta.dotted-expression.baml variable.other.readwrite.baml
+27:3-4       "}"                source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml meta.block.code.baml punctuation.definition.block.end.baml
+27:5-9       "else"             source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml meta.else.baml keyword.control.conditional.baml
+27:10-12     "if"               source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml meta.else.baml meta.expression.if.baml keyword.control.conditional.baml
+27:13-16     "let"              source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml meta.else.baml meta.expression.if.baml meta.pattern.if-let.baml meta.pattern.binding.baml keyword.declaration.binding.baml
+27:17-18     "e"                source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml meta.else.baml meta.expression.if.baml meta.pattern.if-let.baml meta.pattern.binding.baml variable.other.binding.baml
+27:18-19     ":"                source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml meta.else.baml meta.expression.if.baml meta.pattern.if-let.baml meta.pattern.binding.baml punctuation.separator.colon.baml
+27:20-23     "Err"              source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml meta.else.baml meta.expression.if.baml meta.pattern.if-let.baml meta.type-reference.baml entity.name.type.baml
+27:24-25     "="                source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml meta.else.baml meta.expression.if.baml keyword.operator.assignment.baml
+27:25-28     " r "              source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml meta.else.baml meta.expression.if.baml
+27:28-29     "{"                source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml meta.else.baml meta.expression.if.baml meta.block.code.baml punctuation.definition.block.begin.baml
+28:5-6       "e"                source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml meta.else.baml meta.expression.if.baml meta.block.code.baml meta.dotted-expression.baml variable.other.readwrite.baml
+28:6-7       "."                source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml meta.else.baml meta.expression.if.baml meta.block.code.baml meta.dotted-expression.baml punctuation.accessor.baml
+28:7-14      "message"          source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml meta.else.baml meta.expression.if.baml meta.block.code.baml meta.dotted-expression.baml variable.other.readwrite.baml
+29:3-4       "}"                source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml meta.else.baml meta.expression.if.baml meta.block.code.baml punctuation.definition.block.end.baml
+29:5-9       "else"             source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml meta.else.baml meta.expression.if.baml meta.else.baml keyword.control.conditional.baml
+29:10-11     "{"                source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml meta.else.baml meta.expression.if.baml meta.else.baml meta.block.code.baml punctuation.definition.block.begin.baml
+30:5-6       "\""               source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml meta.else.baml meta.expression.if.baml meta.else.baml meta.block.code.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+30:6-11      "empty"            source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml meta.else.baml meta.expression.if.baml meta.else.baml meta.block.code.baml string.quoted.double.baml
+30:11-12     "\""               source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml meta.else.baml meta.expression.if.baml meta.else.baml meta.block.code.baml string.quoted.double.baml punctuation.definition.string.end.baml
+31:3-4       "}"                source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml meta.else.baml meta.expression.if.baml meta.else.baml meta.block.code.baml punctuation.definition.block.end.baml
+32:1-2       "}"                source.baml meta.function.baml meta.block.function.baml punctuation.definition.block.end.baml
+34:1-39      "// `else if let` without a final else." source.baml comment.line.double-slash.baml
+35:1-9       "function"         source.baml meta.function.baml keyword.declaration.function.baml
+35:10-26     "IfLetChainNoElse" source.baml meta.function.baml entity.name.function.baml
+35:26-27     "("                source.baml meta.function.baml meta.parameters.baml punctuation.definition.parameters.begin.baml
+35:27-28     "r"                source.baml meta.function.baml meta.parameters.baml meta.parameter.baml variable.parameter.baml
+35:28-29     ":"                source.baml meta.function.baml meta.parameters.baml meta.parameter.baml punctuation.separator.colon.baml
+35:30-32     "Ok"               source.baml meta.function.baml meta.parameters.baml meta.parameter.baml meta.type-reference.baml entity.name.type.baml
+35:33-34     "|"                source.baml meta.function.baml meta.parameters.baml meta.parameter.baml keyword.operator.type.baml
+35:35-38     "Err"              source.baml meta.function.baml meta.parameters.baml meta.parameter.baml meta.type-reference.baml entity.name.type.baml
+35:38-39     ")"                source.baml meta.function.baml meta.parameters.baml punctuation.definition.parameters.end.baml
+35:40-42     "->"               source.baml meta.function.baml meta.return-type.baml keyword.operator.arrow.baml
+35:43-49     "string"           source.baml meta.function.baml meta.return-type.baml support.type.primitive.baml
+35:50-51     "{"                source.baml meta.function.baml meta.block.function.baml punctuation.definition.block.begin.baml
+36:3-5       "if"               source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml keyword.control.conditional.baml
+36:6-9       "let"              source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml meta.pattern.if-let.baml meta.pattern.binding.baml keyword.declaration.binding.baml
+36:10-11     "o"                source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml meta.pattern.if-let.baml meta.pattern.binding.baml variable.other.binding.baml
+36:11-12     ":"                source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml meta.pattern.if-let.baml meta.pattern.binding.baml punctuation.separator.colon.baml
+36:13-15     "Ok"               source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml meta.pattern.if-let.baml meta.type-reference.baml entity.name.type.baml
+36:16-17     "="                source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml keyword.operator.assignment.baml
+36:17-20     " r "              source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml
+36:20-21     "{"                source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml meta.block.code.baml punctuation.definition.block.begin.baml
+37:5-11      "return"           source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml meta.block.code.baml meta.statement.return.baml keyword.control.flow.return.baml
+37:12-13     "o"                source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml meta.block.code.baml meta.statement.return.baml meta.dotted-expression.baml variable.other.readwrite.baml
+37:13-14     "."                source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml meta.block.code.baml meta.statement.return.baml meta.dotted-expression.baml punctuation.accessor.baml
+37:14-19     "value"            source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml meta.block.code.baml meta.statement.return.baml meta.dotted-expression.baml variable.other.readwrite.baml
+37:19-20     ";"                source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml meta.block.code.baml punctuation.terminator.statement.baml
+38:3-4       "}"                source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml meta.block.code.baml punctuation.definition.block.end.baml
+38:5-9       "else"             source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml meta.else.baml keyword.control.conditional.baml
+38:10-12     "if"               source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml meta.else.baml meta.expression.if.baml keyword.control.conditional.baml
+38:13-16     "let"              source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml meta.else.baml meta.expression.if.baml meta.pattern.if-let.baml meta.pattern.binding.baml keyword.declaration.binding.baml
+38:17-18     "e"                source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml meta.else.baml meta.expression.if.baml meta.pattern.if-let.baml meta.pattern.binding.baml variable.other.binding.baml
+38:18-19     ":"                source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml meta.else.baml meta.expression.if.baml meta.pattern.if-let.baml meta.pattern.binding.baml punctuation.separator.colon.baml
+38:20-23     "Err"              source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml meta.else.baml meta.expression.if.baml meta.pattern.if-let.baml meta.type-reference.baml entity.name.type.baml
+38:24-25     "="                source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml meta.else.baml meta.expression.if.baml keyword.operator.assignment.baml
+38:25-28     " r "              source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml meta.else.baml meta.expression.if.baml
+38:28-29     "{"                source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml meta.else.baml meta.expression.if.baml meta.block.code.baml punctuation.definition.block.begin.baml
+39:5-11      "return"           source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml meta.else.baml meta.expression.if.baml meta.block.code.baml meta.statement.return.baml keyword.control.flow.return.baml
+39:12-13     "e"                source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml meta.else.baml meta.expression.if.baml meta.block.code.baml meta.statement.return.baml meta.dotted-expression.baml variable.other.readwrite.baml
+39:13-14     "."                source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml meta.else.baml meta.expression.if.baml meta.block.code.baml meta.statement.return.baml meta.dotted-expression.baml punctuation.accessor.baml
+39:14-21     "message"          source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml meta.else.baml meta.expression.if.baml meta.block.code.baml meta.statement.return.baml meta.dotted-expression.baml variable.other.readwrite.baml
+39:21-22     ";"                source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml meta.else.baml meta.expression.if.baml meta.block.code.baml punctuation.terminator.statement.baml
+40:3-4       "}"                source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml meta.else.baml meta.expression.if.baml meta.block.code.baml punctuation.definition.block.end.baml
+41:3-4       "\""               source.baml meta.function.baml meta.block.function.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+41:4-15      "unreachable"      source.baml meta.function.baml meta.block.function.baml string.quoted.double.baml
+41:15-16     "\""               source.baml meta.function.baml meta.block.function.baml string.quoted.double.baml punctuation.definition.string.end.baml
+42:1-2       "}"                source.baml meta.function.baml meta.block.function.baml punctuation.definition.block.end.baml

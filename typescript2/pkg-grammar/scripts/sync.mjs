@@ -21,7 +21,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const pkgRoot = resolve(here, '..');
 const mirrorDir = resolve(pkgRoot, '../app-vscode-ext/syntaxes');
 
-const GRAMMARS = ['baml.tmLanguage.json', 'jinja.tmLanguage.json'];
+const GRAMMARS = ['baml.tmLanguage.json'];
 
 const check = process.argv.includes('--check');
 let drifted = false;
