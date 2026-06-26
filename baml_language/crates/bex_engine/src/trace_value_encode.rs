@@ -706,6 +706,7 @@ fn omission_reason_wire(reason: TraceOmissionReason) -> &'static str {
         TraceOmissionReason::UnsupportedValue => "unsupportedValue",
         TraceOmissionReason::HostOwnedValue => "hostOwnedValue",
         TraceOmissionReason::InvalidRuntimeValue => "invalidRuntimeValue",
+        TraceOmissionReason::CyclicReference => "cyclicReference",
     }
 }
 

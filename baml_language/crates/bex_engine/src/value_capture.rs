@@ -58,6 +58,30 @@ pub struct EncodedTraceValue {
     pub body: Vec<u8>,
 }
 
+#[derive(Debug, Default, PartialEq, Eq)]
+pub struct TraceDrainReport {
+    pub encoded: Vec<EncodedTraceValue>,
+    pub failures: Vec<TraceDrainFailure>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TraceDrainFailure {
+    pub boundary_id: BoundaryId,
+    pub call: TraceCallKey,
+    pub kind: CaptureKind,
+    pub log: Option<TraceLogMetadata>,
+    pub snapshot: TraceSnapshotHandle,
+    pub reason: TraceDrainFailureReason,
+    pub diagnostic: String,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TraceDrainFailureReason {
+    SnapshotMissing,
+    EncodeFailed,
+    RecordFailed,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TraceCaptureConfig {
     pub enabled: bool,
@@ -162,7 +186,7 @@ impl TraceCaptureProducer {
         &self.trace_heap
     }
 
-    pub fn try_reserve(
+    fn try_reserve(
         &self,
         boundary_id: BoundaryId,
         call: TraceCallKey,
@@ -237,6 +261,11 @@ impl TraceCaptureProducer {
         kind: CaptureKind,
         copy_snapshot: impl FnOnce(&TraceHeap) -> TraceSnapshotHandle,
     ) -> Result<(), CaptureSkipReason> {
+        assert_ne!(
+            kind,
+            CaptureKind::LogBody,
+            "log captures must use capture_log_with"
+        );
         let reservation = self.try_reserve(boundary_id, call, kind)?;
         let snapshot = copy_snapshot(self.trace_heap());
         reservation.commit(snapshot);
@@ -262,6 +291,14 @@ impl TraceCaptureProducer {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         inner.pending.drain(..).collect()
+    }
+
+    fn pop_pending(&self) -> Option<TraceValueDraft> {
+        self.inner
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .pending
+            .pop_front()
     }
 
     #[must_use]
@@ -306,37 +343,86 @@ impl TraceCaptureProducer {
         &self,
         mut record_value: impl FnMut(&TraceValueDraft, Vec<u8>) -> io::Result<ValueWriteOutcome>,
     ) -> io::Result<Vec<EncodedTraceValue>> {
-        let mut encoded = Vec::new();
-        for draft in self.drain() {
-            let snapshot = self.trace_heap.get(draft.snapshot).ok_or_else(|| {
-                io::Error::new(
-                    io::ErrorKind::NotFound,
-                    format!(
+        let report = self.drain_to_value_recorder_report(|draft, body| record_value(draft, body));
+        if let Some(failure) = report.failures.first() {
+            return Err(io::Error::new(
+                failure.reason.io_error_kind(),
+                failure.diagnostic.clone(),
+            ));
+        }
+        Ok(report.encoded)
+    }
+
+    pub fn drain_to_value_recorder_report(
+        &self,
+        mut record_value: impl FnMut(&TraceValueDraft, Vec<u8>) -> io::Result<ValueWriteOutcome>,
+    ) -> TraceDrainReport {
+        let mut report = TraceDrainReport::default();
+        while let Some(draft) = self.pop_pending() {
+            let Some(snapshot) = self.trace_heap.get(draft.snapshot) else {
+                report.failures.push(TraceDrainFailure {
+                    boundary_id: draft.boundary_id,
+                    call: draft.call,
+                    kind: draft.kind,
+                    log: draft.log,
+                    snapshot: draft.snapshot,
+                    reason: TraceDrainFailureReason::SnapshotMissing,
+                    diagnostic: format!(
                         "trace snapshot {} was already released",
                         draft.snapshot.raw()
                     ),
-                )
-            })?;
+                });
+                continue;
+            };
             let body = match encode_trace_snapshot_body(&snapshot) {
                 Ok(body) => body,
                 Err(err) => {
                     let _ = self.trace_heap.release(draft.snapshot);
-                    return Err(io::Error::new(io::ErrorKind::InvalidData, err));
+                    report.failures.push(TraceDrainFailure {
+                        boundary_id: draft.boundary_id,
+                        call: draft.call,
+                        kind: draft.kind,
+                        log: draft.log,
+                        snapshot: draft.snapshot,
+                        reason: TraceDrainFailureReason::EncodeFailed,
+                        diagnostic: err,
+                    });
+                    continue;
                 }
             };
             let outcome = record_value(&draft, body.clone());
             let _ = self.trace_heap.release(draft.snapshot);
-            let outcome = outcome?;
-            encoded.push(EncodedTraceValue {
-                boundary_id: draft.boundary_id,
-                call: draft.call,
-                kind: draft.kind,
-                log: draft.log,
-                value_ref: outcome.value_ref,
-                body,
-            });
+            match outcome {
+                Ok(outcome) => report.encoded.push(EncodedTraceValue {
+                    boundary_id: draft.boundary_id,
+                    call: draft.call,
+                    kind: draft.kind,
+                    log: draft.log,
+                    value_ref: outcome.value_ref,
+                    body,
+                }),
+                Err(err) => report.failures.push(TraceDrainFailure {
+                    boundary_id: draft.boundary_id,
+                    call: draft.call,
+                    kind: draft.kind,
+                    log: draft.log,
+                    snapshot: draft.snapshot,
+                    reason: TraceDrainFailureReason::RecordFailed,
+                    diagnostic: err.to_string(),
+                }),
+            }
         }
-        Ok(encoded)
+        report
+    }
+}
+
+impl TraceDrainFailureReason {
+    fn io_error_kind(self) -> io::ErrorKind {
+        match self {
+            Self::SnapshotMissing => io::ErrorKind::NotFound,
+            Self::EncodeFailed => io::ErrorKind::InvalidData,
+            Self::RecordFailed => io::ErrorKind::Other,
+        }
     }
 }
 
@@ -373,7 +459,7 @@ impl CaptureKind {
 }
 
 #[must_use = "a capture reservation must be committed or explicitly abandoned"]
-pub struct CaptureReservation {
+struct CaptureReservation {
     producer: TraceCaptureProducer,
     boundary_id: BoundaryId,
     call: TraceCallKey,
@@ -382,11 +468,16 @@ pub struct CaptureReservation {
 }
 
 impl CaptureReservation {
-    pub fn commit(mut self, snapshot: TraceSnapshotHandle) {
+    fn commit(mut self, snapshot: TraceSnapshotHandle) {
         self.commit_with_log(snapshot, None);
     }
 
-    pub fn commit_log(mut self, snapshot: TraceSnapshotHandle, log: TraceLogMetadata) {
+    fn commit_log(mut self, snapshot: TraceSnapshotHandle, log: TraceLogMetadata) {
+        debug_assert_eq!(
+            self.kind,
+            CaptureKind::LogBody,
+            "log metadata can only be committed for LogBody reservations"
+        );
         self.commit_with_log(snapshot, Some(log));
     }
 
@@ -448,21 +539,25 @@ impl Drop for CaptureReservation {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::{
-        Arc,
-        atomic::{AtomicUsize, Ordering},
+    use std::{
+        io,
+        sync::{
+            Arc,
+            atomic::{AtomicUsize, Ordering},
+        },
     };
 
     use bex_events::{
         ids::{BexCallId, BexThreadId, BoundaryId, EngineId, ProcessEuid},
         run::TraceCallKey,
+        value::{ValueCodec, ValueRef, ValueWriteOutcome},
     };
 
     use crate::{
-        trace_heap::{TraceHeap, TraceSnapshotHandle},
+        trace_heap::{TraceHeap, TraceSnapshot, TraceSnapshotHandle, TraceValue, TraceValueRef},
         value_capture::{
             CaptureKind, CaptureSkipReason, TraceCaptureConfig, TraceCaptureProducer,
-            TraceLogMetadata,
+            TraceDrainFailureReason, TraceLogMetadata,
         },
     };
 
@@ -490,6 +585,13 @@ mod tests {
             timestamp_ms: 123,
             message_preview: Some("hello".to_string()),
         }
+    }
+
+    fn test_snapshot(trace_heap: &TraceHeap, value: i64) -> TraceSnapshotHandle {
+        trace_heap.insert_for_test(TraceSnapshot::for_test(
+            TraceValueRef::for_test(0),
+            vec![TraceValue::Int(value)],
+        ))
     }
 
     #[test]
@@ -678,5 +780,73 @@ mod tests {
             )
             .unwrap();
         assert_eq!(producer.drain().len(), 1);
+    }
+
+    #[test]
+    fn drain_report_continues_after_record_failure_and_releases_snapshots() {
+        let producer = TraceCaptureProducer::new(TraceCaptureConfig::enabled(4));
+        producer
+            .capture_with(
+                boundary_id(),
+                trace_key(),
+                CaptureKind::RootInput,
+                |trace_heap| test_snapshot(trace_heap, 1),
+            )
+            .unwrap();
+        producer
+            .capture_with(
+                boundary_id(),
+                trace_key(),
+                CaptureKind::CallOutput,
+                |trace_heap| test_snapshot(trace_heap, 2),
+            )
+            .unwrap();
+        producer
+            .capture_with(
+                boundary_id(),
+                trace_key(),
+                CaptureKind::CallError,
+                |trace_heap| test_snapshot(trace_heap, 3),
+            )
+            .unwrap();
+
+        let mut next_id = 1_u64;
+        let report = producer.drain_to_value_recorder_report(|draft, body| {
+            assert!(!body.is_empty());
+            if draft.kind == CaptureKind::CallOutput {
+                return Err(io::Error::other("writer unavailable"));
+            }
+            let id = format!("value_{next_id}");
+            next_id = next_id.saturating_add(1);
+            Ok(ValueWriteOutcome {
+                value_ref: ValueRef::available(
+                    id,
+                    ValueCodec::BamlOutboundValue,
+                    body.len(),
+                    body.len(),
+                ),
+            })
+        });
+
+        assert_eq!(report.encoded.len(), 2);
+        assert_eq!(report.encoded[0].kind, CaptureKind::RootInput);
+        assert_eq!(report.encoded[1].kind, CaptureKind::CallError);
+        assert_eq!(report.failures.len(), 1);
+        assert_eq!(report.failures[0].kind, CaptureKind::CallOutput);
+        assert_eq!(
+            report.failures[0].reason,
+            TraceDrainFailureReason::RecordFailed
+        );
+        assert_eq!(producer.trace_heap().retained_snapshot_count(), 0);
+        assert!(producer.drain().is_empty());
+    }
+
+    #[test]
+    #[should_panic(expected = "log captures must use capture_log_with")]
+    fn capture_with_rejects_log_body_kind() {
+        let producer = TraceCaptureProducer::new(TraceCaptureConfig::enabled(1));
+        let _ = producer.capture_with(boundary_id(), trace_key(), CaptureKind::LogBody, |_| {
+            TraceSnapshotHandle::for_test(1)
+        });
     }
 }

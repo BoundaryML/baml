@@ -6,7 +6,7 @@
 //! host-owned values.
 
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     sync::{
         Arc, Mutex,
         atomic::{AtomicU64, Ordering},
@@ -98,6 +98,7 @@ pub enum TraceOmissionReason {
     UnsupportedValue,
     HostOwnedValue,
     InvalidRuntimeValue,
+    CyclicReference,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -224,11 +225,17 @@ impl TraceHeap {
             .insert(handle, snapshot);
         handle
     }
+
+    #[cfg(test)]
+    pub(crate) fn insert_for_test(&self, snapshot: TraceSnapshot) -> TraceSnapshotHandle {
+        self.insert_snapshot(snapshot)
+    }
 }
 
 #[derive(Default)]
 struct TraceSnapshotBuilder {
     values: Vec<TraceValue>,
+    in_progress: HashSet<HeapPtr>,
 }
 
 impl TraceSnapshotBuilder {
@@ -269,7 +276,15 @@ impl TraceSnapshotBuilder {
         ptr: HeapPtr,
     ) -> TraceValueRef {
         let object = unsafe { ptr.get() };
-        match object {
+        let tracks_recursion = matches!(
+            object,
+            Object::Array(_) | Object::Map(_) | Object::Instance(_)
+        );
+        if tracks_recursion && !self.in_progress.insert(ptr) {
+            return self.omitted(TraceOmissionReason::CyclicReference, "cyclic reference");
+        }
+
+        let value_ref = match object {
             Object::String(value) => self.alloc(TraceValue::String(value.to_string())),
             Object::Bigint(value) => self.alloc(TraceValue::Bigint(value.to_string())),
             Object::Float(value) => self.alloc(TraceValue::Float(*value)),
@@ -292,28 +307,29 @@ impl TraceSnapshotBuilder {
             }
             Object::Instance(instance) => {
                 let class_object = unsafe { instance.class.get() };
-                let Object::Class(class) = class_object else {
-                    return self.omitted(
+                if let Object::Class(class) = class_object {
+                    let fields = class
+                        .fields
+                        .iter()
+                        .zip(instance.fields.iter())
+                        .map(|(field, slot)| {
+                            (
+                                field.name.clone(),
+                                self.copy_value(heap, permit, slot.load()),
+                            )
+                        })
+                        .collect();
+                    self.alloc(TraceValue::Instance {
+                        type_name: class.name.to_string(),
+                        type_args: instance.class_type_args.clone(),
+                        fields,
+                    })
+                } else {
+                    self.omitted(
                         TraceOmissionReason::InvalidRuntimeValue,
                         "instance class pointer did not point at a class",
-                    );
-                };
-                let fields = class
-                    .fields
-                    .iter()
-                    .zip(instance.fields.iter())
-                    .map(|(field, slot)| {
-                        (
-                            field.name.clone(),
-                            self.copy_value(heap, permit, slot.load()),
-                        )
-                    })
-                    .collect();
-                self.alloc(TraceValue::Instance {
-                    type_name: class.name.to_string(),
-                    type_args: instance.class_type_args.clone(),
-                    fields,
-                })
+                    )
+                }
             }
             Object::Variant(variant) => {
                 let enum_object = unsafe { variant.enm.get() };
@@ -364,7 +380,11 @@ impl TraceSnapshotBuilder {
                 TraceOmissionReason::InvalidRuntimeValue,
                 unsupported_object_message(object),
             ),
+        };
+        if tracks_recursion {
+            self.in_progress.remove(&ptr);
         }
+        value_ref
     }
 
     fn copy_external_value(&mut self, value: BexExternalValue) -> TraceValueRef {
@@ -576,5 +596,38 @@ mod tests {
             media.content,
             TraceMediaContent::Base64("aW1hZ2UtYnl0ZXM=".to_string())
         );
+    }
+
+    #[tokio::test]
+    async fn trace_heap_omits_cyclic_back_edges() {
+        let heap = BexHeap::new(Vec::new());
+        let manager = HeapPermitManager::new();
+        let mut permit = manager
+            .new_permit(EmptyRoots {
+                tlab: Tlab::new(Arc::clone(&heap)),
+            })
+            .await
+            .acquire()
+            .await;
+        let array_ptr = permit.tlab_mut().alloc_array(vec![]);
+        unsafe {
+            *array_ptr.get_mut() =
+                Object::Array(vec![Value::int(1), Value::object(array_ptr)].into());
+        }
+        let trace_heap = TraceHeap::new();
+
+        let handle =
+            trace_heap.copy_value_from_bex_heap(&heap, permit.proof(), Value::object(array_ptr));
+        let snapshot = trace_heap.release(handle).expect("snapshot retained");
+
+        let Some(TraceValue::Array(items)) = snapshot.value(snapshot.root()) else {
+            panic!("root should be an array");
+        };
+        assert_eq!(items.len(), 2);
+        assert_eq!(snapshot.value(items[0]), Some(&TraceValue::Int(1)));
+        let Some(TraceValue::Omitted(cycle)) = snapshot.value(items[1]) else {
+            panic!("cycle back-edge should be omitted");
+        };
+        assert_eq!(cycle.reason, TraceOmissionReason::CyclicReference);
     }
 }

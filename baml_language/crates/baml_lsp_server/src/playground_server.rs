@@ -9,7 +9,6 @@
 //!   Serves pre-built static assets with SPA fallback.
 
 use std::{
-    collections::HashMap,
     net::SocketAddr,
     path::{Path, PathBuf},
     sync::{Arc, Mutex},
@@ -43,6 +42,7 @@ use bex_events::{
     },
     value::{
         ByteValueArtifactSink, CaptureLossKind, CaptureLossReason, CaptureLossRecord,
+        DEFAULT_NATIVE_LIVE_VALUE_CACHE_BYTES, LiveValueBody, LiveValueCache, LiveValueLookup,
         LogEventRecord, ValueCapture, ValueCaptureKind, ValueCodec, ValueIdAllocator, ValueRef,
         ValueWriter,
     },
@@ -399,13 +399,7 @@ struct WsState {
     workspace_roots: Arc<Vec<PathBuf>>,
 }
 
-type LiveValueStore = Arc<Mutex<HashMap<(BoundaryId, String), LiveValueBody>>>;
-
-#[derive(Clone)]
-struct LiveValueBody {
-    codec: ValueCodec,
-    body: Vec<u8>,
-}
+type LiveValueStore = Arc<Mutex<LiveValueCache>>;
 
 #[derive(Default)]
 struct RootValueRefs {
@@ -441,7 +435,7 @@ fn drain_captured_values_and_broadcast(
         }
     };
     let mut history_errors = Vec::new();
-    let encoded_values = match producer.drain_to_value_recorder(|draft, body| {
+    let report = producer.drain_to_value_recorder_report(|draft, body| {
         if let Some(log) = &draft.log {
             let event = LogEventRecord {
                 call: draft.call,
@@ -484,13 +478,20 @@ fn drain_captured_values_and_broadcast(
                 }
             }
         }
-    }) {
-        Ok(encoded_values) => encoded_values,
-        Err(err) => {
-            broadcast_value_capture_diagnostic(broadcast_tx, run_store, boundary_id, err);
-            return RootValueRefs::default();
-        }
-    };
+    });
+    for failure in &report.failures {
+        broadcast_value_capture_diagnostic(
+            broadcast_tx,
+            run_store,
+            failure.boundary_id,
+            format!(
+                "{} capture failed: {}",
+                value_capture_kind_from_bex(failure.kind).as_wire_str(),
+                failure.diagnostic
+            ),
+        );
+    }
+    let encoded_values = report.encoded;
     for err in history_errors {
         broadcast_value_capture_diagnostic(
             broadcast_tx,
@@ -550,15 +551,23 @@ fn drain_captured_values_and_broadcast(
     let mut refs = RootValueRefs::default();
     for encoded in encoded_values {
         let value_ref = encoded.value_ref;
-        let value_key = (encoded.boundary_id, value_ref.id.clone());
         if let Ok(mut store) = value_store.lock() {
-            store.insert(
-                value_key,
+            let insert = store.insert(
+                encoded.boundary_id,
+                &value_ref,
                 LiveValueBody {
                     codec: value_ref.codec,
                     body: encoded.body,
                 },
             );
+            if let Some(diagnostic) = insert.diagnostic {
+                broadcast_value_capture_diagnostic(
+                    broadcast_tx,
+                    run_store,
+                    encoded.boundary_id,
+                    diagnostic,
+                );
+            }
         }
 
         if let Some(log) = encoded.log {
@@ -854,7 +863,9 @@ fn build_router(
     workspace_roots: Arc<Vec<PathBuf>>,
     access_guard: PlaygroundAccessGuard,
 ) -> anyhow::Result<Router> {
-    let value_store = Arc::new(Mutex::new(HashMap::new()));
+    let value_store = Arc::new(Mutex::new(LiveValueCache::with_max_bytes(
+        DEFAULT_NATIVE_LIVE_VALUE_CACHE_BYTES,
+    )));
     let history_store = Arc::new(HistoryStore::new((*workspace_roots).clone()));
     let history_observer_registration = Arc::new(register_history_observer(history_store.clone()));
     let ws_state = WsState {
@@ -1959,12 +1970,18 @@ async fn handle_ws_in_message(
                 }
             };
             let value_ref_id = value_ref.id;
-            let stored = state
+            let live_value = state
                 .value_store
                 .lock()
                 .ok()
-                .and_then(|store| store.get(&(boundary_id, value_ref_id.clone())).cloned());
-            let history_result = if stored.is_none() {
+                .map_or(LiveValueLookup::Missing, |mut store| {
+                    store.get(boundary_id, &value_ref_id)
+                });
+            let live_diagnostic = match &live_value {
+                LiveValueLookup::Evicted(eviction) => Some(eviction.diagnostic.clone()),
+                LiveValueLookup::Available(_) | LiveValueLookup::Missing => None,
+            };
+            let history_result = if !matches!(live_value, LiveValueLookup::Available(_)) {
                 match state
                     .history_store
                     .read_value_result(boundary_id, &value_ref_id)
@@ -1982,8 +1999,8 @@ async fn handle_ws_in_message(
             } else {
                 HistoryValueReadResult::Missing
             };
-            let response = if let Some(stored) = stored {
-                WsOutMessage::ValueBody {
+            let response = match live_value {
+                LiveValueLookup::Available(stored) => WsOutMessage::ValueBody {
                     request_id,
                     boundary_id: boundary_id.to_wire_string(),
                     value_ref_id,
@@ -1993,41 +2010,45 @@ async fn handle_ws_in_message(
                         base64::engine::general_purpose::STANDARD.encode(stored.body),
                     ),
                     diagnostic: None,
-                }
-            } else {
-                let requested_codec = value_ref
-                    .codec
-                    .unwrap_or_else(|| ValueCodec::BamlOutboundValue.as_wire_str().to_string());
-                match history_result {
-                    HistoryValueReadResult::Available(stored) => WsOutMessage::ValueBody {
-                        request_id,
-                        boundary_id: boundary_id.to_wire_string(),
-                        value_ref_id,
-                        codec: stored.codec.as_wire_str().to_string(),
-                        availability: "available".to_string(),
-                        body_base64: Some(
-                            base64::engine::general_purpose::STANDARD.encode(stored.body),
-                        ),
-                        diagnostic: None,
-                    },
-                    HistoryValueReadResult::Missing => WsOutMessage::ValueBody {
-                        request_id,
-                        boundary_id: boundary_id.to_wire_string(),
-                        value_ref_id,
-                        codec: requested_codec,
-                        availability: "missing".to_string(),
-                        body_base64: None,
-                        diagnostic: Some("value body is not available".to_string()),
-                    },
-                    HistoryValueReadResult::BodyUnavailable(unavailable) => {
-                        WsOutMessage::ValueBody {
+                },
+                LiveValueLookup::Evicted(_) | LiveValueLookup::Missing => {
+                    let requested_codec = value_ref
+                        .codec
+                        .unwrap_or_else(|| ValueCodec::BamlOutboundValue.as_wire_str().to_string());
+                    match history_result {
+                        HistoryValueReadResult::Available(stored) => WsOutMessage::ValueBody {
+                            request_id,
+                            boundary_id: boundary_id.to_wire_string(),
+                            value_ref_id,
+                            codec: stored.codec.as_wire_str().to_string(),
+                            availability: "available".to_string(),
+                            body_base64: Some(
+                                base64::engine::general_purpose::STANDARD.encode(stored.body),
+                            ),
+                            diagnostic: None,
+                        },
+                        HistoryValueReadResult::Missing => WsOutMessage::ValueBody {
                             request_id,
                             boundary_id: boundary_id.to_wire_string(),
                             value_ref_id,
                             codec: requested_codec,
                             availability: "missing".to_string(),
                             body_base64: None,
-                            diagnostic: Some(unavailable.diagnostic),
+                            diagnostic: Some(
+                                live_diagnostic
+                                    .unwrap_or_else(|| "value body is not available".to_string()),
+                            ),
+                        },
+                        HistoryValueReadResult::BodyUnavailable(unavailable) => {
+                            WsOutMessage::ValueBody {
+                                request_id,
+                                boundary_id: boundary_id.to_wire_string(),
+                                value_ref_id,
+                                codec: requested_codec,
+                                availability: "missing".to_string(),
+                                body_base64: None,
+                                diagnostic: Some(unavailable.diagnostic),
+                            }
                         }
                     }
                 }
@@ -2711,7 +2732,9 @@ mod tests {
         );
         let history_store = HistoryStore::new(vec![project.clone()]);
         history_store.begin(&project, &start).unwrap();
-        let value_store = Arc::new(Mutex::new(HashMap::new()));
+        let value_store = Arc::new(Mutex::new(LiveValueCache::with_max_bytes(
+            DEFAULT_NATIVE_LIVE_VALUE_CACHE_BYTES,
+        )));
         let (broadcast_tx, mut broadcast_rx) = broadcast::channel(8);
 
         let producer =
@@ -2758,12 +2781,10 @@ mod tests {
 
         let output_ref = refs.output.expect("root output ref should be preserved");
         assert!(refs.error.is_none());
-        assert!(
-            value_store
-                .lock()
-                .unwrap()
-                .contains_key(&(boundary_id, output_ref.id.clone()))
-        );
+        assert!(matches!(
+            value_store.lock().unwrap().get(boundary_id, &output_ref.id),
+            LiveValueLookup::Available(_)
+        ));
         let snapshot = run_store.snapshot(boundary_id).expect("run should exist");
         let diagnostic = snapshot
             .diagnostics
@@ -2862,7 +2883,9 @@ mod tests {
         );
         let history_store = HistoryStore::new(vec![project.clone()]);
         history_store.begin(&project, &start).unwrap();
-        let value_store = Arc::new(Mutex::new(HashMap::new()));
+        let value_store = Arc::new(Mutex::new(LiveValueCache::with_max_bytes(
+            DEFAULT_NATIVE_LIVE_VALUE_CACHE_BYTES,
+        )));
         let (broadcast_tx, mut broadcast_rx) = broadcast::channel(8);
 
         let producer =
@@ -2916,12 +2939,10 @@ mod tests {
         assert_eq!(payload.message, "hello from log");
         let value_ref = payload.value_ref.as_ref().expect("log value ref");
 
-        let live = value_store
-            .lock()
-            .unwrap()
-            .get(&(boundary_id, value_ref.id.clone()))
-            .cloned()
-            .expect("live value body should be retained");
+        let live = match value_store.lock().unwrap().get(boundary_id, &value_ref.id) {
+            LiveValueLookup::Available(live) => live,
+            other => panic!("live value body should be retained, got {other:?}"),
+        };
         assert_eq!(live.codec, ValueCodec::BamlOutboundValue);
         assert!(!live.body.is_empty());
         assert_eq!(

@@ -83,6 +83,7 @@ use bex_events::{
     },
     value::{
         ByteValueArtifactSink, CaptureLossKind, CaptureLossReason, CaptureLossRecord,
+        DEFAULT_WASM_LIVE_VALUE_CACHE_BYTES, LiveValueBody, LiveValueCache, LiveValueLookup,
         LogEventRecord, RunCompletedRecord, RunStartedRecord, ValueCapture, ValueCaptureKind,
         ValueCodec, ValueIdAllocator, ValueRef, ValueWriteOutcome, ValueWriter,
     },
@@ -137,14 +138,8 @@ struct WasmValueRef {
     codec: Option<String>,
 }
 
-type WasmLiveValueStore = Rc<RefCell<HashMap<(BoundaryId, String), WasmLiveValueBody>>>;
+type WasmLiveValueStore = Rc<RefCell<LiveValueCache>>;
 type WasmHistoryStore = Rc<RefCell<WasmHistoryStoreInner>>;
-
-#[derive(Clone)]
-struct WasmLiveValueBody {
-    codec: ValueCodec,
-    body: Vec<u8>,
-}
 
 #[derive(Debug, Default)]
 struct WasmHistoryStoreInner {
@@ -716,7 +711,9 @@ impl BamlWasmRuntime {
         let wasm_vfs_arc = std::sync::Arc::new(wasm_vfs);
         let run_store = std::sync::Arc::new(InMemoryRunStore::default());
         let history_store = Rc::new(RefCell::new(WasmHistoryStoreInner::default()));
-        let value_store = Rc::new(RefCell::new(HashMap::new()));
+        let value_store = Rc::new(RefCell::new(LiveValueCache::with_max_bytes(
+            DEFAULT_WASM_LIVE_VALUE_CACHE_BYTES,
+        )));
         let profile_drain = Rc::new(RefCell::new(CooperativeProfileDrain::new(
             CooperativeProfileDrainOptions {
                 target: RuntimeTarget::Wasm,
@@ -1317,28 +1314,28 @@ impl BamlWasmRuntime {
         let value_ref: WasmValueRef = serde_wasm_bindgen::from_value(value_ref)
             .map_err(|err| JsError::new(&format!("Invalid valueRef: {err}")))?;
         let value_ref_id = value_ref.id;
-        let stored = self
-            .value_store
-            .borrow()
-            .get(&(parsed, value_ref_id.clone()))
-            .cloned();
-        if let Some(stored) = stored {
-            send_wasm_notification(
-                &self.playground_callback,
-                wasm_playground::PlaygroundNotification::ValueBody {
-                    request_id: u64::from(request_id),
-                    boundary_id,
-                    value_ref_id,
-                    codec: stored.codec.as_wire_str().to_string(),
-                    availability: "available".to_string(),
-                    body_base64: Some(
-                        base64::engine::general_purpose::STANDARD.encode(stored.body),
-                    ),
-                    diagnostic: None,
-                },
-            );
-            return Ok(());
-        }
+        let live_value = self.value_store.borrow_mut().get(parsed, &value_ref_id);
+        let live_diagnostic = match live_value {
+            LiveValueLookup::Available(stored) => {
+                send_wasm_notification(
+                    &self.playground_callback,
+                    wasm_playground::PlaygroundNotification::ValueBody {
+                        request_id: u64::from(request_id),
+                        boundary_id,
+                        value_ref_id,
+                        codec: stored.codec.as_wire_str().to_string(),
+                        availability: "available".to_string(),
+                        body_base64: Some(
+                            base64::engine::general_purpose::STANDARD.encode(stored.body),
+                        ),
+                        diagnostic: None,
+                    },
+                );
+                return Ok(());
+            }
+            LiveValueLookup::Evicted(eviction) => Some(eviction.diagnostic),
+            LiveValueLookup::Missing => None,
+        };
 
         let requested_codec = value_ref
             .codec
@@ -1372,7 +1369,10 @@ impl BamlWasmRuntime {
                     codec: requested_codec,
                     availability: "missing".to_string(),
                     body_base64: None,
-                    diagnostic: Some("value body is not available".to_string()),
+                    diagnostic: Some(
+                        live_diagnostic
+                            .unwrap_or_else(|| "value body is not available".to_string()),
+                    ),
                 },
             ),
             HistoryValueReadResult::BodyUnavailable(unavailable) => send_wasm_notification(
@@ -1942,7 +1942,7 @@ fn drain_wasm_captured_values(
         }
     };
     let mut history_errors = Vec::new();
-    let encoded_values = match producer.drain_to_value_recorder(|draft, body| {
+    let report = producer.drain_to_value_recorder_report(|draft, body| {
         if let Some(log) = &draft.log {
             let event = LogEventRecord {
                 call: draft.call,
@@ -1985,13 +1985,20 @@ fn drain_wasm_captured_values(
                 }
             }
         }
-    }) {
-        Ok(encoded_values) => encoded_values,
-        Err(err) => {
-            send_value_capture_diagnostic(callback, run_store, boundary_id, err);
-            return RootValueRefs::default();
-        }
-    };
+    });
+    for failure in &report.failures {
+        send_value_capture_diagnostic(
+            callback,
+            run_store,
+            failure.boundary_id,
+            format!(
+                "{} capture failed: {}",
+                value_capture_kind_from_bex(failure.kind).as_wire_str(),
+                failure.diagnostic
+            ),
+        );
+    }
+    let encoded_values = report.encoded;
     for err in history_errors {
         send_wasm_history_diagnostic(
             callback,
@@ -2051,13 +2058,17 @@ fn drain_wasm_captured_values(
     let mut refs = RootValueRefs::default();
     for encoded in encoded_values {
         let value_ref = encoded.value_ref;
-        value_store.borrow_mut().insert(
-            (encoded.boundary_id, value_ref.id.clone()),
-            WasmLiveValueBody {
+        let insert = value_store.borrow_mut().insert(
+            encoded.boundary_id,
+            &value_ref,
+            LiveValueBody {
                 codec: value_ref.codec,
                 body: encoded.body,
             },
         );
+        if let Some(diagnostic) = insert.diagnostic {
+            send_value_capture_diagnostic(callback, run_store, encoded.boundary_id, diagnostic);
+        }
 
         if let Some(log) = encoded.log {
             if let Some(patch) = run_store.ingest_log_value_ref(
