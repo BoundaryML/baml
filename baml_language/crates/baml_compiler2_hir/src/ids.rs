@@ -85,6 +85,15 @@ impl<T> LocalItemId<T> {
     pub const fn as_u32(self) -> u32 {
         self.packed
     }
+
+    /// Reconstruct from the packed `as_u32` value (inverse of [`Self::as_u32`]).
+    /// Used to rehydrate precompiled stdlib loc-handles.
+    pub const fn from_u32(packed: u32) -> Self {
+        Self {
+            packed,
+            _phantom: PhantomData,
+        }
+    }
 }
 
 // ── hash_name ────────────────────────────────────────────────────────────────

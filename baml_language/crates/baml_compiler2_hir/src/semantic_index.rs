@@ -23,7 +23,7 @@ use text_size::{TextRange, TextSize};
 /// that are not available during HIR building (would create a circular
 /// dependency: `file_semantic_index` → `package_items` → `file_semantic_index`).
 /// Full resolution (namespace vs package-item vs unknown) is done in TIR.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub enum PathResolution {
     /// Root segment is a local variable, parameter, or capture in the current scope.
     /// Segments[1..] are field/method accesses on the local, resolved by TIR type
@@ -44,19 +44,44 @@ use crate::{
 // ── DefinitionSite ───────────────────────────────────────────────────────────
 
 /// Where a local variable was defined (for go-to-definition).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Hash, borsh::BorshSerialize, borsh::BorshDeserialize,
+)]
 pub enum DefinitionSite {
     /// Defined in a let statement.
-    Statement(StmtId),
+    Statement(
+        #[borsh(
+            serialize_with = "baml_compiler2_ast::borsh_helpers::serialize_idx",
+            deserialize_with = "baml_compiler2_ast::borsh_helpers::deserialize_idx"
+        )]
+        StmtId,
+    ),
     /// Defined as a function parameter (with its index).
     Parameter(usize),
     /// Defined by a pattern binding (match arm, catch arm, catch clause, etc.).
-    PatternBinding(PatId),
+    PatternBinding(
+        #[borsh(
+            serialize_with = "baml_compiler2_ast::borsh_helpers::serialize_idx",
+            deserialize_with = "baml_compiler2_ast::borsh_helpers::deserialize_idx"
+        )]
+        PatId,
+    ),
 }
 
 // ── BindingId ────────────────────────────────────────────────────────────────
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    borsh::BorshSerialize,
+    borsh::BorshDeserialize,
+)]
 pub enum BindingKind {
     /// A local binding row in `scope_bindings[scope].bindings`.
     Local(u32),
@@ -64,7 +89,18 @@ pub enum BindingKind {
     Parameter(usize),
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    borsh::BorshSerialize,
+    borsh::BorshDeserialize,
+)]
 pub struct BindingId {
     pub scope: FileScopeId,
     pub kind: BindingKind,
@@ -97,12 +133,24 @@ impl BindingId {
 
 // ── ScopeBindings ────────────────────────────────────────────────────────────
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct LocalBinding {
     pub name: Name,
     pub site: DefinitionSite,
+    #[borsh(
+        serialize_with = "baml_compiler2_ast::borsh_helpers::serialize_idx",
+        deserialize_with = "baml_compiler2_ast::borsh_helpers::deserialize_idx"
+    )]
     pub pattern: PatId,
+    #[borsh(
+        serialize_with = "baml_compiler2_ast::borsh_helpers::serialize_text_range",
+        deserialize_with = "baml_compiler2_ast::borsh_helpers::deserialize_text_range"
+    )]
     pub name_range: TextRange,
+    #[borsh(
+        serialize_with = "baml_compiler2_ast::borsh_helpers::serialize_text_size",
+        deserialize_with = "baml_compiler2_ast::borsh_helpers::deserialize_text_size"
+    )]
     pub visible_from: TextSize,
 }
 
@@ -111,7 +159,7 @@ pub struct LocalBinding {
 /// Lightweight version of Ty's `PlaceTable` + `UseDefMap`. BAML's simpler
 /// scoping (no reassignment, no conditional definitions) means a flat list
 /// suffices — no flow-sensitive bitsets needed.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct ScopeBindings {
     /// Let-bindings in this scope, in source order.
     pub bindings: Vec<LocalBinding>,

@@ -53,7 +53,7 @@ struct InterfaceTypeAssocLowering<'a, 'db> {
 /// This is intentionally small: semantic matching only needs the rule's TIR
 /// types, while MIR can still recover methods from HIR by looking at the
 /// original class or out-of-body `implements for` block.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub enum InterfaceImplOrigin {
     InBodyClass { class_qtn: QualifiedTypeName },
     OutOfBody,
@@ -67,7 +67,7 @@ pub enum InterfaceImplOrigin {
 /// - `for_ty_pattern`: the implementor pattern, e.g. `Box<T>` or `T`.
 /// - `interface_ty`: the implemented interface, e.g. `Printable` or
 ///   `Container<T>`.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct InterfaceImplRule {
     pub generic_params: Vec<Name>,
     pub generic_param_bounds: Vec<Option<Ty>>,
@@ -79,7 +79,7 @@ pub struct InterfaceImplRule {
     pub source_span: Option<Span>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct InterfaceImplInstantiation {
     pub bindings: TypeBindings,
     pub for_ty: Ty,
@@ -88,7 +88,7 @@ pub struct InterfaceImplInstantiation {
 
 /// Compatibility view for old callers while rule-based matching is being
 /// plumbed through the compiler.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct BlanketClassImpl {
     pub class_qtn: QualifiedTypeName,
     pub generic_params: Vec<Name>,
@@ -98,7 +98,7 @@ pub struct BlanketClassImpl {
     pub for_target_ty: Ty,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct InterfaceImplRuleIndex {
     /// Interface QTN -> all rules that can possibly satisfy that interface.
     pub by_interface: FxHashMap<QualifiedTypeName, Vec<usize>>,
@@ -157,7 +157,7 @@ impl InterfaceImplRuleIndex {
 }
 
 /// For every class in a package, the set of interfaces it implements directly.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct ImplementsRegistry {
     /// Canonical implementation rules. New interface semantics should be
     /// expressed in terms of these rules rather than the compatibility maps
@@ -1259,6 +1259,17 @@ pub fn package_implements_registry<'db>(
     db: &'db dyn crate::Db,
     pkg_id: PackageId<'db>,
 ) -> ImplementsRegistry {
+    // Fast path: a frozen stdlib package's interface-implementation rules,
+    // resolved once at artifact-build time. `ImplementsRegistry` is pure data
+    // (Ty + names), so the cached value is returned directly. This is a second
+    // cold cost (after `package_interface`) pulled by inference over the stdlib
+    // type graph. Falls through to resolution when the cache is not installed.
+    if let Some(reg) =
+        crate::precompiled_tir::precompiled_implements_registry(pkg_id.name(db).as_str())
+    {
+        return reg.clone();
+    }
+
     let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
     let mut interface_impl_rules: Vec<InterfaceImplRule> = Vec::new();
     let mut all_class_qtns: Vec<QualifiedTypeName> = Vec::new();

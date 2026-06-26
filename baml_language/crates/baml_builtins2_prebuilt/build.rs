@@ -13,7 +13,7 @@
 use std::{collections::HashMap, path::PathBuf};
 
 fn main() {
-    use baml_db::{baml_compiler_parser, baml_compiler2_ast, baml_compiler2_hir};
+    use baml_db::{baml_compiler2_hir, baml_compiler2_tir};
 
     let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
     // Rebuild the artifacts whenever the stdlib sources change.
@@ -36,36 +36,53 @@ fn main() {
     std::fs::write(out_dir.join("stdlib_prefix.bin"), &prefix_bytes)
         .expect("write prefix artifact");
 
-    // --- HIR prefix: per-file pre-lowered AST for each builtin file.
+    // --- HIR prefix: snapshot each builtin file's FileSemanticIndex. The cache
+    // is not installed at build time, so file_semantic_index builds from source
+    // here; PrecompiledFile::from_index captures it in borsh-friendly form.
     let mut hir: HashMap<String, baml_compiler2_hir::precompiled::PrecompiledFile> = HashMap::new();
     for file in baml_compiler2_hir::compiler2_all_files(&db) {
         let path = file.path(&db).to_string_lossy().to_string();
-        let tree = baml_compiler_parser::syntax_tree(&db, file);
-        let range = tree.text_range();
-        let (items, diags, env_var_refs) =
-            baml_compiler2_ast::lower_file_with_path(&tree, Some(std::path::Path::new(&path)));
-        assert!(
-            diags.is_empty(),
-            "stdlib file {path} produced CST->AST lowering diagnostics; the HIR \
-             prefix assumes the frozen stdlib lowers cleanly"
-        );
+        let index = baml_compiler2_hir::file_semantic_index(&db, file);
         hir.insert(
             path,
-            baml_compiler2_hir::precompiled::PrecompiledFile {
-                items,
-                env_var_refs,
-                range_start: range.start().into(),
-                range_end: range.end().into(),
-            },
+            baml_compiler2_hir::precompiled::PrecompiledFile::from_index(&db, index),
         );
     }
     let hir_bytes = borsh::to_vec(&hir).expect("serialize stdlib HIR prefix");
     std::fs::write(out_dir.join("stdlib_hir.bin"), &hir_bytes).expect("write HIR artifact");
 
+    // --- TIR prefix: each stdlib package's fully-resolved PackageInterface (the
+    // signature graph: class fields, enum variants, type aliases, function
+    // signatures, throw sets). Resolving these is the dominant cost of the first
+    // user-file type-check; this does it once, here, so a normal compile loads it.
+    let mut tir: HashMap<String, baml_compiler2_tir::package_interface::PackageInterface> =
+        HashMap::new();
+    let mut implements: HashMap<String, baml_compiler2_tir::interfaces::ImplementsRegistry> =
+        HashMap::new();
+    let mut seen = std::collections::HashSet::new();
+    for file in baml_compiler2_hir::compiler2_all_files(&db) {
+        let pkg_name = baml_compiler2_hir::file_package::file_package(&db, file).package;
+        if !seen.insert(pkg_name.clone()) {
+            continue;
+        }
+        let pkg_id = baml_compiler2_hir::package::PackageId::new(&db, pkg_name.clone());
+        let pi = baml_compiler2_tir::package_interface::package_interface(&db, pkg_id);
+        tir.insert(pkg_name.to_string(), pi.clone());
+        let reg = baml_compiler2_tir::interfaces::package_implements_registry(&db, pkg_id);
+        implements.insert(pkg_name.to_string(), reg.clone());
+    }
+    let tir_bytes = borsh::to_vec(&tir).expect("serialize stdlib TIR interfaces");
+    std::fs::write(out_dir.join("stdlib_tir.bin"), &tir_bytes).expect("write TIR artifact");
+    let impl_bytes = borsh::to_vec(&implements).expect("serialize stdlib implements registries");
+    std::fs::write(out_dir.join("stdlib_implements.bin"), &impl_bytes)
+        .expect("write implements artifact");
+
     println!(
-        "cargo:warning=baml_builtins2_prebuilt: EmitState prefix = {} bytes, HIR prefix = {} bytes ({} files)",
+        "cargo:warning=baml_builtins2_prebuilt: EmitState prefix = {} bytes, HIR prefix = {} bytes ({} files), TIR prefix = {} bytes ({} packages)",
         prefix_bytes.len(),
         hir_bytes.len(),
-        hir.len()
+        hir.len(),
+        tir_bytes.len(),
+        tir.len()
     );
 }

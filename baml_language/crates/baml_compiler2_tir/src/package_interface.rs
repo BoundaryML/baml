@@ -28,7 +28,7 @@ use crate::{
 
 /// Fully-resolved typed interface for a package.
 /// Consumers never touch dependency `ItemTree` or raw `TypeExpr`.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct PackageInterface {
     /// All exported types: namespace path -> name -> `ExportedType`
     pub types: FxHashMap<Vec<Name>, FxHashMap<Name, ExportedType>>,
@@ -39,7 +39,7 @@ pub struct PackageInterface {
 }
 
 /// A type exported from a package.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub enum ExportedType {
     Class {
         qtn: QualifiedTypeName,
@@ -58,7 +58,7 @@ pub enum ExportedType {
 }
 
 /// A function exported from a package (free function or method).
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct ExportedFunction {
     pub name: Name,
     pub params: Vec<FunctionParamTy>,
@@ -303,6 +303,18 @@ fn lower_class_method_signature<'db>(
 
 #[salsa::tracked(returns(ref))]
 pub fn package_interface<'db>(db: &'db dyn crate::Db, pkg_id: PackageId<'db>) -> PackageInterface {
+    // Fast path: a frozen stdlib package with a precompiled interface. Its
+    // signatures are resolved once at artifact-build time; `PackageInterface` is
+    // pure data, so the cached value is returned directly (no reconstruction).
+    // This is the dominant cost of the first user-file type-check, which pulls in
+    // the stdlib type graph through this query. Falls through to resolution when
+    // the cache is not installed (tests, LSP) or for the user's own package.
+    if let Some(pi) =
+        crate::precompiled_tir::precompiled_package_interface(pkg_id.name(db).as_str())
+    {
+        return pi.clone();
+    }
+
     let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
 
     let mut types: FxHashMap<Vec<Name>, FxHashMap<Name, ExportedType>> = FxHashMap::default();

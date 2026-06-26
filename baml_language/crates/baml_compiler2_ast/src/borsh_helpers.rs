@@ -71,6 +71,34 @@ pub fn deserialize_vec_idx_pair<T, R: Read>(r: &mut R) -> Result<Vec<(Idx<T>, Id
     Ok(v)
 }
 
+// ── TextSize (one u32 offset) ────────────────────────────────────────────────
+
+pub fn serialize_text_size<W: Write>(size: &text_size::TextSize, w: &mut W) -> Result<(), Error> {
+    u32::from(*size).serialize(w)
+}
+
+pub fn deserialize_text_size<R: Read>(r: &mut R) -> Result<text_size::TextSize, Error> {
+    Ok(text_size::TextSize::from(u32::deserialize_reader(r)?))
+}
+
+// ── Range<T: Borsh> (e.g. Range<FileScopeId>) ────────────────────────────────
+
+pub fn serialize_range<T: BorshSerialize, W: Write>(
+    range: &std::ops::Range<T>,
+    w: &mut W,
+) -> Result<(), Error> {
+    range.start.serialize(w)?;
+    range.end.serialize(w)
+}
+
+pub fn deserialize_range<T: BorshDeserialize, R: Read>(
+    r: &mut R,
+) -> Result<std::ops::Range<T>, Error> {
+    let start = T::deserialize_reader(r)?;
+    let end = T::deserialize_reader(r)?;
+    Ok(start..end)
+}
+
 // ── TextRange (two u32 offsets) ──────────────────────────────────────────────
 
 pub fn serialize_text_range<W: Write>(range: &TextRange, w: &mut W) -> Result<(), Error> {

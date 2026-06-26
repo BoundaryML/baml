@@ -22,7 +22,7 @@ use crate::{
 /// A throw fact is now a proper `Ty` — no more lossy string round-trips.
 pub type ThrowFact = Ty;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct FunctionThrowSets {
     pub direct: BTreeMap<Name, BTreeSet<ThrowFact>>,
     pub transitive: BTreeMap<Name, BTreeSet<ThrowFact>>,

@@ -15,7 +15,9 @@ use crate::loc::{
 /// Covers both namespace-level items (Class, Function, …) and intra-item
 /// members (Field, Method, Variant, Binding, Parameter). Used by
 /// `Definition<'db>::kind()` and `Hir2Diagnostic::DuplicateDefinition`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Hash, borsh::BorshSerialize, borsh::BorshDeserialize,
+)]
 pub enum DefinitionKind {
     // Namespace-level items
     Class,

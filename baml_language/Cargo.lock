@@ -874,6 +874,7 @@ dependencies = [
  "baml_compiler2_ppir",
  "baml_type",
  "baml_workspace",
+ "borsh",
  "indexmap",
  "num-bigint",
  "rustc-hash 2.1.2",

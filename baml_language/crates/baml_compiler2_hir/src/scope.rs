@@ -11,7 +11,18 @@ use text_size::TextRange;
 
 /// Dense sequential index into the per-file scope arena.
 /// `FileScopeId(0)` is always the Project scope (outermost).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Hash,
+    PartialOrd,
+    Ord,
+    borsh::BorshSerialize,
+    borsh::BorshDeserialize,
+)]
 pub struct FileScopeId(u32);
 
 impl FileScopeId {
@@ -48,7 +59,7 @@ pub struct ScopeId<'db> {
 }
 
 /// What kind of scope this is in the hierarchy.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub enum ScopeKind {
     /// The compilation unit — collects all packages.
     Project,
@@ -83,7 +94,7 @@ pub enum ScopeKind {
 }
 
 /// A single scope node in the per-file scope tree.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct Scope {
     /// Parent scope. `None` only for the Project root scope.
     pub parent: Option<FileScopeId>,
@@ -94,9 +105,17 @@ pub struct Scope {
     /// Source range of this scope. Used by `scope_at_offset()` to find the
     /// innermost scope containing a cursor position. Structural scopes
     /// (Project, Package, Namespace) use the file's full range.
+    #[borsh(
+        serialize_with = "baml_compiler2_ast::borsh_helpers::serialize_text_range",
+        deserialize_with = "baml_compiler2_ast::borsh_helpers::deserialize_text_range"
+    )]
     pub range: TextRange,
     /// Contiguous range of descendant scope IDs (DFS pre-order).
     /// All scopes in `descendants` are proper descendants of this scope.
+    #[borsh(
+        serialize_with = "baml_compiler2_ast::borsh_helpers::serialize_range",
+        deserialize_with = "baml_compiler2_ast::borsh_helpers::deserialize_range"
+    )]
     pub descendants: Range<FileScopeId>,
     /// True for the synthetic `ScopeKind::Lambda` scope a tagged template's
     /// body is walked in (BEP-049 `walk_template_lambda_body`). Unlike a real

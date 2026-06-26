@@ -99,15 +99,12 @@ pub fn compiler2_all_files(db: &dyn Db) -> Vec<baml_base::SourceFile> {
 pub fn file_semantic_index(db: &dyn Db, file: SourceFile) -> FileSemanticIndex<'_> {
     let path = file.path(db);
 
-    // Fast path: a frozen stdlib file with precompiled AST. Skip lex/parse/lower
-    // and re-run only the builder (which re-interns `'db` handles in this DB), so
-    // the result is identical to the from-source path. Falls through to parsing
-    // when the cache is not installed.
+    // Fast path: a frozen stdlib file with a precompiled semantic index. Skip
+    // lex/parse/lower AND the builder; rehydrate the cached index, re-interning
+    // the `'db`-bound fields in this DB, so the result is identical to the
+    // from-source path. Falls through to building when the cache is not installed.
     if let Some(pc) = crate::precompiled::precompiled_builtin(&path.to_string_lossy()) {
-        return SemanticIndexBuilder::new(db, file)
-            .with_lowering_diagnostics(Vec::new())
-            .with_env_var_refs(pc.env_var_refs.clone())
-            .build(&pc.items, pc.file_range());
+        return pc.rehydrate(db, file);
     }
 
     let tree = baml_compiler_parser::syntax_tree(db, file);
