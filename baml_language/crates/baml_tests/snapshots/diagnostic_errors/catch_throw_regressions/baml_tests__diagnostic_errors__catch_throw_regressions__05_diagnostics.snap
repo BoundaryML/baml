@@ -23,7 +23,7 @@ source: crates/baml_tests/src/generated_tests.rs
 ────╯
 
   [type] error: non-exhaustive catch_all on type string | BuildError; missing: string
-    ╭─[ regressions.baml:92:1 ]
+    ╭─[ regressions.baml:92:5 ]
     │
  92 │ ╭─▶     BuildWithBuildError(ok) catch_all (e) {
     ┆ ┆   
@@ -35,12 +35,11 @@ source: crates/baml_tests/src/generated_tests.rs
 ────╯
 
   [type] warning: unreachable code: 2 statement(s) after diverging statement
-     ╭─[ regressions.baml:100:6 ]
+     ╭─[ regressions.baml:101:9 ]
      │
- 100 │ ╭─▶     {
- 101 │ ├─▶         throw "error"
-     │ │                           
-     │ ╰─────────────────────────── unreachable code: 2 statement(s) after diverging statement
-     │     
-     │     Note: Error code: E0001
+ 101 │         throw "error"
+     │         ──────┬──────  
+     │               ╰──────── unreachable code: 2 statement(s) after diverging statement
+     │ 
+     │ Note: Error code: E0001
 ─────╯

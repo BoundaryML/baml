@@ -1668,8 +1668,18 @@ fn file_path_string(db: &dyn Db, file: SourceFile) -> String {
 /// in place, keeping the code before it. `///` doc comments are kept.
 fn clean_body_source(db: &dyn Db, file: SourceFile, range: TextRange) -> String {
     let text = file.text(db);
-    let start: usize = range.start().into();
     let end: usize = range.end().into();
+    // Show the body from the start of its first line so the original
+    // indentation is preserved. Callers pass either a trimmed item span
+    // (starts at the first real token) or a raw CST node range (starts at
+    // leading trivia), so first advance to the first non-whitespace char,
+    // then back up to that line's start — anchoring on trivia would pull in
+    // the previous line (e.g. the enclosing `class … {`).
+    let raw_start: usize = range.start().into();
+    let first_real = text[raw_start..end]
+        .find(|c: char| !c.is_whitespace())
+        .map_or(raw_start, |off| raw_start + off);
+    let start = text[..first_real].rfind('\n').map_or(0, |i| i + 1);
     let Some(src) = text.get(start..end) else {
         return String::new();
     };

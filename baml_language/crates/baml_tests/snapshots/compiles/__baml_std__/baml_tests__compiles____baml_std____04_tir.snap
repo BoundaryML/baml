@@ -756,9 +756,9 @@ function baml.csv.CsvReader$stream.next(self: baml.csv.CsvReader$stream) -> baml
   }
   !! 9967..9972: type `baml.csv.CsvReader$stream` has no member `_poll`
   !! 10288..10299: type `baml.csv.CsvReader$stream` has no member `_read_chunk`
-  !! 9946..10315: non-exhaustive match on `unknown`; missing: _
-  !! 9897..9923: declared throws is `baml.csv.CsvError | baml.errors.Io`, but this function may also throw `unknown`
-  ?? 9897..9923: extraneous throws declaration: baml.csv.CsvError, baml.errors.Io
+  !! 9955..10315: non-exhaustive match on `unknown`; missing: _
+  !! 9898..9923: declared throws is `baml.csv.CsvError | baml.errors.Io`, but this function may also throw `unknown`
+  ?? 9898..9923: extraneous throws declaration: baml.csv.CsvError, baml.errors.Io
 }
 class baml.csv.CsvRows$stream {
   reader: baml.csv.CsvReader$stream | null
@@ -799,9 +799,9 @@ function baml.csv.CsvRows$stream.next(self: baml.csv.CsvRows$stream<T>) -> T | b
   }
   !! 15625..15641: did you mean `self.reader?.next`? `self.reader.next` does not handle the case when `self.reader` is null
   !! 15625..15643: `(() -> baml.csv.CsvRecord | baml.iter.Done throws baml.csv.CsvError | baml.errors.Io) | null` is not a function — it cannot be called
-  !! 15769..15781: type mismatch: expected baml.csv.CsvReader, got baml.csv.CsvReader$stream | null
+  !! 15770..15781: type mismatch: expected baml.csv.CsvReader, got baml.csv.CsvReader$stream | null
   !! 15843..15863: did you mean `self.reader?._on_skip`? `self.reader._on_skip` does not handle the case when `self.reader` is null
-  !! 15609..16073: non-exhaustive match on `unknown`; missing: _
+  !! 15618..16073: non-exhaustive match on `unknown`; missing: _
 }
 class baml.csv.CsvWriter$stream {
   _handle: $rust_type
@@ -939,7 +939,7 @@ function baml.errors.StackTrace$stream.to_string(self: baml.errors.StackTrace$st
     self._to_string_impl() : unknown
   }
   !! 348..363: type `baml.errors.StackTrace$stream` has no member `_to_string_impl`
-  !! 328..334: declared throws is `never`, but this function may also throw `unknown`
+  !! 329..334: declared throws is `never`, but this function may also throw `unknown`
 }
 
 --- <builtin>/baml/ns_events/events.baml ---
@@ -1698,7 +1698,7 @@ function baml.iter.ArrayIterator$stream.next(self: baml.iter.ArrayIterator$strea
   !! 4259..4288: cannot order `int | null` and `int` with `>=`: ordering requires both operands to have the same type
   !! 4259..4288: cannot order `int | null` and `int` with `>=`: ordering requires both operands to have the same type
   !! 4353..4361: type mismatch: expected int, got int | null
-  !! 4363..4378: operator `+` cannot be applied to `int | null` and `1`
+  !! 4370..4378: operator `+` cannot be applied to `int | null` and `1`
 }
 class baml.iter.Range$stream {
   i: int | null
@@ -1725,7 +1725,7 @@ function baml.iter.Range$stream.next(self: baml.iter.Range$stream) -> int | baml
       }
   }
   !! 4916..4933: `int | null` does not implement `Compare`, so it cannot be ordered with `<`
-  !! 4962..4977: operator `+` cannot be applied to `int | null` and `int | null`
+  !! 4971..4977: operator `+` cannot be applied to `int | null` and `int | null`
   !! 5000..5003: type mismatch: expected int | baml.iter.Done, got int | null
 }
 class baml.iter.Repeat$stream {
@@ -1756,10 +1756,10 @@ function baml.iter.Repeat$stream.next(self: baml.iter.Repeat$stream<T>) -> T | b
         }
   }
   !! 5500..5514: cannot order `int | null` and `0` with `<`: ordering requires both operands to have the same type
-  !! 5517..5536: type mismatch: expected T | baml.iter.Done, got T | null
+  !! 5526..5536: type mismatch: expected T | baml.iter.Done, got T | null
   !! 5554..5568: cannot order `int | null` and `0` with `>`: ordering requires both operands to have the same type
-  !! 5571..5590: operator `-` cannot be applied to `int | null` and `1`
-  !! 5596..5615: type mismatch: expected T | baml.iter.Done, got T | null
+  !! 5580..5590: operator `-` cannot be applied to `int | null` and `1`
+  !! 5605..5615: type mismatch: expected T | baml.iter.Done, got T | null
 }
 class baml.iter.Map$stream {
   source: baml.iter.Iterator | null
@@ -1781,7 +1781,7 @@ function baml.iter.Map$stream.next(self: baml.iter.Map$stream<T, R, E, E2>) -> R
   }
   !! 6049..6065: did you mean `self.source?.next`? `self.source.next` does not handle the case when `self.source` is null
   !! 6049..6067: `(() -> unknown | baml.iter.Done throws never) | null` is not a function — it cannot be called
-  !! 6115..6128: `unknown` is not a function — it cannot be called
+  !! 6116..6128: `unknown` is not a function — it cannot be called
 }
 class baml.iter.Filter$stream {
   source: baml.iter.Iterator | null
@@ -1898,13 +1898,13 @@ function baml.iter.FlatMap$stream.next(self: baml.iter.FlatMap$stream<T, R, E, E
     Done {  } : baml.iter.Done
   }
   !! 8047..8055: type `never` has no member `next`
-  !! 8177..8192: type mismatch: expected baml.iter.Iterator | baml.iter.Done$stream | null, got baml.iter.Done
+  !! 8188..8192: type mismatch: expected baml.iter.Iterator | baml.iter.Done$stream | null, got baml.iter.Done
   !! 8217..8233: did you mean `self.source?.next`? `self.source.next` does not handle the case when `self.source` is null
   !! 8217..8235: `(() -> unknown | baml.iter.Done throws never) | null` is not a function — it cannot be called
-  !! 8334..8347: `unknown` is not a function — it cannot be called
-  !! 7943..8442: non-exhaustive match on `baml.iter.Iterator | baml.iter.Done$stream | null`; missing: baml.iter.Iterator, baml.iter.Done$stream {}, null
-  !! 8025..8176: unreachable arm
-  !! 8195..8431: unreachable arm
+  !! 8335..8347: `unknown` is not a function — it cannot be called
+  !! 7952..8442: non-exhaustive match on `baml.iter.Iterator | baml.iter.Done$stream | null`; missing: baml.iter.Iterator, baml.iter.Done$stream {}, null
+  !! 8026..8176: unreachable arm
+  !! 8196..8431: unreachable arm
 }
 class baml.iter.Flatten$stream {
   source: baml.iter.Iterator | null
@@ -1950,12 +1950,12 @@ function baml.iter.Flatten$stream.next(self: baml.iter.Flatten$stream<I, R, E, E
     Done {  } : baml.iter.Done
   }
   !! 9033..9041: type `never` has no member `next`
-  !! 9163..9178: type mismatch: expected baml.iter.Iterator | baml.iter.Done$stream | null, got baml.iter.Done
+  !! 9174..9178: type mismatch: expected baml.iter.Iterator | baml.iter.Done$stream | null, got baml.iter.Done
   !! 9203..9219: did you mean `self.source?.next`? `self.source.next` does not handle the case when `self.source` is null
   !! 9203..9221: `(() -> unknown | baml.iter.Done throws never) | null` is not a function — it cannot be called
-  !! 8929..9417: non-exhaustive match on `baml.iter.Iterator | baml.iter.Done$stream | null`; missing: baml.iter.Iterator, baml.iter.Done$stream {}, null
-  !! 9011..9162: unreachable arm
-  !! 9181..9406: unreachable arm
+  !! 8938..9417: non-exhaustive match on `baml.iter.Iterator | baml.iter.Done$stream | null`; missing: baml.iter.Iterator, baml.iter.Done$stream {}, null
+  !! 9012..9162: unreachable arm
+  !! 9182..9406: unreachable arm
 }
 class baml.iter.Peekable$stream {
   source: baml.iter.Iterator | null
@@ -1980,8 +1980,8 @@ function baml.iter.Peekable$stream.next(self: baml.iter.Peekable$stream<T, E>) -
     self.source.next() : unknown
   }
   !! 10143..10144: type mismatch: expected T | baml.iter.Done, got T | baml.iter.Done$stream | null
-  !! 10153..10176: did you mean `self.source?.next`? `self.source.next` does not handle the case when `self.source` is null
-  !! 10153..10178: `(() -> unknown | baml.iter.Done throws never) | null` is not a function — it cannot be called
+  !! 10160..10176: did you mean `self.source?.next`? `self.source.next` does not handle the case when `self.source` is null
+  !! 10160..10178: `(() -> unknown | baml.iter.Done throws never) | null` is not a function — it cannot be called
 }
 class baml.iter.StepBy$stream {
   source: baml.iter.Iterator | null
@@ -2017,13 +2017,13 @@ function baml.iter.StepBy$stream.next(self: baml.iter.StepBy$stream<T, E>) -> T 
     }
     self.source.next() : unknown
   }
-  !! 10598..10615: did you mean `self.source?.next`? `self.source.next` does not handle the case when `self.source` is null
-  !! 10598..10617: `(() -> unknown | baml.iter.Done throws never) | null` is not a function — it cannot be called
-  !! 10652..10663: operator `-` cannot be applied to `int | null` and `1`
+  !! 10599..10615: did you mean `self.source?.next`? `self.source.next` does not handle the case when `self.source` is null
+  !! 10599..10617: `(() -> unknown | baml.iter.Done throws never) | null` is not a function — it cannot be called
+  !! 10653..10663: operator `-` cannot be applied to `int | null` and `1`
   !! 10690..10706: did you mean `self.source?.next`? `self.source.next` does not handle the case when `self.source` is null
   !! 10690..10708: `(() -> unknown | baml.iter.Done throws never) | null` is not a function — it cannot be called
-  !! 10794..10817: did you mean `self.source?.next`? `self.source.next` does not handle the case when `self.source` is null
-  !! 10794..10819: `(() -> unknown | baml.iter.Done throws never) | null` is not a function — it cannot be called
+  !! 10801..10817: did you mean `self.source?.next`? `self.source.next` does not handle the case when `self.source` is null
+  !! 10801..10819: `(() -> unknown | baml.iter.Done throws never) | null` is not a function — it cannot be called
 }
 class baml.iter.Chain$stream {
   first: baml.iter.Iterator | null
@@ -2054,8 +2054,8 @@ function baml.iter.Chain$stream.next(self: baml.iter.Chain$stream<T, E, E2>) -> 
   }
   !! 11276..11291: did you mean `self.first?.next`? `self.first.next` does not handle the case when `self.first` is null
   !! 11276..11293: `(() -> unknown | baml.iter.Done throws never) | null` is not a function — it cannot be called
-  !! 11398..11420: did you mean `self.other?.next`? `self.other.next` does not handle the case when `self.other` is null
-  !! 11398..11422: `(() -> unknown | baml.iter.Done throws never) | null` is not a function — it cannot be called
+  !! 11405..11420: did you mean `self.other?.next`? `self.other.next` does not handle the case when `self.other` is null
+  !! 11405..11422: `(() -> unknown | baml.iter.Done throws never) | null` is not a function — it cannot be called
 }
 
 --- <builtin>/baml/ns_json/json.baml ---
@@ -3358,7 +3358,7 @@ function baml.time.Instant$stream.to_string(self: baml.time.Instant$stream) -> s
           root.sys.panic("Instant.to_string: " + message) : never
   }
   !! 3041..3056: type `baml.time.Instant$stream` has no member `_to_string_impl`
-  !! 3015..3021: declared throws is `never`, but this function may also throw `unknown`
+  !! 3016..3021: declared throws is `never`, but this function may also throw `unknown`
 }
 function baml.time.Instant$stream.from_json(j: baml.json.json) -> unknown throws baml.json.JsonDecodeError {
   { : baml.time.Instant
@@ -3371,7 +3371,7 @@ function baml.time.Instant$stream.from_json(j: baml.json.json) -> unknown throws
       _ =>
         throw baml.json.JsonDecodeError { message: "Expected timestam...", path: "" } : never
   }
-  !! 3731..3748: type mismatch: expected baml.time.Instant$stream, got baml.time.Instant
+  !! 3732..3748: type mismatch: expected baml.time.Instant$stream, got baml.time.Instant
 }
 function baml.time.Instant$stream.to_json(self: baml.time.Instant$stream) -> baml.json.json throws baml.json.JsonSerializationError {
   { : unknown
@@ -3381,7 +3381,7 @@ function baml.time.Instant$stream.to_json(self: baml.time.Instant$stream) -> bam
           throw baml.json.JsonSerializationError { message: message, path: "" } : never
   }
   !! 4173..4188: type `baml.time.Instant$stream` has no member `_to_string_impl`
-  !! 4120..4153: declared throws is `baml.json.JsonSerializationError`, but this function may also throw `unknown`
+  !! 4121..4153: declared throws is `baml.json.JsonSerializationError`, but this function may also throw `unknown`
 }
 
 --- <builtin>/baml/ns_time/plaindate.baml ---
@@ -3432,7 +3432,7 @@ function baml.time.PlainDate$stream.to_string(self: baml.time.PlainDate$stream) 
           root.sys.panic("PlainDate.to_stri..." + message) : never
   }
   !! 1108..1123: type `baml.time.PlainDate$stream` has no member `_to_string_impl`
-  !! 1082..1088: declared throws is `never`, but this function may also throw `unknown`
+  !! 1083..1088: declared throws is `never`, but this function may also throw `unknown`
 }
 function baml.time.PlainDate$stream.from_json(j: baml.json.json) -> unknown throws baml.json.JsonDecodeError {
   { : baml.time.PlainDate
@@ -3445,7 +3445,7 @@ function baml.time.PlainDate$stream.from_json(j: baml.json.json) -> unknown thro
       _ =>
         throw baml.json.JsonDecodeError { message: "Expected ISO 8601...", path: "" } : never
   }
-  !! 2783..2802: type mismatch: expected baml.time.PlainDate$stream, got baml.time.PlainDate
+  !! 2784..2802: type mismatch: expected baml.time.PlainDate$stream, got baml.time.PlainDate
 }
 function baml.time.PlainDate$stream.to_json(self: baml.time.PlainDate$stream) -> baml.json.json throws baml.json.JsonSerializationError {
   { : unknown
@@ -3455,7 +3455,7 @@ function baml.time.PlainDate$stream.to_json(self: baml.time.PlainDate$stream) ->
           throw baml.json.JsonSerializationError { message: message, path: "" } : never
   }
   !! 3231..3246: type `baml.time.PlainDate$stream` has no member `_to_string_impl`
-  !! 3178..3211: declared throws is `baml.json.JsonSerializationError`, but this function may also throw `unknown`
+  !! 3179..3211: declared throws is `baml.json.JsonSerializationError`, but this function may also throw `unknown`
 }
 
 --- <builtin>/baml/ns_time/plaindatetime.baml ---
@@ -3565,7 +3565,7 @@ function baml.time.PlainDateTime$stream.to_string(self: baml.time.PlainDateTime$
           root.sys.panic("PlainDateTime.to_..." + message) : never
   }
   !! 2548..2563: type `baml.time.PlainDateTime$stream` has no member `_to_string_impl`
-  !! 2522..2528: declared throws is `never`, but this function may also throw `unknown`
+  !! 2523..2528: declared throws is `never`, but this function may also throw `unknown`
 }
 function baml.time.PlainDateTime$stream.from_json(j: baml.json.json) -> unknown throws baml.json.JsonDecodeError {
   { : baml.time.PlainDateTime
@@ -3578,7 +3578,7 @@ function baml.time.PlainDateTime$stream.from_json(j: baml.json.json) -> unknown 
       _ =>
         throw baml.json.JsonDecodeError { message: "Expected zoneless...", path: "" } : never
   }
-  !! 7406..7429: type mismatch: expected baml.time.PlainDateTime$stream, got baml.time.PlainDateTime
+  !! 7407..7429: type mismatch: expected baml.time.PlainDateTime$stream, got baml.time.PlainDateTime
 }
 function baml.time.PlainDateTime$stream.to_json(self: baml.time.PlainDateTime$stream) -> baml.json.json throws baml.json.JsonSerializationError {
   { : unknown
@@ -3588,7 +3588,7 @@ function baml.time.PlainDateTime$stream.to_json(self: baml.time.PlainDateTime$st
           throw baml.json.JsonSerializationError { message: message, path: "" } : never
   }
   !! 7862..7877: type `baml.time.PlainDateTime$stream` has no member `_to_string_impl`
-  !! 7809..7842: declared throws is `baml.json.JsonSerializationError`, but this function may also throw `unknown`
+  !! 7810..7842: declared throws is `baml.json.JsonSerializationError`, but this function may also throw `unknown`
 }
 
 --- <builtin>/baml/ns_time/plaintime.baml ---
@@ -3655,7 +3655,7 @@ function baml.time.PlainTime$stream.to_string(self: baml.time.PlainTime$stream) 
     self._to_string_impl() : unknown
   }
   !! 1798..1813: type `baml.time.PlainTime$stream` has no member `_to_string_impl`
-  !! 1772..1778: declared throws is `never`, but this function may also throw `unknown`
+  !! 1773..1778: declared throws is `never`, but this function may also throw `unknown`
 }
 function baml.time.PlainTime$stream.from_json(j: baml.json.json) -> unknown throws baml.json.JsonDecodeError {
   { : baml.time.PlainTime
@@ -3668,7 +3668,7 @@ function baml.time.PlainTime$stream.from_json(j: baml.json.json) -> unknown thro
       _ =>
         throw baml.json.JsonDecodeError { message: "Expected ISO 8601...", path: "" } : never
   }
-  !! 2867..2886: type mismatch: expected baml.time.PlainTime$stream, got baml.time.PlainTime
+  !! 2868..2886: type mismatch: expected baml.time.PlainTime$stream, got baml.time.PlainTime
 }
 function baml.time.PlainTime$stream.to_json(self: baml.time.PlainTime$stream) -> baml.json.json throws baml.json.JsonSerializationError {
   { : baml.json.json
@@ -3934,7 +3934,7 @@ function baml.time.ZonedDateTime$stream.from_json(j: baml.json.json) -> unknown 
       _ =>
         throw baml.json.JsonDecodeError { message: "Expected RFC 3339...", path: "" } : never
   }
-  !! 9141..9164: type mismatch: expected baml.time.ZonedDateTime$stream, got baml.time.ZonedDateTime
+  !! 9142..9164: type mismatch: expected baml.time.ZonedDateTime$stream, got baml.time.ZonedDateTime
 }
 function baml.time.ZonedDateTime$stream.to_json(self: baml.time.ZonedDateTime$stream) -> baml.json.json throws baml.json.JsonSerializationError {
   { : unknown
@@ -3948,7 +3948,7 @@ function baml.time.ZonedDateTime$stream.to_json(self: baml.time.ZonedDateTime$st
           throw baml.json.JsonSerializationError { message: message, path: "" } : never
   }
   !! 9609..9624: type `baml.time.ZonedDateTime$stream` has no member `_to_string_impl`
-  !! 9556..9589: declared throws is `baml.json.JsonSerializationError`, but this function may also throw `unknown`
+  !! 9557..9589: declared throws is `baml.json.JsonSerializationError`, but this function may also throw `unknown`
 }
 
 --- <builtin>/baml/ns_toml/toml.baml ---
@@ -4083,7 +4083,7 @@ function baml.TypeValue$stream.to_string(self: baml.TypeValue$stream) -> string 
     self._to_string_impl() : unknown
   }
   !! 586..601: type `baml.TypeValue$stream` has no member `_to_string_impl`
-  !! 560..566: declared throws is `never`, but this function may also throw `unknown`
+  !! 561..566: declared throws is `never`, but this function may also throw `unknown`
 }
 
 --- <builtin>/baml/uint8array.baml ---
@@ -4101,5 +4101,5 @@ function baml.Uint8Array$stream.to_string(self: baml.Uint8Array$stream) -> strin
     self._to_string_impl() : unknown
   }
   !! 3970..3985: type `baml.Uint8Array$stream` has no member `_to_string_impl`
-  !! 3950..3956: declared throws is `never`, but this function may also throw `unknown`
+  !! 3951..3956: declared throws is `never`, but this function may also throw `unknown`
 }

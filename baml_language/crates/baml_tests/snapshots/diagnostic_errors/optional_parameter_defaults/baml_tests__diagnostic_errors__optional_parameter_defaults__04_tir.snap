@@ -62,7 +62,7 @@ function user.BadRequiredAfterDefault(a: int = 1, b: int) -> int throws never {
   { : int
     b : int
   }
-  !! 793..800: required parameter `b` cannot appear after a defaulted parameter
+  !! 794..800: required parameter `b` cannot appear after a defaulted parameter
 }
 type user.NamedFilter = (query: string, filter?: string | null) -> int throws never
 type user.NamedLimit = (query: string, limit?: string | null) -> int throws never

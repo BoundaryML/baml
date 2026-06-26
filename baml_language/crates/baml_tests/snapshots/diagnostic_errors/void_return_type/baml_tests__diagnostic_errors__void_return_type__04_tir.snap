@@ -38,7 +38,7 @@ function user.return_closure(handler: (value: int) -> string throws never) -> (v
           handler(value)
         }
   }
-  !! 727..769: this body may throw through callback `handler`, but declared throws is `never`. The callback type does not say what it can throw. If `handler` is an infallible host callback, annotate it with `throws never`; otherwise catch the call or let the enclosing function declare/propagate the callback's throws.
+  !! 728..769: this body may throw through callback `handler`, but declared throws is `never`. The callback type does not say what it can throw. If `handler` is an infallible host callback, annotate it with `throws never`; otherwise catch the call or let the enclosing function declare/propagate the callback's throws.
 }
 lambda user.return_closure {
 }

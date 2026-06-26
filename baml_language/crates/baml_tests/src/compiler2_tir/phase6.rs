@@ -1470,14 +1470,14 @@ function f(xs: int[]) -> string {
 }
 "#,
     );
-    insta::assert_snapshot!(render_tir(&db, file), @r#"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f(xs: int[]) -> string throws never {
       { : never
         return xs.push(1) : int
       }
-      !! 45..56: type mismatch: expected string, got int
+      !! 46..56: type mismatch: expected string, got int
     }
-    "#);
+    ");
 }
 
 #[test]
@@ -1496,7 +1496,7 @@ function f(xs: int[]?) -> string {
       { : never
         return xs?.push?.(1) : int | null
       }
-      !! 46..60: type mismatch: expected string, got int | null
+      !! 47..60: type mismatch: expected string, got int | null
     }
     ");
 }

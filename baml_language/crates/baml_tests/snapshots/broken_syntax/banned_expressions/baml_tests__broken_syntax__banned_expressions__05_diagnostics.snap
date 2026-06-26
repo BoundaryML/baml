@@ -33,7 +33,7 @@ source: crates/baml_tests/src/generated_tests.rs
 ───╯
 
   [type] error: missing return value of type int
-    ╭─[ banned_expressions.baml:8:22 ]
+    ╭─[ banned_expressions.baml:8:23 ]
     │
   8 │ ╭─▶ function Bar() -> int {
     ┆ ┆   
@@ -65,14 +65,13 @@ source: crates/baml_tests/src/generated_tests.rs
 ────╯
 
   [type] warning: unreachable code: 1 statement(s) after diverging statement
-    ╭─[ banned_expressions.baml:33:14 ]
+    ╭─[ banned_expressions.baml:34:3 ]
     │
- 33 │ ╭─▶   let x = 10;
- 34 │ ├─▶   let y = (x = 5);
-    │ │                        
-    │ ╰──────────────────────── unreachable code: 1 statement(s) after diverging statement
-    │     
-    │     Note: Error code: E0001
+ 34 │   let y = (x = 5);
+    │   ────────┬───────  
+    │           ╰───────── unreachable code: 1 statement(s) after diverging statement
+    │ 
+    │ Note: Error code: E0001
 ────╯
 
   [hir] error: assignment is not allowed in expression position; assignment is a statement
@@ -86,14 +85,13 @@ source: crates/baml_tests/src/generated_tests.rs
 ────╯
 
   [type] warning: unreachable code: 1 statement(s) after diverging statement
-    ╭─[ banned_expressions.baml:63:56 ]
+    ╭─[ banned_expressions.baml:64:3 ]
     │
- 63 │ ╭─▶ function ParenSafeAssignField(user: User?) -> string? {
- 64 │ ├─▶   let result = (user?.profile?.name = "new_name");
-    │ │                                                        
-    │ ╰──────────────────────────────────────────────────────── unreachable code: 1 statement(s) after diverging statement
-    │     
-    │     Note: Error code: E0001
+ 64 │   let result = (user?.profile?.name = "new_name");
+    │   ────────────────────────┬───────────────────────  
+    │                           ╰───────────────────────── unreachable code: 1 statement(s) after diverging statement
+    │ 
+    │ Note: Error code: E0001
 ────╯
 
   [hir] error: assignment is not allowed in expression position; assignment is a statement
@@ -107,14 +105,13 @@ source: crates/baml_tests/src/generated_tests.rs
 ────╯
 
   [type] warning: unreachable code: 1 statement(s) after diverging statement
-    ╭─[ banned_expressions.baml:69:55 ]
+    ╭─[ banned_expressions.baml:70:3 ]
     │
- 69 │ ╭─▶ function ParenSafeAssignIndex(items: int[]?) -> int? {
- 70 │ ├─▶   let result = (items?.[0] = 42);
-    │ │                                       
-    │ ╰─────────────────────────────────────── unreachable code: 1 statement(s) after diverging statement
-    │     
-    │     Note: Error code: E0001
+ 70 │   let result = (items?.[0] = 42);
+    │   ───────────────┬───────────────  
+    │                  ╰───────────────── unreachable code: 1 statement(s) after diverging statement
+    │ 
+    │ Note: Error code: E0001
 ────╯
 
   [hir] error: assignment is not allowed in expression position; assignment is a statement
@@ -128,14 +125,13 @@ source: crates/baml_tests/src/generated_tests.rs
 ────╯
 
   [type] warning: unreachable code: 1 statement(s) after diverging statement
-    ╭─[ banned_expressions.baml:75:56 ]
+    ╭─[ banned_expressions.baml:76:3 ]
     │
- 75 │ ╭─▶ function ParenSafeCompoundAssign(user: User?) -> int? {
- 76 │ ├─▶   let result = (user?.id += 1);
-    │ │                                     
-    │ ╰───────────────────────────────────── unreachable code: 1 statement(s) after diverging statement
-    │     
-    │     Note: Error code: E0001
+ 76 │   let result = (user?.id += 1);
+    │   ──────────────┬──────────────  
+    │                 ╰──────────────── unreachable code: 1 statement(s) after diverging statement
+    │ 
+    │ Note: Error code: E0001
 ────╯
 
   [hir] error: assignment is not allowed in expression position; assignment is a statement
@@ -159,14 +155,13 @@ source: crates/baml_tests/src/generated_tests.rs
 ────╯
 
   [type] warning: unreachable code: 1 statement(s) after diverging statement
-    ╭─[ banned_expressions.baml:86:57 ]
+    ╭─[ banned_expressions.baml:87:3 ]
     │
- 86 │ ╭─▶ function ParenSafeAssignDeepChain(node: Node?) -> int? {
- 87 │ ├─▶   let result = (node?.children?.[0].value = 99);
-    │ │                                                      
-    │ ╰────────────────────────────────────────────────────── unreachable code: 1 statement(s) after diverging statement
-    │     
-    │     Note: Error code: E0001
+ 87 │   let result = (node?.children?.[0].value = 99);
+    │   ───────────────────────┬──────────────────────  
+    │                          ╰──────────────────────── unreachable code: 1 statement(s) after diverging statement
+    │ 
+    │ Note: Error code: E0001
 ────╯
 
   [hir] error: assignment is not allowed in expression position; assignment is a statement
@@ -180,14 +175,13 @@ source: crates/baml_tests/src/generated_tests.rs
 ────╯
 
   [type] warning: unreachable code: 1 statement(s) after diverging statement
-    ╭─[ banned_expressions.baml:92:56 ]
+    ╭─[ banned_expressions.baml:93:3 ]
     │
- 92 │ ╭─▶ function ParenSafeAssignMapIndex(node: Node?) -> int? {
- 93 │ ├─▶   let result = (node?.labels?.["main"].value = 50);
-    │ │                                                         
-    │ ╰───────────────────────────────────────────────────────── unreachable code: 1 statement(s) after diverging statement
-    │     
-    │     Note: Error code: E0001
+ 93 │   let result = (node?.labels?.["main"].value = 50);
+    │   ────────────────────────┬────────────────────────  
+    │                           ╰────────────────────────── unreachable code: 1 statement(s) after diverging statement
+    │ 
+    │ Note: Error code: E0001
 ────╯
 
   [hir] error: assignment is not allowed in expression position; assignment is a statement

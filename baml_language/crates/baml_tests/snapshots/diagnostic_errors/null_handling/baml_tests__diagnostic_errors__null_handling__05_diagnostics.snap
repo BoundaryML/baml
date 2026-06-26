@@ -3,11 +3,11 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
   [type] error: did you mean `user?.profile?.name`? `user?.profile.name` does not handle the case when `user?.profile` is null
-    ╭─[ null_handling.baml:60:13 ]
+    ╭─[ null_handling.baml:60:14 ]
     │
  60 │     let a7 = (user?.profile).name;
-    │             ──────────┬──────────  
-    │                       ╰──────────── did you mean `user?.profile?.name`? `user?.profile.name` does not handle the case when `user?.profile` is null
+    │              ──────────┬─────────  
+    │                        ╰─────────── did you mean `user?.profile?.name`? `user?.profile.name` does not handle the case when `user?.profile` is null
     │ 
     │ Note: Error code: E0001
 ────╯
@@ -23,15 +23,13 @@ source: crates/baml_tests/src/generated_tests.rs
 ────╯
 
   [type] warning: unreachable code: 1 statement(s) after diverging statement
-    ╭─[ null_handling.baml:83:19 ]
+    ╭─[ null_handling.baml:86:5 ]
     │
- 83 │ ╭─▶     user?.id += 1;
-    ┆ ┆   
- 86 │ ├─▶     let a11 = (user?.profile?.name = "new_name");
-    │ │                                                       
-    │ ╰─────────────────────────────────────────────────────── unreachable code: 1 statement(s) after diverging statement
-    │     
-    │     Note: Error code: E0001
+ 86 │     let a11 = (user?.profile?.name = "new_name");
+    │     ──────────────────────┬──────────────────────  
+    │                           ╰──────────────────────── unreachable code: 1 statement(s) after diverging statement
+    │ 
+    │ Note: Error code: E0001
 ────╯
 
   [hir] error: assignment is not allowed in expression position; assignment is a statement
@@ -55,15 +53,13 @@ source: crates/baml_tests/src/generated_tests.rs
 ─────╯
 
   [type] warning: unreachable code: 1 statement(s) after diverging statement
-     ╭─[ null_handling.baml:148:28 ]
+     ╭─[ null_handling.baml:151:5 ]
      │
- 148 │ ╭─▶     lookup?.["total"] += 5;
-     ┆ ┆   
- 151 │ ├─▶     let b13 = (items?.[0] = 77);
-     │ │                                      
-     │ ╰────────────────────────────────────── unreachable code: 1 statement(s) after diverging statement
-     │     
-     │     Note: Error code: E0001
+ 151 │     let b13 = (items?.[0] = 77);
+     │     ──────────────┬─────────────  
+     │                   ╰─────────────── unreachable code: 1 statement(s) after diverging statement
+     │ 
+     │ Note: Error code: E0001
 ─────╯
 
   [hir] error: assignment is not allowed in expression position; assignment is a statement
@@ -97,10 +93,10 @@ source: crates/baml_tests/src/generated_tests.rs
 ─────╯
 
   [type] error: did you mean `callback?.(42)?.length`? `callback?.(42).length` does not handle the case when `callback?.(42)` is null
-     ╭─[ null_handling.baml:173:13 ]
+     ╭─[ null_handling.baml:173:14 ]
      │
  173 │     let c3 = (callback?.(42)).length;
-     │             ────────────┬───────────  
+     │              ───────────┬───────────  
      │                         ╰───────────── did you mean `callback?.(42)?.length`? `callback?.(42).length` does not handle the case when `callback?.(42)` is null
      │ 
      │ Note: Error code: E0001
@@ -147,27 +143,27 @@ source: crates/baml_tests/src/generated_tests.rs
 ─────╯
 
   [type] warning: did you mean `user?.profile?.name`? `... ?? null` is unnecessary because `user?.profile?.name` is already nullable
-     ╭─[ null_handling.baml:236:13 ]
+     ╭─[ null_handling.baml:236:14 ]
      │
  236 │     let d9 = user?.profile?.name ?? null;
-     │             ──────────────┬─────────────  
+     │              ─────────────┬─────────────  
      │                           ╰─────────────── did you mean `user?.profile?.name`? `... ?? null` is unnecessary because `user?.profile?.name` is already nullable
      │ 
      │ Note: Error code: E0004
 ─────╯
 
   [type] warning: did you mean `user?.profile?.name ?? "Anonymous"`? BAML uses `??` instead of `||` for null coalescing
-     ╭─[ null_handling.baml:239:14 ]
+     ╭─[ null_handling.baml:239:15 ]
      │
  239 │     let d10 = user?.profile?.name || "Anonymous";
-     │              ─────────────────┬─────────────────  
-     │                               ╰─────────────────── did you mean `user?.profile?.name ?? "Anonymous"`? BAML uses `??` instead of `||` for null coalescing
+     │               ─────────────────┬────────────────  
+     │                                ╰────────────────── did you mean `user?.profile?.name ?? "Anonymous"`? BAML uses `??` instead of `||` for null coalescing
      │ 
      │ Note: Error code: E0004
 ─────╯
 
   [type] error: did you mean `user?.profile?.name ?? node?.labels?.["name"]?.value.to_string()`? `user?.profile?.name ?? node?.labels?.["name"]?.value.to_string() ?? "fallback"` is unnecessary, because `user?.profile?.name ?? node?.labels?.["name"]?.value.to_string()` cannot be null
-     ╭─[ null_handling.baml:256:13 ]
+     ╭─[ null_handling.baml:256:14 ]
      │
  256 │ ╭─▶     let e3 = user?.profile?.name
      ┆ ┆   
@@ -179,15 +175,13 @@ source: crates/baml_tests/src/generated_tests.rs
 ─────╯
 
   [type] warning: unreachable code: 6 statement(s) after diverging statement
-     ╭─[ null_handling.baml:264:36 ]
+     ╭─[ null_handling.baml:267:5 ]
      │
- 264 │ ╭─▶     node?.value += items?.[0] ?? 1;
-     ┆ ┆   
- 267 │ ├─▶     let e4 = (node?.next?.value = 42);
-     │ │                                            
-     │ ╰──────────────────────────────────────────── unreachable code: 6 statement(s) after diverging statement
-     │     
-     │     Note: Error code: E0001
+ 267 │     let e4 = (node?.next?.value = 42);
+     │     ─────────────────┬────────────────  
+     │                      ╰────────────────── unreachable code: 6 statement(s) after diverging statement
+     │ 
+     │ Note: Error code: E0001
 ─────╯
 
   [hir] error: assignment is not allowed in expression position; assignment is a statement

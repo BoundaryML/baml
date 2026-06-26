@@ -3,7 +3,7 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
   [type] error: unresolved name: GPT4
-   ╭─[ main.baml:1:44 ]
+   ╭─[ main.baml:1:45 ]
    │
  1 │ ╭─▶ function HelloWorld(name: string) -> string {
    ┆ ┆   

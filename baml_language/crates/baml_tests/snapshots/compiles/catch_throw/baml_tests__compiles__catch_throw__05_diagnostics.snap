@@ -3,12 +3,11 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
   [type] warning: unreachable code: 1 statement(s) after diverging statement
-     ╭─[ catch_throw.baml:111:44 ]
+     ╭─[ catch_throw.baml:112:5 ]
      │
- 111 │ ╭─▶ function ThrowStatement(x: int) -> string {
- 112 │ ├─▶     throw "error"
-     │ │                       
-     │ ╰─────────────────────── unreachable code: 1 statement(s) after diverging statement
-     │     
-     │     Note: Error code: E0001
+ 112 │     throw "error"
+     │     ──────┬──────  
+     │           ╰──────── unreachable code: 1 statement(s) after diverging statement
+     │ 
+     │ Note: Error code: E0001
 ─────╯
