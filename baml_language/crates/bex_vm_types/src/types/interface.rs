@@ -1,6 +1,30 @@
 use borsh::{BorshDeserialize, BorshSerialize};
 use indexmap::IndexMap;
 
+use crate::HeapPtr;
+
+#[derive(Debug, Clone, BorshSerialize, BorshDeserialize)]
+pub struct InterfaceDef {
+    // Signature
+    pub name: baml_type::TypeName,
+    pub args: Vec<(baml_type::Name, Vec<baml_type::RuntimeInterface>)>,
+    pub requires: Vec<baml_type::RuntimeInterface>,
+
+    // Member Types
+    pub assoc: Vec<(baml_type::Name, baml_type::RuntimeInterface)>,
+    pub fields: Vec<(baml_type::Name, baml_type::RuntimeTy)>,
+    pub methods: Vec<InterfaceMethodDef>,
+}
+
+#[derive(Debug, Clone, BorshSerialize, BorshDeserialize)]
+pub struct InterfaceMethodDef {
+    pub name: baml_type::Name,
+    pub args: Vec<baml_type::RuntimeTy>,
+    pub kwargs: Vec<(baml_type::Name, baml_type::RuntimeTy)>,
+    pub returns: baml_type::RuntimeTy,
+    pub errors: baml_type::RuntimeTy,
+}
+
 pub type InterfaceAssociatedBindings = Vec<(baml_type::Name, baml_type::RuntimeTy)>;
 pub type InterfaceImplementorEntry = (
     baml_type::TypeName,
@@ -36,7 +60,7 @@ pub struct InterfaceBound {
 /// `Iterator.collect` resolve `Item`/`Error` under an open-world virtual call.
 #[derive(Clone, Debug, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
 pub struct MethodImpl {
-    pub fqn: String,
+    pub fqn: HeapPtr,
     pub frame: Vec<baml_type::TyTemplate>,
 }
 
@@ -46,6 +70,8 @@ pub struct MethodImpl {
 /// (`baml_compiler2_tir::interfaces`) with the method handles attached.
 #[derive(Clone, Debug, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
 pub struct RuntimeImplRule {
+    /// Points at the [`InterfaceDef`] for this implementation.
+    pub interface_head: HeapPtr,
     /// The implementor pattern; a `TyTemplate::TypeArgRef(n)` leaf is the impl's
     /// n-th generic parameter (de Bruijn). E.g. `implement<T> I for Wrap<T>` →
     /// `Class(Wrap, [TypeArgRef(0)])`, `implement I for Foo` →

@@ -480,6 +480,9 @@ impl EqualsDriver {
 
             // By reference:
             (Object::Function(_), Object::Function(_))
+            | (Object::Interface(_), Object::Interface(_))
+            | (Object::Package(_), Object::Package(_))
+            | (Object::ImplRule(_), Object::ImplRule(_))
             | (Object::Closure(_), Object::Closure(_))
             | (Object::Class(_), Object::Class(_))
             | (Object::Enum(_), Object::Enum(_))
@@ -487,6 +490,9 @@ impl EqualsDriver {
             | (Object::RustData(_), Object::RustData(_)) => step(pa == pb),
             (
                 Object::Function(_)
+                | Object::Interface(_)
+                | Object::Package(_)
+                | Object::ImplRule(_)
                 | Object::Closure(_)
                 | Object::Class(_)
                 | Object::Enum(_)
@@ -585,7 +591,9 @@ fn resolve_equals_eq(vm: &BexVm, concrete: &RuntimeTy) -> Option<(HeapPtr, Vec<R
     // invoked with its frame realized against the impl's bound type args.
     let (rule, bound_args) = resolve::resolve_implements_rule(vm, concrete, &equals_qtn(), &[])?;
     let method = rule.methods.get("eq")?;
-    let callee = vm.find_function_by_name(&method.fqn)?;
+    // `fqn` is the resolved callee's heap pointer (the impl method or merged
+    // default), baked at emit time — invoke it directly.
+    let callee = method.fqn;
     Some((callee, resolve::realize_frame(&method.frame, &bound_args)))
 }
 

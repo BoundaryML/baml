@@ -6,7 +6,9 @@ use indexmap::IndexMap;
 use crate::{
     ArrayContainer, BoundMethod, Class, CollectorRef, Enum, Function, GenericFunction, HostClosure,
     Instance, MapContainer, Uint8ArrayContainer, UnscheduledFuture, Value, Variant,
-    types::{Array, Cell, Closure, FunctionType, FutureType, Map},
+    types::{
+        Array, Cell, Closure, FunctionType, FutureType, InterfaceDef, Map, Package, RuntimeImplRule,
+    },
 };
 
 /// Any data that the Baml program can reference and is allocated on heap.
@@ -19,8 +21,17 @@ use crate::{
 /// Read `Vm::objects` for more information.
 #[derive(Clone, Debug)]
 pub enum Object {
+    /// Package object.
+    Package(Box<Package>),
+
     /// Function object.
     Function(Box<Function>),
+
+    /// Represents an interface definition. Not a value object.
+    Interface(Box<InterfaceDef>),
+
+    /// Represents an implementation rule for an interface.
+    ImplRule(Box<RuntimeImplRule>),
 
     /// Class object.
     Class(Box<Class>),
@@ -127,6 +138,9 @@ const _: () = assert!(
 #[derive(BorshSerialize, BorshDeserialize)]
 enum ObjectWire {
     Function(Box<Function>),
+    Interface(Box<InterfaceDef>),
+    Package(Box<Package>),
+    ImplRule(Box<RuntimeImplRule>),
     Class(Box<Class>),
     Instance(Instance),
     Enum(Box<Enum>),
@@ -164,6 +178,9 @@ impl BorshSerialize for Object {
     fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
         let proxy = match self {
             Self::Function(v) => ObjectWire::Function(v.clone()),
+            Self::Interface(v) => ObjectWire::Interface(v.clone()),
+            Self::Package(v) => ObjectWire::Package(v.clone()),
+            Self::ImplRule(v) => ObjectWire::ImplRule(v.clone()),
             Self::Class(v) => ObjectWire::Class(v.clone()),
             Self::Instance(v) => ObjectWire::Instance(v.clone()),
             Self::Enum(v) => ObjectWire::Enum(v.clone()),
@@ -223,6 +240,9 @@ impl BorshDeserialize for Object {
         let proxy = ObjectWire::deserialize_reader(reader)?;
         Ok(match proxy {
             ObjectWire::Function(v) => Self::Function(v),
+            ObjectWire::Interface(v) => Self::Interface(v),
+            ObjectWire::Package(v) => Self::Package(v),
+            ObjectWire::ImplRule(v) => Self::ImplRule(v),
             ObjectWire::Class(v) => Self::Class(v),
             ObjectWire::Instance(v) => Self::Instance(v),
             ObjectWire::Enum(v) => Self::Enum(v),
@@ -260,6 +280,9 @@ impl std::fmt::Display for Object {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Object::Function(function) => function.fmt(f),
+            Object::Interface(interface) => write!(f, "<interface {}>", interface.name),
+            Object::Package(_) => write!(f, "<package>"),
+            Object::ImplRule(_) => write!(f, "<impl_rule>"),
             Object::Class(class) => class.fmt(f),
             Object::Instance(instance) => instance.fmt(f),
             Object::Enum(enm) => enm.fmt(f),
@@ -313,6 +336,9 @@ pub enum ObjectType {
     Array,
     Map,
     Function(FunctionType),
+    Interface,
+    Package,
+    ImplRule,
     Closure,
     Cell,
     Class,
@@ -332,6 +358,9 @@ impl ObjectType {
     pub fn of(ob: &Object) -> Self {
         match ob {
             Object::Function(func) => Self::Function(FunctionType::from(&func.kind)),
+            Object::Interface(_) => Self::Interface,
+            Object::Package(_) => Self::Package,
+            Object::ImplRule(_) => Self::ImplRule,
             Object::Closure(_) => Self::Closure,
             Object::BoundMethod(_) => Self::Closure, // Treat as callable like closures
             Object::GenericFunction(_) => Self::Closure, // Callable like closures
@@ -380,6 +409,9 @@ impl std::fmt::Display for ObjectType {
             ObjectType::Array => write!(f, "array"),
             ObjectType::Map => write!(f, "map"),
             ObjectType::Function(function_type) => write!(f, "{function_type}"),
+            ObjectType::Interface => write!(f, "interface"),
+            ObjectType::Package => write!(f, "package"),
+            ObjectType::ImplRule => write!(f, "impl_rule"),
             ObjectType::Closure => write!(f, "closure"),
             ObjectType::Cell => write!(f, "cell"),
             ObjectType::Class => write!(f, "class"),

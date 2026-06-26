@@ -13,6 +13,7 @@ mod function;
 mod future;
 mod interface;
 mod object;
+mod package;
 mod value;
 
 use std::collections::HashMap;
@@ -27,6 +28,7 @@ pub use future::*;
 use indexmap::IndexMap;
 pub use interface::*;
 pub use object::*;
+pub use package::*;
 pub use tokio_util::sync::CancellationToken;
 pub use value::*;
 

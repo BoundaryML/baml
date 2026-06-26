@@ -16,6 +16,7 @@
 
 use std::{collections::HashMap, sync::Arc};
 
+use baml_type::Name;
 use smallvec::SmallVec;
 
 /// Branch hint: tells the compiler this condition is almost never true.
@@ -430,6 +431,7 @@ mod tests {
             id_overrides: Vec::new(),
             argv: Arc::from([]),
             pending_call_type_args: Vec::new(),
+            packages: indexmap::IndexMap::new(),
             interface_impls: Arc::new(indexmap::IndexMap::new()),
             recursive_type_alias_defs: Arc::new(indexmap::IndexMap::new()),
         }
@@ -794,10 +796,14 @@ pub struct BexVm {
     /// shared view is a `VmInternalError`.
     pub globals: VmGlobals,
 
+    /// All loaded packages, indexed by their name.
+    /// Must be in a topological order, with dependencies resolved before their dependents.
+    pub packages: IndexMap<Name, HeapPtr>,
     /// Resolved class names mapping fully-qualified class names to their heap pointers.
     ///
     /// Used by `resolve_class()` for generated `copy::` struct `to_value()` methods.
     /// Populated at VM construction time from the compiled program's class index.
+    #[deprecated = "use `packages` instead to look up classes/enums/etc"]
     pub resolved_class_names: HashMap<String, HeapPtr>,
 
     /// Pre-resolved heap pointers for `baml.errors.*` classes, indexed by
@@ -903,6 +909,7 @@ pub struct BexVm {
     /// method on a value's concrete type and by the `type.implements()` /
     /// `type.implementors()` / `type.implemented_by()` reflection methods. Shared
     /// `Arc` so spawned VMs (lambdas, futures) don't duplicate the map.
+    #[deprecated = "use `packages` instead to look up interfaces and implementations"]
     pub interface_impls: Arc<InterfaceImplsByPackage>,
 
     /// Recursive type-alias definitions (`type JSON = … | JSON[]`). Only
@@ -910,6 +917,7 @@ pub struct BexVm {
     /// inline at lowering. Shared `Arc` across spawned VMs like `interface_impls`.
     /// Read by the canonical type algebra (`RuntimeTypeContext`) to expand an
     /// alias, and by output-format rendering.
+    #[deprecated = "use `packages` instead to look up recursive type aliases"]
     pub recursive_type_alias_defs:
         Arc<indexmap::IndexMap<baml_type::TypeName, baml_type::RuntimeTy>>,
 }
@@ -1182,6 +1190,9 @@ fn value_type_tag(value: Value) -> i64 {
                 Object::Collector(_) => type_tags::COLLECTOR,
                 Object::Type(_) => type_tags::TYPE,
                 Object::Class(_) => type_tags::UNKNOWN,
+                Object::Interface(_) => type_tags::UNKNOWN,
+                Object::Package(_) => type_tags::UNKNOWN,
+                Object::ImplRule(_) => type_tags::UNKNOWN,
                 #[cfg(feature = "heap_debug")]
                 Object::Sentinel(_) => type_tags::UNKNOWN,
                 Object::Instance(instance) => {
@@ -1323,6 +1334,7 @@ impl BexVm {
             id_overrides: Vec::new(),
             argv,
             pending_call_type_args: Vec::new(),
+            packages: indexmap::IndexMap::new(),
             interface_impls,
             recursive_type_alias_defs,
         }
@@ -6470,11 +6482,9 @@ impl BexVm {
                                 method: method_name.clone(),
                             }
                         })?;
-                        let callee = self.find_function_by_name(&method.fqn).ok_or_else(|| {
-                            VmInternalError::UnresolvedVirtualCall {
-                                method: method_name.clone(),
-                            }
-                        })?;
+                        // `fqn` is the resolved callee's heap pointer, baked at
+                        // emit time — invoke it directly.
+                        let callee = method.fqn;
                         // Seed the callee frame: the impl's frame realized against
                         // its bound args (the impl's own generics for an impl method,
                         // or the interface's args + associated types for an inherited

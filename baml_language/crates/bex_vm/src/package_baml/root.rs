@@ -581,6 +581,9 @@ fn deep_copy_value_recursive(
                 // Bigint is behind Arc — clone() is cheap (increments refcount).
                 Object::Bigint(arc) => vm.tlab.alloc(Object::Bigint(std::sync::Arc::clone(&arc))),
                 Object::Function(f) => vm.tlab.alloc(Object::Function(f)),
+                Object::Interface(i) => vm.tlab.alloc(Object::Interface(i)),
+                Object::Package(p) => vm.tlab.alloc(Object::Package(p)),
+                Object::ImplRule(r) => vm.tlab.alloc(Object::ImplRule(r)),
                 Object::Class(c) => vm.tlab.alloc(Object::Class(c)),
                 Object::Enum(e) => vm.tlab.alloc(Object::Enum(e)),
                 Object::Variant(v) => vm.tlab.alloc(Object::Variant(v)),
