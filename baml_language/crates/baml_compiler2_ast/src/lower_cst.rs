@@ -1149,7 +1149,7 @@ fn lower_class(
         .filter_map(|block| lower_implements_block(&block, diags, env_var_refs))
         .collect();
 
-    let class_def = crate::ast::ClassDef {
+    let mut class_def = crate::ast::ClassDef {
         name: Name::new(name_token.text()),
         generic_params,
         generic_param_bounds,
@@ -1166,6 +1166,9 @@ fn lower_class(
     // methods. `obj.to_json()` desugars to `baml.json.from(obj)` and
     // `Type.from_json(j)` desugars to `baml.json.to<Type>(j)` (TIR + MIR);
     // customization is via `implements baml.ToJson` / `baml.FromJson`.
+
+    // BEP-042: wrap a magic `cleanup(self) -> void` method in its run-once guard.
+    crate::cleanup_guard::maybe_inject_cleanup_guard(&mut class_def);
 
     Some(class_def)
 }
@@ -1216,6 +1219,56 @@ pub(crate) fn extract_generic_params_with_bounds(
                 });
             if let Some(n) = name {
                 out.push((n, bound));
+            }
+        }
+    }
+    out
+}
+
+/// Like [`extract_generic_params_with_bounds`], but captures **every**
+/// `&`-separated bound on each generic param (`T extends A & B` → `[A, B]`)
+/// instead of just the first. Used for `implement` blocks (BEP-044), whose
+/// generic-param bounds are an interface intersection. The single-bound
+/// extractor remains for function/class/interface generic params, which do not
+/// yet carry multiple bounds.
+pub(crate) fn extract_generic_params_with_all_bounds(
+    node: &SyntaxNode,
+) -> Vec<(Name, Vec<crate::ast::TypeExpr>)> {
+    use baml_compiler_syntax::SyntaxKind;
+
+    let mut out: Vec<(Name, Vec<crate::ast::TypeExpr>)> = Vec::new();
+    for child in node.children() {
+        if child.kind() != SyntaxKind::GENERIC_PARAM_LIST {
+            continue;
+        }
+        for param_node in child.children() {
+            if param_node.kind() != SyntaxKind::GENERIC_PARAM {
+                continue;
+            }
+            let mut name: Option<Name> = None;
+            for elem in param_node.children_with_tokens() {
+                if let Some(token) = elem.as_token()
+                    && token.kind() == SyntaxKind::WORD
+                    && name.is_none()
+                {
+                    name = Some(Name::new(token.text()));
+                }
+            }
+            let bounds: Vec<crate::ast::TypeExpr> = param_node
+                .children()
+                .find(|n| n.kind() == SyntaxKind::GENERIC_PARAM_BOUNDS)
+                .map(|bounds_node| {
+                    bounds_node
+                        .children()
+                        .filter_map(|n| {
+                            let te = baml_compiler_syntax::ast::TypeExpr::cast(n)?;
+                            Some(lower_type_expr::lower_type_expr_node(&te))
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
+            if let Some(n) = name {
+                out.push((n, bounds));
             }
         }
     }
@@ -1603,7 +1656,7 @@ fn lower_implements_for(
 ) -> Option<ImplementsForDef> {
     let imp = ast::ImplementsFor::cast(node.clone())?;
 
-    let generic_params = extract_generic_params_with_bounds(node);
+    let generic_params = extract_generic_params_with_all_bounds(node);
 
     // Interface target (the `I` in `implements I for T`)
     let target_node = imp.target()?;

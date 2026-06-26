@@ -19,7 +19,7 @@ use crate::{
     diagnostic::{Hir2Diagnostic, MemberSite},
     file_package::file_package,
     ids::{FunctionMarker, LocalItemId},
-    item_tree::ItemTree,
+    item_tree::{GenericParam, ImplBlock, ImplSubject, InterfaceFieldLink, ItemTree},
     loc::{
         ClassLoc, ClientLoc, EnumLoc, FunctionLoc, InterfaceLoc, LetLoc, RetryPolicyLoc,
         TemplateStringLoc, TestLoc, TypeAliasLoc,
@@ -37,6 +37,21 @@ struct PathRootReference {
     use_scope: FileScopeId,
     use_offset: TextSize,
     owner_lambda: Option<FileScopeId>,
+}
+
+/// The head name used to seed an impl's stable `ImplId` from a target
+/// `TypeExpr`: the last path segment (interface/class name), or a coarse shape
+/// tag for non-path for-targets (primitives, list/map/union). This only needs
+/// to be position-independent and reasonably collision-distributed — the
+/// `LocalItemId` collision index disambiguates anything that shares a head.
+fn impl_head_name(te: &ast::TypeExpr) -> Name {
+    match te {
+        ast::TypeExpr::Path { segments, .. } => segments
+            .last()
+            .cloned()
+            .unwrap_or_else(|| Name::new("#path")),
+        _ => Name::new("#nonpath"),
+    }
 }
 
 pub struct SemanticIndexBuilder<'db> {
@@ -1253,6 +1268,18 @@ impl<'db> SemanticIndexBuilder<'db> {
                         span: method.name_span,
                     });
             }
+            // BEP-042: `cleanup` is a reserved magic finalizer name. A method
+            // named `cleanup` whose signature isn't `cleanup(self) -> void` is
+            // malformed (the magic guard only fires for the exact shape).
+            if method.name.as_str() == ast::cleanup_guard::CLEANUP_METHOD
+                && !ast::cleanup_guard::has_cleanup_shape(method)
+            {
+                self.diagnostics
+                    .push(Hir2Diagnostic::CleanupMagicMethodSignature {
+                        class_name: c.name.clone(),
+                        span: method.name_span,
+                    });
+            }
             seen.entry(method.name.clone())
                 .or_default()
                 .push(MemberSite {
@@ -1272,6 +1299,7 @@ impl<'db> SemanticIndexBuilder<'db> {
         self.class_depth += 1;
         let mut method_ids: Vec<_> = c.methods.iter().map(|m| self.lower_function(m)).collect();
         for impl_block in &c.implements {
+            let mut block_method_ids = Vec::new();
             for m in &impl_block.methods {
                 let fid = self.lower_function(m);
                 // BEP-044: remember which interface this method came from so
@@ -1283,8 +1311,29 @@ impl<'db> SemanticIndexBuilder<'db> {
                 self.item_tree
                     .method_to_iface_associated_type_bindings
                     .insert(fid, impl_block.associated_type_bindings.clone());
-                method_ids.push(fid);
+                block_method_ids.push(fid);
             }
+            // Dual-write: also record this in-body impl under a stable `ImplId`.
+            // An in-body `implements I {}` (and a simple `implement I for C`
+            // merged onto the class) is `InClass`; its for-type is the class.
+            let iface_head = impl_head_name(&impl_block.target.expr);
+            let block = ImplBlock {
+                subject: ImplSubject::InClass {
+                    class: local_id,
+                    out_of_body: impl_block.is_out_of_body,
+                },
+                interface_target: impl_block.target.clone(),
+                field_links: impl_block
+                    .field_links
+                    .iter()
+                    .map(InterfaceFieldLink::from_ast)
+                    .collect(),
+                associated_type_bindings: impl_block.associated_type_bindings.clone(),
+                methods: block_method_ids.clone(),
+                span: impl_block.span,
+            };
+            self.item_tree.alloc_impl(&iface_head, &c.name, block);
+            method_ids.extend(block_method_ids);
         }
         self.class_depth -= 1;
 
@@ -1321,7 +1370,34 @@ impl<'db> SemanticIndexBuilder<'db> {
             self.pop_scope();
         }
         self.class_depth -= 1;
-        self.item_tree.add_implements_for(imp, method_ids);
+        self.item_tree.add_implements_for(imp, method_ids.clone());
+        // Dual-write: also record this out-of-body impl under a stable `ImplId`.
+        let iface_head = impl_head_name(&imp.interface_target.expr);
+        let for_head = impl_head_name(&imp.for_target.expr);
+        let generics = imp
+            .generic_params
+            .iter()
+            .map(|(name, bounds)| GenericParam {
+                name: name.clone(),
+                bounds: bounds.clone(),
+            })
+            .collect();
+        let block = ImplBlock {
+            subject: ImplSubject::Free {
+                for_target: imp.for_target.clone(),
+                generics,
+            },
+            interface_target: imp.interface_target.clone(),
+            field_links: imp
+                .field_links
+                .iter()
+                .map(InterfaceFieldLink::from_ast)
+                .collect(),
+            associated_type_bindings: imp.associated_type_bindings.clone(),
+            methods: method_ids,
+            span: imp.span,
+        };
+        self.item_tree.alloc_impl(&iface_head, &for_head, block);
     }
 
     /// Lower an `interface I { ... }` declaration (BEP-044).

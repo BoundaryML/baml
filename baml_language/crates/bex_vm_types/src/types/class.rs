@@ -1,7 +1,7 @@
 use baml_type::RuntimeTy;
 use borsh::{BorshDeserialize, BorshSerialize};
 
-use crate::{AtomicValueSlot, HeapPtr, Value};
+use crate::{AtomicValueSlot, CleanupLatch, HeapPtr, Value};
 
 /// A field within a runtime class, carrying type and schema metadata.
 #[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
@@ -47,6 +47,20 @@ pub struct Class {
 
     /// Class-level type attribute (e.g., from @@stream.done).
     pub ty_attr: baml_type::TyAttr,
+
+    /// BEP-042: `true` if this class defines a magic `cleanup(self) -> void`
+    /// finalizer. Set at emit time. The GC checks this bit to decide whether an
+    /// instance is finalizable — so the common case (no `cleanup`) is a single
+    /// flag read and never enters finalization.
+    pub has_cleanup: bool,
+
+    /// Number of generic params the class itself declares (`GenericBox<T>` ⇒ 1,
+    /// non-generic ⇒ 0). A method's `display_type_params` are De Bruijn-ordered
+    /// as *class params first, then the method's own*, so this count is the
+    /// length of that class prefix — it lets the engine split a method's own
+    /// generic params (which Gate A must demand) from the inherited class params
+    /// (bound by the receiver, never by name). Set at emit time.
+    pub generic_param_count: usize,
 }
 
 impl std::fmt::Display for Class {
@@ -64,12 +78,22 @@ pub struct Instance {
     /// Resolved class-level type args at construction time.  Empty when the
     /// class is non-generic.  De Bruijn-ordered to match
     /// `enclosing_generic_params()`: index 0 = first class param, etc.
-    pub class_type_args: Vec<baml_type::RuntimeTy>,
+    ///
+    /// Boxed (immutable after construction) rather than a `Vec` so `Instance`
+    /// stays within `Object`'s 64-byte budget once the `cleaned` latch is added
+    /// — matching the existing `Box<[RuntimeTy]>` convention for type-arg lists.
+    pub class_type_args: Box<[baml_type::RuntimeTy]>,
 
     /// Fields are accessed by index. No string lookups. Each slot is atomic so
     /// racing field reads/writes across `spawn` fibers cannot become a Rust
     /// data race.
     pub fields: Vec<AtomicValueSlot>,
+
+    /// BEP-042 `cleanup` run-once latch. `false` for a fresh instance; flipped
+    /// `true` by the first `cleanup` invocation (explicit, `defer`, or the GC
+    /// finalizer). Only classes with a `cleanup` method ever read or write it;
+    /// for every other instance it is an inert `false`.
+    pub cleaned: CleanupLatch,
 }
 
 impl Instance {
@@ -80,8 +104,9 @@ impl Instance {
     ) -> Self {
         Self {
             class,
-            class_type_args,
+            class_type_args: class_type_args.into(),
             fields: fields.into_iter().map(AtomicValueSlot::new).collect(),
+            cleaned: CleanupLatch::new(false),
         }
     }
 

@@ -182,3 +182,27 @@ class VeryLongStrings(BaseModel):
 # #########################################################################
 # Generated type aliases (0)
 # #########################################################################
+
+
+# #########################################################################
+# Model rebuilds (15)
+# #########################################################################
+# Resolve string forward references now that every model above is defined so
+# class declaration order never breaks Pydantic construction (issue #793).
+# Recursive models are intentionally omitted (Pydantic resolves those lazily;
+# eagerly rebuilding them can recurse).
+AllNullable.model_rebuild()
+BooleanEdgeCases.model_rebuild()
+EmptyCollections.model_rebuild()
+InnerNullable.model_rebuild()
+LargeStructure.model_rebuild()
+MixedEdgeCases.model_rebuild()
+NestedNullable.model_rebuild()
+NullEdgeCases.model_rebuild()
+NumberEdgeCases.model_rebuild()
+OptionalEverything.model_rebuild()
+OuterNullable.model_rebuild()
+SomeNullable.model_rebuild()
+SpecialCharacters.model_rebuild()
+User.model_rebuild()
+VeryLongStrings.model_rebuild()

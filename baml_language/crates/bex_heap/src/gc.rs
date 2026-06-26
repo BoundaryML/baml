@@ -160,6 +160,141 @@ impl BexHeap {
     /// and clears Gen0 and Gen1. After collection all survivors reside in Gen2.
     ///
     /// Returns `(GcStats, remapped_roots, forwarding_map)`.
+    /// BEP-042: scan the given from-space generations for instances that died
+    /// this collection (not in `forwarding`), are not already cleaned, and
+    /// whose class defines a `cleanup` finalizer. Returns their (old) HeapPtrs
+    /// — the keep-alive seeds for finalization.
+    ///
+    /// Cheap: most objects are not instances, and most instances belong to
+    /// classes without `cleanup` (a single `has_cleanup` flag read). Only the
+    /// dead-and-finalizable minority is collected.
+    ///
+    /// SAFETY: call only at a GC safepoint, after the root trace has populated
+    /// `forwarding`, and before the space swap — the from-space objects must
+    /// still be intact.
+    unsafe fn scan_dead_finalizers(
+        &self,
+        forwarding: &HashMap<HeapPtr, HeapPtr>,
+        gens: &[&ChunkedVec<Object>],
+    ) -> Vec<(HeapPtr, String)> {
+        // Fast path: if no class defines `cleanup`, no instance can ever be
+        // finalizable, so skip the O(heap) from-space walk on every collection.
+        if !self.has_finalizable_classes {
+            return Vec::new();
+        }
+        let mut seeds = Vec::new();
+        for space in gens {
+            for i in 0..space.len() {
+                // SAFETY: index in bounds; GC safepoint.
+                let ptr = unsafe { self.make_heap_ptr(space.get_ptr(i)) };
+                if forwarding.contains_key(&ptr) {
+                    continue; // reachable from roots → not dead
+                }
+                // SAFETY: from-space object is still intact pre-swap.
+                let Object::Instance(inst) = (unsafe { ptr.get() }) else {
+                    continue;
+                };
+                if inst.cleaned.is_cleaned() {
+                    continue; // explicit/`defer` already cleaned it — SuppressFinalize
+                }
+                // The class object is compile-time/permanent — always valid.
+                let Object::Class(class) = (unsafe { inst.class.get() }) else {
+                    continue;
+                };
+                if class.has_cleanup {
+                    // Resolve the `cleanup` function name here, while the class
+                    // is in hand: methods register as `{class_fqn}.cleanup`
+                    // (matching `make_to_json_callee`'s `{fqn}.to_json`).
+                    let cleanup_fn = format!("{}.cleanup", class.name.render_dotted(false));
+                    seeds.push((ptr, cleanup_fn));
+                }
+            }
+        }
+        seeds
+    }
+
+    /// BEP-042 (major GC): keep alive every dead, not-yet-cleaned instance of a
+    /// `has_cleanup` class (and its transitive closure) by copying it into the
+    /// inactive space, and queue it for finalization. The copy loop mirrors the
+    /// root trace in [`copy_collection`]; queued pointers are the post-copy
+    /// locations, valid until the engine drains them at this same safepoint.
+    ///
+    /// SAFETY: GC safepoint, after the root trace, before the swap.
+    unsafe fn keepalive_finalizers_major(&self, forwarding: &mut HashMap<HeapPtr, HeapPtr>) {
+        let seeds = unsafe {
+            self.scan_dead_finalizers(
+                forwarding,
+                &[self.gen0_ref(), self.gen1_ref(), self.gen2_ref()],
+            )
+        };
+        if seeds.is_empty() {
+            return;
+        }
+        let mut worklist: Vec<HeapPtr> = seeds.iter().map(|(ptr, _)| *ptr).collect();
+        while let Some(old_ptr) = worklist.pop() {
+            if forwarding.contains_key(&old_ptr) {
+                continue;
+            }
+            if self.is_compile_time_ptr(old_ptr) {
+                forwarding.insert(old_ptr, old_ptr);
+                continue;
+            }
+            let new_ptr = self.copy_object_to_inactive(old_ptr, forwarding);
+            // SAFETY: just written into inactive; pointer valid.
+            let obj = unsafe { new_ptr.get() };
+            self.add_references_to_worklist(obj, &mut worklist);
+        }
+        for (old_ptr, cleanup_fn) in seeds {
+            // Every seed was copied above, so it is now in `forwarding`.
+            self.push_pending_finalizer(forwarding[&old_ptr], cleanup_fn);
+        }
+    }
+
+    /// BEP-042 (minor GC): like [`keepalive_finalizers_major`], but only the
+    /// young generations are collected, so only dead young instances are
+    /// finalized. The closure copy is generation-aware (Gen0→new Gen1,
+    /// Gen1→Gen2 promotion, Gen2 identity), mirroring [`copy_collection_minor`].
+    ///
+    /// SAFETY: GC safepoint, after the root trace, before the swap.
+    unsafe fn keepalive_finalizers_minor(
+        &self,
+        forwarding: &mut HashMap<HeapPtr, HeapPtr>,
+        promoted_to_gen2: &mut usize,
+    ) {
+        let seeds =
+            unsafe { self.scan_dead_finalizers(forwarding, &[self.gen0_ref(), self.gen1_ref()]) };
+        if seeds.is_empty() {
+            return;
+        }
+        let mut worklist: Vec<HeapPtr> = seeds.iter().map(|(ptr, _)| *ptr).collect();
+        while let Some(old_ptr) = worklist.pop() {
+            if forwarding.contains_key(&old_ptr) {
+                continue;
+            }
+            match self.generation_of(old_ptr) {
+                Generation::CompileTime | Generation::Gen2 => {
+                    forwarding.insert(old_ptr, old_ptr);
+                }
+                Generation::Gen0 => {
+                    let new_ptr = self.copy_object_to_space(&self.inactive, old_ptr, forwarding);
+                    // SAFETY: just written; pointer valid.
+                    let obj = unsafe { new_ptr.get() };
+                    self.add_references_to_worklist(obj, &mut worklist);
+                }
+                Generation::Gen1 => {
+                    let new_ptr = self.copy_object_to_space(&self.gen2, old_ptr, forwarding);
+                    // SAFETY: just written; pointer valid.
+                    let obj = unsafe { new_ptr.get() };
+                    self.add_references_to_worklist(obj, &mut worklist);
+                    *promoted_to_gen2 += 1;
+                }
+            }
+        }
+        for (old_ptr, cleanup_fn) in seeds {
+            self.push_pending_finalizer(forwarding[&old_ptr], cleanup_fn);
+        }
+    }
+
     fn copy_collection(
         &self,
         roots: &[HeapPtr],
@@ -222,6 +357,15 @@ impl BexHeap {
             // SAFETY: We just wrote the object into inactive, pointer is valid.
             let obj = unsafe { new_ptr.get() };
             self.add_references_to_worklist(obj, &mut worklist);
+        }
+
+        // BEP-042: keep alive every dead instance with a `cleanup` finalizer
+        // (and its transitive closure) by copying it into inactive, and queue
+        // it for post-collection finalization. After the root trace (so dead =
+        // not in `forwarding`), before the swap (so from-space is intact).
+        // SAFETY: GC safepoint; exclusive access.
+        unsafe {
+            self.keepalive_finalizers_major(&mut forwarding);
         }
 
         // Patch all intra-heap pointers in the inactive space to their new locations.
@@ -909,6 +1053,15 @@ impl BexHeap {
             }
         }
 
+        // BEP-042: keep alive dead young instances with a `cleanup` finalizer
+        // (and their closure) and queue them. Runs after the root trace and
+        // before the fixup, so the just-promoted finalizable objects are
+        // covered by the same fixup/promotion-barrier passes below.
+        // SAFETY: GC safepoint; exclusive access.
+        unsafe {
+            self.keepalive_finalizers_minor(&mut forwarding, &mut promoted_to_gen2);
+        }
+
         // Fix up references:
         // - Full fixup for inactive (new Gen1 — all objects are freshly copied).
         // - Tail fixup for Gen2 (newly promoted objects).
@@ -1147,6 +1300,8 @@ mod tests {
             alias: None,
             type_tag: 100,
             ty_attr: baml_type::TyAttr::default(),
+            has_cleanup: false,
+            generic_param_count: 0,
         }))];
         let debug = HeapDebuggerConfig {
             enabled: true,
@@ -1786,6 +1941,8 @@ mod tests {
             alias: None,
             type_tag: 0,
             ty_attr: TyAttr::default(),
+            has_cleanup: false,
+            generic_param_count: 0,
         })));
         let field_str = tlab.alloc_string("field_value".to_string());
         let inst_ptr =
@@ -2046,6 +2203,8 @@ mod tests {
             alias: None,
             type_tag: 42,
             ty_attr: TyAttr::default(),
+            has_cleanup: false,
+            generic_param_count: 0,
         })));
 
         let (_, new_roots, _) = unsafe { heap.collect_garbage(&[ptr]) };
@@ -2485,6 +2644,8 @@ mod tests {
             alias: None,
             type_tag: 0,
             ty_attr: TyAttr::default(),
+            has_cleanup: false,
+            generic_param_count: 0,
         })));
         let instance_container = tlab.alloc(Object::Instance(Instance::new(
             class_ptr,

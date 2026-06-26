@@ -106,6 +106,8 @@ fn alloc_instance_ntypeargs_stores_class_type_args() {
         alias: None,
         type_tag: 100,
         ty_attr: TyAttr::default(),
+        has_cleanup: false,
+        generic_param_count: 0,
     })));
 
     // Function: push RuntimeTy::int() as a type arg, then AllocInstance with ntypeargs=1.
@@ -133,7 +135,7 @@ fn alloc_instance_ntypeargs_stores_class_type_args() {
     match vm.get_object(inst_ptr) {
         Object::Instance(inst) => {
             assert_eq!(
-                inst.class_type_args,
+                inst.class_type_args.to_vec(),
                 vec![RuntimeTy::int()],
                 "Instance::class_type_args should equal [RuntimeTy::int()]"
             );
@@ -154,6 +156,8 @@ fn alloc_instance_ntypeargs_zero_gives_empty_class_type_args() {
         alias: None,
         type_tag: 101,
         ty_attr: TyAttr::default(),
+        has_cleanup: false,
+        generic_param_count: 0,
     })));
 
     let fn_name = "user.test_mono_alloc";

@@ -619,6 +619,8 @@ mod tests {
             alias: None,
             type_tag: 100,
             ty_attr: baml_type::TyAttr::default(),
+            has_cleanup: false,
+            generic_param_count: 0,
         })));
 
         // Allocate an instance of that class

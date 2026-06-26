@@ -149,6 +149,10 @@ pub enum Hir2Diagnostic {
     /// must live inside an `implements baml.FromJson { ... }` block. (The
     /// auto-derived structural-default `from_json` delegate is exempt.)
     FromJsonMustImplementInterface { class_name: Name, span: TextRange },
+    /// A class declares a `cleanup` method whose signature is not the reserved
+    /// magic-finalizer shape `cleanup(self) -> void` (BEP-042). `cleanup` is a
+    /// reserved magic method name, so it must have that exact shape.
+    CleanupMagicMethodSignature { class_name: Name, span: TextRange },
     /// A class field has a different type than the interface declares for
     /// that name.
     InterfaceFieldTypeMismatch {
@@ -632,6 +636,22 @@ impl Hir2Diagnostic {
                     range: *span,
                 },
                 "move this into `implements baml.FromJson { ... }`",
+            )
+            .with_phase(DiagnosticPhase::Hir),
+
+            Hir2Diagnostic::CleanupMagicMethodSignature { class_name, span } => Diagnostic::error(
+                DiagnosticId::CleanupMagicMethodSignature,
+                format!(
+                    "`cleanup` on class `{class_name}` must have the signature \
+                     `cleanup(self) -> void`; it is a reserved magic finalizer name"
+                ),
+            )
+            .with_primary(
+                Span {
+                    file_id,
+                    range: *span,
+                },
+                "expected `cleanup(self) -> void`",
             )
             .with_phase(DiagnosticPhase::Hir),
             Hir2Diagnostic::InterfaceFieldTypeMismatch {

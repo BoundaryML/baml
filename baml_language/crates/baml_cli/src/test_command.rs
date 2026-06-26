@@ -164,7 +164,6 @@ impl TestArgs {
             self.include.iter().map(|s| s.as_str()),
             self.exclude.iter().map(|s| s.as_str()),
         );
-        let has_filters = !self.include.is_empty() || !self.exclude.is_empty();
         let legacy_selected: Vec<&LegacyTest> = legacy
             .iter()
             .filter(|t| filter.includes(&t.function_name, &t.test_name))
@@ -226,6 +225,7 @@ impl TestArgs {
 
         let mut passed = 0usize;
         let mut failed = 0usize;
+        let mut tolerated = 0usize;
         let mut total = 0usize;
         let mut command_failed = false;
 
@@ -239,15 +239,16 @@ impl TestArgs {
         }
 
         // Testset tests run inside the stdlib: a single `run_filtered` call
-        // expands, filters, runs (concurrently via spawn/await), and aggregates.
+        // expands, filters, runs (concurrently via spawn/await), and aggregates
+        // (honoring testset runners), returning a tolerated-aware flat report.
         if let Some(reg) = &registry {
             match run_filtered_report(&run_ctx, reg, &self.include, &self.exclude) {
                 Ok(value) => match parse_flat_report(&value) {
                     Some(flat) => consume_flat_report(
                         &flat,
-                        has_filters,
                         &mut passed,
                         &mut failed,
+                        &mut tolerated,
                         &mut total,
                         &mut command_failed,
                     ),
@@ -273,7 +274,19 @@ impl TestArgs {
             return Ok(crate::ExitCode::NoTestsRun);
         }
 
-        let summary = format!("{passed} passed, {failed} failed, {total} total");
+        let summary = if command_failed && tolerated > 0 {
+            format!(
+                "{passed} passed, {failed} failed, {tolerated} tolerated {}, {total} total",
+                pluralize(tolerated, "failure", "failures")
+            )
+        } else if !command_failed && tolerated > 0 {
+            format!(
+                "aggregate passed — {passed} passed, {tolerated} tolerated {}, {total} total",
+                pluralize(tolerated, "failure", "failures")
+            )
+        } else {
+            format!("{passed} passed, {failed} failed, {total} total")
+        };
         if command_failed {
             // `reporter.finish` styles success — print as an error so the
             // bold-red `Error:` carries the visual weight of "tests failed".
@@ -458,81 +471,84 @@ fn list_selected_testset_names(
 /// aggregate `PASS/FAIL testing::*` line plus failed child names and failure
 /// messages, and the exit verdict follows the aggregate `outcome` (so a runner
 /// like `PassRate` can pass the suite even with a failing leaf).
+/// Print the aggregate testset result and fold its counts into the running
+/// totals. Both filtered and unfiltered runs go through the same aggregate path
+/// (filtered selections still run under their testset runners), so a failing
+/// leaf whose runner still passes the suite is reported as a *tolerated* failure
+/// — kept out of the hard `failed` count and not failing the command.
 fn consume_flat_report(
     flat: &FlatReport,
-    has_filters: bool,
     passed: &mut usize,
     failed: &mut usize,
+    tolerated: &mut usize,
     total: &mut usize,
     command_failed: &mut bool,
 ) {
-    if has_filters {
-        for row in &flat.results {
-            let (func, test) = split_top(&row.name);
-            if row.outcome == "pass" {
-                println!("PASS {func}::{test}");
-                *passed += 1;
-            } else {
-                println!("FAIL {func}::{test} [outcome={}]", row.outcome);
-                for message in &row.messages {
-                    eprintln!("  => {message}");
-                }
-                *failed += 1;
+    *passed += flat.passed;
+    *failed += flat.failed;
+    *tolerated += flat.tolerated;
+    *total += flat.total;
+
+    if flat.outcome == "pass" {
+        if flat.tolerated > 0 {
+            println!(
+                "PASS testing::* [outcome=pass; {} tolerated {}]",
+                flat.tolerated,
+                pluralize(flat.tolerated, "failure", "failures")
+            );
+            // The aggregate-pass path's failed_names hold the tolerated names
+            // (a passing suite contributes none to the top failed_names, so this
+            // is usually empty — printed for symmetry with the FAIL path).
+            for name in &flat.failed_names {
+                println!("  tolerated: {name}");
             }
-        }
-        *total += flat.results.len();
-        if flat.outcome != "pass" {
-            *command_failed = true;
+        } else {
+            println!("PASS testing::*");
         }
     } else {
-        *passed += flat.passed;
-        *failed += flat.failed;
-        *total += flat.total;
-        if flat.outcome == "pass" {
-            println!("PASS testing::*");
-        } else {
-            println!("FAIL testing::* [outcome={}]", flat.outcome);
-            for name in &flat.failed_names {
-                println!("  failed: {name}");
-            }
-            for message in &flat.messages {
-                eprintln!("  => {message}");
-            }
-            // A testset runner can fail the aggregate without marking any child
-            // failed. Count that verdict as one displayed failure so the summary
-            // does not read "0 failed" when the aggregate itself failed.
-            if flat.failed == 0 {
-                *failed += 1;
-                *total += 1;
-            }
-            *command_failed = true;
+        println!("FAIL testing::* [outcome={}]", flat.outcome);
+        for name in &flat.failed_names {
+            println!("  failed: {name}");
         }
+        for message in &flat.messages {
+            eprintln!("  => {message}");
+        }
+        // A testset runner can fail the aggregate without marking any child
+        // failed. Count that verdict as one displayed failure so the summary
+        // does not read "0 failed" when the aggregate itself failed.
+        if flat.failed == 0 {
+            *failed += 1;
+            *total += 1;
+        }
+        *command_failed = true;
+    }
+}
+
+fn pluralize(n: usize, singular: &str, plural: &str) -> String {
+    if n == 1 {
+        singular.to_string()
+    } else {
+        plural.to_string()
     }
 }
 
 // ---------------------------------------------------------------------------
 // Flat report parsing
 //
-// `FlatTestReport` / `FlatTestResult` (baml_std/testing/types.baml) are
-// intentionally shallow: primitive fields and a flat `results` array, so the
-// driver reads them with a couple of small helpers instead of walking a nested,
+// `FlatTestReport` (baml_std/testing/types.baml) is intentionally shallow:
+// primitive fields only, already aggregated (including the tolerated-failure
+// split), so the driver reads it directly instead of walking a nested,
 // union-wrapped `TestReport | TestSetReport` tree.
 // ---------------------------------------------------------------------------
-
-struct FlatRow {
-    name: String,
-    outcome: String,
-    messages: Vec<String>,
-}
 
 struct FlatReport {
     outcome: String,
     passed: usize,
     failed: usize,
+    tolerated: usize,
     total: usize,
     failed_names: Vec<String>,
     messages: Vec<String>,
-    results: Vec<FlatRow>,
 }
 
 fn parse_flat_report(value: &BexExternalValue) -> Option<FlatReport> {
@@ -547,6 +563,7 @@ fn parse_flat_report(value: &BexExternalValue) -> Option<FlatReport> {
     // one as an FFI contract break (parse fails -> reported, not silently zeroed).
     let passed = fields.get("passed").and_then(as_usize)?;
     let failed = fields.get("failed").and_then(as_usize)?;
+    let tolerated = fields.get("tolerated").and_then(as_usize)?;
     let total = fields.get("total").and_then(as_usize)?;
     let failed_names = fields
         .get("failed_names")
@@ -556,47 +573,13 @@ fn parse_flat_report(value: &BexExternalValue) -> Option<FlatReport> {
         .get("messages")
         .map(string_array_values)
         .unwrap_or_default();
-    let results = fields
-        .get("results")
-        .map(parse_flat_rows)
-        .unwrap_or_default();
     Some(FlatReport {
         outcome,
         passed,
         failed,
+        tolerated,
         total,
         failed_names,
-        messages,
-        results,
-    })
-}
-
-fn parse_flat_rows(value: &BexExternalValue) -> Vec<FlatRow> {
-    let BexExternalValue::Array { items, .. } = unwrap_union(value) else {
-        return Vec::new();
-    };
-    items.iter().filter_map(parse_flat_row).collect()
-}
-
-fn parse_flat_row(value: &BexExternalValue) -> Option<FlatRow> {
-    let BexExternalValue::Instance { fields, .. } = unwrap_union(value) else {
-        return None;
-    };
-    let name = fields
-        .get("name")
-        .and_then(|v| as_string(unwrap_union(v)))?
-        .to_string();
-    let outcome = fields
-        .get("outcome")
-        .and_then(|v| as_string(unwrap_union(v)))?
-        .to_string();
-    let messages = fields
-        .get("messages")
-        .map(string_array_values)
-        .unwrap_or_default();
-    Some(FlatRow {
-        name,
-        outcome,
         messages,
     })
 }
@@ -692,30 +675,15 @@ mod tests {
         }
     }
 
-    fn flat_row(name: &str, outcome: &str, messages: &[&str]) -> BexExternalValue {
-        instance(
-            "testing.FlatTestResult",
-            vec![
-                ("name", string(name)),
-                ("outcome", string(outcome)),
-                (
-                    "messages",
-                    array(messages.iter().map(|m| string(m)).collect()),
-                ),
-                ("duration_ms", int(0)),
-                ("run_count", int(1)),
-            ],
-        )
-    }
-
+    #[allow(clippy::too_many_arguments)]
     fn flat_report(
         outcome: &str,
         passed: i64,
         failed: i64,
+        tolerated: i64,
         total: i64,
         failed_names: Vec<BexExternalValue>,
         messages: Vec<BexExternalValue>,
-        results: Vec<BexExternalValue>,
     ) -> BexExternalValue {
         instance(
             "testing.FlatTestReport",
@@ -723,10 +691,10 @@ mod tests {
                 ("outcome", string(outcome)),
                 ("passed", int(passed)),
                 ("failed", int(failed)),
+                ("tolerated", int(tolerated)),
                 ("total", int(total)),
                 ("failed_names", array(failed_names)),
                 ("messages", array(messages)),
-                ("results", array(results)),
             ],
         )
     }
@@ -735,37 +703,26 @@ mod tests {
     fn parses_flat_report_fields() {
         let value = flat_report(
             "fail",
-            2,
+            1,
+            1,
             1,
             3,
-            vec![string("suite/three")],
+            vec![string("hard/fails")],
             vec![string("assertion failed")],
-            vec![
-                flat_row("suite/one", "pass", &[]),
-                flat_row("suite/two", "pass", &[]),
-                // A multi-run (Quorum/Retry) leaf with one message per failing run.
-                flat_row("suite/three", "fail", &["run 1 failed", "run 2 failed"]),
-            ],
         );
 
         let parsed = parse_flat_report(&value).expect("should parse");
         assert_eq!(parsed.outcome, "fail");
-        assert_eq!((parsed.passed, parsed.failed, parsed.total), (2, 1, 3));
-        assert_eq!(parsed.failed_names, vec!["suite/three".to_string()]);
-        assert_eq!(parsed.messages, vec!["assertion failed".to_string()]);
-        assert_eq!(parsed.results.len(), 3);
-        assert_eq!(parsed.results[2].name, "suite/three");
-        assert_eq!(parsed.results[2].outcome, "fail");
-        // Every failing run's message is preserved, not just the first.
         assert_eq!(
-            parsed.results[2].messages,
-            vec!["run 1 failed".to_string(), "run 2 failed".to_string()]
+            (parsed.passed, parsed.failed, parsed.tolerated, parsed.total),
+            (1, 1, 1, 3)
         );
-        assert!(parsed.results[0].messages.is_empty());
+        assert_eq!(parsed.failed_names, vec!["hard/fails".to_string()]);
+        assert_eq!(parsed.messages, vec!["assertion failed".to_string()]);
     }
 
     #[test]
-    fn parse_flat_report_unwraps_union_wrapped_fields() {
+    fn parse_flat_report_unwraps_union_wrapped_outcome() {
         // Union-typed fields (Outcome) arrive wrapped across the FFI boundary.
         let wrapped_outcome = BexExternalValue::union(
             string("pass"),
@@ -778,10 +735,10 @@ mod tests {
                 ("outcome", wrapped_outcome),
                 ("passed", int(1)),
                 ("failed", int(0)),
+                ("tolerated", int(0)),
                 ("total", int(1)),
                 ("failed_names", array(Vec::new())),
                 ("messages", array(Vec::new())),
-                ("results", array(Vec::new())),
             ],
         );
 
@@ -790,86 +747,49 @@ mod tests {
         assert_eq!(parsed.total, 1);
     }
 
+    fn consume(report: &FlatReport) -> (usize, usize, usize, usize, bool) {
+        let (mut passed, mut failed, mut tolerated, mut total, mut command_failed) =
+            (0, 0, 0, 0, false);
+        consume_flat_report(
+            report,
+            &mut passed,
+            &mut failed,
+            &mut tolerated,
+            &mut total,
+            &mut command_failed,
+        );
+        (passed, failed, tolerated, total, command_failed)
+    }
+
     #[test]
-    fn consume_filtered_counts_and_fails_on_any_leaf() {
+    fn consume_aggregate_pass_with_tolerated_failure() {
+        // PassRate-style: aggregate passes; the failing leaf is tolerated, not hard.
+        let parsed =
+            parse_flat_report(&flat_report("pass", 2, 0, 1, 3, Vec::new(), Vec::new())).unwrap();
+        assert_eq!(consume(&parsed), (2, 0, 1, 3, false));
+    }
+
+    #[test]
+    fn consume_aggregate_fail_keeps_tolerated_out_of_failed() {
+        // A hard sibling fails the command; tolerated stays separate from failed.
         let parsed = parse_flat_report(&flat_report(
             "fail",
             1,
             1,
-            2,
-            vec![string("suite/three")],
-            vec![string("boom")],
-            vec![
-                flat_row("suite/one", "pass", &[]),
-                flat_row("suite/three", "fail", &["boom"]),
-            ],
-        ))
-        .unwrap();
-
-        let (mut passed, mut failed, mut total, mut command_failed) = (0, 0, 0, false);
-        consume_flat_report(
-            &parsed,
-            true,
-            &mut passed,
-            &mut failed,
-            &mut total,
-            &mut command_failed,
-        );
-        assert_eq!((passed, failed, total), (1, 1, 2));
-        assert!(command_failed);
-    }
-
-    #[test]
-    fn consume_unfiltered_honors_aggregate_pass_with_failing_leaf() {
-        // PassRate-style: aggregate passes even though a leaf failed.
-        let parsed = parse_flat_report(&flat_report(
-            "pass",
-            2,
             1,
             3,
-            Vec::new(),
-            Vec::new(),
+            vec![string("hard/fails")],
             Vec::new(),
         ))
         .unwrap();
-
-        let (mut passed, mut failed, mut total, mut command_failed) = (0, 0, 0, false);
-        consume_flat_report(
-            &parsed,
-            false,
-            &mut passed,
-            &mut failed,
-            &mut total,
-            &mut command_failed,
-        );
-        assert_eq!((passed, failed, total), (2, 1, 3));
-        assert!(!command_failed);
+        assert_eq!(consume(&parsed), (1, 1, 1, 3, true));
     }
 
     #[test]
-    fn consume_unfiltered_synthesizes_failure_when_aggregate_fails_with_zero_failed() {
+    fn consume_fail_with_zero_hard_failed_synthesizes_one() {
         // Runner fails the aggregate without marking any child failed.
-        let parsed = parse_flat_report(&flat_report(
-            "fail",
-            1,
-            0,
-            1,
-            Vec::new(),
-            Vec::new(),
-            Vec::new(),
-        ))
-        .unwrap();
-
-        let (mut passed, mut failed, mut total, mut command_failed) = (0, 0, 0, false);
-        consume_flat_report(
-            &parsed,
-            false,
-            &mut passed,
-            &mut failed,
-            &mut total,
-            &mut command_failed,
-        );
-        assert_eq!((passed, failed, total), (1, 1, 2));
-        assert!(command_failed);
+        let parsed =
+            parse_flat_report(&flat_report("fail", 1, 0, 0, 1, Vec::new(), Vec::new())).unwrap();
+        assert_eq!(consume(&parsed), (1, 1, 0, 2, true));
     }
 }

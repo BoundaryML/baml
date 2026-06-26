@@ -11,10 +11,11 @@ class testing.FilterPat {
   func_pat: string
   test_pat: string
 }
-class testing.FlatLeaf {
-  name: string
-  body: TestBody
-  runner: TestRunner?
+class testing.LeafCounts {
+  passed: int
+  failed: int
+  tolerated: int
+  total: int
 }
 class testing.NameSplit {
   head: string
@@ -53,6 +54,12 @@ type testing.SerializedTestDef = testing.SerializedTest | testing.SerializedTest
 function testing.$invoke_collector(collector: TestSetBody, c: testing.TestCollector) -> void  [expr] {
   {  } collector(c)
 }
+function testing._has_selected_descendant(prefix: string, names: string[]) -> bool  [expr] {
+  { let descendant_prefix = prefix Add "/"; for selected in names {  } if (selected.starts_with(descendant_prefix)) { return true } else {  } null } false
+}
+function testing._name_selected(name: string, names: string[]) -> bool  [expr] {
+  { for selected in names {  } if (selected Eq name) { return true } else {  } null } false
+}
 function testing.aggregate_reports(named_results: NamedChildReport[]) -> TestSetReport  [expr] {
   { let passed = 0; let failed = 0; let has_error = false; let failed_names: string[] = []; let results: ChildReport[] = []; for named_result in named_results { let result = named_result.report; results.push(result); let outcome = match (result) { report: TestReport => report.outcome, report: TestSetReport => report.outcome } } if (outcome Eq "pass") { passed Add= 1 } else { failed Add= 1; let child_failed_names = match (result) { report: TestReport => [named_result.name], report: TestSetReport => if (report.failed_names.length() Gt 0) {  } report.failed_names else {  } [named_result.name] }; for name in child_failed_names {  } failed_names.push(name) } if (outcome Eq "error") { has_error = true } else {  } null; let outcome: Outcome = if (has_error) {  } "error" else if (failed Eq 0) {  } "pass" else {  } "fail" } TestSetReport { outcome: outcome, passed: passed, failed: failed, total: results.length(), failed_names: failed_names, results: results }
 }
@@ -62,23 +69,20 @@ function testing.any_pattern_matches(pats: testing.FilterPat[], function_name: s
 function testing.collect_leaf_messages(results: ChildReport[], out: string[]) -> void  [expr] {
   { for r in results {  } match (r) { tr: TestReport => { for run in tr.runs {  } if (run.outcome Ne "pass") {  } if let m: string = run.message { out.push(m) } }, tsr: TestSetReport => { root.collect_leaf_messages(tsr.results, out) } } }
 }
-function testing.collect_leaf_outcomes(results: ChildReport[], out: string[]) -> void  [expr] {
-  { for r in results {  } match (r) { tr: TestReport => { out.push(if (tr.outcome Eq "pass") {  } "pass" else {  } "fail") }, tsr: TestSetReport => {  } if (tsr.results.length() Eq 0) { { let i = 0; while i Lt tsr.passed { out.push("pass") } }; { let i = 0; while i Lt tsr.failed { out.push("fail") } } } else { root.collect_leaf_outcomes(tsr.results, out) } } }
+function testing.collect_leaf_names(registry: testing.TestRegistry) -> string[]  [expr] {
+  { let out: string[] = []; for t in registry.collector.tests { out.push(t.name) }; for ts in registry.collector.testsets { for name in root.collect_subtree_names(registry, ts) { out.push(name) } } } out
 }
-function testing.collect_leaves(registry: testing.TestRegistry) -> testing.FlatLeaf[]  [expr] {
-  { let out: testing.FlatLeaf[] = []; for t in registry.collector.tests {  } out.push(testing.FlatLeaf { name: t.name, body: t.body, runner: t.runner }); for ts in registry.collector.testsets { for leaf in root.collect_subtree_leaves(registry, ts) {  } out.push(leaf) } } out
+function testing.collect_subtree_names(registry: testing.TestRegistry, ts: testing.TestSetRegistration) -> string[]  [expr] {
+  {  } root.collect_leaf_names(registry.expand_testset_registry(ts)) catch_all (e) { baml.panics.Panic => [ts.name], _ => [ts.name] }
 }
-function testing.collect_subtree_leaves(registry: testing.TestRegistry, ts: testing.TestSetRegistration) -> testing.FlatLeaf[]  [expr] {
-  {  } root.collect_leaves(registry.expand_testset_registry(ts)) catch_all (e) { baml.panics.Panic => [root.expansion_error_leaf(ts.name)], _ => [root.expansion_error_leaf(ts.name)] }
+function testing.count_leaves(results: ChildReport[], tolerated_by_parent: bool) -> testing.LeafCounts  [expr] {
+  { let passed = 0; let failed = 0; let tolerated = 0; let total = 0; for r in results { let delta = match (r) { tr: TestReport => {  } if (tr.outcome Eq "pass") {  } testing.LeafCounts { passed: 1, failed: 0, tolerated: 0, total: 1 } else if (tolerated_by_parent) {  } testing.LeafCounts { passed: 0, failed: 0, tolerated: 1, total: 1 } else {  } testing.LeafCounts { passed: 0, failed: 1, tolerated: 0, total: 1 }, tsr: TestSetReport => { let ft = tolerated_by_parent Or tsr.outcome Eq "pass" } if (tsr.results.length() Gt 0) {  } root.count_leaves(tsr.results, ft) else if (ft) {  } testing.LeafCounts { passed: tsr.passed, failed: 0, tolerated: tsr.failed, total: tsr.total } else {  } testing.LeafCounts { passed: tsr.passed, failed: tsr.failed, tolerated: 0, total: tsr.total } }; passed Add= delta.passed; failed Add= delta.failed; tolerated Add= delta.tolerated; total Add= delta.total } } testing.LeafCounts { passed: passed, failed: failed, tolerated: tolerated, total: total }
 }
 function testing.expand_set(self: ?, name: string) -> testing.SerializedTestDef[]  [expr] {
   { for ts in self.collector.testsets {  } if (ts.name Eq name) { self.expand_testset_registry(ts); return self.serialize() }; for k in self.expansions.keys() { let sub = self.expansions[k] } if (name.starts_with(k Add "/")) { return sub.expand_set(name) }; throw "TestSet not found..." Add name }
 }
 function testing.expand_testset_registry(self: ?, ts: testing.TestSetRegistration) -> testing.TestRegistry  [expr] {
   {  } match (self.expansions.get(ts.name)) { existing: testing.TestRegistry => existing, null => { let start = baml.sys.now_ms(); let sub_collector = testing.TestCollector { prefix: ts.name, tests: [], testsets: [] }; ts.collector(sub_collector); let elapsed = baml.sys.now_ms() Sub start; let sub_registry = testing.TestRegistry { collector: sub_collector, expansions: map {  }, loading_time_ms: elapsed }; self.expansions.set(ts.name, sub_registry) } sub_registry }
-}
-function testing.expansion_error_leaf(name: string) -> testing.FlatLeaf  [expr] {
-  {  } testing.FlatLeaf { name: name Add "/(failed to expand)", body: () -> void throws unknown { {  } baml.sys.panic("testset failed to...") }, runner: null }
 }
 function testing.expansion_error_report(name: string) -> TestSetReport  [expr] {
   {  } TestSetReport { outcome: "error", passed: 0, failed: 1, total: 1, failed_names: [name], results: [] }
@@ -92,11 +96,8 @@ function testing.find_test(self: ?, name: string) -> testing.TestRegistration  [
 function testing.find_testset(self: ?, name: string) -> testing.TestSetRegistration  [expr] {
   { for ts in self.testsets {  } if (ts.name Eq name) { return ts }; throw "TestSet not found: " Add name }
 }
-function testing.flatten_leaf_report(name: string, report: TestReport) -> FlatTestResult  [expr] {
-  { let messages: string[] = []; let duration = 0; for run in report.runs { duration Add= run.duration_ms } if (run.outcome Ne "pass") {  } if let m: string = run.message { messages.push(m) } } FlatTestResult { name: name, outcome: report.outcome, messages: messages, duration_ms: duration, run_count: report.runs.length() }
-}
-function testing.flatten_testset_report(report: TestSetReport) -> FlatTestReport  [expr] {
-  { let outcomes: string[] = []; root.collect_leaf_outcomes(report.results, outcomes); let passed = 0; let failed = 0; for o in outcomes {  } if (o Eq "pass") { passed Add= 1 } else { failed Add= 1 }; let messages: string[] = []; root.collect_leaf_messages(report.results, messages); let no_rows: FlatTestResult[] = [] } FlatTestReport { outcome: report.outcome, passed: passed, failed: failed, total: outcomes.length(), failed_names: report.failed_names, messages: messages, results: no_rows }
+function testing.flatten_with_tolerated(report: TestSetReport) -> FlatTestReport  [expr] {
+  { let top_tolerated = report.outcome Eq "pass"; let counts = if (report.results.length() Gt 0) {  } root.count_leaves(report.results, top_tolerated) else if (top_tolerated) {  } testing.LeafCounts { passed: report.passed, failed: 0, tolerated: report.failed, total: report.total } else {  } testing.LeafCounts { passed: report.passed, failed: report.failed, tolerated: 0, total: report.total }; let messages: string[] = []; root.collect_leaf_messages(report.results, messages) } FlatTestReport { outcome: report.outcome, passed: counts.passed, failed: counts.failed, tolerated: counts.tolerated, total: counts.total, failed_names: report.failed_names, messages: messages }
 }
 function testing.glob_match(subject: string, pattern: string) -> bool  [expr] {
   { let parts = pattern.split("*"); let n = parts.length(); if (n Eq 1) { return subject Eq pattern }; let first = parts[0]; let last = parts[n Sub 1]; if (Not subject.starts_with(first)) { return false }; if (Not subject.ends_with(last)) { return false }; let start = first.length(); let end_limit = subject.length() Sub last.length(); if (start Gt end_limit) { return false }; let pos = start; { let i = 1; while i Lt n Sub 1 { let part = parts[i] } if (part Ne "") { let idx = subject.substring(pos, end_limit).index_of(part); if (idx Lt 0) { return false }; pos = pos Add idx Add part.length() } } } true
@@ -105,7 +106,7 @@ function testing.leaf_selected(name: string, include: testing.FilterPat[], exclu
   { let split = root.split_top(name); if (root.any_pattern_matches(exclude, split.head, split.tail)) { return false }; if (include.length() Eq 0) { return true } } root.any_pattern_matches(include, split.head, split.tail)
 }
 function testing.list_filtered(self: ?, include: string[], exclude: string[]) -> string[]  [expr] {
-  { let inc = root.parse_filter_patterns(include); let exc = root.parse_filter_patterns(exclude); let names: string[] = []; for leaf in root.collect_leaves(self) {  } if (root.leaf_selected(leaf.name, inc, exc)) { names.push(leaf.name) } } names
+  {  } root.select_names(self, include, exclude)
 }
 function testing.new(collector: testing.TestCollector) -> testing.TestRegistry  [expr] {
   {  } testing.TestRegistry { collector: collector, expansions: map {  }, loading_time_ms: 0 }
@@ -129,10 +130,10 @@ function testing.run_children_parallel(children: TestSetChild[]) -> TestSetRepor
   { let futures: baml.future.Future<NamedChildReport, null>[] = []; for child in children {  } futures.push(spawn { () -> { {  } NamedChildReport { name: child.name, report: child.run() } } }); let named_results = await baml.future.all_complete(futures) catch_all (e) { _ => baml.sys.panic("unexpected test c...") } } root.aggregate_reports(named_results)
 }
 function testing.run_filtered(self: ?, include: string[], exclude: string[]) -> FlatTestReport  [expr] {
-  { let has_filters = include.length() Gt 0 Or exclude.length() Gt 0 } if (Not has_filters) {  } root.flatten_testset_report(self.run_all()) else { let inc = root.parse_filter_patterns(include); let exc = root.parse_filter_patterns(exclude); let selected: testing.FlatLeaf[] = []; for leaf in root.collect_leaves(self) {  } if (root.leaf_selected(leaf.name, inc, exc)) { selected.push(leaf) } } root.run_selected_leaves(selected)
+  { let report = if (include.length() Eq 0 And exclude.length() Eq 0) {  } self.run_all() else {  } self.run_selected(root.select_names(self, include, exclude)) } root.flatten_with_tolerated(report)
 }
-function testing.run_selected_leaves(leaves: testing.FlatLeaf[]) -> FlatTestReport  [expr] {
-  { let futures: baml.future.Future<FlatTestResult, null>[] = []; for leaf in leaves {  } futures.push(spawn { () -> { {  } root.flatten_leaf_report(leaf.name, root.run_test(leaf.body, leaf.runner)) } }); let results = await baml.future.all_complete(futures) catch_all (e) { _ => baml.sys.panic("unexpected test c...") }; let passed = 0; let failed = 0; let has_error = false; let failed_names: string[] = []; let messages: string[] = []; for r in results {  } if (r.outcome Eq "pass") { passed Add= 1 } else { failed Add= 1; failed_names.push(r.name); for m in r.messages { messages.push(m) } } if (r.outcome Eq "error") { has_error = true }; let outcome: Outcome = if (has_error) {  } "error" else if (failed Eq 0) {  } "pass" else {  } "fail" } FlatTestReport { outcome: outcome, passed: passed, failed: failed, total: results.length(), failed_names: failed_names, messages: messages, results: results }
+function testing.run_selected(self: ?, names: string[]) -> TestSetReport  [expr] {
+  {  } root.run_testset(root.testset_children_selected(self, names), null)
 }
 function testing.run_test(self: ?, name: string) -> TestReport  [expr] {
   { for t in self.collector.tests {  } if (t.name Eq name) { return root.run_test(t.body, t.runner) }; for k in self.expansions.keys() { let sub = self.expansions[k] } if (name.starts_with(k Add "/")) { return sub.run_test(name) }; throw "Test not found: " Add name }
@@ -146,6 +147,9 @@ function testing.run_testset(children: TestSetChild[], runner: TestSetRunner?) -
 function testing.run_testset(self: ?, name: string) -> TestSetReport  [expr] {
   { for ts in self.collector.testsets {  } if (ts.name Eq name) { return root.run_testset(root.testset_children(self.expand_testset_registry(ts)), ts.runner) }; for k in self.expansions.keys() { let sub = self.expansions[k] } if (name.starts_with(k Add "/")) { return sub.run_testset(name) }; throw "TestSet not found: " Add name }
 }
+function testing.select_names(registry: testing.TestRegistry, include: string[], exclude: string[]) -> string[]  [expr] {
+  { let inc = root.parse_filter_patterns(include); let exc = root.parse_filter_patterns(exclude); let out: string[] = []; for name in root.collect_leaf_names(registry) {  } if (root.leaf_selected(name, inc, exc)) { out.push(name) } } out
+}
 function testing.serialize(self: ?) -> testing.SerializedTestDef[]  [expr] {
   { let items: testing.SerializedTestDef[] = []; for t in self.collector.tests {  } items.push(testing.SerializedTest { type: "test", name: t.name }); for ts in self.collector.testsets { let expanded = self.expansions.get(ts.name) } match (expanded) { sub: testing.TestRegistry => {  } items.push(testing.SerializedTestSet { name: ts.name, items: sub.serialize(), loadingTimeMs: sub.loading_time_ms }), null => {  } items.push(testing.SerializedTest { type: "lazyTestSet", name: ts.name }) }; return items }
 }
@@ -158,16 +162,22 @@ function testing.test_child(name: string, body: TestBody, runner: TestRunner?) -
 function testing.testset_child(registry: testing.TestRegistry, ts: testing.TestSetRegistration) -> TestSetChild  [expr] {
   {  } TestSetChild { name: ts.name, run: () -> ChildReport { {  } root.run_testset(root.testset_children(registry.expand_testset_registry(ts)), ts.runner) catch_all (e) { baml.panics.Panic => root.expansion_error_report(ts.name), _ => root.expansion_error_report(ts.name) } } }
 }
+function testing.testset_child_selected(registry: testing.TestRegistry, ts: testing.TestSetRegistration, names: string[]) -> TestSetChild  [expr] {
+  {  } TestSetChild { name: ts.name, run: () -> ChildReport { {  } root.run_testset(root.testset_children_selected(registry.expand_testset_registry(ts), names), ts.runner) catch_all (e) { baml.panics.Panic => root.expansion_error_report(ts.name), _ => root.expansion_error_report(ts.name) } } }
+}
 function testing.testset_children(registry: testing.TestRegistry) -> TestSetChild[]  [expr] {
   { let children: TestSetChild[] = []; for t in registry.collector.tests {  } children.push(root.test_child(t.name, t.body, t.runner)); for ts in registry.collector.testsets {  } children.push(root.testset_child(registry, ts)) } children
+}
+function testing.testset_children_selected(registry: testing.TestRegistry, names: string[]) -> TestSetChild[]  [expr] {
+  { let children: TestSetChild[] = []; for t in registry.collector.tests {  } if (root._name_selected(t.name, names)) {  } children.push(root.test_child(t.name, t.body, t.runner)) else {  } null; for ts in registry.collector.testsets {  } if (root._name_selected(ts.name, names)) {  } children.push(root.testset_child(registry, ts)) else if (root._has_selected_descendant(ts.name, names)) {  } children.push(root.testset_child_selected(registry, ts, names)) else {  } null } children
 }
 
 --- captures ---
 lambda () in test_child: captures [body, runner]
 lambda () in testset_child: captures [registry, ts]
+lambda () in testset_child_selected: captures [registry, ts, names]
 lambda () in ?: captures [child]
 lambda () in run_test: captures [body]
-lambda () in ?: captures [leaf]
 
 --- <builtin>/testing/runners.baml ---
 function testing.FailFast() -> TestSetRunner  [expr] {
@@ -202,17 +212,10 @@ class testing.FlatTestReport {
   outcome: testing.Outcome
   passed: int
   failed: int
+  tolerated: int
   total: int
   failed_names: string[]
   messages: string[]
-  results: testing.FlatTestResult[]
-}
-class testing.FlatTestResult {
-  name: string
-  outcome: testing.Outcome
-  messages: string[]
-  duration_ms: int
-  run_count: int
 }
 class testing.NamedChildReport {
   name: string
