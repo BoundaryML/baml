@@ -5,7 +5,6 @@ use baml_compiler2_hir::{
     contributions::Definition,
     package::{PackageId, PackageItems},
 };
-
 use rustc_hash::FxHashSet;
 
 use crate::{
