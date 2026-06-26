@@ -30,4 +30,4 @@ pub use record::{
     RunCompletedRecord, RunStartedRecord, ValueAvailability, ValueCapture, ValueCaptureKind,
     ValueCodec, ValueFileRecord, ValueRecord, ValueRef,
 };
-pub use writer::{ValueWriteOutcome, ValueWriter};
+pub use writer::{ValueIdAllocator, ValueWriteOutcome, ValueWriter};

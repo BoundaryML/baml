@@ -162,6 +162,7 @@ message RunErrorV1 {
   string class = 1;
   string message = 2;
   optional string details = 3;
+  ValueMetadataV1 value_ref = 4;
 }
 
 message RunCancellationV1 {
@@ -176,6 +177,7 @@ message RunCompletedV1 {
   optional string renderer_hint = 3;
   RunErrorV1 error = 4;
   RunCancellationV1 cancellation = 5;
+  ValueMetadataV1 result_value_ref = 6;
 }
 
 message ValueRecordV1 {

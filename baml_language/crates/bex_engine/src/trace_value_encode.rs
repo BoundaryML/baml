@@ -1,5 +1,6 @@
 //! Artifact-safe encoding for trace-owned value snapshots.
 
+use baml_type::{FunctionParamMode, Literal, MediaKind, RuntimeTy};
 use num_bigint::BigInt;
 use prost::{Enumeration, Message};
 
@@ -82,6 +83,8 @@ struct BamlValueClass {
     name: String,
     #[prost(message, repeated, tag = "2")]
     fields: Vec<BamlOutboundMapEntry>,
+    #[prost(message, repeated, tag = "3")]
+    type_args: Vec<BamlTy>,
 }
 
 #[derive(Clone, PartialEq, Message)]
@@ -125,6 +128,310 @@ enum MediaTypeEnum {
     Other = 5,
 }
 
+#[derive(Clone, PartialEq, Message)]
+struct BamlTy {
+    #[prost(
+        oneof = "BamlTyVariant",
+        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24"
+    )]
+    ty: Option<BamlTyVariant>,
+}
+
+#[derive(Clone, PartialEq, ::prost::Oneof)]
+enum BamlTyVariant {
+    #[prost(message, tag = "1")]
+    Primitive(BamlTyPrimitive),
+    #[prost(message, tag = "2")]
+    ClassTy(BamlTyClass),
+    #[prost(message, tag = "3")]
+    Enum(BamlTyEnum),
+    #[prost(message, tag = "4")]
+    List(BamlTyList),
+    #[prost(message, tag = "5")]
+    Map(BamlTyMap),
+    #[prost(message, tag = "6")]
+    Optional(BamlTyOptional),
+    #[prost(message, tag = "7")]
+    Union(BamlTyUnion),
+    #[prost(message, tag = "8")]
+    Literal(BamlTyLiteral),
+    #[prost(message, tag = "9")]
+    TypeAlias(BamlTyTypeAlias),
+    #[prost(message, tag = "10")]
+    Unknown(BamlTyUnknown),
+    #[prost(message, tag = "11")]
+    Media(BamlTyMedia),
+    #[prost(message, tag = "12")]
+    Interface(BamlTyInterface),
+    #[prost(message, tag = "13")]
+    EnumVariant(BamlTyEnumVariant),
+    #[prost(message, tag = "14")]
+    Function(BamlTyFunction),
+    #[prost(message, tag = "15")]
+    Future(BamlTyFuture),
+    #[prost(message, tag = "16")]
+    RustType(BamlTyRustType),
+    #[prost(message, tag = "17")]
+    MetaType(BamlTyMetaType),
+    #[prost(message, tag = "18")]
+    Resource(BamlTyResource),
+    #[prost(message, tag = "19")]
+    PromptAst(BamlTyPromptAst),
+    #[prost(message, tag = "20")]
+    Void(BamlTyVoid),
+    #[prost(message, tag = "21")]
+    WatchAccessor(BamlTyWatchAccessor),
+    #[prost(message, tag = "22")]
+    TypeVar(BamlTyTypeVar),
+    #[prost(message, tag = "23")]
+    AssociatedTypeProjection(BamlTyAssociatedTypeProjection),
+    #[prost(message, tag = "24")]
+    Never(BamlTyNever),
+}
+
+#[derive(Clone, PartialEq, Message)]
+struct BamlTyPrimitive {
+    #[prost(enumeration = "BamlTyPrimitiveKind", tag = "1")]
+    kind: i32,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Enumeration)]
+#[repr(i32)]
+enum BamlTyPrimitiveKind {
+    Unspecified = 0,
+    String = 1,
+    Int = 2,
+    Float = 3,
+    Bool = 4,
+    Null = 5,
+    Bytes = 6,
+    Bigint = 7,
+}
+
+#[derive(Clone, PartialEq, Message)]
+struct BamlTyClass {
+    #[prost(string, tag = "1")]
+    name: String,
+    #[prost(message, repeated, tag = "2")]
+    type_args: Vec<BamlTy>,
+}
+
+#[derive(Clone, PartialEq, Message)]
+struct BamlTyTypeAlias {
+    #[prost(string, tag = "1")]
+    name: String,
+    #[prost(message, repeated, tag = "2")]
+    type_args: Vec<BamlTy>,
+}
+
+#[derive(Clone, PartialEq, Message)]
+struct BamlTyEnum {
+    #[prost(string, tag = "1")]
+    name: String,
+}
+
+#[derive(Clone, PartialEq, Message)]
+struct BamlTyList {
+    #[prost(message, optional, boxed, tag = "1")]
+    item: Option<Box<BamlTy>>,
+}
+
+#[derive(Clone, PartialEq, Message)]
+struct BamlTyMap {
+    #[prost(message, optional, boxed, tag = "1")]
+    key: Option<Box<BamlTy>>,
+    #[prost(message, optional, boxed, tag = "2")]
+    value: Option<Box<BamlTy>>,
+}
+
+#[derive(Clone, PartialEq, Message)]
+struct BamlTyOptional {
+    #[prost(message, optional, boxed, tag = "1")]
+    inner: Option<Box<BamlTy>>,
+}
+
+#[derive(Clone, PartialEq, Message)]
+struct BamlTyUnion {
+    #[prost(message, repeated, tag = "1")]
+    options: Vec<BamlTy>,
+}
+
+#[derive(Clone, PartialEq, Message)]
+#[allow(
+    clippy::empty_structs_with_brackets,
+    reason = "Empty message mirrors the outbound protobuf shape."
+)]
+struct BamlTyUnknown {}
+
+#[derive(Clone, PartialEq, Message)]
+struct BamlTyMedia {
+    #[prost(enumeration = "BamlTyMediaKind", tag = "1")]
+    kind: i32,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Enumeration)]
+#[repr(i32)]
+enum BamlTyMediaKind {
+    Unspecified = 0,
+    Image = 1,
+    Audio = 2,
+    Video = 3,
+    Pdf = 4,
+    Generic = 5,
+}
+
+#[derive(Clone, PartialEq, Message)]
+struct BamlTyInterface {
+    #[prost(string, tag = "1")]
+    name: String,
+    #[prost(message, repeated, tag = "2")]
+    type_args: Vec<BamlTy>,
+    #[prost(message, repeated, tag = "3")]
+    bindings: Vec<BamlTyAssociatedBinding>,
+}
+
+#[derive(Clone, PartialEq, Message)]
+struct BamlTyAssociatedBinding {
+    #[prost(string, tag = "1")]
+    name: String,
+    #[prost(message, optional, tag = "2")]
+    ty: Option<BamlTy>,
+}
+
+#[derive(Clone, PartialEq, Message)]
+struct BamlTyEnumVariant {
+    #[prost(string, tag = "1")]
+    name: String,
+    #[prost(string, tag = "2")]
+    variant: String,
+}
+
+#[derive(Clone, PartialEq, Message)]
+struct BamlTyFunction {
+    #[prost(string, repeated, tag = "1")]
+    generic_params: Vec<String>,
+    #[prost(message, repeated, tag = "3")]
+    params: Vec<BamlTyFunctionParam>,
+    #[prost(message, optional, boxed, tag = "4")]
+    ret: Option<Box<BamlTy>>,
+    #[prost(message, optional, boxed, tag = "5")]
+    throws: Option<Box<BamlTy>>,
+}
+
+#[derive(Clone, PartialEq, Message)]
+struct BamlTyFunctionParam {
+    #[prost(string, optional, tag = "1")]
+    name: Option<String>,
+    #[prost(message, optional, tag = "2")]
+    ty: Option<BamlTy>,
+    #[prost(enumeration = "BamlTyFunctionParamMode", tag = "3")]
+    mode: i32,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Enumeration)]
+#[repr(i32)]
+enum BamlTyFunctionParamMode {
+    Unspecified = 0,
+    Required = 1,
+    Optional = 2,
+}
+
+#[derive(Clone, PartialEq, Message)]
+struct BamlTyFuture {
+    #[prost(message, optional, boxed, tag = "1")]
+    value: Option<Box<BamlTy>>,
+    #[prost(message, optional, boxed, tag = "2")]
+    error: Option<Box<BamlTy>>,
+}
+
+#[derive(Clone, PartialEq, Message)]
+struct BamlTyWatchAccessor {
+    #[prost(message, optional, boxed, tag = "1")]
+    inner: Option<Box<BamlTy>>,
+}
+
+#[derive(Clone, PartialEq, Message)]
+struct BamlTyTypeVar {
+    #[prost(string, tag = "1")]
+    name: String,
+}
+
+#[derive(Clone, PartialEq, Message)]
+struct BamlTyAssociatedTypeProjection {
+    #[prost(message, optional, boxed, tag = "1")]
+    base: Option<Box<BamlTy>>,
+    #[prost(message, optional, boxed, tag = "2")]
+    interface: Option<Box<BamlTy>>,
+    #[prost(string, tag = "3")]
+    member: String,
+}
+
+#[derive(Clone, PartialEq, Message)]
+struct BamlTyLiteral {
+    #[prost(oneof = "BamlTyLiteralVariant", tags = "1, 2, 3, 4, 5")]
+    literal: Option<BamlTyLiteralVariant>,
+}
+
+#[derive(Clone, PartialEq, ::prost::Oneof)]
+#[allow(
+    clippy::enum_variant_names,
+    reason = "Variant names mirror the protobuf literal oneof fields."
+)]
+enum BamlTyLiteralVariant {
+    #[prost(string, tag = "1")]
+    StringValue(String),
+    #[prost(int64, tag = "2")]
+    IntValue(i64),
+    #[prost(bool, tag = "3")]
+    BoolValue(bool),
+    #[prost(string, tag = "4")]
+    BigintValue(String),
+    #[prost(string, tag = "5")]
+    FloatValue(String),
+}
+
+#[derive(Clone, PartialEq, Message)]
+#[allow(
+    clippy::empty_structs_with_brackets,
+    reason = "Empty message mirrors the outbound protobuf shape."
+)]
+struct BamlTyRustType {}
+
+#[derive(Clone, PartialEq, Message)]
+#[allow(
+    clippy::empty_structs_with_brackets,
+    reason = "Empty message mirrors the outbound protobuf shape."
+)]
+struct BamlTyMetaType {}
+
+#[derive(Clone, PartialEq, Message)]
+#[allow(
+    clippy::empty_structs_with_brackets,
+    reason = "Empty message mirrors the outbound protobuf shape."
+)]
+struct BamlTyResource {}
+
+#[derive(Clone, PartialEq, Message)]
+#[allow(
+    clippy::empty_structs_with_brackets,
+    reason = "Empty message mirrors the outbound protobuf shape."
+)]
+struct BamlTyPromptAst {}
+
+#[derive(Clone, PartialEq, Message)]
+#[allow(
+    clippy::empty_structs_with_brackets,
+    reason = "Empty message mirrors the outbound protobuf shape."
+)]
+struct BamlTyVoid {}
+
+#[derive(Clone, PartialEq, Message)]
+#[allow(
+    clippy::empty_structs_with_brackets,
+    reason = "Empty message mirrors the outbound protobuf shape."
+)]
+struct BamlTyNever {}
+
 pub(crate) fn encode_trace_snapshot_body(snapshot: &TraceSnapshot) -> Result<Vec<u8>, String> {
     let value = encode_value(snapshot, snapshot.root())?;
     Ok(value.encode_to_vec())
@@ -166,7 +473,7 @@ fn encode_value(
         TraceValue::Media(media) => Some(BamlValueVariant::MediaValue(media_to_proto(media))),
         TraceValue::Instance {
             type_name,
-            type_args: _,
+            type_args,
             fields,
         } => Some(BamlValueVariant::ClassValue(BamlValueClass {
             name: type_name.clone(),
@@ -179,6 +486,7 @@ fn encode_value(
                     })
                 })
                 .collect::<Result<_, String>>()?,
+            type_args: type_args.iter().map(runtime_ty_to_proto_ty).collect(),
         })),
         TraceValue::Enum { type_name, variant } => {
             Some(BamlValueVariant::EnumValue(BamlValueEnum {
@@ -219,6 +527,7 @@ fn media_kind_to_proto_enum(kind: bex_external_types::MediaKind) -> MediaTypeEnu
 fn omission_to_class(descriptor: &TraceOmissionDescriptor) -> BamlValueClass {
     BamlValueClass {
         name: "baml.trace.OmittedValue".to_string(),
+        type_args: Vec::new(),
         fields: vec![
             BamlOutboundMapEntry {
                 key: "reason".to_string(),
@@ -235,6 +544,159 @@ fn omission_to_class(descriptor: &TraceOmissionDescriptor) -> BamlValueClass {
                 }),
             },
         ],
+    }
+}
+
+fn runtime_ty_to_proto_ty(ty: &RuntimeTy) -> BamlTy {
+    BamlTy {
+        ty: Some(runtime_ty_to_variant(ty)),
+    }
+}
+
+fn primitive(kind: BamlTyPrimitiveKind) -> BamlTyVariant {
+    BamlTyVariant::Primitive(BamlTyPrimitive { kind: kind as i32 })
+}
+
+fn runtime_ty_to_variant(ty: &RuntimeTy) -> BamlTyVariant {
+    match ty {
+        RuntimeTy::String { .. } => primitive(BamlTyPrimitiveKind::String),
+        RuntimeTy::Int { .. } => primitive(BamlTyPrimitiveKind::Int),
+        RuntimeTy::Float { .. } => primitive(BamlTyPrimitiveKind::Float),
+        RuntimeTy::Bool { .. } => primitive(BamlTyPrimitiveKind::Bool),
+        RuntimeTy::Null { .. } => primitive(BamlTyPrimitiveKind::Null),
+        RuntimeTy::Uint8Array { .. } => primitive(BamlTyPrimitiveKind::Bytes),
+        RuntimeTy::Bigint { .. } => primitive(BamlTyPrimitiveKind::Bigint),
+        RuntimeTy::Class(name, args, _) => BamlTyVariant::ClassTy(BamlTyClass {
+            name: name.render_dotted(false),
+            type_args: args.iter().map(runtime_ty_to_proto_ty).collect(),
+        }),
+        RuntimeTy::TypeAlias(name, _) => BamlTyVariant::TypeAlias(BamlTyTypeAlias {
+            name: name.render_dotted(false),
+            type_args: Vec::new(),
+        }),
+        RuntimeTy::Enum(name, _) => BamlTyVariant::Enum(BamlTyEnum {
+            name: name.render_dotted(false),
+        }),
+        RuntimeTy::EnumVariant(name, variant, _) => BamlTyVariant::EnumVariant(BamlTyEnumVariant {
+            name: name.render_dotted(false),
+            variant: variant.as_str().to_string(),
+        }),
+        RuntimeTy::List(inner, _) => BamlTyVariant::List(BamlTyList {
+            item: Some(Box::new(runtime_ty_to_proto_ty(inner))),
+        }),
+        RuntimeTy::Map { key, value, .. } => BamlTyVariant::Map(BamlTyMap {
+            key: Some(Box::new(runtime_ty_to_proto_ty(key))),
+            value: Some(Box::new(runtime_ty_to_proto_ty(value))),
+        }),
+        RuntimeTy::Union(members, _) => {
+            let has_null = members.iter().any(RuntimeTy::is_null);
+            let non_null = members
+                .iter()
+                .filter(|member| !member.is_null())
+                .collect::<Vec<_>>();
+            if has_null && non_null.len() == 1 {
+                BamlTyVariant::Optional(BamlTyOptional {
+                    inner: Some(Box::new(runtime_ty_to_proto_ty(non_null[0]))),
+                })
+            } else {
+                BamlTyVariant::Union(BamlTyUnion {
+                    options: members.iter().map(runtime_ty_to_proto_ty).collect(),
+                })
+            }
+        }
+        RuntimeTy::Literal(lit, _, _) => BamlTyVariant::Literal(literal_to_proto(lit)),
+        RuntimeTy::Media(kind, _) => BamlTyVariant::Media(BamlTyMedia {
+            kind: media_kind_to_proto_ty(*kind) as i32,
+        }),
+        RuntimeTy::Interface(name, args, bindings, _) => {
+            BamlTyVariant::Interface(BamlTyInterface {
+                name: name.render_dotted(false),
+                type_args: args.iter().map(runtime_ty_to_proto_ty).collect(),
+                bindings: bindings
+                    .iter()
+                    .map(|(name, ty)| BamlTyAssociatedBinding {
+                        name: name.as_str().to_string(),
+                        ty: Some(runtime_ty_to_proto_ty(ty)),
+                    })
+                    .collect(),
+            })
+        }
+        RuntimeTy::Function {
+            params,
+            ret,
+            throws,
+            ..
+        } => BamlTyVariant::Function(BamlTyFunction {
+            generic_params: Vec::new(),
+            params: params
+                .iter()
+                .map(|param| BamlTyFunctionParam {
+                    name: param.name.as_ref().map(|name| name.as_str().to_string()),
+                    ty: Some(runtime_ty_to_proto_ty(&param.ty)),
+                    mode: function_param_mode_to_proto(param.mode) as i32,
+                })
+                .collect(),
+            ret: Some(Box::new(runtime_ty_to_proto_ty(ret))),
+            throws: Some(Box::new(runtime_ty_to_proto_ty(throws))),
+        }),
+        RuntimeTy::Future(value, error, _) => BamlTyVariant::Future(BamlTyFuture {
+            value: Some(Box::new(runtime_ty_to_proto_ty(value))),
+            error: Some(Box::new(runtime_ty_to_proto_ty(error))),
+        }),
+        RuntimeTy::RustType { .. } => BamlTyVariant::RustType(BamlTyRustType {}),
+        RuntimeTy::Type { .. } => BamlTyVariant::MetaType(BamlTyMetaType {}),
+        RuntimeTy::Resource { .. } => BamlTyVariant::Resource(BamlTyResource {}),
+        RuntimeTy::PromptAst { .. } => BamlTyVariant::PromptAst(BamlTyPromptAst {}),
+        RuntimeTy::Void { .. } => BamlTyVariant::Void(BamlTyVoid {}),
+        RuntimeTy::WatchAccessor(inner, _) => BamlTyVariant::WatchAccessor(BamlTyWatchAccessor {
+            inner: Some(Box::new(runtime_ty_to_proto_ty(inner))),
+        }),
+        RuntimeTy::TypeVar(name, _) => BamlTyVariant::TypeVar(BamlTyTypeVar {
+            name: name.as_str().to_string(),
+        }),
+        RuntimeTy::AssociatedTypeProjection {
+            base,
+            interface,
+            member,
+            ..
+        } => BamlTyVariant::AssociatedTypeProjection(BamlTyAssociatedTypeProjection {
+            base: Some(Box::new(runtime_ty_to_proto_ty(base))),
+            interface: interface
+                .as_ref()
+                .map(|interface| Box::new(runtime_ty_to_proto_ty(interface))),
+            member: member.as_str().to_string(),
+        }),
+        RuntimeTy::BuiltinUnknown { .. } => BamlTyVariant::Unknown(BamlTyUnknown {}),
+        RuntimeTy::Never { .. } => BamlTyVariant::Never(BamlTyNever {}),
+    }
+}
+
+fn literal_to_proto(lit: &Literal) -> BamlTyLiteral {
+    BamlTyLiteral {
+        literal: Some(match lit {
+            Literal::String(value) => BamlTyLiteralVariant::StringValue(value.clone()),
+            Literal::Int(value) => BamlTyLiteralVariant::IntValue(*value),
+            Literal::Bool(value) => BamlTyLiteralVariant::BoolValue(*value),
+            Literal::Bigint(value) => BamlTyLiteralVariant::BigintValue(value.to_string()),
+            Literal::Float(value) => BamlTyLiteralVariant::FloatValue(value.clone()),
+        }),
+    }
+}
+
+fn media_kind_to_proto_ty(kind: MediaKind) -> BamlTyMediaKind {
+    match kind {
+        MediaKind::Image => BamlTyMediaKind::Image,
+        MediaKind::Audio => BamlTyMediaKind::Audio,
+        MediaKind::Video => BamlTyMediaKind::Video,
+        MediaKind::Pdf => BamlTyMediaKind::Pdf,
+        MediaKind::Generic => BamlTyMediaKind::Generic,
+    }
+}
+
+fn function_param_mode_to_proto(mode: FunctionParamMode) -> BamlTyFunctionParamMode {
+    match mode {
+        FunctionParamMode::Required => BamlTyFunctionParamMode::Required,
+        FunctionParamMode::Optional => BamlTyFunctionParamMode::Optional,
     }
 }
 
@@ -257,7 +719,8 @@ fn bigint_to_hex(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use bridge_ctypes::baml_core::cffi::{
-        BamlOutboundValue, baml_outbound_value::Value as BamlValueVariant,
+        BamlOutboundValue, BamlTyPrimitiveKind, baml_outbound_value::Value as BamlValueVariant,
+        baml_ty,
     };
     use prost::Message;
 
@@ -329,5 +792,32 @@ mod tests {
             media.value,
             Some(bridge_ctypes::baml_core::cffi::baml_value_media::Value::Base64(_))
         ));
+    }
+
+    #[test]
+    fn generic_instance_trace_values_preserve_type_args() {
+        let snapshot = TraceSnapshot::for_test(
+            TraceValueRef::for_test(0),
+            vec![TraceValue::Instance {
+                type_name: "user.Box".to_string(),
+                type_args: vec![baml_type::RuntimeTy::string()],
+                fields: Vec::new(),
+            }],
+        );
+
+        let bytes = super::encode_trace_snapshot_body(&snapshot).unwrap();
+        let decoded = BamlOutboundValue::decode(bytes.as_slice()).unwrap();
+        let Some(BamlValueVariant::ClassValue(class)) = decoded.value else {
+            panic!("root should encode as a class");
+        };
+        assert_eq!(class.name, "user.Box");
+        assert_eq!(class.type_args.len(), 1);
+        let Some(baml_ty::Ty::Primitive(primitive)) = class.type_args[0].ty.as_ref() else {
+            panic!("type arg should encode as a primitive string type");
+        };
+        assert_eq!(
+            primitive.kind,
+            BamlTyPrimitiveKind::BamlTyPrimitiveString as i32
+        );
     }
 }

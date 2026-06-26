@@ -118,11 +118,11 @@ mod tests {
 
     use crate::{
         ids::{BexCallId, BexThreadId, BoundaryId, EngineId, ProcessEuid},
-        run::{SourceLocation, TraceCallKey},
+        run::{RunError, RunErrorClass, RunStatus, SourceLocation, TraceCallKey},
         value::{
             CaptureLossKind, CaptureLossReason, CaptureLossRecord, LogEventRecord, LogRecord,
-            ValueAvailability, ValueCodec, ValueFileRecord, ValueRecord, ValueRef, pb,
-            read::read_bamlvalue_from_bytes,
+            RunCompletedRecord, ValueAvailability, ValueCodec, ValueFileRecord, ValueRecord,
+            ValueRef, pb, read::read_bamlvalue_from_bytes,
         },
     };
 
@@ -194,6 +194,89 @@ mod tests {
         let parsed = read_bamlvalue_from_bytes(&bytes).unwrap();
         assert_eq!(parsed.records, vec![ValueFileRecord::LogEvent(record)]);
         assert!(!parsed.truncated);
+    }
+
+    #[test]
+    fn run_completed_terminal_value_refs_round_trip() {
+        let result_ref = ValueRef::available("value_result", ValueCodec::BamlOutboundValue, 4, 4);
+        let error_ref = ValueRef::available("value_error", ValueCodec::BamlOutboundValue, 2, 2);
+        let success = RunCompletedRecord {
+            status: RunStatus::Succeeded,
+            completed_at_ms: 123,
+            renderer_hint: Some("baml.outbound.base64".to_string()),
+            result_value_ref: Some(result_ref),
+            error: None,
+            cancellation: None,
+        };
+        let failure = RunCompletedRecord {
+            status: RunStatus::Failed,
+            completed_at_ms: 124,
+            renderer_hint: None,
+            result_value_ref: None,
+            error: Some(RunError {
+                class: RunErrorClass::Runtime,
+                message: "boom".to_string(),
+                details: Some("details".to_string()),
+                value_ref: Some(error_ref),
+            }),
+            cancellation: None,
+        };
+        let mut bytes = Vec::new();
+        super::encode_header(&mut bytes, BoundaryId::from_bytes([8; 16])).unwrap();
+        super::encode_run_completed(&mut bytes, &success).unwrap();
+        super::encode_run_completed(&mut bytes, &failure).unwrap();
+
+        let parsed = read_bamlvalue_from_bytes(&bytes).unwrap();
+        assert_eq!(
+            parsed.records,
+            vec![
+                ValueFileRecord::RunCompleted(success),
+                ValueFileRecord::RunCompleted(failure)
+            ]
+        );
+        assert!(!parsed.truncated);
+    }
+
+    #[test]
+    fn run_completed_decodes_old_records_without_terminal_value_refs() {
+        let old_record = pb::ValueRecordV1 {
+            metadata: None,
+            body: Vec::new(),
+            capture: None,
+            run_started: None,
+            run_completed: Some(pb::RunCompletedV1 {
+                status: pb::RunStatus::Failed as i32,
+                completed_at_ms: 456,
+                renderer_hint: None,
+                error: Some(pb::RunErrorV1 {
+                    class: "runtime".to_string(),
+                    message: "old boom".to_string(),
+                    details: None,
+                    value_ref: None,
+                }),
+                cancellation: None,
+                result_value_ref: None,
+            }),
+            log_event: None,
+            capture_loss: None,
+            blob: None,
+        };
+        let mut bytes = Vec::new();
+        super::encode_header(&mut bytes, BoundaryId::from_bytes([9; 16])).unwrap();
+        old_record.encode_length_delimited(&mut bytes).unwrap();
+
+        let parsed = read_bamlvalue_from_bytes(&bytes).unwrap();
+        let [ValueFileRecord::RunCompleted(record)] = parsed.records.as_slice() else {
+            panic!("expected run completed record");
+        };
+        assert_eq!(record.result_value_ref, None);
+        assert_eq!(
+            record
+                .error
+                .as_ref()
+                .and_then(|error| error.value_ref.as_ref()),
+            None
+        );
     }
 
     #[test]

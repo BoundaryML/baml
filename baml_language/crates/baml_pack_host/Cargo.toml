@@ -18,12 +18,6 @@ workspace = true
 baml_exec = { workspace = true }
 bex_engine = { workspace = true, default-features = false, features = [ "ring-crypto" ] }
 bex_events = { workspace = true }
-# `bundle-http` pulls in reqwest so packed binaries can make HTTP/LLM calls;
-# without it the host's HTTP ops fall back to `Unsupported` ("Operation not
-# supported on this platform"). Unlike `baml_cli`, the host doesn't depend on
-# `baml_lsp_server` (which is what enables `bundle-http` for `baml run` via
-# feature unification), so it must turn it on directly. `ring-crypto` provides
-# the required rustls crypto provider.
 sys_native = { workspace = true, default-features = false, features = [ "bundle-http", "ring-crypto" ] }
 borsh = { workspace = true }
 libsui = { workspace = true }

@@ -155,7 +155,12 @@ impl Fetcher {
 
     pub fn fetch_archive(&self) -> Result<Vec<u8>, FetchError> {
         let archive = self.download_and_verify()?;
-        validate_archive_layout(self.product, &self.spec.target, &archive, &self.artifact_url())?;
+        validate_archive_layout(
+            self.product,
+            &self.spec.target,
+            &archive,
+            &self.artifact_url(),
+        )?;
         Ok(archive)
     }
 

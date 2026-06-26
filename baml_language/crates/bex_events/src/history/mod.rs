@@ -139,6 +139,8 @@ pub struct HistoryValueBody {
 pub enum HistoryValueBodyUnavailableReason {
     BlobStoreUnavailable,
     BlobMissing,
+    BlobInvalid,
+    BlobIntegrityMismatch,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -408,6 +410,10 @@ impl HistoryStore {
             completed_at_ms,
             renderer_hint: match outcome {
                 RunOutcome::Succeeded(result) => result.renderer_hint.clone(),
+                RunOutcome::Failed(_) | RunOutcome::Cancelled(_) | RunOutcome::Panicked(_) => None,
+            },
+            result_value_ref: match outcome {
+                RunOutcome::Succeeded(result) => result.value_ref.clone(),
                 RunOutcome::Failed(_) | RunOutcome::Cancelled(_) | RunOutcome::Panicked(_) => None,
             },
             error: match outcome {
@@ -979,6 +985,15 @@ fn hydrate_value_body(
     let Some(blob_ref) = blob_ref else {
         return Ok(Ok(inline_body));
     };
+    if let Err(err) = blob_ref.validate() {
+        return Ok(Err(HistoryValueBodyUnavailable {
+            reason: HistoryValueBodyUnavailableReason::BlobInvalid,
+            diagnostic: format!(
+                "value body blob ref {} is invalid: {err}",
+                blob_ref_label(blob_ref)
+            ),
+        }));
+    }
     let Some(blob_store) = blob_store else {
         return Ok(Err(HistoryValueBodyUnavailable {
             reason: HistoryValueBodyUnavailableReason::BlobStoreUnavailable,
@@ -988,12 +1003,22 @@ fn hydrate_value_body(
             ),
         }));
     };
-    match blob_store.read_blob(blob_ref)? {
-        Some(body) => Ok(Ok(body)),
-        None => Ok(Err(HistoryValueBodyUnavailable {
+    match blob_store.read_blob(blob_ref) {
+        Ok(Some(body)) => Ok(Ok(body)),
+        Ok(None) => Ok(Err(HistoryValueBodyUnavailable {
             reason: HistoryValueBodyUnavailableReason::BlobMissing,
             diagnostic: format!("value body blob {} is missing", blob_ref_label(blob_ref)),
         })),
+        Err(err) if err.kind() == io::ErrorKind::InvalidData => {
+            Ok(Err(HistoryValueBodyUnavailable {
+                reason: HistoryValueBodyUnavailableReason::BlobIntegrityMismatch,
+                diagnostic: format!(
+                    "value body blob {} failed integrity verification: {err}",
+                    blob_ref_label(blob_ref)
+                ),
+            }))
+        }
+        Err(err) => Err(err),
     }
 }
 
@@ -1019,7 +1044,7 @@ fn outcome_fields_from_replay(
     match completed.status {
         RunStatus::Succeeded => (
             Some(RunResult {
-                value_ref: output_ref,
+                value_ref: completed.result_value_ref.or(output_ref),
                 renderer_hint: completed.renderer_hint,
                 supporting_payload_ids: Vec::new(),
             }),
@@ -1037,7 +1062,9 @@ fn outcome_fields_from_replay(
                 details: None,
                 value_ref: None,
             });
-            error.value_ref = error_ref;
+            if error.value_ref.is_none() {
+                error.value_ref = error_ref;
+            }
             (None, Some(error), None)
         }
         RunStatus::Cancelled => (None, None, completed.cancellation),
@@ -1277,7 +1304,10 @@ mod tests {
         run::{
             ProjectGeneration, ProjectId, RequestId, RunRequestSummary, RunTimeAnchor, StartGuard,
         },
-        value::{CaptureLossKind, CaptureLossReason, CaptureLossRecord, ValueCaptureKind},
+        value::{
+            BlobRef, CaptureLossKind, CaptureLossReason, CaptureLossRecord, ValueCaptureKind,
+            ValueRecord,
+        },
     };
 
     fn temp_project(tag: &str) -> PathBuf {
@@ -1417,6 +1447,84 @@ mod tests {
     }
 
     #[test]
+    fn replay_prefers_completed_result_ref_and_falls_back_to_root_output() {
+        let completed_ref =
+            ValueRef::available("value_completed", ValueCodec::BamlOutboundValue, 3, 3);
+        let captured_ref =
+            ValueRef::available("value_captured", ValueCodec::BamlOutboundValue, 3, 3);
+        let completed = RunCompletedRecord {
+            status: RunStatus::Succeeded,
+            completed_at_ms: 20,
+            renderer_hint: Some("baml.outbound.base64".to_string()),
+            result_value_ref: Some(completed_ref.clone()),
+            error: None,
+            cancellation: None,
+        };
+
+        let (result, error, cancellation) =
+            outcome_fields_from_replay(Some(completed), Some(captured_ref.clone()), None);
+        assert_eq!(result.unwrap().value_ref, Some(completed_ref));
+        assert_eq!(error, None);
+        assert_eq!(cancellation, None);
+
+        let legacy_completed = RunCompletedRecord {
+            status: RunStatus::Succeeded,
+            completed_at_ms: 20,
+            renderer_hint: None,
+            result_value_ref: None,
+            error: None,
+            cancellation: None,
+        };
+        let (result, _, _) =
+            outcome_fields_from_replay(Some(legacy_completed), Some(captured_ref.clone()), None);
+        assert_eq!(result.unwrap().value_ref, Some(captured_ref));
+    }
+
+    #[test]
+    fn replay_preserves_completed_error_ref_and_falls_back_to_root_error() {
+        let completed_ref =
+            ValueRef::available("value_completed_error", ValueCodec::BamlOutboundValue, 2, 2);
+        let captured_ref =
+            ValueRef::available("value_captured_error", ValueCodec::BamlOutboundValue, 2, 2);
+        let completed = RunCompletedRecord {
+            status: RunStatus::Failed,
+            completed_at_ms: 20,
+            renderer_hint: None,
+            result_value_ref: None,
+            error: Some(RunError {
+                class: RunErrorClass::Runtime,
+                message: "boom".to_string(),
+                details: None,
+                value_ref: Some(completed_ref.clone()),
+            }),
+            cancellation: None,
+        };
+
+        let (result, error, cancellation) =
+            outcome_fields_from_replay(Some(completed), None, Some(captured_ref.clone()));
+        assert_eq!(result, None);
+        assert_eq!(error.unwrap().value_ref, Some(completed_ref));
+        assert_eq!(cancellation, None);
+
+        let legacy_completed = RunCompletedRecord {
+            status: RunStatus::Failed,
+            completed_at_ms: 20,
+            renderer_hint: None,
+            result_value_ref: None,
+            error: Some(RunError {
+                class: RunErrorClass::Runtime,
+                message: "old boom".to_string(),
+                details: None,
+                value_ref: None,
+            }),
+            cancellation: None,
+        };
+        let (_, error, _) =
+            outcome_fields_from_replay(Some(legacy_completed), None, Some(captured_ref.clone()));
+        assert_eq!(error.unwrap().value_ref, Some(captured_ref));
+    }
+
+    #[test]
     fn segment_paths_sort_by_numeric_thread_and_segment() {
         let project = temp_project("numeric-segment-sort");
         let boundary_dir = project.join("boundary");
@@ -1513,7 +1621,7 @@ mod tests {
             .complete(
                 boundary_id,
                 &RunOutcome::Succeeded(RunResult {
-                    value_ref: Some(root_output.value_ref.clone()),
+                    value_ref: Some(root_output.value_ref),
                     renderer_hint: None,
                     supporting_payload_ids: Vec::new(),
                 }),
@@ -1551,6 +1659,65 @@ mod tests {
                 .unwrap()
                 .body,
             vec![4, 5, 6]
+        );
+
+        let _ = std::fs::remove_dir_all(project);
+    }
+
+    #[test]
+    fn history_value_ids_are_unique_across_threads() {
+        let project = temp_project("thread-value-ids");
+        let boundary_id = BoundaryId::from_bytes([41; 16]);
+        let store = HistoryStore::new(vec![project.clone()]);
+        let start = start_context(boundary_id);
+        store.begin(&project, &start).unwrap();
+
+        let thread_one = root_trace();
+        let thread_two = TraceCallKey {
+            thread_id: BexThreadId(2),
+            call_id: BexCallId(1),
+            ..thread_one
+        };
+        let first = store
+            .append_value_body(
+                boundary_id,
+                ValueCapture {
+                    kind: ValueCaptureKind::CallOutput,
+                    call: thread_one,
+                },
+                ValueCodec::BamlOutboundValue,
+                vec![1],
+            )
+            .unwrap();
+        let second = store
+            .append_value_body(
+                boundary_id,
+                ValueCapture {
+                    kind: ValueCaptureKind::CallOutput,
+                    call: thread_two,
+                },
+                ValueCodec::BamlOutboundValue,
+                vec![2],
+            )
+            .unwrap();
+
+        assert_eq!(first.value_ref.id, "value_1");
+        assert_eq!(second.value_ref.id, "value_2");
+        assert_eq!(
+            store
+                .read_value(boundary_id, &first.value_ref.id)
+                .unwrap()
+                .unwrap()
+                .body,
+            vec![1]
+        );
+        assert_eq!(
+            store
+                .read_value(boundary_id, &second.value_ref.id)
+                .unwrap()
+                .unwrap()
+                .body,
+            vec![2]
         );
 
         let _ = std::fs::remove_dir_all(project);
@@ -1791,6 +1958,96 @@ mod tests {
         );
         assert!(unavailable.diagnostic.contains("is missing"));
         assert!(unavailable.diagnostic.contains("sha256:"));
+
+        let _ = std::fs::remove_dir_all(project);
+    }
+
+    #[test]
+    fn history_reports_invalid_blob_ref_without_path_traversal() {
+        let boundary_id = BoundaryId::from_bytes([42; 16]);
+        let trace = root_trace();
+        let mut bytes = Vec::new();
+        crate::value::encode::encode_header(&mut bytes, boundary_id).unwrap();
+        crate::value::encode::encode_record(
+            &mut bytes,
+            &ValueRecord {
+                value_ref: ValueRef::available("value_bad", ValueCodec::BamlOutboundValue, 3, 3),
+                body: Vec::new(),
+                blob_ref: Some(BlobRef {
+                    algorithm: BlobRef::ALGORITHM_SHA256.to_string(),
+                    digest: "../bad".to_string(),
+                    size_bytes: 3,
+                }),
+                capture: Some(ValueCapture {
+                    kind: ValueCaptureKind::RootOutput,
+                    call: trace,
+                }),
+            },
+        )
+        .unwrap();
+        let segments = vec![HistoryValueSegment {
+            label: "bad-value-segment".to_string(),
+            bytes,
+        }];
+
+        let result =
+            read_value_from_segments_with_blobs_result(&segments, "value_bad", None).unwrap();
+        let HistoryValueReadResult::BodyUnavailable(unavailable) = result else {
+            panic!("expected invalid blob ref to make body unavailable");
+        };
+        assert_eq!(
+            unavailable.reason,
+            HistoryValueBodyUnavailableReason::BlobInvalid
+        );
+        assert!(unavailable.diagnostic.contains("invalid"));
+    }
+
+    #[test]
+    fn history_reports_blob_integrity_mismatch() {
+        let project = temp_project("blob-integrity");
+        let boundary_id = BoundaryId::from_bytes([43; 16]);
+        let store = HistoryStore::new(vec![project.clone()]);
+        let start = start_context(boundary_id);
+        store.begin(&project, &start).unwrap();
+        let trace = root_trace();
+        store
+            .attach_root_trace(boundary_id, trace.call_ref())
+            .unwrap();
+
+        let large_body = vec![9; 70 * 1024];
+        let outcome = store
+            .append_value_body(
+                boundary_id,
+                ValueCapture {
+                    kind: ValueCaptureKind::RootOutput,
+                    call: trace,
+                },
+                ValueCodec::BamlOutboundValue,
+                large_body.clone(),
+            )
+            .unwrap();
+
+        let boundary_dir = find_boundary_dir(std::slice::from_ref(&project), boundary_id).unwrap();
+        let blob_path = std::fs::read_dir(boundary_dir.join("blobs").join("sha256"))
+            .unwrap()
+            .flatten()
+            .flat_map(|entry| std::fs::read_dir(entry.path()).unwrap().flatten())
+            .map(|entry| entry.path())
+            .find(|path| path.extension().is_some_and(|ext| ext == "blob"))
+            .expect("blob file should exist");
+        std::fs::write(blob_path, vec![8; large_body.len()]).unwrap();
+
+        let result = store
+            .read_value_result(boundary_id, &outcome.value_ref.id)
+            .unwrap();
+        let HistoryValueReadResult::BodyUnavailable(unavailable) = result else {
+            panic!("expected tampered blob body to be unavailable");
+        };
+        assert_eq!(
+            unavailable.reason,
+            HistoryValueBodyUnavailableReason::BlobIntegrityMismatch
+        );
+        assert!(unavailable.diagnostic.contains("integrity"));
 
         let _ = std::fs::remove_dir_all(project);
     }

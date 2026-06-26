@@ -142,6 +142,7 @@ pub struct RunCompletedRecord {
     pub status: RunStatus,
     pub completed_at_ms: u64,
     pub renderer_hint: Option<String>,
+    pub result_value_ref: Option<ValueRef>,
     pub error: Option<RunError>,
     pub cancellation: Option<CancellationState>,
 }
@@ -602,6 +603,7 @@ impl TryFrom<crate::value::pb::RunCompletedV1> for RunCompletedRecord {
             status,
             completed_at_ms: value.completed_at_ms,
             renderer_hint: value.renderer_hint,
+            result_value_ref: value.result_value_ref.map(ValueRef::try_from).transpose()?,
             error: value.error.map(run_error_from_proto).transpose()?,
             cancellation: value.cancellation.map(cancellation_from_proto),
         })
@@ -614,6 +616,7 @@ impl From<&RunCompletedRecord> for crate::value::pb::RunCompletedV1 {
             status: run_status_to_proto(value.status) as i32,
             completed_at_ms: value.completed_at_ms,
             renderer_hint: value.renderer_hint.clone(),
+            result_value_ref: value.result_value_ref.as_ref().map(Into::into),
             error: value.error.as_ref().map(run_error_to_proto),
             cancellation: value.cancellation.as_ref().map(cancellation_to_proto),
         }
@@ -731,7 +734,7 @@ fn run_error_from_proto(value: crate::value::pb::RunErrorV1) -> io::Result<RunEr
         },
         message: value.message,
         details: value.details,
-        value_ref: None,
+        value_ref: value.value_ref.map(ValueRef::try_from).transpose()?,
     })
 }
 
@@ -748,6 +751,7 @@ fn run_error_to_proto(value: &RunError) -> crate::value::pb::RunErrorV1 {
         .to_string(),
         message: value.message.clone(),
         details: value.details.clone(),
+        value_ref: value.value_ref.as_ref().map(Into::into),
     }
 }
 

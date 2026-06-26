@@ -175,7 +175,10 @@ fn print_version() {
     let version = match concrete_version_for_selector(&selector) {
         Ok(version) => version,
         Err(_) if is_channel(&selector.selector) => {
-            println!("baml toolchain not installed{}", selector_annotation(&selector));
+            println!(
+                "baml toolchain not installed{}",
+                selector_annotation(&selector)
+            );
             println!("Run: baml toolchain use {}", selector.selector);
             return;
         }
@@ -222,7 +225,7 @@ fn selector_origin(source: &SelectorSource) -> Option<String> {
 /// version. The channel name is included only for channel selectors (canary /
 /// nightly), since an exact-version selector already equals the printed version.
 fn selector_annotation(selector: &ResolvedSelector) -> String {
-    let channel = is_channel(&selector.selector).then(|| selector.selector.as_str());
+    let channel = is_channel(&selector.selector).then_some(selector.selector.as_str());
     match (channel, selector_origin(&selector.source)) {
         (Some(channel), Some(origin)) => format!(" ({channel}, {origin})"),
         (Some(channel), None) => format!(" ({channel})"),

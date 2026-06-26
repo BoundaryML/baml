@@ -1174,10 +1174,7 @@ async fn captured_call_errors_for_source(
         let Object::Function(function) = object else {
             continue;
         };
-        if capture_functions
-            .iter()
-            .any(|name| function.name.as_str() == *name)
-        {
+        if capture_functions.contains(&function.name.as_str()) {
             function.capture = phase5_call_output_error_capture();
         }
     }

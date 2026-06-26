@@ -18,6 +18,7 @@ pub struct BlobRef {
 
 impl BlobRef {
     pub const ALGORITHM_SHA256: &'static str = "sha256";
+    const SHA256_HEX_LEN: usize = 64;
 
     #[must_use]
     pub fn sha256(bytes: &[u8]) -> Self {
@@ -31,6 +32,62 @@ impl BlobRef {
             digest: hex,
             size_bytes: bytes.len(),
         }
+    }
+
+    pub fn validate(&self) -> io::Result<()> {
+        if self.algorithm != Self::ALGORITHM_SHA256 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("unsupported blob algorithm `{}`", self.algorithm),
+            ));
+        }
+        if self.digest.len() != Self::SHA256_HEX_LEN {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!(
+                    "invalid sha256 blob digest length {}; expected {} hex characters",
+                    self.digest.len(),
+                    Self::SHA256_HEX_LEN
+                ),
+            ));
+        }
+        if !self.digest.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "invalid sha256 blob digest; expected only hex characters",
+            ));
+        }
+        Ok(())
+    }
+
+    fn normalized_digest(&self) -> io::Result<String> {
+        self.validate()?;
+        Ok(self.digest.to_ascii_lowercase())
+    }
+
+    fn verify_bytes(&self, bytes: &[u8]) -> io::Result<()> {
+        if bytes.len() != self.size_bytes {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!(
+                    "blob size mismatch for {}; expected {} bytes, got {} bytes",
+                    self.digest,
+                    self.size_bytes,
+                    bytes.len()
+                ),
+            ));
+        }
+        let actual = Self::sha256(bytes);
+        if actual.digest != self.digest.to_ascii_lowercase() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!(
+                    "blob digest mismatch for {}; computed {}",
+                    self.digest, actual.digest
+                ),
+            ));
+        }
+        Ok(())
     }
 }
 
@@ -57,18 +114,21 @@ impl BlobStore {
         &self.root
     }
 
-    #[must_use]
-    pub fn path_for(&self, blob_ref: &BlobRef) -> PathBuf {
-        let prefix = blob_ref.digest.get(..2).unwrap_or("xx");
-        self.root
+    pub fn path_for(&self, blob_ref: &BlobRef) -> io::Result<PathBuf> {
+        let digest = blob_ref.normalized_digest()?;
+        let prefix = digest.get(..2).ok_or_else(|| {
+            io::Error::new(io::ErrorKind::InvalidData, "blob digest has no prefix")
+        })?;
+        Ok(self
+            .root
             .join(&blob_ref.algorithm)
             .join(prefix)
-            .join(format!("{}.blob", blob_ref.digest))
+            .join(format!("{digest}.blob")))
     }
 
     pub fn write_blob(&self, bytes: &[u8]) -> io::Result<BlobRef> {
         let blob_ref = BlobRef::sha256(bytes);
-        let path = self.path_for(&blob_ref);
+        let path = self.path_for(&blob_ref)?;
         if path.is_file() {
             return Ok(blob_ref);
         }
@@ -101,9 +161,12 @@ impl BlobStore {
     }
 
     pub fn read_blob(&self, blob_ref: &BlobRef) -> io::Result<Option<Vec<u8>>> {
-        let path = self.path_for(blob_ref);
+        let path = self.path_for(blob_ref)?;
         match fs::read(path) {
-            Ok(bytes) => Ok(Some(bytes)),
+            Ok(bytes) => {
+                blob_ref.verify_bytes(&bytes)?;
+                Ok(Some(bytes))
+            }
             Err(err) if err.kind() == io::ErrorKind::NotFound => Ok(None),
             Err(err) => Err(err),
         }
@@ -264,6 +327,17 @@ mod tests {
         ValueArtifactSink,
     };
 
+    fn temp_root(label: &str) -> std::path::PathBuf {
+        std::env::temp_dir().join(format!(
+            "bamlvalue-{label}-{}-{:?}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ))
+    }
+
     #[test]
     fn bounded_sink_truncates_with_drop_diagnostics() {
         let mut sink = ByteValueArtifactSink::with_max_bytes(4);
@@ -304,14 +378,7 @@ mod tests {
 
     #[test]
     fn blob_store_dedupes_by_sha256_digest() {
-        let root = std::env::temp_dir().join(format!(
-            "bamlvalue-blob-store-{}-{:?}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
-        ));
+        let root = temp_root("blob-store");
         let store = BlobStore::new(&root);
 
         let first = store.write_blob(b"large body").unwrap();
@@ -345,18 +412,11 @@ mod tests {
 
     #[test]
     fn blob_store_temp_names_do_not_collide_with_stale_pid_temp_file() {
-        let root = std::env::temp_dir().join(format!(
-            "bamlvalue-blob-store-temp-{}-{:?}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
-        ));
+        let root = temp_root("blob-store-temp");
         let store = BlobStore::new(&root);
         let bytes = b"large body";
         let blob_ref = BlobRef::sha256(bytes);
-        let final_path = store.path_for(&blob_ref);
+        let final_path = store.path_for(&blob_ref).unwrap();
         let parent = final_path.parent().unwrap();
         std::fs::create_dir_all(parent).unwrap();
         let stale_tmp = parent.join(format!(".{}.{}.tmp", blob_ref.digest, std::process::id()));
@@ -367,6 +427,51 @@ mod tests {
         assert_eq!(written, blob_ref);
         assert_eq!(std::fs::read(final_path).unwrap(), bytes);
         assert_eq!(std::fs::read(stale_tmp).unwrap(), b"stale temp");
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn blob_store_rejects_unsafe_blob_refs_before_path_joining() {
+        let root = temp_root("blob-store-invalid-ref");
+        let store = BlobStore::new(&root);
+        let valid = BlobRef::sha256(b"body");
+
+        let bad_algorithm = BlobRef {
+            algorithm: "../sha256".to_string(),
+            ..valid.clone()
+        };
+        assert!(store.path_for(&bad_algorithm).is_err());
+
+        let bad_digest = BlobRef {
+            digest: "../not-a-digest".to_string(),
+            ..valid
+        };
+        assert!(store.path_for(&bad_digest).is_err());
+        assert!(!root.exists());
+    }
+
+    #[test]
+    fn blob_store_verifies_blob_size_and_digest_on_read() {
+        let root = temp_root("blob-store-integrity");
+        let store = BlobStore::new(&root);
+        let blob_ref = store.write_blob(b"large body").unwrap();
+
+        let wrong_size = BlobRef {
+            size_bytes: blob_ref.size_bytes + 1,
+            ..blob_ref.clone()
+        };
+        assert_eq!(
+            store.read_blob(&wrong_size).unwrap_err().kind(),
+            std::io::ErrorKind::InvalidData
+        );
+
+        let path = store.path_for(&blob_ref).unwrap();
+        std::fs::write(&path, b"tampered").unwrap();
+        assert_eq!(
+            store.read_blob(&blob_ref).unwrap_err().kind(),
+            std::io::ErrorKind::InvalidData
+        );
+
         let _ = std::fs::remove_dir_all(root);
     }
 }

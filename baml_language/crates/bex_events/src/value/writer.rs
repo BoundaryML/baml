@@ -1,6 +1,9 @@
 //! Minimal `.bamlvalue` append writer.
 
-use std::io;
+use std::{
+    io,
+    sync::{Arc, Mutex},
+};
 
 use crate::{
     ids::BoundaryId,
@@ -18,9 +21,50 @@ use crate::{
 #[derive(Debug)]
 pub struct ValueWriter<S> {
     sink: S,
-    next_value_id: u64,
+    value_id_allocator: ValueIdAllocator,
     blob_store: Option<BlobStore>,
     inline_threshold_bytes: Option<usize>,
+}
+
+#[derive(Clone, Debug)]
+pub struct ValueIdAllocator {
+    prefix: Arc<str>,
+    next_value_id: Arc<Mutex<u64>>,
+}
+
+impl ValueIdAllocator {
+    #[must_use]
+    pub fn new(prefix: impl Into<String>) -> Self {
+        Self::with_next_value_id(prefix, 1)
+    }
+
+    #[must_use]
+    pub(crate) fn with_next_value_id(prefix: impl Into<String>, next_value_id: u64) -> Self {
+        Self {
+            prefix: Arc::from(prefix.into()),
+            next_value_id: Arc::new(Mutex::new(next_value_id)),
+        }
+    }
+
+    #[must_use]
+    pub(crate) fn standard() -> Self {
+        Self::new("value")
+    }
+
+    #[must_use]
+    pub fn live_fallback() -> Self {
+        Self::new("live_value")
+    }
+
+    fn allocate(&self) -> String {
+        let mut next_value_id = self
+            .next_value_id
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let id = format!("{}_{}", self.prefix, *next_value_id);
+        *next_value_id = next_value_id.saturating_add(1);
+        id
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -30,13 +74,13 @@ pub struct ValueWriteOutcome {
 
 impl<S: ValueArtifactSink> ValueWriter<S> {
     pub fn new(sink: S, boundary_id: BoundaryId) -> io::Result<Self> {
-        Self::new_with_next_value_id(sink, boundary_id, 1)
+        Self::new_with_id_allocator(sink, boundary_id, ValueIdAllocator::standard())
     }
 
-    pub(crate) fn new_with_next_value_id(
+    pub fn new_with_id_allocator(
         mut sink: S,
         boundary_id: BoundaryId,
-        next_value_id: u64,
+        value_id_allocator: ValueIdAllocator,
     ) -> io::Result<Self> {
         let mut header = Vec::new();
         encode_header(&mut header, boundary_id)
@@ -44,7 +88,7 @@ impl<S: ValueArtifactSink> ValueWriter<S> {
         sink.write_chunk(&header)?;
         Ok(Self {
             sink,
-            next_value_id,
+            value_id_allocator,
             blob_store: None,
             inline_threshold_bytes: None,
         })
@@ -56,21 +100,21 @@ impl<S: ValueArtifactSink> ValueWriter<S> {
         blob_store: BlobStore,
         inline_threshold_bytes: usize,
     ) -> io::Result<Self> {
-        Self::with_blob_store_and_next_value_id(
+        Self::with_blob_store_and_id_allocator(
             sink,
             boundary_id,
             blob_store,
             inline_threshold_bytes,
-            1,
+            ValueIdAllocator::standard(),
         )
     }
 
-    pub(crate) fn with_blob_store_and_next_value_id(
+    pub(crate) fn with_blob_store_and_id_allocator(
         mut sink: S,
         boundary_id: BoundaryId,
         blob_store: BlobStore,
         inline_threshold_bytes: usize,
-        next_value_id: u64,
+        value_id_allocator: ValueIdAllocator,
     ) -> io::Result<Self> {
         let mut header = Vec::new();
         encode_header(&mut header, boundary_id)
@@ -78,7 +122,7 @@ impl<S: ValueArtifactSink> ValueWriter<S> {
         sink.write_chunk(&header)?;
         Ok(Self {
             sink,
-            next_value_id,
+            value_id_allocator,
             blob_store: Some(blob_store),
             inline_threshold_bytes: Some(inline_threshold_bytes),
         })
@@ -98,8 +142,7 @@ impl<S: ValueArtifactSink> ValueWriter<S> {
         body: Vec<u8>,
         capture: Option<ValueCapture>,
     ) -> io::Result<ValueWriteOutcome> {
-        let id = format!("value_{}", self.next_value_id);
-        self.next_value_id = self.next_value_id.saturating_add(1);
+        let id = self.value_id_allocator.allocate();
         let original_size = body.len();
         let (body, blob_ref) = self.store_body(body)?;
         let retained_size = blob_ref.as_ref().map_or(body.len(), |blob| blob.size_bytes);
@@ -123,8 +166,7 @@ impl<S: ValueArtifactSink> ValueWriter<S> {
         body: Vec<u8>,
         event: LogEventRecord,
     ) -> io::Result<ValueWriteOutcome> {
-        let id = format!("value_{}", self.next_value_id);
-        self.next_value_id = self.next_value_id.saturating_add(1);
+        let id = self.value_id_allocator.allocate();
         let original_size = body.len();
         let (body, blob_ref) = self.store_body(body)?;
         let retained_size = blob_ref.as_ref().map_or(body.len(), |blob| blob.size_bytes);
@@ -175,12 +217,6 @@ impl<S: ValueArtifactSink> ValueWriter<S> {
         self.sink
     }
 
-    #[must_use]
-    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
-    pub(crate) fn next_value_id(&self) -> u64 {
-        self.next_value_id
-    }
-
     fn store_body(&self, body: Vec<u8>) -> io::Result<(Vec<u8>, Option<BlobRef>)> {
         let Some(blob_store) = &self.blob_store else {
             return Ok((body, None));
@@ -202,7 +238,7 @@ mod tests {
         ids::BoundaryId,
         value::{
             BlobStore, ByteValueArtifactSink, ValueArtifactRef, ValueCodec, ValueFileRecord,
-            ValueWriter, read_bamlvalue_from_bytes,
+            ValueIdAllocator, ValueWriter, read_bamlvalue_from_bytes,
         },
     };
 
@@ -231,6 +267,34 @@ mod tests {
         };
         assert_eq!(record.body, vec![1, 2, 3]);
         assert!(record.blob_ref.is_none());
+    }
+
+    #[test]
+    fn shared_allocator_makes_value_ids_unique_across_writers() {
+        let boundary_id = BoundaryId::from_bytes([2; 16]);
+        let allocator = ValueIdAllocator::standard();
+        let mut first = ValueWriter::new_with_id_allocator(
+            ByteValueArtifactSink::new(),
+            boundary_id,
+            allocator.clone(),
+        )
+        .unwrap();
+        let mut second = ValueWriter::new_with_id_allocator(
+            ByteValueArtifactSink::new(),
+            boundary_id,
+            allocator,
+        )
+        .unwrap();
+
+        let first_outcome = first
+            .append_body(ValueCodec::BamlOutboundValue, vec![1])
+            .unwrap();
+        let second_outcome = second
+            .append_body(ValueCodec::BamlOutboundValue, vec![2])
+            .unwrap();
+
+        assert_eq!(first_outcome.value_ref.id, "value_1");
+        assert_eq!(second_outcome.value_ref.id, "value_2");
     }
 
     #[test]
@@ -263,7 +327,7 @@ mod tests {
         assert!(record.body.is_empty());
         let blob_ref = record.blob_ref.as_ref().expect("blob ref recorded");
         assert_eq!(
-            std::fs::read(BlobStore::new(&root).path_for(blob_ref)).unwrap(),
+            std::fs::read(BlobStore::new(&root).path_for(blob_ref).unwrap()).unwrap(),
             b"abcdef"
         );
         let _ = std::fs::remove_dir_all(root);

@@ -84,7 +84,7 @@ use bex_events::{
     value::{
         ByteValueArtifactSink, CaptureLossKind, CaptureLossReason, CaptureLossRecord,
         LogEventRecord, RunCompletedRecord, RunStartedRecord, ValueCapture, ValueCaptureKind,
-        ValueCodec, ValueRef, ValueWriteOutcome, ValueWriter,
+        ValueCodec, ValueIdAllocator, ValueRef, ValueWriteOutcome, ValueWriter,
     },
 };
 pub use bridge_ctypes::{
@@ -312,6 +312,10 @@ impl WasmHistoryStoreInner {
             completed_at_ms,
             renderer_hint: match outcome {
                 RunOutcome::Succeeded(result) => result.renderer_hint.clone(),
+                RunOutcome::Failed(_) | RunOutcome::Cancelled(_) | RunOutcome::Panicked(_) => None,
+            },
+            result_value_ref: match outcome {
+                RunOutcome::Succeeded(result) => result.value_ref.clone(),
                 RunOutcome::Failed(_) | RunOutcome::Cancelled(_) | RunOutcome::Panicked(_) => None,
             },
             error: match outcome {
@@ -1926,7 +1930,11 @@ fn drain_wasm_captured_values(
     boundary_id: BoundaryId,
     producer: &bex_project::TraceCaptureProducer,
 ) -> RootValueRefs {
-    let mut writer = match ValueWriter::new(ByteValueArtifactSink::new(), boundary_id) {
+    let mut writer = match ValueWriter::new_with_id_allocator(
+        ByteValueArtifactSink::new(),
+        boundary_id,
+        ValueIdAllocator::live_fallback(),
+    ) {
         Ok(writer) => writer,
         Err(err) => {
             send_value_capture_diagnostic(callback, run_store, boundary_id, err);
@@ -2322,7 +2330,7 @@ mod history_tests {
                 .capture_with(
                     boundary_id,
                     root_trace(),
-                    bex_project::CaptureKind::RootOutput,
+                    bex_project::CaptureKind::RootInput,
                     |_| panic!("zero-capacity producer must not copy a value")
                 )
                 .is_err()
@@ -2450,6 +2458,57 @@ mod history_tests {
             panic!("expected replayed value body");
         };
         assert_eq!(body.body, vec![1, 2, 3]);
+    }
+
+    #[test]
+    fn warm_history_replays_result_ref_from_completion_record_without_root_capture() {
+        let boundary_id = BoundaryId::from_bytes([13; 16]);
+        let start = start_context(boundary_id);
+        let trace = root_trace();
+        let event = call_event();
+        let envelope = profile_event_envelope_from_disk_event(
+            ProfileEventSource::Replay {
+                artifact_id: "wasm-completion-ref-test".to_string(),
+            },
+            trace.process_euid,
+            trace.engine_id,
+            &event,
+        )
+        .unwrap();
+
+        let mut store = WasmHistoryStoreInner::default();
+        store.begin(&start).unwrap();
+        store
+            .ingest_profile_records(vec![HistoryProfileRecord {
+                envelope,
+                disk_event: event,
+            }])
+            .unwrap();
+        store
+            .attach_root_trace(boundary_id, trace.call_ref())
+            .unwrap();
+        let completion_ref =
+            ValueRef::available("value_completion", ValueCodec::BamlOutboundValue, 3, 3);
+        store
+            .complete(
+                boundary_id,
+                &RunOutcome::Succeeded(RunResult {
+                    value_ref: Some(completion_ref.clone()),
+                    renderer_hint: Some("baml.outbound.base64".to_string()),
+                    supporting_payload_ids: Vec::new(),
+                }),
+                20,
+            )
+            .unwrap();
+
+        let replayed = store.open(boundary_id).unwrap();
+        assert_eq!(
+            replayed
+                .result
+                .as_ref()
+                .and_then(|result| result.value_ref.as_ref()),
+            Some(&completion_ref)
+        );
     }
 
     #[test]

@@ -1,6 +1,5 @@
 //! `BexExternalValue` -> `BamlOutboundValue` conversion.
 
-use bex_events::run::{RunOutcome, RunResult};
 use bex_project::{BexExternalAdt, BexExternalValue};
 use indexmap::IndexMap;
 
@@ -349,17 +348,6 @@ fn artifact_safe_omission(reason: &str, message: &str) -> BamlValueVariant {
             },
         ],
         type_args: Vec::new(),
-    })
-}
-
-pub fn encoded_success_outcome(
-    _result: &BexExternalValue,
-    renderer_hint: &'static str,
-) -> RunOutcome {
-    RunOutcome::Succeeded(RunResult {
-        value_ref: None,
-        renderer_hint: Some(renderer_hint.to_string()),
-        supporting_payload_ids: Vec::new(),
     })
 }
 

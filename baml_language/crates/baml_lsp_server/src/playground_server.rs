@@ -43,7 +43,8 @@ use bex_events::{
     },
     value::{
         ByteValueArtifactSink, CaptureLossKind, CaptureLossReason, CaptureLossRecord,
-        LogEventRecord, ValueCapture, ValueCaptureKind, ValueCodec, ValueRef, ValueWriter,
+        LogEventRecord, ValueCapture, ValueCaptureKind, ValueCodec, ValueIdAllocator, ValueRef,
+        ValueWriter,
     },
 };
 use bex_project::{is_cancelled_engine_error, is_cancelled_runtime_error};
@@ -428,7 +429,11 @@ fn drain_captured_values_and_broadcast(
     boundary_id: BoundaryId,
     producer: &bex_project::TraceCaptureProducer,
 ) -> RootValueRefs {
-    let mut fallback_writer = match ValueWriter::new(ByteValueArtifactSink::new(), boundary_id) {
+    let mut fallback_writer = match ValueWriter::new_with_id_allocator(
+        ByteValueArtifactSink::new(),
+        boundary_id,
+        ValueIdAllocator::live_fallback(),
+    ) {
         Ok(writer) => writer,
         Err(err) => {
             broadcast_value_capture_diagnostic(broadcast_tx, run_store, boundary_id, err);
@@ -2620,7 +2625,6 @@ fn content_type_for_path(path: &Path) -> Option<&'static str> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::sync::Arc;
 
     use bex_events::{
@@ -2629,6 +2633,8 @@ mod tests {
     };
     use bex_heap::{BexHeap, HeapPermit as _, HeapPermitManager, Tlab, TlabHolder};
     use bex_vm_types::{RootHaver, Value};
+
+    use super::*;
 
     fn unique_temp_dir(name: &str) -> PathBuf {
         std::env::temp_dir().join(format!(
@@ -2715,12 +2721,31 @@ mod tests {
                 .capture_with(
                     boundary_id,
                     test_trace_key(),
-                    bex_project::CaptureKind::RootOutput,
+                    bex_project::CaptureKind::RootInput,
                     |_| panic!("zero-capacity producer must not copy a value")
                 )
                 .is_err()
         );
         assert_eq!(producer.stats().skipped_value_queue_full, 1);
+        let heap = BexHeap::new(Vec::new());
+        let manager = HeapPermitManager::new();
+        let permit = manager
+            .new_permit(EmptyRoots {
+                tlab: Tlab::new(Arc::clone(&heap)),
+            })
+            .await
+            .acquire()
+            .await;
+        producer
+            .capture_with(
+                boundary_id,
+                test_trace_key(),
+                bex_project::CaptureKind::RootOutput,
+                |trace_heap| {
+                    trace_heap.copy_value_from_bex_heap(&heap, permit.proof(), Value::int(7))
+                },
+            )
+            .expect("root output should use reserved capacity");
 
         let refs = drain_captured_values_and_broadcast(
             &broadcast_tx,
@@ -2731,8 +2756,14 @@ mod tests {
             &producer,
         );
 
-        assert!(refs.output.is_none());
+        let output_ref = refs.output.expect("root output ref should be preserved");
         assert!(refs.error.is_none());
+        assert!(
+            value_store
+                .lock()
+                .unwrap()
+                .contains_key(&(boundary_id, output_ref.id.clone()))
+        );
         let snapshot = run_store.snapshot(boundary_id).expect("run should exist");
         let diagnostic = snapshot
             .diagnostics

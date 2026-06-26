@@ -1539,7 +1539,6 @@ version = "0.1.0"
 dependencies = [
  "baml_type",
  "base64",
- "bex_events",
  "bex_project",
  "indexmap",
  "num-bigint",

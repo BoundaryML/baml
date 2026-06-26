@@ -15,7 +15,8 @@ use crate::{
     run::{ProfileEventEnvelope, ProfileEventKind},
     value::{
         BlobStore, CaptureLossRecord, FileValueArtifactSink, LogEventRecord, RunCompletedRecord,
-        RunStartedRecord, ValueCapture, ValueCodec, ValueWriteOutcome, ValueWriter,
+        RunStartedRecord, ValueCapture, ValueCodec, ValueIdAllocator, ValueWriteOutcome,
+        ValueWriter,
     },
 };
 
@@ -26,6 +27,7 @@ pub struct BoundaryWriter {
     rotation_policy: SegmentRotationPolicy,
     stack_writers: HashMap<u64, RotatingStackWriter>,
     value_writers: HashMap<u64, RotatingValueWriter>,
+    value_id_allocator: ValueIdAllocator,
     run_started_written: bool,
     run_completed_written: bool,
 }
@@ -100,6 +102,7 @@ impl BoundaryWriter {
             rotation_policy,
             stack_writers: HashMap::new(),
             value_writers: HashMap::new(),
+            value_id_allocator: ValueIdAllocator::standard(),
             run_started_written: false,
             run_completed_written: false,
         })
@@ -205,6 +208,7 @@ impl BoundaryWriter {
                 self.boundary_id,
                 thread_id,
                 self.rotation_policy,
+                self.value_id_allocator.clone(),
             )?;
             self.value_writers.insert(thread_id, writer);
         }
@@ -257,7 +261,7 @@ impl RotatingStackWriter {
 
     fn write_event(&mut self, disk_event: &pb::DiskEventV1) -> io::Result<()> {
         self.rotate_if_needed()?;
-        self.writer.write_event(disk_event)?;
+        self.writer.write_event(disk_event);
         self.events_written = self.events_written.saturating_add(1);
         Ok(())
     }
@@ -293,6 +297,7 @@ struct RotatingValueWriter {
     boundary_id: BoundaryId,
     thread_id: u64,
     blob_store: BlobStore,
+    value_id_allocator: ValueIdAllocator,
     policy: SegmentRotationPolicy,
     segment: u64,
     records_written: u64,
@@ -305,14 +310,23 @@ impl RotatingValueWriter {
         boundary_id: BoundaryId,
         thread_id: u64,
         policy: SegmentRotationPolicy,
+        value_id_allocator: ValueIdAllocator,
     ) -> io::Result<Self> {
         let blob_store = BlobStore::for_boundary_dir(&path.boundary_dir);
-        let writer = Self::open_writer(&path, boundary_id, thread_id, 0, blob_store.clone(), 1)?;
+        let writer = Self::open_writer(
+            &path,
+            boundary_id,
+            thread_id,
+            0,
+            blob_store.clone(),
+            value_id_allocator.clone(),
+        )?;
         Ok(Self {
             path,
             boundary_id,
             thread_id,
             blob_store,
+            value_id_allocator,
             policy,
             segment: 0,
             records_written: 0,
@@ -380,7 +394,6 @@ impl RotatingValueWriter {
         {
             return Ok(());
         }
-        let next_value_id = self.writer.next_value_id();
         self.writer.flush()?;
         self.segment = self.segment.saturating_add(1);
         self.writer = Self::open_writer(
@@ -389,7 +402,7 @@ impl RotatingValueWriter {
             self.thread_id,
             self.segment,
             self.blob_store.clone(),
-            next_value_id,
+            self.value_id_allocator.clone(),
         )?;
         self.records_written = 0;
         Ok(())
@@ -405,15 +418,15 @@ impl RotatingValueWriter {
         thread_id: u64,
         segment: u64,
         blob_store: BlobStore,
-        next_value_id: u64,
+        value_id_allocator: ValueIdAllocator,
     ) -> io::Result<ValueWriter<FileValueArtifactSink>> {
         let sink = FileValueArtifactSink::create(path.value_segment_path(thread_id, segment))?;
-        ValueWriter::with_blob_store_and_next_value_id(
+        ValueWriter::with_blob_store_and_id_allocator(
             sink,
             boundary_id,
             blob_store,
             VALUE_INLINE_THRESHOLD_BYTES,
-            next_value_id,
+            value_id_allocator,
         )
     }
 }
@@ -457,14 +470,13 @@ impl StackSegmentWriter {
         Ok(writer)
     }
 
-    fn write_event(&mut self, disk_event: &pb::DiskEventV1) -> io::Result<()> {
+    fn write_event(&mut self, disk_event: &pb::DiskEventV1) {
         let start_len = self.scratch.len();
         encode_disk_event(&mut self.scratch, disk_event);
         let encoded_len = self.scratch.len().saturating_sub(start_len);
         self.bytes_written = self
             .bytes_written
             .saturating_add(u64::try_from(encoded_len).unwrap_or(u64::MAX));
-        Ok(())
     }
 
     fn flush(&mut self) -> io::Result<()> {
