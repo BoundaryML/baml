@@ -1,0 +1,41 @@
+name: Deploy agent-tries-baml to Fly
+
+# Auto-deploy the bammy-2 Fly apps whenever this branch is pushed with changes
+# under tools/agent-tries-baml/. Requires repo secret FLY_API_TOKEN (a Fly deploy
+# token that covers all four apps — e.g. an org token, or per-app deploy tokens).
+on:
+  push:
+    branches:
+      - dhilan/atb-rewrite
+    paths:
+      - 'tools/agent-tries-baml/**'
+      - '.github/workflows/atb-deploy.yml'
+  workflow_dispatch:
+
+# Newer push supersedes an in-flight deploy of the same ref.
+concurrency:
+  group: atb-deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Deploy bammy-2 fly apps
+    runs-on: ubuntu-latest
+    env:
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+    defaults:
+      run:
+        working-directory: tools/agent-tries-baml
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      # Proxy first — the service & cron route their LLM calls through it.
+      - name: Deploy proxy
+        run: flyctl deploy --config fly.bammy-2-proxy.toml --remote-only --ha=false --yes
+      - name: Deploy service
+        run: flyctl deploy --config fly.bammy-2-service.toml --remote-only --ha=false --yes
+      - name: Deploy ingress
+        run: flyctl deploy --config fly.bammy-2-ingress.toml --remote-only --ha=false --yes
+      - name: Deploy cron
+        run: flyctl deploy --config fly.bammy-2-cron.toml --remote-only --ha=false --yes
