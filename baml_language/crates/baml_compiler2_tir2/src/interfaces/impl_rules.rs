@@ -651,14 +651,31 @@ pub fn type_implements_interface<'db>(
     concrete: &Ty,
     interface: &baml_type::Interface,
     aliases: &HashMap<QualifiedTypeName, Ty>,
-    is_subtype: impl FnMut(&Ty, &Ty) -> bool,
+    mut is_subtype: impl FnMut(&Ty, &Ty) -> bool,
 ) -> bool {
-    crate::interfaces::package_implements_registry(db, pkg_id).type_implements_interface_via_rule(
-        concrete,
-        &interface.to_ty(),
-        aliases,
-        is_subtype,
-    )
+    // Orphan rule: an impl lives in the package of either the interface or the
+    // implementor, so this package + its dependency closure is the complete search.
+    // Membership holds iff some impl structurally matches `(concrete, interface)` and its
+    // pinned bounds hold. Coherence guarantees ≤1 match for realized inputs; for symbolic
+    // inputs there may be several applicable blocks — any one establishes membership.
+    let mut packages = vec![pkg_id];
+    packages.extend(baml_compiler2_hir::package::package_dependency_closure(
+        db, pkg_id,
+    ));
+    for pkg in packages {
+        for impl_loc in package_impl_locs(db, pkg) {
+            let Ok(data) = impl_data(db, impl_loc).as_ref() else {
+                continue;
+            };
+            let Some(bindings) = match_impl_head(db, data, concrete, interface, aliases) else {
+                continue;
+            };
+            if impl_bounds_hold_symbolic(data, &bindings, &mut is_subtype) {
+                return true;
+            }
+        }
+    }
+    false
 }
 
 /// [`get_implements_block`] with an explicit recursion budget. Bound
@@ -699,62 +716,13 @@ fn get_implements_block_within_depth<'db>(
             let Ok(data) = impl_data(db, impl_loc).as_ref() else {
                 continue;
             };
-            // Exact interface head + arity — never a super-/sub-interface.
-            if interface_loc_qtn(db, data.interface).as_ref() != Some(&requested_iface.name)
-                || data.interface_args.len() != requested_iface.generics.len()
-            {
-                continue;
-            }
-            let param_names: Vec<Name> = data
-                .generic_params
-                .iter()
-                .map(|(name, _)| name.clone())
-                .collect();
-            // A bare blanket `implement<T> I for T` applies ONLY to a concrete
-            // receiver: matching its for-pattern type-var against an existential
-            // or another type-var would bind `T` to a non-concrete type and
-            // wrongly claim a static impl. A type-var *nested* in the for-type
-            // (`for Box<T>`) is fine — the surrounding constructor already pins
-            // the receiver as concrete, and the inner arg may be anything.
-            if let Ty::TypeVar(name, _) = &data.for_ty_pattern
-                && param_names.contains(name)
-                && !is_concrete_receiver(concrete_ty)
-            {
-                continue;
-            }
-            // Bind the impl's own generics by jointly unifying its for-type
-            // pattern against the realized type and its interface input args
-            // against the requested ones — a param may appear in either (e.g.
-            // `implement<U, O> Add<O> for Box<U>`), so both feed one binding set.
-            let mut pairs: Vec<(&Ty, &Ty)> = Vec::with_capacity(1 + requested_iface.generics.len());
-            pairs.push((&data.for_ty_pattern, concrete_ty));
-            pairs.extend(data.interface_args.iter().zip(&requested_iface.generics));
-            let Some(bindings) = match_ty_patterns(&pairs, &param_names, aliases) else {
+            // Structural match: exact interface head, the bare-blanket guard, joint
+            // for-type + interface-arg unification, and associated-type pins. Inputs are
+            // realized here, so the resulting bindings are ground.
+            let Some(bindings) = match_impl_head(db, data, concrete_ty, requested_iface, aliases)
+            else {
                 continue;
             };
-
-            // Associated-type pins in the request must agree with what this impl
-            // binds them to, realized through the same bindings: `Item = int`
-            // against an impl whose `type Item = U` (with `U := int`) matches,
-            // but against `type Item = string` does not. An associate the impl
-            // doesn't pin here carries no conflict at this layer.
-            let associated_types_agree =
-                requested_iface
-                    .associated_types
-                    .iter()
-                    .all(|(name, requested_ty)| {
-                        match data.associated_types.iter().find(|(n, _)| n == name) {
-                            Some((_, impl_ty)) => is_same_normalized_type(
-                                &substitute_ty(impl_ty, &bindings),
-                                requested_ty,
-                                aliases,
-                            ),
-                            None => true,
-                        }
-                    });
-            if !associated_types_agree {
-                continue;
-            }
 
             // Generic bounds must hold: a bound `T extends I` is satisfied iff the
             // bound type (`T`'s binding) itself implements `I` — possibly via
@@ -798,6 +766,146 @@ fn get_implements_block_within_depth<'db>(
         }
     }
     None
+}
+
+/// Structurally match one impl against a requested `(concrete, interface)`: exact
+/// interface head + arity, the bare-blanket-only-for-a-concrete-receiver guard, joint
+/// for-type + interface-arg unification (a param may appear in either), and the
+/// requested associated-type pins. Returns the impl's generic bindings on a structural
+/// match; declared generic *bounds* are NOT checked here — the realized resolver
+/// discharges them by bounded re-entry, the symbolic ones through `is_subtype`.
+///
+/// `concrete`/`interface` may carry free type vars (the symbolic case): each binds an
+/// impl param or stays free, so an unbound param leaves the match parametric.
+fn match_impl_head<'db>(
+    db: &'db dyn crate::Db,
+    data: &ImplData<'db>,
+    concrete: &Ty,
+    requested_iface: &baml_type::Interface,
+    aliases: &HashMap<QualifiedTypeName, Ty>,
+) -> Option<TypeBindings> {
+    if interface_loc_qtn(db, data.interface).as_ref() != Some(&requested_iface.name)
+        || data.interface_args.len() != requested_iface.generics.len()
+    {
+        return None;
+    }
+    let param_names: Vec<Name> = data
+        .generic_params
+        .iter()
+        .map(|(name, _)| name.clone())
+        .collect();
+    if let Ty::TypeVar(name, _) = &data.for_ty_pattern
+        && param_names.contains(name)
+        && !is_concrete_receiver(concrete)
+    {
+        return None;
+    }
+    let mut pairs: Vec<(&Ty, &Ty)> = Vec::with_capacity(1 + requested_iface.generics.len());
+    pairs.push((&data.for_ty_pattern, concrete));
+    pairs.extend(data.interface_args.iter().zip(&requested_iface.generics));
+    let bindings = match_ty_patterns(&pairs, &param_names, aliases)?;
+
+    let associated_types_agree =
+        requested_iface
+            .associated_types
+            .iter()
+            .all(|(name, requested_ty)| {
+                match data.associated_types.iter().find(|(n, _)| n == name) {
+                    Some((_, impl_ty)) => is_same_normalized_type(
+                        &substitute_ty(impl_ty, &bindings),
+                        requested_ty,
+                        aliases,
+                    ),
+                    None => true,
+                }
+            });
+    associated_types_agree.then_some(bindings)
+}
+
+/// Whether every declared bound the match *pinned* holds, discharged through
+/// `is_subtype` (so it works when a binding still carries free vars). A param the match
+/// left free, or a bound still mentioning a free param, is deferred — it becomes an
+/// obligation on the eventual call-site instantiation, mirroring `get_implements_block`'s
+/// "skip unbound params" rule for the realized case.
+fn impl_bounds_hold_symbolic(
+    data: &ImplData<'_>,
+    bindings: &TypeBindings,
+    is_subtype: &mut impl FnMut(&Ty, &Ty) -> bool,
+) -> bool {
+    data.generic_params.iter().all(|(name, bounds)| {
+        let Some(actual) = bindings.get(name) else {
+            return true;
+        };
+        bounds.iter().all(|bound| {
+            let bound = substitute_interface(bound, bindings);
+            if bound.generics.iter().any(contains_typevar)
+                || bound
+                    .associated_types
+                    .iter()
+                    .any(|(_, ty)| contains_typevar(ty))
+            {
+                return true;
+            }
+            is_subtype(actual, &bound.to_ty())
+        })
+    })
+}
+
+/// Every impl block in `pkg_id` + dependency closure that applies to `concrete`.
+///
+/// Symbolic-capable: `concrete` may carry free vars, and a matched impl's interface (read
+/// via `impl_data(impl_loc)`) stays parametric in the impl's still-free params — e.g.
+/// `implement<T> Foo<T> for MyType` matches `MyType` with `T` free, i.e. `MyType: Foo<_>`
+/// for every `T`. This enumerates the finite set of impl *blocks*, never the (possibly
+/// infinite) set of interface instantiations; membership against a *named* interface is
+/// [`type_implements_interface`], and the realized unique match is [`get_implements_block`].
+///
+/// `is_subtype` discharges the impls' generic bounds; new callers pass a
+/// `baml_type::normalize`-backed closure rather than the deprecated local oracle.
+#[expect(
+    dead_code,
+    reason = "symbolic impl-block enumerator; wired into concrete-receiver member resolution \
+              and interface-view inference once those are rebuilt onto it"
+)]
+pub(crate) fn impls_for_type<'db>(
+    db: &'db dyn crate::Db,
+    pkg_id: PackageId<'db>,
+    concrete: &Ty,
+    aliases: &HashMap<QualifiedTypeName, Ty>,
+    mut is_subtype: impl FnMut(&Ty, &Ty) -> bool,
+) -> Vec<ResolvedImpl<'db>> {
+    let mut packages = vec![pkg_id];
+    packages.extend(baml_compiler2_hir::package::package_dependency_closure(
+        db, pkg_id,
+    ));
+    let mut out = Vec::new();
+    for pkg in packages {
+        for impl_loc in package_impl_locs(db, pkg) {
+            let Ok(data) = impl_data(db, impl_loc).as_ref() else {
+                continue;
+            };
+            let param_names: Vec<Name> = data
+                .generic_params
+                .iter()
+                .map(|(name, _)| name.clone())
+                .collect();
+            if let Ty::TypeVar(name, _) = &data.for_ty_pattern
+                && param_names.contains(name)
+                && !is_concrete_receiver(concrete)
+            {
+                continue;
+            }
+            let Some(bindings) =
+                match_ty_patterns(&[(&data.for_ty_pattern, concrete)], &param_names, aliases)
+            else {
+                continue;
+            };
+            if impl_bounds_hold_symbolic(data, &bindings, &mut is_subtype) {
+                out.push(ResolvedImpl { impl_loc, bindings });
+            }
+        }
+    }
+    out
 }
 
 /// An interface method resolved on a [`ResolvedImpl`] — the function backing it
