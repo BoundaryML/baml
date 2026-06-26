@@ -202,11 +202,17 @@ impl TestArgs {
         }
 
         // ── 7. Execute ─────────────────────────────────────────────────────
-        let aggregate_new_style = !has_filters
-            && selected
-                .iter()
-                .any(|t| matches!(&t.kind, TestKind::Testset { .. }));
-        let mut total = if aggregate_new_style {
+        let selected_testset_paths: Vec<String> = selected
+            .iter()
+            .filter_map(|t| match &t.kind {
+                TestKind::Testset { full_path } => Some(full_path.clone()),
+                TestKind::Legacy { .. } => None,
+            })
+            .collect();
+        let has_selected_testsets = !selected_testset_paths.is_empty();
+        let aggregate_new_style = !has_filters && has_selected_testsets;
+        let aggregate_filtered_new_style = has_filters && has_selected_testsets;
+        let mut total = if aggregate_new_style || aggregate_filtered_new_style {
             selected
                 .iter()
                 .filter(|t| matches!(&t.kind, TestKind::Legacy { .. }))
@@ -237,7 +243,7 @@ impl TestArgs {
                     command_failed |= failed > failed_before;
                 }
                 TestKind::Testset { full_path } => {
-                    if aggregate_new_style {
+                    if aggregate_new_style || aggregate_filtered_new_style {
                         continue;
                     }
                     let Some(reg_value) = registry_value.as_ref() else {
@@ -267,9 +273,33 @@ impl TestArgs {
             };
             command_failed |=
                 run_testset_registry(&run_ctx, reg_value, &mut passed, &mut failed, &mut total);
+        } else if aggregate_filtered_new_style {
+            let Some(reg_value) = registry_value.as_ref() else {
+                eprintln!("FAIL testing::* - testset registry unavailable");
+                failed += 1;
+                total += 1;
+                let summary = format!("{passed} passed, {failed} failed, {total} total");
+                crate::reporter::print_error(format_args!("test failures — {summary}"));
+                return Ok(crate::ExitCode::TestFailure);
+            };
+            command_failed |= run_selected_testset_registry(
+                &run_ctx,
+                reg_value,
+                &selected_testset_paths,
+                &mut passed,
+                &mut failed,
+                &mut total,
+            );
         }
 
-        let summary = format!("{passed} passed, {failed} failed, {total} total");
+        let summary = if !command_failed && failed > 0 {
+            format!(
+                "aggregate passed — {passed} passed, {failed} tolerated {}, {total} total",
+                pluralize(failed, "failure", "failures")
+            )
+        } else {
+            format!("{passed} passed, {failed} failed, {total} total")
+        };
         if command_failed {
             // `reporter.finish` styles success — print as an error so
             // the bold-red `Error:` carries the visual weight of "tests
@@ -648,48 +678,7 @@ fn run_testset_registry(
         call_ctx,
         true,
     )) {
-        Ok(report) => {
-            let outcome = extract_outcome(&report).unwrap_or_else(|| "unknown".to_string());
-            let aggregate_failed = outcome != "pass";
-            if let Some((report_passed, report_failed, report_total)) =
-                extract_leaf_summary(&report).or_else(|| {
-                    extract_testset_summary(&report)
-                        .map(|(_, passed, failed, total)| (passed, failed, total))
-                })
-            {
-                *passed += report_passed;
-                *failed += report_failed;
-                *total += report_total;
-                if !aggregate_failed {
-                    println!("PASS testing::*");
-                } else {
-                    println!("FAIL testing::* [outcome={outcome}]");
-                    print_failed_names(&report);
-                    print_failure_messages(&report);
-                    // A testset runner can fail the aggregate without marking
-                    // individual children failed. Count that runner-level
-                    // verdict as one displayed failure so the summary does not
-                    // say "0 failed" when the aggregate itself failed.
-                    if report_failed == 0 {
-                        *failed += 1;
-                        *total += 1;
-                    }
-                }
-                aggregate_failed
-            } else {
-                *total += 1;
-                if !aggregate_failed {
-                    println!("PASS testing::*");
-                    *passed += 1;
-                } else {
-                    println!("FAIL testing::* [outcome={outcome}]");
-                    print_failed_names(&report);
-                    print_failure_messages(&report);
-                    *failed += 1;
-                }
-                aggregate_failed
-            }
-        }
+        Ok(report) => record_testset_registry_report(&report, passed, failed, total),
         Err(e) => {
             eprintln!("FAIL testing::*");
             eprintln!("  => {e:?}");
@@ -697,6 +686,90 @@ fn run_testset_registry(
             *total += 1;
             true
         }
+    }
+}
+
+fn run_selected_testset_registry(
+    ctx: &RunCtx,
+    registry: &BexExternalValue,
+    full_paths: &[String],
+    passed: &mut usize,
+    failed: &mut usize,
+    total: &mut usize,
+) -> bool {
+    let call_ctx = FunctionCallContextBuilder::new(CallId::next())
+        .with_cancel_token(ctx.cancel.clone())
+        .build();
+    match ctx.rt.block_on(ctx.engine.call_function(
+        "testing.TestRegistry.run_selected",
+        vec![registry.clone(), string_array(full_paths)],
+        call_ctx,
+        true,
+    )) {
+        Ok(report) => record_testset_registry_report(&report, passed, failed, total),
+        Err(e) => {
+            eprintln!("FAIL testing::*");
+            eprintln!("  => {e:?}");
+            *failed += 1;
+            *total += 1;
+            true
+        }
+    }
+}
+
+fn record_testset_registry_report(
+    report: &BexExternalValue,
+    passed: &mut usize,
+    failed: &mut usize,
+    total: &mut usize,
+) -> bool {
+    let outcome = extract_outcome(report).unwrap_or_else(|| "unknown".to_string());
+    let aggregate_failed = outcome != "pass";
+    if let Some((report_passed, report_failed, report_total)) = extract_leaf_summary(report)
+        .or_else(|| {
+            extract_testset_summary(report)
+                .map(|(_, passed, failed, total)| (passed, failed, total))
+        })
+    {
+        *passed += report_passed;
+        *failed += report_failed;
+        *total += report_total;
+        if !aggregate_failed {
+            if report_failed > 0 {
+                println!(
+                    "PASS testing::* [outcome=pass; {report_failed} tolerated {}]",
+                    pluralize(report_failed, "failure", "failures")
+                );
+                print_tolerated_names(report);
+            } else {
+                println!("PASS testing::*");
+            }
+        } else {
+            println!("FAIL testing::* [outcome={outcome}]");
+            print_failed_names(report);
+            print_failure_messages(report);
+            // A testset runner can fail the aggregate without marking
+            // individual children failed. Count that runner-level
+            // verdict as one displayed failure so the summary does not
+            // say "0 failed" when the aggregate itself failed.
+            if report_failed == 0 {
+                *failed += 1;
+                *total += 1;
+            }
+        }
+        aggregate_failed
+    } else {
+        *total += 1;
+        if !aggregate_failed {
+            println!("PASS testing::*");
+            *passed += 1;
+        } else {
+            println!("FAIL testing::* [outcome={outcome}]");
+            print_failed_names(report);
+            print_failure_messages(report);
+            *failed += 1;
+        }
+        aggregate_failed
     }
 }
 
@@ -780,8 +853,16 @@ fn extract_leaf_summary(value: &BexExternalValue) -> Option<(usize, usize, usize
 }
 
 fn print_failed_names(value: &BexExternalValue) {
+    print_names(value, "failed");
+}
+
+fn print_tolerated_names(value: &BexExternalValue) {
+    print_names(value, "tolerated");
+}
+
+fn print_names(value: &BexExternalValue, label: &str) {
     for name in extract_failed_names(value) {
-        println!("  failed: {name}");
+        println!("  {label}: {name}");
     }
 }
 
@@ -876,6 +957,16 @@ fn as_usize(value: &BexExternalValue) -> Option<usize> {
     }
 }
 
+fn string_array(values: &[String]) -> BexExternalValue {
+    BexExternalValue::Array {
+        element_type: baml_type::RuntimeTy::string(),
+        items: values
+            .iter()
+            .map(|value| BexExternalValue::String(value.clone().into()))
+            .collect(),
+    }
+}
+
 /// Match the last segment of a namespaced class name, ignoring any leading
 /// `testing.` / `user.` / similar prefix. `testing.SerializedTest` and
 /// `SerializedTest` both match `"SerializedTest"`.
@@ -895,6 +986,10 @@ fn split_top(full_path: &str) -> (String, String) {
         Some((head, tail)) => (head.to_string(), tail.to_string()),
         None => (String::new(), full_path.to_string()),
     }
+}
+
+fn pluralize<'a>(count: usize, singular: &'a str, plural: &'a str) -> &'a str {
+    if count == 1 { singular } else { plural }
 }
 
 #[cfg(test)]

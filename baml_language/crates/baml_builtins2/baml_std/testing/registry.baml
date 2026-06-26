@@ -166,6 +166,10 @@ class TestRegistry {
     root.run_testset(root.testset_children(self), null)
   }
 
+  function run_selected(self, names: string[]) -> TestSetReport {
+    root.run_testset(root.testset_children_selected(self, names), null)
+  }
+
   // Expand a lazy testset by name. Searches recursively through expanded
   // sub-registries so nested testsets can be expanded too.
   function expand_set(self, name: string) -> SerializedTestDef[] {
@@ -217,6 +221,27 @@ function testset_children(registry: TestRegistry) -> TestSetChild[] {
   children
 }
 
+function testset_children_selected(registry: TestRegistry, names: string[]) -> TestSetChild[] {
+  let children: TestSetChild[] = []
+  for (let t in registry.collector.tests) {
+    if (root._name_selected(t.name, names)) {
+      children.push(root.test_child(t.name, t.body, t.runner))
+    } else {
+      null
+    }
+  }
+  for (let ts in registry.collector.testsets) {
+    if (root._name_selected(ts.name, names)) {
+      children.push(root.testset_child(registry, ts))
+    } else if (root._has_selected_descendant(ts.name, names)) {
+      children.push(root.testset_child_selected(registry, ts, names))
+    } else {
+      null
+    }
+  }
+  children
+}
+
 function test_child(name: string, body: TestBody, runner: TestRunner?) -> TestSetChild {
   TestSetChild {
     name: name,
@@ -242,6 +267,49 @@ function testset_child(registry: TestRegistry, ts: TestSetRegistration) -> TestS
       }
     },
   }
+}
+
+function testset_child_selected(registry: TestRegistry, ts: TestSetRegistration, names: string[]) -> TestSetChild {
+  TestSetChild {
+    name: ts.name,
+    run: () -> ChildReport {
+      root.run_testset(root.testset_children_selected(registry.expand_testset_registry(ts), names), ts.runner) catch_all (e) {
+        _ => {
+          TestSetReport {
+            outcome: "error",
+            passed: 0,
+            failed: 1,
+            total: 1,
+            failed_names: [ts.name],
+            results: [],
+          }
+        }
+      }
+    },
+  }
+}
+
+function _name_selected(name: string, names: string[]) -> bool {
+  for (let selected in names) {
+    if (selected == name) {
+      return true
+    } else {
+      null
+    }
+  }
+  false
+}
+
+function _has_selected_descendant(prefix: string, names: string[]) -> bool {
+  let descendant_prefix = prefix + "/"
+  for (let selected in names) {
+    if (selected.starts_with(descendant_prefix)) {
+      return true
+    } else {
+      null
+    }
+  }
+  false
 }
 
 function aggregate_reports(named_results: NamedChildReport[]) -> TestSetReport {

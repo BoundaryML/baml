@@ -391,13 +391,17 @@ testset "suite" with testing.PassRate(0.6) {
         stderr,
     );
     assert!(
-        combined.contains("2 passed, 1 failed, 3 total"),
-        "Expected unfiltered aggregate output to report leaf test totals, got:\n{combined}"
+        combined.contains("PASS testing::* [outcome=pass; 1 tolerated failure]"),
+        "Expected unfiltered aggregate output to identify tolerated failures, got:\n{combined}"
+    );
+    assert!(
+        combined.contains("aggregate passed — 2 passed, 1 tolerated failure, 3 total"),
+        "Expected unfiltered aggregate summary to report tolerated leaf totals, got:\n{combined}"
     );
 }
 
 #[test]
-fn test_filtered_testset_run_executes_leaf_without_parent_runner() {
+fn test_filtered_testset_run_honors_pass_rate_runner_for_selected_set() {
     let built = common::ensure_built();
     let tmp = tempfile::tempdir().unwrap();
 
@@ -412,19 +416,65 @@ testset "suite" with testing.PassRate(0.6) {
 "#,
     );
 
+    let output = run_baml_cli(built, tmp.path(), &["test", "--from", ".", "-i", "suite::"]);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let combined = format!("{stdout}{stderr}");
+
+    assert!(
+        output.status.success(),
+        "Expected filtered testset run to honor PassRate and pass, got: {:?}\nstdout: {}\nstderr: {}",
+        output.status.code(),
+        stdout,
+        stderr,
+    );
+    assert!(
+        combined.contains("PASS testing::* [outcome=pass; 1 tolerated failure]"),
+        "Expected filtered aggregate output to identify tolerated failures, got:\n{combined}"
+    );
+    assert!(
+        combined.contains("aggregate passed — 2 passed, 1 tolerated failure, 3 total"),
+        "Expected filtered aggregate summary to report selected leaf totals, got:\n{combined}"
+    );
+}
+
+#[test]
+fn test_filtered_testset_leaf_runs_under_parent_runner() {
+    let built = common::ensure_built();
+    let tmp = tempfile::tempdir().unwrap();
+
+    create_project(
+        tmp.path(),
+        r#"
+testset "suite" with testing.PassRate(0.0) {
+  test "failing leaf" { assert.is_true(false) }
+}
+"#,
+    );
+
     let output = run_baml_cli(
         built,
         tmp.path(),
-        &["test", "--from", ".", "-i", "suite::three"],
+        &["test", "--from", ".", "-i", "suite::failing leaf"],
     );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let combined = format!("{stdout}{stderr}");
 
-    assert_eq!(
+    assert!(
+        output.status.success(),
+        "Expected filtered leaf to run under parent PassRate and pass, got: {:?}\nstdout: {}\nstderr: {}",
         output.status.code(),
-        Some(2),
-        "Expected filtered failing leaf to bypass parent PassRate and fail, got: {:?}\nstdout: {}\nstderr: {}",
-        output.status.code(),
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr),
+        stdout,
+        stderr,
+    );
+    assert!(
+        combined.contains("PASS testing::* [outcome=pass; 1 tolerated failure]"),
+        "Expected filtered leaf output to identify tolerated failures, got:\n{combined}"
+    );
+    assert!(
+        combined.contains("aggregate passed — 0 passed, 1 tolerated failure, 1 total"),
+        "Expected filtered leaf output to report selected leaf totals, got:\n{combined}"
     );
 }
 
