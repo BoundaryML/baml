@@ -379,10 +379,7 @@ function claude_messages(req: baml.http.Request) -> baml.http.Response {
         _ => null
     };
     return match (parsed) {
-        null => {
-            baml.io.println("proxy-msg: MessagesReq PARSE FAILED -> 400");
-            json_response(400, "{\"error\":\"bad messages request\"}")
-        },
+        null => json_response(400, "{\"error\":\"bad messages request\"}"),
         let mr: MessagesReq => {
             let prompt = render_messages(mr);
             let staging = staging_root() + "/msg-" + baml.id.new();
@@ -395,20 +392,6 @@ function claude_messages(req: baml.http.Request) -> baml.http.Response {
             // on stdin. No --permission-mode (bypassPermissions is rejected as root).
             let args = ["-p", "-", "--output-format", "json", "--model", mr.model, "--max-turns", "1", "--tools", ""];
             let res = run_capture(claude_bin(), args, staging, null, 300000, prompt, anthropic_api_key() == "");
-            // Surface a failed claude run (non-zero exit or an error result like
-            // error_max_turns) instead of silently wrapping garbage back to BAML.
-            if (res.exit_code != 0 || res.stdout.includes("\"is_error\":true")) {
-                let head = res.stdout.substring(0, 200) catch (_) {
-                    _ => res.stdout
-                };
-                baml.io
-                    .println(
-                        "proxy-claude FAILED: exit="
-                            + baml.unstable.string(res.exit_code)
-                            + " head="
-                            + head,
-                    );
-            }
             let line = find_last_json_line(res.stdout);
             let out = baml.json.from_string<ClaudeOut>(line) catch (_) {
                 _ => ClaudeOut { result: null }
