@@ -24,6 +24,53 @@ fn len_as_u32(len: usize) -> u32 {
     u32::try_from(len).expect("arena length exceeds u32::MAX")
 }
 
+// ── Vec<(Name, Idx<T>)> (object-literal fields) ──────────────────────────────
+
+pub fn serialize_vec_name_idx<T, W: Write>(
+    v: &[(baml_base::Name, Idx<T>)],
+    w: &mut W,
+) -> Result<(), Error> {
+    len_as_u32(v.len()).serialize(w)?;
+    for (name, idx) in v {
+        name.serialize(w)?;
+        serialize_idx(idx, w)?;
+    }
+    Ok(())
+}
+
+pub fn deserialize_vec_name_idx<T, R: Read>(
+    r: &mut R,
+) -> Result<Vec<(baml_base::Name, Idx<T>)>, Error> {
+    let len = u32::deserialize_reader(r)?;
+    let mut v = Vec::with_capacity(len as usize);
+    for _ in 0..len {
+        let name = baml_base::Name::deserialize_reader(r)?;
+        v.push((name, deserialize_idx(r)?));
+    }
+    Ok(v)
+}
+
+// ── Vec<(Idx<T>, Idx<T>)> (map-literal entries) ──────────────────────────────
+
+pub fn serialize_vec_idx_pair<T, W: Write>(v: &[(Idx<T>, Idx<T>)], w: &mut W) -> Result<(), Error> {
+    len_as_u32(v.len()).serialize(w)?;
+    for (a, b) in v {
+        serialize_idx(a, w)?;
+        serialize_idx(b, w)?;
+    }
+    Ok(())
+}
+
+#[allow(clippy::type_complexity)] // mirrors the AST field type `Vec<(ExprId, ExprId)>`
+pub fn deserialize_vec_idx_pair<T, R: Read>(r: &mut R) -> Result<Vec<(Idx<T>, Idx<T>)>, Error> {
+    let len = u32::deserialize_reader(r)?;
+    let mut v = Vec::with_capacity(len as usize);
+    for _ in 0..len {
+        v.push((deserialize_idx(r)?, deserialize_idx(r)?));
+    }
+    Ok(v)
+}
+
 // ── TextRange (two u32 offsets) ──────────────────────────────────────────────
 
 pub fn serialize_text_range<W: Write>(range: &TextRange, w: &mut W) -> Result<(), Error> {
@@ -67,6 +114,49 @@ pub fn deserialize_opt_idx<T, R: Read>(r: &mut R) -> Result<Option<Idx<T>>, Erro
     } else {
         Ok(Some(deserialize_idx(r)?))
     }
+}
+
+// ── Vec<Idx<T>> ──────────────────────────────────────────────────────────────
+
+pub fn serialize_idx_vec<T, W: Write>(v: &[Idx<T>], w: &mut W) -> Result<(), Error> {
+    len_as_u32(v.len()).serialize(w)?;
+    for idx in v {
+        serialize_idx(idx, w)?;
+    }
+    Ok(())
+}
+
+pub fn deserialize_idx_vec<T, R: Read>(r: &mut R) -> Result<Vec<Idx<T>>, Error> {
+    let len = u32::deserialize_reader(r)?;
+    let mut v = Vec::with_capacity(len as usize);
+    for _ in 0..len {
+        v.push(deserialize_idx(r)?);
+    }
+    Ok(v)
+}
+
+// ── HashSet<Idx<T>> ──────────────────────────────────────────────────────────
+
+pub fn serialize_idx_set<T, W: Write>(
+    set: &std::collections::HashSet<Idx<T>>,
+    w: &mut W,
+) -> Result<(), Error> {
+    len_as_u32(set.len()).serialize(w)?;
+    for idx in set {
+        serialize_idx(idx, w)?;
+    }
+    Ok(())
+}
+
+pub fn deserialize_idx_set<T, R: Read>(
+    r: &mut R,
+) -> Result<std::collections::HashSet<Idx<T>>, Error> {
+    let len = u32::deserialize_reader(r)?;
+    let mut set = std::collections::HashSet::with_capacity(len as usize);
+    for _ in 0..len {
+        set.insert(deserialize_idx(r)?);
+    }
+    Ok(set)
 }
 
 // ── Arena<T> where T: Borsh (dense, alloc-only) ──────────────────────────────

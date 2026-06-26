@@ -15,17 +15,25 @@ use text_size::TextRange;
 // ── Attributes ──────────────────────────────────────────────────
 
 /// Raw attribute from CST — not yet validated.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct RawAttribute {
     pub name: Name,
     pub args: Vec<RawAttributeArg>,
+    #[borsh(
+        serialize_with = "crate::borsh_helpers::serialize_text_range",
+        deserialize_with = "crate::borsh_helpers::deserialize_text_range"
+    )]
     pub span: TextRange,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct RawAttributeArg {
     pub key: Option<Name>,
     pub value: String,
+    #[borsh(
+        serialize_with = "crate::borsh_helpers::serialize_text_range",
+        deserialize_with = "crate::borsh_helpers::deserialize_text_range"
+    )]
     pub span: TextRange,
 }
 
@@ -36,7 +44,7 @@ pub struct RawAttributeArg {
 /// Corresponds to `TypeRef` in `baml_compiler_hir/src/type_ref.rs` but lives
 /// in the AST layer (before any name resolution). CST → `TypeExpr` conversion
 /// happens once during `lower_file` and is never repeated.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub enum TypeExpr {
     /// Named type path: `User`, `baml.http.Request`, `Stream<T>`
     Path {
@@ -339,7 +347,7 @@ impl std::fmt::Display for TypeExpr {
 }
 
 /// A parameter in a function type expression.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct FunctionTypeParam {
     pub name: Option<Name>,
     pub optional: bool,
@@ -348,7 +356,7 @@ pub struct FunctionTypeParam {
 
 /// Named associated type binding used inside type applications:
 /// `Iterator<Item = int>`.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct AssociatedTypeBinding {
     pub name: Name,
     pub ty: Box<TypeExpr>,
@@ -356,9 +364,13 @@ pub struct AssociatedTypeBinding {
 
 /// A type expression with its source span — used in item definitions
 /// where we need both the type data and the source location.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct SpannedTypeExpr {
     pub expr: TypeExpr,
+    #[borsh(
+        serialize_with = "crate::borsh_helpers::serialize_text_range",
+        deserialize_with = "crate::borsh_helpers::deserialize_text_range"
+    )]
     pub span: TextRange,
 }
 
@@ -377,16 +389,44 @@ pub type TypeAnnotId = Idx<TypeExpr>;
 
 /// Full expression body — owned arena of expressions, statements,
 /// and patterns. Modeled after `ExprBody` in `body.rs`.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct ExprBody {
+    #[borsh(
+        serialize_with = "crate::borsh_helpers::serialize_arena",
+        deserialize_with = "crate::borsh_helpers::deserialize_arena"
+    )]
     pub exprs: Arena<Expr>,
+    #[borsh(
+        serialize_with = "crate::borsh_helpers::serialize_arena",
+        deserialize_with = "crate::borsh_helpers::deserialize_arena"
+    )]
     pub stmts: Arena<Stmt>,
+    #[borsh(
+        serialize_with = "crate::borsh_helpers::serialize_arena",
+        deserialize_with = "crate::borsh_helpers::deserialize_arena"
+    )]
     pub patterns: Arena<Pattern>,
+    #[borsh(
+        serialize_with = "crate::borsh_helpers::serialize_arena",
+        deserialize_with = "crate::borsh_helpers::deserialize_arena"
+    )]
     pub match_arms: Arena<MatchArm>,
+    #[borsh(
+        serialize_with = "crate::borsh_helpers::serialize_arena",
+        deserialize_with = "crate::borsh_helpers::deserialize_arena"
+    )]
     pub catch_arms: Arena<CatchArm>,
     /// Type annotations on let bindings etc.
+    #[borsh(
+        serialize_with = "crate::borsh_helpers::serialize_arena",
+        deserialize_with = "crate::borsh_helpers::deserialize_arena"
+    )]
     pub type_annotations: Arena<TypeExpr>,
     /// Root expression of the function body.
+    #[borsh(
+        serialize_with = "crate::borsh_helpers::serialize_opt_idx",
+        deserialize_with = "crate::borsh_helpers::deserialize_opt_idx"
+    )]
     pub root_expr: Option<ExprId>,
 }
 
@@ -522,21 +562,54 @@ impl ExprBody {
 /// Parallel span storage for an `ExprBody` — maps arena IDs to source ranges.
 /// Separated so semantic queries (type checking) can ignore spans and get
 /// Salsa early-cutoff on whitespace changes.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct AstSourceMap {
+    #[borsh(
+        serialize_with = "crate::borsh_helpers::serialize_arena_text_range",
+        deserialize_with = "crate::borsh_helpers::deserialize_arena_text_range"
+    )]
     pub expr_spans: Arena<TextRange>,
+    #[borsh(
+        serialize_with = "crate::borsh_helpers::serialize_arena_text_range",
+        deserialize_with = "crate::borsh_helpers::deserialize_arena_text_range"
+    )]
     pub stmt_spans: Arena<TextRange>,
+    #[borsh(
+        serialize_with = "crate::borsh_helpers::serialize_arena_text_range",
+        deserialize_with = "crate::borsh_helpers::deserialize_arena_text_range"
+    )]
     pub pattern_spans: Arena<TextRange>,
+    #[borsh(
+        serialize_with = "crate::borsh_helpers::serialize_arena_text_range",
+        deserialize_with = "crate::borsh_helpers::deserialize_arena_text_range"
+    )]
     pub match_arm_spans: Arena<TextRange>,
+    #[borsh(
+        serialize_with = "crate::borsh_helpers::serialize_arena_text_range",
+        deserialize_with = "crate::borsh_helpers::deserialize_arena_text_range"
+    )]
     pub type_annotation_spans: Arena<TextRange>,
+    #[borsh(
+        serialize_with = "crate::borsh_helpers::serialize_arena_text_range",
+        deserialize_with = "crate::borsh_helpers::deserialize_arena_text_range"
+    )]
     pub catch_arm_spans: Arena<TextRange>,
+    // Secondary diagnostic sub-spans (member-name, path-segment, and call-label
+    // refinements of a node's primary span). Skipped from borsh: they only
+    // sharpen diagnostic locations, and the precompiled artifact is built from
+    // the frozen, error-free stdlib whose nodes never originate user-facing
+    // diagnostics. Default to empty on load; primary spans (the arenas above)
+    // are preserved.
     /// For `MemberAccess` expressions, the span of just the member name (after the dot).
+    #[borsh(skip)]
     pub member_access_member_spans: HashMap<ExprId, TextRange>,
     /// For multi-segment `Path` expressions, per-segment spans.
     /// `path_segment_spans[expr_id][i]` is the `TextRange` of `segments[i]`.
+    #[borsh(skip)]
     pub path_segment_spans: HashMap<ExprId, Vec<TextRange>>,
     /// For labeled call arguments, the span of the label name keyed by
     /// `(call_expr_id, argument_expr_id)`.
+    #[borsh(skip)]
     pub call_arg_label_spans: HashMap<(ExprId, ExprId), TextRange>,
 
     /// Ids of compiler-synthesized nodes — desugarings that have no
@@ -548,8 +621,20 @@ pub struct AstSourceMap {
     /// uniform replacement for fragile structural heuristics (e.g. comparing a
     /// call's span to its callee's). Populated at the `alloc_*` chokepoints
     /// during lowering, via a scoped "synthesizing" flag.
+    #[borsh(
+        serialize_with = "crate::borsh_helpers::serialize_idx_set",
+        deserialize_with = "crate::borsh_helpers::deserialize_idx_set"
+    )]
     pub synthetic_exprs: HashSet<ExprId>,
+    #[borsh(
+        serialize_with = "crate::borsh_helpers::serialize_idx_set",
+        deserialize_with = "crate::borsh_helpers::deserialize_idx_set"
+    )]
     pub synthetic_stmts: HashSet<StmtId>,
+    #[borsh(
+        serialize_with = "crate::borsh_helpers::serialize_idx_set",
+        deserialize_with = "crate::borsh_helpers::deserialize_idx_set"
+    )]
     pub synthetic_patterns: HashSet<PatId>,
 }
 
@@ -684,7 +769,7 @@ impl Default for AstSourceMap {
 }
 
 /// Expressions — modeled after `Expr` in `body.rs`.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub enum Expr {
     Literal(Literal),
     /// Byte string literal: `b"hello"`, `b"\x00\xFF"`.
@@ -698,14 +783,30 @@ pub enum Expr {
     /// the specialized function value (`(int) -> int`). Distinct from
     /// `Call { type_args, .. }`, which applies type args *and* invokes.
     GenericApply {
+        #[borsh(
+            serialize_with = "crate::borsh_helpers::serialize_idx",
+            deserialize_with = "crate::borsh_helpers::deserialize_idx"
+        )]
         base: ExprId,
         /// Explicit type arguments, e.g. the `<int>` in `foo<int>`. Never empty
         /// (a bare path lowers to `Path`, not `GenericApply`).
         type_args: Vec<TypeExpr>,
     },
     If {
+        #[borsh(
+            serialize_with = "crate::borsh_helpers::serialize_idx",
+            deserialize_with = "crate::borsh_helpers::deserialize_idx"
+        )]
         condition: ExprId,
+        #[borsh(
+            serialize_with = "crate::borsh_helpers::serialize_idx",
+            deserialize_with = "crate::borsh_helpers::deserialize_idx"
+        )]
         then_branch: ExprId,
+        #[borsh(
+            serialize_with = "crate::borsh_helpers::serialize_opt_idx",
+            deserialize_with = "crate::borsh_helpers::deserialize_opt_idx"
+        )]
         else_branch: Option<ExprId>,
     },
     /// `if let PATTERN = SCRUTINEE { THEN } else { ELSE }` — refutable
@@ -714,14 +815,42 @@ pub enum Expr {
     /// never after the `if let`). Unlike `Stmt::Let`, the pattern is
     /// expected to be *refutable*; an irrefutable pattern earns a warning.
     IfLet {
+        #[borsh(
+            serialize_with = "crate::borsh_helpers::serialize_idx",
+            deserialize_with = "crate::borsh_helpers::deserialize_idx"
+        )]
         pattern: PatId,
+        #[borsh(
+            serialize_with = "crate::borsh_helpers::serialize_idx",
+            deserialize_with = "crate::borsh_helpers::deserialize_idx"
+        )]
         scrutinee: ExprId,
+        #[borsh(
+            serialize_with = "crate::borsh_helpers::serialize_idx",
+            deserialize_with = "crate::borsh_helpers::deserialize_idx"
+        )]
         then_branch: ExprId,
+        #[borsh(
+            serialize_with = "crate::borsh_helpers::serialize_opt_idx",
+            deserialize_with = "crate::borsh_helpers::deserialize_opt_idx"
+        )]
         else_branch: Option<ExprId>,
     },
     Match {
+        #[borsh(
+            serialize_with = "crate::borsh_helpers::serialize_idx",
+            deserialize_with = "crate::borsh_helpers::deserialize_idx"
+        )]
         scrutinee: ExprId,
+        #[borsh(
+            serialize_with = "crate::borsh_helpers::serialize_opt_idx",
+            deserialize_with = "crate::borsh_helpers::deserialize_opt_idx"
+        )]
         scrutinee_type: Option<TypeAnnotId>,
+        #[borsh(
+            serialize_with = "crate::borsh_helpers::serialize_idx_vec",
+            deserialize_with = "crate::borsh_helpers::deserialize_idx_vec"
+        )]
         arms: Vec<MatchArmId>,
     },
     /// `<expr> is <pattern>` — Rust `matches!`-style pattern test.
@@ -732,14 +861,30 @@ pub enum Expr {
     /// it just always evaluates to `false`. Treat it as a one-arm
     /// pattern-test, not as an exhaustive match.
     Is {
+        #[borsh(
+            serialize_with = "crate::borsh_helpers::serialize_idx",
+            deserialize_with = "crate::borsh_helpers::deserialize_idx"
+        )]
         scrutinee: ExprId,
+        #[borsh(
+            serialize_with = "crate::borsh_helpers::serialize_idx",
+            deserialize_with = "crate::borsh_helpers::deserialize_idx"
+        )]
         pattern: PatId,
     },
     Catch {
+        #[borsh(
+            serialize_with = "crate::borsh_helpers::serialize_idx",
+            deserialize_with = "crate::borsh_helpers::deserialize_idx"
+        )]
         base: ExprId,
         clauses: Vec<CatchClause>,
     },
     Throw {
+        #[borsh(
+            serialize_with = "crate::borsh_helpers::serialize_idx",
+            deserialize_with = "crate::borsh_helpers::deserialize_idx"
+        )]
         value: ExprId,
     },
     /// BEP-034 `spawn name_expr? (with expr (, expr)*)? { body }`. The body is
@@ -748,31 +893,63 @@ pub enum Expr {
     /// surfaces in debug / stack traces.
     Spawn {
         /// Optional human-readable label for the spawn.
+        #[borsh(
+            serialize_with = "crate::borsh_helpers::serialize_opt_idx",
+            deserialize_with = "crate::borsh_helpers::deserialize_opt_idx"
+        )]
         name: Option<ExprId>,
         /// BEP-034 spawn options: the `with expr (, expr)*` clause. Each entry
         /// is an arbitrary expression; in v1 TIR requires exactly one, a call
         /// to `baml.spawn.options(...)`. Empty when there is no `with` clause.
+        #[borsh(
+            serialize_with = "crate::borsh_helpers::serialize_idx_vec",
+            deserialize_with = "crate::borsh_helpers::deserialize_idx_vec"
+        )]
         with_exprs: Vec<ExprId>,
         /// Body of the spawn (`{...}`) — always an `Expr::Block` after
         /// CST lowering.
+        #[borsh(
+            serialize_with = "crate::borsh_helpers::serialize_idx",
+            deserialize_with = "crate::borsh_helpers::deserialize_idx"
+        )]
         body: ExprId,
     },
     /// BEP-034 `await expr` — prefix form. Suspends the current thread
     /// until `expr`'s future settles, then unwraps the value or re-throws
     /// the future's error.
     Await {
+        #[borsh(
+            serialize_with = "crate::borsh_helpers::serialize_idx",
+            deserialize_with = "crate::borsh_helpers::deserialize_idx"
+        )]
         future: ExprId,
     },
     Binary {
         op: BinaryOp,
+        #[borsh(
+            serialize_with = "crate::borsh_helpers::serialize_idx",
+            deserialize_with = "crate::borsh_helpers::deserialize_idx"
+        )]
         lhs: ExprId,
+        #[borsh(
+            serialize_with = "crate::borsh_helpers::serialize_idx",
+            deserialize_with = "crate::borsh_helpers::deserialize_idx"
+        )]
         rhs: ExprId,
     },
     Unary {
         op: UnaryOp,
+        #[borsh(
+            serialize_with = "crate::borsh_helpers::serialize_idx",
+            deserialize_with = "crate::borsh_helpers::deserialize_idx"
+        )]
         expr: ExprId,
     },
     Call {
+        #[borsh(
+            serialize_with = "crate::borsh_helpers::serialize_idx",
+            deserialize_with = "crate::borsh_helpers::deserialize_idx"
+        )]
         callee: ExprId,
         /// Explicit type arguments at the call site, e.g. `foo<int, string>(x)`.
         /// Empty vec when no `<...>` was written.
@@ -788,38 +965,78 @@ pub enum Expr {
         /// Explicit generic type args from syntax like `Foo<int> { ... }`.
         /// Empty when no `<...>` was written (e.g. bare `Foo { ... }`).
         type_args: Vec<TypeExpr>,
+        #[borsh(
+            serialize_with = "crate::borsh_helpers::serialize_vec_name_idx",
+            deserialize_with = "crate::borsh_helpers::deserialize_vec_name_idx"
+        )]
         fields: Vec<(Name, ExprId)>,
         spreads: Vec<SpreadField>,
     },
     Array {
+        #[borsh(
+            serialize_with = "crate::borsh_helpers::serialize_idx_vec",
+            deserialize_with = "crate::borsh_helpers::deserialize_idx_vec"
+        )]
         elements: Vec<ExprId>,
     },
     Map {
+        #[borsh(
+            serialize_with = "crate::borsh_helpers::serialize_vec_idx_pair",
+            deserialize_with = "crate::borsh_helpers::deserialize_vec_idx_pair"
+        )]
         entries: Vec<(ExprId, ExprId)>,
     },
     Block {
+        #[borsh(
+            serialize_with = "crate::borsh_helpers::serialize_idx_vec",
+            deserialize_with = "crate::borsh_helpers::deserialize_idx_vec"
+        )]
         stmts: Vec<StmtId>,
+        #[borsh(
+            serialize_with = "crate::borsh_helpers::serialize_opt_idx",
+            deserialize_with = "crate::borsh_helpers::deserialize_opt_idx"
+        )]
         tail_expr: Option<ExprId>,
     },
     // These nodes are constructed purely in the HIR layer AFTER
     // name resolution as we can't know if it's a member access
     // until we know how to resolve the path
     MemberAccess {
+        #[borsh(
+            serialize_with = "crate::borsh_helpers::serialize_idx",
+            deserialize_with = "crate::borsh_helpers::deserialize_idx"
+        )]
         base: ExprId,
         member: Name,
     },
     /// Explicit static projection/upcast: `expr.as<T>`.
     Upcast {
+        #[borsh(
+            serialize_with = "crate::borsh_helpers::serialize_idx",
+            deserialize_with = "crate::borsh_helpers::deserialize_idx"
+        )]
         base: ExprId,
         target: TypeExpr,
     },
     /// Optional member access: `obj?.member` — short-circuits to null if base is null.
     OptionalMemberAccess {
+        #[borsh(
+            serialize_with = "crate::borsh_helpers::serialize_idx",
+            deserialize_with = "crate::borsh_helpers::deserialize_idx"
+        )]
         base: ExprId,
         member: Name,
     },
     Index {
+        #[borsh(
+            serialize_with = "crate::borsh_helpers::serialize_idx",
+            deserialize_with = "crate::borsh_helpers::deserialize_idx"
+        )]
         base: ExprId,
+        #[borsh(
+            serialize_with = "crate::borsh_helpers::serialize_idx",
+            deserialize_with = "crate::borsh_helpers::deserialize_idx"
+        )]
         index: ExprId,
     },
     /// Lambda expression: anonymous function in expression position.
@@ -828,11 +1045,23 @@ pub enum Expr {
     Lambda(Box<FunctionDef>),
     /// Optional index: `obj?.[expr]` — short-circuits to null if base is null.
     OptionalIndex {
+        #[borsh(
+            serialize_with = "crate::borsh_helpers::serialize_idx",
+            deserialize_with = "crate::borsh_helpers::deserialize_idx"
+        )]
         base: ExprId,
+        #[borsh(
+            serialize_with = "crate::borsh_helpers::serialize_idx",
+            deserialize_with = "crate::borsh_helpers::deserialize_idx"
+        )]
         index: ExprId,
     },
     /// Optional call: `func?.(args)` — short-circuits to null if callee is null.
     OptionalCall {
+        #[borsh(
+            serialize_with = "crate::borsh_helpers::serialize_idx",
+            deserialize_with = "crate::borsh_helpers::deserialize_idx"
+        )]
         callee: ExprId,
         args: Vec<CallArg>,
     },
@@ -840,6 +1069,10 @@ pub enum Expr {
     /// Delimits the scope of null short-circuiting.
     /// If any `?.` inside encounters null, the entire `OptionalChain` evaluates to null.
     OptionalChain {
+        #[borsh(
+            serialize_with = "crate::borsh_helpers::serialize_idx",
+            deserialize_with = "crate::borsh_helpers::deserialize_idx"
+        )]
         expr: ExprId,
     },
     /// Backtick template literal site (BEP-049). Held as a first-class HIR
@@ -872,7 +1105,7 @@ pub enum Expr {
 
 /// Which BEP-049 backtick form an [`Expr::Template`] is, plus the per-form
 /// payload needed to realize it.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub enum TemplateTag {
     /// Untagged `` `…` `` (BEP §11): implicit per-value `.to_string()`,
     /// result type `string`.
@@ -884,7 +1117,13 @@ pub enum TemplateTag {
     /// consume it directly; the structured `segments` exist only so TIR can
     /// emit per-`${…}` strict-stringify diagnostics (BEP §11) on the original
     /// spans rather than on the synthetic `.to_string()` calls.
-    Default { elaborated: ExprId },
+    Default {
+        #[borsh(
+            serialize_with = "crate::borsh_helpers::serialize_idx",
+            deserialize_with = "crate::borsh_helpers::deserialize_idx"
+        )]
+        elaborated: ExprId,
+    },
     /// Tagged `` tag`…` `` (BEP §10): `tag` is the tag expression — usually a
     /// bare identifier referring to a fn marked `//baml:tagged_string`. Stored
     /// as an `ExprId` so paths and future curry forms compose without grammar
@@ -899,21 +1138,46 @@ pub enum TemplateTag {
     /// hand-rolled `body` closure — except when the template is purely static
     /// (text + interp, no `${for}`/`${if}`), where MIR keeps a fixed-array
     /// fast-path off `segments` instead.
-    Custom { tag: ExprId, body: ExprId },
+    Custom {
+        #[borsh(
+            serialize_with = "crate::borsh_helpers::serialize_idx",
+            deserialize_with = "crate::borsh_helpers::deserialize_idx"
+        )]
+        tag: ExprId,
+        #[borsh(
+            serialize_with = "crate::borsh_helpers::serialize_idx",
+            deserialize_with = "crate::borsh_helpers::deserialize_idx"
+        )]
+        body: ExprId,
+    },
 }
 
 /// One segment of an [`Expr::Template`] body. Parallel to `BacktickSegment`
 /// in the CST layer, but every sub-expression is already lowered.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub enum TemplateSegment {
     /// Literal text between interpolations / block tags.
     Text(std::string::String),
     /// A `${expr}` interpolation. The wrapped `ExprId` is the lowered
     /// inner expression (already a block expression per BEP §4).
-    Interp(ExprId),
+    Interp(
+        #[borsh(
+            serialize_with = "crate::borsh_helpers::serialize_idx",
+            deserialize_with = "crate::borsh_helpers::deserialize_idx"
+        )]
+        ExprId,
+    ),
     /// A `${for (let p in c)}...${endfor}` block (iterator form).
     For {
+        #[borsh(
+            serialize_with = "crate::borsh_helpers::serialize_idx",
+            deserialize_with = "crate::borsh_helpers::deserialize_idx"
+        )]
         binding: PatId,
+        #[borsh(
+            serialize_with = "crate::borsh_helpers::serialize_idx",
+            deserialize_with = "crate::borsh_helpers::deserialize_idx"
+        )]
         collection: ExprId,
         body: Vec<TemplateSegment>,
     },
@@ -925,8 +1189,20 @@ pub enum TemplateSegment {
     /// `{ init; while cond { body } after { step } }` shape the host C-style
     /// `for` lowers to (`lower_c_style_for`).
     CStyleFor {
+        #[borsh(
+            serialize_with = "crate::borsh_helpers::serialize_idx",
+            deserialize_with = "crate::borsh_helpers::deserialize_idx"
+        )]
         init: StmtId,
+        #[borsh(
+            serialize_with = "crate::borsh_helpers::serialize_idx",
+            deserialize_with = "crate::borsh_helpers::deserialize_idx"
+        )]
         cond: ExprId,
+        #[borsh(
+            serialize_with = "crate::borsh_helpers::serialize_opt_idx",
+            deserialize_with = "crate::borsh_helpers::deserialize_opt_idx"
+        )]
         step: Option<StmtId>,
         body: Vec<TemplateSegment>,
     },
@@ -937,15 +1213,23 @@ pub enum TemplateSegment {
     },
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct TemplateIfBranch {
+    #[borsh(
+        serialize_with = "crate::borsh_helpers::serialize_idx",
+        deserialize_with = "crate::borsh_helpers::deserialize_idx"
+    )]
     pub condition: ExprId,
     pub body: Vec<TemplateSegment>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct CallArg {
     pub label: Option<Name>,
+    #[borsh(
+        serialize_with = "crate::borsh_helpers::serialize_idx",
+        deserialize_with = "crate::borsh_helpers::deserialize_idx"
+    )]
     pub expr: ExprId,
 }
 
@@ -963,14 +1247,28 @@ impl CallArg {
 }
 
 /// Statements — modeled after `Stmt` in `body.rs`.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub enum Stmt {
-    Expr(ExprId),
+    Expr(
+        #[borsh(
+            serialize_with = "crate::borsh_helpers::serialize_idx",
+            deserialize_with = "crate::borsh_helpers::deserialize_idx"
+        )]
+        ExprId,
+    ),
     Let {
         /// The binding pattern. A `: T` annotation lives inside the pattern
         /// as the bind's sub-pattern slot, not as a separate field on
         /// `Stmt::Let` — see [`Pattern::Bind`].
+        #[borsh(
+            serialize_with = "crate::borsh_helpers::serialize_idx",
+            deserialize_with = "crate::borsh_helpers::deserialize_idx"
+        )]
         pattern: PatId,
+        #[borsh(
+            serialize_with = "crate::borsh_helpers::serialize_opt_idx",
+            deserialize_with = "crate::borsh_helpers::deserialize_opt_idx"
+        )]
         initializer: Option<ExprId>,
         is_watched: bool,
         origin: LetOrigin,
@@ -979,11 +1277,27 @@ pub enum Stmt {
         /// the pattern may be refutable, and the else expression is
         /// required to have type `Ty::Never`. Pattern bindings flow into
         /// the enclosing scope on a successful match.
+        #[borsh(
+            serialize_with = "crate::borsh_helpers::serialize_opt_idx",
+            deserialize_with = "crate::borsh_helpers::deserialize_opt_idx"
+        )]
         else_branch: Option<ExprId>,
     },
     While {
+        #[borsh(
+            serialize_with = "crate::borsh_helpers::serialize_idx",
+            deserialize_with = "crate::borsh_helpers::deserialize_idx"
+        )]
         condition: ExprId,
+        #[borsh(
+            serialize_with = "crate::borsh_helpers::serialize_idx",
+            deserialize_with = "crate::borsh_helpers::deserialize_idx"
+        )]
         body: ExprId,
+        #[borsh(
+            serialize_with = "crate::borsh_helpers::serialize_opt_idx",
+            deserialize_with = "crate::borsh_helpers::deserialize_opt_idx"
+        )]
         after: Option<StmtId>,
         origin: LoopOrigin,
     },
@@ -997,8 +1311,20 @@ pub enum Stmt {
     /// `Stmt::While`) no `after`/`origin` — those exist only for desugared
     /// C-style `for` loops.
     WhileLet {
+        #[borsh(
+            serialize_with = "crate::borsh_helpers::serialize_idx",
+            deserialize_with = "crate::borsh_helpers::deserialize_idx"
+        )]
         pattern: PatId,
+        #[borsh(
+            serialize_with = "crate::borsh_helpers::serialize_idx",
+            deserialize_with = "crate::borsh_helpers::deserialize_idx"
+        )]
         scrutinee: ExprId,
+        #[borsh(
+            serialize_with = "crate::borsh_helpers::serialize_idx",
+            deserialize_with = "crate::borsh_helpers::deserialize_idx"
+        )]
         body: ExprId,
     },
     /// For-in loop: `for let <binding> in <collection> { <body> }`.
@@ -1011,14 +1337,36 @@ pub enum Stmt {
     /// Desugaring to index-based iteration happens at MIR lowering time.
     For {
         /// The loop variable binding pattern (e.g. `i` in `for let i in xs`).
+        #[borsh(
+            serialize_with = "crate::borsh_helpers::serialize_idx",
+            deserialize_with = "crate::borsh_helpers::deserialize_idx"
+        )]
         binding: PatId,
         /// The collection expression to iterate over.
+        #[borsh(
+            serialize_with = "crate::borsh_helpers::serialize_idx",
+            deserialize_with = "crate::borsh_helpers::deserialize_idx"
+        )]
         collection: ExprId,
         /// The loop body expression.
+        #[borsh(
+            serialize_with = "crate::borsh_helpers::serialize_idx",
+            deserialize_with = "crate::borsh_helpers::deserialize_idx"
+        )]
         body: ExprId,
     },
-    Return(Option<ExprId>),
+    Return(
+        #[borsh(
+            serialize_with = "crate::borsh_helpers::serialize_opt_idx",
+            deserialize_with = "crate::borsh_helpers::deserialize_opt_idx"
+        )]
+        Option<ExprId>,
+    ),
     Throw {
+        #[borsh(
+            serialize_with = "crate::borsh_helpers::serialize_idx",
+            deserialize_with = "crate::borsh_helpers::deserialize_idx"
+        )]
         value: ExprId,
     },
     Break,
@@ -1030,15 +1378,35 @@ pub enum Stmt {
     /// capturing values at the `defer` site). `return`/`break`/`continue` that
     /// would escape the body are rejected in TIR; `throw` is allowed.
     Defer {
+        #[borsh(
+            serialize_with = "crate::borsh_helpers::serialize_idx",
+            deserialize_with = "crate::borsh_helpers::deserialize_idx"
+        )]
         body: ExprId,
     },
     Assign {
+        #[borsh(
+            serialize_with = "crate::borsh_helpers::serialize_idx",
+            deserialize_with = "crate::borsh_helpers::deserialize_idx"
+        )]
         target: ExprId,
+        #[borsh(
+            serialize_with = "crate::borsh_helpers::serialize_idx",
+            deserialize_with = "crate::borsh_helpers::deserialize_idx"
+        )]
         value: ExprId,
     },
     AssignOp {
+        #[borsh(
+            serialize_with = "crate::borsh_helpers::serialize_idx",
+            deserialize_with = "crate::borsh_helpers::deserialize_idx"
+        )]
         target: ExprId,
         op: AssignOp,
+        #[borsh(
+            serialize_with = "crate::borsh_helpers::serialize_idx",
+            deserialize_with = "crate::borsh_helpers::deserialize_idx"
+        )]
         value: ExprId,
     },
     Missing,
@@ -1062,7 +1430,7 @@ pub enum Stmt {
 ///   `ascription` field for `[…]: T`. `:` is only valid after `let x` or
 ///   `[…]` — it is rejected on `_`, `Class { … }`, bare types, and
 ///   Or-patterns.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub enum Pattern {
     // ── Atoms (single-shape patterns) ────────────────────────────────────
     /// `_` — wildcard. Always irrefutable. Binds nothing. Cannot carry a
@@ -1077,7 +1445,14 @@ pub enum Pattern {
     /// Progressive widening like `let x: int: float` is naturally
     /// impossible because `Pattern::Type` doesn't itself have a sub-
     /// pattern slot.
-    Bind { name: Name, subpat: Option<PatId> },
+    Bind {
+        name: Name,
+        #[borsh(
+            serialize_with = "crate::borsh_helpers::serialize_opt_idx",
+            deserialize_with = "crate::borsh_helpers::deserialize_opt_idx"
+        )]
+        subpat: Option<PatId>,
+    },
     /// `pkg.Foo { a, b: <pat>, ... }` — class destructure. `class` is the
     /// dotted path as segments (single-element vec for unqualified names).
     /// Class destructures cannot carry `: T` ascriptions.
@@ -1094,8 +1469,16 @@ pub enum Pattern {
     /// so deeper chains like `[…]: T1: T2` and exotic shapes like
     /// `[…]: let xs` are syntactically rejected at AST lowering.
     Array {
+        #[borsh(
+            serialize_with = "crate::borsh_helpers::serialize_idx_vec",
+            deserialize_with = "crate::borsh_helpers::deserialize_idx_vec"
+        )]
         prefix: Vec<PatId>,
         rest: Option<ArrayRestPat>,
+        #[borsh(
+            serialize_with = "crate::borsh_helpers::serialize_idx_vec",
+            deserialize_with = "crate::borsh_helpers::deserialize_idx_vec"
+        )]
         suffix: Vec<PatId>,
         ascription: Option<TypeExpr>,
     },
@@ -1111,22 +1494,40 @@ pub enum Pattern {
     /// `p1 | p2 | ...` — alternation. Length always `>= 2`. Every alternative
     /// must bind the same names (TIR enforces). Cannot carry a `: T`
     /// ascription.
-    Or(Vec<PatId>),
+    Or(
+        #[borsh(
+            serialize_with = "crate::borsh_helpers::serialize_idx_vec",
+            deserialize_with = "crate::borsh_helpers::deserialize_idx_vec"
+        )]
+        Vec<PatId>,
+    ),
 }
 
 /// Single field inside a class destructure pattern.
 ///
 /// Shorthand `{ f }` lowers to `FieldPat { field: f, pat: <Bind { name: f }> }`,
 /// so consumers never see the missing-pattern shape.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct FieldPat {
     pub field: Name,
+    #[borsh(
+        serialize_with = "crate::borsh_helpers::serialize_text_range",
+        deserialize_with = "crate::borsh_helpers::deserialize_text_range"
+    )]
     pub field_span: text_size::TextRange,
+    #[borsh(
+        serialize_with = "crate::borsh_helpers::serialize_idx",
+        deserialize_with = "crate::borsh_helpers::deserialize_idx"
+    )]
     pub pat: PatId,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct ArrayRestPat {
+    #[borsh(
+        serialize_with = "crate::borsh_helpers::serialize_opt_idx",
+        deserialize_with = "crate::borsh_helpers::deserialize_opt_idx"
+    )]
     pub pat: Option<PatId>,
 }
 
@@ -1210,37 +1611,75 @@ impl Pattern {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct MatchArm {
+    #[borsh(
+        serialize_with = "crate::borsh_helpers::serialize_idx",
+        deserialize_with = "crate::borsh_helpers::deserialize_idx"
+    )]
     pub pattern: PatId,
+    #[borsh(
+        serialize_with = "crate::borsh_helpers::serialize_opt_idx",
+        deserialize_with = "crate::borsh_helpers::deserialize_opt_idx"
+    )]
     pub guard: Option<ExprId>,
+    #[borsh(
+        serialize_with = "crate::borsh_helpers::serialize_idx",
+        deserialize_with = "crate::borsh_helpers::deserialize_idx"
+    )]
     pub body: ExprId,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Hash, borsh::BorshSerialize, borsh::BorshDeserialize,
+)]
 pub enum CatchClauseKind {
     Catch,
     CatchAll,
     CatchAllPanics,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct CatchClause {
     pub kind: CatchClauseKind,
+    #[borsh(
+        serialize_with = "crate::borsh_helpers::serialize_idx",
+        deserialize_with = "crate::borsh_helpers::deserialize_idx"
+    )]
     pub binding: PatId,
     /// Optional second binding for the stack trace: `catch (e, st) { ... }`
+    #[borsh(
+        serialize_with = "crate::borsh_helpers::serialize_opt_idx",
+        deserialize_with = "crate::borsh_helpers::deserialize_opt_idx"
+    )]
     pub stack_trace_binding: Option<PatId>,
+    #[borsh(
+        serialize_with = "crate::borsh_helpers::serialize_idx_vec",
+        deserialize_with = "crate::borsh_helpers::deserialize_idx_vec"
+    )]
     pub arms: Vec<CatchArmId>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct CatchArm {
+    #[borsh(
+        serialize_with = "crate::borsh_helpers::serialize_idx",
+        deserialize_with = "crate::borsh_helpers::deserialize_idx"
+    )]
     pub pattern: PatId,
+    #[borsh(
+        serialize_with = "crate::borsh_helpers::serialize_idx",
+        deserialize_with = "crate::borsh_helpers::deserialize_idx"
+    )]
     pub body: ExprId,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct SpreadField {
+    #[borsh(
+        serialize_with = "crate::borsh_helpers::serialize_idx",
+        deserialize_with = "crate::borsh_helpers::deserialize_idx"
+    )]
     pub expr: ExprId,
     pub position: usize,
 }
@@ -1248,14 +1687,14 @@ pub struct SpreadField {
 /// Re-export `baml_base::Literal` as the canonical literal type.
 pub type Literal = baml_base::Literal;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub enum LetOrigin {
     Source,
     Client,
     RetryPolicy,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub enum FunctionOrigin {
     UserDefined,
     Companion,
@@ -1265,14 +1704,14 @@ pub enum FunctionOrigin {
     AutoDerive,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub enum LoopOrigin {
     While,
     For,
 }
 
 /// Binary operators — matches those supported in `body.rs`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub enum BinaryOp {
     Add,
     Sub,
@@ -1323,7 +1762,7 @@ impl std::fmt::Display for BinaryOp {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub enum UnaryOp {
     Not,
     Neg,
@@ -1340,7 +1779,7 @@ impl std::fmt::Display for UnaryOp {
 }
 
 /// Compound assignment operators.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub enum AssignOp {
     Add,
     Sub,
@@ -1358,7 +1797,7 @@ pub enum AssignOp {
 
 /// Top-level item — the output unit of CST → AST lowering.
 #[allow(clippy::large_enum_variant)]
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub enum Item {
     Function(FunctionDef),
     Class(ClassDef),
@@ -1373,7 +1812,7 @@ pub enum Item {
     ImplementsFor(ImplementsForDef),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub enum DeclarativeMeta {
     /// LLM function metadata (client name, prompt template).
     /// Present only for functions declared with `{ client ...; prompt ... }` syntax.
@@ -1382,7 +1821,7 @@ pub enum DeclarativeMeta {
     Llm(LlmBodyDef),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct FunctionDef {
     pub name: Name,
     /// Generic type parameters (e.g., `["T", "U"]`). Empty for non-generic functions.
@@ -1406,11 +1845,19 @@ pub struct FunctionDef {
     /// tags (a tag name immediately followed by a backtick literal), and
     /// their first parameter must be `body: (...) -> TaggedString`.
     pub is_tagged_template_tag: bool,
+    #[borsh(
+        serialize_with = "crate::borsh_helpers::serialize_text_range",
+        deserialize_with = "crate::borsh_helpers::deserialize_text_range"
+    )]
     pub span: TextRange,
+    #[borsh(
+        serialize_with = "crate::borsh_helpers::serialize_text_range",
+        deserialize_with = "crate::borsh_helpers::deserialize_text_range"
+    )]
     pub name_span: TextRange,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct FunctionDefaults {
     pub exprs: ExprBody,
     pub source_map: AstSourceMap,
@@ -1430,7 +1877,7 @@ impl FunctionDefaults {
 }
 
 #[allow(clippy::large_enum_variant)]
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub enum FunctionBodyDef {
     Expr(ExprBody, AstSourceMap),
     /// Body is `$rust_function` or `$rust_io_function` — Rust-bound implementation.
@@ -1438,7 +1885,7 @@ pub enum FunctionBodyDef {
 }
 
 /// What kind of builtin a function is.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub enum BuiltinKind {
     /// VM instruction — fast, synchronous, no I/O.
     Vm,
@@ -1454,7 +1901,7 @@ pub enum BuiltinKind {
     AwaitAny,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct LlmBodyDef {
     pub client: Option<Name>,
     pub prompt: Option<RawPrompt>,
@@ -1477,35 +1924,63 @@ pub struct LlmBodyDef {
     /// `stream_body`) and read back by `make_llm_companion`. Empty for legacy
     /// Jinja `#"..."#` prompts (their companions use the 3-arg Jinja path).
     pub companion_bodies: Vec<(std::string::String, (ExprBody, AstSourceMap))>,
+    #[borsh(
+        serialize_with = "crate::borsh_helpers::serialize_text_range",
+        deserialize_with = "crate::borsh_helpers::deserialize_text_range"
+    )]
     pub span: TextRange,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct RawPrompt {
     pub text: std::string::String,
     /// Interpolation locations within the template.
     pub interpolations: Vec<Interpolation>,
+    #[borsh(
+        serialize_with = "crate::borsh_helpers::serialize_text_range",
+        deserialize_with = "crate::borsh_helpers::deserialize_text_range"
+    )]
     pub span: TextRange,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct Interpolation {
     pub content: std::string::String,
     /// Span of the full interpolation, including delimiters.
+    #[borsh(
+        serialize_with = "crate::borsh_helpers::serialize_text_range",
+        deserialize_with = "crate::borsh_helpers::deserialize_text_range"
+    )]
     pub span: TextRange,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct Param {
     pub name: Name,
     pub type_expr: Option<SpannedTypeExpr>,
     pub default: Option<DefaultExprId>,
+    #[borsh(
+        serialize_with = "crate::borsh_helpers::serialize_text_range",
+        deserialize_with = "crate::borsh_helpers::deserialize_text_range"
+    )]
     pub span: TextRange,
+    #[borsh(
+        serialize_with = "crate::borsh_helpers::serialize_text_range",
+        deserialize_with = "crate::borsh_helpers::deserialize_text_range"
+    )]
     pub name_span: TextRange,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct DefaultExprId(ExprId);
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Hash, borsh::BorshSerialize, borsh::BorshDeserialize,
+)]
+pub struct DefaultExprId(
+    #[borsh(
+        serialize_with = "crate::borsh_helpers::serialize_idx",
+        deserialize_with = "crate::borsh_helpers::deserialize_idx"
+    )]
+    ExprId,
+);
 
 impl DefaultExprId {
     pub fn new(expr: ExprId) -> Self {
@@ -1517,7 +1992,7 @@ impl DefaultExprId {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct ClassDef {
     pub name: Name,
     /// Generic type parameters (e.g., `["T"]` for `Array<T>`). Empty for non-generic classes.
@@ -1533,7 +2008,15 @@ pub struct ClassDef {
     pub attributes: Vec<RawAttribute>,
     /// Joined `///` doc-comment lines preceding this declaration.
     pub docstring: Option<std::string::String>,
+    #[borsh(
+        serialize_with = "crate::borsh_helpers::serialize_text_range",
+        deserialize_with = "crate::borsh_helpers::deserialize_text_range"
+    )]
     pub span: TextRange,
+    #[borsh(
+        serialize_with = "crate::borsh_helpers::serialize_text_range",
+        deserialize_with = "crate::borsh_helpers::deserialize_text_range"
+    )]
     pub name_span: TextRange,
 }
 
@@ -1541,7 +2024,7 @@ pub struct ClassDef {
 ///
 /// Interfaces declare a contract over fields and methods. Classes opt in to
 /// the contract via [`ImplementsBlockDef`] inside the class body.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct InterfaceDef {
     pub name: Name,
     /// Generic type parameters (e.g., `["T"]` for `Container<T>`). Empty for non-generic interfaces.
@@ -1564,13 +2047,21 @@ pub struct InterfaceDef {
     pub default_methods: Vec<FunctionDef>,
     pub attributes: Vec<RawAttribute>,
     pub docstring: Option<std::string::String>,
+    #[borsh(
+        serialize_with = "crate::borsh_helpers::serialize_text_range",
+        deserialize_with = "crate::borsh_helpers::deserialize_text_range"
+    )]
     pub span: TextRange,
+    #[borsh(
+        serialize_with = "crate::borsh_helpers::serialize_text_range",
+        deserialize_with = "crate::borsh_helpers::deserialize_text_range"
+    )]
     pub name_span: TextRange,
 }
 
 /// Method signature declared in an interface body without a body — i.e., a
 /// required method. Mirrors [`FunctionDef`] minus the body.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct MethodSigDef {
     pub name: Name,
     pub generic_params: Vec<Name>,
@@ -1582,12 +2073,20 @@ pub struct MethodSigDef {
     pub throws: Option<SpannedTypeExpr>,
     pub attributes: Vec<RawAttribute>,
     pub docstring: Option<std::string::String>,
+    #[borsh(
+        serialize_with = "crate::borsh_helpers::serialize_text_range",
+        deserialize_with = "crate::borsh_helpers::deserialize_text_range"
+    )]
     pub span: TextRange,
+    #[borsh(
+        serialize_with = "crate::borsh_helpers::serialize_text_range",
+        deserialize_with = "crate::borsh_helpers::deserialize_text_range"
+    )]
     pub name_span: TextRange,
 }
 
 /// One `implements I { ... }` block inside a class body (BEP-044).
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct ImplementsBlockDef {
     /// The target interface, captured as a `TypeExpr` so we can accept generic
     /// parameterization like `implements Container<int>`. The path's first
@@ -1602,6 +2101,10 @@ pub struct ImplementsBlockDef {
     pub methods: Vec<FunctionDef>,
     /// True when this block came from top-level `implements I for T`.
     pub is_out_of_body: bool,
+    #[borsh(
+        serialize_with = "crate::borsh_helpers::serialize_text_range",
+        deserialize_with = "crate::borsh_helpers::deserialize_text_range"
+    )]
     pub span: TextRange,
 }
 
@@ -1616,17 +2119,29 @@ impl ImplementsBlockDef {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct InterfaceFieldLinkDef {
     pub interface_field: Name,
     pub class_field: Name,
+    #[borsh(
+        serialize_with = "crate::borsh_helpers::serialize_text_range",
+        deserialize_with = "crate::borsh_helpers::deserialize_text_range"
+    )]
     pub span: TextRange,
+    #[borsh(
+        serialize_with = "crate::borsh_helpers::serialize_text_range",
+        deserialize_with = "crate::borsh_helpers::deserialize_text_range"
+    )]
     pub interface_field_span: TextRange,
+    #[borsh(
+        serialize_with = "crate::borsh_helpers::serialize_text_range",
+        deserialize_with = "crate::borsh_helpers::deserialize_text_range"
+    )]
     pub class_field_span: TextRange,
 }
 
 /// Top-level `implements I for T { ... }` block (BEP-044).
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct ImplementsForDef {
     /// Generic type parameters on the implements block (e.g. `<T>` or `<T extends Named>`).
     pub generic_params: Vec<(Name, Option<TypeExpr>)>,
@@ -1640,113 +2155,209 @@ pub struct ImplementsForDef {
     pub associated_type_bindings: Vec<AssociatedTypeBindingDef>,
     /// Method definitions inside the block.
     pub methods: Vec<FunctionDef>,
+    #[borsh(
+        serialize_with = "crate::borsh_helpers::serialize_text_range",
+        deserialize_with = "crate::borsh_helpers::deserialize_text_range"
+    )]
     pub span: TextRange,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct AssociatedTypeDef {
     pub name: Name,
     pub bound: Option<SpannedTypeExpr>,
     pub default: Option<SpannedTypeExpr>,
+    #[borsh(
+        serialize_with = "crate::borsh_helpers::serialize_text_range",
+        deserialize_with = "crate::borsh_helpers::deserialize_text_range"
+    )]
     pub span: TextRange,
+    #[borsh(
+        serialize_with = "crate::borsh_helpers::serialize_text_range",
+        deserialize_with = "crate::borsh_helpers::deserialize_text_range"
+    )]
     pub name_span: TextRange,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct AssociatedTypeBindingDef {
     pub name: Name,
     pub type_expr: Option<SpannedTypeExpr>,
+    #[borsh(
+        serialize_with = "crate::borsh_helpers::serialize_text_range",
+        deserialize_with = "crate::borsh_helpers::deserialize_text_range"
+    )]
     pub span: TextRange,
+    #[borsh(
+        serialize_with = "crate::borsh_helpers::serialize_text_range",
+        deserialize_with = "crate::borsh_helpers::deserialize_text_range"
+    )]
     pub name_span: TextRange,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct FieldDef {
     pub name: Name,
     pub type_expr: Option<SpannedTypeExpr>,
     pub attributes: Vec<RawAttribute>,
     /// Joined `///` doc-comment lines preceding this declaration.
     pub docstring: Option<std::string::String>,
+    #[borsh(
+        serialize_with = "crate::borsh_helpers::serialize_text_range",
+        deserialize_with = "crate::borsh_helpers::deserialize_text_range"
+    )]
     pub span: TextRange,
+    #[borsh(
+        serialize_with = "crate::borsh_helpers::serialize_text_range",
+        deserialize_with = "crate::borsh_helpers::deserialize_text_range"
+    )]
     pub name_span: TextRange,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct EnumDef {
     pub name: Name,
     pub variants: Vec<VariantDef>,
     pub attributes: Vec<RawAttribute>,
     /// Joined `///` doc-comment lines preceding this declaration.
     pub docstring: Option<std::string::String>,
+    #[borsh(
+        serialize_with = "crate::borsh_helpers::serialize_text_range",
+        deserialize_with = "crate::borsh_helpers::deserialize_text_range"
+    )]
     pub span: TextRange,
+    #[borsh(
+        serialize_with = "crate::borsh_helpers::serialize_text_range",
+        deserialize_with = "crate::borsh_helpers::deserialize_text_range"
+    )]
     pub name_span: TextRange,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct VariantDef {
     pub name: Name,
     pub attributes: Vec<RawAttribute>,
     /// Joined `///` doc-comment lines preceding this declaration.
     pub docstring: Option<std::string::String>,
+    #[borsh(
+        serialize_with = "crate::borsh_helpers::serialize_text_range",
+        deserialize_with = "crate::borsh_helpers::deserialize_text_range"
+    )]
     pub span: TextRange,
+    #[borsh(
+        serialize_with = "crate::borsh_helpers::serialize_text_range",
+        deserialize_with = "crate::borsh_helpers::deserialize_text_range"
+    )]
     pub name_span: TextRange,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct TypeAliasDef {
     pub name: Name,
     pub type_expr: Option<SpannedTypeExpr>,
+    #[borsh(
+        serialize_with = "crate::borsh_helpers::serialize_text_range",
+        deserialize_with = "crate::borsh_helpers::deserialize_text_range"
+    )]
     pub span: TextRange,
+    #[borsh(
+        serialize_with = "crate::borsh_helpers::serialize_text_range",
+        deserialize_with = "crate::borsh_helpers::deserialize_text_range"
+    )]
     pub name_span: TextRange,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct ClientDef {
     pub name: Name,
     pub config_items: Vec<ConfigItemDef>,
+    #[borsh(
+        serialize_with = "crate::borsh_helpers::serialize_text_range",
+        deserialize_with = "crate::borsh_helpers::deserialize_text_range"
+    )]
     pub span: TextRange,
+    #[borsh(
+        serialize_with = "crate::borsh_helpers::serialize_text_range",
+        deserialize_with = "crate::borsh_helpers::deserialize_text_range"
+    )]
     pub name_span: TextRange,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct ConfigItemDef {
     pub key: Name,
     pub value: std::string::String,
+    #[borsh(
+        serialize_with = "crate::borsh_helpers::serialize_text_range",
+        deserialize_with = "crate::borsh_helpers::deserialize_text_range"
+    )]
     pub span: TextRange,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct TestDef {
     pub name: Name,
     pub config_items: Vec<ConfigItemDef>,
+    #[borsh(
+        serialize_with = "crate::borsh_helpers::serialize_text_range",
+        deserialize_with = "crate::borsh_helpers::deserialize_text_range"
+    )]
     pub span: TextRange,
+    #[borsh(
+        serialize_with = "crate::borsh_helpers::serialize_text_range",
+        deserialize_with = "crate::borsh_helpers::deserialize_text_range"
+    )]
     pub name_span: TextRange,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct TemplateStringDef {
     pub name: Name,
     pub params: Vec<Param>,
     pub body: Option<RawPrompt>,
+    #[borsh(
+        serialize_with = "crate::borsh_helpers::serialize_text_range",
+        deserialize_with = "crate::borsh_helpers::deserialize_text_range"
+    )]
     pub span: TextRange,
+    #[borsh(
+        serialize_with = "crate::borsh_helpers::serialize_text_range",
+        deserialize_with = "crate::borsh_helpers::deserialize_text_range"
+    )]
     pub name_span: TextRange,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct RetryPolicyDef {
     pub name: Name,
     pub config_items: Vec<ConfigItemDef>,
+    #[borsh(
+        serialize_with = "crate::borsh_helpers::serialize_text_range",
+        deserialize_with = "crate::borsh_helpers::deserialize_text_range"
+    )]
     pub span: TextRange,
+    #[borsh(
+        serialize_with = "crate::borsh_helpers::serialize_text_range",
+        deserialize_with = "crate::borsh_helpers::deserialize_text_range"
+    )]
     pub name_span: TextRange,
 }
 
 /// A top-level let binding — compiler-generated, not user syntax.
 /// Carries an optional `ExprBody` initializer that flows through TIR type-checking.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct LetDef {
     pub name: Name,
     pub initializer: Option<(ExprBody, AstSourceMap)>,
     pub origin: LetOrigin,
+    #[borsh(
+        serialize_with = "crate::borsh_helpers::serialize_text_range",
+        deserialize_with = "crate::borsh_helpers::deserialize_text_range"
+    )]
     pub span: TextRange,
+    #[borsh(
+        serialize_with = "crate::borsh_helpers::serialize_text_range",
+        deserialize_with = "crate::borsh_helpers::deserialize_text_range"
+    )]
     pub name_span: TextRange,
 }

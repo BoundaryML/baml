@@ -205,7 +205,7 @@ pub type Name = SmolStr;
 ///
 /// `Display` joins with `.` for diagnostics and for places that key off the
 /// dotted form (the bytecode emitter's class registry, debug snapshots).
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct TypePath(pub Vec<Name>);
 
 impl TypePath {
