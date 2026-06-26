@@ -25,8 +25,8 @@ function         testing.expansion_error_report   <builtin>/testing/registry.bam
 class            testing.FilterPat                <builtin>/testing/registry.baml:450
 class            testing.NameSplit                <builtin>/testing/registry.baml:456
 function         testing.split_top                <builtin>/testing/registry.baml:462
-function         testing.parse_filter_patterns    <builtin>/testing/registry.baml:474
-function         testing.glob_match               <builtin>/testing/registry.baml:490
+function         testing.parse_filter_patterns    <builtin>/testing/registry.baml:473
+function         testing.glob_match               <builtin>/testing/registry.baml:488
 function         testing.filter_match             <builtin>/testing/registry.baml:516
 function         testing.any_pattern_matches      <builtin>/testing/registry.baml:524
 function         testing.leaf_selected            <builtin>/testing/registry.baml:535
