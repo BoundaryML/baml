@@ -20,6 +20,13 @@ client<llm> Opus {
         base_url: env.LLM_BASE_URL,
         api_key: env.LLM_API_KEY,
         supports_streaming: false,
+        // The proxy fulfils /v1/messages by running `claude -p` (up to 300s), so a
+        // long generation can take ~30s+. BAML's default request timeout is shorter
+        // than that, which made slow redrafts/dedups fail with "All orchestration
+        // steps failed". 600s is comfortably above the proxy's claude budget.
+        http: {
+            request_timeout_ms: 600000,
+        },
     },
 }
 
@@ -31,6 +38,13 @@ client<llm> Sonnet {
         base_url: env.LLM_BASE_URL,
         api_key: env.LLM_API_KEY,
         supports_streaming: false,
+        // The proxy fulfils /v1/messages by running `claude -p` (up to 300s), so a
+        // long generation can take ~30s+. BAML's default request timeout is shorter
+        // than that, which made slow redrafts/dedups fail with "All orchestration
+        // steps failed". 600s is comfortably above the proxy's claude budget.
+        http: {
+            request_timeout_ms: 600000,
+        },
     },
 }
 
@@ -42,5 +56,12 @@ client<llm> Haiku {
         base_url: env.LLM_BASE_URL,
         api_key: env.LLM_API_KEY,
         supports_streaming: false,
+        // The proxy fulfils /v1/messages by running `claude -p` (up to 300s), so a
+        // long generation can take ~30s+. BAML's default request timeout is shorter
+        // than that, which made slow redrafts/dedups fail with "All orchestration
+        // steps failed". 600s is comfortably above the proxy's claude budget.
+        http: {
+            request_timeout_ms: 600000,
+        },
     },
 }
