@@ -9,6 +9,8 @@ import asyncio
 import functools
 from typing import Any, Callable, Dict, List, Literal, Optional, Sequence
 
+from typing_extensions import Sentinel
+
 from .baml_py import (
     BamlCallContext,
     BamlPyHandle,
@@ -213,21 +215,14 @@ async def call_function(rt, function_name, kwargs, ctx=None, collectors=None, _c
 Mode = Literal["sync", "async"]
 
 
-class Unset:
-    """Sentinel type for explicitly omitted generated SDK arguments."""
-    __slots__ = ()
-    _instance: "Unset | None" = None
-
-    def __new__(cls) -> "Unset":
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
-        return cls._instance
-
-    def __repr__(self) -> str:
-        return "baml.UNSET"
-
-
-UNSET = Unset()
+# Sentinel for explicitly omitted generated SDK arguments. `Sentinel`
+# (PEP 661, via `typing_extensions`) yields a single value that doubles as
+# its own type, so generated `.pyi` stubs can write
+# `opt: typing.Union[int, None, UNSET] = UNSET` — both the annotation and
+# the default are this one object. Type checkers only recognize a sentinel
+# in a type expression when it is referenced by a *bare name*, so generated
+# code imports `UNSET` directly rather than reaching it via attribute access.
+UNSET = Sentinel("UNSET")
 
 
 def _build_kwargs(
@@ -512,7 +507,6 @@ __all__ = [
     "HostSpanManager",
     "LLMCall",
     "Timing",
-    "Unset",
     "UNSET",
     "Usage",
     "BamlCtxManager",
