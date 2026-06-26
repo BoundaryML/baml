@@ -442,6 +442,11 @@ impl MirBuilder {
         self.set_terminator(Terminator::Throw { value });
     }
 
+    /// Emit a rethrow terminator for a caught error value.
+    pub(crate) fn rethrow(&mut self, value: Operand) {
+        self.set_terminator(Terminator::Rethrow { value });
+    }
+
     /// Emit a throw-if-panic terminator: if the value is a panic instance,
     /// throw it; otherwise continue to `otherwise`.
     pub(crate) fn throw_if_panic(&mut self, value: Operand, otherwise: BlockId) {

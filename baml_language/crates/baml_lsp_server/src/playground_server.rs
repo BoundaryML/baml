@@ -38,8 +38,8 @@ use bex_events::{
         AttachRootTraceResult, BoundaryId, CancellationState, CapturedValueRole,
         DiagnosticSeverity, ExecutionRequest, HostCallId, InMemoryRunStore, ProjectGeneration,
         ProjectId, RequestId, RunCursor, RunCursorExpiredReason, RunDiagnostic, RunError,
-        RunErrorClass, RunFilter, RunKind, RunOutcome, RunResult, RunSubscription, RunTarget,
-        RunVisibilityFilter, StartedHostRun,
+        RunErrorClass, RunFilter, RunKind, RunOutcome, RunPatch, RunResult, RunSubscription,
+        RunTarget, RunVisibilityFilter, StartedHostRun,
     },
     value::{
         ByteValueArtifactSink, CaptureLossKind, CaptureLossReason, CaptureLossRecord,
@@ -684,7 +684,20 @@ fn broadcast_value_capture_loss_diagnostic(
     capture_kind: &str,
     skipped: u64,
 ) {
-    if let Some(patch) = run_store.add_diagnostic(
+    if let Some(patch) =
+        value_capture_loss_diagnostic_patch(run_store, boundary_id, capture_kind, skipped)
+    {
+        broadcast_run_patch(broadcast_tx, &patch);
+    }
+}
+
+fn value_capture_loss_diagnostic_patch(
+    run_store: &InMemoryRunStore,
+    boundary_id: BoundaryId,
+    capture_kind: &str,
+    skipped: u64,
+) -> Option<RunPatch> {
+    run_store.add_diagnostic(
         boundary_id,
         RunDiagnostic {
             severity: DiagnosticSeverity::Warning,
@@ -693,9 +706,7 @@ fn broadcast_value_capture_loss_diagnostic(
             call_node_id: None,
             payload_id: None,
         },
-    ) {
-        broadcast_run_patch(broadcast_tx, &patch);
-    }
+    )
 }
 
 fn capture_loss_message(capture_kind: &str, skipped: u64) -> String {
@@ -2673,6 +2684,72 @@ mod tests {
             thread_id: BexThreadId(1),
             call_id: BexCallId(3),
         }
+    }
+
+    #[tokio::test]
+    async fn native_zero_capacity_drain_broadcasts_capture_loss_diagnostic() {
+        let project = unique_temp_dir("baml-native-capture-loss");
+        std::fs::create_dir_all(&project).expect("project dir should be created");
+        std::fs::write(project.join("baml.toml"), "").expect("manifest should be created");
+
+        let boundary_id = BoundaryId::from_bytes([21; 16]);
+        let run_store = InMemoryRunStore::default();
+        let start = run_store.create_run_at(
+            boundary_id,
+            test_execution_request(),
+            RequestId(1),
+            RunTimeAnchor {
+                epoch_created_at_ms: 20,
+                trace_zero_ns: 0,
+            },
+        );
+        let history_store = HistoryStore::new(vec![project.clone()]);
+        history_store.begin(&project, &start).unwrap();
+        let value_store = Arc::new(Mutex::new(HashMap::new()));
+        let (broadcast_tx, mut broadcast_rx) = broadcast::channel(8);
+
+        let producer =
+            bex_project::TraceCaptureProducer::new(bex_project::TraceCaptureConfig::enabled(0));
+        assert!(
+            producer
+                .capture_with(
+                    boundary_id,
+                    test_trace_key(),
+                    bex_project::CaptureKind::RootOutput,
+                    |_| panic!("zero-capacity producer must not copy a value")
+                )
+                .is_err()
+        );
+        assert_eq!(producer.stats().skipped_value_queue_full, 1);
+
+        let refs = drain_captured_values_and_broadcast(
+            &broadcast_tx,
+            &run_store,
+            &history_store,
+            &value_store,
+            boundary_id,
+            &producer,
+        );
+
+        assert!(refs.output.is_none());
+        assert!(refs.error.is_none());
+        let snapshot = run_store.snapshot(boundary_id).expect("run should exist");
+        let diagnostic = snapshot
+            .diagnostics
+            .iter()
+            .find(|diagnostic| diagnostic.code.as_deref() == Some("valueCaptureLoss"))
+            .expect("capture loss should be recorded live");
+        assert_eq!(
+            diagnostic.message,
+            "Skipped 1 captured value value(s) because the trace capture queue was full"
+        );
+
+        let patch = broadcast_rx
+            .try_recv()
+            .expect("drain should broadcast a capture-loss patch");
+        assert!(matches!(patch, WsOutMessage::RunPatch { .. }));
+
+        let _ = std::fs::remove_dir_all(project);
     }
 
     #[test]

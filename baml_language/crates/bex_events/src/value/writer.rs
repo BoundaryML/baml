@@ -29,24 +29,14 @@ pub struct ValueWriteOutcome {
 }
 
 impl<S: ValueArtifactSink> ValueWriter<S> {
-    pub fn new(mut sink: S, boundary_id: BoundaryId) -> io::Result<Self> {
-        let mut header = Vec::new();
-        encode_header(&mut header, boundary_id)
-            .map_err(|err| io::Error::new(io::ErrorKind::InvalidData, err))?;
-        sink.write_chunk(&header)?;
-        Ok(Self {
-            sink,
-            next_value_id: 1,
-            blob_store: None,
-            inline_threshold_bytes: None,
-        })
+    pub fn new(sink: S, boundary_id: BoundaryId) -> io::Result<Self> {
+        Self::new_with_next_value_id(sink, boundary_id, 1)
     }
 
-    pub fn with_blob_store(
+    pub(crate) fn new_with_next_value_id(
         mut sink: S,
         boundary_id: BoundaryId,
-        blob_store: BlobStore,
-        inline_threshold_bytes: usize,
+        next_value_id: u64,
     ) -> io::Result<Self> {
         let mut header = Vec::new();
         encode_header(&mut header, boundary_id)
@@ -54,7 +44,41 @@ impl<S: ValueArtifactSink> ValueWriter<S> {
         sink.write_chunk(&header)?;
         Ok(Self {
             sink,
-            next_value_id: 1,
+            next_value_id,
+            blob_store: None,
+            inline_threshold_bytes: None,
+        })
+    }
+
+    pub fn with_blob_store(
+        sink: S,
+        boundary_id: BoundaryId,
+        blob_store: BlobStore,
+        inline_threshold_bytes: usize,
+    ) -> io::Result<Self> {
+        Self::with_blob_store_and_next_value_id(
+            sink,
+            boundary_id,
+            blob_store,
+            inline_threshold_bytes,
+            1,
+        )
+    }
+
+    pub(crate) fn with_blob_store_and_next_value_id(
+        mut sink: S,
+        boundary_id: BoundaryId,
+        blob_store: BlobStore,
+        inline_threshold_bytes: usize,
+        next_value_id: u64,
+    ) -> io::Result<Self> {
+        let mut header = Vec::new();
+        encode_header(&mut header, boundary_id)
+            .map_err(|err| io::Error::new(io::ErrorKind::InvalidData, err))?;
+        sink.write_chunk(&header)?;
+        Ok(Self {
+            sink,
+            next_value_id,
             blob_store: Some(blob_store),
             inline_threshold_bytes: Some(inline_threshold_bytes),
         })
@@ -149,6 +173,12 @@ impl<S: ValueArtifactSink> ValueWriter<S> {
 
     pub fn into_sink(self) -> S {
         self.sink
+    }
+
+    #[must_use]
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
+    pub(crate) fn next_value_id(&self) -> u64 {
+        self.next_value_id
     }
 
     fn store_body(&self, body: Vec<u8>) -> io::Result<(Vec<u8>, Option<BlobRef>)> {

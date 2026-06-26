@@ -1667,6 +1667,7 @@ struct LoweringContext<'db> {
     binding_locals: HashMap<BindingId, Local>,
     loop_context: Option<LoopContext>,
     catch_context: Option<CatchContext>,
+    catch_rethrow_locals: Vec<Local>,
     exit_block: BlockId,
 
     // Eagerly aggregated type maps from all scopes in the function.
@@ -2900,6 +2901,7 @@ impl<'db> LoweringContext<'db> {
             binding_locals: HashMap::new(),
             loop_context: None,
             catch_context: None,
+            catch_rethrow_locals: Vec::new(),
             exit_block: BlockId(0), // placeholder; overwritten in lower_function_body
             expr_types,
             pat_types,
@@ -3123,6 +3125,7 @@ impl<'db> LoweringContext<'db> {
             binding_locals: HashMap::new(),
             loop_context: None,
             catch_context: None,
+            catch_rethrow_locals: Vec::new(),
             exit_block: BlockId(0), // placeholder; overwritten in lower_let_body_inner
             expr_types,
             pat_types,
@@ -5722,7 +5725,7 @@ impl LoweringContext<'_> {
             }
 
             AstExpr::Throw { value } => {
-                let val_op = self.lower_to_operand(value);
+                let val_op = self.lower_throw_operand(value);
                 if let Some(catch_ctx) = &self.catch_context {
                     // Inside a catch block: store the value into the error
                     // local and jump to the handler instead of unwinding.
@@ -5731,6 +5734,8 @@ impl LoweringContext<'_> {
                     self.builder
                         .assign(Place::Local(error_local), Rvalue::Use(val_op));
                     self.builder.goto(unwind_target);
+                } else if self.operand_is_marked_rethrow(&val_op) {
+                    self.builder.rethrow(val_op);
                 } else {
                     self.builder.throw(val_op);
                 }
@@ -5777,6 +5782,15 @@ impl LoweringContext<'_> {
         }
 
         self.builder.current_source_span = prev_span;
+    }
+
+    fn operand_is_marked_rethrow(&self, operand: &Operand) -> bool {
+        match operand {
+            Operand::Copy(Place::Local(local)) | Operand::Move(Place::Local(local)) => {
+                self.catch_rethrow_locals.contains(local)
+            }
+            Operand::Copy(_) | Operand::Move(_) | Operand::Constant(_) => false,
+        }
     }
 
     /// Lower `spawn name? with? { body }` into:
@@ -9327,6 +9341,11 @@ impl<'db> LoweringContext<'db> {
         let temp = self.builder.temp(ty);
         self.lower_expr(expr_id, Place::local(temp));
         Operand::Copy(Place::Local(temp))
+    }
+
+    fn lower_throw_operand(&mut self, expr_id: AstExprId) -> Operand {
+        self.try_resolve_to_local(expr_id)
+            .map_or_else(|| self.lower_to_operand(expr_id), Operand::copy_local)
     }
 
     fn emit_panic_call(&mut self, message: &str, _expr_id: AstExprId) {
@@ -13209,14 +13228,18 @@ impl LoweringContext<'_> {
             }
 
             AstStmt::Throw { value } => {
-                let val_op = self.lower_to_operand(value);
+                let val_op = self.lower_throw_operand(value);
                 // Unwatch all watched locals before throwing. Defers run via the
                 // block's unwind landing pads: the throw's PC is inside the
                 // enclosing defer region(s), so the exception table routes it to
                 // the innermost defer pad (BEP-042 Stage 2). We do NOT inline-
                 // replay here — that would double-run the defers.
                 self.emit_unwatch_to_depth(0);
-                self.builder.throw(val_op);
+                if self.operand_is_marked_rethrow(&val_op) {
+                    self.builder.rethrow(val_op);
+                } else {
+                    self.builder.throw(val_op);
+                }
                 let dead = self.builder.create_block();
                 self.builder.set_current_block(dead);
             }
@@ -14064,14 +14087,14 @@ impl LoweringContext<'_> {
                         // Even if exhaustive, catch otherwise should rethrow
                         // (the error might not match any arm at runtime).
                         self.builder
-                            .throw(Operand::Copy(Place::Local(*error_local)));
+                            .rethrow(Operand::Copy(Place::Local(*error_local)));
                     }
                 }
             } else {
                 match &otherwise {
                     SwitchOtherwise::Catch { error_local, .. } => {
                         self.builder
-                            .throw(Operand::Copy(Place::Local(*error_local)));
+                            .rethrow(Operand::Copy(Place::Local(*error_local)));
                     }
                     SwitchOtherwise::Match { .. } => {
                         self.builder.goto(join);
@@ -15829,7 +15852,14 @@ impl LoweringContext<'_> {
         if clauses.len() == 1 {
             install_clause_locals(self, error_local, &clause_locals[0]);
         }
-        if clauses.len() == 1
+        let switch_rethrow_mark = self.catch_rethrow_locals.len();
+        if clauses.len() == 1 {
+            self.catch_rethrow_locals.push(error_local);
+            if let Some(local) = clause_locals[0].binding_copy_local {
+                self.catch_rethrow_locals.push(local);
+            }
+        }
+        let lowered_as_switch = clauses.len() == 1
             && self.try_lower_as_switch(
                 error_local,
                 &switch_arms,
@@ -15840,8 +15870,9 @@ impl LoweringContext<'_> {
                     needs_throw_if_panic,
                 },
                 None,
-            )
-        {
+            );
+        self.catch_rethrow_locals.truncate(switch_rethrow_mark);
+        if lowered_as_switch {
             self.builder.set_current_block(bb_join);
             self.restore_active_locals(saved_catch_outer_locals);
             return;
@@ -15877,7 +15908,8 @@ impl LoweringContext<'_> {
 
         // Rethrow if nothing matched.
         if !self.builder.is_current_terminated() {
-            self.builder.throw(Operand::Copy(Place::Local(error_local)));
+            self.builder
+                .rethrow(Operand::Copy(Place::Local(error_local)));
         }
 
         // Lower each arm body.
@@ -15888,7 +15920,13 @@ impl LoweringContext<'_> {
             let clause = clause_locals[clause_idx].clone();
             install_clause_locals(self, error_local, &clause);
             self.bind_pattern(error_local, arm.pattern);
+            let rethrow_mark = self.catch_rethrow_locals.len();
+            self.catch_rethrow_locals.push(error_local);
+            if let Some(local) = clause.binding_copy_local {
+                self.catch_rethrow_locals.push(local);
+            }
             self.lower_expr(arm.body, dest.clone());
+            self.catch_rethrow_locals.truncate(rethrow_mark);
             if !self.builder.is_current_terminated() {
                 // A `watch let` declared inside a catch-arm body must be
                 // torn down on fallthrough.

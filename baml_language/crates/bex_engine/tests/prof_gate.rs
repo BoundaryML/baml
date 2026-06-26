@@ -28,7 +28,7 @@ use std::{
 
 use bex_engine::{
     BexEngine, BexExternalValue, CancellationToken, EngineError, FunctionCallContextBuilder,
-    value_capture::{TraceCaptureConfig, TraceCaptureProducer},
+    value_capture::{CaptureKind, EncodedTraceValue, TraceCaptureConfig, TraceCaptureProducer},
 };
 use bex_events::{
     ids::BoundaryId,
@@ -1161,6 +1161,200 @@ async fn call_error_capture_records_throw_origin_without_rethrow_duplicate() {
             )
         });
     assert_eq!(*origin_function, "user.capture_phase5_boom");
+}
+
+async fn captured_call_errors_for_source(
+    source: &str,
+    capture_functions: &[&str],
+    marker_fqn: &str,
+    boundary_id: BoundaryId,
+) -> (Vec<EncodedTraceValue>, HashMap<TraceCallKey, String>) {
+    let mut program = compile_for_engine(source);
+    for object in &mut program.objects {
+        let Object::Function(function) = object else {
+            continue;
+        };
+        if capture_functions
+            .iter()
+            .any(|name| function.name.as_str() == *name)
+        {
+            function.capture = phase5_call_output_error_capture();
+        }
+    }
+
+    let engine = Arc::new(
+        BexEngine::new(program, Arc::new(sys_native::SysOps::native()), Vec::new())
+            .expect("engine construction"),
+    );
+    let value_capture = TraceCaptureProducer::new(TraceCaptureConfig::enabled(16));
+    let call_ctx = FunctionCallContextBuilder::new(sys_types::CallId::next())
+        .with_boundary_id(boundary_id)
+        .with_capture_defaults(bex_engine::CaptureDefaults {
+            values_enabled: true,
+            logs_enabled: false,
+        })
+        .with_value_capture(value_capture.clone())
+        .build();
+    let result = engine
+        .call_function_with_trace("main", vec![], call_ctx, true)
+        .await
+        .expect("program should produce a traced call result");
+    assert_eq!(result.value.unwrap(), BexExternalValue::Int(0));
+    drop(engine);
+
+    let mut writer =
+        ValueWriter::new(ByteValueArtifactSink::new(), boundary_id).expect("value writer");
+    let captured = value_capture
+        .drain_to_value_writer(&mut writer)
+        .expect("call error drafts encode");
+    assert_eq!(value_capture.trace_heap().retained_snapshot_count(), 0);
+
+    let call_errors = captured
+        .into_iter()
+        .filter(|encoded| encoded.kind == CaptureKind::CallError)
+        .collect::<Vec<_>>();
+    let parsed = read_bamlvalue_from_bytes(writer.sink().bytes()).expect("value bytes parse");
+    let call_error_records = parsed
+        .records
+        .iter()
+        .filter(|record| {
+            matches!(
+                record,
+                ValueFileRecord::CapturedValue(value)
+                    if value.capture.as_ref().is_some_and(|capture| capture.kind == ValueCaptureKind::CallError)
+            )
+        })
+        .count();
+    assert_eq!(call_error_records, call_errors.len());
+
+    let (header, events) = load_profile(marker_fqn);
+    assert_balance(&header, &events);
+    let contents = bex_events::prof::file::BamlprofContents {
+        header,
+        events: events
+            .into_iter()
+            .map(|event| pb::DiskEventV1 { event: Some(event) })
+            .collect(),
+        truncated: false,
+    };
+    let reconstructed =
+        bamlprof::reconstruct_bamlprof(&contents).expect("call error profile reconstructs");
+    assert!(
+        reconstructed.diagnostics.is_empty(),
+        "profile reconstruction diagnostics: {:#?}",
+        reconstructed.diagnostics
+    );
+    let function_by_call = reconstructed
+        .calls
+        .iter()
+        .filter_map(|call| {
+            call.function_name
+                .as_ref()
+                .map(|name| (call.trace_key, name.clone()))
+        })
+        .collect::<HashMap<_, _>>();
+
+    (call_errors, function_by_call)
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn call_error_capture_keeps_independent_equal_primitive_origins() {
+    let _guard = test_lock().await;
+    init_prof_env();
+    let source = r#"
+        function capture_phase5_equal_fail_a() -> int throws int {
+            throw 5
+        }
+
+        function capture_phase5_equal_fail_b() -> int throws int {
+            throw 5
+        }
+
+        function main() -> int {
+            let _ = capture_phase5_equal_fail_a() catch (e) { let e => 0 };
+            let _ = capture_phase5_equal_fail_b() catch (e) { let e => 0 };
+            0
+        }
+    "#;
+    let (call_errors, function_by_call) = captured_call_errors_for_source(
+        source,
+        &[
+            "user.capture_phase5_equal_fail_a",
+            "user.capture_phase5_equal_fail_b",
+        ],
+        "user.capture_phase5_equal_fail_a",
+        BoundaryId::from_bytes([18; 16]),
+    )
+    .await;
+
+    let mut origin_functions = call_errors
+        .iter()
+        .map(|encoded| {
+            function_by_call
+                .get(&encoded.call)
+                .unwrap_or_else(|| panic!("captured error call not in profile: {encoded:?}"))
+                .clone()
+        })
+        .collect::<Vec<_>>();
+    origin_functions.sort();
+    assert_eq!(
+        origin_functions,
+        vec![
+            "user.capture_phase5_equal_fail_a".to_string(),
+            "user.capture_phase5_equal_fail_b".to_string(),
+        ],
+        "independent equal primitive throws must keep distinct origins: {call_errors:#?}"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn call_error_capture_treats_equal_wrapper_throw_as_new_origin() {
+    let _guard = test_lock().await;
+    init_prof_env();
+    let source = r#"
+        function capture_phase5_equal_leaf() -> int throws int {
+            throw 5
+        }
+
+        function capture_phase5_equal_wrapper_new_throw() -> int throws int {
+            capture_phase5_equal_leaf() catch (e) {
+                let e => throw 5
+            }
+        }
+
+        function main() -> int {
+            capture_phase5_equal_wrapper_new_throw() catch (e) { let e => 0 }
+        }
+    "#;
+    let (call_errors, function_by_call) = captured_call_errors_for_source(
+        source,
+        &[
+            "user.capture_phase5_equal_leaf",
+            "user.capture_phase5_equal_wrapper_new_throw",
+        ],
+        "user.capture_phase5_equal_leaf",
+        BoundaryId::from_bytes([19; 16]),
+    )
+    .await;
+
+    let mut origin_functions = call_errors
+        .iter()
+        .map(|encoded| {
+            function_by_call
+                .get(&encoded.call)
+                .unwrap_or_else(|| panic!("captured error call not in profile: {encoded:?}"))
+                .clone()
+        })
+        .collect::<Vec<_>>();
+    origin_functions.sort();
+    assert_eq!(
+        origin_functions,
+        vec![
+            "user.capture_phase5_equal_leaf".to_string(),
+            "user.capture_phase5_equal_wrapper_new_throw".to_string(),
+        ],
+        "wrapper throw of a new equal value must not be collapsed into the leaf origin: {call_errors:#?}"
+    );
 }
 
 fn assert_canonical_profile_parity_shape(reconstructed: &ReconstructedProfile) {

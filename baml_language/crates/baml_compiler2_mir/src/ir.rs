@@ -505,6 +505,12 @@ pub enum Terminator {
         value: Operand,
     },
 
+    /// Re-throw a caught error value, preserving its original trace origin.
+    Rethrow {
+        /// The caught error value to rethrow.
+        value: Operand,
+    },
+
     /// If the value is a panic instance (`baml.panics.*`), throw it.
     /// Otherwise continue to `otherwise` block.
     ///
@@ -562,7 +568,7 @@ impl Terminator {
                 }
                 succs
             }
-            Terminator::Throw { .. } => vec![],
+            Terminator::Throw { .. } | Terminator::Rethrow { .. } => vec![],
             Terminator::ThrowIfPanic { otherwise, .. } => vec![*otherwise],
             Terminator::ShortCircuit { eval_rhs, join, .. } => vec![*eval_rhs, *join],
         }

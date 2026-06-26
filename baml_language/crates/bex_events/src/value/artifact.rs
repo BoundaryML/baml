@@ -2,7 +2,7 @@
 
 use std::{
     fmt::Write as _,
-    fs::{self, File},
+    fs::{self, File, OpenOptions},
     io::{self, Write},
     path::{Path, PathBuf},
 };
@@ -77,9 +77,17 @@ impl BlobStore {
             io::Error::new(io::ErrorKind::InvalidInput, "blob path has no parent")
         })?;
         fs::create_dir_all(parent)?;
-        let tmp_path = parent.join(format!(".{}.{}.tmp", blob_ref.digest, std::process::id()));
+        let tmp_path = parent.join(format!(
+            ".{}.{}.{}.tmp",
+            blob_ref.digest,
+            std::process::id(),
+            uuid::Uuid::new_v4()
+        ));
         {
-            let mut tmp = File::create(&tmp_path)?;
+            let mut tmp = OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(&tmp_path)?;
             tmp.write_all(bytes)?;
             tmp.flush()?;
             tmp.sync_all()?;
@@ -124,6 +132,7 @@ pub trait ValueArtifactSink {
 pub struct FileValueArtifactSink {
     file: File,
     path: PathBuf,
+    bytes_written: u64,
 }
 
 impl FileValueArtifactSink {
@@ -135,6 +144,7 @@ impl FileValueArtifactSink {
         Ok(Self {
             file: File::create(path)?,
             path: path.to_path_buf(),
+            bytes_written: 0,
         })
     }
 
@@ -150,11 +160,20 @@ impl FileValueArtifactSink {
             path: self.path.clone(),
         })
     }
+
+    #[must_use]
+    pub fn bytes_written(&self) -> u64 {
+        self.bytes_written
+    }
 }
 
 impl ValueArtifactSink for FileValueArtifactSink {
     fn write_chunk(&mut self, bytes: &[u8]) -> io::Result<()> {
-        self.file.write_all(bytes)
+        self.file.write_all(bytes)?;
+        self.bytes_written = self
+            .bytes_written
+            .saturating_add(u64::try_from(bytes.len()).unwrap_or(u64::MAX));
+        Ok(())
     }
 
     fn flush(&mut self) -> io::Result<ValueArtifactRef> {
@@ -321,6 +340,33 @@ mod tests {
             }
         }
         assert_eq!(blob_files, 1);
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn blob_store_temp_names_do_not_collide_with_stale_pid_temp_file() {
+        let root = std::env::temp_dir().join(format!(
+            "bamlvalue-blob-store-temp-{}-{:?}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let store = BlobStore::new(&root);
+        let bytes = b"large body";
+        let blob_ref = BlobRef::sha256(bytes);
+        let final_path = store.path_for(&blob_ref);
+        let parent = final_path.parent().unwrap();
+        std::fs::create_dir_all(parent).unwrap();
+        let stale_tmp = parent.join(format!(".{}.{}.tmp", blob_ref.digest, std::process::id()));
+        std::fs::write(&stale_tmp, b"stale temp").unwrap();
+
+        let written = store.write_blob(bytes).unwrap();
+
+        assert_eq!(written, blob_ref);
+        assert_eq!(std::fs::read(final_path).unwrap(), bytes);
+        assert_eq!(std::fs::read(stale_tmp).unwrap(), b"stale temp");
         let _ = std::fs::remove_dir_all(root);
     }
 }

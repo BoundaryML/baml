@@ -721,7 +721,7 @@ fn simulate_terminator_stack(
             sim.push();
             simulate_store_place_stack(destination, sim, classifications)
         }
-        Terminator::Throw { value } => {
+        Terminator::Throw { value } | Terminator::Rethrow { value } => {
             let mut sink = StackCarryPullSink {
                 sim,
                 carried_local,

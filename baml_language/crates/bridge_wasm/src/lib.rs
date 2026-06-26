@@ -76,9 +76,10 @@ use bex_events::{
         AttachRootTraceResult, BoundaryId, CancellationState, CapturedValueRole,
         EnvResolutionStatus, ExecutionRequest, HostCallId, InMemoryRunStore, ProjectGeneration,
         ProjectId, RequestId, RunCursor, RunCursorExpiredReason, RunDiagnostic, RunError,
-        RunErrorClass, RunFilter, RunKind, RunOutcome, RunRequestState, RunResult, RunSubscription,
-        RunSummary, RunTarget, RunVisibilityFilter, RuntimeTarget, StartRunContext, StartedHostRun,
-        TraceCallKey, patch_to_wire, run_summary_to_wire, run_to_wire,
+        RunErrorClass, RunFilter, RunKind, RunOutcome, RunPatch, RunRequestState, RunResult,
+        RunSubscription, RunSummary, RunTarget, RunVisibilityFilter, RuntimeTarget,
+        StartRunContext, StartedHostRun, TraceCallKey, patch_to_wire, run_summary_to_wire,
+        run_to_wire,
     },
     value::{
         ByteValueArtifactSink, CaptureLossKind, CaptureLossReason, CaptureLossRecord,
@@ -2198,7 +2199,20 @@ fn send_value_capture_loss_diagnostic(
     capture_kind: &str,
     skipped: u64,
 ) {
-    if let Some(patch) = run_store.add_diagnostic(
+    if let Some(patch) =
+        value_capture_loss_diagnostic_patch(run_store, boundary_id, capture_kind, skipped)
+    {
+        send_run_patch(callback, &patch);
+    }
+}
+
+fn value_capture_loss_diagnostic_patch(
+    run_store: &InMemoryRunStore,
+    boundary_id: BoundaryId,
+    capture_kind: &str,
+    skipped: u64,
+) -> Option<RunPatch> {
+    run_store.add_diagnostic(
         boundary_id,
         RunDiagnostic {
             severity: bex_events::run::DiagnosticSeverity::Warning,
@@ -2207,9 +2221,7 @@ fn send_value_capture_loss_diagnostic(
             call_node_id: None,
             payload_id: None,
         },
-    ) {
-        send_run_patch(callback, &patch);
-    }
+    )
 }
 
 fn capture_loss_message(capture_kind: &str, skipped: u64) -> String {
@@ -2246,8 +2258,8 @@ mod history_tests {
         ids::{BexCallId, BexThreadId, EngineId, ProcessEuid},
         prof::pb,
         run::{
-            PayloadKind, ProfileEventSource, ProjectGeneration, RunRequestSummary, RunStatus,
-            RunTimeAnchor, StartGuard, profile_event_envelope_from_disk_event,
+            PayloadKind, ProfileEventSource, ProjectGeneration, RunPatchChange, RunRequestSummary,
+            RunStatus, RunTimeAnchor, StartGuard, profile_event_envelope_from_disk_event,
         },
     };
 
@@ -2298,6 +2310,69 @@ mod history_tests {
                 call_site_line: None,
             })),
         }
+    }
+
+    #[test]
+    fn wasm_queue_full_stats_create_value_capture_loss_patch() {
+        let boundary_id = BoundaryId::from_bytes([22; 16]);
+        let producer =
+            bex_project::TraceCaptureProducer::new(bex_project::TraceCaptureConfig::enabled(0));
+        assert!(
+            producer
+                .capture_with(
+                    boundary_id,
+                    root_trace(),
+                    bex_project::CaptureKind::RootOutput,
+                    |_| panic!("zero-capacity producer must not copy a value")
+                )
+                .is_err()
+        );
+        let stats = producer.stats();
+        assert_eq!(stats.skipped_value_queue_full, 1);
+
+        let run_store = InMemoryRunStore::default();
+        run_store.create_run_at(
+            boundary_id,
+            ExecutionRequest {
+                project_id: ProjectId("wasm-project".to_string()),
+                project_generation: ProjectGeneration(1),
+                target: RunTarget::Function {
+                    function_name: "user.Extract".to_string(),
+                },
+                args_summary: None,
+                options_summary: None,
+            },
+            RequestId(1),
+            RunTimeAnchor {
+                epoch_created_at_ms: 20,
+                trace_zero_ns: 0,
+            },
+        );
+
+        let patch = value_capture_loss_diagnostic_patch(
+            &run_store,
+            boundary_id,
+            "value",
+            stats.skipped_value_queue_full,
+        )
+        .expect("live capture-loss diagnostic should produce a patch");
+        assert!(
+            patch.changes.iter().any(|change| matches!(
+                change,
+                RunPatchChange::UpsertDiagnostic(diagnostic)
+                    if diagnostic.code.as_deref() == Some("valueCaptureLoss")
+                        && diagnostic.message == "Skipped 1 captured value value(s) because the trace capture queue was full"
+            )),
+            "expected valueCaptureLoss diagnostic patch, got {patch:#?}"
+        );
+        assert!(
+            run_store
+                .snapshot(boundary_id)
+                .expect("run should exist")
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.code.as_deref() == Some("valueCaptureLoss"))
+        );
     }
 
     #[test]

@@ -17,7 +17,7 @@ use std::{io, path::Path};
 use self::router::BoundaryTraceRouter;
 #[cfg(not(target_arch = "wasm32"))]
 use self::{
-    boundary_writer::BoundaryWriter,
+    boundary_writer::{BoundaryWriter, SegmentRotationPolicy},
     path::{
         BoundaryHistoryPath, build_boundary_history_path, find_boundary_dir, list_boundary_dirs,
     },
@@ -187,6 +187,7 @@ pub struct HistoryStore {
 struct HistoryStoreInner {
     search_roots: Vec<PathBuf>,
     router: BoundaryTraceRouter,
+    rotation_policy: SegmentRotationPolicy,
     boundaries: HashMap<BoundaryId, BoundaryState>,
 }
 
@@ -196,6 +197,7 @@ struct BoundaryState {
     started: RunStartedRecord,
     root_trace: Option<TraceCallKey>,
     claimed_profile_indices: HashSet<usize>,
+    profile_write_error: Option<String>,
     completed: Option<RunCompletedRecord>,
     writer: BoundaryWriter,
 }
@@ -208,6 +210,7 @@ impl std::fmt::Debug for BoundaryState {
             .field("started", &self.started)
             .field("root_trace", &self.root_trace)
             .field("claimed_profile_indices", &self.claimed_profile_indices)
+            .field("profile_write_error", &self.profile_write_error)
             .field("completed", &self.completed)
             .finish_non_exhaustive()
     }
@@ -221,6 +224,23 @@ impl HistoryStore {
             inner: Arc::new(Mutex::new(HistoryStoreInner {
                 search_roots,
                 router: BoundaryTraceRouter::default(),
+                rotation_policy: SegmentRotationPolicy::default(),
+                boundaries: HashMap::new(),
+            })),
+        }
+    }
+
+    #[cfg(test)]
+    #[must_use]
+    fn new_with_rotation_policy(
+        search_roots: Vec<PathBuf>,
+        rotation_policy: SegmentRotationPolicy,
+    ) -> Self {
+        Self {
+            inner: Arc::new(Mutex::new(HistoryStoreInner {
+                search_roots,
+                router: BoundaryTraceRouter::default(),
+                rotation_policy,
                 boundaries: HashMap::new(),
             })),
         }
@@ -237,11 +257,16 @@ impl HistoryStore {
             created_at_ms: start.created_at_ms,
             time_anchor: start.time_anchor,
         };
-        let writer = BoundaryWriter::create(path.clone(), start.boundary_id, start.created_at_ms)?;
         let mut inner = self
             .inner
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let writer = BoundaryWriter::create_with_rotation_policy(
+            path.clone(),
+            start.boundary_id,
+            start.created_at_ms,
+            inner.rotation_policy,
+        )?;
         if !inner.search_roots.contains(&path.project_root) {
             inner.search_roots.push(path.project_root.clone());
         }
@@ -252,6 +277,7 @@ impl HistoryStore {
                 started,
                 root_trace: None,
                 claimed_profile_indices: HashSet::new(),
+                profile_write_error: None,
                 completed: None,
                 writer,
             },
@@ -292,7 +318,13 @@ impl HistoryStore {
             }
             None => state.root_trace = Some(root_trace),
         }
-        route_claimed_locked(&mut inner, boundary_id)
+        match route_claimed_locked(&mut inner, boundary_id) {
+            Ok(()) => Ok(()),
+            Err(err) => {
+                remember_profile_write_error(&mut inner, boundary_id, &err);
+                Err(err)
+            }
+        }
     }
 
     pub fn append_value_body(
@@ -394,6 +426,9 @@ impl HistoryStore {
         let Some(state) = inner.boundaries.get_mut(&boundary_id) else {
             return Ok(());
         };
+        if let Some(error) = &state.profile_write_error {
+            return Err(history_profile_write_error(boundary_id, error));
+        }
         ensure_run_started_written(state)?;
         let thread_id = state.root_trace.map_or(0, |root| root.thread_id.0);
         state.writer.write_run_completed(thread_id, &record)?;
@@ -420,7 +455,7 @@ impl HistoryStore {
     }
 
     pub fn open(&self, boundary_id: BoundaryId) -> io::Result<Run> {
-        let (known_dir, search_roots) = {
+        let (known_dir, search_roots, profile_write_error) = {
             let inner = self
                 .inner
                 .lock()
@@ -431,8 +466,15 @@ impl HistoryStore {
                     .get(&boundary_id)
                     .map(|state| state.path.boundary_dir.clone()),
                 inner.search_roots.clone(),
+                inner
+                    .boundaries
+                    .get(&boundary_id)
+                    .and_then(|state| state.profile_write_error.clone()),
             )
         };
+        if let Some(error) = profile_write_error {
+            return Err(history_profile_write_error(boundary_id, &error));
+        }
         let dir = known_dir
             .or_else(|| find_boundary_dir(&search_roots, boundary_id))
             .ok_or_else(|| {
@@ -509,7 +551,9 @@ impl HistoryEventObserver for HistoryStore {
         inner.router.ingest(envelope, disk_event);
         let boundary_ids = inner.boundaries.keys().copied().collect::<Vec<_>>();
         for boundary_id in boundary_ids {
-            let _ = route_claimed_locked(&mut inner, boundary_id);
+            if let Err(err) = route_claimed_locked(&mut inner, boundary_id) {
+                remember_profile_write_error(&mut inner, boundary_id, &err);
+            }
         }
     }
 }
@@ -539,14 +583,36 @@ fn route_claimed_locked(inner: &mut HistoryStoreInner, boundary_id: BoundaryId) 
     };
     ensure_run_started_written(state)?;
     for (index, record) in records {
-        if !state.claimed_profile_indices.insert(index) {
+        if state.claimed_profile_indices.contains(&index) {
             continue;
         }
         state
             .writer
             .write_profile_event(&record.envelope, &record.disk_event)?;
+        state.claimed_profile_indices.insert(index);
     }
     state.writer.flush()
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn remember_profile_write_error(
+    inner: &mut HistoryStoreInner,
+    boundary_id: BoundaryId,
+    error: &io::Error,
+) {
+    if let Some(state) = inner.boundaries.get_mut(&boundary_id)
+        && state.profile_write_error.is_none()
+    {
+        state.profile_write_error = Some(error.to_string());
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn history_profile_write_error(boundary_id: BoundaryId, error: &str) -> io::Error {
+    io::Error::other(format!(
+        "history profile write failed for {}: {error}",
+        boundary_id.to_wire_string()
+    ))
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -1081,8 +1147,28 @@ fn segment_paths(dir: &Path, prefix: &str, extension: &str) -> Vec<PathBuf> {
                 && path.extension().and_then(|ext| ext.to_str()) == Some(extension)
         }));
     }
-    paths.sort();
+    paths.sort_by(|left, right| {
+        segment_sort_key(left, prefix).cmp(&segment_sort_key(right, prefix))
+    });
     paths
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn segment_sort_key(path: &Path, prefix: &str) -> (u64, u64, String) {
+    let thread_id = path
+        .parent()
+        .and_then(|parent| parent.file_name())
+        .and_then(|name| name.to_str())
+        .and_then(|name| name.strip_prefix("thread-"))
+        .and_then(|id| id.parse::<u64>().ok())
+        .unwrap_or(u64::MAX);
+    let segment_id = path
+        .file_stem()
+        .and_then(|name| name.to_str())
+        .and_then(|name| name.strip_prefix(prefix))
+        .and_then(|id| id.parse::<u64>().ok())
+        .unwrap_or(u64::MAX);
+    (thread_id, segment_id, path.display().to_string())
 }
 
 fn history_diagnostic(code: impl Into<String>, message: String) -> RunDiagnostic {
@@ -1328,6 +1414,146 @@ mod tests {
             )
             .unwrap();
         (store, outcome)
+    }
+
+    #[test]
+    fn segment_paths_sort_by_numeric_thread_and_segment() {
+        let project = temp_project("numeric-segment-sort");
+        let boundary_dir = project.join("boundary");
+        for relative in [
+            "thread-1/value-10.bamlvalue",
+            "thread-1/value-2.bamlvalue",
+            "thread-10/value-0.bamlvalue",
+            "thread-2/value-0.bamlvalue",
+        ] {
+            let path = boundary_dir.join(relative);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(path, b"").unwrap();
+        }
+
+        let ordered = value_segment_paths(&boundary_dir)
+            .into_iter()
+            .map(|path| {
+                path.strip_prefix(&boundary_dir)
+                    .unwrap()
+                    .to_string_lossy()
+                    .replace('\\', "/")
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            ordered,
+            vec![
+                "thread-1/value-2.bamlvalue",
+                "thread-1/value-10.bamlvalue",
+                "thread-2/value-0.bamlvalue",
+                "thread-10/value-0.bamlvalue",
+            ]
+        );
+
+        let _ = std::fs::remove_dir_all(project);
+    }
+
+    #[test]
+    fn history_rotates_stack_and_value_segments_and_replays() {
+        let project = temp_project("segment-rotation");
+        let boundary_id = BoundaryId::from_bytes([31; 16]);
+        let store = HistoryStore::new_with_rotation_policy(
+            vec![project.clone()],
+            SegmentRotationPolicy::for_tests(u64::MAX, 1, u64::MAX, 2),
+        );
+        let start = start_context(boundary_id);
+        store.begin(&project, &start).unwrap();
+
+        let root = root_trace();
+        for event in [call_event(), child_call_event(3, root.call_id.0)] {
+            let envelope = crate::run::profile_event_envelope_from_disk_event(
+                crate::run::ProfileEventSource::Replay {
+                    artifact_id: "test".to_string(),
+                },
+                root.process_euid,
+                root.engine_id,
+                &event,
+            )
+            .unwrap();
+            store.ingest_history_profile_event(envelope, event);
+        }
+        store
+            .attach_root_trace(boundary_id, root.call_ref())
+            .unwrap();
+
+        let root_output = store
+            .append_value_body(
+                boundary_id,
+                ValueCapture {
+                    kind: ValueCaptureKind::RootOutput,
+                    call: root,
+                },
+                ValueCodec::BamlOutboundValue,
+                vec![1, 2, 3],
+            )
+            .unwrap();
+        let child_trace = TraceCallKey {
+            call_id: BexCallId(3),
+            ..root
+        };
+        let child_output = store
+            .append_value_body(
+                boundary_id,
+                ValueCapture {
+                    kind: ValueCaptureKind::CallOutput,
+                    call: child_trace,
+                },
+                ValueCodec::BamlOutboundValue,
+                vec![4, 5, 6],
+            )
+            .unwrap();
+        assert_eq!(root_output.value_ref.id, "value_1");
+        assert_eq!(child_output.value_ref.id, "value_2");
+        store
+            .complete(
+                boundary_id,
+                &RunOutcome::Succeeded(RunResult {
+                    value_ref: Some(root_output.value_ref.clone()),
+                    renderer_hint: None,
+                    supporting_payload_ids: Vec::new(),
+                }),
+                20,
+            )
+            .unwrap();
+
+        let boundary_dir =
+            find_boundary_dir(std::slice::from_ref(&project), boundary_id).expect("boundary dir");
+        let stack_names = stack_segment_paths(&boundary_dir)
+            .into_iter()
+            .map(|path| path.file_name().unwrap().to_string_lossy().to_string())
+            .collect::<Vec<_>>();
+        assert_eq!(stack_names, vec!["stack-0.bamlprof", "stack-1.bamlprof"]);
+        let value_names = value_segment_paths(&boundary_dir)
+            .into_iter()
+            .map(|path| path.file_name().unwrap().to_string_lossy().to_string())
+            .collect::<Vec<_>>();
+        assert_eq!(value_names, vec!["value-0.bamlvalue", "value-1.bamlvalue"]);
+
+        let replayed = store.open(boundary_id).unwrap();
+        assert_eq!(replayed.status, RunStatus::Succeeded);
+        assert_eq!(
+            replayed
+                .result
+                .as_ref()
+                .and_then(|result| result.value_ref.as_ref())
+                .map(|value_ref| value_ref.id.as_str()),
+            Some("value_1")
+        );
+        assert_eq!(
+            store
+                .read_value(boundary_id, &child_output.value_ref.id)
+                .unwrap()
+                .unwrap()
+                .body,
+            vec![4, 5, 6]
+        );
+
+        let _ = std::fs::remove_dir_all(project);
     }
 
     #[test]

@@ -1346,7 +1346,7 @@ impl BexVm {
         mask: VmCaptureMask,
         value: Value,
     ) {
-        if !self.note_throw_origin(value) || !mask.error {
+        if !mask.error || !self.note_throw_origin(value, false) {
             return;
         }
         self.queue_call_capture(call_id, VmCallCaptureKind::Error, value);
@@ -1377,11 +1377,13 @@ impl BexVm {
         self.queue_call_capture(call_id, VmCallCaptureKind::Output, value);
     }
 
-    fn note_throw_origin(&mut self, value: Value) -> bool {
-        if self.seen_throw_values.contains(&value) {
+    fn note_throw_origin(&mut self, value: Value, is_rethrow: bool) -> bool {
+        if is_rethrow && self.seen_throw_values.contains(&value) {
             return false;
         }
-        self.seen_throw_values.push(value);
+        if !self.seen_throw_values.contains(&value) {
+            self.seen_throw_values.push(value);
+        }
         true
     }
 
@@ -1391,11 +1393,12 @@ impl BexVm {
         parent_call_id: u64,
         mask: VmCaptureMask,
         value: Value,
+        is_rethrow: bool,
     ) {
-        if !self.note_throw_origin(value) {
+        if parent_call_id == 0 || !mask.error {
             return;
         }
-        if parent_call_id == 0 || !mask.error {
+        if !self.note_throw_origin(value, is_rethrow) {
             return;
         }
         self.queue_call_capture(call_id, VmCallCaptureKind::Error, value);
@@ -3292,6 +3295,7 @@ impl BexVm {
         frame_idx: &mut usize,
         function: &mut &'static Function,
         exception_value: Value,
+        is_rethrow: bool,
     ) -> Result<bool, VmError> {
         // Capture the stack trace before unwinding destroys frame information.
         let trace: Vec<StackFrame> = self.capture_stack_trace();
@@ -3379,6 +3383,7 @@ impl BexVm {
                     parent_call_id,
                     capture_mask,
                     exception_value,
+                    is_rethrow,
                 );
                 origin_checked = true;
             }
@@ -4244,6 +4249,7 @@ impl BexVm {
                                 self.current_call_id,
                                 capture_mask,
                                 value,
+                                false,
                             );
                             return Err(VmError::Thrown(value));
                         }
@@ -4864,7 +4870,7 @@ impl BexVm {
         // Bytecode frame whose `function` pointer is valid for `&'static
         // Function` while we hold `&mut self`.
         let mut function = unsafe { self.load_function(seed_idx)? };
-        self.try_unwind_exception(&mut frame_idx, &mut function, exception_value)
+        self.try_unwind_exception(&mut frame_idx, &mut function, exception_value, false)
     }
 
     /// Number of live frames on the VM call stack.
@@ -5168,6 +5174,7 @@ impl BexVm {
                                 &mut frame_idx,
                                 &mut function,
                                 exception_value,
+                                false,
                             )?;
                             if crossed {
                                 // The exception escaped the watch filter:
@@ -5228,6 +5235,7 @@ impl BexVm {
                                     &mut frame_idx,
                                     &mut function,
                                     exception_value,
+                                    false,
                                 )?;
                                 if crossed {
                                     // The exception escaped the watch
@@ -5304,6 +5312,7 @@ impl BexVm {
                             &mut frame_idx,
                             &mut function,
                             exception_value,
+                            false,
                         )?;
                         if crossed {
                             // The exception escaped the watch filter: fail
@@ -6576,13 +6585,15 @@ impl BexVm {
                 }
 
                 // ── Throw ─────────────────────────────────────────────────────
-                OpCode::Throw => {
+                OpCode::Throw | OpCode::Rethrow => {
+                    let is_rethrow = op == OpCode::Rethrow;
                     let value = self.stack.ensure_pop();
                     // Save pc before unwinding (handler lookup needs it).
                     if let Some(Frame::Bytecode(bf)) = self.frames.get_mut(*frame_idx) {
                         bf.instruction_ptr = *pc;
                     }
-                    let crossed = self.try_unwind_exception(frame_idx, function, value)?;
+                    let crossed =
+                        self.try_unwind_exception(frame_idx, function, value, is_rethrow)?;
                     if crossed {
                         // The exception escaped the watch filter: fail the
                         // interrupt loudly (see try_unwind_exception).
@@ -6794,7 +6805,8 @@ impl BexVm {
                         if let Some(Frame::Bytecode(bf)) = self.frames.get_mut(*frame_idx) {
                             bf.instruction_ptr = *pc;
                         }
-                        let crossed = self.try_unwind_exception(frame_idx, function, value)?;
+                        let crossed =
+                            self.try_unwind_exception(frame_idx, function, value, true)?;
                         if crossed {
                             // See OpCode::Throw: an escaping watch-filter
                             // exception fails the interrupt loudly.

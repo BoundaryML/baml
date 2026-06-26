@@ -599,6 +599,11 @@ pub enum Instruction {
     /// Stack: `[error_value]` -> `[]` (control transfers to unwind handler or caller)
     Throw,
 
+    /// Re-throw a caught value on top of the stack.
+    ///
+    /// Stack: `[error_value]` -> `[]` (control transfers to unwind handler or caller)
+    Rethrow,
+
     /// Return from a function.
     ///
     /// No arguments needed, result is stored in the eval stack and the VM
@@ -988,6 +993,9 @@ pub enum OpCode {
     CallIndirectWithRuntimeId,
     VirtualCallWithRuntimeId,
     SysOpWithRuntimeId,
+
+    // ── Phase 5 trace-origin marker, appended to preserve discriminants ──
+    Rethrow,
 }
 
 impl OpCode {
@@ -998,6 +1006,7 @@ impl OpCode {
             Self::Return
             | Self::Await
             | Self::Throw
+            | Self::Rethrow
             | Self::LoadArrayElement
             | Self::LoadMapElement
             | Self::StoreArrayElement
@@ -1142,6 +1151,7 @@ impl TryFrom<u8> for OpCode {
             x if x == Self::Await as u8 => Ok(Self::Await),
             x if x == Self::AwaitAny as u8 => Ok(Self::AwaitAny),
             x if x == Self::Throw as u8 => Ok(Self::Throw),
+            x if x == Self::Rethrow as u8 => Ok(Self::Rethrow),
             x if x == Self::LoadArrayElement as u8 => Ok(Self::LoadArrayElement),
             x if x == Self::LoadMapElement as u8 => Ok(Self::LoadMapElement),
             x if x == Self::StoreArrayElement as u8 => Ok(Self::StoreArrayElement),
@@ -1275,6 +1285,7 @@ impl std::fmt::Display for OpCode {
             Self::VirtualCall => "VIRTUAL_CALL",
             Self::VirtualCallWithRuntimeId => "VIRTUAL_CALL_WITH_RUNTIME_ID",
             Self::Throw => "THROW",
+            Self::Rethrow => "RETHROW",
             Self::LoadArrayElement => "LOAD_ARRAY_ELEMENT",
             Self::LoadMapElement => "LOAD_MAP_ELEMENT",
             Self::StoreArrayElement => "STORE_ARRAY_ELEMENT",
@@ -1587,6 +1598,7 @@ impl std::fmt::Display for Instruction {
                 )
             }
             Instruction::Throw => f.write_str("THROW"),
+            Instruction::Rethrow => f.write_str("RETHROW"),
 
             Instruction::Return => f.write_str("RETURN"),
             Instruction::AllocMap(n) => write!(f, "ALLOC_MAP {n}"),
@@ -1984,6 +1996,7 @@ impl Bytecode {
                 Instruction::Return
                 | Instruction::Await
                 | Instruction::Throw
+                | Instruction::Rethrow
                 | Instruction::LoadArrayElement
                 | Instruction::LoadMapElement
                 | Instruction::StoreArrayElement
@@ -2314,6 +2327,7 @@ impl Bytecode {
             Instruction::Await => OpCode::Await,
             Instruction::AwaitAny => OpCode::AwaitAny,
             Instruction::Throw => OpCode::Throw,
+            Instruction::Rethrow => OpCode::Rethrow,
             Instruction::LoadArrayElement => OpCode::LoadArrayElement,
             Instruction::LoadMapElement => OpCode::LoadMapElement,
             Instruction::StoreArrayElement => OpCode::StoreArrayElement,

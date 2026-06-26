@@ -406,6 +406,11 @@ fn write_terminator(f: &mut impl Write, term: &Terminator) -> fmt::Result {
             write_operand(f, value)?;
             write!(f, ";")
         }
+        Terminator::Rethrow { value } => {
+            write!(f, "rethrow ")?;
+            write_operand(f, value)?;
+            write!(f, ";")
+        }
         Terminator::ThrowIfPanic { value, otherwise } => {
             write!(f, "throw_if_panic ")?;
             write_operand(f, value)?;

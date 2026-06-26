@@ -2249,6 +2249,10 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 self.emit_operand_pull(value);
                 self.emit(Instruction::Throw);
             }
+            Terminator::Rethrow { value } => {
+                self.emit_operand_pull(value);
+                self.emit(Instruction::Rethrow);
+            }
 
             Terminator::ThrowIfPanic { value, otherwise } => {
                 self.emit_operand_pull(value);

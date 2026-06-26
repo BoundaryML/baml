@@ -235,6 +235,7 @@ pub(crate) fn display_instruction(
         | Instruction::CallIndirect
         | Instruction::CallIndirectWithRuntimeId
         | Instruction::Throw
+        | Instruction::Rethrow
         | Instruction::Discriminant
         | Instruction::TypeTag
         | Instruction::IsType(_)
@@ -406,9 +407,11 @@ fn instruction_style(instruction: &Instruction) -> Style {
         | Instruction::CallIndirectWithRuntimeId
         | Instruction::VirtualCall { .. }
         | Instruction::VirtualCallWithRuntimeId { .. } => Style::new().magenta(),
-        Instruction::Return | Instruction::Pop(_) | Instruction::Copy(_) | Instruction::Throw => {
-            Style::new().red()
-        }
+        Instruction::Return
+        | Instruction::Pop(_)
+        | Instruction::Copy(_)
+        | Instruction::Throw
+        | Instruction::Rethrow => Style::new().red(),
         Instruction::AllocMap(_)
         | Instruction::AllocInstance { .. }
         | Instruction::InitInstance(_)
@@ -816,6 +819,7 @@ fn display_instruction_textual(
         }
 
         Instruction::Throw => "throw".to_string(),
+        Instruction::Rethrow => "rethrow".to_string(),
 
         // --- Operators ---
         Instruction::BinOp(op) => format!("bin_op {op}"),
@@ -1212,6 +1216,7 @@ pub fn display_compact_bytecode(
             | OpCode::Await
             | OpCode::AwaitAny
             | OpCode::Throw
+            | OpCode::Rethrow
             | OpCode::LoadArrayElement
             | OpCode::LoadMapElement
             | OpCode::StoreArrayElement
