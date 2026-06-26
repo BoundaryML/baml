@@ -655,6 +655,30 @@ pub trait ToBexExternalValue: std::any::Any + Send + Sync {
     fn to_bex_external_value(self: std::sync::Arc<Self>) -> BexExternalValue;
 }
 
+/// A structural inbound [`BexExternalValue`] that BAML cannot type — stashed
+/// verbatim so it rides through the VM as an opaque `Object::RustData`
+/// (`RuntimeTy::RustType`) and is re-emitted **unchanged** on the way out.
+///
+/// This is the round-trip carrier for *structural* host-only values: the ones
+/// that arrive with their content inline (an unbound generic `Instance`, a
+/// host-only `Map`/`Array`) rather than as a `HostValue` key-handle. Without it
+/// such a value, landed in a `RustType` slot, would either be lost or
+/// materialized into an introspectable VM object — breaking the opaque-leaf
+/// contract (e.g. an unbound `GenericBox(value=5)` must stay distinct from a
+/// bound `GenericBox[int]`). See `03c-impl-guide` "Host-only roundtripping".
+pub struct OpaqueExternalValue(pub BexExternalValue);
+
+impl ToBexExternalValue for OpaqueExternalValue {
+    fn to_bex_external_value(self: std::sync::Arc<Self>) -> BexExternalValue {
+        // Re-emit the stashed value verbatim. Take ownership when this is the
+        // sole reference (the common case), else clone the inner value.
+        match std::sync::Arc::try_unwrap(self) {
+            Ok(inner) => inner.0,
+            Err(arc) => arc.0.clone(),
+        }
+    }
+}
+
 impl ToBexExternalValue for baml_builtins2::PromptAst {
     fn to_bex_external_value(self: std::sync::Arc<Self>) -> BexExternalValue {
         BexExternalValue::Adt(BexExternalAdt::PromptAst(self))
@@ -679,6 +703,13 @@ pub fn try_convert_rust_data(
         return Some(typed.to_bex_external_value());
     }
     if let Ok(typed) = arc.clone().downcast::<baml_builtins2::MediaValue>() {
+        return Some(typed.to_bex_external_value());
+    }
+    // A structural host-only value stashed verbatim on the way in (an unbound
+    // generic instance, a host-only map/array): re-emit it exactly as it
+    // arrived so the host decoder reconstructs the same value. See
+    // [`OpaqueExternalValue`].
+    if let Ok(typed) = arc.clone().downcast::<OpaqueExternalValue>() {
         return Some(typed.to_bex_external_value());
     }
     // A `HostValueArc` wrapped into `Object::RustData` (e.g. the `_handle`

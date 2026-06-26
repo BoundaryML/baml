@@ -11,10 +11,12 @@
 //! Salsa-tracked so subtype calls don't rebuild the closure on each check.
 
 mod coherence;
+mod impl_rules;
 
 use baml_base::{Literal, Name, Span};
 use baml_compiler2_hir::{contributions::Definition, package::PackageId};
 pub use coherence::*;
+pub use impl_rules::*;
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::{
@@ -958,6 +960,24 @@ pub fn match_ty_pattern(
     Some(bindings)
 }
 
+/// Match several `(pattern, concrete)` pairs into one consistent set of
+/// bindings, threading them across every pair — a `generic_param` that occurs
+/// in more than one pattern must unify to the same type in all of them. Returns
+/// `None` if any pair fails or the bindings conflict. Used by the canonical
+/// resolver to bind an impl's generics from its for-type pattern *and* its
+/// interface input args simultaneously (a param may appear in either).
+pub fn match_ty_patterns(
+    pairs: &[(&Ty, &Ty)],
+    generic_params: &[Name],
+    aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
+) -> Option<TypeBindings> {
+    let mut bindings = TypeBindings::default();
+    for (pattern, concrete) in pairs {
+        match_ty_pattern_into(pattern, concrete, generic_params, aliases, &mut bindings)?;
+    }
+    Some(bindings)
+}
+
 fn match_ty_pattern_into(
     pattern: &Ty,
     concrete: &Ty,
@@ -1288,85 +1308,49 @@ pub fn package_implements_registry<'db>(
             let class_ns = baml_compiler2_hir::file_package::file_package(db, class_loc.file(db))
                 .namespace_path
                 .clone();
-            for target in &class_data.implements {
-                let Some(iface_loc) =
-                    resolve_path_to_interface(db, &target.target.expr, pkg_items, &class_ns)
-                else {
+            let class_file = class_loc.file(db);
+            // In-body impls (and merged simple `implement I for C`) are recorded
+            // under `class_to_impls` in source order; each resolves through the
+            // shared `impl_data` query. Bounds stay on the legacy single-bound
+            // path (`lower_generic_param_bounds`) until the deferred enforcement.
+            for impl_id in hir_tree
+                .class_to_impls
+                .get(&class_loc.id(db))
+                .into_iter()
+                .flatten()
+            {
+                let impl_loc = baml_compiler2_hir::loc::ImplLoc::new(db, class_file, *impl_id);
+                let Ok(data) = impl_data(db, impl_loc).as_ref() else {
                     continue;
                 };
-                let iface_tree = baml_compiler2_hir::file_item_tree(db, iface_loc.file(db));
-                if let Some(iface_data) = iface_tree.interfaces.get(&iface_loc.id(db)) {
-                    let iface_qtn =
-                        qualify_def(db, Definition::Interface(iface_loc), &iface_data.name);
-                    let mut diags = Vec::new();
-                    let lowered_interface = crate::lower_type_expr::lower_type_expr_in_ns(
-                        db,
-                        &target.target.expr,
-                        pkg_items,
-                        &class_ns,
-                        &class_data.generic_params,
-                        &mut diags,
-                    );
-                    let interface_args =
-                        if let Ty::Interface(_, interface_args, _, _) = lowered_interface {
-                            interface_args
-                        } else {
-                            Vec::new()
-                        };
-                    let iface_pkg_info =
-                        baml_compiler2_hir::file_package::file_package(db, iface_loc.file(db));
-                    let iface_pkg_id = PackageId::new(db, iface_pkg_info.package.clone());
-                    let iface_pkg_items = baml_compiler2_ppir::package_items(db, iface_pkg_id);
-                    let iface_namespace_path = iface_pkg_info.namespace_path;
-                    let associated_bindings = lower_interface_associated_bindings(
-                        db,
-                        iface_data,
-                        &interface_args,
-                        &target.associated_type_bindings,
-                        iface_pkg_items,
-                        pkg_items,
-                        &iface_namespace_path,
-                        &class_ns,
-                        &class_data.generic_params,
-                        &mut diags,
-                    );
-                    let for_ty_pattern = Ty::Class(
-                        class_qtn.clone(),
-                        class_data
-                            .generic_params
-                            .iter()
-                            .map(|param| Ty::TypeVar(param.clone(), TyAttr::default()))
-                            .collect(),
+                let Some(iface_qtn) = interface_loc_qtn(db, data.interface) else {
+                    continue;
+                };
+                let mut diags = Vec::new();
+                let class_bound_tys = crate::builder::lower_generic_param_bounds(
+                    db,
+                    &class_data.generic_param_bounds,
+                    pkg_items,
+                    &class_ns,
+                    &class_data.generic_params,
+                    None,
+                    &mut diags,
+                );
+                interface_impl_rules.push(InterfaceImplRule {
+                    generic_params: class_data.generic_params.clone(),
+                    generic_param_bounds: class_bound_tys,
+                    for_ty_pattern: data.for_ty_pattern.clone(),
+                    interface_ty: Ty::Interface(
+                        iface_qtn,
+                        data.interface_args.clone(),
+                        data.associated_types.clone(),
                         TyAttr::default(),
-                    );
-                    let class_bound_tys = crate::builder::lower_generic_param_bounds(
-                        db,
-                        &class_data.generic_param_bounds,
-                        pkg_items,
-                        &class_ns,
-                        &class_data.generic_params,
-                        None,
-                        &mut diags,
-                    );
-                    interface_impl_rules.push(InterfaceImplRule {
-                        generic_params: class_data.generic_params.clone(),
-                        generic_param_bounds: class_bound_tys,
-                        for_ty_pattern,
-                        interface_ty: Ty::Interface(
-                            iface_qtn.clone(),
-                            interface_args,
-                            associated_bindings,
-                            TyAttr::default(),
-                        ),
-                        origin: InterfaceImplOrigin::InBodyClass {
-                            class_qtn: class_qtn.clone(),
-                        },
-                        source_span: Some(Span::new(
-                            class_loc.file(db).file_id(db),
-                            target.target.span,
-                        )),
-                    });
-                }
+                    ),
+                    origin: data.origin.clone(),
+                    source_span: impl_data_source_map(db, impl_loc)
+                        .as_ref()
+                        .map(|sm| sm.impl_span),
+                });
             }
         }
     }
@@ -1377,88 +1361,54 @@ pub fn package_implements_registry<'db>(
             continue;
         }
         let item_tree = baml_compiler2_hir::file_item_tree(db, file);
-        for imp in &item_tree.implements_for {
-            let Some(iface_loc) = resolve_path_to_interface(
-                db,
-                &imp.interface_target.expr,
-                pkg_items,
-                &pkg_info.namespace_path,
-            ) else {
+        // Out-of-body impls in source order via `free_impls`; each resolves
+        // through `impl_data`. Bounds stay on the legacy single-bound path.
+        for impl_id in &item_tree.free_impls {
+            let impl_loc = baml_compiler2_hir::loc::ImplLoc::new(db, file, *impl_id);
+            let Ok(data) = impl_data(db, impl_loc).as_ref() else {
                 continue;
             };
-            let iface_tree = baml_compiler2_hir::file_item_tree(db, iface_loc.file(db));
-            let Some(iface_data) = iface_tree.interfaces.get(&iface_loc.id(db)) else {
+            let Some(iface_qtn) = interface_loc_qtn(db, data.interface) else {
                 continue;
             };
-            let iface_qtn = qualify_def(db, Definition::Interface(iface_loc), &iface_data.name);
+            let Some(block) = item_tree.impls.get(impl_id) else {
+                continue;
+            };
+            let baml_compiler2_hir::item_tree::ImplSubject::Free { generics, .. } = &block.subject
+            else {
+                continue;
+            };
+            let names: Vec<Name> = generics.iter().map(|g| g.name.clone()).collect();
             let mut diags = Vec::new();
-            let target_ty = crate::lower_type_expr::lower_type_expr_in_ns(
-                db,
-                &imp.for_target.expr,
-                pkg_items,
-                &pkg_info.namespace_path,
-                &imp.generic_params,
-                &mut diags,
-            );
-            let lowered_interface = crate::lower_type_expr::lower_type_expr_in_ns(
-                db,
-                &imp.interface_target.expr,
-                pkg_items,
-                &pkg_info.namespace_path,
-                &imp.generic_params,
-                &mut diags,
-            );
-            let interface_args = if let Ty::Interface(_, interface_args, _, _) = lowered_interface {
-                interface_args
-            } else {
-                Vec::new()
-            };
-            let iface_pkg_info =
-                baml_compiler2_hir::file_package::file_package(db, iface_loc.file(db));
-            let iface_pkg_id = PackageId::new(db, iface_pkg_info.package.clone());
-            let iface_pkg_items = baml_compiler2_ppir::package_items(db, iface_pkg_id);
-            let iface_namespace_path = iface_pkg_info.namespace_path;
-            let associated_bindings = lower_interface_associated_bindings(
-                db,
-                iface_data,
-                &interface_args,
-                &imp.associated_type_bindings,
-                iface_pkg_items,
-                pkg_items,
-                &iface_namespace_path,
-                &pkg_info.namespace_path,
-                &imp.generic_params,
-                &mut diags,
-            );
-            let interface_ty = Ty::Interface(
-                iface_qtn.clone(),
-                interface_args.clone(),
-                associated_bindings,
-                TyAttr::default(),
-            );
-            let bounds: Vec<Option<Ty>> = imp
-                .generic_param_bounds
+            let bounds: Vec<Option<Ty>> = generics
                 .iter()
-                .map(|b| {
-                    b.as_ref().map(|te| {
+                .map(|g| {
+                    g.bounds.first().map(|te| {
                         crate::lower_type_expr::lower_type_expr_in_ns(
                             db,
                             te,
                             pkg_items,
                             &pkg_info.namespace_path,
-                            &imp.generic_params,
+                            &names,
                             &mut diags,
                         )
                     })
                 })
                 .collect();
             interface_impl_rules.push(InterfaceImplRule {
-                generic_params: imp.generic_params.clone(),
-                generic_param_bounds: bounds.clone(),
-                for_ty_pattern: target_ty.clone(),
-                interface_ty,
-                origin: InterfaceImplOrigin::OutOfBody,
-                source_span: Some(Span::new(file.file_id(db), imp.span)),
+                generic_params: names,
+                generic_param_bounds: bounds,
+                for_ty_pattern: data.for_ty_pattern.clone(),
+                interface_ty: Ty::Interface(
+                    iface_qtn,
+                    data.interface_args.clone(),
+                    data.associated_types.clone(),
+                    TyAttr::default(),
+                ),
+                origin: data.origin.clone(),
+                source_span: impl_data_source_map(db, impl_loc)
+                    .as_ref()
+                    .map(|sm| sm.impl_span),
             });
         }
     }

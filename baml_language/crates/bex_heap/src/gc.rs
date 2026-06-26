@@ -1301,6 +1301,7 @@ mod tests {
             type_tag: 100,
             ty_attr: baml_type::TyAttr::default(),
             has_cleanup: false,
+            generic_param_count: 0,
         }))];
         let debug = HeapDebuggerConfig {
             enabled: true,
@@ -1941,6 +1942,7 @@ mod tests {
             type_tag: 0,
             ty_attr: TyAttr::default(),
             has_cleanup: false,
+            generic_param_count: 0,
         })));
         let field_str = tlab.alloc_string("field_value".to_string());
         let inst_ptr =
@@ -2202,6 +2204,7 @@ mod tests {
             type_tag: 42,
             ty_attr: TyAttr::default(),
             has_cleanup: false,
+            generic_param_count: 0,
         })));
 
         let (_, new_roots, _) = unsafe { heap.collect_garbage(&[ptr]) };
@@ -2642,6 +2645,7 @@ mod tests {
             type_tag: 0,
             ty_attr: TyAttr::default(),
             has_cleanup: false,
+            generic_param_count: 0,
         })));
         let instance_container = tlab.alloc(Object::Instance(Instance::new(
             class_ptr,

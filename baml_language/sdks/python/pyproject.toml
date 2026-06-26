@@ -8,6 +8,8 @@ readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     "protobuf>=6.31.1",
+    # `UNSET` is built with `typing_extensions.Sentinel` (PEP 661).
+    "typing-extensions>=4.14.0",
 ]
 classifiers = [
     "License :: OSI Approved :: Apache Software License",
@@ -31,7 +33,7 @@ dev = [
     "maturin>=1.9.4,<2.0",
     "grpcio-tools>=1.50",
     "pydantic>=2",
-    "pyright>=1.1.409",
+    "pyright>=1.1.410",
     "ruff",
     "ty",
 ]

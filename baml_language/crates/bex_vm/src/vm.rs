@@ -44,6 +44,7 @@ fn guard_template_matches(
 ) -> bool {
     match template {
         baml_type::TyTemplate::Wildcard => true,
+        #[expect(deprecated)]
         baml_type::TyTemplate::TypeArgRefOrWildcard(n) => match frame_type_args.get(*n as usize) {
             Some(baml_type::RuntimeTy::BuiltinUnknown { .. }) | None => true,
             Some(expected) => actual.is_subtype_of(expected),
@@ -301,6 +302,7 @@ mod tests {
             type_tag: 100,
             ty_attr: TyAttr::default(),
             has_cleanup: false,
+            generic_param_count: 0,
         }))
     }
 
