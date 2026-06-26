@@ -282,6 +282,8 @@ class LinearLabelRef {
 
 class LinearWebhookData {
     id: string?,
+    title: string?,
+    description: string?,
     labelIds: string[]?,
     labels: LinearLabelRef[]?,
 }
@@ -295,6 +297,22 @@ class LinearWebhook {
 class WebhookIssue {
     _id: string?,
     status: string?,
+}
+
+// Doc shape for ingesting a Linear card that has no mirrored Convex issue yet.
+// Only the fields the issues schema needs; createDoc fills attempts/createdAt/
+// updatedAt and strips nulls. evidence stays empty (no trophy backs a board card).
+class WebhookIssueCreate {
+    kind: string,
+    title: string,
+    description: string,
+    category: string,
+    evidence: string[],
+    status: string,
+    linearSyncStatus: string,
+    linearIssueId: string,
+    firstSeenAt: int,
+    lastSeenAt: int,
 }
 
 // Route a Linear Issue event to a lifecycle move. We match the Convex issue by
@@ -346,11 +364,10 @@ function route_linear_webhook(w: LinearWebhook) -> baml.http.Response {
     let issue = match (issues.at(0)) {
         let i: WebhookIssue => i,
         null => {
-            baml.io
-                .println(
-                    "linear-webhook: type=Issue id=" + linear_id + " -> NO matching convex issue",
-                );
-            return json_response(200, "{}");
+            // No Convex issue mirrors this Linear card yet — it was created/managed
+            // directly on the board. Ingest it as a new issue so the human move still
+            // drives the pipeline (e.g. approved -> FixDispatch -> Cursor + Slack).
+            return create_issue_from_webhook(linear_id, data);
         },
     };
     let iid = match (issue._id) {
@@ -419,6 +436,73 @@ function webhook_label_ids(data: LinearWebhookData) -> string[] {
 }
 
 // Map the status-group label + the issue's CURRENT status (the resting-state gate)
+// Initial pipeline status for a brand-new issue ingested from a Linear card, based
+// on the human-action label it carries. "" when the card has no actionable label.
+function initial_status_for_labels(label_ids: string[]) -> string {
+    if (in_list(label_ids, linear_status_id("APPROVED"))) {
+        return "approved";
+    }
+    if (in_list(label_ids, linear_status_id("REDRAFT"))) {
+        return "redraft";
+    }
+    if (in_list(label_ids, linear_status_id("PR_PREP"))) {
+        return "prprep";
+    }
+    return "";
+}
+
+// Ingest a Linear card that has no mirrored Convex issue. Only act on a human-action
+// label (approved/redraft/pr-prep) — otherwise a card edit would spawn junk issues.
+// Stamp linearIssueId (so later webhooks match this issue) and linearSyncStatus
+// "synced" (the card already exists; LinearPush must not create a duplicate).
+function create_issue_from_webhook(linear_id: string, data: LinearWebhookData) -> baml.http.Response {
+    let label_ids = webhook_label_ids(data);
+    let status = initial_status_for_labels(label_ids);
+    if (status == "") {
+        baml.io
+            .println(
+                "linear-webhook: id=" + linear_id + " -> no matching convex issue, no actionable label; ignored",
+            );
+        return json_response(200, "{}");
+    }
+    let title = match (data.title) {
+        let t: string => t,
+        null => "(imported from Linear)",
+    };
+    let desc = match (data.description) {
+        let d: string => d,
+        null => "",
+    };
+    let ev: string[] = [];
+    let now = baml.sys.now_ms();
+    let doc = WebhookIssueCreate {
+        kind: "skill",
+        title: title,
+        description: desc,
+        category: "bug",
+        evidence: ev,
+        status: status,
+        linearSyncStatus: "synced",
+        linearIssueId: linear_id,
+        firstSeenAt: now,
+        lastSeenAt: now,
+    };
+    let doc_json = baml.json.to_string(doc) catch (_) {
+        _ => ""
+    };
+    if (doc_json == "") {
+        return json_response(200, "{}");
+    }
+    let new_id = ingress_svc().create("issues", doc_json) catch (_) {
+        _ => ""
+    };
+    baml.io
+        .println(
+            "linear-webhook: id=" + linear_id + " -> created convex issue " + new_id + " (status=" + status + ")",
+        );
+    return json_response(200, "{}");
+}
+
 // to a patch, or "" for no-op. Mirrors services/ingress/app.py _route_linear_status.
 function route_linear_status(issue: WebhookIssue, label_ids: string[]) -> string {
     let cur = match (issue.status) {
