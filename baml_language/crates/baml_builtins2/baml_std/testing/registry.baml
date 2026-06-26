@@ -30,7 +30,7 @@ class TestCollector {
     for (let t in self.tests) {
       if (t.name == full_name || t.name.starts_with(hash_prefix)) { count += 1 } else { null }
     }
-    let final_name = if (count > 0) { full_name + "#" + baml.unstable.string(count + 1) } else { full_name }
+    let final_name = if (count > 0) { full_name + "#" + string.from(count + 1) } else { full_name }
     let _ = self.tests.push(TestRegistration { name: final_name, body: body, runner: runner })
   }
 
@@ -41,7 +41,7 @@ class TestCollector {
     for (let ts in self.testsets) {
       if (ts.name == full_name || ts.name.starts_with(hash_prefix)) { count += 1 } else { null }
     }
-    let final_name = if (count > 0) { full_name + "#" + baml.unstable.string(count + 1) } else { full_name }
+    let final_name = if (count > 0) { full_name + "#" + string.from(count + 1) } else { full_name }
     let _ = self.testsets.push(TestSetRegistration { name: final_name, collector: collector, runner: runner })
   }
 

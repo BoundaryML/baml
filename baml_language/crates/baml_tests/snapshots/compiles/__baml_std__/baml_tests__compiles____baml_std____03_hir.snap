@@ -1661,9 +1661,6 @@ function baml.toml.to_json(self: ?) -> baml.json.json  [expr] {
   {  } baml.json.from(self.items)
 }
 
---- <builtin>/baml/ns_unstable/unstable.baml ---
-function baml.unstable.string(value: T) -> string  [builtin]
-
 --- <builtin>/baml/ns_yaml/yaml.baml ---
 class baml.yaml.YamlParseError {
   message: string

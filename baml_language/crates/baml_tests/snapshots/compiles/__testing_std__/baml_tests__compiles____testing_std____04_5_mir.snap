@@ -1679,7 +1679,7 @@ fn testing.TestCollector.register_test(self: testing.TestCollector, name: string
         _59 = copy _10;
         _58 = copy _59 + const 1_i64;
         _60 = load_type(int);
-        _57 = call const fn baml.unstable.string<copy _60>(copy _58) -> [bb34];
+        _57 = call const fn baml.String.from<copy _60>(copy _58) -> [bb34];
     }
 
     bb34: {
@@ -1962,7 +1962,7 @@ fn testing.TestCollector.register_test_set(self: testing.TestCollector, name: st
         _59 = copy _10;
         _58 = copy _59 + const 1_i64;
         _60 = load_type(int);
-        _57 = call const fn baml.unstable.string<copy _60>(copy _58) -> [bb34];
+        _57 = call const fn baml.String.from<copy _60>(copy _58) -> [bb34];
     }
 
     bb34: {
@@ -4867,7 +4867,7 @@ fn testing._int_to_float(value: int) -> float {
 
     bb0: {
         _4 = load_type(int);
-        _3 = call const fn baml.unstable.string<copy _4>(copy _1) -> [bb1, unwind: bb2];
+        _3 = call const fn baml.String.from<copy _4>(copy _1) -> [bb1, unwind: bb2];
     }
 
     bb1: {

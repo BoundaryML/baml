@@ -671,7 +671,7 @@ function testing.TestCollector.register_test(self: testing.TestCollector, name: 
     load_var count
     load_const 1
     add_int
-    call baml.unstable.string
+    call baml.String.from
     store_var _57
     load_var2 13 14
     bin_op +
@@ -913,7 +913,7 @@ function testing.TestCollector.register_test_set(self: testing.TestCollector, na
     load_var count
     load_const 1
     add_int
-    call baml.unstable.string
+    call baml.String.from
     store_var _57
     load_var2 13 14
     bin_op +
@@ -2398,7 +2398,7 @@ function testing.TestRegistry.serialize(self: testing.TestRegistry) -> (testing.
 function testing._int_to_float(value: int) -> float {
     load_type int
     load_var value
-    call baml.unstable.string
+    call baml.String.from
     call baml.Float.parse
     jump L0
     load_var e
