@@ -363,6 +363,22 @@ mod backtick_format_tests {
         let second = format(&formatted, &options).expect("formatter should be idempotent");
         assert_eq!(formatted, second);
     }
+
+    /// A single-line backtick is never split, even when it is longer than the
+    /// line width: wrapping it would insert a newline and change its value.
+    #[test]
+    fn backtick_single_line_over_width_not_wrapped() {
+        let long = "x".repeat(160);
+        let source = format!("function D(name: string) -> string {{\n    `{long} ${{name}}`\n}}\n");
+        let options = FormatOptions::default();
+        let formatted = format(&source, &options).expect("formatter should succeed");
+        assert!(
+            formatted.contains(&format!("    `{long} ${{name}}`\n")),
+            "single-line backtick must stay on one line, got:\n{formatted}"
+        );
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second);
+    }
 }
 
 #[cfg(test)]
