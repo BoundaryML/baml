@@ -763,8 +763,8 @@ impl Printable for RawString {
 /// common-prefix the runtime would, re-emits at the block indent, and then
 /// re-derives the value of both forms and bails to verbatim if they differ. A
 /// literal with a `${for}`/`${if}` block tag or a multi-line interpolation is
-/// always printed verbatim ([`Self::dedent_safe`]), since re-indenting those
-/// could change the §13 / placeholder-dedent value.
+/// always printed verbatim (see the `dedent_safe` field), since re-indenting
+/// those could change the §13 / placeholder-dedent value.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct BacktickString {
     pub token_span: TextRange,
