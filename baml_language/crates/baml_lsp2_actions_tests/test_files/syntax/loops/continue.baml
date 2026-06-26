@@ -51,7 +51,7 @@ function ContinueNested() -> int {
 //     │     ────┬────
 //     │         ╰────── unreachable code: 1 statement(s) after diverging statement
 //     │
-//     │ Note: Error code: E0001
+//     │ Note: Error code: E0146
 // ────╯
 // error: missing return value of type int
 //     ╭─[ loops_continue.baml:30:34 ]

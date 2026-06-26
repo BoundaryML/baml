@@ -144,5 +144,5 @@ function BreakContinue() -> int {
 //     │        ───┬──
 //     │           ╰──── unreachable code: 1 statement(s) after diverging statement
 //     │
-//     │ Note: Error code: E0001
+//     │ Note: Error code: E0146
 // ────╯

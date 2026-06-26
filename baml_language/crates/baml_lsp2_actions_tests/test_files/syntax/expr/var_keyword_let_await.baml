@@ -64,5 +64,5 @@ function UseReserved() -> int {
 //    │       ───┬───
 //    │          ╰───── unreachable code: 2 statement(s) after diverging statement
 //    │
-//    │ Note: Error code: E0001
+//    │ Note: Error code: E0146
 // ───╯

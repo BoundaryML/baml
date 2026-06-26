@@ -9,7 +9,7 @@ source: crates/baml_tests/src/generated_tests.rs
    │     ────────┬───────  
    │             ╰───────── unreachable code: 1 statement(s) after diverging statement
    │ 
-   │ Note: Error code: E0001
+   │ Note: Error code: E0146
 ───╯
 
   [hir] error: assignment is not allowed in expression position; assignment is a statement
