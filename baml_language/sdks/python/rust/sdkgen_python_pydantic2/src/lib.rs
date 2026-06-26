@@ -1910,11 +1910,15 @@ mod tests {
 
         let pyi = &out[&PathBuf::from("lorem/__init__.pyi")];
         assert!(pyi.contains(
-            "def search(query: str, *, max_results: typing.Union[int, baml.Unset] = 10, filter: typing.Union[str, baml.Unset] = baml.UNSET, tags: typing.Union[typing.List[str], baml.Unset] = [], metadata: typing.Union[typing.Dict[str, str], baml.Unset] = {}, fallback: typing.Union[str, None, baml.Unset] = None) -> str: ...\n"
+            "def search(query: str, *, max_results: typing.Union[int, UNSET] = 10, filter: typing.Union[str, UNSET] = UNSET, tags: typing.Union[typing.List[str], UNSET] = [], metadata: typing.Union[typing.Dict[str, str], UNSET] = {}, fallback: typing.Union[str, None, UNSET] = None) -> str: ...\n"
         ));
         assert!(pyi.contains(
-            "async def search_async(query: str, *, max_results: typing.Union[int, baml.Unset] = 10, filter: typing.Union[str, baml.Unset] = baml.UNSET, tags: typing.Union[typing.List[str], baml.Unset] = [], metadata: typing.Union[typing.Dict[str, str], baml.Unset] = {}, fallback: typing.Union[str, None, baml.Unset] = None) -> str: ...\n"
+            "async def search_async(query: str, *, max_results: typing.Union[int, UNSET] = 10, filter: typing.Union[str, UNSET] = UNSET, tags: typing.Union[typing.List[str], UNSET] = [], metadata: typing.Union[typing.Dict[str, str], UNSET] = {}, fallback: typing.Union[str, None, UNSET] = None) -> str: ...\n"
         ));
+        // The sentinel is imported as a bare name so it can appear in the
+        // `typing.Union[..., UNSET]` type expressions above (type checkers
+        // reject `baml.UNSET` member access in a type position).
+        assert!(pyi.contains("    from ..baml import UNSET as UNSET\n"));
     }
 
     #[test]
@@ -1979,10 +1983,10 @@ mod tests {
 
         let pyi = &out[&PathBuf::from("lorem/__init__.pyi")];
         assert!(pyi.contains(
-            "def extract_resume(resume: str, *, client: typing.Union[baml.llm.Client, baml.Unset] = baml.UNSET) -> str: ...\n"
+            "def extract_resume(resume: str, *, client: typing.Union[baml.llm.Client, UNSET] = UNSET) -> str: ...\n"
         ));
         assert!(pyi.contains(
-            "def extract_resume__build_request(resume: str, *, client: typing.Union[baml.llm.Client, baml.Unset] = baml.UNSET) -> baml.http.Request: ...\n"
+            "def extract_resume__build_request(resume: str, *, client: typing.Union[baml.llm.Client, UNSET] = UNSET) -> baml.http.Request: ...\n"
         ));
     }
 
@@ -2030,10 +2034,10 @@ mod tests {
         let pyi = &out[&PathBuf::from("lorem/__init__.pyi")];
 
         assert!(pyi.contains(
-            "def defaults(*, tags: typing.Union[typing.List[str], baml.Unset] = [], metadata: typing.Union[typing.Dict[str, int], baml.Unset] = {}, fallback: typing.Union[str, None, baml.Unset] = None) -> str: ...\n"
+            "def defaults(*, tags: typing.Union[typing.List[str], UNSET] = [], metadata: typing.Union[typing.Dict[str, int], UNSET] = {}, fallback: typing.Union[str, None, UNSET] = None) -> str: ...\n"
         ));
         assert!(pyi.contains(
-            "async def defaults_async(*, tags: typing.Union[typing.List[str], baml.Unset] = [], metadata: typing.Union[typing.Dict[str, int], baml.Unset] = {}, fallback: typing.Union[str, None, baml.Unset] = None) -> str: ...\n"
+            "async def defaults_async(*, tags: typing.Union[typing.List[str], UNSET] = [], metadata: typing.Union[typing.Dict[str, int], UNSET] = {}, fallback: typing.Union[str, None, UNSET] = None) -> str: ...\n"
         ));
     }
 

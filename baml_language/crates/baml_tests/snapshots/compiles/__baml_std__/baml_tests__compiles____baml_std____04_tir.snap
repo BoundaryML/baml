@@ -861,6 +861,9 @@ class baml.errors.GenericSdkError {
 class baml.errors.CompilationError {
   message: string
 }
+class baml.errors.TypeMismatch {
+  message: string
+}
 class baml.errors.InvalidArgument$stream {
   message: string | null
 }
@@ -903,6 +906,9 @@ class baml.errors.GenericSdkError$stream {
   message: string | null
 }
 class baml.errors.CompilationError$stream {
+  message: string | null
+}
+class baml.errors.TypeMismatch$stream {
   message: string | null
 }
 

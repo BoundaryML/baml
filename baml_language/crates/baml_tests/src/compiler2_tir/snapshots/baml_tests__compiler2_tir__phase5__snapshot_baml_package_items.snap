@@ -91,6 +91,7 @@ namespace baml.errors:
   class StackFrame { methods: [] }
   class StackTrace { methods: [_to_string_impl, to_string] }
   class Timeout { methods: [] }
+  class TypeMismatch { methods: [] }
   class Unsupported { methods: [] }
 namespace baml.events:
 namespace baml.fs:

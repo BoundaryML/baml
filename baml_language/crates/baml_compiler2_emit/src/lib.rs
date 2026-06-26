@@ -869,6 +869,7 @@ pub fn generate_project_bytecode_with_opt(
                 type_tag,
                 ty_attr: TyAttr::default(),
                 has_cleanup,
+                generic_param_count: class_data.generic_params.len(),
             })));
             // Register with fully-qualified name for inter-package lookups.
             class_object_indices.insert(fq_name.clone(), class_obj_idx);

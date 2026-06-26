@@ -59,3 +59,26 @@ class TestSetChild {
 
 // TestSetRunner receives lazy children and returns the aggregate report.
 type TestSetRunner = (TestSetChild[]) -> TestSetReport throws never
+
+// --- Flat report type for the CLI test runner ---
+//
+// `TestRegistry.run_filtered` returns this already-aggregated, primitive-only
+// shape so the Rust driver prints it directly instead of walking the nested,
+// union-wrapped `TestReport | TestSetReport` tree across the FFI boundary.
+
+/// Aggregated, already-flattened report returned to the CLI driver.
+///
+/// `outcome` is the aggregate verdict (honors testset runners). Counts are
+/// leaf-level: `failed` = hard failures, `tolerated` = failing leaves whose
+/// enclosing testset runner still passed (e.g. under `PassRate`), `passed` and
+/// `total` as usual. `failed_names` are the hard-failure names; `messages` are
+/// every failing run's message.
+class FlatTestReport {
+  outcome Outcome
+  passed int
+  failed int
+  tolerated int
+  total int
+  failed_names string[]
+  messages string[]
+}

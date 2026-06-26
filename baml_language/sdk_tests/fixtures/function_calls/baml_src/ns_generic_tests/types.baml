@@ -214,3 +214,107 @@ function parse_as<T>(source: string) -> T throws baml.json.JsonParseError | baml
 function consume_int_wrapper(x: GenericBox<int>) -> int {
   x.value
 }
+
+// ---------------------------------------------------------------------------
+// §J variance soundness (02d/02e): a `TypeVar` that occurs at more than one
+// position whose variances conflict has no consistent binding and the call must
+// REJECT, instead of fabricating an unsound union. The invariant-container
+// shapes below (`T[]`, `map<_, T>`, `GenericBox<T>`) are reachable from inbound
+// values; the contravariant function-parameter cases live at the unifier layer
+// (a host callable crosses the FFI as an opaque handle, not a structural
+// function type — see 02d / J13). Each body just reflects `T` so the regression
+// (agreeing-occurrence) twins can read the bound type back.
+// ---------------------------------------------------------------------------
+
+// Two invariant list-element occurrences: pair(int[], string[]) rejects;
+// pair(int[], int[]) binds T = int.
+function pair<T>(a: T[], b: T[]) -> string {
+  reflect.type_of<T>().to_string()
+}
+
+// Two invariant map-value occurrences: conflicting value types reject.
+function merge<T>(a: map<string, T>, b: map<string, T>) -> string {
+  reflect.type_of<T>().to_string()
+}
+
+// Two invariant generic-class-arg occurrences: GenericBox<int> vs GenericBox<string> rejects.
+function combine<T>(x: GenericBox<T>, y: GenericBox<T>) -> string {
+  reflect.type_of<T>().to_string()
+}
+
+// Invariant (`arr: T[]`) × covariant (`bare: T`) in one call: glue(int, string[])
+// rejects; glue(int, int[]) binds T = int.
+function glue<T>(bare: T, arr: T[]) -> string {
+  reflect.type_of<T>().to_string()
+}
+
+// §D n-ary covariant join: three covariant bare-arg occurrences union-merge.
+function triple_choose<T>(a: T, b: T, c: T) -> string {
+  reflect.type_of<T>().to_string()
+}
+
+// §J multiple unconstrained TypeVars in one union: un-inferrable ⇒ reject (two
+// free vars beside a concrete `int` member have no principled split).
+function two_in_union<T, U>(x: T | U | int) -> string {
+  reflect.type_of<T | U>().to_string()
+}
+
+// ---------------------------------------------------------------------------
+// §I nullable param: the non-null arm of `T?` binds against a present actual
+// (`maybe_id(5)` ⇒ T=int), while a `null`-only actual is no evidence ⇒ T falls
+// to host-only `rust_type` (we do NOT null-strip `T?` to bind `T=null`). Returns
+// the value so the host can assert the round trip.
+// ---------------------------------------------------------------------------
+
+function maybe_id<T>(x: T?) -> T? {
+  x
+}
+
+// ---------------------------------------------------------------------------
+// §B low-evidence free functions: a free function has no wire-arg channel, so an
+// EMPTY collection yields no element/value evidence and the element/value
+// TypeVar falls to host-only `rust_type` (B7/B9). The bodies return the empty
+// container so the host reads back `[]` / `None` rather than a reflected name.
+// (Contrast the *bound instance* path, where an empty field still recovers `T`
+// from the wire type-arg — B6.)
+// ---------------------------------------------------------------------------
+
+function first_or<T>(xs: T[]) -> T? {
+  if (xs.length() > 0) { xs[0] } else { null }
+}
+
+// §B/§D heterogeneous array: the elements of a single `T[]` union-merge while
+// synthesizing the one container's element type, so `elem_type([1, "x"])` binds
+// `T = int | string`. Reflects `T` so the host can read the unified element type
+// directly (distinct from B8, which only reads back the round-tripped values).
+function elem_type<T>(xs: T[]) -> string {
+  reflect.type_of<T>().to_string()
+}
+
+function values_of<T>(m: map<string, T>) -> T[] {
+  m.values()
+}
+
+// ---------------------------------------------------------------------------
+// §J J13 bridge-level reification of function-typed args: a host callable
+// crosses the FFI as an opaque handle, not a structural `(T) -> R`, so the
+// bridge can neither infer `T`/`R` from it nor validate a binding inferred
+// elsewhere against it. Every TypeVar TOUCHED by the callable is therefore
+// poisoned and must be specified up front — `T` is poisoned by `(T)` even though
+// `x` would otherwise pin it, and `R` lives only in the closure's return. The
+// body invokes the callable so the explicit-binding positive case round-trips.
+// ---------------------------------------------------------------------------
+
+function apply<T, R>(f: (T) -> R, x: T) -> R {
+  f(x)
+}
+
+// ---------------------------------------------------------------------------
+// §I enum actual: an enum value binds `T` to the enum TYPE (`identity(SomeEnum.VARIANT)`
+// ⇒ T=SomeEnum), recovered from the resolved variant.
+// ---------------------------------------------------------------------------
+
+enum SomeEnum {
+  VARIANT
+  OTHER
+}
