@@ -1,0 +1,394 @@
+1:1-90       "// Learn more about clients at https://docs.boundaryml.com/docs/snippets/clients/overview" source.baml comment.line.double-slash.baml
+3:1-9        "function"         source.baml meta.function.baml keyword.declaration.function.baml
+3:10-13      "add"              source.baml meta.function.baml entity.name.function.baml
+3:13-14      "("                source.baml meta.function.baml meta.parameters.baml punctuation.definition.parameters.begin.baml
+3:14-15      "a"                source.baml meta.function.baml meta.parameters.baml meta.parameter.baml variable.parameter.baml
+3:15-16      ":"                source.baml meta.function.baml meta.parameters.baml meta.parameter.baml punctuation.separator.colon.baml
+3:17-20      "int"              source.baml meta.function.baml meta.parameters.baml meta.parameter.baml support.type.primitive.baml
+3:20-21      ","                source.baml meta.function.baml meta.parameters.baml punctuation.separator.comma.baml
+3:22-23      "b"                source.baml meta.function.baml meta.parameters.baml meta.parameter.baml variable.parameter.baml
+3:23-24      ":"                source.baml meta.function.baml meta.parameters.baml meta.parameter.baml punctuation.separator.colon.baml
+3:25-28      "int"              source.baml meta.function.baml meta.parameters.baml meta.parameter.baml support.type.primitive.baml
+3:28-29      ")"                source.baml meta.function.baml meta.parameters.baml punctuation.definition.parameters.end.baml
+3:30-32      "->"               source.baml meta.function.baml meta.return-type.baml keyword.operator.arrow.baml
+3:33-36      "int"              source.baml meta.function.baml meta.return-type.baml support.type.primitive.baml
+3:37-38      "{"                source.baml meta.function.baml meta.block.function.baml punctuation.definition.block.begin.baml
+4:5-6        "a"                source.baml meta.function.baml meta.block.function.baml meta.dotted-expression.baml variable.other.readwrite.baml
+4:7-8        "+"                source.baml meta.function.baml meta.block.function.baml keyword.operator.arithmetic.baml
+4:9-10       "b"                source.baml meta.function.baml meta.block.function.baml meta.dotted-expression.baml variable.other.readwrite.baml
+5:1-2        "}"                source.baml meta.function.baml meta.block.function.baml punctuation.definition.block.end.baml
+7:1-62       "// Using the new OpenAI Responses API for enhanced formatting" source.baml comment.line.double-slash.baml
+8:1-7        "client"           source.baml meta.client.baml keyword.declaration.client.baml
+8:7-8        "<"                source.baml meta.client.baml punctuation.definition.type-parameters.begin.baml
+8:8-11       "llm"              source.baml meta.client.baml support.type.client.baml
+8:11-12      ">"                source.baml meta.client.baml punctuation.definition.type-parameters.end.baml
+8:13-23      "CustomGPT5"       source.baml meta.client.baml entity.name.client.baml
+8:24-25      "{"                source.baml meta.client.baml meta.config.block.baml punctuation.definition.block.begin.baml
+9:5-13       "provider"         source.baml meta.client.baml meta.config.block.baml meta.field.config.baml variable.other.property.baml
+9:13-14      ":"                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml punctuation.separator.colon.baml
+9:15-31      "openai-responses" source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.dotted-expression.baml variable.other.readwrite.baml
+9:31-32      ","                source.baml meta.client.baml meta.config.block.baml punctuation.separator.comma.baml
+10:5-12      "options"          source.baml meta.client.baml meta.config.block.baml meta.field.config.baml variable.other.property.baml
+10:12-13     ":"                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml punctuation.separator.colon.baml
+10:14-15     "{"                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml punctuation.definition.block.begin.baml
+11:9-14      "model"            source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml variable.other.property.baml
+11:14-15     ":"                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml punctuation.separator.colon.baml
+11:16-17     "\""               source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+11:17-22     "gpt-5"            source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml string.quoted.double.baml
+11:22-23     "\""               source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml string.quoted.double.baml punctuation.definition.string.end.baml
+11:23-24     ","                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml punctuation.separator.comma.baml
+12:9-16      "api_key"          source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml variable.other.property.baml
+12:16-17     ":"                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml punctuation.separator.colon.baml
+12:18-21     "env"              source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml meta.dotted-expression.baml support.other.namespace.baml
+12:21-22     "."                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml meta.dotted-expression.baml punctuation.accessor.baml
+12:22-30     "TEMP_KEY"         source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml meta.dotted-expression.baml variable.other.readwrite.baml
+12:30-31     ","                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml punctuation.separator.comma.baml
+13:5-6       "}"                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml punctuation.definition.block.end.baml
+13:6-7       ","                source.baml meta.client.baml meta.config.block.baml punctuation.separator.comma.baml
+14:1-2       "}"                source.baml meta.client.baml meta.config.block.baml punctuation.definition.block.end.baml
+16:1-7       "client"           source.baml meta.client.baml keyword.declaration.client.baml
+16:7-8       "<"                source.baml meta.client.baml punctuation.definition.type-parameters.begin.baml
+16:8-11      "llm"              source.baml meta.client.baml support.type.client.baml
+16:11-12     ">"                source.baml meta.client.baml punctuation.definition.type-parameters.end.baml
+16:13-27     "CustomGPT5Mini"   source.baml meta.client.baml entity.name.client.baml
+16:28-29     "{"                source.baml meta.client.baml meta.config.block.baml punctuation.definition.block.begin.baml
+17:5-13      "provider"         source.baml meta.client.baml meta.config.block.baml meta.field.config.baml variable.other.property.baml
+17:13-14     ":"                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml punctuation.separator.colon.baml
+17:15-31     "openai-responses" source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.dotted-expression.baml variable.other.readwrite.baml
+17:31-32     ","                source.baml meta.client.baml meta.config.block.baml punctuation.separator.comma.baml
+18:5-17      "retry_policy"     source.baml meta.client.baml meta.config.block.baml meta.field.config.baml variable.other.property.baml
+18:17-18     ":"                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml punctuation.separator.colon.baml
+18:19-30     "Exponential"      source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.dotted-expression.baml variable.other.readwrite.baml
+18:30-31     ","                source.baml meta.client.baml meta.config.block.baml punctuation.separator.comma.baml
+19:5-12      "options"          source.baml meta.client.baml meta.config.block.baml meta.field.config.baml variable.other.property.baml
+19:12-13     ":"                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml punctuation.separator.colon.baml
+19:14-15     "{"                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml punctuation.definition.block.begin.baml
+20:9-14      "model"            source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml variable.other.property.baml
+20:14-15     ":"                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml punctuation.separator.colon.baml
+20:16-17     "\""               source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+20:17-27     "gpt-5-mini"       source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml string.quoted.double.baml
+20:27-28     "\""               source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml string.quoted.double.baml punctuation.definition.string.end.baml
+20:28-29     ","                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml punctuation.separator.comma.baml
+21:9-16      "api_key"          source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml variable.other.property.baml
+21:16-17     ":"                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml punctuation.separator.colon.baml
+21:18-21     "env"              source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml meta.dotted-expression.baml support.other.namespace.baml
+21:21-22     "."                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml meta.dotted-expression.baml punctuation.accessor.baml
+21:22-36     "OPENAI_API_KEY"   source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml meta.dotted-expression.baml variable.other.readwrite.baml
+21:36-37     ","                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml punctuation.separator.comma.baml
+22:5-6       "}"                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml punctuation.definition.block.end.baml
+22:6-7       ","                source.baml meta.client.baml meta.config.block.baml punctuation.separator.comma.baml
+23:1-2       "}"                source.baml meta.client.baml meta.config.block.baml punctuation.definition.block.end.baml
+25:1-31      "// Openai with chat completion" source.baml comment.line.double-slash.baml
+26:1-7       "client"           source.baml meta.client.baml keyword.declaration.client.baml
+26:7-8       "<"                source.baml meta.client.baml punctuation.definition.type-parameters.begin.baml
+26:8-11      "llm"              source.baml meta.client.baml support.type.client.baml
+26:11-12     ">"                source.baml meta.client.baml punctuation.definition.type-parameters.end.baml
+26:13-27     "CustomGPT5Chat"   source.baml meta.client.baml entity.name.client.baml
+26:28-29     "{"                source.baml meta.client.baml meta.config.block.baml punctuation.definition.block.begin.baml
+27:5-13      "provider"         source.baml meta.client.baml meta.config.block.baml meta.field.config.baml variable.other.property.baml
+27:13-14     ":"                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml punctuation.separator.colon.baml
+27:15-21     "openai"           source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.dotted-expression.baml variable.other.readwrite.baml
+27:21-22     ","                source.baml meta.client.baml meta.config.block.baml punctuation.separator.comma.baml
+28:5-12      "options"          source.baml meta.client.baml meta.config.block.baml meta.field.config.baml variable.other.property.baml
+28:12-13     ":"                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml punctuation.separator.colon.baml
+28:14-15     "{"                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml punctuation.definition.block.begin.baml
+29:9-14      "model"            source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml variable.other.property.baml
+29:14-15     ":"                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml punctuation.separator.colon.baml
+29:16-17     "\""               source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+29:17-22     "gpt-5"            source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml string.quoted.double.baml
+29:22-23     "\""               source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml string.quoted.double.baml punctuation.definition.string.end.baml
+29:23-24     ","                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml punctuation.separator.comma.baml
+30:9-16      "api_key"          source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml variable.other.property.baml
+30:16-17     ":"                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml punctuation.separator.colon.baml
+30:18-21     "env"              source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml meta.dotted-expression.baml support.other.namespace.baml
+30:21-22     "."                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml meta.dotted-expression.baml punctuation.accessor.baml
+30:22-36     "OPENAI_API_KEY"   source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml meta.dotted-expression.baml variable.other.readwrite.baml
+30:36-37     ","                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml punctuation.separator.comma.baml
+31:5-6       "}"                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml punctuation.definition.block.end.baml
+31:6-7       ","                source.baml meta.client.baml meta.config.block.baml punctuation.separator.comma.baml
+32:1-2       "}"                source.baml meta.client.baml meta.config.block.baml punctuation.definition.block.end.baml
+34:1-36      "// Latest Anthropic Claude 4 models" source.baml comment.line.double-slash.baml
+35:1-7       "client"           source.baml meta.client.baml keyword.declaration.client.baml
+35:7-8       "<"                source.baml meta.client.baml punctuation.definition.type-parameters.begin.baml
+35:8-11      "llm"              source.baml meta.client.baml support.type.client.baml
+35:11-12     ">"                source.baml meta.client.baml punctuation.definition.type-parameters.end.baml
+35:13-24     "CustomOpus4"      source.baml meta.client.baml entity.name.client.baml
+35:25-26     "{"                source.baml meta.client.baml meta.config.block.baml punctuation.definition.block.begin.baml
+36:5-13      "provider"         source.baml meta.client.baml meta.config.block.baml meta.field.config.baml variable.other.property.baml
+36:13-14     ":"                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml punctuation.separator.colon.baml
+36:15-24     "anthropic"        source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.dotted-expression.baml variable.other.readwrite.baml
+36:24-25     ","                source.baml meta.client.baml meta.config.block.baml punctuation.separator.comma.baml
+37:5-12      "options"          source.baml meta.client.baml meta.config.block.baml meta.field.config.baml variable.other.property.baml
+37:12-13     ":"                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml punctuation.separator.colon.baml
+37:14-15     "{"                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml punctuation.definition.block.begin.baml
+38:9-14      "model"            source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml variable.other.property.baml
+38:14-15     ":"                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml punctuation.separator.colon.baml
+38:16-17     "\""               source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+38:17-41     "claude-opus-4-1-20250805" source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml string.quoted.double.baml
+38:41-42     "\""               source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml string.quoted.double.baml punctuation.definition.string.end.baml
+38:42-43     ","                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml punctuation.separator.comma.baml
+39:9-16      "api_key"          source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml variable.other.property.baml
+39:16-17     ":"                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml punctuation.separator.colon.baml
+39:18-21     "env"              source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml meta.dotted-expression.baml support.other.namespace.baml
+39:21-22     "."                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml meta.dotted-expression.baml punctuation.accessor.baml
+39:22-39     "ANTHROPIC_API_KEY" source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml meta.dotted-expression.baml variable.other.readwrite.baml
+39:39-40     ","                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml punctuation.separator.comma.baml
+40:5-6       "}"                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml punctuation.definition.block.end.baml
+40:6-7       ","                source.baml meta.client.baml meta.config.block.baml punctuation.separator.comma.baml
+41:1-2       "}"                source.baml meta.client.baml meta.config.block.baml punctuation.definition.block.end.baml
+43:1-7       "client"           source.baml meta.client.baml keyword.declaration.client.baml
+43:7-8       "<"                source.baml meta.client.baml punctuation.definition.type-parameters.begin.baml
+43:8-11      "llm"              source.baml meta.client.baml support.type.client.baml
+43:11-12     ">"                source.baml meta.client.baml punctuation.definition.type-parameters.end.baml
+43:13-26     "CustomSonnet4"    source.baml meta.client.baml entity.name.client.baml
+43:27-28     "{"                source.baml meta.client.baml meta.config.block.baml punctuation.definition.block.begin.baml
+44:5-13      "provider"         source.baml meta.client.baml meta.config.block.baml meta.field.config.baml variable.other.property.baml
+44:13-14     ":"                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml punctuation.separator.colon.baml
+44:15-24     "anthropic"        source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.dotted-expression.baml variable.other.readwrite.baml
+44:24-25     ","                source.baml meta.client.baml meta.config.block.baml punctuation.separator.comma.baml
+45:5-12      "options"          source.baml meta.client.baml meta.config.block.baml meta.field.config.baml variable.other.property.baml
+45:12-13     ":"                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml punctuation.separator.colon.baml
+45:14-15     "{"                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml punctuation.definition.block.begin.baml
+46:9-14      "model"            source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml variable.other.property.baml
+46:14-15     ":"                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml punctuation.separator.colon.baml
+46:16-17     "\""               source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+46:17-41     "claude-sonnet-4-20250514" source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml string.quoted.double.baml
+46:41-42     "\""               source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml string.quoted.double.baml punctuation.definition.string.end.baml
+46:42-43     ","                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml punctuation.separator.comma.baml
+47:9-16      "api_key"          source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml variable.other.property.baml
+47:16-17     ":"                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml punctuation.separator.colon.baml
+47:18-21     "env"              source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml meta.dotted-expression.baml support.other.namespace.baml
+47:21-22     "."                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml meta.dotted-expression.baml punctuation.accessor.baml
+47:22-39     "ANTHROPIC_API_KEY" source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml meta.dotted-expression.baml variable.other.readwrite.baml
+47:39-40     ","                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml punctuation.separator.comma.baml
+48:5-6       "}"                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml punctuation.definition.block.end.baml
+48:6-7       ","                source.baml meta.client.baml meta.config.block.baml punctuation.separator.comma.baml
+49:1-2       "}"                source.baml meta.client.baml meta.config.block.baml punctuation.definition.block.end.baml
+51:1-7       "client"           source.baml meta.client.baml keyword.declaration.client.baml
+51:7-8       "<"                source.baml meta.client.baml punctuation.definition.type-parameters.begin.baml
+51:8-11      "llm"              source.baml meta.client.baml support.type.client.baml
+51:11-12     ">"                source.baml meta.client.baml punctuation.definition.type-parameters.end.baml
+51:13-24     "CustomHaiku"      source.baml meta.client.baml entity.name.client.baml
+51:25-26     "{"                source.baml meta.client.baml meta.config.block.baml punctuation.definition.block.begin.baml
+52:5-13      "provider"         source.baml meta.client.baml meta.config.block.baml meta.field.config.baml variable.other.property.baml
+52:13-14     ":"                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml punctuation.separator.colon.baml
+52:15-24     "anthropic"        source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.dotted-expression.baml variable.other.readwrite.baml
+52:24-25     ","                source.baml meta.client.baml meta.config.block.baml punctuation.separator.comma.baml
+53:5-12      "options"          source.baml meta.client.baml meta.config.block.baml meta.field.config.baml variable.other.property.baml
+53:12-13     ":"                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml punctuation.separator.colon.baml
+53:14-15     "{"                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml punctuation.definition.block.begin.baml
+54:9-14      "model"            source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml variable.other.property.baml
+54:14-15     ":"                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml punctuation.separator.colon.baml
+54:16-17     "\""               source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+54:17-33     "claude-haiku-4-5" source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml string.quoted.double.baml
+54:33-34     "\""               source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml string.quoted.double.baml punctuation.definition.string.end.baml
+54:34-35     ","                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml punctuation.separator.comma.baml
+55:9-16      "api_key"          source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml variable.other.property.baml
+55:16-17     ":"                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml punctuation.separator.colon.baml
+55:18-21     "env"              source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml meta.dotted-expression.baml support.other.namespace.baml
+55:21-22     "."                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml meta.dotted-expression.baml punctuation.accessor.baml
+55:22-39     "ANTHROPIC_API_KEY" source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml meta.dotted-expression.baml variable.other.readwrite.baml
+55:39-40     ","                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml punctuation.separator.comma.baml
+56:5-6       "}"                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml punctuation.definition.block.end.baml
+56:6-7       ","                source.baml meta.client.baml meta.config.block.baml punctuation.separator.comma.baml
+57:1-2       "}"                source.baml meta.client.baml meta.config.block.baml punctuation.definition.block.end.baml
+59:1-47      "// Example Google AI client (uncomment to use)" source.baml comment.line.double-slash.baml
+60:1-30      "// client<llm> CustomGemini {" source.baml comment.line.double-slash.baml
+61:1-24      "//   provider google-ai" source.baml comment.line.double-slash.baml
+62:1-15      "//   options {"   source.baml comment.line.double-slash.baml
+63:1-30      "//     model \"gemini-2.5-pro\"" source.baml comment.line.double-slash.baml
+64:1-34      "//     api_key env.GOOGLE_API_KEY" source.baml comment.line.double-slash.baml
+65:1-7       "//   }"           source.baml comment.line.double-slash.baml
+66:1-5       "// }"             source.baml comment.line.double-slash.baml
+68:1-49      "// Example AWS Bedrock client (uncomment to use)" source.baml comment.line.double-slash.baml
+69:1-31      "// client<llm> CustomBedrock {" source.baml comment.line.double-slash.baml
+70:1-26      "//   provider aws-bedrock" source.baml comment.line.double-slash.baml
+71:1-15      "//   options {"   source.baml comment.line.double-slash.baml
+72:1-55      "//     model \"anthropic.claude-sonnet-4-20250514-v1:0\"" source.baml comment.line.double-slash.baml
+73:1-26      "//     region \"us-east-1\"" source.baml comment.line.double-slash.baml
+74:1-58      "//     // AWS credentials are auto-detected from env vars" source.baml comment.line.double-slash.baml
+75:1-7       "//   }"           source.baml comment.line.double-slash.baml
+76:1-5       "// }"             source.baml comment.line.double-slash.baml
+78:1-50      "// Example Azure OpenAI client (uncomment to use)" source.baml comment.line.double-slash.baml
+79:1-29      "// client<llm> CustomAzure {" source.baml comment.line.double-slash.baml
+80:1-27      "//   provider azure-openai" source.baml comment.line.double-slash.baml
+81:1-15      "//   options {"   source.baml comment.line.double-slash.baml
+82:1-21      "//     model \"gpt-5\"" source.baml comment.line.double-slash.baml
+83:1-40      "//     api_key env.AZURE_OPENAI_API_KEY" source.baml comment.line.double-slash.baml
+84:1-96      "//     base_url \"https://MY_RESOURCE_NAME.openai.azure.com/openai/deployments/MY_DEPLOYMENT_ID\"" source.baml comment.line.double-slash.baml
+85:1-40      "//     api_version \"2024-10-01-preview\"" source.baml comment.line.double-slash.baml
+86:1-7       "//   }"           source.baml comment.line.double-slash.baml
+87:1-5       "// }"             source.baml comment.line.double-slash.baml
+89:1-47      "// Example Vertex AI client (uncomment to use)" source.baml comment.line.double-slash.baml
+90:1-30      "// client<llm> CustomVertex {" source.baml comment.line.double-slash.baml
+91:1-24      "//   provider vertex-ai" source.baml comment.line.double-slash.baml
+92:1-15      "//   options {"   source.baml comment.line.double-slash.baml
+93:1-30      "//     model \"gemini-2.5-pro\"" source.baml comment.line.double-slash.baml
+94:1-30      "//     location \"us-central1\"" source.baml comment.line.double-slash.baml
+95:1-60      "//     // Uses Google Cloud Application Default Credentials" source.baml comment.line.double-slash.baml
+96:1-7       "//   }"           source.baml comment.line.double-slash.baml
+97:1-5       "// }"             source.baml comment.line.double-slash.baml
+99:1-61      "// Example Ollama client for local models (uncomment to use)" source.baml comment.line.double-slash.baml
+100:1-30     "// client<llm> CustomOllama {" source.baml comment.line.double-slash.baml
+101:1-29     "//   provider openai-generic" source.baml comment.line.double-slash.baml
+102:1-15     "//   options {"   source.baml comment.line.double-slash.baml
+103:1-44     "//     base_url \"http://localhost:11434/v1\"" source.baml comment.line.double-slash.baml
+104:1-22     "//     model \"llama4\"" source.baml comment.line.double-slash.baml
+105:1-69     "//     default_role \"user\" // Most local models prefer the user role" source.baml comment.line.double-slash.baml
+106:1-45     "//     // No API key needed for local Ollama" source.baml comment.line.double-slash.baml
+107:1-7      "//   }"           source.baml comment.line.double-slash.baml
+108:1-5      "// }"             source.baml comment.line.double-slash.baml
+110:1-65     "// https://docs.boundaryml.com/docs/snippets/clients/round-robin" source.baml comment.line.double-slash.baml
+111:1-7      "client"           source.baml meta.client.baml keyword.declaration.client.baml
+111:7-8      "<"                source.baml meta.client.baml punctuation.definition.type-parameters.begin.baml
+111:8-11     "llm"              source.baml meta.client.baml support.type.client.baml
+111:11-12    ">"                source.baml meta.client.baml punctuation.definition.type-parameters.end.baml
+111:13-23    "CustomFast"       source.baml meta.client.baml entity.name.client.baml
+111:24-25    "{"                source.baml meta.client.baml meta.config.block.baml punctuation.definition.block.begin.baml
+112:5-13     "provider"         source.baml meta.client.baml meta.config.block.baml meta.field.config.baml variable.other.property.baml
+112:13-14    ":"                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml punctuation.separator.colon.baml
+112:15-26    "round-robin"      source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.dotted-expression.baml variable.other.readwrite.baml
+112:26-27    ","                source.baml meta.client.baml meta.config.block.baml punctuation.separator.comma.baml
+113:5-12     "options"          source.baml meta.client.baml meta.config.block.baml meta.field.config.baml variable.other.property.baml
+113:12-13    ":"                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml punctuation.separator.colon.baml
+113:14-15    "{"                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml punctuation.definition.block.begin.baml
+114:9-55     "// This will alternate between the two clients" source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml comment.line.double-slash.baml
+115:9-17     "strategy"         source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml variable.other.property.baml
+115:17-18    ":"                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml punctuation.separator.colon.baml
+115:19-20    "["                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml meta.config.array.baml punctuation.definition.array.begin.baml
+115:20-34    "CustomGPT5Mini"   source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml meta.config.array.baml meta.dotted-expression.baml variable.other.readwrite.baml
+115:34-35    ","                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml meta.config.array.baml punctuation.separator.comma.baml
+115:36-47    "CustomHaiku"      source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml meta.config.array.baml meta.dotted-expression.baml variable.other.readwrite.baml
+115:47-48    "]"                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml meta.config.array.baml punctuation.definition.array.end.baml
+115:48-49    ","                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml punctuation.separator.comma.baml
+116:5-6      "}"                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml punctuation.definition.block.end.baml
+116:6-7      ","                source.baml meta.client.baml meta.config.block.baml punctuation.separator.comma.baml
+117:1-2      "}"                source.baml meta.client.baml meta.config.block.baml punctuation.definition.block.end.baml
+119:1-62     "// https://docs.boundaryml.com/docs/snippets/clients/fallback" source.baml comment.line.double-slash.baml
+120:1-7      "client"           source.baml meta.client.baml keyword.declaration.client.baml
+120:7-8      "<"                source.baml meta.client.baml punctuation.definition.type-parameters.begin.baml
+120:8-11     "llm"              source.baml meta.client.baml support.type.client.baml
+120:11-12    ">"                source.baml meta.client.baml punctuation.definition.type-parameters.end.baml
+120:13-27    "OpenaiFallback"   source.baml meta.client.baml entity.name.client.baml
+120:28-29    "{"                source.baml meta.client.baml meta.config.block.baml punctuation.definition.block.begin.baml
+121:5-13     "provider"         source.baml meta.client.baml meta.config.block.baml meta.field.config.baml variable.other.property.baml
+121:13-14    ":"                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml punctuation.separator.colon.baml
+121:15-23    "fallback"         source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.dotted-expression.baml variable.other.readwrite.baml
+121:23-24    ","                source.baml meta.client.baml meta.config.block.baml punctuation.separator.comma.baml
+122:5-12     "options"          source.baml meta.client.baml meta.config.block.baml meta.field.config.baml variable.other.property.baml
+122:12-13    ":"                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml punctuation.separator.colon.baml
+122:14-15    "{"                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml punctuation.definition.block.begin.baml
+123:9-65     "// This will try the clients in order until one succeeds" source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml comment.line.double-slash.baml
+124:9-17     "strategy"         source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml variable.other.property.baml
+124:17-18    ":"                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml punctuation.separator.colon.baml
+124:19-20    "["                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml meta.config.array.baml punctuation.definition.array.begin.baml
+124:20-34    "CustomGPT5Mini"   source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml meta.config.array.baml meta.dotted-expression.baml variable.other.readwrite.baml
+124:34-35    ","                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml meta.config.array.baml punctuation.separator.comma.baml
+124:36-46    "CustomGPT5"       source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml meta.config.array.baml meta.dotted-expression.baml variable.other.readwrite.baml
+124:46-47    "]"                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml meta.config.array.baml punctuation.definition.array.end.baml
+124:47-48    ","                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml punctuation.separator.comma.baml
+125:5-6      "}"                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml punctuation.definition.block.end.baml
+125:6-7      ","                source.baml meta.client.baml meta.config.block.baml punctuation.separator.comma.baml
+126:1-2      "}"                source.baml meta.client.baml meta.config.block.baml punctuation.definition.block.end.baml
+128:1-59     "// https://docs.boundaryml.com/docs/snippets/clients/retry" source.baml comment.line.double-slash.baml
+129:1-13     "retry_policy"     source.baml meta.retry-policy.baml keyword.declaration.retry-policy.baml
+129:14-22    "Constant"         source.baml meta.retry-policy.baml entity.name.retry-policy.baml
+129:23-24    "{"                source.baml meta.retry-policy.baml meta.config.block.baml punctuation.definition.block.begin.baml
+130:5-16     "max_retries"      source.baml meta.retry-policy.baml meta.config.block.baml meta.field.config.baml variable.other.property.baml
+130:16-17    ":"                source.baml meta.retry-policy.baml meta.config.block.baml meta.field.config.baml punctuation.separator.colon.baml
+130:18-19    "3"                source.baml meta.retry-policy.baml meta.config.block.baml meta.field.config.baml constant.numeric.integer.baml
+130:19-20    ","                source.baml meta.retry-policy.baml meta.config.block.baml punctuation.separator.comma.baml
+131:5-13     "strategy"         source.baml meta.retry-policy.baml meta.config.block.baml meta.field.config.baml variable.other.property.baml
+131:13-14    ":"                source.baml meta.retry-policy.baml meta.config.block.baml meta.field.config.baml punctuation.separator.colon.baml
+131:15-16    "{"                source.baml meta.retry-policy.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml punctuation.definition.block.begin.baml
+132:9-13     "type"             source.baml meta.retry-policy.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml variable.other.property.baml
+132:13-14    ":"                source.baml meta.retry-policy.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml punctuation.separator.colon.baml
+132:15-29    "constant_delay"   source.baml meta.retry-policy.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml meta.dotted-expression.baml variable.other.readwrite.baml
+132:29-30    ","                source.baml meta.retry-policy.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml punctuation.separator.comma.baml
+133:9-17     "delay_ms"         source.baml meta.retry-policy.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml variable.other.property.baml
+133:17-18    ":"                source.baml meta.retry-policy.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml punctuation.separator.colon.baml
+133:19-22    "200"              source.baml meta.retry-policy.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml constant.numeric.integer.baml
+133:22-23    ","                source.baml meta.retry-policy.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml punctuation.separator.comma.baml
+134:5-6      "}"                source.baml meta.retry-policy.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml punctuation.definition.block.end.baml
+134:6-7      ","                source.baml meta.retry-policy.baml meta.config.block.baml punctuation.separator.comma.baml
+135:1-2      "}"                source.baml meta.retry-policy.baml meta.config.block.baml punctuation.definition.block.end.baml
+137:1-13     "retry_policy"     source.baml meta.retry-policy.baml keyword.declaration.retry-policy.baml
+137:14-25    "Exponential"      source.baml meta.retry-policy.baml entity.name.retry-policy.baml
+137:26-27    "{"                source.baml meta.retry-policy.baml meta.config.block.baml punctuation.definition.block.begin.baml
+138:5-16     "max_retries"      source.baml meta.retry-policy.baml meta.config.block.baml meta.field.config.baml variable.other.property.baml
+138:16-17    ":"                source.baml meta.retry-policy.baml meta.config.block.baml meta.field.config.baml punctuation.separator.colon.baml
+138:18-19    "2"                source.baml meta.retry-policy.baml meta.config.block.baml meta.field.config.baml constant.numeric.integer.baml
+138:19-20    ","                source.baml meta.retry-policy.baml meta.config.block.baml punctuation.separator.comma.baml
+139:5-13     "strategy"         source.baml meta.retry-policy.baml meta.config.block.baml meta.field.config.baml variable.other.property.baml
+139:13-14    ":"                source.baml meta.retry-policy.baml meta.config.block.baml meta.field.config.baml punctuation.separator.colon.baml
+139:15-16    "{"                source.baml meta.retry-policy.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml punctuation.definition.block.begin.baml
+140:9-13     "type"             source.baml meta.retry-policy.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml variable.other.property.baml
+140:13-14    ":"                source.baml meta.retry-policy.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml punctuation.separator.colon.baml
+140:15-34    "exponential_backoff" source.baml meta.retry-policy.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml meta.dotted-expression.baml variable.other.readwrite.baml
+140:34-35    ","                source.baml meta.retry-policy.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml punctuation.separator.comma.baml
+141:9-17     "delay_ms"         source.baml meta.retry-policy.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml variable.other.property.baml
+141:17-18    ":"                source.baml meta.retry-policy.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml punctuation.separator.colon.baml
+141:19-22    "300"              source.baml meta.retry-policy.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml constant.numeric.integer.baml
+141:22-23    ","                source.baml meta.retry-policy.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml punctuation.separator.comma.baml
+142:9-19     "multiplier"       source.baml meta.retry-policy.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml variable.other.property.baml
+142:19-20    ":"                source.baml meta.retry-policy.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml punctuation.separator.colon.baml
+142:21-24    "1.5"              source.baml meta.retry-policy.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml constant.numeric.float.baml
+142:24-25    ","                source.baml meta.retry-policy.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml punctuation.separator.comma.baml
+143:9-21     "max_delay_ms"     source.baml meta.retry-policy.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml variable.other.property.baml
+143:21-22    ":"                source.baml meta.retry-policy.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml punctuation.separator.colon.baml
+143:23-28    "10000"            source.baml meta.retry-policy.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml constant.numeric.integer.baml
+143:28-29    ","                source.baml meta.retry-policy.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml punctuation.separator.comma.baml
+144:5-6      "}"                source.baml meta.retry-policy.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml punctuation.definition.block.end.baml
+144:6-7      ","                source.baml meta.retry-policy.baml meta.config.block.baml punctuation.separator.comma.baml
+145:1-2      "}"                source.baml meta.retry-policy.baml meta.config.block.baml punctuation.definition.block.end.baml
+147:1-9      "function"         source.baml meta.function.baml keyword.declaration.function.baml
+147:10-21    "will_double"      source.baml meta.function.baml entity.name.function.baml
+147:21-22    "("                source.baml meta.function.baml meta.parameters.baml punctuation.definition.parameters.begin.baml
+147:22-23    "x"                source.baml meta.function.baml meta.parameters.baml meta.parameter.baml variable.parameter.baml
+147:23-24    ":"                source.baml meta.function.baml meta.parameters.baml meta.parameter.baml punctuation.separator.colon.baml
+147:25-28    "int"              source.baml meta.function.baml meta.parameters.baml meta.parameter.baml support.type.primitive.baml
+147:28-29    ")"                source.baml meta.function.baml meta.parameters.baml punctuation.definition.parameters.end.baml
+147:30-32    "->"               source.baml meta.function.baml meta.return-type.baml keyword.operator.arrow.baml
+147:33-36    "int"              source.baml meta.function.baml meta.return-type.baml support.type.primitive.baml
+147:37-38    "{"                source.baml meta.function.baml meta.block.function.baml punctuation.definition.block.begin.baml
+148:5-6      "x"                source.baml meta.function.baml meta.block.function.baml meta.dotted-expression.baml variable.other.readwrite.baml
+148:7-8      "*"                source.baml meta.function.baml meta.block.function.baml keyword.operator.arithmetic.baml
+148:9-10     "2"                source.baml meta.function.baml meta.block.function.baml constant.numeric.integer.baml
+149:1-2      "}"                source.baml meta.function.baml meta.block.function.baml punctuation.definition.block.end.baml
+151:1-9      "function"         source.baml meta.function.baml keyword.declaration.function.baml
+151:10-16    "double"           source.baml meta.function.baml entity.name.function.baml
+151:16-17    "("                source.baml meta.function.baml meta.parameters.baml punctuation.definition.parameters.begin.baml
+151:17-18    ")"                source.baml meta.function.baml meta.parameters.baml punctuation.definition.parameters.end.baml
+151:19-21    "->"               source.baml meta.function.baml meta.return-type.baml keyword.operator.arrow.baml
+151:22-26    "void"             source.baml meta.function.baml meta.return-type.baml meta.type-reference.baml entity.name.type.baml
+151:27-28    "{"                source.baml meta.function.baml meta.block.function.baml punctuation.definition.block.begin.baml
+152:5-8      "let"              source.baml meta.function.baml meta.block.function.baml meta.statement.let.baml meta.pattern.statement.baml meta.pattern.binding.baml keyword.declaration.binding.baml
+152:9-16     "doubled"          source.baml meta.function.baml meta.block.function.baml meta.statement.let.baml meta.pattern.statement.baml meta.pattern.binding.baml variable.other.binding.baml
+152:17-18    "="                source.baml meta.function.baml meta.block.function.baml meta.statement.let.baml keyword.operator.assignment.baml
+152:19-20    "["                source.baml meta.function.baml meta.block.function.baml meta.statement.let.baml meta.expression.array.baml punctuation.definition.array.begin.baml
+152:20-21    "1"                source.baml meta.function.baml meta.block.function.baml meta.statement.let.baml meta.expression.array.baml constant.numeric.integer.baml
+152:21-22    ","                source.baml meta.function.baml meta.block.function.baml meta.statement.let.baml meta.expression.array.baml punctuation.separator.comma.baml
+152:23-24    "2"                source.baml meta.function.baml meta.block.function.baml meta.statement.let.baml meta.expression.array.baml constant.numeric.integer.baml
+152:24-25    ","                source.baml meta.function.baml meta.block.function.baml meta.statement.let.baml meta.expression.array.baml punctuation.separator.comma.baml
+152:26-27    "3"                source.baml meta.function.baml meta.block.function.baml meta.statement.let.baml meta.expression.array.baml constant.numeric.integer.baml
+152:27-28    "]"                source.baml meta.function.baml meta.block.function.baml meta.statement.let.baml meta.expression.array.baml punctuation.definition.array.end.baml
+152:28-29    "."                source.baml meta.function.baml meta.block.function.baml meta.statement.let.baml meta.function-call.member.baml punctuation.accessor.baml
+152:29-32    "map"              source.baml meta.function.baml meta.block.function.baml meta.statement.let.baml meta.function-call.member.baml entity.name.function.baml
+152:32-33    "("                source.baml meta.function.baml meta.block.function.baml meta.statement.let.baml meta.function-call.member.baml meta.function-call.arguments.baml punctuation.definition.arguments.begin.baml
+152:33-44    "will_double"      source.baml meta.function.baml meta.block.function.baml meta.statement.let.baml meta.function-call.member.baml meta.function-call.arguments.baml meta.dotted-expression.baml variable.other.readwrite.baml
+152:44-45    ")"                source.baml meta.function.baml meta.block.function.baml meta.statement.let.baml meta.function-call.member.baml meta.function-call.arguments.baml punctuation.definition.arguments.end.baml
+152:45-46    ";"                source.baml meta.function.baml meta.block.function.baml punctuation.terminator.statement.baml
+153:5-8      "log"              source.baml meta.function.baml meta.block.function.baml meta.function-call.baml variable.other.readwrite.baml
+153:8-9      "."                source.baml meta.function.baml meta.block.function.baml meta.function-call.baml punctuation.accessor.baml
+153:9-13     "info"             source.baml meta.function.baml meta.block.function.baml meta.function-call.baml entity.name.function.baml
+153:13-14    "("                source.baml meta.function.baml meta.block.function.baml meta.function-call.baml meta.function-call.arguments.baml punctuation.definition.arguments.begin.baml
+153:14-15    "{"                source.baml meta.function.baml meta.block.function.baml meta.function-call.baml meta.function-call.arguments.baml meta.expression.map.baml punctuation.definition.map.begin.baml
+153:16-17    "\""               source.baml meta.function.baml meta.block.function.baml meta.function-call.baml meta.function-call.arguments.baml meta.expression.map.baml meta.map.entry.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+153:17-24    "doubled"          source.baml meta.function.baml meta.block.function.baml meta.function-call.baml meta.function-call.arguments.baml meta.expression.map.baml meta.map.entry.baml string.quoted.double.baml
+153:24-25    "\""               source.baml meta.function.baml meta.block.function.baml meta.function-call.baml meta.function-call.arguments.baml meta.expression.map.baml meta.map.entry.baml string.quoted.double.baml punctuation.definition.string.end.baml
+153:25-26    ":"                source.baml meta.function.baml meta.block.function.baml meta.function-call.baml meta.function-call.arguments.baml meta.expression.map.baml meta.map.entry.baml punctuation.separator.colon.baml
+153:27-34    "doubled"          source.baml meta.function.baml meta.block.function.baml meta.function-call.baml meta.function-call.arguments.baml meta.expression.map.baml meta.map.entry.baml meta.dotted-expression.baml variable.other.readwrite.baml
+153:35-36    "}"                source.baml meta.function.baml meta.block.function.baml meta.function-call.baml meta.function-call.arguments.baml meta.expression.map.baml punctuation.definition.map.end.baml
+153:36-37    ")"                source.baml meta.function.baml meta.block.function.baml meta.function-call.baml meta.function-call.arguments.baml punctuation.definition.arguments.end.baml
+153:37-38    ";"                source.baml meta.function.baml meta.block.function.baml punctuation.terminator.statement.baml
+154:1-2      "}"                source.baml meta.function.baml meta.block.function.baml punctuation.definition.block.end.baml

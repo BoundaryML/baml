@@ -584,116 +584,6 @@ fn deep_equals_recursive(
     }
 }
 
-pub fn any_value_to_string(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
-    // Arity is already checked by the VM.
-    let formatted = format_value_recursive(vm, &args[0], 0)?;
-
-    Ok(vm.alloc_string(formatted))
-}
-
-fn format_value_recursive(vm: &mut Vm, value: &Value, depth: usize) -> Result<String, VmError> {
-    // Check available stack space (MAX_FRAMES - current_frames)
-    let available_frames = crate::vm::MAX_FRAMES.saturating_sub(vm.frames.len());
-
-    if depth >= available_frames {
-        return Err(VmError::RuntimeError(RuntimeError::StackOverflow));
-    }
-
-    match value {
-        Value::Null => Ok("null".to_string()),
-        Value::Int(i) => Ok(i.to_string()),
-        Value::Float(f) => Ok(f.to_string()),
-        Value::Bool(b) => Ok(b.to_string()),
-
-        Value::Object(obj_idx) => match &vm.objects[*obj_idx] {
-            Object::Instance(instance) => {
-                let Object::Class(class) = &vm.objects[instance.class] else {
-                    return Err(VmError::RuntimeError(RuntimeError::Other(
-                        "Invalid class reference".to_string(),
-                    )));
-                };
-
-                let class_name = class.name.clone();
-                let field_names = class.field_names.clone();
-                let fields = instance.fields.clone();
-
-                let mut result = format!("{class_name} {{\n");
-                let field_indent = "    ".repeat(depth + 1);
-
-                for (i, field_value) in fields.iter().enumerate() {
-                    let field_name = match field_names.get(i) {
-                        Some(name) => name.as_str(),
-                        None => {
-                            let fallback = format!("field_{i}");
-                            let formatted_value =
-                                format_value_recursive(vm, field_value, depth + 1)?;
-                            result.push_str(&format!(
-                                "{field_indent}{fallback}: {formatted_value}\n"
-                            ));
-                            continue;
-                        }
-                    };
-                    let formatted_value = format_value_recursive(vm, field_value, depth + 1)?;
-                    result.push_str(&format!("{field_indent}{field_name}: {formatted_value}\n"));
-                }
-
-                let indent = "    ".repeat(depth);
-                result.push_str(&format!("{indent}}}"));
-                Ok(result)
-            }
-
-            Object::Array(values) => {
-                let values = values.clone();
-                let mut result = String::from("[");
-                for (i, value) in values.iter().enumerate() {
-                    if i > 0 {
-                        result.push_str(", ");
-                    }
-                    result.push_str(&format_value_recursive(vm, value, depth)?);
-                }
-                result.push(']');
-                Ok(result)
-            }
-
-            Object::Map(map) => {
-                let map = map.clone();
-                let mut result = String::from("{\n");
-                let field_indent = "    ".repeat(depth + 1);
-
-                for (key, value) in map.iter() {
-                    let formatted_value = format_value_recursive(vm, value, depth + 1)?;
-                    result.push_str(&format!("{field_indent}\"{key}\": {formatted_value}\n"));
-                }
-
-                let indent = "    ".repeat(depth);
-                result.push_str(&format!("{indent}}}"));
-                Ok(result)
-            }
-
-            Object::String(s) => Ok(format!("\"{s}\"")),
-            Object::Enum(e) => Ok(e.name.clone()),
-            Object::Variant(variant) => {
-                let Object::Enum(enm) = &vm.objects[variant.enm] else {
-                    return Err(VmError::RuntimeError(RuntimeError::Other(
-                        "Invalid enum reference".to_string(),
-                    )));
-                };
-
-                let variant_name = match enm.variant_names.get(variant.index) {
-                    Some(name) => name.clone(),
-                    None => format!("variant_{}", variant.index),
-                };
-                Ok(variant_name)
-            }
-            Object::Function(f) => Ok(format!("<function {}>", f.name)),
-            Object::Class(c) => Ok(format!("<class {}>", c.name)),
-            Object::Media(_) => Ok("<media>".to_string()),
-            Object::Future(_) => Ok("<future>".to_string()),
-            Object::BamlType(_) => Ok("<baml type>".to_string()),
-        },
-    }
-}
-
 pub type NativeFunction = fn(&mut Vm, &[Value]) -> NativeFunctionResult;
 
 pub fn functions() -> BamlMap<String, (NativeFunction, usize)> {
@@ -751,7 +641,6 @@ pub fn functions() -> BamlMap<String, (NativeFunction, usize)> {
         // Utility functions.
         ("baml.deep_copy", (deep_copy_object, 1)),
         ("baml.deep_equals", (deep_equals, 2)),
-        ("baml.unstable.string", (any_value_to_string, 1)),
     ];
 
     BamlMap::from_iter(

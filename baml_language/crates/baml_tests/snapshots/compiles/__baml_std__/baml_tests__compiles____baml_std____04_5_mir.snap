@@ -14543,8 +14543,6 @@ fn baml.toml.Table.baml.ToJson.to_json(self: null) -> baml.json.json {
     }
 }
 
-fn baml.unstable.string = builtin(vm)
-
 fn baml.yaml.deserialize(s: string) -> T {
     // Locals:
     let _0: T // _0 // return

@@ -13250,9 +13250,6 @@ function baml.toml.table_from_json(j: baml.json.json) -> baml.toml.Table {
     unreachable
 }
 
-function baml.unstable.string(value: T) -> string {
-}
-
 function baml.yaml.deserialize(s: string) -> T {
     load_var s
     call baml.yaml.parse

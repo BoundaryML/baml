@@ -1,0 +1,94 @@
+1:1-48       "// Valid HTTP configuration for regular clients" source.baml comment.line.double-slash.baml
+2:1-7        "client"           source.baml meta.client.baml keyword.declaration.client.baml
+2:7-8        "<"                source.baml meta.client.baml punctuation.definition.type-parameters.begin.baml
+2:8-11       "llm"              source.baml meta.client.baml support.type.client.baml
+2:11-12      ">"                source.baml meta.client.baml punctuation.definition.type-parameters.end.baml
+2:13-28      "ValidHttpClient"  source.baml meta.client.baml entity.name.client.baml
+2:29-30      "{"                source.baml meta.client.baml meta.config.block.baml punctuation.definition.block.begin.baml
+3:3-11       "provider"         source.baml meta.client.baml meta.config.block.baml meta.field.config.baml variable.other.property.baml
+3:12-18      "openai"           source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.dotted-expression.baml variable.other.readwrite.baml
+4:3-10       "options"          source.baml meta.client.baml meta.config.block.baml meta.field.config.baml variable.other.property.baml
+4:11-12      "{"                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml punctuation.definition.block.begin.baml
+5:5-10       "model"            source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml variable.other.property.baml
+5:11-12      "\""               source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+5:12-17      "gpt-4"            source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml string.quoted.double.baml
+5:17-18      "\""               source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml string.quoted.double.baml punctuation.definition.string.end.baml
+6:5-9        "http"             source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml variable.other.property.baml
+6:10-11      "{"                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml punctuation.definition.block.begin.baml
+7:7-25       "connect_timeout_ms" source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml variable.other.property.baml
+7:26-30      "5000"             source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml constant.numeric.integer.baml
+8:7-25       "request_timeout_ms" source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml variable.other.property.baml
+8:26-31      "30000"            source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml constant.numeric.integer.baml
+9:5-6        "}"                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml punctuation.definition.block.end.baml
+10:3-4       "}"                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml punctuation.definition.block.end.baml
+11:1-2       "}"                source.baml meta.client.baml meta.config.block.baml punctuation.definition.block.end.baml
+13:1-28      "// Valid streaming timeouts" source.baml comment.line.double-slash.baml
+14:1-7       "client"           source.baml meta.client.baml keyword.declaration.client.baml
+14:7-8       "<"                source.baml meta.client.baml punctuation.definition.type-parameters.begin.baml
+14:8-11      "llm"              source.baml meta.client.baml support.type.client.baml
+14:11-12     ">"                source.baml meta.client.baml punctuation.definition.type-parameters.end.baml
+14:13-33     "ValidStreamingClient" source.baml meta.client.baml entity.name.client.baml
+14:34-35     "{"                source.baml meta.client.baml meta.config.block.baml punctuation.definition.block.begin.baml
+15:3-11      "provider"         source.baml meta.client.baml meta.config.block.baml meta.field.config.baml variable.other.property.baml
+15:12-21     "anthropic"        source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.dotted-expression.baml variable.other.readwrite.baml
+16:3-10      "options"          source.baml meta.client.baml meta.config.block.baml meta.field.config.baml variable.other.property.baml
+16:11-12     "{"                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml punctuation.definition.block.begin.baml
+17:5-10      "model"            source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml variable.other.property.baml
+17:11-12     "\""               source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+17:12-20     "claude-3"         source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml string.quoted.double.baml
+17:20-21     "\""               source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml string.quoted.double.baml punctuation.definition.string.end.baml
+18:5-9       "http"             source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml variable.other.property.baml
+18:10-11     "{"                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml punctuation.definition.block.begin.baml
+19:7-37      "time_to_first_token_timeout_ms" source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml variable.other.property.baml
+19:38-43     "15000"            source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml constant.numeric.integer.baml
+20:7-22      "idle_timeout_ms"  source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml variable.other.property.baml
+20:23-28     "10000"            source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml constant.numeric.integer.baml
+21:5-6       "}"                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml punctuation.definition.block.end.baml
+22:3-4       "}"                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml punctuation.definition.block.end.baml
+23:1-2       "}"                source.baml meta.client.baml meta.config.block.baml punctuation.definition.block.end.baml
+25:1-33      "// Valid zero timeout (infinite)" source.baml comment.line.double-slash.baml
+26:1-7       "client"           source.baml meta.client.baml keyword.declaration.client.baml
+26:7-8       "<"                source.baml meta.client.baml punctuation.definition.type-parameters.begin.baml
+26:8-11      "llm"              source.baml meta.client.baml support.type.client.baml
+26:11-12     ">"                source.baml meta.client.baml punctuation.definition.type-parameters.end.baml
+26:13-34     "InfiniteTimeoutClient" source.baml meta.client.baml entity.name.client.baml
+26:35-36     "{"                source.baml meta.client.baml meta.config.block.baml punctuation.definition.block.begin.baml
+27:3-11      "provider"         source.baml meta.client.baml meta.config.block.baml meta.field.config.baml variable.other.property.baml
+27:12-18     "openai"           source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.dotted-expression.baml variable.other.readwrite.baml
+28:3-10      "options"          source.baml meta.client.baml meta.config.block.baml meta.field.config.baml variable.other.property.baml
+28:11-12     "{"                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml punctuation.definition.block.begin.baml
+29:5-10      "model"            source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml variable.other.property.baml
+29:11-12     "\""               source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+29:12-17     "gpt-4"            source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml string.quoted.double.baml
+29:17-18     "\""               source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml string.quoted.double.baml punctuation.definition.string.end.baml
+30:5-9       "http"             source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml variable.other.property.baml
+30:10-11     "{"                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml punctuation.definition.block.begin.baml
+31:7-25      "request_timeout_ms" source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml variable.other.property.baml
+31:26-27     "0"                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml constant.numeric.integer.baml
+32:5-6       "}"                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml punctuation.definition.block.end.baml
+33:3-4       "}"                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml punctuation.definition.block.end.baml
+34:1-2       "}"                source.baml meta.client.baml meta.config.block.baml punctuation.definition.block.end.baml
+36:1-45      "// Valid composite client with total timeout" source.baml comment.line.double-slash.baml
+37:1-7       "client"           source.baml meta.client.baml keyword.declaration.client.baml
+37:7-8       "<"                source.baml meta.client.baml punctuation.definition.type-parameters.begin.baml
+37:8-11      "llm"              source.baml meta.client.baml support.type.client.baml
+37:11-12     ">"                source.baml meta.client.baml punctuation.definition.type-parameters.end.baml
+37:13-32     "ValidFallbackClient" source.baml meta.client.baml entity.name.client.baml
+37:33-34     "{"                source.baml meta.client.baml meta.config.block.baml punctuation.definition.block.begin.baml
+38:3-11      "provider"         source.baml meta.client.baml meta.config.block.baml meta.field.config.baml variable.other.property.baml
+38:12-20     "fallback"         source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.dotted-expression.baml variable.other.readwrite.baml
+39:3-10      "options"          source.baml meta.client.baml meta.config.block.baml meta.field.config.baml variable.other.property.baml
+39:11-12     "{"                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml punctuation.definition.block.begin.baml
+40:5-13      "strategy"         source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml variable.other.property.baml
+40:14-15     "["                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml meta.config.array.baml punctuation.definition.array.begin.baml
+40:15-30     "ValidHttpClient"  source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml meta.config.array.baml meta.dotted-expression.baml variable.other.readwrite.baml
+40:30-31     ","                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml meta.config.array.baml punctuation.separator.comma.baml
+40:32-52     "ValidStreamingClient" source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml meta.config.array.baml meta.dotted-expression.baml variable.other.readwrite.baml
+40:52-53     "]"                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml meta.config.array.baml punctuation.definition.array.end.baml
+41:5-9       "http"             source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml variable.other.property.baml
+41:10-11     "{"                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml punctuation.definition.block.begin.baml
+42:7-23      "total_timeout_ms" source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml variable.other.property.baml
+42:24-29     "60000"            source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml constant.numeric.integer.baml
+43:5-6       "}"                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml punctuation.definition.block.end.baml
+44:3-4       "}"                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml punctuation.definition.block.end.baml
+45:1-2       "}"                source.baml meta.client.baml meta.config.block.baml punctuation.definition.block.end.baml

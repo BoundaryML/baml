@@ -4041,8 +4041,6 @@ class baml.toml.TomlParseError$stream {
   message: string | null
 }
 
---- <builtin>/baml/ns_unstable/unstable.baml ---
-
 --- <builtin>/baml/ns_yaml/yaml.baml ---
 class baml.yaml.YamlParseError {
   message: string
