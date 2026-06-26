@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 4623
 ---
 === HIR2 ===
 
@@ -73,7 +72,7 @@ function testing.collect_leaf_names(registry: testing.TestRegistry) -> string[] 
   { let out: string[] = []; for t in registry.collector.tests { out.push(t.name) }; for ts in registry.collector.testsets { for name in root.collect_subtree_names(registry, ts) { out.push(name) } } } out
 }
 function testing.collect_subtree_names(registry: testing.TestRegistry, ts: testing.TestSetRegistration) -> string[]  [expr] {
-  {  } root.collect_leaf_names(registry.expand_testset_registry(ts)) catch_all (e) { baml.panics.Panic => [ts.name], _ => [ts.name] }
+  {  } root.collect_leaf_names(registry.expand_testset_registry(ts)) catch_all (e) { baml.panics.Panic => [ts.name Add "/(failed to expand)"], _ => [ts.name Add "/(failed to expand)"] }
 }
 function testing.count_leaves(results: ChildReport[], tolerated_by_parent: bool) -> testing.LeafCounts  [expr] {
   { let passed = 0; let failed = 0; let tolerated = 0; let total = 0; for r in results { let delta = match (r) { tr: TestReport => {  } if (tr.outcome Eq "pass") {  } testing.LeafCounts { passed: 1, failed: 0, tolerated: 0, total: 1 } else if (tolerated_by_parent) {  } testing.LeafCounts { passed: 0, failed: 0, tolerated: 1, total: 1 } else {  } testing.LeafCounts { passed: 0, failed: 1, tolerated: 0, total: 1 }, tsr: TestSetReport => { let ft = tolerated_by_parent Or tsr.outcome Eq "pass" } if (tsr.results.length() Gt 0) {  } root.count_leaves(tsr.results, ft) else if (ft) {  } testing.LeafCounts { passed: tsr.passed, failed: 0, tolerated: tsr.failed, total: tsr.total } else {  } testing.LeafCounts { passed: tsr.passed, failed: tsr.failed, tolerated: 0, total: tsr.total } }; passed Add= delta.passed; failed Add= delta.failed; tolerated Add= delta.tolerated; total Add= delta.total } } testing.LeafCounts { passed: passed, failed: failed, tolerated: tolerated, total: total }
@@ -85,7 +84,7 @@ function testing.expand_testset_registry(self: ?, ts: testing.TestSetRegistratio
   {  } match (self.expansions.get(ts.name)) { existing: testing.TestRegistry => existing, null => { let start = baml.sys.now_ms(); let sub_collector = testing.TestCollector { prefix: ts.name, tests: [], testsets: [] }; ts.collector(sub_collector); let elapsed = baml.sys.now_ms() Sub start; let sub_registry = testing.TestRegistry { collector: sub_collector, expansions: map {  }, loading_time_ms: elapsed }; self.expansions.set(ts.name, sub_registry) } sub_registry }
 }
 function testing.expansion_error_report(name: string) -> TestSetReport  [expr] {
-  {  } TestSetReport { outcome: "error", passed: 0, failed: 1, total: 1, failed_names: [name], results: [] }
+  {  } TestSetReport { outcome: "error", passed: 0, failed: 1, total: 1, failed_names: [name Add "/(failed to expand)"], results: [] }
 }
 function testing.filter_match(expr: string, subject: string) -> bool  [expr] {
   {  } if (expr Eq "") {  } true else {  } root.glob_match(subject, expr)

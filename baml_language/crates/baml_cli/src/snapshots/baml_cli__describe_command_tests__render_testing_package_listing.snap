@@ -1,6 +1,5 @@
 ---
 source: crates/baml_cli/src/describe_command_tests.rs
-assertion_line: 413
 expression: output
 ---
 class            testing.TestRegistration         <builtin>/testing/registry.baml:5
@@ -23,21 +22,21 @@ function         testing.run_children_parallel    <builtin>/testing/registry.bam
 function         testing.run_test                 <builtin>/testing/registry.baml:378
 function         testing.run_testset              <builtin>/testing/registry.baml:413
 function         testing.expansion_error_report   <builtin>/testing/registry.baml:428
-class            testing.FilterPat                <builtin>/testing/registry.baml:441
-class            testing.NameSplit                <builtin>/testing/registry.baml:447
-function         testing.split_top                <builtin>/testing/registry.baml:453
-function         testing.parse_filter_patterns    <builtin>/testing/registry.baml:465
-function         testing.glob_match               <builtin>/testing/registry.baml:481
-function         testing.filter_match             <builtin>/testing/registry.baml:507
-function         testing.any_pattern_matches      <builtin>/testing/registry.baml:515
-function         testing.leaf_selected            <builtin>/testing/registry.baml:526
-function         testing.select_names             <builtin>/testing/registry.baml:539
-function         testing.collect_leaf_names       <builtin>/testing/registry.baml:552
-function         testing.collect_subtree_names    <builtin>/testing/registry.baml:568
-class            testing.LeafCounts               <builtin>/testing/registry.baml:576
-function         testing.count_leaves             <builtin>/testing/registry.baml:586
-function         testing.flatten_with_tolerated   <builtin>/testing/registry.baml:625
-function         testing.collect_leaf_messages    <builtin>/testing/registry.baml:649
+class            testing.FilterPat                <builtin>/testing/registry.baml:444
+class            testing.NameSplit                <builtin>/testing/registry.baml:450
+function         testing.split_top                <builtin>/testing/registry.baml:456
+function         testing.parse_filter_patterns    <builtin>/testing/registry.baml:468
+function         testing.glob_match               <builtin>/testing/registry.baml:484
+function         testing.filter_match             <builtin>/testing/registry.baml:510
+function         testing.any_pattern_matches      <builtin>/testing/registry.baml:518
+function         testing.leaf_selected            <builtin>/testing/registry.baml:529
+function         testing.select_names             <builtin>/testing/registry.baml:542
+function         testing.collect_leaf_names       <builtin>/testing/registry.baml:555
+function         testing.collect_subtree_names    <builtin>/testing/registry.baml:573
+class            testing.LeafCounts               <builtin>/testing/registry.baml:581
+function         testing.count_leaves             <builtin>/testing/registry.baml:591
+function         testing.flatten_with_tolerated   <builtin>/testing/registry.baml:630
+function         testing.collect_leaf_messages    <builtin>/testing/registry.baml:654
 function         testing.Quorum                   <builtin>/testing/runners.baml:1
 function         testing.Retry                    <builtin>/testing/runners.baml:34
 function         testing.PassRate                 <builtin>/testing/runners.baml:67

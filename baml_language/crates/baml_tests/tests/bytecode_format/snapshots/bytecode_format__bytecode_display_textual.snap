@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/tests/bytecode_format/main.rs
-assertion_line: 41
 ---
 function assert.contains(haystack: string, needle: string) -> null {
     load_var2 1 2
@@ -4296,6 +4295,8 @@ function testing.collect_subtree_names(registry: testing.TestRegistry, ts: testi
     throw_if_panic
     load_var ts
     load_field .name
+    load_const "/(failed to expand)"
+    bin_op +
     load_type string
     alloc_array 1
     jump L2
@@ -4303,6 +4304,8 @@ function testing.collect_subtree_names(registry: testing.TestRegistry, ts: testi
   L1: SdkPanic
     load_var ts
     load_field .name
+    load_const "/(failed to expand)"
+    bin_op +
     load_type string
     alloc_array 1
 
@@ -4605,6 +4608,8 @@ function testing.expansion_error_report(name: string) -> testing.TestSetReport {
     load_const 1
     load_const 1
     load_var name
+    load_const "/(failed to expand)"
+    bin_op +
     load_type string
     alloc_array 1
     load_type testing.TestReport | testing.TestSetReport

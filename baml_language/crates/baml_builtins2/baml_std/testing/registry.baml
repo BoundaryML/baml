@@ -431,7 +431,10 @@ function expansion_error_report(name: string) -> TestSetReport {
     passed: 0,
     failed: 1,
     total: 1,
-    failed_names: [name],
+    // Match the sentinel leaf name from collect_subtree_names so the reported
+    // failure reads "suite/(failed to expand)" — distinguishing an expansion
+    // failure from an ordinary test failure and aligning select/report naming.
+    failed_names: [name + "/(failed to expand)"],
     results: [],
   }
 }
@@ -563,12 +566,14 @@ function collect_leaf_names(registry: TestRegistry) -> string[] {
 }
 
 // Expand one testset to its leaf names, containing failures: a testset whose
-// generator throws or panics during expansion is represented by its own name
-// (so a filter selecting it still runs it -> surfaces the error via run_selected).
+// generator throws or panics during expansion is represented by a sentinel leaf
+// *under* its own path ("suite/(failed to expand)") so `split_top` keeps it in
+// the testset segment and `-i suite::*` / `-x suite::*` select it like a real
+// leaf, then `run_selected` runs it and surfaces the error.
 function collect_subtree_names(registry: TestRegistry, ts: TestSetRegistration) -> string[] {
   root.collect_leaf_names(registry.expand_testset_registry(ts)) catch_all (e) {
-    baml.panics.Panic => [ts.name],
-    _ => [ts.name],
+    baml.panics.Panic => [ts.name + "/(failed to expand)"],
+    _ => [ts.name + "/(failed to expand)"],
   }
 }
 

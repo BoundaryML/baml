@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 4663
 ---
 === TIR2 ===
 
@@ -497,7 +496,7 @@ function testing.run_testset(children: testing.TestSetChild[], runner: testing.T
 }
 function testing.expansion_error_report(name: string) -> testing.TestSetReport throws never {
   { : testing.TestSetReport
-    TestSetReport { outcome: "error", passed: 0, failed: 1, total: 1, failed_names: [name], results: [] } : testing.TestSetReport
+    TestSetReport { outcome: "error", passed: 0, failed: 1, total: 1, failed_names: [name + "/(failed to expand)"], results: [] } : testing.TestSetReport
   }
 }
 class testing.FilterPat {
@@ -659,9 +658,9 @@ function testing.collect_subtree_names(registry: testing.TestRegistry, ts: testi
     catch (root.collect_leaf_names(registry.expand_testset_registry(ts)) : string[]) : string[]
       catch_all (e)
         baml.panics.Panic =>
-          [ts.name] : string[]
+          [ts.name + "/(failed to expand)"] : string[]
         _ =>
-          [ts.name] : string[]
+          [ts.name + "/(failed to expand)"] : string[]
   }
 }
 class testing.LeafCounts {
