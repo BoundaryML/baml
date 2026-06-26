@@ -27,29 +27,8 @@ const CAPTIONS = [
   'II · The Battle of Architecture',
   'III · The Battle of Deployment',
 ];
-// a distinct skyline of Roman temples per battle (they sit on the walking line)
-const SKYLINES = [
-  // I — Design: a temple flanked by smaller ones
-  [
-    { src: '/temple_b.png', w: 92, h: 88, left: '2%', size: 124 },
-    { src: '/temple_a.png', w: 130, h: 96, left: '33%', size: 152 },
-    { src: '/temple_b.png', w: 92, h: 88, left: '65%', size: 118 },
-    { src: '/temple_a.png', w: 130, h: 96, left: '83%', size: 140 },
-  ],
-  // II — Architecture: grand, wide colonnades
-  [
-    { src: '/temple_c.png', w: 168, h: 104, left: '-5%', size: 176 },
-    { src: '/temple_b.png', w: 92, h: 88, left: '40%', size: 122 },
-    { src: '/temple_c.png', w: 168, h: 104, left: '66%', size: 164 },
-  ],
-  // III — Deployment: a varied row
-  [
-    { src: '/temple_a.png', w: 130, h: 96, left: '1%', size: 134 },
-    { src: '/temple_c.png', w: 168, h: 104, left: '27%', size: 150 },
-    { src: '/temple_b.png', w: 92, h: 88, left: '63%', size: 116 },
-    { src: '/temple_a.png', w: 130, h: 96, left: '80%', size: 146 },
-  ],
-];
+// a distinct hand-drawn backdrop scene per battle
+const BACKDROPS = ['/scene_design.jpg', '/scene_arch.jpg', '/scene_deploy.jpg'];
 
 const SCENE_MS = 9000;
 const SCENE_START = 12000; // start cycling captions once the march is rolling
@@ -78,6 +57,7 @@ const lp2 = (100 * (LD.walkIn + LD.wave)) / LEAD_MS;
 const ARMY_START = LD.walkIn + LD.wave; // soldiers appear once the lead marches on
 const LEAD_GONE = LEAD_MS + 400;        // lead has fully exited the right edge
 const LEAD_SIZE = 94;                   // same scale as the rank and file
+const TANK_DELAY = 15000;               // tank rolls in well after the infantry
 
 const pc = (n: number) => `${n.toFixed(2)}%`;
 
@@ -92,7 +72,7 @@ const STYLES = `
   @keyframes wmarch { from { transform: translateX(${START_VW}vw); } to { transform: translateX(${END_VW}vw); } }
   @keyframes wtankx { from { transform: translateX(-26vw); } to { transform: translateX(128vw); } }
   @keyframes warrow { 0% { transform: translateX(0); opacity: 0; } 10% { opacity: 1; } 100% { transform: translateX(210px); opacity: 0; } }
-  @keyframes wfade  { from { opacity: 0; } to { opacity: 0.5; } }
+  @keyframes wbg    { from { opacity: 0; } to { opacity: 1; } }
 
   /* kneeler: parent travels (holding still mid-screen); child sheets cross-fade */
   @keyframes kmove {
@@ -185,7 +165,9 @@ function Kneeler({ size, delay, z }: { size: number; delay: number; z: number })
 
 function Tank() {
   const size = 116;
-  return <div style={{ ...sprite('tank', size), left: 0, bottom: GROUND, transform: 'translateX(-26vw)', animation: `${frames('tank', 460)}, wtankx 20000ms linear infinite` }} />;
+  // Holds off-screen-left (base transform) until TANK_DELAY, so the infantry
+  // march for a while before the tank rolls in.
+  return <div style={{ ...sprite('tank', size), left: 0, bottom: GROUND, transform: 'translateX(-26vw)', animation: `${frames('tank', 460)}, wtankx 22000ms linear ${TANK_DELAY}ms infinite` }} />;
 }
 
 // Legionaries march in tight batches (shoulder-to-shoulder clumps) with clear
@@ -230,16 +212,18 @@ export default function WarScene() {
     <div className="warscene relative size-full overflow-hidden">
       <style>{STYLES}</style>
 
-      {/* Roman temple skyline — a different arrangement per battle, sitting on
-          the walking line, faint behind the action */}
-      <div key={scene} style={{ position: 'absolute', inset: 0, animation: 'wfade 700ms ease-out both' }}>
-        {SKYLINES[scene].map((tp, i) => {
-          const w = Math.round((tp.size * tp.w) / tp.h);
-          return (
-            <div key={i} style={{ position: 'absolute', left: tp.left, bottom: GROUND, width: w, height: tp.size, backgroundImage: `url(${tp.src})`, backgroundRepeat: 'no-repeat', backgroundSize: `${w}px ${tp.size}px` }} />
-          );
-        })}
-      </div>
+      {/* hand-drawn backdrop scene — a different one per battle, ground aligned
+          to the bottom where the column marches, cross-fading on scene change */}
+      <div
+        key={scene}
+        style={{
+          position: 'absolute', inset: 0,
+          backgroundImage: `url(${BACKDROPS[scene]})`,
+          backgroundSize: 'cover', backgroundPosition: 'center bottom',
+          backgroundRepeat: 'no-repeat', imageRendering: 'auto',
+          animation: 'wbg 700ms ease-out both',
+        }}
+      />
 
       {/* caption */}
       <div className="absolute inset-x-0 top-0 flex justify-center pt-3">

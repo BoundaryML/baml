@@ -24,7 +24,7 @@ export default function Home() {
       </section>
 
       {/* The march against slop — cycling battlegrounds */}
-      <div className="h-56 w-full overflow-hidden sm:h-64">
+      <div className="h-72 w-full overflow-hidden sm:h-80">
         <WarScene />
       </div>
     </main>
