@@ -5,10 +5,21 @@ import PledgeWall from '@/components/PledgeWall';
 export default function Home() {
   return (
     <main className="w-full">
-      {/* 1. Scroll-driven war hero (pinned; the column marches as you scroll) */}
+      {/* intro */}
+      <section className="px-6 pt-20 text-center sm:pt-28">
+        <h1 className="text-4xl font-bold tracking-tight text-ink sm:text-6xl">fight slop with slop</h1>
+        <p className="tweet-font mt-3 text-sm text-accent">
+          by{' '}
+          <a href="https://x.com/boundaryml" target="_blank" rel="noopener noreferrer" className="hover:underline">
+            @boundaryml
+          </a>
+        </p>
+      </section>
+
+      {/* the three battles — scene + paragraph per row, materializing on scroll */}
       <WarScene />
 
-      {/* 2. The bet we're making at baml */}
+      {/* the bet we're making at baml */}
       <section className="mx-auto max-w-2xl px-6 py-24 sm:py-32">
         <p
           className="text-center text-2xl leading-relaxed text-ink sm:text-[2rem] sm:leading-snug"
@@ -20,7 +31,7 @@ export default function Home() {
         </p>
       </section>
 
-      {/* 3. How other people are fighting slop — the live wall */}
+      {/* how other people are fighting slop — the live wall */}
       <section className="pb-16 sm:pb-20">
         <h2 className="mb-6 px-6 text-center text-xs font-bold uppercase tracking-[0.2em] text-ink-2 sm:mb-8">
           how others are fighting slop
@@ -28,7 +39,7 @@ export default function Home() {
         <PledgeWall />
       </section>
 
-      {/* 4. Add yours */}
+      {/* add yours */}
       <section className="mx-auto max-w-2xl px-6 pb-28">
         <h2 className="mb-8 text-center text-2xl font-bold tracking-tight text-ink sm:text-3xl">
           fight slop with slop

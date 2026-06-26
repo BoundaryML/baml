@@ -62,7 +62,13 @@ body {
   animation: marquee 45s linear infinite;
 }
 
-.marquee-track:hover {
+/* second row scrolls the other way */
+.marquee-track-rev {
+  animation: marquee 45s linear infinite reverse;
+}
+
+.marquee-track:hover,
+.marquee-track-rev:hover {
   animation-play-state: paused;
 }
 
@@ -93,7 +99,8 @@ body {
   html {
     scroll-behavior: auto;
   }
-  .marquee-track {
+  .marquee-track,
+  .marquee-track-rev {
     animation: none;
   }
   .animate-paper-plane-send {

@@ -47,13 +47,22 @@ export default function PledgeWall() {
   while (filled.length < 6) filled = [...filled, ...visiblePledges];
   const loop = [...filled, ...filled];
 
+  // a second row, offset so the two rows don't show identical cards in step
+  const filled2 = [...filled.slice(Math.floor(filled.length / 2)), ...filled.slice(0, Math.floor(filled.length / 2))];
+  const loop2 = [...filled2, ...filled2];
+
   return (
-    <div className="w-full overflow-hidden">
+    <div className="flex w-full flex-col gap-3 overflow-hidden">
       <div className="marquee-track flex w-max gap-3">
         {/* the second block is a visual clone only — hide it from a11y so
             screen readers don't read every pledge twice */}
         {loop.map((p, i) => (
           <PledgeCard key={`${p.id}-${i}`} pledge={p} clone={i >= filled.length} />
+        ))}
+      </div>
+      <div className="marquee-track-rev flex w-max gap-3" aria-hidden="true">
+        {loop2.map((p, i) => (
+          <PledgeCard key={`r2-${p.id}-${i}`} pledge={p} clone />
         ))}
       </div>
     </div>
