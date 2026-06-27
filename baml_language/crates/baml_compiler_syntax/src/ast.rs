@@ -2131,7 +2131,7 @@ impl InterfaceFieldLink {
             .find(|token| {
                 !token.kind().is_trivia()
                     && is_member_name_token(token.kind())
-                    && !(token.kind() == SyntaxKind::KW_AS)
+                    && token.kind() != SyntaxKind::KW_AS
             })
     }
 
