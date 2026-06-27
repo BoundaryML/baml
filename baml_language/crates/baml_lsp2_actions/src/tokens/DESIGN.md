@@ -94,6 +94,19 @@ For now the `boolean` token type is delivered via a transitional text match in
 ready for the proper remap. `as`/`type` highlighting already works via the
 existing context handlers, so the remap is a *mechanism* upgrade, not a feature.
 
+**`as`/`type` remap also confirmed broad (attempted + reverted):** remapping the
+5 `as`/`type` bump sites to `KW_AS`/`KW_TYPE` (and making `classify_token` read
+the kinds) compiled and kept the 78 fixtures green, but broke compiler lowering
+— `baml_compiler2_ast` `function_type_throws_preserves_omission_vs_explicit_never`
+started emitting a spurious "type alias" diagnostic (the type-alias path keys on
+the `type` token). So BOTH parser-token remaps (true/false/null AND as/type) are
+deferred on the same evidence-based cost/benefit: they ripple into hover /
+lowering / formatter / CST snapshots for a highlighter-purity-only gain, while
+`classify_token`'s contextual disambiguation (the `as`/`type`/`true`/`false`
+checks are scoped to a known parent node, not free substring scanning) is correct
+and reasonable. Doing the remap properly means mapping + updating every
+token-kind consumer first (a dedicated fan-out), not a highlighter-local change.
+
 ## Revised sequencing: architecture first, parser-token remap as a mapped follow-up
 
 The RA *system* (Phases B/C/D) is LSP-only — no parser change, no broad
