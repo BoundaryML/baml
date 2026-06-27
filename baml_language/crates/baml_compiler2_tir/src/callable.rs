@@ -255,6 +255,17 @@ impl ThrowsAnalysisContext for CallableThrowsAnalysis<'_, '_> {
         // builder impl.
         lookup_named_throw_summary(self.db, self.pkg_id, &Name::new("id.set"))
     }
+
+    fn to_json_fallback_throws(&self) -> Option<BTreeSet<Ty>> {
+        // `recv.to_json()` lowers to `baml.json.from(recv)` — see the builder impl.
+        lookup_named_throw_summary(self.db, self.pkg_id, &Name::new("json.from"))
+    }
+
+    #[allow(clippy::wrong_self_convention)]
+    fn from_json_fallback_throws(&self) -> Option<BTreeSet<Ty>> {
+        // `Type.from_json(j)` lowers to `baml.json.to<Type>(j)` — see the builder impl.
+        lookup_named_throw_summary(self.db, self.pkg_id, &Name::new("json.to"))
+    }
 }
 
 fn callee_uses_method_call_convention(

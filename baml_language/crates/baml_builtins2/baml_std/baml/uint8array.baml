@@ -3,12 +3,6 @@
 /// Used for binary data such as file contents, network payloads, and encoded strings.
 /// `push` silently masks values to u8; `from_array` throws `InvalidArgument` for out-of-range values.
 class Uint8Array {
-  /// Serializes the byte array to a JSON array of integers (each in range 0–255).
-  //baml:mut_vm
-  function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError {
-    $rust_function
-  }
-
   /// Returns the number of bytes in the array.
   function length(self) -> int throws never {
     $rust_function

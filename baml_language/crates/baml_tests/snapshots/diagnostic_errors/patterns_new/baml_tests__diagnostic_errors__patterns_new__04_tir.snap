@@ -45,30 +45,24 @@ function user.or_multiple_binds_diff_narrows(v: int | string) -> int throws neve
         1 : 1
   }
   !! 1874..1894: Or-pattern alternatives bind `a` with conflicting types: `int` vs `string`
-  !! 1880..1894: Or-pattern alternatives bind `b` with conflicting types: `int` vs `string`
+  !! 1881..1894: Or-pattern alternatives bind `b` with conflicting types: `int` vs `string`
 }
 class user.Team {
   scores: int[]
-}
-function user.Team.to_json(self: user.Team) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "scores": baml.json.to_json(self.scores) } : map<string, baml.json.json>
-}
-function user.Team.from_json(j: baml.json.json) -> user.Team throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  Team { scores: baml.json.from_json<int[]>(baml.json.field(j, "scores")) } : user.Team
 }
 function user.refutable_let_empty_array(xs: int[]) -> int throws never {
   { : 1
     let [] = xs : int[]
     1 : 1
   }
-  !! 2288..2291: refutable pattern in let binding; refutable patterns belong in `match`
+  !! 2289..2291: refutable pattern in let binding; refutable patterns belong in `match`
 }
 function user.refutable_let_array_prefix(xs: int[]) -> int throws never {
   { : int
     let [first, ..] = xs : int[]
     first : int
   }
-  !! 2427..2443: refutable pattern in let binding; refutable patterns belong in `match`
+  !! 2428..2443: refutable pattern in let binding; refutable patterns belong in `match`
 }
 function user.refutable_for_array_prefix(rows: int[][]) -> int throws never {
   { : int
@@ -79,7 +73,7 @@ function user.refutable_for_array_prefix(rows: int[][]) -> int throws never {
       }
     total : int
   }
-  !! 2605..2621: refutable pattern in for-let binding; refutable patterns belong in `match`
+  !! 2606..2621: refutable pattern in for-let binding; refutable patterns belong in `match`
 }
 function user.refutable_for_class_field_array_prefix(teams: user.Team[]) -> int throws never {
   { : int
@@ -100,16 +94,10 @@ function user.irrefutable_while_let(n: int) -> int throws never {
       }
     1 : 1
   }
-  ?? 3348..3359: irrefutable `while let` pattern; the loop never exits by pattern failure — use a plain `while`/`loop` instead
+  ?? 3349..3359: irrefutable `while let` pattern; the loop never exits by pattern failure — use a plain `while`/`loop` instead
 }
 class user.Bag {
   contents: int
-}
-function user.Bag.to_json(self: user.Bag) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "contents": baml.json.to_json(self.contents) } : map<string, baml.json.json>
-}
-function user.Bag.from_json(j: baml.json.json) -> user.Bag throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  Bag { contents: baml.json.from_json<int>(baml.json.field(j, "contents")) } : user.Bag
 }
 function user.class_destructure_unreachable_after_bare(b: user.Bag) -> int throws never {
   { : 1 | 2
@@ -124,12 +112,6 @@ function user.class_destructure_unreachable_after_bare(b: user.Bag) -> int throw
 class user.Mixed {
   value: int | float | bool
 }
-function user.Mixed.to_json(self: user.Mixed) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "value": baml.json.to_json(self.value) } : map<string, baml.json.json>
-}
-function user.Mixed.from_json(j: baml.json.json) -> user.Mixed throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  Mixed { value: baml.json.from_json<int | float | bool>(baml.json.field(j, "value")) } : user.Mixed
-}
 function user.class_destructure_field_union_missing_int(m: user.Mixed) -> int throws never {
   { : 1 | 2
     match (m : user.Mixed) : 1 | 2
@@ -138,17 +120,11 @@ function user.class_destructure_field_union_missing_int(m: user.Mixed) -> int th
       Mixed { value: bool } =>
         2 : 2
   }
-  !! 4351..4445: non-exhaustive match on `Mixed`; missing: Mixed { value: int }
+  !! 4356..4445: non-exhaustive match on `Mixed`; missing: Mixed { value: int }
 }
 class user.Pair {
   kind: int | bool
   payload: int | string
-}
-function user.Pair.to_json(self: user.Pair) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "kind": baml.json.to_json(self.kind), "payload": baml.json.to_json(self.payload) } : map<string, baml.json.json>
-}
-function user.Pair.from_json(j: baml.json.json) -> user.Pair throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  Pair { kind: baml.json.from_json<int | bool>(baml.json.field(j, "kind")), payload: baml.json.from_json<int | string>(baml.json.field(j, "payload")) } : user.Pair
 }
 function user.class_destructure_two_field_union_missing_combination(p: user.Pair) -> int throws never {
   { : 1 | 2 | 3
@@ -160,7 +136,7 @@ function user.class_destructure_two_field_union_missing_combination(p: user.Pair
       Pair { kind: bool, payload: int } =>
         3 : 3
   }
-  !! 4817..4983: non-exhaustive match on `Pair`; missing: Pair { kind: true, payload: string }, Pair { kind: false, payload: string }
+  !! 4822..4983: non-exhaustive match on `Pair`; missing: Pair { kind: true, payload: string }, Pair { kind: false, payload: string }
 }
 enum user.Color3
 function user.enum_with_single_missing_variant(c: user.Color3) -> int throws never {
@@ -171,7 +147,7 @@ function user.enum_with_single_missing_variant(c: user.Color3) -> int throws nev
       Color3.Blue =>
         2 : 2
   }
-  !! 5495..5569: non-exhaustive match on `Color3`; missing: user.Color3.Red
+  !! 5500..5569: non-exhaustive match on `Color3`; missing: user.Color3.Red
 }
 enum user.Direction4
 function user.enum_with_multiple_missing_variants(d: user.Direction4) -> int throws never {
@@ -180,7 +156,7 @@ function user.enum_with_multiple_missing_variants(d: user.Direction4) -> int thr
       Direction4.North =>
         1 : 1
   }
-  !! 5793..5845: non-exhaustive match on `Direction4`; missing: user.Direction4.East, user.Direction4.South, user.Direction4.West
+  !! 5798..5845: non-exhaustive match on `Direction4`; missing: user.Direction4.East, user.Direction4.South, user.Direction4.West
 }
 enum user.ExcessiveEnum
 function user.enum_with_excessive_missing_variants(e: user.ExcessiveEnum) -> int throws never {
@@ -189,17 +165,11 @@ function user.enum_with_excessive_missing_variants(e: user.ExcessiveEnum) -> int
       ExcessiveEnum.First =>
         1 : 1
   }
-  !! 6152..6207: non-exhaustive match on `ExcessiveEnum`; missing: user.ExcessiveEnum.Second, user.ExcessiveEnum.Third, user.ExcessiveEnum.Fourth, user.ExcessiveEnum.Fifth, user.ExcessiveEnum.Sixth, user.ExcessiveEnum.Seventh, user.ExcessiveEnum.Eighth, user.ExcessiveEnum.Ninth, user.ExcessiveEnum.Tenth, user.ExcessiveEnum.Eleventh, user.ExcessiveEnum.Twelfth
+  !! 6157..6207: non-exhaustive match on `ExcessiveEnum`; missing: user.ExcessiveEnum.Second, user.ExcessiveEnum.Third, user.ExcessiveEnum.Fourth, user.ExcessiveEnum.Fifth, user.ExcessiveEnum.Sixth, user.ExcessiveEnum.Seventh, user.ExcessiveEnum.Eighth, user.ExcessiveEnum.Ninth, user.ExcessiveEnum.Tenth, user.ExcessiveEnum.Eleventh, user.ExcessiveEnum.Twelfth
 }
 class user.Flagged {
   flag: bool
   note: string
-}
-function user.Flagged.to_json(self: user.Flagged) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "flag": baml.json.to_json(self.flag), "note": baml.json.to_json(self.note) } : map<string, baml.json.json>
-}
-function user.Flagged.from_json(j: baml.json.json) -> user.Flagged throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  Flagged { flag: baml.json.from_json<bool>(baml.json.field(j, "flag")), note: baml.json.from_json<string>(baml.json.field(j, "note")) } : user.Flagged
 }
 function user.class_field_bool_narrowing_missing_true(f: user.Flagged) -> int throws never {
   { : 1 | 2
@@ -209,17 +179,11 @@ function user.class_field_bool_narrowing_missing_true(f: user.Flagged) -> int th
       Flagged { flag: false, note: string } =>
         2 : 2
   }
-  !! 6524..6649: non-exhaustive match on `Flagged`; missing: Flagged { flag: true, note: _ }
+  !! 6529..6649: non-exhaustive match on `Flagged`; missing: Flagged { flag: true, note: _ }
 }
 class user.Box2 {
   first: bool
   second: int[] | null
-}
-function user.Box2.to_json(self: user.Box2) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "first": baml.json.to_json(self.first), "second": baml.json.to_json(self.second) } : map<string, baml.json.json>
-}
-function user.Box2.from_json(j: baml.json.json) -> user.Box2 throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  Box2 { first: baml.json.from_json<bool>(baml.json.field(j, "first")), second: baml.json.from_json<int[]?>(baml.json.field(j, "second")) } : user.Box2
 }
 function user.nested_class_optional_missing_combination(b: user.Box2) -> int throws never {
   { : 1 | 2 | 3
@@ -231,7 +195,7 @@ function user.nested_class_optional_missing_combination(b: user.Box2) -> int thr
       Box2 { first: false, second: null } =>
         3 : 3
   }
-  !! 6988..7158: non-exhaustive match on `Box2`; missing: Box2 { first: false, second: [..] }
+  !! 6993..7158: non-exhaustive match on `Box2`; missing: Box2 { first: false, second: [..] }
 }
 function user.int_literal_non_exhaustive(n: int) -> int throws never {
   { : 1
@@ -239,17 +203,11 @@ function user.int_literal_non_exhaustive(n: int) -> int throws never {
       1 =>
         1 : 1
   }
-  !! 7283..7320: non-exhaustive match on `int`; missing: _
+  !! 7288..7320: non-exhaustive match on `int`; missing: _
 }
 class user.IntPair {
   a: int
   b: int
-}
-function user.IntPair.to_json(self: user.IntPair) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "a": baml.json.to_json(self.a), "b": baml.json.to_json(self.b) } : map<string, baml.json.json>
-}
-function user.IntPair.from_json(j: baml.json.json) -> user.IntPair throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  IntPair { a: baml.json.from_json<int>(baml.json.field(j, "a")), b: baml.json.from_json<int>(baml.json.field(j, "b")) } : user.IntPair
 }
 function user.or_pattern_two_field_non_exhaustive(p: user.IntPair) -> int throws never {
   { : 1
@@ -257,7 +215,7 @@ function user.or_pattern_two_field_non_exhaustive(p: user.IntPair) -> int throws
       IntPair { a: 0 | 1, b: 2 | 3 } =>
         1 : 1
   }
-  !! 7800..7866: non-exhaustive match on `IntPair`; missing: IntPair { a: 0, b: _ }, IntPair { a: 1, b: _ }, IntPair { a: _, b: _ }
+  !! 7805..7866: non-exhaustive match on `IntPair`; missing: IntPair { a: 0, b: _ }, IntPair { a: 1, b: _ }, IntPair { a: _, b: _ }
 }
 function user.or_pattern_optional_int_non_exhaustive(x: int | null) -> int throws never {
   { : 0 | 1
@@ -267,7 +225,7 @@ function user.or_pattern_optional_int_non_exhaustive(x: int | null) -> int throw
       0 | 1 =>
         1 : 1
   }
-  !! 8113..8173: non-exhaustive match on `int | null`; missing: int
+  !! 8118..8173: non-exhaustive match on `int | null`; missing: int
 }
 function user.slice_prefix_or_suffix_non_exhaustive(xs: bool[]) -> int throws never {
   { : 0 | 1 | 2
@@ -279,7 +237,7 @@ function user.slice_prefix_or_suffix_non_exhaustive(xs: bool[]) -> int throws ne
       [.., false] =>
         2 : 2
   }
-  !! 8637..8727: non-exhaustive match on `bool[]`; missing: [false, .., true]
+  !! 8642..8727: non-exhaustive match on `bool[]`; missing: [false, .., true]
 }
 function user.slice_repeated_prefix_unreachable(xs: bool[]) -> int throws never {
   { : 1 | 2 | 3

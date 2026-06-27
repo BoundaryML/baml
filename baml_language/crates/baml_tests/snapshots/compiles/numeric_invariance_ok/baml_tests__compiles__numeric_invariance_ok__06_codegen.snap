@@ -1,26 +1,13 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-function user.BigintCounter.from_json(j: baml.json.json) -> BigintCounter {
-    load_var j
-    load_const "count"
-    call baml.json.field
-    store_var _3
-    load_type bigint
-    load_var _3
-    call baml.json.from_json
-    init_instance user.BigintCounter .count
-    return
+function boundary.LocalId.capture(self: boundary.LocalId, inputs: bool | null, output: bool | null, error: bool | null) -> boundary.LocalId {
 }
 
-function user.BigintCounter.to_json(self: BigintCounter) -> baml.json.json {
-    load_type bigint
-    load_var self
-    load_field .count
-    call baml.json.to_json
-    load_const "count"
-    alloc_map 1
-    return
+function boundary.id() -> boundary.LocalId {
+}
+
+function boundary.id.current() -> string {
 }
 
 function user.BigintFieldOk() -> BigintCounter {
@@ -32,6 +19,7 @@ function user.BigintFieldOk() -> BigintCounter {
 function user.BigintLiteralArray() -> bigint[] {
     load_const 1n
     load_const 2n
+    load_type bigint
     alloc_array 2
     return
 }
@@ -39,16 +27,20 @@ function user.BigintLiteralArray() -> bigint[] {
 function user.BigintMapLiteral() -> map<string, bigint> {
     load_const 1n
     load_const "a"
+    load_type string
+    load_type bigint
     alloc_map 1
     return
 }
 
 function user.EmptyBigintArray() -> bigint[] {
+    load_type bigint
     alloc_array 0
     return
 }
 
 function user.EvolvingRetype() -> bigint[] {
+    load_type never
     alloc_array 0
     return
 }
@@ -56,6 +48,7 @@ function user.EvolvingRetype() -> bigint[] {
 function user.IntArrayIdentity() -> int[] {
     load_const 1
     load_const 2
+    load_type int
     alloc_array 2
     return
 }

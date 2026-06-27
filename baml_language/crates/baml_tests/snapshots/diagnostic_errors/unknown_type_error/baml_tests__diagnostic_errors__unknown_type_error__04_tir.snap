@@ -6,26 +6,26 @@ function user.Foo() -> unknown throws never {
   { : 1
     1 : 1
   }
-  !! 131..136: unresolved type: blah
+  !! 132..136: unresolved type: blah
 }
 function user.Bar(x: unknown) -> int throws never {
   { : 1
     1 : 1
   }
-  !! 210..229: unresolved type: unknown_param_type
+  !! 211..229: unresolved type: unknown_param_type
 }
 function user.Baz() -> unknown | null throws never {
   { : null
     null : null
   }
-  !! 311..329: unresolved type: unknown_optional
+  !! 312..329: unresolved type: unknown_optional
 }
 enum user.Status
 function user.StatusTypoInTypePosition(s: unknown) -> int throws never {
   { : 1
     1 : 1
   }
-  !! 669..681: unresolved type: Status.Typo
+  !! 670..681: unresolved type: Status.Typo
 }
 function user.UnknownFieldAccess(raw: unknown) -> string throws never {
   { : unknown
@@ -35,12 +35,6 @@ function user.UnknownFieldAccess(raw: unknown) -> string throws never {
 }
 class user.Envelope {
   payload: unknown
-}
-function user.Envelope.to_json(self: user.Envelope) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  baml.json.parse(baml.json.to_string<Envelope>(self)) : baml.json.json
-}
-function user.Envelope.from_json(j: baml.json.json) -> user.Envelope throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  baml.json.from_string<T>(baml.json.stringify(j)) : user.Envelope
 }
 function user.UnknownNestedFieldAccess(envelope: user.Envelope) -> string throws never {
   { : unknown

@@ -11,7 +11,8 @@
 //!     (decoded into a `type`-valued `BexExternalAdt::Type`).
 
 use baml_type::{
-    FunctionParamMode, MediaKind, Name, RuntimeFunctionParamTy, RuntimeTy, TyAttr, TypeName,
+    FunctionParamMode, MediaKind, Name, RuntimeFunctionParamTy, RuntimeInterface, RuntimeTy,
+    TyAttr, TypeName,
 };
 use bex_project::{BexExternalAdt, BexExternalValue};
 use indexmap::IndexMap;
@@ -84,14 +85,26 @@ pub fn proto_ty_to_runtime_ty(ty: &BamlTy) -> Result<RuntimeTy, CtypesError> {
         TyVariant::Unknown(_) => RuntimeTy::unknown(),
         TyVariant::Media(m) => RuntimeTy::Media(media_kind_to_runtime(m.kind), TyAttr::default()),
         TyVariant::Interface(i) => {
-            let type_name = TypeName::from_dotted_path(&i.name);
-            let args = decode_type_args(&i.type_args)?;
             let bindings = i
                 .bindings
                 .iter()
                 .map(|b| Ok((Name::new(&b.name), opt_to_runtime_ty(b.ty.as_ref())?)))
                 .collect::<Result<Vec<_>, CtypesError>>()?;
-            RuntimeTy::Interface(type_name, args, bindings, TyAttr::default())
+            // The wire order is untrusted (a non-BAML or future producer may send
+            // bindings in any order) and `RuntimeInterface`'s derived `Eq`/`Hash`
+            // are order-sensitive, so route through `RuntimeInterface::new` to sort
+            // them, then lift the constraint to its existential type.
+            let constraint = RuntimeInterface::new(
+                TypeName::from_dotted_path(&i.name),
+                decode_type_args(&i.type_args)?,
+                bindings,
+            );
+            RuntimeTy::Interface(
+                constraint.name,
+                constraint.generics,
+                constraint.associated_types,
+                TyAttr::default(),
+            )
         }
         TyVariant::EnumVariant(e) => RuntimeTy::EnumVariant(
             TypeName::from_dotted_path(&e.name),
@@ -135,12 +148,23 @@ pub fn proto_ty_to_runtime_ty(ty: &BamlTy) -> Result<RuntimeTy, CtypesError> {
         TyVariant::TypeVar(v) => RuntimeTy::TypeVar(Name::new(&v.name), TyAttr::default()),
         TyVariant::AssociatedTypeProjection(p) => RuntimeTy::AssociatedTypeProjection {
             base: Box::new(opt_to_runtime_ty(p.base.as_deref())?),
-            interface: p
-                .interface
-                .as_deref()
-                .map(proto_ty_to_runtime_ty)
-                .transpose()?
-                .map(Box::new),
+            // The projection's interface constraint is wired as a `Ty` and must
+            // decode to an interface existential, from which the constraint
+            // (`RuntimeInterface`) is recovered.
+            interface: match p.interface.as_deref() {
+                Some(ty) => match proto_ty_to_runtime_ty(ty)? {
+                    RuntimeTy::Interface(name, generics, associated_types, _) => Some(Box::new(
+                        RuntimeInterface::new(name, generics, associated_types),
+                    )),
+                    _ => {
+                        return Err(CtypesError::InternalError(
+                            "AssociatedTypeProjection.interface did not decode to an interface type"
+                                .to_string(),
+                        ));
+                    }
+                },
+                None => None,
+            },
             member: Name::new(&p.member),
             attr: TyAttr::default(),
         },

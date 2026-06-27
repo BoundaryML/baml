@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 42200
 ---
 === TIR2 ===
 function user.test_return_mismatch() -> int throws never {
@@ -25,7 +24,7 @@ function user.test_no_annotation_no_context() -> int throws never {
         }
     0 : 0
   }
-  !! 277..294: cannot infer type of lambda parameter `x` — add a type annotation or provide context
+  !! 278..294: cannot infer type of lambda parameter `x` — add a type annotation or provide context
 }
 lambda user.test_no_annotation_no_context {
 }
@@ -65,7 +64,7 @@ function user.test_unknown_param_type() -> int throws never {
         }
     0 : 0
   }
-  !! 784..800: unresolved type: NonExistentType
+  !! 785..800: unresolved type: NonExistentType
 }
 lambda user.test_unknown_param_type {
 }
@@ -78,7 +77,7 @@ function user.test_unknown_return_type() -> int throws never {
         }
     0 : 0
   }
-  !! 942..958: unresolved type: NonExistentType
+  !! 943..958: unresolved type: NonExistentType
 }
 lambda user.test_unknown_return_type {
 }

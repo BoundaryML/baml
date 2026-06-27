@@ -166,3 +166,34 @@ class Warning(BaseModel):
 # #########################################################################
 # Generated type aliases (0)
 # #########################################################################
+
+
+# #########################################################################
+# Model rebuilds (22)
+# #########################################################################
+# Resolve string forward references now that every model above is defined so
+# class declaration order never breaks Pydantic construction (issue #793).
+# Recursive models are intentionally omitted (Pydantic resolves those lazily;
+# eagerly rebuilding them can recurse).
+Admin.model_rebuild()
+ApiError.model_rebuild()
+ApiPending.model_rebuild()
+ApiSuccess.model_rebuild()
+Bird.model_rebuild()
+Cat.model_rebuild()
+Circle.model_rebuild()
+ComplexUnions.model_rebuild()
+DataResponse.model_rebuild()
+DiscriminatedUnions.model_rebuild()
+Dog.model_rebuild()
+Error.model_rebuild()
+ErrorResponse.model_rebuild()
+PrimitiveUnions.model_rebuild()
+Product.model_rebuild()
+Rectangle.model_rebuild()
+Result.model_rebuild()
+Success.model_rebuild()
+Triangle.model_rebuild()
+UnionArrays.model_rebuild()
+User.model_rebuild()
+Warning.model_rebuild()

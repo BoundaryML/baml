@@ -62,5 +62,8 @@ tracing-subscriber = { workspace = true }
 vfs = { workspace = true }
 webbrowser = { workspace = true }
 
+[dev-dependencies]
+bex_vm_types = { workspace = true }
+
 [package.metadata.ci]
 wasm_support = false

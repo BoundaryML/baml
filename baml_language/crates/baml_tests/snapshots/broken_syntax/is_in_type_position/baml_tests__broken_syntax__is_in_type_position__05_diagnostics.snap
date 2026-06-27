@@ -3,10 +3,10 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
   [type] error: unresolved type: v
-   ╭─[ main.baml:6:22 ]
+   ╭─[ main.baml:6:23 ]
    │
  6 │ function bad_param(v: v is int) -> bool { true }
-   │                      ─┬  
+   │                       ┬  
    │                       ╰── unresolved type: v
    │ 
    │ Note: Error code: E0002
@@ -123,10 +123,10 @@ source: crates/baml_tests/src/generated_tests.rs
 ───╯
 
   [type] error: unresolved type: v
-   ╭─[ main.baml:9:25 ]
+   ╭─[ main.baml:9:26 ]
    │
  9 │ function bad_return() -> v is int { true }
-   │                         ─┬  
+   │                          ┬  
    │                          ╰── unresolved type: v
    │ 
    │ Note: Error code: E0002

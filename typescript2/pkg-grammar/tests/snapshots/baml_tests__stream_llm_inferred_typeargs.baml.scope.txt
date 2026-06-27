@@ -1,0 +1,107 @@
+1:1-19       "// Call-shape pin." source.baml comment.line.double-slash.baml
+2:1-3        "//"               source.baml comment.line.double-slash.baml
+3:1-75       "// `stream_llm_function<TStream, TFinal>` is generic, and direct user-code" source.baml comment.line.double-slash.baml
+4:1-76       "// call sites may rely on type inference (via the let-binding / return-type" source.baml comment.line.double-slash.baml
+5:1-69       "// annotation) to fill `<TStream, TFinal>` rather than spelling them" source.baml comment.line.double-slash.baml
+6:1-73       "// explicitly. This project locks in that *call shape* — the stdlib must" source.baml comment.line.double-slash.baml
+7:1-72       "// continue to accept `stream_llm_function(client, name, args)` without" source.baml comment.line.double-slash.baml
+8:1-23       "// explicit type args." source.baml comment.line.double-slash.baml
+9:1-3        "//"               source.baml comment.line.double-slash.baml
+10:1-76      "// Note: the PPIR-synthesized `$stream`/`$parse_stream`/`$parse` companions" source.baml comment.line.double-slash.baml
+11:1-73      "// do NOT rely on inference — they pass `<STREAM_EXPANDED, ORIGINAL>` as" source.baml comment.line.double-slash.baml
+12:1-76      "// explicit type args (see `ppir_expansion_items`). Inference-reliant calls" source.baml comment.line.double-slash.baml
+13:1-75      "// like the one below work because TIR persists inferred instantiations in" source.baml comment.line.double-slash.baml
+14:1-70      "// `CallPlan.type_args` (including phase-0 reverse inference from the" source.baml comment.line.double-slash.baml
+15:1-74      "// expected return type) and MIR materializes them into the callee frame," source.baml comment.line.double-slash.baml
+16:1-79      "// where `__make_stream` reifies them via `reflect.type_of<TStream/TFinal>()`." source.baml comment.line.double-slash.baml
+17:1-72      "// There is no name-keyed registry fallback anymore — a propagation gap" source.baml comment.line.double-slash.baml
+18:1-69      "// would surface as \"Non-parsable type: ...\" from `StreamCache.new`." source.baml comment.line.double-slash.baml
+19:1-72      "// Runtime coverage: `streaming_parsing::stream_string_final_value` and" source.baml comment.line.double-slash.baml
+20:1-63      "// `streaming_parsing::stream_class_in_namespace_final_value`." source.baml comment.line.double-slash.baml
+22:1-7       "client"           source.baml meta.client.baml keyword.declaration.client.baml
+22:7-8       "<"                source.baml meta.client.baml punctuation.definition.type-parameters.begin.baml
+22:8-11      "llm"              source.baml meta.client.baml support.type.client.baml
+22:11-12     ">"                source.baml meta.client.baml punctuation.definition.type-parameters.end.baml
+22:13-23     "TestClient"       source.baml meta.client.baml entity.name.client.baml
+22:24-25     "{"                source.baml meta.client.baml meta.config.block.baml punctuation.definition.block.begin.baml
+23:5-13      "provider"         source.baml meta.client.baml meta.config.block.baml meta.field.config.baml variable.other.property.baml
+23:14-20     "openai"           source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.dotted-expression.baml variable.other.readwrite.baml
+24:5-12      "options"          source.baml meta.client.baml meta.config.block.baml meta.field.config.baml variable.other.property.baml
+24:13-14     "{"                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml punctuation.definition.block.begin.baml
+25:9-14      "model"            source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml variable.other.property.baml
+25:15-16     "\""               source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+25:16-27     "gpt-4o-mini"      source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml string.quoted.double.baml
+25:27-28     "\""               source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml string.quoted.double.baml punctuation.definition.string.end.baml
+26:9-16      "api_key"          source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml variable.other.property.baml
+26:17-18     "\""               source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+26:18-26     "test-key"         source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml string.quoted.double.baml
+26:26-27     "\""               source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml string.quoted.double.baml punctuation.definition.string.end.baml
+27:9-17      "base_url"         source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml variable.other.property.baml
+27:18-19     "\""               source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+27:19-40     "http://localhost:1234" source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml string.quoted.double.baml
+27:40-41     "\""               source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml meta.field.config.baml string.quoted.double.baml punctuation.definition.string.end.baml
+28:5-6       "}"                source.baml meta.client.baml meta.config.block.baml meta.field.config.baml meta.config.block.baml punctuation.definition.block.end.baml
+29:1-2       "}"                source.baml meta.client.baml meta.config.block.baml punctuation.definition.block.end.baml
+31:1-9       "function"         source.baml meta.function.baml keyword.declaration.function.baml
+31:10-18     "TestFunc"         source.baml meta.function.baml entity.name.function.baml
+31:18-19     "("                source.baml meta.function.baml meta.parameters.baml punctuation.definition.parameters.begin.baml
+31:19-24     "input"            source.baml meta.function.baml meta.parameters.baml meta.parameter.baml variable.parameter.baml
+31:24-25     ":"                source.baml meta.function.baml meta.parameters.baml meta.parameter.baml punctuation.separator.colon.baml
+31:26-32     "string"           source.baml meta.function.baml meta.parameters.baml meta.parameter.baml support.type.primitive.baml
+31:32-33     ")"                source.baml meta.function.baml meta.parameters.baml punctuation.definition.parameters.end.baml
+31:34-36     "->"               source.baml meta.function.baml meta.return-type.baml keyword.operator.arrow.baml
+31:37-43     "string"           source.baml meta.function.baml meta.return-type.baml support.type.primitive.baml
+31:44-45     "{"                source.baml meta.function.baml meta.block.function.baml punctuation.definition.block.begin.baml
+32:5-11      "client"           source.baml meta.function.baml meta.block.function.baml meta.field.llm.client.baml keyword.other.llm.client.baml
+32:12-22     "TestClient"       source.baml meta.function.baml meta.block.function.baml meta.field.llm.client.baml meta.dotted-expression.baml variable.other.readwrite.baml
+33:5-11      "prompt"           source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml keyword.other.llm.prompt.baml
+33:12-13     "#"                source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml punctuation.definition.string.begin.baml
+33:13-14     "\""               source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml punctuation.definition.string.begin.baml
+33:14-17     "hi "              source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml
+33:17-19     "{{"               source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.begin.baml
+33:20-25     "input"            source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.dotted-expression.baml variable.other.readwrite.baml
+33:26-28     "}}"               source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.end.baml
+33:28-29     "\""               source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml punctuation.definition.string.end.baml
+33:29-30     "#"                source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml punctuation.definition.string.end.baml
+34:1-2       "}"                source.baml meta.function.baml meta.block.function.baml punctuation.definition.block.end.baml
+36:1-9       "function"         source.baml meta.function.baml keyword.declaration.function.baml
+36:10-30     "call_stream_inferred" source.baml meta.function.baml entity.name.function.baml
+36:30-31     "("                source.baml meta.function.baml meta.parameters.baml punctuation.definition.parameters.begin.baml
+36:31-32     ")"                source.baml meta.function.baml meta.parameters.baml punctuation.definition.parameters.end.baml
+36:33-35     "->"               source.baml meta.function.baml meta.return-type.baml keyword.operator.arrow.baml
+36:36-40     "baml"             source.baml meta.function.baml meta.return-type.baml meta.type-reference.baml support.other.namespace.baml
+36:40-41     "."                source.baml meta.function.baml meta.return-type.baml meta.type-reference.baml punctuation.accessor.baml
+36:41-44     "llm"              source.baml meta.function.baml meta.return-type.baml meta.type-reference.baml entity.name.namespace.baml
+36:44-45     "."                source.baml meta.function.baml meta.return-type.baml meta.type-reference.baml punctuation.accessor.baml
+36:45-51     "Stream"           source.baml meta.function.baml meta.return-type.baml meta.type-reference.baml entity.name.type.baml
+36:51-52     "<"                source.baml meta.function.baml meta.return-type.baml punctuation.definition.type.baml
+36:52-56     "null"             source.baml meta.function.baml meta.return-type.baml constant.language.null.baml
+36:57-58     "|"                source.baml meta.function.baml meta.return-type.baml keyword.operator.type.baml
+36:59-65     "string"           source.baml meta.function.baml meta.return-type.baml support.type.primitive.baml
+36:65-66     ","                source.baml meta.function.baml meta.return-type.baml punctuation.definition.type.baml
+36:67-73     "string"           source.baml meta.function.baml meta.return-type.baml support.type.primitive.baml
+36:73-74     ">"                source.baml meta.function.baml meta.return-type.baml punctuation.definition.type.baml
+36:75-76     "{"                source.baml meta.function.baml meta.block.function.baml punctuation.definition.block.begin.baml
+37:5-9       "baml"             source.baml meta.function.baml meta.block.function.baml meta.function-call.baml support.other.namespace.baml
+37:9-10      "."                source.baml meta.function.baml meta.block.function.baml meta.function-call.baml punctuation.accessor.baml
+37:10-13     "llm"              source.baml meta.function.baml meta.block.function.baml meta.function-call.baml variable.other.readwrite.baml
+37:13-14     "."                source.baml meta.function.baml meta.block.function.baml meta.function-call.baml punctuation.accessor.baml
+37:14-33     "stream_llm_function" source.baml meta.function.baml meta.block.function.baml meta.function-call.baml entity.name.function.baml
+37:33-34     "("                source.baml meta.function.baml meta.block.function.baml meta.function-call.baml meta.function-call.arguments.baml punctuation.definition.arguments.begin.baml
+37:34-44     "TestClient"       source.baml meta.function.baml meta.block.function.baml meta.function-call.baml meta.function-call.arguments.baml meta.dotted-expression.baml variable.other.readwrite.baml
+37:44-45     ","                source.baml meta.function.baml meta.block.function.baml meta.function-call.baml meta.function-call.arguments.baml punctuation.separator.comma.baml
+37:46-47     "\""               source.baml meta.function.baml meta.block.function.baml meta.function-call.baml meta.function-call.arguments.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+37:47-55     "TestFunc"         source.baml meta.function.baml meta.block.function.baml meta.function-call.baml meta.function-call.arguments.baml string.quoted.double.baml
+37:55-56     "\""               source.baml meta.function.baml meta.block.function.baml meta.function-call.baml meta.function-call.arguments.baml string.quoted.double.baml punctuation.definition.string.end.baml
+37:56-57     ","                source.baml meta.function.baml meta.block.function.baml meta.function-call.baml meta.function-call.arguments.baml punctuation.separator.comma.baml
+37:58-59     "{"                source.baml meta.function.baml meta.block.function.baml meta.function-call.baml meta.function-call.arguments.baml meta.expression.map.baml punctuation.definition.map.begin.baml
+37:60-61     "\""               source.baml meta.function.baml meta.block.function.baml meta.function-call.baml meta.function-call.arguments.baml meta.expression.map.baml meta.map.entry.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+37:61-66     "input"            source.baml meta.function.baml meta.block.function.baml meta.function-call.baml meta.function-call.arguments.baml meta.expression.map.baml meta.map.entry.baml string.quoted.double.baml
+37:66-67     "\""               source.baml meta.function.baml meta.block.function.baml meta.function-call.baml meta.function-call.arguments.baml meta.expression.map.baml meta.map.entry.baml string.quoted.double.baml punctuation.definition.string.end.baml
+37:67-68     ":"                source.baml meta.function.baml meta.block.function.baml meta.function-call.baml meta.function-call.arguments.baml meta.expression.map.baml meta.map.entry.baml punctuation.separator.colon.baml
+37:69-70     "\""               source.baml meta.function.baml meta.block.function.baml meta.function-call.baml meta.function-call.arguments.baml meta.expression.map.baml meta.map.entry.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+37:70-75     "world"            source.baml meta.function.baml meta.block.function.baml meta.function-call.baml meta.function-call.arguments.baml meta.expression.map.baml meta.map.entry.baml string.quoted.double.baml
+37:75-76     "\""               source.baml meta.function.baml meta.block.function.baml meta.function-call.baml meta.function-call.arguments.baml meta.expression.map.baml meta.map.entry.baml string.quoted.double.baml punctuation.definition.string.end.baml
+37:77-78     "}"                source.baml meta.function.baml meta.block.function.baml meta.function-call.baml meta.function-call.arguments.baml meta.expression.map.baml punctuation.definition.map.end.baml
+37:78-79     ")"                source.baml meta.function.baml meta.block.function.baml meta.function-call.baml meta.function-call.arguments.baml punctuation.definition.arguments.end.baml
+38:1-2       "}"                source.baml meta.function.baml meta.block.function.baml punctuation.definition.block.end.baml

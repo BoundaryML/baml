@@ -12,18 +12,6 @@ source: crates/baml_tests/src/generated_tests.rs
    │ Note: Error code: E0010
 ───╯
 
-  [type] error: unresolved name: GPT4
-    ╭─[ extra_greater.baml:20:2 ]
-    │
- 20 │ ╭─▶ }
-    ┆ ┆   
- 26 │ ├─▶ }
-    │ │       
-    │ ╰─────── unresolved name: GPT4
-    │     
-    │     Note: Error code: E0003
-────╯
-
   [parse] error: Unmatched '>' in type expression (found 1 extra)
     ╭─[ extra_greater.baml:23:38 ]
     │
@@ -35,23 +23,11 @@ source: crates/baml_tests/src/generated_tests.rs
 ────╯
 
   [type] error: unresolved name: GPT4
-    ╭─[ extra_greater.baml:23:50 ]
+    ╭─[ extra_greater.baml:23:51 ]
     │
  23 │ ╭─▶ function BadParam(x: map<string, int>>) -> string {
     ┆ ┆   
  26 │ ├─▶ }
-    │ │       
-    │ ╰─────── unresolved name: GPT4
-    │     
-    │     Note: Error code: E0003
-────╯
-
-  [type] error: unresolved name: GPT4
-    ╭─[ extra_greater.baml:26:2 ]
-    │
- 26 │ ╭─▶ }
-    ┆ ┆   
- 32 │ ├─▶ }
     │ │       
     │ ╰─────── unresolved name: GPT4
     │     
@@ -69,7 +45,7 @@ source: crates/baml_tests/src/generated_tests.rs
 ────╯
 
   [type] error: unresolved name: GPT4
-    ╭─[ extra_greater.baml:29:46 ]
+    ╭─[ extra_greater.baml:29:47 ]
     │
  29 │ ╭─▶ function BadReturnType() -> map<string, int>> {
     ┆ ┆   

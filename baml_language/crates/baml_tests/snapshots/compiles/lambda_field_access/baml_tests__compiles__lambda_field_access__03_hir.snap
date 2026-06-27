@@ -9,12 +9,6 @@ class user.Outer {
   inner: user.Inner
   name: string
 }
-function user.from_json(j: baml.json.json) -> user.Inner  [expr] {
-  user.Inner { value: baml.json.from_json(baml.json.field(j, "value")) }
-}
-function user.from_json(j: baml.json.json) -> user.Outer  [expr] {
-  user.Outer { inner: baml.json.from_json(baml.json.field(j, "inner")), name: baml.json.from_json(baml.json.field(j, "name")) }
-}
 function user.test_captured_field_access(obj: user.Outer) -> string  [expr] {
   { let get_name = () -> string { {  } obj.name } } get_name()
 }
@@ -32,12 +26,6 @@ function user.test_no_leak_after_lambda(obj: user.Outer) -> string  [expr] {
 }
 function user.test_sequential_lambdas(obj: user.Outer) -> int  [expr] {
   { let get_name = () -> string { {  } obj.name }; let get_value = () -> int { {  } obj.inner.value }; let n = get_name() } get_value()
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "inner": baml.json.to_json(self.inner), "name": baml.json.to_json(self.name) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "value": baml.json.to_json(self.value) }
 }
 
 --- captures ---

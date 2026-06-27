@@ -7,28 +7,24 @@ type Item = Table | Item[] | bool | int | float | string | baml.time.ZonedDateTi
 class Table {
     items: map<string, Item>
 
-    function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError {
-        self.items.to_json() catch (_) {
-            root.json.JsonParseError { message } => throw root.json.JsonSerializationError { message: message, path: "" },
+    implements baml.ToJson {
+        function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError {
+            // Render the items map structurally; `baml.json.from` recurses each
+            // `Item` value, honoring the `baml.ToJson` overrides on the nested
+            // `baml.time.*` types (and nested `Table`s).
+            baml.json.from(self.items)
         }
     }
     /// Converts a JSON object to a TOML table.
     ///
     /// This is lossy: JSON `null` values are skipped, and datetime strings
     /// stay strings (JSON has no datetime type to distinguish them by).
-    function from_json(json: baml.json.json) -> Table throws baml.json.JsonDecodeError {
-        match (json) {
-            map<string, baml.json.json> => {
-                let items: map<string, Item> = map {};
-                for (let key in json.keys()) {
-                    items[key] = match (json[key]) {
-                        null => { continue; }, // skip null values
-                        let item => item_from_json(item)
-                    }
-                }
-                Table { items: items }
-            },
-            _ => throw baml.json.JsonDecodeError { message: "expected map", path: "" }
+    implements baml.FromJson {
+        function from_json(j: baml.json.json) -> Self throws baml.json.JsonDecodeError {
+            // Delegate to a concrete-`Table`-returning helper: matching the
+            // recursive `map<string, baml.json.json>` pattern against the abstract
+            // `Self` return type confuses arm-reachability analysis.
+            table_from_json(j)
         }
     }
 
@@ -36,6 +32,25 @@ class Table {
     //baml:mut_vm
     function parse(s: string) -> Table throws TomlParseError {
         $rust_function
+    }
+}
+
+/// Decodes a JSON object into a `Table`, skipping null values. Returns a
+/// concrete `Table` so arm-reachability over the recursive `json` map pattern
+/// is analyzed without the abstract `Self` of `Table`'s `baml.FromJson` impl.
+function table_from_json(j: baml.json.json) -> Table throws baml.json.JsonDecodeError {
+    match (j) {
+        map<string, baml.json.json> => {
+            let items: map<string, Item> = map {};
+            for (let key in j.keys()) {
+                items[key] = match (j[key]) {
+                    null => { continue; }, // skip null values
+                    let item => item_from_json(item)
+                }
+            }
+            Table { items: items }
+        },
+        _ => throw baml.json.JsonDecodeError { message: "expected map", path: "" }
     }
 }
 

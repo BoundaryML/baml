@@ -109,7 +109,7 @@ pub enum PlaygroundNotification {
     #[serde(rename_all = "camelCase")]
     ProfileArtifactChunk {
         #[serde(skip_serializing_if = "Option::is_none")]
-        run_id: Option<String>,
+        boundary_id: Option<String>,
         engine_id: u64,
         process_id: String,
         bytes_base64: String,
@@ -123,11 +123,28 @@ pub enum PlaygroundNotification {
     RunSnapshot {
         #[serde(skip_serializing_if = "Option::is_none")]
         request_id: Option<u64>,
-        run_id: String,
+        boundary_id: String,
         snapshot: serde_json::Value,
     },
     #[serde(rename_all = "camelCase")]
+    ValueBody {
+        request_id: u64,
+        boundary_id: String,
+        value_ref_id: String,
+        codec: String,
+        availability: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        body_base64: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        diagnostic: Option<String>,
+    },
+    #[serde(rename_all = "camelCase")]
     RunList {
+        request_id: u64,
+        runs: Vec<serde_json::Value>,
+    },
+    #[serde(rename_all = "camelCase")]
+    HistoryList {
         request_id: u64,
         runs: Vec<serde_json::Value>,
     },
@@ -136,7 +153,7 @@ pub enum PlaygroundNotification {
         #[serde(skip_serializing_if = "Option::is_none")]
         request_id: Option<u64>,
         subscription_id: String,
-        run_id: String,
+        boundary_id: String,
         reason: String,
     },
     #[serde(rename_all = "camelCase")]

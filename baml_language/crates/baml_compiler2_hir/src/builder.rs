@@ -19,7 +19,7 @@ use crate::{
     diagnostic::{Hir2Diagnostic, MemberSite},
     file_package::file_package,
     ids::{FunctionMarker, LocalItemId},
-    item_tree::ItemTree,
+    item_tree::{GenericParam, ImplBlock, ImplSubject, InterfaceFieldLink, ItemTree},
     loc::{
         ClassLoc, ClientLoc, EnumLoc, FunctionLoc, InterfaceLoc, LetLoc, RetryPolicyLoc,
         TemplateStringLoc, TestLoc, TypeAliasLoc,
@@ -37,6 +37,21 @@ struct PathRootReference {
     use_scope: FileScopeId,
     use_offset: TextSize,
     owner_lambda: Option<FileScopeId>,
+}
+
+/// The head name used to seed an impl's stable `ImplId` from a target
+/// `TypeExpr`: the last path segment (interface/class name), or a coarse shape
+/// tag for non-path for-targets (primitives, list/map/union). This only needs
+/// to be position-independent and reasonably collision-distributed — the
+/// `LocalItemId` collision index disambiguates anything that shares a head.
+fn impl_head_name(te: &ast::TypeExpr) -> Name {
+    match &te.kind {
+        ast::TypeExprKind::Path { segments, .. } => segments
+            .last()
+            .cloned()
+            .unwrap_or_else(|| Name::new("#path")),
+        _ => Name::new("#nonpath"),
+    }
 }
 
 pub struct SemanticIndexBuilder<'db> {
@@ -1223,13 +1238,44 @@ impl<'db> SemanticIndexBuilder<'db> {
                 });
         }
         for method in &c.methods {
-            // `to_string` is not a magic method: it must be provided by
-            // implementing `baml.ToString`, never declared directly on the
-            // class. (Methods inside `implements I { ... }` blocks live in
-            // `c.implements`, not `c.methods`, so an interface impl is fine.)
+            // `to_string` / `to_json` are not magic methods: each must be provided
+            // by implementing `baml.ToString` / `baml.ToJson`, never declared
+            // directly on the class. (Methods inside `implements I { ... }` blocks
+            // live in `c.implements`, not `c.methods`, so an interface impl is fine.)
             if method.name.as_str() == "to_string" {
                 self.diagnostics
                     .push(Hir2Diagnostic::ToStringMustImplementInterface {
+                        class_name: c.name.clone(),
+                        span: method.name_span,
+                    });
+            }
+            if method.name.as_str() == "to_json" {
+                self.diagnostics
+                    .push(Hir2Diagnostic::ToJsonMustImplementInterface {
+                        class_name: c.name.clone(),
+                        span: method.name_span,
+                    });
+            }
+            // `from_json` likewise belongs to `baml.FromJson`. The auto-derived
+            // structural-default delegate (origin `AutoDerive`) is exempt — it is
+            // synthesized, not user-written, and is `baml.FromJson`'s default.
+            if method.name.as_str() == "from_json"
+                && method.origin != ast::FunctionOrigin::AutoDerive
+            {
+                self.diagnostics
+                    .push(Hir2Diagnostic::FromJsonMustImplementInterface {
+                        class_name: c.name.clone(),
+                        span: method.name_span,
+                    });
+            }
+            // BEP-042: `cleanup` is a reserved magic finalizer name. A method
+            // named `cleanup` whose signature isn't `cleanup(self) -> void` is
+            // malformed (the magic guard only fires for the exact shape).
+            if method.name.as_str() == ast::cleanup_guard::CLEANUP_METHOD
+                && !ast::cleanup_guard::has_cleanup_shape(method)
+            {
+                self.diagnostics
+                    .push(Hir2Diagnostic::CleanupMagicMethodSignature {
                         class_name: c.name.clone(),
                         span: method.name_span,
                     });
@@ -1253,6 +1299,7 @@ impl<'db> SemanticIndexBuilder<'db> {
         self.class_depth += 1;
         let mut method_ids: Vec<_> = c.methods.iter().map(|m| self.lower_function(m)).collect();
         for impl_block in &c.implements {
+            let mut block_method_ids = Vec::new();
             for m in &impl_block.methods {
                 let fid = self.lower_function(m);
                 // BEP-044: remember which interface this method came from so
@@ -1264,8 +1311,29 @@ impl<'db> SemanticIndexBuilder<'db> {
                 self.item_tree
                     .method_to_iface_associated_type_bindings
                     .insert(fid, impl_block.associated_type_bindings.clone());
-                method_ids.push(fid);
+                block_method_ids.push(fid);
             }
+            // Dual-write: also record this in-body impl under a stable `ImplId`.
+            // An in-body `implements I {}` (and a simple `implement I for C`
+            // merged onto the class) is `InClass`; its for-type is the class.
+            let iface_head = impl_head_name(&impl_block.target);
+            let block = ImplBlock {
+                subject: ImplSubject::InClass {
+                    class: local_id,
+                    out_of_body: impl_block.is_out_of_body,
+                },
+                interface_target: impl_block.target.clone(),
+                field_links: impl_block
+                    .field_links
+                    .iter()
+                    .map(InterfaceFieldLink::from_ast)
+                    .collect(),
+                associated_type_bindings: impl_block.associated_type_bindings.clone(),
+                methods: block_method_ids.clone(),
+                span: impl_block.span,
+            };
+            self.item_tree.alloc_impl(&iface_head, &c.name, block);
+            method_ids.extend(block_method_ids);
         }
         self.class_depth -= 1;
 
@@ -1281,8 +1349,10 @@ impl<'db> SemanticIndexBuilder<'db> {
         if has_generic_params {
             // Derive a synthetic scope name from the for_target for `self` resolution.
             // Use the for_target's root name (e.g. "Container" from "Container<T>").
-            let scope_name = match &imp.for_target.expr {
-                baml_compiler2_ast::TypeExpr::Path { segments, .. } => segments.first().cloned(),
+            let scope_name = match &imp.for_target.kind {
+                baml_compiler2_ast::TypeExprKind::Path { segments, .. } => {
+                    segments.first().cloned()
+                }
                 _ => None,
             };
             self.push_scope(ScopeKind::Class, scope_name, imp.span);
@@ -1302,7 +1372,34 @@ impl<'db> SemanticIndexBuilder<'db> {
             self.pop_scope();
         }
         self.class_depth -= 1;
-        self.item_tree.add_implements_for(imp, method_ids);
+        self.item_tree.add_implements_for(imp, method_ids.clone());
+        // Dual-write: also record this out-of-body impl under a stable `ImplId`.
+        let iface_head = impl_head_name(&imp.interface_target);
+        let for_head = impl_head_name(&imp.for_target);
+        let generics = imp
+            .generic_params
+            .iter()
+            .map(|(name, bounds)| GenericParam {
+                name: name.clone(),
+                bounds: bounds.clone(),
+            })
+            .collect();
+        let block = ImplBlock {
+            subject: ImplSubject::Free {
+                for_target: imp.for_target.clone(),
+                generics,
+            },
+            interface_target: imp.interface_target.clone(),
+            field_links: imp
+                .field_links
+                .iter()
+                .map(InterfaceFieldLink::from_ast)
+                .collect(),
+            associated_type_bindings: imp.associated_type_bindings.clone(),
+            methods: method_ids,
+            span: imp.span,
+        };
+        self.item_tree.alloc_impl(&iface_head, &for_head, block);
     }
 
     /// Lower an `interface I { ... }` declaration (BEP-044).
@@ -1527,11 +1624,7 @@ impl<'db> SemanticIndexBuilder<'db> {
                 self.validate_schema_attributes(&class.attributes);
                 for field in &class.fields {
                     if let Some(type_expr) = &field.type_expr {
-                        self.validate_type_expr_phase1(
-                            &type_expr.expr,
-                            type_expr.span,
-                            is_builtin_file,
-                        );
+                        self.validate_type_expr_phase1(type_expr, type_expr.span, is_builtin_file);
                     }
                     self.validate_internal_attributes(
                         &field.attributes,
@@ -1553,11 +1646,7 @@ impl<'db> SemanticIndexBuilder<'db> {
             }
             ast::Item::TypeAlias(alias) => {
                 if let Some(type_expr) = &alias.type_expr {
-                    self.validate_type_expr_phase1(
-                        &type_expr.expr,
-                        type_expr.span,
-                        is_builtin_file,
-                    );
+                    self.validate_type_expr_phase1(type_expr, type_expr.span, is_builtin_file);
                 }
             }
             _ => {}
@@ -1580,14 +1669,14 @@ impl<'db> SemanticIndexBuilder<'db> {
 
         for param in &function.params {
             if let Some(type_expr) = &param.type_expr {
-                self.validate_type_expr_phase1(&type_expr.expr, type_expr.span, is_builtin_file);
+                self.validate_type_expr_phase1(type_expr, type_expr.span, is_builtin_file);
             }
         }
         if let Some(type_expr) = &function.return_type {
-            self.validate_type_expr_phase1(&type_expr.expr, type_expr.span, is_builtin_file);
+            self.validate_type_expr_phase1(type_expr, type_expr.span, is_builtin_file);
         }
         if let Some(type_expr) = &function.throws {
-            self.validate_type_expr_phase1(&type_expr.expr, type_expr.span, is_builtin_file);
+            self.validate_type_expr_phase1(type_expr, type_expr.span, is_builtin_file);
         }
 
         if let Some(ast::FunctionBodyDef::Builtin(kind)) = function.body {
@@ -1608,7 +1697,7 @@ impl<'db> SemanticIndexBuilder<'db> {
             if let Some(throws) = &function.throws {
                 let mut invalid = Vec::new();
                 Self::collect_invalid_builtin_throw_types(
-                    &throws.expr,
+                    throws,
                     &function.generic_params,
                     &mut invalid,
                 );
@@ -1816,20 +1905,20 @@ impl<'db> SemanticIndexBuilder<'db> {
             }
         }
 
-        match type_expr {
-            ast::TypeExpr::Optional { inner, .. } | ast::TypeExpr::List { inner, .. } => {
+        match &type_expr.kind {
+            ast::TypeExprKind::Optional { inner, .. } | ast::TypeExprKind::List { inner, .. } => {
                 Self::collect_unknown_type_attrs(inner, diagnostics);
             }
-            ast::TypeExpr::Map { key, value, .. } => {
+            ast::TypeExprKind::Map { key, value, .. } => {
                 Self::collect_unknown_type_attrs(key, diagnostics);
                 Self::collect_unknown_type_attrs(value, diagnostics);
             }
-            ast::TypeExpr::Union { variants, .. } => {
+            ast::TypeExprKind::Union { variants, .. } => {
                 for v in variants {
                     Self::collect_unknown_type_attrs(v, diagnostics);
                 }
             }
-            ast::TypeExpr::Function {
+            ast::TypeExprKind::Function {
                 params,
                 ret,
                 throws,
@@ -1843,23 +1932,43 @@ impl<'db> SemanticIndexBuilder<'db> {
                     Self::collect_unknown_type_attrs(throws, diagnostics);
                 }
             }
+            ast::TypeExprKind::Path {
+                generic_args,
+                associated_type_bindings,
+                ..
+            } => {
+                for arg in generic_args {
+                    Self::collect_unknown_type_attrs(arg, diagnostics);
+                }
+                for binding in associated_type_bindings {
+                    Self::collect_unknown_type_attrs(&binding.ty, diagnostics);
+                }
+            }
+            ast::TypeExprKind::AssociatedTypeProjection {
+                base, interface, ..
+            } => {
+                Self::collect_unknown_type_attrs(base, diagnostics);
+                if let Some(interface) = interface {
+                    Self::collect_unknown_type_attrs(interface, diagnostics);
+                }
+            }
             _ => {}
         }
     }
 
     fn type_expr_contains_rust(type_expr: &ast::TypeExpr) -> bool {
-        match type_expr {
-            ast::TypeExpr::Rust { .. } => true,
-            ast::TypeExpr::Optional { inner, .. } | ast::TypeExpr::List { inner, .. } => {
+        match &type_expr.kind {
+            ast::TypeExprKind::Rust { .. } => true,
+            ast::TypeExprKind::Optional { inner, .. } | ast::TypeExprKind::List { inner, .. } => {
                 Self::type_expr_contains_rust(inner)
             }
-            ast::TypeExpr::Map { key, value, .. } => {
+            ast::TypeExprKind::Map { key, value, .. } => {
                 Self::type_expr_contains_rust(key) || Self::type_expr_contains_rust(value)
             }
-            ast::TypeExpr::Union { variants, .. } => {
+            ast::TypeExprKind::Union { variants, .. } => {
                 variants.iter().any(Self::type_expr_contains_rust)
             }
-            ast::TypeExpr::Function {
+            ast::TypeExprKind::Function {
                 params,
                 ret,
                 throws,
@@ -1873,13 +1982,23 @@ impl<'db> SemanticIndexBuilder<'db> {
                         .as_ref()
                         .is_some_and(|throws| Self::type_expr_contains_rust(throws))
             }
-            ast::TypeExpr::AssociatedTypeProjection {
+            ast::TypeExprKind::AssociatedTypeProjection {
                 base, interface, ..
             } => {
                 Self::type_expr_contains_rust(base)
                     || interface
                         .as_ref()
                         .is_some_and(|interface| Self::type_expr_contains_rust(interface))
+            }
+            ast::TypeExprKind::Path {
+                generic_args,
+                associated_type_bindings,
+                ..
+            } => {
+                generic_args.iter().any(Self::type_expr_contains_rust)
+                    || associated_type_bindings
+                        .iter()
+                        .any(|binding| Self::type_expr_contains_rust(&binding.ty))
             }
             _ => false,
         }
@@ -1890,8 +2009,8 @@ impl<'db> SemanticIndexBuilder<'db> {
         allowed_generic_params: &[Name],
         invalid: &mut Vec<String>,
     ) {
-        match type_expr {
-            ast::TypeExpr::Path {
+        match &type_expr.kind {
+            ast::TypeExprKind::Path {
                 segments,
                 generic_args,
                 ..
@@ -1942,7 +2061,7 @@ impl<'db> SemanticIndexBuilder<'db> {
                     invalid.push(Self::render_type_expr(type_expr));
                 }
             }
-            ast::TypeExpr::Union { variants, .. } => {
+            ast::TypeExprKind::Union { variants, .. } => {
                 for ty in variants {
                     Self::collect_invalid_builtin_throw_types(ty, allowed_generic_params, invalid);
                 }
@@ -1954,52 +2073,54 @@ impl<'db> SemanticIndexBuilder<'db> {
             // declared `throws` is erased for builtins), so this is sound. Lets
             // `_compare_shim` declare `throws T.CompareError` rather than an
             // unconstrained error param that call sites cannot pin.
-            ast::TypeExpr::AssociatedTypeProjection { base, .. }
+            ast::TypeExprKind::AssociatedTypeProjection { base, .. }
                 if matches!(
-                    base.as_ref(),
-                    ast::TypeExpr::Path { segments, generic_args, .. }
+                    &base.kind,
+                    ast::TypeExprKind::Path { segments, generic_args, .. }
                         if generic_args.is_empty()
                             && segments.len() == 1
                             && allowed_generic_params.iter().any(|name| name == &segments[0])
                 ) => {}
             // `throws never` is the explicit "infallible" marker — always valid.
-            ast::TypeExpr::Never { .. } => {}
+            ast::TypeExprKind::Never { .. } => {}
             _ => invalid.push(Self::render_type_expr(type_expr)),
         }
     }
 
     fn render_type_expr(type_expr: &ast::TypeExpr) -> String {
-        match type_expr {
-            ast::TypeExpr::Path { segments, .. } => segments
+        match &type_expr.kind {
+            ast::TypeExprKind::Path { segments, .. } => segments
                 .iter()
                 .map(Name::as_str)
                 .collect::<Vec<_>>()
                 .join("."),
-            ast::TypeExpr::AssociatedTypeProjection { .. } => type_expr.to_string(),
-            ast::TypeExpr::Int { .. } => "int".to_string(),
-            ast::TypeExpr::Bigint { .. } => "bigint".to_string(),
-            ast::TypeExpr::Float { .. } => "float".to_string(),
-            ast::TypeExpr::String { .. } => "string".to_string(),
-            ast::TypeExpr::Bool { .. } => "bool".to_string(),
-            ast::TypeExpr::Null { .. } => "null".to_string(),
-            ast::TypeExpr::Never { .. } => "never".to_string(),
-            ast::TypeExpr::Void { .. } => "void".to_string(),
-            ast::TypeExpr::Uint8Array { .. } => "uint8array".to_string(),
-            ast::TypeExpr::Media { kind, .. } => kind.to_string(),
-            ast::TypeExpr::Optional { inner, .. } => format!("{}?", Self::render_type_expr(inner)),
-            ast::TypeExpr::List { inner, .. } => format!("{}[]", Self::render_type_expr(inner)),
-            ast::TypeExpr::Map { key, value, .. } => format!(
+            ast::TypeExprKind::AssociatedTypeProjection { .. } => type_expr.to_string(),
+            ast::TypeExprKind::Int { .. } => "int".to_string(),
+            ast::TypeExprKind::Bigint { .. } => "bigint".to_string(),
+            ast::TypeExprKind::Float { .. } => "float".to_string(),
+            ast::TypeExprKind::String { .. } => "string".to_string(),
+            ast::TypeExprKind::Bool { .. } => "bool".to_string(),
+            ast::TypeExprKind::Null { .. } => "null".to_string(),
+            ast::TypeExprKind::Never { .. } => "never".to_string(),
+            ast::TypeExprKind::Void { .. } => "void".to_string(),
+            ast::TypeExprKind::Uint8Array { .. } => "uint8array".to_string(),
+            ast::TypeExprKind::Media { kind, .. } => kind.to_string(),
+            ast::TypeExprKind::Optional { inner, .. } => {
+                format!("{}?", Self::render_type_expr(inner))
+            }
+            ast::TypeExprKind::List { inner, .. } => format!("{}[]", Self::render_type_expr(inner)),
+            ast::TypeExprKind::Map { key, value, .. } => format!(
                 "map<{}, {}>",
                 Self::render_type_expr(key),
                 Self::render_type_expr(value)
             ),
-            ast::TypeExpr::Union { variants, .. } => variants
+            ast::TypeExprKind::Union { variants, .. } => variants
                 .iter()
                 .map(Self::render_type_expr)
                 .collect::<Vec<_>>()
                 .join(" | "),
-            ast::TypeExpr::Literal { value, .. } => value.to_string(),
-            ast::TypeExpr::Function {
+            ast::TypeExprKind::Literal { value, .. } => value.to_string(),
+            ast::TypeExprKind::Function {
                 params,
                 ret,
                 throws,
@@ -2026,11 +2147,11 @@ impl<'db> SemanticIndexBuilder<'db> {
                     throws
                 )
             }
-            ast::TypeExpr::BuiltinUnknown { .. } => "unknown".to_string(),
-            ast::TypeExpr::Type { .. } => "type".to_string(),
-            ast::TypeExpr::Rust { .. } => "$rust_type".to_string(),
-            ast::TypeExpr::Error { .. } => "<error>".to_string(),
-            ast::TypeExpr::Unknown { .. } => "<unknown>".to_string(),
+            ast::TypeExprKind::BuiltinUnknown { .. } => "unknown".to_string(),
+            ast::TypeExprKind::Type { .. } => "type".to_string(),
+            ast::TypeExprKind::Rust { .. } => "$rust_type".to_string(),
+            ast::TypeExprKind::Error { .. } => "<error>".to_string(),
+            ast::TypeExprKind::Unknown { .. } => "<unknown>".to_string(),
         }
     }
 }

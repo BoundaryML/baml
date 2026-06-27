@@ -82,17 +82,21 @@ class Instant {
     function _to_string_impl(self) -> string throws root.errors.InvalidArgument {
         $rust_function
     }
-    function from_json(j: baml.json.json) -> Instant throws root.json.JsonDecodeError {
-        match (j) {
-            string => Instant.parse(j) catch (_) {
-                root.errors.ParseError { message } => throw root.json.JsonDecodeError { message: message, path: "" },
-            },
-            _ => throw root.json.JsonDecodeError { message: "Expected timestamp string" }
+    implements baml.FromJson {
+        function from_json(j: baml.json.json) -> Self throws baml.json.JsonDecodeError {
+            match (j) {
+                string => Instant.parse(j) catch (_) {
+                    root.errors.ParseError { message } => throw baml.json.JsonDecodeError { message: message, path: "" },
+                },
+                _ => throw baml.json.JsonDecodeError { message: "Expected timestamp string", path: "" }
+            }
         }
     }
-    function to_json(self) -> string throws root.json.JsonSerializationError {
-        self._to_string_impl() catch (_) {
-            root.errors.InvalidArgument { message } => throw root.json.JsonSerializationError { message: message, path: "" },
+    implements baml.ToJson {
+        function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError {
+            self._to_string_impl() catch (_) {
+                root.errors.InvalidArgument { message } => throw baml.json.JsonSerializationError { message: message, path: "" },
+            }
         }
     }
 

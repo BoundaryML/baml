@@ -40,12 +40,6 @@ class String {
     root._to_string_shim(value)
   }
 
-  /// Serializes this string to a JSON value.
-  //baml:mut_vm
-  function to_json(self) -> baml.json.json throws never {
-    $rust_function
-  }
-
   /// Returns the number of **Unicode code points** (characters) in the string.
   ///
   /// This is `O(1)` — the count is cached at construction time. For ASCII
@@ -159,6 +153,18 @@ class String {
     $rust_function
   }
 
+  /// Returns the string's Unicode code points as one-character strings.
+  ///
+  /// # Examples
+  /// ```
+  /// "hello".chars()  // ["h", "e", "l", "l", "o"]
+  /// "é😀".chars()    // ["é", "😀"]
+  /// "".chars()       // []
+  /// ```
+  function chars(self) -> string[] throws never {
+    $rust_function
+  }
+
   /// Splits the string into lines, recognizing both `\n` and `\r\n` as line
   /// terminators. The terminator is **not** included in the returned strings.
   /// A final terminator does not produce a trailing empty string.
@@ -200,16 +206,16 @@ class String {
   }
 
   /// Returns the **character index** of the first occurrence of `search`, or
-  /// `-1` if not found.
+  /// `null` if not found.
   ///
   /// # Examples
   /// ```
   /// "hello world".index_of("world")  // 6
   /// "héllo".index_of("l")            // 2
   /// "😀hello".index_of("h")          // 1
-  /// "abc".index_of("z")              // -1
+  /// "abc".index_of("z")              // null
   /// ```
-  function index_of(self, search: string) -> int throws never {
+  function index_of(self, search: string) -> int? throws never {
     $rust_function
   }
 

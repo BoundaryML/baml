@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/tests/baml_src.rs
-assertion_line: 140
 ---
 function cancel_token.$init_test_ns_cancel_token_cancel_token(registry: testing.TestCollector) -> null {
     load_var registry
@@ -70,7 +69,7 @@ function cancel_token.await_token_cancelled_catches() -> int {
 
   L0:
     load_var e
-    throw
+    rethrow
 
   L1:
     load_const 0
@@ -121,6 +120,7 @@ function cancel_token.token_is_cancelled_reflects_cancel() -> bool[] {
     call baml.spawn.CancelToken.is_cancelled
     store_var after
     load_var2 2 3
+    load_type bool
     alloc_array 2
     return
 }

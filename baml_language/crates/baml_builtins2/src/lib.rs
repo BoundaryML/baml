@@ -49,6 +49,8 @@ impl BuiltinFile {
 
 /// Package name for the main std package (baml types and namespaces).
 pub const PACKAGE_BAML: &str = "baml";
+/// Package name for boundary identity and capture helpers.
+pub const PACKAGE_BOUNDARY: &str = "boundary";
 /// Package name for the testing package.
 pub const PACKAGE_TESTING: &str = "testing";
 /// Package name for the assert package.
@@ -113,7 +115,6 @@ pub const ALL: &[BuiltinFile] = &[
     builtin!("baml", "ns_yaml/yaml.baml"),
     builtin!("baml", "ns_toml/toml.baml"),
     builtin!("baml", "ns_csv/csv.baml"),
-    builtin!("baml", "ns_unstable/unstable.baml"),
     builtin!("baml", "ns_llm/llm_types.baml"),
     builtin!("baml", "ns_llm/llm.baml"),
     builtin!("baml", "ns_stream/stream.baml"),
@@ -129,6 +130,9 @@ pub const ALL: &[BuiltinFile] = &[
     builtin!("baml", "ns_time/plaindatetime.baml"),
     builtin!("baml", "ns_time/zoneddatetime.baml"),
     builtin!("baml", "ns_ops/comparison.baml"),
+    // --- boundary package ---
+    builtin!("boundary", "core.baml"),
+    builtin!("boundary", "ns_id/id.baml"),
     // --- reflect package (standalone, accessible as `reflect.type_of(...)`) ---
     builtin!("reflect", "reflect.baml"),
     // --- testing package ---

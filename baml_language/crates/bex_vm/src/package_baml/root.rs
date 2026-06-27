@@ -3,7 +3,7 @@ use std::{collections::HashMap, sync::Arc};
 use bex_heap::TlabHolder;
 use bex_vm_types::{
     FutureRead, HeapPtr, ValueKind,
-    types::{AtomicValueSlot, Instance, Object, Value},
+    types::{Array, AtomicValueSlot, Instance, Map, Object, Value},
 };
 use indexmap::IndexMap;
 
@@ -141,6 +141,49 @@ impl BamlPackageBaml for PackageBamlImpl {
 
     fn _to_string_shim(vm: &mut BexVm, value: &Value) -> NativeCallResult {
         render_to_string_honoring_overrides(vm, *value)
+    }
+
+    /// `baml._to_json_default(value)` and `baml._to_json_shim(value)` both render
+    /// `value` to a `json` value for `baml.json.from`, honoring `baml.ToJson`
+    /// overrides at every depth. The json analog of `_to_string_default` /
+    /// `_to_string_shim`; both delegate to the override-honoring walker in
+    /// `json.rs`. Unlike the string shims, this can throw `JsonSerializationError`
+    /// for values with no json representation.
+    fn _to_json_default(vm: &mut BexVm, value: &Value) -> NativeCallResult {
+        super::json::render_to_json_honoring_overrides(vm, *value)
+    }
+
+    fn _to_json_shim(vm: &mut BexVm, value: &Value) -> NativeCallResult {
+        super::json::render_to_json_honoring_overrides(vm, *value)
+    }
+
+    /// `baml._from_json_shim<T>(j)` backs `baml.json.to<T>`: decode `j` into the
+    /// target type `T` (read from the call's type-args), dispatching a user
+    /// `implements baml.FromJson` override on `T` and otherwise decoding
+    /// structurally. The deserialize analog of `_to_json_shim`.
+    fn _from_json_shim(vm: &mut BexVm, j: &Value) -> NativeCallResult {
+        super::json::json_to_shim(vm, *j)
+    }
+
+    /// `baml._cleanup_begin(value)` — BEP-042 `cleanup` run-once guard.
+    ///
+    /// Atomically test-and-sets `value`'s per-instance "cleaned" latch and
+    /// returns `true` iff this is the first `cleanup` invocation on that
+    /// instance (so the compiled guard runs the body); a later invocation —
+    /// explicit, `defer`, or (Commit 2) the GC finalizer — returns `false` and
+    /// the body is skipped. The latch is set on entry: a `cleanup` that throws
+    /// is still considered cleaned and will not be retried.
+    ///
+    /// A non-instance receiver returns `true` defensively; the guard is only
+    /// emitted for a class `cleanup(self)` method, whose `self` is an instance.
+    fn _cleanup_begin(vm: &BexVm, value: &Value) -> bool {
+        match value.as_object_ptr() {
+            Some(ptr) => match vm.get_object(ptr) {
+                Object::Instance(inst) => inst.cleaned.begin(),
+                _ => true,
+            },
+            None => true,
+        }
     }
 }
 
@@ -467,7 +510,11 @@ fn deep_copy_value_recursive(
                 Object::Uint8Array(bytes) => vm.tlab.alloc(Object::Uint8Array(bytes)),
 
                 Object::Array(values) => {
-                    let placeholder_ptr = vm.tlab.alloc(Object::Array(Vec::new().into()));
+                    // A deep copy preserves the source array's element type.
+                    let element_ty = values.element_ty.as_ref().clone();
+                    let placeholder_ptr = vm
+                        .tlab
+                        .alloc(Object::Array(Array::new(element_ty.clone(), Vec::new())));
                     copied_objects.insert(ptr, placeholder_ptr);
 
                     // Snapshot under the source's lock; the recursive call
@@ -479,12 +526,20 @@ fn deep_copy_value_recursive(
                     }
 
                     // no GC write barrier because it is all in gen0
-                    *vm.get_object_mut(placeholder_ptr) = Object::Array(new_values.into());
+                    *vm.get_object_mut(placeholder_ptr) =
+                        Object::Array(Array::new(element_ty, new_values));
                     placeholder_ptr
                 }
 
                 Object::Map(map) => {
-                    let placeholder_ptr = vm.tlab.alloc(Object::Map(IndexMap::new().into()));
+                    // A deep copy preserves the source map's key/value types.
+                    let key_ty = map.key_ty.as_ref().clone();
+                    let value_ty = map.value_ty.as_ref().clone();
+                    let placeholder_ptr = vm.tlab.alloc(Object::Map(Map::new(
+                        key_ty.clone(),
+                        value_ty.clone(),
+                        IndexMap::new(),
+                    )));
                     copied_objects.insert(ptr, placeholder_ptr);
 
                     let snapshot = map.to_index_map();
@@ -495,14 +550,15 @@ fn deep_copy_value_recursive(
                     }
 
                     // no GC write barrier because it is all in gen0
-                    *vm.get_object_mut(placeholder_ptr) = Object::Map(new_map.into());
+                    *vm.get_object_mut(placeholder_ptr) =
+                        Object::Map(Map::new(key_ty, value_ty, new_map));
                     placeholder_ptr
                 }
 
                 Object::Instance(instance) => {
                     let placeholder_ptr = vm.tlab.alloc(Object::Instance(Instance::new(
                         instance.class,
-                        instance.class_type_args.clone(),
+                        instance.class_type_args.to_vec(),
                         Vec::new(),
                     )));
                     copied_objects.insert(ptr, placeholder_ptr);
@@ -512,8 +568,11 @@ fn deep_copy_value_recursive(
                         new_fields.push(deep_copy_value_recursive(vm, field, copied_objects));
                     }
 
-                    let new_instance =
-                        Instance::new(instance.class, instance.class_type_args, new_fields);
+                    let new_instance = Instance::new(
+                        instance.class,
+                        instance.class_type_args.to_vec(),
+                        new_fields,
+                    );
                     // no GC write barrier because it is all in gen0
                     *vm.get_object_mut(placeholder_ptr) = Object::Instance(new_instance);
                     placeholder_ptr

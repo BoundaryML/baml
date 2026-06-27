@@ -73,9 +73,64 @@ pub(crate) async fn build_request(
         request.url = parsed.to_string();
     }
 
+    // In the browser (WASM playground), requests go directly to LLM providers,
+    // which CORS blocks. When BOUNDARY_PROXY_URL is set we route through the
+    // playground proxy: it forwards to the original target (carried in the
+    // `baml-original-url` header) and injects server-side API keys. Read the
+    // env var before `auth_request` consumes `io`; apply the rewrite after, so
+    // any auth headers are already present (the proxy overrides them for
+    // allowed origins). Bedrock is excluded — its SigV4 signature is bound to
+    // the host and would not survive the rewrite (matching legacy behavior).
+    #[cfg(target_arch = "wasm32")]
+    let proxy_url = if provider == LlmProvider::AwsBedrock {
+        None
+    } else {
+        io.env_get("BOUNDARY_PROXY_URL".to_string())
+            .await
+            .ok()
+            .flatten()
+    };
+
     crate::auth_request::auth_request(provider, &mut request, client, io).await?;
 
+    #[cfg(target_arch = "wasm32")]
+    if let Some(proxy_url) = proxy_url {
+        let proxy_url = proxy_url.trim();
+        if !proxy_url.is_empty() {
+            apply_proxy_rewrite(&mut request, proxy_url)?;
+        }
+    }
+
     Ok(request)
+}
+
+/// Route a request through the playground proxy (WASM only).
+///
+/// Sends to `{proxy}/<path+query>` and puts the original origin in the
+/// `baml-original-url` header. The proxy reconstructs the real target by
+/// appending the forwarded path to that origin, then injects the API key for
+/// allowed model-provider origins.
+#[cfg(target_arch = "wasm32")]
+fn apply_proxy_rewrite(
+    request: &mut crate::baml_std::HttpRequest,
+    proxy_url: &str,
+) -> Result<(), BuildRequestError> {
+    let parsed = url::Url::parse(&request.url)
+        .map_err(|e| BuildRequestError::Other(format!("invalid URL '{}': {e}", request.url)))?;
+    let origin = parsed.origin().ascii_serialization();
+
+    // Everything after the origin — appended to the original origin by the proxy.
+    let mut suffix = parsed.path().to_string();
+    if let Some(query) = parsed.query() {
+        suffix.push('?');
+        suffix.push_str(query);
+    }
+
+    request.url = format!("{}{}", proxy_url.trim_end_matches('/'), suffix);
+    request
+        .headers
+        .insert("baml-original-url".to_string(), origin);
+    Ok(())
 }
 
 // ---------------------------------------------------------------------------

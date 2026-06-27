@@ -38,7 +38,6 @@ function Clamp(x: int) -> int {
 // if_else.baml:9:19 (type) len=3 "int"
 // if_else.baml:9:27 (type) len=3 "int"
 // if_else.baml:10:3 (keyword) len=3 "let"
-// if_else.baml:10:7 (variable) len=6 "result"
 // if_else.baml:10:14 (operator) len=1 "="
 // if_else.baml:10:16 (keyword) len=2 "if"
 // if_else.baml:10:22 (operator) len=1 "<"

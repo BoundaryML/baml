@@ -3,11 +3,11 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
   [type] warning: extraneous throws declaration: Errors
-    ╭─[ catch_return_type_mismatch.baml:10:33 ]
+    ╭─[ catch_return_type_mismatch.baml:10:34 ]
     │
  10 │ function callee() -> bool throws Errors {
-    │                                 ───┬───  
-    │                                    ╰───── extraneous throws declaration: Errors
+    │                                  ───┬──  
+    │                                     ╰──── extraneous throws declaration: Errors
     │ 
     │ Note: Error code: E0097
 ────╯

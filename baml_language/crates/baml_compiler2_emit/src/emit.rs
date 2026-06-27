@@ -16,8 +16,9 @@ use baml_compiler2_mir::{
 };
 use baml_type::{RuntimeTy, TyTemplate, TypeName};
 use bex_vm_types::{
-    BinOp as VmBinOp, Bytecode, CmpOp, ConstValue, Function, FunctionKind, FunctionOrigin,
-    GlobalIndex, Instruction, Object, ObjectIndex, ObjectPool, UnaryOp as VmUnaryOp,
+    BinOp as VmBinOp, Bytecode, CmpOp, ConstValue, Function, FunctionCaptureProps, FunctionKind,
+    FunctionOrigin, GlobalIndex, Instruction, Object, ObjectIndex, ObjectPool,
+    UnaryOp as VmUnaryOp,
     bytecode::{
         ClassInitPlan, DebugLocalScope, FieldCopy, FieldCopySet, InstructionMeta, JumpTableData,
         LineTableEntry, MatchHashEntry, MatchHashTable, OperandMeta,
@@ -702,7 +703,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 self.operand_reads_spawn_captured_local(left, seen)
                     || self.operand_reads_spawn_captured_local(right, seen)
             }
-            Rvalue::Array(elements)
+            Rvalue::Array(_, elements)
             | Rvalue::Aggregate {
                 fields: elements, ..
             } => elements
@@ -714,7 +715,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             Rvalue::MakeGenericFunctionFromValue { value, .. } => {
                 self.operand_reads_spawn_captured_local(value, seen)
             }
-            Rvalue::Map(entries) => entries.iter().any(|(key, value)| {
+            Rvalue::Map(_, _, entries) => entries.iter().any(|(key, value)| {
                 self.operand_reads_spawn_captured_local(key, seen)
                     || self.operand_reads_spawn_captured_local(value, seen)
             }),
@@ -976,6 +977,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             throws_type: None,
             origin: FunctionOrigin::Internal,
             body_meta: None,
+            capture: FunctionCaptureProps::disabled(),
             function_id: 0, // assigned at engine init (interim provider)
         }
     }
@@ -1459,7 +1461,20 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                             OperandMeta::Const(Self::display_string_operand("data")),
                         );
 
-                        // 6. AllocMap(2) -> { level: "info", data: <user_data> }
+                        // 6. Push the payload map's key/value type tags, then
+                        //    AllocMap(2) -> { level: "info", data: <user_data> }.
+                        //    The event is a `map<string, unknown>` (string keys;
+                        //    heterogeneous values). The VM's `AllocMap` pops the
+                        //    value type (top of stack) then the key type (below it)
+                        //    before draining the entries, so push key first, value
+                        //    second — mirroring the `alloc_map` helper. Omitting
+                        //    these tags makes the VM read the entry keys as types.
+                        unwrap_infallible(
+                            self.load_type(&TyTemplate::Concrete(RuntimeTy::string())),
+                        );
+                        unwrap_infallible(
+                            self.load_type(&TyTemplate::Concrete(RuntimeTy::unknown())),
+                        );
                         self.emit(Instruction::AllocMap(2));
 
                         // 7. Restore call-site span and emit SendEvent
@@ -2055,6 +2070,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 callee,
                 args,
                 ntypeargs,
+                runtime_id,
                 destination,
                 target,
                 unwind: _,
@@ -2071,10 +2087,21 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
 
                 if let Some(global_callee) = global_callee {
                     unwrap_infallible(pull_semantics::walk_call_direct_args(self, args));
-                    let inst = self.emit(Instruction::Call {
-                        callee: global_callee,
-                        ntypeargs: u16::try_from(*ntypeargs).expect("ntypeargs fits in u16"),
-                    });
+                    if let Some(runtime_id) = runtime_id {
+                        unwrap_infallible(pull_semantics::walk_operand_pull(self, runtime_id));
+                    }
+                    let instruction = if runtime_id.is_some() {
+                        Instruction::CallWithRuntimeId {
+                            callee: global_callee,
+                            ntypeargs: u16::try_from(*ntypeargs).expect("ntypeargs fits in u16"),
+                        }
+                    } else {
+                        Instruction::Call {
+                            callee: global_callee,
+                            ntypeargs: u16::try_from(*ntypeargs).expect("ntypeargs fits in u16"),
+                        }
+                    };
+                    let inst = self.emit(instruction);
                     if let Some(name) = &func_name {
                         self.set_operand(inst, OperandMeta::Callable(name.clone()));
                     }
@@ -2084,7 +2111,12 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                     unwrap_infallible(pull_semantics::walk_call_indirect_operands(
                         self, callee, args,
                     ));
-                    self.emit(Instruction::CallIndirect);
+                    if let Some(runtime_id) = runtime_id {
+                        unwrap_infallible(pull_semantics::walk_operand_pull(self, runtime_id));
+                        self.emit(Instruction::CallIndirectWithRuntimeId);
+                    } else {
+                        self.emit(Instruction::CallIndirect);
+                    }
                     self.emit_store_place(destination);
                     self.emit_jump_unless_fallthrough(*target);
                 }
@@ -2095,6 +2127,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 method,
                 args,
                 ntypeargs,
+                runtime_id,
                 destination,
                 target,
                 unwind: _,
@@ -2109,11 +2142,22 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 let inst = self.emit(Instruction::LoadType(iface_const));
                 self.set_operand(inst, OperandMeta::Const(iface.to_string()));
                 self.emit_constant(&Constant::String(method.clone()));
+                if let Some(runtime_id) = runtime_id {
+                    unwrap_infallible(pull_semantics::walk_operand_pull(self, runtime_id));
+                }
                 let nargs = args.len() - ntypeargs;
-                let inst = self.emit(Instruction::VirtualCall {
-                    nargs: u16::try_from(nargs).expect("nargs fits in u16"),
-                    ntypeargs: u16::try_from(*ntypeargs).expect("ntypeargs fits in u16"),
-                });
+                let instruction = if runtime_id.is_some() {
+                    Instruction::VirtualCallWithRuntimeId {
+                        nargs: u16::try_from(nargs).expect("nargs fits in u16"),
+                        ntypeargs: u16::try_from(*ntypeargs).expect("ntypeargs fits in u16"),
+                    }
+                } else {
+                    Instruction::VirtualCall {
+                        nargs: u16::try_from(nargs).expect("nargs fits in u16"),
+                        ntypeargs: u16::try_from(*ntypeargs).expect("ntypeargs fits in u16"),
+                    }
+                };
+                let inst = self.emit(instruction);
                 self.set_operand(inst, OperandMeta::Callable(method.clone()));
                 self.emit_store_place(destination);
                 self.emit_jump_unless_fallthrough(*target);
@@ -2130,6 +2174,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             Terminator::SysOp {
                 callee,
                 args,
+                runtime_id,
                 destination,
                 target,
                 unwind: _,
@@ -2150,7 +2195,14 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                     });
 
                 unwrap_infallible(pull_semantics::walk_call_direct_args(self, args));
-                let inst = self.emit(Instruction::SysOp(global_callee));
+                if let Some(runtime_id) = runtime_id {
+                    unwrap_infallible(pull_semantics::walk_operand_pull(self, runtime_id));
+                }
+                let inst = if runtime_id.is_some() {
+                    self.emit(Instruction::SysOpWithRuntimeId(global_callee))
+                } else {
+                    self.emit(Instruction::SysOp(global_callee))
+                };
                 if let Some(name) = &func_name {
                     self.set_operand(inst, OperandMeta::Callable(name.clone()));
                 }
@@ -2209,6 +2261,10 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             Terminator::Throw { value } => {
                 self.emit_operand_pull(value);
                 self.emit(Instruction::Throw);
+            }
+            Terminator::Rethrow { value } => {
+                self.emit_operand_pull(value);
+                self.emit(Instruction::Rethrow);
             }
 
             Terminator::ThrowIfPanic { value, otherwise } => {
@@ -2962,7 +3018,11 @@ impl PullSink for StackifyCodegen<'_, '_> {
         Ok(())
     }
 
-    fn alloc_array(&mut self, len: usize) -> Result<(), Self::Error> {
+    fn alloc_array(&mut self, element_ty: &TyTemplate, len: usize) -> Result<(), Self::Error> {
+        // Push the (frame-resolved) element type on top of the `len` elements;
+        // the VM's `AllocArray` pops it before draining the values, mirroring how
+        // `AllocInstance` consumes its leading type args.
+        self.load_type(element_ty)?;
         self.emit(Instruction::AllocArray(len));
         Ok(())
     }
@@ -2994,7 +3054,16 @@ impl PullSink for StackifyCodegen<'_, '_> {
         Ok(())
     }
 
-    fn alloc_map(&mut self, len: usize) -> Result<(), Self::Error> {
+    fn alloc_map(
+        &mut self,
+        key_ty: &TyTemplate,
+        value_ty: &TyTemplate,
+        len: usize,
+    ) -> Result<(), Self::Error> {
+        // Push key then value type on top of the entries; the VM's `AllocMap`
+        // pops value then key before processing the pairs.
+        self.load_type(key_ty)?;
+        self.load_type(value_ty)?;
         self.emit(Instruction::AllocMap(len));
         Ok(())
     }

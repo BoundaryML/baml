@@ -6324,6 +6324,27 @@ fn implements_for_optional_target_is_rejected() {
 }
 
 #[test]
+fn impl_generic_bound_must_be_an_interface() {
+    // BEP-044: a generic bound (`T extends X`) must be an interface. A class
+    // bound resolves to a concrete non-interface type and is rejected (E0145),
+    // rather than being silently dropped from the resolved bound set.
+    assert_compile_error_code(
+        r#"
+        interface Printable {
+            function print(self) -> string
+        }
+        class Widget {
+            name: string
+        }
+        implements<T extends Widget> Printable for T {
+            function print(self) -> string { return "w" }
+        }
+        "#,
+        "E0145",
+    );
+}
+
+#[test]
 fn implements_for_unknown_target_is_rejected() {
     // The user-facing top type `unknown` denotes "any type" — it has no single
     // concrete implementor for dispatch to recover, so it is rejected like a
@@ -7678,6 +7699,78 @@ fn malformed_impls_do_not_spuriously_overlap() {
     assert!(
         !errors.iter().any(|e| e.starts_with("[E0132]")),
         "unresolved for-types must not be reported as an overlap; got:\n  {}",
+        errors.join("\n  ")
+    );
+}
+
+/// An unresolved interface type-argument in an `implements` clause must be
+/// reported EXACTLY ONCE. `impl_data` owns it; the implements-target validator
+/// in the LSP must not re-emit it (otherwise the error appears two or three
+/// times — the duplication an `.any()`-based assertion never catches).
+#[test]
+fn implements_target_arg_error_is_reported_exactly_once() {
+    let in_body = collect_compile_errors(
+        r#"
+        interface Container<T> {
+            function size(self) -> int
+        }
+        class Box {
+            items: int[]
+            implements Container<DoesNotExist> {
+                function size(self) -> int { return 0 }
+            }
+        }
+        "#,
+    );
+    assert_eq!(
+        in_body
+            .iter()
+            .filter(|e| e.contains("DoesNotExist"))
+            .count(),
+        1,
+        "in-body interface arg error must be reported once; got:\n  {}",
+        in_body.join("\n  ")
+    );
+
+    let out_of_body = collect_compile_errors(
+        r#"
+        interface Container<T> {
+            function size(self) -> int
+        }
+        class Cat {
+            name: string
+        }
+        implement Container<DoesNotExist> for Cat {
+            function size(self) -> int { return 0 }
+        }
+        "#,
+    );
+    assert_eq!(
+        out_of_body
+            .iter()
+            .filter(|e| e.contains("DoesNotExist"))
+            .count(),
+        1,
+        "out-of-body interface arg error must be reported once; got:\n  {}",
+        out_of_body.join("\n  ")
+    );
+}
+
+/// When BOTH the interface target and the for-target are unresolved, the
+/// for-target error must still be reported — `impl_data` resolves the interface
+/// first, but it carries the for-target diagnostic into the failure rather than
+/// dropping it.
+#[test]
+fn unresolved_for_target_reported_even_when_interface_unresolved() {
+    let errors = collect_compile_errors(
+        r#"
+        implement BadInterface for AlsoMissing {}
+        "#,
+    );
+    assert!(
+        errors.iter().any(|e| e.contains("AlsoMissing")),
+        "the unresolved for-target must not be dropped when the interface is also \
+         unresolved; got:\n  {}",
         errors.join("\n  ")
     );
 }

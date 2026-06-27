@@ -178,15 +178,19 @@ function type_error_repro.BoardMinimal.new() -> type_error_repro.BoardMinimal {
     load_const ""
     load_const ""
     load_const ""
+    load_type string
     alloc_array 3
     load_const ""
     load_const ""
     load_const ""
+    load_type string
     alloc_array 3
     load_const ""
     load_const ""
     load_const ""
+    load_type string
     alloc_array 3
+    load_type string[]
     alloc_array 3
     init_instance user.type_error_repro.BoardMinimal .cells
     return
@@ -217,15 +221,19 @@ function type_error_repro.BoardRead.new() -> type_error_repro.BoardRead {
     load_const ""
     load_const ""
     load_const ""
+    load_type string
     alloc_array 3
     load_const ""
     load_const ""
     load_const ""
+    load_type string
     alloc_array 3
     load_const ""
     load_const ""
     load_const ""
+    load_type string
     alloc_array 3
+    load_type string[]
     alloc_array 3
     init_instance user.type_error_repro.BoardRead .cells
     return
@@ -245,15 +253,19 @@ function type_error_repro.BoardWrite.new() -> type_error_repro.BoardWrite {
     load_const ""
     load_const ""
     load_const ""
+    load_type string
     alloc_array 3
     load_const ""
     load_const ""
     load_const ""
+    load_type string
     alloc_array 3
     load_const ""
     load_const ""
     load_const ""
+    load_type string
     alloc_array 3
+    load_type string[]
     alloc_array 3
     init_instance user.type_error_repro.BoardWrite .cells
     return
@@ -319,6 +331,7 @@ function type_error_repro.ContainerSelf.new() -> type_error_repro.ContainerSelf 
     load_const "a"
     load_const "b"
     load_const "c"
+    load_type string
     alloc_array 3
     init_instance user.type_error_repro.ContainerSelf .items
     return
@@ -348,18 +361,25 @@ function type_error_repro.Cube.get(self: type_error_repro.Cube, x: int, y: int, 
 function type_error_repro.Cube.new() -> type_error_repro.Cube {
     load_const 0
     load_const 0
+    load_type int
     alloc_array 2
     load_const 0
     load_const 0
+    load_type int
     alloc_array 2
+    load_type int[]
     alloc_array 2
     load_const 0
     load_const 0
+    load_type int
     alloc_array 2
     load_const 0
     load_const 0
+    load_type int
     alloc_array 2
+    load_type int[]
     alloc_array 2
+    load_type int[][]
     alloc_array 2
     init_instance user.type_error_repro.Cube .data
     return
@@ -392,15 +412,19 @@ function type_error_repro.GridSelf.new() -> type_error_repro.GridSelf {
     load_const ""
     load_const ""
     load_const ""
+    load_type string
     alloc_array 3
     load_const ""
     load_const ""
     load_const ""
+    load_type string
     alloc_array 3
     load_const ""
     load_const ""
     load_const ""
+    load_type string
     alloc_array 3
+    load_type string[]
     alloc_array 3
     init_instance user.type_error_repro.GridSelf .cells
     return
@@ -430,6 +454,7 @@ function type_error_repro.OuterItems.new() -> type_error_repro.OuterItems {
     load_const "a"
     load_const "b"
     load_const "c"
+    load_type string
     alloc_array 3
     init_instance user.type_error_repro.InnerItems .items
     init_instance user.type_error_repro.OuterItems .inner
@@ -460,8 +485,11 @@ function type_error_repro.Registry.new() -> type_error_repro.Registry {
     load_const 1
     load_const 2
     load_const 3
+    load_type int
     alloc_array 3
     load_const "nums"
+    load_type string
+    load_type int[]
     alloc_map 1
     init_instance user.type_error_repro.Registry .data
     return
@@ -487,6 +515,8 @@ function type_error_repro.ScoresSelf.get(self: type_error_repro.ScoresSelf, key:
 }
 
 function type_error_repro.ScoresSelf.new() -> type_error_repro.ScoresSelf {
+    load_type string
+    load_type int
     alloc_map 0
     init_instance user.type_error_repro.ScoresSelf .data
     return
@@ -502,6 +532,7 @@ function type_error_repro.ScoresSelf.set(self: type_error_repro.ScoresSelf, key:
 }
 
 function type_error_repro.Stack.new() -> type_error_repro.Stack {
+    load_type int
     alloc_array 0
     init_instance user.type_error_repro.Stack .items
     return
@@ -530,6 +561,7 @@ function type_error_repro.array_element_assignment_1d_body() -> string {
     load_const "a"
     load_const "b"
     load_const "c"
+    load_type string
     alloc_array 3
     store_var arr
     load_var arr
@@ -546,15 +578,19 @@ function type_error_repro.array_element_assignment_2d_type_error_body() -> strin
     load_const ""
     load_const ""
     load_const ""
+    load_type string
     alloc_array 3
     load_const ""
     load_const ""
     load_const ""
+    load_type string
     alloc_array 3
     load_const ""
     load_const ""
     load_const ""
+    load_type string
     alloc_array 3
+    load_type string[]
     alloc_array 3
     store_var cells
     load_var cells
@@ -575,6 +611,7 @@ function type_error_repro.array_index_with_int_works_body() -> string {
     load_const "a"
     load_const "b"
     load_const "c"
+    load_type string
     alloc_array 3
     load_const 1
     load_array_element
@@ -585,6 +622,7 @@ function type_error_repro.array_write_with_variable_index_body() -> string {
     load_const "a"
     load_const "b"
     load_const "c"
+    load_type string
     alloc_array 3
     store_var arr
     load_var arr
@@ -601,6 +639,7 @@ function type_error_repro.bytecode_1d_array_read_through_field_body() -> string 
     load_const "a"
     load_const "b"
     load_const "c"
+    load_type string
     alloc_array 3
     init_instance user.type_error_repro.BytecodeContainerRead .items
     load_const 1
@@ -612,6 +651,7 @@ function type_error_repro.bytecode_1d_array_write_local_body() -> string {
     load_const "a"
     load_const "b"
     load_const "c"
+    load_type string
     alloc_array 3
     store_var arr
     load_var arr
@@ -628,6 +668,7 @@ function type_error_repro.bytecode_1d_array_write_through_field_body() -> null {
     load_const "a"
     load_const "b"
     load_const "c"
+    load_type string
     alloc_array 3
     init_instance user.type_error_repro.BytecodeContainer .items
     load_const 1
@@ -641,10 +682,13 @@ function type_error_repro.bytecode_1d_array_write_through_field_body() -> null {
 function type_error_repro.bytecode_2d_array_write_local_body() -> string {
     load_const "a"
     load_const "b"
+    load_type string
     alloc_array 2
     load_const "c"
     load_const "d"
+    load_type string
     alloc_array 2
+    load_type string[]
     alloc_array 2
     store_var cells
     load_var cells
@@ -664,10 +708,13 @@ function type_error_repro.bytecode_2d_array_write_local_body() -> string {
 function type_error_repro.bytecode_2d_array_write_through_field_body() -> null {
     load_const "a"
     load_const "b"
+    load_type string
     alloc_array 2
     load_const "c"
     load_const "d"
+    load_type string
     alloc_array 2
+    load_type string[]
     alloc_array 2
     init_instance user.type_error_repro.BytecodeGrid .cells
     load_const 1
@@ -680,6 +727,8 @@ function type_error_repro.bytecode_2d_array_write_through_field_body() -> null {
 }
 
 function type_error_repro.bytecode_map_write_local_body() -> int {
+    load_type string
+    load_type int
     alloc_map 0
     store_var scores
     load_var scores
@@ -693,6 +742,8 @@ function type_error_repro.bytecode_map_write_local_body() -> int {
 }
 
 function type_error_repro.bytecode_map_write_through_field_body() -> null {
+    load_type string
+    load_type int
     alloc_map 0
     init_instance user.type_error_repro.BytecodeScores .data
     load_const "alice"
@@ -707,6 +758,7 @@ function type_error_repro.bytecode_non_self_param_array_write_body() -> null {
     load_const "a"
     load_const "b"
     load_const "c"
+    load_type string
     alloc_array 3
     init_instance user.type_error_repro.BytecodeContainerNonSelf .items
     load_const 1
@@ -883,6 +935,7 @@ function type_error_repro.int_through_function_call_as_index_works_body() -> str
     load_const "a"
     load_const "b"
     load_const "c"
+    load_type string
     alloc_array 3
     load_const 1
     call user.type_error_repro.get_element_for_int_through_call
@@ -890,6 +943,8 @@ function type_error_repro.int_through_function_call_as_index_works_body() -> str
 }
 
 function type_error_repro.map_write_local_variable_body() -> int {
+    load_type string
+    load_type int
     alloc_map 0
     store_var scores
     load_var scores
@@ -906,15 +961,19 @@ function type_error_repro.nested_array_index_with_int_works_body() -> string {
     load_const "a"
     load_const "b"
     load_const "c"
+    load_type string
     alloc_array 3
     load_const "d"
     load_const "e"
     load_const "f"
+    load_type string
     alloc_array 3
     load_const "g"
     load_const "h"
     load_const "i"
+    load_type string
     alloc_array 3
+    load_type string[]
     alloc_array 3
     load_const 1
     load_const 2
@@ -926,15 +985,19 @@ function type_error_repro.nested_array_read_with_variables_body() -> string {
     load_const "a"
     load_const "b"
     load_const "c"
+    load_type string
     alloc_array 3
     load_const "d"
     load_const "e"
     load_const "f"
+    load_type string
     alloc_array 3
     load_const "g"
     load_const "h"
     load_const "i"
+    load_type string
     alloc_array 3
+    load_type string[]
     alloc_array 3
     load_const 1
     load_array_element
@@ -947,15 +1010,19 @@ function type_error_repro.nested_array_write_with_variables_body() -> string {
     load_const "a"
     load_const "b"
     load_const "c"
+    load_type string
     alloc_array 3
     load_const "d"
     load_const "e"
     load_const "f"
+    load_type string
     alloc_array 3
     load_const "g"
     load_const "h"
     load_const "i"
+    load_type string
     alloc_array 3
+    load_type string[]
     alloc_array 3
     store_var cells
     load_var cells
@@ -976,6 +1043,7 @@ function type_error_repro.non_self_param_array_write_body() -> string {
     load_const "a"
     load_const "b"
     load_const "c"
+    load_type string
     alloc_array 3
     init_instance user.type_error_repro.ContainerNonSelf .items
     store_var_load_var c

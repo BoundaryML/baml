@@ -52,9 +52,3 @@ function user.UseOptionalDropping() -> string[]  [expr] {
 function user.UseRequiredByName() -> string[]  [expr] {
   {  } SearchDocs(query = "birds")
 }
-function user.from_json(j: baml.json.json) -> user.SearchService  [expr] {
-  user.SearchService { base: baml.json.from_json(baml.json.field(j, "base")) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "base": baml.json.to_json(self.base) }
-}

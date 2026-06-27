@@ -125,6 +125,9 @@ pub enum DiagnosticId {
     WatchOnNonVariable,
     WatchOnUnwatchedVariable,
 
+    // Control-flow diagnostics (E0146)
+    UnreachableCode,
+
     // Syntax errors (E0028-E0031)
     MissingSemicolon,
     MissingConditionParens,
@@ -291,9 +294,21 @@ pub enum DiagnosticId {
     OverlappingImplements,
     /// An interface `requires` a type that is not an interface (e.g. a class or enum).
     InterfaceRequiresNonInterface,
+    /// A generic parameter's bound (`T extends X`) is not an interface. Bounds
+    /// must be interfaces (BEP-044).
+    GenericBoundNotInterface,
     /// A class declares a `to_string` method directly; it must be provided by
     /// implementing the `baml.ToString` interface instead.
     ToStringMustImplementInterface,
+    /// A class declares a `to_json` method directly; it must be provided by
+    /// implementing the `baml.ToJson` interface instead.
+    ToJsonMustImplementInterface,
+    /// A class declares a `from_json` method directly; it must be provided by
+    /// implementing the `baml.FromJson` interface instead.
+    FromJsonMustImplementInterface,
+    /// A class declares a `cleanup` method whose signature is not the reserved
+    /// magic-finalizer shape `cleanup(self) -> void` (BEP-042).
+    CleanupMagicMethodSignature,
 }
 
 impl DiagnosticId {
@@ -362,6 +377,9 @@ impl DiagnosticId {
             DiagnosticId::UnknownEnumVariant => "E0064",
             DiagnosticId::WatchOnNonVariable => "E0065",
             DiagnosticId::WatchOnUnwatchedVariable => "E0066",
+
+            // Control-flow diagnostics
+            DiagnosticId::UnreachableCode => "E0146",
 
             // Syntax errors
             DiagnosticId::MissingSemicolon => "E0028",
@@ -486,6 +504,10 @@ impl DiagnosticId {
             DiagnosticId::ImplViolatesOrphanRule => "E0139",
             DiagnosticId::ToStringMustImplementInterface => "E0140",
             DiagnosticId::DeferControlFlowEscape => "E0141",
+            DiagnosticId::ToJsonMustImplementInterface => "E0142",
+            DiagnosticId::FromJsonMustImplementInterface => "E0143",
+            DiagnosticId::CleanupMagicMethodSignature => "E0144",
+            DiagnosticId::GenericBoundNotInterface => "E0145",
         }
     }
 }

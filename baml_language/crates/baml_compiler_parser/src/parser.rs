@@ -1550,6 +1550,53 @@ impl<'a> Parser<'a> {
         true
     }
 
+    /// The span to attach to an "expected …, found …" / point-at-here error.
+    ///
+    /// Points at the current token — `current()` already skips trivia, so its
+    /// span is tight. At end of input there is no token to point at (the error
+    /// is the *absence* of a token), so we emit a zero-width caret just past the
+    /// last real token, matching rustc's `prev_token.span.shrink_to_hi()`. This
+    /// never points at trailing trivia: the old fallback reached into the raw
+    /// `self.tokens.last()`, which could be a trailing newline and produced a
+    /// span covering `"\n"`.
+    fn error_span(&self) -> baml_base::Span {
+        if let Some(token) = self.current() {
+            return token.span;
+        }
+        match self.last_non_trivia_token() {
+            Some(token) => {
+                let end = token.span.range.end();
+                baml_base::Span::new(token.span.file_id, TextRange::new(end, end))
+            }
+            None => baml_base::Span::new(baml_base::FileId::new(0), TextRange::default()),
+        }
+    }
+
+    /// The last non-trivia token in the stream, used to anchor end-of-input
+    /// error spans so they never land on trailing whitespace or comments.
+    ///
+    /// Comments are token sequences (e.g. `// …`), not single trivia tokens, so
+    /// a reverse scan can't recognize them; mirror `current_impl` and walk
+    /// forward, skipping comment runs with `skip_comment_at`, tracking the last
+    /// real (non-basic-trivia) token.
+    fn last_non_trivia_token(&self) -> Option<&Token> {
+        let mut last = None;
+        let mut i = 0;
+        while i < self.tokens.len() {
+            let new_i = self.skip_comment_at(i);
+            if new_i != i {
+                i = new_i;
+                continue;
+            }
+            let token = &self.tokens[i];
+            if !self.is_basic_trivia(token.kind) {
+                last = Some(token);
+            }
+            i += 1;
+        }
+        last
+    }
+
     /// Expect a token, emit error if not found
     fn expect(&mut self, kind: TokenKind) -> bool {
         if self.eat(kind) {
@@ -1560,12 +1607,7 @@ impl<'a> Parser<'a> {
                 .map(|t| format!("{}", t.kind))
                 .unwrap_or_else(|| "EOF".to_string());
 
-            let span = self.current().map(|t| t.span).unwrap_or_else(|| {
-                // Use the span of the last token if available, or a default empty span
-                self.tokens.last().map(|t| t.span).unwrap_or_else(|| {
-                    baml_base::Span::new(baml_base::FileId::new(0), TextRange::default())
-                })
-            });
+            let span = self.error_span();
 
             self.events.push(Event::UnexpectedToken {
                 expected: format!("{kind}"),
@@ -1592,12 +1634,7 @@ impl<'a> Parser<'a> {
             .map(|t| format!("{}", t.kind))
             .unwrap_or_else(|| "EOF".to_string());
 
-        let span = self.current().map(|t| t.span).unwrap_or_else(|| {
-            // Use the span of the last token if available, or a default empty span
-            self.tokens.last().map(|t| t.span).unwrap_or_else(|| {
-                baml_base::Span::new(baml_base::FileId::new(0), TextRange::default())
-            })
-        });
+        let span = self.error_span();
 
         self.events.push(Event::UnexpectedToken {
             expected,
@@ -1613,11 +1650,7 @@ impl<'a> Parser<'a> {
 
     /// Emit a hard syntax error (custom message) at the current token's span.
     fn error_here(&mut self, message: String) {
-        let span = self.current().map(|t| t.span).unwrap_or_else(|| {
-            self.tokens.last().map(|t| t.span).unwrap_or_else(|| {
-                baml_base::Span::new(baml_base::FileId::new(0), TextRange::default())
-            })
-        });
+        let span = self.error_span();
         self.error(message, span);
     }
 
@@ -4393,12 +4426,8 @@ impl<'a> Parser<'a> {
             if self.testset_body_depth > 0 {
                 self.parse_test_expr();
             } else {
-                let span = self.current().map(|t| t.span).unwrap_or_else(|| {
-                    baml_base::Span::new(baml_base::FileId::new(0), TextRange::default())
-                });
-                self.error(
+                self.error_here(
                     "test blocks are only allowed at the top level or inside a testset".to_string(),
-                    span,
                 );
                 self.parse_test_expr(); // still parse to recover
             }
@@ -4406,13 +4435,9 @@ impl<'a> Parser<'a> {
             if self.testset_body_depth > 0 {
                 self.parse_testset();
             } else {
-                let span = self.current().map(|t| t.span).unwrap_or_else(|| {
-                    baml_base::Span::new(baml_base::FileId::new(0), TextRange::default())
-                });
-                self.error(
+                self.error_here(
                     "testset blocks are only allowed at the top level or inside a testset"
                         .to_string(),
-                    span,
                 );
                 self.parse_testset(); // still parse to recover
             }

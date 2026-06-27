@@ -328,35 +328,42 @@ fn strip_artifact(path: &Path) -> Result<PathBuf> {
     std::fs::copy(path, &stripped)
         .with_context(|| format!("failed to copy {} for stripping", path.display()))?;
 
-    let (program, args): (&str, &[&str]) = if cfg!(target_os = "macos") {
-        ("strip", &["-x"])
-    } else if cfg!(target_os = "windows") {
-        ("llvm-strip", &["--strip-unneeded"])
-    } else {
-        ("strip", &["--strip-unneeded"])
-    };
-
-    let status = Command::new(program)
-        .args(args)
-        .arg(&stripped)
-        .status()
-        .with_context(|| format!("failed to run {program}"))?;
-
-    if !status.success() {
-        // Try llvm-strip as fallback on Linux
-        if cfg!(target_os = "linux") {
-            let fallback = Command::new("llvm-strip").arg("-x").arg(&stripped).status();
-            if let Ok(s) = fallback {
-                if s.success() {
-                    return Ok(stripped);
-                }
-            }
+    let mut failures = Vec::new();
+    for (program, args) in strip_candidates() {
+        match Command::new(program).args(args).arg(&stripped).status() {
+            Ok(status) if status.success() => return Ok(stripped),
+            Ok(status) => failures.push(format!("{program} exited with {status}")),
+            Err(err) => failures.push(format!("{program}: {err}")),
         }
-        eprintln!("  warning: strip failed, using unstripped size");
-        // Return the copy as-is (unstripped)
+    }
+
+    if failures.is_empty() {
+        eprintln!("  warning: no strip command configured, using unstripped size");
+    } else {
+        eprintln!(
+            "  warning: strip failed ({}), using unstripped size",
+            failures.join("; ")
+        );
     }
 
     Ok(stripped)
+}
+
+fn strip_candidates() -> Vec<(&'static str, &'static [&'static str])> {
+    if cfg!(target_os = "macos") {
+        vec![("strip", &["-x"])]
+    } else if cfg!(target_os = "windows") {
+        vec![
+            ("llvm-strip", &["--strip-unneeded"]),
+            ("llvm-strip.exe", &["--strip-unneeded"]),
+        ]
+    } else {
+        vec![
+            ("strip", &["--strip-unneeded"]),
+            ("llvm-strip", &["--strip-unneeded"]),
+            ("llvm-strip", &["-x"]),
+        ]
+    }
 }
 
 /// Compute gzip size of a file in memory (no temp file).

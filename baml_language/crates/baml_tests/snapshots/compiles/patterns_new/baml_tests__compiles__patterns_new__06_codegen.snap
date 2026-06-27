@@ -1,70 +1,13 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-function user.AppError.from_json(j: baml.json.json) -> AppError {
-    load_var j
-    load_const "code"
-    call baml.json.field
-    store_var _3
-    load_type int
-    load_var _3
-    call baml.json.from_json
-    init_instance user.AppError .code
-    return
+function boundary.LocalId.capture(self: boundary.LocalId, inputs: bool | null, output: bool | null, error: bool | null) -> boundary.LocalId {
 }
 
-function user.AppError.to_json(self: AppError) -> baml.json.json {
-    load_type int
-    load_var self
-    load_field .code
-    call baml.json.to_json
-    load_const "code"
-    alloc_map 1
-    return
+function boundary.id() -> boundary.LocalId {
 }
 
-function user.PatternBucket.from_json(j: baml.json.json) -> PatternBucket {
-    load_var j
-    load_const "values"
-    call baml.json.field
-    store_var _3
-    load_type int[]
-    load_var _3
-    call baml.json.from_json
-    init_instance user.PatternBucket .values
-    return
-}
-
-function user.PatternBucket.to_json(self: PatternBucket) -> baml.json.json {
-    load_type int[]
-    load_var self
-    load_field .values
-    call baml.json.to_json
-    load_const "values"
-    alloc_map 1
-    return
-}
-
-function user.PatternMatrix.from_json(j: baml.json.json) -> PatternMatrix {
-    load_var j
-    load_const "rows"
-    call baml.json.field
-    store_var _3
-    load_type int[][]
-    load_var _3
-    call baml.json.from_json
-    init_instance user.PatternMatrix .rows
-    return
-}
-
-function user.PatternMatrix.to_json(self: PatternMatrix) -> baml.json.json {
-    load_type int[][]
-    load_var self
-    load_field .rows
-    call baml.json.to_json
-    load_const "rows"
-    alloc_map 1
-    return
+function boundary.id.current() -> string {
 }
 
 function user.bare_type_arm(v: int | string) -> int {
@@ -146,7 +89,7 @@ function user.catch_chain_union(mode: int) -> int {
 
   L1:
     load_var e
-    throw
+    rethrow
 
   L2:
     load_const 1
@@ -172,7 +115,7 @@ function user.catch_paren_or_chain(mode: int) -> int {
 
   L1:
     load_var e
-    throw
+    rethrow
 
   L2:
     load_const 1
@@ -198,7 +141,7 @@ function user.catch_widening_chain(mode: int) -> int {
 
   L1:
     load_var e
-    throw
+    rethrow
 
   L2:
     load_const 2

@@ -16,16 +16,11 @@ function parse(s: string) -> baml.json.json throws YamlParseError {
     $rust_function
 }
 
-/// Parses YAML text and decodes it to `T`, honoring user-defined `from_json`
+/// Parses YAML text and decodes it to `T`, honoring user-defined `baml.FromJson`
 /// overrides (via `baml.json.from_json<T>`). The YAML counterpart of
-/// `baml.json.deserialize<T>`.
-///
-/// A `JsonParseError` thrown during decoding (e.g. by a user `from_json`
-/// override) is retyped as `JsonDecodeError`: the input here is YAML, so a
-/// JSON *parse* error would misattribute the failure to JSON text that never
-/// existed.
+/// `baml.json.deserialize<T>`. Parsing throws `YamlParseError`; decoding the
+/// resulting `json` into `T` throws `JsonDecodeError` (decoding never re-parses,
+/// so no `JsonParseError` arises here).
 function deserialize<T>(s: string) -> T throws YamlParseError | baml.json.JsonDecodeError {
-    baml.json.from_json<T>(parse(s)) catch (e) {
-        let err: baml.json.JsonParseError => throw baml.json.JsonDecodeError { message: err.message, path: "" }
-    }
+    baml.json.from_json<T>(parse(s))
 }

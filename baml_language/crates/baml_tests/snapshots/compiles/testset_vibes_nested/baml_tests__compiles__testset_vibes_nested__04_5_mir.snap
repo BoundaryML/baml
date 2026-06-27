@@ -70,7 +70,7 @@ fn .<lambda($init_test_main, 0)>(testset: testing.TestCollector) -> null {
     let _40: (testing.TestCollector) -> void throws unknown
 
     bb0: {
-        _2 = [const "happy", const "sad"];
+        _2 = [const "happy", const "sad"]: string[];
         _3 = copy _2;
         goto -> bb1;
     }
@@ -497,7 +497,7 @@ fn .<lambda(<lambda($init_test_main, 0)>, 3)>(testset: testing.TestCollector) ->
     let _38: (testing.TestCollector) -> void throws unknown
 
     bb0: {
-        _2 = [const "happy", const "sad"];
+        _2 = [const "happy", const "sad"]: string[];
         _3 = copy _2;
         goto -> bb1;
     }
@@ -881,7 +881,7 @@ fn user.ClassifySentiment(text: string, client: baml.llm.Client) -> Sentiment {
     }
 
     bb2: {
-        _4 = { const "text": copy _1 };
+        _4 = { const "text": copy _1 }: map<string, unknown>;
         _5 = load_type(Sentiment);
         _0 = call const fn baml.llm.call_llm_function<copy _5>(copy _2, const "ClassifySentiment", copy _4, const <omitted>) -> [bb3];
     }
@@ -910,7 +910,7 @@ fn user.ClassifySentiment$build_request(text: string, client: baml.llm.Client) -
     }
 
     bb2: {
-        _4 = { const "text": copy _1 };
+        _4 = { const "text": copy _1 }: map<string, unknown>;
         _0 = call const fn baml.llm.build_request(copy _2, const "ClassifySentiment", copy _4, const <omitted>) -> [bb3];
     }
 
@@ -938,7 +938,7 @@ fn user.ClassifySentiment$build_request_stream(text: string, client: baml.llm.Cl
     }
 
     bb2: {
-        _4 = { const "text": copy _1 };
+        _4 = { const "text": copy _1 }: map<string, unknown>;
         _0 = call const fn baml.llm.build_request_stream(copy _2, const "ClassifySentiment", copy _4, const <omitted>) -> [bb3];
     }
 
@@ -966,7 +966,7 @@ fn user.ClassifySentiment$render_prompt(text: string, client: baml.llm.Client) -
     }
 
     bb2: {
-        _4 = { const "text": copy _1 };
+        _4 = { const "text": copy _1 }: map<string, unknown>;
         _0 = call const fn baml.llm.render_prompt(copy _2, const "ClassifySentiment", copy _4, const <omitted>) -> [bb3];
     }
 
@@ -995,7 +995,7 @@ fn user.ClassifySentiment2(text: string, client: baml.llm.Client) -> string {
     }
 
     bb2: {
-        _4 = { const "text": copy _1 };
+        _4 = { const "text": copy _1 }: map<string, unknown>;
         _5 = load_type(string);
         _0 = call const fn baml.llm.call_llm_function<copy _5>(copy _2, const "ClassifySentiment2", copy _4, const <omitted>) -> [bb3];
     }
@@ -1024,7 +1024,7 @@ fn user.ClassifySentiment2$build_request(text: string, client: baml.llm.Client) 
     }
 
     bb2: {
-        _4 = { const "text": copy _1 };
+        _4 = { const "text": copy _1 }: map<string, unknown>;
         _0 = call const fn baml.llm.build_request(copy _2, const "ClassifySentiment2", copy _4, const <omitted>) -> [bb3];
     }
 
@@ -1052,7 +1052,7 @@ fn user.ClassifySentiment2$build_request_stream(text: string, client: baml.llm.C
     }
 
     bb2: {
-        _4 = { const "text": copy _1 };
+        _4 = { const "text": copy _1 }: map<string, unknown>;
         _0 = call const fn baml.llm.build_request_stream(copy _2, const "ClassifySentiment2", copy _4, const <omitted>) -> [bb3];
     }
 
@@ -1080,7 +1080,7 @@ fn user.ClassifySentiment2$render_prompt(text: string, client: baml.llm.Client) 
     }
 
     bb2: {
-        _4 = { const "text": copy _1 };
+        _4 = { const "text": copy _1 }: map<string, unknown>;
         _0 = call const fn baml.llm.render_prompt(copy _2, const "ClassifySentiment2", copy _4, const <omitted>) -> [bb3];
     }
 
@@ -1149,9 +1149,9 @@ fn user.GPT4o$new() -> null {
     }
 
     bb1: {
-        _3 = {  };
-        _4 = {  };
-        _5 = {  };
+        _3 = {  }: map<string, string>;
+        _4 = {  }: map<string, string>;
+        _5 = {  }: map<string, unknown>;
         _1 = baml.llm.PrimitiveClientOptions { const "gpt-4o", const null, const null, const null, const null, const null, const null, const null, const null, copy _2, const null, const null, copy _3, copy _4, copy _5 };
         _0 = baml.llm.PrimitiveClient { const "GPT4o", const "openai", copy _1 };
         goto -> bb2;
@@ -1183,7 +1183,7 @@ fn user.GenerateTests(count: int, topic: string, client: baml.llm.Client) -> str
     }
 
     bb2: {
-        _5 = { const "count": copy _1, const "topic": copy _2 };
+        _5 = { const "count": copy _1, const "topic": copy _2 }: map<string, unknown>;
         _6 = load_type(string[]);
         _0 = call const fn baml.llm.call_llm_function<copy _6>(copy _3, const "GenerateTests", copy _5, const <omitted>) -> [bb3];
     }
@@ -1213,7 +1213,7 @@ fn user.GenerateTests$build_request(count: int, topic: string, client: baml.llm.
     }
 
     bb2: {
-        _5 = { const "count": copy _1, const "topic": copy _2 };
+        _5 = { const "count": copy _1, const "topic": copy _2 }: map<string, unknown>;
         _0 = call const fn baml.llm.build_request(copy _3, const "GenerateTests", copy _5, const <omitted>) -> [bb3];
     }
 
@@ -1242,7 +1242,7 @@ fn user.GenerateTests$build_request_stream(count: int, topic: string, client: ba
     }
 
     bb2: {
-        _5 = { const "count": copy _1, const "topic": copy _2 };
+        _5 = { const "count": copy _1, const "topic": copy _2 }: map<string, unknown>;
         _0 = call const fn baml.llm.build_request_stream(copy _3, const "GenerateTests", copy _5, const <omitted>) -> [bb3];
     }
 
@@ -1271,110 +1271,11 @@ fn user.GenerateTests$render_prompt(count: int, topic: string, client: baml.llm.
     }
 
     bb2: {
-        _5 = { const "count": copy _1, const "topic": copy _2 };
+        _5 = { const "count": copy _1, const "topic": copy _2 }: map<string, unknown>;
         _0 = call const fn baml.llm.render_prompt(copy _3, const "GenerateTests", copy _5, const <omitted>) -> [bb3];
     }
 
     bb3: {
-        return;
-    }
-}
-
-fn user.Sentiment.from_json(j: baml.json.json) -> Sentiment {
-    // Locals:
-    let _0: Sentiment // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: string
-    let _3: baml.json.json
-    let _4: type
-    let _5: float
-    let _6: baml.json.json
-    let _7: type
-    let _8: string
-    let _9: baml.json.json
-    let _10: type
-
-    bb0: {
-        _3 = call const fn baml.json.field(copy _1, const "feeling") -> [bb1];
-    }
-
-    bb1: {
-        _4 = load_type(string);
-        _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
-    }
-
-    bb2: {
-        _6 = call const fn baml.json.field(copy _1, const "confidence") -> [bb3];
-    }
-
-    bb3: {
-        _7 = load_type(float);
-        _5 = call const fn baml.json.from_json<copy _7>(copy _6) -> [bb4];
-    }
-
-    bb4: {
-        _9 = call const fn baml.json.field(copy _1, const "reasoning") -> [bb5];
-    }
-
-    bb5: {
-        _10 = load_type(string);
-        _8 = call const fn baml.json.from_json<copy _10>(copy _9) -> [bb6];
-    }
-
-    bb6: {
-        _0 = user.Sentiment { copy _2, copy _5, copy _8 };
-        goto -> bb7;
-    }
-
-    bb7: {
-        return;
-    }
-}
-
-fn user.Sentiment.to_json(self: Sentiment) -> baml.json.json {
-    // Locals:
-    let _0: baml.json.json // _0 // return
-    let _1: Sentiment // self // param
-    let _2: baml.json.json
-    let _3: string
-    let _4: Sentiment
-    let _5: type
-    let _6: baml.json.json
-    let _7: float
-    let _8: Sentiment
-    let _9: type
-    let _10: baml.json.json
-    let _11: string
-    let _12: Sentiment
-    let _13: type
-
-    bb0: {
-        _4 = copy _1;
-        _3 = copy _4.0;
-        _5 = load_type(string);
-        _2 = call const fn baml.json.to_json<copy _5>(copy _3) -> [bb1];
-    }
-
-    bb1: {
-        _8 = copy _1;
-        _7 = copy _8.1;
-        _9 = load_type(float);
-        _6 = call const fn baml.json.to_json<copy _9>(copy _7) -> [bb2];
-    }
-
-    bb2: {
-        _12 = copy _1;
-        _11 = copy _12.2;
-        _13 = load_type(string);
-        _10 = call const fn baml.json.to_json<copy _13>(copy _11) -> [bb3];
-    }
-
-    bb3: {
-        _0 = { const "feeling": copy _2, const "confidence": copy _6, const "reasoning": copy _10 };
-        goto -> bb4;
-    }
-
-    bb4: {
         return;
     }
 }

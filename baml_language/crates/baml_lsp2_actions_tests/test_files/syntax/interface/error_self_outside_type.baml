@@ -7,20 +7,20 @@ function bad(x: Self) -> Self {
 //----
 //- diagnostics
 // error: unresolved type: Self
-//    ╭─[ interface_error_self_outside_type.baml:3:25 ]
+//    ╭─[ interface_error_self_outside_type.baml:3:26 ]
 //    │
 //  3 │ function bad(x: Self) -> Self {
-//    │                         ──┬──  
-//    │                           ╰──── unresolved type: Self
-//    │ 
+//    │                          ──┬─
+//    │                            ╰─── unresolved type: Self
+//    │
 //    │ Note: Error code: E0002
 // ───╯
 // error: unresolved type: Self
-//    ╭─[ interface_error_self_outside_type.baml:3:16 ]
+//    ╭─[ interface_error_self_outside_type.baml:3:17 ]
 //    │
 //  3 │ function bad(x: Self) -> Self {
-//    │                ──┬──  
-//    │                  ╰──── unresolved type: Self
-//    │ 
+//    │                 ──┬─
+//    │                   ╰─── unresolved type: Self
+//    │
 //    │ Note: Error code: E0002
 // ───╯

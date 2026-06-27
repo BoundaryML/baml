@@ -1,0 +1,122 @@
+1:1-6        "class"            source.baml meta.class.baml keyword.declaration.class.baml
+1:7-21       "TestClassAlias"   source.baml meta.class.baml meta.class.header.baml entity.name.type.class.baml
+1:22-23      "{"                source.baml meta.class.baml meta.class.body.baml punctuation.definition.block.begin.baml
+2:3-6        "key"              source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
+2:7-13       "string"           source.baml meta.class.baml meta.class.body.baml meta.field.baml support.type.primitive.baml
+2:14-15      "@"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.attribute.baml punctuation.definition.annotation.baml storage.type.annotation.baml
+2:15-20      "alias"            source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.attribute.baml storage.type.annotation.baml
+2:20-21      "("                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.attribute.baml meta.attribute.arguments.baml punctuation.definition.annotation-arguments.begin.bracket.round.baml
+2:21-22      "\""               source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.attribute.baml meta.attribute.arguments.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+2:22-30      "key-dash"         source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.attribute.baml meta.attribute.arguments.baml string.quoted.double.baml
+2:30-31      "\""               source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.attribute.baml meta.attribute.arguments.baml string.quoted.double.baml punctuation.definition.string.end.baml
+2:31-32      ")"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.attribute.baml meta.attribute.arguments.baml punctuation.definition.annotation-arguments.end.bracket.round.baml
+3:3-4        "@"                source.baml meta.class.baml meta.class.body.baml meta.attribute.baml punctuation.definition.annotation.baml storage.type.annotation.baml
+3:4-15       "description"      source.baml meta.class.baml meta.class.body.baml meta.attribute.baml storage.type.annotation.baml
+3:15-16      "("                source.baml meta.class.baml meta.class.body.baml meta.attribute.baml meta.attribute.arguments.baml punctuation.definition.annotation-arguments.begin.bracket.round.baml
+3:16-17      "#"                source.baml meta.class.baml meta.class.body.baml meta.attribute.baml meta.attribute.arguments.baml string.quoted.raw.baml punctuation.definition.string.begin.baml
+3:17-18      "\""               source.baml meta.class.baml meta.class.body.baml meta.attribute.baml meta.attribute.arguments.baml string.quoted.raw.baml
+4:1-35       "     This is a description for key" source.baml meta.class.baml meta.class.body.baml meta.attribute.baml meta.attribute.arguments.baml string.quoted.raw.baml
+5:1-13       "     af asdf"     source.baml meta.class.baml meta.class.body.baml meta.attribute.baml meta.attribute.arguments.baml string.quoted.raw.baml
+6:4-5        "\""               source.baml meta.class.baml meta.class.body.baml meta.attribute.baml meta.attribute.arguments.baml string.quoted.raw.baml
+6:5-6        "#"                source.baml meta.class.baml meta.class.body.baml meta.attribute.baml meta.attribute.arguments.baml string.quoted.raw.baml punctuation.definition.string.end.baml
+6:6-7        ")"                source.baml meta.class.baml meta.class.body.baml meta.attribute.baml meta.attribute.arguments.baml punctuation.definition.annotation-arguments.end.bracket.round.baml
+7:3-7        "key2"             source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
+7:8-14       "string"           source.baml meta.class.baml meta.class.body.baml meta.field.baml support.type.primitive.baml
+7:15-16      "@"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.attribute.baml punctuation.definition.annotation.baml storage.type.annotation.baml
+7:16-21      "alias"            source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.attribute.baml storage.type.annotation.baml
+7:21-22      "("                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.attribute.baml meta.attribute.arguments.baml punctuation.definition.annotation-arguments.begin.bracket.round.baml
+7:22-23      "\""               source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.attribute.baml meta.attribute.arguments.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+7:23-28      "key21"            source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.attribute.baml meta.attribute.arguments.baml string.quoted.double.baml
+7:28-29      "\""               source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.attribute.baml meta.attribute.arguments.baml string.quoted.double.baml punctuation.definition.string.end.baml
+7:29-30      ")"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.attribute.baml meta.attribute.arguments.baml punctuation.definition.annotation-arguments.end.bracket.round.baml
+7:31-32      "@"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.attribute.baml punctuation.definition.annotation.baml storage.type.annotation.baml
+7:32-37      "alias"            source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.attribute.baml storage.type.annotation.baml
+7:37-38      "("                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.attribute.baml meta.attribute.arguments.baml punctuation.definition.annotation-arguments.begin.bracket.round.baml
+7:38-39      "\""               source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.attribute.baml meta.attribute.arguments.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+7:39-44      "key22"            source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.attribute.baml meta.attribute.arguments.baml string.quoted.double.baml
+7:44-45      "\""               source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.attribute.baml meta.attribute.arguments.baml string.quoted.double.baml punctuation.definition.string.end.baml
+7:45-46      ")"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.attribute.baml meta.attribute.arguments.baml punctuation.definition.annotation-arguments.end.bracket.round.baml
+8:3-7        "key3"             source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
+8:8-14       "string"           source.baml meta.class.baml meta.class.body.baml meta.field.baml support.type.primitive.baml
+8:15-16      "@"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.attribute.baml punctuation.definition.annotation.baml storage.type.annotation.baml
+8:16-21      "alias"            source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.attribute.baml storage.type.annotation.baml
+8:21-22      "("                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.attribute.baml meta.attribute.arguments.baml punctuation.definition.annotation-arguments.begin.bracket.round.baml
+8:22-23      "\""               source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.attribute.baml meta.attribute.arguments.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+8:23-37      "key with space"   source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.attribute.baml meta.attribute.arguments.baml string.quoted.double.baml
+8:37-38      "\""               source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.attribute.baml meta.attribute.arguments.baml string.quoted.double.baml punctuation.definition.string.end.baml
+8:38-39      ")"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.attribute.baml meta.attribute.arguments.baml punctuation.definition.annotation-arguments.end.bracket.round.baml
+9:3-7        "key4"             source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
+9:8-14       "string"           source.baml meta.class.baml meta.class.body.baml meta.field.baml support.type.primitive.baml
+9:15-16      "@"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.attribute.baml punctuation.definition.annotation.baml storage.type.annotation.baml
+9:16-21      "alias"            source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.attribute.baml storage.type.annotation.baml
+9:21-22      "("                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.attribute.baml meta.attribute.arguments.baml punctuation.definition.annotation-arguments.begin.bracket.round.baml
+9:22-23      "\""               source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.attribute.baml meta.attribute.arguments.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+9:23-47      "key.with.punctuation/123" source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.attribute.baml meta.attribute.arguments.baml string.quoted.double.baml
+9:47-48      "\""               source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.attribute.baml meta.attribute.arguments.baml string.quoted.double.baml punctuation.definition.string.end.baml
+9:48-49      ")"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.attribute.baml meta.attribute.arguments.baml punctuation.definition.annotation-arguments.end.bracket.round.baml
+10:1-2       "}"                source.baml meta.class.baml meta.class.body.baml punctuation.definition.block.end.baml
+12:1-6       "class"            source.baml meta.class.baml keyword.declaration.class.baml
+12:7-28      "HasTwoBlockAttributes" source.baml meta.class.baml meta.class.header.baml entity.name.type.class.baml
+12:29-30     "{"                source.baml meta.class.baml meta.class.body.baml punctuation.definition.block.begin.baml
+13:3-7       "name"             source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
+13:8-14      "string"           source.baml meta.class.baml meta.class.body.baml meta.field.baml support.type.primitive.baml
+14:3-5       "@@"               source.baml meta.class.baml meta.class.body.baml meta.attribute.block.baml punctuation.definition.annotation.baml storage.type.annotation.baml
+14:5-16      "description"      source.baml meta.class.baml meta.class.body.baml meta.attribute.block.baml storage.type.annotation.baml
+14:16-17     "("                source.baml meta.class.baml meta.class.body.baml meta.attribute.block.baml meta.attribute.arguments.baml punctuation.definition.annotation-arguments.begin.bracket.round.baml
+14:17-18     "\""               source.baml meta.class.baml meta.class.body.baml meta.attribute.block.baml meta.attribute.arguments.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+14:18-24     "A test"           source.baml meta.class.baml meta.class.body.baml meta.attribute.block.baml meta.attribute.arguments.baml string.quoted.double.baml
+14:24-25     "\""               source.baml meta.class.baml meta.class.body.baml meta.attribute.block.baml meta.attribute.arguments.baml string.quoted.double.baml punctuation.definition.string.end.baml
+14:25-26     ")"                source.baml meta.class.baml meta.class.body.baml meta.attribute.block.baml meta.attribute.arguments.baml punctuation.definition.annotation-arguments.end.bracket.round.baml
+15:3-5       "@@"               source.baml meta.class.baml meta.class.body.baml meta.attribute.block.baml punctuation.definition.annotation.baml storage.type.annotation.baml
+15:5-10      "alias"            source.baml meta.class.baml meta.class.body.baml meta.attribute.block.baml storage.type.annotation.baml
+15:10-11     "("                source.baml meta.class.baml meta.class.body.baml meta.attribute.block.baml meta.attribute.arguments.baml punctuation.definition.annotation-arguments.begin.bracket.round.baml
+15:11-12     "\""               source.baml meta.class.baml meta.class.body.baml meta.attribute.block.baml meta.attribute.arguments.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+15:12-21     "AKAHasTwo"        source.baml meta.class.baml meta.class.body.baml meta.attribute.block.baml meta.attribute.arguments.baml string.quoted.double.baml
+15:21-22     "\""               source.baml meta.class.baml meta.class.body.baml meta.attribute.block.baml meta.attribute.arguments.baml string.quoted.double.baml punctuation.definition.string.end.baml
+15:22-23     ")"                source.baml meta.class.baml meta.class.body.baml meta.attribute.block.baml meta.attribute.arguments.baml punctuation.definition.annotation-arguments.end.bracket.round.baml
+16:1-2       "}"                source.baml meta.class.baml meta.class.body.baml punctuation.definition.block.end.baml
+18:1-6       "class"            source.baml meta.class.baml keyword.declaration.class.baml
+18:7-30      "HasThreeBlockAttributes" source.baml meta.class.baml meta.class.header.baml entity.name.type.class.baml
+18:31-32     "{"                source.baml meta.class.baml meta.class.body.baml punctuation.definition.block.begin.baml
+19:3-7       "name"             source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
+19:8-14      "string"           source.baml meta.class.baml meta.class.body.baml meta.field.baml support.type.primitive.baml
+20:3-5       "@@"               source.baml meta.class.baml meta.class.body.baml meta.attribute.block.baml punctuation.definition.annotation.baml storage.type.annotation.baml
+20:5-16      "description"      source.baml meta.class.baml meta.class.body.baml meta.attribute.block.baml storage.type.annotation.baml
+20:16-17     "("                source.baml meta.class.baml meta.class.body.baml meta.attribute.block.baml meta.attribute.arguments.baml punctuation.definition.annotation-arguments.begin.bracket.round.baml
+20:17-18     "\""               source.baml meta.class.baml meta.class.body.baml meta.attribute.block.baml meta.attribute.arguments.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+20:18-24     "A test"           source.baml meta.class.baml meta.class.body.baml meta.attribute.block.baml meta.attribute.arguments.baml string.quoted.double.baml
+20:24-25     "\""               source.baml meta.class.baml meta.class.body.baml meta.attribute.block.baml meta.attribute.arguments.baml string.quoted.double.baml punctuation.definition.string.end.baml
+20:25-26     ")"                source.baml meta.class.baml meta.class.body.baml meta.attribute.block.baml meta.attribute.arguments.baml punctuation.definition.annotation-arguments.end.bracket.round.baml
+21:3-5       "@@"               source.baml meta.class.baml meta.class.body.baml meta.attribute.block.baml punctuation.definition.annotation.baml storage.type.annotation.baml
+21:5-10      "alias"            source.baml meta.class.baml meta.class.body.baml meta.attribute.block.baml storage.type.annotation.baml
+21:10-11     "("                source.baml meta.class.baml meta.class.body.baml meta.attribute.block.baml meta.attribute.arguments.baml punctuation.definition.annotation-arguments.begin.bracket.round.baml
+21:11-12     "\""               source.baml meta.class.baml meta.class.body.baml meta.attribute.block.baml meta.attribute.arguments.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+21:12-21     "AKAHasTwo"        source.baml meta.class.baml meta.class.body.baml meta.attribute.block.baml meta.attribute.arguments.baml string.quoted.double.baml
+21:21-22     "\""               source.baml meta.class.baml meta.class.body.baml meta.attribute.block.baml meta.attribute.arguments.baml string.quoted.double.baml punctuation.definition.string.end.baml
+21:22-23     ")"                source.baml meta.class.baml meta.class.body.baml meta.attribute.block.baml meta.attribute.arguments.baml punctuation.definition.annotation-arguments.end.bracket.round.baml
+22:3-5       "@@"               source.baml meta.class.baml meta.class.body.baml meta.attribute.block.baml punctuation.definition.annotation.baml storage.type.annotation.baml
+22:5-16      "description"      source.baml meta.class.baml meta.class.body.baml meta.attribute.block.baml storage.type.annotation.baml
+22:16-17     "("                source.baml meta.class.baml meta.class.body.baml meta.attribute.block.baml meta.attribute.arguments.baml punctuation.definition.annotation-arguments.begin.bracket.round.baml
+22:17-18     "\""               source.baml meta.class.baml meta.class.body.baml meta.attribute.block.baml meta.attribute.arguments.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+22:18-38     "A second description" source.baml meta.class.baml meta.class.body.baml meta.attribute.block.baml meta.attribute.arguments.baml string.quoted.double.baml
+22:38-39     "\""               source.baml meta.class.baml meta.class.body.baml meta.attribute.block.baml meta.attribute.arguments.baml string.quoted.double.baml punctuation.definition.string.end.baml
+22:39-40     ")"                source.baml meta.class.baml meta.class.body.baml meta.attribute.block.baml meta.attribute.arguments.baml punctuation.definition.annotation-arguments.end.bracket.round.baml
+23:1-2       "}"                source.baml meta.class.baml meta.class.body.baml punctuation.definition.block.end.baml
+25:1-61      "// error: Attribute \"@description\" can only be defined once." source.baml comment.line.double-slash.baml
+26:1-35      "//   -->  class/attributes.baml:20" source.baml comment.line.double-slash.baml
+27:1-8       "//    |"          source.baml comment.line.double-slash.baml
+28:1-22      "// 19 |   name string" source.baml comment.line.double-slash.baml
+29:1-34      "// 20 |   @@description(\"A test\")" source.baml comment.line.double-slash.baml
+30:1-8       "//    |"          source.baml comment.line.double-slash.baml
+31:1-61      "// error: Attribute \"@description\" can only be defined once." source.baml comment.line.double-slash.baml
+32:1-35      "//   -->  class/attributes.baml:22" source.baml comment.line.double-slash.baml
+33:1-8       "//    |"          source.baml comment.line.double-slash.baml
+34:1-31      "// 21 |   @@alias(\"AKAHasTwo\")" source.baml comment.line.double-slash.baml
+35:1-48      "// 22 |   @@description(\"A second description\")" source.baml comment.line.double-slash.baml
+36:1-8       "//    |"          source.baml comment.line.double-slash.baml
+37:1-61      "// error: Attribute \"@description\" can only be defined once." source.baml comment.line.double-slash.baml
+38:1-35      "//   -->  class/attributes.baml:20" source.baml comment.line.double-slash.baml
+39:1-8       "//    |"          source.baml comment.line.double-slash.baml
+40:1-22      "// 19 |   name string" source.baml comment.line.double-slash.baml
+41:1-34      "// 20 |   @@description(\"A test\")" source.baml comment.line.double-slash.baml
+42:1-8       "//    |"          source.baml comment.line.double-slash.baml

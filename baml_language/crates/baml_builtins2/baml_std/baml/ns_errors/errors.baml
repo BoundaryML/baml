@@ -80,3 +80,13 @@ class GenericSdkError {
 class CompilationError {
   message string
 }
+
+/// A value/type mismatch at the call boundary — a caller passed an argument
+/// that doesn't fit the callee's (possibly inferred) type, a generic `TypeVar`
+/// could not be inferred and must be specified, or repeat occurrences of a
+/// `TypeVar` have no consistent binding. Synthesized host-side from
+/// `EngineError::TypeMismatch`; each host SDK surfaces it as its native
+/// type-error (Python `TypeError`).
+class TypeMismatch {
+  message string
+}

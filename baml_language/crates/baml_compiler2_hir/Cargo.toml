@@ -17,3 +17,6 @@ la-arena = { workspace = true }
 rustc-hash = { workspace = true }
 salsa = { workspace = true }
 text-size = { workspace = true }
+
+[dev-dependencies]
+baml_builtins2 = { workspace = true }

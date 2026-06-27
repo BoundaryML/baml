@@ -823,7 +823,7 @@ fn convert_object(
                 .collect::<Result<_, _>>()?;
             Ok(BexExternalValue::Instance {
                 class_name: class.name.to_string(),
-                type_args: instance.class_type_args.clone(),
+                type_args: instance.class_type_args.to_vec(),
                 fields,
             })
         }
@@ -874,4 +874,59 @@ fn convert_object(
 
 pub trait BuiltinClass<'a>: Sized + From<BexClass<'a>> {
     fn name() -> &'static str;
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{collections::HashMap, sync::Arc};
+
+    use bex_external_types::BexExternalValue;
+    use bex_str::BexStr;
+    use bex_vm_types::RootHaver;
+
+    use crate::{BexHeap, BexValue, HeapPermit as _, HeapPermitManager, Tlab, TlabHolder};
+
+    struct EmptyRoots {
+        tlab: Tlab,
+    }
+
+    impl RootHaver for EmptyRoots {
+        fn collect_roots(&self, _roots: &mut Vec<bex_vm_types::HeapPtr>) {}
+
+        fn forward_roots(
+            &mut self,
+            _forward: &HashMap<bex_vm_types::HeapPtr, bex_vm_types::HeapPtr>,
+        ) {
+        }
+    }
+
+    impl TlabHolder for EmptyRoots {
+        fn tlab(&self) -> &Tlab {
+            &self.tlab
+        }
+
+        fn tlab_mut(&mut self) -> &mut Tlab {
+            &mut self.tlab
+        }
+    }
+
+    #[tokio::test]
+    async fn trace_owned_function_refs_become_string_placeholders() {
+        let heap = BexHeap::new(Vec::new());
+        let manager = HeapPermitManager::new();
+        let permit = manager
+            .new_permit(EmptyRoots {
+                tlab: Tlab::new(Arc::clone(&heap)),
+            })
+            .await
+            .acquire()
+            .await;
+        let value = BexExternalValue::FunctionRef { global_index: 7 };
+
+        let owned = BexValue::ExternalValue(&value)
+            .as_owned_for_trace(&heap, permit.proof())
+            .unwrap();
+
+        assert_eq!(owned, BexExternalValue::String(BexStr::from("<function>")));
+    }
 }

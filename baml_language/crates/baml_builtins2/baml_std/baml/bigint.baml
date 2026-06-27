@@ -24,10 +24,6 @@
 ///     * `bigint.parse(s)` where `s` carries more decimal digits than the
 ///       cap permits.
 class Bigint {
-  //baml:mut_vm
-  function to_json(self) -> baml.json.json throws never {
-    $rust_function
-  }
   // ─── Comparisons / clamping ───────────────────────────────────────────────
 
   /// Returns the absolute value of `self`.

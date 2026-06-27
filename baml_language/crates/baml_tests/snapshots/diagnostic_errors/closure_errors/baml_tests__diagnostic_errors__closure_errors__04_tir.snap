@@ -10,12 +10,6 @@ function user.Formatter.format(self: user.Formatter, text: string) -> string thr
     self.prefix + text : string
   }
 }
-function user.Formatter.to_json(self: user.Formatter) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "prefix": baml.json.to_json(self.prefix) } : map<string, baml.json.json>
-}
-function user.Formatter.from_json(j: baml.json.json) -> user.Formatter throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  Formatter { prefix: baml.json.from_json<string>(baml.json.field(j, "prefix")) } : user.Formatter
-}
 class user.Counter {
   value: int
 }
@@ -25,12 +19,6 @@ function user.Counter.increment(self: user.Counter) -> int throws never {
     self.value : int
   }
 }
-function user.Counter.to_json(self: user.Counter) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "value": baml.json.to_json(self.value) } : map<string, baml.json.json>
-}
-function user.Counter.from_json(j: baml.json.json) -> user.Counter throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  Counter { value: baml.json.from_json<int>(baml.json.field(j, "value")) } : user.Counter
-}
 class user.Employee {
   first: string
   last: string
@@ -39,12 +27,6 @@ function user.Employee.full_name(self: user.Employee) -> string throws never {
   { : string
     self.first + " " + self.last : string
   }
-}
-function user.Employee.to_json(self: user.Employee) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "first": baml.json.to_json(self.first), "last": baml.json.to_json(self.last) } : map<string, baml.json.json>
-}
-function user.Employee.from_json(j: baml.json.json) -> user.Employee throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  Employee { first: baml.json.from_json<string>(baml.json.field(j, "first")), last: baml.json.from_json<string>(baml.json.field(j, "last")) } : user.Employee
 }
 function user.test_err_extra_arg() -> string throws never {
   { : string
@@ -68,14 +50,14 @@ function user.test_err_bound_type_mismatch() -> int throws never {
     let inc: (Counter) -> int = c.increment : () -> int throws never -> (user.Counter) -> int throws never
     0 : 0
   }
-  !! 789..801: type mismatch: expected (Counter) -> int throws never, got () -> int throws never
+  !! 790..801: type mismatch: expected (Counter) -> int throws never, got () -> int throws never
 }
 function user.test_err_unbound_type_mismatch() -> string throws never {
   { : ""
     let f: () -> string = Employee.full_name : (self: user.Employee) -> string throws never -> () -> string throws never
     "" : ""
   }
-  !! 947..966: type mismatch: expected () -> string throws never, got (self: Employee) -> string throws never
+  !! 948..966: type mismatch: expected () -> string throws never, got (self: Employee) -> string throws never
 }
 function user.takes_unbound(f: (user.Employee) -> string throws never) -> string throws never {
   { : string

@@ -1,38 +1,13 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-function user.User.from_json(j: baml.json.json) -> User {
-    load_var j
-    load_const "name"
-    call baml.json.field
-    store_var _3
-    load_type string
-    load_var _3
-    call baml.json.from_json
-    load_var j
-    load_const "age"
-    call baml.json.field
-    store_var _6
-    load_type int
-    load_var _6
-    call baml.json.from_json
-    init_instance user.User .name, .age
-    return
+function boundary.LocalId.capture(self: boundary.LocalId, inputs: bool | null, output: bool | null, error: bool | null) -> boundary.LocalId {
 }
 
-function user.User.to_json(self: User) -> baml.json.json {
-    load_type string
-    load_var self
-    load_field .name
-    call baml.json.to_json
-    load_type int
-    load_var self
-    load_field .age
-    call baml.json.to_json
-    load_const "name"
-    load_const "age"
-    alloc_map 2
-    return
+function boundary.id() -> boundary.LocalId {
+}
+
+function boundary.id.current() -> string {
 }
 
 function user.deserialize_user(s: string) -> User {

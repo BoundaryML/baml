@@ -15,8 +15,13 @@ export const LLMNode: ComponentType<NodeProps> = memo(({ data }) => {
   const theme = useGraphThemeContext();
   const chrome = getChrome(theme);
   const llm = chrome.llm;
-  // Deeper nodes render smaller (semantic-zoom hierarchy).
-  const s = depthScale(typeof d.depth === 'number' ? d.depth : 0);
+  // Deeper nodes render smaller (semantic-zoom hierarchy) — but not when a
+  // preview is shown, so the content matches the (unshrunk) layout box.
+  const hasPreview =
+    (d.valuePreviews?.length ?? 0) > 0 || !!d.errorMessage || !!d.hasResult;
+  const s = hasPreview
+    ? 1
+    : depthScale(typeof d.depth === 'number' ? d.depth : 0);
   // LLM nodes use a violet accent regardless of state — domain signal first,
   // execution state communicated through the gradient + border tint.
   const base = stateStyle(theme, d.executionState);
@@ -109,7 +114,7 @@ export const LLMNode: ComponentType<NodeProps> = memo(({ data }) => {
         <NodeOutputPreview
           result={d.result}
           hasResult={d.hasResult}
-          images={d.imageOutputs}
+          valuePreviews={d.valuePreviews}
           errorMessage={d.errorMessage}
           customRenderers={d.customRenderers}
         />

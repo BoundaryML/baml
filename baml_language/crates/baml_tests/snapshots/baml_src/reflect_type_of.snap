@@ -190,6 +190,8 @@ function reflect_type_of.type_of_optional_to_string_fn() -> string {
 }
 
 function reflect_type_of.type_of_to_string_works_as_map_key_fn() -> int {
+    load_type string
+    load_type int
     alloc_map 0
     store_var m
     load_type reflect_type_of.User

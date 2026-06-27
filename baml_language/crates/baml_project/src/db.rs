@@ -1292,10 +1292,8 @@ impl ProjectDatabase {
                     // ...and its own block must still contain the cursor —
                     // otherwise the header's region ended when that block closed.
                     let header_scope = index.scope_at_offset(range.start(), None);
-                    let header_scope_range =
-                        index.scopes[header_scope.index() as usize].range;
-                    if !(header_scope_range.contains(offset)
-                        || header_scope_range.end() == offset)
+                    let header_scope_range = index.scopes[header_scope.index() as usize].range;
+                    if !(header_scope_range.contains(offset) || header_scope_range.end() == offset)
                     {
                         continue;
                     }
@@ -1419,7 +1417,6 @@ function classify(text: string) -> string {
         );
     }
 
-
     #[test]
     fn test_ast_control_flow_graph_with_headers() {
         use baml_compiler2_visualization::control_flow::NodeType;
@@ -1497,6 +1494,7 @@ function Workflow(input: string) -> string {
     }
 
     #[test]
+    #[allow(clippy::cast_possible_truncation)] // tiny test fixtures fit in u32
     fn cursor_in_header_region_selects_governing_header() {
         use baml_compiler2_visualization::control_flow::{NodeType, STMT_SOURCE_EXPR_TAG};
 
@@ -1521,9 +1519,7 @@ function Workflow(input: string) -> string {
         let process_expr = graph
             .nodes
             .values()
-            .find(|n| {
-                matches!(n.node_type, NodeType::HeaderContextEnter) && n.label == "Process"
-            })
+            .find(|n| matches!(n.node_type, NodeType::HeaderContextEnter) && n.label == "Process")
             .and_then(|n| n.source_expr)
             .expect("Process header should exist with a source_expr");
         assert!(process_expr & STMT_SOURCE_EXPR_TAG != 0);
@@ -1543,9 +1539,7 @@ function Workflow(input: string) -> string {
         let prepare_expr = graph
             .nodes
             .values()
-            .find(|n| {
-                matches!(n.node_type, NodeType::HeaderContextEnter) && n.label == "Prepare"
-            })
+            .find(|n| matches!(n.node_type, NodeType::HeaderContextEnter) && n.label == "Prepare")
             .and_then(|n| n.source_expr)
             .expect("Prepare header should exist with a source_expr");
         let let_offset = (src.find("let x = input;").unwrap() as u32) + 4;

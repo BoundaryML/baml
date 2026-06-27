@@ -10,7 +10,10 @@ use baml_lsp2_actions::{
 use baml_project::ProjectDatabase;
 use clap::Args;
 
-use crate::project_load::load_project_or_default;
+use crate::{
+    project_load::load_project_or_default,
+    util::{line_number_at_offset, relative_path},
+};
 
 #[derive(Args, Clone, Debug)]
 pub struct GrepArgs {
@@ -384,15 +387,6 @@ pub fn parse_kind_filter(kinds: &[String]) -> Result<Vec<DefinitionKind>> {
             ),
         })
         .collect()
-}
-
-fn relative_path(path: &std::path::Path, root: &std::path::Path) -> std::path::PathBuf {
-    path.strip_prefix(root).unwrap_or(path).to_path_buf()
-}
-
-fn line_number_at_offset(text: &str, offset: usize) -> usize {
-    let offset = offset.min(text.len());
-    text[..offset].chars().filter(|&c| c == '\n').count() + 1
 }
 
 /// Choose the appropriate body representation based on budget.

@@ -42,6 +42,19 @@ impl LeafBody {
             .collect()
     }
 
+    pub(crate) fn callable_child_names(&self, kids: &BTreeSet<String>) -> BTreeSet<String> {
+        let mut out = BTreeSet::new();
+        for (sym, _) in &self.symbols {
+            let EmittedSymbol::Function(f) = sym else {
+                continue;
+            };
+            if f.mode == SyncAsync::Sync && kids.contains(&f.py_name) {
+                out.insert(f.py_name.clone());
+            }
+        }
+        out
+    }
+
     pub(crate) fn stdlib_imports(&self) -> Vec<&'static str> {
         let mut out = Vec::new();
         if self
@@ -1232,7 +1245,7 @@ fn required_positional_count(
 ///     ...
 /// ]
 /// ```
-pub(crate) fn render_leaf_body(body: &LeafBody) -> String {
+pub(crate) fn render_leaf_body(body: &LeafBody, callable_child_names: &BTreeSet<String>) -> String {
     if body.is_empty() {
         return String::new();
     }
@@ -1240,6 +1253,9 @@ pub(crate) fn render_leaf_body(body: &LeafBody) -> String {
     let mut out = String::new();
 
     let mut stdlibs = body.stdlib_imports();
+    if !callable_child_names.is_empty() && !stdlibs.contains(&"importlib") {
+        stdlibs.push("importlib");
+    }
     let root_imports = body.root_imports_py();
     let root_segments = &root_imports.segments;
     let root_names = &root_imports.root_names;
@@ -1251,7 +1267,7 @@ pub(crate) fn render_leaf_body(body: &LeafBody) -> String {
     }
     // Generic functions emit `T = typing.TypeVar("T")` lines below; the
     // `Class`/`TypeAlias` rule in `stdlib_imports` doesn't catch the
-    // function-only-but-generic case (e.g. stdlib `baml.unstable.string<T>`).
+    // function-only-but-generic case (e.g. stdlib `string.from<T>`).
     if !body.generic_typevars().is_empty() && !stdlibs.contains(&"typing") {
         stdlibs.push("typing");
     }
@@ -1347,7 +1363,7 @@ pub(crate) fn render_leaf_body(body: &LeafBody) -> String {
     if is_baml_builtins_root {
         out.push('\n');
         out.push_str(
-            "from baml_core import BamlError as BamlError, BamlPanic as BamlPanic, Unset as Unset, UNSET as UNSET\n",
+            "from baml_core import BamlError as BamlError, BamlPanic as BamlPanic, UNSET as UNSET\n",
         );
     }
 
@@ -1384,6 +1400,32 @@ pub(crate) fn render_leaf_body(body: &LeafBody) -> String {
         prev = Some((key, sym));
     }
 
+    if !callable_child_names.is_empty() {
+        out.push_str("\n\n");
+        for (idx, name) in callable_child_names.iter().enumerate() {
+            if idx > 0 {
+                out.push('\n');
+            }
+            let module_var = format!("_{name}_namespace");
+            writeln!(
+                out,
+                "{module_var} = importlib.import_module(\".{name}\", __name__)"
+            )
+            .unwrap();
+            writeln!(
+                out,
+                "for _baml_child_name in getattr({module_var}, \"__all__\", ()):"
+            )
+            .unwrap();
+            writeln!(
+                out,
+                "    setattr({name}, _baml_child_name, getattr({module_var}, _baml_child_name))"
+            )
+            .unwrap();
+            writeln!(out, "del {module_var}").unwrap();
+        }
+    }
+
     // 25b2 Phase 4: per-leaf `_register_*` trailers are gone. The
     // codegen-emitted `baml_sdk/_typemap.py` carries every FQN → leaf
     // lazy entry; `set_type_map(_TYPE_MAP)` in the root init installs
@@ -1395,7 +1437,6 @@ pub(crate) fn render_leaf_body(body: &LeafBody) -> String {
     if is_baml_builtins_root {
         names.push("BamlError");
         names.push("BamlPanic");
-        names.push("Unset");
         names.push("UNSET");
     }
     if !names.is_empty() {
@@ -1660,12 +1701,7 @@ fn render_typed_method_arguments(m: &PyMethodBinding, ctx: &TranslateCtx) -> Str
     s
 }
 
-fn render_function_signature_pyi(f: &PyFunction, ctx: &TranslateCtx) -> String {
-    let async_kw = if matches!(f.mode, SyncAsync::Async) {
-        "async "
-    } else {
-        ""
-    };
+fn render_function_params_pyi(f: &PyFunction, ctx: &TranslateCtx) -> String {
     let mut typed_params = render_typed_params(&f.param_names, &f.arg_tys, &f.arg_defaults, ctx);
     // A generic free function requires the caller to bind every TypeVar via a
     // keyword-only `_types=` dict (the runtime enforces this; the stub mirrors
@@ -1682,6 +1718,16 @@ fn render_function_signature_pyi(f: &PyFunction, ctx: &TranslateCtx) -> String {
             typed_params.push_str(", *, _types: dict[str, type]");
         }
     }
+    typed_params
+}
+
+fn render_function_signature_pyi(f: &PyFunction, ctx: &TranslateCtx) -> String {
+    let async_kw = if matches!(f.mode, SyncAsync::Async) {
+        "async "
+    } else {
+        ""
+    };
+    let typed_params = render_function_params_pyi(f, ctx);
     let ret_py = translate_ty(&f.return_ty, ctx);
     // 32d: append the `Raises:` block to the stub docstring (a no-op when the
     // function throws nothing; flips `: ...` into a docstring body when it
@@ -1700,6 +1746,63 @@ fn render_function_signature_pyi(f: &PyFunction, ctx: &TranslateCtx) -> String {
             name = f.py_name
         ),
     }
+}
+
+fn render_callable_child_protocol_pyi(
+    name: &str,
+    parent_fn: &PyFunction,
+    child_body: &LeafBody,
+    parent_leaf: &LeafPath,
+    callback_protocols: Option<&std::rc::Rc<IndexMap<Ty, String>>>,
+) -> String {
+    let parent_ctx = TranslateCtx {
+        current_leaf: parent_leaf.clone(),
+        self_ref: None,
+        defer_name_refs: false,
+        callback_protocols: callback_protocols.cloned(),
+    };
+    let child_ctx = TranslateCtx {
+        current_leaf: child_body.leaf.clone(),
+        self_ref: None,
+        defer_name_refs: false,
+        callback_protocols: callback_protocols.cloned(),
+    };
+    let protocol_name = callable_child_protocol_name(name);
+    let mut out = format!("class {protocol_name}(typing.Protocol):\n");
+    out.push_str(&render_protocol_function_method_pyi(
+        "__call__",
+        parent_fn,
+        &parent_ctx,
+    ));
+    for (sym, _) in &child_body.symbols {
+        if let EmittedSymbol::Function(f) = sym {
+            out.push_str(&render_protocol_function_method_pyi(
+                &f.py_name, f, &child_ctx,
+            ));
+        }
+    }
+    writeln!(out, "\n{name}: {protocol_name}").unwrap();
+    out
+}
+
+fn callable_child_protocol_name(name: &str) -> String {
+    format!("_BamlCallableNamespace_{name}")
+}
+
+fn render_protocol_function_method_pyi(name: &str, f: &PyFunction, ctx: &TranslateCtx) -> String {
+    let async_kw = if matches!(f.mode, SyncAsync::Async) {
+        "async "
+    } else {
+        ""
+    };
+    let typed_params = render_function_params_pyi(f, ctx);
+    let params = if typed_params.is_empty() {
+        "self".to_string()
+    } else {
+        format!("self, {typed_params}")
+    };
+    let ret_py = translate_ty(&f.return_ty, ctx);
+    format!("    {async_kw}def {name}({params}) -> {ret_py}: ...\n")
 }
 
 fn render_typed_params(
@@ -1736,7 +1839,7 @@ fn render_typed_params(
 /// positional; optional params (the `?` marker on a BAML callable type) get an
 /// Ellipsis default (`= ...`) so a host callback that either supplies or omits
 /// them type-checks. Unlike an optional *function* argument there is no
-/// `baml.Unset` sentinel: BAML invokes the callback positionally, and the
+/// `UNSET` sentinel: BAML invokes the callback positionally, and the
 /// callback's own language-level default fills any omitted trailing arg.
 fn render_callback_protocol(
     name: &str,
@@ -1782,20 +1885,24 @@ fn render_param_pyi(
 }
 
 fn with_unset_union(ty_py: &str) -> String {
+    // `UNSET` is a PEP 661 sentinel that doubles as its own type. Type
+    // checkers only accept a sentinel in a type expression when it is a bare
+    // name, so the leaf imports `UNSET` directly (see `render_leaf_body_pyi`)
+    // and we reference it unqualified here rather than as `baml.UNSET`.
     if let Some(inner) = ty_py
         .strip_prefix("typing.Union[")
         .and_then(|inner| inner.strip_suffix(']'))
     {
-        format!("typing.Union[{inner}, baml.Unset]")
+        format!("typing.Union[{inner}, UNSET]")
     } else if let Some(inner) = ty_py
         .strip_prefix("typing.Optional[")
         .and_then(|inner| inner.strip_suffix(']'))
     {
         // `Optional[X]` is `Union[X, None]`; flatten so a nullable keyword
-        // argument composes into a single `Union[X, None, baml.Unset]`.
-        format!("typing.Union[{inner}, None, baml.Unset]")
+        // argument composes into a single `Union[X, None, UNSET]`.
+        format!("typing.Union[{inner}, None, UNSET]")
     } else {
-        format!("typing.Union[{ty_py}, baml.Unset]")
+        format!("typing.Union[{ty_py}, UNSET]")
     }
 }
 
@@ -1807,7 +1914,7 @@ fn render_default_pyi(default: &FunctionArgumentDefault) -> String {
         }
         FunctionArgumentDefault::Literal(DefaultLiteral::EmptyList) => "[]".to_string(),
         FunctionArgumentDefault::Literal(DefaultLiteral::EmptyMap) => "{}".to_string(),
-        FunctionArgumentDefault::Expression { .. } => "baml.UNSET".to_string(),
+        FunctionArgumentDefault::Expression { .. } => "UNSET".to_string(),
     }
 }
 
@@ -1826,7 +1933,10 @@ fn render_literal_default(lit: &Literal) -> String {
 /// `baml_core` factory imports; `typing` is needed whenever a
 /// signature is present (`needs_typing_pyi`); `enum` and `pydantic`
 /// follow the `.py` rule.
-pub(crate) fn render_leaf_body_pyi(body: &LeafBody) -> String {
+pub(crate) fn render_leaf_body_pyi(
+    body: &LeafBody,
+    callable_child_bodies: &BTreeMap<String, &LeafBody>,
+) -> String {
     if body.is_empty() {
         return String::new();
     }
@@ -1843,15 +1953,21 @@ pub(crate) fn render_leaf_body_pyi(body: &LeafBody) -> String {
     // type checkers and keeps the stub minimal.
     let mut rel_imports = body.all_rel_imports_py();
     if body.has_defaulted_call_params() && body.leaf.segments != ["baml"] {
+        // Optional arguments annotate as `typing.Union[..., UNSET]` and
+        // default to `UNSET`. The sentinel must be a bare name in the type
+        // expression (type checkers reject `baml.UNSET` member access there),
+        // so import it directly from the `baml` builtins package rather than
+        // importing the package and using attribute access.
         rel_imports.push(RelImport {
             depth: body.leaf.segments.len() + 1,
-            from_path: String::new(),
-            anchor: "baml".to_string(),
+            from_path: "baml".to_string(),
+            anchor: "UNSET as UNSET".to_string(),
         });
         rel_imports.sort();
         rel_imports.dedup();
     }
-    let needs_typing = body.needs_typing_pyi() || !rel_imports.is_empty();
+    let needs_typing =
+        body.needs_typing_pyi() || !rel_imports.is_empty() || !callable_child_bodies.is_empty();
     let needs_typing_extensions = body.has_recursive_alias();
     let needs_pydantic = body.needs_pydantic();
     let has_stdlib_block = needs_enum || needs_typing || needs_typing_extensions || needs_pydantic;
@@ -1892,7 +2008,7 @@ pub(crate) fn render_leaf_body_pyi(body: &LeafBody) -> String {
     if is_baml_builtins_root {
         out.push('\n');
         out.push_str(
-            "from baml_core import BamlError as BamlError, BamlPanic as BamlPanic, Unset as Unset, UNSET as UNSET\n",
+            "from baml_core import BamlError as BamlError, BamlPanic as BamlPanic, UNSET as UNSET\n",
         );
     }
 
@@ -1944,10 +2060,34 @@ pub(crate) fn render_leaf_body_pyi(body: &LeafBody) -> String {
         }
     }
 
+    for (name, child_body) in callable_child_bodies {
+        if let Some(parent_fn) = body.symbols.iter().find_map(|(sym, _)| match sym {
+            EmittedSymbol::Function(f) if f.mode == SyncAsync::Sync && f.py_name == *name => {
+                Some(f)
+            }
+            _ => None,
+        }) {
+            out.push_str("\n\n");
+            out.push_str(&render_callable_child_protocol_pyi(
+                name,
+                parent_fn,
+                child_body,
+                &body.leaf,
+                callback_protocols.as_ref(),
+            ));
+        }
+    }
+
     out.push_str("\n\n");
 
     let mut prev: Option<(&SortKey, &EmittedSymbol)> = None;
     for (sym, key) in &body.symbols {
+        if let EmittedSymbol::Function(f) = sym
+            && f.mode == SyncAsync::Sync
+            && callable_child_bodies.contains_key(&f.py_name)
+        {
+            continue;
+        }
         let body_text = render_symbol_pyi(sym, &body.leaf, callback_protocols.as_ref());
         if body_text.is_empty() {
             continue;
@@ -1973,7 +2113,6 @@ pub(crate) fn render_leaf_body_pyi(body: &LeafBody) -> String {
     if is_baml_builtins_root {
         names.push("BamlError");
         names.push("BamlPanic");
-        names.push("Unset");
         names.push("UNSET");
     }
     if !names.is_empty() {

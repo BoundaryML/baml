@@ -1305,6 +1305,11 @@ impl<'g> HirCompiler<'g> {
                         format!("baml.String.{method}")
                     }
 
+                    Some(TypeIR::Primitive(TypeValue::Float, _))
+                    | Some(TypeIR::Primitive(TypeValue::Int, _)) => {
+                        format!("baml.Float.{method}")
+                    }
+
                     Some(TypeIR::Primitive(TypeValue::Media(media_type), _)) => {
                         let subtype = match media_type {
                             BamlMediaType::Image => "baml.media.image",

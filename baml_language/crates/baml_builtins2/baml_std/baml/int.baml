@@ -9,10 +9,6 @@
 /// throws a catchable `baml.panics.IntegerOverflow` rather than wrapping or
 /// crashing; `/` and `%` by zero throw `baml.panics.DivisionByZero`.
 class Int {
-  /// Serializes this integer to a JSON number.
-  function to_json(self) -> baml.json.json throws never {
-    $rust_function
-  }
   // ─── Comparisons / clamping ───────────────────────────────────────────────
 
   /// Returns the absolute value of `self`.

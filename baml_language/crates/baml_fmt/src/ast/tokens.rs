@@ -752,12 +752,26 @@ impl Printable for RawString {
     }
 }
 
-/// BEP-049 backtick-interpolated string literal. M1: printed verbatim — no
-/// re-indenting, no re-emission of escapes. Richer formatting (auto-choosing
-/// tick count, normalizing dedent) is deferred until there is real corpus.
+/// BEP-049 backtick-interpolated string literal.
+///
+/// A backtick string is auto-dedented at lower time (BEP-049 §12,
+/// `baml_base::dedent::preprocess_template`) with its `${...}` interpolations
+/// replaced by placeholders and §13 whitespace control applied, so its runtime
+/// *value* depends on the interior's indentation. The formatter re-indents a
+/// multi-line interior to sit one level past the surrounding block (like a raw
+/// string) but ONLY when that is provably value-preserving: it strips the same
+/// common-prefix the runtime would, re-emits at the block indent, and then
+/// re-derives the value of both forms and bails to verbatim if they differ. A
+/// literal with a `${for}`/`${if}` block tag or a multi-line interpolation is
+/// always printed verbatim (see the `dedent_safe` field), since re-indenting
+/// those could change the §13 / placeholder-dedent value.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct BacktickString {
     pub token_span: TextRange,
+    /// `true` when the literal has no `${for}`/`${if}` block tag and no
+    /// multi-line `${...}` interpolation, so re-indenting its text lines cannot
+    /// change the runtime value.
+    dedent_safe: bool,
 }
 impl FromCST for BacktickString {
     fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
@@ -768,8 +782,23 @@ impl FromCST for BacktickString {
             .first_child_token_of_kind(SyntaxKind::BACKTICK)
             .ok_or_else(|| StrongAstError::missing(SyntaxKind::BACKTICK, node.text_range()))?;
 
+        // Block tags (§13 whitespace control) and multi-line interpolations
+        // (placeholdered before the §12 min-indent, so their inner lines are NOT
+        // re-indented) make a plain re-indent value-unsafe. Detect them up front.
+        let dedent_safe = !node.children().any(|child| match child.kind() {
+            SyntaxKind::BACKTICK_FOR_OPEN
+            | SyntaxKind::BACKTICK_ENDFOR
+            | SyntaxKind::BACKTICK_IF_OPEN
+            | SyntaxKind::BACKTICK_ELSE_IF
+            | SyntaxKind::BACKTICK_ELSE
+            | SyntaxKind::BACKTICK_ENDIF => true,
+            SyntaxKind::BACKTICK_INTERPOLATION => child.text().to_string().contains('\n'),
+            _ => false,
+        });
+
         Ok(BacktickString {
             token_span: TextRange::new(start.text_range().start(), node.text_range().end()),
+            dedent_safe,
         })
     }
 }
@@ -783,11 +812,73 @@ impl KnownKind for BacktickString {
         SyntaxKind::BACKTICK_STRING_LITERAL
     }
 }
+
+/// Re-indent a multi-line backtick literal `text` so its interior sits one level
+/// past `indent`, or return `None` to print it verbatim (single line, malformed,
+/// or the re-indent would change the runtime value).
+fn reindent_backtick(text: &str, indent: usize, indent_width: usize) -> Option<String> {
+    if !text.contains('\n') {
+        return None;
+    }
+    // The delimiter is a run of N backticks on each side (tick ladder).
+    let ticks = text.bytes().take_while(|&c| c == b'`').count();
+    if ticks == 0 || text.len() < ticks * 2 {
+        return None;
+    }
+    let inner = &text[ticks..text.len() - ticks];
+
+    // Source-level dedent: strip the common leading-whitespace prefix and trim,
+    // matching the runtime §12 dedent but on the raw source so escapes and
+    // `${...}` stay intact and the printed form remains valid source.
+    let dedented = baml_db::dedent::preprocess_template(inner);
+    if dedented.is_empty() {
+        return None;
+    }
+
+    let base = indent + indent_width;
+    let mut candidate_inner = String::from("\n");
+    for (i, line) in dedented.lines().enumerate() {
+        if i > 0 {
+            candidate_inner.push('\n');
+        }
+        if !line.is_empty() {
+            candidate_inner.extend(std::iter::repeat_n(' ', base));
+            candidate_inner.push_str(line);
+        }
+    }
+    candidate_inner.push('\n');
+    candidate_inner.extend(std::iter::repeat_n(' ', indent));
+
+    // Bail to verbatim unless the runtime value (escapes decoded, then §12
+    // dedented) is byte-identical for the original and re-indented interiors.
+    let value = |s: &str| {
+        baml_db::dedent::preprocess_template(&baml_db::escape::unescape_backtick_string_literal(s))
+    };
+    if value(inner) != value(&candidate_inner) {
+        return None;
+    }
+
+    Some(format!(
+        "{}{}{}",
+        &text[..ticks],
+        candidate_inner,
+        &text[text.len() - ticks..]
+    ))
+}
+
 impl Printable for BacktickString {
-    fn print(&self, _shape: Shape, printer: &mut Printer) -> PrintInfo {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         let text = &printer.input[self.span()];
         let multi_lined = text.contains('\n');
-        printer.print_raw_token(self);
+        let reindented = if self.dedent_safe {
+            reindent_backtick(text, shape.indent, printer.config.indent_width)
+        } else {
+            None
+        };
+        match reindented {
+            Some(reindented) => printer.print_str(&reindented),
+            None => printer.print_raw_token(self),
+        }
         PrintInfo { multi_lined }
     }
     fn leftmost_token(&self) -> TextRange {

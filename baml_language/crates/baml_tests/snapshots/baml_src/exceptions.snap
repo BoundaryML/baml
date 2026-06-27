@@ -593,7 +593,7 @@ function exceptions.bare_class_dispatch_first_fn() -> int {
 
   L1:
     load_var e
-    throw
+    rethrow
 
   L2:
     load_const 2
@@ -623,7 +623,7 @@ function exceptions.bare_class_dispatch_second_fn() -> int {
 
   L1:
     load_var e
-    throw
+    rethrow
 
   L2:
     load_const 2
@@ -690,7 +690,7 @@ function exceptions.bare_class_single_arm_fn() -> int {
 
   L0:
     load_var e
-    throw
+    rethrow
 
   L1:
     load_const 1
@@ -709,7 +709,7 @@ function exceptions.catch_division_by_zero_fn() -> int {
 
   L0:
     load_var e
-    throw
+    rethrow
 
   L1:
     load_const 1
@@ -850,7 +850,7 @@ function exceptions.catch_four_typed_arms_jump_table_fn() -> int {
 
   L0:
     load_var e
-    throw
+    rethrow
 
   L1: ErrD
     load_const 40
@@ -949,7 +949,7 @@ function exceptions.catch_index_out_of_bounds_fn() -> int {
 
   L0:
     load_var e
-    throw
+    rethrow
 
   L1:
     load_const 1
@@ -970,7 +970,7 @@ function exceptions.catch_integer_overflow_add_fn() -> int {
 
   L0:
     load_var e
-    throw
+    rethrow
 
   L1:
     load_const 1
@@ -991,7 +991,7 @@ function exceptions.catch_integer_overflow_mul_fn() -> int {
 
   L0:
     load_var e
-    throw
+    rethrow
 
   L1:
     load_const 1
@@ -1012,7 +1012,7 @@ function exceptions.catch_integer_overflow_neg_fn() -> int {
 
   L0:
     load_var e
-    throw
+    rethrow
 
   L1:
     load_const 1
@@ -1033,7 +1033,7 @@ function exceptions.catch_integer_overflow_sub_fn() -> int {
 
   L0:
     load_var e
-    throw
+    rethrow
 
   L1:
     load_const 1
@@ -1053,7 +1053,7 @@ function exceptions.catch_integer_overflow_via_panic_union_fn() -> int {
 
   L0:
     load_var e
-    throw
+    rethrow
 
   L1: SdkPanic
     load_const 2
@@ -1139,7 +1139,7 @@ function exceptions.catch_map_key_not_found_fn() -> int {
 
   L0:
     load_var e
-    throw
+    rethrow
 
   L1:
     load_const 1
@@ -1262,7 +1262,7 @@ function exceptions.catch_negative_index_as_index_out_of_bounds_fn() -> int {
 
   L0:
     load_var e
-    throw
+    rethrow
 
   L1:
     load_const 1
@@ -1286,7 +1286,7 @@ function exceptions.catch_negative_shift_fn() -> int {
 
   L0:
     load_var e
-    throw
+    rethrow
 
   L1:
     load_const 1
@@ -1308,7 +1308,7 @@ function exceptions.catch_shift_overflow_fn() -> int {
 
   L0:
     load_var e
-    throw
+    rethrow
 
   L1:
     load_const 1
@@ -1418,7 +1418,7 @@ function exceptions.catch_two_typed_arms_sequential_chain_fn() -> int {
 
   L1:
     load_var e
-    throw
+    rethrow
 
   L2:
     load_const 2
@@ -1448,7 +1448,7 @@ function exceptions.catch_two_user_classes_dispatch_first_fn() -> int {
 
   L1:
     load_var e
-    throw
+    rethrow
 
   L2:
     load_const 2
@@ -1478,7 +1478,7 @@ function exceptions.catch_two_user_classes_dispatch_second_fn() -> int {
 
   L1:
     load_var e
-    throw
+    rethrow
 
   L2:
     load_const 2
@@ -1523,7 +1523,7 @@ function exceptions.catch_user_class_single_arm_fn() -> int {
 
   L0:
     load_var e
-    throw
+    rethrow
 
   L1:
     load_const 1
@@ -1542,7 +1542,7 @@ function exceptions.catch_without_stack_trace_still_works_fn() -> string {
 
   L0:
     load_var e
-    throw
+    rethrow
 
   L1:
     load_var e
@@ -1918,7 +1918,7 @@ function exceptions.mixed_union_no_wildcard_error_fires_fn() -> int {
 
   L1:
     load_var e
-    throw
+    rethrow
 
   L2:
     load_const 1
@@ -1944,7 +1944,7 @@ function exceptions.mixed_union_no_wildcard_panic_fires_fn() -> int {
 
   L1:
     load_var e
-    throw
+    rethrow
 
   L2:
     load_const 1
@@ -1970,7 +1970,7 @@ function exceptions.named_binding_int_access_value_fn() -> int {
 
   L1:
     load_var e
-    throw
+    rethrow
 
   L2:
     load_var e
@@ -2001,7 +2001,7 @@ function exceptions.named_binding_string_access_value_fn() -> string {
 
   L1:
     load_var e
-    throw
+    rethrow
 
   L2:
     load_const "was int"
@@ -2024,7 +2024,7 @@ function exceptions.named_class_binding_access_field_fn() -> string {
 
   L0:
     load_var e
-    throw
+    rethrow
 
   L1:
     load_var e
@@ -2051,7 +2051,7 @@ function exceptions.named_class_binding_dispatch_access_fields_fn() -> string {
 
   L1:
     load_var e
-    throw
+    rethrow
 
   L2:
     load_var e
@@ -2076,7 +2076,7 @@ function exceptions.named_panic_binding_division_by_zero_field_fn() -> int {
 
   L0:
     load_var e
-    throw
+    rethrow
 
   L1:
     load_var e
@@ -2096,7 +2096,7 @@ function exceptions.named_panic_binding_index_out_of_bounds_fields_fn() -> int {
 
   L0:
     load_var e
-    throw
+    rethrow
 
   L1:
     load_var e
@@ -2116,7 +2116,7 @@ function exceptions.named_panic_binding_index_out_of_bounds_length_fn() -> int {
 
   L0:
     load_var e
-    throw
+    rethrow
 
   L1:
     load_var e
@@ -2137,7 +2137,7 @@ function exceptions.named_panic_binding_integer_overflow_message_fn() -> string 
 
   L0:
     load_var e
-    throw
+    rethrow
 
   L1:
     load_var e
@@ -2157,7 +2157,7 @@ function exceptions.named_panic_binding_map_key_not_found_field_fn() -> string {
 
   L0:
     load_var e
-    throw
+    rethrow
 
   L1:
     load_var e
@@ -2199,7 +2199,7 @@ function exceptions.panic_alias_catches_any_panic_fn() -> int {
 
   L0:
     load_var e
-    throw
+    rethrow
 
   L1: SdkPanic
     load_const 1
@@ -2391,6 +2391,7 @@ function exceptions.s10_do_div_4() -> int {
 
 function exceptions.s10_do_oob_1() -> int {
     load_const 1
+    load_type int
     alloc_array 1
     load_const 5
     load_array_element
@@ -2506,6 +2507,7 @@ function exceptions.s11_divides_wrong() -> int {
 
 function exceptions.s11_oob() -> int {
     load_const 1
+    load_type int
     alloc_array 1
     load_const 5
     load_array_element
@@ -2586,7 +2588,7 @@ function exceptions.s13_middle_2() -> int {
 
   L0:
     load_var e
-    throw
+    rethrow
 
   L1:
     load_const 1
@@ -2614,6 +2616,7 @@ function exceptions.s14_oob_fields() -> int {
     load_const 10
     load_const 20
     load_const 30
+    load_type int
     alloc_array 3
     load_const 7
     load_array_element
@@ -3165,6 +3168,8 @@ function exceptions.s5_add_overflow(x: int) -> int {
 function exceptions.s5_bad_1() -> int {
     load_const 1
     load_const "a"
+    load_type string
+    load_type int
     alloc_map 1
     load_const "x"
     load_map_element
@@ -3174,6 +3179,7 @@ function exceptions.s5_bad_1() -> int {
 function exceptions.s5_bad_2() -> int {
     load_const 1
     load_const 2
+    load_type int
     alloc_array 2
     load_const 3
     unary_op -
@@ -3205,6 +3211,7 @@ function exceptions.s5_neg_overflow(x: int) -> int {
 function exceptions.s5_oob_1() -> int {
     load_const 1
     load_const 2
+    load_type int
     alloc_array 2
     load_const 5
     load_array_element
@@ -3227,6 +3234,8 @@ function exceptions.s5_sub_overflow(x: int) -> int {
 function exceptions.s5b_bad_3() -> string {
     load_const "one"
     load_const "a"
+    load_type string
+    load_type string
     alloc_map 1
     load_const "x"
     load_map_element
@@ -3244,6 +3253,7 @@ function exceptions.s5b_oob_2() -> int {
     load_const 10
     load_const 20
     load_const 30
+    load_type int
     alloc_array 3
     load_const 7
     load_array_element
@@ -3299,6 +3309,7 @@ function exceptions.s6_risky_2(x: int) -> int {
     load_const 1
     load_const 2
     load_const 3
+    load_type int
     alloc_array 3
     load_var x
     load_array_element
@@ -3442,6 +3453,7 @@ function exceptions.s9_risky_12(mode: int) -> int {
 
   L0:
     load_const 1
+    load_type int
     alloc_array 1
     load_const 5
     load_array_element
@@ -3522,6 +3534,7 @@ function exceptions.s9_risky_9(mode: int) -> int {
 
   L2:
     load_const 1
+    load_type int
     alloc_array 1
     load_const 5
     load_array_element
@@ -3567,6 +3580,7 @@ function exceptions.s9b_risky_17() -> int {
 
 function exceptions.s9b_risky_18() -> int {
     load_const 1
+    load_type int
     alloc_array 1
     load_const 5
     load_array_element
@@ -3600,6 +3614,7 @@ function exceptions.s9c_risky_19(mode: int) -> int {
 
   L2:
     load_const 1
+    load_type int
     alloc_array 1
     load_const 5
     load_array_element
@@ -3664,7 +3679,7 @@ function exceptions.typed_binding_dispatch_int_vs_string_fn() -> int {
 
   L1:
     load_var e
-    throw
+    rethrow
 
   L2:
     load_const 2
@@ -3694,7 +3709,7 @@ function exceptions.typed_binding_dispatch_string_vs_int_fn() -> int {
 
   L1:
     load_var e
-    throw
+    rethrow
 
   L2:
     load_const 2
@@ -3717,7 +3732,7 @@ function exceptions.typed_binding_int_fn() -> int {
 
   L0:
     load_var e
-    throw
+    rethrow
 
   L1:
     load_const 1
@@ -3758,7 +3773,7 @@ function exceptions.typed_binding_string_fn() -> int {
 
   L0:
     load_var e
-    throw
+    rethrow
 
   L1:
     load_const 1

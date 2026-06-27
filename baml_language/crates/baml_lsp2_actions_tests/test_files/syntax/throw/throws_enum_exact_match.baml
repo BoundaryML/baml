@@ -17,20 +17,20 @@ function ThrowsEnumExact(x: int) -> string throws Errors {
 //----
 //- diagnostics
 // error: declared throws is `Errors`, but this function may also throw `Errors.AuthError | Errors.InternalError | Errors.NotFoundError`
-//    ╭─[ throw_throws_enum_exact_match.baml:9:50 ]
+//    ╭─[ throw_throws_enum_exact_match.baml:9:51 ]
 //    │
 //  9 │ function ThrowsEnumExact(x: int) -> string throws Errors {
-//    │                                                  ───┬───  
-//    │                                                     ╰───── declared throws is `Errors`, but this function may also throw `Errors.AuthError | Errors.InternalError | Errors.NotFoundError`
-//    │ 
+//    │                                                   ───┬──
+//    │                                                      ╰──── declared throws is `Errors`, but this function may also throw `Errors.AuthError | Errors.InternalError | Errors.NotFoundError`
+//    │
 //    │ Note: Error code: E0096
 // ───╯
 // warning: extraneous throws declaration: Errors
-//    ╭─[ throw_throws_enum_exact_match.baml:9:50 ]
+//    ╭─[ throw_throws_enum_exact_match.baml:9:51 ]
 //    │
 //  9 │ function ThrowsEnumExact(x: int) -> string throws Errors {
-//    │                                                  ───┬───  
-//    │                                                     ╰───── extraneous throws declaration: Errors
-//    │ 
+//    │                                                   ───┬──
+//    │                                                      ╰──── extraneous throws declaration: Errors
+//    │
 //    │ Note: Error code: E0097
 // ───╯

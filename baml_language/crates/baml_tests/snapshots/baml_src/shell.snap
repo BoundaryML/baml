@@ -51,6 +51,7 @@ function shell.$init_test_ns_shell_shell(registry: testing.TestCollector) -> nul
 function shell.exec_echo_fn() -> bool {
     load_const "echo"
     load_const "Hello From Exec!"
+    load_type string
     alloc_array 1
     load_const null
     sys_op baml.sys.exec

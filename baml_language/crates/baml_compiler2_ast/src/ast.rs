@@ -37,7 +37,7 @@ pub struct RawAttributeArg {
 /// in the AST layer (before any name resolution). CST → `TypeExpr` conversion
 /// happens once during `lower_file` and is never repeated.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum TypeExpr {
+pub enum TypeExprKind {
     /// Named type path: `User`, `baml.http.Request`, `Stream<T>`
     Path {
         segments: Vec<Name>,
@@ -146,7 +146,66 @@ pub enum TypeExpr {
     },
 }
 
+/// A type expression node paired with its source span. Every node in the tree
+/// is spanned (recursively, via the `Box<TypeExpr>`/`Vec<TypeExpr>` children of
+/// [`TypeExprKind`]), so a diagnostic about any sub-type (e.g. an unresolved
+/// member of a union/map) can point exactly at it.
+///
+/// Equality and hashing are **structural** — they ignore `span`. Two occurrences
+/// of the same type compare equal regardless of source position; `span` is
+/// diagnostic metadata, not part of type identity (this matches the pre-spanning
+/// behavior and keeps Salsa early-cutoff / dedup position-insensitive).
+#[derive(Debug, Clone)]
+pub struct TypeExpr {
+    pub kind: TypeExprKind,
+    pub span: TextRange,
+}
+
+impl PartialEq for TypeExpr {
+    fn eq(&self, other: &Self) -> bool {
+        self.kind == other.kind
+    }
+}
+
+impl Eq for TypeExpr {}
+
+impl std::hash::Hash for TypeExpr {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.kind.hash(state);
+    }
+}
+
+impl std::ops::Deref for TypeExpr {
+    type Target = TypeExprKind;
+    fn deref(&self) -> &TypeExprKind {
+        &self.kind
+    }
+}
+
+impl std::ops::DerefMut for TypeExpr {
+    fn deref_mut(&mut self) -> &mut TypeExprKind {
+        &mut self.kind
+    }
+}
+
+impl TypeExprKind {
+    /// Pair this node with its source span. `TypeExprKind::Int { .. }.at(span)`.
+    pub fn at(self, span: TextRange) -> TypeExpr {
+        TypeExpr { kind: self, span }
+    }
+}
+
 impl TypeExpr {
+    /// Override this node's top-level span (its children keep their own spans).
+    /// Used where an item carries a separate annotation span for the whole type.
+    #[must_use]
+    pub fn with_span(mut self, span: TextRange) -> Self {
+        self.span = span;
+        self
+    }
+}
+
+impl TypeExprKind {
     /// Access the type-level attributes on this type expression.
     pub fn attrs(&self) -> &[RawAttribute] {
         match self {
@@ -208,8 +267,17 @@ impl TypeExpr {
 
 impl std::fmt::Display for TypeExpr {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.kind)
+    }
+}
+
+impl std::fmt::Display for TypeExprKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         fn needs_parens(ty: &TypeExpr) -> bool {
-            matches!(ty, TypeExpr::Union { .. } | TypeExpr::Function { .. })
+            matches!(
+                ty.kind,
+                TypeExprKind::Union { .. } | TypeExprKind::Function { .. }
+            )
         }
 
         fn write_postfix_base(f: &mut std::fmt::Formatter<'_>, ty: &TypeExpr) -> std::fmt::Result {
@@ -221,7 +289,7 @@ impl std::fmt::Display for TypeExpr {
         }
 
         match self {
-            TypeExpr::Path {
+            TypeExprKind::Path {
                 segments,
                 generic_args,
                 associated_type_bindings,
@@ -254,7 +322,7 @@ impl std::fmt::Display for TypeExpr {
                 }
                 Ok(())
             }
-            TypeExpr::AssociatedTypeProjection {
+            TypeExprKind::AssociatedTypeProjection {
                 base,
                 interface,
                 member,
@@ -267,31 +335,31 @@ impl std::fmt::Display for TypeExpr {
                     write!(f, ".{member}")
                 }
             }
-            TypeExpr::Int { .. } => write!(f, "int"),
-            TypeExpr::Bigint { .. } => write!(f, "bigint"),
-            TypeExpr::Float { .. } => write!(f, "float"),
-            TypeExpr::String { .. } => write!(f, "string"),
-            TypeExpr::Bool { .. } => write!(f, "bool"),
-            TypeExpr::Null { .. } => write!(f, "null"),
-            TypeExpr::Never { .. } => write!(f, "never"),
-            TypeExpr::Void { .. } => write!(f, "void"),
-            TypeExpr::Uint8Array { .. } => write!(f, "uint8array"),
-            TypeExpr::Media { kind, .. } => write!(f, "{}", format!("{kind:?}").to_lowercase()),
-            TypeExpr::Optional { inner, .. } => {
+            TypeExprKind::Int { .. } => write!(f, "int"),
+            TypeExprKind::Bigint { .. } => write!(f, "bigint"),
+            TypeExprKind::Float { .. } => write!(f, "float"),
+            TypeExprKind::String { .. } => write!(f, "string"),
+            TypeExprKind::Bool { .. } => write!(f, "bool"),
+            TypeExprKind::Null { .. } => write!(f, "null"),
+            TypeExprKind::Never { .. } => write!(f, "never"),
+            TypeExprKind::Void { .. } => write!(f, "void"),
+            TypeExprKind::Uint8Array { .. } => write!(f, "uint8array"),
+            TypeExprKind::Media { kind, .. } => write!(f, "{}", format!("{kind:?}").to_lowercase()),
+            TypeExprKind::Optional { inner, .. } => {
                 write_postfix_base(f, inner)?;
                 write!(f, "?")
             }
-            TypeExpr::List { inner, .. } => {
+            TypeExprKind::List { inner, .. } => {
                 write_postfix_base(f, inner)?;
                 write!(f, "[]")
             }
-            TypeExpr::Map { key, value, .. } => write!(f, "map<{key}, {value}>"),
-            TypeExpr::Union { variants, .. } => {
+            TypeExprKind::Map { key, value, .. } => write!(f, "map<{key}, {value}>"),
+            TypeExprKind::Union { variants, .. } => {
                 for (i, v) in variants.iter().enumerate() {
                     if i > 0 {
                         write!(f, " | ")?;
                     }
-                    if matches!(v, TypeExpr::Function { .. }) {
+                    if matches!(v.kind, TypeExprKind::Function { .. }) {
                         write!(f, "({v})")?;
                     } else {
                         write!(f, "{v}")?;
@@ -299,8 +367,8 @@ impl std::fmt::Display for TypeExpr {
                 }
                 Ok(())
             }
-            TypeExpr::Literal { value, .. } => write!(f, "{value}"),
-            TypeExpr::Function {
+            TypeExprKind::Literal { value, .. } => write!(f, "{value}"),
+            TypeExprKind::Function {
                 params,
                 ret,
                 throws,
@@ -319,7 +387,7 @@ impl std::fmt::Display for TypeExpr {
                     }
                 }
                 write!(f, ") -> ")?;
-                if matches!(**ret, TypeExpr::Function { .. }) {
+                if matches!(ret.kind, TypeExprKind::Function { .. }) {
                     write!(f, "({ret})")?;
                 } else {
                     write!(f, "{ret}")?;
@@ -329,11 +397,11 @@ impl std::fmt::Display for TypeExpr {
                 }
                 Ok(())
             }
-            TypeExpr::BuiltinUnknown { .. } => write!(f, "unknown"),
-            TypeExpr::Type { .. } => write!(f, "type"),
-            TypeExpr::Rust { .. } => write!(f, "$rust_type"),
-            TypeExpr::Error { .. } => write!(f, "error"),
-            TypeExpr::Unknown { .. } => write!(f, "?"),
+            TypeExprKind::BuiltinUnknown { .. } => write!(f, "unknown"),
+            TypeExprKind::Type { .. } => write!(f, "type"),
+            TypeExprKind::Rust { .. } => write!(f, "$rust_type"),
+            TypeExprKind::Error { .. } => write!(f, "error"),
+            TypeExprKind::Unknown { .. } => write!(f, "?"),
         }
     }
 }
@@ -352,14 +420,6 @@ pub struct FunctionTypeParam {
 pub struct AssociatedTypeBinding {
     pub name: Name,
     pub ty: Box<TypeExpr>,
-}
-
-/// A type expression with its source span — used in item definitions
-/// where we need both the type data and the source location.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SpannedTypeExpr {
-    pub expr: TypeExpr,
-    pub span: TextRange,
 }
 
 // ── Expression Bodies ───────────────────────────────────────────
@@ -1393,8 +1453,8 @@ pub struct FunctionDef {
     pub generic_param_bounds: Vec<Option<TypeExpr>>,
     pub params: Vec<Param>,
     pub defaults: FunctionDefaults,
-    pub return_type: Option<SpannedTypeExpr>,
-    pub throws: Option<SpannedTypeExpr>,
+    pub return_type: Option<TypeExpr>,
+    pub throws: Option<TypeExpr>,
     pub body: Option<FunctionBodyDef>,
     pub declarative_meta: Option<DeclarativeMeta>,
     pub origin: FunctionOrigin,
@@ -1498,7 +1558,7 @@ pub struct Interpolation {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Param {
     pub name: Name,
-    pub type_expr: Option<SpannedTypeExpr>,
+    pub type_expr: Option<TypeExpr>,
     pub default: Option<DefaultExprId>,
     pub span: TextRange,
     pub name_span: TextRange,
@@ -1552,7 +1612,7 @@ pub struct InterfaceDef {
     pub generic_param_bounds: Vec<Option<TypeExpr>>,
     /// Required interfaces from `requires I1, I2, ...`. Each is parsed as a
     /// `TypeExpr` so we can accept generic requirements like `Container<int>`.
-    pub requires: Vec<SpannedTypeExpr>,
+    pub requires: Vec<TypeExpr>,
     /// Field signatures declared on the interface. Interface fields cannot
     /// have default values — see BEP-044 §"Interface Fields".
     pub fields: Vec<FieldDef>,
@@ -1578,8 +1638,8 @@ pub struct MethodSigDef {
     pub generic_param_bounds: Vec<Option<TypeExpr>>,
     pub params: Vec<Param>,
     pub defaults: FunctionDefaults,
-    pub return_type: Option<SpannedTypeExpr>,
-    pub throws: Option<SpannedTypeExpr>,
+    pub return_type: Option<TypeExpr>,
+    pub throws: Option<TypeExpr>,
     pub attributes: Vec<RawAttribute>,
     pub docstring: Option<std::string::String>,
     pub span: TextRange,
@@ -1592,7 +1652,7 @@ pub struct ImplementsBlockDef {
     /// The target interface, captured as a `TypeExpr` so we can accept generic
     /// parameterization like `implements Container<int>`. The path's first
     /// segment is the interface name.
-    pub target: SpannedTypeExpr,
+    pub target: TypeExpr,
     /// Explicit mappings from interface fields to class fields:
     /// `interface_field as class_field`.
     pub field_links: Vec<InterfaceFieldLinkDef>,
@@ -1609,8 +1669,8 @@ impl ImplementsBlockDef {
     /// Convenience: the interface's simple name (last path segment), used for
     /// diagnostics. Returns `None` if the target is not a simple path.
     pub fn interface_name(&self) -> Option<&Name> {
-        match &self.target.expr {
-            TypeExpr::Path { segments, .. } => segments.last(),
+        match &self.target.kind {
+            TypeExprKind::Path { segments, .. } => segments.last(),
             _ => None,
         }
     }
@@ -1628,12 +1688,14 @@ pub struct InterfaceFieldLinkDef {
 /// Top-level `implements I for T { ... }` block (BEP-044).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ImplementsForDef {
-    /// Generic type parameters on the implements block (e.g. `<T>` or `<T extends Named>`).
-    pub generic_params: Vec<(Name, Option<TypeExpr>)>,
+    /// Generic type parameters on the implements block, each with its set of
+    /// `&`-separated interface bounds (`<T>` → `(T, [])`; `<T extends A & B>` →
+    /// `(T, [A, B])`). Empty bound list = unbounded.
+    pub generic_params: Vec<(Name, Vec<TypeExpr>)>,
     /// The interface being implemented.
-    pub interface_target: SpannedTypeExpr,
+    pub interface_target: TypeExpr,
     /// The type the interface is being implemented for.
-    pub for_target: SpannedTypeExpr,
+    pub for_target: TypeExpr,
     /// Explicit mappings from interface fields to class fields.
     pub field_links: Vec<InterfaceFieldLinkDef>,
     /// Associated type bindings, e.g. `type Item = int`.
@@ -1646,8 +1708,8 @@ pub struct ImplementsForDef {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AssociatedTypeDef {
     pub name: Name,
-    pub bound: Option<SpannedTypeExpr>,
-    pub default: Option<SpannedTypeExpr>,
+    pub bound: Option<TypeExpr>,
+    pub default: Option<TypeExpr>,
     pub span: TextRange,
     pub name_span: TextRange,
 }
@@ -1655,7 +1717,7 @@ pub struct AssociatedTypeDef {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AssociatedTypeBindingDef {
     pub name: Name,
-    pub type_expr: Option<SpannedTypeExpr>,
+    pub type_expr: Option<TypeExpr>,
     pub span: TextRange,
     pub name_span: TextRange,
 }
@@ -1663,7 +1725,7 @@ pub struct AssociatedTypeBindingDef {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FieldDef {
     pub name: Name,
-    pub type_expr: Option<SpannedTypeExpr>,
+    pub type_expr: Option<TypeExpr>,
     pub attributes: Vec<RawAttribute>,
     /// Joined `///` doc-comment lines preceding this declaration.
     pub docstring: Option<std::string::String>,
@@ -1695,7 +1757,7 @@ pub struct VariantDef {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TypeAliasDef {
     pub name: Name,
-    pub type_expr: Option<SpannedTypeExpr>,
+    pub type_expr: Option<TypeExpr>,
     pub span: TextRange,
     pub name_span: TextRange,
 }
