@@ -50,14 +50,14 @@ function user.test_err_bound_type_mismatch() -> int throws never {
     let inc: (Counter) -> int = c.increment : () -> int throws never -> (user.Counter) -> int throws never
     0 : 0
   }
-  !! 789..801: type mismatch: expected (Counter) -> int throws never, got () -> int throws never
+  !! 790..801: type mismatch: expected (Counter) -> int throws never, got () -> int throws never
 }
 function user.test_err_unbound_type_mismatch() -> string throws never {
   { : ""
     let f: () -> string = Employee.full_name : (self: user.Employee) -> string throws never -> () -> string throws never
     "" : ""
   }
-  !! 947..966: type mismatch: expected () -> string throws never, got (self: Employee) -> string throws never
+  !! 948..966: type mismatch: expected () -> string throws never, got (self: Employee) -> string throws never
 }
 function user.takes_unbound(f: (user.Employee) -> string throws never) -> string throws never {
   { : string

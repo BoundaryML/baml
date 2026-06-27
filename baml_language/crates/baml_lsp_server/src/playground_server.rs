@@ -11,7 +11,8 @@
 use std::{
     net::SocketAddr,
     path::{Path, PathBuf},
-    sync::Arc,
+    sync::{Arc, Mutex},
+    time::Duration,
 };
 
 use axum::{
@@ -27,14 +28,26 @@ use axum::{
     routing::{get, get_service},
 };
 use base64::Engine as _;
-use bex_events::run::{
-    AttachRootTraceResult, CancellationState, ExecutionRequest, HostCallId, InMemoryRunStore,
-    ProjectGeneration, ProjectId, RequestId, RunCursor, RunCursorExpiredReason, RunError,
-    RunErrorClass, RunFilter, RunId, RunKind, RunOutcome, RunSubscription, RunTarget,
-    RunVisibilityFilter, StartedHostRun,
+use bex_events::{
+    history::{
+        HistoryObserverRegistration, HistoryStore, HistoryValueReadResult,
+        register_history_observer,
+    },
+    run::{
+        AttachRootTraceResult, BoundaryId, CancellationState, CapturedValueRole,
+        DiagnosticSeverity, ExecutionRequest, HostCallId, InMemoryRunStore, ProjectGeneration,
+        ProjectId, RequestId, RunCursor, RunCursorExpiredReason, RunDiagnostic, RunError,
+        RunErrorClass, RunFilter, RunKind, RunOutcome, RunPatch, RunResult, RunSubscription,
+        RunTarget, RunVisibilityFilter, StartedHostRun,
+    },
+    value::{
+        ByteValueArtifactSink, CaptureLossKind, CaptureLossReason, CaptureLossRecord,
+        DEFAULT_NATIVE_LIVE_VALUE_CACHE_BYTES, LiveValueBody, LiveValueCache, LiveValueLookup,
+        LogEventRecord, ValueCapture, ValueCaptureKind, ValueCodec, ValueIdAllocator, ValueRef,
+        ValueWriter,
+    },
 };
 use bex_project::{is_cancelled_engine_error, is_cancelled_runtime_error};
-use bridge_ctypes::encoded_success_outcome;
 use futures::{SinkExt, stream::StreamExt};
 use tokio::{net::TcpListener, sync::broadcast};
 
@@ -66,10 +79,10 @@ fn epoch_ms() -> u64 {
 fn broadcast_run_started(
     broadcast_tx: &broadcast::Sender<WsOutMessage>,
     run_store: &InMemoryRunStore,
-    run_id: bex_events::run::RunId,
+    boundary_id: bex_events::run::BoundaryId,
     request_id: Option<u64>,
 ) {
-    if let Some(run) = run_store.snapshot(run_id) {
+    if let Some(run) = run_store.snapshot(boundary_id) {
         let _ = broadcast_tx.send(WsOutMessage::RunStarted {
             request_id,
             run: run_to_wire(&run),
@@ -92,7 +105,12 @@ fn broadcast_started_host_run(
     started: &StartedHostRun,
     request_id: Option<u64>,
 ) {
-    broadcast_run_started(broadcast_tx, run_store, started.start.run_id, request_id);
+    broadcast_run_started(
+        broadcast_tx,
+        run_store,
+        started.start.boundary_id,
+        request_id,
+    );
     if let Some(patch) = &started.started_patch {
         broadcast_run_patch(broadcast_tx, patch);
     }
@@ -101,11 +119,18 @@ fn broadcast_started_host_run(
 fn broadcast_root_trace_attachment(
     broadcast_tx: &broadcast::Sender<WsOutMessage>,
     run_store: &InMemoryRunStore,
-    run_id: RunId,
+    history_store: &HistoryStore,
+    boundary_id: BoundaryId,
     entry_call_ref: bex_events::ids::CallRef,
     label: &str,
 ) {
-    match run_store.attach_root_trace(run_id, entry_call_ref) {
+    if let Err(err) = history_store.attach_root_trace(boundary_id, entry_call_ref) {
+        tracing::warn!(
+            "History root trace attachment failed for {}: {err}",
+            boundary_id.to_wire_string()
+        );
+    }
+    match run_store.attach_root_trace(boundary_id, entry_call_ref) {
         AttachRootTraceResult::Attached { patches } => {
             for patch in patches {
                 broadcast_run_patch(broadcast_tx, &patch);
@@ -113,19 +138,34 @@ fn broadcast_root_trace_attachment(
         }
         AttachRootTraceResult::AlreadyAttached => {}
         AttachRootTraceResult::RunMissing => {
-            tracing::warn!("RunStore missing {label}run {}", run_id.to_wire_string());
+            tracing::warn!(
+                "RunStore missing {label}run {}",
+                boundary_id.to_wire_string()
+            );
         }
         AttachRootTraceResult::Conflict { existing } => {
             tracing::warn!(
                 "RunStore {label}root trace conflict for {}: existing {}",
-                run_id.to_wire_string(),
+                boundary_id.to_wire_string(),
                 existing.encode()
             );
         }
     }
 }
 
-fn engine_error_outcome(err: &bex_project::EngineError) -> RunOutcome {
+fn flush_native_profile_events_before_trace_attach(boundary_id: BoundaryId) {
+    if !bex_events::prof::flush_and_join(Duration::from_secs(1)) {
+        tracing::warn!(
+            "Timed out flushing native profile events before trace attachment for {}",
+            boundary_id.to_wire_string()
+        );
+    }
+}
+
+fn engine_error_outcome_with_ref(
+    err: &bex_project::EngineError,
+    value_ref: Option<ValueRef>,
+) -> RunOutcome {
     if is_cancelled_engine_error(err) {
         let now = epoch_ms();
         return RunOutcome::Cancelled(CancellationState {
@@ -138,16 +178,25 @@ fn engine_error_outcome(err: &bex_project::EngineError) -> RunOutcome {
         class: RunErrorClass::Runtime,
         message: format!("{err}"),
         details: None,
+        value_ref,
     })
 }
 
 fn complete_run_and_broadcast(
     broadcast_tx: &broadcast::Sender<WsOutMessage>,
     run_store: &InMemoryRunStore,
-    run_id: RunId,
+    history_store: &HistoryStore,
+    boundary_id: BoundaryId,
     outcome: RunOutcome,
 ) {
-    if let Some(patch) = run_store.complete_run_now(run_id, outcome) {
+    let completed_at_ms = epoch_ms();
+    if let Err(err) = history_store.complete(boundary_id, &outcome, completed_at_ms) {
+        tracing::warn!(
+            "History completion failed for {}: {err}",
+            boundary_id.to_wire_string()
+        );
+    }
+    if let Some(patch) = run_store.complete_run(boundary_id, outcome, completed_at_ms) {
         broadcast_run_patch(broadcast_tx, &patch);
     }
 }
@@ -207,12 +256,88 @@ impl FunctionRunTarget {
 }
 
 #[allow(clippy::result_large_err)]
-fn parse_run_id_for_request(request_id: u64, run_id: &str) -> Result<RunId, WsOutMessage> {
-    RunId::from_wire_str(run_id).ok_or_else(|| WsOutMessage::CommandError {
+fn parse_boundary_id_for_request(
+    request_id: u64,
+    boundary_id: &str,
+) -> Result<BoundaryId, WsOutMessage> {
+    BoundaryId::from_wire_str(boundary_id).ok_or_else(|| WsOutMessage::CommandError {
         request_id,
-        code: "invalidRunId".to_string(),
-        message: format!("Invalid runId: {run_id}"),
+        code: "invalidBoundaryId".to_string(),
+        message: format!("Invalid boundaryId: {boundary_id}"),
     })
+}
+
+fn value_body_response(
+    request_id: u64,
+    boundary_id: BoundaryId,
+    value_ref_id: String,
+    requested_codec: String,
+    live_value: LiveValueLookup,
+    history_result: Result<HistoryValueReadResult, String>,
+) -> WsOutMessage {
+    let live_diagnostic = match &live_value {
+        LiveValueLookup::Evicted(eviction) => Some(eviction.diagnostic.clone()),
+        LiveValueLookup::Available(_) | LiveValueLookup::Missing => None,
+    };
+    match live_value {
+        LiveValueLookup::Available(stored) => WsOutMessage::ValueBody {
+            request_id,
+            boundary_id: boundary_id.to_wire_string(),
+            value_ref_id,
+            codec: stored.codec.as_wire_str().to_string(),
+            availability: "available".to_string(),
+            body_base64: Some(base64::engine::general_purpose::STANDARD.encode(stored.body)),
+            diagnostic: None,
+        },
+        LiveValueLookup::Evicted(_) | LiveValueLookup::Missing => match history_result {
+            Ok(HistoryValueReadResult::Available(stored)) => WsOutMessage::ValueBody {
+                request_id,
+                boundary_id: boundary_id.to_wire_string(),
+                value_ref_id,
+                codec: stored.codec.as_wire_str().to_string(),
+                availability: "available".to_string(),
+                body_base64: Some(base64::engine::general_purpose::STANDARD.encode(stored.body)),
+                diagnostic: None,
+            },
+            Ok(HistoryValueReadResult::Missing) => WsOutMessage::ValueBody {
+                request_id,
+                boundary_id: boundary_id.to_wire_string(),
+                value_ref_id,
+                codec: requested_codec,
+                availability: "missing".to_string(),
+                body_base64: None,
+                diagnostic: Some(
+                    live_diagnostic.unwrap_or_else(|| "value body is not available".to_string()),
+                ),
+            },
+            Ok(HistoryValueReadResult::BodyUnavailable(unavailable)) => WsOutMessage::ValueBody {
+                request_id,
+                boundary_id: boundary_id.to_wire_string(),
+                value_ref_id,
+                codec: requested_codec,
+                availability: "missing".to_string(),
+                body_base64: None,
+                diagnostic: Some(unavailable.diagnostic),
+            },
+            Err(err) => {
+                let diagnostic = match live_diagnostic {
+                    Some(live_diagnostic) => {
+                        format!("{live_diagnostic}; history value read failed: {err}")
+                    }
+                    None => format!("history value read failed: {err}"),
+                };
+                WsOutMessage::ValueBody {
+                    request_id,
+                    boundary_id: boundary_id.to_wire_string(),
+                    value_ref_id,
+                    codec: requested_codec,
+                    availability: "lost".to_string(),
+                    body_base64: None,
+                    diagnostic: Some(diagnostic),
+                }
+            }
+        },
+    }
 }
 
 fn cursor_expired_reason_to_wire(reason: RunCursorExpiredReason) -> &'static str {
@@ -276,7 +401,10 @@ fn runtime_error_class(err: &bex_project::RuntimeError) -> RunErrorClass {
     }
 }
 
-fn runtime_error_outcome(err: &bex_project::RuntimeError) -> RunOutcome {
+fn runtime_error_outcome_with_ref(
+    err: &bex_project::RuntimeError,
+    value_ref: Option<ValueRef>,
+) -> RunOutcome {
     if is_cancelled_runtime_error(err) {
         let now = epoch_ms();
         return RunOutcome::Cancelled(CancellationState {
@@ -289,6 +417,7 @@ fn runtime_error_outcome(err: &bex_project::RuntimeError) -> RunOutcome {
         class: runtime_error_class(err),
         message: format!("{err}"),
         details: None,
+        value_ref,
     })
 }
 
@@ -332,12 +461,345 @@ struct WsState {
     env_state: Arc<PlaygroundEnvState>,
     io_state: Arc<PlaygroundIoState>,
     run_store: Arc<InMemoryRunStore>,
+    history_store: Arc<HistoryStore>,
+    _history_observer_registration: Arc<HistoryObserverRegistration>,
+    value_store: LiveValueStore,
     /// LSP output (responses + publishDiagnostics) destined for `/api/lsp`.
     lsp_out_tx: broadcast::Sender<lsp_server::Message>,
     /// What the browser currently has per file (for disk-watcher echo avoidance).
     doc_mirror: DocMirror,
     /// Workspace roots that browser-mode LSP saves are allowed to write under.
     workspace_roots: Arc<Vec<PathBuf>>,
+}
+
+type LiveValueStore = Arc<Mutex<LiveValueCache>>;
+
+#[derive(Default)]
+struct RootValueRefs {
+    output: Option<ValueRef>,
+    error: Option<ValueRef>,
+}
+
+fn root_value_success_outcome(value_ref: Option<ValueRef>, renderer_hint: &str) -> RunOutcome {
+    RunOutcome::Succeeded(RunResult {
+        value_ref,
+        renderer_hint: Some(renderer_hint.to_string()),
+        supporting_payload_ids: Vec::new(),
+    })
+}
+
+fn drain_captured_values_and_broadcast(
+    broadcast_tx: &broadcast::Sender<WsOutMessage>,
+    run_store: &InMemoryRunStore,
+    history_store: &HistoryStore,
+    value_store: &LiveValueStore,
+    boundary_id: BoundaryId,
+    producer: &bex_project::TraceCaptureProducer,
+) -> RootValueRefs {
+    let mut fallback_writer = match ValueWriter::new_with_id_allocator(
+        ByteValueArtifactSink::new(),
+        boundary_id,
+        ValueIdAllocator::live_fallback(),
+    ) {
+        Ok(writer) => writer,
+        Err(err) => {
+            broadcast_value_capture_diagnostic(broadcast_tx, run_store, boundary_id, err);
+            return RootValueRefs::default();
+        }
+    };
+    let mut history_errors = Vec::new();
+    let report = producer.drain_to_value_recorder_report(|draft, body| {
+        if let Some(log) = &draft.log {
+            let event = LogEventRecord {
+                call: draft.call,
+                level: log.level.clone(),
+                source: log.source.clone(),
+                timestamp_ms: log.timestamp_ms,
+                message_preview: log.message_preview.clone(),
+            };
+            match history_store.append_log_body(
+                draft.boundary_id,
+                event.clone(),
+                ValueCodec::BamlOutboundValue,
+                body.clone(),
+            ) {
+                Ok(outcome) => Ok(outcome),
+                Err(err) => {
+                    history_errors.push(err.to_string());
+                    fallback_writer.append_log_body(ValueCodec::BamlOutboundValue, body, event)
+                }
+            }
+        } else {
+            let capture = ValueCapture {
+                kind: value_capture_kind_from_bex(draft.kind),
+                call: draft.call,
+            };
+            match history_store.append_value_body(
+                draft.boundary_id,
+                capture.clone(),
+                ValueCodec::BamlOutboundValue,
+                body.clone(),
+            ) {
+                Ok(outcome) => Ok(outcome),
+                Err(err) => {
+                    history_errors.push(err.to_string());
+                    fallback_writer.append_body_with_capture(
+                        ValueCodec::BamlOutboundValue,
+                        body,
+                        Some(capture),
+                    )
+                }
+            }
+        }
+    });
+    for failure in &report.failures {
+        broadcast_value_capture_diagnostic(
+            broadcast_tx,
+            run_store,
+            failure.boundary_id,
+            format!(
+                "{} capture failed: {}",
+                value_capture_kind_from_bex(failure.kind).as_wire_str(),
+                failure.diagnostic
+            ),
+        );
+    }
+    let encoded_values = report.encoded;
+    for err in history_errors {
+        broadcast_value_capture_diagnostic(
+            broadcast_tx,
+            run_store,
+            boundary_id,
+            format!("history value persistence failed; retained live bytes only: {err}"),
+        );
+    }
+    let stats = producer.stats();
+    if stats.skipped_value_queue_full > 0 {
+        append_capture_loss_record(
+            history_store,
+            boundary_id,
+            CaptureLossKind::Value,
+            stats.skipped_value_queue_full,
+        )
+        .unwrap_or_else(|err| {
+            broadcast_value_capture_diagnostic(
+                broadcast_tx,
+                run_store,
+                boundary_id,
+                format!("history capture-loss persistence failed: {err}"),
+            );
+        });
+        broadcast_value_capture_loss_diagnostic(
+            broadcast_tx,
+            run_store,
+            boundary_id,
+            "value",
+            stats.skipped_value_queue_full,
+        );
+    }
+    if stats.skipped_log_queue_full > 0 {
+        append_capture_loss_record(
+            history_store,
+            boundary_id,
+            CaptureLossKind::Log,
+            stats.skipped_log_queue_full,
+        )
+        .unwrap_or_else(|err| {
+            broadcast_value_capture_diagnostic(
+                broadcast_tx,
+                run_store,
+                boundary_id,
+                format!("history capture-loss persistence failed: {err}"),
+            );
+        });
+        broadcast_value_capture_loss_diagnostic(
+            broadcast_tx,
+            run_store,
+            boundary_id,
+            "log",
+            stats.skipped_log_queue_full,
+        );
+    }
+
+    let mut refs = RootValueRefs::default();
+    for encoded in encoded_values {
+        let value_ref = encoded.value_ref;
+        if let Ok(mut store) = value_store.lock() {
+            let insert = store.insert(
+                encoded.boundary_id,
+                &value_ref,
+                LiveValueBody {
+                    codec: value_ref.codec,
+                    body: encoded.body,
+                },
+            );
+            if let Some(diagnostic) = insert.diagnostic {
+                broadcast_value_capture_diagnostic(
+                    broadcast_tx,
+                    run_store,
+                    encoded.boundary_id,
+                    diagnostic,
+                );
+            }
+        }
+
+        if let Some(log) = encoded.log {
+            if let Some(patch) = run_store.ingest_log_value_ref(
+                encoded.boundary_id,
+                encoded.call,
+                log.level,
+                log.message_preview
+                    .clone()
+                    .unwrap_or_else(|| "captured log".to_string()),
+                log.source,
+                Some(value_ref),
+            ) {
+                broadcast_run_patch(broadcast_tx, &patch);
+            }
+            continue;
+        }
+
+        match encoded.kind {
+            bex_project::CaptureKind::RootInput => {
+                if let Some(patch) =
+                    run_store.ingest_root_input_value_ref(encoded.boundary_id, Some(value_ref))
+                {
+                    broadcast_run_patch(broadcast_tx, &patch);
+                }
+            }
+            bex_project::CaptureKind::RootOutput => {
+                refs.output = Some(value_ref);
+            }
+            bex_project::CaptureKind::RootError => {
+                refs.error = Some(value_ref);
+            }
+            bex_project::CaptureKind::CallInput => {
+                if let Some(patch) = run_store.ingest_call_value_ref(
+                    encoded.boundary_id,
+                    encoded.call,
+                    CapturedValueRole::CallInput,
+                    Some("inputs".to_string()),
+                    Some(value_ref),
+                ) {
+                    broadcast_run_patch(broadcast_tx, &patch);
+                }
+            }
+            bex_project::CaptureKind::CallOutput => {
+                if let Some(patch) = run_store.ingest_call_value_ref(
+                    encoded.boundary_id,
+                    encoded.call,
+                    CapturedValueRole::CallOutput,
+                    Some("output".to_string()),
+                    Some(value_ref),
+                ) {
+                    broadcast_run_patch(broadcast_tx, &patch);
+                }
+            }
+            bex_project::CaptureKind::CallError => {
+                if let Some(patch) = run_store.ingest_call_value_ref(
+                    encoded.boundary_id,
+                    encoded.call,
+                    CapturedValueRole::CallError,
+                    Some("error".to_string()),
+                    Some(value_ref),
+                ) {
+                    broadcast_run_patch(broadcast_tx, &patch);
+                }
+            }
+            bex_project::CaptureKind::LogBody => {}
+        }
+    }
+
+    refs
+}
+
+fn append_capture_loss_record(
+    history_store: &HistoryStore,
+    boundary_id: BoundaryId,
+    kind: CaptureLossKind,
+    skipped: u64,
+) -> std::io::Result<()> {
+    history_store.append_capture_loss(
+        boundary_id,
+        &CaptureLossRecord {
+            kind,
+            reason: CaptureLossReason::QueueFull,
+            skipped_count: skipped,
+            call: None,
+            message: Some(capture_loss_message(kind.as_wire_str(), skipped)),
+            timestamp_ms: epoch_ms(),
+        },
+    )
+}
+
+fn value_capture_kind_from_bex(kind: bex_project::CaptureKind) -> ValueCaptureKind {
+    match kind {
+        bex_project::CaptureKind::RootInput => ValueCaptureKind::RootInput,
+        bex_project::CaptureKind::RootOutput => ValueCaptureKind::RootOutput,
+        bex_project::CaptureKind::RootError => ValueCaptureKind::RootError,
+        bex_project::CaptureKind::LogBody => ValueCaptureKind::LogBody,
+        bex_project::CaptureKind::CallOutput => ValueCaptureKind::CallOutput,
+        bex_project::CaptureKind::CallError => ValueCaptureKind::CallError,
+        bex_project::CaptureKind::CallInput => ValueCaptureKind::CallInput,
+    }
+}
+
+fn broadcast_value_capture_diagnostic(
+    broadcast_tx: &broadcast::Sender<WsOutMessage>,
+    run_store: &InMemoryRunStore,
+    boundary_id: BoundaryId,
+    err: impl std::fmt::Display,
+) {
+    if let Some(patch) = run_store.add_diagnostic(
+        boundary_id,
+        RunDiagnostic {
+            severity: DiagnosticSeverity::Warning,
+            code: Some("valueCaptureFailed".to_string()),
+            message: format!("Failed to retain captured value bytes: {err}"),
+            call_node_id: None,
+            payload_id: None,
+        },
+    ) {
+        broadcast_run_patch(broadcast_tx, &patch);
+    }
+}
+
+fn broadcast_value_capture_loss_diagnostic(
+    broadcast_tx: &broadcast::Sender<WsOutMessage>,
+    run_store: &InMemoryRunStore,
+    boundary_id: BoundaryId,
+    capture_kind: &str,
+    skipped: u64,
+) {
+    if let Some(patch) =
+        value_capture_loss_diagnostic_patch(run_store, boundary_id, capture_kind, skipped)
+    {
+        broadcast_run_patch(broadcast_tx, &patch);
+    }
+}
+
+fn value_capture_loss_diagnostic_patch(
+    run_store: &InMemoryRunStore,
+    boundary_id: BoundaryId,
+    capture_kind: &str,
+    skipped: u64,
+) -> Option<RunPatch> {
+    run_store.add_diagnostic(
+        boundary_id,
+        RunDiagnostic {
+            severity: DiagnosticSeverity::Warning,
+            code: Some("valueCaptureLoss".to_string()),
+            message: capture_loss_message(capture_kind, skipped),
+            call_node_id: None,
+            payload_id: None,
+        },
+    )
+}
+
+fn capture_loss_message(capture_kind: &str, skipped: u64) -> String {
+    format!(
+        "Skipped {skipped} captured {capture_kind} value(s) because the trace capture queue was full"
+    )
 }
 
 #[derive(Clone, Debug)]
@@ -474,12 +936,20 @@ fn build_router(
     workspace_roots: Arc<Vec<PathBuf>>,
     access_guard: PlaygroundAccessGuard,
 ) -> anyhow::Result<Router> {
+    let value_store = Arc::new(Mutex::new(LiveValueCache::with_max_bytes(
+        DEFAULT_NATIVE_LIVE_VALUE_CACHE_BYTES,
+    )));
+    let history_store = Arc::new(HistoryStore::new((*workspace_roots).clone()));
+    let history_observer_registration = Arc::new(register_history_observer(history_store.clone()));
     let ws_state = WsState {
         bex,
         broadcast_tx,
         env_state,
         io_state,
         run_store,
+        history_store,
+        _history_observer_registration: history_observer_registration,
+        value_store,
         lsp_out_tx,
         doc_mirror,
         workspace_roots,
@@ -517,6 +987,11 @@ fn build_router(
     };
 
     Ok(api.fallback_service(fallback))
+}
+
+fn history_project_root_for_project(project: &str) -> PathBuf {
+    let fs_path = bex_project::FsPath::from_str(project.to_string());
+    bex_events::history::path::resolve_project_root(fs_path.as_path())
 }
 
 // ---------------------------------------------------------------------------
@@ -981,10 +1456,10 @@ async fn playground_ws_session(socket: WebSocket, state: WsState) {
 
     if let Some(hello) = to_ws_text(&WsOutMessage::Hello {
         toolchain_version: baml_version::CANONICAL_VERSION.to_string(),
-        playground_protocol: 1,
-        min_client_playground_protocol: 1,
+        playground_protocol: 2,
+        min_client_playground_protocol: 2,
         capabilities: vec![
-            "playgroundWebSocket.v1".to_string(),
+            "playgroundWebSocket.v2".to_string(),
             "callFunction.v1".to_string(),
             "collectTests.v1".to_string(),
             "sourceFiles.v1".to_string(),
@@ -1112,7 +1587,16 @@ async fn handle_function_run(
     let broadcast_tx = state.broadcast_tx.clone();
     let project_generation = state.bex.project_generation(&project).unwrap_or(0);
     let fs_path = bex_project::FsPath::from_str(project);
-    let function_call_ctx = bex_project::FunctionCallContextBuilder::new(call_id);
+    let boundary_id = BoundaryId::new_random();
+    let value_capture =
+        bex_project::TraceCaptureProducer::new(bex_project::TraceCaptureConfig::enabled(16));
+    let function_call_ctx = bex_project::FunctionCallContextBuilder::new(call_id)
+        .with_boundary_id(boundary_id)
+        .with_capture_defaults(bex_project::CaptureDefaults {
+            values_enabled: true,
+            logs_enabled: true,
+        })
+        .with_value_capture(value_capture.clone());
 
     let bex = match state.bex.get_bex_for_project(&fs_path) {
         Ok(bex) => bex,
@@ -1130,7 +1614,10 @@ async fn handle_function_run(
     };
 
     let run_store = state.run_store.clone();
+    let history_store = state.history_store.clone();
+    let value_store = state.value_store.clone();
     let started = run_store.create_attached_run(
+        boundary_id,
         ExecutionRequest {
             project_id: ProjectId(fs_path.as_path().to_string_lossy().to_string()),
             project_generation: ProjectGeneration(project_generation),
@@ -1141,13 +1628,20 @@ async fn handle_function_run(
         RequestId(client.request_id()),
         HostCallId::Native(call_id),
     );
+    let project_root =
+        history_project_root_for_project(fs_path.as_path().to_string_lossy().as_ref());
+    if let Err(err) = history_store.begin(&project_root, &started.start) {
+        tracing::warn!(
+            "History begin failed for {}: {err}",
+            started.start.boundary_id.to_wire_string()
+        );
+    }
     broadcast_started_host_run(
         &broadcast_tx,
         &run_store,
         &started,
         client.run_started_request_id(),
     );
-    let run_id = started.start.run_id;
 
     tokio::spawn(async move {
         let function_name = target.call_function_name;
@@ -1156,25 +1650,50 @@ async fn handle_function_run(
             .await
         {
             Ok(traced) => {
+                flush_native_profile_events_before_trace_attach(boundary_id);
                 broadcast_root_trace_attachment(
                     &broadcast_tx,
                     &run_store,
-                    run_id,
+                    &history_store,
+                    boundary_id,
                     traced.entry_call_ref,
                     "",
                 );
+                let refs = drain_captured_values_and_broadcast(
+                    &broadcast_tx,
+                    &run_store,
+                    &history_store,
+                    &value_store,
+                    boundary_id,
+                    &value_capture,
+                );
                 let outcome = match traced.value {
-                    Ok(result) => encoded_success_outcome(&result, "baml.outbound.base64"),
-                    Err(e) => runtime_error_outcome(&e),
+                    Ok(_result) => root_value_success_outcome(refs.output, "baml.outbound.base64"),
+                    Err(e) => runtime_error_outcome_with_ref(&e, refs.error),
                 };
-                complete_run_and_broadcast(&broadcast_tx, &run_store, run_id, outcome);
-            }
-            Err(e) => {
                 complete_run_and_broadcast(
                     &broadcast_tx,
                     &run_store,
-                    run_id,
-                    runtime_error_outcome(&e),
+                    &history_store,
+                    boundary_id,
+                    outcome,
+                );
+            }
+            Err(e) => {
+                let refs = drain_captured_values_and_broadcast(
+                    &broadcast_tx,
+                    &run_store,
+                    &history_store,
+                    &value_store,
+                    boundary_id,
+                    &value_capture,
+                );
+                complete_run_and_broadcast(
+                    &broadcast_tx,
+                    &run_store,
+                    &history_store,
+                    boundary_id,
+                    runtime_error_outcome_with_ref(&e, refs.error),
                 );
             }
         };
@@ -1189,11 +1708,24 @@ fn handle_test_run(
     call_id: sys_types::CallId,
     state: &WsState,
 ) {
-    let ctx = bex_project::FunctionCallContextBuilder::new(call_id).build();
+    let boundary_id = BoundaryId::new_random();
+    let value_capture =
+        bex_project::TraceCaptureProducer::new(bex_project::TraceCaptureConfig::enabled(16));
+    let ctx = bex_project::FunctionCallContextBuilder::new(call_id)
+        .with_boundary_id(boundary_id)
+        .with_capture_defaults(bex_project::CaptureDefaults {
+            values_enabled: true,
+            logs_enabled: true,
+        })
+        .with_value_capture(value_capture.clone())
+        .build();
     let broadcast_tx = state.broadcast_tx.clone();
     let bex = state.bex.clone();
     let run_store = state.run_store.clone();
+    let history_store = state.history_store.clone();
+    let value_store = state.value_store.clone();
     let started = run_store.create_attached_run(
+        boundary_id,
         ExecutionRequest {
             project_id: ProjectId(project.clone()),
             project_generation: ProjectGeneration(generation),
@@ -1207,13 +1739,19 @@ fn handle_test_run(
         RequestId(client.request_id()),
         HostCallId::Native(call_id),
     );
+    let project_root = history_project_root_for_project(&project);
+    if let Err(err) = history_store.begin(&project_root, &started.start) {
+        tracing::warn!(
+            "History begin failed for {}: {err}",
+            started.start.boundary_id.to_wire_string()
+        );
+    }
     broadcast_started_host_run(
         &broadcast_tx,
         &run_store,
         &started,
         client.run_started_request_id(),
     );
-    let run_id = started.start.run_id;
 
     tokio::spawn(async move {
         match bex
@@ -1221,25 +1759,50 @@ fn handle_test_run(
             .await
         {
             Ok(traced) => {
+                flush_native_profile_events_before_trace_attach(boundary_id);
                 broadcast_root_trace_attachment(
                     &broadcast_tx,
                     &run_store,
-                    run_id,
+                    &history_store,
+                    boundary_id,
                     traced.entry_call_ref,
                     "test ",
                 );
+                let refs = drain_captured_values_and_broadcast(
+                    &broadcast_tx,
+                    &run_store,
+                    &history_store,
+                    &value_store,
+                    boundary_id,
+                    &value_capture,
+                );
                 let outcome = match traced.value {
-                    Ok(result) => encoded_success_outcome(&result, "testReport"),
-                    Err(e) => engine_error_outcome(&e),
+                    Ok(_result) => root_value_success_outcome(refs.output, "testReport"),
+                    Err(e) => engine_error_outcome_with_ref(&e, refs.error),
                 };
-                complete_run_and_broadcast(&broadcast_tx, &run_store, run_id, outcome);
-            }
-            Err(e) => {
                 complete_run_and_broadcast(
                     &broadcast_tx,
                     &run_store,
-                    run_id,
-                    engine_error_outcome(&e),
+                    &history_store,
+                    boundary_id,
+                    outcome,
+                );
+            }
+            Err(e) => {
+                let refs = drain_captured_values_and_broadcast(
+                    &broadcast_tx,
+                    &run_store,
+                    &history_store,
+                    &value_store,
+                    boundary_id,
+                    &value_capture,
+                );
+                complete_run_and_broadcast(
+                    &broadcast_tx,
+                    &run_store,
+                    &history_store,
+                    boundary_id,
+                    engine_error_outcome_with_ref(&e, refs.error),
                 );
             }
         };
@@ -1290,9 +1853,12 @@ async fn handle_ws_in_message(
             .await;
         }
 
-        WsInMessage::CancelRun { request_id, run_id } => {
-            let run_id = match parse_run_id_for_request(request_id, &run_id) {
-                Ok(run_id) => run_id,
+        WsInMessage::CancelRun {
+            request_id,
+            boundary_id,
+        } => {
+            let boundary_id = match parse_boundary_id_for_request(request_id, &boundary_id) {
+                Ok(boundary_id) => boundary_id,
                 Err(msg) => {
                     send_ws(sink, &msg).await;
                     return;
@@ -1300,10 +1866,10 @@ async fn handle_ws_in_message(
             };
             let project_id = state
                 .run_store
-                .snapshot(run_id)
+                .snapshot(boundary_id)
                 .map(|run| run.request.project_id.0);
 
-            let response = match state.run_store.cancel_run(run_id, epoch_ms(), None) {
+            let response = match state.run_store.cancel_run(boundary_id, epoch_ms(), None) {
                 bex_events::run::CancelRunEffect::CancelHostCall {
                     host_call_id,
                     patch,
@@ -1372,21 +1938,79 @@ async fn handle_ws_in_message(
             send_ws(sink, &WsOutMessage::RunList { request_id, runs }).await;
         }
 
-        WsInMessage::Snapshot { request_id, run_id } => {
-            let run_id = match parse_run_id_for_request(request_id, &run_id) {
-                Ok(run_id) => run_id,
+        WsInMessage::ListHistory { request_id, filter } => {
+            let runs = state
+                .history_store
+                .list(&run_filter_from_wire(filter))
+                .iter()
+                .map(run_summary_to_wire)
+                .collect();
+            send_ws(sink, &WsOutMessage::HistoryList { request_id, runs }).await;
+        }
+
+        WsInMessage::OpenHistory {
+            request_id,
+            boundary_id,
+        } => {
+            let boundary_id = match parse_boundary_id_for_request(request_id, &boundary_id) {
+                Ok(boundary_id) => boundary_id,
                 Err(msg) => {
                     send_ws(sink, &msg).await;
                     return;
                 }
             };
-            match state.run_store.snapshot(run_id) {
+            let snapshot = match state.run_store.snapshot(boundary_id) {
+                Some(snapshot) => Ok(snapshot),
+                None => state.history_store.open(boundary_id).map(|run| {
+                    let snapshot = run.clone();
+                    let _ = state.run_store.insert_replayed_run(run);
+                    snapshot
+                }),
+            };
+            match snapshot {
+                Ok(snapshot) => {
+                    send_ws(
+                        sink,
+                        &WsOutMessage::RunSnapshot {
+                            request_id: Some(request_id),
+                            boundary_id: boundary_id.to_wire_string(),
+                            snapshot: run_to_wire(&snapshot),
+                        },
+                    )
+                    .await;
+                }
+                Err(err) => {
+                    send_ws(
+                        sink,
+                        &WsOutMessage::CommandError {
+                            request_id,
+                            code: "historyOpenFailed".to_string(),
+                            message: format!("{err}"),
+                        },
+                    )
+                    .await;
+                }
+            }
+        }
+
+        WsInMessage::Snapshot {
+            request_id,
+            boundary_id,
+        } => {
+            let boundary_id = match parse_boundary_id_for_request(request_id, &boundary_id) {
+                Ok(boundary_id) => boundary_id,
+                Err(msg) => {
+                    send_ws(sink, &msg).await;
+                    return;
+                }
+            };
+            match state.run_store.snapshot(boundary_id) {
                 Some(snapshot) => {
                     send_ws(
                         sink,
                         &WsOutMessage::RunSnapshot {
                             request_id: Some(request_id),
-                            run_id: run_id.to_wire_string(),
+                            boundary_id: boundary_id.to_wire_string(),
                             snapshot: run_to_wire(&snapshot),
                         },
                     )
@@ -1406,14 +2030,66 @@ async fn handle_ws_in_message(
             }
         }
 
+        WsInMessage::ReadValue {
+            request_id,
+            boundary_id,
+            value_ref,
+        } => {
+            let boundary_id = match parse_boundary_id_for_request(request_id, &boundary_id) {
+                Ok(boundary_id) => boundary_id,
+                Err(msg) => {
+                    send_ws(sink, &msg).await;
+                    return;
+                }
+            };
+            let value_ref_id = value_ref.id;
+            let requested_codec = value_ref
+                .codec
+                .unwrap_or_else(|| ValueCodec::BamlOutboundValue.as_wire_str().to_string());
+            let live_value = state
+                .value_store
+                .lock()
+                .ok()
+                .map_or(LiveValueLookup::Missing, |mut store| {
+                    store.get(boundary_id, &value_ref_id)
+                });
+            let history_result = if !matches!(live_value, LiveValueLookup::Available(_)) {
+                match state
+                    .history_store
+                    .read_value_result(boundary_id, &value_ref_id)
+                {
+                    Ok(value) => Ok(value),
+                    Err(err) => {
+                        tracing::warn!(
+                            "History readValue failed for {} {}: {err}",
+                            boundary_id.to_wire_string(),
+                            value_ref_id
+                        );
+                        Err(err.to_string())
+                    }
+                }
+            } else {
+                Ok(HistoryValueReadResult::Missing)
+            };
+            let response = value_body_response(
+                request_id,
+                boundary_id,
+                value_ref_id,
+                requested_codec,
+                live_value,
+                history_result,
+            );
+            send_ws(sink, &response).await;
+        }
+
         WsInMessage::Subscribe {
             request_id,
             subscription_id,
-            run_id,
+            boundary_id,
             after_cursor,
         } => {
-            let run_id = match parse_run_id_for_request(request_id, &run_id) {
-                Ok(run_id) => run_id,
+            let boundary_id = match parse_boundary_id_for_request(request_id, &boundary_id) {
+                Ok(boundary_id) => boundary_id,
                 Err(msg) => {
                     send_ws(sink, &msg).await;
                     return;
@@ -1421,14 +2097,14 @@ async fn handle_ws_in_message(
             };
             match state
                 .run_store
-                .subscribe(run_id, after_cursor.map(RunCursor))
+                .subscribe(boundary_id, after_cursor.map(RunCursor))
             {
                 RunSubscription::Snapshot { snapshot, patches } => {
                     send_ws(
                         sink,
                         &WsOutMessage::RunSnapshot {
                             request_id: Some(request_id),
-                            run_id: run_id.to_wire_string(),
+                            boundary_id: boundary_id.to_wire_string(),
                             snapshot: run_to_wire(&snapshot),
                         },
                     )
@@ -1449,7 +2125,7 @@ async fn handle_ws_in_message(
                         &WsOutMessage::RunCursorExpired {
                             request_id: Some(request_id),
                             subscription_id: Some(subscription_id),
-                            run_id: run_id.to_wire_string(),
+                            boundary_id: boundary_id.to_wire_string(),
                             reason: cursor_expired_reason_to_wire(reason).to_string(),
                         },
                     )
@@ -1511,12 +2187,12 @@ async fn handle_ws_in_message(
 
         WsInMessage::RespondToInput {
             request_id,
-            run_id,
+            boundary_id,
             input_request_id,
             value,
         } => {
-            let run_id = match parse_run_id_for_request(request_id, &run_id) {
-                Ok(run_id) => run_id,
+            let boundary_id = match parse_boundary_id_for_request(request_id, &boundary_id) {
+                Ok(boundary_id) => boundary_id,
                 Err(msg) => {
                     send_ws(sink, &msg).await;
                     return;
@@ -1539,7 +2215,7 @@ async fn handle_ws_in_message(
             };
             let outcome = state
                 .io_state
-                .resolve_for_run(run_id, input_request_id, value);
+                .resolve_for_run(boundary_id, input_request_id, value);
             send_ws(
                 sink,
                 &WsOutMessage::CommandAck {
@@ -1552,12 +2228,12 @@ async fn handle_ws_in_message(
 
         WsInMessage::RespondToEnv {
             request_id,
-            run_id,
+            boundary_id,
             env_request_id,
             value,
         } => {
-            let run_id = match parse_run_id_for_request(request_id, &run_id) {
-                Ok(run_id) => run_id,
+            let boundary_id = match parse_boundary_id_for_request(request_id, &boundary_id) {
+                Ok(boundary_id) => boundary_id,
                 Err(msg) => {
                     send_ws(sink, &msg).await;
                     return;
@@ -1580,7 +2256,7 @@ async fn handle_ws_in_message(
             };
             let outcome = state
                 .env_state
-                .resolve_for_run(run_id, env_request_id, value);
+                .resolve_for_run(boundary_id, env_request_id, value);
             send_ws(
                 sink,
                 &WsOutMessage::CommandAck {
@@ -1996,6 +2672,16 @@ fn content_type_for_path(path: &Path) -> Option<&'static str> {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
+    use bex_events::{
+        history::HistoryValueBody,
+        ids::{BexCallId, BexThreadId, EngineId, ProcessEuid},
+        run::{PayloadKind, ProjectId, RunTimeAnchor, TraceCallKey},
+    };
+    use bex_heap::{BexHeap, HeapPermit as _, HeapPermitManager, Tlab, TlabHolder};
+    use bex_vm_types::{RootHaver, Value};
+
     use super::*;
 
     fn unique_temp_dir(name: &str) -> PathBuf {
@@ -2007,6 +2693,222 @@ mod tests {
                 .unwrap()
                 .as_nanos()
         ))
+    }
+
+    struct EmptyRoots {
+        tlab: Tlab,
+    }
+
+    impl RootHaver for EmptyRoots {
+        fn collect_roots(&self, _roots: &mut Vec<bex_vm_types::HeapPtr>) {}
+
+        fn forward_roots(
+            &mut self,
+            _forward: &std::collections::HashMap<bex_vm_types::HeapPtr, bex_vm_types::HeapPtr>,
+        ) {
+        }
+    }
+
+    impl TlabHolder for EmptyRoots {
+        fn tlab(&self) -> &Tlab {
+            &self.tlab
+        }
+
+        fn tlab_mut(&mut self) -> &mut Tlab {
+            &mut self.tlab
+        }
+    }
+
+    fn test_execution_request() -> ExecutionRequest {
+        ExecutionRequest {
+            project_id: ProjectId("native-project".to_string()),
+            project_generation: ProjectGeneration(1),
+            target: RunTarget::Function {
+                function_name: "user.LogIt".to_string(),
+            },
+            args_summary: None,
+            options_summary: None,
+        }
+    }
+
+    fn test_trace_key() -> TraceCallKey {
+        TraceCallKey {
+            process_euid: ProcessEuid([8; 16]),
+            engine_id: EngineId(2),
+            thread_id: BexThreadId(1),
+            call_id: BexCallId(3),
+        }
+    }
+
+    #[test]
+    fn value_body_response_distinguishes_history_read_failure_from_missing_value() {
+        let boundary_id = BoundaryId::from_bytes([31; 16]);
+
+        let missing = value_body_response(
+            7,
+            boundary_id,
+            "value_missing".to_string(),
+            ValueCodec::BamlOutboundValue.as_wire_str().to_string(),
+            LiveValueLookup::Missing,
+            Ok(HistoryValueReadResult::Missing),
+        );
+        let WsOutMessage::ValueBody {
+            availability,
+            diagnostic,
+            body_base64,
+            ..
+        } = missing
+        else {
+            panic!("expected value body response");
+        };
+        assert_eq!(availability, "missing");
+        assert_eq!(body_base64, None);
+        assert_eq!(diagnostic.as_deref(), Some("value body is not available"));
+
+        let failed = value_body_response(
+            8,
+            boundary_id,
+            "value_failed".to_string(),
+            ValueCodec::BamlOutboundValue.as_wire_str().to_string(),
+            LiveValueLookup::Missing,
+            Err("failed to read value segment value-0.bamlvalue".to_string()),
+        );
+        let WsOutMessage::ValueBody {
+            availability,
+            diagnostic,
+            body_base64,
+            ..
+        } = failed
+        else {
+            panic!("expected value body response");
+        };
+        assert_eq!(availability, "lost");
+        assert_eq!(body_base64, None);
+        assert!(
+            diagnostic
+                .as_deref()
+                .is_some_and(|message| message.contains("history value read failed")),
+            "{diagnostic:?}"
+        );
+    }
+
+    #[test]
+    fn value_body_response_preserves_history_body() {
+        let boundary_id = BoundaryId::from_bytes([32; 16]);
+        let response = value_body_response(
+            9,
+            boundary_id,
+            "value_1".to_string(),
+            ValueCodec::BamlOutboundValue.as_wire_str().to_string(),
+            LiveValueLookup::Missing,
+            Ok(HistoryValueReadResult::Available(HistoryValueBody {
+                codec: ValueCodec::BamlOutboundValue,
+                body: vec![1, 2, 3],
+            })),
+        );
+        let WsOutMessage::ValueBody {
+            availability,
+            body_base64,
+            diagnostic,
+            ..
+        } = response
+        else {
+            panic!("expected value body response");
+        };
+        assert_eq!(availability, "available");
+        assert_eq!(body_base64.as_deref(), Some("AQID"));
+        assert_eq!(diagnostic, None);
+    }
+
+    #[tokio::test]
+    async fn native_zero_capacity_drain_broadcasts_capture_loss_diagnostic() {
+        let project = unique_temp_dir("baml-native-capture-loss");
+        std::fs::create_dir_all(&project).expect("project dir should be created");
+        std::fs::write(project.join("baml.toml"), "").expect("manifest should be created");
+
+        let boundary_id = BoundaryId::from_bytes([21; 16]);
+        let run_store = InMemoryRunStore::default();
+        let start = run_store.create_run_at(
+            boundary_id,
+            test_execution_request(),
+            RequestId(1),
+            RunTimeAnchor {
+                epoch_created_at_ms: 20,
+                trace_zero_ns: 0,
+            },
+        );
+        let history_store = HistoryStore::new(vec![project.clone()]);
+        history_store.begin(&project, &start).unwrap();
+        let value_store = Arc::new(Mutex::new(LiveValueCache::with_max_bytes(
+            DEFAULT_NATIVE_LIVE_VALUE_CACHE_BYTES,
+        )));
+        let (broadcast_tx, mut broadcast_rx) = broadcast::channel(8);
+
+        let producer =
+            bex_project::TraceCaptureProducer::new(bex_project::TraceCaptureConfig::enabled(0));
+        assert!(
+            producer
+                .capture_with(
+                    boundary_id,
+                    test_trace_key(),
+                    bex_project::CaptureKind::RootInput,
+                    |_| panic!("zero-capacity producer must not copy a value")
+                )
+                .is_err()
+        );
+        assert_eq!(producer.stats().skipped_value_queue_full, 1);
+        let heap = BexHeap::new(Vec::new());
+        let manager = HeapPermitManager::new();
+        let permit = manager
+            .new_permit(EmptyRoots {
+                tlab: Tlab::new(Arc::clone(&heap)),
+            })
+            .await
+            .acquire()
+            .await;
+        producer
+            .capture_with(
+                boundary_id,
+                test_trace_key(),
+                bex_project::CaptureKind::RootOutput,
+                |trace_heap| {
+                    trace_heap.copy_value_from_bex_heap(&heap, permit.proof(), Value::int(7))
+                },
+            )
+            .expect("root output should use reserved capacity");
+
+        let refs = drain_captured_values_and_broadcast(
+            &broadcast_tx,
+            &run_store,
+            &history_store,
+            &value_store,
+            boundary_id,
+            &producer,
+        );
+
+        let output_ref = refs.output.expect("root output ref should be preserved");
+        assert!(refs.error.is_none());
+        assert!(matches!(
+            value_store.lock().unwrap().get(boundary_id, &output_ref.id),
+            LiveValueLookup::Available(_)
+        ));
+        let snapshot = run_store.snapshot(boundary_id).expect("run should exist");
+        let diagnostic = snapshot
+            .diagnostics
+            .iter()
+            .find(|diagnostic| diagnostic.code.as_deref() == Some("valueCaptureLoss"))
+            .expect("capture loss should be recorded live");
+        assert_eq!(
+            diagnostic.message,
+            "Skipped 1 captured value value(s) because the trace capture queue was full"
+        );
+
+        let patch = broadcast_rx
+            .try_recv()
+            .expect("drain should broadcast a capture-loss patch");
+        assert!(matches!(patch, WsOutMessage::RunPatch { .. }));
+
+        let _ = std::fs::remove_dir_all(project);
     }
 
     #[test]
@@ -2048,5 +2950,122 @@ mod tests {
 
         let _ = std::fs::remove_dir_all(&root);
         let _ = std::fs::remove_dir_all(&outside);
+    }
+
+    #[test]
+    fn history_project_root_for_project_uses_manifestless_project_owner() {
+        let root = unique_temp_dir("baml-lsp-history-root");
+        let source_dir = root.join("baml_src/ns");
+        std::fs::create_dir_all(&source_dir).expect("source dir should be created");
+        std::fs::write(
+            source_dir.join("main.baml"),
+            "function Test() -> int { 1 }\n",
+        )
+        .expect("source file should be created");
+
+        assert_eq!(
+            history_project_root_for_project(&source_dir.to_string_lossy()),
+            root
+        );
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[tokio::test]
+    async fn native_drain_persists_identified_log_and_retains_live_body() {
+        let project = unique_temp_dir("baml-native-log-history");
+        std::fs::create_dir_all(&project).expect("project dir should be created");
+        std::fs::write(project.join("baml.toml"), "").expect("manifest should be created");
+
+        let boundary_id = BoundaryId::from_bytes([13; 16]);
+        let run_store = InMemoryRunStore::default();
+        let start = run_store.create_run_at(
+            boundary_id,
+            test_execution_request(),
+            RequestId(1),
+            RunTimeAnchor {
+                epoch_created_at_ms: 20,
+                trace_zero_ns: 0,
+            },
+        );
+        let history_store = HistoryStore::new(vec![project.clone()]);
+        history_store.begin(&project, &start).unwrap();
+        let value_store = Arc::new(Mutex::new(LiveValueCache::with_max_bytes(
+            DEFAULT_NATIVE_LIVE_VALUE_CACHE_BYTES,
+        )));
+        let (broadcast_tx, mut broadcast_rx) = broadcast::channel(8);
+
+        let producer =
+            bex_project::TraceCaptureProducer::new(bex_project::TraceCaptureConfig::enabled(4));
+        let heap = BexHeap::new(Vec::new());
+        let manager = HeapPermitManager::new();
+        let permit = manager
+            .new_permit(EmptyRoots {
+                tlab: Tlab::new(Arc::clone(&heap)),
+            })
+            .await
+            .acquire()
+            .await;
+        producer
+            .capture_log_with(boundary_id, test_trace_key(), |trace_heap| {
+                let snapshot =
+                    trace_heap.copy_value_from_bex_heap(&heap, permit.proof(), Value::int(42));
+                (
+                    bex_project::TraceLogMetadata {
+                        level: Some("info".to_string()),
+                        source: None,
+                        timestamp_ms: 21,
+                        message_preview: Some("hello from log".to_string()),
+                    },
+                    snapshot,
+                )
+            })
+            .unwrap();
+
+        let refs = drain_captured_values_and_broadcast(
+            &broadcast_tx,
+            &run_store,
+            &history_store,
+            &value_store,
+            boundary_id,
+            &producer,
+        );
+
+        assert!(refs.output.is_none());
+        assert!(refs.error.is_none());
+        let snapshot = run_store.snapshot(boundary_id).expect("run should exist");
+        let payload = snapshot
+            .payloads
+            .iter()
+            .find_map(|payload| match &payload.kind {
+                PayloadKind::Log(log) => Some(log),
+                _ => None,
+            })
+            .expect("log payload should be ingested");
+        assert_eq!(payload.level.as_deref(), Some("info"));
+        assert_eq!(payload.message, "hello from log");
+        let value_ref = payload.value_ref.as_ref().expect("log value ref");
+
+        let live = match value_store.lock().unwrap().get(boundary_id, &value_ref.id) {
+            LiveValueLookup::Available(live) => live,
+            other => panic!("live value body should be retained, got {other:?}"),
+        };
+        assert_eq!(live.codec, ValueCodec::BamlOutboundValue);
+        assert!(!live.body.is_empty());
+        assert_eq!(
+            history_store
+                .read_value(boundary_id, &value_ref.id)
+                .unwrap()
+                .unwrap()
+                .body,
+            live.body
+        );
+
+        let patch = broadcast_rx
+            .try_recv()
+            .expect("drain should broadcast a RunStore patch");
+        assert!(matches!(patch, WsOutMessage::RunPatch { .. }));
+
+        let _ = std::fs::remove_dir_all(project);
     }
 }

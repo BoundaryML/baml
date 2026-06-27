@@ -223,7 +223,7 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
         }
         // Pre-resolve `Self` to the enclosing impl's `for` target before lowering
         // signature types, mirroring the body path in `tir::inference`.
-        let self_replacement = enclosing_impl.map(|imp| imp.for_target.expr.clone());
+        let self_replacement = enclosing_impl.map(|imp| imp.for_target.clone());
         let lower_sig_te = |te: &baml_compiler2_ast::TypeExpr,
                             generic_params: &[Name],
                             diags: &mut Vec<baml_compiler2_tir::infer_context::TirTypeError>|
@@ -244,7 +244,7 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
             )
         };
 
-        // Check return type — use the span from the item tree's SpannedTypeExpr.
+        // Check return type — use the span from the item tree's TypeExpr.
         if let Some(ret_te) = &sig.return_type {
             lower_sig_te(ret_te, &generic_params, &mut type_errors);
             if !type_errors.is_empty() {
@@ -270,8 +270,10 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
         for (i, param) in sig.params.iter().enumerate() {
             type_errors.clear();
             let param_ty = if param.name.as_str() == "self"
-                && matches!(param.ty, baml_compiler2_ast::TypeExpr::Unknown { .. })
-            {
+                && matches!(
+                    param.ty.kind,
+                    baml_compiler2_ast::TypeExprKind::Unknown { .. }
+                ) {
                 // `self`'s type is the enclosing receiver: the class for an in-body
                 // method, or the impl's `for` target for an out-of-body
                 // `implement I for C` method (mirroring the body path in
@@ -309,7 +311,7 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
                 } else if let Some(imp) = enclosing_impl {
                     baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
                         db,
-                        &imp.for_target.expr,
+                        &imp.for_target,
                         pkg_items,
                         &pkg_info.namespace_path,
                         &generic_params,
@@ -492,12 +494,11 @@ fn check_interfaces<'db>(
             && interface_has_cycle(db, iface, pkg_items, namespace_path).is_none()
         {
             for parent_te in &iface.requires {
-                if resolve_interface_path(db, &parent_te.expr, pkg_items, namespace_path).is_none()
-                {
+                if resolve_interface_path(db, parent_te, pkg_items, namespace_path).is_none() {
                     // BEP-044 wf3 #19: echo the user-written name verbatim
                     // (e.g. `root.a.Ghost`) rather than stripping to the bare
                     // leaf — matches how `implements` renders its target.
-                    let target_name = format!("{}", parent_te.expr);
+                    let target_name = format!("{parent_te}");
                     let interface_name = Name::new(
                         interface_qtn_for_file(db, file, &iface.name).render_user_facing(),
                     );
@@ -505,8 +506,7 @@ fn check_interfaces<'db>(
                     // from "name doesn't exist at all" (E0112), mirroring the
                     // `implements` path. Without this, a `requires` on an
                     // unknown name wrongly claims the name "is not an interface".
-                    let diag = if is_non_interface_type(&parent_te.expr, pkg_items, namespace_path)
-                    {
+                    let diag = if is_non_interface_type(parent_te, pkg_items, namespace_path) {
                         Hir2Diagnostic::InterfaceRequiresNonInterface {
                             interface_name,
                             target_name,
@@ -535,7 +535,7 @@ fn check_interfaces<'db>(
         if let baml_compiler2_ast::Item::Interface(iface) = item {
             for field in &iface.fields {
                 if let Some(te) = &field.type_expr
-                    && type_expr_contains_self(&te.expr)
+                    && type_expr_contains_self(te)
                 {
                     diagnostics.push(
                         Diagnostic::error(
@@ -664,11 +664,17 @@ fn check_interfaces<'db>(
                 continue;
             };
             for (error, loc) in impl_diags {
-                let span = match loc {
+                let mut span = match loc {
                     ImplDiagnosticLocation::InterfaceTarget => sm.interface_target_span,
                     ImplDiagnosticLocation::ForTarget => sm.for_target_span.unwrap_or(sm.impl_span),
                     ImplDiagnosticLocation::Bound => sm.impl_span,
                 };
+                // Prefer the error's own precise span (e.g. an unresolved member of
+                // the interface target) so this matches the same error surfaced by
+                // other passes and the dedup below collapses them to one (B-538).
+                if let Some(range) = error.precise_span() {
+                    span.range = range;
+                }
                 diagnostics.push(
                     Diagnostic::error(tir_type_error_to_diagnostic_id(error), error.to_string())
                         .with_primary_span(span)
@@ -682,7 +688,7 @@ fn check_interfaces<'db>(
         if let baml_compiler2_ast::Item::Interface(iface) = item {
             for method in &iface.default_methods {
                 if let Some(ret) = &method.return_type
-                    && type_expr_contains_self(&ret.expr)
+                    && type_expr_contains_self(ret)
                 {
                     diagnostics.push(
                         Diagnostic::error(
@@ -709,7 +715,7 @@ fn check_interfaces<'db>(
     diagnostics
 }
 
-/// Resolve a `TypeExpr::Path` to an interface, by name, walking the package.
+/// Resolve a `TypeExprKind::Path` to an interface, by name, walking the package.
 ///
 /// Returns `None` if the path doesn't name an interface (including: name
 /// doesn't exist, or resolves to a class/enum/etc.).
@@ -770,14 +776,15 @@ fn interface_has_cycle<'db>(
     pkg_items: &baml_compiler2_hir::package::PackageItems<'db>,
     namespace_path: &[Name],
 ) -> Option<Vec<Name>> {
-    use baml_compiler2_ast::TypeExpr;
+    use baml_compiler2_ast::TypeExprKind;
 
-    let self_probe = TypeExpr::Path {
+    let self_probe = TypeExprKind::Path {
         segments: vec![iface.name.clone()],
         generic_args: Vec::new(),
         associated_type_bindings: Vec::new(),
         attrs: Vec::new(),
-    };
+    }
+    .at(TextRange::default());
     let self_loc =
         resolve_interface_path(db, &self_probe, pkg_items, namespace_path).map(|r| r.loc);
     // Frontier item: (segments to probe, name-chain leading here from `iface`).
@@ -785,8 +792,8 @@ fn interface_has_cycle<'db>(
     let mut frontier: Vec<(Vec<Name>, Vec<Name>)> = iface
         .requires
         .iter()
-        .filter_map(|p| match &p.expr {
-            TypeExpr::Path { segments, .. } if !segments.is_empty() => {
+        .filter_map(|p| match &p.kind {
+            TypeExprKind::Path { segments, .. } if !segments.is_empty() => {
                 Some((segments.clone(), vec![iface.name.clone(), leaf(segments)]))
             }
             _ => None,
@@ -797,18 +804,19 @@ fn interface_has_cycle<'db>(
         if !visited.insert(path.clone()) {
             continue;
         }
-        let probe = TypeExpr::Path {
+        let probe = TypeExprKind::Path {
             segments: path,
             generic_args: Vec::new(),
             associated_type_bindings: Vec::new(),
             attrs: Vec::new(),
-        };
+        }
+        .at(TextRange::default());
         if let Some(parent) = resolve_interface_path(db, &probe, pkg_items, namespace_path) {
             if self_loc.as_ref().is_some_and(|loc| *loc == parent.loc) {
                 return Some(chain);
             }
             for parent in &parent.iface.requires {
-                if let TypeExpr::Path { segments, .. } = &parent.expr
+                if let TypeExprKind::Path { segments, .. } = &parent.kind
                     && !segments.is_empty()
                 {
                     let mut next_chain = chain.clone();
@@ -885,8 +893,8 @@ impl MethodSignature {
         generic_params: &[Name],
         generic_param_bounds: &[Option<baml_compiler2_ast::TypeExpr>],
         params: &[baml_compiler2_ast::Param],
-        return_type: Option<&baml_compiler2_ast::SpannedTypeExpr>,
-        throws: Option<&baml_compiler2_ast::SpannedTypeExpr>,
+        return_type: Option<&baml_compiler2_ast::TypeExpr>,
+        throws: Option<&baml_compiler2_ast::TypeExpr>,
         subst: &std::collections::HashMap<Name, baml_compiler2_ast::TypeExpr>,
     ) -> Self {
         let scoped_subst = if generic_params.is_empty() {
@@ -918,15 +926,15 @@ impl MethodSignature {
                 let ty_str = p
                     .type_expr
                     .as_ref()
-                    .map(|te| substitute_type_vars(&te.expr, &scoped_subst).to_string())
+                    .map(|te| substitute_type_vars(te, &scoped_subst).to_string())
                     .unwrap_or_else(|| "<unknown>".to_string());
                 (p.name.clone(), ty_str)
             })
             .collect();
         let return_type = return_type
-            .map(|te| substitute_type_vars(&te.expr, &scoped_subst).to_string())
+            .map(|te| substitute_type_vars(te, &scoped_subst).to_string())
             .unwrap_or_else(|| "<unspecified>".to_string());
-        let throws = throws.map(|te| substitute_type_vars(&te.expr, &scoped_subst).to_string());
+        let throws = throws.map(|te| substitute_type_vars(te, &scoped_subst).to_string());
         // Keep the substituted TypeExprs for semantic (not string) matching.
         let param_types = orig_params
             .iter()
@@ -934,11 +942,11 @@ impl MethodSignature {
             .map(|p| {
                 p.type_expr
                     .as_ref()
-                    .map(|te| substitute_type_vars(&te.expr, &scoped_subst))
+                    .map(|te| substitute_type_vars(te, &scoped_subst))
             })
             .collect();
-        let return_te = orig_return.map(|te| substitute_type_vars(&te.expr, &scoped_subst));
-        let throws_te = orig_throws.map(|te| substitute_type_vars(&te.expr, &scoped_subst));
+        let return_te = orig_return.map(|te| substitute_type_vars(te, &scoped_subst));
+        let throws_te = orig_throws.map(|te| substitute_type_vars(te, &scoped_subst));
         Self {
             generic_params: generic_params.to_vec(),
             generic_param_bounds,
@@ -1070,12 +1078,12 @@ fn substitute_type_vars(
     ty: &baml_compiler2_ast::TypeExpr,
     subst: &std::collections::HashMap<Name, baml_compiler2_ast::TypeExpr>,
 ) -> baml_compiler2_ast::TypeExpr {
-    use baml_compiler2_ast::TypeExpr;
+    use baml_compiler2_ast::TypeExprKind;
     if subst.is_empty() {
         return ty.clone();
     }
-    match ty {
-        TypeExpr::Path {
+    let kind = match &ty.kind {
+        TypeExprKind::Path {
             segments,
             generic_args,
             associated_type_bindings,
@@ -1096,7 +1104,7 @@ fn substitute_type_vars(
             {
                 return replacement.clone();
             }
-            TypeExpr::Path {
+            TypeExprKind::Path {
                 segments: segments.clone(),
                 generic_args: generic_args
                     .iter()
@@ -1112,12 +1120,12 @@ fn substitute_type_vars(
                 attrs: attrs.clone(),
             }
         }
-        TypeExpr::AssociatedTypeProjection {
+        TypeExprKind::AssociatedTypeProjection {
             base,
             interface,
             member,
             attrs,
-        } => TypeExpr::AssociatedTypeProjection {
+        } => TypeExprKind::AssociatedTypeProjection {
             base: Box::new(substitute_type_vars(base, subst)),
             interface: interface
                 .as_ref()
@@ -1125,32 +1133,32 @@ fn substitute_type_vars(
             member: member.clone(),
             attrs: attrs.clone(),
         },
-        TypeExpr::List { inner, attrs } => TypeExpr::List {
+        TypeExprKind::List { inner, attrs } => TypeExprKind::List {
             inner: Box::new(substitute_type_vars(inner, subst)),
             attrs: attrs.clone(),
         },
-        TypeExpr::Optional { inner, attrs } => TypeExpr::Optional {
+        TypeExprKind::Optional { inner, attrs } => TypeExprKind::Optional {
             inner: Box::new(substitute_type_vars(inner, subst)),
             attrs: attrs.clone(),
         },
-        TypeExpr::Union { variants, attrs } => TypeExpr::Union {
+        TypeExprKind::Union { variants, attrs } => TypeExprKind::Union {
             variants: variants
                 .iter()
                 .map(|m| substitute_type_vars(m, subst))
                 .collect(),
             attrs: attrs.clone(),
         },
-        TypeExpr::Map { key, value, attrs } => TypeExpr::Map {
+        TypeExprKind::Map { key, value, attrs } => TypeExprKind::Map {
             key: Box::new(substitute_type_vars(key, subst)),
             value: Box::new(substitute_type_vars(value, subst)),
             attrs: attrs.clone(),
         },
-        TypeExpr::Function {
+        TypeExprKind::Function {
             params,
             ret,
             throws,
             attrs,
-        } => TypeExpr::Function {
+        } => TypeExprKind::Function {
             params: params
                 .iter()
                 .map(|param| baml_compiler2_ast::FunctionTypeParam {
@@ -1165,8 +1173,9 @@ fn substitute_type_vars(
                 .map(|throws| Box::new(substitute_type_vars(throws, subst))),
             attrs: attrs.clone(),
         },
-        _ => ty.clone(),
-    }
+        _ => return ty.clone(),
+    };
+    kind.at(ty.span)
 }
 
 fn subst_without_names(
@@ -1193,16 +1202,13 @@ fn associated_type_subst_from_bindings(
         if let Some(binding) = bindings.iter().find(|binding| binding.name == assoc.name)
             && let Some(type_expr) = &binding.type_expr
         {
-            subst.insert(
-                assoc.name.clone(),
-                substitute_type_vars(&type_expr.expr, &subst),
-            );
+            subst.insert(assoc.name.clone(), substitute_type_vars(type_expr, &subst));
             continue;
         }
         if !subst.contains_key(&assoc.name)
             && let Some(default) = &assoc.default
         {
-            let default_expr = substitute_type_vars(&default.expr, &subst);
+            let default_expr = substitute_type_vars(default, &subst);
             subst.insert(assoc.name.clone(), default_expr);
         }
     }
@@ -1229,7 +1235,7 @@ fn associated_type_subst_from_type_args(
         if !subst.contains_key(&assoc.name)
             && let Some(default) = &assoc.default
         {
-            let default_expr = substitute_type_vars(&default.expr, &subst);
+            let default_expr = substitute_type_vars(default, &subst);
             subst.insert(assoc.name.clone(), default_expr);
         }
     }
@@ -1248,18 +1254,18 @@ fn augment_subst_with_class_required_parent_associated_types(
 
     for parent_te in &iface.requires {
         let Some(required_parent) =
-            resolve_interface_path(db, &parent_te.expr, pkg_items, namespace_path)
+            resolve_interface_path(db, parent_te, pkg_items, namespace_path)
         else {
             continue;
         };
         let Some(class_parent_block) = class.implements.iter().find(|block| {
-            resolve_interface_path(db, &block.target.expr, pkg_items, namespace_path)
+            resolve_interface_path(db, &block.target, pkg_items, namespace_path)
                 .is_some_and(|implemented| implemented.qtn == required_parent.qtn)
         }) else {
             continue;
         };
-        let parent_args: &[baml_compiler2_ast::TypeExpr] = match &class_parent_block.target.expr {
-            baml_compiler2_ast::TypeExpr::Path { generic_args, .. } => generic_args.as_slice(),
+        let parent_args: &[baml_compiler2_ast::TypeExpr] = match &class_parent_block.target.kind {
+            baml_compiler2_ast::TypeExprKind::Path { generic_args, .. } => generic_args.as_slice(),
             _ => &[][..],
         };
         let parent_generic_subst: std::collections::HashMap<Name, baml_compiler2_ast::TypeExpr> =
@@ -1403,14 +1409,14 @@ fn validate_associated_type_binding_defs(
         let mut binding_diags = Vec::new();
         let binding_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
             db,
-            &binding_ty_expr.expr,
+            binding_ty_expr,
             binding_pkg_items,
             binding_namespace_path,
             generic_params,
             &mut binding_diags,
         );
         let mut bound_diags = Vec::new();
-        let bound_expr = substitute_type_vars(&bound.expr, &associated_subst);
+        let bound_expr = substitute_type_vars(bound, &associated_subst);
         let bound_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
             db,
             &bound_expr,
@@ -1491,13 +1497,13 @@ fn validate_associated_type_default_bounds(
             if let Some(default) = &assoc.default {
                 associated_subst.insert(
                     assoc.name.clone(),
-                    substitute_type_vars(&default.expr, &associated_subst),
+                    substitute_type_vars(default, &associated_subst),
                 );
             }
             continue;
         };
         let mut bound_diags = Vec::new();
-        let bound_expr = substitute_type_vars(&bound.expr, &associated_subst);
+        let bound_expr = substitute_type_vars(bound, &associated_subst);
         let bound_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
             db,
             &bound_expr,
@@ -1507,7 +1513,7 @@ fn validate_associated_type_default_bounds(
             &mut bound_diags,
         );
         let mut default_diags = Vec::new();
-        let default_expr = substitute_type_vars(&default.expr, &associated_subst);
+        let default_expr = substitute_type_vars(default, &associated_subst);
         let default_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
             db,
             &default_expr,
@@ -1630,7 +1636,7 @@ fn validate_associated_type_bindings_in_items(
                         validate_associated_type_bindings_in_type_expr(
                             db,
                             file_id,
-                            &te.expr,
+                            te,
                             te.span,
                             pkg_items,
                             namespace_path,
@@ -1658,7 +1664,7 @@ fn validate_associated_type_bindings_in_items(
                     validate_associated_type_bindings_in_type_expr(
                         db,
                         file_id,
-                        &block.target.expr,
+                        &block.target,
                         block.target.span,
                         pkg_items,
                         namespace_path,
@@ -1672,7 +1678,7 @@ fn validate_associated_type_bindings_in_items(
                             validate_associated_type_bindings_in_type_expr(
                                 db,
                                 file_id,
-                                &te.expr,
+                                te,
                                 te.span,
                                 pkg_items,
                                 namespace_path,
@@ -1720,7 +1726,7 @@ fn validate_associated_type_bindings_in_items(
                     validate_associated_type_bindings_in_type_expr(
                         db,
                         file_id,
-                        &parent.expr,
+                        parent,
                         parent.span,
                         pkg_items,
                         namespace_path,
@@ -1735,7 +1741,7 @@ fn validate_associated_type_bindings_in_items(
                         validate_associated_type_bindings_in_type_expr(
                             db,
                             file_id,
-                            &te.expr,
+                            te,
                             te.span,
                             pkg_items,
                             namespace_path,
@@ -1751,7 +1757,7 @@ fn validate_associated_type_bindings_in_items(
                         validate_associated_type_bindings_in_type_expr(
                             db,
                             file_id,
-                            &bound.expr,
+                            bound,
                             bound.span,
                             pkg_items,
                             namespace_path,
@@ -1765,7 +1771,7 @@ fn validate_associated_type_bindings_in_items(
                         validate_associated_type_bindings_in_type_expr(
                             db,
                             file_id,
-                            &default.expr,
+                            default,
                             default.span,
                             pkg_items,
                             namespace_path,
@@ -1809,7 +1815,7 @@ fn validate_associated_type_bindings_in_items(
                     validate_associated_type_bindings_in_type_expr(
                         db,
                         file_id,
-                        &te.expr,
+                        te,
                         te.span,
                         pkg_items,
                         namespace_path,
@@ -1853,7 +1859,7 @@ fn validate_associated_type_bindings_in_items(
                 validate_associated_type_bindings_in_type_expr(
                     db,
                     file_id,
-                    &imp.interface_target.expr,
+                    &imp.interface_target,
                     imp.interface_target.span,
                     pkg_items,
                     namespace_path,
@@ -1865,7 +1871,7 @@ fn validate_associated_type_bindings_in_items(
                 validate_associated_type_bindings_in_type_expr(
                     db,
                     file_id,
-                    &imp.for_target.expr,
+                    &imp.for_target,
                     imp.for_target.span,
                     pkg_items,
                     namespace_path,
@@ -1879,7 +1885,7 @@ fn validate_associated_type_bindings_in_items(
                         validate_associated_type_bindings_in_type_expr(
                             db,
                             file_id,
-                            &te.expr,
+                            te,
                             te.span,
                             pkg_items,
                             namespace_path,
@@ -2001,7 +2007,7 @@ fn validate_associated_type_bindings_in_function(
             validate_ambiguous_typevar_associated_projection_in_type_expr(
                 db,
                 file_id,
-                &te.expr,
+                te,
                 te.span,
                 pkg_items,
                 namespace_path,
@@ -2011,7 +2017,7 @@ fn validate_associated_type_bindings_in_function(
             validate_associated_type_bindings_in_type_expr(
                 db,
                 file_id,
-                &te.expr,
+                te,
                 te.span,
                 pkg_items,
                 namespace_path,
@@ -2026,7 +2032,7 @@ fn validate_associated_type_bindings_in_function(
         validate_ambiguous_typevar_associated_projection_in_type_expr(
             db,
             file_id,
-            &ret.expr,
+            ret,
             ret.span,
             pkg_items,
             namespace_path,
@@ -2036,7 +2042,7 @@ fn validate_associated_type_bindings_in_function(
         validate_associated_type_bindings_in_type_expr(
             db,
             file_id,
-            &ret.expr,
+            ret,
             ret.span,
             pkg_items,
             namespace_path,
@@ -2050,7 +2056,7 @@ fn validate_associated_type_bindings_in_function(
         validate_ambiguous_typevar_associated_projection_in_type_expr(
             db,
             file_id,
-            &throws.expr,
+            throws,
             throws.span,
             pkg_items,
             namespace_path,
@@ -2060,7 +2066,7 @@ fn validate_associated_type_bindings_in_function(
         validate_associated_type_bindings_in_type_expr(
             db,
             file_id,
-            &throws.expr,
+            throws,
             throws.span,
             pkg_items,
             namespace_path,
@@ -2110,7 +2116,7 @@ fn validate_associated_type_bindings_in_method_sig(
             validate_ambiguous_typevar_associated_projection_in_type_expr(
                 db,
                 file_id,
-                &te.expr,
+                te,
                 te.span,
                 pkg_items,
                 namespace_path,
@@ -2120,7 +2126,7 @@ fn validate_associated_type_bindings_in_method_sig(
             validate_associated_type_bindings_in_type_expr(
                 db,
                 file_id,
-                &te.expr,
+                te,
                 te.span,
                 pkg_items,
                 namespace_path,
@@ -2135,7 +2141,7 @@ fn validate_associated_type_bindings_in_method_sig(
         validate_ambiguous_typevar_associated_projection_in_type_expr(
             db,
             file_id,
-            &ret.expr,
+            ret,
             ret.span,
             pkg_items,
             namespace_path,
@@ -2145,7 +2151,7 @@ fn validate_associated_type_bindings_in_method_sig(
         validate_associated_type_bindings_in_type_expr(
             db,
             file_id,
-            &ret.expr,
+            ret,
             ret.span,
             pkg_items,
             namespace_path,
@@ -2159,7 +2165,7 @@ fn validate_associated_type_bindings_in_method_sig(
         validate_ambiguous_typevar_associated_projection_in_type_expr(
             db,
             file_id,
-            &throws.expr,
+            throws,
             throws.span,
             pkg_items,
             namespace_path,
@@ -2169,7 +2175,7 @@ fn validate_associated_type_bindings_in_method_sig(
         validate_associated_type_bindings_in_type_expr(
             db,
             file_id,
-            &throws.expr,
+            throws,
             throws.span,
             pkg_items,
             namespace_path,
@@ -2194,10 +2200,10 @@ fn validate_associated_type_bindings_in_type_expr(
     aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    use baml_compiler2_ast::TypeExpr;
+    use baml_compiler2_ast::TypeExprKind;
 
-    match expr {
-        TypeExpr::Path {
+    match &expr.kind {
+        TypeExprKind::Path {
             segments,
             generic_args,
             associated_type_bindings,
@@ -2260,7 +2266,7 @@ fn validate_associated_type_bindings_in_type_expr(
                 );
             }
         }
-        TypeExpr::AssociatedTypeProjection {
+        TypeExprKind::AssociatedTypeProjection {
             base, interface, ..
         } => {
             validate_associated_type_bindings_in_type_expr(
@@ -2306,7 +2312,7 @@ fn validate_associated_type_bindings_in_type_expr(
                 diagnostics,
             );
         }
-        TypeExpr::Optional { inner, .. } | TypeExpr::List { inner, .. } => {
+        TypeExprKind::Optional { inner, .. } | TypeExprKind::List { inner, .. } => {
             validate_associated_type_bindings_in_type_expr(
                 db,
                 file_id,
@@ -2320,7 +2326,7 @@ fn validate_associated_type_bindings_in_type_expr(
                 diagnostics,
             );
         }
-        TypeExpr::Map { key, value, .. } => {
+        TypeExprKind::Map { key, value, .. } => {
             validate_associated_type_bindings_in_type_expr(
                 db,
                 file_id,
@@ -2346,7 +2352,7 @@ fn validate_associated_type_bindings_in_type_expr(
                 diagnostics,
             );
         }
-        TypeExpr::Union { variants, .. } => {
+        TypeExprKind::Union { variants, .. } => {
             for variant in variants {
                 validate_associated_type_bindings_in_type_expr(
                     db,
@@ -2362,7 +2368,7 @@ fn validate_associated_type_bindings_in_type_expr(
                 );
             }
         }
-        TypeExpr::Function {
+        TypeExprKind::Function {
             params,
             ret,
             throws,
@@ -2432,12 +2438,13 @@ fn validate_unqualified_associated_type_projection(
     let Some(member) = segments.last() else {
         return;
     };
-    let base_expr = baml_compiler2_ast::TypeExpr::Path {
+    let base_expr = baml_compiler2_ast::TypeExprKind::Path {
         segments: segments[..segments.len() - 1].to_vec(),
         generic_args: Vec::new(),
         associated_type_bindings: Vec::new(),
         attrs: Vec::new(),
-    };
+    }
+    .at(TextRange::default());
     let mut base_diags = Vec::new();
     let base_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
         db,
@@ -2524,11 +2531,11 @@ fn validate_qualified_associated_type_projection(
     aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    let baml_compiler2_ast::TypeExpr::AssociatedTypeProjection {
+    let baml_compiler2_ast::TypeExprKind::AssociatedTypeProjection {
         base,
         interface: Some(interface),
         ..
-    } = expr
+    } = &expr.kind
     else {
         return;
     };
@@ -2711,8 +2718,7 @@ fn matching_associated_type_projection_interfaces(
     let mut matches = Vec::new();
 
     for impl_target in &class_data.implements {
-        let Some(iface) =
-            resolve_interface_path(db, &impl_target.target.expr, pkg_items, &class_ns)
+        let Some(iface) = resolve_interface_path(db, &impl_target.target, pkg_items, &class_ns)
         else {
             continue;
         };
@@ -2722,7 +2728,7 @@ fn matching_associated_type_projection_interfaces(
             .iter()
             .any(|assoc| assoc.name == *member)
         {
-            matches.push(impl_target.target.expr.to_string());
+            matches.push(impl_target.target.to_string());
         }
     }
 
@@ -2740,10 +2746,10 @@ fn validate_ambiguous_typevar_associated_projection_in_type_expr(
     generic_bounds: &std::collections::HashMap<Name, baml_compiler2_ast::TypeExpr>,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    use baml_compiler2_ast::TypeExpr;
+    use baml_compiler2_ast::TypeExprKind;
 
-    match expr {
-        TypeExpr::Path {
+    match &expr.kind {
+        TypeExprKind::Path {
             segments,
             generic_args,
             associated_type_bindings,
@@ -2820,7 +2826,7 @@ fn validate_ambiguous_typevar_associated_projection_in_type_expr(
                 );
             }
         }
-        TypeExpr::AssociatedTypeProjection {
+        TypeExprKind::AssociatedTypeProjection {
             base, interface, ..
         } => {
             validate_ambiguous_typevar_associated_projection_in_type_expr(
@@ -2846,7 +2852,7 @@ fn validate_ambiguous_typevar_associated_projection_in_type_expr(
                 );
             }
         }
-        TypeExpr::Optional { inner, .. } | TypeExpr::List { inner, .. } => {
+        TypeExprKind::Optional { inner, .. } | TypeExprKind::List { inner, .. } => {
             validate_ambiguous_typevar_associated_projection_in_type_expr(
                 db,
                 file_id,
@@ -2858,7 +2864,7 @@ fn validate_ambiguous_typevar_associated_projection_in_type_expr(
                 diagnostics,
             );
         }
-        TypeExpr::Map { key, value, .. } => {
+        TypeExprKind::Map { key, value, .. } => {
             validate_ambiguous_typevar_associated_projection_in_type_expr(
                 db,
                 file_id,
@@ -2880,7 +2886,7 @@ fn validate_ambiguous_typevar_associated_projection_in_type_expr(
                 diagnostics,
             );
         }
-        TypeExpr::Union { variants, .. } => {
+        TypeExprKind::Union { variants, .. } => {
             for variant in variants {
                 validate_ambiguous_typevar_associated_projection_in_type_expr(
                     db,
@@ -2894,7 +2900,7 @@ fn validate_ambiguous_typevar_associated_projection_in_type_expr(
                 );
             }
         }
-        TypeExpr::Function {
+        TypeExprKind::Function {
             params,
             ret,
             throws,
@@ -2971,12 +2977,9 @@ fn associated_type_projection_sources_for_interface_bound(
             baml_compiler2_hir::package::PackageId::new(db, current_pkg.package.clone());
         let current_pkg_items = baml_compiler2_hir::package::package_items(db, current_pkg_id);
         for parent in &current.iface.requires {
-            if let Some(parent) = resolve_interface_path(
-                db,
-                &parent.expr,
-                current_pkg_items,
-                &current_pkg.namespace_path,
-            ) {
+            if let Some(parent) =
+                resolve_interface_path(db, parent, current_pkg_items, &current_pkg.namespace_path)
+            {
                 stack.push(parent);
             }
         }
@@ -3028,12 +3031,9 @@ fn associated_type_projection_sources_for_interface_qtn(
             baml_compiler2_hir::package::PackageId::new(db, current_pkg.package.clone());
         let current_pkg_items = baml_compiler2_hir::package::package_items(db, current_pkg_id);
         for parent in &current.iface.requires {
-            if let Some(parent) = resolve_interface_path(
-                db,
-                &parent.expr,
-                current_pkg_items,
-                &current_pkg.namespace_path,
-            ) {
+            if let Some(parent) =
+                resolve_interface_path(db, parent, current_pkg_items, &current_pkg.namespace_path)
+            {
                 stack.push(parent);
             }
         }
@@ -3055,11 +3055,11 @@ fn validate_associated_type_bindings_on_interface_type(
     aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    let baml_compiler2_ast::TypeExpr::Path {
+    let baml_compiler2_ast::TypeExprKind::Path {
         generic_args,
         associated_type_bindings,
         ..
-    } = expr
+    } = &expr.kind
     else {
         return;
     };
@@ -3152,7 +3152,7 @@ fn validate_associated_type_bindings_on_interface_type(
             &mut binding_diags,
         );
         let mut bound_diags = Vec::new();
-        let bound_expr = substitute_type_vars(&bound.expr, &associated_subst);
+        let bound_expr = substitute_type_vars(bound, &associated_subst);
         let bound_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
             db,
             &bound_expr,
@@ -3196,7 +3196,7 @@ fn validate_associated_type_bindings_on_interface_type(
 #[derive(Debug, Default)]
 struct InterfaceMembers {
     /// (origin interface name, field name, field type)
-    fields: Vec<(Name, Name, Option<baml_compiler2_ast::SpannedTypeExpr>)>,
+    fields: Vec<(Name, Name, Option<baml_compiler2_ast::TypeExpr>)>,
     /// (origin interface name, required method name, signature)
     required_methods: Vec<(InterfaceMemberOrigin, Name, MethodSignature)>,
     /// (origin interface name, default method name, signature)
@@ -3310,7 +3310,7 @@ fn collect_interface_members_with_subst<'db>(
     subst: &std::collections::HashMap<Name, baml_compiler2_ast::TypeExpr>,
     generic_params_in_scope: &[Name],
 ) -> InterfaceMembers {
-    use baml_compiler2_ast::TypeExpr;
+    use baml_compiler2_ast::TypeExprKind;
 
     let mut out = InterfaceMembers::default();
     let mut visited: HashSet<Vec<Name>> = HashSet::new();
@@ -3318,11 +3318,14 @@ fn collect_interface_members_with_subst<'db>(
         .generic_params
         .iter()
         .map(|param| {
-            subst.get(param).cloned().unwrap_or_else(|| TypeExpr::Path {
-                segments: vec![param.clone()],
-                generic_args: Vec::new(),
-                associated_type_bindings: Vec::new(),
-                attrs: Vec::new(),
+            subst.get(param).cloned().unwrap_or_else(|| {
+                TypeExprKind::Path {
+                    segments: vec![param.clone()],
+                    generic_args: Vec::new(),
+                    associated_type_bindings: Vec::new(),
+                    attrs: Vec::new(),
+                }
+                .at(TextRange::default())
             })
         })
         .collect();
@@ -3354,14 +3357,10 @@ fn collect_interface_members_with_subst<'db>(
             type_args: current_type_args.clone(),
         };
         for field in &current.fields {
-            let substituted =
-                field
-                    .type_expr
-                    .as_ref()
-                    .map(|te| baml_compiler2_ast::SpannedTypeExpr {
-                        expr: substitute_type_vars(&te.expr, &current_subst),
-                        span: te.span,
-                    });
+            let substituted = field
+                .type_expr
+                .as_ref()
+                .map(|te| substitute_type_vars(te, &current_subst));
             out.fields
                 .push((origin.display_name(), field.name.clone(), substituted));
         }
@@ -3421,7 +3420,7 @@ fn collect_interface_members_with_subst<'db>(
         }
 
         for parent_te in &current.requires {
-            let TypeExpr::Path { segments, .. } = &parent_te.expr else {
+            let TypeExprKind::Path { segments, .. } = &parent_te.kind else {
                 continue;
             };
             if segments.is_empty() {
@@ -3430,12 +3429,13 @@ fn collect_interface_members_with_subst<'db>(
             if !visited.insert(segments.clone()) {
                 continue;
             }
-            let probe = TypeExpr::Path {
+            let probe = TypeExprKind::Path {
                 segments: segments.clone(),
                 generic_args: Vec::new(),
                 associated_type_bindings: Vec::new(),
                 attrs: Vec::new(),
-            };
+            }
+            .at(TextRange::default());
             let current_pkg_info = baml_compiler2_hir::file_package::file_package(db, current_file);
             let current_pkg_id =
                 baml_compiler2_hir::package::PackageId::new(db, current_pkg_info.package.clone());
@@ -3449,8 +3449,8 @@ fn collect_interface_members_with_subst<'db>(
                 let (parent_args, parent_assoc_bindings): (
                     &[baml_compiler2_ast::TypeExpr],
                     &[baml_compiler2_ast::AssociatedTypeBinding],
-                ) = match &parent_te.expr {
-                    TypeExpr::Path {
+                ) = match &parent_te.kind {
+                    TypeExprKind::Path {
                         generic_args,
                         associated_type_bindings,
                         ..
@@ -3506,10 +3506,10 @@ fn is_non_interface_type(
     pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
     namespace_path: &[Name],
 ) -> bool {
-    use baml_compiler2_ast::TypeExpr;
+    use baml_compiler2_ast::TypeExprKind;
     use baml_compiler2_hir::contributions::Definition;
 
-    let TypeExpr::Path { segments, .. } = target else {
+    let TypeExprKind::Path { segments, .. } = &target.kind else {
         return false;
     };
     let Some((name, head)) = segments.split_last() else {
@@ -3538,8 +3538,8 @@ fn rendered_type_args(args: &[baml_compiler2_ast::TypeExpr]) -> Vec<String> {
 fn type_args_from_target_expr(
     target: &baml_compiler2_ast::TypeExpr,
 ) -> Vec<baml_compiler2_ast::TypeExpr> {
-    match target {
-        baml_compiler2_ast::TypeExpr::Path { generic_args, .. } => generic_args.clone(),
+    match &target.kind {
+        baml_compiler2_ast::TypeExprKind::Path { generic_args, .. } => generic_args.clone(),
         _ => Vec::new(),
     }
 }
@@ -3652,8 +3652,8 @@ fn interface_target_matches_required_parent(
     }
 
     let candidate_generic_subst: std::collections::HashMap<Name, baml_compiler2_ast::TypeExpr> =
-        match candidate_target {
-            baml_compiler2_ast::TypeExpr::Path { generic_args, .. } => candidate
+        match &candidate_target.kind {
+            baml_compiler2_ast::TypeExprKind::Path { generic_args, .. } => candidate
                 .iface
                 .generic_params
                 .iter()
@@ -3669,8 +3669,8 @@ fn interface_target_matches_required_parent(
     );
 
     let required_generic_subst: std::collections::HashMap<Name, baml_compiler2_ast::TypeExpr> =
-        match required_parent {
-            baml_compiler2_ast::TypeExpr::Path { generic_args, .. } => required
+        match &required_parent.kind {
+            baml_compiler2_ast::TypeExprKind::Path { generic_args, .. } => required
                 .iface
                 .generic_params
                 .iter()
@@ -3679,8 +3679,8 @@ fn interface_target_matches_required_parent(
                 .collect(),
             _ => std::collections::HashMap::new(),
         };
-    let required_assoc_bindings = match required_parent {
-        baml_compiler2_ast::TypeExpr::Path {
+    let required_assoc_bindings = match &required_parent.kind {
+        baml_compiler2_ast::TypeExprKind::Path {
             associated_type_bindings,
             ..
         } => associated_type_bindings.as_slice(),
@@ -3850,13 +3850,13 @@ fn item_implements_required_parent_for_target(
                 .collect();
             implements_for_targets_match(
                 ctx,
-                &candidate.for_target.expr,
+                &candidate.for_target,
                 &candidate_generic_params,
-                &current.for_target.expr,
+                &current.for_target,
                 current_generic_params,
             ) && interface_target_matches_required_parent(
                 ctx,
-                &candidate.interface_target.expr,
+                &candidate.interface_target,
                 ctx.namespace_path,
                 &candidate.associated_type_bindings,
                 required_parent,
@@ -3867,13 +3867,13 @@ fn item_implements_required_parent_for_target(
         baml_compiler2_ast::Item::Class(class) => {
             implements_for_target_matches_class(
                 ctx,
-                &current.for_target.expr,
+                &current.for_target,
                 current_generic_params,
                 class,
             ) && class.implements.iter().any(|candidate| {
                 interface_target_matches_required_parent(
                     ctx,
-                    &candidate.target.expr,
+                    &candidate.target,
                     ctx.namespace_path,
                     &candidate.associated_type_bindings,
                     required_parent,
@@ -3911,13 +3911,13 @@ fn has_sibling_implements_for_origin(
             .collect();
         implements_for_targets_match(
             ctx,
-            &candidate.for_target.expr,
+            &candidate.for_target,
             &candidate_generic_params,
-            &current.for_target.expr,
+            &current.for_target,
             &current_generic_params,
         ) && interface_origin_matches_target_expr(
             ctx.db,
-            &candidate.interface_target.expr,
+            &candidate.interface_target,
             ctx.pkg_items,
             ctx.namespace_path,
             &candidate_generic_params,
@@ -3934,7 +3934,7 @@ fn lower_path_generic_args<'db>(
     namespace_path: &[Name],
     generic_params: &[Name],
 ) -> Vec<Ty> {
-    let baml_compiler2_ast::TypeExpr::Path { generic_args, .. } = expr else {
+    let baml_compiler2_ast::TypeExprKind::Path { generic_args, .. } = &expr.kind else {
         return Vec::new();
     };
     let mut diags = Vec::new();
@@ -3969,7 +3969,7 @@ fn validate_interface_extends_fields(
         if let Some(te) = &field.type_expr {
             seen.insert(
                 field.name.clone(),
-                (iface.name.clone(), te.expr.clone(), format!("{}", te.expr)),
+                (iface.name.clone(), te.clone(), format!("{te}")),
             );
         }
     }
@@ -3977,7 +3977,7 @@ fn validate_interface_extends_fields(
     // Walk each parent via resolve and collect its members.
     for parent_te in &iface.requires {
         let Some(parent) =
-            resolve_interface_path(ctx.db, &parent_te.expr, ctx.pkg_items, ctx.namespace_path)
+            resolve_interface_path(ctx.db, parent_te, ctx.pkg_items, ctx.namespace_path)
         else {
             continue;
         };
@@ -3992,7 +3992,7 @@ fn validate_interface_extends_fields(
         );
         for (origin, field_name, field_te) in &members.fields {
             let Some(field_te) = field_te else { continue };
-            let ty_str = format!("{}", field_te.expr);
+            let ty_str = format!("{field_te}");
             if let Some((existing_origin, existing_ty, existing_rendered)) = seen.get(field_name) {
                 if !type_exprs_compatible(
                     ctx.db,
@@ -4003,7 +4003,7 @@ fn validate_interface_extends_fields(
                     ctx.pkg_items,
                     ctx.namespace_path,
                     &iface.generic_params,
-                    &field_te.expr,
+                    field_te,
                     ctx.aliases,
                 ) {
                     diagnostics.push(
@@ -4025,7 +4025,7 @@ fn validate_interface_extends_fields(
             } else {
                 seen.insert(
                     field_name.clone(),
-                    (origin.clone(), field_te.expr.clone(), ty_str),
+                    (origin.clone(), field_te.clone(), ty_str),
                 );
             }
         }
@@ -4231,7 +4231,7 @@ fn validate_implements_for<'db>(
 ) {
     use baml_compiler2_hir::diagnostic::Hir2Diagnostic;
 
-    let target_name = Name::new(format!("{}", imp.for_target.expr));
+    let target_name = Name::new(format!("{}", imp.for_target));
     let generic_param_names: Vec<Name> =
         imp.generic_params.iter().map(|(n, _)| n.clone()).collect();
     // Single-bound view (first `&`-bound only) — unchanged behavior.
@@ -4255,7 +4255,7 @@ fn validate_implements_for<'db>(
     let mut target_type_errors = Vec::new();
     let target_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
         db,
-        &imp.for_target.expr,
+        &imp.for_target,
         pkg_items,
         namespace_path,
         &generic_param_names,
@@ -4281,7 +4281,7 @@ fn validate_implements_for<'db>(
                 format!(
                     "cannot implement interface `{}` for `{}`: only concrete types may \
                      implement interfaces",
-                    imp.interface_target.expr, imp.for_target.expr
+                    imp.interface_target, imp.for_target
                 ),
             )
             .with_primary_span(Span {
@@ -4299,11 +4299,7 @@ fn validate_implements_for<'db>(
     // unsound — the runtime can't recover `T`. Reject it.
     {
         let mut bound_in_target: HashSet<Name> = HashSet::new();
-        collect_type_var_names(
-            &imp.for_target.expr,
-            &generic_param_names,
-            &mut bound_in_target,
-        );
+        collect_type_var_names(&imp.for_target, &generic_param_names, &mut bound_in_target);
         for (name, _) in &imp.generic_params {
             if !bound_in_target.contains(name) {
                 diagnostics.push(
@@ -4312,7 +4308,7 @@ fn validate_implements_for<'db>(
                         format!(
                             "type parameter `{name}` is not constrained by the implementor type \
                              `{}`; it appears only in the interface arguments",
-                            imp.for_target.expr
+                            imp.for_target
                         ),
                     )
                     .with_primary_span(Span {
@@ -4326,15 +4322,15 @@ fn validate_implements_for<'db>(
     }
 
     let Some(resolved_iface) =
-        resolve_interface_path(db, &imp.interface_target.expr, pkg_items, namespace_path)
+        resolve_interface_path(db, &imp.interface_target, pkg_items, namespace_path)
     else {
         let is_non_interface =
-            is_non_interface_type(&imp.interface_target.expr, pkg_items, namespace_path);
+            is_non_interface_type(&imp.interface_target, pkg_items, namespace_path);
         if is_non_interface {
             diagnostics.push(
                 Hir2Diagnostic::NotAnInterface {
                     class_name: target_name,
-                    target_name: format!("{}", imp.interface_target.expr),
+                    target_name: format!("{}", imp.interface_target),
                     span: imp.interface_target.span,
                 }
                 .to_diagnostic(file_id),
@@ -4343,7 +4339,7 @@ fn validate_implements_for<'db>(
             diagnostics.push(
                 Hir2Diagnostic::UnknownInterface {
                     class_name: target_name,
-                    target_name: format!("{}", imp.interface_target.expr),
+                    target_name: format!("{}", imp.interface_target),
                     span: imp.interface_target.span,
                 }
                 .to_diagnostic(file_id),
@@ -4362,7 +4358,7 @@ fn validate_implements_for<'db>(
         let mut iface_lower_errs = Vec::new();
         let iface_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
             db,
-            &imp.interface_target.expr,
+            &imp.interface_target,
             pkg_items,
             namespace_path,
             &generic_param_names,
@@ -4386,7 +4382,7 @@ fn validate_implements_for<'db>(
                 DiagnosticId::ImplViolatesOrphanRule,
                 format!(
                     "cannot implement foreign interface `{}` for `{}`: {detail} (orphan rule)",
-                    imp.interface_target.expr, imp.for_target.expr
+                    imp.interface_target, imp.for_target
                 ),
             )
             .with_primary_span(Span {
@@ -4416,8 +4412,8 @@ fn validate_implements_for<'db>(
     let iface_pkg_items = baml_compiler2_hir::package::package_items(db, iface_pkg_id);
     let iface_namespace_path = iface_pkg_info.namespace_path;
     let generic_subst: std::collections::HashMap<Name, baml_compiler2_ast::TypeExpr> =
-        match &imp.interface_target.expr {
-            baml_compiler2_ast::TypeExpr::Path { generic_args, .. } => iface
+        match &imp.interface_target.kind {
+            baml_compiler2_ast::TypeExprKind::Path { generic_args, .. } => iface
                 .generic_params
                 .iter()
                 .zip(generic_args.iter())
@@ -4425,8 +4421,8 @@ fn validate_implements_for<'db>(
                 .collect(),
             _ => std::collections::HashMap::new(),
         };
-    let target_associated_type_bindings = match &imp.interface_target.expr {
-        baml_compiler2_ast::TypeExpr::Path {
+    let target_associated_type_bindings = match &imp.interface_target.kind {
+        baml_compiler2_ast::TypeExprKind::Path {
             associated_type_bindings,
             ..
         } => associated_type_bindings.as_slice(),
@@ -4577,8 +4573,9 @@ fn validate_implements_for<'db>(
             .requires
             .iter()
             .filter_map(|parent_te| {
-                let required_parent = substitute_type_vars(&parent_te.expr, &subst);
-                let baml_compiler2_ast::TypeExpr::Path { segments, .. } = &required_parent else {
+                let required_parent = substitute_type_vars(parent_te, &subst);
+                let baml_compiler2_ast::TypeExprKind::Path { segments, .. } = &required_parent.kind
+                else {
                     return None;
                 };
                 let parent_name =
@@ -4636,7 +4633,7 @@ fn validate_class_implements<'db>(
     let mut seen_targets: IndexMap<String, (Name, Vec<TextRange>)> = IndexMap::new();
     for block in &class.implements {
         let Some(resolved_iface) =
-            resolve_interface_path(db, &block.target.expr, pkg_items, namespace_path)
+            resolve_interface_path(db, &block.target, pkg_items, namespace_path)
         else {
             continue;
         };
@@ -4649,7 +4646,7 @@ fn validate_class_implements<'db>(
         // args rather than the source text is what makes the alias case collide.
         let type_arg_key = lower_path_generic_args(
             db,
-            &block.target.expr,
+            &block.target,
             pkg_items,
             namespace_path,
             &class.generic_params,
@@ -4685,17 +4682,16 @@ fn validate_class_implements<'db>(
 
     for block in &class.implements {
         let Some(resolved_iface) =
-            resolve_interface_path(db, &block.target.expr, pkg_items, namespace_path)
+            resolve_interface_path(db, &block.target, pkg_items, namespace_path)
         else {
             // Distinguish "name doesn't exist" (E0112) from "name exists
             // but isn't an interface" (E0119).
-            let is_non_interface =
-                is_non_interface_type(&block.target.expr, pkg_items, namespace_path);
+            let is_non_interface = is_non_interface_type(&block.target, pkg_items, namespace_path);
             if is_non_interface {
                 diagnostics.push(
                     Hir2Diagnostic::NotAnInterface {
                         class_name: class.name.clone(),
-                        target_name: format!("{}", block.target.expr),
+                        target_name: format!("{}", block.target),
                         span: block.target.span,
                     }
                     .to_diagnostic(file_id),
@@ -4704,7 +4700,7 @@ fn validate_class_implements<'db>(
                 diagnostics.push(
                     Hir2Diagnostic::UnknownInterface {
                         class_name: class.name.clone(),
-                        target_name: format!("{}", block.target.expr),
+                        target_name: format!("{}", block.target),
                         span: block.target.span,
                     }
                     .to_diagnostic(file_id),
@@ -4730,8 +4726,8 @@ fn validate_class_implements<'db>(
         // generic args. `implements Container<int>` gives `{T → int}` so
         // signature comparisons see the concrete shape.
         let generic_subst: std::collections::HashMap<Name, baml_compiler2_ast::TypeExpr> =
-            match &block.target.expr {
-                baml_compiler2_ast::TypeExpr::Path { generic_args, .. } => iface
+            match &block.target.kind {
+                baml_compiler2_ast::TypeExprKind::Path { generic_args, .. } => iface
                     .generic_params
                     .iter()
                     .zip(generic_args.iter())
@@ -4739,8 +4735,8 @@ fn validate_class_implements<'db>(
                     .collect(),
                 _ => std::collections::HashMap::new(),
             };
-        let target_associated_type_bindings = match &block.target.expr {
-            baml_compiler2_ast::TypeExpr::Path {
+        let target_associated_type_bindings = match &block.target.kind {
+            baml_compiler2_ast::TypeExprKind::Path {
                 associated_type_bindings,
                 ..
             } => associated_type_bindings.as_slice(),
@@ -4883,7 +4879,7 @@ fn validate_class_implements<'db>(
                 && class.implements.iter().any(|candidate| {
                     interface_origin_matches_target_expr(
                         db,
-                        &candidate.target.expr,
+                        &candidate.target,
                         pkg_items,
                         namespace_path,
                         &class.generic_params,
@@ -4911,17 +4907,14 @@ fn validate_class_implements<'db>(
         let class_fields: IndexMap<Name, &baml_compiler2_ast::FieldDef> =
             class.fields.iter().map(|f| (f.name.clone(), f)).collect();
 
-        let own_fields: IndexMap<Name, Option<baml_compiler2_ast::SpannedTypeExpr>> = iface
+        let own_fields: IndexMap<Name, Option<baml_compiler2_ast::TypeExpr>> = iface
             .fields
             .iter()
             .map(|f| {
-                let substituted =
-                    f.type_expr
-                        .as_ref()
-                        .map(|te| baml_compiler2_ast::SpannedTypeExpr {
-                            expr: substitute_type_vars(&te.expr, &subst),
-                            span: te.span,
-                        });
+                let substituted = f
+                    .type_expr
+                    .as_ref()
+                    .map(|te| substitute_type_vars(te, &subst));
                 (f.name.clone(), substituted)
             })
             .collect();
@@ -4981,7 +4974,7 @@ fn validate_class_implements<'db>(
             ) {
                 // C12: `Self`-in-field is reported separately (E0136); skip the
                 // invariance check here to avoid the contradictory cascade.
-                if type_expr_contains_self(&iface_te.expr) {
+                if type_expr_contains_self(iface_te) {
                     continue;
                 }
                 if !type_exprs_compatible(
@@ -4989,11 +4982,11 @@ fn validate_class_implements<'db>(
                     iface_pkg_items,
                     &iface_namespace_path,
                     &interface_generic_params,
-                    &iface_te.expr,
+                    iface_te,
                     pkg_items,
                     namespace_path,
                     &class.generic_params,
-                    &class_te.expr,
+                    class_te,
                     aliases,
                 ) {
                     diagnostics.push(
@@ -5002,8 +4995,8 @@ fn validate_class_implements<'db>(
                             field_name: link.class_field.clone(),
                             interface_field_name: link.interface_field.clone(),
                             interface_name: iface_display_name.clone(),
-                            class_type: format!("{}", class_te.expr),
-                            interface_type: format!("{}", iface_te.expr),
+                            class_type: format!("{class_te}"),
+                            interface_type: format!("{iface_te}"),
                             span: class_te.span,
                         }
                         .to_diagnostic(file_id),
@@ -5037,7 +5030,7 @@ fn validate_class_implements<'db>(
                 // C12: `Self` in the interface field type is rejected separately
                 // (E0136); skip the invariance check so it doesn't ALSO demand
                 // the class field be `Self?` (the old contradictory cascade).
-                if type_expr_contains_self(&iface_te.expr) {
+                if type_expr_contains_self(iface_te) {
                     continue;
                 }
                 if !type_exprs_compatible(
@@ -5045,11 +5038,11 @@ fn validate_class_implements<'db>(
                     iface_pkg_items,
                     &iface_namespace_path,
                     &interface_generic_params,
-                    &iface_te.expr,
+                    iface_te,
                     pkg_items,
                     namespace_path,
                     &class.generic_params,
-                    &class_te.expr,
+                    class_te,
                     aliases,
                 ) {
                     diagnostics.push(
@@ -5059,8 +5052,8 @@ fn validate_class_implements<'db>(
                             // Non-aliased: the interface and class field share a name.
                             interface_field_name: field_name.clone(),
                             interface_name: iface_display_name.clone(),
-                            class_type: format!("{}", class_te.expr),
-                            interface_type: format!("{}", iface_te.expr),
+                            class_type: format!("{class_te}"),
+                            interface_type: format!("{iface_te}"),
                             span: class_te.span,
                         }
                         .to_diagnostic(file_id),
@@ -5076,8 +5069,9 @@ fn validate_class_implements<'db>(
                 .requires
                 .iter()
                 .filter_map(|parent_te| {
-                    let required_parent = substitute_type_vars(&parent_te.expr, &subst);
-                    let baml_compiler2_ast::TypeExpr::Path { segments, .. } = &required_parent
+                    let required_parent = substitute_type_vars(parent_te, &subst);
+                    let baml_compiler2_ast::TypeExprKind::Path { segments, .. } =
+                        &required_parent.kind
                     else {
                         return None;
                     };
@@ -5092,7 +5086,7 @@ fn validate_class_implements<'db>(
                     let class_implements_it = class.implements.iter().any(|candidate| {
                         interface_target_matches_required_parent(
                             &ctx,
-                            &candidate.target.expr,
+                            &candidate.target,
                             namespace_path,
                             &candidate.associated_type_bindings,
                             &required_parent,
@@ -5335,9 +5329,9 @@ fn collect_type_var_names(
     type_params: &[Name],
     out: &mut HashSet<Name>,
 ) {
-    use baml_compiler2_ast::TypeExpr;
-    match expr {
-        TypeExpr::Path {
+    use baml_compiler2_ast::TypeExprKind;
+    match &expr.kind {
+        TypeExprKind::Path {
             segments,
             generic_args,
             ..
@@ -5349,19 +5343,19 @@ fn collect_type_var_names(
                 collect_type_var_names(a, type_params, out);
             }
         }
-        TypeExpr::List { inner, .. } | TypeExpr::Optional { inner, .. } => {
+        TypeExprKind::List { inner, .. } | TypeExprKind::Optional { inner, .. } => {
             collect_type_var_names(inner, type_params, out);
         }
-        TypeExpr::Map { key, value, .. } => {
+        TypeExprKind::Map { key, value, .. } => {
             collect_type_var_names(key, type_params, out);
             collect_type_var_names(value, type_params, out);
         }
-        TypeExpr::Union { variants, .. } => {
+        TypeExprKind::Union { variants, .. } => {
             for v in variants {
                 collect_type_var_names(v, type_params, out);
             }
         }
-        TypeExpr::Function {
+        TypeExprKind::Function {
             params,
             ret,
             throws,
@@ -5380,9 +5374,9 @@ fn collect_type_var_names(
 }
 
 fn type_expr_contains_self(expr: &baml_compiler2_ast::TypeExpr) -> bool {
-    use baml_compiler2_ast::TypeExpr;
-    match expr {
-        TypeExpr::Path {
+    use baml_compiler2_ast::TypeExprKind;
+    match &expr.kind {
+        TypeExprKind::Path {
             segments,
             generic_args,
             ..
@@ -5390,14 +5384,14 @@ fn type_expr_contains_self(expr: &baml_compiler2_ast::TypeExpr) -> bool {
             (segments.len() == 1 && segments[0].as_str() == "Self")
                 || generic_args.iter().any(type_expr_contains_self)
         }
-        TypeExpr::Optional { inner, .. } | TypeExpr::List { inner, .. } => {
+        TypeExprKind::Optional { inner, .. } | TypeExprKind::List { inner, .. } => {
             type_expr_contains_self(inner)
         }
-        TypeExpr::Map { key, value, .. } => {
+        TypeExprKind::Map { key, value, .. } => {
             type_expr_contains_self(key) || type_expr_contains_self(value)
         }
-        TypeExpr::Union { variants, .. } => variants.iter().any(type_expr_contains_self),
-        TypeExpr::Function {
+        TypeExprKind::Union { variants, .. } => variants.iter().any(type_expr_contains_self),
+        TypeExprKind::Function {
             params,
             ret,
             throws,
@@ -5448,7 +5442,7 @@ fn check_jinja_templates(
                 .type_expr
                 .as_ref()
                 .map(|type_expr| {
-                    jinja_type_from_type_expr(db, &type_expr.expr, pkg_items, namespace_path)
+                    jinja_type_from_type_expr(db, type_expr, pkg_items, namespace_path)
                 })
                 .unwrap_or(sys_jinja_types::Type::Unknown);
             types.add_variable(param.name.as_str(), ty);
@@ -5489,9 +5483,7 @@ fn check_llm_prompt_template(
         let ty = param
             .type_expr
             .as_ref()
-            .map(|type_expr| {
-                jinja_type_from_type_expr(db, &type_expr.expr, pkg_items, namespace_path)
-            })
+            .map(|type_expr| jinja_type_from_type_expr(db, type_expr, pkg_items, namespace_path))
             .unwrap_or(sys_jinja_types::Type::Unknown);
         types.add_variable(param.name.as_str(), ty);
     }
@@ -5537,7 +5529,7 @@ fn build_jinja_types(
                     .type_expr
                     .as_ref()
                     .map(|type_expr| {
-                        jinja_type_from_type_expr(db, &type_expr.expr, pkg_items, &class_namespace)
+                        jinja_type_from_type_expr(db, type_expr, pkg_items, &class_namespace)
                     })
                     .unwrap_or(sys_jinja_types::Type::Unknown);
                 (field.name.to_string(), ty)
@@ -5574,7 +5566,7 @@ fn build_jinja_types(
                 baml_compiler2_hir::file_package::file_package(db, file).namespace_path;
             types.add_alias(
                 alias_data.name.as_str(),
-                jinja_type_from_type_expr(db, &type_expr.expr, pkg_items, &alias_namespace),
+                jinja_type_from_type_expr(db, type_expr, pkg_items, &alias_namespace),
             );
         }
     }
@@ -5596,12 +5588,7 @@ fn build_jinja_types(
                     .type_expr
                     .as_ref()
                     .map(|type_expr| {
-                        jinja_type_from_type_expr(
-                            db,
-                            &type_expr.expr,
-                            pkg_items,
-                            &template_namespace,
-                        )
+                        jinja_type_from_type_expr(db, type_expr, pkg_items, &template_namespace)
                     })
                     .unwrap_or(sys_jinja_types::Type::Unknown);
                 (param.name.to_string(), ty)
@@ -5635,24 +5622,24 @@ fn jinja_type_from_type_expr_inner(
     namespace_path: &[Name],
     resolving_aliases: &mut HashSet<String>,
 ) -> sys_jinja_types::Type {
-    use baml_compiler2_ast::TypeExpr;
+    use baml_compiler2_ast::TypeExprKind;
     use baml_compiler2_hir::contributions::Definition;
     use sys_jinja_types::Type;
 
-    match type_expr {
-        TypeExpr::Int { .. } => Type::Int,
-        TypeExpr::Bigint { .. } => Type::Bigint,
-        TypeExpr::Float { .. } => Type::Float,
-        TypeExpr::String { .. } => Type::String,
-        TypeExpr::Bool { .. } => Type::Bool,
-        TypeExpr::Null { .. } => Type::None,
-        TypeExpr::Media { kind, .. } => match kind {
+    match &type_expr.kind {
+        TypeExprKind::Int { .. } => Type::Int,
+        TypeExprKind::Bigint { .. } => Type::Bigint,
+        TypeExprKind::Float { .. } => Type::Float,
+        TypeExprKind::String { .. } => Type::String,
+        TypeExprKind::Bool { .. } => Type::Bool,
+        TypeExprKind::Null { .. } => Type::None,
+        TypeExprKind::Media { kind, .. } => match kind {
             baml_base::MediaKind::Image => Type::Image,
             baml_base::MediaKind::Audio => Type::Audio,
             _ => Type::Unknown,
         },
-        TypeExpr::Literal { value, .. } => Type::Literal(value.clone()),
-        TypeExpr::Optional { inner, .. } => Type::merge([
+        TypeExprKind::Literal { value, .. } => Type::Literal(value.clone()),
+        TypeExprKind::Optional { inner, .. } => Type::merge([
             Type::None,
             jinja_type_from_type_expr_inner(
                 db,
@@ -5662,14 +5649,14 @@ fn jinja_type_from_type_expr_inner(
                 resolving_aliases,
             ),
         ]),
-        TypeExpr::List { inner, .. } => Type::List(Box::new(jinja_type_from_type_expr_inner(
+        TypeExprKind::List { inner, .. } => Type::List(Box::new(jinja_type_from_type_expr_inner(
             db,
             inner,
             pkg_items,
             namespace_path,
             resolving_aliases,
         ))),
-        TypeExpr::Map { value, .. } => Type::Map(
+        TypeExprKind::Map { value, .. } => Type::Map(
             Box::new(Type::String),
             Box::new(jinja_type_from_type_expr_inner(
                 db,
@@ -5679,7 +5666,7 @@ fn jinja_type_from_type_expr_inner(
                 resolving_aliases,
             )),
         ),
-        TypeExpr::Union { variants, .. } => Type::merge(variants.iter().map(|variant| {
+        TypeExprKind::Union { variants, .. } => Type::merge(variants.iter().map(|variant| {
             jinja_type_from_type_expr_inner(
                 db,
                 variant,
@@ -5688,7 +5675,7 @@ fn jinja_type_from_type_expr_inner(
                 resolving_aliases,
             )
         })),
-        TypeExpr::Path { segments, .. } if !segments.is_empty() => {
+        TypeExprKind::Path { segments, .. } if !segments.is_empty() => {
             let (lookup_namespace, name) = jinja_lookup_path(namespace_path, segments);
             let key = format!(
                 "{}::{}",
@@ -5718,7 +5705,7 @@ fn jinja_type_from_type_expr_inner(
                         .map(|spanned| {
                             jinja_type_from_type_expr_inner(
                                 db,
-                                &spanned.expr,
+                                spanned,
                                 pkg_items,
                                 &alias_namespace,
                                 resolving_aliases,
@@ -5735,16 +5722,18 @@ fn jinja_type_from_type_expr_inner(
                 _ => Type::Unknown,
             }
         }
-        TypeExpr::Function { .. } | TypeExpr::AssociatedTypeProjection { .. } => Type::Unknown,
-        TypeExpr::Uint8Array { .. }
-        | TypeExpr::Never { .. }
-        | TypeExpr::Void { .. }
-        | TypeExpr::BuiltinUnknown { .. }
-        | TypeExpr::Type { .. }
-        | TypeExpr::Rust { .. }
-        | TypeExpr::Error { .. }
-        | TypeExpr::Unknown { .. }
-        | TypeExpr::Path { .. } => Type::Unknown,
+        TypeExprKind::Function { .. } | TypeExprKind::AssociatedTypeProjection { .. } => {
+            Type::Unknown
+        }
+        TypeExprKind::Uint8Array { .. }
+        | TypeExprKind::Never { .. }
+        | TypeExprKind::Void { .. }
+        | TypeExprKind::BuiltinUnknown { .. }
+        | TypeExprKind::Type { .. }
+        | TypeExprKind::Rust { .. }
+        | TypeExprKind::Error { .. }
+        | TypeExprKind::Unknown { .. }
+        | TypeExprKind::Path { .. } => Type::Unknown,
     }
 }
 
@@ -6120,13 +6109,14 @@ fn tir_type_error_to_diagnostic_id(
         TirTypeError::TypeMismatch { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::UnresolvedMember { .. } => DiagnosticId::NoSuchField,
         TirTypeError::UnresolvedName { .. } => DiagnosticId::UnknownVariable,
-        TirTypeError::DeadCode { .. } => DiagnosticId::TypeMismatch,
+        TirTypeError::DeadCode { .. } => DiagnosticId::UnreachableCode,
         TirTypeError::VoidUsedAsValue => DiagnosticId::TypeMismatch,
         TirTypeError::VoidFunctionResultUsed => DiagnosticId::TypeMismatch,
         TirTypeError::SpawnWithNotATransformer { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::NotCallable { .. } => DiagnosticId::NotCallable,
         TirTypeError::NotIterable { .. } => DiagnosticId::NotCallable,
         TirTypeError::NotIndexable { .. } => DiagnosticId::NotIndexable,
+        TirTypeError::InvalidMapKeyType { .. } => DiagnosticId::InvalidMapKeyType,
         TirTypeError::InvalidBinaryOp { .. } => DiagnosticId::InvalidOperator,
         TirTypeError::OrderingDifferentTypes { .. }
         | TirTypeError::OrderingRequiresCompare { .. }

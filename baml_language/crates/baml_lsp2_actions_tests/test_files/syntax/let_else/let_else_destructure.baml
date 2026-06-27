@@ -24,12 +24,11 @@ function IrrefutableDestructure(u: User) -> string {
 //----
 //- diagnostics
 // warning: irrefutable `let … else` pattern; the `else` branch is unreachable — use a plain `let` binding instead
-//     ╭─[ let_else_let_else_destructure.baml:19:53 ]
+//     ╭─[ let_else_let_else_destructure.baml:20:3 ]
 //     │
-//  19 │ ╭─▶ function IrrefutableDestructure(u: User) -> string {
-//  20 │ ├─▶   let User { name, age } = u else { return "unreachable"; };
-//     │ │                                                                  
-//     │ ╰────────────────────────────────────────────────────────────────── irrefutable `let … else` pattern; the `else` branch is unreachable — use a plain `let` binding instead
-//     │     
-//     │     Note: Error code: E0114
+//  20 │   let User { name, age } = u else { return "unreachable"; };
+//     │   ───────────┬──────────
+//     │              ╰──────────── irrefutable `let … else` pattern; the `else` branch is unreachable — use a plain `let` binding instead
+//     │
+//     │ Note: Error code: E0114
 // ────╯

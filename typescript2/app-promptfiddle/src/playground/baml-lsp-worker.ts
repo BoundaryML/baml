@@ -96,8 +96,15 @@ const envVars: Record<string, string> = {};
 let nextEnvReqId = 1;
 const pendingEnvResolvers = new Map<number, (v: string | undefined) => void>();
 
+// Internal env vars the runtime probes optionally — resolve to undefined when
+// unset rather than prompting. BOUNDARY_PROXY_URL is controlled solely by the
+// gateway toggle: when off it's simply absent (no proxy), and a missing-key
+// popup for it would make no sense. Every other unset var still opens the popup.
+const OPTIONAL_INTERNAL_ENV = new Set<string>(["BOUNDARY_PROXY_URL"]);
+
 function resolveEnv(variable: string, requestId?: number): Promise<string | undefined> {
   if (variable in envVars) return Promise.resolve(envVars[variable]);
+  if (OPTIONAL_INTERNAL_ENV.has(variable)) return Promise.resolve(undefined);
   return new Promise<string | undefined>((resolve) => {
     const id = requestId ?? nextEnvReqId++;
     pendingEnvResolvers.set(id, resolve);
@@ -421,8 +428,20 @@ function onPlaygroundNotification(notification: PlaygroundNotification): void {
       postOut({
         type: "runSnapshot",
         requestId: notification.requestId,
-        runId: notification.runId,
+        boundaryId: notification.boundaryId,
         snapshot: notification.snapshot,
+      } as WorkerOutMessage);
+      break;
+    case "valueBody":
+      postOut({
+        type: "valueBody",
+        requestId: notification.requestId,
+        boundaryId: notification.boundaryId,
+        valueRefId: notification.valueRefId,
+        codec: notification.codec,
+        availability: notification.availability,
+        bodyBase64: notification.bodyBase64,
+        diagnostic: notification.diagnostic,
       } as WorkerOutMessage);
       break;
     case "runList":
@@ -432,12 +451,19 @@ function onPlaygroundNotification(notification: PlaygroundNotification): void {
         runs: notification.runs,
       } as WorkerOutMessage);
       break;
+    case "historyList":
+      postOut({
+        type: "historyList",
+        requestId: notification.requestId,
+        runs: notification.runs,
+      } as WorkerOutMessage);
+      break;
     case "runCursorExpired":
       postOut({
         type: "runCursorExpired",
         requestId: notification.requestId,
         subscriptionId: notification.subscriptionId,
-        runId: notification.runId,
+        boundaryId: notification.boundaryId,
         reason: notification.reason,
       } as WorkerOutMessage);
       break;
@@ -716,7 +742,7 @@ self.onmessage = async (event: MessageEvent) => {
         try {
           const outcome = rt.respondToInput(
             msg.requestId,
-            msg.runId,
+            msg.boundaryId,
             msg.inputRequestId,
           );
           if (outcome === "accepted") {
@@ -747,7 +773,7 @@ self.onmessage = async (event: MessageEvent) => {
         try {
           const outcome = rt.respondToEnv(
             msg.requestId,
-            msg.runId,
+            msg.boundaryId,
             msg.envRequestId,
             msg.value,
           );
@@ -823,7 +849,7 @@ self.onmessage = async (event: MessageEvent) => {
         const rt = runtimeForCommand(msg.requestId, "wasmRuntimeNotReady");
         if (!rt) return;
         try {
-          rt.cancelRun(msg.requestId, msg.runId);
+          rt.cancelRun(msg.requestId, msg.boundaryId);
         } catch (e) {
           postOut({
             type: "commandError",
@@ -852,17 +878,68 @@ self.onmessage = async (event: MessageEvent) => {
         return;
       }
 
+    case "listHistory":
+      {
+        const rt = runtimeForCommand(msg.requestId, "wasmRuntimeNotReady");
+        if (!rt) return;
+        try {
+          rt.listHistory(msg.requestId, msg.filter);
+        } catch (e) {
+          postOut({
+            type: "commandError",
+            requestId: msg.requestId,
+            code: "wasmListHistoryFailed",
+            message: e instanceof Error ? e.message : String(e),
+          });
+        }
+        return;
+      }
+
+    case "openHistory":
+      {
+        const rt = runtimeForCommand(msg.requestId, "wasmRuntimeNotReady");
+        if (!rt) return;
+        try {
+          rt.openHistory(msg.requestId, msg.boundaryId);
+        } catch (e) {
+          postOut({
+            type: "commandError",
+            requestId: msg.requestId,
+            code: "wasmOpenHistoryFailed",
+            message: e instanceof Error ? e.message : String(e),
+          });
+        }
+        return;
+      }
+
     case "snapshot":
       {
         const rt = runtimeForCommand(msg.requestId, "wasmRuntimeNotReady");
         if (!rt) return;
         try {
-          rt.snapshot(msg.requestId, msg.runId);
+          rt.snapshot(msg.requestId, msg.boundaryId);
         } catch (e) {
           postOut({
             type: "commandError",
             requestId: msg.requestId,
             code: "wasmSnapshotFailed",
+            message: e instanceof Error ? e.message : String(e),
+          });
+        }
+        return;
+      }
+
+    case "readValue":
+      {
+        const rt = runtimeForCommand(msg.requestId, "wasmRuntimeNotReady");
+        if (!rt) return;
+        try {
+          rt.readValue(msg.requestId, msg.boundaryId, msg.valueRef);
+        } catch (e) {
+          postOut({
+            type: "commandError",
+            requestId: msg.requestId,
+            code: "wasmReadValueFailed",
             message: e instanceof Error ? e.message : String(e),
           });
         }
@@ -877,7 +954,7 @@ self.onmessage = async (event: MessageEvent) => {
           rt.subscribe(
             msg.requestId,
             msg.subscriptionId,
-            msg.runId,
+            msg.boundaryId,
             msg.afterCursor == null ? undefined : BigInt(msg.afterCursor),
           );
         } catch (e) {

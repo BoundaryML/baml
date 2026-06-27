@@ -216,7 +216,7 @@ fn unknown_type_in_param() {
       { : never
         return 0 : 0
       }
-      !! 13..25: unresolved type: Nonexistent
+      !! 14..25: unresolved type: Nonexistent
     }
     ");
 }
@@ -230,7 +230,7 @@ fn unknown_type_in_return() {
       { : never
         return 0 : 0
       }
-      !! 15..28: unresolved type: DoesNotExist
+      !! 16..28: unresolved type: DoesNotExist
     }
     ");
 }
@@ -686,7 +686,7 @@ fn missing_return() {
       { : int
         let x = 1 : 1 -> int
       }
-      !! 19..34: missing return: expected `int`
+      !! 20..34: missing return: expected `int`
     }
     ");
 }
@@ -700,7 +700,7 @@ fn block_ending_in_stmt() {
       { : string
         let x = "hello" : "hello" -> string
       }
-      !! 22..43: missing return: expected `string`
+      !! 23..43: missing return: expected `string`
     }
     "#);
 }
@@ -716,7 +716,7 @@ fn invalid_binary_op_string_minus_int() {
       { : never
         return "hello" - 5 : unknown
       }
-      !! 28..40: operator `-` cannot be applied to `"hello"` and `5`
+      !! 29..40: operator `-` cannot be applied to `"hello"` and `5`
     }
     "#);
 }
@@ -905,7 +905,7 @@ fn invalid_unary_op_neg_string() {
       { : never
         return Neg "hello" : unknown
       }
-      !! 28..37: operator `-` cannot be applied to `"hello"`
+      !! 29..37: operator `-` cannot be applied to `"hello"`
     }
     "#);
 }
@@ -976,7 +976,7 @@ fn if_without_else_optional() {
               5 : 5
             }
       }
-      !! 36..49: `if` without `else` cannot be used as a value; add an `else` branch
+      !! 37..49: `if` without `else` cannot be used as a value; add an `else` branch
     }
     ");
 }
@@ -998,7 +998,7 @@ fn if_without_else_let_binding() {
             }
         return y ?? 0 : void
       }
-      !! 36..49: `if` without `else` cannot be used as a value; add an `else` branch
+      !! 37..49: `if` without `else` cannot be used as a value; add an `else` branch
       !! 58..64: did you mean `y`? `y ?? 0` is unnecessary, because `y` cannot be null
       !! 58..64: `if` without `else` cannot be used as a value; add an `else` branch
     }
@@ -1238,7 +1238,7 @@ function f(x: A | B) -> string { return x.value; }"#,
       { : never
         return x.value : int | string
       }
-      !! 86..94: type mismatch: expected string, got int | string
+      !! 87..94: type mismatch: expected string, got int | string
     }
     class user.A$stream {
       value: int | null
@@ -1270,8 +1270,8 @@ function f(x: A | B | null) -> string { return x.name; }"#,
       { : never
         return x.name : string | string | null
       }
-      !! 94..101: did you mean `x?.name`? `x.name` does not handle the case when `x` is null
-      !! 94..101: type mismatch: expected string, got string | string | null
+      !! 95..101: did you mean `x?.name`? `x.name` does not handle the case when `x` is null
+      !! 95..101: type mismatch: expected string, got string | string | null
     }
     class user.A$stream {
       name: string | null

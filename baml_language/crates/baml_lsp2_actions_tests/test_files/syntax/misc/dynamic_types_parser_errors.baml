@@ -247,16 +247,16 @@ test IncompleteSyntax {
 //     │ Note: Error code: E0010
 // ────╯
 // error: unresolved type: Resume
-//    ╭─[ misc_dynamic_types_parser_errors.baml:1:45 ]
+//    ╭─[ misc_dynamic_types_parser_errors.baml:1:46 ]
 //    │
 //  1 │ function TypeBuilderFn(from_text: string) -> Resume {
-//    │                                             ───┬───
-//    │                                                ╰───── unresolved type: Resume
+//    │                                              ───┬──
+//    │                                                 ╰──── unresolved type: Resume
 //    │
 //    │ Note: Error code: E0002
 // ───╯
 // error: unresolved type: Resume
-//     ╭─[ misc_dynamic_types_parser_errors.baml:1:52 ]
+//     ╭─[ misc_dynamic_types_parser_errors.baml:1:53 ]
 //     │
 //   1 │ ╭─▶ function TypeBuilderFn(from_text: string) -> Resume {
 //     ┆ ┆

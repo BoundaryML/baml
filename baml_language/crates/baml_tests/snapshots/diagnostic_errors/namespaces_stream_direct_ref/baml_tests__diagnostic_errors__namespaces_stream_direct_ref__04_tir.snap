@@ -12,13 +12,13 @@ function user.RootUsesOwnStream(c: user.Config$stream) -> string throws never {
   { : string | null
     c.key : string | null
   }
-  !! 637..647: type mismatch: expected string, got string | null
+  !! 642..647: type mismatch: expected string, got string | null
 }
 function user.RootUsesLlmStream(r: user.llm.Response$stream) -> string throws never {
   { : string | null
     r.text : string | null
   }
-  !! 758..769: type mismatch: expected string, got string | null
+  !! 763..769: type mismatch: expected string, got string | null
 }
 class user.RootWithStreamFields {
   own_stream: user.Config$stream
@@ -44,13 +44,13 @@ function user.llm.LlmUsesOwnStream(r: user.llm.Response$stream) -> string throws
   { : string | null
     r.text : string | null
   }
-  !! 228..239: type mismatch: expected string, got string | null
+  !! 233..239: type mismatch: expected string, got string | null
 }
 function user.llm.LlmUsesRootStream(c: user.Config$stream) -> string throws never {
   { : string | null
     c.key : string | null
   }
-  !! 345..355: type mismatch: expected string, got string | null
+  !! 350..355: type mismatch: expected string, got string | null
 }
 class user.llm.LlmWithStreamFields {
   own_stream: user.llm.Response$stream

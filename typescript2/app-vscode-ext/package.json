@@ -23,27 +23,13 @@
         "aliases": ["BAML", "baml"],
         "extensions": [".baml"],
         "configuration": "./language-configuration.json"
-      },
-      {
-        "id": "baml-jinja",
-        "aliases": ["Jinja baml"],
-        "extensions": [".baml.jinja"]
       }
     ],
     "grammars": [
       {
         "language": "baml",
         "scopeName": "source.baml",
-        "path": "./syntaxes/baml.tmLanguage.json",
-        "embeddedLanguages": {
-          "source.baml-jinja": "baml-jinja",
-          "string.quoted.block.baml.prompt": "baml-jinja"
-        }
-      },
-      {
-        "language": "baml-jinja",
-        "scopeName": "source.baml-jinja",
-        "path": "./syntaxes/jinja.tmLanguage.json"
+        "path": "./syntaxes/baml.tmLanguage.json"
       }
     ],
     "commands": [
@@ -94,7 +80,7 @@
     }
   },
   "scripts": {
-    "sync:grammar": "node ../pkg-grammar/scripts/sync.mjs",
+    "sync:grammar": "pnpm --filter @b/pkg-grammar build",
     "predev": "pnpm run sync:grammar",
     "dev": "tsup --watch --sourcemap",
     "prebuild": "pnpm run sync:grammar",

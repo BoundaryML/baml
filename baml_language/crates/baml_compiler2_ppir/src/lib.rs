@@ -89,14 +89,12 @@ pub fn collect_alias_bodies(
         let (items, _, _) = ast::lower_file(&cst);
         for item in &items {
             if let ast::Item::TypeAlias(a) = item {
-                let ty = a
-                    .type_expr
-                    .as_ref()
-                    .map(|s| PpirTy::from_type_expr(&s.expr))
-                    .unwrap_or(PpirTy::CannotBeStreamed {
+                let ty = a.type_expr.as_ref().map(PpirTy::from_type_expr).unwrap_or(
+                    PpirTy::CannotBeStreamed {
                         origin: ty::CannotBeStreamedOrigin::Unknown,
                         attrs: PpirTypeAttrs::default(),
-                    });
+                    },
+                );
                 let mut full_path = vec![pkg_info.package.clone()];
                 full_path.extend(pkg_info.namespace_path.iter().cloned());
                 full_path.push(a.name.clone());
@@ -247,7 +245,7 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
                     let ppir_ty = field
                         .type_expr
                         .as_ref()
-                        .map(|s| PpirTy::from_type_expr(&s.expr))
+                        .map(PpirTy::from_type_expr)
                         .unwrap_or(PpirTy::CannotBeStreamed {
                             origin: ty::CannotBeStreamedOrigin::Unknown,
                             attrs: PpirTypeAttrs::default(),
@@ -284,7 +282,7 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
 
                     // Preserve non-stream type attributes from the original outermost TypeExpr
                     if let Some(orig_spanned) = &field.type_expr {
-                        for attr in orig_spanned.expr.attrs() {
+                        for attr in orig_spanned.attrs() {
                             if !attr.name.starts_with("stream.") && !attr.name.starts_with("sap.") {
                                 type_expr.attrs_mut().push(attr.clone());
                             }
@@ -292,12 +290,12 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
                     }
 
                     // Replace the field's type expr (preserves field.name, field.attributes, field.span, etc.)
-                    field.type_expr = Some(ast::SpannedTypeExpr {
-                        expr: type_expr,
+                    field.type_expr = Some(ast::TypeExpr {
                         span: field
                             .type_expr
                             .as_ref()
                             .map_or(TextRange::default(), |s| s.span),
+                        ..type_expr
                     });
 
                     // Strip stream.* from field-level attributes (preserve @alias, @description, @skip, etc.)
@@ -330,14 +328,12 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
                     continue;
                 }
 
-                let ty = a
-                    .type_expr
-                    .as_ref()
-                    .map(|s| PpirTy::from_type_expr(&s.expr))
-                    .unwrap_or(PpirTy::CannotBeStreamed {
+                let ty = a.type_expr.as_ref().map(PpirTy::from_type_expr).unwrap_or(
+                    PpirTy::CannotBeStreamed {
                         origin: ty::CannotBeStreamedOrigin::Unknown,
                         attrs: PpirTypeAttrs::default(),
-                    });
+                    },
+                );
 
                 let ctx = ExpandCtx {
                     package_name: &package_name,
@@ -360,19 +356,19 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
 
                 // Preserve non-stream type attributes from original alias body
                 if let Some(orig_spanned) = &a.type_expr {
-                    for attr in orig_spanned.expr.attrs() {
+                    for attr in orig_spanned.attrs() {
                         if !attr.name.starts_with("stream.") && !attr.name.starts_with("sap.") {
                             new_type_expr.attrs_mut().push(attr.clone());
                         }
                     }
                 }
 
-                stream_alias.type_expr = Some(ast::SpannedTypeExpr {
-                    expr: new_type_expr,
+                stream_alias.type_expr = Some(ast::TypeExpr {
                     span: a
                         .type_expr
                         .as_ref()
                         .map_or(TextRange::default(), |s| s.span),
+                    ..new_type_expr
                 });
 
                 synthetic_items.push(ast::Item::TypeAlias(stream_alias));
@@ -392,7 +388,7 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
                 };
 
                 // Compute the stream-expanded return type.
-                let ppir_ty = PpirTy::from_type_expr(&return_type_spanned.expr);
+                let ppir_ty = PpirTy::from_type_expr(return_type_spanned);
                 let ctx = ExpandCtx {
                     package_name: &package_name,
                     namespace_path: &pkg_info.namespace_path,
@@ -428,18 +424,16 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
                 // `lower_type_expr_in_ns` with the companion's own namespace
                 // context — bare in-namespace names resolve correctly, with
                 // diagnostics surfaced as ordinary compile errors.
-                let original_return_type_expr = return_type_spanned.expr.clone();
+                let original_return_type_expr = return_type_spanned.clone();
                 let companion_type_args =
                     || vec![stream_type_expr.clone(), original_return_type_expr.clone()];
-                let companion_stream_return_type = ast::SpannedTypeExpr {
-                    expr: ast::TypeExpr::Path {
-                        segments: vec![Name::new("baml"), Name::new("llm"), Name::new("Stream")],
-                        generic_args: companion_type_args(),
-                        associated_type_bindings: vec![],
-                        attrs: vec![],
-                    },
-                    span,
-                };
+                let companion_stream_return_type = ast::TypeExprKind::Path {
+                    segments: vec![Name::new("baml"), Name::new("llm"), Name::new("Stream")],
+                    generic_args: companion_type_args(),
+                    associated_type_bindings: vec![],
+                    attrs: vec![],
+                }
+                .at(span);
 
                 // --- $stream companion ---
                 // Calls baml.llm.stream_llm_function(CLIENT, "FuncName", map { args })
@@ -509,8 +503,8 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
                 {
                     let sse_param = ast::Param {
                         name: Name::new("sse"),
-                        type_expr: Some(ast::SpannedTypeExpr {
-                            expr: ast::TypeExpr::Path {
+                        type_expr: Some(
+                            ast::TypeExprKind::Path {
                                 segments: vec![
                                     Name::new("baml"),
                                     Name::new("http"),
@@ -519,9 +513,9 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
                                 generic_args: vec![],
                                 associated_type_bindings: vec![],
                                 attrs: vec![],
-                            },
-                            span,
-                        }),
+                            }
+                            .at(span),
+                        ),
                         default: None,
                         span,
                         name_span,
@@ -667,9 +661,8 @@ pub fn function_signature<'db>(
         .map(|p| {
             let type_expr = p
                 .type_expr
-                .as_ref()
-                .map(|te| te.expr.clone())
-                .unwrap_or(ast::TypeExpr::Unknown { attrs: vec![] });
+                .clone()
+                .unwrap_or(ast::TypeExprKind::Unknown { attrs: vec![] }.at(TextRange::default()));
             baml_compiler2_hir::signature::SignatureParam {
                 name: p.name.clone(),
                 ty: type_expr,
@@ -678,13 +671,13 @@ pub fn function_signature<'db>(
         })
         .collect();
 
-    let return_type = func_data.return_type.as_ref().map(|te| te.expr.clone());
+    let return_type = func_data.return_type.clone();
 
     Arc::new(baml_compiler2_hir::signature::FunctionSignature {
         name: func_data.name.clone(),
         params,
         return_type,
-        throws: func_data.throws.as_ref().map(|te| te.expr.clone()),
+        throws: func_data.throws.clone(),
     })
 }
 
@@ -724,9 +717,8 @@ pub fn elaborated_function_signature<'db>(
         .map(|p| {
             let type_expr = p
                 .type_expr
-                .as_ref()
-                .map(|te| te.expr.clone())
-                .unwrap_or(ast::TypeExpr::Unknown { attrs: vec![] });
+                .clone()
+                .unwrap_or(ast::TypeExprKind::Unknown { attrs: vec![] }.at(TextRange::default()));
             baml_compiler2_hir::signature::SignatureParam {
                 name: p.name.clone(),
                 ty: type_expr,
@@ -735,8 +727,8 @@ pub fn elaborated_function_signature<'db>(
         })
         .collect();
 
-    let return_type = func_data.return_type.as_ref().map(|te| te.expr.clone());
-    let throws = func_data.throws.as_ref().map(|te| te.expr.clone());
+    let return_type = func_data.return_type.clone();
+    let throws = func_data.throws.clone();
     let reserved_effect_param_names = enclosing_class_generic_params(&item_tree, function.id(db));
 
     Arc::new(

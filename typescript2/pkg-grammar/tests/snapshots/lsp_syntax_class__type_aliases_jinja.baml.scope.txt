@@ -1,0 +1,185 @@
+1:1-5        "type"             source.baml meta.type-alias.baml keyword.declaration.type-alias.baml
+1:6-15       "ProjectId"        source.baml meta.type-alias.baml entity.name.type.alias.baml
+1:16-17      "="                source.baml meta.type-alias.baml keyword.operator.assignment.baml
+1:18-21      "int"              source.baml meta.type-alias.baml support.type.primitive.baml
+3:1-9        "function"         source.baml meta.function.baml keyword.declaration.function.baml
+3:10-21      "NormalAlias"      source.baml meta.function.baml entity.name.function.baml
+3:21-22      "("                source.baml meta.function.baml meta.parameters.baml punctuation.definition.parameters.begin.baml
+3:22-25      "pid"              source.baml meta.function.baml meta.parameters.baml meta.parameter.baml variable.parameter.baml
+3:25-26      ":"                source.baml meta.function.baml meta.parameters.baml meta.parameter.baml punctuation.separator.colon.baml
+3:27-36      "ProjectId"        source.baml meta.function.baml meta.parameters.baml meta.parameter.baml meta.type-reference.baml entity.name.type.baml
+3:36-37      ")"                source.baml meta.function.baml meta.parameters.baml punctuation.definition.parameters.end.baml
+3:38-40      "->"               source.baml meta.function.baml meta.return-type.baml keyword.operator.arrow.baml
+3:41-47      "string"           source.baml meta.function.baml meta.return-type.baml support.type.primitive.baml
+3:48-49      "{"                source.baml meta.function.baml meta.block.function.baml punctuation.definition.block.begin.baml
+4:3-9        "client"           source.baml meta.function.baml meta.block.function.baml meta.field.llm.client.baml keyword.other.llm.client.baml
+4:10-11      "\""               source.baml meta.function.baml meta.block.function.baml meta.field.llm.client.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+4:11-24      "openai/gpt-4o"    source.baml meta.function.baml meta.block.function.baml meta.field.llm.client.baml string.quoted.double.baml
+4:24-25      "\""               source.baml meta.function.baml meta.block.function.baml meta.field.llm.client.baml string.quoted.double.baml punctuation.definition.string.end.baml
+5:3-9        "prompt"           source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml keyword.other.llm.prompt.baml
+5:10-11      "#"                source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml punctuation.definition.string.begin.baml
+5:11-12      "\""               source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml punctuation.definition.string.begin.baml
+5:12-17      "Pid: "            source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml
+5:17-19      "{{"               source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.begin.baml
+5:20-23      "pid"              source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.dotted-expression.baml variable.other.readwrite.baml
+5:23-24      "."                source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.dotted-expression.baml punctuation.accessor.baml
+5:24-26      "id"               source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.dotted-expression.baml variable.other.readwrite.baml
+5:27-29      "}}"               source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.end.baml
+5:29-59      ". Generate a fake name for it." source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml
+5:59-60      "\""               source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml punctuation.definition.string.end.baml
+5:60-61      "#"                source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml punctuation.definition.string.end.baml
+6:1-2        "}"                source.baml meta.function.baml meta.block.function.baml punctuation.definition.block.end.baml
+8:1-5        "type"             source.baml meta.type-alias.baml keyword.declaration.type-alias.baml
+8:6-7        "A"                source.baml meta.type-alias.baml entity.name.type.alias.baml
+8:8-9        "="                source.baml meta.type-alias.baml keyword.operator.assignment.baml
+8:10-15      "float"            source.baml meta.type-alias.baml support.type.primitive.baml
+9:1-5        "type"             source.baml meta.type-alias.baml keyword.declaration.type-alias.baml
+9:6-7        "B"                source.baml meta.type-alias.baml entity.name.type.alias.baml
+9:8-9        "="                source.baml meta.type-alias.baml keyword.operator.assignment.baml
+9:10-11      "A"                source.baml meta.type-alias.baml meta.type-reference.baml entity.name.type.baml
+10:1-5       "type"             source.baml meta.type-alias.baml keyword.declaration.type-alias.baml
+10:6-7       "C"                source.baml meta.type-alias.baml entity.name.type.alias.baml
+10:8-9       "="                source.baml meta.type-alias.baml keyword.operator.assignment.baml
+10:10-11     "B"                source.baml meta.type-alias.baml meta.type-reference.baml entity.name.type.baml
+12:1-9       "function"         source.baml meta.function.baml keyword.declaration.function.baml
+12:10-21     "LongerAlias"      source.baml meta.function.baml entity.name.function.baml
+12:21-22     "("                source.baml meta.function.baml meta.parameters.baml punctuation.definition.parameters.begin.baml
+12:22-23     "c"                source.baml meta.function.baml meta.parameters.baml meta.parameter.baml variable.parameter.baml
+12:23-24     ":"                source.baml meta.function.baml meta.parameters.baml meta.parameter.baml punctuation.separator.colon.baml
+12:25-26     "C"                source.baml meta.function.baml meta.parameters.baml meta.parameter.baml meta.type-reference.baml entity.name.type.baml
+12:26-27     ")"                source.baml meta.function.baml meta.parameters.baml punctuation.definition.parameters.end.baml
+12:28-30     "->"               source.baml meta.function.baml meta.return-type.baml keyword.operator.arrow.baml
+12:31-37     "string"           source.baml meta.function.baml meta.return-type.baml support.type.primitive.baml
+12:38-39     "{"                source.baml meta.function.baml meta.block.function.baml punctuation.definition.block.begin.baml
+13:3-9       "client"           source.baml meta.function.baml meta.block.function.baml meta.field.llm.client.baml keyword.other.llm.client.baml
+13:10-11     "\""               source.baml meta.function.baml meta.block.function.baml meta.field.llm.client.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+13:11-24     "openai/gpt-4o"    source.baml meta.function.baml meta.block.function.baml meta.field.llm.client.baml string.quoted.double.baml
+13:24-25     "\""               source.baml meta.function.baml meta.block.function.baml meta.field.llm.client.baml string.quoted.double.baml punctuation.definition.string.end.baml
+14:3-9       "prompt"           source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml keyword.other.llm.prompt.baml
+14:10-11     "#"                source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml punctuation.definition.string.begin.baml
+14:11-12     "\""               source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml punctuation.definition.string.begin.baml
+14:12-14     "{{"               source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.begin.baml
+14:15-16     "c"                source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.dotted-expression.baml variable.other.readwrite.baml
+14:16-17     "."                source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.dotted-expression.baml punctuation.accessor.baml
+14:17-22     "value"            source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.dotted-expression.baml variable.other.readwrite.baml
+14:23-25     "}}"               source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.end.baml
+14:25-26     "\""               source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml punctuation.definition.string.end.baml
+14:26-27     "#"                source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml punctuation.definition.string.end.baml
+15:1-2       "}"                source.baml meta.function.baml meta.block.function.baml punctuation.definition.block.end.baml
+17:1-5       "type"             source.baml meta.type-alias.baml keyword.declaration.type-alias.baml
+17:6-15      "JsonValue"        source.baml meta.type-alias.baml entity.name.type.alias.baml
+17:16-17     "="                source.baml meta.type-alias.baml keyword.operator.assignment.baml
+17:18-21     "int"              source.baml meta.type-alias.baml support.type.primitive.baml
+17:22-23     "|"                source.baml meta.type-alias.baml keyword.operator.type.baml
+17:24-30     "string"           source.baml meta.type-alias.baml support.type.primitive.baml
+17:31-32     "|"                source.baml meta.type-alias.baml keyword.operator.type.baml
+17:33-37     "bool"             source.baml meta.type-alias.baml support.type.primitive.baml
+17:38-39     "|"                source.baml meta.type-alias.baml keyword.operator.type.baml
+17:40-45     "float"            source.baml meta.type-alias.baml support.type.primitive.baml
+17:46-47     "|"                source.baml meta.type-alias.baml keyword.operator.type.baml
+17:48-58     "JsonObject"       source.baml meta.type-alias.baml meta.type-reference.baml entity.name.type.baml
+17:59-60     "|"                source.baml meta.type-alias.baml keyword.operator.type.baml
+17:61-70     "JsonArray"        source.baml meta.type-alias.baml meta.type-reference.baml entity.name.type.baml
+18:1-5       "type"             source.baml meta.type-alias.baml keyword.declaration.type-alias.baml
+18:6-16      "JsonObject"       source.baml meta.type-alias.baml entity.name.type.alias.baml
+18:17-18     "="                source.baml meta.type-alias.baml keyword.operator.assignment.baml
+18:19-22     "map"              source.baml meta.type-alias.baml support.type.primitive.baml
+18:22-23     "<"                source.baml meta.type-alias.baml punctuation.definition.type.baml
+18:23-29     "string"           source.baml meta.type-alias.baml support.type.primitive.baml
+18:29-30     ","                source.baml meta.type-alias.baml punctuation.definition.type.baml
+18:31-40     "JsonValue"        source.baml meta.type-alias.baml meta.type-reference.baml entity.name.type.baml
+18:40-41     ">"                source.baml meta.type-alias.baml punctuation.definition.type.baml
+19:1-5       "type"             source.baml meta.type-alias.baml keyword.declaration.type-alias.baml
+19:6-15      "JsonArray"        source.baml meta.type-alias.baml entity.name.type.alias.baml
+19:16-17     "="                source.baml meta.type-alias.baml keyword.operator.assignment.baml
+19:18-27     "JsonValue"        source.baml meta.type-alias.baml meta.type-reference.baml entity.name.type.baml
+19:27-28     "["                source.baml meta.type-alias.baml punctuation.definition.type.baml
+19:28-29     "]"                source.baml meta.type-alias.baml punctuation.definition.type.baml
+21:1-9       "function"         source.baml meta.function.baml keyword.declaration.function.baml
+21:10-26     "RecursiveAliases" source.baml meta.function.baml entity.name.function.baml
+21:26-27     "("                source.baml meta.function.baml meta.parameters.baml punctuation.definition.parameters.begin.baml
+21:27-28     "j"                source.baml meta.function.baml meta.parameters.baml meta.parameter.baml variable.parameter.baml
+21:28-29     ":"                source.baml meta.function.baml meta.parameters.baml meta.parameter.baml punctuation.separator.colon.baml
+21:30-39     "JsonValue"        source.baml meta.function.baml meta.parameters.baml meta.parameter.baml meta.type-reference.baml entity.name.type.baml
+21:39-40     ")"                source.baml meta.function.baml meta.parameters.baml punctuation.definition.parameters.end.baml
+21:41-43     "->"               source.baml meta.function.baml meta.return-type.baml keyword.operator.arrow.baml
+21:44-50     "string"           source.baml meta.function.baml meta.return-type.baml support.type.primitive.baml
+21:51-52     "{"                source.baml meta.function.baml meta.block.function.baml punctuation.definition.block.begin.baml
+22:3-9       "client"           source.baml meta.function.baml meta.block.function.baml meta.field.llm.client.baml keyword.other.llm.client.baml
+22:10-11     "\""               source.baml meta.function.baml meta.block.function.baml meta.field.llm.client.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+22:11-24     "openai/gpt-4o"    source.baml meta.function.baml meta.block.function.baml meta.field.llm.client.baml string.quoted.double.baml
+22:24-25     "\""               source.baml meta.function.baml meta.block.function.baml meta.field.llm.client.baml string.quoted.double.baml punctuation.definition.string.end.baml
+23:3-9       "prompt"           source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml keyword.other.llm.prompt.baml
+23:10-11     "#"                source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml punctuation.definition.string.begin.baml
+23:11-12     "\""               source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml punctuation.definition.string.begin.baml
+23:12-14     "{{"               source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.begin.baml
+23:15-16     "j"                source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.dotted-expression.baml variable.other.readwrite.baml
+23:16-17     "."                source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.dotted-expression.baml punctuation.accessor.baml
+23:17-22     "value"            source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.dotted-expression.baml variable.other.readwrite.baml
+23:23-25     "}}"               source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.end.baml
+23:25-26     "\""               source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml punctuation.definition.string.end.baml
+23:26-27     "#"                source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml punctuation.definition.string.end.baml
+24:1-2       "}"                source.baml meta.function.baml meta.block.function.baml punctuation.definition.block.end.baml
+26:1-5       "type"             source.baml meta.type-alias.baml keyword.declaration.type-alias.baml
+26:6-7       "I"                source.baml meta.type-alias.baml entity.name.type.alias.baml
+26:8-9       "="                source.baml meta.type-alias.baml keyword.operator.assignment.baml
+26:10-11     "J"                source.baml meta.type-alias.baml meta.type-reference.baml entity.name.type.baml
+27:1-5       "type"             source.baml meta.type-alias.baml keyword.declaration.type-alias.baml
+27:6-7       "J"                source.baml meta.type-alias.baml entity.name.type.alias.baml
+27:8-9       "="                source.baml meta.type-alias.baml keyword.operator.assignment.baml
+27:10-11     "I"                source.baml meta.type-alias.baml meta.type-reference.baml entity.name.type.baml
+29:1-9       "function"         source.baml meta.function.baml keyword.declaration.function.baml
+29:10-22     "InvalidAlias"     source.baml meta.function.baml entity.name.function.baml
+29:22-23     "("                source.baml meta.function.baml meta.parameters.baml punctuation.definition.parameters.begin.baml
+29:23-24     "i"                source.baml meta.function.baml meta.parameters.baml meta.parameter.baml variable.parameter.baml
+29:24-25     ":"                source.baml meta.function.baml meta.parameters.baml meta.parameter.baml punctuation.separator.colon.baml
+29:26-27     "I"                source.baml meta.function.baml meta.parameters.baml meta.parameter.baml meta.type-reference.baml entity.name.type.baml
+29:27-28     ")"                source.baml meta.function.baml meta.parameters.baml punctuation.definition.parameters.end.baml
+29:29-31     "->"               source.baml meta.function.baml meta.return-type.baml keyword.operator.arrow.baml
+29:32-38     "string"           source.baml meta.function.baml meta.return-type.baml support.type.primitive.baml
+29:39-40     "{"                source.baml meta.function.baml meta.block.function.baml punctuation.definition.block.begin.baml
+30:3-9       "client"           source.baml meta.function.baml meta.block.function.baml meta.field.llm.client.baml keyword.other.llm.client.baml
+30:10-11     "\""               source.baml meta.function.baml meta.block.function.baml meta.field.llm.client.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+30:11-24     "openai/gpt-4o"    source.baml meta.function.baml meta.block.function.baml meta.field.llm.client.baml string.quoted.double.baml
+30:24-25     "\""               source.baml meta.function.baml meta.block.function.baml meta.field.llm.client.baml string.quoted.double.baml punctuation.definition.string.end.baml
+31:3-9       "prompt"           source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml keyword.other.llm.prompt.baml
+31:10-11     "#"                source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml punctuation.definition.string.begin.baml
+31:11-12     "\""               source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml punctuation.definition.string.begin.baml
+31:12-14     "{{"               source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.begin.baml
+31:15-16     "i"                source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.dotted-expression.baml variable.other.readwrite.baml
+31:16-17     "."                source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.dotted-expression.baml punctuation.accessor.baml
+31:17-22     "value"            source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.dotted-expression.baml variable.other.readwrite.baml
+31:23-25     "}}"               source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.end.baml
+31:25-26     "\""               source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml punctuation.definition.string.end.baml
+31:26-27     "#"                source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml punctuation.definition.string.end.baml
+32:1-2       "}"                source.baml meta.function.baml meta.block.function.baml punctuation.definition.block.end.baml
+34:1-78      "// warning: 'pid' is a type alias ProjectId (resolves to int), expected class" source.baml comment.line.double-slash.baml
+35:1-42      "//   -->  class/type_aliases_jinja.baml:5" source.baml comment.line.double-slash.baml
+36:1-8       "//    |"          source.baml comment.line.double-slash.baml
+37:1-33      "//  4 |   client \"openai/gpt-4o\"" source.baml comment.line.double-slash.baml
+38:1-69      "//  5 |   prompt #\"Pid: {{ pid.id }}. Generate a fake name for it.\"#" source.baml comment.line.double-slash.baml
+39:1-8       "//    |"          source.baml comment.line.double-slash.baml
+40:1-70      "// warning: 'c' is a type alias C (resolves to float), expected class" source.baml comment.line.double-slash.baml
+41:1-43      "//   -->  class/type_aliases_jinja.baml:14" source.baml comment.line.double-slash.baml
+42:1-8       "//    |"          source.baml comment.line.double-slash.baml
+43:1-33      "// 13 |   client \"openai/gpt-4o\"" source.baml comment.line.double-slash.baml
+44:1-35      "// 14 |   prompt #\"{{ c.value }}\"#" source.baml comment.line.double-slash.baml
+45:1-8       "//    |"          source.baml comment.line.double-slash.baml
+46:1-68      "// warning: 'j' is a recursive type alias JsonValue, expected class" source.baml comment.line.double-slash.baml
+47:1-43      "//   -->  class/type_aliases_jinja.baml:23" source.baml comment.line.double-slash.baml
+48:1-8       "//    |"          source.baml comment.line.double-slash.baml
+49:1-33      "// 22 |   client \"openai/gpt-4o\"" source.baml comment.line.double-slash.baml
+50:1-35      "// 23 |   prompt #\"{{ j.value }}\"#" source.baml comment.line.double-slash.baml
+51:1-8       "//    |"          source.baml comment.line.double-slash.baml
+52:1-60      "// warning: 'i' is a recursive type alias I, expected class" source.baml comment.line.double-slash.baml
+53:1-43      "//   -->  class/type_aliases_jinja.baml:31" source.baml comment.line.double-slash.baml
+54:1-8       "//    |"          source.baml comment.line.double-slash.baml
+55:1-33      "// 30 |   client \"openai/gpt-4o\"" source.baml comment.line.double-slash.baml
+56:1-35      "// 31 |   prompt #\"{{ i.value }}\"#" source.baml comment.line.double-slash.baml
+57:1-8       "//    |"          source.baml comment.line.double-slash.baml
+58:1-74      "// error: Error validating: These aliases form a dependency cycle: I -> J" source.baml comment.line.double-slash.baml
+59:1-43      "//   -->  class/type_aliases_jinja.baml:26" source.baml comment.line.double-slash.baml
+60:1-8       "//    |"          source.baml comment.line.double-slash.baml
+61:1-8       "// 25 |"          source.baml comment.line.double-slash.baml
+62:1-19      "// 26 | type I = J" source.baml comment.line.double-slash.baml
+63:1-8       "//    |"          source.baml comment.line.double-slash.baml

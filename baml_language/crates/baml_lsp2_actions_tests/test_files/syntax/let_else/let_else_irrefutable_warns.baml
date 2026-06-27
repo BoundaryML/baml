@@ -8,12 +8,11 @@ function IrrefutablePlainBinding(x: int) -> int {
 //----
 //- diagnostics
 // warning: irrefutable `let … else` pattern; the `else` branch is unreachable — use a plain `let` binding instead
-//    ╭─[ let_else_let_else_irrefutable_warns.baml:3:50 ]
+//    ╭─[ let_else_let_else_irrefutable_warns.baml:4:3 ]
 //    │
-//  3 │ ╭─▶ function IrrefutablePlainBinding(x: int) -> int {
-//  4 │ ├─▶   let v = x else { return 0; };
-//    │ │                                     
-//    │ ╰───────────────────────────────────── irrefutable `let … else` pattern; the `else` branch is unreachable — use a plain `let` binding instead
-//    │     
-//    │     Note: Error code: E0114
+//  4 │   let v = x else { return 0; };
+//    │   ──┬──
+//    │     ╰──── irrefutable `let … else` pattern; the `else` branch is unreachable — use a plain `let` binding instead
+//    │
+//    │ Note: Error code: E0114
 // ───╯

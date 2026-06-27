@@ -500,7 +500,7 @@ jobs:
 
           for platform in linux macos windows wasm; do
             f="reports/size-gate-${platform}.json"
-            if [ -f "$f" ]; then
+            if [ -s "$f" ]; then
               json_files+=("$f")
             else
               missing+=("$platform (job result: ${platform_results[$platform]:-unknown})")

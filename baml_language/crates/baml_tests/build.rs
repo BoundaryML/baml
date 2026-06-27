@@ -978,6 +978,11 @@ fn generate_diagnostics_test(project: &TestProject, tier: Tier) -> TokenStream {
                 file_paths.insert(file_id, source_file.path(&db));
             }
 
+            // Diagnostic spans must tightly cover the offending construct, never
+            // the leading/trailing whitespace around it (see
+            // `assert_diagnostic_spans_exclude_trivia`).
+            assert_diagnostic_spans_exclude_trivia(#project_name, &diagnostics, &sources);
+
             let config = RenderConfig::test();
 
             let mut output = String::new();

@@ -13,22 +13,21 @@ source: crates/baml_tests/src/generated_tests.rs
 ────╯
 
   [type] warning: extraneous throws declaration: baml.json.JsonParseError
-    ╭─[ json_static_method_arity.baml:23:59 ]
+    ╭─[ json_static_method_arity.baml:23:60 ]
     │
  23 │     function from_json(j: baml.json.json) -> Box<T> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-    │                                                           ──────────────────────────┬──────────────────────────  
-    │                                                                                     ╰──────────────────────────── extraneous throws declaration: baml.json.JsonParseError
+    │                                                            ──────────────────────────┬─────────────────────────  
+    │                                                                                      ╰─────────────────────────── extraneous throws declaration: baml.json.JsonParseError
     │ 
     │ Note: Error code: E0097
 ────╯
 
   [type] error: function `from_json` expects 1 type argument(s), got 2
-    ╭─[ json_static_method_arity.baml:34:112 ]
+    ╭─[ json_static_method_arity.baml:35:5 ]
     │
- 34 │ ╭─▶ function bad_extra(j: baml.json.json) -> Box<int> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
- 35 │ ├─▶     Box<int, string>.from_json(j)
-    │ │                                       
-    │ ╰─────────────────────────────────────── function `from_json` expects 1 type argument(s), got 2
-    │     
-    │     Note: Error code: E0005
+ 35 │     Box<int, string>.from_json(j)
+    │     ──────────────┬──────────────  
+    │                   ╰──────────────── function `from_json` expects 1 type argument(s), got 2
+    │ 
+    │ Note: Error code: E0005
 ────╯

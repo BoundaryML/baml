@@ -1,0 +1,23 @@
+1:1-4        "let"              source.baml meta.statement.let.baml meta.pattern.statement.baml meta.pattern.binding.baml keyword.declaration.binding.baml
+1:5-6        "x"                source.baml meta.statement.let.baml meta.pattern.statement.baml meta.pattern.binding.baml variable.other.binding.baml
+1:7-8        "="                source.baml meta.statement.let.baml keyword.operator.assignment.baml
+1:9-10       "1"                source.baml meta.statement.let.baml constant.numeric.integer.baml
+1:10-11      ";"                source.baml punctuation.terminator.statement.baml
+3:1-4        "let"              source.baml meta.statement.let.baml meta.pattern.statement.baml meta.pattern.binding.baml keyword.declaration.binding.baml
+3:5-6        "y"                source.baml meta.statement.let.baml meta.pattern.statement.baml meta.pattern.binding.baml variable.other.binding.baml
+3:7-8        "="                source.baml meta.statement.let.baml keyword.operator.assignment.baml
+3:9-10       "{"                source.baml meta.statement.let.baml meta.block.code.baml punctuation.definition.block.begin.baml
+4:5-8        "let"              source.baml meta.statement.let.baml meta.block.code.baml meta.statement.let.baml meta.pattern.statement.baml meta.pattern.binding.baml keyword.declaration.binding.baml
+4:9-10       "b"                source.baml meta.statement.let.baml meta.block.code.baml meta.statement.let.baml meta.pattern.statement.baml meta.pattern.binding.baml variable.other.binding.baml
+4:11-12      "="                source.baml meta.statement.let.baml meta.block.code.baml meta.statement.let.baml keyword.operator.assignment.baml
+4:13-14      "2"                source.baml meta.statement.let.baml meta.block.code.baml meta.statement.let.baml constant.numeric.integer.baml
+4:14-15      ";"                source.baml meta.statement.let.baml meta.block.code.baml punctuation.terminator.statement.baml
+5:5-6        "["                source.baml meta.statement.let.baml meta.block.code.baml meta.expression.array.baml punctuation.definition.array.begin.baml
+5:6-7        "1"                source.baml meta.statement.let.baml meta.block.code.baml meta.expression.array.baml constant.numeric.integer.baml
+5:7-8        ","                source.baml meta.statement.let.baml meta.block.code.baml meta.expression.array.baml punctuation.separator.comma.baml
+5:8-9        "2"                source.baml meta.statement.let.baml meta.block.code.baml meta.expression.array.baml constant.numeric.integer.baml
+5:9-10       ","                source.baml meta.statement.let.baml meta.block.code.baml meta.expression.array.baml punctuation.separator.comma.baml
+5:10-11      "3"                source.baml meta.statement.let.baml meta.block.code.baml meta.expression.array.baml constant.numeric.integer.baml
+5:11-12      "]"                source.baml meta.statement.let.baml meta.block.code.baml meta.expression.array.baml punctuation.definition.array.end.baml
+6:1-2        "}"                source.baml meta.statement.let.baml meta.block.code.baml punctuation.definition.block.end.baml
+6:2-3        ";"                source.baml punctuation.terminator.statement.baml

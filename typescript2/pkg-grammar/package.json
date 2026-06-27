@@ -6,14 +6,23 @@
   "description": "Canonical TextMate grammars for the BAML language (single source of truth, consumed by app-vscode-ext and app-promptfiddle).",
   "exports": {
     "./baml.tmLanguage.json": "./baml.tmLanguage.json",
-    "./jinja.tmLanguage.json": "./jinja.tmLanguage.json",
     "./package.json": "./package.json"
   },
   "files": [
     "*.tmLanguage.json"
   ],
   "scripts": {
+    "build": "tsx scripts/build.ts && node scripts/sync.mjs",
     "sync": "node scripts/sync.mjs",
-    "check": "node scripts/sync.mjs --check"
+    "check": "node scripts/sync.mjs --check",
+    "preview": "vite",
+    "test": "vitest run --config vitest.config.ts"
+  },
+  "devDependencies": {
+    "shiki": "^3.0.0",
+    "tmlanguage-generator": "^0.6.8",
+    "tsx": "^4.19.2",
+    "vite": "^6.0.0",
+    "vitest": "^4.0.16"
   }
 }

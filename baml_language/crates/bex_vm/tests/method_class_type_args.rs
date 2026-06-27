@@ -15,7 +15,7 @@ use baml_project::testing::compile_source;
 use baml_type::{Name, RuntimeTy, TyAttr, TyTemplate, TypeName};
 use bex_vm::{BexVm, VmExecState};
 use bex_vm_types::{
-    ConstValue, Instruction, Object, ObjectIndex, Value,
+    ConstValue, FunctionCaptureProps, Instruction, Object, ObjectIndex, Value,
     bytecode::Bytecode,
     types::{Class, Function, FunctionKind, FunctionOrigin, Program},
 };
@@ -58,6 +58,7 @@ fn inject_function(
         throws_type: None,
         origin: FunctionOrigin::UserDefined,
         body_meta: None,
+        capture: FunctionCaptureProps::disabled(),
         function_id: 0,
     };
     let fn_obj_idx = program.add_object(Object::Function(Box::new(func)));

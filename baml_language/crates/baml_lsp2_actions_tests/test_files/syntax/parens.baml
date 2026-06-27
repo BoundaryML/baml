@@ -813,7 +813,7 @@ function foo() -> int {
 //     │ Note: Error code: E0006
 // ────╯
 // error: missing return value of type int
-//     ╭─[ parens.baml:1:22 ]
+//     ╭─[ parens.baml:1:23 ]
 //     │
 //   1 │ ╭─▶ function foo() -> int {
 //     ┆ ┆

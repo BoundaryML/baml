@@ -8,7 +8,7 @@ describe('execution-store', () => {
   it('applies RunStore patches without mutating the original snapshot', () => {
     const initial = runFixture('run-1', 100);
     const patch: RunPatch = {
-      runId: 'run-1',
+      boundaryId: 'run-1',
       cursor: 4,
       changes: [
         {
@@ -45,7 +45,7 @@ describe('execution-store', () => {
         {
           type: 'setGraphRuntimeOverlay',
           overlay: {
-            runId: 'run-1',
+            boundaryId: 'run-1',
             projectGeneration: 1,
             entries: [],
             unattachedCallNodeIds: ['call_node_1'],
@@ -66,6 +66,7 @@ describe('execution-store', () => {
           outcome: {
             status: 'succeeded',
             result: {
+              valueRef: null,
               value: 'ok',
               rendererHint: null,
               supportingPayloadIds: [],
@@ -101,8 +102,8 @@ describe('execution-store', () => {
 
     expect(listener).toHaveBeenCalledTimes(4);
     const latest = listener.mock.calls.at(-1)?.[0];
-    expect(latest.selectedRunId).toBe('run-old');
-    expect(latest.runs.map((run: Run) => run.runId)).toEqual([
+    expect(latest.selectedBoundaryId).toBe('run-old');
+    expect(latest.runs.map((run: Run) => run.boundaryId)).toEqual([
       'run-new',
       'run-old',
     ]);
@@ -148,19 +149,19 @@ describe('execution-store', () => {
     });
     expect(client.snapshot).toHaveBeenCalledWith('test-run');
     expect(client.subscribe).toHaveBeenCalledWith('test-run', 7);
-    expect(store.getSnapshot().runs[0]?.runId).toBe('test-run');
+    expect(store.getSnapshot().runs[0]?.boundaryId).toBe('test-run');
 
     store.dispose();
   });
 });
 
 function runFixture(
-  runId: string,
+  boundaryId: string,
   createdAtMs: number,
   overrides: Partial<Run> = {},
 ): Run {
   return {
-    runId,
+    boundaryId,
     target: { kind: 'function', functionName: 'main' },
     visibility: { kind: 'history' },
     status: 'running',
@@ -202,7 +203,10 @@ function mockRunStoreClient(): RunStoreClient {
     respondToInput: vi.fn(),
     respondToEnv: vi.fn(),
     listRuns: vi.fn(),
+    listHistory: vi.fn(),
+    openHistory: vi.fn(),
     snapshot: vi.fn(),
+    readValue: vi.fn(),
     subscribe: vi.fn(),
     unsubscribe: vi.fn(),
     dispose: vi.fn(),

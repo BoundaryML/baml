@@ -6,6 +6,7 @@ import { depthScale } from '../lod';
 import { useGraphThemeContext } from '../theme';
 import type { WorkflowNodeData } from '../types';
 import { NodeHandles } from './NodeHandles';
+import { NodeOutputPreview } from './NodeOutputPreview';
 
 /**
  * Visual frame for a subgraph (function root, branch arm, loop body, scope).
@@ -29,6 +30,7 @@ export const GroupNode: ComponentType<NodeProps> = memo(({ data, id }) => {
   const stateAccent = style.accent;
   const isStateful =
     d.executionState !== 'not-started' && d.executionState !== 'skipped';
+  const hasValuePreviews = (d.valuePreviews?.length ?? 0) > 0;
 
   const borderColor = isHighlighted
     ? chrome.selectionRing.color
@@ -150,6 +152,22 @@ export const GroupNode: ComponentType<NodeProps> = memo(({ data, id }) => {
           </span>
         )}
       </div>
+      {hasValuePreviews ? (
+        <div
+          style={{
+            position: 'absolute',
+            top: 16,
+            left: 14,
+            zIndex: 4,
+            pointerEvents: 'auto',
+          }}
+        >
+          <NodeOutputPreview
+            valuePreviews={d.valuePreviews}
+            customRenderers={d.customRenderers}
+          />
+        </div>
+      ) : null}
     </div>
   );
 });
