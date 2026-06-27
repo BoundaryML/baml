@@ -1097,10 +1097,7 @@ pub fn def_to_item_ref<'db>(db: &'db dyn crate::Db, def: Definition<'db>) -> Ite
                 return ItemRef::Method {
                     package: pkg_info.package.clone(),
                     namespace: pkg_info.namespace_path,
-                    class: Name::new(format!(
-                        "{}$for${}",
-                        imp.interface_target.expr, imp.for_target.expr
-                    )),
+                    class: Name::new(format!("{}$for${}", imp.interface_target, imp.for_target)),
                     name,
                 };
             }
@@ -1122,7 +1119,7 @@ fn scoped_implements_method_name(
     item_tree
         .method_to_iface_target
         .get(&func_id)
-        .map(|target| Name::new(format!("{}.{}", target.expr, method_name)))
+        .map(|target| Name::new(format!("{target}.{method_name}")))
         .unwrap_or_else(|| method_name.clone())
 }
 
@@ -1198,7 +1195,7 @@ use baml_compiler2_ast::{
     AssignOp as AstAssignOp, AstSourceMap, BinaryOp as AstBinaryOp, CallArg, Expr as AstExpr,
     ExprBody as AstExprBody, ExprId as AstExprId, Literal as AstLiteral, PatId as AstPatId,
     Pattern as AstPattern, Stmt as AstStmt, StmtId as AstStmtId, TypeExpr as AstTypeExpr,
-    UnaryOp as AstUnaryOp,
+    TypeExprKind as AstTypeExprKind, UnaryOp as AstUnaryOp,
 };
 use baml_compiler2_hir::{
     body::{FunctionBody, LetBody, let_body, let_body_source_map},
@@ -1236,8 +1233,8 @@ fn lower_interface_target_args<'db>(
     generic_params: &[Name],
     diags: &mut Vec<baml_compiler2_tir::infer_context::TirTypeError>,
 ) -> Vec<Tir2Ty> {
-    match target {
-        baml_compiler2_ast::TypeExpr::Path { generic_args, .. } => generic_args
+    match &target.kind {
+        baml_compiler2_ast::TypeExprKind::Path { generic_args, .. } => generic_args
             .iter()
             .map(|arg| {
                 baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
@@ -1296,7 +1293,7 @@ fn lower_interface_target_associated_bindings<'db>(
             {
                 let ty = baml_compiler2_tir::generics::lower_type_expr_with_generics(
                     db,
-                    &type_expr.expr,
+                    type_expr,
                     pkg_items,
                     namespace_path,
                     &bindings,
@@ -1308,7 +1305,7 @@ fn lower_interface_target_associated_bindings<'db>(
             assoc.default.as_ref().map(|default| {
                 let ty = baml_compiler2_tir::generics::lower_type_expr_with_generics(
                     db,
-                    &default.expr,
+                    default,
                     pkg_items,
                     &target_iface_pkg.namespace_path,
                     &bindings,
@@ -2243,7 +2240,7 @@ impl<'db> LoweringContext<'db> {
                         let mut idx_counter = 0usize;
                         let mut insert_field =
                             |name: &str,
-                             type_expr: Option<&baml_compiler2_ast::SpannedTypeExpr>,
+                             type_expr: Option<&baml_compiler2_ast::TypeExpr>,
                              generic_params: &[Name],
                              ns: &[Name],
                              fields: &mut IndexMap<String, usize>,
@@ -2261,7 +2258,7 @@ impl<'db> LoweringContext<'db> {
                                         let tir_ty =
                                         baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
                                             db,
-                                            &te.expr,
+                                            te,
                                             pkg_items,
                                             ns,
                                             generic_params,
@@ -2297,7 +2294,7 @@ impl<'db> LoweringContext<'db> {
                             let Some(iface_loc) =
                                 baml_compiler2_tir::interfaces::resolve_path_to_interface(
                                     db,
-                                    &impl_target.target.expr,
+                                    &impl_target.target,
                                     pkg_items,
                                     &pkg_ns,
                                 )
@@ -2349,7 +2346,7 @@ impl<'db> LoweringContext<'db> {
                 let Some(root_iface_loc) =
                     baml_compiler2_tir::interfaces::resolve_path_to_interface(
                         db,
-                        &imp.interface_target.expr,
+                        &imp.interface_target,
                         pkg_items,
                         &pkg_info.namespace_path,
                     )
@@ -2360,7 +2357,7 @@ impl<'db> LoweringContext<'db> {
                 let mut diags = Vec::new();
                 let target_ty_tir = baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
                     db,
-                    &imp.for_target.expr,
+                    &imp.for_target,
                     pkg_items,
                     &pkg_info.namespace_path,
                     &imp.generic_params,
@@ -2378,7 +2375,7 @@ impl<'db> LoweringContext<'db> {
                         {
                             let root_iface_args_tir = lower_interface_target_args(
                                 db,
-                                &imp.interface_target.expr,
+                                &imp.interface_target,
                                 pkg_items,
                                 &pkg_info.namespace_path,
                                 &imp.generic_params,
@@ -2423,7 +2420,7 @@ impl<'db> LoweringContext<'db> {
                         }
                         let root_iface_args_tir = lower_interface_target_args(
                             db,
-                            &imp.interface_target.expr,
+                            &imp.interface_target,
                             pkg_items,
                             &pkg_info.namespace_path,
                             &imp.generic_params,
@@ -2481,7 +2478,7 @@ impl<'db> LoweringContext<'db> {
 
                 let root_iface_args_tir = lower_interface_target_args(
                     db,
-                    &imp.interface_target.expr,
+                    &imp.interface_target,
                     pkg_items,
                     &pkg_info.namespace_path,
                     &imp.generic_params,
@@ -2489,7 +2486,7 @@ impl<'db> LoweringContext<'db> {
                 );
                 let root_iface_assoc_tir = lower_interface_target_associated_bindings(
                     db,
-                    &imp.interface_target.expr,
+                    &imp.interface_target,
                     &imp.associated_type_bindings,
                     pkg_items,
                     &pkg_info.namespace_path,
@@ -2786,7 +2783,7 @@ impl<'db> LoweringContext<'db> {
                         iface_data
                             .associated_types
                             .iter()
-                            .map(|assoc| assoc.bound.as_ref().map(|bound| bound.expr.clone())),
+                            .map(|assoc| assoc.bound.clone()),
                     );
                 }
             }
@@ -4241,14 +4238,16 @@ impl<'db> LoweringContext<'db> {
         // for out-of-body implementations, otherwise the enclosing class type.
         for (param_idx, param) in sig.params.iter().enumerate() {
             let param_ty = if param.name.as_str() == "self"
-                && matches!(param.ty, baml_compiler2_ast::TypeExpr::Unknown { .. })
-            {
+                && matches!(
+                    param.ty.kind,
+                    baml_compiler2_ast::TypeExprKind::Unknown { .. }
+                ) {
                 if let Some(imp) = enclosing_impl {
                     let mut diags = Vec::new();
                     let generic_params = self.enclosing_generic_params();
                     let tir_ty = lower_type_expr_in_ns(
                         self.db,
-                        &imp.for_target.expr,
+                        &imp.for_target,
                         pkg_items,
                         &pkg_info.namespace_path,
                         &generic_params,
@@ -4703,7 +4702,7 @@ impl<'db> LoweringContext<'db> {
                     let mut diags = Vec::new();
                     let tir_ty = lower_type_expr_in_ns(
                         self.db,
-                        &spanned_te.expr,
+                        spanned_te,
                         pkg_items,
                         &pkg_info.namespace_path,
                         &lambda_param_generics,
@@ -4965,7 +4964,12 @@ impl LoweringContext<'_> {
         let tag_pkg_items = package_items(self.db, tag_pkg_id);
         let mut body_params: Vec<(Name, RuntimeTy)> = Vec::new();
         let closure_ty = match tag_sig.params.first().map(|p| &p.ty) {
-            Some(body_te @ baml_compiler2_ast::TypeExpr::Function { params, .. }) => {
+            Some(
+                body_te @ baml_compiler2_ast::TypeExpr {
+                    kind: baml_compiler2_ast::TypeExprKind::Function { params, .. },
+                    ..
+                },
+            ) => {
                 for (i, p) in params.iter().enumerate() {
                     let name = p
                         .name
@@ -6556,7 +6560,7 @@ impl<'db> LoweringContext<'db> {
         let mut diags = Vec::new();
         let tir_ty = lower_type_expr_in_ns(
             db,
-            &te.expr,
+            te,
             pkg_items_ref,
             &pkg_ns,
             &class_data.generic_params,
@@ -7748,14 +7752,14 @@ impl<'db> LoweringContext<'db> {
             && segments.len() == 2
             && self.is_default_receiver_root(segments)
             && let Some(target_te) = self.implements_block_iface_target()
-            && let baml_compiler2_ast::TypeExpr::Path { .. } = &target_te.expr
+            && let baml_compiler2_ast::TypeExprKind::Path { .. } = &target_te.kind
         {
             let current_pkg = baml_compiler2_hir::file_package::file_package(self.db, self.file);
             let pkg_id = PackageId::new(self.db, current_pkg.package.clone());
             let pkg_items = package_items(self.db, pkg_id);
             if let Some(iface_loc) = baml_compiler2_tir::interfaces::resolve_path_to_interface(
                 self.db,
-                &target_te.expr,
+                &target_te,
                 pkg_items,
                 &current_pkg.namespace_path,
             ) {
@@ -7783,29 +7787,28 @@ impl<'db> LoweringContext<'db> {
                 // `enclosing_generic_params`), so without this an explicit
                 // `default.<method>()` that reads `T` would resolve it to
                 // `unknown` at runtime. Mirrors the interface-dispatch switch.
-                let iface_type_arg_tys: Vec<Tir2Ty> = if let baml_compiler2_ast::TypeExpr::Path {
-                    generic_args,
-                    ..
-                } = &target_te.expr
-                {
-                    let generic_params = self.enclosing_generic_params();
-                    let mut diags = Vec::new();
-                    generic_args
-                        .iter()
-                        .map(|arg| {
-                            baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
-                                self.db,
-                                arg,
-                                pkg_items,
-                                &current_pkg.namespace_path,
-                                &generic_params,
-                                &mut diags,
-                            )
-                        })
-                        .collect()
-                } else {
-                    vec![]
-                };
+                let iface_type_arg_tys: Vec<Tir2Ty> =
+                    if let baml_compiler2_ast::TypeExprKind::Path { generic_args, .. } =
+                        &target_te.kind
+                    {
+                        let generic_params = self.enclosing_generic_params();
+                        let mut diags = Vec::new();
+                        generic_args
+                            .iter()
+                            .map(|arg| {
+                                baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
+                                    self.db,
+                                    arg,
+                                    pkg_items,
+                                    &current_pkg.namespace_path,
+                                    &generic_params,
+                                    &mut diags,
+                                )
+                            })
+                            .collect()
+                    } else {
+                        vec![]
+                    };
                 let frame_type_arg_ops = self.emit_frame_type_arg_ops(&iface_type_arg_tys);
                 let ntypeargs = frame_type_arg_ops.len();
                 let mut all_args = frame_type_arg_ops;
@@ -8898,8 +8901,8 @@ impl<'db> LoweringContext<'db> {
             .iter()
             .filter(|param| {
                 matches!(
-                    param.type_expr.as_ref().map(|ty| &ty.expr),
-                    Some(baml_compiler2_ast::TypeExpr::Type { .. })
+                    param.type_expr.as_ref().map(|ty| &ty.kind),
+                    Some(baml_compiler2_ast::TypeExprKind::Type { .. })
                 )
             })
             .count();
@@ -9140,12 +9143,12 @@ impl LoweringContext<'_> {
         type_arg: &AstTypeExpr,
         generic_params: &[baml_base::Name],
     ) -> Option<TyTemplate> {
-        let AstTypeExpr::Path {
+        let AstTypeExprKind::Path {
             segments,
             generic_args,
             associated_type_bindings,
             ..
-        } = type_arg
+        } = &type_arg.kind
         else {
             return None;
         };
@@ -12438,7 +12441,7 @@ impl<'db> LoweringContext<'db> {
 
     fn implements_target_matches_requested_views(
         &self,
-        target: &baml_compiler2_ast::SpannedTypeExpr,
+        target: &baml_compiler2_ast::TypeExpr,
         associated_type_bindings: &[baml_compiler2_ast::AssociatedTypeBindingDef],
         class_loc: baml_compiler2_hir::loc::ClassLoc<'db>,
         requested_views: &[InterfaceTypeView],
@@ -12512,7 +12515,7 @@ impl<'db> LoweringContext<'db> {
 
     fn resolve_implements_target_view(
         &self,
-        target: &baml_compiler2_ast::SpannedTypeExpr,
+        target: &baml_compiler2_ast::TypeExpr,
         associated_type_bindings: &[baml_compiler2_ast::AssociatedTypeBindingDef],
         class_loc: baml_compiler2_hir::loc::ClassLoc<'db>,
     ) -> Option<InterfaceTypeView> {
@@ -12522,7 +12525,7 @@ impl<'db> LoweringContext<'db> {
         let class_pkg_items = package_items(self.db, class_pkg_id);
         let target_loc = baml_compiler2_tir::interfaces::resolve_path_to_interface(
             self.db,
-            &target.expr,
+            target,
             class_pkg_items,
             &class_pkg.namespace_path,
         )?;
@@ -12536,8 +12539,8 @@ impl<'db> LoweringContext<'db> {
         let item_tree = file_item_tree(self.db, class_file);
         let class_data = &item_tree[class_loc.id(self.db)];
         let mut diags = Vec::new();
-        let target_args = match &target.expr {
-            baml_compiler2_ast::TypeExpr::Path { generic_args, .. } => generic_args
+        let target_args = match &target.kind {
+            baml_compiler2_ast::TypeExprKind::Path { generic_args, .. } => generic_args
                 .iter()
                 .map(|arg| {
                     baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
@@ -12572,7 +12575,7 @@ impl<'db> LoweringContext<'db> {
                 {
                     let ty = baml_compiler2_tir::generics::lower_type_expr_with_generics(
                         self.db,
-                        &type_expr.expr,
+                        type_expr,
                         class_pkg_items,
                         &class_pkg.namespace_path,
                         &bindings,
@@ -12584,7 +12587,7 @@ impl<'db> LoweringContext<'db> {
                 assoc.default.as_ref().map(|default| {
                     let ty = baml_compiler2_tir::generics::lower_type_expr_with_generics(
                         self.db,
-                        &default.expr,
+                        default,
                         class_pkg_items,
                         &target_iface_pkg.namespace_path,
                         &bindings,
@@ -12640,7 +12643,7 @@ impl<'db> LoweringContext<'db> {
     /// `A::foo`, even though `A` is reachable through `B`'s closure.
     fn method_provider_view(
         &self,
-        target: &baml_compiler2_ast::SpannedTypeExpr,
+        target: &baml_compiler2_ast::TypeExpr,
         associated_type_bindings: &[baml_compiler2_ast::AssociatedTypeBindingDef],
         class_loc: baml_compiler2_hir::loc::ClassLoc<'db>,
         method: &Name,
@@ -12884,7 +12887,7 @@ impl<'db> LoweringContext<'db> {
     /// inside an `implements I { ... }` block, return `I`'s target type
     /// expression. `None` for free functions, top-level class methods,
     /// and interface default-method bodies.
-    fn implements_block_iface_target(&self) -> Option<baml_compiler2_ast::SpannedTypeExpr> {
+    fn implements_block_iface_target(&self) -> Option<baml_compiler2_ast::TypeExpr> {
         let func_loc = self.func_loc?;
         let item_tree = file_item_tree(self.db, func_loc.file(self.db));
         item_tree
@@ -13884,8 +13887,12 @@ impl LoweringContext<'_> {
              -> bool {
                 match atom {
                     // OLD `Literal(Int(val))`: integer switch
-                    AstPattern::Type(AstTypeExpr::Literal {
-                        value: AstLiteral::Int(val),
+                    AstPattern::Type(AstTypeExpr {
+                        kind:
+                            AstTypeExprKind::Literal {
+                                value: AstLiteral::Int(val),
+                                ..
+                            },
                         ..
                     }) => {
                         match switch_kind.as_ref() {
@@ -13901,11 +13908,13 @@ impl LoweringContext<'_> {
                     // OLD `EnumVariant { ... }`: integer switch with discriminant.
                     // The new repr puts enum variants inside `Pattern::Type`;
                     // detect via TIR.
-                    AstPattern::Type(AstTypeExpr::Path { .. })
-                        if matches!(
-                            this.pat_types.get(&this.pat_metadata_key(atom_id)),
-                            Some(Tir2Ty::EnumVariant(_, _, _))
-                        ) =>
+                    AstPattern::Type(AstTypeExpr {
+                        kind: AstTypeExprKind::Path { .. },
+                        ..
+                    }) if matches!(
+                        this.pat_types.get(&this.pat_metadata_key(atom_id)),
+                        Some(Tir2Ty::EnumVariant(_, _, _))
+                    ) =>
                     {
                         let Some(Tir2Ty::EnumVariant(qtn, variant, _)) =
                             this.pat_types.get(&this.pat_metadata_key(atom_id))
@@ -14665,7 +14674,7 @@ impl LoweringContext<'_> {
                     if bindings.is_empty() {
                         baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
                             self.db,
-                            &te.expr,
+                            te,
                             pkg_items_for_class,
                             &ns_context,
                             &class_data.generic_params,
@@ -14674,7 +14683,7 @@ impl LoweringContext<'_> {
                     } else {
                         baml_compiler2_tir::generics::lower_type_expr_with_generics(
                             self.db,
-                            &te.expr,
+                            te,
                             pkg_items_for_class,
                             &ns_context,
                             &bindings,
@@ -15042,8 +15051,8 @@ impl LoweringContext<'_> {
             // separate variants. The new flat enum collapses all of those
             // into `Pattern::Type(TypeExpr)`, so we dispatch on the inner
             // TypeExpr to recover OLD's per-kind codegen.
-            AstPattern::Type(ty_expr) => match ty_expr {
-                AstTypeExpr::Literal { value: lit, .. } => {
+            AstPattern::Type(ty_expr) => match &ty_expr.kind {
+                AstTypeExprKind::Literal { value: lit, .. } => {
                     let constant = Self::lower_literal(lit);
                     let test = Rvalue::BinaryOp {
                         op: BinOp::Eq,
@@ -15057,7 +15066,7 @@ impl LoweringContext<'_> {
                     self.builder
                         .branch(Operand::Copy(Place::Local(test_local)), success, failure);
                 }
-                AstTypeExpr::Null { .. } => {
+                AstTypeExprKind::Null { .. } => {
                     let test = Rvalue::BinaryOp {
                         op: BinOp::Eq,
                         left: Operand::Copy(Place::Local(scrutinee)),
@@ -15070,7 +15079,7 @@ impl LoweringContext<'_> {
                     self.builder
                         .branch(Operand::Copy(Place::Local(test_local)), success, failure);
                 }
-                AstTypeExpr::Path { .. }
+                AstTypeExprKind::Path { .. }
                     if matches!(
                         self.pat_types.get(&self.pat_metadata_key(pat_id)),
                         Some(Tir2Ty::EnumVariant(_, _, _))

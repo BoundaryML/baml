@@ -27,9 +27,7 @@
 
 use baml_base::Name;
 
-use crate::ast::{
-    CallArg, ClassDef, Expr, FunctionBodyDef, FunctionDef, SpannedTypeExpr, TypeExpr,
-};
+use crate::ast::{CallArg, ClassDef, Expr, FunctionBodyDef, FunctionDef, TypeExpr, TypeExprKind};
 
 /// The reserved magic-method name for the BEP-042 finalizer.
 pub const CLEANUP_METHOD: &str = "cleanup";
@@ -40,13 +38,13 @@ pub const CLEANUP_METHOD: &str = "cleanup";
 /// the language-blessed spelling of "cannot fail" (the stdlib uses it widely,
 /// including on `_cleanup_begin` itself), so it must be accepted, not rejected.
 ///
-/// Takes `Option<&SpannedTypeExpr>` so the AST guard/HIR check and the emit-side
+/// Takes `Option<&TypeExpr>` so the AST guard/HIR check and the emit-side
 /// `has_cleanup` detection (which holds an HIR `Function`, whose `throws` is the
-/// same `ast::SpannedTypeExpr`) share one source of truth.
-pub fn throws_is_effectively_none(throws: Option<&SpannedTypeExpr>) -> bool {
+/// same `ast::TypeExpr`) share one source of truth.
+pub fn throws_is_effectively_none(throws: Option<&TypeExpr>) -> bool {
     match throws {
         None => true,
-        Some(st) => matches!(st.expr, TypeExpr::Never { .. }),
+        Some(st) => matches!(st.kind, TypeExprKind::Never { .. }),
     }
 }
 
@@ -84,8 +82,8 @@ pub fn has_cleanup_shape(func: &FunctionDef) -> bool {
         && func.params[0].default.is_none()
         && throws_is_effectively_none(func.throws.as_ref())
         && matches!(
-            func.return_type.as_ref().map(|st| &st.expr),
-            Some(TypeExpr::Void { .. })
+            func.return_type.as_ref().map(|st| &st.kind),
+            Some(TypeExprKind::Void { .. })
         )
 }
 

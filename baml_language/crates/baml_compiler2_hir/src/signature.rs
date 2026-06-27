@@ -8,7 +8,7 @@
 use std::sync::Arc;
 
 use baml_base::Name;
-use baml_compiler2_ast::{FunctionDefaults, FunctionTypeParam, TypeExpr};
+use baml_compiler2_ast::{FunctionDefaults, FunctionTypeParam, TypeExpr, TypeExprKind};
 use rustc_hash::FxHashSet;
 use text_size::TextRange;
 
@@ -17,7 +17,7 @@ use crate::{item_tree::DefaultExprRef, loc::FunctionLoc};
 /// Compiler2 function signature — param names + unresolved `TypeExpr`.
 ///
 /// No spans — those live in `SignatureSourceMap`.
-/// `TypeExpr` is already span-free (spans live in `SpannedTypeExpr` at the
+/// `TypeExpr` is already span-free (spans live in `TypeExpr` at the
 /// AST layer and are split out here).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FunctionSignature {
@@ -104,11 +104,9 @@ fn function_signature_with_source_map<'db>(
         .params
         .iter()
         .map(|p| {
-            let type_expr = p
-                .type_expr
-                .as_ref()
-                .map(|te| te.expr.clone())
-                .unwrap_or(TypeExpr::Unknown { attrs: vec![] });
+            let type_expr = p.type_expr.clone().unwrap_or_else(|| {
+                TypeExprKind::Unknown { attrs: vec![] }.at(TextRange::default())
+            });
             SignatureParam {
                 name: p.name.clone(),
                 ty: type_expr,
@@ -117,13 +115,13 @@ fn function_signature_with_source_map<'db>(
         })
         .collect();
 
-    let return_type = func_data.return_type.as_ref().map(|te| te.expr.clone());
+    let return_type = func_data.return_type.clone();
 
     let sig = Arc::new(FunctionSignature {
         name: func_data.name.clone(),
         params,
         return_type,
-        throws: func_data.throws.as_ref().map(|te| te.expr.clone()),
+        throws: func_data.throws.clone(),
     });
 
     // Build source map — spans only (separate for early-cutoff)
@@ -142,16 +140,17 @@ fn function_signature_with_source_map<'db>(
 }
 
 fn type_expr_for_effect_param(name: Name) -> TypeExpr {
-    TypeExpr::Path {
+    TypeExprKind::Path {
         segments: vec![name],
         generic_args: Vec::new(),
         associated_type_bindings: Vec::new(),
         attrs: Vec::new(),
     }
+    .at(TextRange::default())
 }
 
 fn never_type_expr() -> TypeExpr {
-    TypeExpr::Never { attrs: Vec::new() }
+    TypeExprKind::Never { attrs: Vec::new() }.at(TextRange::default())
 }
 
 fn fresh_effect_param_name(used_names: &mut FxHashSet<Name>) -> Name {
@@ -166,13 +165,14 @@ fn fresh_effect_param_name(used_names: &mut FxHashSet<Name>) -> Name {
 }
 
 fn fill_omitted_nested_throws_with_never(type_expr: TypeExpr) -> TypeExpr {
-    match type_expr {
-        TypeExpr::Path {
+    let span = type_expr.span;
+    let kind = match type_expr.kind {
+        TypeExprKind::Path {
             segments,
             generic_args,
             associated_type_bindings,
             attrs,
-        } => TypeExpr::Path {
+        } => TypeExprKind::Path {
             segments,
             generic_args: generic_args
                 .into_iter()
@@ -187,44 +187,44 @@ fn fill_omitted_nested_throws_with_never(type_expr: TypeExpr) -> TypeExpr {
                 .collect(),
             attrs,
         },
-        TypeExpr::AssociatedTypeProjection {
+        TypeExprKind::AssociatedTypeProjection {
             base,
             interface,
             member,
             attrs,
-        } => TypeExpr::AssociatedTypeProjection {
+        } => TypeExprKind::AssociatedTypeProjection {
             base: Box::new(fill_omitted_nested_throws_with_never(*base)),
             interface: interface
                 .map(|interface| Box::new(fill_omitted_nested_throws_with_never(*interface))),
             member,
             attrs,
         },
-        TypeExpr::Optional { inner, attrs } => TypeExpr::Optional {
+        TypeExprKind::Optional { inner, attrs } => TypeExprKind::Optional {
             inner: Box::new(fill_omitted_nested_throws_with_never(*inner)),
             attrs,
         },
-        TypeExpr::List { inner, attrs } => TypeExpr::List {
+        TypeExprKind::List { inner, attrs } => TypeExprKind::List {
             inner: Box::new(fill_omitted_nested_throws_with_never(*inner)),
             attrs,
         },
-        TypeExpr::Map { key, value, attrs } => TypeExpr::Map {
+        TypeExprKind::Map { key, value, attrs } => TypeExprKind::Map {
             key: Box::new(fill_omitted_nested_throws_with_never(*key)),
             value: Box::new(fill_omitted_nested_throws_with_never(*value)),
             attrs,
         },
-        TypeExpr::Union { variants, attrs } => TypeExpr::Union {
+        TypeExprKind::Union { variants, attrs } => TypeExprKind::Union {
             variants: variants
                 .into_iter()
                 .map(fill_omitted_nested_throws_with_never)
                 .collect(),
             attrs,
         },
-        TypeExpr::Function {
+        TypeExprKind::Function {
             params,
             ret,
             throws,
             attrs,
-        } => TypeExpr::Function {
+        } => TypeExprKind::Function {
             params: params
                 .into_iter()
                 .map(|param| FunctionTypeParam {
@@ -242,7 +242,8 @@ fn fill_omitted_nested_throws_with_never(type_expr: TypeExpr) -> TypeExpr {
             attrs,
         },
         other => other,
-    }
+    };
+    kind.at(span)
 }
 
 fn elaborate_immediate_callback_param(
@@ -251,7 +252,7 @@ fn elaborate_immediate_callback_param(
     attrs: Vec<baml_compiler2_ast::RawAttribute>,
     effect_param: Name,
 ) -> TypeExpr {
-    TypeExpr::Function {
+    TypeExprKind::Function {
         params: params
             .into_iter()
             .map(|param| FunctionTypeParam {
@@ -264,15 +265,17 @@ fn elaborate_immediate_callback_param(
         throws: Some(Box::new(type_expr_for_effect_param(effect_param))),
         attrs,
     }
+    .at(TextRange::default())
 }
 
 fn union_type_expr(members: Vec<TypeExpr>) -> TypeExpr {
     match members.as_slice() {
         [single] => single.clone(),
-        _ => TypeExpr::Union {
+        _ => TypeExprKind::Union {
             variants: members,
             attrs: Vec::new(),
-        },
+        }
+        .at(TextRange::default()),
     }
 }
 
@@ -287,8 +290,9 @@ fn elaborate_immediate_function_return_root(
     let params = params
         .into_iter()
         .map(|param| {
-            let ty = match param.ty {
-                TypeExpr::Function {
+            let span = param.ty.span;
+            let ty = match param.ty.kind {
+                TypeExprKind::Function {
                     params,
                     ret,
                     throws,
@@ -303,7 +307,7 @@ fn elaborate_immediate_function_return_root(
                         }
                     };
                     immediate_effects.push(callback_throws.clone());
-                    TypeExpr::Function {
+                    TypeExprKind::Function {
                         params: params
                             .into_iter()
                             .map(|param| FunctionTypeParam {
@@ -316,8 +320,9 @@ fn elaborate_immediate_function_return_root(
                         throws: Some(Box::new(callback_throws)),
                         attrs,
                     }
+                    .at(span)
                 }
-                other => fill_omitted_nested_throws_with_never(other),
+                other => fill_omitted_nested_throws_with_never(other.at(span)),
             };
             FunctionTypeParam {
                 name: param.name,
@@ -327,7 +332,7 @@ fn elaborate_immediate_function_return_root(
         })
         .collect();
 
-    TypeExpr::Function {
+    TypeExprKind::Function {
         params,
         ret: Box::new(fill_omitted_nested_throws_with_never(ret)),
         throws: Some(Box::new(if immediate_effects.is_empty() {
@@ -337,6 +342,7 @@ fn elaborate_immediate_function_return_root(
         })),
         attrs,
     }
+    .at(TextRange::default())
 }
 
 pub fn elaborate_function_signature_parts(
@@ -354,8 +360,9 @@ pub fn elaborate_function_signature_parts(
     let params = params
         .into_iter()
         .map(|param| {
-            let elaborated = match param.ty {
-                TypeExpr::Function {
+            let span = param.ty.span;
+            let elaborated = match param.ty.kind {
+                TypeExprKind::Function {
                     params,
                     ret,
                     throws: None,
@@ -365,18 +372,21 @@ pub fn elaborate_function_signature_parts(
                     synthetic_effect_params.push(effect_param.clone());
                     elaborate_immediate_callback_param(params, *ret, attrs, effect_param)
                 }
-                TypeExpr::Function {
+                TypeExprKind::Function {
                     params,
                     ret,
                     throws,
                     attrs,
-                } => fill_omitted_nested_throws_with_never(TypeExpr::Function {
-                    params,
-                    ret,
-                    throws,
-                    attrs,
-                }),
-                other => fill_omitted_nested_throws_with_never(other),
+                } => fill_omitted_nested_throws_with_never(
+                    TypeExprKind::Function {
+                        params,
+                        ret,
+                        throws,
+                        attrs,
+                    }
+                    .at(span),
+                ),
+                other => fill_omitted_nested_throws_with_never(other.at(span)),
             };
             SignatureParam {
                 name: param.name,
@@ -385,31 +395,37 @@ pub fn elaborate_function_signature_parts(
             }
         })
         .collect();
-    let return_type = return_type.map(|return_type| match return_type {
-        TypeExpr::Function {
-            params,
-            ret,
-            throws: None,
-            attrs,
-        } => elaborate_immediate_function_return_root(
-            params,
-            *ret,
-            attrs,
-            &mut used_names,
-            &mut synthetic_effect_params,
-        ),
-        TypeExpr::Function {
-            params,
-            ret,
-            throws,
-            attrs,
-        } => fill_omitted_nested_throws_with_never(TypeExpr::Function {
-            params,
-            ret,
-            throws,
-            attrs,
-        }),
-        other => fill_omitted_nested_throws_with_never(other),
+    let return_type = return_type.map(|return_type| {
+        let span = return_type.span;
+        match return_type.kind {
+            TypeExprKind::Function {
+                params,
+                ret,
+                throws: None,
+                attrs,
+            } => elaborate_immediate_function_return_root(
+                params,
+                *ret,
+                attrs,
+                &mut used_names,
+                &mut synthetic_effect_params,
+            ),
+            TypeExprKind::Function {
+                params,
+                ret,
+                throws,
+                attrs,
+            } => fill_omitted_nested_throws_with_never(
+                TypeExprKind::Function {
+                    params,
+                    ret,
+                    throws,
+                    attrs,
+                }
+                .at(span),
+            ),
+            other => fill_omitted_nested_throws_with_never(other.at(span)),
+        }
     });
 
     ElaboratedFunctionSignature {
@@ -446,11 +462,9 @@ fn elaborated_function_signature_with_source_map<'db>(
         .params
         .iter()
         .map(|p| {
-            let type_expr = p
-                .type_expr
-                .as_ref()
-                .map(|te| te.expr.clone())
-                .unwrap_or(TypeExpr::Unknown { attrs: vec![] });
+            let type_expr = p.type_expr.clone().unwrap_or_else(|| {
+                TypeExprKind::Unknown { attrs: vec![] }.at(TextRange::default())
+            });
             SignatureParam {
                 name: p.name.clone(),
                 ty: type_expr,
@@ -459,8 +473,8 @@ fn elaborated_function_signature_with_source_map<'db>(
         })
         .collect();
 
-    let return_type = func_data.return_type.as_ref().map(|te| te.expr.clone());
-    let throws = func_data.throws.as_ref().map(|te| te.expr.clone());
+    let return_type = func_data.return_type.clone();
+    let throws = func_data.throws.clone();
     let reserved_effect_param_names = enclosing_class_generic_params(&item_tree, function.id(db));
     let signature = Arc::new(elaborate_function_signature_parts(
         func_data.name.clone(),

@@ -480,7 +480,6 @@ fn file_package_derives_correct_namespaces() {
 
 #[test]
 fn rust_type_field_lowers_to_rust_type() {
-    use baml_compiler2_ast::TypeExpr;
     use baml_compiler2_hir::package::{PackageId, package_items};
     use baml_compiler2_tir::lower_type_expr::lower_type_expr;
 
@@ -492,7 +491,7 @@ fn rust_type_field_lowers_to_rust_type() {
     let mut diags = Vec::new();
     let ty = lower_type_expr(
         &db,
-        &TypeExpr::Rust { attrs: vec![] },
+        &baml_compiler2_ast::TypeExprKind::Rust { attrs: vec![] }.at(Default::default()),
         items,
         &[],
         &mut diags,
@@ -552,12 +551,13 @@ fn cross_namespace_type_resolution_via_root() {
     let segments = vec![Name::new("root"), Name::new("llm"), Name::new("Response")];
     let ty = lower_type_expr_in_ns(
         &db,
-        &baml_compiler2_ast::TypeExpr::Path {
+        &baml_compiler2_ast::TypeExprKind::Path {
             segments,
             generic_args: vec![],
             associated_type_bindings: vec![],
             attrs: vec![],
-        },
+        }
+        .at(Default::default()),
         pkg_items,
         &[], // root namespace context
         &[],
@@ -579,12 +579,13 @@ fn cross_namespace_type_resolution_via_root() {
     let pkg_info = file_package(&db, ns_file);
     let ty = lower_type_expr_in_ns(
         &db,
-        &baml_compiler2_ast::TypeExpr::Path {
+        &baml_compiler2_ast::TypeExprKind::Path {
             segments,
             generic_args: vec![],
             associated_type_bindings: vec![],
             attrs: vec![],
-        },
+        }
+        .at(Default::default()),
         pkg_items,
         &pkg_info.namespace_path, // ["llm"] namespace context
         &[],
@@ -620,12 +621,13 @@ fn same_namespace_resolution_no_prefix() {
     let segments = vec![Name::new("LLMConfig")];
     let ty = lower_type_expr_in_ns(
         &db,
-        &baml_compiler2_ast::TypeExpr::Path {
+        &baml_compiler2_ast::TypeExprKind::Path {
             segments,
             generic_args: vec![],
             associated_type_bindings: vec![],
             attrs: vec![],
-        },
+        }
+        .at(Default::default()),
         pkg_items,
         &[Name::new("llm")], // llm namespace context
         &[],
@@ -677,12 +679,13 @@ fn nested_namespace_resolution() {
     ];
     let ty = lower_type_expr_in_ns(
         &db,
-        &baml_compiler2_ast::TypeExpr::Path {
+        &baml_compiler2_ast::TypeExprKind::Path {
             segments,
             generic_args: vec![],
             associated_type_bindings: vec![],
             attrs: vec![],
-        },
+        }
+        .at(Default::default()),
         pkg_items,
         &[],
         &[],
@@ -716,12 +719,13 @@ fn bare_name_cross_namespace_rejected() {
     let mut diags = Vec::new();
     let ty = lower_type_expr_in_ns(
         &db,
-        &baml_compiler2_ast::TypeExpr::Path {
+        &baml_compiler2_ast::TypeExprKind::Path {
             segments,
             generic_args: vec![],
             associated_type_bindings: vec![],
             attrs: vec![],
-        },
+        }
+        .at(Default::default()),
         pkg_items,
         &ns_context,
         &[],
@@ -760,12 +764,13 @@ fn multi_segment_bare_path_rejected() {
     let mut diags = Vec::new();
     let ty = lower_type_expr_in_ns(
         &db,
-        &baml_compiler2_ast::TypeExpr::Path {
+        &baml_compiler2_ast::TypeExprKind::Path {
             segments,
             generic_args: vec![],
             associated_type_bindings: vec![],
             attrs: vec![],
-        },
+        }
+        .at(Default::default()),
         pkg_items,
         &ns_context,
         &[],

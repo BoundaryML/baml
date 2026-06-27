@@ -53,11 +53,11 @@ source: crates/baml_tests/src/generated_tests.rs
 ────╯
 
   [type] error: unresolved type: Missing
-    ╭─[ main.baml:36:10 ]
+    ╭─[ main.baml:36:22 ]
     │
  36 │     v is WrapGeneric<Missing>
-    │          ──────────┬─────────  
-    │                    ╰─────────── unresolved type: Missing
+    │                      ───┬───  
+    │                         ╰───── unresolved type: Missing
     │ 
     │ Note: Error code: E0002
 ────╯

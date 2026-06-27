@@ -49,14 +49,14 @@ function UseReserved() -> int {
 //    │ Note: Error code: E0010
 // ───╯
 // error: Expected '}', found EOF
-//     ╭─[ expr_var_keyword_let_await.baml:11:8 ]
-//     │
-//  11 │ //    |
-//     │        │
-//     │        ╰─ Expected '}', found EOF
-//     │
-//     │ Note: Error code: E0010
-// ────╯
+//    ╭─[ expr_var_keyword_let_await.baml:4:2 ]
+//    │
+//  4 │ }
+//    │  │
+//    │  ╰─ Expected '}', found EOF
+//    │
+//    │ Note: Error code: E0010
+// ───╯
 // warning: unreachable code: 2 statement(s) after diverging statement
 //    ╭─[ expr_var_keyword_let_await.baml:2:7 ]
 //    │

@@ -3,7 +3,7 @@
 //! One function per item kind. Type expressions are fully lowered to recursive
 //! `TypeExpr`. Expression bodies are fully lowered to `ExprBody` arenas with a
 //! parallel `AstSourceMap`. Missing names skip the item (`return None`), missing
-//! types produce `TypeExpr::Unknown`.
+//! types produce `TypeExprKind::Unknown`.
 //!
 //! No LLM function expansion, no attribute validation, no duplicate detection —
 //! all of that moves downstream.
@@ -19,8 +19,8 @@ use crate::{
         ConfigItemDef, EnumDef, Expr, ExprBody, ExprId, FieldDef, FunctionBodyDef, FunctionDef,
         FunctionDefaults, ImplementsBlockDef, ImplementsForDef, InterfaceDef,
         InterfaceFieldLinkDef, Interpolation, Item, LetDef, LetOrigin, LlmBodyDef, MethodSigDef,
-        Param, RawAttribute, RawAttributeArg, RawPrompt, SpannedTypeExpr, TemplateStringDef,
-        TestDef, TypeAliasDef, TypeExpr, VariantDef,
+        Param, RawAttribute, RawAttributeArg, RawPrompt, TemplateStringDef, TestDef, TypeAliasDef,
+        TypeExpr, TypeExprKind, VariantDef,
     },
     companions::expand_companions,
     lower_expr_body, lower_type_expr,
@@ -173,8 +173,8 @@ pub fn lower_file_with_path(
             items.push(Item::ImplementsFor(imp));
             continue;
         }
-        let target_name = match &imp.for_target.expr {
-            crate::ast::TypeExpr::Path {
+        let target_name = match &imp.for_target.kind {
+            crate::ast::TypeExprKind::Path {
                 segments,
                 generic_args,
                 ..
@@ -230,7 +230,7 @@ pub fn lower_file_with_path(
     (items, diags, env_var_refs)
 }
 
-/// Check if a just-lowered type expression contains `TypeExpr::Unknown` at the root.
+/// Check if a just-lowered type expression contains `TypeExprKind::Unknown` at the root.
 /// If so, emit an `UnparseableType` diagnostic.
 fn check_unknown_type(
     type_expr: &crate::ast::TypeExpr,
@@ -238,7 +238,7 @@ fn check_unknown_type(
     span: text_size::TextRange,
     diags: &mut Vec<LoweringDiagnostic>,
 ) {
-    if matches!(type_expr, crate::ast::TypeExpr::Unknown { .. }) {
+    if matches!(type_expr.kind, crate::ast::TypeExprKind::Unknown { .. }) {
         diags.push(LoweringDiagnostic::UnparseableType { context, span });
     }
 }
@@ -305,19 +305,13 @@ fn lower_function(
             true,
             diags,
         );
-        SpannedTypeExpr {
-            expr,
-            span: te_span,
-        }
+        expr.with_span(te_span)
     });
 
     let throws = func
         .throws_clause()
         .and_then(|tc| tc.type_expr())
-        .map(|te| SpannedTypeExpr {
-            expr: lower_type_expr::lower_type_expr_node(&te),
-            span: te.syntax().span_range(),
-        });
+        .map(|te| lower_type_expr::lower_type_expr_node(&te).with_span(te.syntax().span_range()));
 
     let (body, declarative_meta) = if let Some(llm) = func.llm_body() {
         let mut llm_body_def = lower_llm_body(&llm);
@@ -340,7 +334,7 @@ fn lower_function(
         // BuiltinUnknown" error from the LLM client.
         let call_type_args: Vec<crate::ast::TypeExpr> = return_type
             .as_ref()
-            .map(|rt| vec![rt.expr.clone()])
+            .map(|rt| vec![rt.clone()])
             .unwrap_or_default();
         // New-mode (BEP-049 M5f): a backtick prompt compiles to a `prompt`…``
         // closure passed as the 4th arg to `call_llm_function`; the orchestrator
@@ -595,10 +589,7 @@ pub(crate) fn lower_param(
                 false,
                 diags,
             );
-            SpannedTypeExpr {
-                expr,
-                span: te_span,
-            }
+            expr.with_span(te_span)
         }),
         default: None,
         span: param.syntax().span_range(),
@@ -615,15 +606,15 @@ pub(crate) fn append_default_client_param(
     let default_expr = alloc_client_override_default_expr(defaults, client_name, span);
     params.push(Param {
         name: Name::new("client"),
-        type_expr: Some(SpannedTypeExpr {
-            expr: TypeExpr::Path {
+        type_expr: Some(
+            TypeExprKind::Path {
                 segments: vec![Name::new("baml"), Name::new("llm"), Name::new("Client")],
                 generic_args: vec![],
                 associated_type_bindings: vec![],
                 attrs: vec![],
-            },
-            span,
-        }),
+            }
+            .at(span),
+        ),
         default: Some(crate::ast::DefaultExprId::new(default_expr)),
         span,
         name_span: span,
@@ -1118,10 +1109,7 @@ fn lower_class(
                 *expr.attrs_mut() = keep;
                 hoisted_field_attrs = hoist;
 
-                SpannedTypeExpr {
-                    expr,
-                    span: te_span,
-                }
+                expr.with_span(te_span)
             });
             let field_docstring = crate::docstring::extract_docstring(f.syntax());
             Some(FieldDef {
@@ -1347,7 +1335,7 @@ fn lower_interface(
         } else {
             Vec::new()
         };
-    let requires: Vec<SpannedTypeExpr> = parent_type_nodes
+    let requires: Vec<TypeExpr> = parent_type_nodes
         .into_iter()
         .map(|te| {
             let expr = lower_type_expr::lower_type_expr_node(&te);
@@ -1358,10 +1346,7 @@ fn lower_interface(
                 te_span,
                 diags,
             );
-            SpannedTypeExpr {
-                expr,
-                span: te_span,
-            }
+            expr.with_span(te_span)
         })
         .collect();
 
@@ -1392,10 +1377,7 @@ fn lower_interface(
                     false,
                     diags,
                 );
-                SpannedTypeExpr {
-                    expr,
-                    span: te_span,
-                }
+                expr.with_span(te_span)
             });
             Some(FieldDef {
                 name: Name::new(&field_name_str),
@@ -1460,7 +1442,7 @@ fn lower_associated_type_def(
             span,
             diags,
         );
-        SpannedTypeExpr { expr, span }
+        expr.with_span(span)
     });
     let default = decl.default_or_binding().map(|te| {
         let expr = lower_type_expr::lower_type_expr_node(&te);
@@ -1471,7 +1453,7 @@ fn lower_associated_type_def(
             span,
             diags,
         );
-        SpannedTypeExpr { expr, span }
+        expr.with_span(span)
     });
     Some(AssociatedTypeDef {
         name,
@@ -1503,7 +1485,7 @@ fn lower_associated_type_binding_def(
             span,
             diags,
         );
-        SpannedTypeExpr { expr, span }
+        expr.with_span(span)
     });
     Some(AssociatedTypeBindingDef {
         name,
@@ -1554,19 +1536,13 @@ fn lower_method_sig(
             true,
             diags,
         );
-        SpannedTypeExpr {
-            expr,
-            span: te_span,
-        }
+        expr.with_span(te_span)
     });
 
     let throws = sig
         .throws_clause()
         .and_then(|tc| tc.type_expr())
-        .map(|te| SpannedTypeExpr {
-            expr: lower_type_expr::lower_type_expr_node(&te),
-            span: te.syntax().span_range(),
-        });
+        .map(|te| lower_type_expr::lower_type_expr_node(&te).with_span(te.syntax().span_range()));
 
     Some(MethodSigDef {
         name,
@@ -1591,19 +1567,16 @@ fn lower_implements_block(
     let target_node = block.target()?;
     let target_te = target_node.type_expr()?;
     let target_span = target_te.syntax().span_range();
-    let target = SpannedTypeExpr {
-        expr: lower_type_expr::lower_type_expr_node(&target_te),
-        span: target_span,
-    };
+    let target = lower_type_expr::lower_type_expr_node(&target_te).with_span(target_span);
     check_unknown_type(
-        &target.expr,
+        &target,
         "interface name in `implements`".to_string(),
         target_span,
         diags,
     );
 
-    let target_label = match &target.expr {
-        crate::ast::TypeExpr::Path { segments, .. } => segments
+    let target_label = match &target.kind {
+        crate::ast::TypeExprKind::Path { segments, .. } => segments
             .last()
             .map(|n: &Name| n.to_string())
             .unwrap_or_else(|| "?".to_string()),
@@ -1662,12 +1635,9 @@ fn lower_implements_for(
     let target_node = imp.target()?;
     let target_te = target_node.type_expr()?;
     let target_span = target_te.syntax().span_range();
-    let interface_target = SpannedTypeExpr {
-        expr: lower_type_expr::lower_type_expr_node(&target_te),
-        span: target_span,
-    };
+    let interface_target = lower_type_expr::lower_type_expr_node(&target_te).with_span(target_span);
     check_unknown_type(
-        &interface_target.expr,
+        &interface_target,
         "interface name in `implements ... for`".to_string(),
         target_span,
         diags,
@@ -1677,19 +1647,16 @@ fn lower_implements_for(
     let for_node = imp.for_target()?;
     let for_te = for_node.type_expr()?;
     let for_span = for_te.syntax().span_range();
-    let for_target = SpannedTypeExpr {
-        expr: lower_type_expr::lower_type_expr_node(&for_te),
-        span: for_span,
-    };
+    let for_target = lower_type_expr::lower_type_expr_node(&for_te).with_span(for_span);
     check_unknown_type(
-        &for_target.expr,
+        &for_target,
         "target type in `implements ... for`".to_string(),
         for_span,
         diags,
     );
 
-    let iface_label = match &interface_target.expr {
-        crate::ast::TypeExpr::Path { segments, .. } => segments
+    let iface_label = match &interface_target.kind {
+        crate::ast::TypeExprKind::Path { segments, .. } => segments
             .last()
             .map(|n: &Name| n.to_string())
             .unwrap_or_else(|| "?".to_string()),
@@ -1790,10 +1757,7 @@ fn lower_type_alias(
                 false,
                 diags,
             );
-            SpannedTypeExpr {
-                expr,
-                span: te_span,
-            }
+            expr.with_span(te_span)
         }),
         span: node.span_range(),
         name_span: name_token.text_range(),
@@ -2012,15 +1976,15 @@ fn synthesize_init_test_function(
     // The single parameter: `registry: testing.TestCollector`
     let registry_param = Param {
         name: Name::new("registry"),
-        type_expr: Some(SpannedTypeExpr {
-            expr: crate::ast::TypeExpr::Path {
+        type_expr: Some(
+            crate::ast::TypeExprKind::Path {
                 segments: vec![Name::new("testing"), Name::new("TestCollector")],
                 generic_args: vec![],
                 associated_type_bindings: vec![],
                 attrs: vec![],
-            },
-            span,
-        }),
+            }
+            .at(span),
+        ),
         default: None,
         span,
         name_span: span,
@@ -2072,10 +2036,7 @@ fn synthesize_register_call(
                 generic_param_bounds: vec![],
                 params: vec![],
                 defaults: FunctionDefaults::empty(),
-                return_type: Some(SpannedTypeExpr {
-                    expr: crate::ast::TypeExpr::Void { attrs: vec![] },
-                    span,
-                }),
+                return_type: Some(crate::ast::TypeExprKind::Void { attrs: vec![] }.at(span)),
                 throws: None,
                 body: Some(FunctionBodyDef::Expr(lambda_body, lambda_source_map)),
                 declarative_meta: None,
@@ -2138,15 +2099,15 @@ fn synthesize_register_call(
             // Collector lambda parameter: `testset`
             let testset_param = Param {
                 name: Name::new("testset"),
-                type_expr: Some(SpannedTypeExpr {
-                    expr: crate::ast::TypeExpr::Path {
+                type_expr: Some(
+                    crate::ast::TypeExprKind::Path {
                         segments: vec![Name::new("testing"), Name::new("TestCollector")],
                         generic_args: vec![],
                         associated_type_bindings: vec![],
                         attrs: vec![],
-                    },
-                    span,
-                }),
+                    }
+                    .at(span),
+                ),
                 default: None,
                 span,
                 name_span: span,
@@ -2158,10 +2119,7 @@ fn synthesize_register_call(
                 generic_param_bounds: vec![],
                 params: vec![testset_param],
                 defaults: FunctionDefaults::empty(),
-                return_type: Some(SpannedTypeExpr {
-                    expr: crate::ast::TypeExpr::Void { attrs: vec![] },
-                    span,
-                }),
+                return_type: Some(crate::ast::TypeExprKind::Void { attrs: vec![] }.at(span)),
                 throws: None,
                 body: Some(FunctionBodyDef::Expr(collector_exprs, collector_source_map)),
                 declarative_meta: None,

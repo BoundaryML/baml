@@ -265,7 +265,7 @@ fn build_interface_impls(
                     Some((
                         b.name.clone(),
                         baml_compiler2_mir::tir2_to_template(
-                            &lower(&te.expr, generics),
+                            &lower(te, generics),
                             resolved,
                             generics,
                         ),
@@ -279,7 +279,7 @@ fn build_interface_impls(
         // concrete class's out-of-body impl folds onto the class — see (b).)
         for imp in &item_tree.implements_for {
             let Some((iface_tn, interface_args, mut interface_assoc)) = split_interface(
-                &lower(&imp.interface_target.expr, &imp.generic_params),
+                &lower(&imp.interface_target, &imp.generic_params),
                 resolved,
                 &imp.generic_params,
             ) else {
@@ -290,7 +290,7 @@ fn build_interface_impls(
                 &imp.generic_params,
             ));
             let for_ty_pattern = baml_compiler2_mir::tir2_to_template(
-                &lower(&imp.for_target.expr, &imp.generic_params),
+                &lower(&imp.for_target, &imp.generic_params),
                 resolved,
                 &imp.generic_params,
             );
@@ -367,7 +367,7 @@ fn build_interface_impls(
                 .filter_map(|&m| {
                     let target = item_tree.method_to_iface_target.get(&m)?;
                     let (m_iface_tn, m_args, _m_assoc) =
-                        split_interface(&lower(&target.expr, generics), resolved, generics)?;
+                        split_interface(&lower(target, generics), resolved, generics)?;
                     Some((
                         m_iface_tn,
                         m_args,
@@ -406,7 +406,7 @@ fn build_interface_impls(
 
             for block in &class_data.implements {
                 let Some((iface_tn, interface_args, mut interface_assoc)) =
-                    split_interface(&lower(&block.target.expr, generics), resolved, generics)
+                    split_interface(&lower(&block.target, generics), resolved, generics)
                 else {
                     continue;
                 };
@@ -630,7 +630,7 @@ pub use bex_vm_types::Program as ProgramAlias;
 /// One entry in the emitted runtime field list for a class.
 type MergedFieldEntry = (
     String,
-    Option<baml_compiler2_ast::SpannedTypeExpr>,
+    Option<baml_compiler2_ast::TypeExpr>,
     Vec<baml_compiler2_hir::item_tree::Attribute>,
     Vec<Name>,
     Vec<Name>,
@@ -795,7 +795,7 @@ pub fn generate_project_bytecode_with_opt(
                         // the `TyTemplate` (TypeVar→TypeArgRef(N)) used by
                         // typed runtime walking.
                         let tir_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
-                            db, &te.expr, pkg_items, ns, gen_params, &mut diags,
+                            db, te, pkg_items, ns, gen_params, &mut diags,
                         );
                         let resolved_ty = cache.convert(&tir_ty);
                         let template = baml_compiler2_mir::tir2_to_template(
@@ -858,8 +858,8 @@ pub fn generate_project_bytecode_with_opt(
                         func.throws.as_ref(),
                     )
                     && matches!(
-                        func.return_type.as_ref().map(|st| &st.expr),
-                        Some(baml_compiler2_ast::ast::TypeExpr::Void { .. })
+                        func.return_type.as_ref().map(|st| &st.kind),
+                        Some(baml_compiler2_ast::ast::TypeExprKind::Void { .. })
                     )
             });
 
@@ -1511,7 +1511,7 @@ struct FunctionSignatureMetadata {
 }
 
 fn type_expr_for_name_with_generic_args(name: Name, generic_params: &[Name]) -> TypeExpr {
-    TypeExpr::Path {
+    baml_compiler2_ast::TypeExprKind::Path {
         segments: vec![name],
         generic_args: generic_params
             .iter()
@@ -1521,6 +1521,7 @@ fn type_expr_for_name_with_generic_args(name: Name, generic_params: &[Name]) -> 
         associated_type_bindings: Vec::new(),
         attrs: Vec::new(),
     }
+    .at(baml_compiler2_ast::TextRange::default())
 }
 
 /// Extract runtime and display signature metadata from an `item_tree` Function.
@@ -1569,7 +1570,7 @@ fn compute_function_metadata_from_item_tree(
         .values()
         .find(|iface_data| iface_data.default_methods.contains(&func_id));
     let self_replacement = enclosing_impl
-        .map(|imp| imp.for_target.expr.clone())
+        .map(|imp| imp.for_target.clone())
         .or_else(|| {
             enclosing_class.map(|class_data| {
                 type_expr_for_name_with_generic_args(
@@ -1791,7 +1792,7 @@ fn compute_function_metadata_from_item_tree(
     let mut display_param_types = Vec::with_capacity(func_data.params.len());
     for param in &func_data.params {
         let resolved = if let Some(te) = &param.type_expr {
-            Some(resolve_display_tir(&te.expr))
+            Some(resolve_display_tir(te))
         } else if param.name.as_str() == "self" {
             self_replacement.as_ref().map(&resolve_display_tir)
         } else {
@@ -1806,10 +1807,7 @@ fn compute_function_metadata_from_item_tree(
         }
     }
 
-    let resolved_return_type = func_data
-        .return_type
-        .as_ref()
-        .map(|te| resolve_display_tir(&te.expr));
+    let resolved_return_type = func_data.return_type.as_ref().map(resolve_display_tir);
     let (return_type, display_return_type) = if let Some(tir_ty) = resolved_return_type {
         (
             runtime_from_display_tir(&tir_ty),

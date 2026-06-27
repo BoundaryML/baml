@@ -101,6 +101,11 @@ pub enum TirTypeError {
     UnresolvedType {
         name: Name,
         suggestions: Vec<String>,
+        /// Span of just the offending type name (the union/map/compound member),
+        /// or `TextRange::default()` if unknown. Preferred over the surrounding
+        /// type-expr span when reporting, so the squiggle lands on the member
+        /// rather than the whole compound type (B-538).
+        span: TextRange,
     },
     /// An associated-type projection's explicit `as X` qualifier resolved to a
     /// non-interface type (a class, alias, etc.). The qualifier must name an
@@ -415,6 +420,22 @@ pub enum TirTypeError {
     GenericBoundNotInterface { bound: Ty },
 }
 
+impl TirTypeError {
+    /// The span of just the offending construct (e.g. an unresolved type's name
+    /// inside a compound type), if this error carries one more precise than the
+    /// surrounding type-expr span. Callers reporting a `TirTypeError` against a
+    /// whole type-annotation span should prefer this:
+    /// `self.precise_span().unwrap_or(annotation_span)` (B-538).
+    pub fn precise_span(&self) -> Option<TextRange> {
+        match self {
+            TirTypeError::UnresolvedType { span, .. } if *span != TextRange::default() => {
+                Some(*span)
+            }
+            _ => None,
+        }
+    }
+}
+
 impl fmt::Display for TirTypeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -566,7 +587,9 @@ impl fmt::Display for TirTypeError {
                      ({names}); qualify the projection with `(... as Interface).{member}`"
                 )
             }
-            TirTypeError::UnresolvedType { name, suggestions } => {
+            TirTypeError::UnresolvedType {
+                name, suggestions, ..
+            } => {
                 if suggestions.is_empty() {
                     write!(f, "unresolved type: {name}")
                 } else if suggestions.len() == 1 {
@@ -1496,6 +1519,9 @@ impl<'db> InferContext<'db> {
         if self.suppress_member_lookup_errors.get() && is_synthesized_code_diag(&error) {
             return;
         }
+        // Prefer the error's own precise span (e.g. an unresolved member of a
+        // compound type) over the whole type-expr span (B-538).
+        let span = error.precise_span().unwrap_or(span);
         self.diagnostics
             .borrow_mut()
             .diagnostics
