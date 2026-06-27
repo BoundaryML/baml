@@ -41,13 +41,15 @@ import type {
   FunctionInfo,
   ProjectUpdate,
   Run,
-  RunId,
+  BoundaryId,
   RunStatus,
   SourceNavigationTarget,
   WorkerOutMessage,
 } from './worker-protocol';
 import type { ResultRendererProps } from './result-renderers';
 import { ResultDisplay } from './ResultDisplay';
+import { ValueRenderer } from './ValueRenderer';
+import { CapturedValueCard } from './CapturedValueCard';
 import { registerBuiltinResultRenderers } from './renderers/registerBuiltins';
 import {
   HttpRequestCurlRenderer,
@@ -58,11 +60,14 @@ import { FunctionSidebar } from './FunctionSidebar';
 import { companionFunctionName } from './shared/companion-functions';
 import { createExecutionStore, type ExecutionStore } from './execution-store';
 import { createRunStoreClient } from './run-store-client';
+import { createValueBodyCache } from './value-body-cache';
+import type { ValueBodyCache } from './value-body-cache';
 import type { ExecutionStoreSnapshot } from './execution-store';
 import {
   decodeRunResultValue,
   runToTraceRows,
   runToDisplayRun,
+  type RunTraceLog,
   type RunStoreDisplayRun,
 } from './run-store-projections';
 import {
@@ -104,7 +109,7 @@ function isTerminalRunStatus(status: RunStatus): boolean {
   );
 }
 
-type RunScopedEnvRequest = { runId: RunId; envRequestId: string };
+type RunScopedEnvRequest = { boundaryId: BoundaryId; envRequestId: string };
 type PendingEnvDialogRequest = {
   variable: string;
   runScoped: RunScopedEnvRequest | null;
@@ -124,7 +129,7 @@ function findPendingEnvRequest(
         kind.key === variable &&
         kind.state === 'pending'
       ) {
-        return { runId: run.runId, envRequestId: kind.requestId };
+        return { boundaryId: run.boundaryId, envRequestId: kind.requestId };
       }
     }
   }
@@ -462,8 +467,94 @@ function formatTraceMs(value: number | null): string {
   return `${Math.round(value)}ms`;
 }
 
-const TraceTimelineView: FC<{ run: Run | undefined }> = ({ run }) => {
-  const rows = runToTraceRows(run);
+function traceLogLevelClass(level: string | null): string {
+  switch (level) {
+    case 'error':
+      return 'text-vsc-red';
+    case 'warn':
+      return 'text-vsc-yellow';
+    case 'debug':
+      return 'text-vsc-text-muted';
+    case 'info':
+    case null:
+      return 'text-vsc-accent';
+    default:
+      return 'text-vsc-text-muted';
+  }
+}
+
+function traceValueStateLabel(value: { state: RunTraceLog['state'] }): string | null {
+  switch (value.state) {
+    case 'available':
+      return null;
+    case 'loading':
+      return 'loading';
+    case 'pending':
+      return 'pending';
+    case 'omitted':
+      return 'omitted';
+    case 'truncated':
+      return 'truncated';
+    case 'missing':
+      return 'missing';
+    case 'lost':
+      return 'lost';
+    case 'error':
+      return 'error';
+    case 'unavailable':
+      return 'unavailable';
+    default:
+      value.state satisfies never;
+      return null;
+  }
+}
+
+const TraceLogView: FC<{ log: RunTraceLog }> = ({ log }) => {
+  const stateLabel = traceValueStateLabel(log);
+  return (
+    <div className="rounded border border-vsc-border-subtle bg-vsc-surface/60 px-2 py-1">
+      <div className="flex min-w-0 items-center gap-1.5">
+        <span
+          className={cn(
+            'font-vsc-mono text-[10px] uppercase',
+            traceLogLevelClass(log.level),
+          )}
+        >
+          {log.level ?? 'log'}
+        </span>
+        {log.sourceLine != null && (
+          <span className="text-vsc-text-faint text-[10px]">
+            :{log.sourceLine}
+          </span>
+        )}
+        <span className="min-w-0 truncate text-vsc-text-muted text-[11px]">
+          {log.message}
+        </span>
+        {stateLabel && (
+          <span className="ml-auto shrink-0 rounded border border-vsc-border-subtle px-1 py-0.5 text-[10px] text-vsc-text-faint">
+            {stateLabel}
+          </span>
+        )}
+      </div>
+      {log.value !== null && (
+        <div className="mt-1 overflow-x-auto">
+          <ValueRenderer value={log.value} displayMode="inline" />
+        </div>
+      )}
+      {log.diagnostic && (
+        <div className="mt-1 text-[10px] text-vsc-text-faint">
+          {log.diagnostic}
+        </div>
+      )}
+    </div>
+  );
+};
+
+const TraceTimelineView: FC<{
+  run: Run | undefined;
+  valueBodyCache: ValueBodyCache;
+}> = ({ run, valueBodyCache }) => {
+  const rows = runToTraceRows(run, valueBodyCache);
   if (rows.length === 0) {
     return (
       <div className="flex-1 flex items-center justify-center text-vsc-text-faint text-xs bg-vsc-bg">
@@ -512,6 +603,26 @@ const TraceTimelineView: FC<{ run: Run | undefined }> = ({ run }) => {
                   }}
                 />
               </div>
+              {row.logs.length > 0 && (
+                <div
+                  className="mt-1.5 space-y-1"
+                  style={{ paddingLeft: Math.min(row.depth, 12) * 12 + 10 }}
+                >
+                  {row.logs.map((log) => (
+                    <TraceLogView key={log.id} log={log} />
+                  ))}
+                </div>
+              )}
+              {row.callValues.length > 0 && (
+                <div
+                  className="mt-1.5 space-y-1"
+                  style={{ paddingLeft: Math.min(row.depth, 12) * 12 + 10 }}
+                >
+                  {row.callValues.map((value) => (
+                    <CapturedValueCard key={value.id} value={value} compact />
+                  ))}
+                </div>
+              )}
             </div>
             <div className="text-[10px] text-vsc-text-faint">
               {formatTraceMs(row.durationMs)}
@@ -542,16 +653,22 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
   argsByFunction,
   initialSidebarOpen = true,
 }) => {
+  const runStoreClient = useMemo(() => createRunStoreClient(port), [port]);
   const executionStore = useMemo(
-    () => createExecutionStore(createRunStoreClient(port)),
-    [port],
+    () => createExecutionStore(runStoreClient),
+    [runStoreClient],
+  );
+  const valueBodyCache = useMemo(
+    () => createValueBodyCache(runStoreClient),
+    [runStoreClient],
   );
   const pendingExecutionStoreDisposalsRef = useRef(
     new Map<ExecutionStore, ReturnType<typeof setTimeout>>(),
   );
   const [executionSnapshot, setExecutionSnapshot] =
     useState<ExecutionStoreSnapshot>(() => executionStore.getSnapshot());
-  const [argsJsonByRunId, setArgsJsonByRunId] = useState<
+  const [valueBodyCacheVersion, setValueBodyCacheVersion] = useState(0);
+  const [argsJsonByBoundaryId, setArgsJsonByBoundaryId] = useState<
     Record<string, string>
   >({});
 
@@ -559,6 +676,14 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
     setExecutionSnapshot(executionStore.getSnapshot());
     return executionStore.subscribe(setExecutionSnapshot);
   }, [executionStore]);
+
+  useEffect(
+    () =>
+      valueBodyCache.subscribe(() => {
+        setValueBodyCacheVersion((version) => version + 1);
+      }),
+    [valueBodyCache],
+  );
 
   useEffect(() => {
     const pendingDispose =
@@ -610,12 +735,12 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
   const displayRuns = useMemo(
     () =>
       executionSnapshot.runs
-        .map((run) => runToDisplayRun(run, argsJsonByRunId))
+        .map((run) => runToDisplayRun(run, argsJsonByBoundaryId, valueBodyCache))
         .filter(
           (run): run is RunStoreDisplayRun =>
             run != null,
         ),
-    [executionSnapshot.runs, argsJsonByRunId],
+    [executionSnapshot.runs, argsJsonByBoundaryId, valueBodyCache, valueBodyCacheVersion],
   );
   const functionRuns = useMemo(
     () =>
@@ -1161,7 +1286,9 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
         case 'commandAck':
         case 'commandError':
         case 'runList':
+        case 'historyList':
         case 'runSnapshot':
+        case 'valueBody':
         case 'runCursorExpired':
         case 'profileArtifactChunk':
           // RunStoreClient consumes these during the staged migration. The
@@ -1229,7 +1356,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
           if (cached !== undefined) {
             if (runScoped) {
               void executionStore
-                .respondToEnv(runScoped.runId, runScoped.envRequestId, cached)
+                .respondToEnv(runScoped.boundaryId, runScoped.envRequestId, cached)
                 .catch((error) => {
                   console.warn('[ExecutionPanel] respondToEnv failed:', error);
                 });
@@ -1415,10 +1542,10 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
 
     let cancelled = false;
     const timer = setTimeout(async () => {
-      const waitForPreviewRun = (runId: RunId): Promise<Run> => {
+      const waitForPreviewRun = (boundaryId: BoundaryId): Promise<Run> => {
         const existing = executionStore
           .getSnapshot()
-          .runs.find((run) => run.runId === runId);
+          .runs.find((run) => run.boundaryId === boundaryId);
         if (existing && isTerminalRunStatus(existing.status)) {
           return Promise.resolve(existing);
         }
@@ -1439,7 +1566,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
           };
 
           unsubscribe = executionStore.subscribe((snapshot) => {
-            const run = snapshot.runs.find((entry) => entry.runId === runId);
+            const run = snapshot.runs.find((entry) => entry.boundaryId === boundaryId);
             if (run && isTerminalRunStatus(run.status)) {
               finish(run);
             }
@@ -1453,21 +1580,24 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
       try {
         const previewFunctionName = companionFunctionName(selectedFn, subFn);
         const argsBytes = encodeRunArgs(parsed as Record<string, unknown>);
-        const runId = await executionStore.startPreviewRun({
+        const boundaryId = await executionStore.startPreviewRun({
           project: selectedProject,
           parentFunctionName: selectedFn,
           helper: subFn,
           functionName: previewFunctionName,
           argsBytes: new Uint8Array(argsBytes),
         });
-        const run = await waitForPreviewRun(runId);
+        const run = await waitForPreviewRun(boundaryId);
         if (run.error) {
           throw new Error(run.error.message);
         }
         if (run.status === 'cancelled') {
           throw new Error('Cancelled');
         }
-        const resultValue = decodeRunResultValue(run);
+        if (run.result?.valueRef) {
+          await valueBodyCache.read(run.boundaryId, run.result.valueRef);
+        }
+        const resultValue = decodeRunResultValue(run, valueBodyCache);
         if (resultValue == null) {
           throw new Error('Preview completed without a result');
         }
@@ -1497,6 +1627,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
     argsJson,
     port,
     executionStore,
+    valueBodyCache,
     projectUpdateVersion,
   ]);
 
@@ -1513,8 +1644,8 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
   const isRunning = functionRuns[0]?.status === 'running';
 
   const onCancelFunctionRun = useCallback(
-    (runId: RunId) => {
-      void executionStore.cancelRun(runId).catch((error) => {
+    (boundaryId: BoundaryId) => {
+      void executionStore.cancelRun(boundaryId).catch((error) => {
         console.warn('[ExecutionPanel] cancelRun failed:', error);
       });
     },
@@ -1522,9 +1653,9 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
   );
 
   const submitRunInput = useCallback(
-    (runId: RunId, inputRequestId: string, value: string) => {
+    (boundaryId: BoundaryId, inputRequestId: string, value: string) => {
       void executionStore
-        .respondToInput(runId, inputRequestId, value)
+        .respondToInput(boundaryId, inputRequestId, value)
         .catch((error) => {
           console.warn('[ExecutionPanel] respondToInput failed:', error);
         });
@@ -1532,10 +1663,10 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
     [executionStore],
   );
 
-  const toggleResultMode = useCallback((runId: string) => {
+  const toggleResultMode = useCallback((boundaryId: string) => {
     setResultModes((prev) => ({
       ...prev,
-      [runId]: (prev[runId] ?? 'parsed') === 'parsed' ? 'raw' : 'parsed',
+      [boundaryId]: (prev[boundaryId] ?? 'parsed') === 'parsed' ? 'raw' : 'parsed',
     }));
   }, []);
 
@@ -1593,7 +1724,8 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
   const onRunFunction = useCallback(async () => {
     if (!selectedFn || !selectedProject || isRunning) return;
 
-    setActiveTab('run');
+    // Don't force the 'run' tab — running keeps the user on whatever tab
+    // they're viewing (graph, trace, prompt, etc.).
     setExpandedLogId(null);
     setRunValidationError(null);
 
@@ -1614,12 +1746,12 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
       }
       const argsBytes = encodeRunArgs(parsed as Record<string, unknown>);
 
-      const runId = await executionStore.startRun({
+      const boundaryId = await executionStore.startRun({
         project: selectedProject,
         functionName: selectedFn,
         argsBytes: new Uint8Array(argsBytes),
       });
-      setArgsJsonByRunId((prev) => ({ ...prev, [runId]: argsJson }));
+      setArgsJsonByBoundaryId((prev) => ({ ...prev, [boundaryId]: argsJson }));
     } catch (e) {
       const errMsg = e instanceof Error ? e.message : String(e);
       setRunValidationError(errMsg);
@@ -1659,10 +1791,10 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
   }, [initialTestName, initialTestsetName, selectedProject, port]);
 
   const waitForTerminalRun = useCallback(
-    (runId: RunId) => {
+    (boundaryId: BoundaryId) => {
       const existing = executionStore
         .getSnapshot()
-        .runs.find((run) => run.runId === runId);
+        .runs.find((run) => run.boundaryId === boundaryId);
       if (existing && isTerminalRunStatus(existing.status)) {
         return Promise.resolve();
       }
@@ -1679,7 +1811,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
         };
 
         unsubscribe = executionStore.subscribe((snapshot) => {
-          const run = snapshot.runs.find((entry) => entry.runId === runId);
+          const run = snapshot.runs.find((entry) => entry.boundaryId === boundaryId);
           if (run && isTerminalRunStatus(run.status)) {
             finish();
           }
@@ -1703,12 +1835,12 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
         return next;
       });
       try {
-        const runId = await executionStore.startTestRun({
+        const boundaryId = await executionStore.startTestRun({
           project: selectedProject,
           generation,
           testName: name,
         });
-        await waitForTerminalRun(runId);
+        await waitForTerminalRun(boundaryId);
       } catch (e) {
         setTestStartErrors(
           (prev) =>
@@ -2476,8 +2608,8 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                     No test runs yet
                   </div>
                 )}
-                {testRuns.map((run, runIdx) => {
-                  const isLatest = runIdx === 0;
+                {testRuns.map((run, boundaryIdx) => {
+                  const isLatest = boundaryIdx === 0;
                   const statusCls =
                     run.status === 'error'
                       ? 'bg-vsc-red'
@@ -2530,6 +2662,17 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                           </span>
                         )}
                       </div>
+                      {run.rootInput != null && (
+                        <div className="py-1.5 pr-2.5 pl-[22px] border-b border-vsc-border-subtle">
+                          <div className="text-[10px] font-semibold text-vsc-text-muted mb-0.5 uppercase tracking-wide">
+                            Input
+                          </div>
+                          <ResultDisplay
+                            result={run.rootInput}
+                            customRenderers={resultRenderers}
+                          />
+                        </div>
+                      )}
                       {run.fetchLogs.map((log) => {
                         const isExp = expandedLogId === log.id;
                         const statusColorCls =
@@ -2648,6 +2791,14 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                             Error
                           </div>
                           <ErrorDisplay error={run.error} />
+                          {run.errorValue != null && (
+                            <div className="mt-1">
+                              <ResultDisplay
+                                result={run.errorValue}
+                                customRenderers={resultRenderers}
+                              />
+                            </div>
+                          )}
                         </div>
                       )}
                       {run.result != null && (
@@ -2682,6 +2833,9 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                         latestGraphRunSnapshot?.graphRuntimeOverlay
                       }
                       calls={latestGraphRunSnapshot?.calls}
+                      run={latestGraphRunSnapshot ?? null}
+                      valueBodyCache={valueBodyCache}
+                      valueBodyCacheVersion={valueBodyCacheVersion}
                       runStatus={latestGraphRunSnapshot?.status}
                       runError={latestGraphRunSnapshot?.error?.message ?? null}
                       customRenderers={resultRenderers}
@@ -2701,7 +2855,10 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                   className="flex-1 min-h-0 mt-0 flex flex-col"
                   style={{ minHeight: 300 }}
                 >
-                  <TraceTimelineView run={latestGraphRunSnapshot} />
+                  <TraceTimelineView
+                    run={latestGraphRunSnapshot}
+                    valueBodyCache={valueBodyCache}
+                  />
                 </TabsContent>
 
                 {/* Profile flamegraph */}
@@ -2815,6 +2972,9 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                           latestGraphRunSnapshot?.graphRuntimeOverlay
                         }
                         calls={latestGraphRunSnapshot?.calls}
+                        run={latestGraphRunSnapshot ?? null}
+                        valueBodyCache={valueBodyCache}
+                        valueBodyCacheVersion={valueBodyCacheVersion}
                         runStatus={latestGraphRunSnapshot?.status}
                         runError={
                           latestGraphRunSnapshot?.error?.message ?? null
@@ -2858,8 +3018,8 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                       </div>
                     )}
 
-                    {functionRuns.map((run, runIdx) => {
-                      const isLatest = runIdx === 0;
+                    {functionRuns.map((run, boundaryIdx) => {
+                      const isLatest = boundaryIdx === 0;
                       const isLlmFunctionRun = llmFunctionNames.has(
                         run.functionName,
                       );
@@ -2922,6 +3082,18 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                               </span>
                             )}
                           </div>
+
+                          {run.rootInput != null && (
+                            <div className="py-1.5 pr-2.5 pl-[22px] border-b border-vsc-border-subtle">
+                              <div className="text-[10px] font-semibold text-vsc-text-muted mb-0.5 uppercase tracking-wide">
+                                Input
+                              </div>
+                              <ResultDisplay
+                                result={run.rootInput}
+                                customRenderers={resultRenderers}
+                              />
+                            </div>
+                          )}
 
                           {/* Fetch logs for this run */}
                           {run.fetchLogs.map((log) => {
@@ -3048,6 +3220,14 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                                 error={run.error}
                                 onRetry={onRunFunction}
                               />
+                              {run.errorValue != null && (
+                                <div className="mt-1">
+                                  <ResultDisplay
+                                    result={run.errorValue}
+                                    customRenderers={resultRenderers}
+                                  />
+                                </div>
+                              )}
                             </div>
                           )}
                           {run.result != null && (
@@ -3141,7 +3321,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
               if (pending.runScoped) {
                 void executionStore
                   .respondToEnv(
-                    pending.runScoped.runId,
+                    pending.runScoped.boundaryId,
                     pending.runScoped.envRequestId,
                     value,
                   )

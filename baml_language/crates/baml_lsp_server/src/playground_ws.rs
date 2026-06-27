@@ -41,15 +41,15 @@ pub enum WsInMessage {
     CancelRun {
         #[serde(rename = "requestId")]
         request_id: u64,
-        #[serde(rename = "runId")]
-        run_id: String,
+        #[serde(rename = "boundaryId")]
+        boundary_id: String,
     },
     #[serde(rename = "respondToInput")]
     RespondToInput {
         #[serde(rename = "requestId")]
         request_id: u64,
-        #[serde(rename = "runId")]
-        run_id: String,
+        #[serde(rename = "boundaryId")]
+        boundary_id: String,
         #[serde(rename = "inputRequestId")]
         input_request_id: String,
         value: String,
@@ -58,8 +58,8 @@ pub enum WsInMessage {
     RespondToEnv {
         #[serde(rename = "requestId")]
         request_id: u64,
-        #[serde(rename = "runId")]
-        run_id: String,
+        #[serde(rename = "boundaryId")]
+        boundary_id: String,
         #[serde(rename = "envRequestId")]
         env_request_id: String,
         value: Option<String>,
@@ -70,12 +70,34 @@ pub enum WsInMessage {
         request_id: u64,
         filter: Option<RunListFilter>,
     },
+    #[serde(rename = "listHistory")]
+    ListHistory {
+        #[serde(rename = "requestId")]
+        request_id: u64,
+        filter: Option<RunListFilter>,
+    },
+    #[serde(rename = "openHistory")]
+    OpenHistory {
+        #[serde(rename = "requestId")]
+        request_id: u64,
+        #[serde(rename = "boundaryId")]
+        boundary_id: String,
+    },
     #[serde(rename = "snapshot")]
     Snapshot {
         #[serde(rename = "requestId")]
         request_id: u64,
-        #[serde(rename = "runId")]
-        run_id: String,
+        #[serde(rename = "boundaryId")]
+        boundary_id: String,
+    },
+    #[serde(rename = "readValue")]
+    ReadValue {
+        #[serde(rename = "requestId")]
+        request_id: u64,
+        #[serde(rename = "boundaryId")]
+        boundary_id: String,
+        #[serde(rename = "valueRef")]
+        value_ref: WsValueRef,
     },
     #[serde(rename = "subscribe")]
     Subscribe {
@@ -83,8 +105,8 @@ pub enum WsInMessage {
         request_id: u64,
         #[serde(rename = "subscriptionId")]
         subscription_id: String,
-        #[serde(rename = "runId")]
-        run_id: String,
+        #[serde(rename = "boundaryId")]
+        boundary_id: String,
         #[serde(rename = "afterCursor")]
         after_cursor: Option<u64>,
     },
@@ -146,6 +168,12 @@ pub enum WsInMessage {
     /// User deleted an env var override in the UI.
     #[serde(rename = "deleteEnvVar")]
     DeleteEnvVar { key: String },
+}
+
+#[derive(Debug, Deserialize)]
+pub struct WsValueRef {
+    pub id: String,
+    pub codec: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -226,13 +254,34 @@ pub enum WsOutMessage {
         request_id: u64,
         runs: Vec<serde_json::Value>,
     },
+    #[serde(rename = "historyList")]
+    HistoryList {
+        #[serde(rename = "requestId")]
+        request_id: u64,
+        runs: Vec<serde_json::Value>,
+    },
     #[serde(rename = "runSnapshot")]
     RunSnapshot {
         #[serde(rename = "requestId", skip_serializing_if = "Option::is_none")]
         request_id: Option<u64>,
-        #[serde(rename = "runId")]
-        run_id: String,
+        #[serde(rename = "boundaryId")]
+        boundary_id: String,
         snapshot: serde_json::Value,
+    },
+    #[serde(rename = "valueBody")]
+    ValueBody {
+        #[serde(rename = "requestId")]
+        request_id: u64,
+        #[serde(rename = "boundaryId")]
+        boundary_id: String,
+        #[serde(rename = "valueRefId")]
+        value_ref_id: String,
+        codec: String,
+        availability: String,
+        #[serde(rename = "bodyBase64", skip_serializing_if = "Option::is_none")]
+        body_base64: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        diagnostic: Option<String>,
     },
     #[serde(rename = "runCursorExpired")]
     RunCursorExpired {
@@ -240,8 +289,8 @@ pub enum WsOutMessage {
         request_id: Option<u64>,
         #[serde(rename = "subscriptionId", skip_serializing_if = "Option::is_none")]
         subscription_id: Option<String>,
-        #[serde(rename = "runId")]
-        run_id: String,
+        #[serde(rename = "boundaryId")]
+        boundary_id: String,
         reason: String,
     },
     #[serde(rename = "envVarRequest")]
@@ -322,7 +371,7 @@ mod tests {
         let cancel = serde_json::from_value::<WsInMessage>(json!({
             "type": "cancelRun",
             "requestId": 7,
-            "runId": "baml_run_1_00000000000000000000000000000001"
+            "boundaryId": "baml_id_1_AAAAAAAAAAAAAAAAAAAAAQ"
         }))
         .unwrap();
         assert!(matches!(
@@ -334,7 +383,7 @@ mod tests {
             "type": "subscribe",
             "requestId": 8,
             "subscriptionId": "sub-1",
-            "runId": "baml_run_1_00000000000000000000000000000001",
+            "boundaryId": "baml_id_1_AAAAAAAAAAAAAAAAAAAAAQ",
             "afterCursor": 3
         }))
         .unwrap();
@@ -408,7 +457,7 @@ mod tests {
         let input = serde_json::from_value::<WsInMessage>(json!({
             "type": "respondToInput",
             "requestId": 11,
-            "runId": "baml_run_1_00000000000000000000000000000001",
+            "boundaryId": "baml_id_1_AAAAAAAAAAAAAAAAAAAAAQ",
             "inputRequestId": "4",
             "value": "hello"
         }))
@@ -426,7 +475,7 @@ mod tests {
         let env = serde_json::from_value::<WsInMessage>(json!({
             "type": "respondToEnv",
             "requestId": 12,
-            "runId": "baml_run_1_00000000000000000000000000000001",
+            "boundaryId": "baml_id_1_AAAAAAAAAAAAAAAAAAAAAQ",
             "envRequestId": "5",
             "value": "secret"
         }))
@@ -466,6 +515,30 @@ mod tests {
                 }),
             } if project_id == "/tmp/project" && function_name == "Extract"
         ));
+
+        let read_value = serde_json::from_value::<WsInMessage>(json!({
+            "type": "readValue",
+            "requestId": 15,
+            "boundaryId": "baml_id_1_AAAAAAAAAAAAAAAAAAAAAQ",
+            "valueRef": {
+                "id": "value_1",
+                "codec": "bamlOutboundValue"
+            }
+        }))
+        .unwrap();
+        assert!(matches!(
+            read_value,
+            WsInMessage::ReadValue {
+                request_id: 15,
+                ref boundary_id,
+                value_ref: WsValueRef {
+                    ref id,
+                    codec: Some(ref codec),
+                },
+            } if boundary_id == "baml_id_1_AAAAAAAAAAAAAAAAAAAAAQ"
+                && id == "value_1"
+                && codec == "bamlOutboundValue"
+        ));
     }
 
     #[test]
@@ -473,13 +546,36 @@ mod tests {
         let msg = WsOutMessage::RunCursorExpired {
             request_id: Some(8),
             subscription_id: Some("sub-1".to_string()),
-            run_id: "baml_run_1_00000000000000000000000000000001".to_string(),
+            boundary_id: "baml_id_1_AAAAAAAAAAAAAAAAAAAAAQ".to_string(),
             reason: "compacted".to_string(),
         };
         let wire = serde_json::to_value(msg).unwrap();
         assert_eq!(wire["type"], "runCursorExpired");
         assert_eq!(wire["requestId"], 8);
         assert_eq!(wire["subscriptionId"], "sub-1");
+        assert_eq!(wire["boundaryId"], "baml_id_1_AAAAAAAAAAAAAAAAAAAAAQ");
         assert_eq!(wire["reason"], "compacted");
+    }
+
+    #[test]
+    fn value_body_frame_uses_value_ref_identity() {
+        let msg = WsOutMessage::ValueBody {
+            request_id: 15,
+            boundary_id: "baml_id_1_AAAAAAAAAAAAAAAAAAAAAQ".to_string(),
+            value_ref_id: "value_1".to_string(),
+            codec: "bamlOutboundValue".to_string(),
+            availability: "available".to_string(),
+            body_base64: Some("AQID".to_string()),
+            diagnostic: None,
+        };
+        let wire = serde_json::to_value(msg).unwrap();
+        assert_eq!(wire["type"], "valueBody");
+        assert_eq!(wire["requestId"], 15);
+        assert_eq!(wire["boundaryId"], "baml_id_1_AAAAAAAAAAAAAAAAAAAAAQ");
+        assert_eq!(wire["valueRefId"], "value_1");
+        assert_eq!(wire["codec"], "bamlOutboundValue");
+        assert_eq!(wire["availability"], "available");
+        assert_eq!(wire["bodyBase64"], "AQID");
+        assert!(wire.get("diagnostic").is_none());
     }
 }

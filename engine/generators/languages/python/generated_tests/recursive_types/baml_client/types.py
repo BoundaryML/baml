@@ -65,4 +65,3 @@ Nonrecursive2: typing_extensions.TypeAlias = typing.Optional[str]
 
 
 Recursive1: typing_extensions.TypeAlias = typing.Union[int, typing.List["Recursive1"]]
-

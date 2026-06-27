@@ -53,7 +53,7 @@ class TypeVariety {
     simple string
     optional string?
     array int[]
-    nested_array: 
+    nested_array:
     int[][]
     union_type: int | string
     optional_union: (int | string)?
@@ -242,7 +242,7 @@ class TriviaMultiAttr {
     // 16 arg leading
     "user_name" // 17 arg trailing
     ) // 18 second attr close trailing
-    // 19 third attr leading    
+    // 19 third attr leading
     @stream.done // 20 third attr trailing
 }
 
@@ -284,7 +284,7 @@ class ThisIsAnExtremelyLongClassNameThatDefinitelyExceedsTheOneHundredCharacterL
 class AttributeVariety {
     a string @skip
     b: string
-    
+
     @alias("alt_name")
     c string @description("desc")
     d string @stream.done

@@ -201,7 +201,7 @@ function json_to_from_string.check_decode_error_path_contains_field() -> bool {
 
   L0:
     load_var e
-    throw
+    rethrow
 
   L1:
     load_var e

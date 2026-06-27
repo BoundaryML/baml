@@ -153,7 +153,7 @@ fn rewrite_block_ids_in_terminator(term: &mut Terminator, map: &[Option<BlockId>
                 remap(u);
             }
         }
-        Terminator::Throw { .. } => {}
+        Terminator::Throw { .. } | Terminator::Rethrow { .. } => {}
         Terminator::ThrowIfPanic { otherwise, .. } => remap(otherwise),
         Terminator::ShortCircuit { eval_rhs, join, .. } => {
             remap(eval_rhs);
@@ -223,7 +223,7 @@ fn rewrite_block_ids_in_terminator_with_map(
                 remap(u);
             }
         }
-        Terminator::Throw { .. } => {}
+        Terminator::Throw { .. } | Terminator::Rethrow { .. } => {}
         Terminator::ThrowIfPanic { otherwise, .. } => remap(otherwise),
         Terminator::ShortCircuit { eval_rhs, join, .. } => {
             remap(eval_rhs);
@@ -399,6 +399,7 @@ fn collect_place_index_locals(body: &MirFunctionBody) -> HashSet<Local> {
                 Terminator::Call {
                     callee,
                     args,
+                    runtime_id,
                     destination,
                     ..
                 } => {
@@ -406,27 +407,40 @@ fn collect_place_index_locals(body: &MirFunctionBody) -> HashSet<Local> {
                     for a in args {
                         scan_operand(a, &mut set);
                     }
+                    if let Some(runtime_id) = runtime_id {
+                        scan_operand(runtime_id, &mut set);
+                    }
                     scan_place(destination, &mut set);
                 }
                 Terminator::VirtualCall {
-                    args, destination, ..
+                    args,
+                    runtime_id,
+                    destination,
+                    ..
                 } => {
                     // No callee operand: the method is resolved at runtime from
                     // `iface` (a type template, not a value local).
                     for a in args {
                         scan_operand(a, &mut set);
                     }
+                    if let Some(runtime_id) = runtime_id {
+                        scan_operand(runtime_id, &mut set);
+                    }
                     scan_place(destination, &mut set);
                 }
                 Terminator::SysOp {
                     callee,
                     args,
+                    runtime_id,
                     destination,
                     ..
                 } => {
                     scan_operand(callee, &mut set);
                     for a in args {
                         scan_operand(a, &mut set);
+                    }
+                    if let Some(runtime_id) = runtime_id {
+                        scan_operand(runtime_id, &mut set);
                     }
                     scan_place(destination, &mut set);
                 }
@@ -448,7 +462,9 @@ fn collect_place_index_locals(body: &MirFunctionBody) -> HashSet<Local> {
                 Terminator::Switch { discriminant, .. } => {
                     scan_operand(discriminant, &mut set);
                 }
-                Terminator::Throw { value } | Terminator::ThrowIfPanic { value, .. } => {
+                Terminator::Throw { value }
+                | Terminator::Rethrow { value }
+                | Terminator::ThrowIfPanic { value, .. } => {
                     scan_operand(value, &mut set);
                 }
                 Terminator::Await {
@@ -673,6 +689,7 @@ fn count_in_terminator(term: &Terminator, uses: &mut [usize]) {
         Terminator::Call {
             callee,
             args,
+            runtime_id,
             destination,
             ..
         } => {
@@ -680,26 +697,39 @@ fn count_in_terminator(term: &Terminator, uses: &mut [usize]) {
             for arg in args {
                 count_in_operand(arg, uses);
             }
+            if let Some(runtime_id) = runtime_id {
+                count_in_operand(runtime_id, uses);
+            }
             count_dest_place(destination, uses);
         }
         Terminator::VirtualCall {
-            args, destination, ..
+            args,
+            runtime_id,
+            destination,
+            ..
         } => {
             // No callee operand — the method is resolved at runtime from `iface`.
             for arg in args {
                 count_in_operand(arg, uses);
+            }
+            if let Some(runtime_id) = runtime_id {
+                count_in_operand(runtime_id, uses);
             }
             count_dest_place(destination, uses);
         }
         Terminator::SysOp {
             callee,
             args,
+            runtime_id,
             destination,
             ..
         } => {
             count_in_operand(callee, uses);
             for arg in args {
                 count_in_operand(arg, uses);
+            }
+            if let Some(runtime_id) = runtime_id {
+                count_in_operand(runtime_id, uses);
             }
             count_dest_place(destination, uses);
         }
@@ -737,7 +767,9 @@ fn count_in_terminator(term: &Terminator, uses: &mut [usize]) {
             // destination is a write (the winning index)
             count_dest_place(destination, uses);
         }
-        Terminator::Throw { value } | Terminator::ThrowIfPanic { value, .. } => {
+        Terminator::Throw { value }
+        | Terminator::Rethrow { value }
+        | Terminator::ThrowIfPanic { value, .. } => {
             count_in_operand(value, uses);
         }
         Terminator::ShortCircuit {
@@ -986,16 +1018,43 @@ fn apply_subst_to_terminator(term: &mut Terminator, subst: &HashMap<Local, Opera
     match term {
         Terminator::Branch { condition, .. } => apply_subst_to_operand(condition, subst),
         Terminator::Switch { discriminant, .. } => apply_subst_to_operand(discriminant, subst),
-        Terminator::Call { callee, args, .. } | Terminator::SysOp { callee, args, .. } => {
+        Terminator::Call {
+            callee,
+            args,
+            runtime_id,
+            ..
+        } => {
             apply_subst_to_operand(callee, subst);
             for arg in args {
                 apply_subst_to_operand(arg, subst);
             }
+            if let Some(runtime_id) = runtime_id {
+                apply_subst_to_operand(runtime_id, subst);
+            }
         }
-        Terminator::VirtualCall { args, .. } => {
+        Terminator::SysOp {
+            callee,
+            args,
+            runtime_id,
+            ..
+        } => {
+            apply_subst_to_operand(callee, subst);
+            for arg in args {
+                apply_subst_to_operand(arg, subst);
+            }
+            if let Some(runtime_id) = runtime_id {
+                apply_subst_to_operand(runtime_id, subst);
+            }
+        }
+        Terminator::VirtualCall {
+            args, runtime_id, ..
+        } => {
             // No callee operand — only the value args are substituted.
             for arg in args {
                 apply_subst_to_operand(arg, subst);
+            }
+            if let Some(runtime_id) = runtime_id {
+                apply_subst_to_operand(runtime_id, subst);
             }
         }
         Terminator::Spawn {
@@ -1010,7 +1069,9 @@ fn apply_subst_to_terminator(term: &mut Terminator, subst: &HashMap<Local, Opera
                 apply_subst_to_operand(config, subst);
             }
         }
-        Terminator::Throw { value } | Terminator::ThrowIfPanic { value, .. } => {
+        Terminator::Throw { value }
+        | Terminator::Rethrow { value }
+        | Terminator::ThrowIfPanic { value, .. } => {
             apply_subst_to_operand(value, subst);
         }
         Terminator::ShortCircuit { operand, .. } => {
@@ -1244,12 +1305,7 @@ fn rewrite_locals_in_terminator(term: &mut Terminator, map: &[Option<Local>]) {
         Terminator::Call {
             callee,
             args,
-            destination,
-            ..
-        }
-        | Terminator::SysOp {
-            callee,
-            args,
+            runtime_id,
             destination,
             ..
         } => {
@@ -1257,14 +1313,39 @@ fn rewrite_locals_in_terminator(term: &mut Terminator, map: &[Option<Local>]) {
             for arg in args {
                 remap_operand(arg, map);
             }
+            if let Some(runtime_id) = runtime_id {
+                remap_operand(runtime_id, map);
+            }
+            remap_place(destination, map);
+        }
+        Terminator::SysOp {
+            callee,
+            args,
+            runtime_id,
+            destination,
+            ..
+        } => {
+            remap_operand(callee, map);
+            for arg in args {
+                remap_operand(arg, map);
+            }
+            if let Some(runtime_id) = runtime_id {
+                remap_operand(runtime_id, map);
+            }
             remap_place(destination, map);
         }
         Terminator::VirtualCall {
-            args, destination, ..
+            args,
+            runtime_id,
+            destination,
+            ..
         } => {
             // No callee operand — the method is resolved at runtime from `iface`.
             for arg in args {
                 remap_operand(arg, map);
+            }
+            if let Some(runtime_id) = runtime_id {
+                remap_operand(runtime_id, map);
             }
             remap_place(destination, map);
         }
@@ -1298,7 +1379,9 @@ fn rewrite_locals_in_terminator(term: &mut Terminator, map: &[Option<Local>]) {
             remap_operand(futures, map);
             remap_place(destination, map);
         }
-        Terminator::Throw { value } | Terminator::ThrowIfPanic { value, .. } => {
+        Terminator::Throw { value }
+        | Terminator::Rethrow { value }
+        | Terminator::ThrowIfPanic { value, .. } => {
             remap_operand(value, map);
         }
         Terminator::ShortCircuit {
@@ -1473,6 +1556,7 @@ fn verify_mir(body: &MirFunctionBody, name: &crate::ItemRef) {
                 Terminator::Call {
                     callee,
                     args,
+                    runtime_id,
                     destination,
                     ..
                 } => {
@@ -1480,26 +1564,39 @@ fn verify_mir(body: &MirFunctionBody, name: &crate::ItemRef) {
                     for a in args {
                         check_operand(a, &blk);
                     }
+                    if let Some(runtime_id) = runtime_id {
+                        check_operand(runtime_id, &blk);
+                    }
                     check_place(destination, &blk);
                 }
                 Terminator::VirtualCall {
-                    args, destination, ..
+                    args,
+                    runtime_id,
+                    destination,
+                    ..
                 } => {
                     // No callee operand — the method is resolved at runtime from `iface`.
                     for a in args {
                         check_operand(a, &blk);
+                    }
+                    if let Some(runtime_id) = runtime_id {
+                        check_operand(runtime_id, &blk);
                     }
                     check_place(destination, &blk);
                 }
                 Terminator::SysOp {
                     callee,
                     args,
+                    runtime_id,
                     destination,
                     ..
                 } => {
                     check_operand(callee, &blk);
                     for a in args {
                         check_operand(a, &blk);
+                    }
+                    if let Some(runtime_id) = runtime_id {
+                        check_operand(runtime_id, &blk);
                     }
                     check_place(destination, &blk);
                 }
@@ -1533,7 +1630,9 @@ fn verify_mir(body: &MirFunctionBody, name: &crate::ItemRef) {
                     check_operand(futures, &blk);
                     check_place(destination, &blk);
                 }
-                Terminator::Throw { value } | Terminator::ThrowIfPanic { value, .. } => {
+                Terminator::Throw { value }
+                | Terminator::Rethrow { value }
+                | Terminator::ThrowIfPanic { value, .. } => {
                     check_operand(value, &blk);
                 }
                 Terminator::ShortCircuit {

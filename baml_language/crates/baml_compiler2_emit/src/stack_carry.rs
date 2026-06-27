@@ -520,9 +520,11 @@ fn simulate_terminator_stack(
         Terminator::Call {
             callee,
             args,
+            runtime_id,
             destination,
             ..
         } => {
+            let runtime_id_slots = usize::from(runtime_id.is_some());
             let direct_call =
                 pull_semantics::resolve_constant_function_name(callee, classifications, def_use)
                     .is_some();
@@ -536,7 +538,12 @@ fn simulate_terminator_stack(
                 if pull_semantics::walk_call_direct_args(&mut sink, args).is_err() {
                     return false;
                 }
-                if !sim.pop_n(args.len()) {
+                if let Some(runtime_id) = runtime_id
+                    && pull_semantics::walk_operand_pull(&mut sink, runtime_id).is_err()
+                {
+                    return false;
+                }
+                if !sim.pop_n(args.len() + runtime_id_slots) {
                     return false;
                 }
             } else {
@@ -549,7 +556,12 @@ fn simulate_terminator_stack(
                 if pull_semantics::walk_call_indirect_operands(&mut sink, callee, args).is_err() {
                     return false;
                 }
-                if !sim.pop_n(args.len() + 1) {
+                if let Some(runtime_id) = runtime_id
+                    && pull_semantics::walk_operand_pull(&mut sink, runtime_id).is_err()
+                {
+                    return false;
+                }
+                if !sim.pop_n(args.len() + 1 + runtime_id_slots) {
                     return false;
                 }
             }
@@ -557,23 +569,42 @@ fn simulate_terminator_stack(
             simulate_store_place_stack(destination, sim, classifications)
         }
         Terminator::VirtualCall {
-            args, destination, ..
+            args,
+            runtime_id,
+            destination,
+            ..
         } => {
-            let mut sink = StackCarryPullSink {
-                sim,
-                carried_local,
-                classifications,
-                def_use,
-            };
-            if pull_semantics::walk_call_direct_args(&mut sink, args).is_err() {
-                return false;
+            {
+                let mut sink = StackCarryPullSink {
+                    sim,
+                    carried_local,
+                    classifications,
+                    def_use,
+                };
+                if pull_semantics::walk_call_direct_args(&mut sink, args).is_err() {
+                    return false;
+                }
             }
             // After the value args, emit pushes the interface type (LoadType)
             // and the method name (LoadConst); `VirtualCall` then pops the args
             // plus those two operands and pushes the result.
             sim.push();
             sim.push();
-            if !sim.pop_n(args.len() + 2) {
+            let runtime_id_slots = if let Some(runtime_id) = runtime_id {
+                let mut sink = StackCarryPullSink {
+                    sim,
+                    carried_local,
+                    classifications,
+                    def_use,
+                };
+                if pull_semantics::walk_operand_pull(&mut sink, runtime_id).is_err() {
+                    return false;
+                }
+                1
+            } else {
+                0
+            };
+            if !sim.pop_n(args.len() + 2 + runtime_id_slots) {
                 return false;
             }
             sim.push();
@@ -582,6 +613,7 @@ fn simulate_terminator_stack(
         Terminator::SysOp {
             callee,
             args,
+            runtime_id,
             destination,
             ..
         } => {
@@ -601,7 +633,15 @@ fn simulate_terminator_stack(
                 return false;
             }
 
-            if !sim.pop_n(args.len()) {
+            let runtime_id_slots = if let Some(runtime_id) = runtime_id {
+                if pull_semantics::walk_operand_pull(&mut sink, runtime_id).is_err() {
+                    return false;
+                }
+                1
+            } else {
+                0
+            };
+            if !sim.pop_n(args.len() + runtime_id_slots) {
                 return false;
             }
             sim.push();
@@ -681,7 +721,7 @@ fn simulate_terminator_stack(
             sim.push();
             simulate_store_place_stack(destination, sim, classifications)
         }
-        Terminator::Throw { value } => {
+        Terminator::Throw { value } | Terminator::Rethrow { value } => {
             let mut sink = StackCarryPullSink {
                 sim,
                 carried_local,
