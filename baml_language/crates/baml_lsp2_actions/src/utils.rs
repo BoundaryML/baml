@@ -296,7 +296,7 @@ pub fn display_ty(ty: &Ty) -> String {
 
 fn type_expr_needs_postfix_parens(te: &TypeExpr) -> bool {
     matches!(
-        te.kind,
+        &te.kind,
         TypeExprKind::Union { .. } | TypeExprKind::Function { .. }
     )
 }
@@ -312,7 +312,7 @@ fn display_type_expr_as_postfix_base(te: &TypeExpr) -> String {
 
 fn display_type_expr_as_function_result(te: &TypeExpr) -> String {
     let rendered = display_type_expr(te);
-    if matches!(te.kind, TypeExprKind::Function { .. }) {
+    if matches!(&te.kind, TypeExprKind::Function { .. }) {
         format!("({rendered})")
     } else {
         rendered
