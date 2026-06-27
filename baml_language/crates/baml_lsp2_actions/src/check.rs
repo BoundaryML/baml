@@ -6127,6 +6127,7 @@ fn tir_type_error_to_diagnostic_id(
         TirTypeError::NotCallable { .. } => DiagnosticId::NotCallable,
         TirTypeError::NotIterable { .. } => DiagnosticId::NotCallable,
         TirTypeError::NotIndexable { .. } => DiagnosticId::NotIndexable,
+        TirTypeError::InvalidMapKeyType { .. } => DiagnosticId::InvalidMapKeyType,
         TirTypeError::InvalidBinaryOp { .. } => DiagnosticId::InvalidOperator,
         TirTypeError::OrderingDifferentTypes { .. }
         | TirTypeError::OrderingRequiresCompare { .. }
