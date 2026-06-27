@@ -1436,7 +1436,7 @@ function baml.String.from_utf8(utf8: uint8array) -> string {
 function baml.String.includes(self: baml.String, search: string) -> bool {
 }
 
-function baml.String.index_of(self: baml.String, search: string) -> int {
+function baml.String.index_of(self: baml.String, search: string) -> int | null {
 }
 
 function baml.String.is_alphabetic(self: baml.String) -> bool {
@@ -1775,14 +1775,14 @@ function baml.csv.CsvReader._read_chunk(self: baml.csv.CsvReader) -> null {
 
   L2:
     load_var e
-    throw
+    rethrow
 
   L3:
     load_var self
     call baml.csv.CsvReader._mark_exhausted
     pop 1
     load_var e
-    throw
+    rethrow
 
   L4:
     load_const baml.csv.CsvErrorKind.Closed
@@ -1854,7 +1854,7 @@ function baml.csv.CsvReader.close(self: baml.csv.CsvReader) -> null {
 
   L1:
     load_var _
-    throw
+    rethrow
 
   L2:
     load_const null
@@ -2436,7 +2436,7 @@ function baml.csv.CsvWriter._emit(self: baml.csv.CsvWriter, out: string) -> null
 
   L1:
     load_var _
-    throw
+    rethrow
 
   L2:
     load_const "underlying file handle is closed: "
@@ -2493,7 +2493,7 @@ function baml.csv.CsvWriter.close(self: baml.csv.CsvWriter) -> null {
 
   L1:
     load_var _
-    throw
+    rethrow
 
   L2:
     load_const null
@@ -2637,7 +2637,7 @@ function baml.csv.create(path: string, options: baml.csv.WriterOptions | null) -
 
   L1:
     load_var _
-    throw
+    rethrow
 
   L2:
     load_var _
@@ -2678,7 +2678,7 @@ function baml.csv.decode(source: string | uint8array, options: baml.csv.ReaderOp
 
   L1:
     load_var _
-    throw
+    rethrow
 
   L2:
     load_const "unreachable: in-memory CSV source raised Io: "
@@ -2824,7 +2824,7 @@ function baml.csv.open(path: string, options: baml.csv.ReaderOptions | null) -> 
 
   L1:
     load_var _
-    throw
+    rethrow
 
   L2:
     load_var _
@@ -3005,7 +3005,7 @@ function baml.csv.parse(source: string | uint8array, options: baml.csv.ReaderOpt
 
   L22:
     load_var _
-    throw
+    rethrow
 
   L23:
     load_const "unreachable: in-memory CSV source raised Io: "
@@ -3092,7 +3092,7 @@ function baml.csv.stringify(rows: T[], options: baml.csv.WriterOptions | null) -
 
   L1:
     load_var _
-    throw
+    rethrow
 
   L2:
     load_const "unreachable: buffer writer raised Io: "
@@ -3277,7 +3277,7 @@ function baml.csv.stringify_records(records: (null | bool | int | bigint | float
 
   L23:
     load_var _
-    throw
+    rethrow
 
   L24:
     load_const "unreachable: buffer writer raised Io: "
@@ -7833,7 +7833,7 @@ function baml.llm.Client.execute_once_oneshot(self: baml.llm.Client, context: ba
   L2:
     load_var self
     load_field .counter
-    store_var _80
+    store_var _79
     load_var self
     copy 0
     load_field .counter
@@ -7860,146 +7860,146 @@ function baml.llm.Client.execute_once_oneshot(self: baml.llm.Client, context: ba
   L4:
     load_var self
     load_field .sub_clients
-    store_var _38
+    store_var _37
     load_type baml.llm.Client
-    load_var _38
+    load_var _37
     call baml.iter.Iterable$for$T[].iter
-    store_var _39
+    store_var _38
 
   L5:
-    load_var _39
+    load_var _38
     is_type baml.iter.Flatten<...>
     pop_jump_if_false L6
     jump L23
 
   L6:
-    load_var _39
+    load_var _38
     is_type baml.iter.ArrayIterator<...>
     pop_jump_if_false L7
     jump L22
 
   L7:
-    load_var _39
+    load_var _38
     is_type baml.iter.StepBy<...>
     pop_jump_if_false L8
     jump L21
 
   L8:
-    load_var _39
+    load_var _38
     is_type baml.iter.Chain<...>
     pop_jump_if_false L9
     jump L20
 
   L9:
-    load_var _39
+    load_var _38
     is_type baml.iter.Repeat<...>
     pop_jump_if_false L10
     jump L19
 
   L10:
-    load_var _39
+    load_var _38
     is_type baml.iter.Map<...>
     pop_jump_if_false L11
     jump L18
 
   L11:
-    load_var _39
+    load_var _38
     is_type baml.iter.Filter<...>
     pop_jump_if_false L12
     jump L17
 
   L12:
-    load_var _39
+    load_var _38
     is_type baml.iter.FilterMap<...>
     pop_jump_if_false L13
     jump L16
 
   L13:
-    load_var _39
+    load_var _38
     is_type baml.iter.FlatMap<...>
     pop_jump_if_false L14
     jump L15
 
   L14:
-    load_var _39
+    load_var _38
     is_type baml.iter.Peekable<...>
     pop_jump_if_false L35
     load_type baml.llm.Client
     load_type never
-    load_var _39
+    load_var _38
     call baml.iter.Peekable.Iterator.next
-    store_var _41
+    store_var _40
     jump L24
 
   L15:
-    load_var _39
+    load_var _38
     make_bound_method baml.iter.FlatMap.Iterator.next
     call_indirect
-    store_var _41
+    store_var _40
     jump L24
 
   L16:
-    load_var _39
+    load_var _38
     make_bound_method baml.iter.FilterMap.Iterator.next
     call_indirect
-    store_var _41
+    store_var _40
     jump L24
 
   L17:
     load_type baml.llm.Client
     load_type never
     load_type never
-    load_var _39
+    load_var _38
     call baml.iter.Filter.Iterator.next
-    store_var _41
+    store_var _40
     jump L24
 
   L18:
-    load_var _39
+    load_var _38
     make_bound_method baml.iter.Map.Iterator.next
     call_indirect
-    store_var _41
+    store_var _40
     jump L24
 
   L19:
     load_type baml.llm.Client
-    load_var _39
+    load_var _38
     call baml.iter.Repeat.Iterator.next
-    store_var _41
+    store_var _40
     jump L24
 
   L20:
     load_type baml.llm.Client
     load_type never
     load_type never
-    load_var _39
+    load_var _38
     call baml.iter.Chain.Iterator.next
-    store_var _41
+    store_var _40
     jump L24
 
   L21:
     load_type baml.llm.Client
     load_type never
-    load_var _39
+    load_var _38
     call baml.iter.StepBy.Iterator.next
-    store_var _41
+    store_var _40
     jump L24
 
   L22:
     load_type baml.llm.Client
-    load_var _39
+    load_var _38
     call baml.iter.ArrayIterator.Iterator.next
-    store_var _41
+    store_var _40
     jump L24
 
   L23:
-    load_var _39
+    load_var _38
     make_bound_method baml.iter.Flatten.Iterator.next
     call_indirect
-    store_var _41
+    store_var _40
 
   L24:
-    load_var _41
+    load_var _40
     is_type baml.iter.Done
     pop_jump_if_false L25
     jump L27
@@ -8099,7 +8099,7 @@ function baml.llm.Client.execute_once_oneshot(self: baml.llm.Client, context: ba
 
   L33:
     load_var e
-    throw
+    rethrow
 
   L34:
     return
@@ -10055,7 +10055,7 @@ function baml.time.Instant$stream.baml.FromJson.from_json(j: baml.json.json) -> 
 
   L2:
     load_var _
-    throw
+    rethrow
 
   L3:
     load_var _
@@ -10079,7 +10079,7 @@ function baml.time.Instant$stream.baml.ToJson.to_json(self: baml.time.Instant$st
 
   L0:
     load_var _
-    throw
+    rethrow
 
   L1:
     load_var _
@@ -10104,7 +10104,7 @@ function baml.time.Instant$stream.baml.ToString.to_string(self: baml.time.Instan
 
   L0:
     load_var _
-    throw
+    rethrow
 
   L1:
     load_const "Instant.to_string: "
@@ -10154,7 +10154,7 @@ function baml.time.Instant.baml.FromJson.from_json(j: baml.json.json) -> baml.ti
 
   L2:
     load_var _
-    throw
+    rethrow
 
   L3:
     load_var _
@@ -10178,7 +10178,7 @@ function baml.time.Instant.baml.ToJson.to_json(self: baml.time.Instant) -> baml.
 
   L0:
     load_var _
-    throw
+    rethrow
 
   L1:
     load_var _
@@ -10203,7 +10203,7 @@ function baml.time.Instant.baml.ToString.to_string(self: baml.time.Instant) -> s
 
   L0:
     load_var _
-    throw
+    rethrow
 
   L1:
     load_const "Instant.to_string: "
@@ -10363,7 +10363,7 @@ function baml.time.PlainDate$stream.baml.FromJson.from_json(j: baml.json.json) -
 
   L2:
     load_var _
-    throw
+    rethrow
 
   L3:
     load_var _
@@ -10387,7 +10387,7 @@ function baml.time.PlainDate$stream.baml.ToJson.to_json(self: baml.time.PlainDat
 
   L0:
     load_var _
-    throw
+    rethrow
 
   L1:
     load_var _
@@ -10412,7 +10412,7 @@ function baml.time.PlainDate$stream.baml.ToString.to_string(self: baml.time.Plai
 
   L0:
     load_var _
-    throw
+    rethrow
 
   L1:
     load_const "PlainDate.to_string: "
@@ -10454,7 +10454,7 @@ function baml.time.PlainDate.baml.FromJson.from_json(j: baml.json.json) -> baml.
 
   L2:
     load_var _
-    throw
+    rethrow
 
   L3:
     load_var _
@@ -10478,7 +10478,7 @@ function baml.time.PlainDate.baml.ToJson.to_json(self: baml.time.PlainDate) -> b
 
   L0:
     load_var _
-    throw
+    rethrow
 
   L1:
     load_var _
@@ -10503,7 +10503,7 @@ function baml.time.PlainDate.baml.ToString.to_string(self: baml.time.PlainDate) 
 
   L0:
     load_var _
-    throw
+    rethrow
 
   L1:
     load_const "PlainDate.to_string: "
@@ -10568,7 +10568,7 @@ function baml.time.PlainDateTime$stream.baml.FromJson.from_json(j: baml.json.jso
 
   L2:
     load_var _
-    throw
+    rethrow
 
   L3:
     load_var _
@@ -10592,7 +10592,7 @@ function baml.time.PlainDateTime$stream.baml.ToJson.to_json(self: baml.time.Plai
 
   L0:
     load_var _
-    throw
+    rethrow
 
   L1:
     load_var _
@@ -10617,7 +10617,7 @@ function baml.time.PlainDateTime$stream.baml.ToString.to_string(self: baml.time.
 
   L0:
     load_var _
-    throw
+    rethrow
 
   L1:
     load_const "PlainDateTime.to_string: "
@@ -10659,7 +10659,7 @@ function baml.time.PlainDateTime.baml.FromJson.from_json(j: baml.json.json) -> b
 
   L2:
     load_var _
-    throw
+    rethrow
 
   L3:
     load_var _
@@ -10683,7 +10683,7 @@ function baml.time.PlainDateTime.baml.ToJson.to_json(self: baml.time.PlainDateTi
 
   L0:
     load_var _
-    throw
+    rethrow
 
   L1:
     load_var _
@@ -10708,7 +10708,7 @@ function baml.time.PlainDateTime.baml.ToString.to_string(self: baml.time.PlainDa
 
   L0:
     load_var _
-    throw
+    rethrow
 
   L1:
     load_const "PlainDateTime.to_string: "
@@ -11012,7 +11012,7 @@ function baml.time.PlainTime$stream.baml.FromJson.from_json(j: baml.json.json) -
 
   L2:
     load_var _
-    throw
+    rethrow
 
   L3:
     load_var _
@@ -11258,7 +11258,7 @@ function baml.time.PlainTime.baml.FromJson.from_json(j: baml.json.json) -> baml.
 
   L2:
     load_var _
-    throw
+    rethrow
 
   L3:
     load_var _
@@ -11744,7 +11744,7 @@ function baml.time.ZonedDateTime$stream.baml.FromJson.from_json(j: baml.json.jso
 
   L2:
     load_var _
-    throw
+    rethrow
 
   L3:
     load_var _
@@ -11780,7 +11780,7 @@ function baml.time.ZonedDateTime$stream.baml.ToJson.to_json(self: baml.time.Zone
 
   L2:
     load_var _
-    throw
+    rethrow
 
   L3:
     load_var _
@@ -11863,7 +11863,7 @@ function baml.time.ZonedDateTime.baml.FromJson.from_json(j: baml.json.json) -> b
 
   L2:
     load_var _
-    throw
+    rethrow
 
   L3:
     load_var _
@@ -11899,7 +11899,7 @@ function baml.time.ZonedDateTime.baml.ToJson.to_json(self: baml.time.ZonedDateTi
 
   L2:
     load_var _
-    throw
+    rethrow
 
   L3:
     load_var _

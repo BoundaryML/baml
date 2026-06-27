@@ -256,6 +256,10 @@ test "string_index_of_after_emoji" {
     assert.is_true(baml.deep_equals("😀hello".index_of("h"), 1))
 }
 
+test "string_index_of_absent_is_null" {
+    assert.is_true(baml.deep_equals("abc".index_of("z"), null))
+}
+
 // ─── repeat ──────────────────────────────────────────────────────────────────
 
 test "string_repeat" {

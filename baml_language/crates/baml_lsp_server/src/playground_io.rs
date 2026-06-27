@@ -16,7 +16,7 @@ use std::{
 };
 
 use bex_events::run::{
-    HostCallId, InMemoryRunStore, RequestCommandOutcome, RunId, RunRequestState,
+    BoundaryId, HostCallId, InMemoryRunStore, RequestCommandOutcome, RunRequestState,
 };
 use bex_heap::BexHeap;
 use parking_lot::Mutex;
@@ -81,11 +81,13 @@ impl PlaygroundIoState {
     }
 
     /// Resolve a pending input request through the run-scoped command path.
-    pub fn resolve_for_run(&self, run_id: RunId, id: u64, value: String) -> &'static str {
+    pub fn resolve_for_run(&self, boundary_id: BoundaryId, id: u64, value: String) -> &'static str {
         let host_call_id = match self.pending.lock().get(&id) {
             Some(pending) => pending.host_call_id.clone(),
             None => {
-                let outcome = self.run_store.input_request_outcome_for_run(run_id, id);
+                let outcome = self
+                    .run_store
+                    .input_request_outcome_for_run(boundary_id, id);
                 return if outcome == RequestCommandOutcome::Accepted {
                     RequestCommandOutcome::Missing.as_wire_str()
                 } else {
@@ -93,13 +95,15 @@ impl PlaygroundIoState {
                 };
             }
         };
-        if self.run_store.run_id_for_host_call(&host_call_id) != Some(run_id) {
+        if self.run_store.boundary_id_for_host_call(&host_call_id) != Some(boundary_id) {
             return RequestCommandOutcome::RejectedStale.as_wire_str();
         }
 
-        let result =
-            self.run_store
-                .resolve_input_request_for_run(run_id, id, RunRequestState::Resolved);
+        let result = self.run_store.resolve_input_request_for_run(
+            boundary_id,
+            id,
+            RunRequestState::Resolved,
+        );
         if result.outcome != RequestCommandOutcome::Accepted {
             return result.outcome.as_wire_str();
         }
@@ -107,7 +111,7 @@ impl PlaygroundIoState {
         let Some(pending) = self.pending.lock().remove(&id) else {
             return self
                 .run_store
-                .input_request_outcome_for_run(run_id, id)
+                .input_request_outcome_for_run(boundary_id, id)
                 .as_wire_str();
         };
         let call_id = match &pending.host_call_id {
@@ -286,7 +290,9 @@ impl sys_ops::io::IoNamespaceIo for PlaygroundIo {
 
 #[cfg(test)]
 mod tests {
-    use bex_events::run::{ExecutionRequest, ProjectGeneration, ProjectId, RequestId, RunTarget};
+    use bex_events::run::{
+        BoundaryId, ExecutionRequest, ProjectGeneration, ProjectId, RequestId, RunTarget,
+    };
 
     use super::*;
 
@@ -296,6 +302,7 @@ mod tests {
         let run_store = Arc::new(InMemoryRunStore::default());
         let state = PlaygroundIoState::new(broadcast_tx, run_store.clone());
         let start = run_store.create_run(
+            BoundaryId::new_random(),
             ExecutionRequest {
                 project_id: ProjectId("project".to_string()),
                 project_generation: ProjectGeneration(1),
@@ -308,13 +315,13 @@ mod tests {
             RequestId(1),
         );
         let host = HostCallId::Native(CallId(42));
-        run_store.attach_host_call(start.run_id, host.clone());
+        run_store.attach_host_call(start.boundary_id, host.clone());
         run_store
             .ingest_input_requested(&host, 1, Some("name?".to_string()))
             .unwrap();
 
         assert_eq!(
-            state.resolve_for_run(start.run_id, 1, "answer".to_string()),
+            state.resolve_for_run(start.boundary_id, 1, "answer".to_string()),
             RequestCommandOutcome::Missing.as_wire_str()
         );
     }

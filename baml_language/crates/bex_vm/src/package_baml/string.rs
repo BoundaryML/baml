@@ -131,10 +131,8 @@ impl BamlClassString for PackageBamlImpl {
     }
 
     #[allow(clippy::cast_possible_wrap)]
-    fn index_of(string: &BexStr, search: &BexStr) -> i64 {
-        string
-            .char_index_of(search.as_str())
-            .map_or(-1, |i| i as i64)
+    fn index_of(string: &BexStr, search: &BexStr) -> Option<i64> {
+        string.char_index_of(search.as_str()).map(|i| i as i64)
     }
 
     fn char_at(string: &BexStr, index: i64) -> Result<BexStr, VmRustFnError> {

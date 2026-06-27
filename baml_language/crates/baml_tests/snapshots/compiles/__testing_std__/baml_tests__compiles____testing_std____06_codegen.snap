@@ -4699,20 +4699,23 @@ function testing.glob_match(subject: string, pattern: string) -> bool {
     store_var_load_var part
     load_const ""
     cmp_op !=
-    pop_jump_if_false L8
+    pop_jump_if_false L9
     load_var2 1 11
     load_var end_limit
     call baml.String.substring
     load_var part
     call baml.String.index_of
-    store_var idx
-    load_var idx
-    load_const 0
-    cmp_int_op <
+    store_var _38
+    load_var _38
+    is_type int
     pop_jump_if_false L7
-    jump L9
+    jump L8
 
   L7:
+    load_const false
+    jump L14
+
+  L8:
     load_var2 11 14
     add_int
     store_var _45
@@ -4722,16 +4725,12 @@ function testing.glob_match(subject: string, pattern: string) -> bool {
     add_int
     store_var pos
 
-  L8:
+  L9:
     load_var i
     load_const 1
     add_int
     store_var i
     jump L4
-
-  L9:
-    load_const false
-    jump L14
 
   L10:
     load_const false
@@ -4945,36 +4944,13 @@ function testing.parse_filter_patterns(raw: string[]) -> testing.FilterPat[] {
     load_var s
     load_const "::"
     call baml.String.index_of
-    store_var idx
-    load_var idx
-    load_const 0
-    cmp_int_op <
+    store_var _36
+    load_var _36
+    is_type int
     pop_jump_if_false L21
     jump L22
 
   L21:
-    load_var s
-    load_const 0
-    load_var idx
-    call baml.String.substring
-    store_var _45
-    load_var s
-    call baml.String.length
-    store_var _50
-    load_var2 5 6
-    load_const 2
-    add_int
-    load_var _50
-    call baml.String.substring
-    store_var _47
-    load_var2 2 7
-    load_var _47
-    init_instance testing.FilterPat .func_pat, .test_pat
-    call baml.Array.push
-    pop 1
-    jump L0
-
-  L22:
     load_var2 2 5
     load_const ""
     init_instance testing.FilterPat .func_pat, .test_pat
@@ -4983,6 +4959,30 @@ function testing.parse_filter_patterns(raw: string[]) -> testing.FilterPat[] {
     load_var out
     load_const ""
     load_var s
+    init_instance testing.FilterPat .func_pat, .test_pat
+    call baml.Array.push
+    pop 1
+    jump L0
+
+  L22:
+    load_var _36
+    store_var idx
+    load_var s
+    load_const 0
+    load_var idx
+    call baml.String.substring
+    store_var _40
+    load_var s
+    call baml.String.length
+    store_var _45
+    load_var2 5 7
+    load_const 2
+    add_int
+    load_var _45
+    call baml.String.substring
+    store_var _42
+    load_var2 2 8
+    load_var _42
     init_instance testing.FilterPat .func_pat, .test_pat
     call baml.Array.push
     pop 1
@@ -5610,14 +5610,21 @@ function testing.split_top(path: string) -> testing.NameSplit {
     load_var path
     load_const "/"
     call baml.String.index_of
-    store_var idx
-    load_var idx
-    load_const 0
-    cmp_int_op <
+    store_var _2
+    load_var _2
+    is_type int
     pop_jump_if_false L0
     jump L1
 
   L0:
+    load_const ""
+    load_var path
+    init_instance testing.NameSplit .head, .tail
+    jump L2
+
+  L1:
+    load_var _2
+    store_var idx
     load_var path
     load_const 0
     load_var idx
@@ -5625,17 +5632,11 @@ function testing.split_top(path: string) -> testing.NameSplit {
     load_var path
     call baml.String.length
     store_var _10
-    load_var2 1 2
+    load_var2 1 3
     load_const 1
     add_int
     load_var _10
     call baml.String.substring
-    init_instance testing.NameSplit .head, .tail
-    jump L2
-
-  L1:
-    load_const ""
-    load_var path
     init_instance testing.NameSplit .head, .tail
 
   L2:

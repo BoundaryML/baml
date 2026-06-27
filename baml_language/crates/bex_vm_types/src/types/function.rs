@@ -123,6 +123,63 @@ impl FunctionOrigin {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
+pub enum CaptureOption {
+    #[default]
+    Disabled,
+    Auto,
+    Enabled,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CaptureCategory {
+    Input,
+    Output,
+    Error,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
+pub struct FunctionCaptureProps {
+    pub inputs: CaptureOption,
+    pub output: CaptureOption,
+    pub error: CaptureOption,
+}
+
+impl FunctionCaptureProps {
+    #[must_use]
+    pub const fn disabled() -> Self {
+        Self {
+            inputs: CaptureOption::Disabled,
+            output: CaptureOption::Disabled,
+            error: CaptureOption::Disabled,
+        }
+    }
+
+    #[must_use]
+    pub const fn option(self, category: CaptureCategory) -> CaptureOption {
+        match category {
+            CaptureCategory::Input => self.inputs,
+            CaptureCategory::Output => self.output,
+            CaptureCategory::Error => self.error,
+        }
+    }
+
+    #[must_use]
+    pub const fn with_option(mut self, category: CaptureCategory, option: CaptureOption) -> Self {
+        match category {
+            CaptureCategory::Input => self.inputs = option,
+            CaptureCategory::Output => self.output = option,
+            CaptureCategory::Error => self.error = option,
+        }
+        self
+    }
+
+    #[must_use]
+    pub const fn with_auto(self, category: CaptureCategory) -> Self {
+        self.with_option(category, CaptureOption::Auto)
+    }
+}
+
 /// Represents any Baml function.
 #[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub struct Function {
@@ -203,6 +260,10 @@ pub struct Function {
 
     /// LLM-specific metadata (prompt template, client name). `None` for non-LLM functions.
     pub body_meta: Option<FunctionMeta>,
+
+    /// Capture policy hints for this function. Hosts resolve `Auto` against
+    /// boundary defaults; ordinary functions default to disabled.
+    pub capture: FunctionCaptureProps,
 
     /// Per-run profiling id (`0` = unassigned), written into the BEX event
     /// stream's `CallFunction` records and resolved through the per-run

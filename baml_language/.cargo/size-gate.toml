@@ -41,12 +41,12 @@ policy.max_delta_pct = 3.0
 # 15.59 MB baseline).
 [artifacts.baml-cli.platform.aarch64-apple-darwin]
 max_file_bytes = 16_580_000
-# Linux x86_64: baseline 20.86 MB file.
+# Linux x86_64: baseline 21.51 MB file.
 [artifacts.baml-cli.platform.x86_64-unknown-linux-gnu]
-max_file_bytes = 21_490_000
-# Windows x86_64: baseline 16.32 MB file.
+max_file_bytes = 22_157_698
+# Windows x86_64: baseline 18.11 MB file.
 [artifacts.baml-cli.platform.x86_64-pc-windows-msvc]
-max_file_bytes = 16_810_000
+max_file_bytes = 18_654_306
 
 [artifacts.packed-program]
 kind = "pack"
@@ -55,15 +55,12 @@ policy.max_delta_pct = 3.0
 # macOS arm64: baseline 12.01 MB file.
 [artifacts.packed-program.platform.aarch64-apple-darwin]
 max_file_bytes = 12_370_000
-# Linux x86_64: baseline 15.59 MB file (recorded 2026-06-02, .ci/size-gate). The
-# prior 15_570_000 ceiling was set for an older 15.12 MB baseline and was never
-# bumped when the baseline was refreshed, so it sat *below* its own baseline and
-# failed every build. Re-set to ~3% above the recorded baseline.
+# Linux x86_64: baseline 15.62 MB file.
 [artifacts.packed-program.platform.x86_64-unknown-linux-gnu]
-max_file_bytes = 16_060_000
-# Windows x86_64: baseline 12.24 MB file.
+max_file_bytes = 16_087_826
+# Windows x86_64: baseline 13.00 MB file.
 [artifacts.packed-program.platform.x86_64-pc-windows-msvc]
-max_file_bytes = 12_610_000
+max_file_bytes = 13_392_903
 
 [artifacts.packed-program.pack]
 cli_package = "baml_cli"
@@ -85,6 +82,6 @@ no_default_features = true
 wasm = true
 policy.max_delta_pct = 3.0
 
-# Single platform; baseline 3.87 MB gzip.
+# Single platform; baseline 4.06 MB gzip.
 [artifacts.bridge_wasm.platform.wasm32-unknown-unknown]
-max_gzip_bytes = 3_990_000
+max_gzip_bytes = 4_177_779

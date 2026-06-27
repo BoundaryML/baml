@@ -148,8 +148,8 @@ fn publish_env_resolved(
         return;
     };
     let status = env_resolution_status(value);
-    if let Some(run_id) = run_store.run_id_for_host_call(host_call_id) {
-        let result = run_store.resolve_env_request_for_run(run_id, request_id, status, None);
+    if let Some(boundary_id) = run_store.boundary_id_for_host_call(host_call_id) {
+        let result = run_store.resolve_env_request_for_run(boundary_id, request_id, status, None);
         if result.outcome == RequestCommandOutcome::Accepted
             && let Some(patch) = result.patch
         {

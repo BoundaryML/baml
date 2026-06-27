@@ -77,7 +77,7 @@ export type {
   Run,
   RunCursor,
   RunCursorExpiredReason,
-  RunId,
+  BoundaryId,
   RunPatch,
   RunPatchChange,
   RunStatus,
