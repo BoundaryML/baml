@@ -18,8 +18,8 @@ class Plain {
 //     ╭─[ interface_error_default_outside_implements.baml:11:12 ]
 //     │
 //  11 │     return default.log("hi")
-//     │            ─────┬─────
-//     │                 ╰─────── unresolved name: default
+//     │            ───┬───
+//     │               ╰───── unresolved name: default
 //     │
 //     │ Note: Error code: E0003
 // ────╯
