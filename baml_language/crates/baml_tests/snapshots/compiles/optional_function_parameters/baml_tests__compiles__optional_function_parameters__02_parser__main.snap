@@ -1,11 +1,10 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 18292
 ---
 === SYNTAX TREE ===
 SOURCE_FILE
   TYPE_ALIAS_DEF
-    WORD "type"
+    KW_TYPE "type"
     WORD "Searcher"
     EQUALS "="
     TYPE_EXPR
@@ -27,7 +26,7 @@ SOURCE_FILE
       TYPE_EXPR "int"
         WORD "int"
   TYPE_ALIAS_DEF
-    WORD "type"
+    KW_TYPE "type"
     WORD "NarrowSearcher"
     EQUALS "="
     TYPE_EXPR

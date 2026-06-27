@@ -336,7 +336,7 @@ impl UnionMemberParts {
         if !self
             .tokens
             .iter()
-            .any(|t| t.kind() == SyntaxKind::WORD && t.text() == "as")
+            .any(|t| t.kind() == SyntaxKind::KW_AS)
         {
             return None;
         }
@@ -463,7 +463,7 @@ impl TypeExpr {
         }
         if !tokens
             .iter()
-            .any(|t| t.kind() == SyntaxKind::WORD && t.text() == "as")
+            .any(|t| t.kind() == SyntaxKind::KW_AS)
         {
             return None;
         }
@@ -2131,7 +2131,7 @@ impl InterfaceFieldLink {
             .find(|token| {
                 !token.kind().is_trivia()
                     && is_member_name_token(token.kind())
-                    && !(token.kind() == SyntaxKind::WORD && token.text() == "as")
+                    && !(token.kind() == SyntaxKind::KW_AS)
             })
     }
 
@@ -2144,7 +2144,7 @@ impl InterfaceFieldLink {
             .filter_map(rowan::NodeOrToken::into_token)
             .filter(|token| !token.kind().is_trivia())
         {
-            if token.kind() == SyntaxKind::WORD && token.text() == "as" {
+            if token.kind() == SyntaxKind::KW_AS {
                 after_as = true;
                 continue;
             }
@@ -2160,7 +2160,7 @@ impl InterfaceFieldLink {
         self.syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
-            .find(|token| token.kind() == SyntaxKind::WORD && token.text() == "as")
+            .find(|token| token.kind() == SyntaxKind::KW_AS)
     }
 }
 
@@ -2754,16 +2754,15 @@ impl TestDef {
 }
 
 impl TypeAliasDef {
-    /// Get the type alias name.
-    /// Note: "type" is parsed as a WORD token, not a keyword, so we skip it.
+    /// Get the type alias name — the first direct WORD child (the `type`
+    /// keyword is a `KW_TYPE` token, so no skipping is needed).
     pub fn name(&self) -> Option<SyntaxToken> {
         self.syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
-            .filter(|token| {
+            .find(|token| {
                 token.kind() == SyntaxKind::WORD && token.parent() == Some(self.syntax.clone())
             })
-            .nth(1) // Skip "type" keyword (which is a WORD), get the actual name
     }
 
     /// Get the aliased type expression.

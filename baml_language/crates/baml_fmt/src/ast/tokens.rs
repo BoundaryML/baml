@@ -88,6 +88,8 @@ define_keyword_tokens! {
     "dynamic" => SyntaxKind::KW_DYNAMIC => Dynamic;
     "with" => SyntaxKind::KW_WITH => With;
     "throws" => SyntaxKind::KW_THROWS => Throws;
+    "type" => SyntaxKind::KW_TYPE => TypeKw;
+    "as" => SyntaxKind::KW_AS => As;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

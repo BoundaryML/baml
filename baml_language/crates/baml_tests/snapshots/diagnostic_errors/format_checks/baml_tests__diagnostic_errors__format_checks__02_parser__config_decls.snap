@@ -1522,7 +1522,7 @@ llm /* 4 type trailing */
               WORD "Q"
             R_BRACE "}"
         TYPE_ALIAS_DEF
-          WORD "type"
+          KW_TYPE "type"
           WORD "InnerAlias"
           EQUALS "="
           TYPE_EXPR "string | int"
@@ -1625,7 +1625,7 @@ llm /* 4 type trailing */
             WORD "AnotherVeryLongVariantName"
           R_BRACE "}"
         TYPE_ALIAS_DEF
-          WORD "type"
+          KW_TYPE "type"
           WORD "VeryLongTypeAliasNameThatExceedsLimit"
           EQUALS "="
           TYPE_EXPR "int | string | bool | float | null | int[] | string[]"
@@ -1693,7 +1693,7 @@ llm /* 4 type trailing */
             WORD "X"
           R_BRACE "}"
         TYPE_ALIAS_DEF
-          WORD "type"
+          KW_TYPE "type"
           WORD "TbAlias"
           EQUALS "="
           TYPE_EXPR "// 42 equals trailing
@@ -1749,7 +1749,7 @@ llm /* 4 type trailing */
             WORD "X"
           R_BRACE "}"
         TYPE_ALIAS_DEF
-          WORD "type"
+          KW_TYPE "type"
           WORD "TbAliasBlock"
           EQUALS "="
           TYPE_EXPR "/* 42 equals trailing */

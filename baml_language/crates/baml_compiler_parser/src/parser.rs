@@ -3011,7 +3011,7 @@ impl<'a> Parser<'a> {
         self.expect(TokenKind::LParen);
         self.parse_type();
         if self.at_contextual_kw("as") {
-            self.bump();
+            self.bump_contextual_kw_as("as", SyntaxKind::KW_AS);
         } else {
             self.error_unexpected_token("`as`".to_string());
         }
@@ -3665,7 +3665,7 @@ impl<'a> Parser<'a> {
             }
 
             if p.at_contextual_kw("as") {
-                p.bump();
+                p.bump_contextual_kw_as("as", SyntaxKind::KW_AS);
             } else {
                 p.error_unexpected_token("`as`".to_string());
             }
@@ -3758,7 +3758,7 @@ impl<'a> Parser<'a> {
     fn parse_associated_type_decl(&mut self, require_binding: bool) {
         self.with_node(SyntaxKind::ASSOCIATED_TYPE_DECL, |p| {
             if p.at_contextual_kw("type") {
-                p.bump();
+                p.bump_contextual_kw_as("type", SyntaxKind::KW_TYPE);
             } else {
                 p.error_unexpected_token("`type`".to_string());
             }
@@ -5818,7 +5818,7 @@ impl<'a> Parser<'a> {
                 let lhs_start = self.find_previous_expr_start_after(expr_start);
                 self.wrap_events_in_node(lhs_start, SyntaxKind::UPCAST_EXPR);
                 self.bump(); // .
-                self.bump(); // contextual `as`
+                self.bump_contextual_kw_as("as", SyntaxKind::KW_AS);
                 self.parse_generic_args();
                 self.finish_node();
             } else if op == TokenKind::Dot || op == TokenKind::Dollar {
@@ -7735,7 +7735,7 @@ impl<'a> Parser<'a> {
         self.with_node(SyntaxKind::TYPE_ALIAS_DEF, |p| {
             // 'type' keyword
             if p.at(TokenKind::Word) && p.current().map(|t| t.text == "type").unwrap_or(false) {
-                p.bump();
+                p.bump_contextual_kw_as("type", SyntaxKind::KW_TYPE);
             } else {
                 p.error_unexpected_token("'type' keyword".to_string());
             }

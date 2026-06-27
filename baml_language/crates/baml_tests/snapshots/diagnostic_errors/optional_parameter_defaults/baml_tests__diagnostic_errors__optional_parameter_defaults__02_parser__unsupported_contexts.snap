@@ -33,7 +33,7 @@ SOURCE_FILE
       QUOTE """
       HASH "#"
   TYPE_ALIAS_DEF
-    WORD "type"
+    KW_TYPE "type"
     WORD "NamedFilter"
     EQUALS "="
     TYPE_EXPR
@@ -56,7 +56,7 @@ SOURCE_FILE
       TYPE_EXPR "int"
         WORD "int"
   TYPE_ALIAS_DEF
-    WORD "type"
+    KW_TYPE "type"
     WORD "NamedLimit"
     EQUALS "="
     TYPE_EXPR

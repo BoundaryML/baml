@@ -17,7 +17,6 @@
 //!   `declaration` modifier; a reference is classified the same way as its
 //!   definition.
 
-use std::cmp::Ordering;
 
 use baml_base::{Name, SourceFile};
 use baml_compiler_syntax::ast::{GenericParam, ObjectField};
@@ -686,11 +685,6 @@ fn classify_token(token: &SyntaxToken) -> Option<Class> {
         SyntaxKind::CLIENT_FIELD => {
             (kind == SyntaxKind::KW_CLIENT).then_some(plain(SemanticTokenType::Property))
         }
-        // `as` is a contextual keyword (lexed as a WORD) in `.as<T>` casts and
-        // `field as field` interface field links.
-        SyntaxKind::UPCAST_EXPR | SyntaxKind::INTERFACE_FIELD_LINK => {
-            (word && token.text() == "as").then_some(plain(SemanticTokenType::Keyword))
-        }
         // A generic parameter declaration (`T` in `class Box<T>`, `<T: Bound>`):
         // the leading name as a `TypeParameter` declaration; a bound is a child
         // `TYPE_EXPR` and classifies on its own.
@@ -746,25 +740,21 @@ fn classify_type_decl_word(token: &SyntaxToken) -> Option<Class> {
         return None;
     }
     let parent = token.parent()?;
-    let words: Vec<SyntaxToken> = parent
+    // The name is the first direct WORD (bounds/values are child TYPE_EXPRs).
+    let first_word = parent
         .children_with_tokens()
         .filter_map(NodeOrToken::into_token)
-        .filter(|t| t.kind() == SyntaxKind::WORD)
-        .collect();
-    // The leading run of `type` WORDs are keywords; the name is the first WORD
-    // after them.
-    let lead_type_kws = words.iter().take_while(|t| t.text() == "type").count();
-    let index = words
-        .iter()
-        .position(|t| t.text_range() == token.text_range())?;
-    match index.cmp(&lead_type_kws) {
-        Ordering::Less => Some(plain(SemanticTokenType::Keyword)),
-        Ordering::Equal => {
-            let ty = SemanticTokenType::Type;
-            Some(if lead_type_kws > 0 { decl(ty) } else { plain(ty) })
-        }
-        Ordering::Greater => None,
+        .find(|t| t.kind() == SyntaxKind::WORD)?;
+    if first_word.text_range() != token.text_range() {
+        return None;
     }
+    // Introduced by a `type` keyword => a declaration; otherwise a binding.
+    let is_decl = parent
+        .children_with_tokens()
+        .filter_map(NodeOrToken::into_token)
+        .any(|t| t.kind() == SyntaxKind::KW_TYPE);
+    let ty = SemanticTokenType::Type;
+    Some(if is_decl { decl(ty) } else { plain(ty) })
 }
 
 // ── Type-name classification (annotations) ──────────────────────────────────────

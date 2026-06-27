@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 13789
 ---
 === SYNTAX TREE ===
 SOURCE_FILE
@@ -64,13 +63,13 @@ SOURCE_FILE
         WORD "int"
     R_BRACE "}"
   TYPE_ALIAS_DEF
-    WORD "type"
+    KW_TYPE "type"
     WORD "ConfigAlias"
     EQUALS "="
     TYPE_EXPR "Config"
       WORD "Config"
   TYPE_ALIAS_DEF
-    WORD "type"
+    KW_TYPE "type"
     WORD "ResponseAlias"
     EQUALS "="
     TYPE_EXPR "Response"
