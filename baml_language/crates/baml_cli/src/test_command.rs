@@ -14,7 +14,7 @@ use clap::Args;
 use sys_native::{CallId, SysOpsExt};
 
 use crate::{
-    project_load::load_project_from_reporting, reporter::Reporter, test_filter::TestFilter,
+    project_load::load_project_for_build, reporter::Reporter, test_filter::TestFilter,
 };
 
 #[derive(Args, Clone, Debug)]
@@ -22,28 +22,35 @@ pub struct TestArgs {
     #[arg(long, help = "Project search starting point", value_name = "PATH")]
     pub from: Option<PathBuf>,
 
-    /// Only list selected tests
+    /// List the selected tests instead of running them. The
+    /// "Testset::TestName" shown on each line is a valid -i / -x selector.
     #[arg(long, default_value_t = false)]
     list: bool,
 
     #[arg(long, short = 'i')]
-    /// Specific functions or tests to include. If none provided, runs all tests.
+    /// Tests (or whole testsets) to include. If none provided, runs all tests.
+    ///
+    /// A selector is "Testset::TestName": the part before `::` is the enclosing
+    /// testset, the part after is the test. Either side may be empty or use `*`
+    /// wildcards. (For a legacy function-attached `test`, the part before `::`
+    /// is the function name instead.)
     ///
     /// Examples:
     ///
-    /// -i "FunctionName::TestName" will match the specific test
+    /// -i "MySet::my test"  one test inside testset "MySet"
     ///
-    /// -i "FunctionName::" will run all tests in the function
+    /// -i "MySet::"  every test in testset "MySet"
     ///
-    /// -i "::TestName" will run the test in any function
+    /// -i "::my test"  a test in any testset — also the form for a top-level
+    /// `test` with no enclosing testset (its testset name is empty)
     ///
-    /// -i "Get*::*Bar" will match with wildcards
+    /// -i "Get*::*Bar"  wildcards on either side
     pub include: Vec<String>,
 
     #[arg(long, short = 'x')]
-    /// Specific functions or tests to exclude. Takes precedence over --include.
+    /// Tests (or whole testsets) to exclude. Takes precedence over --include.
     ///
-    /// Uses the same syntax as --include.
+    /// Uses the same "Testset::TestName" syntax as --include.
     pub exclude: Vec<String>,
 }
 
@@ -71,7 +78,7 @@ impl TestArgs {
     pub fn run(&self) -> Result<crate::ExitCode> {
         let reporter = Reporter::new();
         // ── 1. Load project ────────────────────────────────────────────────
-        let (db, from, baml_files) = load_project_from_reporting(self.from.as_deref(), &reporter)?;
+        let (db, from, baml_files) = load_project_for_build(self.from.as_deref(), &reporter, false)?;
         if baml_files.is_empty() {
             reporter.abandon();
             crate::reporter::print_error(format_args!(
@@ -85,7 +92,9 @@ impl TestArgs {
             .ok_or_else(|| anyhow!("No project context"))?;
 
         // ── 2. Diagnostics ─────────────────────────────────────────────────
-        reporter.spin("Checking", format!("{} file(s)", baml_files.len()));
+        // One "Compiling" verb covers diagnostics + the bytecode build below;
+        // a separate "Checking" line would just repeat the file count.
+        reporter.spin("Compiling", format!("{} file(s)", baml_files.len()));
         let source_files = db.get_source_files();
         let diagnostics = baml_project::collect_diagnostics(&db, project, &source_files);
         let errors: Vec<_> = diagnostics

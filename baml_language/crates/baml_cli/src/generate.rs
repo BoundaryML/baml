@@ -17,7 +17,7 @@ use text_size::{TextRange, TextSize};
 use toml::Spanned;
 
 use crate::{
-    commands::release_version, project_load::load_project_from_reporting, reporter::Reporter,
+    commands::release_version, project_load::load_project_for_build, reporter::Reporter,
 };
 
 #[derive(Args, Clone, Debug)]
@@ -50,7 +50,7 @@ impl GenerateArgs {
             "Generating",
             format!("clients with CLI version: {}", release_version()),
         );
-        let (db, from, baml_files) = load_project_from_reporting(self.from.as_deref(), &reporter)?;
+        let (db, from, baml_files) = load_project_for_build(self.from.as_deref(), &reporter, false)?;
         if baml_files.is_empty() {
             reporter.abandon();
             crate::reporter::print_error(format_args!(
@@ -65,8 +65,10 @@ impl GenerateArgs {
 
         // Compile-time diagnostics — same shape as run/pack: render the
         // ariadne block after abandoning the spinner so the colored
-        // source-snippet output doesn't fight with the lamb.
-        reporter.spin("Checking", format!("{} file(s)", baml_files.len()));
+        // source-snippet output doesn't fight with the lamb. No "Checking"
+        // line here: the meaningful "Resolving" and "Compiling" phases below
+        // carry the progress, and a "Checking N file(s)" would just duplicate
+        // the "Compiling N file(s)" count.
         let source_files = db.get_source_files();
         let diagnostics = baml_project::collect_diagnostics(&db, project, &source_files);
         let errors: Vec<_> = diagnostics
