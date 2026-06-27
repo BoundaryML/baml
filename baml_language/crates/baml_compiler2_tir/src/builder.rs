@@ -9395,11 +9395,15 @@ impl<'db> TypeInferenceBuilder<'db> {
                     .iter()
                     .any(|(n, _)| n == &segments[0]);
                 if !is_dep_package && !self.locals.contains_key(&segments[0]) {
-                    self.context.report_simple(
+                    // Narrow the span to the offending root segment (`o`), not
+                    // the whole `o.value` access (B-539).
+                    self.context.report_at_segment(
                         TirTypeError::UnresolvedName {
                             name: segments[0].clone(),
                         },
                         expr_id,
+                        0,
+                        Vec::new(),
                     );
                 }
                 Ty::Unknown {

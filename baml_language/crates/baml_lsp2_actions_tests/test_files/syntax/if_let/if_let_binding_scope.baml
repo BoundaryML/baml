@@ -43,8 +43,8 @@ function BindingDoesNotLeakIntoElse(r: Ok | Err) -> string {
 //     ╭─[ if_let_if_let_binding_scope.baml:15:3 ]
 //     │
 //  15 │   o.value
-//     │   ───┬───
-//     │      ╰───── unresolved name: o
+//     │   ┬
+//     │   ╰── unresolved name: o
 //     │
 //     │ Note: Error code: E0003
 // ────╯
@@ -52,8 +52,8 @@ function BindingDoesNotLeakIntoElse(r: Ok | Err) -> string {
 //     ╭─[ if_let_if_let_binding_scope.baml:27:3 ]
 //     │
 //  27 │   o.value
-//     │   ───┬───
-//     │      ╰───── unresolved name: o
+//     │   ┬
+//     │   ╰── unresolved name: o
 //     │
 //     │ Note: Error code: E0003
 // ────╯
@@ -61,8 +61,8 @@ function BindingDoesNotLeakIntoElse(r: Ok | Err) -> string {
 //     ╭─[ if_let_if_let_binding_scope.baml:36:5 ]
 //     │
 //  36 │     o.value
-//     │     ───┬───
-//     │        ╰───── unresolved name: o
+//     │     ┬
+//     │     ╰── unresolved name: o
 //     │
 //     │ Note: Error code: E0003
 // ────╯
