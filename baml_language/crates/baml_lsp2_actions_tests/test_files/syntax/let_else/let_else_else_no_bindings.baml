@@ -14,8 +14,8 @@ function ElseDoesNotSeeBinding(r: Ok | Err) -> string {
 //    ╭─[ let_else_let_else_else_no_bindings.baml:7:31 ]
 //    │
 //  7 │   let o: Ok = r else { return o.value; };
-//    │                               ───┬───
-//    │                                  ╰───── unresolved name: o
+//    │                               ┬
+//    │                               ╰── unresolved name: o
 //    │
 //    │ Note: Error code: E0003
 // ───╯
