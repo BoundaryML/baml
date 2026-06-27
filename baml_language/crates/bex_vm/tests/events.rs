@@ -30,20 +30,23 @@ fn log_event_source_uses_unknown_column_and_real_offsets() {
                 ..
             } => {
                 assert_eq!(event_name, "$baml_log");
-                let (file_id, line, column, start_offset, end_offset) =
+                let source_location =
                     source_location.expect("log event should carry source location");
 
-                assert_ne!(file_id, u32::MAX);
-                assert_eq!(line, 2);
-                assert_eq!(column, 0);
+                assert_ne!(source_location.file_id, u32::MAX);
+                assert_eq!(source_location.line, 2);
+                assert_eq!(source_location.column, 0);
                 assert_ne!(
-                    column, start_offset,
+                    source_location.column, source_location.start_offset,
                     "column must be the unknown-column sentinel, not the byte offset"
                 );
-                assert!(start_offset < end_offset);
+                assert!(source_location.start_offset < source_location.end_offset);
                 assert!(
-                    start_offset <= call_start && call_start < end_offset,
-                    "source span {start_offset}..{end_offset} should cover log.info at {call_start}"
+                    source_location.start_offset <= call_start
+                        && call_start < source_location.end_offset,
+                    "source span {}..{} should cover log.info at {call_start}",
+                    source_location.start_offset,
+                    source_location.end_offset,
                 );
                 return;
             }

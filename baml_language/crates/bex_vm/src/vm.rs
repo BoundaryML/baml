@@ -915,6 +915,16 @@ pub struct BexVm {
 /// Similarly, when the VM encounters an await point, it returns control flow to
 /// the embedder, expecting the embedder to await the future and fulfil it with
 /// the final result before yielding back control flow to the VM.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct VmEventSourceLocation {
+    pub file_id: u32,
+    pub line: u32,
+    /// Zero means the VM does not know a source column; byte offsets remain precise.
+    pub column: u32,
+    pub start_offset: u32,
+    pub end_offset: u32,
+}
+
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, PartialEq)]
 pub enum VmExecState {
@@ -995,9 +1005,8 @@ pub enum VmExecState {
         event_name: String,
         /// Event payload (raw VM value; engine converts to `BexExternalValue`).
         data: Value,
-        /// Source location where the event was emitted:
-        /// (`file_id`, line, column, `start_offset`, `end_offset`).
-        source_location: Option<(u32, u32, u32, u32, u32)>,
+        /// Source location where the event was emitted.
+        source_location: Option<VmEventSourceLocation>,
     },
 
     /// We are still executing, but we should yield to allow other threads or the GC to run.
@@ -3710,14 +3719,14 @@ impl BexVm {
 
     fn event_source_location_for_line_entry(
         entry: &bytecode::LineTableEntry,
-    ) -> (u32, u32, u32, u32, u32) {
-        (
-            entry.span.file_id.as_u32(),
-            u32::try_from(entry.line).unwrap_or(u32::MAX),
-            0,
-            u32::from(entry.span.range.start()),
-            u32::from(entry.span.range.end()),
-        )
+    ) -> VmEventSourceLocation {
+        VmEventSourceLocation {
+            file_id: entry.span.file_id.as_u32(),
+            line: u32::try_from(entry.line).unwrap_or(u32::MAX),
+            column: 0,
+            start_offset: u32::from(entry.span.range.start()),
+            end_offset: u32::from(entry.span.range.end()),
+        }
     }
 
     /// Call-entry bookkeeping for a frame about to be pushed: mints the call

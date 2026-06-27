@@ -104,7 +104,7 @@ pub use bex_heap::GcStats;
 pub use bex_heap::{ActiveHeapPermit, HeapGuard, HeapPermitManager, InactiveHeapPermit};
 use bex_vm::{
     BexVm, VmCallCaptureKind, VmCallInputCapture, VmCallInputCaptureHook, VmCaptureMask,
-    VmExecState,
+    VmEventSourceLocation, VmExecState,
 };
 use bex_vm_types::{
     FunctionMeta, FunctionOrigin, GlobalPool, HeapPtr, Object, SharedGlobals, SysOp,
@@ -3418,7 +3418,7 @@ impl BexEngine {
         thread: &ActiveHeapPermit<BexThread>,
         capture: Option<&LogCaptureContext>,
         data: Value,
-        source_location: Option<(u32, u32, u32, u32, u32)>,
+        source_location: Option<VmEventSourceLocation>,
     ) {
         let Some(capture) = capture else {
             return;
@@ -3471,9 +3471,15 @@ impl BexEngine {
     }
 
     fn source_location_from_event(
-        source_location: Option<(u32, u32, u32, u32, u32)>,
+        source_location: Option<VmEventSourceLocation>,
     ) -> Option<bex_events::run::SourceLocation> {
-        let (file_id, line, column, start_offset, end_offset) = source_location?;
+        let VmEventSourceLocation {
+            file_id,
+            line,
+            column,
+            start_offset,
+            end_offset,
+        } = source_location?;
         Some(bex_events::run::SourceLocation {
             file_path: None,
             file_id: Some(u64::from(file_id)),

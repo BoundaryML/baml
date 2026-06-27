@@ -9,6 +9,7 @@ pub const DEFAULT_NATIVE_LIVE_VALUE_CACHE_BYTES: usize = 64 * 1024 * 1024;
 pub const DEFAULT_WASM_LIVE_VALUE_CACHE_BYTES: usize = 16 * 1024 * 1024;
 
 const DEFAULT_EVICTION_TOMBSTONES: usize = 4096;
+const LRU_COMPACTION_FACTOR: usize = 4;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct LiveValueKey {
@@ -116,6 +117,7 @@ impl LiveValueCache {
     ) -> LiveValueInsertResult {
         let key = LiveValueKey::new(boundary_id, value_ref.id.clone());
         self.evicted.remove(&key);
+        self.compact_evicted_order_if_needed();
         if let Some(previous) = self.entries.remove(&key) {
             self.current_bytes = self.current_bytes.saturating_sub(previous.size_bytes);
         }
@@ -146,6 +148,7 @@ impl LiveValueCache {
         );
         self.current_bytes = self.current_bytes.saturating_add(size_bytes);
         self.lru.push_back((sequence, key));
+        self.compact_lru_if_needed();
         let (evicted_entries, evicted_bytes) = self.evict_until_within_budget();
         LiveValueInsertResult {
             retained: true,
@@ -161,7 +164,9 @@ impl LiveValueCache {
         if let Some(entry) = self.entries.get_mut(&key) {
             entry.sequence = sequence;
             self.lru.push_back((sequence, key));
-            return LiveValueLookup::Available(entry.body.clone());
+            let body = entry.body.clone();
+            self.compact_lru_if_needed();
+            return LiveValueLookup::Available(body);
         }
         self.evicted
             .get(&key)
@@ -194,6 +199,7 @@ impl LiveValueCache {
                 "live value body was evicted from the bounded live cache".to_string(),
             );
         }
+        self.compact_lru_if_needed();
         (evicted_entries, evicted_bytes)
     }
 
@@ -220,6 +226,37 @@ impl LiveValueCache {
                 self.evicted.remove(&key);
             }
         }
+        self.compact_evicted_order_if_needed();
+    }
+
+    fn compact_lru_if_needed(&mut self) {
+        let live_len = self.entries.len().max(1);
+        if self.lru.len() <= live_len.saturating_mul(LRU_COMPACTION_FACTOR) {
+            return;
+        }
+
+        let mut entries = self
+            .entries
+            .iter()
+            .map(|(key, entry)| (entry.sequence, key.clone()))
+            .collect::<Vec<_>>();
+        entries.sort_by_key(|(sequence, _)| *sequence);
+        self.lru = entries.into_iter().collect();
+    }
+
+    fn compact_evicted_order_if_needed(&mut self) {
+        let evicted_len = self.evicted.len().max(1);
+        if self.evicted_order.len() <= evicted_len.saturating_mul(LRU_COMPACTION_FACTOR) {
+            return;
+        }
+
+        let mut entries = self
+            .evicted
+            .iter()
+            .map(|(key, eviction)| (eviction.sequence, key.clone()))
+            .collect::<Vec<_>>();
+        entries.sort_by_key(|(sequence, _)| *sequence);
+        self.evicted_order = entries.into_iter().collect();
     }
 
     fn next_sequence(&mut self) -> u64 {
@@ -230,7 +267,7 @@ impl LiveValueCache {
 
 #[cfg(test)]
 mod tests {
-    use super::{LiveValueBody, LiveValueCache, LiveValueLookup};
+    use super::{LRU_COMPACTION_FACTOR, LiveValueBody, LiveValueCache, LiveValueLookup};
     use crate::{
         ids::BoundaryId,
         value::{ValueCodec, ValueRef},
@@ -310,5 +347,71 @@ mod tests {
             cache.get(boundary_id, "value_big"),
             LiveValueLookup::Evicted(_)
         ));
+    }
+
+    #[test]
+    fn live_value_cache_compacts_lru_tombstones_after_repeated_reads() {
+        let boundary_id = BoundaryId::from_bytes([3; 16]);
+        let mut cache = LiveValueCache::with_max_bytes(4);
+        cache.insert(
+            boundary_id,
+            &value_ref("value_1", 1),
+            LiveValueBody {
+                codec: ValueCodec::BamlOutboundValue,
+                body: vec![1],
+            },
+        );
+
+        for _ in 0..64 {
+            assert!(matches!(
+                cache.get(boundary_id, "value_1"),
+                LiveValueLookup::Available(_)
+            ));
+        }
+
+        let max_lru_len = cache.entries.len().max(1) * LRU_COMPACTION_FACTOR;
+        assert!(
+            cache.lru.len() <= max_lru_len,
+            "lru should stay compacted; len={} max={max_lru_len}",
+            cache.lru.len()
+        );
+    }
+
+    #[test]
+    fn live_value_cache_compacts_eviction_tombstones_after_reinsert() {
+        let boundary_id = BoundaryId::from_bytes([4; 16]);
+        let mut cache = LiveValueCache::with_max_bytes(1);
+
+        for _ in 0..64 {
+            cache.insert(
+                boundary_id,
+                &value_ref("value_1", 2),
+                LiveValueBody {
+                    codec: ValueCodec::BamlOutboundValue,
+                    body: vec![1, 2],
+                },
+            );
+            assert!(matches!(
+                cache.get(boundary_id, "value_1"),
+                LiveValueLookup::Evicted(_)
+            ));
+
+            cache.insert(
+                boundary_id,
+                &value_ref("value_1", 1),
+                LiveValueBody {
+                    codec: ValueCodec::BamlOutboundValue,
+                    body: vec![1],
+                },
+            );
+        }
+
+        assert!(cache.evicted.is_empty());
+        let max_evicted_order_len = cache.evicted.len().max(1) * LRU_COMPACTION_FACTOR;
+        assert!(
+            cache.evicted_order.len() <= max_evicted_order_len,
+            "evicted order should stay compacted; len={} max={max_evicted_order_len}",
+            cache.evicted_order.len()
+        );
     }
 }
