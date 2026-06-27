@@ -664,11 +664,17 @@ fn check_interfaces<'db>(
                 continue;
             };
             for (error, loc) in impl_diags {
-                let span = match loc {
+                let mut span = match loc {
                     ImplDiagnosticLocation::InterfaceTarget => sm.interface_target_span,
                     ImplDiagnosticLocation::ForTarget => sm.for_target_span.unwrap_or(sm.impl_span),
                     ImplDiagnosticLocation::Bound => sm.impl_span,
                 };
+                // Prefer the error's own precise span (e.g. an unresolved member of
+                // the interface target) so this matches the same error surfaced by
+                // other passes and the dedup below collapses them to one (B-538).
+                if let Some(range) = error.precise_span() {
+                    span.range = range;
+                }
                 diagnostics.push(
                     Diagnostic::error(tir_type_error_to_diagnostic_id(error), error.to_string())
                         .with_primary_span(span)
