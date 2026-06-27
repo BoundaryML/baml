@@ -340,8 +340,10 @@ pub fn semantic_tokens(db: &dyn Db, file: SourceFile) -> Vec<SemanticToken> {
 pub fn semantic_tokens_in_range(
     db: &dyn Db,
     file: SourceFile,
-    range: TextRange,
+    start: u32,
+    end: u32,
 ) -> Vec<SemanticToken> {
+    let range = TextRange::new(start.into(), end.into());
     let root = baml_compiler_parser::syntax_tree(db, file);
     let walk = Walk {
         db,

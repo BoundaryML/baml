@@ -25,7 +25,8 @@ mod tests {
                     .filter(|t| range.intersect(t.range).is_some())
                     .cloned()
                     .collect();
-                let actual = semantic_tokens_in_range(&db, file, range);
+                let actual =
+                    semantic_tokens_in_range(&db, file, range.start().into(), range.end().into());
                 assert_eq!(
                     actual, expected,
                     "range {range:?} mismatch\n  expected: {expected:?}\n  actual:   {actual:?}"

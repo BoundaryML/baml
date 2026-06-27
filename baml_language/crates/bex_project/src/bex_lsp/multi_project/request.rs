@@ -50,7 +50,7 @@ pub(super) fn server_capabilities() -> ServerCapabilities {
                         .collect(),
                 },
                 full: Some(SemanticTokensFullOptions::Bool(true)),
-                range: None,
+                range: Some(true),
                 ..Default::default()
             },
         )),
@@ -319,42 +319,48 @@ impl BexLspRequest for BexMulitProject {
         // Get the semantic tokens using compiler2 (hybrid CST + type-aware).
         // Always returns tokens in document order.
         let tokens = baml_lsp2_actions::semantic_tokens(lsp_db, source_file);
-
-        // Convert to LSP delta-encoded format
-        let line_index = baml_project::position::LineIndex::new(text);
-        let mut lsp_tokens = Vec::with_capacity(tokens.len());
-        let mut prev_line = 0u32;
-        let mut prev_start = 0u32;
-
-        for token in &tokens {
-            let start_offset: u32 = token.range.start().into();
-            let end_offset: u32 = token.range.end().into();
-            let length = end_offset - start_offset;
-
-            let Some(pos) = line_index.offset_to_position(start_offset) else {
-                continue;
-            };
-
-            let delta_line = pos.line - prev_line;
-            let delta_start = if delta_line == 0 {
-                pos.character - prev_start
-            } else {
-                pos.character
-            };
-
-            lsp_tokens.push(lsp_types::SemanticToken {
-                delta_line,
-                delta_start,
-                length,
-                token_type: token.token_type.legend_index(),
-                token_modifiers_bitset: token.modifiers.bits(),
-            });
-
-            prev_line = pos.line;
-            prev_start = pos.character;
-        }
+        let lsp_tokens = encode_semantic_tokens(&tokens, text);
 
         Ok(Some(lsp_types::SemanticTokensResult::Tokens(
+            lsp_types::SemanticTokens {
+                result_id: None,
+                data: lsp_tokens,
+            },
+        )))
+    }
+
+    /// Viewport semantic tokens — rust-analyzer's `highlight_range`. Resolves
+    /// only the scopes the requested range touches.
+    fn on_request_text_document_semantic_tokens_range(
+        &self,
+        params: lsp_request_params!("textDocument/semanticTokens/range"),
+    ) -> Result<lsp_request_result!("textDocument/semanticTokens/range"), LspError> {
+        let path = self.get_path_from_uri(&params.text_document.uri)?;
+        let root_path = Self::get_baml_project_root(&path)?;
+        let project_handle = self.get_or_create_project(root_path)?;
+
+        let project = project_handle.project.try_lock_db()?;
+        let lsp_db = project.db();
+        let Some(source_file) = lsp_db.get_file(std::path::Path::new(path.as_str())) else {
+            return Ok(None);
+        };
+        let text = source_file.text(lsp_db);
+
+        let start = u32::try_from(baml_project::position::lsp_position_to_offset(
+            text,
+            &params.range.start,
+        ))
+        .unwrap_or(u32::MAX);
+        let end = u32::try_from(baml_project::position::lsp_position_to_offset(
+            text,
+            &params.range.end,
+        ))
+        .unwrap_or(u32::MAX);
+        let tokens =
+            baml_lsp2_actions::tokens::semantic_tokens_in_range(lsp_db, source_file, start, end);
+        let lsp_tokens = encode_semantic_tokens(&tokens, text);
+
+        Ok(Some(lsp_types::SemanticTokensRangeResult::Tokens(
             lsp_types::SemanticTokens {
                 result_id: None,
                 data: lsp_tokens,
@@ -854,6 +860,42 @@ impl BexLspRequest for BexMulitProject {
             new_text: formatted,
         }]))
     }
+}
+
+/// Delta-encode semantic tokens into the LSP wire format (relative line/start,
+/// legend indices). Shared by the `full` and `range` requests.
+fn encode_semantic_tokens(
+    tokens: &[baml_lsp2_actions::tokens::SemanticToken],
+    text: &str,
+) -> Vec<lsp_types::SemanticToken> {
+    let line_index = baml_project::position::LineIndex::new(text);
+    let mut out = Vec::with_capacity(tokens.len());
+    let mut prev_line = 0u32;
+    let mut prev_start = 0u32;
+    for token in tokens {
+        let start_offset: u32 = token.range.start().into();
+        let end_offset: u32 = token.range.end().into();
+        let length = end_offset - start_offset;
+        let Some(pos) = line_index.offset_to_position(start_offset) else {
+            continue;
+        };
+        let delta_line = pos.line - prev_line;
+        let delta_start = if delta_line == 0 {
+            pos.character - prev_start
+        } else {
+            pos.character
+        };
+        out.push(lsp_types::SemanticToken {
+            delta_line,
+            delta_start,
+            length,
+            token_type: token.token_type.legend_index(),
+            token_modifiers_bitset: token.modifiers.bits(),
+        });
+        prev_line = pos.line;
+        prev_start = pos.character;
+    }
+    out
 }
 
 /// Convert a compiler2 `DefinitionKind` to an LSP `SymbolKind`.
