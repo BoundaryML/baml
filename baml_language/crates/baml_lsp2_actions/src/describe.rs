@@ -938,11 +938,7 @@ fn render_method_signature(
             let ty = exported
                 .and_then(|ef| ef.params.get(i))
                 .map(|fp| crate::utils::display_ty_canonical_for_file(db, file, &fp.ty))
-                .or_else(|| {
-                    p.type_expr
-                        .as_ref()
-                        .map(|te| crate::utils::display_type_expr(&te.expr))
-                })
+                .or_else(|| p.type_expr.as_ref().map(crate::utils::display_type_expr))
                 .unwrap_or_else(|| "unknown".to_string());
             let opt = if p.default.is_some() { "?" } else { "" };
             format!("{pname}{opt}: {ty}")
@@ -952,11 +948,7 @@ fn render_method_signature(
     let ret = if m.return_type.is_some() {
         let ty = exported
             .map(|ef| crate::utils::display_ty_canonical_for_file(db, file, &ef.return_type))
-            .or_else(|| {
-                m.return_type
-                    .as_ref()
-                    .map(|te| crate::utils::display_type_expr(&te.expr))
-            })
+            .or_else(|| m.return_type.as_ref().map(crate::utils::display_type_expr))
             .unwrap_or_default();
         format!(" -> {ty}")
     } else {
@@ -976,7 +968,7 @@ fn render_method_signature(
         None => m
             .throws
             .as_ref()
-            .map(|te| format!(" throws {}", crate::utils::display_type_expr(&te.expr)))
+            .map(|te| format!(" throws {}", crate::utils::display_type_expr(te)))
             .unwrap_or_default(),
     };
 
@@ -1384,11 +1376,11 @@ fn find_dependencies(
             let iface = &item_tree[iface_loc.id(db)];
             for field in &iface.fields {
                 if let Some(te) = &field.type_expr {
-                    collect_type_expr_deps(db, file, &te.expr, &mut deps, &mut seen);
+                    collect_type_expr_deps(db, file, te, &mut deps, &mut seen);
                 }
             }
             for parent in &iface.requires {
-                collect_type_expr_deps(db, file, &parent.expr, &mut deps, &mut seen);
+                collect_type_expr_deps(db, file, parent, &mut deps, &mut seen);
             }
         }
         baml_compiler2_hir::contributions::Definition::TypeAlias(alias_loc) => {
@@ -1396,7 +1388,7 @@ fn find_dependencies(
             let item_tree = baml_compiler2_hir::file_item_tree(db, file);
             let alias = &item_tree[alias_loc.id(db)];
             if let Some(spanned_te) = &alias.type_expr {
-                collect_type_expr_deps(db, file, &spanned_te.expr, &mut deps, &mut seen);
+                collect_type_expr_deps(db, file, spanned_te, &mut deps, &mut seen);
             }
         }
         baml_compiler2_hir::contributions::Definition::Client(client_loc) => {
@@ -1445,9 +1437,9 @@ fn collect_type_expr_deps(
     deps: &mut Vec<DepRef>,
     seen: &mut std::collections::HashSet<String>,
 ) {
-    use baml_compiler2_ast::TypeExpr;
-    match te {
-        TypeExpr::Path {
+    use baml_compiler2_ast::TypeExprKind;
+    match &te.kind {
+        TypeExprKind::Path {
             segments,
             generic_args,
             ..
@@ -1465,19 +1457,19 @@ fn collect_type_expr_deps(
                 collect_type_expr_deps(db, file, ga, deps, seen);
             }
         }
-        TypeExpr::Optional { inner, .. } | TypeExpr::List { inner, .. } => {
+        TypeExprKind::Optional { inner, .. } | TypeExprKind::List { inner, .. } => {
             collect_type_expr_deps(db, file, inner, deps, seen);
         }
-        TypeExpr::Map { key, value, .. } => {
+        TypeExprKind::Map { key, value, .. } => {
             collect_type_expr_deps(db, file, key, deps, seen);
             collect_type_expr_deps(db, file, value, deps, seen);
         }
-        TypeExpr::Union { variants, .. } => {
+        TypeExprKind::Union { variants, .. } => {
             for v in variants {
                 collect_type_expr_deps(db, file, v, deps, seen);
             }
         }
-        TypeExpr::Function {
+        TypeExprKind::Function {
             params,
             ret,
             throws,

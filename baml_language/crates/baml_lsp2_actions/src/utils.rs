@@ -22,7 +22,7 @@
 
 use baml_base::{Name, SourceFile};
 use baml_compiler_syntax::{SyntaxToken, TokenAtOffset};
-use baml_compiler2_ast::TypeExpr;
+use baml_compiler2_ast::{TypeExpr, TypeExprKind};
 use baml_compiler2_hir::{contributions::Definition, package::PackageItems};
 use baml_compiler2_tir::{
     ty::{QualifiedTypeName, Ty, TyRenderStrategy},
@@ -295,7 +295,10 @@ pub fn display_ty(ty: &Ty) -> String {
 // ── display_type_expr ─────────────────────────────────────────────────────────
 
 fn type_expr_needs_postfix_parens(te: &TypeExpr) -> bool {
-    matches!(te, TypeExpr::Union { .. } | TypeExpr::Function { .. })
+    matches!(
+        te.kind,
+        TypeExprKind::Union { .. } | TypeExprKind::Function { .. }
+    )
 }
 
 fn display_type_expr_as_postfix_base(te: &TypeExpr) -> String {
@@ -309,7 +312,7 @@ fn display_type_expr_as_postfix_base(te: &TypeExpr) -> String {
 
 fn display_type_expr_as_function_result(te: &TypeExpr) -> String {
     let rendered = display_type_expr(te);
-    if matches!(te, TypeExpr::Function { .. }) {
+    if matches!(te.kind, TypeExprKind::Function { .. }) {
         format!("({rendered})")
     } else {
         rendered
@@ -322,40 +325,42 @@ fn display_type_expr_as_function_result(te: &TypeExpr) -> String {
 /// output, where we have the AST type expression before resolution. This
 /// produces output that matches the user's source syntax.
 pub fn display_type_expr(te: &TypeExpr) -> String {
-    let rendered = match te {
-        TypeExpr::Path { segments, .. } => {
+    let rendered = match &te.kind {
+        TypeExprKind::Path { segments, .. } => {
             // Use only the last segment for brevity (e.g. `baml.Foo` → `Foo`).
             segments
                 .last()
                 .map(|n| n.as_str().to_string())
                 .unwrap_or_else(|| "unknown".to_string())
         }
-        TypeExpr::AssociatedTypeProjection { .. } => te.to_string(),
-        TypeExpr::Int { .. } => "int".to_string(),
-        TypeExpr::Bigint { .. } => "bigint".to_string(),
-        TypeExpr::Float { .. } => "float".to_string(),
-        TypeExpr::String { .. } => "string".to_string(),
-        TypeExpr::Bool { .. } => "bool".to_string(),
-        TypeExpr::Null { .. } => "null".to_string(),
-        TypeExpr::Uint8Array { .. } => "uint8array".to_string(),
-        TypeExpr::Media { kind, .. } => format!("{kind:?}").to_lowercase(),
-        TypeExpr::Optional { inner, .. } => {
+        TypeExprKind::AssociatedTypeProjection { .. } => te.to_string(),
+        TypeExprKind::Int { .. } => "int".to_string(),
+        TypeExprKind::Bigint { .. } => "bigint".to_string(),
+        TypeExprKind::Float { .. } => "float".to_string(),
+        TypeExprKind::String { .. } => "string".to_string(),
+        TypeExprKind::Bool { .. } => "bool".to_string(),
+        TypeExprKind::Null { .. } => "null".to_string(),
+        TypeExprKind::Uint8Array { .. } => "uint8array".to_string(),
+        TypeExprKind::Media { kind, .. } => format!("{kind:?}").to_lowercase(),
+        TypeExprKind::Optional { inner, .. } => {
             format!("{}?", display_type_expr_as_postfix_base(inner))
         }
-        TypeExpr::List { inner, .. } => format!("{}[]", display_type_expr_as_postfix_base(inner)),
-        TypeExpr::Map { key, value, .. } => {
+        TypeExprKind::List { inner, .. } => {
+            format!("{}[]", display_type_expr_as_postfix_base(inner))
+        }
+        TypeExprKind::Map { key, value, .. } => {
             format!(
                 "map<{}, {}>",
                 display_type_expr(key),
                 display_type_expr(value)
             )
         }
-        TypeExpr::Union { variants, .. } => {
+        TypeExprKind::Union { variants, .. } => {
             let parts: Vec<_> = variants.iter().map(display_type_expr).collect();
             parts.join(" | ")
         }
-        TypeExpr::Literal { value, .. } => value.to_string(),
-        TypeExpr::Function {
+        TypeExprKind::Literal { value, .. } => value.to_string(),
+        TypeExprKind::Function {
             params,
             ret,
             throws,
@@ -385,12 +390,12 @@ pub fn display_type_expr(te: &TypeExpr) -> String {
                 throws
             )
         }
-        TypeExpr::BuiltinUnknown { .. } => "unknown".to_string(),
-        TypeExpr::Never { .. } => "never".to_string(),
-        TypeExpr::Void { .. } => "void".to_string(),
-        TypeExpr::Type { .. } => "type".to_string(),
-        TypeExpr::Rust { .. } => "$rust_type".to_string(),
-        TypeExpr::Error { .. } | TypeExpr::Unknown { .. } => "unknown".to_string(),
+        TypeExprKind::BuiltinUnknown { .. } => "unknown".to_string(),
+        TypeExprKind::Never { .. } => "never".to_string(),
+        TypeExprKind::Void { .. } => "void".to_string(),
+        TypeExprKind::Type { .. } => "type".to_string(),
+        TypeExprKind::Rust { .. } => "$rust_type".to_string(),
+        TypeExprKind::Error { .. } | TypeExprKind::Unknown { .. } => "unknown".to_string(),
     };
     humanize_type_string(&rendered)
 }

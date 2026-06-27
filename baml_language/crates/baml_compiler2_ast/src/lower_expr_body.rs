@@ -16,8 +16,8 @@ use crate::{
         ArrayRestPat, AssignOp, AstSourceMap, BinaryOp, CallArg, CatchArm, CatchArmId, CatchClause,
         CatchClauseKind, DefaultExprId, Expr, ExprBody, ExprId, FieldPat, FunctionBodyDef,
         FunctionDef, FunctionDefaults, LetOrigin, Literal, LoopOrigin, MatchArm, MatchArmId, Param,
-        PatId, Pattern, SpannedTypeExpr, SpreadField, Stmt, StmtId, TemplateIfBranch,
-        TemplateSegment, TemplateTag, TypeAnnotId, TypeExpr, UnaryOp,
+        PatId, Pattern, SpreadField, Stmt, StmtId, TemplateIfBranch, TemplateSegment, TemplateTag,
+        TypeAnnotId, TypeExpr, TypeExprKind, UnaryOp,
     },
 };
 
@@ -2686,7 +2686,7 @@ impl LoweringContext {
             })
             .and_then(baml_compiler_syntax::ast::TypeExpr::cast)
             .map(|te| crate::lower_type_expr::lower_type_expr_node(&te))
-            .unwrap_or_else(|| TypeExpr::Unknown { attrs: Vec::new() });
+            .unwrap_or_else(|| TypeExprKind::Unknown { attrs: Vec::new() }.at(node.span_range()));
 
         let id = self.alloc_expr(Expr::Upcast { base, target }, node.span_range());
         if self.needs_chain_wrap.remove(&base) {
@@ -3470,13 +3470,13 @@ impl LoweringContext {
         // let __tt_parts: string[] = [];
         stmts.push(self.tt_let_typed_empty_list(
             &parts,
-            TypeExpr::String { attrs: Vec::new() },
+            TypeExprKind::String { attrs: Vec::new() }.at(span),
             span,
         ));
         // let __tt_values: unknown[] = [];
         stmts.push(self.tt_let_typed_empty_list(
             &values,
-            TypeExpr::BuiltinUnknown { attrs: Vec::new() },
+            TypeExprKind::BuiltinUnknown { attrs: Vec::new() }.at(span),
             span,
         ));
         // let __tt_cur = "";
@@ -3681,10 +3681,11 @@ impl LoweringContext {
         // (`visible_from == let.span.end`) begins at `span.start`, letting the
         // start-anchored accumulator references (see `tt_path`) resolve to it.
         let at = TextRange::empty(span.start());
-        let list_ty = TypeExpr::List {
+        let list_ty = TypeExprKind::List {
             inner: Box::new(elem),
             attrs: Vec::new(),
-        };
+        }
+        .at(span);
         let type_pat = self.alloc_pattern(Pattern::Type(list_ty), at);
         let pat = self.alloc_pattern(
             Pattern::Bind {
@@ -4216,7 +4217,7 @@ impl LoweringContext {
         // We scan children in order, skipping items until after PARAMETER_LIST.
         let return_type = {
             let mut after_params = false;
-            let mut found: Option<SpannedTypeExpr> = None;
+            let mut found: Option<TypeExpr> = None;
             for child in node.children() {
                 match child.kind() {
                     SyntaxKind::PARAMETER_LIST | SyntaxKind::GENERIC_PARAM_LIST => {
@@ -4227,10 +4228,10 @@ impl LoweringContext {
                     }
                     SyntaxKind::TYPE_EXPR if after_params && found.is_none() => {
                         if let Some(te) = ast::TypeExpr::cast(child.clone()) {
-                            found = Some(SpannedTypeExpr {
-                                expr: crate::lower_type_expr::lower_type_expr_node(&te),
-                                span: child.span_range(),
-                            });
+                            found = Some(
+                                crate::lower_type_expr::lower_type_expr_node(&te)
+                                    .with_span(child.span_range()),
+                            );
                         }
                     }
                     _ => {}
@@ -4245,9 +4246,9 @@ impl LoweringContext {
             .find(|n| n.kind() == SyntaxKind::THROWS_CLAUSE)
             .and_then(ast::ThrowsClause::cast)
             .and_then(|tc| tc.type_expr())
-            .map(|te| SpannedTypeExpr {
-                span: te.syntax().span_range(),
-                expr: crate::lower_type_expr::lower_type_expr_node(&te),
+            .map(|te| {
+                crate::lower_type_expr::lower_type_expr_node(&te)
+                    .with_span(te.syntax().span_range())
             });
 
         // Lower body via a FRESH LoweringContext — lambda gets its own ExprBody.
@@ -4845,15 +4846,15 @@ impl LoweringContext {
 
         let sub_param = Param {
             name: Name::new("testset"),
-            type_expr: Some(SpannedTypeExpr {
-                expr: TypeExpr::Path {
+            type_expr: Some(
+                TypeExprKind::Path {
                     segments: vec![Name::new("testing"), Name::new("TestCollector")],
                     generic_args: vec![],
                     associated_type_bindings: vec![],
                     attrs: vec![],
-                },
-                span,
-            }),
+                }
+                .at(span),
+            ),
             default: None,
             span,
             name_span: span,

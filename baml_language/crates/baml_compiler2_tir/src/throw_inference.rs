@@ -360,7 +360,7 @@ fn lower_param_types<'db>(
             let mut diags = Vec::new();
             let ty = lower_type_expr_in_ns(
                 db,
-                &type_expr.expr,
+                type_expr,
                 pkg_items,
                 ns_context,
                 generic_params,
