@@ -1433,7 +1433,7 @@ function baml.String.from_utf8(utf8: uint8array) -> string {
 function baml.String.includes(self: baml.String, search: string) -> bool {
 }
 
-function baml.String.index_of(self: baml.String, search: string) -> int {
+function baml.String.index_of(self: baml.String, search: string) -> int | null {
 }
 
 function baml.String.is_alphabetic(self: baml.String) -> bool {
