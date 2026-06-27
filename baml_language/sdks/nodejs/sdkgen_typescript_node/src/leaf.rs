@@ -43,6 +43,21 @@ pub(crate) struct LeafBody {
     pub(crate) symbols: Vec<(EmittedSymbol, SortKey)>,
 }
 
+impl LeafBody {
+    fn callable_child_aliases(&self, kids: &BTreeSet<String>) -> BTreeMap<String, String> {
+        let mut out = BTreeMap::new();
+        for (sym, _) in &self.symbols {
+            let EmittedSymbol::Function(f) = sym else {
+                continue;
+            };
+            if f.mode == SyncAsync::Sync && kids.contains(&f.name) {
+                out.insert(f.name.clone(), child_namespace_alias(&f.name));
+            }
+        }
+        out
+    }
+}
+
 pub(crate) fn group_and_sort(
     triples: Vec<(LeafPath, EmittedSymbol, SortKey)>,
 ) -> BTreeMap<LeafPath, LeafBody> {
@@ -362,6 +377,7 @@ pub(crate) fn render_index_ts(body: &LeafBody, kids: &BTreeSet<String>, is_root:
         current_leaf: body.leaf.clone(),
     };
     let mut state = RenderState::default();
+    let callable_child_aliases = body.callable_child_aliases(kids);
 
     // Render symbol bodies first so the import preamble can be computed.
     let mut body_str = String::new();
@@ -370,13 +386,26 @@ pub(crate) fn render_index_ts(body: &LeafBody, kids: &BTreeSet<String>, is_root:
         if prev.is_some() {
             body_str.push('\n');
         }
-        render_symbol_ts(&mut body_str, sym, &ctx, &mut state);
+        render_symbol_ts(
+            &mut body_str,
+            sym,
+            &ctx,
+            &mut state,
+            &callable_child_aliases,
+        );
         prev = Some(key);
     }
 
     state.uses_baml_handle = body_str.contains("_BamlHandle");
     let mut out = String::new();
-    write_preamble_ts(&mut out, &state, body, kids, is_root);
+    write_preamble_ts(
+        &mut out,
+        &state,
+        body,
+        kids,
+        &callable_child_aliases,
+        is_root,
+    );
     if !body_str.is_empty() {
         if !out.is_empty() {
             out.push('\n');
@@ -445,10 +474,20 @@ fn leaf_module_specifier(from: &LeafPath, to: &LeafPath) -> String {
 /// segment (including `void`), but a reserved word like `default` is not a
 /// legal `export * as` alias — bind a mangled local and re-export under the
 /// reserved name (legal as an export name).
-fn write_child_reexports(out: &mut String, kids: &BTreeSet<String>) {
+fn child_namespace_alias(kid: &str) -> String {
+    format!("__ns_{kid}")
+}
+
+fn write_child_reexports(
+    out: &mut String,
+    kids: &BTreeSet<String>,
+    callable_child_aliases: &BTreeMap<String, String>,
+) {
     for kid in kids {
         let child_path = format!("./{kid}/index.js");
-        if is_js_reserved(kid) {
+        if let Some(local) = callable_child_aliases.get(kid) {
+            let _ = writeln!(out, "import * as {local} from \"{child_path}\";");
+        } else if is_js_reserved(kid) {
             let local = format!("__ns_{kid}");
             let _ = writeln!(out, "import * as {local} from \"{child_path}\";");
             let _ = writeln!(out, "export {{ {local} as {kid} }};");
@@ -488,6 +527,7 @@ fn write_preamble_ts(
     state: &RenderState,
     body: &LeafBody,
     kids: &BTreeSet<String>,
+    callable_child_aliases: &BTreeMap<String, String>,
     is_root: bool,
 ) {
     if state.uses_baml_handle {
@@ -509,12 +549,12 @@ fn write_preamble_ts(
         out.push_str("setTypeMap(_TYPE_MAP);\n");
         if !kids.is_empty() {
             out.push('\n');
-            write_child_reexports(out, kids);
+            write_child_reexports(out, kids, callable_child_aliases);
         }
     } else {
         out.push_str(&runtime_import_line(state, &[]));
         out.push_str(&cross_leaf_imports(state, &body.leaf));
-        write_child_reexports(out, kids);
+        write_child_reexports(out, kids, callable_child_aliases);
     }
 }
 
@@ -525,6 +565,7 @@ fn render_symbol_ts(
     sym: &EmittedSymbol,
     ctx: &TranslateCtx,
     state: &mut RenderState,
+    callable_child_aliases: &BTreeMap<String, String>,
 ) {
     match sym {
         EmittedSymbol::Class(c) => {
@@ -536,7 +577,13 @@ fn render_symbol_ts(
         }
         EmittedSymbol::Enum(e) => render_enum(out, e),
         EmittedSymbol::TypeAlias(a) => render_type_alias(out, a, ctx, state),
-        EmittedSymbol::Function(f) => render_function_ts(out, f, ctx, state),
+        EmittedSymbol::Function(f) => render_function_ts(
+            out,
+            f,
+            ctx,
+            state,
+            callable_child_aliases.get(&f.name).map(String::as_str),
+        ),
     }
 }
 
@@ -768,6 +815,7 @@ fn render_function_ts(
     f: &NodeFunction,
     ctx: &TranslateCtx,
     state: &mut RenderState,
+    child_namespace_alias: Option<&str>,
 ) {
     write_doc_with_raises(out, f.docstring.as_deref(), &f.raises_names);
     state.uses_define_function = true;
@@ -797,11 +845,14 @@ fn render_function_ts(
     let optional_arg = optional_param_names_arg(&optional_params);
     // Free functions bind only their own `<...>` params (no generic receiver).
     let tail = factory_tail(&optional_arg, &f.generic_params, &[]);
-    let factory = format!(
+    let mut factory = format!(
         "defineFunction(\"{}\", \"{}\", {required_params_lit}{tail}) as {sig}",
         f.baml_fqn,
         mode_str(f.mode),
     );
+    if let Some(alias) = child_namespace_alias {
+        factory = format!("Object.assign({factory}, {alias})");
+    }
     if is_js_reserved(&f.name) {
         // `export const new = …` is a syntax error; bind a mangled local
         // and re-export under the reserved name.
@@ -1129,6 +1180,43 @@ mod tests {
         let ts = render_index_ts(&b, &kids, false);
         assert!(ts.contains("export * as aws from \"./aws/index.js\";"));
         assert!(!ts.contains("export const"));
+    }
+
+    #[test]
+    fn callable_child_collision_composes_function_with_namespace() {
+        let b = body(
+            &["vendor", "boundary"],
+            vec![
+                func_sym(
+                    "id",
+                    "boundary.id",
+                    SyncAsync::Sync,
+                    vec![],
+                    Ty::Class(name("boundary", &[], "LocalId"), vec![]),
+                ),
+                func_sym(
+                    "id_async",
+                    "boundary.id",
+                    SyncAsync::Async,
+                    vec![],
+                    Ty::Class(name("boundary", &[], "LocalId"), vec![]),
+                ),
+                class_sym("LocalId", name("boundary", &[], "LocalId"), vec![]),
+            ],
+        );
+        let mut kids = BTreeSet::new();
+        kids.insert("id".to_string());
+        let ts = render_index_ts(&b, &kids, false);
+        assert!(ts.contains("import * as __ns_id from \"./id/index.js\";"));
+        assert!(!ts.contains("export * as id from \"./id/index.js\";"));
+        assert!(ts.contains(
+            "export const id = Object.assign(defineFunction(\"boundary.id\", \"sync\", []) as () => LocalId, __ns_id);"
+        ));
+        assert!(
+            ts.contains(
+                "export const id_async = defineFunction(\"boundary.id\", \"async\", []) as () => Promise<LocalId>;"
+            )
+        );
     }
 
     #[test]

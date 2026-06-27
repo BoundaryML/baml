@@ -30,7 +30,6 @@ fn user.CatchAndRethrow(x: int) -> string {
     let _0: string // _0 // return
     let _1: int // x // param
     let _2: unknown // e
-    let _3: string
 
     bb0: {
         _0 = call const fn user.MayFail(copy _1) -> [bb1, unwind: bb2];
@@ -45,8 +44,7 @@ fn user.CatchAndRethrow(x: int) -> string {
     }
 
     bb3: {
-        _3 = copy _2;
-        throw copy _3;
+        rethrow copy _2;
     }
 }
 
@@ -73,7 +71,7 @@ fn user.CatchWithFallback(x: int) -> string {
     }
 
     bb3: {
-        throw copy _2;
+        rethrow copy _2;
     }
 
     bb4: {
@@ -108,7 +106,7 @@ fn user.CatchWithTypedArm(x: int) -> string {
     }
 
     bb2: {
-        throw copy _2;
+        rethrow copy _2;
     }
 
     bb3: {
@@ -144,7 +142,7 @@ fn user.ChainedCatchClauses(x: int) -> string {
     }
 
     bb3: {
-        throw copy _2;
+        rethrow copy _2;
     }
 
     bb4: {
@@ -235,7 +233,7 @@ fn user.MultipleCatchArms(x: int) -> string {
     }
 
     bb3: {
-        throw copy _2;
+        rethrow copy _2;
     }
 
     bb4: {
@@ -309,7 +307,7 @@ fn user.SingleCatchTyped(x: int) -> string {
     }
 
     bb2: {
-        throw copy _2;
+        rethrow copy _2;
     }
 
     bb3: {
