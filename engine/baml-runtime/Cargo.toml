@@ -139,7 +139,7 @@ aws-config = { version = "=1.5.3", default-features = false, features = [] }
 # https://github.com/awslabs/aws-sdk-rust/issues/1263
 # same goes for aws-config.
 # Potential migration https://docs.aws.amazon.com/sdk-for-rust/latest/dg/http.html#tlsProviders
-aws-sdk-bedrockruntime = { version = "=1.106.0", default-features = false, features = [
+aws-sdk-bedrockruntime = { version = "=1.107.0", default-features = false, features = [
 ] }
 colored = { version = "2.1.0", default-features = false, features = [
   "no-color",
@@ -173,7 +173,7 @@ aws-config = "=1.5.3"
 # https://github.com/awslabs/aws-sdk-rust/issues/1263
 # same goes for aws-config.
 # Potential migration https://docs.aws.amazon.com/sdk-for-rust/latest/dg/http.html#tlsProviders
-aws-sdk-bedrockruntime = { version = "=1.106.0", default-features = false, features = [
+aws-sdk-bedrockruntime = { version = "=1.107.0", default-features = false, features = [
 ] }
 axum = "0.7.5"
 axum-extra = { version = "0.9.3", features = ["erased-json", "typed-header"] }
@@ -181,7 +181,7 @@ criterion = "0.5.1"
 # depends on ring
 gcp_auth = "0.12.3"
 hostname = "0.3.1"
-jsonwebtoken = { version = "9.3.0" }
+jsonwebtoken = { version = "10.3.0" }
 notify-debouncer-full = "0.3.1"
 ring = { version = "0.17.4", features = ["std"] }
 tokio = { version = "1", features = ["full"] }
