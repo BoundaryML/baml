@@ -103,6 +103,7 @@ fn style_for(token_type: SemanticTokenType) -> Style {
         T::Parameter => Style::new().color256(173),
         T::Namespace => Style::new().cyan().bright(),
         T::String | T::Regexp => Style::new().green(),
+        T::EscapeSequence => Style::new().color256(214),
         T::Number => Style::new().yellow().bright(),
         T::Comment => Style::new().color256(244),
         T::Decorator => Style::new().color256(179),

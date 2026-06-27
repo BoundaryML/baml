@@ -423,6 +423,17 @@ fn resolve_field_access_at(
                 range: *name_range,
             })
         }
+        MemberResolution::InterfaceMethod { iface_loc, .. }
+        | MemberResolution::InterfaceField { iface_loc, .. } => {
+            // An interface member accessed on an interface-typed value: navigate
+            // to the declaring interface.
+            let def = baml_compiler2_hir::contributions::Definition::Interface(*iface_loc);
+            let (def_file, range) = utils::definition_span(db, def)?;
+            Some(Location {
+                file: def_file,
+                range,
+            })
+        }
     }
 }
 

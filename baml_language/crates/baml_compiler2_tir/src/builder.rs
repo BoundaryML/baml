@@ -2487,7 +2487,10 @@ impl<'db> TypeInferenceBuilder<'db> {
             | MemberResolution::BoundMethod { func_loc, .. }
             | MemberResolution::UnboundMethod { func_loc, .. }
             | MemberResolution::InterfaceDefaultMethod { func_loc, .. } => func_loc,
-            MemberResolution::Field { .. } | MemberResolution::Variant { .. } => {
+            MemberResolution::Field { .. }
+            | MemberResolution::Variant { .. }
+            | MemberResolution::InterfaceMethod { .. }
+            | MemberResolution::InterfaceField { .. } => {
                 return callee_generic_params.to_vec();
             }
         };
@@ -2501,9 +2504,10 @@ impl<'db> TypeInferenceBuilder<'db> {
             MemberResolution::InterfaceDefaultMethod { .. } => {
                 owner_params.into_iter().chain(fn_params).collect()
             }
-            MemberResolution::Field { .. } | MemberResolution::Variant { .. } => {
-                callee_generic_params.to_vec()
-            }
+            MemberResolution::Field { .. }
+            | MemberResolution::Variant { .. }
+            | MemberResolution::InterfaceMethod { .. }
+            | MemberResolution::InterfaceField { .. } => callee_generic_params.to_vec(),
         }
     }
 
@@ -12333,6 +12337,13 @@ impl<'db> TypeInferenceBuilder<'db> {
                         attr: TyAttr::default(),
                     });
                 }
+                self.resolutions.insert(
+                    at,
+                    crate::inference::MemberResolution::InterfaceField {
+                        iface_loc,
+                        field_name: member.clone(),
+                    },
+                );
                 let ty = field
                     .type_expr
                     .as_ref()
@@ -12383,6 +12394,15 @@ impl<'db> TypeInferenceBuilder<'db> {
                     continue;
                 }
                 let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(db, file, fn_id);
+                if bound {
+                    self.resolutions.insert(
+                        at,
+                        crate::inference::MemberResolution::InterfaceMethod {
+                            iface_loc,
+                            method_name: member.clone(),
+                        },
+                    );
+                }
                 let sig = baml_compiler2_ppir::elaborated_function_signature(db, func_loc);
                 // An exact receiver pins `Self` to its own type, not to a fresh
                 // method generic, so suppress the unbound-reference generic there.
@@ -12678,6 +12698,15 @@ impl<'db> TypeInferenceBuilder<'db> {
             for sig in &iface_data.required_methods {
                 if sig.name != *member {
                     continue;
+                }
+                if bound {
+                    self.resolutions.insert(
+                        at,
+                        crate::inference::MemberResolution::InterfaceMethod {
+                            iface_loc,
+                            method_name: member.clone(),
+                        },
+                    );
                 }
                 // An exact receiver pins `Self` to its own type, not to a fresh
                 // method generic, so suppress the unbound-reference generic there.

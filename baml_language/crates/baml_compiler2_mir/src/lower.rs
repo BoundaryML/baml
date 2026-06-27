@@ -1187,7 +1187,7 @@ fn resolution_to_item_ref(
                 name: func_data.name.clone(),
             })
         }
-        MemberResolution::Field { .. } | MemberResolution::Variant { .. } => None,
+        MemberResolution::Field { .. } | MemberResolution::Variant { .. } | MemberResolution::InterfaceMethod { .. } | MemberResolution::InterfaceField { .. } => None,
     }
 }
 
@@ -6013,6 +6013,13 @@ impl<'db> LoweringContext<'db> {
                     Some(MemberResolution::Variant { .. }) => {
                         // Handled by expr_types check below.
                     }
+                    Some(
+                        MemberResolution::InterfaceMethod { .. }
+                        | MemberResolution::InterfaceField { .. },
+                    ) => {
+                        // Interface member on an interface-typed value: fall through
+                        // to the runtime interface-dispatch path below.
+                    }
                     None => {}
                 }
             }
@@ -6080,6 +6087,11 @@ impl<'db> LoweringContext<'db> {
                         // The root segment is a local; chain through class fields.
                         self.lower_multi_segment_path_as_field_chain(expr_id, segments, dest);
                         return;
+                    }
+                    MemberResolution::InterfaceMethod { .. }
+                    | MemberResolution::InterfaceField { .. } => {
+                        // Interface member on an interface-typed value: fall through
+                        // to the runtime interface-dispatch path below.
                     }
                 }
             }
@@ -8556,7 +8568,7 @@ impl<'db> LoweringContext<'db> {
                         | MemberResolution::InterfaceDefaultMethod { func_loc, .. } => {
                             Some(*func_loc)
                         }
-                        MemberResolution::Field { .. } | MemberResolution::Variant { .. } => None,
+                        MemberResolution::Field { .. } | MemberResolution::Variant { .. } | MemberResolution::InterfaceMethod { .. } | MemberResolution::InterfaceField { .. } => None,
                     });
                 if from_pmr.is_some() {
                     from_pmr
@@ -8570,7 +8582,7 @@ impl<'db> LoweringContext<'db> {
                             | MemberResolution::InterfaceDefaultMethod { func_loc, .. } => {
                                 Some(*func_loc)
                             }
-                            MemberResolution::Field { .. } | MemberResolution::Variant { .. } => {
+                            MemberResolution::Field { .. } | MemberResolution::Variant { .. } | MemberResolution::InterfaceMethod { .. } | MemberResolution::InterfaceField { .. } => {
                                 None
                             }
                         })
@@ -8593,7 +8605,7 @@ impl<'db> LoweringContext<'db> {
                     | MemberResolution::UnboundMethod { func_loc, .. }
                     | MemberResolution::InterfaceDefaultMethod { func_loc, .. } => Some(*func_loc),
                     MemberResolution::Free { func_loc } => Some(*func_loc),
-                    MemberResolution::Field { .. } | MemberResolution::Variant { .. } => None,
+                    MemberResolution::Field { .. } | MemberResolution::Variant { .. } | MemberResolution::InterfaceMethod { .. } | MemberResolution::InterfaceField { .. } => None,
                 };
                 if let Some(fl) = func_loc {
                     let body = baml_compiler2_ppir::function_body(self.db, fl);
@@ -8651,7 +8663,7 @@ impl<'db> LoweringContext<'db> {
                         | MemberResolution::InterfaceDefaultMethod { func_loc, .. } => {
                             Some(*func_loc)
                         }
-                        MemberResolution::Field { .. } | MemberResolution::Variant { .. } => None,
+                        MemberResolution::Field { .. } | MemberResolution::Variant { .. } | MemberResolution::InterfaceMethod { .. } | MemberResolution::InterfaceField { .. } => None,
                     });
                 if from_pmr.is_some() {
                     from_pmr
@@ -8665,7 +8677,7 @@ impl<'db> LoweringContext<'db> {
                             | MemberResolution::InterfaceDefaultMethod { func_loc, .. } => {
                                 Some(*func_loc)
                             }
-                            MemberResolution::Field { .. } | MemberResolution::Variant { .. } => {
+                            MemberResolution::Field { .. } | MemberResolution::Variant { .. } | MemberResolution::InterfaceMethod { .. } | MemberResolution::InterfaceField { .. } => {
                                 None
                             }
                         })
@@ -8688,7 +8700,7 @@ impl<'db> LoweringContext<'db> {
                     | MemberResolution::UnboundMethod { func_loc, .. }
                     | MemberResolution::InterfaceDefaultMethod { func_loc, .. } => Some(*func_loc),
                     MemberResolution::Free { func_loc } => Some(*func_loc),
-                    MemberResolution::Field { .. } | MemberResolution::Variant { .. } => None,
+                    MemberResolution::Field { .. } | MemberResolution::Variant { .. } | MemberResolution::InterfaceMethod { .. } | MemberResolution::InterfaceField { .. } => None,
                 };
                 if let Some(fl) = func_loc {
                     let body = baml_compiler2_ppir::function_body(self.db, fl);
@@ -8741,7 +8753,7 @@ impl<'db> LoweringContext<'db> {
                         | MemberResolution::InterfaceDefaultMethod { func_loc, .. } => {
                             Some(*func_loc)
                         }
-                        MemberResolution::Field { .. } | MemberResolution::Variant { .. } => None,
+                        MemberResolution::Field { .. } | MemberResolution::Variant { .. } | MemberResolution::InterfaceMethod { .. } | MemberResolution::InterfaceField { .. } => None,
                     });
                 if from_pmr.is_some() {
                     from_pmr
@@ -8755,7 +8767,7 @@ impl<'db> LoweringContext<'db> {
                             | MemberResolution::InterfaceDefaultMethod { func_loc, .. } => {
                                 Some(*func_loc)
                             }
-                            MemberResolution::Field { .. } | MemberResolution::Variant { .. } => {
+                            MemberResolution::Field { .. } | MemberResolution::Variant { .. } | MemberResolution::InterfaceMethod { .. } | MemberResolution::InterfaceField { .. } => {
                                 None
                             }
                         })
@@ -8778,7 +8790,7 @@ impl<'db> LoweringContext<'db> {
                     | MemberResolution::UnboundMethod { func_loc, .. }
                     | MemberResolution::InterfaceDefaultMethod { func_loc, .. } => Some(*func_loc),
                     MemberResolution::Free { func_loc } => Some(*func_loc),
-                    MemberResolution::Field { .. } | MemberResolution::Variant { .. } => None,
+                    MemberResolution::Field { .. } | MemberResolution::Variant { .. } | MemberResolution::InterfaceMethod { .. } | MemberResolution::InterfaceField { .. } => None,
                 };
                 if let Some(fl) = func_loc {
                     let body = baml_compiler2_ppir::function_body(self.db, fl);
@@ -8852,7 +8864,7 @@ impl<'db> LoweringContext<'db> {
                         | MemberResolution::InterfaceDefaultMethod { func_loc, .. } => {
                             Some(*func_loc)
                         }
-                        MemberResolution::Field { .. } | MemberResolution::Variant { .. } => None,
+                        MemberResolution::Field { .. } | MemberResolution::Variant { .. } | MemberResolution::InterfaceMethod { .. } | MemberResolution::InterfaceField { .. } => None,
                     });
                 if from_pmr.is_some() {
                     from_pmr
@@ -8866,7 +8878,7 @@ impl<'db> LoweringContext<'db> {
                             | MemberResolution::InterfaceDefaultMethod { func_loc, .. } => {
                                 Some(*func_loc)
                             }
-                            MemberResolution::Field { .. } | MemberResolution::Variant { .. } => {
+                            MemberResolution::Field { .. } | MemberResolution::Variant { .. } | MemberResolution::InterfaceMethod { .. } | MemberResolution::InterfaceField { .. } => {
                                 None
                             }
                         })
@@ -8951,7 +8963,7 @@ impl LoweringContext<'_> {
                         | MemberResolution::InterfaceDefaultMethod { func_loc, .. } => {
                             Some(*func_loc)
                         }
-                        MemberResolution::Field { .. } | MemberResolution::Variant { .. } => None,
+                        MemberResolution::Field { .. } | MemberResolution::Variant { .. } | MemberResolution::InterfaceMethod { .. } | MemberResolution::InterfaceField { .. } => None,
                     });
                 if from_pmr.is_some() {
                     from_pmr
@@ -8965,7 +8977,7 @@ impl LoweringContext<'_> {
                             | MemberResolution::InterfaceDefaultMethod { func_loc, .. } => {
                                 Some(*func_loc)
                             }
-                            MemberResolution::Field { .. } | MemberResolution::Variant { .. } => {
+                            MemberResolution::Field { .. } | MemberResolution::Variant { .. } | MemberResolution::InterfaceMethod { .. } | MemberResolution::InterfaceField { .. } => {
                                 None
                             }
                         })
@@ -9790,7 +9802,7 @@ impl<'db> LoweringContext<'db> {
                         return;
                     }
                 }
-                MemberResolution::Field { .. } | MemberResolution::Variant { .. } => {
+                MemberResolution::Field { .. } | MemberResolution::Variant { .. } | MemberResolution::InterfaceMethod { .. } | MemberResolution::InterfaceField { .. } => {
                     // Fall through — handled by the existing field/enum-variant lowering below
                 }
             }

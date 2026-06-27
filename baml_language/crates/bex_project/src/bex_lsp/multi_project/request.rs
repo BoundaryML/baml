@@ -44,7 +44,10 @@ pub(super) fn server_capabilities() -> ServerCapabilities {
                         .iter()
                         .map(|t| lsp_types::SemanticTokenType::new(t.as_str()))
                         .collect(),
-                    token_modifiers: vec![],
+                    token_modifiers: baml_lsp2_actions::TOKEN_MODIFIERS
+                        .iter()
+                        .map(|name| lsp_types::SemanticTokenModifier::new(name))
+                        .collect(),
                 },
                 full: Some(SemanticTokensFullOptions::Bool(true)),
                 range: None,
@@ -344,7 +347,7 @@ impl BexLspRequest for BexMulitProject {
                 delta_start,
                 length,
                 token_type: token.token_type.legend_index(),
-                token_modifiers_bitset: 0,
+                token_modifiers_bitset: token.modifiers.bits(),
             });
 
             prev_line = pos.line;

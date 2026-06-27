@@ -621,6 +621,7 @@ dependencies = [
  "percent-encoding",
  "pin-project-lite",
  "serde_core",
+ "serde_json",
  "serde_path_to_error",
  "serde_urlencoded",
  "sha1",
@@ -984,6 +985,7 @@ dependencies = [
  "baml_compiler_parser",
  "baml_compiler_syntax",
  "baml_workspace",
+ "bitflags 2.11.1",
  "indexmap",
  "insta",
  "rowan 0.16.1",
@@ -7636,6 +7638,21 @@ dependencies = [
 [[package]]
 name = "tools_sccache"
 version = "0.1.0"
+
+[[package]]
+name = "tools_semantic_tokens"
+version = "0.0.0-beta"
+dependencies = [
+ "anyhow",
+ "axum",
+ "baml_lsp2_actions",
+ "baml_lsp2_actions_tests",
+ "baml_project",
+ "clap",
+ "serde",
+ "serde_json",
+ "tokio",
+]
 
 [[package]]
 name = "tower"

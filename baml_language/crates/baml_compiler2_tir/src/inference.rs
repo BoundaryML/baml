@@ -131,6 +131,96 @@ pub(crate) fn inference_owner_scope(
     }
 }
 
+/// The expression body + source map of an inference-bearing scope, plus the
+/// scope id to feed `infer_scope_types`.
+#[derive(Clone)]
+pub struct ScopeBody<'db> {
+    /// The inference-owner scope (`Function` / `Let` / `Lambda`).
+    pub scope: ScopeId<'db>,
+    pub expr_body: ExprBody,
+    pub source_map: AstSourceMap,
+}
+
+/// The body + source map of the scope that owns `scope_id`'s inference (its
+/// nearest `Function` / `Let` / `Lambda`) — the uniform map from a scope to its
+/// expression body, covering function bodies, top-level `let` initializers, and
+/// lambda/closure bodies (including nested ones and `spawn`/block bodies that
+/// lower to closures).
+///
+/// The single place that resolves a scope to its body, so consumers (e.g. the
+/// LSP semantic layer) never reimplement the per-scope-kind lookup that
+/// `infer_scope_types` performs internally.
+pub fn scope_body<'db>(db: &'db dyn crate::Db, scope_id: ScopeId<'db>) -> Option<ScopeBody<'db>> {
+    let file = scope_id.file(db);
+    let index = baml_compiler2_ppir::file_semantic_index(db, file);
+    let owner = inference_owner_scope(index, scope_id.file_scope_id(db));
+    let (expr_body, source_map) = fetch_scope_body(db, file, index, owner)?;
+    Some(ScopeBody {
+        scope: index.scope_ids[owner.index() as usize],
+        expr_body,
+        source_map,
+    })
+}
+
+/// Fetch the `(ExprBody, AstSourceMap)` for an inference-owner scope.
+fn fetch_scope_body<'db>(
+    db: &'db dyn crate::Db,
+    file: SourceFile,
+    index: &baml_compiler2_hir::semantic_index::FileSemanticIndex<'db>,
+    owner: FileScopeId,
+) -> Option<(ExprBody, AstSourceMap)> {
+    let scope = &index.scopes[owner.index() as usize];
+    match scope.kind {
+        ScopeKind::Function => {
+            let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
+            let (local_id, _) = item_tree
+                .functions
+                .iter()
+                .find(|(_, f)| f.span == scope.range && scope.name.as_ref() == Some(&f.name))?;
+            let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(db, file, *local_id);
+            let body = baml_compiler2_ppir::function_body(db, func_loc);
+            let baml_compiler2_hir::body::FunctionBody::Expr(eb) = body.as_ref() else {
+                return None;
+            };
+            let sm = baml_compiler2_ppir::function_body_source_map(db, func_loc)?;
+            Some((eb.clone(), sm))
+        }
+        ScopeKind::Let => {
+            let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
+            let (local_id, _) = item_tree
+                .lets
+                .iter()
+                .find(|(_, l)| l.span == scope.range && scope.name.as_ref() == Some(&l.name))?;
+            let let_loc = baml_compiler2_hir::loc::LetLoc::new(db, file, *local_id);
+            let body = baml_compiler2_hir::body::let_body(db, let_loc);
+            let baml_compiler2_hir::body::LetBody::Expr(eb) = body.as_ref() else {
+                return None;
+            };
+            let sm = baml_compiler2_hir::body::let_body_source_map(db, let_loc)?;
+            Some((eb.clone(), sm))
+        }
+        ScopeKind::Lambda => {
+            // The lambda body is nested inside the enclosing Function/Let body;
+            // descend to it by span.
+            let mut parent = scope.parent;
+            let enclosing = loop {
+                let p = parent?;
+                if matches!(
+                    index.scopes[p.index() as usize].kind,
+                    ScopeKind::Function | ScopeKind::Let
+                ) {
+                    break p;
+                }
+                parent = index.scopes[p.index() as usize].parent;
+            };
+            let (eb, sm) = fetch_scope_body(db, file, index, enclosing)?;
+            let (_, lambda_body, lambda_sm, _) = find_lambda_by_span(&eb, &sm, scope.range)?;
+            Some((lambda_body.clone(), lambda_sm.clone()))
+        }
+        _ => None,
+    }
+}
+
 fn enclosing_type_generics(
     db: &dyn crate::Db,
     file: SourceFile,
@@ -623,6 +713,20 @@ pub enum MemberResolution<'db> {
     InterfaceDefaultMethod {
         iface_loc: InterfaceLoc<'db>,
         func_loc: FunctionLoc<'db>,
+    },
+    /// A required (signature-only) interface method, accessed on an
+    /// interface-typed value (`x.as<Greeter>.greet()`, `self.next()` in a
+    /// default method). It has no body `FunctionLoc` — only the declaring
+    /// interface.
+    InterfaceMethod {
+        iface_loc: InterfaceLoc<'db>,
+        method_name: Name,
+    },
+    /// An interface field, accessed on an interface-typed value
+    /// (`x.as<Named>.name`).
+    InterfaceField {
+        iface_loc: InterfaceLoc<'db>,
+        field_name: Name,
     },
 }
 

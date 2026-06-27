@@ -530,6 +530,7 @@ impl SyntaxKind {
                 | Self::KW_LET
                 | Self::KW_CONST
                 | Self::KW_IN
+                | Self::KW_IS
                 | Self::KW_BREAK
                 | Self::KW_CONTINUE
                 | Self::KW_RETURN
@@ -544,6 +545,7 @@ impl SyntaxKind {
                 | Self::KW_WATCH
                 | Self::KW_INSTANCEOF
                 | Self::KW_DYNAMIC
+                | Self::KW_WITH
         )
     }
 }
