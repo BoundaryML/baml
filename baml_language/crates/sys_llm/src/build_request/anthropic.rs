@@ -85,6 +85,13 @@ pub(crate) fn build_request(
     let mut headers = indexmap::IndexMap::new();
     headers.insert("content-type".to_string(), "application/json".to_string());
     headers.insert("anthropic-version".to_string(), "2023-06-01".to_string());
+    // In the browser (WASM playground), requests go directly to the Anthropic
+    // API. Anthropic blocks browser-origin requests unless this header opts in.
+    #[cfg(target_arch = "wasm32")]
+    headers.insert(
+        "anthropic-dangerous-direct-browser-access".to_string(),
+        "true".to_string(),
+    );
 
     // Body — use the user-provided max_tokens, or fall back to a safe default.
     let max_tokens = match &client.provider_options {

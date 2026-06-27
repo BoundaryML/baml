@@ -218,6 +218,7 @@ mod tests {
                 vec![HeaderObservation {
                     name: "authorization".to_string(),
                     value_redacted: true,
+                    value: None,
                 }],
                 Some(24),
             )

@@ -246,6 +246,7 @@ fn payload_kind_to_wire(kind: &PayloadKind) -> Value {
             "requestHeaders": fetch.request_headers.iter().map(|header| json!({
                 "name": &header.name,
                 "valueRedacted": header.value_redacted,
+                "value": header.value.as_ref(),
             })).collect::<Vec<_>>(),
         }),
         PayloadKind::FetchUpdated(fetch) => json!({
@@ -256,6 +257,7 @@ fn payload_kind_to_wire(kind: &PayloadKind) -> Value {
             "responseHeaders": fetch.response_headers.iter().map(|header| json!({
                 "name": &header.name,
                 "valueRedacted": header.value_redacted,
+                "value": header.value.as_ref(),
             })).collect::<Vec<_>>(),
             "error": fetch.error.as_ref(),
         }),

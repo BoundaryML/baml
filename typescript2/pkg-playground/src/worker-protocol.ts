@@ -367,14 +367,22 @@ export interface PayloadEvent {
         fetchId: string;
         method: string;
         url: string;
-        requestHeaders: Array<{ name: string; valueRedacted: boolean }>;
+        requestHeaders: Array<{
+          name: string;
+          valueRedacted: boolean;
+          value?: string | null;
+        }>;
       }
     | {
         type: 'fetchUpdated';
         fetchId: string;
         status: number | null;
         durationMs: number | null;
-        responseHeaders: Array<{ name: string; valueRedacted: boolean }>;
+        responseHeaders: Array<{
+          name: string;
+          valueRedacted: boolean;
+          value?: string | null;
+        }>;
         error: string | null;
       }
     | {

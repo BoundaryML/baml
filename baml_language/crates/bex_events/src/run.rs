@@ -406,6 +406,34 @@ pub struct FetchUpdated {
 pub struct HeaderObservation {
     pub name: String,
     pub value_redacted: bool,
+    /// Unredacted value, present only for display-safe headers (see
+    /// [`HeaderObservation::observe`]). `None` whenever the value is redacted.
+    pub value: Option<String>,
+}
+
+/// Header whose value is safe to surface in run logs: it carries request
+/// routing info (the original upstream URL when requests go through the
+/// playground proxy), not secrets.
+pub const DISPLAY_SAFE_HEADER_ORIGINAL_URL: &str = "baml-original-url";
+
+impl HeaderObservation {
+    /// Observe a header, redacting its value unless the header is known to be
+    /// display-safe.
+    pub fn observe(name: &str, value: &str) -> Self {
+        if name.eq_ignore_ascii_case(DISPLAY_SAFE_HEADER_ORIGINAL_URL) {
+            HeaderObservation {
+                name: name.to_string(),
+                value_redacted: false,
+                value: Some(value.to_string()),
+            }
+        } else {
+            HeaderObservation {
+                name: name.to_string(),
+                value_redacted: true,
+                value: None,
+            }
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -4230,6 +4258,7 @@ mod tests {
                 vec![HeaderObservation {
                     name: "authorization".to_string(),
                     value_redacted: true,
+                    value: None,
                 }],
                 Some(18),
             )

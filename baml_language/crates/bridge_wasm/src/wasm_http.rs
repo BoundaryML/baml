@@ -736,10 +736,7 @@ impl IoNamespaceHttp for WasmHttp {
 
 fn header_observations(headers: &indexmap::IndexMap<String, String>) -> Vec<HeaderObservation> {
     headers
-        .keys()
-        .map(|name| HeaderObservation {
-            name: name.clone(),
-            value_redacted: true,
-        })
+        .iter()
+        .map(|(name, value)| HeaderObservation::observe(name, value))
         .collect()
 }
