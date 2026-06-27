@@ -16,7 +16,8 @@ pub struct CheckArgs {
 impl CheckArgs {
     pub fn run(&self) -> Result<crate::ExitCode> {
         let reporter = Reporter::new();
-        let (db, from, baml_files) = load_project_for_build(self.from.as_deref(), &reporter, false)?;
+        let (db, from, baml_files) =
+            load_project_for_build(self.from.as_deref(), &reporter, false)?;
         if baml_files.is_empty() {
             reporter.abandon();
             crate::reporter::print_error(format_args!(

@@ -16,9 +16,7 @@ use sdkgen_python_pydantic2::{NamingConvention, OutputType};
 use text_size::{TextRange, TextSize};
 use toml::Spanned;
 
-use crate::{
-    commands::release_version, project_load::load_project_for_build, reporter::Reporter,
-};
+use crate::{commands::release_version, project_load::load_project_for_build, reporter::Reporter};
 
 #[derive(Args, Clone, Debug)]
 pub struct GenerateArgs {
@@ -50,7 +48,8 @@ impl GenerateArgs {
             "Generating",
             format!("clients with CLI version: {}", release_version()),
         );
-        let (db, from, baml_files) = load_project_for_build(self.from.as_deref(), &reporter, false)?;
+        let (db, from, baml_files) =
+            load_project_for_build(self.from.as_deref(), &reporter, false)?;
         if baml_files.is_empty() {
             reporter.abandon();
             crate::reporter::print_error(format_args!(

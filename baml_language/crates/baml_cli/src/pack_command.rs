@@ -40,9 +40,7 @@ use sys_native::SysOpsExt;
 
 use crate::{
     commands::release_version,
-    project_load::{
-        load_project_for_build, resolve_standalone_file, validate_file_from_flags,
-    },
+    project_load::{load_project_for_build, resolve_standalone_file, validate_file_from_flags},
     reporter::Reporter,
 };
 
@@ -264,8 +262,7 @@ impl PackArgs {
     }
 
     fn load_project(&self, reporter: &Reporter) -> Result<(ProjectDatabase, bool)> {
-        let (db, from, baml_files) =
-            load_project_for_build(self.from.as_deref(), reporter, false)?;
+        let (db, from, baml_files) = load_project_for_build(self.from.as_deref(), reporter, false)?;
         if baml_files.is_empty() {
             anyhow::bail!("No .baml files found in {}", from.display());
         }

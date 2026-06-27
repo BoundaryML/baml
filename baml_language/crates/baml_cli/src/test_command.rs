@@ -13,9 +13,7 @@ use bex_engine::{
 use clap::Args;
 use sys_native::{CallId, SysOpsExt};
 
-use crate::{
-    project_load::load_project_for_build, reporter::Reporter, test_filter::TestFilter,
-};
+use crate::{project_load::load_project_for_build, reporter::Reporter, test_filter::TestFilter};
 
 #[derive(Args, Clone, Debug)]
 pub struct TestArgs {
@@ -78,7 +76,8 @@ impl TestArgs {
     pub fn run(&self) -> Result<crate::ExitCode> {
         let reporter = Reporter::new();
         // ── 1. Load project ────────────────────────────────────────────────
-        let (db, from, baml_files) = load_project_for_build(self.from.as_deref(), &reporter, false)?;
+        let (db, from, baml_files) =
+            load_project_for_build(self.from.as_deref(), &reporter, false)?;
         if baml_files.is_empty() {
             reporter.abandon();
             crate::reporter::print_error(format_args!(
@@ -92,8 +91,9 @@ impl TestArgs {
             .ok_or_else(|| anyhow!("No project context"))?;
 
         // ── 2. Diagnostics ─────────────────────────────────────────────────
-        // One "Compiling" verb covers diagnostics + the bytecode build below;
-        // a separate "Checking" line would just repeat the file count.
+        // One "Compiling" spinner stays up for the whole diagnostics +
+        // bytecode-build span below; a separate "Checking" line (or a second
+        // "Compiling") would just repeat the file count.
         reporter.spin("Compiling", format!("{} file(s)", baml_files.len()));
         let source_files = db.get_source_files();
         let diagnostics = baml_project::collect_diagnostics(&db, project, &source_files);
@@ -127,7 +127,8 @@ impl TestArgs {
         let legacy = discover_legacy_tests(&db, project);
 
         // ── 4. Compile + engine + runtime ──────────────────────────────────
-        reporter.spin("Compiling", format!("{} file(s)", baml_files.len()));
+        // The "Compiling N file(s)" spinner from step 2 is still up — no need
+        // to re-issue it here.
         let compile_options = baml_compiler2_emit::CompileOptions {
             emit_test_cases: true,
         };
