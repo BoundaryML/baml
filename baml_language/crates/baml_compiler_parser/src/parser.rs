@@ -1573,12 +1573,28 @@ impl<'a> Parser<'a> {
     }
 
     /// The last non-trivia token in the stream, used to anchor end-of-input
-    /// error spans so they never land on trailing whitespace.
+    /// error spans so they never land on trailing whitespace or comments.
+    ///
+    /// Comments are token sequences (e.g. `// …`), not single trivia tokens, so
+    /// a reverse scan can't recognize them; mirror `current_impl` and walk
+    /// forward, skipping comment runs with `skip_comment_at`, tracking the last
+    /// real (non-basic-trivia) token.
     fn last_non_trivia_token(&self) -> Option<&Token> {
-        self.tokens
-            .iter()
-            .rev()
-            .find(|token| !self.is_basic_trivia(token.kind))
+        let mut last = None;
+        let mut i = 0;
+        while i < self.tokens.len() {
+            let new_i = self.skip_comment_at(i);
+            if new_i != i {
+                i = new_i;
+                continue;
+            }
+            let token = &self.tokens[i];
+            if !self.is_basic_trivia(token.kind) {
+                last = Some(token);
+            }
+            i += 1;
+        }
+        last
     }
 
     /// Expect a token, emit error if not found

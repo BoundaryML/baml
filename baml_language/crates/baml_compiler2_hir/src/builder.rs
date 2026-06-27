@@ -1932,6 +1932,26 @@ impl<'db> SemanticIndexBuilder<'db> {
                     Self::collect_unknown_type_attrs(throws, diagnostics);
                 }
             }
+            ast::TypeExprKind::Path {
+                generic_args,
+                associated_type_bindings,
+                ..
+            } => {
+                for arg in generic_args {
+                    Self::collect_unknown_type_attrs(arg, diagnostics);
+                }
+                for binding in associated_type_bindings {
+                    Self::collect_unknown_type_attrs(&binding.ty, diagnostics);
+                }
+            }
+            ast::TypeExprKind::AssociatedTypeProjection {
+                base, interface, ..
+            } => {
+                Self::collect_unknown_type_attrs(base, diagnostics);
+                if let Some(interface) = interface {
+                    Self::collect_unknown_type_attrs(interface, diagnostics);
+                }
+            }
             _ => {}
         }
     }
@@ -1969,6 +1989,16 @@ impl<'db> SemanticIndexBuilder<'db> {
                     || interface
                         .as_ref()
                         .is_some_and(|interface| Self::type_expr_contains_rust(interface))
+            }
+            ast::TypeExprKind::Path {
+                generic_args,
+                associated_type_bindings,
+                ..
+            } => {
+                generic_args.iter().any(Self::type_expr_contains_rust)
+                    || associated_type_bindings
+                        .iter()
+                        .any(|binding| Self::type_expr_contains_rust(&binding.ty))
             }
             _ => false,
         }

@@ -35,7 +35,7 @@ pub(crate) fn lower_config_value_with_env_refs(
     let Some(cv_node) = item.config_value_node() else {
         return alloc(Expr::Null);
     };
-    lower_config_value_node(&cv_node, item.syntax().span_range(), alloc, env_var_refs)
+    lower_config_value_node(&cv_node, cv_node.span_range(), alloc, env_var_refs)
 }
 
 /// Lower a `CONFIG_VALUE` node into an `Expr`.
