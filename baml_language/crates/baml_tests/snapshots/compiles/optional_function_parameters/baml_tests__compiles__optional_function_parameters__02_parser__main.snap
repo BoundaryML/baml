@@ -147,7 +147,7 @@ SOURCE_FILE
           WORD "string"
           QUESTION "?"
         EQUALS "="
-        WORD "null"
+        KW_NULL "null"
       COMMA ","
       PARAMETER
         WORD "chunk_size"
@@ -350,7 +350,7 @@ SOURCE_FILE
           WORD "string"
           QUESTION "?"
         EQUALS "="
-        WORD "null"
+        KW_NULL "null"
       R_PAREN ")"
     ARROW "->"
     TYPE_EXPR "int"
@@ -365,7 +365,7 @@ SOURCE_FILE
             BINARY_EXPR "filter == null"
               WORD "filter"
               EQUALS_EQUALS "=="
-              WORD "null"
+              KW_NULL "null"
             R_PAREN ")"
           BLOCK_EXPR "{
     max_results
@@ -527,7 +527,7 @@ SOURCE_FILE
             WORD "string"
             QUESTION "?"
           EQUALS "="
-          WORD "null"
+          KW_NULL "null"
         R_PAREN ")"
       ARROW "->"
       TYPE_EXPR "string[]"

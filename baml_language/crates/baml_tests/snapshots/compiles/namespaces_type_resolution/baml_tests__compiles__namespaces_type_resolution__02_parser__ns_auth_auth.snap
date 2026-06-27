@@ -262,7 +262,7 @@ SOURCE_FILE
                 OBJECT_FIELD "expired: true"
                   WORD "expired"
                   COLON ":"
-                  WORD "true"
+                  KW_TRUE "true"
                 R_BRACE "}"
             COMMA ","
           MATCH_ARM

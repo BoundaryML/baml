@@ -3700,7 +3700,11 @@ impl BlockExpr {
                         | SyntaxKind::INTEGER_LITERAL
                         | SyntaxKind::FLOAT_LITERAL
                         | SyntaxKind::STRING_LITERAL
-                        | SyntaxKind::RAW_STRING_LITERAL => Some(BlockElement::ExprToken(t)),
+                        | SyntaxKind::RAW_STRING_LITERAL
+                        // Boolean / null literals are re-lexed contextual keywords.
+                        | SyntaxKind::KW_TRUE
+                        | SyntaxKind::KW_FALSE
+                        | SyntaxKind::KW_NULL => Some(BlockElement::ExprToken(t)),
                         _ => None,
                     }
                 }

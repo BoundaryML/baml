@@ -274,7 +274,7 @@ SOURCE_FILE
                 OBJECT_FIELD "retryable: true"
                   WORD "retryable"
                   COLON ":"
-                  WORD "true"
+                  KW_TRUE "true"
                 R_BRACE "}"
             COMMA ","
           MATCH_ARM

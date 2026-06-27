@@ -33,7 +33,7 @@ SOURCE_FILE
     null
   }"
           L_BRACE "{"
-          WORD "null"
+          KW_NULL "null"
           R_BRACE "}"
     R_BRACE "}"
   FUNCTION_DEF

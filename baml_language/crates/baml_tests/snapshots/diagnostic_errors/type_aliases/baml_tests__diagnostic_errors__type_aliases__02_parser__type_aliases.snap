@@ -45,7 +45,7 @@ SOURCE_FILE
   true
 }"
         L_BRACE "{"
-        WORD "true"
+        KW_TRUE "true"
         R_BRACE "}"
   TYPE_ALIAS_DEF
     KW_TYPE "type"
