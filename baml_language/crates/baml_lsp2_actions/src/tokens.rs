@@ -472,17 +472,6 @@ impl Walk<'_> {
         if kind == SyntaxKind::WORD {
             if let Some(class) = (self.resolve)(token.text_range()) {
                 emit(token.text_range(), class, out);
-            } else {
-                // Transitional: type/config-position `true`/`false`/`null` are
-                // still bare WORDs until those parse sites are re-lexed too; give
-                // them the same classification as the `KW_*` value-position form.
-                match token.text() {
-                    "true" | "false" => {
-                        emit(token.text_range(), plain(SemanticTokenType::Boolean), out);
-                    }
-                    "null" => emit(token.text_range(), plain(SemanticTokenType::Keyword), out),
-                    _ => {}
-                }
             }
             return;
         }
