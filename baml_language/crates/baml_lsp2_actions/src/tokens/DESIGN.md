@@ -135,12 +135,25 @@ IN PROGRESS:
   dispatch reading typed `ast::*` accessors. Behavior-preserving (78 fixtures +
   range test are the oracle).
 
-DEFERRED (documented cost/benefit):
-- **P1 broad remap (true/false/null -> KW_*):** ripples into hover/formatter/CST
-  snapshots for a highlighter-purity gain; the boolean output already ships via a
-  transitional text match. The contained `as`/`type` -> KW_AS/KW_TYPE remap is
-  worthwhile and smaller-radius; do it once C lands (it changes how `classify_token`
-  reads `as`/`type`).
+DELIVERED — parser-token remaps (both done, with every consumer updated):
+- **`as`/`type` -> KW_AS/KW_TYPE** and **`true`/`false`/`null` ->
+  KW_TRUE/KW_FALSE/KW_NULL** at the value/decl parse sites. The classifier now
+  reads every literal and keyword by kind — there is NO remaining text match in
+  the classifier. Consumers updated: ast.rs (TypeAliasDef::name, the `as`
+  checks, the block tail-expression accessor — a trailing `false`/`true`/`null`
+  is the block value, else E0029), baml_fmt (TypeKw/As keyword tokens +
+  KeywordLiteral for bool/null), the lsp classifier (kind-based). 67 parser CST
+  snapshots regenerated (mechanical WORD -> KW_*; the meta-type value `type` and
+  type-position literal types correctly stay WORD, handled by `type_run`).
+  Validated end to end: lsp 440/440, compiler2_ast 73/73, baml_tests 2661/2665
+  (the 4 generic_arg_soundness failures are a pre-existing TIR generics gap,
+  fail on base). The blast-radius cost (hover/lowering/formatter/snapshots) was
+  real but was the work, not a reason to defer — every consumer was mapped and
+  fixed.
+
+REMAINING (niche, reasonable as-is): type-position boolean/null literal *types*
+(`x: true`) stay bare WORDs, classified by `type_run` as types — re-lexing them
+would touch type-parsing + type-check consumers for a niche gain.
 
 ## Phases (each ends green: 78 fixtures unchanged unless the change is the point)
 
