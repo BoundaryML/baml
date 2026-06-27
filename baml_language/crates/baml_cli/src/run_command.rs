@@ -747,8 +747,12 @@ impl RunArgs {
         ));
         // Close out compilation with its elapsed time, then let the program
         // run silently — its output is the point, not our status lines.
-        // `--list` keeps the spinner alive for `print_list` to wrap up.
-        if !self.list {
+        // `--list` has no program run to time, and `print_list` writes straight
+        // to stdout, so just clear the spinner to keep it from smearing over
+        // the listing.
+        if self.list {
+            reporter.abandon();
+        } else {
             reporter.finish("Compiled", format!("{} file(s)", baml_files.len()));
         }
         Ok((db, engine, needs_format_hint))
@@ -796,7 +800,11 @@ impl RunArgs {
             "Compiled {} function(s) from standalone file",
             engine.user_functions().len()
         ));
-        if !self.list {
+        // See `load_and_compile`: clear the spinner before `--list` output,
+        // otherwise finish with the elapsed-time line.
+        if self.list {
+            reporter.abandon();
+        } else {
             reporter.finish("Compiled", &display);
         }
         Ok((db, engine, needs_format_hint))
