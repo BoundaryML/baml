@@ -186,6 +186,32 @@ ast_node!(TypeExpr, TYPE_EXPR);
 ast_node!(Attribute, ATTRIBUTE);
 ast_node!(TypeBuilderBlock, TYPE_BUILDER_BLOCK);
 ast_node!(DynamicTypeDef, DYNAMIC_TYPE_DEF);
+ast_node!(ObjectField, OBJECT_FIELD);
+ast_node!(GenericParam, GENERIC_PARAM);
+
+impl ObjectField {
+    /// The bare-word key of `key: value` (or shorthand `key`).
+    ///
+    /// `None` when the key is a string literal (`"key": value`): such a key is a
+    /// child node, not a bare word.
+    pub fn key(&self) -> Option<SyntaxToken> {
+        self.syntax
+            .children_with_tokens()
+            .find(|element| !element.kind().is_trivia())
+            .and_then(rowan::NodeOrToken::into_token)
+            .filter(|token| token.kind() == SyntaxKind::WORD)
+    }
+}
+
+impl GenericParam {
+    /// The declared parameter name (`T` in `<T: Bound>`).
+    pub fn name(&self) -> Option<SyntaxToken> {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| token.kind() == SyntaxKind::WORD)
+    }
+}
 
 /// Parts of a union member for token-based parsing.
 ///

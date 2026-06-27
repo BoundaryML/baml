@@ -17,10 +17,14 @@
 //!   `declaration` modifier; a reference is classified the same way as its
 //!   definition.
 
+use std::cmp::Ordering;
+
 use baml_base::{Name, SourceFile};
+use baml_compiler_syntax::ast::{GenericParam, ObjectField};
 use baml_compiler_syntax::{SyntaxKind, SyntaxNode, SyntaxToken};
 use baml_compiler2_tir::resolve::{resolve_name_at, resolve_path_at};
-use rowan::NodeOrToken;
+use rowan::ast::AstNode;
+use rowan::{NodeOrToken, WalkEvent};
 use text_size::{TextRange, TextSize};
 
 use crate::Db;
@@ -327,7 +331,7 @@ pub fn semantic_tokens(db: &dyn Db, file: SourceFile) -> Vec<SemanticToken> {
         range: None,
     };
     let mut out = Vec::new();
-    walk.node(&root, &mut out);
+    walk.run(&root, &mut out);
     out
 }
 
@@ -352,7 +356,7 @@ pub fn semantic_tokens_in_range(
         range: Some(range),
     };
     let mut out = Vec::new();
-    walk.node(&root, &mut out);
+    walk.run(&root, &mut out);
     // The range gate is per-subtree; trim the boundary tokens to exactly `range`.
     out.retain(|t| range.intersect(t.range).is_some());
     out
@@ -377,17 +381,56 @@ struct Walk<'db> {
 }
 
 impl Walk<'_> {
-    /// Dispatch a node to its classifier.
-    fn node(&self, node: &SyntaxNode, out: &mut Vec<SemanticToken>) {
-        // Range gate: a subtree disjoint from the viewport is skipped wholesale,
-        // so its tokens are never classified and its scope never resolved.
-        if let Some(r) = self.range {
-            if r.intersect(node.text_range()).is_none() {
-                return;
+    /// The single document-order driver: a flat `preorder_with_tokens()` walk
+    /// (rust-analyzer's `traverse`). Each `Enter(Node)` either hands a complex
+    /// subtree to its wholesale handler and skips it, or descends; each
+    /// `Enter(Token)` is classified from its parent kind ([`classify_token`])
+    /// with a syntactic fallback ([`Self::token`]).
+    fn run(&self, root: &SyntaxNode, out: &mut Vec<SemanticToken>) {
+        let mut preorder = root.preorder_with_tokens();
+        while let Some(event) = preorder.next() {
+            match event {
+                WalkEvent::Enter(NodeOrToken::Node(node)) => {
+                    // Range gate: a subtree disjoint from the viewport is skipped
+                    // wholesale, so its tokens are never classified and its scope
+                    // never resolved.
+                    if let Some(r) = self.range {
+                        if r.intersect(node.text_range()).is_none() {
+                            preorder.skip_subtree();
+                            continue;
+                        }
+                    }
+                    // A node whose classification spans its whole subtree with
+                    // custom traversal (strings, comments, type exprs, object
+                    // literals, generators) is handled wholesale; skipping it
+                    // prevents the flat loop from re-visiting its descendants.
+                    if self.wholesale(&node, out) {
+                        preorder.skip_subtree();
+                    }
+                }
+                WalkEvent::Enter(NodeOrToken::Token(token)) => {
+                    if token.kind().is_whitespace() {
+                        continue;
+                    }
+                    match classify_token(&token) {
+                        Some(class) => emit(token.text_range(), class, out),
+                        None => self.token(&token, out),
+                    }
+                }
+                WalkEvent::Leave(_) => {}
             }
         }
+    }
+
+    /// Classify a node whose logic spans its entire subtree, emitting all of its
+    /// descendant tokens. Returns `true` if `node` was such a node (the caller
+    /// then skips the subtree), `false` to let the flat loop descend normally.
+    fn wholesale(&self, node: &SyntaxNode, out: &mut Vec<SemanticToken>) -> bool {
+        if node.kind().is_comment() {
+            emit_node(node, SemanticTokenType::Comment, out);
+            return true;
+        }
         match node.kind() {
-            ref n if n.is_comment() => emit_node(node, SemanticTokenType::Comment, out),
             // Escape-processing literals: split out `\n`, `\xNN`, `\u{..}`, ...
             SyntaxKind::STRING_LITERAL | SyntaxKind::BYTE_STRING_LITERAL => {
                 string_with_escapes(node, out);
@@ -397,70 +440,12 @@ impl Walk<'_> {
                 emit_node(node, SemanticTokenType::String, out);
             }
             SyntaxKind::BACKTICK_STRING_LITERAL => self.backtick_string(node, out),
-            SyntaxKind::ATTRIBUTE | SyntaxKind::BLOCK_ATTRIBUTE => self.tokens(node, out, |t| {
-                (matches!(t.kind(), SyntaxKind::AT_AT | SyntaxKind::AT | SyntaxKind::WORD)
-                    || t.kind().is_keyword())
-                .then_some(plain(SemanticTokenType::Decorator))
-            }),
-            SyntaxKind::TYPE_ALIAS_DEF | SyntaxKind::ASSOCIATED_TYPE_DECL => {
-                self.type_decl(node, out);
-            }
-            SyntaxKind::ENUM_DEF => self.decl_name(node, SemanticTokenType::Enum, out),
-            SyntaxKind::ENUM_VARIANT => self.decl_name(node, SemanticTokenType::EnumMember, out),
-            SyntaxKind::CLASS_DEF => self.decl_name(node, SemanticTokenType::Class, out),
-            SyntaxKind::INTERFACE_DEF => self.decl_name(node, SemanticTokenType::Interface, out),
-            SyntaxKind::FIELD => self.decl_name(node, SemanticTokenType::Property, out),
-            SyntaxKind::FUNCTION_DEF | SyntaxKind::METHOD_SIG => self.function_def(node, out),
-            SyntaxKind::PARAMETER => self.decl_name(node, SemanticTokenType::Parameter, out),
             SyntaxKind::TYPE_EXPR => self.type_expr(node, out),
-            // `let x`, match-arm bindings, etc.: the bound name is a declaration.
-            SyntaxKind::BINDING_PATTERN => self.decl_name(node, SemanticTokenType::Variable, out),
-            SyntaxKind::CLIENT_TYPE => self.tokens(node, out, |t| {
-                (t.kind() == SyntaxKind::WORD).then_some(plain(SemanticTokenType::Type))
-            }),
-            SyntaxKind::CONFIG_ITEM => self.tokens(node, out, |t| {
-                (t.kind().is_keyword() || t.kind() == SyntaxKind::WORD)
-                    .then_some(plain(SemanticTokenType::Property))
-            }),
-            SyntaxKind::CLIENT_DEF | SyntaxKind::RETRY_POLICY_DEF => {
-                self.decl_name(node, SemanticTokenType::Struct, out);
-            }
-            SyntaxKind::TEST_DEF => self.decl_name(node, SemanticTokenType::Struct, out),
-            SyntaxKind::TEMPLATE_STRING_DEF => {
-                self.decl_name(node, SemanticTokenType::Function, out);
-            }
-            SyntaxKind::PROMPT_FIELD => self.decl_name(node, SemanticTokenType::Property, out),
             SyntaxKind::OBJECT_LITERAL => self.object_literal(node, out),
-            SyntaxKind::OBJECT_FIELD => self.object_field(node, out),
-            SyntaxKind::CLIENT_FIELD => self.tokens(node, out, |t| {
-                (t.kind() == SyntaxKind::KW_CLIENT).then_some(plain(SemanticTokenType::Property))
-            }),
-            // `as` is a contextual keyword (lexed as a WORD) in `.as<T>` casts
-            // and `field as field` interface field links.
-            SyntaxKind::UPCAST_EXPR | SyntaxKind::INTERFACE_FIELD_LINK => self.tokens(node, out, |t| {
-                (t.kind() == SyntaxKind::WORD && t.text() == "as")
-                    .then_some(plain(SemanticTokenType::Keyword))
-            }),
             SyntaxKind::GENERATOR_DEF => self.generator_def(node, out),
-            // A generic parameter declaration (`T` in `class Box<T>`,
-            // `function f<T>()`, `<T: Bound>`): the name as a `TypeParameter`
-            // declaration, any bound dispatched as a type.
-            SyntaxKind::GENERIC_PARAM => {
-                let mut named = false;
-                self.tokens(node, out, |t| {
-                    (!named && t.kind() == SyntaxKind::WORD).then(|| {
-                        named = true;
-                        decl(SemanticTokenType::TypeParameter)
-                    })
-                });
-            }
-            _ => self.children(node, out),
+            _ => return false,
         }
-    }
-
-    /// Walk all children with no special token classification.
-    fn children(&self, node: &SyntaxNode, out: &mut Vec<SemanticToken>) {
-        self.tokens(node, out, |_| None);
+        true
     }
 
     /// Classify a single leaf token. A WORD consults the resolution index (an
@@ -516,10 +501,10 @@ impl Walk<'_> {
         emit(token.text_range(), plain(token_type), out);
     }
 
-    /// The one structural primitive: walk children, dispatching each node and
-    /// classifying each token by `classify`. A `None` result falls back to the
-    /// token's own syntactic classification ([`Self::token`]). Every node handler
-    /// below is a thin wrapper over this.
+    /// A structural primitive for the wholesale handlers: walk a node's direct
+    /// children, classifying each direct token by `classify` (with a syntactic
+    /// fallback) and recursing each child node through [`Self::run`]. A `None`
+    /// result falls back to the token's own classification ([`Self::token`]).
     fn tokens(
         &self,
         node: &SyntaxNode,
@@ -528,47 +513,13 @@ impl Walk<'_> {
     ) {
         for child in node.children_with_tokens() {
             match child {
-                NodeOrToken::Node(n) => self.node(&n, out),
+                NodeOrToken::Node(n) => self.run(&n, out),
                 NodeOrToken::Token(t) => match classify(&t) {
                     Some(class) => emit(t.text_range(), class, out),
                     None => self.token(&t, out),
                 },
             }
         }
-    }
-
-    /// Direct WORD children as a declaration of `ty` (class/enum/field/... names,
-    /// which never appear in the expression index).
-    fn decl_name(&self, node: &SyntaxNode, ty: SemanticTokenType, out: &mut Vec<SemanticToken>) {
-        self.tokens(node, out, |t| (t.kind() == SyntaxKind::WORD).then_some(decl(ty)));
-    }
-
-    /// A `TYPE_ALIAS_DEF` (`type X = …`), an associated-type *declaration*
-    /// (`type Item [extends Bound] [= Default]` in an interface/impl), or an
-    /// associated-type *binding* (`Item = string` inside `Iterator<…>`). All
-    /// three share `ASSOCIATED_TYPE_DECL`/`TYPE_ALIAS_DEF`. The leading `type`
-    /// keyword (a WORD in the grammar) is `Keyword`; the type name is `Type` —
-    /// a declaration when introduced by `type`, otherwise a reference (a
-    /// binding names an existing associated type). Bounds / values are child
-    /// `TYPE_EXPR`s and dispatch on their own.
-    fn type_decl(&self, node: &SyntaxNode, out: &mut Vec<SemanticToken>) {
-        let mut saw_type_kw = false;
-        let mut named = false;
-        self.tokens(node, out, |t| {
-            if t.kind() != SyntaxKind::WORD {
-                return None;
-            }
-            if !named && t.text() == "type" {
-                saw_type_kw = true;
-                return Some(plain(SemanticTokenType::Keyword));
-            }
-            if !named {
-                named = true;
-                let ty = SemanticTokenType::Type;
-                return Some(if saw_type_kw { decl(ty) } else { plain(ty) });
-            }
-            None
-        });
     }
 
     /// A `TYPE_EXPR` — each (possibly dotted) type name resolved to what it
@@ -600,7 +551,7 @@ impl Walk<'_> {
                 }
             }
             match &children[i] {
-                NodeOrToken::Node(n) => self.node(n, out),
+                NodeOrToken::Node(n) => self.run(n, out),
                 NodeOrToken::Token(t) => self.token(t, out),
             }
             i += 1;
@@ -629,19 +580,6 @@ impl Walk<'_> {
         emit(leaf.text_range(), class, out);
     }
 
-    /// A `FUNCTION_DEF` or `METHOD_SIG` — the name as a `Function` (or `Method`,
-    /// inside a class/interface/implements) declaration; parameters, the return
-    /// type, and the body are dispatched as child nodes (the body's identifiers
-    /// resolve through the index).
-    fn function_def(&self, node: &SyntaxNode, out: &mut Vec<SemanticToken>) {
-        let name_type = if in_method_context(node) {
-            SemanticTokenType::Method
-        } else {
-            SemanticTokenType::Function
-        };
-        self.decl_name(node, name_type, out);
-    }
-
     /// An `OBJECT_LITERAL` — the constructed type name as a `Class` reference,
     /// then the body dispatched (field keys + value expressions). The name is a
     /// bare WORD for `Foo { … }` but a leading `PATH_EXPR` (`Foo<int>`) when the
@@ -659,7 +597,7 @@ impl Walk<'_> {
                     typed = true;
                     self.object_type_path(&n, out);
                 }
-                NodeOrToken::Node(n) => self.node(&n, out),
+                NodeOrToken::Node(n) => self.run(&n, out),
                 NodeOrToken::Token(t) => self.token(&t, out),
             }
         }
@@ -724,20 +662,108 @@ impl Walk<'_> {
             _ => None,
         });
     }
+}
 
-    /// An `OBJECT_FIELD` (`a: expr` or `"a": expr`) — a bare-word key (before the
-    /// `:`) as a `Property`; a string key and the value expression dispatched (so
-    /// a value like `null` / `true` isn't mistaken for the key).
-    fn object_field(&self, node: &SyntaxNode, out: &mut Vec<SemanticToken>) {
-        let mut seen_colon = false;
-        self.tokens(node, out, |t| match t.kind() {
-            SyntaxKind::COLON => {
-                seen_colon = true;
-                None
-            }
-            SyntaxKind::WORD if !seen_colon => Some(plain(SemanticTokenType::Property)),
-            _ => None,
-        });
+/// Classify a single leaf token from its parent kind, reproducing what the old
+/// per-node handlers emitted for direct child tokens. Stateful position checks
+/// (which WORD is the name, a key before its `:`) are read off the typed AST or
+/// preceding siblings. Returns `None` for tokens with no parent-driven class, so
+/// the caller falls back to the syntactic classification ([`Walk::token`]).
+fn classify_token(token: &SyntaxToken) -> Option<Class> {
+    let parent = token.parent()?;
+    let kind = token.kind();
+    let word = kind == SyntaxKind::WORD;
+    match parent.kind() {
+        SyntaxKind::ATTRIBUTE | SyntaxKind::BLOCK_ATTRIBUTE => (matches!(
+            kind,
+            SyntaxKind::AT_AT | SyntaxKind::AT | SyntaxKind::WORD
+        ) || kind.is_keyword())
+        .then_some(plain(SemanticTokenType::Decorator)),
+        SyntaxKind::CLIENT_TYPE => word.then_some(plain(SemanticTokenType::Type)),
+        SyntaxKind::CONFIG_ITEM => {
+            (kind.is_keyword() || word).then_some(plain(SemanticTokenType::Property))
+        }
+        SyntaxKind::CLIENT_FIELD => {
+            (kind == SyntaxKind::KW_CLIENT).then_some(plain(SemanticTokenType::Property))
+        }
+        // `as` is a contextual keyword (lexed as a WORD) in `.as<T>` casts and
+        // `field as field` interface field links.
+        SyntaxKind::UPCAST_EXPR | SyntaxKind::INTERFACE_FIELD_LINK => {
+            (word && token.text() == "as").then_some(plain(SemanticTokenType::Keyword))
+        }
+        // A generic parameter declaration (`T` in `class Box<T>`, `<T: Bound>`):
+        // the leading name as a `TypeParameter` declaration; a bound is a child
+        // `TYPE_EXPR` and classifies on its own.
+        SyntaxKind::GENERIC_PARAM => GenericParam::cast(parent)
+            .and_then(|p| p.name())
+            .filter(|name| name.text_range() == token.text_range())
+            .map(|_| decl(SemanticTokenType::TypeParameter)),
+        SyntaxKind::ENUM_DEF => word.then_some(decl(SemanticTokenType::Enum)),
+        SyntaxKind::ENUM_VARIANT => word.then_some(decl(SemanticTokenType::EnumMember)),
+        SyntaxKind::CLASS_DEF => word.then_some(decl(SemanticTokenType::Class)),
+        SyntaxKind::INTERFACE_DEF => word.then_some(decl(SemanticTokenType::Interface)),
+        SyntaxKind::FIELD | SyntaxKind::PROMPT_FIELD => {
+            word.then_some(decl(SemanticTokenType::Property))
+        }
+        SyntaxKind::PARAMETER => word.then_some(decl(SemanticTokenType::Parameter)),
+        // `let x`, match-arm bindings, etc.: the bound name is a declaration.
+        SyntaxKind::BINDING_PATTERN => word.then_some(decl(SemanticTokenType::Variable)),
+        SyntaxKind::CLIENT_DEF | SyntaxKind::RETRY_POLICY_DEF | SyntaxKind::TEST_DEF => {
+            word.then_some(decl(SemanticTokenType::Struct))
+        }
+        SyntaxKind::TEMPLATE_STRING_DEF => word.then_some(decl(SemanticTokenType::Function)),
+        // The name as a `Function`, or a `Method` inside a class / interface /
+        // implements block.
+        SyntaxKind::FUNCTION_DEF | SyntaxKind::METHOD_SIG => word.then(|| {
+            decl(if in_method_context(&parent) {
+                SemanticTokenType::Method
+            } else {
+                SemanticTokenType::Function
+            })
+        }),
+        SyntaxKind::TYPE_ALIAS_DEF | SyntaxKind::ASSOCIATED_TYPE_DECL => {
+            classify_type_decl_word(token)
+        }
+        // A bare-word key (before the `:`) is a `Property`; a string key and the
+        // value expression are dispatched as nodes.
+        SyntaxKind::OBJECT_FIELD => ObjectField::cast(parent)
+            .and_then(|f| f.key())
+            .filter(|key| key.text_range() == token.text_range())
+            .map(|_| plain(SemanticTokenType::Property)),
+        _ => None,
+    }
+}
+
+/// Classify a WORD inside a `TYPE_ALIAS_DEF` (`type X = …`), an associated-type
+/// *declaration* (`type Item [extends Bound] [= Default]`), or an associated-type
+/// *binding* (`Item = string` inside `Iterator<…>`). The leading `type` keywords
+/// (WORDs in the grammar) are `Keyword`; the type name is `Type` — a declaration
+/// when introduced by `type`, otherwise a reference (a binding names an existing
+/// associated type). Bounds / values are child `TYPE_EXPR`s classified on their
+/// own.
+fn classify_type_decl_word(token: &SyntaxToken) -> Option<Class> {
+    if token.kind() != SyntaxKind::WORD {
+        return None;
+    }
+    let parent = token.parent()?;
+    let words: Vec<SyntaxToken> = parent
+        .children_with_tokens()
+        .filter_map(NodeOrToken::into_token)
+        .filter(|t| t.kind() == SyntaxKind::WORD)
+        .collect();
+    // The leading run of `type` WORDs are keywords; the name is the first WORD
+    // after them.
+    let lead_type_kws = words.iter().take_while(|t| t.text() == "type").count();
+    let index = words
+        .iter()
+        .position(|t| t.text_range() == token.text_range())?;
+    match index.cmp(&lead_type_kws) {
+        Ordering::Less => Some(plain(SemanticTokenType::Keyword)),
+        Ordering::Equal => {
+            let ty = SemanticTokenType::Type;
+            Some(if lead_type_kws > 0 { decl(ty) } else { plain(ty) })
+        }
+        Ordering::Greater => None,
     }
 }
 

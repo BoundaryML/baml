@@ -100,6 +100,35 @@ The RA *system* (Phases B/C/D) is LSP-only — no parser change, no broad
 fallout — and is the high-value core. Do it first; do the broad parser-token
 remap (P1 full) afterward as a carefully-mapped change.
 
+## Status (2026-06)
+
+DELIVERED + committed + validated (PR #3867):
+- **B (on-demand resolution):** `scope_resolution_index` — per-`ScopeId`
+  salsa-cached resolution index (RA body-granularity memo; editing one scope
+  invalidates only its index). `build` merges them for a full document;
+  `resolve_token_class` resolves one name on demand (RA `Semantics::resolve`),
+  walking the scope chain. The `Walk` is parameterized by a `resolve` closure.
+- **D (scaling):** `semantic_tokens_in_range` (RA `highlight_range`) — range-gated
+  walk, resolves only the scopes the viewport touches; proven equal to
+  full-filtered-to-range across every sub-range (`range_tokens_test`). LSP:
+  `semanticTokens/range` + `full/delta` advertised + wired (per-file token cache,
+  monotonic `result_id`, prefix/suffix token-granularity diff; diff unit-tested).
+- **A1 (boolean):** `true`/`false` -> `boolean` token type; inert KW_* token
+  foundation laid.
+
+IN PROGRESS:
+- **C (flat preorder traversal) + A2 (typed accessors):** rewriting the recursive
+  `Walk` into one `preorder_with_tokens()` loop + `classify_token` parent-kind
+  dispatch reading typed `ast::*` accessors. Behavior-preserving (78 fixtures +
+  range test are the oracle).
+
+DEFERRED (documented cost/benefit):
+- **P1 broad remap (true/false/null -> KW_*):** ripples into hover/formatter/CST
+  snapshots for a highlighter-purity gain; the boolean output already ships via a
+  transitional text match. The contained `as`/`type` -> KW_AS/KW_TYPE remap is
+  worthwhile and smaller-radius; do it once C lands (it changes how `classify_token`
+  reads `as`/`type`).
+
 ## Phases (each ends green: 78 fixtures unchanged unless the change is the point)
 
 - **A. Parser/AST prerequisites (P1 then P2).** Land literal/keyword tokens +
