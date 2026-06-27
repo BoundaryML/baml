@@ -1,0 +1,80 @@
+1:1-6        "class"            source.baml meta.class.baml keyword.declaration.class.baml
+1:7-10       "Dog"              source.baml meta.class.baml meta.class.header.baml entity.name.type.class.baml
+1:11-12      "{"                source.baml meta.class.baml meta.class.body.baml punctuation.definition.block.begin.baml
+2:3-7        "type"             source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
+2:8-9        "\""               source.baml meta.class.baml meta.class.body.baml meta.field.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+2:9-12       "dog"              source.baml meta.class.baml meta.class.body.baml meta.field.baml string.quoted.double.baml
+2:12-13      "\""               source.baml meta.class.baml meta.class.body.baml meta.field.baml string.quoted.double.baml punctuation.definition.string.end.baml
+3:3-7        "name"             source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
+3:8-14       "string"           source.baml meta.class.baml meta.class.body.baml meta.field.baml support.type.primitive.baml
+4:1-2        "}"                source.baml meta.class.baml meta.class.body.baml punctuation.definition.block.end.baml
+6:1-6        "class"            source.baml meta.class.baml keyword.declaration.class.baml
+6:7-10       "Cat"              source.baml meta.class.baml meta.class.header.baml entity.name.type.class.baml
+6:11-12      "{"                source.baml meta.class.baml meta.class.body.baml punctuation.definition.block.begin.baml
+7:3-7        "type"             source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
+7:8-9        "\""               source.baml meta.class.baml meta.class.body.baml meta.field.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+7:9-12       "cat"              source.baml meta.class.baml meta.class.body.baml meta.field.baml string.quoted.double.baml
+7:12-13      "\""               source.baml meta.class.baml meta.class.body.baml meta.field.baml string.quoted.double.baml punctuation.definition.string.end.baml
+8:3-7        "name"             source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
+8:8-14       "string"           source.baml meta.class.baml meta.class.body.baml meta.field.baml support.type.primitive.baml
+9:1-2        "}"                source.baml meta.class.baml meta.class.body.baml punctuation.definition.block.end.baml
+11:1-6       "class"            source.baml meta.class.baml keyword.declaration.class.baml
+11:7-13      "Lizard"           source.baml meta.class.baml meta.class.header.baml entity.name.type.class.baml
+11:14-15     "{"                source.baml meta.class.baml meta.class.body.baml punctuation.definition.block.begin.baml
+12:3-7       "type"             source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
+12:8-9       "\""               source.baml meta.class.baml meta.class.body.baml meta.field.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+12:9-15      "lizard"           source.baml meta.class.baml meta.class.body.baml meta.field.baml string.quoted.double.baml
+12:15-16     "\""               source.baml meta.class.baml meta.class.body.baml meta.field.baml string.quoted.double.baml punctuation.definition.string.end.baml
+13:3-7       "name"             source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
+13:8-14      "string"           source.baml meta.class.baml meta.class.body.baml meta.field.baml support.type.primitive.baml
+14:1-2       "}"                source.baml meta.class.baml meta.class.body.baml punctuation.definition.block.end.baml
+16:1-5       "type"             source.baml meta.type-alias.baml keyword.declaration.type-alias.baml
+16:6-9       "Pet"              source.baml meta.type-alias.baml entity.name.type.alias.baml
+16:10-11     "="                source.baml meta.type-alias.baml keyword.operator.assignment.baml
+16:12-15     "Cat"              source.baml meta.type-alias.baml meta.type-reference.baml entity.name.type.baml
+16:16-17     "|"                source.baml meta.type-alias.baml keyword.operator.type.baml
+16:18-21     "Dog"              source.baml meta.type-alias.baml meta.type-reference.baml entity.name.type.baml
+16:22-23     "|"                source.baml meta.type-alias.baml keyword.operator.type.baml
+16:24-30     "Lizard"           source.baml meta.type-alias.baml meta.type-reference.baml entity.name.type.baml
+16:30-31     ";"                source.baml meta.type-alias.baml punctuation.terminator.statement.baml
+18:1-9       "function"         source.baml meta.function.baml keyword.declaration.function.baml
+18:10-18     "Describe"         source.baml meta.function.baml entity.name.function.baml
+18:18-19     "("                source.baml meta.function.baml meta.parameters.baml punctuation.definition.parameters.begin.baml
+18:19-22     "pet"              source.baml meta.function.baml meta.parameters.baml meta.parameter.baml variable.parameter.baml
+18:22-23     ":"                source.baml meta.function.baml meta.parameters.baml meta.parameter.baml punctuation.separator.colon.baml
+18:24-27     "Pet"              source.baml meta.function.baml meta.parameters.baml meta.parameter.baml meta.type-reference.baml entity.name.type.baml
+18:27-28     ")"                source.baml meta.function.baml meta.parameters.baml punctuation.definition.parameters.end.baml
+18:29-31     "->"               source.baml meta.function.baml meta.return-type.baml keyword.operator.arrow.baml
+18:32-38     "string"           source.baml meta.function.baml meta.return-type.baml support.type.primitive.baml
+18:39-40     "{"                source.baml meta.function.baml meta.block.function.baml punctuation.definition.block.begin.baml
+19:3-8       "match"            source.baml meta.function.baml meta.block.function.baml meta.expression.match.baml keyword.control.match.baml
+19:9-10      "("                source.baml meta.function.baml meta.block.function.baml meta.expression.match.baml meta.match.scrutinee.group.baml punctuation.definition.group.begin.baml
+19:10-13     "pet"              source.baml meta.function.baml meta.block.function.baml meta.expression.match.baml meta.match.scrutinee.group.baml meta.dotted-expression.baml variable.other.readwrite.baml
+19:13-14     ")"                source.baml meta.function.baml meta.block.function.baml meta.expression.match.baml meta.match.scrutinee.group.baml punctuation.definition.group.end.baml
+19:15-16     "{"                source.baml meta.function.baml meta.block.function.baml meta.expression.match.baml meta.block.match.baml punctuation.definition.block.begin.baml
+20:5-8       "let"              source.baml meta.function.baml meta.block.function.baml meta.expression.match.baml meta.block.match.baml meta.match.arm.baml meta.pattern.match.baml meta.pattern.binding.baml keyword.declaration.binding.baml
+20:9-12      "cat"              source.baml meta.function.baml meta.block.function.baml meta.expression.match.baml meta.block.match.baml meta.match.arm.baml meta.pattern.match.baml meta.pattern.binding.baml variable.other.binding.baml
+20:12-13     ":"                source.baml meta.function.baml meta.block.function.baml meta.expression.match.baml meta.block.match.baml meta.match.arm.baml meta.pattern.match.baml meta.pattern.binding.baml punctuation.separator.colon.baml
+20:14-17     "Cat"              source.baml meta.function.baml meta.block.function.baml meta.expression.match.baml meta.block.match.baml meta.match.arm.baml meta.pattern.match.baml meta.type-reference.baml entity.name.type.baml
+20:18-20     "=>"               source.baml meta.function.baml meta.block.function.baml meta.expression.match.baml meta.block.match.baml meta.match.arm.baml keyword.operator.arrow.baml
+20:21-24     "cat"              source.baml meta.function.baml meta.block.function.baml meta.expression.match.baml meta.block.match.baml meta.match.arm.baml meta.dotted-expression.baml variable.other.readwrite.baml
+20:24-25     "."                source.baml meta.function.baml meta.block.function.baml meta.expression.match.baml meta.block.match.baml meta.match.arm.baml meta.dotted-expression.baml punctuation.accessor.baml
+20:25-29     "name"             source.baml meta.function.baml meta.block.function.baml meta.expression.match.baml meta.block.match.baml meta.match.arm.baml meta.dotted-expression.baml variable.other.readwrite.baml
+20:29-30     ","                source.baml meta.function.baml meta.block.function.baml meta.expression.match.baml meta.block.match.baml punctuation.separator.comma.baml
+21:5-8       "let"              source.baml meta.function.baml meta.block.function.baml meta.expression.match.baml meta.block.match.baml meta.match.arm.baml meta.pattern.match.baml meta.pattern.binding.baml keyword.declaration.binding.baml
+21:9-12      "dog"              source.baml meta.function.baml meta.block.function.baml meta.expression.match.baml meta.block.match.baml meta.match.arm.baml meta.pattern.match.baml meta.pattern.binding.baml variable.other.binding.baml
+21:12-13     ":"                source.baml meta.function.baml meta.block.function.baml meta.expression.match.baml meta.block.match.baml meta.match.arm.baml meta.pattern.match.baml meta.pattern.binding.baml punctuation.separator.colon.baml
+21:14-17     "Dog"              source.baml meta.function.baml meta.block.function.baml meta.expression.match.baml meta.block.match.baml meta.match.arm.baml meta.pattern.match.baml meta.type-reference.baml entity.name.type.baml
+21:18-20     "=>"               source.baml meta.function.baml meta.block.function.baml meta.expression.match.baml meta.block.match.baml meta.match.arm.baml keyword.operator.arrow.baml
+21:21-24     "dog"              source.baml meta.function.baml meta.block.function.baml meta.expression.match.baml meta.block.match.baml meta.match.arm.baml meta.dotted-expression.baml variable.other.readwrite.baml
+21:24-25     "."                source.baml meta.function.baml meta.block.function.baml meta.expression.match.baml meta.block.match.baml meta.match.arm.baml meta.dotted-expression.baml punctuation.accessor.baml
+21:25-29     "name"             source.baml meta.function.baml meta.block.function.baml meta.expression.match.baml meta.block.match.baml meta.match.arm.baml meta.dotted-expression.baml variable.other.readwrite.baml
+21:29-30     ","                source.baml meta.function.baml meta.block.function.baml meta.expression.match.baml meta.block.match.baml punctuation.separator.comma.baml
+22:5-6       "_"                source.baml meta.function.baml meta.block.function.baml meta.expression.match.baml meta.block.match.baml meta.match.arm.baml meta.pattern.match.baml variable.language.wildcard.baml
+22:7-9       "=>"               source.baml meta.function.baml meta.block.function.baml meta.expression.match.baml meta.block.match.baml meta.match.arm.baml keyword.operator.arrow.baml
+22:10-11     "\""               source.baml meta.function.baml meta.block.function.baml meta.expression.match.baml meta.block.match.baml meta.match.arm.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+22:11-20     "other pet"        source.baml meta.function.baml meta.block.function.baml meta.expression.match.baml meta.block.match.baml meta.match.arm.baml string.quoted.double.baml
+22:20-21     "\""               source.baml meta.function.baml meta.block.function.baml meta.expression.match.baml meta.block.match.baml meta.match.arm.baml string.quoted.double.baml punctuation.definition.string.end.baml
+22:21-22     ","                source.baml meta.function.baml meta.block.function.baml meta.expression.match.baml meta.block.match.baml punctuation.separator.comma.baml
+23:3-4       "}"                source.baml meta.function.baml meta.block.function.baml meta.expression.match.baml meta.block.match.baml punctuation.definition.block.end.baml
+24:1-2       "}"                source.baml meta.function.baml meta.block.function.baml punctuation.definition.block.end.baml

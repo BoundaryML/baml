@@ -557,6 +557,26 @@ fn primitive(kind: BamlTyPrimitiveKind) -> BamlTyVariant {
     BamlTyVariant::Primitive(BamlTyPrimitive { kind: kind as i32 })
 }
 
+fn interface_to_proto_ty(
+    name: &baml_type::TypeName,
+    type_args: &[RuntimeTy],
+    bindings: &[(baml_type::Name, RuntimeTy)],
+) -> BamlTy {
+    BamlTy {
+        ty: Some(BamlTyVariant::Interface(BamlTyInterface {
+            name: name.render_dotted(false),
+            type_args: type_args.iter().map(runtime_ty_to_proto_ty).collect(),
+            bindings: bindings
+                .iter()
+                .map(|(name, ty)| BamlTyAssociatedBinding {
+                    name: name.as_str().to_string(),
+                    ty: Some(runtime_ty_to_proto_ty(ty)),
+                })
+                .collect(),
+        })),
+    }
+}
+
 fn runtime_ty_to_variant(ty: &RuntimeTy) -> BamlTyVariant {
     match ty {
         RuntimeTy::String { .. } => primitive(BamlTyPrimitiveKind::String),
@@ -609,17 +629,9 @@ fn runtime_ty_to_variant(ty: &RuntimeTy) -> BamlTyVariant {
             kind: media_kind_to_proto_ty(*kind) as i32,
         }),
         RuntimeTy::Interface(name, args, bindings, _) => {
-            BamlTyVariant::Interface(BamlTyInterface {
-                name: name.render_dotted(false),
-                type_args: args.iter().map(runtime_ty_to_proto_ty).collect(),
-                bindings: bindings
-                    .iter()
-                    .map(|(name, ty)| BamlTyAssociatedBinding {
-                        name: name.as_str().to_string(),
-                        ty: Some(runtime_ty_to_proto_ty(ty)),
-                    })
-                    .collect(),
-            })
+            interface_to_proto_ty(name, args, bindings)
+                .ty
+                .unwrap_or_else(|| unreachable!("interface helper always sets ty"))
         }
         RuntimeTy::Function {
             params,
@@ -661,9 +673,13 @@ fn runtime_ty_to_variant(ty: &RuntimeTy) -> BamlTyVariant {
             ..
         } => BamlTyVariant::AssociatedTypeProjection(BamlTyAssociatedTypeProjection {
             base: Some(Box::new(runtime_ty_to_proto_ty(base))),
-            interface: interface
-                .as_ref()
-                .map(|interface| Box::new(runtime_ty_to_proto_ty(interface))),
+            interface: interface.as_deref().map(|interface| {
+                Box::new(interface_to_proto_ty(
+                    &interface.name,
+                    &interface.generics,
+                    &interface.associated_types,
+                ))
+            }),
             member: member.as_str().to_string(),
         }),
         RuntimeTy::BuiltinUnknown { .. } => BamlTyVariant::Unknown(BamlTyUnknown {}),

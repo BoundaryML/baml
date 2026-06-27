@@ -137,6 +137,7 @@ function iter_impl_generics_only.iter_array_iter() -> int[] {
     load_const 1
     load_const 2
     load_const 3
+    load_type int
     alloc_array 3
     call user.iter_impl_generics_only.core.ArrayIterator.new
     store_var _1
@@ -289,12 +290,14 @@ function iter_impl_generics_only.iter_chain() -> int[] {
     load_type int
     load_const 1
     load_const 2
+    load_type int
     alloc_array 2
     call user.iter_impl_generics_only.core.ArrayIterator.new
     store_var a
     load_type int
     load_const 3
     load_const 4
+    load_type int
     alloc_array 2
     call user.iter_impl_generics_only.core.ArrayIterator.new
     store_var b
@@ -317,6 +320,7 @@ function iter_impl_generics_only.iter_collect() -> int[] {
     load_const 5
     load_const 6
     load_const 7
+    load_type int
     alloc_array 3
     call user.iter_impl_generics_only.core.ArrayIterator.new
     load_type iter_impl_generics_only.core.Iterator<int, never>
@@ -332,6 +336,7 @@ function iter_impl_generics_only.iter_count() -> int {
     load_const 9
     load_const 9
     load_const 9
+    load_type int
     alloc_array 3
     call user.iter_impl_generics_only.core.ArrayIterator.new
     load_type iter_impl_generics_only.core.Iterator<int, never>
@@ -347,6 +352,7 @@ function iter_impl_generics_only.iter_explicit_map_coerces_to_iterator() -> int[
     load_const 1
     load_const 2
     load_const 3
+    load_type int
     alloc_array 3
     call user.iter_impl_generics_only.core.ArrayIterator.new
     store_var it
@@ -371,6 +377,7 @@ function iter_impl_generics_only.iter_filter() -> int[] {
     load_const 2
     load_const 3
     load_const 4
+    load_type int
     alloc_array 4
     call user.iter_impl_generics_only.core.ArrayIterator.new
     store_var it
@@ -396,6 +403,7 @@ function iter_impl_generics_only.iter_filter_implicit_source() -> int[] {
     load_const 2
     load_const 3
     load_const 4
+    load_type int
     alloc_array 4
     call user.iter_impl_generics_only.core.ArrayIterator.new
     store_var _2
@@ -570,6 +578,7 @@ function iter_impl_generics_only.iter_filter_map() -> int[] {
     load_const 2
     load_const 3
     load_const 4
+    load_type int
     alloc_array 4
     call user.iter_impl_generics_only.core.ArrayIterator.new
     store_var it
@@ -596,6 +605,7 @@ function iter_impl_generics_only.iter_filter_map_implicit_source() -> int[] {
     load_const 2
     load_const 3
     load_const 4
+    load_type int
     alloc_array 4
     call user.iter_impl_generics_only.core.ArrayIterator.new
     store_var _2
@@ -770,6 +780,7 @@ function iter_impl_generics_only.iter_flat_map() -> int[] {
     load_type int
     load_const 1
     load_const 2
+    load_type int
     alloc_array 2
     call user.iter_impl_generics_only.core.ArrayIterator.new
     store_var it
@@ -795,6 +806,7 @@ function iter_impl_generics_only.iter_flat_map_implicit_source() -> int[] {
     load_type int
     load_const 1
     load_const 2
+    load_type int
     alloc_array 2
     call user.iter_impl_generics_only.core.ArrayIterator.new
     store_var _2
@@ -982,17 +994,20 @@ function iter_impl_generics_only.iter_flatten() -> int[] {
     load_type int
     load_const 1
     load_const 2
+    load_type int
     alloc_array 2
     call user.iter_impl_generics_only.core.ArrayIterator.new
     store_var _2
     load_type int
     load_const 3
     load_const 4
+    load_type int
     alloc_array 2
     call user.iter_impl_generics_only.core.ArrayIterator.new
     store_var _5
     load_type iter_impl_generics_only.core.Iterable<int, never>
     load_var2 2 3
+    load_type iter_impl_generics_only.core.Iterable<int, never>
     alloc_array 2
     call user.iter_impl_generics_only.core.ArrayIterator.new
     store_var outer
@@ -1014,6 +1029,7 @@ function iter_impl_generics_only.iter_map() -> int[] {
     load_const 1
     load_const 2
     load_const 3
+    load_type int
     alloc_array 3
     call user.iter_impl_generics_only.core.ArrayIterator.new
     store_var it
@@ -1039,6 +1055,7 @@ function iter_impl_generics_only.iter_map_implicit_source() -> int[] {
     load_const 1
     load_const 2
     load_const 3
+    load_type int
     alloc_array 3
     call user.iter_impl_generics_only.core.ArrayIterator.new
     store_var _2
@@ -1213,6 +1230,7 @@ function iter_impl_generics_only.iter_peekable() -> int[] {
     load_type int
     load_const 4
     load_const 5
+    load_type int
     alloc_array 2
     call user.iter_impl_generics_only.core.ArrayIterator.new
     store_var _2
@@ -1366,6 +1384,7 @@ function iter_impl_generics_only.iter_peekable() -> int[] {
     store_var p
 
   L20:
+    load_type int
     alloc_array 0
     store_var out
     load_type int
@@ -1883,6 +1902,7 @@ function iter_impl_generics_only.iter_reduce() -> int {
     load_const 2
     load_const 3
     load_const 4
+    load_type int
     alloc_array 4
     call user.iter_impl_generics_only.core.ArrayIterator.new
     store_var it
@@ -2054,6 +2074,7 @@ function iter_impl_generics_only.iter_some_every_find() -> bool {
     load_const 1
     load_const 2
     load_const 3
+    load_type int
     alloc_array 3
     call user.iter_impl_generics_only.core.ArrayIterator.new
     store_var _2
@@ -2226,6 +2247,7 @@ function iter_impl_generics_only.iter_some_every_find() -> bool {
     load_const 1
     load_const 2
     load_const 3
+    load_type int
     alloc_array 3
     call user.iter_impl_generics_only.core.ArrayIterator.new
     store_var _41
@@ -2399,6 +2421,7 @@ function iter_impl_generics_only.iter_some_every_find() -> bool {
     load_const 2
     load_const 3
     load_const 4
+    load_type int
     alloc_array 4
     call user.iter_impl_generics_only.core.ArrayIterator.new
     store_var _80

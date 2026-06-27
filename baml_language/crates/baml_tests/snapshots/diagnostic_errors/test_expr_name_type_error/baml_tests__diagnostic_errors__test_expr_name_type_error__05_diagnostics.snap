@@ -3,10 +3,10 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
   [type] error: operator `+` cannot be applied to `"a"` and `1`
-   ╭─[ main.baml:3:5 ]
+   ╭─[ main.baml:3:6 ]
    │
  3 │ test "a" + 1 {
-   │     ────┬───  
+   │      ───┬───  
    │         ╰───── operator `+` cannot be applied to `"a"` and `1`
    │ 
    │ Note: Error code: E0004

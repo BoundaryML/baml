@@ -25,21 +25,12 @@ class user.User {
   profile: user.Profile
   tags: string[]
 }
-function user.User.from_json(j: baml.json.json) -> user.User throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  User { name: baml.json.from_json<string>(baml.json.field(j, "name")), profile: baml.json.from_json<Profile>(baml.json.field(j, "profile")), tags: baml.json.from_json<string[]>(baml.json.field(j, "tags")) } : user.User
-}
 class user.Profile {
   bio: string
   settings: user.Settings
 }
-function user.Profile.from_json(j: baml.json.json) -> user.Profile throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  Profile { bio: baml.json.from_json<string>(baml.json.field(j, "bio")), settings: baml.json.from_json<Settings>(baml.json.field(j, "settings")) } : user.Profile
-}
 class user.Settings {
   theme: string
-}
-function user.Settings.from_json(j: baml.json.json) -> user.Settings throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  Settings { theme: baml.json.from_json<string>(baml.json.field(j, "theme")) } : user.Settings
 }
 class user.User$stream {
   name: string | null
@@ -57,9 +48,6 @@ class user.IndexUser {
   name: string
   age: int
   tags: string[]
-}
-function user.IndexUser.from_json(j: baml.json.json) -> user.IndexUser throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  IndexUser { name: baml.json.from_json<string>(baml.json.field(j, "name")), age: baml.json.from_json<int>(baml.json.field(j, "age")), tags: baml.json.from_json<string[]>(baml.json.field(j, "tags")) } : user.IndexUser
 }
 function user.IndexAccess(users: user.IndexUser[]) -> string throws never {
   { : never

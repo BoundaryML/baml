@@ -52,9 +52,6 @@ function user.GenerateTests$build_request_stream(count: int, topic: string, clie
 function user.GenerateTests$render_prompt(count: int, topic: string, client: baml.llm.Client = GPT4o) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(client, "GenerateTests", map { "count": count, "topic": topic })
 }
-function user.from_json(j: baml.json.json) -> user.Sentiment  [expr] {
-  user.Sentiment { feeling: baml.json.from_json(baml.json.field(j, "feeling")), confidence: baml.json.from_json(baml.json.field(j, "confidence")), reasoning: baml.json.from_json(baml.json.field(j, "reasoning")) }
-}
 
 --- captures ---
 lambda (testset) in ?: captures [sentiments]

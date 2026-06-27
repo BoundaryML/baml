@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 48645
 ---
 === COMPILER2 DIAGNOSTICS ===
   [type] error: `$id` cannot be the target of a compound assignment; use `$id = ...` with an override from `baml.id.new()`
@@ -24,14 +23,13 @@ assertion_line: 48645
 ────╯
 
   [type] error: `$id` is a value, not a binding; bind it to a local before accessing `.len` (e.g. `let id = $id; id.len`)
-    ╭─[ runtime_id.baml:20:34 ]
+    ╭─[ runtime_id.baml:21:5 ]
     │
- 20 │ ╭─▶ function member_access() -> int {
- 21 │ ├─▶     $id.len()
-    │ │                   
-    │ ╰─────────────────── `$id` is a value, not a binding; bind it to a local before accessing `.len` (e.g. `let id = $id; id.len`)
-    │     
-    │     Note: Error code: E0001
+ 21 │     $id.len()
+    │     ───┬───  
+    │        ╰───── `$id` is a value, not a binding; bind it to a local before accessing `.len` (e.g. `let id = $id; id.len`)
+    │ 
+    │ Note: Error code: E0001
 ────╯
 
   [type] error: missing required argument `x`
@@ -65,10 +63,10 @@ assertion_line: 48645
 ────╯
 
   [type] error: declared throws is `never`, but this function may also throw `baml.errors.InvalidArgument`
-    ╭─[ runtime_id.baml:48:50 ]
+    ╭─[ runtime_id.baml:48:51 ]
     │
  48 │ function setter_never(s: string) -> string throws never {
-    │                                                  ───┬──  
+    │                                                   ──┬──  
     │                                                     ╰──── declared throws is `never`, but this function may also throw `baml.errors.InvalidArgument`
     │ 
     │ Note: Error code: E0096

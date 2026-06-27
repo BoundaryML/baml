@@ -65,12 +65,14 @@ class PlainDate {
         $rust_function
     }
 
-    function from_json(j: baml.json.json) -> PlainDate throws root.json.JsonDecodeError {
-        match (j) {
-            string => PlainDate.parse(j) catch (_) {
-                root.errors.ParseError { message } => throw root.json.JsonDecodeError { message: message, path: "" },
-            },
-            _ => throw root.json.JsonDecodeError { message: "Expected ISO 8601 date string" }
+    implements baml.FromJson {
+        function from_json(j: baml.json.json) -> Self throws baml.json.JsonDecodeError {
+            match (j) {
+                string => PlainDate.parse(j) catch (_) {
+                    root.errors.ParseError { message } => throw baml.json.JsonDecodeError { message: message, path: "" },
+                },
+                _ => throw baml.json.JsonDecodeError { message: "Expected ISO 8601 date string", path: "" }
+            }
         }
     }
     implements baml.ToJson {

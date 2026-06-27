@@ -217,6 +217,4 @@ test default {
 //
 // Function: baml.deep_equals
 //
-// Function: baml.unstable.string
-//
 // Function: baml.fetch_as

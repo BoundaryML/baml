@@ -51,27 +51,6 @@ function user.enum_with_multiple_missing_variants(d: user.Direction4) -> int  [e
 function user.enum_with_single_missing_variant(c: user.Color3) -> int  [expr] {
   {  } match (c) { user.Color3.Green => 1, user.Color3.Blue => 2 }
 }
-function user.from_json(j: baml.json.json) -> user.Bag  [expr] {
-  user.Bag { contents: baml.json.from_json(baml.json.field(j, "contents")) }
-}
-function user.from_json(j: baml.json.json) -> user.Flagged  [expr] {
-  user.Flagged { flag: baml.json.from_json(baml.json.field(j, "flag")), note: baml.json.from_json(baml.json.field(j, "note")) }
-}
-function user.from_json(j: baml.json.json) -> user.Team  [expr] {
-  user.Team { scores: baml.json.from_json(baml.json.field(j, "scores")) }
-}
-function user.from_json(j: baml.json.json) -> user.Pair  [expr] {
-  user.Pair { kind: baml.json.from_json(baml.json.field(j, "kind")), payload: baml.json.from_json(baml.json.field(j, "payload")) }
-}
-function user.from_json(j: baml.json.json) -> user.IntPair  [expr] {
-  user.IntPair { a: baml.json.from_json(baml.json.field(j, "a")), b: baml.json.from_json(baml.json.field(j, "b")) }
-}
-function user.from_json(j: baml.json.json) -> user.Mixed  [expr] {
-  user.Mixed { value: baml.json.from_json(baml.json.field(j, "value")) }
-}
-function user.from_json(j: baml.json.json) -> user.Box2  [expr] {
-  user.Box2 { first: baml.json.from_json(baml.json.field(j, "first")), second: baml.json.from_json(baml.json.field(j, "second")) }
-}
 function user.int_literal_non_exhaustive(n: int) -> int  [expr] {
   {  } match (n) { 1 => 1 }
 }

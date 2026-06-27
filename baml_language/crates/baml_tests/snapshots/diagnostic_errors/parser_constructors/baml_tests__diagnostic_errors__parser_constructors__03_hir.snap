@@ -12,9 +12,6 @@ function user.boolArray() -> bool[]  [expr] {
 function user.floatArray() -> float[]  [expr] {
   {  } [1.0, 2.0, 3.0]
 }
-function user.from_json(j: baml.json.json) -> user.Point  [expr] {
-  user.Point { x: baml.json.from_json(baml.json.field(j, "x")), y: baml.json.from_json(baml.json.field(j, "y")) }
-}
 function user.intArray() -> int[]  [expr] {
   {  } [1, 2, 3]
 }
@@ -34,12 +31,6 @@ class user.Point {
 class user.Vec2D {
   p: user.Point
   q: user.Point
-}
-function user.from_json(j: baml.json.json) -> user.Point  [expr] {
-  user.Point { x: baml.json.from_json(baml.json.field(j, "x")), y: baml.json.from_json(baml.json.field(j, "y")) }
-}
-function user.from_json(j: baml.json.json) -> user.Vec2D  [expr] {
-  user.Vec2D { p: baml.json.from_json(baml.json.field(j, "p")), q: baml.json.from_json(baml.json.field(j, "q")) }
 }
 function user.point() -> user.Point  [expr] {
   {  } user.Point { x: 1, y: 2 }

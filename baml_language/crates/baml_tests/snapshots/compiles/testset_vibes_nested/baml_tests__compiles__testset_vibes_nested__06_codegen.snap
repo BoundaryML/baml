@@ -41,6 +41,8 @@ function user.ClassifySentiment(text: string, client: baml.llm.Client) -> Sentim
     load_const "ClassifySentiment"
     load_var text
     load_const "text"
+    load_type string
+    load_type unknown
     alloc_map 1
     load_const <omitted>
     call baml.llm.call_llm_function
@@ -60,6 +62,8 @@ function user.ClassifySentiment$build_request(text: string, client: baml.llm.Cli
     load_const "ClassifySentiment"
     load_var text
     load_const "text"
+    load_type string
+    load_type unknown
     alloc_map 1
     load_const <omitted>
     call baml.llm.build_request
@@ -79,6 +83,8 @@ function user.ClassifySentiment$build_request_stream(text: string, client: baml.
     load_const "ClassifySentiment"
     load_var text
     load_const "text"
+    load_type string
+    load_type unknown
     alloc_map 1
     load_const <omitted>
     call baml.llm.build_request_stream
@@ -130,6 +136,8 @@ function user.ClassifySentiment$render_prompt(text: string, client: baml.llm.Cli
     load_const "ClassifySentiment"
     load_var text
     load_const "text"
+    load_type string
+    load_type unknown
     alloc_map 1
     load_const <omitted>
     call baml.llm.render_prompt
@@ -151,6 +159,8 @@ function user.ClassifySentiment$stream(text: string, client: baml.llm.Client) ->
     load_const "ClassifySentiment"
     load_var text
     load_const "text"
+    load_type string
+    load_type unknown
     alloc_map 1
     load_const <omitted>
     call baml.llm.stream_llm_function
@@ -171,6 +181,8 @@ function user.ClassifySentiment2(text: string, client: baml.llm.Client) -> strin
     load_const "ClassifySentiment2"
     load_var text
     load_const "text"
+    load_type string
+    load_type unknown
     alloc_map 1
     load_const <omitted>
     call baml.llm.call_llm_function
@@ -190,6 +202,8 @@ function user.ClassifySentiment2$build_request(text: string, client: baml.llm.Cl
     load_const "ClassifySentiment2"
     load_var text
     load_const "text"
+    load_type string
+    load_type unknown
     alloc_map 1
     load_const <omitted>
     call baml.llm.build_request
@@ -209,6 +223,8 @@ function user.ClassifySentiment2$build_request_stream(text: string, client: baml
     load_const "ClassifySentiment2"
     load_var text
     load_const "text"
+    load_type string
+    load_type unknown
     alloc_map 1
     load_const <omitted>
     call baml.llm.build_request_stream
@@ -260,6 +276,8 @@ function user.ClassifySentiment2$render_prompt(text: string, client: baml.llm.Cl
     load_const "ClassifySentiment2"
     load_var text
     load_const "text"
+    load_type string
+    load_type unknown
     alloc_map 1
     load_const <omitted>
     call baml.llm.render_prompt
@@ -281,6 +299,8 @@ function user.ClassifySentiment2$stream(text: string, client: baml.llm.Client) -
     load_const "ClassifySentiment2"
     load_var text
     load_const "text"
+    load_type string
+    load_type unknown
     alloc_map 1
     load_const <omitted>
     call baml.llm.stream_llm_function
@@ -334,8 +354,14 @@ function user.GPT4o$new() -> null {
     load_var _2
     load_const null
     load_const null
+    load_type string
+    load_type string
     alloc_map 0
+    load_type string
+    load_type string
     alloc_map 0
+    load_type string
+    load_type unknown
     alloc_map 0
     init_instance baml.llm.PrimitiveClientOptions .model, .base_url, .allowed_role_metadata, .finish_reason_allow_list, .finish_reason_deny_list, .supports_streaming, .default_role, .allowed_roles, .remap_roles, .api_key, .provider_options, .media_url_handler, .headers, .query_params, .request_body
     init_instance baml.llm.PrimitiveClient .name, .provider, .options
@@ -357,6 +383,8 @@ function user.GenerateTests(count: int, topic: string, client: baml.llm.Client) 
     load_var2 1 2
     load_const "count"
     load_const "topic"
+    load_type string
+    load_type unknown
     alloc_map 2
     load_const <omitted>
     call baml.llm.call_llm_function
@@ -377,6 +405,8 @@ function user.GenerateTests$build_request(count: int, topic: string, client: bam
     load_var2 1 2
     load_const "count"
     load_const "topic"
+    load_type string
+    load_type unknown
     alloc_map 2
     load_const <omitted>
     call baml.llm.build_request
@@ -397,6 +427,8 @@ function user.GenerateTests$build_request_stream(count: int, topic: string, clie
     load_var2 1 2
     load_const "count"
     load_const "topic"
+    load_type string
+    load_type unknown
     alloc_map 2
     load_const <omitted>
     call baml.llm.build_request_stream
@@ -449,6 +481,8 @@ function user.GenerateTests$render_prompt(count: int, topic: string, client: bam
     load_var2 1 2
     load_const "count"
     load_const "topic"
+    load_type string
+    load_type unknown
     alloc_map 2
     load_const <omitted>
     call baml.llm.render_prompt
@@ -471,34 +505,10 @@ function user.GenerateTests$stream(count: int, topic: string, client: baml.llm.C
     load_var2 1 2
     load_const "count"
     load_const "topic"
+    load_type string
+    load_type unknown
     alloc_map 2
     load_const <omitted>
     call baml.llm.stream_llm_function
-    return
-}
-
-function user.Sentiment.from_json(j: baml.json.json) -> Sentiment {
-    load_var j
-    load_const "feeling"
-    call baml.json.field
-    store_var _3
-    load_type string
-    load_var _3
-    call baml.json.from_json
-    load_var j
-    load_const "confidence"
-    call baml.json.field
-    store_var _6
-    load_type float
-    load_var _6
-    call baml.json.from_json
-    load_var j
-    load_const "reasoning"
-    call baml.json.field
-    store_var _9
-    load_type string
-    load_var _9
-    call baml.json.from_json
-    init_instance user.Sentiment .feeling, .confidence, .reasoning
     return
 }

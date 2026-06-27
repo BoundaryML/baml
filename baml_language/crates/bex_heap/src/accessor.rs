@@ -823,7 +823,7 @@ fn convert_object(
                 .collect::<Result<_, _>>()?;
             Ok(BexExternalValue::Instance {
                 class_name: class.name.to_string(),
-                type_args: instance.class_type_args.clone(),
+                type_args: instance.class_type_args.to_vec(),
                 fields,
             })
         }

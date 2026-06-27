@@ -5,13 +5,10 @@ source: crates/baml_tests/src/generated_tests.rs
 class user.Box {
   value: T
 }
-function user.Box.get(self: user.Box) -> unknown throws never {
+function user.Box.get(self: user.Box<T>) -> T throws never {
   { : T
     self.value : T
   }
-}
-function user.Box.from_json(j: baml.json.json) -> user.Box<unknown> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  Box { value: baml.json.from_json<T>(baml.json.field(j, "value")) } : user.Box<T>
 }
 function user.use_box() -> int throws never {
   { : int
@@ -22,13 +19,10 @@ function user.use_box() -> int throws never {
 class user.Wrapper {
   data: T
 }
-function user.Wrapper.of(value: unknown) -> user.Wrapper<unknown> throws never {
+function user.Wrapper.of(value: T) -> user.Wrapper<T> throws never {
   { : user.Wrapper<T>
     Wrapper { data: value } : user.Wrapper<T>
   }
-}
-function user.Wrapper.from_json(j: baml.json.json) -> user.Wrapper<unknown> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  Wrapper { data: baml.json.from_json<T>(baml.json.field(j, "data")) } : user.Wrapper<T>
 }
 function user.use_wrapper() -> user.Wrapper<string> throws never {
   { : user.Wrapper<string>
@@ -39,23 +33,20 @@ class user.Pair {
   first: A
   second: B
 }
-function user.Pair.get_first(self: user.Pair) -> unknown throws never {
+function user.Pair.get_first(self: user.Pair<A, B>) -> A throws never {
   { : A
     self.first : A
   }
 }
-function user.Pair.get_second(self: user.Pair) -> unknown throws never {
+function user.Pair.get_second(self: user.Pair<A, B>) -> B throws never {
   { : B
     self.second : B
   }
 }
-function user.Pair.swap(self: user.Pair) -> user.Pair<unknown, unknown> throws never {
+function user.Pair.swap(self: user.Pair<A, B>) -> user.Pair<B, A> throws never {
   { : user.Pair<B, A>
     Pair { first: self.second, second: self.first } : user.Pair<B, A>
   }
-}
-function user.Pair.from_json(j: baml.json.json) -> user.Pair<unknown, unknown> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  Pair { first: baml.json.from_json<A>(baml.json.field(j, "first")), second: baml.json.from_json<B>(baml.json.field(j, "second")) } : user.Pair<A, B>
 }
 function user.use_pair() -> string throws never {
   { : string
@@ -72,19 +63,16 @@ function user.use_pair_swap() -> user.Pair<string, int> throws never {
 class user.Maker {
   data: T
 }
-function user.Maker.from_string(params: string) -> user.Maker<unknown> throws never {
+function user.Maker.from_string(params: string) -> user.Maker<T> throws never {
   { : user.Maker<T>
     Maker { data: params } : user.Maker<T>
   }
   !! 1848..1854: type mismatch: expected T, got string
 }
-function user.Maker.from_value(params: unknown) -> user.Maker<unknown> throws never {
+function user.Maker.from_value(params: T) -> user.Maker<T> throws never {
   { : user.Maker<T>
     Maker { data: params } : user.Maker<T>
   }
-}
-function user.Maker.from_json(j: baml.json.json) -> user.Maker<unknown> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  Maker { data: baml.json.from_json<T>(baml.json.field(j, "data")) } : user.Maker<T>
 }
 function user.use_maker_static() -> user.Maker<int> throws never {
   { : user.Maker<int>
@@ -94,14 +82,11 @@ function user.use_maker_static() -> user.Maker<int> throws never {
 class user.Holder {
   data: string
 }
-function user.Holder.get_data(self: user.Holder) -> unknown throws never {
+function user.Holder.get_data(self: user.Holder<T>) -> T throws never {
   { : string
     self.data : string
   }
-  !! 2283..2371: type mismatch: expected T, got string
-}
-function user.Holder.from_json(j: baml.json.json) -> user.Holder<unknown> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  Holder { data: baml.json.from_json<string>(baml.json.field(j, "data")) } : user.Holder<T>
+  !! 2362..2371: type mismatch: expected T, got string
 }
 function user.use_holder() -> int throws never {
   { : int
@@ -116,10 +101,7 @@ function user.Shadow.bad<T>(x: T) -> T throws never {
   { : T
     x : T
   }
-  !! 2686..2799: type parameter `T` on method shadows the same parameter on class `Shadow`. Please use a different name for the type parameter.
-}
-function user.Shadow.from_json(j: baml.json.json) -> user.Shadow<unknown> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  Shadow { value: baml.json.from_json<T>(baml.json.field(j, "value")) } : user.Shadow<T>
+  !! 2755..2799: type parameter `T` on method shadows the same parameter on class `Shadow`. Please use a different name for the type parameter.
 }
 function user.wrong_arity_missing() -> user.Box throws never {
   { : user.Box
@@ -130,40 +112,34 @@ function user.wrong_arity_extra() -> user.Box<int, string> throws never {
   { : user.Box<int, string>
     Box { value: 42 } : user.Box<int, string>
   }
-  !! 3129..3146: type `Box` expects 1 type argument(s), got 2
-  !! 3149..3183: type `Box` expects 1 type argument(s), got 2
+  !! 3130..3146: type `Box` expects 1 type argument(s), got 2
+  !! 3153..3183: type `Box` expects 1 type argument(s), got 2
 }
 function user.wrong_arity_partial() -> user.Pair<int> throws never {
   { : user.Pair<int>
     Pair { first: 1, second: "two" } : user.Pair<int>
   }
-  !! 3256..3266: type `Pair` expects 2 type argument(s), got 1
-  !! 3269..3310: type `Pair` expects 2 type argument(s), got 1
+  !! 3257..3266: type `Pair` expects 2 type argument(s), got 1
+  !! 3273..3310: type `Pair` expects 2 type argument(s), got 1
   !! 3303..3308: type mismatch: expected B, got "two"
 }
 class user.Plain {
   name: string
 }
-function user.Plain.from_json(j: baml.json.json) -> user.Plain throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  Plain { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.Plain
-}
 function user.wrong_arity_on_non_generic() -> user.Plain<int> throws never {
   { : user.Plain<int>
     Plain { name: "hello" } : user.Plain<int>
   }
-  !! 3570..3581: type `Plain` expects 0 type argument(s), got 1
-  !! 3584..3616: type `Plain` expects 0 type argument(s), got 1
+  !! 3571..3581: type `Plain` expects 0 type argument(s), got 1
+  !! 3588..3616: type `Plain` expects 0 type argument(s), got 1
 }
 class user.Container {
   inner: user.Box<T>
 }
-function user.Container.unwrap(self: user.Container) -> unknown throws never {
+function user.Container.unwrap(self: user.Container<T>) -> T throws never {
   { : T
     self.inner.get<T>() : T
   }
-}
-function user.Container.from_json(j: baml.json.json) -> user.Container<unknown> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  Container { inner: baml.json.from_json<Box<T>>(baml.json.field(j, "inner")) } : user.Container<T>
 }
 function user.use_nested() -> int throws never {
   { : int
@@ -174,18 +150,15 @@ function user.use_nested() -> int throws never {
 class user.Factory {
   data: T
 }
-function user.Factory.create(value: unknown) -> user.Factory<unknown> throws never {
+function user.Factory.create(value: T) -> user.Factory<T> throws never {
   { : user.Factory<T>
     Factory { data: value } : user.Factory<T>
   }
 }
-function user.Factory.get(self: user.Factory) -> unknown throws never {
+function user.Factory.get(self: user.Factory<T>) -> T throws never {
   { : T
     self.data : T
   }
-}
-function user.Factory.from_json(j: baml.json.json) -> user.Factory<unknown> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  Factory { data: baml.json.from_json<T>(baml.json.field(j, "data")) } : user.Factory<T>
 }
 function user.use_factory() -> int throws never {
   { : int
@@ -196,7 +169,7 @@ function user.use_factory() -> int throws never {
 class user.MaybeBox {
   value: T | null
 }
-function user.MaybeBox.get_or_default(self: user.MaybeBox, default: unknown) -> unknown throws never {
+function user.MaybeBox.get_or_default(self: user.MaybeBox<T>, default: T) -> T throws never {
   { : T
     match (self.value : T | null) : T
       v: T =>
@@ -205,9 +178,6 @@ function user.MaybeBox.get_or_default(self: user.MaybeBox, default: unknown) -> 
         default : T
   }
   !! 4804..4811: unreachable arm
-}
-function user.MaybeBox.from_json(j: baml.json.json) -> user.MaybeBox<unknown> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  MaybeBox { value: baml.json.from_json<T?>(baml.json.field(j, "value")) } : user.MaybeBox<T>
 }
 function user.use_maybe_box() -> int throws never {
   { : int
@@ -218,13 +188,10 @@ function user.use_maybe_box() -> int throws never {
 class user.Stack {
   items: T[]
 }
-function user.Stack.peek(self: user.Stack) -> unknown throws never {
+function user.Stack.peek(self: user.Stack<T>) -> T throws never {
   { : T
     self.items[0] : T
   }
-}
-function user.Stack.from_json(j: baml.json.json) -> user.Stack<unknown> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  Stack { items: baml.json.from_json<T[]>(baml.json.field(j, "items")) } : user.Stack<T>
 }
 function user.use_stack() -> string throws never {
   { : string
@@ -234,9 +201,6 @@ function user.use_stack() -> string throws never {
 }
 class user.Foo {
   value: T
-}
-function user.Foo.from_json(j: baml.json.json) -> user.Foo<unknown> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  Foo { value: baml.json.from_json<T>(baml.json.field(j, "value")) } : user.Foo<T>
 }
 function user.bare_in_union_param(f: user.Foo<int> | user.Foo) -> string throws never {
   { : "specific" | "bare"
@@ -290,16 +254,13 @@ class user.Todo {
   completed: bool
   userId: int
 }
-function user.Todo.from_json(j: baml.json.json) -> user.Todo throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  Todo { id: baml.json.from_json<int>(baml.json.field(j, "id")), title: baml.json.from_json<string>(baml.json.field(j, "title")), completed: baml.json.from_json<bool>(baml.json.field(j, "completed")), userId: baml.json.from_json<int>(baml.json.field(j, "userId")) } : user.Todo
-}
 function user.GetTodo() -> user.Todo throws never {
   { : unknown
     baml.fetch_as(baml.HttpRequest { method: baml.HttpMethod.Get, url: "dummyjson.com/tod..." }) : unknown
   }
-  !! 106..124: unresolved name: fetch_as
+  !! 111..124: unresolved name: fetch_as
   !! 131..230: unresolved type: baml.HttpRequest
-  !! 165..185: unresolved name: HttpMethod
+  !! 166..185: unresolved name: HttpMethod
 }
 class user.Todo$stream {
   id: int | null

@@ -80,47 +80,29 @@ class user.ChainUser {
   tags: string[]
   scores: int[][]
 }
-function user.ChainUser.from_json(j: baml.json.json) -> user.ChainUser throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  ChainUser { name: baml.json.from_json<string>(baml.json.field(j, "name")), profile: baml.json.from_json<ChainProfile>(baml.json.field(j, "profile")), tags: baml.json.from_json<string[]>(baml.json.field(j, "tags")), scores: baml.json.from_json<int[][]>(baml.json.field(j, "scores")) } : user.ChainUser
-}
 class user.ChainProfile {
   bio: string
   settings: user.ChainSettings
   items: user.ChainItem[]
-}
-function user.ChainProfile.from_json(j: baml.json.json) -> user.ChainProfile throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  ChainProfile { bio: baml.json.from_json<string>(baml.json.field(j, "bio")), settings: baml.json.from_json<ChainSettings>(baml.json.field(j, "settings")), items: baml.json.from_json<ChainItem[]>(baml.json.field(j, "items")) } : user.ChainProfile
 }
 class user.ChainSettings {
   theme: string
   notifications: bool
   preferences: user.ChainPreferences
 }
-function user.ChainSettings.from_json(j: baml.json.json) -> user.ChainSettings throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  ChainSettings { theme: baml.json.from_json<string>(baml.json.field(j, "theme")), notifications: baml.json.from_json<bool>(baml.json.field(j, "notifications")), preferences: baml.json.from_json<ChainPreferences>(baml.json.field(j, "preferences")) } : user.ChainSettings
-}
 class user.ChainPreferences {
   color: string
   font: string
   size: int
-}
-function user.ChainPreferences.from_json(j: baml.json.json) -> user.ChainPreferences throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  ChainPreferences { color: baml.json.from_json<string>(baml.json.field(j, "color")), font: baml.json.from_json<string>(baml.json.field(j, "font")), size: baml.json.from_json<int>(baml.json.field(j, "size")) } : user.ChainPreferences
 }
 class user.ChainItem {
   label: string
   value: int
   metadata: user.ChainMetadata
 }
-function user.ChainItem.from_json(j: baml.json.json) -> user.ChainItem throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  ChainItem { label: baml.json.from_json<string>(baml.json.field(j, "label")), value: baml.json.from_json<int>(baml.json.field(j, "value")), metadata: baml.json.from_json<ChainMetadata>(baml.json.field(j, "metadata")) } : user.ChainItem
-}
 class user.ChainMetadata {
   created_at: string
   tags: string[]
-}
-function user.ChainMetadata.from_json(j: baml.json.json) -> user.ChainMetadata throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  ChainMetadata { created_at: baml.json.from_json<string>(baml.json.field(j, "created_at")), tags: baml.json.from_json<string[]>(baml.json.field(j, "tags")) } : user.ChainMetadata
 }
 function user.ChainExprs(user: user.ChainUser, items: user.ChainItem[], m: map<string, int>) -> string throws never {
   { : string
@@ -166,28 +148,28 @@ function user.ChainExprs(user: user.ChainUser, items: user.ChainItem[], m: map<s
     baml.env.get_or_panic("DATABASE_URL") : string
     user.name : string
   }
-  !! 1809..1862: type `string` has no member `len`
-  !! 1865..1879: type `ChainItem[]` has no member `len`
-  !! 1882..1949: type `ChainItem[]` has no member `get`
-  !! 1953..2143: type `ChainItem[]` has no member `get`
-  !! 2309..2508: type `ChainItem[]` has no member `get`
-  !! 3397..3449: type `string` has no member `len`
-  !! 3464..3580: type `string` has no member `len`
+  !! 1849..1862: type `string` has no member `len`
+  !! 1870..1879: type `ChainItem[]` has no member `len`
+  !! 1927..1949: type `ChainItem[]` has no member `get`
+  !! 2033..2143: type `ChainItem[]` has no member `get`
+  !! 2393..2508: type `ChainItem[]` has no member `get`
+  !! 3436..3449: type `string` has no member `len`
+  !! 3537..3580: type `string` has no member `len`
   !! 3766..3769: type `string` has no member `len`
-  !! 3820..3898: type `ChainItem[]` has no member `get`
+  !! 3876..3898: type `ChainItem[]` has no member `get`
   !! 3899..3921: type `ChainItem[]` has no member `len`
-  !! 3929..3952: type `ChainItem[]` has no member `len`
-  !! 3960..3983: type `ChainItem[]` has no member `len`
-  !! 3997..4155: expected 2 argument(s), got 3
-  !! 4085..4108: type `ChainItem[]` has no member `len`
-  !! 4156..4569: type `string` has no member `len`
-  !! 4846..5308: type `string` has no member `len`
-  !! 5624..5900: type `ChainItem[]` has no member `get`
-  !! 5921..5981: type `ChainItem[]` has no member `len`
-  !! 5989..6012: type `ChainItem[]` has no member `len`
+  !! 3930..3952: type `ChainItem[]` has no member `len`
+  !! 3961..3983: type `ChainItem[]` has no member `len`
+  !! 4058..4155: expected 2 argument(s), got 3
+  !! 4086..4108: type `ChainItem[]` has no member `len`
+  !! 4244..4569: type `string` has no member `len`
+  !! 4938..5308: type `string` has no member `len`
+  !! 5712..5900: type `ChainItem[]` has no member `get`
+  !! 5959..5981: type `ChainItem[]` has no member `len`
+  !! 5990..6012: type `ChainItem[]` has no member `len`
   !! 6234..6249: type `int[][]` has no member `len`
   !! 6272..6275: type `int[]` has no member `len`
-  !! 6364..6382: type `ChainItem[]` has no member `get`
+  !! 6369..6382: type `ChainItem[]` has no member `get`
   !! 6464..6467: type `string` has no member `len`
   !! 6513..6516: type `string` has no member `len`
 }
@@ -223,59 +205,35 @@ class user.ChainMetadata$stream {
 }
 class user.EmptyClass {
 }
-function user.EmptyClass.from_json(j: baml.json.json) -> user.EmptyClass throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  EmptyClass {  } : user.EmptyClass
-}
 class user.SingleField {
   name: string
-}
-function user.SingleField.from_json(j: baml.json.json) -> user.SingleField throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  SingleField { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.SingleField
 }
 class user.MultiField {
   name: string
   age: int
   active: bool
 }
-function user.MultiField.from_json(j: baml.json.json) -> user.MultiField throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  MultiField { name: baml.json.from_json<string>(baml.json.field(j, "name")), age: baml.json.from_json<int>(baml.json.field(j, "age")), active: baml.json.from_json<bool>(baml.json.field(j, "active")) } : user.MultiField
-}
 class user.ColonFields {
   name: string
   age: int
 }
-function user.ColonFields.from_json(j: baml.json.json) -> user.ColonFields throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  ColonFields { name: baml.json.from_json<string>(baml.json.field(j, "name")), age: baml.json.from_json<int>(baml.json.field(j, "age")) } : user.ColonFields
-}
 class user.SingleAttrField {
   name: string @description("The user's name")
-}
-function user.SingleAttrField.from_json(j: baml.json.json) -> user.SingleAttrField throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  SingleAttrField { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.SingleAttrField
 }
 class user.MultiAttrField {
   name: string @description("The user's name") @alias("user_name")
   summary: string | null @description("A summary") @alias("sum")
-}
-function user.MultiAttrField.from_json(j: baml.json.json) -> user.MultiAttrField throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  MultiAttrField { name: baml.json.from_json<string>(baml.json.field(j, "name")), summary: baml.json.from_json<string?>(baml.json.field(j, "summary")) } : user.MultiAttrField
 }
 class user.LongAttrField {
   name: string @description("This is an extremely long description attribute value that should push the field definition well past the default line width limit of one hundred columns")
   data: map<string, int | string | bool> @description("complex data") @alias("payload")
   config: map<string, map<string, int | string | bool | null>> @description("deeply nested config structure for testing wrapping")
 }
-function user.LongAttrField.from_json(j: baml.json.json) -> user.LongAttrField throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  LongAttrField { name: baml.json.from_json<string>(baml.json.field(j, "name")), data: baml.json.from_json<map<string, int | string | bool>>(baml.json.field(j, "data")), config: baml.json.from_json<map<string, map<string, int | string | bool | null>>>(baml.json.field(j, "config")) } : user.LongAttrField
-}
 class user.LongFieldTypes {
   very_long_field_name_that_takes_up_space: int | string | bool | float | null | int[] | string[]
   another_long_field: map<string, map<string, map<string, int | string | bool | float | null>>>
   callback_field: (first_param: int, second_param: string, third_param: bool) -> map<string, int> throws never
   deeply_nested: (int | string | bool | float | null)[] | null
-}
-function user.LongFieldTypes.from_json(j: baml.json.json) -> user.LongFieldTypes throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  baml.json.from_string<T>(baml.json.stringify(j)) : user.LongFieldTypes
 }
 class user.TypeVariety {
   simple: string
@@ -292,80 +250,41 @@ class user.TypeVariety {
   paren_union_array: (int | string | bool)[]
   triple_nested: map<string, map<string, map<string, int>>>
 }
-function user.TypeVariety.from_json(j: baml.json.json) -> user.TypeVariety throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  baml.json.from_string<T>(baml.json.stringify(j)) : user.TypeVariety
-}
 class user.DynamicClass {
   name: string
-}
-function user.DynamicClass.from_json(j: baml.json.json) -> user.DynamicClass throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  DynamicClass { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.DynamicClass
 }
 class user.MultiBlockAttr {
   name: string
 }
-function user.MultiBlockAttr.from_json(j: baml.json.json) -> user.MultiBlockAttr throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  MultiBlockAttr { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.MultiBlockAttr
-}
 class user.TriviaClass {
   name: string
-}
-function user.TriviaClass.from_json(j: baml.json.json) -> user.TriviaClass throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  TriviaClass { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.TriviaClass
 }
 class user.TriviaClassBlock {
   name: string
 }
-function user.TriviaClassBlock.from_json(j: baml.json.json) -> user.TriviaClassBlock throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  TriviaClassBlock { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.TriviaClassBlock
-}
 class user.TriviaFieldAttrs {
   name: string @description("the name")
-}
-function user.TriviaFieldAttrs.from_json(j: baml.json.json) -> user.TriviaFieldAttrs throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  TriviaFieldAttrs { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.TriviaFieldAttrs
 }
 class user.TriviaFieldAttrsBlock {
   name: string @description("the name")
 }
-function user.TriviaFieldAttrsBlock.from_json(j: baml.json.json) -> user.TriviaFieldAttrsBlock throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  TriviaFieldAttrsBlock { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.TriviaFieldAttrsBlock
-}
 class user.TriviaLongFieldType {
   data: map<string, int | string | bool | float | null> @description("a long description")
-}
-function user.TriviaLongFieldType.from_json(j: baml.json.json) -> user.TriviaLongFieldType throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  TriviaLongFieldType { data: baml.json.from_json<map<string, int | string | bool | float | null>>(baml.json.field(j, "data")) } : user.TriviaLongFieldType
 }
 class user.TriviaLongFieldTypeBlock {
   data: map<string, int | string | bool | float | null> @description("a long description")
 }
-function user.TriviaLongFieldTypeBlock.from_json(j: baml.json.json) -> user.TriviaLongFieldTypeBlock throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  TriviaLongFieldTypeBlock { data: baml.json.from_json<map<string, int | string | bool | float | null>>(baml.json.field(j, "data")) } : user.TriviaLongFieldTypeBlock
-}
 class user.TriviaMultiAttr {
   name: string @description("name") @alias("user_name")
-}
-function user.TriviaMultiAttr.from_json(j: baml.json.json) -> user.TriviaMultiAttr throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  TriviaMultiAttr { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.TriviaMultiAttr
 }
 class user.TriviaMultiAttrBlock {
   name: string @description("name") @alias("user_name")
 }
-function user.TriviaMultiAttrBlock.from_json(j: baml.json.json) -> user.TriviaMultiAttrBlock throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  TriviaMultiAttrBlock { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.TriviaMultiAttrBlock
-}
 class user.A {
   x: int
 }
-function user.A.from_json(j: baml.json.json) -> user.A throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  A { x: baml.json.from_json<int>(baml.json.field(j, "x")) } : user.A
-}
 class user.ThisIsAnExtremelyLongClassNameThatDefinitelyExceedsTheOneHundredCharacterLineLimitAllByItself {
   x: int
-}
-function user.ThisIsAnExtremelyLongClassNameThatDefinitelyExceedsTheOneHundredCharacterLineLimitAllByItself.from_json(j: baml.json.json) -> user.ThisIsAnExtremelyLongClassNameThatDefinitelyExceedsTheOneHundredCharacterLineLimitAllByItself throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  ThisIsAnExtremelyLongClassNameThatDefinitelyExceedsTheOneHundredCharacterLineLimitAllByItself { x: baml.json.from_json<int>(baml.json.field(j, "x")) } : user.ThisIsAnExtremelyLongClassNameThatDefinitelyExceedsTheOneHundredCharacterLineLimitAllByItself
 }
 class user.AttributeVariety {
   a: string @skip
@@ -375,15 +294,9 @@ class user.AttributeVariety {
   e: string
   f: string
 }
-function user.AttributeVariety.from_json(j: baml.json.json) -> user.AttributeVariety throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  AttributeVariety { a: baml.json.from_json<string>(baml.json.field(j, "a")), b: baml.json.from_json<string>(baml.json.field(j, "b")), c: baml.json.from_json<string>(baml.json.field(j, "c")), d: baml.json.from_json<string>(baml.json.field(j, "d")), e: baml.json.from_json<string>(baml.json.field(j, "e")), f: baml.json.from_json<string>(baml.json.field(j, "f")) } : user.AttributeVariety
-}
 class user.ExtraWhitespace {
   name: string @description("name") @alias("n")
   age: int
-}
-function user.ExtraWhitespace.from_json(j: baml.json.json) -> user.ExtraWhitespace throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  ExtraWhitespace { name: baml.json.from_json<string>(baml.json.field(j, "name")), age: baml.json.from_json<int>(baml.json.field(j, "age")) } : user.ExtraWhitespace
 }
 class user.ManyFields {
   field1: int
@@ -397,23 +310,14 @@ class user.ManyFields {
   field9: int
   field10: int
 }
-function user.ManyFields.from_json(j: baml.json.json) -> user.ManyFields throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  ManyFields { field1: baml.json.from_json<int>(baml.json.field(j, "field1")), field2: baml.json.from_json<int>(baml.json.field(j, "field2")), field3: baml.json.from_json<int>(baml.json.field(j, "field3")), field4: baml.json.from_json<int>(baml.json.field(j, "field4")), field5: baml.json.from_json<int>(baml.json.field(j, "field5")), field6: baml.json.from_json<int>(baml.json.field(j, "field6")), field7: baml.json.from_json<int>(baml.json.field(j, "field7")), field8: baml.json.from_json<int>(baml.json.field(j, "field8")), field9: baml.json.from_json<int>(baml.json.field(j, "field9")), field10: baml.json.from_json<int>(baml.json.field(j, "field10")) } : user.ManyFields
-}
 class user.Outer {
   inner: user.InnerNested
   list: user.InnerNested[]
   optional: user.InnerNested | null
   mapping: map<string, user.InnerNested>
 }
-function user.Outer.from_json(j: baml.json.json) -> user.Outer throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  Outer { inner: baml.json.from_json<InnerNested>(baml.json.field(j, "inner")), list: baml.json.from_json<InnerNested[]>(baml.json.field(j, "list")), optional: baml.json.from_json<InnerNested?>(baml.json.field(j, "optional")), mapping: baml.json.from_json<map<string, InnerNested>>(baml.json.field(j, "mapping")) } : user.Outer
-}
 class user.InnerNested {
   value: int
-}
-function user.InnerNested.from_json(j: baml.json.json) -> user.InnerNested throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  InnerNested { value: baml.json.from_json<int>(baml.json.field(j, "value")) } : user.InnerNested
 }
 class user.WithMethod {
   name: string
@@ -423,9 +327,6 @@ function user.WithMethod.greet() -> string throws never {
     "hello" : "hello"
   }
 }
-function user.WithMethod.from_json(j: baml.json.json) -> user.WithMethod throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  WithMethod { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.WithMethod
-}
 class user.WithLongMethod {
   name: string
 }
@@ -434,61 +335,37 @@ function user.WithLongMethod.processData(first_input: map<string, int>, second_i
     map { "result": 1 } : map<string, int | string | bool>
   }
 }
-function user.WithLongMethod.from_json(j: baml.json.json) -> user.WithLongMethod throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  WithLongMethod { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.WithLongMethod
-}
 class user.DeepOuter {
   level1: user.DeepLevel1
-}
-function user.DeepOuter.from_json(j: baml.json.json) -> user.DeepOuter throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  DeepOuter { level1: baml.json.from_json<DeepLevel1>(baml.json.field(j, "level1")) } : user.DeepOuter
 }
 class user.DeepLevel1 {
   level2: user.DeepLevel2
   items: user.DeepLevel2[]
   mapping: map<string, user.DeepLevel2>
 }
-function user.DeepLevel1.from_json(j: baml.json.json) -> user.DeepLevel1 throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  DeepLevel1 { level2: baml.json.from_json<DeepLevel2>(baml.json.field(j, "level2")), items: baml.json.from_json<DeepLevel2[]>(baml.json.field(j, "items")), mapping: baml.json.from_json<map<string, DeepLevel2>>(baml.json.field(j, "mapping")) } : user.DeepLevel1
-}
 class user.DeepLevel2 {
   level3: user.DeepLevel3
   value: int | string | bool | float | null
 }
-function user.DeepLevel2.from_json(j: baml.json.json) -> user.DeepLevel2 throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  DeepLevel2 { level3: baml.json.from_json<DeepLevel3>(baml.json.field(j, "level3")), value: baml.json.from_json<int | string | bool | float | null>(baml.json.field(j, "value")) } : user.DeepLevel2
-}
 class user.DeepLevel3 {
   data: string
   nested: map<string, map<string, int>>
-}
-function user.DeepLevel3.from_json(j: baml.json.json) -> user.DeepLevel3 throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  DeepLevel3 { data: baml.json.from_json<string>(baml.json.field(j, "data")), nested: baml.json.from_json<map<string, map<string, int>>>(baml.json.field(j, "nested")) } : user.DeepLevel3
 }
 class user.TrailingCommas {
   name: string
   age: int
   active: bool
 }
-function user.TrailingCommas.from_json(j: baml.json.json) -> user.TrailingCommas throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  TrailingCommas { name: baml.json.from_json<string>(baml.json.field(j, "name")), age: baml.json.from_json<int>(baml.json.field(j, "age")), active: baml.json.from_json<bool>(baml.json.field(j, "active")) } : user.TrailingCommas
-}
 class user.TrailingSemicolons {
   name: string
   age: int
   active: bool
-}
-function user.TrailingSemicolons.from_json(j: baml.json.json) -> user.TrailingSemicolons throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  TrailingSemicolons { name: baml.json.from_json<string>(baml.json.field(j, "name")), age: baml.json.from_json<int>(baml.json.field(j, "age")), active: baml.json.from_json<bool>(baml.json.field(j, "active")) } : user.TrailingSemicolons
 }
 class user.MixedDelimiters {
   a: string
   b: int
   c: bool
   d: float
-}
-function user.MixedDelimiters.from_json(j: baml.json.json) -> user.MixedDelimiters throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  MixedDelimiters { a: baml.json.from_json<string>(baml.json.field(j, "a")), b: baml.json.from_json<int>(baml.json.field(j, "b")), c: baml.json.from_json<bool>(baml.json.field(j, "c")), d: baml.json.from_json<float>(baml.json.field(j, "d")) } : user.MixedDelimiters
 }
 class user.FieldsAndMethods {
   name: string
@@ -500,43 +377,25 @@ function user.FieldsAndMethods.greet() -> string throws never {
     "hello" : "hello"
   }
 }
-function user.FieldsAndMethods.from_json(j: baml.json.json) -> user.FieldsAndMethods throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  FieldsAndMethods { name: baml.json.from_json<string>(baml.json.field(j, "name")), age: baml.json.from_json<int>(baml.json.field(j, "age")), active: baml.json.from_json<bool>(baml.json.field(j, "active")) } : user.FieldsAndMethods
-}
 class user.SingleFieldComma {
   name: string
 }
-function user.SingleFieldComma.from_json(j: baml.json.json) -> user.SingleFieldComma throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  SingleFieldComma { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.SingleFieldComma
-}
 class user.SingleFieldSemicolon {
   name: string
-}
-function user.SingleFieldSemicolon.from_json(j: baml.json.json) -> user.SingleFieldSemicolon throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  SingleFieldSemicolon { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.SingleFieldSemicolon
 }
 class user.NoColonDelimiters {
   name: string
   age: int
   active: bool
 }
-function user.NoColonDelimiters.from_json(j: baml.json.json) -> user.NoColonDelimiters throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  NoColonDelimiters { name: baml.json.from_json<string>(baml.json.field(j, "name")), age: baml.json.from_json<int>(baml.json.field(j, "age")), active: baml.json.from_json<bool>(baml.json.field(j, "active")) } : user.NoColonDelimiters
-}
 class user.AttrsWithDelimiters {
   name: string @description("name")
   age: int @alias("user_age")
   active: bool
 }
-function user.AttrsWithDelimiters.from_json(j: baml.json.json) -> user.AttrsWithDelimiters throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  AttrsWithDelimiters { name: baml.json.from_json<string>(baml.json.field(j, "name")), age: baml.json.from_json<int>(baml.json.field(j, "age")), active: baml.json.from_json<bool>(baml.json.field(j, "active")) } : user.AttrsWithDelimiters
-}
 class user.SemicolonTrivia {
   name: string
   age: int
-}
-function user.SemicolonTrivia.from_json(j: baml.json.json) -> user.SemicolonTrivia throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  SemicolonTrivia { name: baml.json.from_json<string>(baml.json.field(j, "name")), age: baml.json.from_json<int>(baml.json.field(j, "age")) } : user.SemicolonTrivia
 }
 class user.EmptyClass$stream {
 }
@@ -742,7 +601,7 @@ function user.EnvClient$new() -> ? throws never {
   baml.llm.PrimitiveClient { name: "EnvClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: baml.env.get_or_panic("OPENAI_API_KEY"), provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } } : baml.llm.PrimitiveClient
 }
 function user.ArrayOfObjectsClient$new() -> ? throws never {
-  baml.llm.PrimitiveClient { name: "ArrayOfObjectsClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map { "tools": [] } } } : baml.llm.PrimitiveClient
+  baml.llm.PrimitiveClient { name: "ArrayOfObjectsClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map { "tools": [map { "server_label": "web_search", "server_url": "https://example.com", "type": "mcp" }, map { "server_label": "calculator", "server_url": "https://calc.exam..." }] } } } : baml.llm.PrimitiveClient
 }
 function user.RawStringConfigClient$new() -> ? throws never {
   baml.llm.PrimitiveClient { name: "RawStringConfigCl...", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map { "system_prompt": "#Youareahelpfulas..." } } } : baml.llm.PrimitiveClient
@@ -761,6 +620,7 @@ function user.ThisIsAnExtremelyLongClientNameThatDefinitelyExceedsTheDefaultLine
 }
 function user.DeeplyNestedClient$new() -> ? throws never {
   baml.llm.PrimitiveClient { name: "DeeplyNestedClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map { "custom_config": map { "retry_on_failure": true, "timeout_ms": 30000, "metadata": map { "team": "platform", "environment": "production" } } }, query_params: map {  }, request_body: map {  } } } : baml.llm.PrimitiveClient
+  !! 5255..5694: type mismatch: expected string, got map<string, bool | int | map<string, string>>
 }
 function user.LongNestedValuesClient$new() -> ? throws never {
   baml.llm.PrimitiveClient { name: "LongNestedValuesC...", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "anthropic/claude-...", base_url: "https://some-extr...", allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } } : baml.llm.PrimitiveClient
@@ -772,7 +632,7 @@ function user.LongArrayClient$new() -> ? throws never {
   baml.llm.PrimitiveClient { name: "LongArrayClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map { "stop_sequences": ["STOP_GENERATION_NOW", "END_OF_RESPONSE_M...", "COMPLETION_FINISH...", "TERMINATE_OUTPUT_...", "FINAL_ANSWER_DELI..."] } } } : baml.llm.PrimitiveClient
 }
 function user.LongArrayOfObjectsClient$new() -> ? throws never {
-  baml.llm.PrimitiveClient { name: "LongArrayOfObject...", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map { "tools": [] } } } : baml.llm.PrimitiveClient
+  baml.llm.PrimitiveClient { name: "LongArrayOfObject...", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map { "tools": [map { "server_label": "this_is_a_very_lo...", "server_url": "https://some-extr...", "type": "mcp", "description": "Averylongdescript..." }, map { "server_label": "another_long_serv...", "server_url": "https://another-l..." }] } } } : baml.llm.PrimitiveClient
 }
 function user.TriviaDeeplyNestedClient$new() -> ? throws never {
   baml.llm.PrimitiveClient { name: "TriviaDeeplyNeste...", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } } : baml.llm.PrimitiveClient
@@ -1103,35 +963,35 @@ function user.DeepNestLongExpr(a: int, b: int, c: int, d: int) -> int throws nev
 }
 function user.LlmBasic(name: string, client: baml.llm.Client = GPT4) -> string throws never {
   baml.llm.call_llm_function<T>(client, "LlmBasic", map { "name": name }) : string
-  !! 11146..11203: unresolved name: GPT4
+  !! 11147..11203: unresolved name: GPT4
 }
 function user.LlmBasic$render_prompt(name: string, client: baml.llm.Client = GPT4) -> baml.llm.PromptAst throws never {
   baml.llm.render_prompt(client, "LlmBasic", map { "name": name }) : baml.llm.PromptAst
-  !! 11069..11203: unresolved name: GPT4
+  !! 11147..11203: unresolved name: GPT4
 }
 function user.LlmBasic$build_request(name: string, client: baml.llm.Client = GPT4) -> baml.http.Request throws never {
   baml.llm.build_request(client, "LlmBasic", map { "name": name }) : baml.http.Request
-  !! 11069..11203: unresolved name: GPT4
+  !! 11147..11203: unresolved name: GPT4
 }
 function user.LlmBasic$build_request_stream(name: string, client: baml.llm.Client = GPT4) -> baml.http.Request throws never {
   baml.llm.build_request_stream(client, "LlmBasic", map { "name": name }) : baml.http.Request
-  !! 11069..11203: unresolved name: GPT4
+  !! 11147..11203: unresolved name: GPT4
 }
 function user.LlmMultiLine(text: string, client: baml.llm.Client = GPT4) -> string throws never {
   baml.llm.call_llm_function<T>(client, "LlmMultiLine", map { "text": text }) : string
-  !! 11306..11428: unresolved name: GPT4
+  !! 11307..11428: unresolved name: GPT4
 }
 function user.LlmMultiLine$render_prompt(text: string, client: baml.llm.Client = GPT4) -> baml.llm.PromptAst throws never {
   baml.llm.render_prompt(client, "LlmMultiLine", map { "text": text }) : baml.llm.PromptAst
-  !! 11203..11428: unresolved name: GPT4
+  !! 11307..11428: unresolved name: GPT4
 }
 function user.LlmMultiLine$build_request(text: string, client: baml.llm.Client = GPT4) -> baml.http.Request throws never {
   baml.llm.build_request(client, "LlmMultiLine", map { "text": text }) : baml.http.Request
-  !! 11203..11428: unresolved name: GPT4
+  !! 11307..11428: unresolved name: GPT4
 }
 function user.LlmMultiLine$build_request_stream(text: string, client: baml.llm.Client = GPT4) -> baml.http.Request throws never {
   baml.llm.build_request_stream(client, "LlmMultiLine", map { "text": text }) : baml.http.Request
-  !! 11203..11428: unresolved name: GPT4
+  !! 11307..11428: unresolved name: GPT4
 }
 function user.LlmStringClient(text: string, client: baml.llm.Client = ...) -> string throws never {
   baml.llm.call_llm_function<T>(client, "LlmStringClient", map { "text": text }) : string
@@ -1147,35 +1007,35 @@ function user.LlmStringClient$build_request_stream(text: string, client: baml.ll
 }
 function user.LlmReversedOrder(text: string, client: baml.llm.Client = GPT4) -> string throws never {
   baml.llm.call_llm_function<T>(client, "LlmReversedOrder", map { "text": text }) : string
-  !! 11706..11763: unresolved name: GPT4
+  !! 11707..11763: unresolved name: GPT4
 }
 function user.LlmReversedOrder$render_prompt(text: string, client: baml.llm.Client = GPT4) -> baml.llm.PromptAst throws never {
   baml.llm.render_prompt(client, "LlmReversedOrder", map { "text": text }) : baml.llm.PromptAst
-  !! 11593..11763: unresolved name: GPT4
+  !! 11707..11763: unresolved name: GPT4
 }
 function user.LlmReversedOrder$build_request(text: string, client: baml.llm.Client = GPT4) -> baml.http.Request throws never {
   baml.llm.build_request(client, "LlmReversedOrder", map { "text": text }) : baml.http.Request
-  !! 11593..11763: unresolved name: GPT4
+  !! 11707..11763: unresolved name: GPT4
 }
 function user.LlmReversedOrder$build_request_stream(text: string, client: baml.llm.Client = GPT4) -> baml.http.Request throws never {
   baml.llm.build_request_stream(client, "LlmReversedOrder", map { "text": text }) : baml.http.Request
-  !! 11593..11763: unresolved name: GPT4
+  !! 11707..11763: unresolved name: GPT4
 }
 function user.LlmWithLongSignature(first_context: string, second_context: string, third_context: string, user_query: string, client: baml.llm.Client = GPT4) -> string throws never {
   baml.llm.call_llm_function<T>(client, "LlmWithLongSignature", map { "first_context": first_context, "second_context": second_context, "third_context": third_context, "user_query": user_query }) : string
-  !! 11948..12099: unresolved name: GPT4
+  !! 11949..12099: unresolved name: GPT4
 }
 function user.LlmWithLongSignature$render_prompt(first_context: string, second_context: string, third_context: string, user_query: string, client: baml.llm.Client = GPT4) -> baml.llm.PromptAst throws never {
   baml.llm.render_prompt(client, "LlmWithLongSignature", map { "first_context": first_context, "second_context": second_context, "third_context": third_context, "user_query": user_query }) : baml.llm.PromptAst
-  !! 11763..12099: unresolved name: GPT4
+  !! 11949..12099: unresolved name: GPT4
 }
 function user.LlmWithLongSignature$build_request(first_context: string, second_context: string, third_context: string, user_query: string, client: baml.llm.Client = GPT4) -> baml.http.Request throws never {
   baml.llm.build_request(client, "LlmWithLongSignature", map { "first_context": first_context, "second_context": second_context, "third_context": third_context, "user_query": user_query }) : baml.http.Request
-  !! 11763..12099: unresolved name: GPT4
+  !! 11949..12099: unresolved name: GPT4
 }
 function user.LlmWithLongSignature$build_request_stream(first_context: string, second_context: string, third_context: string, user_query: string, client: baml.llm.Client = GPT4) -> baml.http.Request throws never {
   baml.llm.build_request_stream(client, "LlmWithLongSignature", map { "first_context": first_context, "second_context": second_context, "third_context": third_context, "user_query": user_query }) : baml.http.Request
-  !! 11763..12099: unresolved name: GPT4
+  !! 11949..12099: unresolved name: GPT4
 }
 function user.ExtraWhitespace(a: int, b: int) -> int throws never {
   { : int
@@ -1209,27 +1069,27 @@ function user.NoColonComplexTypes(items: int[], mapping: map<string, int>) -> st
 }
 function user.LlmBasic$stream(name: string, client: baml.llm.Client = GPT4) -> baml.llm.Stream<string | null, string> throws never {
   baml.llm.stream_llm_function(client, "LlmBasic", map { "name": name }) : baml.llm.Stream<string | null, string>
-  !! 11069..11203: unresolved name: GPT4
+  !! 11147..11203: unresolved name: GPT4
 }
 function user.LlmBasic$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client = GPT4) -> baml.llm.Stream<string | null, string> throws never {
   client.__make_stream(sse) : baml.llm.Stream<string | null, string>
-  !! 11069..11203: unresolved name: GPT4
+  !! 11147..11203: unresolved name: GPT4
 }
 function user.LlmBasic$parse(json: string, client: baml.llm.Client = GPT4) -> string throws never {
   baml.llm.parse<TFinal>(json) : string
-  !! 11069..11203: unresolved name: GPT4
+  !! 11147..11203: unresolved name: GPT4
 }
 function user.LlmMultiLine$stream(text: string, client: baml.llm.Client = GPT4) -> baml.llm.Stream<string | null, string> throws never {
   baml.llm.stream_llm_function(client, "LlmMultiLine", map { "text": text }) : baml.llm.Stream<string | null, string>
-  !! 11203..11428: unresolved name: GPT4
+  !! 11307..11428: unresolved name: GPT4
 }
 function user.LlmMultiLine$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client = GPT4) -> baml.llm.Stream<string | null, string> throws never {
   client.__make_stream(sse) : baml.llm.Stream<string | null, string>
-  !! 11203..11428: unresolved name: GPT4
+  !! 11307..11428: unresolved name: GPT4
 }
 function user.LlmMultiLine$parse(json: string, client: baml.llm.Client = GPT4) -> string throws never {
   baml.llm.parse<TFinal>(json) : string
-  !! 11203..11428: unresolved name: GPT4
+  !! 11307..11428: unresolved name: GPT4
 }
 function user.LlmStringClient$stream(text: string, client: baml.llm.Client = ...) -> baml.llm.Stream<string | null, string> throws never {
   baml.llm.stream_llm_function(client, "LlmStringClient", map { "text": text }) : baml.llm.Stream<string | null, string>
@@ -1242,27 +1102,27 @@ function user.LlmStringClient$parse(json: string, client: baml.llm.Client = ...)
 }
 function user.LlmReversedOrder$stream(text: string, client: baml.llm.Client = GPT4) -> baml.llm.Stream<string | null, string> throws never {
   baml.llm.stream_llm_function(client, "LlmReversedOrder", map { "text": text }) : baml.llm.Stream<string | null, string>
-  !! 11593..11763: unresolved name: GPT4
+  !! 11707..11763: unresolved name: GPT4
 }
 function user.LlmReversedOrder$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client = GPT4) -> baml.llm.Stream<string | null, string> throws never {
   client.__make_stream(sse) : baml.llm.Stream<string | null, string>
-  !! 11593..11763: unresolved name: GPT4
+  !! 11707..11763: unresolved name: GPT4
 }
 function user.LlmReversedOrder$parse(json: string, client: baml.llm.Client = GPT4) -> string throws never {
   baml.llm.parse<TFinal>(json) : string
-  !! 11593..11763: unresolved name: GPT4
+  !! 11707..11763: unresolved name: GPT4
 }
 function user.LlmWithLongSignature$stream(first_context: string, second_context: string, third_context: string, user_query: string, client: baml.llm.Client = GPT4) -> baml.llm.Stream<string | null, string> throws never {
   baml.llm.stream_llm_function(client, "LlmWithLongSignature", map { "first_context": first_context, "second_context": second_context, "third_context": third_context, "user_query": user_query }) : baml.llm.Stream<string | null, string>
-  !! 11763..12099: unresolved name: GPT4
+  !! 11949..12099: unresolved name: GPT4
 }
 function user.LlmWithLongSignature$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client = GPT4) -> baml.llm.Stream<string | null, string> throws never {
   client.__make_stream(sse) : baml.llm.Stream<string | null, string>
-  !! 11763..12099: unresolved name: GPT4
+  !! 11949..12099: unresolved name: GPT4
 }
 function user.LlmWithLongSignature$parse(json: string, client: baml.llm.Client = GPT4) -> string throws never {
   baml.llm.parse<TFinal>(json) : string
-  !! 11763..12099: unresolved name: GPT4
+  !! 11949..12099: unresolved name: GPT4
 }
 function user.MyFunction(a: int, b: int) -> int throws never {
   { : 1
@@ -1572,8 +1432,8 @@ function user.LoopStmts(items: int[], flag: bool) -> int throws never {
     let another_extremely_long_variable_name = a * a + result * result + a * result + a + result + a * a * a + result * result * result + a * result * a + result * a * result : int
     return result : int
   }
-  ?? 12080..12107: unreachable code: 1 statement(s) after diverging statement
-  ?? 12191..12221: unreachable code: 1 statement(s) after diverging statement
+  ?? 12101..12107: unreachable code: 1 statement(s) after diverging statement
+  ?? 12212..12221: unreachable code: 1 statement(s) after diverging statement
 }
 function user.AssertStmts(x: int, y: int) -> int throws never {
   { : int
@@ -1599,20 +1459,11 @@ function user.AssertStmts(x: int, y: int) -> int throws never {
 class user.MatchSuccess {
   data: string
 }
-function user.MatchSuccess.from_json(j: baml.json.json) -> user.MatchSuccess throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  MatchSuccess { data: baml.json.from_json<string>(baml.json.field(j, "data")) } : user.MatchSuccess
-}
 class user.MatchFailure {
   reason: string
 }
-function user.MatchFailure.from_json(j: baml.json.json) -> user.MatchFailure throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  MatchFailure { reason: baml.json.from_json<string>(baml.json.field(j, "reason")) } : user.MatchFailure
-}
 class user.ArrayPatternTriviaBox {
   values: int[]
-}
-function user.ArrayPatternTriviaBox.from_json(j: baml.json.json) -> user.ArrayPatternTriviaBox throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  ArrayPatternTriviaBox { values: baml.json.from_json<int[]>(baml.json.field(j, "values")) } : user.ArrayPatternTriviaBox
 }
 enum user.MatchStatus
 type user.MatchResult = user.MatchSuccess | user.MatchFailure
@@ -1892,7 +1743,7 @@ function user.MatchExprs(x: int, s: user.MatchStatus, r: user.MatchResult, b: bo
       1 | 2 | 3 =>
         0 : 0
   }
-  !! 3915..3929: type mismatch: expected "hello", got "bye"
+  !! 3924..3929: type mismatch: expected "hello", got "bye"
   !! 3933..3943: unreachable arm
   !! 3958..3965: unreachable arm
   !! 8438..8443: operator `*` cannot be applied to `bool` and `bool`
@@ -1900,12 +1751,12 @@ function user.MatchExprs(x: int, s: user.MatchStatus, r: user.MatchResult, b: bo
   !! 8474..8479: operator `*` cannot be applied to `bool` and `bool`
   !! 8486..8491: operator `*` cannot be applied to `int` and `bool`
   !! 8498..8503: operator `*` cannot be applied to `bool` and `int`
-  !! 10691..10814: non-exhaustive match on `int`; missing: _
-  !! 10814..10938: non-exhaustive match on `int`; missing: _
-  !! 10938..11058: non-exhaustive match on `int`; missing: _
-  !! 11058..11179: non-exhaustive match on `int`; missing: _
-  !! 11575..11739: non-exhaustive match on `int`; missing: _
-  !! 11575..11739: type mismatch: expected string, got 0
+  !! 10766..10814: non-exhaustive match on `int`; missing: _
+  !! 10891..10938: non-exhaustive match on `int`; missing: _
+  !! 11006..11058: non-exhaustive match on `int`; missing: _
+  !! 11129..11179: non-exhaustive match on `int`; missing: _
+  !! 11732..11733: type mismatch: expected string, got 0
+  !! 11653..11739: non-exhaustive match on `int`; missing: _
 }
 class user.MatchSuccess$stream {
   data: string | null
@@ -1921,23 +1772,14 @@ class user.OtherPoint {
   x: int
   y: int
 }
-function user.OtherPoint.from_json(j: baml.json.json) -> user.OtherPoint throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  OtherPoint { x: baml.json.from_json<int>(baml.json.field(j, "x")), y: baml.json.from_json<int>(baml.json.field(j, "y")) } : user.OtherPoint
-}
 class user.OtherVec {
   p: user.OtherPoint
   q: user.OtherPoint
-}
-function user.OtherVec.from_json(j: baml.json.json) -> user.OtherVec throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  OtherVec { p: baml.json.from_json<OtherPoint>(baml.json.field(j, "p")), q: baml.json.from_json<OtherPoint>(baml.json.field(j, "q")) } : user.OtherVec
 }
 class user.OtherTriple {
   a: user.OtherVec
   b: user.OtherVec
   c: user.OtherVec
-}
-function user.OtherTriple.from_json(j: baml.json.json) -> user.OtherTriple throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  OtherTriple { a: baml.json.from_json<OtherVec>(baml.json.field(j, "a")), b: baml.json.from_json<OtherVec>(baml.json.field(j, "b")), c: baml.json.from_json<OtherVec>(baml.json.field(j, "c")) } : user.OtherTriple
 }
 function user.OtherExprs(a: int, b: int) -> int throws never {
   { : int
@@ -1970,7 +1812,7 @@ function user.OtherExprs(a: int, b: int) -> int throws never {
     Not a > b : bool
     Neg a : int
     Neg a : int
-    [] : never[]
+    [] : _[]
     [1] : int[]
     [1, 2, 3] : int[]
     [1, 2, 3, 4, 5] : int[]
@@ -2102,14 +1944,8 @@ type user.DeepPostfix = (int | string | bool | float | null)[][] | null
 class user.TypeAliasSuccess {
   data: string
 }
-function user.TypeAliasSuccess.from_json(j: baml.json.json) -> user.TypeAliasSuccess throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  TypeAliasSuccess { data: baml.json.from_json<string>(baml.json.field(j, "data")) } : user.TypeAliasSuccess
-}
 class user.TypeAliasFailure {
   reason: string
-}
-function user.TypeAliasFailure.from_json(j: baml.json.json) -> user.TypeAliasFailure throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  TypeAliasFailure { reason: baml.json.from_json<string>(baml.json.field(j, "reason")) } : user.TypeAliasFailure
 }
 type user.Result = user.TypeAliasSuccess | user.TypeAliasFailure
 type user.MaybeResult = user.Result | null

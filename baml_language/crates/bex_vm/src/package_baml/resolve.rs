@@ -13,7 +13,9 @@
 
 use std::borrow::Cow;
 
-use baml_type::{Literal, MediaKind, Name, RuntimeTy, TyAttr, TyTemplate, TypeName};
+use baml_type::{
+    Literal, MediaKind, Name, RuntimeInterface, RuntimeTy, TyAttr, TyTemplate, TypeName,
+};
 use bex_vm_types::types::{Object, RuntimeImplRule};
 
 use crate::BexVm;
@@ -319,6 +321,7 @@ fn match_template(
         TyTemplate::Wildcard => true,
         // `TypeArgRefOrWildcard` is a de Bruijn ref like `TypeArgRef` (substitution
         // treats them identically); bind it the same way here.
+        #[expect(deprecated)]
         TyTemplate::TypeArgRef(n) | TyTemplate::TypeArgRefOrWildcard(n) => {
             match bindings.get_mut(*n as usize) {
                 Some(slot @ None) => {
@@ -552,7 +555,7 @@ pub(super) fn ty_equivalent(a: &RuntimeTy, b: &RuntimeTy) -> bool {
         ) => {
             amember == bmember
                 && ty_equivalent(abase, bbase)
-                && opt_ty_equivalent(aiface.as_deref(), biface.as_deref())
+                && opt_iface_equivalent(aiface.as_deref(), biface.as_deref())
         }
         (
             RuntimeTy::Function {
@@ -579,11 +582,17 @@ pub(super) fn ty_equivalent(a: &RuntimeTy, b: &RuntimeTy) -> bool {
     }
 }
 
-/// [`ty_equivalent`] lifted over optional types: `None`s match, a `Some`/`None` mismatch
-/// does not, and two `Some`s compare their inner types.
-fn opt_ty_equivalent(a: Option<&RuntimeTy>, b: Option<&RuntimeTy>) -> bool {
+/// Equivalence of two optional interface *constraints* (the `as I` annotation of
+/// an associated-type projection), mirroring the `RuntimeTy::Interface` arm of
+/// [`ty_equivalent`]: same name, equivalent generic arguments, and exactly
+/// equivalent associated-type bindings.
+fn opt_iface_equivalent(a: Option<&RuntimeInterface>, b: Option<&RuntimeInterface>) -> bool {
     match (a, b) {
-        (Some(x), Some(y)) => ty_equivalent(x, y),
+        (Some(x), Some(y)) => {
+            x.name == y.name
+                && ty_args_equivalent(&x.generics, &y.generics)
+                && associated_bindings_exactly_equivalent(&x.associated_types, &y.associated_types)
+        }
         (None, None) => true,
         (Some(_), None) | (None, Some(_)) => false,
     }
@@ -712,6 +721,7 @@ fn substitute_checked(template: &TyTemplate, env: &[RuntimeTy]) -> RuntimeTy {
 /// The largest `TypeArgRef` de Bruijn index anywhere in `t`, if any.
 fn max_type_arg_ref(t: &TyTemplate) -> Option<u32> {
     match t {
+        #[expect(deprecated)]
         TyTemplate::TypeArgRef(n) | TyTemplate::TypeArgRefOrWildcard(n) => Some(*n),
         TyTemplate::Concrete(_) | TyTemplate::Wildcard => None,
         TyTemplate::Array(inner) => max_type_arg_ref(inner),
@@ -729,6 +739,7 @@ fn max_type_arg_ref(t: &TyTemplate) -> Option<u32> {
 /// Whether a template references any impl generic parameter (a `TypeArgRef`).
 fn template_has_type_arg_ref(t: &TyTemplate) -> bool {
     match t {
+        #[expect(deprecated)]
         TyTemplate::TypeArgRef(_) | TyTemplate::TypeArgRefOrWildcard(_) => true,
         TyTemplate::Concrete(_) | TyTemplate::Wildcard => false,
         TyTemplate::Array(inner) => template_has_type_arg_ref(inner),

@@ -321,7 +321,7 @@ impl TraceSnapshotBuilder {
                         .collect();
                     self.alloc(TraceValue::Instance {
                         type_name: class.name.to_string(),
-                        type_args: instance.class_type_args.clone(),
+                        type_args: instance.class_type_args.to_vec(),
                         fields,
                     })
                 } else {
@@ -609,10 +609,14 @@ mod tests {
             .await
             .acquire()
             .await;
-        let array_ptr = permit.tlab_mut().alloc_array(vec![]);
+        let array_ptr = permit
+            .tlab_mut()
+            .alloc_array(baml_type::RuntimeTy::unknown(), vec![]);
         unsafe {
-            *array_ptr.get_mut() =
-                Object::Array(vec![Value::int(1), Value::object(array_ptr)].into());
+            *array_ptr.get_mut() = Object::Array(bex_vm_types::types::Array::new(
+                baml_type::RuntimeTy::unknown(),
+                vec![Value::int(1), Value::object(array_ptr)],
+            ));
         }
         let trace_heap = TraceHeap::new();
 

@@ -233,3 +233,36 @@ class Widget(BaseModel):
 # #########################################################################
 # Generated type aliases (0)
 # #########################################################################
+
+
+# #########################################################################
+# Model rebuilds (24)
+# #########################################################################
+# Resolve string forward references now that every model above is defined so
+# class declaration order never breaks Pydantic construction (issue #793).
+# Recursive models are intentionally omitted (Pydantic resolves those lazily;
+# eagerly rebuilding them can recurse).
+Action.model_rebuild()
+Asset.model_rebuild()
+AssetMetadata.model_rebuild()
+ButtonWidget.model_rebuild()
+DataObject.model_rebuild()
+Dimensions.model_rebuild()
+Environment.model_rebuild()
+Error.model_rebuild()
+ErrorDetail.model_rebuild()
+Feature.model_rebuild()
+ImageWidget.model_rebuild()
+Item.model_rebuild()
+NodeMetadata.model_rebuild()
+PrimaryData.model_rebuild()
+ResponseMetadata.model_rebuild()
+Setting.model_rebuild()
+SimpleCondition.model_rebuild()
+Success.model_rebuild()
+TertiaryData.model_rebuild()
+TextWidget.model_rebuild()
+User.model_rebuild()
+UserProfile.model_rebuild()
+UserResponse.model_rebuild()
+Variant.model_rebuild()

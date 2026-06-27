@@ -8,9 +8,6 @@ class user.Primitives {
   flag: bool
   score: float
 }
-function user.Primitives.from_json(j: baml.json.json) -> user.Primitives throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  Primitives { name: baml.json.from_json<string>(baml.json.field(j, "name")), count: baml.json.from_json<int>(baml.json.field(j, "count")), flag: baml.json.from_json<bool>(baml.json.field(j, "flag")), score: baml.json.from_json<float>(baml.json.field(j, "score")) } : user.Primitives
-}
 class user.Primitives$stream {
   name: string | null
   count: int | null

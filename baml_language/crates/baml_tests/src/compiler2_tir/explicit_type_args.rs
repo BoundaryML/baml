@@ -89,7 +89,7 @@ function caller() -> int {
 }
 "#,
     );
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     function user.no_generics(x: int) -> int throws never {
       { : int
         x : int
@@ -99,7 +99,7 @@ function caller() -> int {
       { : int
         no_generics(42) : int
       }
-      !! 70..94: function `no_generics` expects 0 type argument(s), got 1
+      !! 74..94: function `no_generics` expects 0 type argument(s), got 1
     }
     ");
 }
@@ -121,7 +121,7 @@ function caller() -> int {
 }
 "#,
     );
-    insta::assert_snapshot!(render_tir(&db, file), @r"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     function user.identity<T>(x: T) -> T throws never {
       { : T
         x : T
@@ -131,7 +131,7 @@ function caller() -> int {
       { : int | 42
         identity<T>(42) : int | 42
       }
-      !! 66..95: function `identity` expects 1 type argument(s), got 2
+      !! 70..95: function `identity` expects 1 type argument(s), got 2
     }
     ");
 }
@@ -520,8 +520,8 @@ function caller() -> int {
             }
         f("string") : unknown
       }
-      !! 47..49: unresolved type: T
-      !! 53..55: unresolved type: T
+      !! 48..49: unresolved type: T
+      !! 54..55: unresolved type: T
     }
     lambda user.caller {
     }

@@ -18,9 +18,6 @@ function user.fail_returned() -> (value: int) -> int  [expr] {
 function user.fail_stored() -> user.Holder  [expr] {
   {  } user.Holder { cb: risky }
 }
-function user.from_json(j: baml.json.json) -> user.Holder  [expr] {
-  baml.json.from_string(baml.json.stringify(j))
-}
 function user.nested_position(cb: ((value: int) -> int) -> int) -> int  [expr] {
   { let inner = (value: int) -> int throws string { { throw "boom" } } } cb(inner)
 }
@@ -41,9 +38,6 @@ function user.direct(cb: (value: int) -> int) -> int  [expr] {
 }
 function user.forward(cb: (value: int) -> int) -> int  [expr] {
   {  } direct(cb)
-}
-function user.from_json(j: baml.json.json) -> user.Worker  [expr] {
-  user.Worker { factor: baml.json.from_json(baml.json.field(j, "factor")) }
 }
 function user.member_map(worker: user.Worker, values: int[]) -> int[]  [expr] {
   {  } values.map(worker.scale)

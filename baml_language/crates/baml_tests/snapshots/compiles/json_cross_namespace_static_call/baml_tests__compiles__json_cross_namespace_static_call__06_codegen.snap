@@ -2,41 +2,22 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 function user.decode_auto(j: baml.json.json) -> pkg.inner.AutoBox<int> {
-    load_type int
+    load_type pkg.inner.AutoBox<int>
     load_var j
-    call user.pkg.inner.AutoBox.from_json
+    call baml.json.to
+    return
+}
+
+function user.decode_plain(j: baml.json.json) -> pkg.inner.Plain {
+    load_type pkg.inner.Plain
+    load_var j
+    call baml.json.to
     return
 }
 
 function user.decode_root(j: baml.json.json) -> pkg.inner.Box<int> {
-    load_type int
+    load_type pkg.inner.Box<int>
     load_var j
-    call user.pkg.inner.Box.from_json
-    return
-}
-
-function user.pkg.inner.AutoBox.from_json(j: baml.json.json) -> pkg.inner.AutoBox<T> {
-    load_var j
-    load_const "value"
-    call baml.json.field
-    store_var _3
-    load_type #0
-    load_var _3
-    call baml.json.from_json
-    load_type #0
-    init_instance<1> user.pkg.inner.AutoBox .value
-    return
-}
-
-function user.pkg.inner.Box.from_json(j: baml.json.json) -> pkg.inner.Box<T> {
-    load_var j
-    load_const "value"
-    call baml.json.field
-    store_var _3
-    load_type #0
-    load_var _3
-    call baml.json.from_json
-    load_type #0
-    init_instance<1> user.pkg.inner.Box .value
+    call baml.json.to
     return
 }

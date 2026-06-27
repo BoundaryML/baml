@@ -326,6 +326,7 @@ function watch.watch_break_unwatches_fn() -> int {
     load_const 1
     load_const 2
     load_const 3
+    load_type int
     alloc_array 3
     call baml.iter.Iterable$for$T[].iter
     store_var _3
@@ -612,6 +613,7 @@ function watch.watch_continue_unwatches_fn() -> int {
     load_const 1
     load_const 2
     load_const 3
+    load_type int
     alloc_array 3
     call baml.iter.Iterable$for$T[].iter
     store_var _3
@@ -802,10 +804,12 @@ function watch.watch_continue_unwatches_fn() -> int {
 }
 
 function watch.watch_cyclic_graph_fn() -> int {
+    load_type watch.WVertex
     alloc_array 0
     load_const 1
     init_instance user.watch.WVertex .edges, .value
     store_var v1
+    load_type watch.WVertex
     alloc_array 0
     load_const 2
     init_instance user.watch.WVertex .edges, .value
@@ -813,10 +817,12 @@ function watch.watch_cyclic_graph_fn() -> int {
     load_const "v2"
     load_const null
     watch v2
+    load_type watch.WVertex
     alloc_array 0
     load_const 3
     init_instance user.watch.WVertex .edges, .value
     store_var v3
+    load_type watch.WVertex
     alloc_array 0
     load_const 4
     init_instance user.watch.WVertex .edges, .value
@@ -825,15 +831,19 @@ function watch.watch_cyclic_graph_fn() -> int {
     load_const null
     watch v4
     load_var2 1 2
+    load_type watch.WVertex
     alloc_array 1
     store_field .edges
     load_var2 2 3
+    load_type watch.WVertex
     alloc_array 1
     store_field .edges
     load_var2 3 4
+    load_type watch.WVertex
     alloc_array 1
     store_field .edges
     load_var2 4 1
+    load_type watch.WVertex
     alloc_array 1
     store_field .edges
     load_var v2
@@ -898,6 +908,7 @@ function watch.watch_for_throw_fails() -> int {
     load_const 1
     load_const 2
     load_const 3
+    load_type int
     alloc_array 3
     call baml.iter.Iterable$for$T[].iter
     store_var _2

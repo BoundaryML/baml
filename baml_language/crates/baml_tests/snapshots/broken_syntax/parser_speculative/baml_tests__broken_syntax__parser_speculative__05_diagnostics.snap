@@ -3,19 +3,7 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
   [type] error: unresolved name: GPT4
-   ╭─[ ambiguous_function.baml:1:1 ]
-   │
- 1 │ ╭─▶ // This could initially look like either type
-   ┆ ┆   
- 5 │ ├─▶ }
-   │ │       
-   │ ╰─────── unresolved name: GPT4
-   │     
-   │     Note: Error code: E0003
-───╯
-
-  [type] error: unresolved name: GPT4
-   ╭─[ ambiguous_function.baml:2:44 ]
+   ╭─[ ambiguous_function.baml:2:45 ]
    │
  2 │ ╭─▶ function Ambiguous(input: string) -> string {
    ┆ ┆   
@@ -37,9 +25,9 @@ source: crates/baml_tests/src/generated_tests.rs
 ───╯
 
   [type] error: type mismatch: expected baml.llm.Client, got null
-    ╭─[ ambiguous_function.baml:5:2 ]
+    ╭─[ ambiguous_function.baml:8:1 ]
     │
-  5 │ ╭─▶ }
+  8 │ ╭─▶ function AnotherLLM(input: string) -> string {
     ┆ ┆   
  11 │ ├─▶ }
     │ │       
@@ -49,7 +37,7 @@ source: crates/baml_tests/src/generated_tests.rs
 ────╯
 
   [type] error: type mismatch: expected baml.llm.Client, got null
-    ╭─[ ambiguous_function.baml:8:45 ]
+    ╭─[ ambiguous_function.baml:8:46 ]
     │
   8 │ ╭─▶ function AnotherLLM(input: string) -> string {
     ┆ ┆   
@@ -91,7 +79,7 @@ source: crates/baml_tests/src/generated_tests.rs
 ────╯
 
   [type] error: unresolved name: GPT4
-   ╭─[ llm_function.baml:1:1 ]
+   ╭─[ llm_function.baml:1:48 ]
    │
  1 │ ╭─▶ function ExtractData(text: string) -> JsonData {
    ┆ ┆   
@@ -103,31 +91,7 @@ source: crates/baml_tests/src/generated_tests.rs
 ───╯
 
   [type] error: unresolved name: GPT4
-   ╭─[ llm_function.baml:1:47 ]
-   │
- 1 │ ╭─▶ function ExtractData(text: string) -> JsonData {
-   ┆ ┆   
- 7 │ ├─▶ }
-   │ │       
-   │ ╰─────── unresolved name: GPT4
-   │     
-   │     Note: Error code: E0003
-───╯
-
-  [type] error: unresolved name: GPT4
-    ╭─[ mixed_functions.baml:1:1 ]
-    │
-  1 │ ╭─▶ // Mix of LLM and expression functions in one file
-    ┆ ┆   
- 10 │ ├─▶ }
-    │ │       
-    │ ╰─────── unresolved name: GPT4
-    │     
-    │     Note: Error code: E0003
-────╯
-
-  [type] error: unresolved name: GPT4
-    ╭─[ mixed_functions.baml:2:46 ]
+    ╭─[ mixed_functions.baml:2:47 ]
     │
   2 │ ╭─▶ function LLMAnalyze(text: string) -> Analysis {
     ┆ ┆   
@@ -139,19 +103,7 @@ source: crates/baml_tests/src/generated_tests.rs
 ────╯
 
   [type] error: unresolved name: GPT4
-    ╭─[ mixed_functions.baml:29:2 ]
-    │
- 29 │ ╭─▶ }
-    ┆ ┆   
- 39 │ ├─▶ }
-    │ │       
-    │ ╰─────── unresolved name: GPT4
-    │     
-    │     Note: Error code: E0003
-────╯
-
-  [type] error: unresolved name: GPT4
-    ╭─[ mixed_functions.baml:31:49 ]
+    ╭─[ mixed_functions.baml:31:50 ]
     │
  31 │ ╭─▶ function ChainedProcess(input: string) -> string {
     ┆ ┆   

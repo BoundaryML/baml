@@ -7,7 +7,9 @@
 //! ATTRIBUTE children of the corresponding CST `TYPE_EXPR` node.
 
 use baml_base::Name;
-use baml_compiler_syntax::{FunctionTypeParam, SyntaxKind, ast::TypeExpr as CstTypeExpr};
+use baml_compiler_syntax::{
+    FunctionTypeParam, SyntaxKind, SyntaxNodeExt, ast::TypeExpr as CstTypeExpr,
+};
 use rowan::ast::AstNode;
 use text_size::TextRange;
 
@@ -87,7 +89,7 @@ fn lower_union_with_attrs(type_expr: &CstTypeExpr, hoist_trailing: bool) -> Type
             for child in &children[(last_pipe_idx + 1)..] {
                 if let rowan::NodeOrToken::Node(node) = child {
                     if node.kind() == SyntaxKind::ATTRIBUTE {
-                        trailing_attr_spans.push(node.text_range());
+                        trailing_attr_spans.push(node.span_range());
                     }
                 }
             }

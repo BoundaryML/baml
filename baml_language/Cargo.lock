@@ -861,6 +861,7 @@ dependencies = [
  "baml_compiler2_hir",
  "baml_compiler2_ppir",
  "baml_type",
+ "baml_type_runtime",
  "baml_workspace",
  "indexmap",
  "num-bigint",
@@ -1152,6 +1153,7 @@ dependencies = [
  "baml_base",
  "baml_type_macros",
  "borsh",
+ "rustc-hash 2.1.2",
 ]
 
 [[package]]
@@ -1161,6 +1163,14 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.117",
+]
+
+[[package]]
+name = "baml_type_runtime"
+version = "0.0.0-beta"
+dependencies = [
+ "baml_type",
+ "rustc-hash 2.1.2",
 ]
 
 [[package]]
@@ -1212,6 +1222,7 @@ dependencies = [
  "baml_builtins2",
  "baml_project",
  "baml_type",
+ "baml_type_runtime",
  "bex_events",
  "bex_external_types",
  "bex_heap",
@@ -1223,6 +1234,7 @@ dependencies = [
  "indexmap",
  "num-bigint",
  "prost",
+ "rustc-hash 2.1.2",
  "serde_json",
  "sys_llm",
  "sys_native",

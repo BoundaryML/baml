@@ -9,8 +9,24 @@ fn user.decode_auto(j: baml.json.json) -> pkg.inner.AutoBox<int> {
     let _2: type
 
     bb0: {
-        _2 = load_type(int);
-        _0 = call const fn user.pkg.inner.AutoBox.from_json<copy _2>(copy _1) -> [bb1];
+        _2 = load_type(pkg.inner.AutoBox<int>);
+        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.decode_plain(j: baml.json.json) -> pkg.inner.Plain {
+    // Locals:
+    let _0: pkg.inner.Plain // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: type
+
+    bb0: {
+        _2 = load_type(pkg.inner.Plain);
+        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
     }
 
     bb1: {
@@ -25,65 +41,11 @@ fn user.decode_root(j: baml.json.json) -> pkg.inner.Box<int> {
     let _2: type
 
     bb0: {
-        _2 = load_type(int);
-        _0 = call const fn user.pkg.inner.Box.from_json<copy _2>(copy _1) -> [bb1];
+        _2 = load_type(pkg.inner.Box<int>);
+        _0 = call const fn baml.json.to<copy _2>(copy _1) -> [bb1];
     }
 
     bb1: {
-        return;
-    }
-}
-
-fn user.pkg.inner.Box.from_json(j: baml.json.json) -> pkg.inner.Box<T> {
-    // Locals:
-    let _0: pkg.inner.Box<T> // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: T
-    let _3: baml.json.json
-    let _4: type
-
-    bb0: {
-        _3 = call const fn baml.json.field(copy _1, const "value") -> [bb1];
-    }
-
-    bb1: {
-        _4 = load_type(#0);
-        _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
-    }
-
-    bb2: {
-        _0 = user.pkg.inner.Box<#0> { copy _2 };
-        goto -> bb3;
-    }
-
-    bb3: {
-        return;
-    }
-}
-
-fn user.pkg.inner.AutoBox.from_json(j: baml.json.json) -> pkg.inner.AutoBox<T> {
-    // Locals:
-    let _0: pkg.inner.AutoBox<T> // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: T
-    let _3: baml.json.json
-    let _4: type
-
-    bb0: {
-        _3 = call const fn baml.json.field(copy _1, const "value") -> [bb1];
-    }
-
-    bb1: {
-        _4 = load_type(#0);
-        _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
-    }
-
-    bb2: {
-        _0 = user.pkg.inner.AutoBox<#0> { copy _2 };
-        goto -> bb3;
-    }
-
-    bb3: {
         return;
     }
 }

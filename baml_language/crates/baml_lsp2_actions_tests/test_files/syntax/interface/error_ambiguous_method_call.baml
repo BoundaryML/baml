@@ -25,11 +25,11 @@ function bad(h: Hybrid) -> string {
 //----
 //- diagnostics
 // error: method `encode` on class `Hybrid` is declared by multiple interfaces: `Serializer`, `BinarySerializer`; unqualified calls will be ambiguous — use obj.as<Serializer>.encode() or obj.as<BinarySerializer>.encode()
-//     ╭─[ interface_error_ambiguous_method_call.baml:22:9 ]
+//     ╭─[ interface_error_ambiguous_method_call.baml:22:10 ]
 //     │
 //  22 │   return h.encode()
-//     │         ────┬────  
-//     │             ╰────── method `encode` on class `Hybrid` is declared by multiple interfaces: `Serializer`, `BinarySerializer`; unqualified calls will be ambiguous — use obj.as<Serializer>.encode() or obj.as<BinarySerializer>.encode()
-//     │ 
+//     │          ────┬───
+//     │              ╰───── method `encode` on class `Hybrid` is declared by multiple interfaces: `Serializer`, `BinarySerializer`; unqualified calls will be ambiguous — use obj.as<Serializer>.encode() or obj.as<BinarySerializer>.encode()
+//     │
 //     │ Note: Error code: E0121
 // ────╯

@@ -38,24 +38,6 @@ class user.ChainUser {
 function user.ChainExprs(user: user.ChainUser, items: user.ChainItem[], m: map<string, int>) -> string  [expr] {
   { user; user.name; user.profile.bio; user.profile.settings.theme; user.profile.settings.preferences.color; user.profile.items[0].metadata.tags[0]; user.profile.settings.preferences.font; user.name; user.name; user.profile.settings.theme; user.name.len(); items.len(); user.profile.items.get(0); items.get(0); items.get(0); items[0]; items[0].label; user.tags[0]; user.scores[0][1]; items[0]; items[0]; user.name.len().to_string(); user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string(); user.profile.items[0].metadata.tags[0].len().to_string().len().to_string().len().to_string(); user.profile.items.get(user.profile.items.len() Sub 1 Add user.profile.items.len() Sub 2 Add user.profile.items.len() Sub 3).label; user.profile.items.slice(0, user.profile.items.len() Sub 1, user.profile.settings.preferences.size); user.profile.settings.preferences.color.len().to_string().len(); user.profile.settings.preferences.color.len().to_string().len(); user.profile.items.get(user.profile.items.len() Sub 1 Add user.profile.items.len() Sub 2).label; user.scores[0][0]; user.scores[0][1]; user.scores[user.scores.len() Sub 1][user.scores[0].len() Sub 1]; user.name; items[0]; items.get(0); user.tags[0].len(); user.scores[0][0]; items[0].label.len(); baml.env.get_or_panic("API_KEY"); baml.env.get_or_panic("DATABASE_URL") } user.name
 }
-function user.from_json(j: baml.json.json) -> user.ChainUser  [expr] {
-  user.ChainUser { name: baml.json.from_json(baml.json.field(j, "name")), profile: baml.json.from_json(baml.json.field(j, "profile")), tags: baml.json.from_json(baml.json.field(j, "tags")), scores: baml.json.from_json(baml.json.field(j, "scores")) }
-}
-function user.from_json(j: baml.json.json) -> user.ChainItem  [expr] {
-  user.ChainItem { label: baml.json.from_json(baml.json.field(j, "label")), value: baml.json.from_json(baml.json.field(j, "value")), metadata: baml.json.from_json(baml.json.field(j, "metadata")) }
-}
-function user.from_json(j: baml.json.json) -> user.ChainMetadata  [expr] {
-  user.ChainMetadata { created_at: baml.json.from_json(baml.json.field(j, "created_at")), tags: baml.json.from_json(baml.json.field(j, "tags")) }
-}
-function user.from_json(j: baml.json.json) -> user.ChainPreferences  [expr] {
-  user.ChainPreferences { color: baml.json.from_json(baml.json.field(j, "color")), font: baml.json.from_json(baml.json.field(j, "font")), size: baml.json.from_json(baml.json.field(j, "size")) }
-}
-function user.from_json(j: baml.json.json) -> user.ChainProfile  [expr] {
-  user.ChainProfile { bio: baml.json.from_json(baml.json.field(j, "bio")), settings: baml.json.from_json(baml.json.field(j, "settings")), items: baml.json.from_json(baml.json.field(j, "items")) }
-}
-function user.from_json(j: baml.json.json) -> user.ChainSettings  [expr] {
-  user.ChainSettings { theme: baml.json.from_json(baml.json.field(j, "theme")), notifications: baml.json.from_json(baml.json.field(j, "notifications")), preferences: baml.json.from_json(baml.json.field(j, "preferences")) }
-}
 class user.A {
   x: int
 }
@@ -235,129 +217,6 @@ class user.WithLongMethod {
 class user.WithMethod {
   name: string
 }
-function user.from_json(j: baml.json.json) -> user.TriviaClass  [expr] {
-  user.TriviaClass { name: baml.json.from_json(baml.json.field(j, "name")) }
-}
-function user.from_json(j: baml.json.json) -> user.TrailingSemicolons  [expr] {
-  user.TrailingSemicolons { name: baml.json.from_json(baml.json.field(j, "name")), age: baml.json.from_json(baml.json.field(j, "age")), active: baml.json.from_json(baml.json.field(j, "active")) }
-}
-function user.from_json(j: baml.json.json) -> user.TriviaFieldAttrsBlock  [expr] {
-  user.TriviaFieldAttrsBlock { name: baml.json.from_json(baml.json.field(j, "name")) }
-}
-function user.from_json(j: baml.json.json) -> user.SingleFieldComma  [expr] {
-  user.SingleFieldComma { name: baml.json.from_json(baml.json.field(j, "name")) }
-}
-function user.from_json(j: baml.json.json) -> user.TriviaMultiAttr  [expr] {
-  user.TriviaMultiAttr { name: baml.json.from_json(baml.json.field(j, "name")) }
-}
-function user.from_json(j: baml.json.json) -> user.AttrsWithDelimiters  [expr] {
-  user.AttrsWithDelimiters { name: baml.json.from_json(baml.json.field(j, "name")), age: baml.json.from_json(baml.json.field(j, "age")), active: baml.json.from_json(baml.json.field(j, "active")) }
-}
-function user.from_json(j: baml.json.json) -> user.ThisIsAnExtremelyLongClassNameThatDefinitelyExceedsTheOneHundredCharacterLineLimitAllByItself  [expr] {
-  user.ThisIsAnExtremelyLongClassNameThatDefinitelyExceedsTheOneHundredCharacterLineLimitAllByItself { x: baml.json.from_json(baml.json.field(j, "x")) }
-}
-function user.from_json(j: baml.json.json) -> user.SingleField  [expr] {
-  user.SingleField { name: baml.json.from_json(baml.json.field(j, "name")) }
-}
-function user.from_json(j: baml.json.json) -> user.ManyFields  [expr] {
-  user.ManyFields { field1: baml.json.from_json(baml.json.field(j, "field1")), field2: baml.json.from_json(baml.json.field(j, "field2")), field3: baml.json.from_json(baml.json.field(j, "field3")), field4: baml.json.from_json(baml.json.field(j, "field4")), field5: baml.json.from_json(baml.json.field(j, "field5")), field6: baml.json.from_json(baml.json.field(j, "field6")), field7: baml.json.from_json(baml.json.field(j, "field7")), field8: baml.json.from_json(baml.json.field(j, "field8")), field9: baml.json.from_json(baml.json.field(j, "field9")), field10: baml.json.from_json(baml.json.field(j, "field10")) }
-}
-function user.from_json(j: baml.json.json) -> user.SingleAttrField  [expr] {
-  user.SingleAttrField { name: baml.json.from_json(baml.json.field(j, "name")) }
-}
-function user.from_json(j: baml.json.json) -> user.WithMethod  [expr] {
-  user.WithMethod { name: baml.json.from_json(baml.json.field(j, "name")) }
-}
-function user.from_json(j: baml.json.json) -> user.LongFieldTypes  [expr] {
-  baml.json.from_string(baml.json.stringify(j))
-}
-function user.from_json(j: baml.json.json) -> user.DeepLevel1  [expr] {
-  user.DeepLevel1 { level2: baml.json.from_json(baml.json.field(j, "level2")), items: baml.json.from_json(baml.json.field(j, "items")), mapping: baml.json.from_json(baml.json.field(j, "mapping")) }
-}
-function user.from_json(j: baml.json.json) -> user.MultiBlockAttr  [expr] {
-  user.MultiBlockAttr { name: baml.json.from_json(baml.json.field(j, "name")) }
-}
-function user.from_json(j: baml.json.json) -> user.TrailingCommas  [expr] {
-  user.TrailingCommas { name: baml.json.from_json(baml.json.field(j, "name")), age: baml.json.from_json(baml.json.field(j, "age")), active: baml.json.from_json(baml.json.field(j, "active")) }
-}
-function user.from_json(j: baml.json.json) -> user.TriviaFieldAttrs  [expr] {
-  user.TriviaFieldAttrs { name: baml.json.from_json(baml.json.field(j, "name")) }
-}
-function user.from_json(j: baml.json.json) -> user.FieldsAndMethods  [expr] {
-  user.FieldsAndMethods { name: baml.json.from_json(baml.json.field(j, "name")), age: baml.json.from_json(baml.json.field(j, "age")), active: baml.json.from_json(baml.json.field(j, "active")) }
-}
-function user.from_json(j: baml.json.json) -> user.TriviaLongFieldTypeBlock  [expr] {
-  user.TriviaLongFieldTypeBlock { data: baml.json.from_json(baml.json.field(j, "data")) }
-}
-function user.from_json(j: baml.json.json) -> user.NoColonDelimiters  [expr] {
-  user.NoColonDelimiters { name: baml.json.from_json(baml.json.field(j, "name")), age: baml.json.from_json(baml.json.field(j, "age")), active: baml.json.from_json(baml.json.field(j, "active")) }
-}
-function user.from_json(j: baml.json.json) -> user.A  [expr] {
-  user.A { x: baml.json.from_json(baml.json.field(j, "x")) }
-}
-function user.from_json(j: baml.json.json) -> user.EmptyClass  [expr] {
-  user.EmptyClass {  }
-}
-function user.from_json(j: baml.json.json) -> user.ExtraWhitespace  [expr] {
-  user.ExtraWhitespace { name: baml.json.from_json(baml.json.field(j, "name")), age: baml.json.from_json(baml.json.field(j, "age")) }
-}
-function user.from_json(j: baml.json.json) -> user.ColonFields  [expr] {
-  user.ColonFields { name: baml.json.from_json(baml.json.field(j, "name")), age: baml.json.from_json(baml.json.field(j, "age")) }
-}
-function user.from_json(j: baml.json.json) -> user.InnerNested  [expr] {
-  user.InnerNested { value: baml.json.from_json(baml.json.field(j, "value")) }
-}
-function user.from_json(j: baml.json.json) -> user.LongAttrField  [expr] {
-  user.LongAttrField { name: baml.json.from_json(baml.json.field(j, "name")), data: baml.json.from_json(baml.json.field(j, "data")), config: baml.json.from_json(baml.json.field(j, "config")) }
-}
-function user.from_json(j: baml.json.json) -> user.DeepOuter  [expr] {
-  user.DeepOuter { level1: baml.json.from_json(baml.json.field(j, "level1")) }
-}
-function user.from_json(j: baml.json.json) -> user.DynamicClass  [expr] {
-  user.DynamicClass { name: baml.json.from_json(baml.json.field(j, "name")) }
-}
-function user.from_json(j: baml.json.json) -> user.DeepLevel3  [expr] {
-  user.DeepLevel3 { data: baml.json.from_json(baml.json.field(j, "data")), nested: baml.json.from_json(baml.json.field(j, "nested")) }
-}
-function user.from_json(j: baml.json.json) -> user.TriviaClassBlock  [expr] {
-  user.TriviaClassBlock { name: baml.json.from_json(baml.json.field(j, "name")) }
-}
-function user.from_json(j: baml.json.json) -> user.MixedDelimiters  [expr] {
-  user.MixedDelimiters { a: baml.json.from_json(baml.json.field(j, "a")), b: baml.json.from_json(baml.json.field(j, "b")), c: baml.json.from_json(baml.json.field(j, "c")), d: baml.json.from_json(baml.json.field(j, "d")) }
-}
-function user.from_json(j: baml.json.json) -> user.TriviaLongFieldType  [expr] {
-  user.TriviaLongFieldType { data: baml.json.from_json(baml.json.field(j, "data")) }
-}
-function user.from_json(j: baml.json.json) -> user.SingleFieldSemicolon  [expr] {
-  user.SingleFieldSemicolon { name: baml.json.from_json(baml.json.field(j, "name")) }
-}
-function user.from_json(j: baml.json.json) -> user.TriviaMultiAttrBlock  [expr] {
-  user.TriviaMultiAttrBlock { name: baml.json.from_json(baml.json.field(j, "name")) }
-}
-function user.from_json(j: baml.json.json) -> user.SemicolonTrivia  [expr] {
-  user.SemicolonTrivia { name: baml.json.from_json(baml.json.field(j, "name")), age: baml.json.from_json(baml.json.field(j, "age")) }
-}
-function user.from_json(j: baml.json.json) -> user.AttributeVariety  [expr] {
-  user.AttributeVariety { a: baml.json.from_json(baml.json.field(j, "a")), b: baml.json.from_json(baml.json.field(j, "b")), c: baml.json.from_json(baml.json.field(j, "c")), d: baml.json.from_json(baml.json.field(j, "d")), e: baml.json.from_json(baml.json.field(j, "e")), f: baml.json.from_json(baml.json.field(j, "f")) }
-}
-function user.from_json(j: baml.json.json) -> user.MultiField  [expr] {
-  user.MultiField { name: baml.json.from_json(baml.json.field(j, "name")), age: baml.json.from_json(baml.json.field(j, "age")), active: baml.json.from_json(baml.json.field(j, "active")) }
-}
-function user.from_json(j: baml.json.json) -> user.Outer  [expr] {
-  user.Outer { inner: baml.json.from_json(baml.json.field(j, "inner")), list: baml.json.from_json(baml.json.field(j, "list")), optional: baml.json.from_json(baml.json.field(j, "optional")), mapping: baml.json.from_json(baml.json.field(j, "mapping")) }
-}
-function user.from_json(j: baml.json.json) -> user.MultiAttrField  [expr] {
-  user.MultiAttrField { name: baml.json.from_json(baml.json.field(j, "name")), summary: baml.json.from_json(baml.json.field(j, "summary")) }
-}
-function user.from_json(j: baml.json.json) -> user.WithLongMethod  [expr] {
-  user.WithLongMethod { name: baml.json.from_json(baml.json.field(j, "name")) }
-}
-function user.from_json(j: baml.json.json) -> user.TypeVariety  [expr] {
-  baml.json.from_string(baml.json.stringify(j))
-}
-function user.from_json(j: baml.json.json) -> user.DeepLevel2  [expr] {
-  user.DeepLevel2 { level3: baml.json.from_json(baml.json.field(j, "level3")), value: baml.json.from_json(baml.json.field(j, "value")) }
-}
 function user.greet() -> string  [expr] {
   {  } "hello"
 }
@@ -371,7 +230,7 @@ function user.ArrayConfigClient$new() -> ?  [expr] {
   baml.llm.PrimitiveClient { name: "ArrayConfigClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map { "stop_sequences": ["END", "STOP", "DONE"] } } }
 }
 function user.ArrayOfObjectsClient$new() -> ?  [expr] {
-  baml.llm.PrimitiveClient { name: "ArrayOfObjectsClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map { "tools": [] } } }
+  baml.llm.PrimitiveClient { name: "ArrayOfObjectsClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map { "tools": [map { "server_label": "web_search", "server_url": "https://example.com", "type": "mcp" }, map { "server_label": "calculator", "server_url": "https://calc.exam..." }] } } }
 }
 function user.BasicClient$new() -> ?  [expr] {
   baml.llm.PrimitiveClient { name: "BasicClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } }
@@ -398,7 +257,7 @@ function user.LongArrayClient$new() -> ?  [expr] {
   baml.llm.PrimitiveClient { name: "LongArrayClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map { "stop_sequences": ["STOP_GENERATION_NOW", "END_OF_RESPONSE_M...", "COMPLETION_FINISH...", "TERMINATE_OUTPUT_...", "FINAL_ANSWER_DELI..."] } } }
 }
 function user.LongArrayOfObjectsClient$new() -> ?  [expr] {
-  baml.llm.PrimitiveClient { name: "LongArrayOfObject...", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map { "tools": [] } } }
+  baml.llm.PrimitiveClient { name: "LongArrayOfObject...", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map { "tools": [map { "server_label": "this_is_a_very_lo...", "server_url": "https://some-extr...", "type": "mcp", "description": "Averylongdescript..." }, map { "server_label": "another_long_serv...", "server_url": "https://another-l..." }] } } }
 }
 function user.LongNestedValuesClient$new() -> ?  [expr] {
   baml.llm.PrimitiveClient { name: "LongNestedValuesC...", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "anthropic/claude-...", base_url: "https://some-extr...", allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } }
@@ -673,15 +532,6 @@ type user.MatchResult = user.MatchSuccess | user.MatchFailure
 function user.MatchExprs(x: int, s: user.MatchStatus, r: user.MatchResult, b: bool) -> string  [expr] {
   { match (x) { 0 => "zero", _ => "other" }; match (x) { 0 => "zero", 1 => "one", 2 => "two", 3 => "three", 4 => "four", _ => "other" }; match (x) { 0 => { "zero" }, _ => { let y = x Add 1; "other" } }; match (x) { 0 => "zero", _ => "other" }; match (x) { 0 => "zero", _ => "other" }; match (x) { n: int => "positive", _ => "other" }; match (x) { n: int => "positive", _ => "other" }; match (x) { 0 => "zero", 1 => "one", 42 => "the answer", _ => "unknown" }; match ("hello") { "hello" => "greeting", "bye" => "farewell", _ => "other" }; match (b) { true => "yes", false => "no" }; match (x) { 0 => "zero", n => "nonzero" }; match (x) { n: int => "an integer" }; match (s) { user.MatchStatus.Active => "active", user.MatchStatus.Inactive => "inactive", user.MatchStatus.Pending => "pending" }; match (x) { 0 | 1 => "binary", 2 | 3 | 4 => "small", _ => "big" }; match (x) { 0 => "zero", 1 | 2 => "small", _ => "other" }; match (s) { user.MatchStatus.Active | user.MatchStatus.Pending => "actionable", user.MatchStatus.Inactive => "done" }; match (r) { s: user.MatchSuccess => s.data, f: user.MatchFailure => f.reason }; match (r) { x: user.MatchSuccess | user.MatchFailure => "something" }; match (x) { 0 | 1 | 2 | 3 | 4 | 5 => "small", _ => "big" }; match (x) { n: int => "positive", n: int => "negative", _ => "zero" }; match (x) { n: int => "acceptable small ...", _ => "other" }; match (x) { 0 => "this is a very lo...", 1 => "another long stri...", _ => "short" }; match (x) { 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 => "lots of literals", _ => "other" }; match (s) { user.MatchStatus.Active | user.MatchStatus.Inactive | user.MatchStatus.Pending => "this arm has many..." }; match (x) { 0 => { let result = if (b) {  } "this is the true ..." else {  } "this is the false..." } result, _ => "short" }; match (x) { n: int => "acceptable small ...", _ => "other" }; match (x) { n: int => "acceptable small ...", _ => "other" }; match (x Add 1) { 0 => "was minus one", _ => "other" }; match (x Mul x Add b Mul b Add x Mul b Add x Add b Add x Mul x Mul x Add b Mul b Mul b Add x Mul b Mul x Add b Mul x Mul b) { 0 => "zero polynomial", _ => "nonzero" }; match (x Add 1) { 0 => "whitespace", _ => "other" }; match (x) { 0 => "zero", _ => "other" }; match (x) { 0 => match (b) { true => "zero-true", false => "zero-false" }, _ => "nonzero" }; match (x) { 0 => match (b) { true => match (s) { user.MatchStatus.Active => "zero-true-active", user.MatchStatus.Inactive => "zero-true-inactive", user.MatchStatus.Pending => "zero-true-pending" }, false => "zero-false" }, 1 => match (r) { s: user.MatchSuccess => match (b) { true => s.data, false => "one-success-false" }, f: user.MatchFailure => f.reason }, _ => "other" }; match (x) { 0 => if (b) {  } match (s) { user.MatchStatus.Active => "active", user.MatchStatus.Inactive => "inactive", user.MatchStatus.Pending => "pending" } else {  } "not bool", _ => "other" }; match (x) { 0 => "zero", _ => "other" }; match (x) { x: int | x: int => x }; match (s) { user.MatchStatus.Active | user.MatchStatus.Inactive | user.MatchStatus.Pending => "any" }; match (x) { 1 | 2 => 0 }; match (x) { 1 | 2 => 0 }; match (x) { 1 | 2 => 0 }; match (x) { 1 | 2 | 3 => 0 }; match (s) { user.MatchStatus.Active | user.MatchStatus.Inactive | user.MatchStatus.Pending => "x" }; match (s) { user.MatchStatus.Active | user.MatchStatus.Inactive | user.MatchStatus.Pending => "y" } } match (x) { 1 | 2 | 3 => 0 }
 }
-function user.from_json(j: baml.json.json) -> user.MatchSuccess  [expr] {
-  user.MatchSuccess { data: baml.json.from_json(baml.json.field(j, "data")) }
-}
-function user.from_json(j: baml.json.json) -> user.MatchFailure  [expr] {
-  user.MatchFailure { reason: baml.json.from_json(baml.json.field(j, "reason")) }
-}
-function user.from_json(j: baml.json.json) -> user.ArrayPatternTriviaBox  [expr] {
-  user.ArrayPatternTriviaBox { values: baml.json.from_json(baml.json.field(j, "values")) }
-}
 class user.OtherPoint {
   x: int
   y: int
@@ -697,15 +547,6 @@ class user.OtherVec {
 }
 function user.OtherExprs(a: int, b: int) -> int  [expr] {
   { 0; 1; 42; 999999; 0.0; 3.14; 99.999; "hello"; "a short string"; "a much longer str..."; true; false; null; "raw string"; "raw string with \"..."; "\n        multi-li..."; a; a Add b; a; a Add b Mul a Sub b; a Add b Mul a Sub b Add a Mul a Add b Mul b Mul a Add b Mul a Add b Sub a Sub b Mul a Sub b; a; a; Neg a; Not true; Neg Neg a; Not a Gt b; Neg a; Neg a; []; [1]; [1, 2, 3]; [1, 2, 3, 4, 5]; ["short", "array"]; ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q"]; ["this is a long st...", "another long stri...", "yet another one t...", "and one more stri..."]; ["alpha", "bravo", "charlie", "delta", "echo", "foxtrot", "golf", "hotel", "india", "juliet", "kilo", "lima", "mike", "november", "oscar", "papa"]; [[1, 2], [3, 4]]; [[1, 2, 3], [4, 5, 6], [7, 8, 9]]; [[[1, 2], [3, 4]], [[5, 6], [7, 8]], [[9, 10], [11, 12]], [[13, 14], [15, 16]]]; [1, 2]; [1, 2]; ["this is a long st...", "another long stri...", "yet another that ...", "and one more stri..."]; ["this is a long st...", "another long stri...", "yet another that ...", "and one more stri..."]; map { "key": 1 }; map { "a": 1, "b": 2 }; map { "a": 1, "b": 2, "c": 3, "d": 4, "e": 5 }; map { "first_key": "first value", "second_key": "second value", "third_key": "third value", "fourth_key": "fourth value", "fifth_key": "fifth" }; map { "outer": map { "inner_a": 1, "inner_b": 2, "inner_c": 3 }, "other": map { "inner_d": 4, "inner_e": 5, "inner_f": 6 } }; map { "k": 1 }; map { "k": 1 }; user.OtherPoint { x: 1, y: 2 }; user.OtherVec { p: user.OtherPoint { x: 1, y: 2 }, q: user.OtherPoint { x: 3, y: 4 } }; user.OtherVec { p: user.OtherPoint { x: 100000, y: 200000 }, q: user.OtherPoint { x: 300000, y: 400000 } }; user.OtherTriple { a: user.OtherVec { p: user.OtherPoint { x: 1, y: 2 }, q: user.OtherPoint { x: 3, y: 4 } }, b: user.OtherVec { p: user.OtherPoint { x: 5, y: 6 }, q: user.OtherPoint { x: 7, y: 8 } }, c: user.OtherVec { p: user.OtherPoint { x: 9, y: 10 }, q: user.OtherPoint { x: 11, y: 12 } } }; user.OtherPoint { x: 1, y: 2 }; user.OtherPoint { x: 1, y: 2 }; user.OtherVec { p: user.OtherPoint { x: 100000, y: 200000 }, q: user.OtherPoint { x: 300000, y: 400000 } }; { let x = 1 } x Add 1; { let x = a Add b; let y = x Mul 2 } y; { let x = { let y = { let z = a Add b } z Mul z } y Add y } x Mul x; { let x = if (a Gt b) {  } match (a) { 0 => { let inner = b Mul 2 } inner Add 1, _ => a } else {  } b } x; [1, 2, 3]; map { "k": 1 }; user.OtherPoint { x: 1, y: 2 } } a Add b
-}
-function user.from_json(j: baml.json.json) -> user.OtherPoint  [expr] {
-  user.OtherPoint { x: baml.json.from_json(baml.json.field(j, "x")), y: baml.json.from_json(baml.json.field(j, "y")) }
-}
-function user.from_json(j: baml.json.json) -> user.OtherVec  [expr] {
-  user.OtherVec { p: baml.json.from_json(baml.json.field(j, "p")), q: baml.json.from_json(baml.json.field(j, "q")) }
-}
-function user.from_json(j: baml.json.json) -> user.OtherTriple  [expr] {
-  user.OtherTriple { a: baml.json.from_json(baml.json.field(j, "a")), b: baml.json.from_json(baml.json.field(j, "b")), c: baml.json.from_json(baml.json.field(j, "c")) }
 }
 class user.TypeAliasFailure {
   reason: string
@@ -773,9 +614,3 @@ type user.UnionParamFn = (value: int | string) -> bool
 type user.UnnamedParams = (int, int) -> int
 type user.VeryLongNamePlusLongUnion = "alpha" | "bravo" | "charlie" | "delta" | "echo" | "foxtrot" | "golf" | "hotel" | "india"
 type user.WideUnion = int | string | bool | float | null | int[] | string[] | bool[] | map<string, int> | map<string, string>
-function user.from_json(j: baml.json.json) -> user.TypeAliasSuccess  [expr] {
-  user.TypeAliasSuccess { data: baml.json.from_json(baml.json.field(j, "data")) }
-}
-function user.from_json(j: baml.json.json) -> user.TypeAliasFailure  [expr] {
-  user.TypeAliasFailure { reason: baml.json.from_json(baml.json.field(j, "reason")) }
-}

@@ -688,13 +688,13 @@ fn walk_rvalue_locals(rvalue: &Rvalue, f: &mut impl FnMut(Local)) {
             walk_operand_locals(right, f);
         }
         Rvalue::UnaryOp { operand, .. } => walk_operand_locals(operand, f),
-        Rvalue::Array(elements) => {
+        Rvalue::Array(_, elements) => {
             for elem in elements {
                 walk_operand_locals(elem, f);
             }
         }
         Rvalue::Uint8Array(_) => {}
-        Rvalue::Map(entries) => {
+        Rvalue::Map(_, _, entries) => {
             for (key, value) in entries {
                 walk_operand_locals(key, f);
                 walk_operand_locals(value, f);
@@ -1511,9 +1511,9 @@ fn rvalue_has_projection_reads(rvalue: &Rvalue) -> bool {
             operand_has_projection(left) || operand_has_projection(right)
         }
         Rvalue::UnaryOp { operand, .. } => operand_has_projection(operand),
-        Rvalue::Array(elements) => elements.iter().any(operand_has_projection),
+        Rvalue::Array(_, elements) => elements.iter().any(operand_has_projection),
         Rvalue::Uint8Array(_) => false,
-        Rvalue::Map(entries) => entries
+        Rvalue::Map(_, _, entries) => entries
             .iter()
             .any(|(key, value)| operand_has_projection(key) || operand_has_projection(value)),
         Rvalue::Aggregate { fields, .. } => fields.iter().any(operand_has_projection),
@@ -1769,11 +1769,11 @@ fn is_call_result_aggregate_operand(
 
 fn aggregate_stack_prefix_operands(rvalue: &Rvalue) -> Option<Vec<&Operand>> {
     match rvalue {
-        Rvalue::Array(elements) => Some(elements.iter().collect()),
+        Rvalue::Array(_, elements) => Some(elements.iter().collect()),
         // Map lowering emits all values first, then all keys, because the VM
         // consumes maps as `[v1, v2, ..., k1, k2, ...]`. A carried key would sit
         // below the emitted values, so only value positions are stack-carryable.
-        Rvalue::Map(entries) => Some(entries.iter().map(|(_key, value)| value).collect()),
+        Rvalue::Map(_, _, entries) => Some(entries.iter().map(|(_key, value)| value).collect()),
         Rvalue::Aggregate {
             kind: baml_compiler2_mir::AggregateKind::Array,
             fields,
@@ -1951,10 +1951,13 @@ mod tests {
                     statements: vec![Statement {
                         kind: StatementKind::Assign {
                             destination: Place::Local(Local(0)),
-                            value: Rvalue::Array(vec![
-                                Operand::copy_local(target),
-                                Operand::Constant(Constant::Int(1)),
-                            ]),
+                            value: Rvalue::Array(
+                                baml_type::TyTemplate::Concrete(baml_type::RuntimeTy::unknown()),
+                                vec![
+                                    Operand::copy_local(target),
+                                    Operand::Constant(Constant::Int(1)),
+                                ],
+                            ),
                         },
                         span: None,
                     }],

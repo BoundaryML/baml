@@ -1,3 +1,4 @@
+#![expect(deprecated, reason = "TypeArgRefOrWildcard")]
 //! `TyTemplate` — a parallel to `Ty` that may contain `TypeArgRef(N)` leaves.
 //!
 //! Used by the `LoadType` VM instruction to represent type expressions that
@@ -42,6 +43,7 @@ pub enum TyTemplate {
     /// materialization must preserve `unknown`, while guard matching needs to
     /// express "this position came from receiver-relative associated evidence
     /// that was not concretized at runtime."
+    #[deprecated = "Once type erasure is eliminated and associated type resolution are fixed this bandaid will be removed."]
     TypeArgRefOrWildcard(u32),
     /// `T[]`
     Array(Box<TyTemplate>),
@@ -75,6 +77,7 @@ impl TyTemplate {
     pub fn substitute(&self, type_args: &[RuntimeTy]) -> RuntimeTy {
         match self {
             Self::Concrete(t) => t.clone(),
+            #[expect(deprecated)]
             Self::TypeArgRef(n) | Self::TypeArgRefOrWildcard(n) => type_args
                 .get(*n as usize)
                 .cloned()
@@ -115,6 +118,7 @@ impl TyTemplate {
     pub fn is_fully_concrete(&self) -> bool {
         match self {
             Self::Concrete(_) => true,
+            #[expect(deprecated)]
             Self::TypeArgRef(_) | Self::TypeArgRefOrWildcard(_) => false,
             Self::Array(inner) => inner.is_fully_concrete(),
             Self::Union(parts) => parts.iter().all(TyTemplate::is_fully_concrete),
@@ -137,6 +141,7 @@ impl fmt::Display for TyTemplate {
         match self {
             Self::Concrete(ty) => write!(f, "{ty}"),
             Self::TypeArgRef(n) => write!(f, "#{n}"),
+            #[expect(deprecated)]
             Self::TypeArgRefOrWildcard(n) => write!(f, "#{n}?"),
             Self::Array(inner) => write!(f, "{inner}[]"),
             Self::Union(parts) => {

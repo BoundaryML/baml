@@ -9,9 +9,9 @@ fn user.NestedMapLiteral() -> baml.json.json {
     let _2: map<string, null>
 
     bb0: {
-        _1 = [const 2_i64, const 3_i64];
-        _2 = { const "nested": const null };
-        _0 = { const "a": const 1_i64, const "b": copy _1, const "c": copy _2 };
+        _1 = [const 2_i64, const 3_i64]: int[];
+        _2 = { const "nested": const null }: map<string, null>;
+        _0 = { const "a": const 1_i64, const "b": copy _1, const "c": copy _2 }: map<string, int | int[] | map<string, null>>;
         goto -> bb1;
     }
 

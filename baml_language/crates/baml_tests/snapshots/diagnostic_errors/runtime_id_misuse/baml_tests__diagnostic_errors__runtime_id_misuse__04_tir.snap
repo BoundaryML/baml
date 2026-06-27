@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 48590
 ---
 === TIR2 ===
 function user.compound_assignment() -> string throws never {
@@ -21,7 +20,7 @@ function user.member_access() -> int throws never {
   { : unknown
     $id.len() : unknown
   }
-  !! 608..620: `$id` is a value, not a binding; bind it to a local before accessing `.len` (e.g. `let id = $id; id.len`)
+  !! 613..620: `$id` is a value, not a binding; bind it to a local before accessing `.len` (e.g. `let id = $id; id.len`)
 }
 function user.takes_int(x: int) -> int throws never {
   { : int
@@ -50,7 +49,7 @@ function user.setter_never(s: string) -> string throws never {
     $id = s : string
     $id : string
   }
-  !! 1333..1339: declared throws is `never`, but this function may also throw `baml.errors.InvalidArgument`
+  !! 1334..1339: declared throws is `never`, but this function may also throw `baml.errors.InvalidArgument`
 }
 function user.optional_member_access() -> int | null throws never {
   { : unknown | null
@@ -61,9 +60,6 @@ function user.optional_member_access() -> int | null throws never {
 class user.WithId {
   field_id: string
   $id: string
-}
-function user.WithId.from_json(j: baml.json.json) -> user.WithId throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  WithId { field_id: baml.json.from_json<string>(baml.json.field(j, "field_id")), $id: baml.json.from_json<string>(baml.json.field(j, "$id")) } : user.WithId
 }
 function user.shorthand_destructure(w: user.WithId) -> string throws never {
   { : "x"

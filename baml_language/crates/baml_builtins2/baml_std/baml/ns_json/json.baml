@@ -120,11 +120,31 @@ function from_string<T>(s: string) -> T throws JsonParseError | JsonDecodeError 
 /// - Primitives, enums, media, type-aliases: structural decode equivalent
 ///   to `from_string<T>(stringify(j))`.
 ///
-/// Throws `JsonParseError` / `JsonDecodeError` on shape mismatch.
+/// Throws `JsonDecodeError` on shape mismatch (decoding an already-parsed
+/// `json` value never re-parses, so no `JsonParseError` arises here).
 //baml:mut_vm
 //baml:may_yield
-function from_json<T>(j: json) -> T throws JsonParseError | JsonDecodeError {
+function from_json<T>(j: json) -> T throws JsonDecodeError {
   $rust_function
+}
+
+/// Decode a `json` value `j` into a BAML value of type `T`, honoring user
+/// `baml.FromJson` overrides on the target type at every depth.
+///
+/// The deserialize counterpart of `baml.json.from<T>` (`json.from` serializes a
+/// `T` to json; `json.to` decodes json back to a `T`). Resolution is on the
+/// target type `T` (delivered via the type-arg channel), via the
+/// `baml._from_json_shim` native — for the same package-boundary reason
+/// `baml.json.from` uses `_to_json_shim`. A type that `implements baml.FromJson`
+/// is constructed via its override; everything else decodes structurally
+/// (per-field, walking lists/maps/optionals and honoring nested overrides).
+///
+/// Throws `JsonDecodeError` on shape mismatch (decoding an already-parsed
+/// `json` value never re-parses, so no `JsonParseError` arises here).
+//baml:mut_vm
+//baml:may_yield
+function to<T>(j: json) -> T throws JsonDecodeError {
+  root._from_json_shim<T>(j)
 }
 
 /// Look up `key` in a `json` value when it is a `map<string, json>`; returns

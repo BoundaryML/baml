@@ -216,7 +216,7 @@ fn unknown_type_in_param() {
       { : never
         return 0 : 0
       }
-      !! 13..25: unresolved type: Nonexistent
+      !! 14..25: unresolved type: Nonexistent
     }
     ");
 }
@@ -230,7 +230,7 @@ fn unknown_type_in_return() {
       { : never
         return 0 : 0
       }
-      !! 15..28: unresolved type: DoesNotExist
+      !! 16..28: unresolved type: DoesNotExist
     }
     ");
 }
@@ -659,12 +659,9 @@ fn calling_class_as_function() {
         "test.baml",
         "class Foo { name string }\nfunction f() -> int { return Foo(1); }",
     );
-    insta::assert_snapshot!(render_tir(&db, file), @r#"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     class user.Foo {
       name: string
-    }
-    function user.Foo.from_json(j: baml.json.json) -> user.Foo throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-      Foo { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.Foo
     }
     function user.f() -> int throws never {
       { : never
@@ -675,7 +672,7 @@ fn calling_class_as_function() {
     class user.Foo$stream {
       name: string | null
     }
-    "#);
+    ");
 }
 
 // ── 3A-6. MissingReturnExpression diagnostic ─────────────────────────────
@@ -689,7 +686,7 @@ fn missing_return() {
       { : int
         let x = 1 : 1 -> int
       }
-      !! 19..34: missing return: expected `int`
+      !! 20..34: missing return: expected `int`
     }
     ");
 }
@@ -703,7 +700,7 @@ fn block_ending_in_stmt() {
       { : string
         let x = "hello" : "hello" -> string
       }
-      !! 22..43: missing return: expected `string`
+      !! 23..43: missing return: expected `string`
     }
     "#);
 }
@@ -719,7 +716,7 @@ fn invalid_binary_op_string_minus_int() {
       { : never
         return "hello" - 5 : unknown
       }
-      !! 28..40: operator `-` cannot be applied to `"hello"` and `5`
+      !! 29..40: operator `-` cannot be applied to `"hello"` and `5`
     }
     "#);
 }
@@ -908,7 +905,7 @@ fn invalid_unary_op_neg_string() {
       { : never
         return Neg "hello" : unknown
       }
-      !! 28..37: operator `-` cannot be applied to `"hello"`
+      !! 29..37: operator `-` cannot be applied to `"hello"`
     }
     "#);
 }
@@ -979,7 +976,7 @@ fn if_without_else_optional() {
               5 : 5
             }
       }
-      !! 36..49: `if` without `else` cannot be used as a value; add an `else` branch
+      !! 37..49: `if` without `else` cannot be used as a value; add an `else` branch
     }
     ");
 }
@@ -1001,7 +998,7 @@ fn if_without_else_let_binding() {
             }
         return y ?? 0 : void
       }
-      !! 36..49: `if` without `else` cannot be used as a value; add an `else` branch
+      !! 37..49: `if` without `else` cannot be used as a value; add an `else` branch
       !! 58..64: did you mean `y`? `y ?? 0` is unnecessary, because `y` cannot be null
       !! 58..64: `if` without `else` cannot be used as a value; add an `else` branch
     }
@@ -1079,20 +1076,14 @@ class Dog { name string
 legs int }
 function f(x: Cat | Dog) -> string { return x.name; }"#,
     );
-    insta::assert_snapshot!(render_tir(&db, file), @r#"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     class user.Cat {
       name: string
       legs: int
     }
-    function user.Cat.from_json(j: baml.json.json) -> user.Cat throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-      Cat { name: baml.json.from_json<string>(baml.json.field(j, "name")), legs: baml.json.from_json<int>(baml.json.field(j, "legs")) } : user.Cat
-    }
     class user.Dog {
       name: string
       legs: int
-    }
-    function user.Dog.from_json(j: baml.json.json) -> user.Dog throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-      Dog { name: baml.json.from_json<string>(baml.json.field(j, "name")), legs: baml.json.from_json<int>(baml.json.field(j, "legs")) } : user.Dog
     }
     function user.f(x: user.Cat | user.Dog) -> string throws never {
       { : never
@@ -1107,7 +1098,7 @@ function f(x: Cat | Dog) -> string { return x.name; }"#,
       name: string | null
       legs: int | null
     }
-    "#);
+    ");
 }
 
 #[test]
@@ -1121,20 +1112,14 @@ class Dog { name string
 tail bool }
 function f(x: Cat | Dog) -> int { return x.whiskers; }"#,
     );
-    insta::assert_snapshot!(render_tir(&db, file), @r#"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     class user.Cat {
       name: string
       whiskers: int
     }
-    function user.Cat.from_json(j: baml.json.json) -> user.Cat throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-      Cat { name: baml.json.from_json<string>(baml.json.field(j, "name")), whiskers: baml.json.from_json<int>(baml.json.field(j, "whiskers")) } : user.Cat
-    }
     class user.Dog {
       name: string
       tail: bool
-    }
-    function user.Dog.from_json(j: baml.json.json) -> user.Dog throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-      Dog { name: baml.json.from_json<string>(baml.json.field(j, "name")), tail: baml.json.from_json<bool>(baml.json.field(j, "tail")) } : user.Dog
     }
     function user.f(x: user.Cat | user.Dog) -> int throws never {
       { : never
@@ -1150,7 +1135,7 @@ function f(x: Cat | Dog) -> int { return x.whiskers; }"#,
       name: string | null
       tail: bool | null
     }
-    "#);
+    ");
 }
 
 #[test]
@@ -1164,24 +1149,15 @@ class C { age int }
 function f(x: A | B | C) -> string { return x.name; }"#,
     );
     // C has no `name` field → error on the whole union
-    insta::assert_snapshot!(render_tir(&db, file), @r#"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     class user.A {
       name: string
-    }
-    function user.A.from_json(j: baml.json.json) -> user.A throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-      A { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.A
     }
     class user.B {
       name: string
     }
-    function user.B.from_json(j: baml.json.json) -> user.B throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-      B { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.B
-    }
     class user.C {
       age: int
-    }
-    function user.C.from_json(j: baml.json.json) -> user.C throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-      C { age: baml.json.from_json<int>(baml.json.field(j, "age")) } : user.C
     }
     function user.f(x: user.A | user.B | user.C) -> string throws never {
       { : never
@@ -1198,7 +1174,7 @@ function f(x: A | B | C) -> string { return x.name; }"#,
     class user.C$stream {
       age: int | null
     }
-    "#);
+    ");
 }
 
 #[test]
@@ -1212,24 +1188,15 @@ class C { age int }
 function f(x: A | B | C) -> string { return x.name; }"#,
     );
     // C has no `name` field → error on the whole union
-    insta::assert_snapshot!(render_tir(&db, file), @r#"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     class user.A {
       name: string
-    }
-    function user.A.from_json(j: baml.json.json) -> user.A throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-      A { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.A
     }
     class user.B {
       age: string
     }
-    function user.B.from_json(j: baml.json.json) -> user.B throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-      B { age: baml.json.from_json<string>(baml.json.field(j, "age")) } : user.B
-    }
     class user.C {
       age: int
-    }
-    function user.C.from_json(j: baml.json.json) -> user.C throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-      C { age: baml.json.from_json<int>(baml.json.field(j, "age")) } : user.C
     }
     function user.f(x: user.A | user.B | user.C) -> string throws never {
       { : never
@@ -1247,7 +1214,7 @@ function f(x: A | B | C) -> string { return x.name; }"#,
     class user.C$stream {
       age: int | null
     }
-    "#);
+    ");
 }
 
 #[test]
@@ -1260,24 +1227,18 @@ class B { value string }
 function f(x: A | B) -> string { return x.value; }"#,
     );
     // Both have `value` but different types → union of field types
-    insta::assert_snapshot!(render_tir(&db, file), @r#"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     class user.A {
       value: int
     }
-    function user.A.from_json(j: baml.json.json) -> user.A throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-      A { value: baml.json.from_json<int>(baml.json.field(j, "value")) } : user.A
-    }
     class user.B {
       value: string
-    }
-    function user.B.from_json(j: baml.json.json) -> user.B throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-      B { value: baml.json.from_json<string>(baml.json.field(j, "value")) } : user.B
     }
     function user.f(x: user.A | user.B) -> string throws never {
       { : never
         return x.value : int | string
       }
-      !! 86..94: type mismatch: expected string, got int | string
+      !! 87..94: type mismatch: expected string, got int | string
     }
     class user.A$stream {
       value: int | null
@@ -1285,7 +1246,7 @@ function f(x: A | B) -> string { return x.value; }"#,
     class user.B$stream {
       value: string | null
     }
-    "#);
+    ");
 }
 
 #[test]
@@ -1298,25 +1259,19 @@ class B { name string }
 function f(x: A | B | null) -> string { return x.name; }"#,
     );
     // null in union → can't access field (needs narrowing first)
-    insta::assert_snapshot!(render_tir(&db, file), @r#"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     class user.A {
       name: string
     }
-    function user.A.from_json(j: baml.json.json) -> user.A throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-      A { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.A
-    }
     class user.B {
       name: string
-    }
-    function user.B.from_json(j: baml.json.json) -> user.B throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-      B { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.B
     }
     function user.f(x: user.A | user.B | null) -> string throws never {
       { : never
         return x.name : string | string | null
       }
-      !! 94..101: did you mean `x?.name`? `x.name` does not handle the case when `x` is null
-      !! 94..101: type mismatch: expected string, got string | string | null
+      !! 95..101: did you mean `x?.name`? `x.name` does not handle the case when `x` is null
+      !! 95..101: type mismatch: expected string, got string | string | null
     }
     class user.A$stream {
       name: string | null
@@ -1324,7 +1279,7 @@ function f(x: A | B | null) -> string { return x.name; }"#,
     class user.B$stream {
       name: string | null
     }
-    "#);
+    ");
 }
 
 // ── Null coalescing operator (??) ──────────────────────────────────────────

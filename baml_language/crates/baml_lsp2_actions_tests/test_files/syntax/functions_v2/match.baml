@@ -38,30 +38,29 @@ function Remand(s: Situation) -> string {
 //----
 //- diagnostics
 // error: type mismatch: expected Pet, got Rock
-//     ╭─[ functions_v2_match.baml:30:32 ]
+//     ╭─[ functions_v2_match.baml:31:7 ]
 //     │
-//  30 │ ╭─▶       let dog: Dog => "Bowwow",
-//  31 │ ├─▶       let rock: Rock => "...",
-//     │ │                                    
-//     │ ╰──────────────────────────────────── type mismatch: expected Pet, got Rock
-//     │     
-//     │     Note: Error code: E0001
+//  31 │       let rock: Rock => "...",
+//     │       ───────┬──────
+//     │              ╰──────── type mismatch: expected Pet, got Rock
+//     │
+//     │ Note: Error code: E0001
 // ────╯
 // error: unreachable arm
 //     ╭─[ functions_v2_match.baml:31:25 ]
 //     │
 //  31 │       let rock: Rock => "...",
-//     │                         ──┬──  
+//     │                         ──┬──
 //     │                           ╰──── unreachable arm
-//     │ 
+//     │
 //     │ Note: Error code: E0063
 // ────╯
 // error: unreachable arm
 //     ╭─[ functions_v2_match.baml:32:12 ]
 //     │
 //  32 │       _ => "...",
-//     │            ──┬──  
+//     │            ──┬──
 //     │              ╰──── unreachable arm
-//     │ 
+//     │
 //     │ Note: Error code: E0063
 // ────╯

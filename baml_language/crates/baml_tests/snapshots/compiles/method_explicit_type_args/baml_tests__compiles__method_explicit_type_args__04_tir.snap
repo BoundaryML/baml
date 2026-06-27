@@ -10,9 +10,6 @@ function user.Foo.zero<T>(self: user.Foo) -> T | null throws never {
     null : null
   }
 }
-function user.Foo.from_json(j: baml.json.json) -> user.Foo throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  Foo { tag: baml.json.from_json<string>(baml.json.field(j, "tag")) } : user.Foo
-}
 function user.use_method_type_args() -> int throws never {
   { : int
     let f = Foo { tag: "x" } : user.Foo

@@ -29,13 +29,14 @@ pub use roots::{PermitProof, RootHaver, WriteBarrier};
 pub use task_group::{TaskGroupInner, TaskGroupPermit, TaskGroupTicket};
 pub use types::{
     ArrayContainer, ArrayReadGuard, ArrayWriteGuard, AtomicValueSlot, BoundMethod, CaptureCategory,
-    CaptureOption, Class, ClassField, ClientBuildMeta, ClientBuildType, CollectorRef, ConstValue,
-    Enum, EnumVariant, Function, FunctionCaptureProps, FunctionKind, FunctionMeta, FunctionOrigin,
-    Future, FutureRead, GenericFunction, HostClosure, Instance, LockedContainer, LockedReadGuard,
-    LockedWriteGuard, MapContainer, MapReadGuard, MapWriteGuard, MediaValue, Object, ObjectType,
-    PanicClass, Program, PromptAst, RetryPolicyMeta, SysOp, SysOpErrorCategory, SysOpPanicCategory,
-    TestArgValue, TestCase, Uint8ArrayContainer, Uint8ArrayReadGuard, Uint8ArrayWriteGuard,
-    UnscheduledFuture, Value, ValueKind, Variant, format_float, sys_op_for_path, type_tags,
+    CaptureOption, Class, ClassField, CleanupLatch, ClientBuildMeta, ClientBuildType, CollectorRef,
+    ConstValue, Enum, EnumVariant, Function, FunctionCaptureProps, FunctionKind, FunctionMeta,
+    FunctionOrigin, Future, FutureRead, GenericFunction, HostClosure, Instance, LockedContainer,
+    LockedReadGuard, LockedWriteGuard, MapContainer, MapReadGuard, MapWriteGuard, MediaValue,
+    Object, ObjectType, PanicClass, Program, PromptAst, RetryPolicyMeta, SysOp, SysOpErrorCategory,
+    SysOpPanicCategory, TestArgValue, TestCase, Uint8ArrayContainer, Uint8ArrayReadGuard,
+    Uint8ArrayWriteGuard, UnscheduledFuture, Value, ValueKind, Variant, format_float,
+    sys_op_for_path, type_tags,
 };
 
 /// Used to check if the VM should yield early.

@@ -71,27 +71,6 @@ function user.for_class_field_type_narrower_than_field_is_refutable() -> int  [e
 function user.for_top_level_class_narrows_union_element_is_refutable() -> int  [expr] {
   { for Person { age: age } in [user.Person { age: 1, flexible_age: 2, address: user.Address { zip: 3 } }, 2] {  } age } 1
 }
-function user.from_json(j: baml.json.json) -> user.Person  [expr] {
-  user.Person { age: baml.json.from_json(baml.json.field(j, "age")), flexible_age: baml.json.from_json(baml.json.field(j, "flexible_age")), address: baml.json.from_json(baml.json.field(j, "address")) }
-}
-function user.from_json(j: baml.json.json) -> user.Box<T>  [expr] {
-  user.Box { value: baml.json.from_json(baml.json.field(j, "value")) }
-}
-function user.from_json(j: baml.json.json) -> user.Address  [expr] {
-  user.Address { zip: baml.json.from_json(baml.json.field(j, "zip")) }
-}
-function user.from_json(j: baml.json.json) -> user.SameNameOuter  [expr] {
-  user.SameNameOuter { field: baml.json.from_json(baml.json.field(j, "field")), other: baml.json.from_json(baml.json.field(j, "other")) }
-}
-function user.from_json(j: baml.json.json) -> user.Admin  [expr] {
-  user.Admin { age: baml.json.from_json(baml.json.field(j, "age")) }
-}
-function user.from_json(j: baml.json.json) -> user.SameNameInner  [expr] {
-  user.SameNameInner { field: baml.json.from_json(baml.json.field(j, "field")) }
-}
-function user.from_json(j: baml.json.json) -> user.OptionalPerson  [expr] {
-  user.OptionalPerson { age: baml.json.from_json(baml.json.field(j, "age")) }
-}
 function user.generic_class_destructure_or_pattern_same_binding_conflicting_types(v: user.Box<int> | user.Box<string>) -> int  [expr] {
   {  } match (v) { Box<int> { value: value } | Box<string> { value: value } => 1 }
 }

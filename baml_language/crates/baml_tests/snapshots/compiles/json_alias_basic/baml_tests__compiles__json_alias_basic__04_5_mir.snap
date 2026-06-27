@@ -76,7 +76,7 @@ fn user.ReturnArray() -> baml.json.json {
     let _0: baml.json.json // _0 // return
 
     bb0: {
-        _0 = [const 1_i64, const 2_i64, const 3_i64];
+        _0 = [const 1_i64, const 2_i64, const 3_i64]: int[];
         goto -> bb1;
     }
 
@@ -132,7 +132,7 @@ fn user.ReturnMap() -> baml.json.json {
     let _0: baml.json.json // _0 // return
 
     bb0: {
-        _0 = { const "key": const "value" };
+        _0 = { const "key": const "value" }: map<string, string>;
         goto -> bb1;
     }
 
@@ -165,33 +165,6 @@ fn user.ReturnString() -> baml.json.json {
     }
 
     bb1: {
-        return;
-    }
-}
-
-fn user.Wrapper.from_json(j: baml.json.json) -> Wrapper {
-    // Locals:
-    let _0: Wrapper // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: baml.json.json
-    let _3: baml.json.json
-    let _4: type
-
-    bb0: {
-        _3 = call const fn baml.json.field(copy _1, const "data") -> [bb1];
-    }
-
-    bb1: {
-        _4 = load_type(baml.json.json);
-        _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
-    }
-
-    bb2: {
-        _0 = user.Wrapper { copy _2 };
-        goto -> bb3;
-    }
-
-    bb3: {
         return;
     }
 }

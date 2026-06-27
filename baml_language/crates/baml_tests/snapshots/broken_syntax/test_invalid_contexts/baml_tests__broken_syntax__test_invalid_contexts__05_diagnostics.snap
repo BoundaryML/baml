@@ -1,10 +1,9 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 3458
 ---
 === COMPILER2 DIAGNOSTICS ===
   [type] error: missing return value of type null
-   ╭─[ main.baml:3:26 ]
+   ╭─[ main.baml:3:27 ]
    │
  3 │ ╭─▶ function helper() -> null {
    ┆ ┆   
@@ -26,7 +25,7 @@ assertion_line: 3458
 ───╯
 
   [type] error: missing return value of type null
-    ╭─[ main.baml:9:27 ]
+    ╭─[ main.baml:9:28 ]
     │
   9 │ ╭─▶ function another() -> null {
     ┆ ┆   

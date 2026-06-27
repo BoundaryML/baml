@@ -1251,7 +1251,7 @@ pub(crate) fn render_leaf_body(body: &LeafBody) -> String {
     }
     // Generic functions emit `T = typing.TypeVar("T")` lines below; the
     // `Class`/`TypeAlias` rule in `stdlib_imports` doesn't catch the
-    // function-only-but-generic case (e.g. stdlib `baml.unstable.string<T>`).
+    // function-only-but-generic case (e.g. stdlib `string.from<T>`).
     if !body.generic_typevars().is_empty() && !stdlibs.contains(&"typing") {
         stdlibs.push("typing");
     }
@@ -1347,7 +1347,7 @@ pub(crate) fn render_leaf_body(body: &LeafBody) -> String {
     if is_baml_builtins_root {
         out.push('\n');
         out.push_str(
-            "from baml_core import BamlError as BamlError, BamlPanic as BamlPanic, Unset as Unset, UNSET as UNSET\n",
+            "from baml_core import BamlError as BamlError, BamlPanic as BamlPanic, UNSET as UNSET\n",
         );
     }
 
@@ -1395,7 +1395,6 @@ pub(crate) fn render_leaf_body(body: &LeafBody) -> String {
     if is_baml_builtins_root {
         names.push("BamlError");
         names.push("BamlPanic");
-        names.push("Unset");
         names.push("UNSET");
     }
     if !names.is_empty() {
@@ -1736,7 +1735,7 @@ fn render_typed_params(
 /// positional; optional params (the `?` marker on a BAML callable type) get an
 /// Ellipsis default (`= ...`) so a host callback that either supplies or omits
 /// them type-checks. Unlike an optional *function* argument there is no
-/// `baml.Unset` sentinel: BAML invokes the callback positionally, and the
+/// `UNSET` sentinel: BAML invokes the callback positionally, and the
 /// callback's own language-level default fills any omitted trailing arg.
 fn render_callback_protocol(
     name: &str,
@@ -1782,20 +1781,24 @@ fn render_param_pyi(
 }
 
 fn with_unset_union(ty_py: &str) -> String {
+    // `UNSET` is a PEP 661 sentinel that doubles as its own type. Type
+    // checkers only accept a sentinel in a type expression when it is a bare
+    // name, so the leaf imports `UNSET` directly (see `render_leaf_body_pyi`)
+    // and we reference it unqualified here rather than as `baml.UNSET`.
     if let Some(inner) = ty_py
         .strip_prefix("typing.Union[")
         .and_then(|inner| inner.strip_suffix(']'))
     {
-        format!("typing.Union[{inner}, baml.Unset]")
+        format!("typing.Union[{inner}, UNSET]")
     } else if let Some(inner) = ty_py
         .strip_prefix("typing.Optional[")
         .and_then(|inner| inner.strip_suffix(']'))
     {
         // `Optional[X]` is `Union[X, None]`; flatten so a nullable keyword
-        // argument composes into a single `Union[X, None, baml.Unset]`.
-        format!("typing.Union[{inner}, None, baml.Unset]")
+        // argument composes into a single `Union[X, None, UNSET]`.
+        format!("typing.Union[{inner}, None, UNSET]")
     } else {
-        format!("typing.Union[{ty_py}, baml.Unset]")
+        format!("typing.Union[{ty_py}, UNSET]")
     }
 }
 
@@ -1807,7 +1810,7 @@ fn render_default_pyi(default: &FunctionArgumentDefault) -> String {
         }
         FunctionArgumentDefault::Literal(DefaultLiteral::EmptyList) => "[]".to_string(),
         FunctionArgumentDefault::Literal(DefaultLiteral::EmptyMap) => "{}".to_string(),
-        FunctionArgumentDefault::Expression { .. } => "baml.UNSET".to_string(),
+        FunctionArgumentDefault::Expression { .. } => "UNSET".to_string(),
     }
 }
 
@@ -1843,10 +1846,15 @@ pub(crate) fn render_leaf_body_pyi(body: &LeafBody) -> String {
     // type checkers and keeps the stub minimal.
     let mut rel_imports = body.all_rel_imports_py();
     if body.has_defaulted_call_params() && body.leaf.segments != ["baml"] {
+        // Optional arguments annotate as `typing.Union[..., UNSET]` and
+        // default to `UNSET`. The sentinel must be a bare name in the type
+        // expression (type checkers reject `baml.UNSET` member access there),
+        // so import it directly from the `baml` builtins package rather than
+        // importing the package and using attribute access.
         rel_imports.push(RelImport {
             depth: body.leaf.segments.len() + 1,
-            from_path: String::new(),
-            anchor: "baml".to_string(),
+            from_path: "baml".to_string(),
+            anchor: "UNSET as UNSET".to_string(),
         });
         rel_imports.sort();
         rel_imports.dedup();
@@ -1892,7 +1900,7 @@ pub(crate) fn render_leaf_body_pyi(body: &LeafBody) -> String {
     if is_baml_builtins_root {
         out.push('\n');
         out.push_str(
-            "from baml_core import BamlError as BamlError, BamlPanic as BamlPanic, Unset as Unset, UNSET as UNSET\n",
+            "from baml_core import BamlError as BamlError, BamlPanic as BamlPanic, UNSET as UNSET\n",
         );
     }
 
@@ -1973,7 +1981,6 @@ pub(crate) fn render_leaf_body_pyi(body: &LeafBody) -> String {
     if is_baml_builtins_root {
         names.push("BamlError");
         names.push("BamlPanic");
-        names.push("Unset");
         names.push("UNSET");
     }
     if !names.is_empty() {

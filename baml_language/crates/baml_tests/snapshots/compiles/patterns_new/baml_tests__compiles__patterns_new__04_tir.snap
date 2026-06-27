@@ -178,9 +178,6 @@ function user.for_let_fn_narrow(items: ((int) -> int throws never)[]) -> int thr
 class user.AppError {
   code: int
 }
-function user.AppError.from_json(j: baml.json.json) -> user.AppError throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  AppError { code: baml.json.from_json<int>(baml.json.field(j, "code")) } : user.AppError
-}
 function user.risky_error(mode: int) -> int throws user.AppError | string {
   { : never
     if (mode == 0 : bool) : void
@@ -192,7 +189,7 @@ function user.risky_error(mode: int) -> int throws user.AppError | string {
 }
 function user.catch_chain_union(mode: int) -> int throws never {
   { : int | 1
-    catch (risky_error(mode) : int) : unknown
+    catch (risky_error(mode) : int) : int | 1
       catch (e)
         AppError | string =>
           1 : 1
@@ -200,7 +197,7 @@ function user.catch_chain_union(mode: int) -> int throws never {
 }
 function user.catch_paren_or_chain(mode: int) -> int throws never {
   { : int | 1
-    catch (risky_error(mode) : int) : unknown
+    catch (risky_error(mode) : int) : int | 1
       catch (e)
         AppError | string =>
           1 : 1
@@ -208,7 +205,7 @@ function user.catch_paren_or_chain(mode: int) -> int throws never {
 }
 function user.catch_widening_chain(mode: int) -> int throws never {
   { : int | 1 | 2
-    catch (risky_error(mode) : int) : unknown
+    catch (risky_error(mode) : int) : int | 1 | 2
       catch (e)
         s: string =>
           1 : 1
@@ -248,14 +245,8 @@ function user.match_nested_paren_union(v: (int | string)[]) -> int throws never 
 class user.PatternBucket {
   values: int[]
 }
-function user.PatternBucket.from_json(j: baml.json.json) -> user.PatternBucket throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  PatternBucket { values: baml.json.from_json<int[]>(baml.json.field(j, "values")) } : user.PatternBucket
-}
 class user.PatternMatrix {
   rows: int[][]
-}
-function user.PatternMatrix.from_json(j: baml.json.json) -> user.PatternMatrix throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  PatternMatrix { rows: baml.json.from_json<int[][]>(baml.json.field(j, "rows")) } : user.PatternMatrix
 }
 type user.Number$stream = int | float
 class user.AppError$stream {

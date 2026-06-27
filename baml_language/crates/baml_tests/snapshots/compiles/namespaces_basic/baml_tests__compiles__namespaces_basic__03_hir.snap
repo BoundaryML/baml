@@ -9,16 +9,10 @@ class user.Config {
 function user.GetResponse(cfg: user.Config) -> root.llm.Response  [expr] {
   {  } root.llm.Response { text: "hello", model: cfg.model }
 }
-function user.from_json(j: baml.json.json) -> user.Config  [expr] {
-  user.Config { key: baml.json.from_json(baml.json.field(j, "key")), model: baml.json.from_json(baml.json.field(j, "model")) }
-}
 class user.llm.Response {
   text: string
   model: string
 }
 function user.llm.MakeResponse(cfg: root.Config) -> user.llm.Response  [expr] {
   {  } user.llm.Response { text: "ok", model: cfg.model }
-}
-function user.llm.from_json(j: baml.json.json) -> user.llm.Response  [expr] {
-  user.llm.Response { text: baml.json.from_json(baml.json.field(j, "text")), model: baml.json.from_json(baml.json.field(j, "model")) }
 }

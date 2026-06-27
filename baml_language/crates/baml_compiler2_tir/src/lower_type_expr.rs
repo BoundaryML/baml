@@ -432,6 +432,82 @@ fn can_be_associated_type_projection_base(ty: &Ty) -> bool {
     )
 }
 
+/// Lower an associated-type projection's explicit `as I` qualifier (already
+/// lowered to `interface_ty`) into the interface *constraint* it denotes,
+/// diagnosing a qualifier that resolves to something other than an interface.
+///
+/// Shared by both type-expr lowering paths ([`lower_type_expr_in_ns`] and
+/// `generics::lower_type_expr_with_generics`) so the qualifier is validated
+/// identically regardless of which one runs — the whole point of doing this in
+/// the compiler rather than the LSP.
+///
+/// A `None` qualifier (an unqualified `Base.Member` projection) is accepted
+/// today and returns `None`. This is transitional: we intend to always resolve a
+/// (possibly parameterized) interface at compile time and drop the `Option`, at
+/// which point a missing qualifier becomes its own diagnostic here too.
+pub(crate) fn lower_explicit_projection_qualifier(
+    db: &dyn crate::Db,
+    interface_ty: Option<Ty>,
+    member: &baml_base::Name,
+    diagnostics: &mut Vec<TirTypeError>,
+) -> Option<Box<baml_type::Interface>> {
+    let interface_ty = interface_ty?;
+    match interface_ty.as_interface() {
+        Some(interface) => {
+            // Own-only: the explicit qualifier must declare `member` *itself*.
+            // Interfaces do not inherit associated types through `requires` (it's
+            // a bound, not inheritance), so `(Foo as RequiresIterator).Item` — with
+            // `Item` declared on the required `Iterator` — is an error, matching the
+            // resolver (which only resolves a member on the exact qualifier).
+            if !interface_declares_member(db, &interface.name, member) {
+                diagnostics.push(TirTypeError::UnknownAssociatedType {
+                    member: member.clone(),
+                    container: interface.name.clone(),
+                    container_is_interface: true,
+                });
+            }
+            Some(Box::new(interface))
+        }
+        None => {
+            // The qualifier lowered to a non-interface type. An *unresolved*
+            // qualifier path already reported `UnresolvedType` (and lowers to
+            // `Unknown`/`Error`), so only a qualifier that resolved to a concrete
+            // non-interface — a class, alias, etc. — is diagnosed here, avoiding a
+            // double report.
+            if !matches!(interface_ty, Ty::Unknown { .. } | Ty::Error { .. }) {
+                diagnostics.push(TirTypeError::NonInterfaceProjectionQualifier);
+            }
+            None
+        }
+    }
+}
+
+/// Whether interface `iface_qtn` declares `member` as one of its *own* associated
+/// types (not via `requires` — interfaces don't inherit). Returns `true` when the
+/// interface can't be resolved, leaving that to the qualifier-path diagnostics.
+fn interface_declares_member(
+    db: &dyn crate::Db,
+    iface_qtn: &QualifiedTypeName,
+    member: &baml_base::Name,
+) -> bool {
+    let pkg_id = baml_compiler2_hir::package::PackageId::new(db, iface_qtn.package().clone());
+    let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
+    let Some(baml_compiler2_hir::contributions::Definition::Interface(iface_loc)) =
+        pkg_items.lookup_type(iface_qtn.namespace(), iface_qtn.name())
+    else {
+        return true;
+    };
+    baml_compiler2_hir::file_item_tree(db, iface_loc.file(db))
+        .interfaces
+        .get(&iface_loc.id(db))
+        .is_some_and(|iface| {
+            iface
+                .associated_types
+                .iter()
+                .any(|assoc| assoc.name == *member)
+        })
+}
+
 pub fn lower_type_expr_in_ns(
     db: &dyn crate::Db,
     type_expr: &TypeExpr,
@@ -539,6 +615,13 @@ pub fn lower_type_expr_in_ns(
                             .get(&class_loc.id(db))
                             .map(|class| class.generic_params.len())
                             .unwrap_or(0);
+                        // A bare generic name (`generic_args.is_empty()`) is left
+                        // unchecked here: it is a deliberate wildcard in several
+                        // positions (`reflect.type_of<Box>()`, construction
+                        // `Box { .. }` where args infer from fields, an interface's
+                        // own `Self` type). Object construction that cannot infer
+                        // its args is reported by `infer_object_expr`
+                        // (`CannotInferTypeParameter`) instead.
                         if !generic_args.is_empty() && generic_args.len() != expected_type_args {
                             diagnostics.push(TirTypeError::WrongNumberOfTypeArgs {
                                 type_name: short.clone(),
@@ -1002,7 +1085,12 @@ pub fn lower_type_expr_in_ns(
             });
             Ty::AssociatedTypeProjection {
                 base: Box::new(base_ty),
-                interface: interface_ty.map(Box::new),
+                interface: lower_explicit_projection_qualifier(
+                    db,
+                    interface_ty,
+                    member,
+                    diagnostics,
+                ),
                 member: member.clone(),
                 attr: TyAttr::default(),
             }
@@ -1244,5 +1332,83 @@ mod tests {
         assert_eq!(params[0].mode, FunctionParamMode::Required);
         assert_eq!(params[1].name.as_deref(), Some("limit"));
         assert_eq!(params[1].mode, FunctionParamMode::Optional);
+    }
+
+    #[test]
+    fn explicit_projection_qualifier_accepts_interface() {
+        let mut db = TestDb::default();
+        db.init();
+        let mut diags = Vec::new();
+        let iface = Ty::Interface(
+            QualifiedTypeName::from_dotted_path("user.Iterator"),
+            Vec::new(),
+            Vec::new(),
+            TyAttr::default(),
+        );
+        // The interface isn't defined in this bare db, so the own-member check
+        // can't resolve it and conservatively accepts (no spurious member error).
+        // Real member-checking is covered by the `interfaces_associated_types`
+        // integration tests.
+        let member = Name::new("Item");
+        assert!(
+            lower_explicit_projection_qualifier(&db, Some(iface), &member, &mut diags).is_some()
+        );
+        assert!(diags.is_empty());
+    }
+
+    #[test]
+    fn explicit_projection_qualifier_rejects_non_interface() {
+        let db = TestDb::default();
+        let mut diags = Vec::new();
+        let class = Ty::Class(
+            QualifiedTypeName::from_dotted_path("user.Foo"),
+            Vec::new(),
+            TyAttr::default(),
+        );
+        let member = Name::new("Item");
+        assert!(
+            lower_explicit_projection_qualifier(&db, Some(class), &member, &mut diags).is_none(),
+            "a class qualifier must not yield an interface"
+        );
+        assert!(
+            matches!(
+                diags.as_slice(),
+                [TirTypeError::NonInterfaceProjectionQualifier]
+            ),
+            "expected NonInterfaceProjectionQualifier, got {diags:?}"
+        );
+    }
+
+    #[test]
+    fn explicit_projection_qualifier_does_not_double_report_already_erroneous() {
+        // An unresolved qualifier path already emitted `UnresolvedType` and lowers
+        // to `Unknown`, so the helper must not add a second diagnostic on top.
+        let db = TestDb::default();
+        let mut diags = Vec::new();
+        let member = Name::new("Item");
+        assert!(
+            lower_explicit_projection_qualifier(
+                &db,
+                Some(Ty::Unknown {
+                    attr: TyAttr::default()
+                }),
+                &member,
+                &mut diags,
+            )
+            .is_none()
+        );
+        assert!(
+            diags.is_empty(),
+            "an already-erroneous qualifier must not double-report, got {diags:?}"
+        );
+    }
+
+    #[test]
+    fn explicit_projection_qualifier_none_is_unqualified() {
+        let db = TestDb::default();
+        let mut diags = Vec::new();
+        let member = Name::new("Item");
+        assert!(lower_explicit_projection_qualifier(&db, None, &member, &mut diags).is_none());
+        assert!(diags.is_empty());
     }
 }

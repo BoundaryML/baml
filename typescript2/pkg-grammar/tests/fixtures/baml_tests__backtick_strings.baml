@@ -1,0 +1,137 @@
+// BEP-049 — backtick string literal compile fixture.
+//
+// M1: contents are plain text (no ${...} interpolation yet — that lands in M2).
+// All functions below should compile, type-check, and produce the same string
+// value as their `"..."` equivalents.
+
+function BacktickOneLiner() -> string {
+    `hello world`
+}
+
+// An *empty* backtick string is intentionally NOT exercised here: per BEP-049
+// §8 case 1, `` `` `` parses as a greedy 2-tick opener with no close (parse
+// error). For empty strings, users write `""`.
+
+function BacktickStandardEscapes() -> string {
+    `line\nbreak\twith\rcr\0nul`
+}
+
+function BacktickEscapedBacktick() -> string {
+    `before \` after`
+}
+
+function BacktickEscapedDollar() -> string {
+    `literal \${name}`
+}
+
+function BacktickMultiline() -> string {
+    `
+        first line
+        second line
+        third line
+    `
+}
+
+function BacktickMultilineWithBlankLines() -> string {
+    `
+        para one
+
+        para two
+    `
+}
+
+function BacktickMultiTickTwo() -> string {
+    ``inline `code` here``
+}
+
+function BacktickMultiTickThree() -> string {
+    ```nested ``double`` ticks```
+}
+
+// Backtick string in an expression position.
+function BacktickInCondition() -> int {
+    if (`abc`.length() > 0) {
+        1
+    } else {
+        0
+    }
+}
+
+function BacktickEquality() -> bool {
+    `abc` == `abc`
+}
+
+// Backtick string as function argument and return value.
+function BacktickPassThrough(s: string) -> string {
+    s
+}
+
+function BacktickLiteralAsArg() -> string {
+    BacktickPassThrough(`forwarded`)
+}
+
+// ─── M2: ${...} interpolation ──────────────────────────────────────────────
+
+function BacktickInterpSimple(name: string) -> string {
+    `Hello, ${name}!`
+}
+
+function BacktickInterpMultiple(first: string, last: string) -> string {
+    `${first} ${last}`
+}
+
+// BEP §11: implicit `.to_string()` for non-string interp values.
+function BacktickInterpInt(n: int) -> string {
+    `count: ${n}`
+}
+
+function BacktickInterpBool(b: bool) -> string {
+    `flag: ${b}`
+}
+
+function BacktickInterpFloat(x: float) -> string {
+    `ratio: ${x}`
+}
+
+// BEP §4: ${...} is a block expression — statements + optional trailing expr.
+function BacktickInterpBlockBody(items: int[]) -> string {
+    `head: ${ let first = items[0]; first }`
+}
+
+// Interpolation calling another function.
+function bangs(n: int) -> string {
+    if (n <= 0) { "" } else { "!" + bangs(n - 1) }
+}
+
+function BacktickInterpCallsFn() -> string {
+    `done${bangs(3)}`
+}
+
+// Multi-line backtick with multiple interpolations — exercises segments()
+// dedent (BEP §12) on a literal that has interp boundaries.
+function BacktickInterpMultiline(name: string, count: int) -> string {
+    `
+        name:  ${name}
+        count: ${count}
+    `
+}
+
+// Escaped `\${...}` stays literal even after M2 (BEP §8).
+function BacktickEscapedInterpStaysLiteral() -> string {
+    `literal: \${ignored}`
+}
+
+// ─── M3: ${for}/${if} block control flow ─────────────────────────────────
+
+function BacktickM3ForLoop(xs: string[]) -> string {
+    `${for (let x in xs)}- ${x}
+${endfor}`
+}
+
+function BacktickM3IfBlock(show: bool) -> string {
+    `${if (show)}hello${endif}`
+}
+
+function BacktickM3IfElseChain(n: int) -> string {
+    `${if (n > 0)}pos${else if (n < 0)}neg${else}zero${endif}`
+}

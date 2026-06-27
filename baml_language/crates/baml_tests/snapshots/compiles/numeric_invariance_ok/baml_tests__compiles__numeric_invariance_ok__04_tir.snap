@@ -14,7 +14,7 @@ function user.EmptyBigintArray() -> bigint[] throws never {
 }
 function user.EvolvingRetype() -> bigint[] throws never {
   { : bigint[]
-    let a = [] : never[] -> bigint[] (evolving)
+    let a = [] : _[] -> bigint[] (evolving)
     a : bigint[]
   }
 }
@@ -31,9 +31,6 @@ function user.BigintMapLiteral() -> map<string, bigint> throws never {
 }
 class user.BigintCounter {
   count: bigint
-}
-function user.BigintCounter.from_json(j: baml.json.json) -> user.BigintCounter throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  BigintCounter { count: baml.json.from_json<bigint>(baml.json.field(j, "count")) } : user.BigintCounter
 }
 function user.BigintFieldOk() -> user.BigintCounter throws never {
   { : user.BigintCounter

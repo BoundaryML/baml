@@ -1,31 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-function user.Container.from_json(j: baml.json.json) -> Container<T> {
-    load_var j
-    load_const "item"
-    call baml.json.field
-    store_var _3
-    load_type #0
-    load_var _3
-    call baml.json.from_json
-    load_type #0
-    init_instance<1> user.Container .item
-    return
-}
-
-function user.User.from_json(j: baml.json.json) -> User {
-    load_var j
-    load_const "name"
-    call baml.json.field
-    store_var _3
-    load_type string
-    load_var _3
-    call baml.json.from_json
-    init_instance user.User .name
-    return
-}
-
 function user.decode_container(s: string) -> Container<User> {
     load_type Container<User>
     load_var s

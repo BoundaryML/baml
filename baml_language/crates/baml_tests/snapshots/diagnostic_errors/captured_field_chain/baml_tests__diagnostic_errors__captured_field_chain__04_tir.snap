@@ -5,15 +5,9 @@ source: crates/baml_tests/src/generated_tests.rs
 class user.Inner {
   value: int
 }
-function user.Inner.from_json(j: baml.json.json) -> user.Inner throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  Inner { value: baml.json.from_json<int>(baml.json.field(j, "value")) } : user.Inner
-}
 class user.Outer {
   inner: user.Inner
   name: string
-}
-function user.Outer.from_json(j: baml.json.json) -> user.Outer throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  Outer { inner: baml.json.from_json<Inner>(baml.json.field(j, "inner")), name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.Outer
 }
 function user.test_captured_chain(outer: user.Outer) -> int throws never {
   { : int
@@ -35,13 +29,13 @@ function user.test_map_chain(data: map<string, map<string, int>>) -> int throws 
   { : unknown
     data.a.b : unknown
   }
-  !! 1131..1142: type `map<string, map<string, int>>` has no member `a`
+  !! 1134..1142: type `map<string, map<string, int>>` has no member `a`
 }
 function user.test_deep_map_chain(data: map<string, map<string, map<string, int>>>) -> int throws never {
   { : unknown
     data.a.b.c : unknown
   }
-  !! 1275..1288: type `map<string, map<string, map<string, int>>>` has no member `a`
+  !! 1278..1288: type `map<string, map<string, map<string, int>>>` has no member `a`
 }
 class user.Inner$stream {
   value: int | null

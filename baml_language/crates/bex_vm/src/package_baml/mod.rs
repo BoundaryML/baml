@@ -10,7 +10,6 @@
 //! - `math` — `BamlNamespaceMath` (trunc)
 //! - `media` — `BamlClassMedia{Pdf,Audio,Video,Image}` + `BamlNamespaceMedia`
 //! - `ops` — `BamlClassOps*` (`Equals`/`Compare` for primitives + containers)
-//! - `unstable` — `BamlNamespaceUnstable` (string)
 //! - `root` — `BamlPackageBaml` (`deep_copy`, `deep_equals`, and the
 //!   `Sortable.sort` shims `_compare_shim` / `_is_primitive_array` /
 //!   `_rust_sort` / `_float_total_cmp`)
@@ -43,7 +42,6 @@ mod time;
 mod toml;
 mod type_class;
 mod uint8array;
-mod unstable;
 mod yaml;
 
 use std::collections::HashMap;
@@ -131,6 +129,50 @@ impl Continuation for PassThroughContinuation {
     fn apply_forwarding(&mut self, _forwarding: &HashMap<HeapPtr, HeapPtr>) {}
 }
 
+/// A typed view of an array receiver: its declared element type alongside the
+/// backing slice.
+///
+/// Mirrors the generated class `view::` structs — the element type rides *with*
+/// the receiver so a builtin that preserves it (`filter`, …) can tag its result
+/// array without a side channel. Derefs to `[Value]`, so slice-only array
+/// builtins take it in place of `&[Value]` with no body changes.
+pub struct ArrayView<'a> {
+    /// The receiver array's declared element type (`T` of `T[]`).
+    pub ty: &'a baml_type::RuntimeTy,
+    /// The receiver array's elements.
+    pub data: &'a [Value],
+}
+
+impl std::ops::Deref for ArrayView<'_> {
+    type Target = [Value];
+    fn deref(&self) -> &[Value] {
+        self.data
+    }
+}
+
+/// A typed view of a map receiver: its declared key/value types alongside the
+/// backing `IndexMap`.
+///
+/// The map analogue of [`ArrayView`] — the key and value types ride *with* the
+/// receiver so a builtin that preserves them can tag its result map without a
+/// side channel. Derefs to the underlying `IndexMap`, so map-only builtins take
+/// it in place of `&IndexMap<BexStr, Value>` with no body changes.
+pub struct MapView<'a> {
+    /// The receiver map's declared key type (`K` of `map<K, V>`).
+    pub key_ty: &'a baml_type::RuntimeTy,
+    /// The receiver map's declared value type (`V` of `map<K, V>`).
+    pub value_ty: &'a baml_type::RuntimeTy,
+    /// The receiver map's entries.
+    pub data: &'a indexmap::IndexMap<bex_str::BexStr, Value>,
+}
+
+impl std::ops::Deref for MapView<'_> {
+    type Target = indexmap::IndexMap<bex_str::BexStr, Value>;
+    fn deref(&self) -> &indexmap::IndexMap<bex_str::BexStr, Value> {
+        self.data
+    }
+}
+
 // Generate the BamlClass*/BamlNamespace*/BamlPackageBaml trait hierarchy.
 // `unsafe_code` is intentional: float-boxed Object reads use `ptr.get()`
 // which is unsafe; the surrounding accessors uphold the heap-permit
@@ -147,6 +189,7 @@ impl Continuation for PassThroughContinuation {
     clippy::pub_underscore_fields,
     clippy::used_underscore_binding,
     clippy::elidable_lifetime_names,
+    clippy::get_first,
     clippy::iter_not_returning_iterator,
     clippy::needless_lifetimes,
     clippy::redundant_closure_call,

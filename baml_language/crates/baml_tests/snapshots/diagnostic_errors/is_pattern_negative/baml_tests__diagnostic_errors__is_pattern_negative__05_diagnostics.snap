@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 41421
 ---
 === COMPILER2 DIAGNOSTICS ===
   [type] error: unresolved name: x
@@ -44,31 +43,31 @@ assertion_line: 41421
 ────╯
 
   [type] error: unresolved name: Frobnitz
-    ╭─[ main.baml:30:9 ]
+    ╭─[ main.baml:30:10 ]
     │
  30 │     v is Frobnitz { x }
-    │         ───────┬───────  
-    │                ╰───────── unresolved name: Frobnitz
+    │          ───────┬──────  
+    │                 ╰──────── unresolved name: Frobnitz
     │ 
     │ Note: Error code: E0003
 ────╯
 
   [type] error: unresolved type: Missing
-    ╭─[ main.baml:36:9 ]
+    ╭─[ main.baml:36:10 ]
     │
  36 │     v is WrapGeneric<Missing>
-    │         ──────────┬──────────  
-    │                   ╰──────────── unresolved type: Missing
+    │          ──────────┬─────────  
+    │                    ╰─────────── unresolved type: Missing
     │ 
     │ Note: Error code: E0002
 ────╯
 
   [type] error: unresolved type: Frobnitz
-    ╭─[ main.baml:41:9 ]
+    ╭─[ main.baml:41:10 ]
     │
  41 │     v is Frobnitz
-    │         ────┬────  
-    │             ╰────── unresolved type: Frobnitz
+    │          ────┬───  
+    │              ╰───── unresolved type: Frobnitz
     │ 
     │ Note: Error code: E0002
 ────╯

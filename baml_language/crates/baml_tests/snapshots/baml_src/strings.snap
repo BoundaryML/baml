@@ -961,6 +961,7 @@ function strings.strings_form_feed() -> string {
 function strings.strings_from_code_points_negative() -> string {
     load_const 1
     unary_op -
+    load_type int
     alloc_array 1
     call baml.String.from_code_points
     return
@@ -968,6 +969,7 @@ function strings.strings_from_code_points_negative() -> string {
 
 function strings.strings_from_code_points_surrogate() -> string {
     load_const 55296
+    load_type int
     alloc_array 1
     call baml.String.from_code_points
     return
@@ -975,6 +977,7 @@ function strings.strings_from_code_points_surrogate() -> string {
 
 function strings.strings_from_code_points_too_large() -> string {
     load_const 1114112
+    load_type int
     alloc_array 1
     call baml.String.from_code_points
     return
