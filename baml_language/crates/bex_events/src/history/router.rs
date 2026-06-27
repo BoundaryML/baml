@@ -3,16 +3,25 @@ use crate::{
     run::{ProfileEventEnvelope, TraceCallKey, component_event_indices_for_root},
 };
 
+pub type HistoryProfileRecordId = u64;
+
 #[derive(Clone, Debug)]
 pub struct HistoryProfileRecord {
     pub envelope: ProfileEventEnvelope,
     pub disk_event: pb::DiskEventV1,
 }
 
+#[derive(Clone, Debug)]
+struct RoutedHistoryProfileRecord {
+    id: HistoryProfileRecordId,
+    record: HistoryProfileRecord,
+}
+
 #[derive(Debug)]
 pub struct BoundaryTraceRouter {
-    records: Vec<HistoryProfileRecord>,
+    records: Vec<RoutedHistoryProfileRecord>,
     max_records: usize,
+    next_record_id: HistoryProfileRecordId,
     dropped_records: u64,
 }
 
@@ -28,14 +37,20 @@ impl BoundaryTraceRouter {
         Self {
             records: Vec::new(),
             max_records,
+            next_record_id: 0,
             dropped_records: 0,
         }
     }
 
     pub fn ingest(&mut self, envelope: ProfileEventEnvelope, disk_event: pb::DiskEventV1) {
-        self.records.push(HistoryProfileRecord {
-            envelope,
-            disk_event,
+        let id = self.next_record_id;
+        self.next_record_id = self.next_record_id.saturating_add(1);
+        self.records.push(RoutedHistoryProfileRecord {
+            id,
+            record: HistoryProfileRecord {
+                envelope,
+                disk_event,
+            },
         });
         if self.records.len() > self.max_records {
             let drop_count = self.records.len() - self.max_records;
@@ -47,18 +62,24 @@ impl BoundaryTraceRouter {
     }
 
     #[must_use]
-    pub fn component_indices(&self, root_trace: TraceCallKey) -> Vec<usize> {
+    pub fn component_record_ids(&self, root_trace: TraceCallKey) -> Vec<HistoryProfileRecordId> {
         let envelopes = self
             .records
             .iter()
-            .map(|record| record.envelope.clone())
+            .map(|record| record.record.envelope.clone())
             .collect::<Vec<_>>();
         component_event_indices_for_root(&envelopes, root_trace)
+            .into_iter()
+            .filter_map(|index| self.records.get(index).map(|record| record.id))
+            .collect()
     }
 
     #[must_use]
-    pub fn record(&self, index: usize) -> Option<&HistoryProfileRecord> {
-        self.records.get(index)
+    pub fn record(&self, id: HistoryProfileRecordId) -> Option<&HistoryProfileRecord> {
+        self.records
+            .iter()
+            .find(|record| record.id == id)
+            .map(|record| &record.record)
     }
 
     #[must_use]

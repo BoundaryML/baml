@@ -3666,6 +3666,18 @@ impl BexVm {
         })
     }
 
+    fn event_source_location_for_line_entry(
+        entry: &bytecode::LineTableEntry,
+    ) -> (u32, u32, u32, u32, u32) {
+        (
+            entry.span.file_id.as_u32(),
+            u32::try_from(entry.line).unwrap_or(u32::MAX),
+            0,
+            u32::from(entry.span.range.start()),
+            u32::from(entry.span.range.end()),
+        )
+    }
+
     /// Call-entry bookkeeping for a frame about to be pushed: mints the call
     /// id, updates `current_call_id`, and emits `CallFunction`. Returns
     /// `(call_id, parent_call_id)` for the frame literal.
@@ -7760,15 +7772,7 @@ impl BexVm {
                                     func.bytecode.line_entry_for_pc(pc)
                                 }
                             })
-                            .map(|entry| {
-                                (
-                                    entry.span.file_id.as_u32(),
-                                    u32::try_from(entry.line).unwrap_or(u32::MAX),
-                                    entry.span.range.start().into(),
-                                    u32::from(entry.span.range.start()),
-                                    u32::from(entry.span.range.end()),
-                                )
-                            })
+                            .map(Self::event_source_location_for_line_entry)
                     } else {
                         None
                     };

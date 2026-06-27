@@ -68,7 +68,7 @@ use bex_events::{
     history::{
         HistoryProfileSegment, HistoryValueReadResult, HistoryValueSegment,
         history_run_matches_filter, open_boundary_from_segments, read_value_from_segments_result,
-        router::{BoundaryTraceRouter, HistoryProfileRecord},
+        router::{BoundaryTraceRouter, HistoryProfileRecord, HistoryProfileRecordId},
         summarize_history_run,
     },
     prof::{CooperativeProfileDrain, CooperativeProfileDrainOptions},
@@ -152,7 +152,7 @@ struct WasmHistoryBoundary {
     value_writer: ValueWriter<ByteValueArtifactSink>,
     started_at_epoch_ns: u128,
     root_trace: Option<TraceCallKey>,
-    claimed_profile_indices: HashSet<usize>,
+    claimed_profile_record_ids: HashSet<HistoryProfileRecordId>,
     profile_writers: HashMap<u64, WasmProfileSegmentWriter>,
 }
 
@@ -183,7 +183,7 @@ impl WasmHistoryStoreInner {
                 value_writer,
                 started_at_epoch_ns: u128::from(start.created_at_ms).saturating_mul(1_000_000),
                 root_trace: None,
-                claimed_profile_indices: HashSet::new(),
+                claimed_profile_record_ids: HashSet::new(),
                 profile_writers: HashMap::new(),
             },
         );
@@ -373,21 +373,21 @@ impl WasmHistoryStoreInner {
         else {
             return Ok(());
         };
-        let component_indices = self.router.component_indices(root_trace);
-        let records = component_indices
+        let component_record_ids = self.router.component_record_ids(root_trace);
+        let records = component_record_ids
             .iter()
-            .filter_map(|index| {
+            .filter_map(|record_id| {
                 self.router
-                    .record(*index)
+                    .record(*record_id)
                     .cloned()
-                    .map(|record| (*index, record))
+                    .map(|record| (*record_id, record))
             })
             .collect::<Vec<_>>();
         let Some(boundary) = self.boundaries.get_mut(&boundary_id) else {
             return Ok(());
         };
-        for (index, record) in records {
-            if !boundary.claimed_profile_indices.insert(index) {
+        for (record_id, record) in records {
+            if !boundary.claimed_profile_record_ids.insert(record_id) {
                 continue;
             }
             boundary.write_profile_record(&record)?;

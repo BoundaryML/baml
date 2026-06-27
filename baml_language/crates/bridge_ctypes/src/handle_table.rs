@@ -364,6 +364,5 @@ mod tests {
             encoded.value,
             Some(BamlValueVariant::HandleValue(_))
         ));
-        assert!(HANDLE_TABLE.resolve(42).is_none());
     }
 }

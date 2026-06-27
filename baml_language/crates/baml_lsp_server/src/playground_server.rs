@@ -267,6 +267,79 @@ fn parse_boundary_id_for_request(
     })
 }
 
+fn value_body_response(
+    request_id: u64,
+    boundary_id: BoundaryId,
+    value_ref_id: String,
+    requested_codec: String,
+    live_value: LiveValueLookup,
+    history_result: Result<HistoryValueReadResult, String>,
+) -> WsOutMessage {
+    let live_diagnostic = match &live_value {
+        LiveValueLookup::Evicted(eviction) => Some(eviction.diagnostic.clone()),
+        LiveValueLookup::Available(_) | LiveValueLookup::Missing => None,
+    };
+    match live_value {
+        LiveValueLookup::Available(stored) => WsOutMessage::ValueBody {
+            request_id,
+            boundary_id: boundary_id.to_wire_string(),
+            value_ref_id,
+            codec: stored.codec.as_wire_str().to_string(),
+            availability: "available".to_string(),
+            body_base64: Some(base64::engine::general_purpose::STANDARD.encode(stored.body)),
+            diagnostic: None,
+        },
+        LiveValueLookup::Evicted(_) | LiveValueLookup::Missing => match history_result {
+            Ok(HistoryValueReadResult::Available(stored)) => WsOutMessage::ValueBody {
+                request_id,
+                boundary_id: boundary_id.to_wire_string(),
+                value_ref_id,
+                codec: stored.codec.as_wire_str().to_string(),
+                availability: "available".to_string(),
+                body_base64: Some(base64::engine::general_purpose::STANDARD.encode(stored.body)),
+                diagnostic: None,
+            },
+            Ok(HistoryValueReadResult::Missing) => WsOutMessage::ValueBody {
+                request_id,
+                boundary_id: boundary_id.to_wire_string(),
+                value_ref_id,
+                codec: requested_codec,
+                availability: "missing".to_string(),
+                body_base64: None,
+                diagnostic: Some(
+                    live_diagnostic.unwrap_or_else(|| "value body is not available".to_string()),
+                ),
+            },
+            Ok(HistoryValueReadResult::BodyUnavailable(unavailable)) => WsOutMessage::ValueBody {
+                request_id,
+                boundary_id: boundary_id.to_wire_string(),
+                value_ref_id,
+                codec: requested_codec,
+                availability: "missing".to_string(),
+                body_base64: None,
+                diagnostic: Some(unavailable.diagnostic),
+            },
+            Err(err) => {
+                let diagnostic = match live_diagnostic {
+                    Some(live_diagnostic) => {
+                        format!("{live_diagnostic}; history value read failed: {err}")
+                    }
+                    None => format!("history value read failed: {err}"),
+                };
+                WsOutMessage::ValueBody {
+                    request_id,
+                    boundary_id: boundary_id.to_wire_string(),
+                    value_ref_id,
+                    codec: requested_codec,
+                    availability: "lost".to_string(),
+                    body_base64: None,
+                    diagnostic: Some(diagnostic),
+                }
+            }
+        },
+    }
+}
+
 fn cursor_expired_reason_to_wire(reason: RunCursorExpiredReason) -> &'static str {
     match reason {
         RunCursorExpiredReason::Expired => "expired",
@@ -1970,6 +2043,9 @@ async fn handle_ws_in_message(
                 }
             };
             let value_ref_id = value_ref.id;
+            let requested_codec = value_ref
+                .codec
+                .unwrap_or_else(|| ValueCodec::BamlOutboundValue.as_wire_str().to_string());
             let live_value = state
                 .value_store
                 .lock()
@@ -1977,82 +2053,32 @@ async fn handle_ws_in_message(
                 .map_or(LiveValueLookup::Missing, |mut store| {
                     store.get(boundary_id, &value_ref_id)
                 });
-            let live_diagnostic = match &live_value {
-                LiveValueLookup::Evicted(eviction) => Some(eviction.diagnostic.clone()),
-                LiveValueLookup::Available(_) | LiveValueLookup::Missing => None,
-            };
             let history_result = if !matches!(live_value, LiveValueLookup::Available(_)) {
                 match state
                     .history_store
                     .read_value_result(boundary_id, &value_ref_id)
                 {
-                    Ok(value) => value,
+                    Ok(value) => Ok(value),
                     Err(err) => {
                         tracing::warn!(
                             "History readValue failed for {} {}: {err}",
                             boundary_id.to_wire_string(),
                             value_ref_id
                         );
-                        HistoryValueReadResult::Missing
+                        Err(err.to_string())
                     }
                 }
             } else {
-                HistoryValueReadResult::Missing
+                Ok(HistoryValueReadResult::Missing)
             };
-            let response = match live_value {
-                LiveValueLookup::Available(stored) => WsOutMessage::ValueBody {
-                    request_id,
-                    boundary_id: boundary_id.to_wire_string(),
-                    value_ref_id,
-                    codec: stored.codec.as_wire_str().to_string(),
-                    availability: "available".to_string(),
-                    body_base64: Some(
-                        base64::engine::general_purpose::STANDARD.encode(stored.body),
-                    ),
-                    diagnostic: None,
-                },
-                LiveValueLookup::Evicted(_) | LiveValueLookup::Missing => {
-                    let requested_codec = value_ref
-                        .codec
-                        .unwrap_or_else(|| ValueCodec::BamlOutboundValue.as_wire_str().to_string());
-                    match history_result {
-                        HistoryValueReadResult::Available(stored) => WsOutMessage::ValueBody {
-                            request_id,
-                            boundary_id: boundary_id.to_wire_string(),
-                            value_ref_id,
-                            codec: stored.codec.as_wire_str().to_string(),
-                            availability: "available".to_string(),
-                            body_base64: Some(
-                                base64::engine::general_purpose::STANDARD.encode(stored.body),
-                            ),
-                            diagnostic: None,
-                        },
-                        HistoryValueReadResult::Missing => WsOutMessage::ValueBody {
-                            request_id,
-                            boundary_id: boundary_id.to_wire_string(),
-                            value_ref_id,
-                            codec: requested_codec,
-                            availability: "missing".to_string(),
-                            body_base64: None,
-                            diagnostic: Some(
-                                live_diagnostic
-                                    .unwrap_or_else(|| "value body is not available".to_string()),
-                            ),
-                        },
-                        HistoryValueReadResult::BodyUnavailable(unavailable) => {
-                            WsOutMessage::ValueBody {
-                                request_id,
-                                boundary_id: boundary_id.to_wire_string(),
-                                value_ref_id,
-                                codec: requested_codec,
-                                availability: "missing".to_string(),
-                                body_base64: None,
-                                diagnostic: Some(unavailable.diagnostic),
-                            }
-                        }
-                    }
-                }
-            };
+            let response = value_body_response(
+                request_id,
+                boundary_id,
+                value_ref_id,
+                requested_codec,
+                live_value,
+                history_result,
+            );
             send_ws(sink, &response).await;
         }
 
@@ -2649,6 +2675,7 @@ mod tests {
     use std::sync::Arc;
 
     use bex_events::{
+        history::HistoryValueBody,
         ids::{BexCallId, BexThreadId, EngineId, ProcessEuid},
         run::{PayloadKind, ProjectId, RunTimeAnchor, TraceCallKey},
     };
@@ -2711,6 +2738,86 @@ mod tests {
             thread_id: BexThreadId(1),
             call_id: BexCallId(3),
         }
+    }
+
+    #[test]
+    fn value_body_response_distinguishes_history_read_failure_from_missing_value() {
+        let boundary_id = BoundaryId::from_bytes([31; 16]);
+
+        let missing = value_body_response(
+            7,
+            boundary_id,
+            "value_missing".to_string(),
+            ValueCodec::BamlOutboundValue.as_wire_str().to_string(),
+            LiveValueLookup::Missing,
+            Ok(HistoryValueReadResult::Missing),
+        );
+        let WsOutMessage::ValueBody {
+            availability,
+            diagnostic,
+            body_base64,
+            ..
+        } = missing
+        else {
+            panic!("expected value body response");
+        };
+        assert_eq!(availability, "missing");
+        assert_eq!(body_base64, None);
+        assert_eq!(diagnostic.as_deref(), Some("value body is not available"));
+
+        let failed = value_body_response(
+            8,
+            boundary_id,
+            "value_failed".to_string(),
+            ValueCodec::BamlOutboundValue.as_wire_str().to_string(),
+            LiveValueLookup::Missing,
+            Err("failed to read value segment value-0.bamlvalue".to_string()),
+        );
+        let WsOutMessage::ValueBody {
+            availability,
+            diagnostic,
+            body_base64,
+            ..
+        } = failed
+        else {
+            panic!("expected value body response");
+        };
+        assert_eq!(availability, "lost");
+        assert_eq!(body_base64, None);
+        assert!(
+            diagnostic
+                .as_deref()
+                .is_some_and(|message| message.contains("history value read failed")),
+            "{diagnostic:?}"
+        );
+    }
+
+    #[test]
+    fn value_body_response_preserves_history_body() {
+        let boundary_id = BoundaryId::from_bytes([32; 16]);
+        let response = value_body_response(
+            9,
+            boundary_id,
+            "value_1".to_string(),
+            ValueCodec::BamlOutboundValue.as_wire_str().to_string(),
+            LiveValueLookup::Missing,
+            Ok(HistoryValueReadResult::Available(HistoryValueBody {
+                codec: ValueCodec::BamlOutboundValue,
+                body: vec![1, 2, 3],
+            })),
+        );
+        let WsOutMessage::ValueBody {
+            availability,
+            body_base64,
+            diagnostic,
+            ..
+        } = response
+        else {
+            panic!("expected value body response");
+        };
+        assert_eq!(availability, "available");
+        assert_eq!(body_base64.as_deref(), Some("AQID"));
+        assert_eq!(diagnostic, None);
     }
 
     #[tokio::test]

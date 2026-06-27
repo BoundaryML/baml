@@ -14,7 +14,7 @@ use std::{
 use std::{io, path::Path};
 
 #[cfg(not(target_arch = "wasm32"))]
-use self::router::BoundaryTraceRouter;
+use self::router::{BoundaryTraceRouter, HistoryProfileRecordId};
 #[cfg(not(target_arch = "wasm32"))]
 use self::{
     boundary_writer::{BoundaryWriter, SegmentRotationPolicy},
@@ -198,7 +198,7 @@ struct BoundaryState {
     path: BoundaryHistoryPath,
     started: RunStartedRecord,
     root_trace: Option<TraceCallKey>,
-    claimed_profile_indices: HashSet<usize>,
+    claimed_profile_record_ids: HashSet<HistoryProfileRecordId>,
     profile_write_error: Option<String>,
     completed: Option<RunCompletedRecord>,
     writer: BoundaryWriter,
@@ -211,7 +211,10 @@ impl std::fmt::Debug for BoundaryState {
             .field("path", &self.path)
             .field("started", &self.started)
             .field("root_trace", &self.root_trace)
-            .field("claimed_profile_indices", &self.claimed_profile_indices)
+            .field(
+                "claimed_profile_record_ids",
+                &self.claimed_profile_record_ids,
+            )
             .field("profile_write_error", &self.profile_write_error)
             .field("completed", &self.completed)
             .finish_non_exhaustive()
@@ -238,10 +241,20 @@ impl HistoryStore {
         search_roots: Vec<PathBuf>,
         rotation_policy: SegmentRotationPolicy,
     ) -> Self {
+        Self::new_with_rotation_policy_and_router_capacity(search_roots, rotation_policy, 100_000)
+    }
+
+    #[cfg(test)]
+    #[must_use]
+    fn new_with_rotation_policy_and_router_capacity(
+        search_roots: Vec<PathBuf>,
+        rotation_policy: SegmentRotationPolicy,
+        router_max_records: usize,
+    ) -> Self {
         Self {
             inner: Arc::new(Mutex::new(HistoryStoreInner {
                 search_roots,
-                router: BoundaryTraceRouter::default(),
+                router: BoundaryTraceRouter::new(router_max_records),
                 rotation_policy,
                 boundaries: HashMap::new(),
             })),
@@ -278,7 +291,7 @@ impl HistoryStore {
                 path,
                 started,
                 root_trace: None,
-                claimed_profile_indices: HashSet::new(),
+                claimed_profile_record_ids: HashSet::new(),
                 profile_write_error: None,
                 completed: None,
                 writer,
@@ -527,13 +540,20 @@ impl HistoryStore {
         };
         let value_segments = value_segment_paths(&dir)
             .into_iter()
-            .filter_map(|path| {
-                std::fs::read(&path).ok().map(|bytes| HistoryValueSegment {
-                    label: path.display().to_string(),
-                    bytes,
-                })
+            .map(|path| {
+                std::fs::read(&path)
+                    .map(|bytes| HistoryValueSegment {
+                        label: path.display().to_string(),
+                        bytes,
+                    })
+                    .map_err(|err| {
+                        io::Error::new(
+                            err.kind(),
+                            format!("failed to read value segment {}: {err}", path.display()),
+                        )
+                    })
             })
-            .collect::<Vec<_>>();
+            .collect::<io::Result<Vec<_>>>()?;
         let blob_store = BlobStore::for_boundary_dir(&dir);
         read_value_from_segments_with_blobs_result(&value_segments, value_ref_id, Some(&blob_store))
     }
@@ -573,29 +593,29 @@ fn route_claimed_locked(inner: &mut HistoryStoreInner, boundary_id: BoundaryId) 
     else {
         return Ok(());
     };
-    let component_indices = inner.router.component_indices(root_trace);
-    let records = component_indices
+    let component_record_ids = inner.router.component_record_ids(root_trace);
+    let records = component_record_ids
         .iter()
-        .filter_map(|index| {
+        .filter_map(|record_id| {
             inner
                 .router
-                .record(*index)
+                .record(*record_id)
                 .cloned()
-                .map(|record| (*index, record))
+                .map(|record| (*record_id, record))
         })
         .collect::<Vec<_>>();
     let Some(state) = inner.boundaries.get_mut(&boundary_id) else {
         return Ok(());
     };
     ensure_run_started_written(state)?;
-    for (index, record) in records {
-        if state.claimed_profile_indices.contains(&index) {
+    for (record_id, record) in records {
+        if state.claimed_profile_record_ids.contains(&record_id) {
             continue;
         }
         state
             .writer
             .write_profile_event(&record.envelope, &record.disk_event)?;
-        state.claimed_profile_indices.insert(index);
+        state.claimed_profile_record_ids.insert(record_id);
     }
     state.writer.flush()
 }
@@ -1398,6 +1418,19 @@ mod tests {
         }
     }
 
+    fn ingest_profile_event(store: &HistoryStore, trace: TraceCallKey, event: pb::DiskEventV1) {
+        let envelope = crate::run::profile_event_envelope_from_disk_event(
+            crate::run::ProfileEventSource::Replay {
+                artifact_id: "test".to_string(),
+            },
+            trace.process_euid,
+            trace.engine_id,
+            &event,
+        )
+        .unwrap();
+        store.ingest_history_profile_event(envelope, event);
+    }
+
     fn write_basic_history_run(
         project: &Path,
         boundary_id: BoundaryId,
@@ -1776,6 +1809,49 @@ mod tests {
         let mut event_bytes = Vec::new();
         encode_disk_event(&mut event_bytes, &call_event());
         assert!(!event_bytes.is_empty());
+        let _ = std::fs::remove_dir_all(project);
+    }
+
+    #[test]
+    fn history_routes_new_profile_records_after_router_drops_claimed_records() {
+        let project = temp_project("route-drop");
+        let boundary_id = BoundaryId::from_bytes([42; 16]);
+        let start = start_context(boundary_id);
+        let store = HistoryStore::new_with_rotation_policy_and_router_capacity(
+            vec![project.clone()],
+            SegmentRotationPolicy::default(),
+            1,
+        );
+        store.begin(&project, &start).unwrap();
+        let trace = root_trace();
+        store
+            .attach_root_trace(boundary_id, trace.call_ref())
+            .unwrap();
+
+        ingest_profile_event(&store, trace, call_event());
+        ingest_profile_event(&store, trace, child_call_event(3, 2));
+
+        {
+            let inner = store
+                .inner
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            assert_eq!(inner.router.dropped_records(), 1);
+        }
+
+        let boundary_dir =
+            find_boundary_dir(std::slice::from_ref(&project), boundary_id).expect("boundary dir");
+        let stack_path = stack_segment_paths(&boundary_dir)
+            .pop()
+            .expect("stack segment");
+        let stack_bytes = std::fs::read(stack_path).unwrap();
+        let parsed = read_bamlprof_from_bytes(&stack_bytes).unwrap();
+        assert_eq!(
+            parsed.events.len(),
+            2,
+            "child profile event should be routed even after router index reuse"
+        );
+
         let _ = std::fs::remove_dir_all(project);
     }
 
@@ -2359,6 +2435,34 @@ mod tests {
                 .unwrap()
                 .body,
             vec![1, 2, 3]
+        );
+
+        let _ = std::fs::remove_dir_all(project);
+    }
+
+    #[test]
+    fn read_value_result_propagates_unreadable_value_segment() {
+        let project = temp_project("unreadable-value-segment");
+        let boundary_id = BoundaryId::from_bytes([18; 16]);
+        let (store, _outcome) = write_basic_history_run(&project, boundary_id);
+        assert_eq!(
+            store
+                .read_value_result(boundary_id, "value_does_not_exist")
+                .unwrap(),
+            HistoryValueReadResult::Missing
+        );
+
+        let boundary_dir =
+            find_boundary_dir(std::slice::from_ref(&project), boundary_id).expect("boundary dir");
+        let unreadable_segment = boundary_dir.join("thread-1").join("value-1.bamlvalue");
+        std::fs::create_dir(&unreadable_segment).unwrap();
+
+        let err = store
+            .read_value_result(boundary_id, "value_does_not_exist")
+            .expect_err("unreadable segment should not be reported as a missing value");
+        assert!(
+            err.to_string().contains("failed to read value segment"),
+            "{err}"
         );
 
         let _ = std::fs::remove_dir_all(project);

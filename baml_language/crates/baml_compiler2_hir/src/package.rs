@@ -9,7 +9,7 @@ use baml_compiler_diagnostics::diagnostic::{Diagnostic, DiagnosticId, Diagnostic
 use rustc_hash::FxHashMap;
 
 use crate::{
-    contributions::Definition,
+    contributions::{Definition, DefinitionKind},
     namespace::{NameConflict, NamespaceId, NamespaceItems, namespace_items},
 };
 
@@ -202,12 +202,7 @@ pub fn package_items<'db>(db: &'db dyn crate::Db, package_id: PackageId<'db>) ->
                 .get(first_segment)
                 .or_else(|| root_ns.values.get(first_segment))
             {
-                if def
-                    .file(db)
-                    .path(db)
-                    .to_string_lossy()
-                    .starts_with("<builtin>/")
-                {
+                if is_allowed_builtin_namespace_shadow(db, &package_name, ns_path, *def) {
                     continue;
                 }
                 shadows.push(NamespaceShadow {
@@ -232,6 +227,137 @@ pub fn package_items<'db>(db: &'db dyn crate::Db, package_id: PackageId<'db>) ->
     };
 
     PackageItems { namespaces, extra }
+}
+
+fn is_allowed_builtin_namespace_shadow(
+    db: &dyn crate::Db,
+    package_name: &Name,
+    ns_path: &[Name],
+    def: Definition<'_>,
+) -> bool {
+    package_name.as_str() == "boundary"
+        && ns_path.len() == 1
+        && ns_path[0].as_str() == "id"
+        && def.kind() == DefinitionKind::Function
+        && def.file(db).path(db).to_string_lossy() == "<builtin>/boundary/core.baml"
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{
+        path::PathBuf,
+        sync::atomic::{AtomicU32, Ordering},
+    };
+
+    use baml_base::{FileId, SourceFile};
+    use baml_workspace::{Compiler2ExtraFiles, Project};
+    use salsa::Setter;
+
+    use super::{PackageId, is_allowed_builtin_namespace_shadow, package_items};
+    use crate::Db;
+
+    #[salsa::db]
+    struct TestDb {
+        storage: salsa::Storage<TestDb>,
+        next_file_id: AtomicU32,
+        project: Option<Project>,
+        extra: Option<Compiler2ExtraFiles>,
+    }
+
+    impl Default for TestDb {
+        fn default() -> Self {
+            Self {
+                storage: salsa::Storage::default(),
+                next_file_id: AtomicU32::new(0),
+                project: None,
+                extra: None,
+            }
+        }
+    }
+
+    impl TestDb {
+        fn add_file(&mut self, path: impl Into<PathBuf>, content: &str) -> SourceFile {
+            let file_id = FileId::new(self.next_file_id.fetch_add(1, Ordering::SeqCst));
+            SourceFile::new(self, content.to_string(), path.into(), file_id)
+        }
+
+        fn with_builtins() -> Self {
+            let mut db = Self::default();
+            let builtin_files = baml_builtins2::ALL
+                .iter()
+                .map(|builtin| db.add_file(PathBuf::from(builtin.virtual_path()), builtin.contents))
+                .collect::<Vec<_>>();
+            let project = Project::new(&db, PathBuf::from("/test"), Vec::new());
+            project.set_files(&mut db).to(Vec::new());
+            db.project = Some(project);
+            db.extra = Some(Compiler2ExtraFiles::new(&db, builtin_files));
+            db
+        }
+    }
+
+    #[salsa::db]
+    impl salsa::Database for TestDb {}
+
+    #[salsa::db]
+    impl baml_workspace::Db for TestDb {
+        fn project(&self) -> Project {
+            self.project.expect("test db initialized")
+        }
+    }
+
+    #[salsa::db]
+    impl Db for TestDb {
+        fn compiler2_extra_files(&self) -> Option<Compiler2ExtraFiles> {
+            self.extra
+        }
+    }
+
+    #[test]
+    fn boundary_id_builtin_namespace_shadow_is_allowlisted() {
+        let db = TestDb::with_builtins();
+        let boundary = baml_base::Name::new("boundary");
+        let id = baml_base::Name::new("id");
+        let package = package_items(&db, PackageId::new(&db, boundary.clone()));
+        let root = package.namespaces.get(&Vec::new()).expect("root namespace");
+        let id_namespace = vec![id.clone()];
+
+        let id_def = root.values.get(&id).copied().expect("boundary.id function");
+        assert!(
+            package.namespaces.contains_key(&id_namespace),
+            "boundary.id namespace should exist"
+        );
+        assert!(
+            is_allowed_builtin_namespace_shadow(&db, &boundary, &id_namespace, id_def),
+            "boundary.id root function shadowed by boundary.id namespace is the only allowed builtin collision"
+        );
+        assert!(
+            package.shadows().is_empty(),
+            "the allowlisted boundary.id collision should not emit namespace-shadow diagnostics"
+        );
+    }
+
+    #[test]
+    fn builtin_namespace_shadow_allowlist_rejects_other_builtin_collisions() {
+        let db = TestDb::with_builtins();
+        let boundary = baml_base::Name::new("boundary");
+        let id = baml_base::Name::new("id");
+        let package = package_items(&db, PackageId::new(&db, boundary.clone()));
+        let root = package.namespaces.get(&Vec::new()).expect("root namespace");
+        let id_def = root.values.get(&id).copied().expect("boundary.id function");
+
+        assert!(!is_allowed_builtin_namespace_shadow(
+            &db,
+            &baml_base::Name::new("baml"),
+            std::slice::from_ref(&id),
+            id_def
+        ));
+        assert!(!is_allowed_builtin_namespace_shadow(
+            &db,
+            &boundary,
+            &[baml_base::Name::new("other")],
+            id_def
+        ));
+    }
 }
 
 /// The *direct* dependencies of `package_id` (hardcoded for now).
