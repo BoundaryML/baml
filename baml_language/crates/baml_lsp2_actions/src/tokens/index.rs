@@ -17,10 +17,11 @@
 //! handled by the walker from their `BINDING_PATTERN` CST nodes, not here.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use baml_base::SourceFile;
 use baml_compiler2_ast::{Expr, ExprBody, ExprId};
-use baml_compiler2_hir::scope::ScopeKind;
+use baml_compiler2_hir::scope::{ScopeId, ScopeKind};
 use baml_compiler2_tir::{
     inference::{ScopeInference, infer_scope_types, scope_body},
     resolve::{ResolvedName, resolve_name_at, resolve_path_at},
@@ -41,17 +42,67 @@ fn record(index: &mut ResolutionIndex, span: TextRange, class: (SemanticTokenTyp
     }
 }
 
-/// Build the resolution index over every inference-bearing scope in `file`.
+/// On-demand classification of a single name token: which scope's inference
+/// owns the expression at `range`, indexed lazily and cached per scope.
 ///
-/// Iterates each `Function` / `Lambda` / `Let` scope and indexes its body via
-/// the uniform [`scope_body`] lookup, so names inside lambdas, `spawn` blocks,
-/// and other closures are classified with their own scope's inference — not
-/// just top-level function bodies. Synthetic template-string bodies are skipped:
-/// their expressions are typed inline in the enclosing scope and indexed there.
+/// This is the rust-analyzer `Semantics::resolve(token)` model — a viewport /
+/// range request only pays for the scopes it actually touches, instead of
+/// resolving every scope in the file up front.
+pub(super) fn resolve_token_class(
+    db: &dyn Db,
+    file: SourceFile,
+    range: TextRange,
+) -> Option<(SemanticTokenType, ModifierSet)> {
+    let sem_index = baml_compiler2_hir::file_semantic_index(db, file);
+    // Walk innermost scope -> ancestors. The token's expression may be indexed
+    // by an enclosing inference-bearing scope rather than the innermost one
+    // (e.g. a `test ... with <runner>` clause, or a value spanning nested
+    // scopes), so probe up the chain — each `scope_resolution_index` is cached.
+    let mut fsi = sem_index.scope_at_offset(range.start(), None);
+    loop {
+        let scope_id = sem_index.scope_ids[fsi.index() as usize];
+        if let Some(class) = scope_resolution_index(db, scope_id).get(&range).copied() {
+            return Some(class);
+        }
+        match sem_index.scopes[fsi.index() as usize].parent {
+            Some(parent) => fsi = parent,
+            None => return None,
+        }
+    }
+}
+
+/// The resolution index for one inference-bearing scope's body — span -> (token
+/// type, modifiers) for every classifiable name occurrence in it. Salsa-cached
+/// per `ScopeId` (rust-analyzer's body-granularity memoization): the first token
+/// resolved in a scope pays for indexing its whole body; the rest are lookups.
+#[salsa::tracked(returns(clone))]
+pub(super) fn scope_resolution_index(db: &dyn Db, scope_id: ScopeId<'_>) -> Arc<ResolutionIndex> {
+    let mut index = ResolutionIndex::new();
+    // `scope_body` resolves `scope_id` to its inference owner (a Function /
+    // Lambda / Let), so a token inside a `spawn`/block scope indexes — and is
+    // found in — its owning body's index.
+    if let Some(body) = scope_body(db, scope_id) {
+        let inference = infer_scope_types(db, body.scope);
+        index_function(
+            db,
+            scope_id.file(db),
+            &body.expr_body,
+            &body.source_map,
+            inference,
+            &mut index,
+        );
+    }
+    Arc::new(index)
+}
+
+/// Whole-file resolution index — the merge of every inference-bearing scope's
+/// (per-scope, salsa-cached) index. A full-document request classifies every
+/// token anyway, so it builds the merge; editing one scope only invalidates
+/// that scope's `scope_resolution_index`, not the whole file. A range request
+/// instead resolves on demand via [`resolve_token_class`].
 pub(super) fn build(db: &dyn Db, file: SourceFile) -> ResolutionIndex {
     let mut index = ResolutionIndex::new();
     let sem_index = baml_compiler2_hir::file_semantic_index(db, file);
-
     for (i, scope) in sem_index.scopes.iter().enumerate() {
         if scope.is_template_body
             || !matches!(
@@ -61,13 +112,10 @@ pub(super) fn build(db: &dyn Db, file: SourceFile) -> ResolutionIndex {
         {
             continue;
         }
-        let Some(body) = scope_body(db, sem_index.scope_ids[i]) else {
-            continue;
-        };
-        let inference = infer_scope_types(db, body.scope);
-        index_function(db, file, &body.expr_body, &body.source_map, inference, &mut index);
+        for (&span, &class) in scope_resolution_index(db, sem_index.scope_ids[i]).iter() {
+            record(&mut index, span, class);
+        }
     }
-
     index
 }
 

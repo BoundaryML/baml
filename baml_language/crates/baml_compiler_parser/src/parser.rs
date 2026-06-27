@@ -6188,10 +6188,14 @@ impl<'a> Parser<'a> {
                 // env.FIELD sugar (not followed by `(`) — desugar to baml.env.get_or_panic("FIELD")
                 self.parse_env_access();
             } else if text == "true" || text == "false" {
-                // Boolean literal
+                // Boolean literal. NOTE: re-lexing these as KW_TRUE/KW_FALSE (the
+                // principled form) ripples into hover/completions/formatter/CST
+                // snapshots — deferred until every token-kind consumer is mapped
+                // and updated. The highlighter classifies them as `boolean` via a
+                // transitional text match in `tokens.rs::token` for now.
                 self.bump();
             } else if text == "null" {
-                // Null literal
+                // Null literal (same KW_NULL deferral as above).
                 self.bump();
             } else {
                 // Identifier or path (could be multi-segment like baml.HttpMethod.Get)

@@ -103,7 +103,7 @@ client<llm> MyClient {
 // config_dictionary.baml:13:5 (string) len=12 "\"string key\""
 // config_dictionary.baml:13:18 (string) len=19 "\"value with spaces\""
 // config_dictionary.baml:14:5 (property) len=12 "booleanValue"
-// config_dictionary.baml:14:18 (keyword) len=4 "true"
+// config_dictionary.baml:14:18 (boolean) len=4 "true"
 // config_dictionary.baml:15:5 (property) len=9 "stringKey"
 // config_dictionary.baml:15:15 (string) len=6 "\"true\""
 // config_dictionary.baml:16:5 (property) len=6 "array1"

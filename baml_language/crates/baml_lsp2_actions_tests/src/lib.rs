@@ -6,3 +6,4 @@ pub mod updater;
 mod test_files {
     include!(concat!(env!("OUT_DIR"), "/generated_lsp2_tests.rs"));
 }
+mod range_tokens_test;

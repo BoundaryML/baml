@@ -33,7 +33,7 @@ function SumOdds() -> int {
 // break_continue.baml:2:14 (operator) len=1 "="
 // break_continue.baml:2:16 (number) len=1 "0"
 // break_continue.baml:3:3 (keyword) len=5 "while"
-// break_continue.baml:3:10 (keyword) len=4 "true"
+// break_continue.baml:3:10 (boolean) len=4 "true"
 // break_continue.baml:4:5 (keyword) len=2 "if"
 // break_continue.baml:4:9 (variable) len=6 "result"
 // break_continue.baml:4:16 (operator) len=2 "=="

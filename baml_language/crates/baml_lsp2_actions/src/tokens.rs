@@ -61,6 +61,9 @@ pub enum SemanticTokenType {
     Operator,
     Decorator,
     EscapeSequence,
+    /// Boolean literal (`true` / `false`) — a custom type beyond the standard
+    /// LSP legend, mirroring rust-analyzer's `boolean`.
+    Boolean,
 }
 
 /// Token type legend — order determines the LSP legend index.
@@ -91,6 +94,7 @@ pub const TOKEN_TYPES: &[SemanticTokenType] = &[
     SemanticTokenType::Operator,
     SemanticTokenType::Decorator,
     SemanticTokenType::EscapeSequence,
+    SemanticTokenType::Boolean,
 ];
 
 impl SemanticTokenType {
@@ -132,6 +136,7 @@ impl SemanticTokenType {
             Self::Operator => "operator",
             Self::Decorator => "decorator",
             Self::EscapeSequence => "escapeSequence",
+            Self::Boolean => "boolean",
         }
     }
 }
@@ -312,13 +317,42 @@ fn emit_node(node: &SyntaxNode, token_type: SemanticTokenType, out: &mut Vec<Sem
 #[salsa::tracked(returns(clone))]
 pub fn semantic_tokens(db: &dyn Db, file: SourceFile) -> Vec<SemanticToken> {
     let root = baml_compiler_parser::syntax_tree(db, file);
+    // Full document: classify every token, so build the merged whole-file index
+    // (itself a merge of per-scope salsa-cached indices) and resolve from it.
+    let index = index::build(db, file);
     let walk = Walk {
         db,
         file,
-        index: index::build(db, file),
+        resolve: Box::new(move |range| index.get(&range).copied()),
+        range: None,
     };
     let mut out = Vec::new();
     walk.node(&root, &mut out);
+    out
+}
+
+/// Semantic tokens for a viewport `range` only — rust-analyzer's
+/// `highlight_range`. Names are resolved on demand through
+/// [`index::resolve_token_class`], so only the scopes the viewport touches are
+/// indexed (the rest of the file is never resolved). Not a Salsa query — keying
+/// on the range would blow the cache; the underlying per-scope indices and name
+/// resolution it calls *are* memoized.
+pub fn semantic_tokens_in_range(
+    db: &dyn Db,
+    file: SourceFile,
+    range: TextRange,
+) -> Vec<SemanticToken> {
+    let root = baml_compiler_parser::syntax_tree(db, file);
+    let walk = Walk {
+        db,
+        file,
+        resolve: Box::new(move |r| index::resolve_token_class(db, file, r)),
+        range: Some(range),
+    };
+    let mut out = Vec::new();
+    walk.node(&root, &mut out);
+    // The range gate is per-subtree; trim the boundary tokens to exactly `range`.
+    out.retain(|t| range.intersect(t.range).is_some());
     out
 }
 
@@ -326,18 +360,30 @@ pub fn semantic_tokens(db: &dyn Db, file: SourceFile) -> Vec<SemanticToken> {
 
 /// A document-order CST walk that classifies each token exactly once.
 ///
-/// Holds the resolution index so the structural dispatch never threads it; an
-/// identifier inside an expression body is looked up there, a declaration name is
-/// classified by its declaring node, and every other token is syntactic.
+/// `resolve` resolves an identifier inside an expression body to its
+/// classification; a declaration name is classified by its declaring node;
+/// every other token is syntactic. For a full-document walk `resolve` is the
+/// merged whole-file index; a range walk resolves on demand per scope
+/// (rust-analyzer's `Semantics::resolve` model — only visited scopes pay).
 struct Walk<'db> {
     db: &'db dyn Db,
     file: SourceFile,
-    index: index::ResolutionIndex,
+    resolve: Box<dyn Fn(TextRange) -> Option<Class> + 'db>,
+    /// For a viewport request: subtrees that don't intersect this range are
+    /// skipped entirely, so their scopes are never resolved.
+    range: Option<TextRange>,
 }
 
 impl Walk<'_> {
     /// Dispatch a node to its classifier.
     fn node(&self, node: &SyntaxNode, out: &mut Vec<SemanticToken>) {
+        // Range gate: a subtree disjoint from the viewport is skipped wholesale,
+        // so its tokens are never classified and its scope never resolved.
+        if let Some(r) = self.range {
+            if r.intersect(node.text_range()).is_none() {
+                return;
+            }
+        }
         match node.kind() {
             ref n if n.is_comment() => emit_node(node, SemanticTokenType::Comment, out),
             // Escape-processing literals: split out `\n`, `\xNN`, `\u{..}`, ...
@@ -423,14 +469,34 @@ impl Walk<'_> {
         if kind.is_whitespace() {
             return;
         }
-        if kind == SyntaxKind::WORD {
-            if let Some(class) = self.index.get(&token.text_range()).copied() {
-                emit(token.text_range(), class, out);
-            } else if matches!(token.text(), "true" | "false" | "null") {
-                // Boolean / null literals lex as words and lower to
-                // `Expr::Literal` / `Expr::Null`, so they never enter the
-                // expression index; classify them as the keyword-literals they are.
+        // Boolean / null literals: a dedicated `KW_TRUE`/`KW_FALSE`/`KW_NULL`
+        // token (value position, re-lexed by the parser). `true`/`false` ->
+        // `boolean`, `null` -> `keyword`.
+        match kind {
+            SyntaxKind::KW_TRUE | SyntaxKind::KW_FALSE => {
+                emit(token.text_range(), plain(SemanticTokenType::Boolean), out);
+                return;
+            }
+            SyntaxKind::KW_NULL => {
                 emit(token.text_range(), plain(SemanticTokenType::Keyword), out);
+                return;
+            }
+            _ => {}
+        }
+        if kind == SyntaxKind::WORD {
+            if let Some(class) = (self.resolve)(token.text_range()) {
+                emit(token.text_range(), class, out);
+            } else {
+                // Transitional: type/config-position `true`/`false`/`null` are
+                // still bare WORDs until those parse sites are re-lexed too; give
+                // them the same classification as the `KW_*` value-position form.
+                match token.text() {
+                    "true" | "false" => {
+                        emit(token.text_range(), plain(SemanticTokenType::Boolean), out);
+                    }
+                    "null" => emit(token.text_range(), plain(SemanticTokenType::Keyword), out),
+                    _ => {}
+                }
             }
             return;
         }
