@@ -17,7 +17,7 @@ function user.Headers() -> string throws never {
     let z = x + y : int
     z.to_string_BAML_NOT_A_METHOD() : unknown
   }
-  !! 319..717: type `int` has no member `to_string_BAML_NOT_A_METHOD`
+  !! 688..717: type `int` has no member `to_string_BAML_NOT_A_METHOD`
 }
 function user.IfElseWithHeaders(flag: bool) -> string throws never {
   { : "yes" | "no"

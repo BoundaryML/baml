@@ -110,7 +110,7 @@ function user.CatchAllMissingString(ok: bool) -> string throws never {
         BuildError =>
           "recovered: " + e.reason : string
   }
-  !! 2151..2248: non-exhaustive catch_all on `string | BuildError`; missing: string
+  !! 2155..2248: non-exhaustive catch_all on `string | BuildError`; missing: string
 }
 function user.UnreachableTailStillChecked() -> string throws never {
   { : never
@@ -120,7 +120,7 @@ function user.UnreachableTailStillChecked() -> string throws never {
       x.missing : unknown
     }
   }
-  ?? 2429..2451: unreachable code: 2 statement(s) after diverging statement
+  ?? 2438..2451: unreachable code: 2 statement(s) after diverging statement
 }
 class user.BuildError$stream {
   reason: string | null

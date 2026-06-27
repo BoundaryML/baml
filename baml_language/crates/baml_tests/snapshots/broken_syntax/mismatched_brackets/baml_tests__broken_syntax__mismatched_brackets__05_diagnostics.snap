@@ -226,8 +226,8 @@ source: crates/baml_tests/src/generated_tests.rs
     ╭─[ main.baml:43:2 ]
     │
  43 │ }
-    │  ┬  
-    │  ╰── Expected ']', found EOF
+    │  │ 
+    │  ╰─ Expected ']', found EOF
     │ 
     │ Note: Error code: E0010
 ────╯
@@ -236,8 +236,8 @@ source: crates/baml_tests/src/generated_tests.rs
     ╭─[ main.baml:43:2 ]
     │
  43 │ }
-    │  ┬  
-    │  ╰── Expected '}', found EOF
+    │  │ 
+    │  ╰─ Expected '}', found EOF
     │ 
     │ Note: Error code: E0010
 ────╯

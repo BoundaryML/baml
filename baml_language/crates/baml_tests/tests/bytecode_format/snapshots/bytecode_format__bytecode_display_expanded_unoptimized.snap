@@ -840,8 +840,7 @@ function testing.TestRegistry.expand_set(self: testing.TestRegistry, name: strin
         1     load_field 0             (collector)
         2     load_field 2             (testsets)
         3     store_var 3              (_3)
-
-  195   4     load_type 0              
+        4     load_type 0              
         5     load_var 3               (_3)
         6     call 469 ntypeargs=1     (baml.iter.Iterable$for$T[].iter)
         7     store_var 4              (_4)
@@ -965,8 +964,7 @@ function testing.TestRegistry.expand_set(self: testing.TestRegistry, name: strin
         121   load_field 1             (expansions)
         122   call 11 ntypeargs=2      (baml.Map.keys)
         123   store_var 7              (_40)
-
-  202   124   load_type 13             
+        124   load_type 13             
         125   load_var 7               (_40)
         126   call 469 ntypeargs=1     (baml.iter.Iterable$for$T[].iter)
         127   store_var 8              (_44)
@@ -1230,8 +1228,7 @@ function testing.TestRegistry.run_test(self: testing.TestRegistry, name: string)
         1     load_field 0             (collector)
         2     load_field 1             (tests)
         3     store_var 3              (_3)
-
-  133   4     load_type 0              
+        4     load_type 0              
         5     load_var 3               (_3)
         6     call 469 ntypeargs=1     (baml.iter.Iterable$for$T[].iter)
         7     store_var 4              (_4)
@@ -1354,8 +1351,7 @@ function testing.TestRegistry.run_test(self: testing.TestRegistry, name: string)
         121   load_field 1             (expansions)
         122   call 11 ntypeargs=2      (baml.Map.keys)
         123   store_var 7              (_40)
-
-  139   124   load_type 13             
+        124   load_type 13             
         125   load_var 7               (_40)
         126   call 469 ntypeargs=1     (baml.iter.Iterable$for$T[].iter)
         127   store_var 8              (_44)
@@ -1470,8 +1466,7 @@ function testing.TestRegistry.run_test(self: testing.TestRegistry, name: string)
         234   load_const 25            ("/")
         235   bin_op +                 
         236   call 145 ntypeargs=0     (baml.String.starts_with)
-
-  142   237   pop_jump_if_false -109   (to 128)
+        237   pop_jump_if_false -109   (to 128)
 
   144   238   load_var2 11 2           
         239   call 700 ntypeargs=0     (testing.TestRegistry.run_test)
@@ -5153,8 +5148,7 @@ function testing.testset_children_selected(registry: testing.TestRegistry, names
   258   235   load_field 0             (name)
         236   load_var 2               (names)
         237   call 698 ntypeargs=0     (testing._has_selected_descendant)
-
-  253   238   pop_jump_if_false -103   (to 135)
+        238   pop_jump_if_false -103   (to 135)
 
   259   239   load_var2 1 13           
         240   load_var 2               (names)

@@ -14,13 +14,11 @@ class Server {
 //----
 //- diagnostics
 // error: class `Server` does not provide field `port` required by interface `Config`
-//     ╭─[ interface_error_missing_field_in_implements_block.baml:9:17 ]
+//     ╭─[ interface_error_missing_field_in_implements_block.baml:11:5 ]
 //     │
-//   9 │ ╭─▶     host: string
-//     ┆ ┆   
-//  11 │ ├─▶     implements Config {}
-//     │ │                              
-//     │ ╰────────────────────────────── add class field `port`, or link it with `port as class_field`
-//     │     
-//     │     Note: Error code: E0124
+//  11 │     implements Config {}
+//     │     ──────────┬─────────
+//     │               ╰─────────── add class field `port`, or link it with `port as class_field`
+//     │
+//     │ Note: Error code: E0124
 // ────╯

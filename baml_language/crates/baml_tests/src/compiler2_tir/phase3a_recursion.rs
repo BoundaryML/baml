@@ -29,7 +29,7 @@ fn type_alias_mutual_recursion() {
     type user.A = user.B
       !! 0..10: recursive type alias cycle: A
     type user.B = user.A
-      !! 10..21: recursive type alias cycle: B
+      !! 11..21: recursive type alias cycle: B
     type user.A$stream = user.B$stream
       !! 0..0: recursive type alias cycle: A$stream
     type user.B$stream = user.A$stream
@@ -46,9 +46,9 @@ fn type_alias_indirect_cycle_three() {
     type user.A = user.B
       !! 0..10: recursive type alias cycle: A
     type user.B = user.C
-      !! 10..21: recursive type alias cycle: B
+      !! 11..21: recursive type alias cycle: B
     type user.C = user.A
-      !! 21..32: recursive type alias cycle: C
+      !! 22..32: recursive type alias cycle: C
     type user.A$stream = user.B$stream
       !! 0..0: recursive type alias cycle: A$stream
     type user.B$stream = user.C$stream
@@ -128,7 +128,7 @@ fn class_field_mutual_reference() {
     class user.Wife {
       husband: user.Husband
     }
-      !! 27..58: class cycle: user.Husband -> user.Wife -> user.Husband
+      !! 28..58: class cycle: user.Husband -> user.Wife -> user.Husband
     class user.Husband$stream {
       wife: user.Wife$stream | null
     }
@@ -218,7 +218,7 @@ fn type_alias_mutual_cycle_through_optional() {
     type user.A = user.B | null
       !! 0..11: recursive type alias cycle: A
     type user.B = user.A
-      !! 11..22: recursive type alias cycle: B
+      !! 12..22: recursive type alias cycle: B
     type user.A$stream = user.B$stream | null
       !! 0..0: recursive type alias cycle: A$stream
     type user.B$stream = user.A$stream
@@ -261,7 +261,7 @@ fn class_required_field_mutual_cycle() {
     class user.B {
       a: user.A
     }
-      !! 15..31: class cycle: user.A -> user.B -> user.A
+      !! 16..31: class cycle: user.A -> user.B -> user.A
     class user.A$stream {
       b: user.B$stream | null
     }
@@ -304,11 +304,11 @@ fn class_required_field_three_way_cycle() {
     class user.B {
       c: user.C
     }
-      !! 15..31: class cycle: user.A -> user.B -> user.C -> user.A
+      !! 16..31: class cycle: user.A -> user.B -> user.C -> user.A
     class user.C {
       a: user.A
     }
-      !! 31..47: class cycle: user.A -> user.B -> user.C -> user.A
+      !! 32..47: class cycle: user.A -> user.B -> user.C -> user.A
     class user.A$stream {
       b: user.B$stream | null
     }
@@ -411,7 +411,7 @@ fn class_cycle_through_type_alias() {
     class user.B {
       a: user.A
     }
-      !! 36..52: class cycle: user.A -> user.B -> user.A
+      !! 37..52: class cycle: user.A -> user.B -> user.A
     class user.A$stream {
       b: user.B$stream | null
     }
@@ -463,7 +463,7 @@ fn class_union_field_all_variants_same_class() {
     class user.B {
       a: user.A
     }
-      !! 19..35: class cycle: user.A -> user.B -> user.A
+      !! 20..35: class cycle: user.A -> user.B -> user.A
     class user.A$stream {
       b: user.B$stream | user.B$stream | null
     }

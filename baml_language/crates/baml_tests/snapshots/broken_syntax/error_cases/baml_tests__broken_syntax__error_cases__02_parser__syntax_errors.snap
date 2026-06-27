@@ -45,11 +45,11 @@ error: Expected return type (->), found '{'
 ───╯
 
 error: Expected '}', found EOF
-    ╭─[ syntax_errors.baml:13:78 ]
+    ╭─[ syntax_errors.baml:13:80 ]
     │
  13 │ // ============================================================================
-    │                                                                              ─┬  
-    │                                                                               ╰── Expected '}', found EOF
+    │                                                                                │ 
+    │                                                                                ╰─ Expected '}', found EOF
     │ 
     │ Note: Error code: E0010
 ────╯

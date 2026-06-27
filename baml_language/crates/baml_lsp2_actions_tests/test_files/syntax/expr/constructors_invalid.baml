@@ -81,7 +81,7 @@ function Foo() -> Bar {
 //    │ Note: Error code: E0001
 // ───╯
 // error: unresolved type: baml.HttpRequest
-//     ╭─[ expr_constructors_invalid.baml:8:16 ]
+//     ╭─[ expr_constructors_invalid.baml:8:17 ]
 //     │
 //   8 │ ╭─▶   let req_bad = baml.HttpRequest {
 //     ┆ ┆
@@ -101,7 +101,7 @@ function Foo() -> Bar {
 //     │ Note: Error code: E0003
 // ────╯
 // error: unresolved type: baml.HttpRequest
-//     ╭─[ expr_constructors_invalid.baml:13:17 ]
+//     ╭─[ expr_constructors_invalid.baml:13:18 ]
 //     │
 //  13 │ ╭─▶   let req_good = baml.HttpRequest {
 //     ┆ ┆

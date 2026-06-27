@@ -21,15 +21,15 @@ class Dog {
 //----
 //- diagnostics
 // error: class `Dog` has multiple `implements Animal` blocks; a class may implement each interface at most once
-//     ╭─[ interface_duplicate_implements.baml:14:13 ]
+//     ╭─[ interface_duplicate_implements.baml:14:14 ]
 //     │
 //   8 │   implements Animal {
-//     │             ───┬───  
-//     │                ╰───── first `implements` block here
-//     │ 
+//     │              ───┬──
+//     │                 ╰──── first `implements` block here
+//     │
 //  14 │   implements Animal {
-//     │             ───┬───  
-//     │                ╰───── duplicate `implements` block
-//     │ 
+//     │              ───┬──
+//     │                 ╰──── duplicate `implements` block
+//     │
 //     │ Note: Error code: E0114
 // ────╯
