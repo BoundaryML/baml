@@ -40,9 +40,7 @@ use sys_native::SysOpsExt;
 
 use crate::{
     commands::release_version,
-    project_load::{
-        load_project_from_reporting, resolve_standalone_file, validate_file_from_flags,
-    },
+    project_load::{load_project_for_build, resolve_standalone_file, validate_file_from_flags},
     reporter::Reporter,
 };
 
@@ -239,25 +237,19 @@ impl PackArgs {
     }
 
     fn load_and_compile(&self, reporter: &Reporter) -> Result<(ProjectDatabase, Program, bool)> {
-        // Per-file `Loading <path>` lines come from
-        // `load_project_from_reporting` (cargo-shaped per-unit
-        // progress) — no aggregate `Loading <project>` needed.
         let (db, needs_format_hint) = if let Some(file) = self.file.as_deref() {
-            let display = file.display().to_string();
-            reporter.spin("Loading", &display);
             self.load_standalone(file)?
         } else {
             self.load_project(reporter)?
         };
 
-        // File count is the meaningful unit here — `self.from` is
-        // usually `.` and reads as noise. Matches the `Checking N
-        // file(s)` shape that `baml run` uses.
+        // One "Compiling N file(s)" line covers diagnostics + bytecode emit;
+        // file count is the meaningful unit (`self.from` is usually `.` and
+        // reads as noise). A separate "Checking" line just repeated the count.
         let file_count = db.get_source_files().len();
-        reporter.spin("Checking", format!("{file_count} file(s)"));
+        reporter.spin("Compiling", format!("{file_count} file(s)"));
         check_diagnostics(&db, "Cannot pack: compilation errors found", reporter)?;
 
-        reporter.spin("Compiling", format!("{file_count} file(s)"));
         let program = baml_compiler2_emit::generate_project_bytecode(
             &db,
             &baml_compiler2_emit::CompileOptions {
@@ -270,7 +262,7 @@ impl PackArgs {
     }
 
     fn load_project(&self, reporter: &Reporter) -> Result<(ProjectDatabase, bool)> {
-        let (db, from, baml_files) = load_project_from_reporting(self.from.as_deref(), reporter)?;
+        let (db, from, baml_files) = load_project_for_build(self.from.as_deref(), reporter, false)?;
         if baml_files.is_empty() {
             anyhow::bail!("No .baml files found in {}", from.display());
         }
