@@ -95,7 +95,7 @@ function future_methods.methods_on_errored_future() -> baml.future.FutureState {
 
   L0:
     load_var e
-    throw
+    rethrow
 
   L1:
     load_var f

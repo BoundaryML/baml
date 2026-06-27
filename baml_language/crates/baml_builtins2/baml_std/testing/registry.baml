@@ -460,11 +460,10 @@ class NameSplit {
 
 // Split a slash path at the first '/'. "suite/x/y" -> ("suite", "x/y").
 function split_top(path: string) -> NameSplit {
-  let idx = path.index_of("/")
-  if (idx < 0) {
-    NameSplit { head: "", tail: path }
-  } else {
+  if let idx: int = path.index_of("/") {
     NameSplit { head: path.substring(0, idx), tail: path.substring(idx + 1, path.length()) }
+  } else {
+    NameSplit { head: "", tail: path }
   }
 }
 
@@ -474,12 +473,11 @@ function split_top(path: string) -> NameSplit {
 function parse_filter_patterns(raw: string[]) -> FilterPat[] {
   let out: FilterPat[] = []
   for (let s in raw) {
-    let idx = s.index_of("::")
-    if (idx < 0) {
+    if let idx: int = s.index_of("::") {
+      out.push(FilterPat { func_pat: s.substring(0, idx), test_pat: s.substring(idx + 2, s.length()) })
+    } else {
       out.push(FilterPat { func_pat: s, test_pat: "" })
       out.push(FilterPat { func_pat: "", test_pat: s })
-    } else {
-      out.push(FilterPat { func_pat: s.substring(0, idx), test_pat: s.substring(idx + 2, s.length()) })
     }
   }
   out
@@ -504,9 +502,11 @@ function glob_match(subject: string, pattern: string) -> bool {
   for (let i = 1; i < n - 1; i += 1) {
     let part = parts[i]
     if (part != "") {
-      let idx = subject.substring(pos, end_limit).index_of(part)
-      if (idx < 0) { return false }
-      pos = pos + idx + part.length()
+      if let idx: int = subject.substring(pos, end_limit).index_of(part) {
+        pos = pos + idx + part.length()
+      } else {
+        return false
+      }
     }
   }
   true

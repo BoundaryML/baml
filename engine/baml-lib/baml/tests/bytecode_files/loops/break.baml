@@ -120,6 +120,8 @@ function Nested() -> int {
 //
 // Function: baml.String.replace
 //
+// Function: baml.Float.to_fixed
+//
 // Function: baml.media.image.from_url
 //
 // Function: baml.media.audio.from_url

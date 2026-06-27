@@ -1,194 +1,110 @@
 import type { FC } from 'react';
-import type { BamlJsMedia, BamlJsValue } from '@b/pkg-proto';
+import type { BamlJsValue } from '@b/pkg-proto';
+import {
+  CapturedValueCard,
+  CAPTURED_VALUE_CARD_WIDTH,
+} from '../../CapturedValueCard';
 import type { ResultRendererProps } from '../../result-renderers';
-import { mediaToSrc } from '../../shared/media-values';
-import { ValueRenderer } from '../../ValueRenderer';
+import type { GraphNodeValuePreview } from '../../run-store-projections';
 
 interface NodeOutputPreviewProps {
   result?: BamlJsValue | null;
   hasResult?: boolean;
-  images?: BamlJsMedia[];
+  valuePreviews?: GraphNodeValuePreview[];
   errorMessage?: string | null;
   customRenderers?: Record<string, FC<ResultRendererProps>>;
 }
 
-export const NODE_IMAGE_PREVIEW_MAX = 4;
-export const NODE_IMAGE_PREVIEW_GAP = 6;
-export const NODE_IMAGE_PREVIEW_WIDTH = 360;
-export const NODE_IMAGE_PREVIEW_SINGLE_HEIGHT = 240;
-export const NODE_IMAGE_PREVIEW_TILE_HEIGHT = 126;
+export const NODE_VALUE_PREVIEW_MAX = 4;
+export const NODE_VALUE_PREVIEW_WIDTH = CAPTURED_VALUE_CARD_WIDTH;
+export const NODE_VALUE_PREVIEW_GAP = 6;
 
 export function NodeOutputPreview({
   result,
   hasResult,
-  images,
+  valuePreviews,
   errorMessage,
   customRenderers,
 }: NodeOutputPreviewProps) {
-  const visible = (images ?? []).slice(0, NODE_IMAGE_PREVIEW_MAX);
-  const remaining = (images?.length ?? 0) - visible.length;
+  const values = graphPreviewValues(valuePreviews, result, hasResult, errorMessage);
+  if (values.length === 0) return null;
 
-  if (errorMessage) {
-    return (
-      <div
-        className="nodrag nopan"
-        style={{
-          marginTop: 6,
-          maxWidth: 360,
-          maxHeight: 180,
-          overflow: 'auto',
-          borderRadius: 6,
-          border: '1px solid rgba(244,63,94,0.35)',
-          background: 'rgba(64,21,30,0.72)',
-          padding: 8,
-        }}
-      >
+  const visible = values.slice(0, NODE_VALUE_PREVIEW_MAX);
+  const remaining = values.length - visible.length;
+
+  return (
+    <div
+      className="nodrag nopan"
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: NODE_VALUE_PREVIEW_GAP,
+        marginTop: 6,
+        width: '100%',
+        maxWidth: NODE_VALUE_PREVIEW_WIDTH,
+      }}
+    >
+      {visible.map((value) => (
+        <CapturedValueCard
+          key={value.id}
+          value={value}
+          compact
+          customRenderers={customRenderers}
+        />
+      ))}
+      {remaining > 0 ? (
         <div
           style={{
-            color: '#fda4af',
+            color: '#a1a1aa',
             fontSize: 10,
-            fontWeight: 700,
-            marginBottom: 4,
-            textTransform: 'uppercase',
+            fontWeight: 600,
+            paddingLeft: 2,
           }}
         >
-          Error
+          +{remaining} more
         </div>
-        <pre
-          style={{
-            margin: 0,
-            whiteSpace: 'pre-wrap',
-            wordBreak: 'break-word',
-            color: '#fecdd3',
-            fontSize: 10,
-            lineHeight: 1.35,
-          }}
-        >
-          {errorMessage}
-        </pre>
-      </div>
-    );
-  }
+      ) : null}
+    </div>
+  );
+}
 
-  if (visible.length > 0) {
-    return (
-      <div
-        className="nodrag nopan"
-        style={{
-          display: 'grid',
-          gridTemplateColumns:
-            visible.length === 1 ? '1fr' : 'repeat(2, minmax(0, 1fr))',
-          gap: NODE_IMAGE_PREVIEW_GAP,
-          marginTop: 6,
-          width: '100%',
-          maxWidth: NODE_IMAGE_PREVIEW_WIDTH,
-        }}
-      >
-        {visible.map((image, index) => {
-          const src = mediaToSrc(image);
-          const isLastWithRemainder =
-            index === visible.length - 1 && remaining > 0;
+function graphPreviewValues(
+  valuePreviews: GraphNodeValuePreview[] | undefined,
+  result: BamlJsValue | null | undefined,
+  hasResult: boolean | undefined,
+  errorMessage: string | null | undefined,
+): GraphNodeValuePreview[] {
+  if (valuePreviews && valuePreviews.length > 0) return valuePreviews;
 
-          return (
-            <div
-              key={`${image.content_type}-${index}`}
-              style={{
-                position: 'relative',
-                width: '100%',
-                height:
-                  visible.length === 1
-                    ? NODE_IMAGE_PREVIEW_SINGLE_HEIGHT
-                    : NODE_IMAGE_PREVIEW_TILE_HEIGHT,
-                borderRadius: 6,
-                overflow: 'hidden',
-                background: '#09090b',
-                border: '1px solid rgba(255,255,255,0.14)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              {src ? (
-                <img
-                  src={src}
-                  alt="BAML image output"
-                  loading="lazy"
-                  style={{
-                    width: '100%',
-                    height: '100%',
-                    objectFit: 'contain',
-                    display: 'block',
-                  }}
-                />
-              ) : (
-                <span
-                  style={{
-                    color: '#9ca3af',
-                    fontSize: 10,
-                    fontFamily: 'monospace',
-                  }}
-                >
-                  &lt;image&gt;
-                </span>
-              )}
-              {isLastWithRemainder && (
-                <div
-                  style={{
-                    position: 'absolute',
-                    inset: 0,
-                    background: 'rgba(0,0,0,0.58)',
-                    color: '#fff',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: 12,
-                    fontWeight: 700,
-                  }}
-                >
-                  +{remaining}
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-    );
+  if (errorMessage) {
+    return [
+      {
+        id: 'node-error',
+        timestampMs: 0,
+        role: 'callError',
+        label: 'error',
+        valueRef: null,
+        value: null,
+        state: 'error',
+        diagnostic: errorMessage,
+      },
+    ];
   }
 
   if (hasResult) {
-    return (
-      <div
-        className="nodrag nopan"
-        style={{
-          marginTop: 6,
-          maxWidth: 360,
-          maxHeight: 220,
-          overflow: 'auto',
-          borderRadius: 6,
-          border: '1px solid rgba(255,255,255,0.10)',
-          background: 'rgba(15,23,42,0.72)',
-          padding: 8,
-        }}
-      >
-        <div
-          style={{
-            color: '#9ca3af',
-            fontSize: 10,
-            fontWeight: 700,
-            marginBottom: 4,
-            textTransform: 'uppercase',
-          }}
-        >
-          Output
-        </div>
-        <ValueRenderer
-          value={result}
-          displayMode="expanded"
-          customRenderers={customRenderers}
-        />
-      </div>
-    );
+    return [
+      {
+        id: 'node-result',
+        timestampMs: 0,
+        role: 'callOutput',
+        label: 'output',
+        valueRef: null,
+        value: result ?? null,
+        state: result == null ? 'unavailable' : 'available',
+        diagnostic: null,
+      },
+    ];
   }
 
-  return null;
+  return [];
 }

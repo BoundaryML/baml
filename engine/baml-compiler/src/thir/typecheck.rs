@@ -166,6 +166,9 @@ pub fn typecheck_returning_context<'a>(
                 vec![TypeIR::string(), TypeIR::string(), TypeIR::string()],
                 TypeIR::string(),
             ),
+            "baml.Float.to_fixed" => {
+                TypeIR::arrow(vec![TypeIR::float(), TypeIR::int()], TypeIR::string())
+            }
             "baml.media.image.from_url" => TypeIR::arrow(vec![TypeIR::string()], TypeIR::image()),
             "baml.media.audio.from_url" => TypeIR::arrow(vec![TypeIR::string()], TypeIR::audio()),
             "baml.media.video.from_url" => TypeIR::arrow(vec![TypeIR::string()], TypeIR::video()),
@@ -1971,6 +1974,28 @@ pub fn typecheck_expression(
                     }
                 },
 
+                Some(TypeIR::Primitive(TypeValue::Float, _)) => match method.as_str() {
+                    "to_fixed" => Some("baml.Float.to_fixed".to_string()),
+                    _ => {
+                        diagnostics.push_error(DatamodelError::new_validation_error(
+                            &format!("Method `{method}` is not available on type `float`"),
+                            span.clone(),
+                        ));
+                        None
+                    }
+                },
+
+                Some(TypeIR::Primitive(TypeValue::Int, _)) => match method.as_str() {
+                    "to_fixed" => Some("baml.Float.to_fixed".to_string()),
+                    _ => {
+                        diagnostics.push_error(DatamodelError::new_validation_error(
+                            &format!("Method `{method}` is not available on type `int`"),
+                            span.clone(),
+                        ));
+                        None
+                    }
+                },
+
                 Some(TypeIR::Primitive(TypeValue::Media(media_type), _)) => {
                     let subtype = match media_type {
                         BamlMediaType::Image => "baml.media.image",
@@ -2113,7 +2138,7 @@ pub fn typecheck_expression(
 
             let mut generic_return_type_inferred = None;
 
-            let typed_args: Vec<_> = if is_known_function {
+            let mut typed_args: Vec<_> = if is_known_function {
                 // Only validate arguments for known functions. Skip the first argument since that's going to be
                 // our method receiver.
                 args.iter()
@@ -2226,6 +2251,14 @@ pub fn typecheck_expression(
                     .collect()
             };
 
+            // to_fixed(digits?) defaults to digits=0 when omitted.
+            if full_name == "baml.Float.to_fixed" && typed_args.is_empty() {
+                typed_args.push(thir::Expr::Value(BamlValueWithMeta::Int(
+                    0,
+                    (span.clone(), Some(TypeIR::int())),
+                )));
+            }
+
             // image.from_url is not a "method", it's an associated function (kind of).
             let is_function_call_on_namespace = matches!(
                 &typed_receiver,
@@ -2236,9 +2269,9 @@ pub fn typecheck_expression(
             );
 
             let passed_number_of_args = if is_function_call_on_namespace {
-                args.len()
+                typed_args.len()
             } else {
-                args.len() + 1 // self
+                typed_args.len() + 1 // self
             };
 
             // Check argument count only for known functions

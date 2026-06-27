@@ -504,15 +504,7 @@ class testing.NameSplit {
 }
 function testing.split_top(path: string) -> testing.NameSplit throws never {
   { : testing.NameSplit
-    let idx = path.index_of("/") : int
-    if (idx < 0 : bool) : testing.NameSplit
-      { : testing.NameSplit
-        NameSplit { head: "", tail: path } : testing.NameSplit
-      }
-    else
-      { : testing.NameSplit
-        NameSplit { head: path.substring(0, idx), tail: path.substring(idx + 1, path.length()) } : testing.NameSplit
-      }
+    if let <pat> = path.index_of("/") { 0 stmts + tail } else { 0 stmts + tail } : testing.NameSplit
   }
 }
 function testing.parse_filter_patterns(raw: string[]) -> testing.FilterPat[] throws never {
@@ -520,16 +512,7 @@ function testing.parse_filter_patterns(raw: string[]) -> testing.FilterPat[] thr
     let out: FilterPat[] = [] : testing.FilterPat[]
     for s in raw
       { : int
-        let idx = s.index_of("::") : int
-        if (idx < 0 : bool) : int
-          { : int
-            out.push(FilterPat { func_pat: s, test_pat: "" }) : int
-            out.push(FilterPat { func_pat: "", test_pat: s }) : int
-          }
-        else
-          { : int
-            out.push(FilterPat { func_pat: s.substring(0, idx), test_pat: s.substring(idx + 2, s.length()) }) : int
-          }
+        if let <pat> = s.index_of("::") { 0 stmts + tail } else { 1 stmts + tail } : int
       }
     out : testing.FilterPat[]
   }
@@ -566,12 +549,7 @@ function testing.glob_match(subject: string, pattern: string) -> bool throws nev
           let part = parts[i] : string
           if (part != "" : bool) : void
             { : void
-              let idx = subject.substring(pos, end_limit).index_of(part) : int
-              if (idx < 0 : bool) : void
-                { : never
-                  return false : false
-                }
-              pos = pos + idx + part.length() : int
+              if let <pat> = subject.substring(pos, end_limit).index_of(part) { 1 stmts } else { 1 stmts } : void
             }
         }
     }

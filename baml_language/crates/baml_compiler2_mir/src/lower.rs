@@ -1192,7 +1192,7 @@ fn resolution_to_item_ref(
 
 // Re-use ExprId from baml_compiler2_ast (already imported above via ExprId)
 use baml_compiler2_ast::{
-    AssignOp as AstAssignOp, AstSourceMap, BinaryOp as AstBinaryOp, Expr as AstExpr,
+    AssignOp as AstAssignOp, AstSourceMap, BinaryOp as AstBinaryOp, CallArg, Expr as AstExpr,
     ExprBody as AstExprBody, ExprId as AstExprId, Literal as AstLiteral, PatId as AstPatId,
     Pattern as AstPattern, Stmt as AstStmt, StmtId as AstStmtId, TypeExpr as AstTypeExpr,
     TypeExprKind as AstTypeExprKind, UnaryOp as AstUnaryOp,
@@ -1504,6 +1504,15 @@ struct InterfaceDispatchCall<'a> {
     iface_assoc: &'a [(Name, Tir2Ty)],
     method: &'a Name,
     args: &'a [AstExprId],
+    runtime_id: Option<AstExprId>,
+}
+
+#[derive(Clone, Copy)]
+struct DispatchCallLowering<'a> {
+    expr_id: AstExprId,
+    args: &'a [AstExprId],
+    runtime_id: Option<AstExprId>,
+    dest: &'a Place,
 }
 
 #[derive(Clone, Copy)]
@@ -1648,6 +1657,7 @@ struct LoweringContext<'db> {
     binding_locals: HashMap<BindingId, Local>,
     loop_context: Option<LoopContext>,
     catch_context: Option<CatchContext>,
+    catch_rethrow_locals: Vec<Local>,
     exit_block: BlockId,
 
     // Eagerly aggregated type maps from all scopes in the function.
@@ -2109,6 +2119,7 @@ impl<'db> LoweringContext<'db> {
                 iface_assoc: &iterable_assoc,
                 method: &iter_method,
                 args: &[],
+                runtime_id: None,
             },
             &Place::local(iter_local),
         );
@@ -2149,6 +2160,7 @@ impl<'db> LoweringContext<'db> {
                 iface_assoc: &iterable_assoc,
                 method: &next_method,
                 args: &[],
+                runtime_id: None,
             },
             &Place::local(next_local),
         );
@@ -2881,6 +2893,7 @@ impl<'db> LoweringContext<'db> {
             binding_locals: HashMap::new(),
             loop_context: None,
             catch_context: None,
+            catch_rethrow_locals: Vec::new(),
             exit_block: BlockId(0), // placeholder; overwritten in lower_function_body
             expr_types,
             pat_types,
@@ -3104,6 +3117,7 @@ impl<'db> LoweringContext<'db> {
             binding_locals: HashMap::new(),
             loop_context: None,
             catch_context: None,
+            catch_rethrow_locals: Vec::new(),
             exit_block: BlockId(0), // placeholder; overwritten in lower_let_body_inner
             expr_types,
             pat_types,
@@ -5539,6 +5553,31 @@ impl LoweringContext<'_> {
         }
     }
 
+    fn split_runtime_id_call_args(args: &[CallArg]) -> (Vec<AstExprId>, Option<AstExprId>) {
+        let mut ordinary_args = Vec::with_capacity(args.len());
+        let mut runtime_id = None;
+        for arg in args {
+            if arg
+                .label
+                .as_ref()
+                .is_some_and(|label| label.as_str() == "$id")
+            {
+                runtime_id.get_or_insert(arg.expr);
+            } else {
+                ordinary_args.push(arg.expr);
+            }
+        }
+        (ordinary_args, runtime_id)
+    }
+
+    fn lower_runtime_id_operand(&mut self, runtime_id: Option<AstExprId>) -> Option<Operand> {
+        runtime_id.map(|expr_id| {
+            let operand = self.lower_to_operand(expr_id);
+            let ty = self.expr_ty(expr_id);
+            Operand::Copy(Place::Local(self.operand_to_local(operand, ty)))
+        })
+    }
+
     fn lower_expr_without_function_coercion(&mut self, expr_id: AstExprId, dest: Place) {
         let prev_span = self.builder.current_source_span;
         if let Some(span) = self.span_for_expr(expr_id) {
@@ -5593,8 +5632,8 @@ impl LoweringContext<'_> {
             }
 
             AstExpr::Call { callee, args, .. } => {
-                let arg_exprs: Vec<_> = args.iter().map(|arg| arg.expr).collect();
-                self.lower_call(expr_id, callee, &arg_exprs, dest);
+                let (arg_exprs, runtime_id) = Self::split_runtime_id_call_args(&args);
+                self.lower_call(expr_id, callee, &arg_exprs, runtime_id, dest);
             }
 
             AstExpr::Array { elements } => {
@@ -5648,8 +5687,8 @@ impl LoweringContext<'_> {
             }
 
             AstExpr::OptionalCall { callee, args } => {
-                let arg_exprs: Vec<_> = args.iter().map(|arg| arg.expr).collect();
-                self.lower_optional_call(expr_id, callee, &arg_exprs, dest);
+                let (arg_exprs, runtime_id) = Self::split_runtime_id_call_args(&args);
+                self.lower_optional_call(expr_id, callee, &arg_exprs, runtime_id, dest);
             }
 
             AstExpr::Index { base, index } => {
@@ -5706,7 +5745,7 @@ impl LoweringContext<'_> {
             }
 
             AstExpr::Throw { value } => {
-                let val_op = self.lower_to_operand(value);
+                let val_op = self.lower_throw_operand(value);
                 if let Some(catch_ctx) = &self.catch_context {
                     // Inside a catch block: store the value into the error
                     // local and jump to the handler instead of unwinding.
@@ -5715,6 +5754,8 @@ impl LoweringContext<'_> {
                     self.builder
                         .assign(Place::Local(error_local), Rvalue::Use(val_op));
                     self.builder.goto(unwind_target);
+                } else if self.operand_is_marked_rethrow(&val_op) {
+                    self.builder.rethrow(val_op);
                 } else {
                     self.builder.throw(val_op);
                 }
@@ -5761,6 +5802,15 @@ impl LoweringContext<'_> {
         }
 
         self.builder.current_source_span = prev_span;
+    }
+
+    fn operand_is_marked_rethrow(&self, operand: &Operand) -> bool {
+        match operand {
+            Operand::Copy(Place::Local(local)) | Operand::Move(Place::Local(local)) => {
+                self.catch_rethrow_locals.contains(local)
+            }
+            Operand::Copy(_) | Operand::Move(_) | Operand::Constant(_) => false,
+        }
     }
 
     /// Lower `spawn name? with? { body }` into:
@@ -7066,6 +7116,7 @@ impl LoweringContext<'_> {
         expr_id: AstExprId,
         callee: AstExprId,
         args: &[AstExprId],
+        runtime_id: Option<AstExprId>,
         dest: Place,
     ) {
         let callee_op = self.lower_to_operand(callee);
@@ -7087,7 +7138,7 @@ impl LoweringContext<'_> {
                 .branch(Operand::Copy(Place::Local(test_local)), bb_null, bb_call);
 
             self.builder.set_current_block(bb_call);
-            self.lower_call(expr_id, callee, args, dest);
+            self.lower_call(expr_id, callee, args, runtime_id, dest);
         } else {
             let bb_null = self.builder.create_block();
             let bb_join = self.builder.create_block();
@@ -7096,7 +7147,7 @@ impl LoweringContext<'_> {
                 .branch(Operand::Copy(Place::Local(test_local)), bb_null, bb_call);
 
             self.builder.set_current_block(bb_call);
-            self.lower_call(expr_id, callee, args, dest.clone());
+            self.lower_call(expr_id, callee, args, runtime_id, dest.clone());
             if !self.builder.is_current_terminated() {
                 self.builder.goto(bb_join);
             }
@@ -7641,6 +7692,7 @@ impl<'db> LoweringContext<'db> {
         expr_id: AstExprId,
         callee: AstExprId,
         args: &[AstExprId],
+        runtime_id: Option<AstExprId>,
         dest: Place,
     ) {
         // Check if callee is a member access (potential watch method call)
@@ -7656,18 +7708,39 @@ impl<'db> LoweringContext<'db> {
             // BEP-044: interface-typed receiver — dispatch by type tag over
             // the registered implementor set. Each arm emits a static call
             // to that implementor's method.
-            if self.try_lower_interface_dispatch(expr_id, base_id, &member_name, args, &dest) {
+            if self.try_lower_interface_dispatch(
+                expr_id,
+                base_id,
+                &member_name,
+                args,
+                runtime_id,
+                &dest,
+            ) {
                 return;
             }
             // Receiver may be a union of concrete classes sharing the method
             // (e.g. `(if c { Dog {} } else { Cat {} }).speak()`).
-            if self.try_lower_union_dispatch(expr_id, base_id, &member_name, args, &dest) {
+            if self.try_lower_union_dispatch(
+                expr_id,
+                base_id,
+                &member_name,
+                args,
+                runtime_id,
+                &dest,
+            ) {
                 return;
             }
             // Receiver may be a union containing an interface member
             // (e.g. `Animal | Vehicle`), where every member declares the
             // method — dispatch on the runtime class across all implementors.
-            if self.try_lower_union_iface_dispatch(expr_id, base_id, &member_name, args, &dest) {
+            if self.try_lower_union_iface_dispatch(
+                expr_id,
+                base_id,
+                &member_name,
+                args,
+                runtime_id,
+                &dest,
+            ) {
                 return;
             }
         }
@@ -7741,10 +7814,18 @@ impl<'db> LoweringContext<'db> {
                 let mut all_args = frame_type_arg_ops;
                 all_args.push(Operand::Copy(Place::Local(self_local)));
                 all_args.extend(self.lower_call_arg_operands(expr_id, args));
+                let runtime_id_operand = self.lower_runtime_id_operand(runtime_id);
                 let target = self.builder.create_block();
                 let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
-                self.builder
-                    .call_with_type_args(callee_op, all_args, ntypeargs, dest, target, unwind);
+                self.builder.call_with_type_args_and_runtime_id(
+                    callee_op,
+                    all_args,
+                    ntypeargs,
+                    runtime_id_operand,
+                    dest,
+                    target,
+                    unwind,
+                );
                 self.builder.set_current_block(target);
                 return;
             }
@@ -7896,6 +7977,7 @@ impl<'db> LoweringContext<'db> {
                             &method_name,
                             expr_id,
                             args,
+                            runtime_id,
                             &dest,
                         ) {
                             return;
@@ -7910,6 +7992,7 @@ impl<'db> LoweringContext<'db> {
                             iface_assoc: &iface_assoc,
                             method: &method_name,
                             args,
+                            runtime_id,
                         },
                         &dest,
                     ) {
@@ -7935,9 +8018,12 @@ impl<'db> LoweringContext<'db> {
                         recv_local,
                         &members,
                         &method_name,
-                        expr_id,
-                        args,
-                        &dest,
+                        DispatchCallLowering {
+                            expr_id,
+                            args,
+                            runtime_id,
+                            dest: &dest,
+                        },
                     ) {
                         return;
                     }
@@ -7949,9 +8035,12 @@ impl<'db> LoweringContext<'db> {
                         && self.emit_method_candidate_switch(
                             recv_local,
                             &candidates,
-                            expr_id,
-                            args,
-                            &dest,
+                            DispatchCallLowering {
+                                expr_id,
+                                args,
+                                runtime_id,
+                                dest: &dest,
+                            },
                             None,
                         )
                     {
@@ -8234,7 +8323,7 @@ impl<'db> LoweringContext<'db> {
         let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
 
         // Check if callee is `reflect.type_of<T>()` — a value-producing intrinsic.
-        // Unlike void intrinsics (log.*, baml.events.send), this emits an assignment
+        // Unlike void intrinsics (log.*), this emits an assignment
         // of `Rvalue::LoadType(template)` to `dest` rather than a StatementKind::Intrinsic.
         if let Some(template) = self.check_type_of_intrinsic(callee, expr_id) {
             self.builder.assign(dest, Rvalue::LoadType(template));
@@ -8269,7 +8358,7 @@ impl<'db> LoweringContext<'db> {
             }
         }
 
-        // Check if callee is a compiler intrinsic (log.*, baml.events.send).
+        // Check if callee is a compiler intrinsic (log.*).
         // Intrinsics are void side effects — emit as a statement, not a call.
         if let Some(op) = self.check_intrinsic(callee) {
             self.builder.push_statement(
@@ -8455,9 +8544,11 @@ impl<'db> LoweringContext<'db> {
             } else {
                 arg_operands
             };
-            self.builder.sys_op(
+            let runtime_id_operand = self.lower_runtime_id_operand(runtime_id);
+            self.builder.sys_op_with_runtime_id(
                 callee_operand,
                 sys_op_arg_operands,
+                runtime_id_operand,
                 Place::Local(dest_local),
                 target,
                 unwind,
@@ -8468,10 +8559,12 @@ impl<'db> LoweringContext<'db> {
             // first, then assign from the temp to the real destination.
             match &dest {
                 Place::Local(_) => {
-                    self.builder.call_with_type_args(
+                    let runtime_id_operand = self.lower_runtime_id_operand(runtime_id);
+                    self.builder.call_with_type_args_and_runtime_id(
                         callee_operand,
                         all_arg_operands_for_call,
                         ntypeargs,
+                        runtime_id_operand,
                         dest,
                         target,
                         unwind,
@@ -8480,10 +8573,12 @@ impl<'db> LoweringContext<'db> {
                 _ => {
                     let call_ty = self.expr_ty(expr_id);
                     let tmp = self.builder.temp(call_ty);
-                    self.builder.call_with_type_args(
+                    let runtime_id_operand = self.lower_runtime_id_operand(runtime_id);
+                    self.builder.call_with_type_args_and_runtime_id(
                         callee_operand,
                         all_arg_operands_for_call,
                         ntypeargs,
+                        runtime_id_operand,
                         Place::local(tmp),
                         target,
                         unwind,
@@ -9385,6 +9480,11 @@ impl<'db> LoweringContext<'db> {
         Operand::Copy(Place::Local(temp))
     }
 
+    fn lower_throw_operand(&mut self, expr_id: AstExprId) -> Operand {
+        self.try_resolve_to_local(expr_id)
+            .map_or_else(|| self.lower_to_operand(expr_id), Operand::copy_local)
+    }
+
     fn emit_panic_call(&mut self, message: &str, _expr_id: AstExprId) {
         // Emit a call to baml.sys.panic with the error message
         let callee = Operand::Constant(Constant::Function(ItemRef::Free {
@@ -10231,6 +10331,7 @@ impl<'db> LoweringContext<'db> {
         base: AstExprId,
         method: &Name,
         args: &[AstExprId],
+        runtime_id: Option<AstExprId>,
         dest: &Place,
     ) -> bool {
         let dispatch_target = self.interface_dispatch_target_for_expr(base).or_else(|| {
@@ -10277,6 +10378,7 @@ impl<'db> LoweringContext<'db> {
                 method,
                 expr_id,
                 args,
+                runtime_id,
                 dest,
             );
         }
@@ -10291,6 +10393,7 @@ impl<'db> LoweringContext<'db> {
                 iface_assoc: &iface_assoc,
                 method,
                 args,
+                runtime_id,
             },
             dest,
         )
@@ -10340,6 +10443,7 @@ impl<'db> LoweringContext<'db> {
         method: &Name,
         expr_id: AstExprId,
         args: &[AstExprId],
+        runtime_id: Option<AstExprId>,
         dest: &Place,
     ) -> bool {
         // `args = [method_type_args… ++ receiver ++ value_args…]` (type args lead,
@@ -10382,6 +10486,7 @@ impl<'db> LoweringContext<'db> {
             TyAttr::default(),
         ));
         let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
+        let runtime_id_operand = self.lower_runtime_id_operand(runtime_id);
         let resume = self.builder.create_block();
         // `VirtualCall`'s destination must be a `Place::Local`. If the caller
         // handed us a projection (field/index) or capture, dispatch into a temp
@@ -10395,11 +10500,12 @@ impl<'db> LoweringContext<'db> {
                 (Place::local(tmp), Some(projection.clone()))
             }
         };
-        self.builder.virtual_call(
+        self.builder.virtual_call_with_runtime_id(
             iface_template,
             method.to_string(),
             all_args,
             ntypeargs,
+            runtime_id_operand,
             call_dest.clone(),
             resume,
             unwind,
@@ -10468,6 +10574,7 @@ impl<'db> LoweringContext<'db> {
         base: AstExprId,
         method: &Name,
         args: &[AstExprId],
+        runtime_id: Option<AstExprId>,
         dest: &Place,
     ) -> bool {
         let Some(members) = self
@@ -10481,7 +10588,17 @@ impl<'db> LoweringContext<'db> {
         let receiver_op = self.lower_to_operand(base);
         let receiver_ty = self.expr_ty(base);
         let recv_local = self.operand_to_local(receiver_op, receiver_ty);
-        self.emit_union_class_dispatch(recv_local, &members, method, expr_id, args, dest)
+        self.emit_union_class_dispatch(
+            recv_local,
+            &members,
+            method,
+            DispatchCallLowering {
+                expr_id,
+                args,
+                runtime_id,
+                dest,
+            },
+        )
     }
 
     /// A method call whose receiver is a union that contains at least one
@@ -10497,6 +10614,7 @@ impl<'db> LoweringContext<'db> {
         base: AstExprId,
         method: &Name,
         args: &[AstExprId],
+        runtime_id: Option<AstExprId>,
         dest: &Place,
     ) -> bool {
         let Some(members) = self
@@ -10513,7 +10631,17 @@ impl<'db> LoweringContext<'db> {
         let receiver_ty = self.expr_ty(base);
         let recv_local = self.operand_to_local(receiver_op, receiver_ty);
         #[expect(deprecated)]
-        self.emit_method_candidate_switch(recv_local, &candidates, expr_id, args, dest, None)
+        self.emit_method_candidate_switch(
+            recv_local,
+            &candidates,
+            DispatchCallLowering {
+                expr_id,
+                args,
+                runtime_id,
+                dest,
+            },
+            None,
+        )
     }
 
     /// Build the runtime-class dispatch candidates for calling `method` on a
@@ -10656,9 +10784,7 @@ impl<'db> LoweringContext<'db> {
         recv_local: Local,
         members: &[Tir2Ty],
         method: &Name,
-        expr_id: AstExprId,
-        args: &[AstExprId],
-        dest: &Place,
+        call: DispatchCallLowering<'_>,
     ) -> bool {
         let mut arms: Vec<(TypeName, ItemRef)> = Vec::new();
         for member in members {
@@ -10675,7 +10801,8 @@ impl<'db> LoweringContext<'db> {
             return false;
         }
 
-        let arg_ops = self.lower_call_arg_operands(expr_id, args);
+        let arg_ops = self.lower_call_arg_operands(call.expr_id, call.args);
+        let runtime_id_operand = self.lower_runtime_id_operand(call.runtime_id);
         let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
 
         let bb_join = self.builder.create_block();
@@ -10699,8 +10826,15 @@ impl<'db> LoweringContext<'db> {
             let callee_op = Operand::Constant(Constant::Function(item_ref.clone()));
             let mut all_args = vec![Operand::Copy(Place::Local(recv_local))];
             all_args.extend(arg_ops.iter().cloned());
-            self.builder
-                .call(callee_op, all_args, dest.clone(), bb_join, unwind);
+            self.builder.call_with_type_args_and_runtime_id(
+                callee_op,
+                all_args,
+                0,
+                runtime_id_operand.clone(),
+                call.dest.clone(),
+                bb_join,
+                unwind,
+            );
             next_check = bb_next;
         }
         self.builder.set_current_block(bb_otherwise);
@@ -10724,6 +10858,7 @@ impl<'db> LoweringContext<'db> {
             iface_assoc,
             method,
             args,
+            runtime_id,
         } = call;
         let resolved = self.interface_method_candidates_for(
             iface_tn,
@@ -10739,9 +10874,12 @@ impl<'db> LoweringContext<'db> {
         self.emit_method_candidate_switch(
             recv_local,
             &resolved,
-            expr_id,
-            args,
-            dest,
+            DispatchCallLowering {
+                expr_id,
+                args,
+                runtime_id,
+                dest,
+            },
             Some(InterfaceDefaultCallContext {
                 iface_tn,
                 iface_type_args,
@@ -10850,9 +10988,7 @@ impl<'db> LoweringContext<'db> {
         &mut self,
         recv_local: Local,
         resolved: &[InterfaceMethodCandidate],
-        expr_id: AstExprId,
-        args: &[AstExprId],
-        dest: &Place,
+        call: DispatchCallLowering<'_>,
         interface_default_context: Option<InterfaceDefaultCallContext<'_>>,
     ) -> bool {
         if resolved.is_empty() {
@@ -10860,9 +10996,10 @@ impl<'db> LoweringContext<'db> {
         }
 
         // Lower args once; same operands used in every arm.
-        let arg_ops = self.lower_call_arg_operands(expr_id, args);
-        let type_arg_ops = self.lower_call_type_args(expr_id, true, None);
-        let has_explicit_type_args = self.call_has_explicit_type_args(expr_id);
+        let arg_ops = self.lower_call_arg_operands(call.expr_id, call.args);
+        let type_arg_ops = self.lower_call_type_args(call.expr_id, true, None);
+        let runtime_id_operand = self.lower_runtime_id_operand(call.runtime_id);
+        let has_explicit_type_args = self.call_has_explicit_type_args(call.expr_id);
         let ntypeargs = type_arg_ops.len();
         let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
 
@@ -10922,11 +11059,12 @@ impl<'db> LoweringContext<'db> {
                     // the operands carry only the call type args + values.
                     let mut all_args = type_arg_ops.clone();
                     all_args.extend(arg_ops.iter().cloned());
-                    self.builder.call_with_type_args(
+                    self.builder.call_with_type_args_and_runtime_id(
                         Operand::Copy(Place::local(bm)),
                         all_args,
                         ntypeargs,
-                        dest.clone(),
+                        runtime_id_operand.clone(),
+                        call.dest.clone(),
                         bb_join,
                         unwind,
                     );
@@ -10973,11 +11111,12 @@ impl<'db> LoweringContext<'db> {
                     all_args.extend(call_type_arg_ops);
                     all_args.push(Operand::Copy(Place::Local(recv_local)));
                     all_args.extend(arg_ops.iter().cloned());
-                    self.builder.call_with_type_args(
+                    self.builder.call_with_type_args_and_runtime_id(
                         callee_op,
                         all_args,
                         arm_ntypeargs,
-                        dest.clone(),
+                        runtime_id_operand.clone(),
+                        call.dest.clone(),
                         bb_join,
                         unwind,
                     );
@@ -13194,14 +13333,18 @@ impl LoweringContext<'_> {
             }
 
             AstStmt::Throw { value } => {
-                let val_op = self.lower_to_operand(value);
+                let val_op = self.lower_throw_operand(value);
                 // Unwatch all watched locals before throwing. Defers run via the
                 // block's unwind landing pads: the throw's PC is inside the
                 // enclosing defer region(s), so the exception table routes it to
                 // the innermost defer pad (BEP-042 Stage 2). We do NOT inline-
                 // replay here — that would double-run the defers.
                 self.emit_unwatch_to_depth(0);
-                self.builder.throw(val_op);
+                if self.operand_is_marked_rethrow(&val_op) {
+                    self.builder.rethrow(val_op);
+                } else {
+                    self.builder.throw(val_op);
+                }
                 let dead = self.builder.create_block();
                 self.builder.set_current_block(dead);
             }
@@ -14055,14 +14198,14 @@ impl LoweringContext<'_> {
                         // Even if exhaustive, catch otherwise should rethrow
                         // (the error might not match any arm at runtime).
                         self.builder
-                            .throw(Operand::Copy(Place::Local(*error_local)));
+                            .rethrow(Operand::Copy(Place::Local(*error_local)));
                     }
                 }
             } else {
                 match &otherwise {
                     SwitchOtherwise::Catch { error_local, .. } => {
                         self.builder
-                            .throw(Operand::Copy(Place::Local(*error_local)));
+                            .rethrow(Operand::Copy(Place::Local(*error_local)));
                     }
                     SwitchOtherwise::Match { .. } => {
                         self.builder.goto(join);
@@ -15820,7 +15963,14 @@ impl LoweringContext<'_> {
         if clauses.len() == 1 {
             install_clause_locals(self, error_local, &clause_locals[0]);
         }
-        if clauses.len() == 1
+        let switch_rethrow_mark = self.catch_rethrow_locals.len();
+        if clauses.len() == 1 {
+            self.catch_rethrow_locals.push(error_local);
+            if let Some(local) = clause_locals[0].binding_copy_local {
+                self.catch_rethrow_locals.push(local);
+            }
+        }
+        let lowered_as_switch = clauses.len() == 1
             && self.try_lower_as_switch(
                 error_local,
                 &switch_arms,
@@ -15831,8 +15981,9 @@ impl LoweringContext<'_> {
                     needs_throw_if_panic,
                 },
                 None,
-            )
-        {
+            );
+        self.catch_rethrow_locals.truncate(switch_rethrow_mark);
+        if lowered_as_switch {
             self.builder.set_current_block(bb_join);
             self.restore_active_locals(saved_catch_outer_locals);
             return;
@@ -15868,7 +16019,8 @@ impl LoweringContext<'_> {
 
         // Rethrow if nothing matched.
         if !self.builder.is_current_terminated() {
-            self.builder.throw(Operand::Copy(Place::Local(error_local)));
+            self.builder
+                .rethrow(Operand::Copy(Place::Local(error_local)));
         }
 
         // Lower each arm body.
@@ -15879,7 +16031,13 @@ impl LoweringContext<'_> {
             let clause = clause_locals[clause_idx].clone();
             install_clause_locals(self, error_local, &clause);
             self.bind_pattern(error_local, arm.pattern);
+            let rethrow_mark = self.catch_rethrow_locals.len();
+            self.catch_rethrow_locals.push(error_local);
+            if let Some(local) = clause.binding_copy_local {
+                self.catch_rethrow_locals.push(local);
+            }
             self.lower_expr(arm.body, dest.clone());
+            self.catch_rethrow_locals.truncate(rethrow_mark);
             if !self.builder.is_current_terminated() {
                 // A `watch let` declared inside a catch-arm body must be
                 // torn down on fallthrough.

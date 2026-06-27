@@ -87,7 +87,7 @@ describe('ExecutionPanel StrictMode lifecycle', () => {
       port.emit({
         type: 'runSnapshot',
         requestId: snapshot!.requestId,
-        runId: run.runId,
+        boundaryId: run.boundaryId,
         snapshot: { ...run, status: 'running', cursor: 1 },
       });
     });
@@ -204,7 +204,7 @@ class FakeRuntimePort implements RuntimePort {
 
 function runFixture(projectId: string, functionName: string): Run {
   return {
-    runId: 'baml_run_1_00000000000000000000000000000001',
+    boundaryId: 'baml_id_1_AAAAAAAAAAAAAAAAAAAAAQ',
     target: { kind: 'function', functionName },
     visibility: { kind: 'history' },
     status: 'pending',

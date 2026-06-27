@@ -130,7 +130,13 @@ impl Fetcher {
         )
     }
 
-    pub fn fetch_archive(&self) -> Result<Vec<u8>, FetchError> {
+    /// Download the release archive and verify its checksum, *without*
+    /// validating the full product layout. Callers that only need a single
+    /// binary out of the archive (`fetch_binary`) don't care whether the
+    /// archive also ships the vsix or playground assets: extracting one entry
+    /// by name into memory is safe regardless of the surrounding layout, and
+    /// the checksum is what guarantees authenticity.
+    fn download_and_verify(&self) -> Result<Vec<u8>, FetchError> {
         let url = self.artifact_url();
         let archive = download_bytes(&url)?;
         if let Some(artifact) = &self.artifact {
@@ -144,13 +150,29 @@ impl Fetcher {
                 })?;
             verify_release_archive_checksum_text(&archive, &url, checksum_text)?;
         }
-        validate_archive_layout(self.product, &self.spec.target, &archive, &url)?;
         Ok(archive)
     }
 
+    pub fn fetch_archive(&self) -> Result<Vec<u8>, FetchError> {
+        let archive = self.download_and_verify()?;
+        validate_archive_layout(
+            self.product,
+            &self.spec.target,
+            &archive,
+            &self.artifact_url(),
+        )?;
+        Ok(archive)
+    }
+
+    /// Pull a single binary out of the release archive. Used by `baml pack`
+    /// (to embed `baml-pack-host`) and wrapper self-update (to fetch `baml`).
+    /// Deliberately skips `validate_archive_layout` — requiring the playground
+    /// assets / vsix here would make `baml pack` fail on an archive that has a
+    /// perfectly good host binary. Extraction itself errors with
+    /// `BinaryNotInArchive` if the requested binary is absent.
     pub fn fetch_binary(&self, binary_name: &str) -> Result<Vec<u8>, FetchError> {
         let url = self.artifact_url();
-        let archive = self.fetch_archive()?;
+        let archive = self.download_and_verify()?;
         extract_binary_from_archive(&archive, &url, binary_name)
     }
 

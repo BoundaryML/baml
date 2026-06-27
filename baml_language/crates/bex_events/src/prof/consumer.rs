@@ -304,6 +304,7 @@ impl ConsumerState {
                         &event,
                     ) {
                         crate::run::publish_profile_event(&envelope);
+                        crate::history::publish_history_profile_event(&envelope, &event);
                     }
                     writer.encode_event(&event);
                 }
@@ -1049,12 +1050,16 @@ mod tests {
             })
             .join()
             .unwrap();
-            // A dead thread's ring is claimable only after the consumer
-            // pools it; give the sweep a beat, like the seconds-long idle
-            // gaps of a real blocking pool. (Back-to-back churn without the
-            // gap legally allocates more rings — bounded by peak concurrent
-            // un-pooled threads, exercised in orphan_churn_reuses_rings.)
-            std::thread::sleep(Duration::from_millis(2));
+            // A dead thread's ring is claimable only after the consumer pools
+            // it. Flush-with-ack gives this test an observed consumer sweep
+            // between sequential churn rounds without relying on scheduler
+            // timing.
+            let (ack_tx, ack_rx) = mpsc::sync_channel(1);
+            ctl_tx.send(ControlMsg::Flush(ack_tx)).unwrap();
+            ctx.wake().force_wake();
+            ack_rx
+                .recv_timeout(Duration::from_secs(1))
+                .expect("soak consumer did not flush before the next churn round");
         }
 
         // Flush through the live consumer and read everything back.
@@ -1065,18 +1070,10 @@ mod tests {
             .recv_timeout(Duration::from_mins(1))
             .expect("soak consumer never acked");
 
-        // Sequential churn must reuse one pooled ring, not grow the registry
-        // (the consumer pools each orphan between rounds; a bounded handful
-        // is tolerated for rounds that overlapped a sweep).
+        // Sequential churn must reuse one pooled ring, not grow the registry.
         let mut rings = 0;
         registry.for_each(|_| rings += 1);
-        // Windows CI occasionally observes a few more in-flight rings at this
-        // check due to thread scheduling jitter around orphan pooling.
-        let max_rings = if cfg!(windows) { 8 } else { 4 };
-        assert!(
-            rings <= max_rings,
-            "registry grew under churn: {rings} rings (max allowed: {max_rings})"
-        );
+        assert_eq!(rings, 1, "registry grew under churn: {rings} rings");
 
         let paths: Vec<_> = std::fs::read_dir(&dir)
             .unwrap()

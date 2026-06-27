@@ -468,6 +468,7 @@ pub enum Instruction {
     /// created — sys-ops are not user-observable futures in BAML, so
     /// the schedule + await pair is pure overhead.
     SysOp(GlobalIndex),
+    SysOpWithRuntimeId(GlobalIndex),
 
     /// BEP-034 `spawn { body }`. Pops `[closure_value, name_value]` from
     /// the stack, allocates an `UnscheduledFuture { closure, name }`
@@ -533,6 +534,15 @@ pub enum Instruction {
         ntypeargs: u16,
     },
 
+    /// `Call` plus a caller-provided `boundary.LocalId` operand on top of the
+    /// stack. Ordinary call arity is unchanged; the VM pops the id first,
+    /// consumes it, installs the callee runtime-id/capture policy, then enters
+    /// the callee.
+    CallWithRuntimeId {
+        callee: GlobalIndex,
+        ntypeargs: u16,
+    },
+
     /// Call a function value from the eval stack.
     ///
     /// Format: `CALL_INDIRECT`.
@@ -541,6 +551,10 @@ pub enum Instruction {
     ///
     /// Arity is read from the runtime callee function object.
     CallIndirect,
+
+    /// `CallIndirect` plus a caller-provided `boundary.LocalId` operand above
+    /// the callee value.
+    CallIndirectWithRuntimeId,
 
     /// Virtual interface-method call: resolve the callee at runtime from the
     /// receiver's concrete `Self` type, then call it. The callee is *not* a
@@ -573,10 +587,22 @@ pub enum Instruction {
         ntypeargs: u16,
     },
 
+    /// `VirtualCall` plus a caller-provided `boundary.LocalId` operand above
+    /// the method-name value.
+    VirtualCallWithRuntimeId {
+        nargs: u16,
+        ntypeargs: u16,
+    },
+
     /// Throw the value on top of the stack.
     ///
     /// Stack: `[error_value]` -> `[]` (control transfers to unwind handler or caller)
     Throw,
+
+    /// Re-throw a caught value on top of the stack.
+    ///
+    /// Stack: `[error_value]` -> `[]` (control transfers to unwind handler or caller)
+    Rethrow,
 
     /// Return from a function.
     ///
@@ -961,6 +987,15 @@ pub enum OpCode {
     // args and popped first; the callee is resolved at runtime from the receiver's
     // `Self`.
     VirtualCall,
+
+    // ── Phase 6 ID-aware call forms, appended to preserve discriminants ──
+    CallWithRuntimeId,
+    CallIndirectWithRuntimeId,
+    VirtualCallWithRuntimeId,
+    SysOpWithRuntimeId,
+
+    // ── Phase 5 trace-origin marker, appended to preserve discriminants ──
+    Rethrow,
 }
 
 impl OpCode {
@@ -971,11 +1006,13 @@ impl OpCode {
             Self::Return
             | Self::Await
             | Self::Throw
+            | Self::Rethrow
             | Self::LoadArrayElement
             | Self::LoadMapElement
             | Self::StoreArrayElement
             | Self::StoreMapElement
             | Self::CallIndirect
+            | Self::CallIndirectWithRuntimeId
             | Self::Discriminant
             | Self::TypeTag
             | Self::ThrowIfPanic
@@ -1065,6 +1102,7 @@ impl OpCode {
             | Self::InitInstance
             | Self::AllocVariant
             | Self::SysOp
+            | Self::SysOpWithRuntimeId
             | Self::Watch
             | Self::Unwatch
             | Self::Notify
@@ -1080,13 +1118,17 @@ impl OpCode {
             | Self::Jump
             | Self::PopJumpIfFalse
             | Self::JumpIfFalse
-            | Self::VirtualCall => 5,
+            | Self::VirtualCall
+            | Self::VirtualCallWithRuntimeId => 5,
 
             // 3-byte: opcode + u16
             Self::MakeGenericFunctionFromValue => 3,
 
             // 7-byte: opcode + u32 + u16 (type-arg threading)
-            Self::AllocInstance | Self::Call | Self::MakeGenericFunction => 7,
+            Self::AllocInstance
+            | Self::Call
+            | Self::CallWithRuntimeId
+            | Self::MakeGenericFunction => 7,
 
             // 9-byte: opcode + u32 + u16 + u16 (closure with capture+typearg counts)
             Self::MakeClosure => 9,
@@ -1109,11 +1151,13 @@ impl TryFrom<u8> for OpCode {
             x if x == Self::Await as u8 => Ok(Self::Await),
             x if x == Self::AwaitAny as u8 => Ok(Self::AwaitAny),
             x if x == Self::Throw as u8 => Ok(Self::Throw),
+            x if x == Self::Rethrow as u8 => Ok(Self::Rethrow),
             x if x == Self::LoadArrayElement as u8 => Ok(Self::LoadArrayElement),
             x if x == Self::LoadMapElement as u8 => Ok(Self::LoadMapElement),
             x if x == Self::StoreArrayElement as u8 => Ok(Self::StoreArrayElement),
             x if x == Self::StoreMapElement as u8 => Ok(Self::StoreMapElement),
             x if x == Self::CallIndirect as u8 => Ok(Self::CallIndirect),
+            x if x == Self::CallIndirectWithRuntimeId as u8 => Ok(Self::CallIndirectWithRuntimeId),
             x if x == Self::Discriminant as u8 => Ok(Self::Discriminant),
             x if x == Self::TypeTag as u8 => Ok(Self::TypeTag),
             x if x == Self::ThrowIfPanic as u8 => Ok(Self::ThrowIfPanic),
@@ -1198,6 +1242,7 @@ impl TryFrom<u8> for OpCode {
             x if x == Self::InitInstance as u8 => Ok(Self::InitInstance),
             x if x == Self::AllocVariant as u8 => Ok(Self::AllocVariant),
             x if x == Self::SysOp as u8 => Ok(Self::SysOp),
+            x if x == Self::SysOpWithRuntimeId as u8 => Ok(Self::SysOpWithRuntimeId),
             x if x == Self::Spawn as u8 => Ok(Self::Spawn),
             x if x == Self::Watch as u8 => Ok(Self::Watch),
             x if x == Self::Unwatch as u8 => Ok(Self::Unwatch),
@@ -1224,6 +1269,8 @@ impl TryFrom<u8> for OpCode {
             x if x == Self::LoadVar2 as u8 => Ok(Self::LoadVar2),
             x if x == Self::StoreVar2 as u8 => Ok(Self::StoreVar2),
             x if x == Self::VirtualCall as u8 => Ok(Self::VirtualCall),
+            x if x == Self::CallWithRuntimeId as u8 => Ok(Self::CallWithRuntimeId),
+            x if x == Self::VirtualCallWithRuntimeId as u8 => Ok(Self::VirtualCallWithRuntimeId),
             _ => Err(byte),
         }
     }
@@ -1236,12 +1283,15 @@ impl std::fmt::Display for OpCode {
             Self::Await => "AWAIT",
             Self::AwaitAny => "AWAIT_ANY",
             Self::VirtualCall => "VIRTUAL_CALL",
+            Self::VirtualCallWithRuntimeId => "VIRTUAL_CALL_WITH_RUNTIME_ID",
             Self::Throw => "THROW",
+            Self::Rethrow => "RETHROW",
             Self::LoadArrayElement => "LOAD_ARRAY_ELEMENT",
             Self::LoadMapElement => "LOAD_MAP_ELEMENT",
             Self::StoreArrayElement => "STORE_ARRAY_ELEMENT",
             Self::StoreMapElement => "STORE_MAP_ELEMENT",
             Self::CallIndirect => "CALL_INDIRECT",
+            Self::CallIndirectWithRuntimeId => "CALL_INDIRECT_WITH_RUNTIME_ID",
             Self::Discriminant => "DISCRIMINANT",
             Self::TypeTag => "TYPE_TAG",
             Self::ThrowIfPanic => "THROW_IF_PANIC",
@@ -1326,11 +1376,13 @@ impl std::fmt::Display for OpCode {
             Self::InitInstance => "INIT_INSTANCE",
             Self::AllocVariant => "ALLOC_VARIANT",
             Self::SysOp => "SYS_OP",
+            Self::SysOpWithRuntimeId => "SYS_OP_WITH_RUNTIME_ID",
             Self::Spawn => "SPAWN",
             Self::Watch => "WATCH",
             Self::Unwatch => "UNWATCH",
             Self::Notify => "NOTIFY",
             Self::Call => "CALL",
+            Self::CallWithRuntimeId => "CALL_WITH_RUNTIME_ID",
             Self::IsType => "IS_TYPE",
             Self::DenseTag => "DENSE_TAG",
             Self::LoadType => "LOAD_TYPE",
@@ -1513,11 +1565,17 @@ impl std::fmt::Display for Instruction {
             Instruction::InitInstance(i) => write!(f, "INIT_INSTANCE {i}"),
             Instruction::AllocVariant(i) => write!(f, "ALLOC_VARIANT {i}"),
             Instruction::SysOp(callee) => write!(f, "SYS_OP {callee}"),
+            Instruction::SysOpWithRuntimeId(callee) => {
+                write!(f, "SYS_OP_WITH_RUNTIME_ID {callee}")
+            }
             Instruction::Spawn => write!(f, "SPAWN"),
             Instruction::Await => f.write_str("AWAIT"),
             Instruction::AwaitAny => f.write_str("AWAIT_ANY"),
             Instruction::Call { callee, ntypeargs } => {
                 write!(f, "CALL {callee} ntypeargs={ntypeargs}")
+            }
+            Instruction::CallWithRuntimeId { callee, ntypeargs } => {
+                write!(f, "CALL_WITH_RUNTIME_ID {callee} ntypeargs={ntypeargs}")
             }
             Instruction::MakeGenericFunction {
                 function,
@@ -1529,10 +1587,18 @@ impl std::fmt::Display for Instruction {
                 write!(f, "MAKE_GENERIC_FUNCTION_FROM_VALUE ntypeargs={ntypeargs}")
             }
             Instruction::CallIndirect => f.write_str("CALL_INDIRECT"),
+            Instruction::CallIndirectWithRuntimeId => f.write_str("CALL_INDIRECT_WITH_RUNTIME_ID"),
             Instruction::VirtualCall { nargs, ntypeargs } => {
                 write!(f, "VIRTUAL_CALL nargs={nargs} ntypeargs={ntypeargs}")
             }
+            Instruction::VirtualCallWithRuntimeId { nargs, ntypeargs } => {
+                write!(
+                    f,
+                    "VIRTUAL_CALL_WITH_RUNTIME_ID nargs={nargs} ntypeargs={ntypeargs}"
+                )
+            }
             Instruction::Throw => f.write_str("THROW"),
+            Instruction::Rethrow => f.write_str("RETHROW"),
 
             Instruction::Return => f.write_str("RETURN"),
             Instruction::AllocMap(n) => write!(f, "ALLOC_MAP {n}"),
@@ -1931,11 +1997,13 @@ impl Bytecode {
                 Instruction::Return
                 | Instruction::Await
                 | Instruction::Throw
+                | Instruction::Rethrow
                 | Instruction::LoadArrayElement
                 | Instruction::LoadMapElement
                 | Instruction::StoreArrayElement
                 | Instruction::StoreMapElement
                 | Instruction::CallIndirect
+                | Instruction::CallIndirectWithRuntimeId
                 | Instruction::Discriminant
                 | Instruction::TypeTag
                 | Instruction::ThrowIfPanic
@@ -2031,6 +2099,7 @@ impl Bytecode {
                 Instruction::LoadGlobal(g)
                 | Instruction::StoreGlobal(g)
                 | Instruction::SysOp(g)
+                | Instruction::SysOpWithRuntimeId(g)
                 | Instruction::MakeBoundMethod(g) => {
                     code.extend_from_slice(
                         &u32::try_from(g.into_raw())
@@ -2040,7 +2109,8 @@ impl Bytecode {
                 }
 
                 // ── Call: u32 callee + u16 ntypeargs ─────────────────
-                Instruction::Call { callee, ntypeargs } => {
+                Instruction::Call { callee, ntypeargs }
+                | Instruction::CallWithRuntimeId { callee, ntypeargs } => {
                     code.extend_from_slice(
                         &u32::try_from(callee.into_raw())
                             .expect("global index fits u32")
@@ -2068,7 +2138,8 @@ impl Bytecode {
                 }
 
                 // ── VirtualCall: u16 nargs, u16 ntypeargs ────────────
-                Instruction::VirtualCall { nargs, ntypeargs } => {
+                Instruction::VirtualCall { nargs, ntypeargs }
+                | Instruction::VirtualCallWithRuntimeId { nargs, ntypeargs } => {
                     code.extend_from_slice(&nargs.to_le_bytes());
                     code.extend_from_slice(&ntypeargs.to_le_bytes());
                 }
@@ -2257,11 +2328,13 @@ impl Bytecode {
             Instruction::Await => OpCode::Await,
             Instruction::AwaitAny => OpCode::AwaitAny,
             Instruction::Throw => OpCode::Throw,
+            Instruction::Rethrow => OpCode::Rethrow,
             Instruction::LoadArrayElement => OpCode::LoadArrayElement,
             Instruction::LoadMapElement => OpCode::LoadMapElement,
             Instruction::StoreArrayElement => OpCode::StoreArrayElement,
             Instruction::StoreMapElement => OpCode::StoreMapElement,
             Instruction::CallIndirect => OpCode::CallIndirect,
+            Instruction::CallIndirectWithRuntimeId => OpCode::CallIndirectWithRuntimeId,
             Instruction::Discriminant => OpCode::Discriminant,
             Instruction::TypeTag => OpCode::TypeTag,
             Instruction::ThrowIfPanic => OpCode::ThrowIfPanic,
@@ -2325,11 +2398,13 @@ impl Bytecode {
             Instruction::InitInstance(_) => OpCode::InitInstance,
             Instruction::AllocVariant(_) => OpCode::AllocVariant,
             Instruction::SysOp(_) => OpCode::SysOp,
+            Instruction::SysOpWithRuntimeId(_) => OpCode::SysOpWithRuntimeId,
             Instruction::Spawn => OpCode::Spawn,
             Instruction::Watch(_) => OpCode::Watch,
             Instruction::Unwatch(_) => OpCode::Unwatch,
             Instruction::Notify(_) => OpCode::Notify,
             Instruction::Call { .. } => OpCode::Call,
+            Instruction::CallWithRuntimeId { .. } => OpCode::CallWithRuntimeId,
             Instruction::IsType(_) => OpCode::IsType,
             Instruction::DenseTag(_) => OpCode::DenseTag,
             Instruction::LoadType(_) => OpCode::LoadType,
@@ -2398,6 +2473,7 @@ impl Bytecode {
                 OpCode::MakeGenericFunctionFromValue
             }
             Instruction::VirtualCall { .. } => OpCode::VirtualCall,
+            Instruction::VirtualCallWithRuntimeId { .. } => OpCode::VirtualCallWithRuntimeId,
         }
     }
 }

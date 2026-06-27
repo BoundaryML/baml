@@ -14,4 +14,4 @@ export type {
   InboundMapValue,
   CallFunctionArgs,
 } from './generated/baml_core/cffi/v1/baml_inbound';
-export type { BamlOutboundValue } from './generated/baml_core/cffi/v1/baml_outbound';
+export { BamlOutboundValue } from './generated/baml_core/cffi/v1/baml_outbound';

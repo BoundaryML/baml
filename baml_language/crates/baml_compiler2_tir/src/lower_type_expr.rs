@@ -12,6 +12,48 @@ use crate::{
     ty::{Freshness, FunctionParamMode, FunctionParamTy, MediaKind, QualifiedTypeName, Ty, TyAttr},
 };
 
+fn is_supported_map_key_type(
+    db: &dyn crate::Db,
+    ty: &Ty,
+    seen_aliases: &mut FxHashSet<QualifiedTypeName>,
+) -> bool {
+    match ty {
+        Ty::String { .. }
+        | Ty::Never { .. }
+        | Ty::Unknown { .. }
+        | Ty::Error { .. }
+        | Ty::TypeVar(..) => true,
+        Ty::Literal(baml_base::Literal::String(_), _, _) => true,
+        Ty::Union(members, _) => members
+            .iter()
+            .all(|member| is_supported_map_key_type(db, member, seen_aliases)),
+        Ty::TypeAlias(qtn, _) => {
+            if !seen_aliases.insert(qtn.clone()) {
+                return false;
+            }
+            let supported = resolve_type_alias_target(db, qtn)
+                .is_some_and(|expanded| is_supported_map_key_type(db, &expanded, seen_aliases));
+            seen_aliases.remove(qtn);
+            supported
+        }
+        _ => false,
+    }
+}
+
+fn resolve_type_alias_target(db: &dyn crate::Db, qtn: &QualifiedTypeName) -> Option<Ty> {
+    let pkg_id = PackageId::new(db, qtn.package().clone());
+    let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
+    let Some(Definition::TypeAlias(alias_loc)) = pkg_items.lookup_type(qtn.namespace(), qtn.name())
+    else {
+        return None;
+    };
+    Some(
+        crate::inference::resolve_type_alias(db, alias_loc)
+            .ty
+            .clone(),
+    )
+}
+
 /// Resolve an AST `TypeExpr` to a `Ty` using package-level name resolution.
 ///
 /// Names are resolved against `package_items`: classes, enums, and type aliases
@@ -19,10 +61,10 @@ use crate::{
 /// and push an `UnresolvedType` diagnostic to `diagnostics`.
 /// The package for each resolved type is derived from the **definition's** file,
 /// not the referencing file.
-pub fn lower_type_expr(
-    db: &dyn crate::Db,
+pub fn lower_type_expr<'db>(
+    db: &'db dyn crate::Db,
     type_expr: &TypeExpr,
-    package_items: &PackageItems<'_>,
+    package_items: &PackageItems<'db>,
     generic_params: &[baml_base::Name],
     diagnostics: &mut Vec<TirTypeError>,
 ) -> Ty {
@@ -533,10 +575,10 @@ fn interface_declares_member(
         })
 }
 
-pub fn lower_type_expr_in_ns(
-    db: &dyn crate::Db,
+pub fn lower_type_expr_in_ns<'db>(
+    db: &'db dyn crate::Db,
     type_expr: &TypeExpr,
-    package_items: &PackageItems<'_>,
+    package_items: &PackageItems<'db>,
     ns_context: &[baml_base::Name],
     generic_params: &[baml_base::Name],
     diagnostics: &mut Vec<TirTypeError>,
@@ -994,25 +1036,36 @@ pub fn lower_type_expr_in_ns(
             )),
             TyAttr::default(),
         ),
-        TypeExprKind::Map { key, value, .. } => Ty::Map {
-            key: Box::new(lower_type_expr_in_ns(
+        TypeExprKind::Map { key, value, .. } => {
+            let key_ty = lower_type_expr_in_ns(
                 db,
                 key,
                 package_items,
                 ns_context,
                 generic_params,
                 diagnostics,
-            )),
-            value: Box::new(lower_type_expr_in_ns(
+            );
+            let value_ty = lower_type_expr_in_ns(
                 db,
                 value,
                 package_items,
                 ns_context,
                 generic_params,
                 diagnostics,
-            )),
-            attr: TyAttr::default(),
-        },
+            );
+            let supported_key_type =
+                is_supported_map_key_type(db, &key_ty, &mut FxHashSet::default());
+            if !supported_key_type {
+                diagnostics.push(TirTypeError::InvalidMapKeyType {
+                    key: key_ty.clone(),
+                });
+            }
+            Ty::Map {
+                key: Box::new(key_ty),
+                value: Box::new(value_ty),
+                attr: TyAttr::default(),
+            }
+        }
         TypeExprKind::Union {
             variants: members, ..
         } => Ty::Union(

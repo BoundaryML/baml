@@ -14,6 +14,15 @@ function $init() -> null {
     return
 }
 
+function boundary.LocalId.capture(self: boundary.LocalId, inputs: bool | null, output: bool | null, error: bool | null) -> boundary.LocalId {
+}
+
+function boundary.id() -> boundary.LocalId {
+}
+
+function boundary.id.current() -> string {
+}
+
 function user.Gpt4oClient$new() -> null {
     load_const "Gpt4oClient"
     load_const "openai"

@@ -206,13 +206,14 @@ fn to_source_code_internal(
             symbols: Vec::new(),
         };
         let body = bodies.get(&leaf_path).unwrap_or(&empty_body);
+        let callable_child_names = body.callable_child_names(&kids);
 
         let mut content = if dir.is_empty() {
             render_root_init(&kids, runtime_payload.is_bytecode())
         } else {
             render_package_init(&kids)
         };
-        content.push_str(&render_leaf_body(body));
+        content.push_str(&render_leaf_body(body, &callable_child_names));
         out.insert(init_py_path(dir), content);
 
         // `.pyi` sibling — pyright wants the classical
@@ -221,11 +222,12 @@ fn to_source_code_internal(
         // `__getattr__` hook. The root `.pyi` drops all the
         // `BamlRuntime`/`set_type_map` runtime wiring too.
         let mut pyi_content = if dir.is_empty() {
-            render_root_init_pyi(&kids)
+            render_root_init_pyi(&kids, &callable_child_names)
         } else {
-            render_package_init_pyi(&kids)
+            render_package_init_pyi(&kids, &callable_child_names)
         };
-        pyi_content.push_str(&render_leaf_body_pyi(body));
+        let callable_child_bodies = callable_child_bodies(dir, &callable_child_names, &bodies);
+        pyi_content.push_str(&render_leaf_body_pyi(body, &callable_child_bodies));
         out.insert(init_pyi_path(dir), pyi_content);
     }
 
@@ -324,11 +326,17 @@ fn render_package_init(children: &BTreeSet<String>) -> String {
 /// `.pyi` counterpart of `render_package_init`. Stubs aren't executed,
 /// so the PEP 562 `__getattr__` hook serves no purpose; pyright wants
 /// the explicit `from . import <child>` cascade instead.
-fn render_package_init_pyi(children: &BTreeSet<String>) -> String {
+fn render_package_init_pyi(
+    children: &BTreeSet<String>,
+    hidden_children: &BTreeSet<String>,
+) -> String {
     let mut out = String::from("from __future__ import annotations\n");
     if !children.is_empty() {
         out.push('\n');
         for child in children {
+            if hidden_children.contains(child) {
+                continue;
+            }
             let _ = writeln!(out, "from . import {child}");
         }
     }
@@ -387,12 +395,35 @@ fn render_root_init(top_children: &BTreeSet<String>, use_bytecode: bool) -> Stri
 /// pyright needs `from . import <child>` re-exports for dotted access
 /// to type-check, and there's no runtime init machinery (no
 /// `BamlRuntime`, no `set_type_map`).
-fn render_root_init_pyi(top_children: &BTreeSet<String>) -> String {
+fn render_root_init_pyi(
+    top_children: &BTreeSet<String>,
+    hidden_children: &BTreeSet<String>,
+) -> String {
     let mut out = String::from("from __future__ import annotations\n");
     if !top_children.is_empty() {
         out.push('\n');
         for child in top_children {
+            if hidden_children.contains(child) {
+                continue;
+            }
             let _ = writeln!(out, "from . import {child}");
+        }
+    }
+    out
+}
+
+fn callable_child_bodies<'a>(
+    dir: &[String],
+    callable_child_names: &BTreeSet<String>,
+    bodies: &'a BTreeMap<LeafPath, LeafBody>,
+) -> BTreeMap<String, &'a LeafBody> {
+    let mut out = BTreeMap::new();
+    for child in callable_child_names {
+        let mut segments = dir.to_vec();
+        segments.push(child.clone());
+        let child_leaf = LeafPath { segments };
+        if let Some(body) = bodies.get(&child_leaf) {
+            out.insert(child.clone(), body);
         }
     }
     out
@@ -607,6 +638,13 @@ mod tests {
         Symbol::Function(bare_func(bare, file, span))
     }
 
+    fn zero_arg_func(bare: &str, return_type: Ty, file: &str, span: u32) -> Symbol {
+        let mut f = bare_func(bare, file, span);
+        f.arguments.clear();
+        f.return_type = return_type;
+        Symbol::Function(f)
+    }
+
     /// Insert a parent function plus its companions into `pool` as
     /// independent `Symbol::Function` entries, mirroring how
     /// `build_symbol_pool` produces them after the 14b refactor.
@@ -726,6 +764,35 @@ mod tests {
         let leaf = &out[&PathBuf::from("lorem/__init__.py")];
         assert!(leaf.contains("import typing\n"));
         assert!(leaf.contains("Foo: typing.TypeAlias = int\n"));
+    }
+
+    #[test]
+    fn callable_child_collision_uses_function_namespace_surface() {
+        let mut pool: SymbolPool = HashMap::new();
+        pool.insert(
+            cg_name("boundary", &[], "id"),
+            zero_arg_func("id", Ty::String, "core.baml", 0),
+        );
+        pool.insert(
+            cg_name("boundary", &["id"], "current"),
+            zero_arg_func("current", Ty::String, "id.baml", 0),
+        );
+
+        let out = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+        let leaf = &out[&PathBuf::from("vendor/boundary/__init__.py")];
+        assert!(leaf.contains("import importlib\n"));
+        assert!(leaf.contains("_id_namespace = importlib.import_module(\".id\", __name__)"));
+        assert!(leaf.contains(
+            "    setattr(id, _baml_child_name, getattr(_id_namespace, _baml_child_name))"
+        ));
+
+        let pyi = &out[&PathBuf::from("vendor/boundary/__init__.pyi")];
+        assert!(!pyi.contains("from . import id\n"));
+        assert!(pyi.contains("class _BamlCallableNamespace_id(typing.Protocol):\n"));
+        assert!(pyi.contains("    def __call__(self) -> str: ...\n"));
+        assert!(pyi.contains("    def current(self) -> str: ...\n"));
+        assert!(pyi.contains("\nid: _BamlCallableNamespace_id\n"));
+        assert!(!pyi.contains("def id() -> str: ..."));
     }
 
     // ── /// docstring emission ──────────────────────────────────────────────
