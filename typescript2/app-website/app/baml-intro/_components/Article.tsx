@@ -6,7 +6,7 @@ import { BamlCode } from '../../learn2/_components/BamlCode';
 import BamlEditor from '../../learn2/_components/BamlEditorLazy';
 import LivePlayground from '../../learn2/_components/LivePlaygroundLazy';
 import { InfectionGraph } from '../../learn3/_components/InfectionGraph';
-import { MetricsDag } from '../../learn3/_components/MetricsDag';
+// import { MetricsDag } from '../../learn3/_components/MetricsDag'; // metrics section hidden
 import { TermPlay } from '../../learn3/_components/TermPlay';
 import { SdkPipeline } from '../../learn4/_components/SdkPipeline';
 import { PackChart, SpawnChart } from './PackChart';
@@ -18,7 +18,7 @@ import {
   BAML_HTTP_TESTS,
   BAML_IMAGE,
   BAML_MATCH,
-  BAML_METRIC,
+  // BAML_METRIC, // metrics section hidden
   BAML_PACKED,
   BAML_RUNNER,
   BAML_SPAWN,
@@ -187,7 +187,7 @@ const TOC: { id: string; label: string; sub?: boolean }[] = [
   { id: 'workflows', label: 'BAML for AI workflows' },
   { id: 'wf-llm', label: '1 · Native LLM Functions', sub: true },
   { id: 'wf-tests', label: '2 · BAML Tests', sub: true },
-  { id: 'wf-metrics', label: '3 · Metrics primitive', sub: true },
+  // { id: 'wf-metrics', label: '3 · Metrics primitive', sub: true },
   { id: 'agents', label: 'BAML for AI Agents' },
   { id: 'types', label: '1 · Type-system', sub: true },
   { id: 'namespaces', label: '2 · Namespaces', sub: true },
@@ -465,6 +465,7 @@ export function Article() {
           </p>
         </Sub>
 
+        {/* Metrics primitive (design stage) — temporarily hidden.
         <Sub
           id="wf-metrics"
           num="3"
@@ -489,6 +490,7 @@ export function Article() {
             }
           </p>
         </Sub>
+        */}
       </Part>
 
       {/* ---- Part 2 · AI agents ---- */}

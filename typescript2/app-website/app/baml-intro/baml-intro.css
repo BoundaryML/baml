@@ -70,14 +70,17 @@
   color: var(--l6-accent);
 }
 
-/* ---- layout: everything left-aligned, "on this page" rail top right ---- */
+/* ---- layout: centered reading column (blogpost style). Text within the
+   column stays left-aligned; the whole column is centered on the page. The
+   "on this page" rail floats in the right gutter. */
 .l6 {
-  --l6-left: clamp(1.2rem, 5vw, 4.5rem);
-  --l6-rail: 0px;
+  --l6-gutter: clamp(1.2rem, 5vw, 4.5rem);
 }
+/* On wide screens widen the side gutter so the centered content clears the
+   fixed "on this page" rail pinned to the right. */
 @media (min-width: 1140px) {
   .l6 {
-    --l6-rail: 232px;
+    --l6-gutter: 248px;
   }
 }
 /* anchor jumps from the rail land below the sticky header */
@@ -85,20 +88,26 @@
   scroll-behavior: smooth;
 }
 .l6-section {
-  max-width: min(760px, calc(100vw - var(--l6-left) - var(--l6-rail) - 1rem));
+  max-width: min(760px, calc(100vw - 2 * var(--l6-gutter)));
   padding: 4.4rem 0 1.2rem;
-  margin: 0 0 0 var(--l6-left);
+  margin: 0 auto;
   scroll-margin-top: 3.2rem;
 }
-/* Breakout: editors, playgrounds, and side-by-side pairs escape the
-   reading column to the right (the column itself stays one width so all
-   headers stay aligned at the left edge). */
+/* Breakout: editors, playgrounds, and side-by-side pairs are wider than the
+   ~760px reading column but stay centered on the page like the prose above.
+   `margin: auto` can't center a child wider than its parent, so we offset the
+   left edge to page-center minus half the breakout's own width. (Negative
+   margins, not transform: a transform here would create a containing block
+   that misplaces the playground's fixed-position Monaco popups.) */
 .l6-breakout,
 .l6-pair {
-  width: min(1200px, calc(100vw - var(--l6-left) - var(--l6-rail) - 1.5rem));
+  --l6-bw: min(1200px, calc(100vw - 2 * var(--l6-gutter)));
+  width: var(--l6-bw);
+  margin-left: calc(50% - var(--l6-bw) / 2);
+  margin-right: 0;
 }
 .l6-breakout--xl {
-  width: min(1400px, calc(100vw - var(--l6-left) - var(--l6-rail) - 1.5rem));
+  --l6-bw: min(1400px, calc(100vw - 2 * var(--l6-gutter)));
 }
 
 /* ---- "on this page" rail ---- */
@@ -298,7 +307,9 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 1.1rem;
   align-items: start;
-  margin: 1.2rem 0;
+  /* vertical only — the centering offset (margin-left) is set above */
+  margin-top: 1.2rem;
+  margin-bottom: 1.2rem;
 }
 @media (max-width: 880px) {
   .l6-pair {
