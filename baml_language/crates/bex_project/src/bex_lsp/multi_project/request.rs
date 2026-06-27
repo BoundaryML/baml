@@ -49,7 +49,7 @@ pub(super) fn server_capabilities() -> ServerCapabilities {
                         .map(|name| lsp_types::SemanticTokenModifier::new(name))
                         .collect(),
                 },
-                full: Some(SemanticTokensFullOptions::Bool(true)),
+                full: Some(SemanticTokensFullOptions::Delta { delta: Some(true) }),
                 range: Some(true),
                 ..Default::default()
             },
@@ -320,13 +320,64 @@ impl BexLspRequest for BexMulitProject {
         // Always returns tokens in document order.
         let tokens = baml_lsp2_actions::semantic_tokens(lsp_db, source_file);
         let lsp_tokens = encode_semantic_tokens(&tokens, text);
+        let result_id = self.cache_semantic_tokens(&path, lsp_tokens.clone());
 
         Ok(Some(lsp_types::SemanticTokensResult::Tokens(
             lsp_types::SemanticTokens {
-                result_id: None,
+                result_id: Some(result_id),
                 data: lsp_tokens,
             },
         )))
+    }
+
+    /// Incremental semantic tokens — rust-analyzer's `full/delta`. Diffs the new
+    /// token array against the cached one for the client's `previous_result_id`
+    /// and returns just the edits; falls back to the full set on a cache miss.
+    fn on_request_text_document_semantic_tokens_full_delta(
+        &self,
+        params: lsp_request_params!("textDocument/semanticTokens/full/delta"),
+    ) -> Result<lsp_request_result!("textDocument/semanticTokens/full/delta"), LspError> {
+        let path = self.get_path_from_uri(&params.text_document.uri)?;
+        let root_path = Self::get_baml_project_root(&path)?;
+        let project_handle = self.get_or_create_project(root_path)?;
+
+        let project = project_handle.project.try_lock_db()?;
+        let lsp_db = project.db();
+        let Some(source_file) = lsp_db.get_file(std::path::Path::new(path.as_str())) else {
+            return Ok(None);
+        };
+        let text = source_file.text(lsp_db);
+
+        let tokens = baml_lsp2_actions::semantic_tokens(lsp_db, source_file);
+        let new_tokens = encode_semantic_tokens(&tokens, text);
+
+        // The previous token array iff its result_id matches what the client holds.
+        let key = crate::fs::FsPath::from_vfs(&path);
+        let prev = {
+            let cache = self.semantic_tokens_cache.lock().unwrap();
+            cache
+                .get(&key)
+                .filter(|(id, _)| *id == params.previous_result_id)
+                .map(|(_, toks)| toks.clone())
+        };
+        let result_id = self.cache_semantic_tokens(&path, new_tokens.clone());
+
+        match prev {
+            Some(prev_tokens) => Ok(Some(
+                lsp_types::SemanticTokensFullDeltaResult::TokensDelta(
+                    lsp_types::SemanticTokensDelta {
+                        result_id: Some(result_id),
+                        edits: diff_semantic_tokens(&prev_tokens, &new_tokens),
+                    },
+                ),
+            )),
+            None => Ok(Some(lsp_types::SemanticTokensFullDeltaResult::Tokens(
+                lsp_types::SemanticTokens {
+                    result_id: Some(result_id),
+                    data: new_tokens,
+                },
+            ))),
+        }
     }
 
     /// Viewport semantic tokens — rust-analyzer's `highlight_range`. Resolves
@@ -898,6 +949,81 @@ fn encode_semantic_tokens(
     out
 }
 
+/// Minimal single-edit diff of two encoded token arrays (rust-analyzer's
+/// approach): trim the common prefix and suffix at token granularity and
+/// replace only the differing middle. `start`/`delete_count` are offsets into
+/// the flat LSP `u32` stream (5 integers per token), so they scale by 5.
+fn diff_semantic_tokens(
+    prev: &[lsp_types::SemanticToken],
+    new: &[lsp_types::SemanticToken],
+) -> Vec<lsp_types::SemanticTokensEdit> {
+    let mut p = 0;
+    while p < prev.len() && p < new.len() && prev[p] == new[p] {
+        p += 1;
+    }
+    let mut s = 0;
+    while s < prev.len() - p && s < new.len() - p && prev[prev.len() - 1 - s] == new[new.len() - 1 - s]
+    {
+        s += 1;
+    }
+    let deleted = prev.len() - p - s;
+    let data = new[p..new.len() - s].to_vec();
+    if deleted == 0 && data.is_empty() {
+        return Vec::new();
+    }
+    vec![lsp_types::SemanticTokensEdit {
+        start: u32::try_from(p * 5).unwrap_or(u32::MAX),
+        delete_count: u32::try_from(deleted * 5).unwrap_or(u32::MAX),
+        data: Some(data),
+    }]
+}
+
+#[cfg(test)]
+mod semantic_tokens_delta_tests {
+    use super::diff_semantic_tokens;
+
+    fn tok(line: u32) -> lsp_types::SemanticToken {
+        lsp_types::SemanticToken {
+            delta_line: line,
+            delta_start: 0,
+            length: 1,
+            token_type: 0,
+            token_modifiers_bitset: 0,
+        }
+    }
+
+    #[test]
+    fn identical_yields_no_edits() {
+        let a = vec![tok(1), tok(2), tok(3)];
+        assert!(diff_semantic_tokens(&a, &a).is_empty());
+    }
+
+    #[test]
+    fn middle_replacement_scales_by_five() {
+        let edits = diff_semantic_tokens(&[tok(1), tok(2), tok(3)], &[tok(1), tok(9), tok(3)]);
+        assert_eq!(edits.len(), 1);
+        assert_eq!(edits[0].start, 5); // one unchanged leading token
+        assert_eq!(edits[0].delete_count, 5); // one token replaced
+        assert_eq!(edits[0].data.as_ref().unwrap(), &[tok(9)]);
+    }
+
+    #[test]
+    fn append_is_pure_insert() {
+        let edits = diff_semantic_tokens(&[tok(1)], &[tok(1), tok(2)]);
+        assert_eq!(edits[0].start, 5);
+        assert_eq!(edits[0].delete_count, 0);
+        assert_eq!(edits[0].data.as_ref().unwrap(), &[tok(2)]);
+    }
+
+    #[test]
+    fn truncate_is_pure_delete() {
+        let edits = diff_semantic_tokens(&[tok(1), tok(2)], &[tok(1)]);
+        assert_eq!(edits[0].start, 5);
+        assert_eq!(edits[0].delete_count, 5);
+        assert!(edits[0].data.as_ref().unwrap().is_empty());
+    }
+}
+
 /// Convert a compiler2 `DefinitionKind` to an LSP `SymbolKind`.
 ///
 /// Used by the `textDocument/documentSymbol` and `workspace/symbol` handlers
@@ -933,6 +1059,24 @@ fn compute_line_starts(source: &str) -> Vec<u32> {
 }
 
 impl BexMulitProject {
+    /// Store `tokens` as the latest semantic tokens for `path` under a fresh
+    /// `result_id`, returning that id so the next `full/delta` can diff against it.
+    fn cache_semantic_tokens(
+        &self,
+        path: &vfs::VfsPath,
+        tokens: Vec<lsp_types::SemanticToken>,
+    ) -> String {
+        let id = self
+            .semantic_tokens_seq
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+            .to_string();
+        self.semantic_tokens_cache
+            .lock()
+            .unwrap()
+            .insert(crate::fs::FsPath::from_vfs(path), (id.clone(), tokens));
+        id
+    }
+
     fn compute_on_position<T>(
         &self,
         params: &lsp_types::TextDocumentPositionParams,
