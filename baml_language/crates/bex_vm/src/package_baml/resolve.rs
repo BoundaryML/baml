@@ -800,9 +800,8 @@ fn template_has_type_arg_ref(t: &TyTemplate) -> bool {
 /// `push_unique`.
 fn concrete_types(vm: &BexVm) -> Vec<RuntimeTy> {
     let mut types: Vec<RuntimeTy> = vm
-        .resolved_class_names
-        .values()
-        .filter_map(|&ptr| match vm.get_object(ptr) {
+        .all_class_and_enum_ptrs()
+        .filter_map(|ptr| match vm.get_object(ptr) {
             Object::Class(class) => Some(RuntimeTy::Class(
                 class.name.clone(),
                 Vec::new(),

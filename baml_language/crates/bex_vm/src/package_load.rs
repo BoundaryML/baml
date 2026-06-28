@@ -156,6 +156,33 @@ fn fill_package_slots(
     vm_packages
 }
 
+/// Flatten every package's recursive type aliases into one `TypeName → RuntimeTy`
+/// map (the shape `SysOpContext::type_alias_definitions` wants for output-format
+/// rendering), reconstructing each qualified name from its package + `LocalName`.
+pub fn all_recursive_type_aliases(
+    packages: &IndexMap<Name, HeapPtr>,
+) -> IndexMap<baml_type::TypeName, baml_type::RuntimeTy> {
+    let mut out = IndexMap::new();
+    for (pkg_name, &pkg_ptr) in packages {
+        // SAFETY: `packages` only ever holds compile-time `Object::Package`
+        // pointers (built by `fill_package_slots`), valid for the heap's lifetime.
+        #[expect(unsafe_code, reason = "deref a compile-time package pointer")]
+        let object = unsafe { pkg_ptr.get() };
+        let Some(package) = object.as_package() else {
+            continue;
+        };
+        for (local, ty) in &package.recursive_type_aliases {
+            let qtn = baml_type::TypeName::new(
+                pkg_name.clone(),
+                local.namespace.clone(),
+                local.name.clone(),
+            );
+            out.insert(qtn, ty.clone());
+        }
+    }
+    out
+}
+
 /// Build the unified heap from `compile_time_objects`, additionally allocating
 /// the per-package `Object::Package` / `Object::ImplRule` objects and returning
 /// the `vm.packages` index. The heap is sealed on return.

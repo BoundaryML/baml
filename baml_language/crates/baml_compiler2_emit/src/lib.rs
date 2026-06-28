@@ -776,6 +776,14 @@ pub fn generate_project_bytecode_with_opt(
         }
     }
 
+    // The per-package program structure the loader builds `Object::Package` +
+    // `vm.packages` from. Accumulated across passes 2/3/3b (classes, enums,
+    // interfaces) and `build_packages` (impl rules); interface object indices are
+    // tracked alongside so impl rules can point at them by index.
+    let mut interface_object_indices: HashMap<baml_type::TypeName, usize> = HashMap::new();
+    let mut program_packages: indexmap::IndexMap<Name, bex_vm_types::types::ProgramPackage> =
+        indexmap::IndexMap::new();
+
     // --- Pass 2: Build classes table ---
     // Maps fully-qualified class name -> (field name -> field index).
     // Also builds class_object_indices: class fq_name -> object index in program.objects.
@@ -908,6 +916,17 @@ pub fn generate_project_bytecode_with_opt(
             })));
             // Register with fully-qualified name for inter-package lookups.
             class_object_indices.insert(fq_name.clone(), class_obj_idx);
+            program_packages
+                .entry(pkg_info.package.clone())
+                .or_default()
+                .classes
+                .insert(
+                    bex_vm_types::types::LocalName {
+                        namespace: pkg_info.namespace_path.clone(),
+                        name: class_data.name.clone(),
+                    },
+                    ObjectIndex::from_raw(class_obj_idx),
+                );
             classes.insert(fq_name.clone(), field_indices);
             // MIR TypeName display for user-defined classes omits the `user.`
             // package prefix in diagnostics/snapshots. Register the same key
@@ -995,6 +1014,17 @@ pub fn generate_project_bytecode_with_opt(
                 ty_attr: TyAttr::default(),
             })));
             enum_object_indices.insert(fq_name.clone(), enum_obj_idx);
+            program_packages
+                .entry(pkg_info.package.clone())
+                .or_default()
+                .enums
+                .insert(
+                    bex_vm_types::types::LocalName {
+                        namespace: pkg_info.namespace_path.clone(),
+                        name: enum_data.name.clone(),
+                    },
+                    ObjectIndex::from_raw(enum_obj_idx),
+                );
             enum_variants.insert(fq_name, variant_map);
         }
     }
@@ -1006,9 +1036,6 @@ pub fn generate_project_bytecode_with_opt(
     // is left empty and filled when reflection needs it. `program_packages` is the
     // per-package structure the loader builds `Object::Package` + `vm.packages`
     // from; `build_packages` fills in each package's impl rules below.
-    let mut interface_object_indices: HashMap<baml_type::TypeName, usize> = HashMap::new();
-    let mut program_packages: indexmap::IndexMap<Name, bex_vm_types::types::ProgramPackage> =
-        indexmap::IndexMap::new();
     for file in &all_files {
         let item_tree = file_item_tree(db, *file);
         let pkg_info = file_package(db, *file);
@@ -1462,15 +1489,24 @@ pub fn generate_project_bytecode_with_opt(
     // Pass 7 is intentionally empty.
 
     // --- Pass 7.5: Recursive type alias definitions (ctx.output_format bridge) ---
-    // Mirrors the legacy pipeline: only recursive aliases are stored in
-    // `Program.recursive_type_alias_defs`; non-recursive aliases are expanded inline
+    // Mirrors the legacy pipeline: only recursive aliases are stored per package
+    // (`Package.recursive_type_aliases`); non-recursive aliases are expanded inline
     // by `convert_tir_ty_for_runtime`. This is required for correct output_format rendering at runtime.
     for cache in alias_caches.values() {
         for (qtn, tir_ty) in &cache.aliases {
             if cache.recursive.contains(qtn) {
                 let mir_ty = cache.convert(tir_ty);
-                let type_name = qtn.clone();
-                program.recursive_type_alias_defs.insert(type_name, mir_ty);
+                program_packages
+                    .entry(qtn.package().clone())
+                    .or_default()
+                    .recursive_type_aliases
+                    .insert(
+                        bex_vm_types::types::LocalName {
+                            namespace: qtn.namespace().clone(),
+                            name: qtn.name().clone(),
+                        },
+                        mir_ty,
+                    );
             }
         }
     }

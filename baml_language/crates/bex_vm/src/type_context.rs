@@ -45,7 +45,7 @@ impl TypeContext for RuntimeTypeContext<'_> {
     fn alias_def(&self, name: &QualifiedTypeName) -> Option<Ty> {
         // Only recursive aliases survive to runtime; non-recursive ones were
         // expanded inline at lowering. Widen the stored `RuntimeTy` up to `Ty`.
-        self.vm.recursive_type_alias_defs.get(name).map(Ty::from)
+        self.vm.recursive_type_alias(name).map(Ty::from)
     }
 
     fn implements_interface(&self, concrete: &Ty, interface: &Interface) -> bool {
@@ -91,13 +91,9 @@ impl TypeContext for RuntimeTypeContext<'_> {
     }
 
     fn enum_variants(&self, name: &QualifiedTypeName) -> Option<Vec<Name>> {
-        // Enums live on the heap; `resolved_class_names` maps the qualified-name
-        // string to the object pointer (classes and enums share that map).
-        let ptr = self
-            .vm
-            .resolved_class_names
-            .get(&name.to_string())
-            .copied()?;
+        // Enums live on the heap; look the qualified name up through its package
+        // (classes and enums share one type namespace).
+        let ptr = self.vm.lookup_type(name)?;
         match self.vm.get_object(ptr) {
             Object::Enum(en) => Some(
                 en.variants

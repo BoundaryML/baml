@@ -143,7 +143,7 @@ macro_rules! verifier_unreachable {
 use ::bex_heap::TlabHolder;
 use ::bex_vm_types::{
     EarlyYieldCheck, RootHaver,
-    types::{ErrorClass, FutureId, InterfaceImplsByPackage},
+    types::{ErrorClass, FutureId},
 };
 use ::core::any::TypeId;
 #[cfg(not(target_arch = "wasm32"))]
@@ -410,7 +410,6 @@ mod tests {
             early_yield: early_yield_for_test(),
             tlab: Tlab::new(heap),
             globals: VmGlobals::Owned(GlobalPool::new()),
-            resolved_class_names: HashMap::new(),
             error_class_ptrs: Vec::new(),
             panic_class_ptrs: Vec::new(),
             watch: Watch::new(),
@@ -432,8 +431,6 @@ mod tests {
             argv: Arc::from([]),
             pending_call_type_args: Vec::new(),
             packages: Arc::new(indexmap::IndexMap::new()),
-            interface_impls: Arc::new(indexmap::IndexMap::new()),
-            recursive_type_alias_defs: Arc::new(indexmap::IndexMap::new()),
         }
     }
 
@@ -800,12 +797,6 @@ pub struct BexVm {
     /// `Object::Package` pointer. Shared (`Arc`) across spawned VMs like
     /// [`Self::interface_impls`].
     pub packages: Arc<IndexMap<Name, HeapPtr>>,
-    /// Resolved class names mapping fully-qualified class names to their heap pointers.
-    ///
-    /// Used by `resolve_class()` for generated `copy::` struct `to_value()` methods.
-    /// Populated at VM construction time from the compiled program's class index.
-    #[deprecated = "use `packages` instead to look up classes/enums/etc"]
-    pub resolved_class_names: HashMap<String, HeapPtr>,
 
     /// Pre-resolved heap pointers for `baml.errors.*` classes, indexed by
     /// `ErrorClass` discriminant.
@@ -904,23 +895,6 @@ pub struct BexVm {
     /// re-enter the VM (via `YieldToCall`) therefore see their own type-args
     /// even if the inner callback uses different ones.
     pending_call_type_args: Vec<baml_type::RuntimeTy>,
-
-    /// Per-program interface implementation registry (BEP-044), consulted by the
-    /// runtime resolver (`resolve_interface_method`) to dispatch an interface
-    /// method on a value's concrete type and by the `type.implements()` /
-    /// `type.implementors()` / `type.implemented_by()` reflection methods. Shared
-    /// `Arc` so spawned VMs (lambdas, futures) don't duplicate the map.
-    #[deprecated = "use `packages` instead to look up interfaces and implementations"]
-    pub interface_impls: Arc<InterfaceImplsByPackage>,
-
-    /// Recursive type-alias definitions (`type JSON = … | JSON[]`). Only
-    /// recursive aliases survive to runtime; non-recursive ones were expanded
-    /// inline at lowering. Shared `Arc` across spawned VMs like `interface_impls`.
-    /// Read by the canonical type algebra (`RuntimeTypeContext`) to expand an
-    /// alias, and by output-format rendering.
-    #[deprecated = "use `packages` instead to look up recursive type aliases"]
-    pub recursive_type_alias_defs:
-        Arc<indexmap::IndexMap<baml_type::TypeName, baml_type::RuntimeTy>>,
 }
 
 /// VM execution state.
@@ -1073,11 +1047,6 @@ pub struct BytecodeProgram {
     pub client_metadata: HashMap<String, bex_vm_types::ClientBuildMeta>,
     /// Compiled test cases.
     pub test_cases: Vec<bex_vm_types::TestCase>,
-    /// Recursive type alias definitions for output format rendering.
-    pub recursive_type_alias_defs: indexmap::IndexMap<baml_type::TypeName, baml_type::RuntimeTy>,
-    /// Runtime interface-impl registry (BEP-044) for the interface-method
-    /// resolver and `type` reflection.
-    pub interface_impls: InterfaceImplsByPackage,
     /// Per-package program structure (global-index-keyed). The loader allocates
     /// the heap `Object::Package` / `Object::ImplRule` objects and the
     /// `vm.packages` index from this, resolving each `ObjectIndex` to a
@@ -1140,8 +1109,6 @@ pub fn convert_program(program: bex_vm_types::Program) -> Result<BytecodeProgram
         template_strings_macros: program.template_strings_macros,
         client_metadata: program.client_metadata,
         test_cases: program.test_cases,
-        recursive_type_alias_defs: program.recursive_type_alias_defs,
-        interface_impls: program.interface_impls,
         packages: program.packages,
     })
 }
@@ -1266,21 +1233,15 @@ impl BexVm {
     /// Create a new VM with a shared heap.
     ///
     /// The heap is shared across all VMs. Each VM gets its own TLAB
-    /// for contention-free allocation.
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "shared per-program tables threaded in from the engine"
-    )]
+    /// for contention-free allocation. `resolved_class_names` is consumed only to
+    /// pre-resolve the error/panic class pointers; class/enum lookups otherwise go
+    /// through `packages`.
     pub fn new(
         heap: Arc<BexHeap>,
         globals: VmGlobals,
-        resolved_class_names: HashMap<String, HeapPtr>,
+        resolved_class_names: &HashMap<String, HeapPtr>,
         #[cfg(not(target_arch = "wasm32"))] park_requested: Arc<AtomicBool>,
         argv: Arc<[String]>,
-        interface_impls: Arc<InterfaceImplsByPackage>,
-        recursive_type_alias_defs: Arc<
-            indexmap::IndexMap<baml_type::TypeName, baml_type::RuntimeTy>,
-        >,
         packages: Arc<IndexMap<Name, HeapPtr>>,
     ) -> Self {
         // Defer the first TLAB chunk reservation until the first `tlab.alloc`,
@@ -1325,7 +1286,6 @@ impl BexVm {
             early_yield,
             tlab,
             globals,
-            resolved_class_names,
             error_class_ptrs,
             panic_class_ptrs,
             watch: Watch::new(),
@@ -1347,8 +1307,6 @@ impl BexVm {
             argv,
             pending_call_type_args: Vec::new(),
             packages,
-            interface_impls,
-            recursive_type_alias_defs,
         }
     }
 
@@ -1611,6 +1569,75 @@ impl BexVm {
         // SAFETY: `HeapPtr` points into stable heap storage. Shared mutable
         // state behind the object must provide its own synchronization.
         unsafe { ptr.get() }
+    }
+
+    /// The `Object::Package` for `pkg`, if loaded.
+    fn package(&self, pkg: &Name) -> Option<&bex_vm_types::types::Package> {
+        self.get_object(*self.packages.get(pkg)?).as_package()
+    }
+
+    /// Look up a class or enum object by its qualified type name. Classes and
+    /// enums share one type namespace, so a name resolves to at most one object.
+    pub fn lookup_type(&self, qtn: &baml_type::TypeName) -> Option<HeapPtr> {
+        let package = self.package(qtn.package())?;
+        let local = bex_vm_types::types::LocalName {
+            namespace: qtn.namespace().clone(),
+            name: qtn.name().clone(),
+        };
+        package
+            .classes
+            .get(&local)
+            .or_else(|| package.enums.get(&local))
+            .copied()
+    }
+
+    /// Look up a class or enum object by its fully-qualified dotted name, with the
+    /// package as the leading segment. For builtin (dependency-package) types
+    /// referenced by constant FQN; not valid for `user`-package types, whose
+    /// rendered name elides the package — use [`Self::lookup_type`] there.
+    pub fn lookup_type_by_fqn(&self, fqn: &str) -> Option<HeapPtr> {
+        let mut parts: Vec<Name> = fqn.split('.').map(Name::new).collect();
+        let name = parts.pop()?;
+        if parts.is_empty() {
+            return None;
+        }
+        let pkg = parts.remove(0);
+        let package = self.package(&pkg)?;
+        let local = bex_vm_types::types::LocalName {
+            namespace: parts,
+            name,
+        };
+        package
+            .classes
+            .get(&local)
+            .or_else(|| package.enums.get(&local))
+            .copied()
+    }
+
+    /// The recursive type-alias definition for `qtn`, if any (only recursive
+    /// aliases survive to runtime; non-recursive ones are expanded inline).
+    pub fn recursive_type_alias(&self, qtn: &baml_type::TypeName) -> Option<&baml_type::RuntimeTy> {
+        let local = bex_vm_types::types::LocalName {
+            namespace: qtn.namespace().clone(),
+            name: qtn.name().clone(),
+        };
+        self.package(qtn.package())?
+            .recursive_type_aliases
+            .get(&local)
+    }
+
+    /// Every class and enum object across all loaded packages.
+    pub fn all_class_and_enum_ptrs(&self) -> impl Iterator<Item = HeapPtr> + '_ {
+        self.packages
+            .values()
+            .filter_map(move |&p| self.get_object(p).as_package())
+            .flat_map(|package| {
+                package
+                    .classes
+                    .values()
+                    .chain(package.enums.values())
+                    .copied()
+            })
     }
 
     /// Get mutable access to an object via `HeapPtr`.
@@ -2009,18 +2036,13 @@ impl BexVm {
                 .map(|(name, idx)| (name, heap.compile_time_ptr(idx.into_raw()))),
         );
 
-        let interface_impls = Arc::new(bytecode.interface_impls);
-        let recursive_type_alias_defs = Arc::new(bytecode.recursive_type_alias_defs);
-
         Ok(Self::new(
             heap,
             globals,
-            resolved_class_names,
+            &resolved_class_names,
             #[cfg(not(target_arch = "wasm32"))]
             park_requested,
             Arc::from(Vec::<String>::new()),
-            interface_impls,
-            recursive_type_alias_defs,
             Arc::new(vm_packages),
         ))
     }
@@ -2723,9 +2745,7 @@ impl BexVm {
     /// Used by generated `copy::` struct `to_value()` methods.
     /// Panics if the class is not found (programming error — all builtin classes must exist).
     pub fn resolve_class(&self, name: &str) -> HeapPtr {
-        *self
-            .resolved_class_names
-            .get(name)
+        self.lookup_type_by_fqn(name)
             .unwrap_or_else(|| panic!("resolve_class: class {name:?} not found"))
     }
 

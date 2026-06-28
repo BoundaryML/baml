@@ -85,10 +85,7 @@ use std::{
 
 use ::bex_heap::{HeapPermit as _, Tlab};
 // Re-export event types for callers.
-use ::bex_vm_types::{
-    RootHaver,
-    types::{FutureId, InterfaceImplsByPackage},
-};
+use ::bex_vm_types::{RootHaver, types::FutureId};
 use ::core::sync::atomic::AtomicBool;
 use async_trait::async_trait;
 pub use bex_events::{
@@ -686,19 +683,9 @@ pub struct BexEngine {
 
     futures: FutureManager,
 
-    /// Per-program interface-impl registry (BEP-044), kept here so every spawned
-    /// VM (including post-`$init` workers) sees the same map without cloning the
-    /// underlying `IndexMap`. Drives the interface-method resolver and `type`
-    /// reflection.
-    interface_impls: Arc<InterfaceImplsByPackage>,
-
-    /// Recursive type-alias definitions, shared with every VM (mirrors
-    /// `interface_impls`). Drives the canonical type algebra at runtime.
-    recursive_type_alias_defs: Arc<indexmap::IndexMap<baml_type::TypeName, baml_type::RuntimeTy>>,
-
     /// Loaded packages (name → `Object::Package` pointer), shared with every VM
-    /// (mirrors `interface_impls`). The source of truth for interface dispatch
-    /// and named-item lookup.
+    /// so spawned workers see the same index. The source of truth for interface
+    /// dispatch, recursive aliases, and named-item lookup.
     packages: Arc<indexmap::IndexMap<baml_type::Name, bex_vm_types::HeapPtr>>,
 
     /// Snapshot of the `BAML_PROFILE` master switch, taken once at
@@ -1436,10 +1423,6 @@ impl BexEngine {
         #[cfg(not(target_arch = "wasm32"))]
         let park_requested = Arc::new(AtomicBool::new(false));
 
-        let interface_impls: Arc<InterfaceImplsByPackage> =
-            Arc::new(bytecode.interface_impls.clone());
-        let recursive_type_alias_defs = Arc::new(bytecode.recursive_type_alias_defs.clone());
-
         // Run $init for each package in dependency order.
         // $init evaluates top-level let-binding initializers and stores their
         // results into the global slots via StoreGlobal instructions.
@@ -1449,16 +1432,14 @@ impl BexEngine {
                 let mut vm = BexVm::new(
                     Arc::clone(&heap),
                     VmGlobals::Owned(globals_pool.clone()),
-                    resolved_class_names
+                    &resolved_class_names
                         .iter()
                         .chain(resolved_enum_names.iter())
                         .map(|(k, v)| (k.clone(), *v))
-                        .collect(),
+                        .collect::<HashMap<_, _>>(),
                     #[cfg(not(target_arch = "wasm32"))]
                     Arc::clone(&park_requested),
                     Arc::clone(&argv),
-                    Arc::clone(&interface_impls),
-                    Arc::clone(&recursive_type_alias_defs),
                     Arc::clone(&packages),
                 );
                 vm.set_entry_point(*init_ptr, &[]);
@@ -1561,7 +1542,9 @@ impl BexEngine {
             template_strings_macros: Arc::new(bytecode.template_strings_macros),
             class_definitions: Arc::new(class_definitions),
             enum_definitions: Arc::new(enum_definitions),
-            type_alias_definitions: Arc::new(bytecode.recursive_type_alias_defs),
+            type_alias_definitions: Arc::new(bex_vm::package_load::all_recursive_type_aliases(
+                &packages,
+            )),
             runtime_io,
         };
 
@@ -1586,8 +1569,6 @@ impl BexEngine {
             park_requested,
             active_calls: Mutex::new(HashMap::new()),
             futures: FutureManager::new(futures_permit),
-            interface_impls,
-            recursive_type_alias_defs,
             packages,
             prof_enabled,
         })
@@ -2433,16 +2414,15 @@ impl BexEngine {
         let vm = BexVm::new(
             Arc::clone(&self.heap),
             VmGlobals::Shared(self.globals.clone()),
-            self.resolved_class_names
+            &self
+                .resolved_class_names
                 .iter()
                 .chain(self.resolved_enum_names.iter())
                 .map(|(k, v)| (k.clone(), *v))
-                .collect(),
+                .collect::<HashMap<_, _>>(),
             #[cfg(not(target_arch = "wasm32"))]
             Arc::clone(&self.park_requested),
             Arc::clone(&self.argv),
-            Arc::clone(&self.interface_impls),
-            Arc::clone(&self.recursive_type_alias_defs),
             Arc::clone(&self.packages),
         );
         // BEP-034: wrap the root VM in a `BexThread` from the outset so the
@@ -3887,16 +3867,15 @@ impl BexEngine {
         let mut child_vm = BexVm::new(
             Arc::clone(&self.heap),
             VmGlobals::Shared(self.globals.clone()),
-            self.resolved_class_names
+            &self
+                .resolved_class_names
                 .iter()
                 .chain(self.resolved_enum_names.iter())
                 .map(|(k, v)| (k.clone(), *v))
-                .collect(),
+                .collect::<HashMap<_, _>>(),
             #[cfg(not(target_arch = "wasm32"))]
             Arc::clone(&self.park_requested),
             Arc::clone(&self.argv),
-            Arc::clone(&self.interface_impls),
-            Arc::clone(&self.recursive_type_alias_defs),
             Arc::clone(&self.packages),
         );
         child_vm.prof_thread_id = prof_thread_id;
