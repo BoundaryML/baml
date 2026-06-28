@@ -23,6 +23,10 @@ function strings_char_at(index: int) -> string {
     "hello".char_at(index)
 }
 
+function strings_code_point_at(index: int) -> int {
+    "hello".code_point_at(index)
+}
+
 function strings_from_utf8_invalid() -> string {
     string.from_utf8(b"\xFF")
 }
@@ -247,6 +251,68 @@ test "string_char_at_past_start_panics" {
     }
 }
 
+// ─── code_point_at ─────────────────────────────────────────────────────────────
+
+// code_point_at is the numeric counterpart of char_at: same codepoint indexing,
+// but returns the code point's value instead of a one-character string.
+test "string_code_point_at_ascii" {
+    assert.is_true("A".code_point_at(0) == 65)
+}
+
+test "string_code_point_at_multibyte" {
+    // "héllo" = h é l l o; index 1 is é (U+00E9 = 233).
+    assert.is_true("héllo".code_point_at(1) == 233)
+}
+
+test "string_code_point_at_emoji" {
+    // A single emoji is one codepoint, not a pair of UTF-16 units.
+    assert.is_true("🐑hello".code_point_at(0) == 128017)
+}
+
+test "string_code_point_at_after_emoji" {
+    assert.is_true("😀hello".code_point_at(1) == 104)
+}
+
+// Negative indices count from the end: -1 is the last character.
+test "string_code_point_at_negative_counts_from_end" {
+    assert.is_true("hello".code_point_at(-1) == 111);
+    assert.is_true("héllo".code_point_at(-4) == 233)
+}
+
+// Every code_point_at value round-trips through from_code_points.
+test "string_code_point_at_round_trips_through_from_code_points" {
+    assert.is_true(baml.deep_equals(string.from_code_points([("é").code_point_at(0)]), "é"))
+}
+
+// code_point_at at or past the end raises IndexOutOfBounds ("hello" has length 5).
+test "string_code_point_at_at_length_panics" {
+    {
+        strings_code_point_at(5);
+        baml.sys.panic("expected code_point_at to throw")
+    } catch (e) {
+        baml.panics.IndexOutOfBounds => null
+    }
+}
+
+test "string_code_point_at_past_end_panics" {
+    {
+        strings_code_point_at(99);
+        baml.sys.panic("expected code_point_at to throw")
+    } catch (e) {
+        baml.panics.IndexOutOfBounds => null
+    }
+}
+
+// Past the start (normalizes before index 0) also raises IndexOutOfBounds.
+test "string_code_point_at_past_start_panics" {
+    {
+        strings_code_point_at(-6);
+        baml.sys.panic("expected code_point_at to throw")
+    } catch (e) {
+        baml.panics.IndexOutOfBounds => null
+    }
+}
+
 // index_of returns codepoint index.
 test "string_index_of_returns_codepoint_index" {
     assert.is_true(baml.deep_equals("héllo".index_of("l"), 2))
@@ -376,6 +442,33 @@ test "string_from_utf8_invalid_throws" {
 
 test "string_from_utf8_empty" {
     assert.is_true(baml.deep_equals(string.from_utf8(b""), ""))
+}
+
+// ─── to_code_points ───────────────────────────────────────────────────────────
+
+// to_code_points is the exact inverse of from_code_points: one int per character.
+test "string_to_code_points_ascii" {
+    assert.is_true(baml.deep_equals("hi".to_code_points(), [104, 105]))
+}
+
+test "string_to_code_points_multibyte" {
+    // "héllo" = h é l l o; é is U+00E9 = 233.
+    assert.is_true(baml.deep_equals("héllo".to_code_points(), [104, 233, 108, 108, 111]))
+}
+
+test "string_to_code_points_emoji" {
+    // A single emoji decodes to one codepoint, not a UTF-16 surrogate pair.
+    assert.is_true(baml.deep_equals("🐑".to_code_points(), [128017]))
+}
+
+test "string_to_code_points_empty" {
+    assert.is_true(baml.deep_equals("".to_code_points(), []))
+}
+
+// from_code_points ∘ to_code_points is the identity over arbitrary text.
+test "string_to_code_points_round_trips" {
+    let s = "Hëllo 🐑 World";
+    assert.is_true(baml.deep_equals(string.from_code_points(s.to_code_points()), s))
 }
 
 // ─── from_code_points ─────────────────────────────────────────────────────────
