@@ -171,7 +171,7 @@ function f(e: TimeoutError | OtherError) -> int {
 
 /// Ensures impossible typed bindings report a mismatch without bogus reachability errors.
 #[test]
-fn impossible_typed_match_binding_is_unreachable() {
+fn impossible_typed_match_binding_reports_mismatch() {
     let mut db = make_db();
     let file = db.add_file(
         "test.baml",

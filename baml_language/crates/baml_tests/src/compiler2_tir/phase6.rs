@@ -1964,6 +1964,41 @@ function f(p: Point) -> string {
     );
 }
 
+/// Ensures an unknown-field arm still counts for exhaustiveness coverage.
+#[test]
+fn class_destructure_unknown_field_arm_does_not_emit_non_exhaustive_match() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+class A {
+    value int
+}
+
+class B {
+    value int
+}
+
+function f(v: A | B) -> string {
+    match (v) {
+        A { valeu: 1 } => "a",
+        B { value } => "b",
+    }
+}
+"#,
+    );
+    let output = render_tir(&db, file);
+
+    assert!(
+        output.contains("class `A` has no field `valeu`"),
+        "unknown field in match-pattern should be diagnosed, got:\n{output}"
+    );
+    assert!(
+        !output.contains("non-exhaustive match"),
+        "invalid match arms should still participate in coverage to avoid duplicate non-exhaustive diagnostics, got:\n{output}"
+    );
+}
+
 #[test]
 fn class_destructure_unknown_field_in_for_binding_reports_field_error() {
     let mut db = make_db();

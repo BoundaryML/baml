@@ -7519,6 +7519,12 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
     }
 
+    /// Infer and validate a `match` expression against the scrutinee type.
+    ///
+    /// Pattern-lowering errors are allowed to participate in exhaustiveness
+    /// coverage so we do not emit duplicate `NonExhaustiveMatch` diagnostics.
+    /// Reachability diagnostics are computed from error-free arms only to avoid
+    /// secondary "unreachable arm" noise caused by invalid patterns.
     fn infer_match_expr(
         &mut self,
         match_expr_id: ExprId,
@@ -7546,9 +7552,12 @@ impl<'db> TypeInferenceBuilder<'db> {
         // so they're irrelevant to exhaustiveness coverage.
         let mut arm_types = Vec::with_capacity(arms.len());
         let mut matrix_arms: Vec<crate::exhaustiveness::DPat> = Vec::new();
-        // Map matrix index → source arm body ExprId for unreachable-arm
-        // diagnostics. We only push non-guarded arms into the matrix.
-        let mut matrix_arm_ids: Vec<ExprId> = Vec::new();
+        // Reachability uses only error-free, non-guarded arms so we suppress
+        // unreachable-arm noise from invalid patterns.
+        let mut reachability_arms: Vec<crate::exhaustiveness::DPat> = Vec::new();
+        // Map reachability-matrix index → source arm body ExprId for
+        // unreachable-arm diagnostics.
+        let mut reachability_arm_ids: Vec<ExprId> = Vec::new();
 
         for arm_id in arms {
             let arm = &body.match_arms[*arm_id];
@@ -7581,20 +7590,17 @@ impl<'db> TypeInferenceBuilder<'db> {
 
             self.restore_scoped_locals(&snapshot);
 
-            // Guarded arms don't contribute to coverage but still need to
-            // appear in the matrix at their source position so we can
-            // detect unreachability of *later* arms (a guard doesn't
-            // cover, but it doesn't make the arm unreachable either).
-            // For now, drop guarded arms from coverage analysis entirely
-            // — matches existing behaviour where guard suppressed both
-            // coverage and unreachable detection for that arm.
-            if arm.guard.is_none() && !pattern_had_error {
-                matrix_arms.push(result.dpat);
-                matrix_arm_ids.push(arm.body);
+            // Guarded arms don't contribute to coverage.
+            if arm.guard.is_none() {
+                matrix_arms.push(result.dpat.clone());
+                if !pattern_had_error {
+                    reachability_arms.push(result.dpat);
+                    reachability_arm_ids.push(arm.body);
+                }
             }
         }
 
-        // Pass 2: run the matrix algorithm once on all non-guarded arms.
+        // Pass 2: run matrix analysis for exhaustiveness and reachability.
         // Normalize the scrutinee for the matrix only — `Optional<T>` is
         // treated as `Union<T, null>` so UnionMember dispatch covers
         // both branches. The `NonExhaustiveMatch` diagnostic below still
@@ -7603,7 +7609,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         let report = crate::pattern_lowering::compute_match_usefulness(
             self,
             &matrix_arms,
-            scrutinee_ty_for_matrix,
+            scrutinee_ty_for_matrix.clone(),
         );
         // Exhaustiveness diagnostic.
         if report.missing.is_empty() {
@@ -7623,13 +7629,20 @@ impl<'db> TypeInferenceBuilder<'db> {
             );
         }
 
-        // Unreachable-arm diagnostic. ArmId in the report indexes into
-        // matrix_arms (not the original arm list), so we look up the
-        // source body ExprId via matrix_arm_ids.
-        for arm in report.unreachable_arms {
-            if let Some(&body_expr) = matrix_arm_ids.get(arm.0) {
-                self.context
-                    .report_simple(TirTypeError::UnreachableArm, body_expr);
+        // Unreachable-arm diagnostic. ArmId in the reachability report indexes
+        // into `reachability_arms` (not the original arm list), so we look up
+        // the source body ExprId via `reachability_arm_ids`.
+        if !reachability_arms.is_empty() {
+            let reachability_report = crate::pattern_lowering::compute_match_usefulness(
+                self,
+                &reachability_arms,
+                scrutinee_ty_for_matrix,
+            );
+            for arm in reachability_report.unreachable_arms {
+                if let Some(&body_expr) = reachability_arm_ids.get(arm.0) {
+                    self.context
+                        .report_simple(TirTypeError::UnreachableArm, body_expr);
+                }
             }
         }
 
