@@ -862,11 +862,6 @@ fn impl_bounds_hold_symbolic(
 ///
 /// `is_subtype` discharges the impls' generic bounds; new callers pass a
 /// `baml_type::normalize`-backed closure rather than the deprecated local oracle.
-#[expect(
-    dead_code,
-    reason = "symbolic impl-block enumerator; wired into concrete-receiver member resolution \
-              and interface-view inference once those are rebuilt onto it"
-)]
 pub(crate) fn impls_for_type<'db>(
     db: &'db dyn crate::Db,
     pkg_id: PackageId<'db>,

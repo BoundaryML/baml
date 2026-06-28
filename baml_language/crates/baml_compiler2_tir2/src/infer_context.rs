@@ -341,15 +341,6 @@ pub enum TirTypeError {
         qualified_name: Name,
     },
 
-    /// The old `value.Interface.member` projection syntax has been replaced by
-    /// `.as<Interface>.member`.
-    DeprecatedInterfaceProjection {
-        interface_name: Name,
-        /// The `.as<...>` projection target with type args (e.g. `Container<int>`),
-        /// which may differ from the bare `interface_name` the user wrote.
-        as_target: String,
-    },
-
     /// `.as<T>` is an interface projection/upcast; the target must be an
     /// interface type.
     InvalidInterfaceUpcastTarget { target: Ty },
@@ -921,13 +912,6 @@ impl fmt::Display for TirTypeError {
             } => write!(
                 f,
                 "interface-qualified field `{field_name}` cannot be used in a class constructor; use class field `{qualified_name}`"
-            ),
-            TirTypeError::DeprecatedInterfaceProjection {
-                interface_name,
-                as_target,
-            } => write!(
-                f,
-                "interface projection uses `.as<{as_target}>`, not `.{interface_name}`"
             ),
             TirTypeError::InvalidInterfaceUpcastTarget { target } => {
                 write!(f, "`.as<T>` target must be an interface, got `{target}`")

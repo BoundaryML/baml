@@ -22,7 +22,7 @@ use baml_compiler2_ast::{
 use baml_compiler2_hir::{
     body::{FunctionBody, LetBody},
     contributions::Definition,
-    loc::{ClassLoc, EnumLoc, FunctionLoc, InterfaceLoc, LetLoc, TypeAliasLoc},
+    loc::{ClassLoc, EnumLoc, FunctionLoc, ImplLoc, InterfaceLoc, LetLoc, TypeAliasLoc},
     package::{PackageId, PackageItems},
     scope::{FileScopeId, ScopeId, ScopeKind},
     semantic_index::{BindingId, BindingKind},
@@ -618,10 +618,27 @@ pub enum MemberResolution<'db> {
         class_loc: ClassLoc<'db>,
         func_loc: FunctionLoc<'db>,
     },
-    /// An interface default method referenced through the interface type
-    /// itself, e.g. `Named.describe(value)`.
-    InterfaceDefaultMethod {
+    /// A **virtual** interface-method call: the receiver's concrete type is unknown — an
+    /// interface-existential value (`named.describe()`) or a `T extends I` type variable —
+    /// so dispatch resolves to the receiver's runtime impl. Only the *slot* is known
+    /// statically — the interface and the method name — so no `FunctionLoc`: there is no
+    /// statically-known body (the interface's default is just one possible target, and a
+    /// required method has none). Recorded for every virtual call, required and default
+    /// alike; the contract (signature / generics / throws) for type-checking is the
+    /// interface's declaration of `method`. Contrast
+    /// [`MemberResolution::InterfaceConcreteMethod`], where the impl — and thus the called
+    /// body — is statically known.
+    InterfaceVirtualMethod {
         iface_loc: InterfaceLoc<'db>,
+        method: Name,
+    },
+    /// A **concrete** interface-method call: the receiver's concrete type is known, so the
+    /// `impl` block is resolved statically (`foo.describe()` on a class implementing the
+    /// interface). `func_loc` is the impl's override, or — when the impl inherits it — the
+    /// interface's default body; `impl_loc` identifies the impl (and recovers the interface,
+    /// the implementor, and the impl's bindings via `impl_data`).
+    InterfaceConcreteMethod {
+        impl_loc: ImplLoc<'db>,
         func_loc: FunctionLoc<'db>,
     },
 }
