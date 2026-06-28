@@ -6271,7 +6271,7 @@ mod tests {
     use text_size::{TextRange, TextSize};
 
     use super::*;
-    use crate::testing::CursorTest;
+    use crate::testing::{CursorTest, ProjectTest};
 
     fn dummy_file_id() -> FileId {
         // Use index 0 — sufficient for span construction in unit tests.
@@ -6601,6 +6601,85 @@ function TakeGuess(person: Person) -> string {
                 .iter()
                 .any(|message| message == "`self` cannot have a default value"),
             "missing self-default diagnostic; got {messages:#?}"
+        );
+    }
+
+    #[test]
+    fn parse_error_in_body_taints_scope_and_descendants() {
+        // A braceless lambda is a syntax error; parser recovery leaves a
+        // malformed lambda that would otherwise emit cascading type errors. The
+        // function-body scope containing the parse error — and its descendant
+        // lambda scope — must be tainted so those type errors are suppressed.
+        let mut builder = ProjectTest::builder();
+        builder.source(
+            "test.baml",
+            "function Braceless() -> int {\n  let f = (x: int) => x + 1;\n  f(2)\n}\n",
+        );
+        let test = builder.build();
+        let file = test.files[0];
+
+        let index = file_semantic_index(&test.db, file);
+        let parse_errors = baml_compiler_parser::parse_errors(&test.db, file);
+        assert!(
+            !parse_errors.is_empty(),
+            "braceless lambda should produce a parse error"
+        );
+
+        let tainted = parse_error_tainted_scopes(index, &parse_errors);
+        assert!(
+            !tainted.is_empty(),
+            "the broken function body should be tainted"
+        );
+
+        // The lambda scope is a *descendant* of the function-body scope that
+        // holds the parse error, so descendant tainting must reach it.
+        let lambda_idx = index
+            .scopes
+            .iter()
+            .position(|s| s.kind == ScopeKind::Lambda)
+            .expect("a lambda scope should exist for the braceless lambda");
+        assert!(
+            tainted.contains(&lambda_idx),
+            "descendant lambda scope (index {lambda_idx}) must be tainted, got {tainted:?}"
+        );
+
+        // Invariant the suppression relies on: every descendant of a tainted
+        // scope is itself tainted.
+        for &i in &tainted {
+            let scope = &index.scopes[i];
+            for d in scope.descendants.start.index()..scope.descendants.end.index() {
+                assert!(
+                    tainted.contains(&(d as usize)),
+                    "descendant {d} of tainted scope {i} must also be tainted"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn structural_parse_error_does_not_taint_scopes() {
+        // A parse error at a structural position (an invalid class name)
+        // resolves to a structural scope, which must never be tainted — so a
+        // type error in an unrelated executable body stays visible.
+        let mut builder = ProjectTest::builder();
+        builder.source(
+            "test.baml",
+            "class 123Bad {\n  field string\n}\n\nfunction Good() -> int {\n  42\n}\n",
+        );
+        let test = builder.build();
+        let file = test.files[0];
+
+        let index = file_semantic_index(&test.db, file);
+        let parse_errors = baml_compiler_parser::parse_errors(&test.db, file);
+        assert!(
+            !parse_errors.is_empty(),
+            "invalid class name should produce a parse error"
+        );
+
+        let tainted = parse_error_tainted_scopes(index, &parse_errors);
+        assert!(
+            tainted.is_empty(),
+            "a structural parse error must not taint any scope, got {tainted:?}"
         );
     }
 }
