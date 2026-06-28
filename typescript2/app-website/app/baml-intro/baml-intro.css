@@ -15,6 +15,12 @@
   --l6-accent: #6d28d9;
   --l6-accent-soft: #a78bfa;
   --l6-amber: #b45309;
+  /* Combined height of the fixed top chrome — SiteBanner (41px) + the shared
+     Navbar (~65px) — used to offset anchor jumps and the "On this page" rail
+     so they clear the nav. The Navbar's own nav-spacer reserves the flow room,
+     so the page sets no top padding itself. Below 640px the banner is hidden
+     and the navbar sits at top:0 (see globals.css), so the chrome shrinks. */
+  --l6-chrome: 84px;
   padding-bottom: 5rem;
   font-family:
     var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system, sans-serif;
@@ -41,40 +47,18 @@
   background: none;
 }
 
-/* ---- top bar ---- */
-.l6-head {
-  position: sticky;
-  top: 0;
-  z-index: 20;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0.8rem 1.5rem;
-  font-size: 12.5px;
-  background: rgba(253, 251, 245, 0.92);
-  border-bottom: 1px solid var(--l6-rule);
-  backdrop-filter: blur(4px);
-}
-.l6-head a {
-  font-weight: 600;
-  color: var(--l6-ink);
-  letter-spacing: 0.05em;
-  text-decoration: none;
-}
-.l6-head a span {
-  margin-left: 0.4rem;
-  font-weight: 400;
-  color: var(--l6-soft);
-}
-.l6-head-install {
-  color: var(--l6-accent);
-}
-
 /* ---- layout: centered reading column (blogpost style). Text within the
    column stays left-aligned; the whole column is centered on the page. The
    "on this page" rail floats in the right gutter. */
 .l6 {
   --l6-gutter: clamp(1.2rem, 5vw, 4.5rem);
+}
+/* At <=640px the banner is hidden and the navbar drops to top:0 (globals.css),
+   so the fixed chrome is just the navbar height. */
+@media (max-width: 640px) {
+  .l6 {
+    --l6-chrome: 58px;
+  }
 }
 /* On wide screens widen the side gutter so the centered content clears the
    fixed "on this page" rail pinned to the right. */
@@ -91,7 +75,7 @@
   max-width: min(760px, calc(100vw - 2 * var(--l6-gutter)));
   padding: 4.4rem 0 1.2rem;
   margin: 0 auto;
-  scroll-margin-top: 3.2rem;
+  scroll-margin-top: calc(var(--l6-chrome) + 1rem);
 }
 /* Breakout: editors, playgrounds, and side-by-side pairs are wider than the
    ~760px reading column but stay centered on the page like the prose above.
@@ -113,7 +97,8 @@
 /* ---- "on this page" rail ---- */
 .l6-toc {
   position: fixed;
-  top: 64px;
+  /* clear the fixed banner + navbar above */
+  top: calc(var(--l6-chrome) + 1rem);
   right: 1.2rem;
   z-index: 15;
   display: none;
@@ -158,7 +143,7 @@
 }
 /* anchored subsections land below the sticky header too */
 .l6 .l6-sub[id] {
-  scroll-margin-top: 3.2rem;
+  scroll-margin-top: calc(var(--l6-chrome) + 1rem);
 }
 
 /* every editor and code block gets the same outline (learn2's border vars
@@ -270,6 +255,27 @@
 .l6-breakout {
   margin-top: 1.2rem;
   margin-bottom: 1.2rem;
+}
+
+/* ---- design philosophy: a bare list of aphorisms (Zen-of-Python style).
+   Monospace, one principle per line, each tee-ing up a section below — the
+   article is where they're demonstrated, so the lines stay unexplained. */
+.l6-tenets {
+  padding: 0;
+  margin: 1.6rem 0 0.5rem;
+  list-style: none;
+}
+.l6-tenet {
+  padding: 0.28rem 0 0.28rem 1.5rem;
+  font-size: 15.5px;
+  line-height: 1.3;
+  color: var(--l6-ink);
+  text-indent: -1.5rem;
+}
+.l6-tenet::before {
+  content: "—";
+  margin-right: 0.7rem;
+  color: var(--l6-accent);
 }
 
 /* ---- hero ---- */

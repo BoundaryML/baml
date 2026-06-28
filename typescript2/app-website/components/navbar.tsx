@@ -23,14 +23,15 @@ const navStyles = {
     boxSizing: 'border-box',
     columnGap: '16px',
     display: 'grid',
-    fontSize: '15px',
-    gridTemplateColumns: 'auto minmax(0, 1fr) auto auto',
+    fontFamily: 'var(--font-geist-mono), ui-monospace, "SF Mono", monospace',
+    fontSize: '14px',
+    gridTemplateColumns: 'auto minmax(0, 1fr) auto',
     left: 0,
-    letterSpacing: '0.05em',
-    padding: '16px 24px',
+    letterSpacing: '0.02em',
+    padding: '8px 24px',
     position: 'fixed',
     right: 0,
-    textTransform: 'uppercase',
+    textTransform: 'none',
     top: 41,
     width: '100%',
     zIndex: 50,
@@ -44,7 +45,7 @@ const navStyles = {
     textAlign: 'right' as const,
   } as React.CSSProperties,
   navSpacer: {
-    height: 106,
+    height: 84,
   } as React.CSSProperties,
 };
 
@@ -108,7 +109,7 @@ export function Navbar() {
     <>
       <nav className="nav-responsive" style={navStyles.nav}>
         <Link href="/" onClick={() => setOpen(false)} style={navStyles.logo}>
-          Boundary
+          BAML
         </Link>
         <div className="nav-links" style={navStyles.navDiv}>
           {siteConfig.nav.links.map((link) => (
@@ -116,12 +117,6 @@ export function Navbar() {
               {link.name}
             </Link>
           ))}
-          <Link className="nav-link" href="/quickstart">
-            Docs
-          </Link>
-          <Link className="nav-link" href="/vs">
-            BAML vs X
-          </Link>
           <Link className="nav-link" href="/changelog">
             Changelog
           </Link>
@@ -131,7 +126,6 @@ export function Navbar() {
         </div>
         <div className="nav-desktop-actions">
           <NavStars />
-          <ForAgentsLink />
         </div>
 
         <button
@@ -159,20 +153,6 @@ export function Navbar() {
           ))}
           <Link
             className="nav-mobile-link"
-            href="/quickstart"
-            onClick={() => setOpen(false)}
-          >
-            Docs
-          </Link>
-          <Link
-            className="nav-mobile-link"
-            href="/vs"
-            onClick={() => setOpen(false)}
-          >
-            BAML vs X
-          </Link>
-          <Link
-            className="nav-mobile-link"
             href="/changelog"
             onClick={() => setOpen(false)}
           >
@@ -189,7 +169,6 @@ export function Navbar() {
           </Link>
           <div className="nav-mobile-footer">
             <NavStars />
-            <ForAgentsLink />
           </div>
         </div>
 
@@ -197,12 +176,12 @@ export function Navbar() {
           .nav-link {
             display: inline-flex;
             align-items: center;
-            margin-right: 16px;
-            padding: 6px 12px;
+            margin-right: 14px;
+            padding: 5px 10px;
             border-radius: 8px;
-            font-size: 13px;
-            letter-spacing: 0.15em;
-            text-transform: uppercase;
+            font-size: 13.5px;
+            letter-spacing: 0.01em;
+            text-transform: lowercase;
             color: #5C5852;
             background-color: transparent;
             transition: background-color 140ms ease, color 140ms ease;
@@ -266,9 +245,9 @@ export function Navbar() {
             .nav-mobile-link {
               padding: 14px 6px;
               border-top: 1px solid #E7E1D3;
-              font-size: 14px;
-              letter-spacing: 0.12em;
-              text-transform: uppercase;
+              font-size: 15px;
+              letter-spacing: 0.01em;
+              text-transform: lowercase;
               color: #1A1612;
             }
             .nav-mobile-footer {
@@ -286,27 +265,5 @@ export function Navbar() {
       </nav>
       <div aria-hidden className="nav-spacer" style={navStyles.navSpacer} />
     </>
-  );
-}
-
-function ForAgentsLink() {
-  const [hovered, setHovered] = useState(false);
-
-  return (
-    <Link
-      href="/llms.txt"
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      style={{
-        ...navStyles.navItem,
-        border: `1px solid ${hovered ? '#A8A29E' : '#D9D3C4'}`,
-        borderRadius: 8,
-        color: hovered ? '#1A1612' : '#5C5852',
-        padding: '6px 14px',
-        transition: 'color 180ms ease, border-color 180ms ease',
-      }}
-    >
-      For agents
-    </Link>
   );
 }

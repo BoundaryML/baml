@@ -744,6 +744,6 @@ code[data-line-numbers] > [data-line]::before {
     top: 0 !important;
   }
   .nav-spacer {
-    height: 65px !important;
+    height: 58px !important;
   }
 }

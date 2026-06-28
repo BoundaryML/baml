@@ -2,6 +2,7 @@
 
 import Image from 'next/image';
 import { type ReactNode, useCallback, useState } from 'react';
+import { Navbar } from '@/components/navbar';
 import { BamlCode } from '../../learn2/_components/BamlCode';
 import BamlEditor from '../../learn2/_components/BamlEditorLazy';
 import LivePlayground from '../../learn2/_components/LivePlaygroundLazy';
@@ -184,6 +185,7 @@ function TryItTabs() {
 
 /* "On this page" rail (top right on wide screens). */
 const TOC: { id: string; label: string; sub?: boolean }[] = [
+  { id: 'philosophy', label: 'Design philosophy' },
   { id: 'workflows', label: 'BAML for AI workflows' },
   { id: 'wf-llm', label: '1 · Native LLM Functions', sub: true },
   { id: 'wf-tests', label: '2 · BAML Tests', sub: true },
@@ -312,8 +314,21 @@ function WorkflowPlayground() {
   );
 }
 
+/* Design philosophy — the principles that decide every feature, stated as
+ * bare aphorisms (Zen-of-Python style). Each one tees up a section below; the
+ * article is where they get demonstrated, so the lines stay unexplained. */
+const TENETS: string[] = [
+  'No viral edits.',
+  'Look like TypeScript.',
+  'Make undesired state unrepresentable.',
+  'Fix JavaScript’s footguns.',
+  'One obvious way.',
+  'Tools for agents, not IDEs.',
+  'Make nondeterminism observable and testable.',
+];
+
 export function Article() {
-  const [activeId, setActiveId] = useState('workflows');
+  const [activeId, setActiveId] = useState('philosophy');
 
   // Scroll spy for the rail: a band near the top of the viewport decides
   // the current section. Ref callback with cleanup — no useEffect.
@@ -346,6 +361,10 @@ export function Article() {
 
   return (
     <div className="l6" ref={spyRef}>
+      {/* The shared site nav — every page uses the same one. It ships its own
+          spacer + banner-offset rules, so the l6 layout doesn't reserve top
+          room itself. */}
+      <Navbar />
       <nav aria-label="On this page" className="l6-toc">
         <p className="l6-toc-cap font-mono">On this page</p>
         <ul>
@@ -363,15 +382,6 @@ export function Article() {
           ))}
         </ul>
       </nav>
-      <header className="l6-head">
-        <a className="font-mono" href="/">
-          BAML <span>· the programming language for agents</span>
-        </a>
-        <span className="l6-head-install font-mono">
-          brew install boundaryml/tap/baml
-        </span>
-      </header>
-
       {/* ---- intro ---- */}
       <section className="l6-section l6-hero" id="top">
         <h1 className="l6-hero-title">
@@ -385,20 +395,39 @@ export function Article() {
           />
           {'BAML is the programming language for agents'}
         </h1>
-        <p className="l6-lead">{'BAML is meant to be written by agents'}</p>
+        <p className="l6-lead">{'How we code will never be the same again.'}</p>
+        <p className="l6-lead">{'And every time coding changed, we built a new language.'}</p>
+        <ul className="l6-tenets font-mono">
+            <li className="l6-tenet">Hardware -&gt; Assembly</li>
+            <li className="l6-tenet">Operating Systems -&gt; Java</li>
+            <li className="l6-tenet">Web -&gt; Javascript</li>
+            <li className="l6-tenet">Agentic Coding -&gt; ????</li>
+        </ul>
+        <p className="l6-lead">{''}</p>
         <p>
           {
-            'Every feature was designed to prevent context pollution and churn when coding with AI. We opt for features that make agents make less mistakes at runtime (like Rust), but without fighting the borrow-checker. We want BAML to be comprehensible to the millions of non-technical people now coding with AI.'
+            'In BAML, every feature is designed to prevent context pollution and churn when coding with AI. We opt for features that prevent mistakes at runtime (like Rust), while maintaining the dynamasism necessary for codemode (like Python).'
           }
         </p>
         <p>
           {
-            'Our goal is to make it feel like TypeScript, but without the sins of Javascript: with a sound type-system, better error handling, no '
+            'In one sentence: BAML feels like TypeScript, but with better error handling, no '
           }
           <code>any</code>
           {', and more.'}
         </p>
       </section>
+
+      {/* ---- design philosophy ---- */}
+      <Section id="philosophy" title="Our design philosophy">
+        <ul className="l6-tenets font-mono">
+          {TENETS.map((t) => (
+            <li className="l6-tenet" key={t}>
+              {t}
+            </li>
+          ))}
+        </ul>
+      </Section>
 
       {/* ---- Part 1 · AI workflows ---- */}
       <Part eyebrow="Part 1" id="workflows" title="BAML for AI workflows">
