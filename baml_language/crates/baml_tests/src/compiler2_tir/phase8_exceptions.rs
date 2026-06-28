@@ -169,6 +169,7 @@ function f(e: TimeoutError | OtherError) -> int {
     );
 }
 
+/// Ensures impossible typed bindings report a mismatch without bogus reachability errors.
 #[test]
 fn impossible_typed_match_binding_is_unreachable() {
     let mut db = make_db();
@@ -184,12 +185,16 @@ fn impossible_typed_match_binding_is_unreachable() {
 
     let output = render_tir(&db, file);
     assert!(
-        output.contains("unreachable arm"),
-        "expected `let s: string` against int scrutinee to be unreachable, got:\n{output}"
+        output.contains("type mismatch: expected int, got string"),
+        "expected `let s: string` against int scrutinee to report a type mismatch, got:\n{output}"
     );
     assert!(
         output.contains("s: string =>"),
         "expected diagnostic output to include the impossible string arm, got:\n{output}"
+    );
+    assert!(
+        !output.contains("unreachable arm"),
+        "invalid typed patterns should not emit secondary reachability diagnostics, got:\n{output}"
     );
 }
 

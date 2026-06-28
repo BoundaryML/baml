@@ -1909,7 +1909,6 @@ function baml.iter.FlatMap$stream.next(self: baml.iter.FlatMap$stream<T, R, E, E
   !! 8335..8347: `unknown` is not a function — it cannot be called
   !! 7952..8442: non-exhaustive match on `baml.iter.Iterator | baml.iter.Done$stream | null`; missing: baml.iter.Iterator, baml.iter.Done$stream {}, null
   !! 8026..8176: unreachable arm
-  !! 8196..8431: unreachable arm
 }
 class baml.iter.Flatten$stream {
   source: baml.iter.Iterator | null
@@ -1960,7 +1959,6 @@ function baml.iter.Flatten$stream.next(self: baml.iter.Flatten$stream<I, R, E, E
   !! 9203..9221: `(() -> unknown | baml.iter.Done throws never) | null` is not a function — it cannot be called
   !! 8938..9417: non-exhaustive match on `baml.iter.Iterator | baml.iter.Done$stream | null`; missing: baml.iter.Iterator, baml.iter.Done$stream {}, null
   !! 9012..9162: unreachable arm
-  !! 9182..9406: unreachable arm
 }
 class baml.iter.Peekable$stream {
   source: baml.iter.Iterator | null

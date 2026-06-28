@@ -407,16 +407,6 @@ source: crates/baml_tests/src/generated_tests.rs
 ─────╯
 
   [type] error: unreachable arm
-     ╭─[ match_exprs.baml:161:18 ]
-     │
- 161 │         "bye" => "farewell",
-     │                  ─────┬────  
-     │                       ╰────── unreachable arm
-     │ 
-     │ Note: Error code: E0063
-─────╯
-
-  [type] error: unreachable arm
      ╭─[ match_exprs.baml:162:14 ]
      │
  162 │         _ => "other"

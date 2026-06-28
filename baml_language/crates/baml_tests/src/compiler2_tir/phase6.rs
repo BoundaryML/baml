@@ -1827,6 +1827,7 @@ function f(xs: int[]) -> int {
     );
 }
 
+/// Ensures nested subpatterns under `..` are rejected in let patterns.
 #[test]
 fn nested_refutable_array_under_rest_is_rejected_in_let() {
     let mut db = make_db();
@@ -1842,8 +1843,8 @@ function f(xs: int[]) -> int {
     let output = render_tir(&db, file);
 
     assert!(
-        output.contains("refutable pattern in let binding"),
-        "nested exact array under rest should still make the let refutable, got:\n{output}"
+        output.contains("rest pattern `..` cannot carry a sub-pattern"),
+        "nested exact array under rest should be rejected as invalid rest syntax, got:\n{output}"
     );
 }
 

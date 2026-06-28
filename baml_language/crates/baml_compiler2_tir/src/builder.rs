@@ -13228,7 +13228,6 @@ impl<'db> TypeInferenceBuilder<'db> {
     /// We keep this local to pattern lowering so we can avoid adding heavier
     /// symbol-table machinery for a single-field-name hint.
     fn class_pattern_field_suggestions(
-        &self,
         unknown_field: &Name,
         declared_fields: &[Name],
     ) -> Vec<Name> {
@@ -18246,7 +18245,7 @@ impl TypeInferenceBuilder<'_> {
                 TirTypeError::UnknownClassPatternField {
                     class_name: qtn.clone(),
                     field_name: fp.field.clone(),
-                    suggestions: self.class_pattern_field_suggestions(&fp.field, &declared_fields),
+                    suggestions: Self::class_pattern_field_suggestions(&fp.field, &declared_fields),
                 },
                 pat_id,
                 at_expr,

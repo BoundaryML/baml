@@ -485,7 +485,7 @@ impl fmt::Display for TirTypeError {
                 } else {
                     let joined = suggestions
                         .iter()
-                        .map(|s| s.to_string())
+                        .map(std::string::ToString::to_string)
                         .collect::<Vec<_>>()
                         .join("`, `");
                     write!(
