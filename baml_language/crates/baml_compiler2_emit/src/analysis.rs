@@ -2000,6 +2000,7 @@ mod tests {
         ));
     }
 
+    /// Builds a minimal integer local declaration for MIR analysis tests.
     fn int_local_decl(name: Option<&str>) -> LocalDecl {
         LocalDecl {
             name: name.map(baml_base::Name::new),
@@ -2014,6 +2015,7 @@ mod tests {
     }
 
     #[test]
+    /// Verifies `Rvalue::Len` bindings are always classified as materialized locals.
     fn len_bindings_are_not_virtualized() {
         let arr = Local(1);
         let len = Local(2);

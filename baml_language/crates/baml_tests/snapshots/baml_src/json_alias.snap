@@ -97,6 +97,8 @@ function json_alias.json_map_has_key() -> bool {
   L1:
     load_var m
     container_len
+    store_var _4
+    load_var _4
     load_const 1
     cmp_int_op ==
 

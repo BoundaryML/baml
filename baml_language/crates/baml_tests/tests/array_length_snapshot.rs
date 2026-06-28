@@ -2,6 +2,7 @@ use baml_tests::{baml_test, engine::OptLevel};
 use bex_engine::BexExternalValue;
 
 #[tokio::test]
+/// Ensures `let n = a.length()` snapshots length before later mutations.
 async fn length_binding_snapshots_before_mutation() {
     let source = r#"
         function bug() -> int {
