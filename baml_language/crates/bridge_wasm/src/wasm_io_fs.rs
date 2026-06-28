@@ -82,6 +82,71 @@ fn js_err(e: &wasm_bindgen::JsValue) -> VmBamlError {
     }
 }
 
+/// A child entry discovered while walking a directory for recursive removal:
+/// its full path plus whether it must be recursed into (a real subdirectory).
+/// Symlinks are treated as files (removed via `removeFile`) so removal never
+/// descends through a link.
+struct RemoveChild {
+    path: String,
+    is_dir: bool,
+}
+
+/// List the immediate children of `path`, preferring the rich `readDirEntries`
+/// JS method (one round-trip with type + symlink info) and falling back to the
+/// legacy `readDir` + per-entry `metadata` probe when a host lacks it.
+fn dir_children(vfs: &WasmVfs, path: &str) -> Result<Vec<RemoveChild>, VmBamlError> {
+    if let Ok(arr) = vfs.vfs_read_dir_entries(path) {
+        let mut out = Vec::with_capacity(arr.length() as usize);
+        for v in arr.iter() {
+            let entry: crate::wasm_fs::WasmVfsDirEntry = serde_wasm_bindgen::from_value(v)
+                .map_err(|e| VmBamlError::ParseError {
+                    message: format!("readDirEntries returned invalid entry: {e}"),
+                })?;
+            out.push(RemoveChild {
+                path: join_path(path, &entry.name),
+                is_dir: entry.file_type == "directory" && !entry.is_symlink,
+            });
+        }
+        return Ok(out);
+    }
+
+    let arr = vfs.vfs_read_dir(path).map_err(|e| js_err(&e))?;
+    let mut out = Vec::with_capacity(arr.length() as usize);
+    for v in arr.iter() {
+        let Some(name) = v.as_string() else {
+            return Err(VmBamlError::DevOther {
+                message: "readDir entry is not a string".into(),
+            });
+        };
+        let full = join_path(path, &name);
+        let is_dir = vfs.vfs_metadata(&full).map_err(|e| js_err(&e))?.file_type == "directory";
+        out.push(RemoveChild { path: full, is_dir });
+    }
+    Ok(out)
+}
+
+/// Recursively remove `path` and everything under it. Idempotent on missing
+/// paths (`force: true` semantics), matching the native `remove_dir_all`.
+fn remove_dir_all_recursive(vfs: &WasmVfs, path: &str) -> Result<(), VmBamlError> {
+    match vfs.vfs_exists(path) {
+        Ok(false) => return Ok(()),
+        Ok(true) => {}
+        Err(e) => return Err(js_err(&e)),
+    }
+    // A non-directory leaf (file or symlink) is removed directly.
+    if vfs.vfs_metadata(path).map_err(|e| js_err(&e))?.file_type != "directory" {
+        return vfs.vfs_remove_file(path).map_err(|e| js_err(&e));
+    }
+    for child in dir_children(vfs, path)? {
+        if child.is_dir {
+            remove_dir_all_recursive(vfs, &child.path)?;
+        } else {
+            vfs.vfs_remove_file(&child.path).map_err(|e| js_err(&e))?;
+        }
+    }
+    vfs.vfs_remove_dir(path).map_err(|e| js_err(&e))
+}
+
 // ============================================================================
 // IoClassFsFile — all File handle methods return Unsupported in WASM.
 // The native tokio file-handle model (open/read/write/seek/close) cannot be
@@ -238,6 +303,37 @@ impl io::IoNamespaceFs for WasmIoFs {
             Err(e) => SysOpOutput::err(VmBamlError::Io {
                 message: format!("{e:?}"),
             }),
+        }
+    }
+
+    fn remove_dir(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        path: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        match self.vfs().vfs_remove_dir(&path) {
+            Ok(()) => SysOpOutput::ok(()),
+            Err(e) => SysOpOutput::err(VmBamlError::Io {
+                message: format!("{e:?}"),
+            }),
+        }
+    }
+
+    fn remove_dir_all(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        path: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        // The JS VFS contract only exposes `removeDir` (empty-directory removal),
+        // so the recursive walk is driven Rust-side, mirroring how `mkdir`
+        // recursion is handled here.
+        match remove_dir_all_recursive(self.vfs(), &path) {
+            Ok(()) => SysOpOutput::ok(()),
+            Err(e) => SysOpOutput::err(e),
         }
     }
 

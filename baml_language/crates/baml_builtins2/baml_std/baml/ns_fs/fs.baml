@@ -64,6 +64,9 @@ function exists(path: string) -> bool throws root.errors.Io {
 }
 
 /// Removes the file at `path`. Throws `Io` if the file does not exist or cannot be deleted.
+///
+/// This handles regular files only. To delete a directory use `remove_dir`
+/// (empty directories) or `remove_dir_all` (directory trees).
 function remove(path: string) -> null throws root.errors.Io {
   $rust_io_function
 }
@@ -110,5 +113,18 @@ function read_dir(path: string) -> DirEntry[] throws root.errors.Io {
 
 /// Creates the directory at `path`. Pass `MkdirOptions { recursive: true }` to create parent directories.
 function mkdir(path: string, options: MkdirOptions) -> null throws root.errors.Io {
+  $rust_io_function
+}
+
+/// Removes the empty directory at `path`. Throws `Io` if `path` is not a
+/// directory, is not empty, or does not exist. Mirrors Bun's `fs.promises.rmdir`.
+function remove_dir(path: string) -> null throws root.errors.Io {
+  $rust_io_function
+}
+
+/// Recursively removes the directory at `path` and all of its contents.
+/// Idempotent: returns successfully if `path` does not exist. Mirrors Bun's
+/// `fs.promises.rm(path, { recursive: true, force: true })`.
+function remove_dir_all(path: string) -> null throws root.errors.Io {
   $rust_io_function
 }
