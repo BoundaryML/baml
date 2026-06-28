@@ -92,6 +92,10 @@ pub enum TirTypeError {
         lhs: Ty,
         rhs: Ty,
     },
+    /// `baml.Array.filled(n, value)` called with a mutable literal (`[]`, `{}`,
+    /// object literal). Every slot aliases the same object reference, so
+    /// mutating one slot mutates all of them.
+    ArrayFilledMutableLiteralAliasing,
     /// Invalid operand type for a unary operator (e.g. `-"hello"`).
     InvalidUnaryOp {
         op: baml_compiler2_ast::UnaryOp,
@@ -544,6 +548,12 @@ impl fmt::Display for TirTypeError {
                     "`{}` and `{}` share no value, so this comparison is always {always}",
                     lhs.render_user_facing(),
                     rhs.render_user_facing()
+                )
+            }
+            TirTypeError::ArrayFilledMutableLiteralAliasing => {
+                write!(
+                    f,
+                    "`Array.filled` reuses the same mutable value in every slot; mutating one slot mutates all of them. Build independent slots with a `while` loop that pushes a fresh literal each iteration"
                 )
             }
             TirTypeError::InvalidUnaryOp { op, operand } => {

@@ -860,6 +860,44 @@ fn equality_disjoint_types_warns_always_false() {
 }
 
 #[test]
+fn array_filled_with_mutable_literal_warns_aliasing() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"function f() -> int {
+  let rows = baml.Array.filled(3, [0])
+  return rows.length()
+}"#,
+    );
+    let tir = render_tir(&db, file);
+    assert!(
+        tir.contains("reuses the same mutable value in every slot"),
+        "expected Array.filled aliasing warning, got:\n{tir}"
+    );
+    assert!(
+        tir.contains("??"),
+        "expected warning marker for mutable literal aliasing, got:\n{tir}"
+    );
+}
+
+#[test]
+fn array_filled_with_primitive_value_has_no_aliasing_warning() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"function f() -> int {
+  let xs = baml.Array.filled(3, 0)
+  return xs.length()
+}"#,
+    );
+    let tir = render_tir(&db, file);
+    assert!(
+        !tir.contains("reuses the same mutable value"),
+        "did not expect mutable-value aliasing warning, got:\n{tir}"
+    );
+}
+
+#[test]
 fn aliased_float_plus_bigint_is_rejected() {
     // Aliases on either side must still trip the float×bigint reject —
     // `infer_binary_op` peels them at entry before classifying.
