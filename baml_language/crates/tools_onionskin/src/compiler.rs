@@ -5305,6 +5305,8 @@ fn format_vm_value(value: &bex_vm_types::Value, vm: &bex_vm::BexVm) -> String {
                 }
                 Object::Function(f) => format!("<fn {}>", f.name),
                 Object::Interface(i) => format!("<interface {}>", i.name),
+                Object::Package(_) => "<package>".to_string(),
+                Object::ImplRule(_) => "<impl_rule>".to_string(),
                 Object::Class(c) => format!("<class {}>", c.name),
                 Object::Enum(e) => format!("<enum {}>", e.name),
                 Object::Future(_) => "<future>".to_string(),

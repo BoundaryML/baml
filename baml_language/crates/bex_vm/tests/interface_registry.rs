@@ -1,4 +1,4 @@
-//! White-box checks of the baked interface registry (`Program::interface_impls`).
+//! White-box checks of the baked interface registry (`Program::packages`).
 //!
 //! These assert properties of the data the runtime resolver consumes for a case
 //! the resolver's only live caller (reflection) can't observe: that an impl
@@ -7,30 +7,37 @@
 //! winning over the default.
 
 use baml_project::testing::compile_source;
-use bex_vm_types::types::Program;
+use bex_vm_types::{Object, types::Program};
 
 /// The `(method name, fn FQN)` pairs recorded for `<for_type> implements <iface>`.
 /// `for_type` is matched against the rule's `for_ty_pattern` rendering, excluding
-/// `$stream` companions. Panics if no such interface / rule was baked.
+/// `$stream` companions. The interface and method callees are carried as global
+/// object indices (`Program::packages` is `HeapPtr`-free), so they are resolved
+/// here through `Program::objects`. Panics if no such interface / rule was baked.
 fn impl_methods(program: &Program, iface: &str, for_type: &str) -> Vec<(String, String)> {
-    program
-        .interface_impls
+    let rule = program
+        .packages
         .values()
-        .find_map(|pkg| {
-            pkg.iter()
-                .find(|(tn, _)| tn.name().as_str() == iface)
-                .map(|(_, rules)| rules)
+        .flat_map(|pkg| pkg.impl_rules.values().flatten())
+        .filter(|rule| {
+            program.objects[rule.interface_head]
+                .as_interface()
+                .is_some_and(|def| def.name.name().as_str() == iface)
         })
-        .unwrap_or_else(|| panic!("no impls baked for interface {iface:?}"))
-        .iter()
         .find(|rule| {
             let pat = rule.for_ty_pattern.to_string();
             pat == for_type || (pat.contains(for_type) && !pat.contains("$stream"))
         })
-        .unwrap_or_else(|| panic!("no `{for_type} implements {iface}` rule baked"))
-        .methods
+        .unwrap_or_else(|| panic!("no `{for_type} implements {iface}` rule baked"));
+    rule.methods
         .iter()
-        .map(|(name, method)| (name.as_str().to_string(), method.fqn.clone()))
+        .map(|(name, method)| {
+            let fqn = match &program.objects[method.fqn] {
+                Object::Function(f) => f.name.clone(),
+                other => panic!("method callee is not a Function: {other:?}"),
+            };
+            (name.as_str().to_string(), fqn)
+        })
         .collect()
 }
 

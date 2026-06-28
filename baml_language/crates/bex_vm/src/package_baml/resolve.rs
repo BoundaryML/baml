@@ -16,9 +16,45 @@ use std::borrow::Cow;
 use baml_type::{
     Literal, MediaKind, Name, RuntimeInterface, RuntimeTy, TyAttr, TyTemplate, TypeName,
 };
-use bex_vm_types::types::{Object, RuntimeImplRule};
+use bex_vm_types::{
+    HeapPtr,
+    types::{Object, Package, RuntimeImplRule},
+};
 
 use crate::BexVm;
+
+/// Dereference a package pointer to its [`Package`]. The runtime `vm.packages`
+/// index only ever holds `Object::Package` pointers.
+fn deref_package(vm: &BexVm, ptr: HeapPtr) -> &Package {
+    vm.get_object(ptr)
+        .as_package()
+        .unwrap_or_else(|| unreachable!("vm.packages pointer is not an Object::Package"))
+}
+
+/// Append every impl rule of `iface` declared in `package` to `out`. `impl_rules`
+/// is keyed by the interface's `Object::Interface` pointer, so the interface is
+/// matched by its resolved name (per-package impl sets are small).
+fn collect_package_rules<'a>(
+    vm: &'a BexVm,
+    package: &'a Package,
+    iface: &TypeName,
+    out: &mut Vec<&'a RuntimeImplRule>,
+) {
+    for (iface_ptr, rule_ptrs) in &package.impl_rules {
+        let matches = vm
+            .get_object(*iface_ptr)
+            .as_interface()
+            .is_some_and(|def| def.name == *iface);
+        if !matches {
+            continue;
+        }
+        for &rule_ptr in rule_ptrs {
+            if let Some(rule) = vm.get_object(rule_ptr).as_impl_rule() {
+                out.push(rule);
+            }
+        }
+    }
+}
 
 /// Overflow backstop for the obligation stack. Cycle detection (in [`prove`])
 /// already rejects goals that *repeat*; this guards the other non-terminating
@@ -93,10 +129,14 @@ fn candidate_rules<'a>(
     if !pkgs.contains(&iface_pkg) {
         pkgs.push(iface_pkg);
     }
-    pkgs.into_iter()
-        .filter_map(|pkg| vm.interface_impls.get(pkg)?.get(iface))
-        .flatten()
-        .collect()
+    let mut out = Vec::new();
+    for pkg in pkgs {
+        let Some(&pkg_ptr) = vm.packages.get(pkg) else {
+            continue;
+        };
+        collect_package_rules(vm, deref_package(vm, pkg_ptr), iface, &mut out);
+    }
+    out
 }
 
 /// Resolve `(Self, Iface<Args>)` to the single applicable `implements` rule, plus
@@ -638,10 +678,9 @@ type ImplementorEntry = (RuntimeTy, Vec<RuntimeTy>, Vec<(Name, RuntimeTy)>);
 /// satisfies. Container/union for-types have no nominal implementor to list.
 pub(super) fn implementor_entries(vm: &BexVm, iface: &TypeName) -> Vec<ImplementorEntry> {
     let mut out: Vec<ImplementorEntry> = Vec::new();
-    for impls in vm.interface_impls.values() {
-        let Some(rules) = impls.get(iface) else {
-            continue;
-        };
+    for &pkg_ptr in vm.packages.values() {
+        let mut rules: Vec<&RuntimeImplRule> = Vec::new();
+        collect_package_rules(vm, deref_package(vm, pkg_ptr), iface, &mut rules);
         for rule in rules {
             match &rule.for_ty_pattern {
                 TyTemplate::TypeArgRef(_) => {

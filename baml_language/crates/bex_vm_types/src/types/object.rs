@@ -133,6 +133,35 @@ const _: () = assert!(
     "Object enum size regression — expected <= 64 bytes"
 );
 
+impl Object {
+    /// The inner [`Package`] if this is an [`Object::Package`].
+    #[inline]
+    pub fn as_package(&self) -> Option<&Package> {
+        match self {
+            Object::Package(p) => Some(&**p),
+            _ => None,
+        }
+    }
+
+    /// The inner [`InterfaceDef`] if this is an [`Object::Interface`].
+    #[inline]
+    pub fn as_interface(&self) -> Option<&InterfaceDef> {
+        match self {
+            Object::Interface(i) => Some(&**i),
+            _ => None,
+        }
+    }
+
+    /// The inner [`RuntimeImplRule`] if this is an [`Object::ImplRule`].
+    #[inline]
+    pub fn as_impl_rule(&self) -> Option<&RuntimeImplRule> {
+        match self {
+            Object::ImplRule(r) => Some(&**r),
+            _ => None,
+        }
+    }
+}
+
 // Custom borsh for Object: RustData and Collector contain non-serializable
 // trait objects (Arc<dyn Any>). They should never appear in a compiled Program.
 #[derive(BorshSerialize, BorshDeserialize)]

@@ -118,6 +118,12 @@ pub struct Program {
     /// packages the same way. The single source of truth for interface dispatch
     /// and reflection. Empty for programs without interface impls.
     pub interface_impls: InterfaceImplsByPackage,
+
+    /// Per-package program structure (global-index-keyed), in topological order
+    /// (dependencies before dependents). The loader allocates the heap
+    /// `Object::Package` / `Object::ImplRule` objects and the `vm.packages` index
+    /// from this, resolving each `ObjectIndex` to a compile-time `HeapPtr`.
+    pub packages: IndexMap<baml_type::Name, ProgramPackage>,
 }
 
 /// Metadata for building a client tree at runtime.

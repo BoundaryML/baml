@@ -431,7 +431,7 @@ mod tests {
             id_overrides: Vec::new(),
             argv: Arc::from([]),
             pending_call_type_args: Vec::new(),
-            packages: indexmap::IndexMap::new(),
+            packages: Arc::new(indexmap::IndexMap::new()),
             interface_impls: Arc::new(indexmap::IndexMap::new()),
             recursive_type_alias_defs: Arc::new(indexmap::IndexMap::new()),
         }
@@ -796,9 +796,10 @@ pub struct BexVm {
     /// shared view is a `VmInternalError`.
     pub globals: VmGlobals,
 
-    /// All loaded packages, indexed by their name.
-    /// Must be in a topological order, with dependencies resolved before their dependents.
-    pub packages: IndexMap<Name, HeapPtr>,
+    /// All loaded packages, indexed by their name; each value is an
+    /// `Object::Package` pointer. Shared (`Arc`) across spawned VMs like
+    /// [`Self::interface_impls`].
+    pub packages: Arc<IndexMap<Name, HeapPtr>>,
     /// Resolved class names mapping fully-qualified class names to their heap pointers.
     ///
     /// Used by `resolve_class()` for generated `copy::` struct `to_value()` methods.
@@ -1077,6 +1078,11 @@ pub struct BytecodeProgram {
     /// Runtime interface-impl registry (BEP-044) for the interface-method
     /// resolver and `type` reflection.
     pub interface_impls: InterfaceImplsByPackage,
+    /// Per-package program structure (global-index-keyed). The loader allocates
+    /// the heap `Object::Package` / `Object::ImplRule` objects and the
+    /// `vm.packages` index from this, resolving each `ObjectIndex` to a
+    /// compile-time `HeapPtr`.
+    pub packages: indexmap::IndexMap<baml_type::Name, bex_vm_types::types::ProgramPackage>,
 }
 
 /// Convert a compiled `Program` to a `BytecodeProgram` with native functions attached.
@@ -1136,6 +1142,7 @@ pub fn convert_program(program: bex_vm_types::Program) -> Result<BytecodeProgram
         test_cases: program.test_cases,
         recursive_type_alias_defs: program.recursive_type_alias_defs,
         interface_impls: program.interface_impls,
+        packages: program.packages,
     })
 }
 
@@ -1260,6 +1267,10 @@ impl BexVm {
     ///
     /// The heap is shared across all VMs. Each VM gets its own TLAB
     /// for contention-free allocation.
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "shared per-program tables threaded in from the engine"
+    )]
     pub fn new(
         heap: Arc<BexHeap>,
         globals: VmGlobals,
@@ -1270,6 +1281,7 @@ impl BexVm {
         recursive_type_alias_defs: Arc<
             indexmap::IndexMap<baml_type::TypeName, baml_type::RuntimeTy>,
         >,
+        packages: Arc<IndexMap<Name, HeapPtr>>,
     ) -> Self {
         // Defer the first TLAB chunk reservation until the first `tlab.alloc`,
         // which the engine reaches only after the VM has been registered as a
@@ -1334,7 +1346,7 @@ impl BexVm {
             id_overrides: Vec::new(),
             argv,
             pending_call_type_args: Vec::new(),
-            packages: indexmap::IndexMap::new(),
+            packages,
             interface_impls,
             recursive_type_alias_defs,
         }
@@ -1956,8 +1968,10 @@ impl BexVm {
             &bytecode.globals,
         );
 
-        // Create heap with compile-time objects
-        let heap = BexHeap::new(compile_time_objects);
+        // Create heap with compile-time objects, additionally allocating the
+        // per-package `Object::Package` / `Object::ImplRule` objects.
+        let (heap, vm_packages) =
+            crate::package_load::build_heap_with_packages(compile_time_objects, &bytecode.packages);
 
         // Convert compile-time globals (ConstValue) to runtime globals (Value).
         // The `from_program` constructor is test-only — we hand the VM an
@@ -2007,6 +2021,7 @@ impl BexVm {
             Arc::from(Vec::<String>::new()),
             interface_impls,
             recursive_type_alias_defs,
+            Arc::new(vm_packages),
         ))
     }
 

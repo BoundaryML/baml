@@ -696,6 +696,11 @@ pub struct BexEngine {
     /// `interface_impls`). Drives the canonical type algebra at runtime.
     recursive_type_alias_defs: Arc<indexmap::IndexMap<baml_type::TypeName, baml_type::RuntimeTy>>,
 
+    /// Loaded packages (name → `Object::Package` pointer), shared with every VM
+    /// (mirrors `interface_impls`). The source of truth for interface dispatch
+    /// and named-item lookup.
+    packages: Arc<indexmap::IndexMap<baml_type::Name, bex_vm_types::HeapPtr>>,
+
     /// Snapshot of the `BAML_PROFILE` master switch, taken once at
     /// construction (the config is read-once per process). Gates every
     /// profiling emission and the per-resume ring refresh.
@@ -1369,8 +1374,16 @@ impl BexEngine {
             })
             .collect();
 
-        // Create the unified heap with compile-time objects
-        let heap = BexHeap::new(compile_time_objects);
+        // Create the unified heap with compile-time objects, additionally
+        // allocating the per-package `Object::Package` / `Object::ImplRule`
+        // objects and the `vm.packages` index.
+        let (heap, vm_packages) = bex_vm::package_load::build_heap_with_packages(
+            compile_time_objects,
+            &bytecode.packages,
+        );
+        // Shared with every VM (mirrors `interface_impls`), so spawned workers
+        // see the same package index without re-resolving it.
+        let packages = Arc::new(vm_packages);
 
         // Convert ObjectIndex -> HeapPtr for function lookup table.
         // Now that the heap exists, we can get stable pointers to compile-time objects.
@@ -1446,6 +1459,7 @@ impl BexEngine {
                     Arc::clone(&argv),
                     Arc::clone(&interface_impls),
                     Arc::clone(&recursive_type_alias_defs),
+                    Arc::clone(&packages),
                 );
                 vm.set_entry_point(*init_ptr, &[]);
                 // Drive the VM to completion. $init only contains synchronous
@@ -1574,6 +1588,7 @@ impl BexEngine {
             futures: FutureManager::new(futures_permit),
             interface_impls,
             recursive_type_alias_defs,
+            packages,
             prof_enabled,
         })
     }
@@ -2428,6 +2443,7 @@ impl BexEngine {
             Arc::clone(&self.argv),
             Arc::clone(&self.interface_impls),
             Arc::clone(&self.recursive_type_alias_defs),
+            Arc::clone(&self.packages),
         );
         // BEP-034: wrap the root VM in a `BexThread` from the outset so the
         // permit's `RootHaver` is the thread (delegating to the inner VM).
@@ -3881,6 +3897,7 @@ impl BexEngine {
             Arc::clone(&self.argv),
             Arc::clone(&self.interface_impls),
             Arc::clone(&self.recursive_type_alias_defs),
+            Arc::clone(&self.packages),
         );
         child_vm.prof_thread_id = prof_thread_id;
         child_vm.prof_suppressed = prof_suppressed;

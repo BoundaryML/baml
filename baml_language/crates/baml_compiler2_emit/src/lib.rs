@@ -60,17 +60,21 @@ fn build_alias_caches(
 /// selection) to dispatch an interface method — operator overloading today;
 /// reflection once unified. Built from the item tree in two parts: (a)
 /// out-of-body `implements_for` blocks; (b) methods folded onto a class.
-fn build_interface_impls(
+fn build_packages(
     db: &dyn baml_compiler2_mir::Db,
     all_files: &[baml_base::SourceFile],
     alias_caches: &HashMap<Name, ResolvedAliases>,
-) -> bex_vm_types::types::InterfaceImplsByPackage {
+    function_indices: &HashMap<String, usize>,
+    interface_indices: &HashMap<baml_type::TypeName, usize>,
+    program_packages: &mut indexmap::IndexMap<Name, bex_vm_types::types::ProgramPackage>,
+) {
     use baml_compiler2_tir::{
         lower_type_expr::{lower_type_expr_in_ns, qualify_def},
         ty,
     };
-    use bex_vm_types::types::{
-        InterfaceBound, InterfaceImplsByPackage, MethodImpl, RuntimeImplRule,
+    use bex_vm_types::{
+        ObjectIndex,
+        types::{InterfaceBound, ProgramImplRule, ProgramMethodImpl},
     };
 
     type IfaceParts = (
@@ -104,11 +108,18 @@ fn build_interface_impls(
         Some((qtn.clone(), arg_templates, assoc_templates))
     }
 
-    // Sort key for a deterministic registry order. `display_name` is excluded from
-    // `Eq`, so key on the module path plus the short name.
-    fn tn_sort_key(tn: &baml_type::TypeName) -> (Vec<Name>, Name) {
-        (tn.module_path(), tn.name().clone())
-    }
+    // Resolve a function FQN to its emitted object index. A missing entry means
+    // the method's function object wasn't emitted (shouldn't happen for a valid
+    // impl), so drop just that method — losing a dispatch, never adding a wrong
+    // one (mirrors the `None`-skips below).
+    let resolve_fqn = |fqn: &str| -> Option<ObjectIndex> {
+        let idx = function_indices.get(fqn).copied();
+        debug_assert!(
+            idx.is_some(),
+            "impl method `{fqn}` has no emitted function object",
+        );
+        idx.map(ObjectIndex::from_raw)
+    };
 
     // Per interface, its default methods (`name → fn FQN`). An implementing rule
     // inherits these for any method it doesn't override, so each baked rule's
@@ -198,20 +209,24 @@ fn build_interface_impls(
     };
     // Fill a rule's method table with the interface's defaults (override winning),
     // each carrying the interface frame it is invoked with.
-    let merge_defaults = |methods: &mut indexmap::IndexMap<Name, MethodImpl>,
+    let merge_defaults = |methods: &mut indexmap::IndexMap<Name, ProgramMethodImpl>,
                           iface_tn: &baml_type::TypeName,
                           interface_frame: &[baml_type::TyTemplate]| {
         if let Some(defaults) = iface_defaults.get(iface_tn) {
             for (name, fqn) in defaults {
-                methods.entry(name.clone()).or_insert_with(|| MethodImpl {
-                    fqn: fqn.clone(),
-                    frame: interface_frame.to_vec(),
-                });
+                let Some(fqn_idx) = resolve_fqn(fqn) else {
+                    continue;
+                };
+                methods
+                    .entry(name.clone())
+                    .or_insert_with(|| ProgramMethodImpl {
+                        fqn: fqn_idx,
+                        frame: interface_frame.to_vec(),
+                    });
             }
         }
     };
 
-    let mut interface_impls: InterfaceImplsByPackage = indexmap::IndexMap::new();
     for file in all_files {
         let item_tree = file_item_tree(db, *file);
         let pkg_info = file_package(db, *file);
@@ -304,28 +319,38 @@ fn build_interface_impls(
                 (0..u32::try_from(imp.generic_params.len()).expect("generic arity fits u32"))
                     .map(baml_type::TyTemplate::TypeArgRef)
                     .collect();
+            let Some(interface_head) = interface_indices
+                .get(&iface_tn)
+                .copied()
+                .map(ObjectIndex::from_raw)
+            else {
+                continue;
+            };
             let mut methods = indexmap::IndexMap::new();
             for &m in &imp.methods {
+                let fqn = def_to_item_ref(db, Definition::Function(FunctionLoc::new(db, *file, m)))
+                    .to_string();
+                let Some(fqn) = resolve_fqn(&fqn) else {
+                    continue;
+                };
                 methods.insert(
                     item_tree[m].name.clone(),
-                    MethodImpl {
-                        fqn: def_to_item_ref(
-                            db,
-                            Definition::Function(FunctionLoc::new(db, *file, m)),
-                        )
-                        .to_string(),
+                    ProgramMethodImpl {
+                        fqn,
                         frame: impl_frame.clone(),
                     },
                 );
             }
             let iface_frame = interface_frame(&iface_tn, &interface_args, &interface_assoc);
             merge_defaults(&mut methods, &iface_tn, &iface_frame);
-            interface_impls
+            program_packages
                 .entry(pkg_info.package.clone())
                 .or_default()
-                .entry(iface_tn)
+                .impl_rules
+                .entry(interface_head)
                 .or_default()
-                .push(RuntimeImplRule {
+                .push(ProgramImplRule {
+                    interface_head,
                     for_ty_pattern,
                     generic_param_bounds,
                     interface_args,
@@ -416,29 +441,38 @@ fn build_interface_impls(
                 // given `(type, Iface<Args>)` unique, so this picks exactly this
                 // block's methods even when the class implements the same
                 // interface at another instantiation.
-                let mut methods: indexmap::IndexMap<Name, MethodImpl> = class_method_impls
+                let Some(interface_head) = interface_indices
+                    .get(&iface_tn)
+                    .copied()
+                    .map(ObjectIndex::from_raw)
+                else {
+                    continue;
+                };
+                let mut methods: indexmap::IndexMap<Name, ProgramMethodImpl> = class_method_impls
                     .iter()
                     .filter(|(m_iface_tn, m_args, _, _)| {
                         *m_iface_tn == iface_tn && *m_args == interface_args
                     })
-                    .map(|(_, _, name, fqn)| {
-                        (
+                    .filter_map(|(_, _, name, fqn)| {
+                        Some((
                             name.clone(),
-                            MethodImpl {
-                                fqn: fqn.clone(),
+                            ProgramMethodImpl {
+                                fqn: resolve_fqn(fqn)?,
                                 frame: impl_frame.clone(),
                             },
-                        )
+                        ))
                     })
                     .collect();
                 let iface_frame = interface_frame(&iface_tn, &interface_args, &interface_assoc);
                 merge_defaults(&mut methods, &iface_tn, &iface_frame);
-                interface_impls
+                program_packages
                     .entry(pkg_info.package.clone())
                     .or_default()
-                    .entry(iface_tn)
+                    .impl_rules
+                    .entry(interface_head)
                     .or_default()
-                    .push(RuntimeImplRule {
+                    .push(ProgramImplRule {
+                        interface_head,
                         for_ty_pattern: for_ty_pattern.clone(),
                         generic_param_bounds: generic_param_bounds.clone(),
                         interface_args,
@@ -449,21 +483,21 @@ fn build_interface_impls(
         }
     }
 
-    // Deterministic order: files/classes iterate from unordered maps, so sort by
-    // package, then interface, then rule. Within one interface a `for_ty_pattern`
-    // is unique (overlap is a coherence error).
-    interface_impls.sort_keys();
-    for pkg_impls in interface_impls.values_mut() {
-        pkg_impls.sort_by_cached_key(|tn, _| tn_sort_key(tn));
-        for rules in pkg_impls.values_mut() {
-            // Primary key is the rendered pattern; its `Display` drops module paths,
-            // so two distinct same-short-name for-types tie. `{:?}` carries the
-            // module-qualified identity and breaks the tie deterministically (rather
-            // than falling back to unordered-map insertion order). The interface
-            // instantiation (args + associated bindings) is folded in last so the
-            // same for-type implementing one interface at several instantiations
-            // (e.g. `Converter<int>` + `Converter<float>`) orders by content rather
-            // than declaration order.
+    // Deterministic order: files/classes iterate from unordered maps. Impl rules
+    // are keyed by their interface's object index (assigned in deterministic
+    // emission order); within one interface a `for_ty_pattern` is unique (overlap
+    // is a coherence error). The primary rule key is the rendered pattern; its
+    // `Display` drops module paths, so two distinct same-short-name for-types tie.
+    // `{:?}` carries the module-qualified identity and breaks the tie (rather than
+    // falling back to unordered-map insertion order). The interface instantiation
+    // (args + associated bindings) is folded in last so the same for-type
+    // implementing one interface at several instantiations (e.g. `Converter<int>`
+    // + `Converter<float>`) orders by content rather than declaration order.
+    // Package-level ordering is finalized by the caller once every map is built.
+    for pkg in program_packages.values_mut() {
+        pkg.interfaces.sort_keys();
+        pkg.impl_rules.sort_keys();
+        for rules in pkg.impl_rules.values_mut() {
             rules.sort_by_cached_key(|rule| {
                 (
                     rule.for_ty_pattern.to_string(),
@@ -474,7 +508,6 @@ fn build_interface_impls(
             });
         }
     }
-    interface_impls
 }
 
 pub(crate) use emit::compile_mir_function;
@@ -966,6 +999,50 @@ pub fn generate_project_bytecode_with_opt(
         }
     }
 
+    // --- Pass 3b: Build interface objects + start the per-package structure ---
+    // Each interface becomes an `Object::Interface` so impl rules can point at it
+    // (`interface_head`) and packages can reference it by index. Only `.name` is
+    // read at runtime today, so the signature (args/requires/assoc/fields/methods)
+    // is left empty and filled when reflection needs it. `program_packages` is the
+    // per-package structure the loader builds `Object::Package` + `vm.packages`
+    // from; `build_packages` fills in each package's impl rules below.
+    let mut interface_object_indices: HashMap<baml_type::TypeName, usize> = HashMap::new();
+    let mut program_packages: indexmap::IndexMap<Name, bex_vm_types::types::ProgramPackage> =
+        indexmap::IndexMap::new();
+    for file in &all_files {
+        let item_tree = file_item_tree(db, *file);
+        let pkg_info = file_package(db, *file);
+        for (iface_id, iface_data) in &item_tree.interfaces {
+            let iface_tn = baml_compiler2_tir::lower_type_expr::qualify_def(
+                db,
+                Definition::Interface(InterfaceLoc::new(db, *file, *iface_id)),
+                &iface_data.name,
+            );
+            let iface_obj_idx = program.add_object(Object::Interface(Box::new(
+                bex_vm_types::types::InterfaceDef {
+                    name: iface_tn.clone(),
+                    args: Vec::new(),
+                    requires: Vec::new(),
+                    assoc: Vec::new(),
+                    fields: Vec::new(),
+                    methods: Vec::new(),
+                },
+            )));
+            interface_object_indices.insert(iface_tn, iface_obj_idx);
+            program_packages
+                .entry(pkg_info.package.clone())
+                .or_default()
+                .interfaces
+                .insert(
+                    bex_vm_types::types::LocalName {
+                        namespace: pkg_info.namespace_path.clone(),
+                        name: iface_data.name.clone(),
+                    },
+                    ObjectIndex::from_raw(iface_obj_idx),
+                );
+        }
+    }
+
     // --- Pass 4: Compile each function ---
     for file in &all_files {
         let line_starts = build_line_starts(file.text(db));
@@ -1398,7 +1475,16 @@ pub fn generate_project_bytecode_with_opt(
         }
     }
 
-    program.interface_impls = build_interface_impls(db, &all_files, &alias_caches);
+    build_packages(
+        db,
+        &all_files,
+        &alias_caches,
+        &program.function_indices,
+        &interface_object_indices,
+        &mut program_packages,
+    );
+    program_packages.sort_keys();
+    program.packages = program_packages;
 
     // --- Pass 8: Test cases (only when requested) ---
     if options.emit_test_cases {
