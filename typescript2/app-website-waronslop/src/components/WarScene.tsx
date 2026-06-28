@@ -2,364 +2,317 @@
 
 import { CSSProperties, useEffect, useRef, useState } from 'react';
 
-type Actor = 'legionnaire' | 'tank' | 'march-out';
+// Scroll-driven war hero: the battle stage pins while you scroll. Progress (--p)
+// scrubs the column across the screen and cross-fades backdrops + info panels.
 
-type Scene = {
-  image: string;
-  side: 'left' | 'right';
+const F = {
+  walk: { src: '/spartan_walk.png', fw: 48, fh: 68, n: 4, ms: 460 },
+  tank: { src: '/tank_roll.png', fw: 96, fh: 56, n: 4, ms: 440 },
+} as const;
+type Kind = keyof typeof F;
+
+type BattleScene = {
+  id: string;
+  backdrop: string;
+  caption: string;
   title: string;
   body: string;
-  actor?: Actor;
+  link?: { href: string; label: string };
+  images: { src: string; alt: string }[];
 };
 
-const SCENES: Scene[] = [
+const SCENES: BattleScene[] = [
   {
-    image: '/scene_design.png',
-    side: 'left',
+    id: 'design',
+    backdrop: '/scene_design.png',
+    caption: 'I · The Battle of Design',
     title: 'The battle of design',
-    body: 'Code can be slop, writing cannot. We built a full vibecoded "notion-like" site for writing, reviewing, and managing detailed design specs for the BAML language (BEPS).',
-    actor: 'legionnaire',
+    body: 'Code can be slop, writing cannot. We built BEPS, a full site for writing, reviewing, and managing detailed design specs for the BAML language.',
+    link: { href: 'https://beps.boundaryml.com', label: 'beps.boundaryml.com' },
+    images: [
+      { src: '/battle-design-kanban.png', alt: 'BEPS kanban board of proposals' },
+      { src: '/battle-design-bep50.png', alt: 'BEP-050 Metrics and Tracing IDs document' },
+      { src: '/battle-design-slack.png', alt: 'Slack thread announcing a new BEP' },
+    ],
   },
   {
-    image: '/scene_arch.png',
-    side: 'right',
+    id: 'arch',
+    backdrop: '/scene_arch.png',
+    caption: 'II · The Battle of Architecture',
     title: 'The battle of architecture',
-    body: 'We built a massive rust crate tracing system to track dependencies across different parts of the BAML language. This helps keep our codebase clean and prevent breaking changes.',
-    actor: 'tank',
+    body: 'We built a massive Rust crate tracing system to track dependencies across different parts of the BAML language. This helps keep our codebase clean and prevent breaking changes.',
+    images: [{ src: '/battle-arch-deps.png', alt: 'BAML dependency graph visualization' }],
   },
   {
-    image: '/scene_deploy.png',
-    side: 'left',
+    id: 'deploy',
+    backdrop: '/scene_deploy.png',
+    caption: 'III · The Battle of Deployment',
     title: 'The battle of deployments',
-    body: 'We have agents write thousands of baml programs to see what breaks and what works.',
-    actor: 'march-out',
+    body: 'We have agents write thousands of BAML programs to see what breaks and what works.',
+    link: { href: 'https://new.boundaryml.com/atb', label: 'new.boundaryml.com/atb' },
+    images: [{ src: '/battle-deploy-runs.png', alt: 'Agent runs dashboard for BAML deployments' }],
   },
 ];
 
-// ── Sprite actors ────────────────────────────────────────────────────────────
-// All movement is pure CSS keyframes (translateX) gated on an `active` flag the
-// scene sets once it scrolls into view — JS never drives transforms frame to
-// frame (that was flaky in Firefox). Sheets are 48×68 (walk/front) and 96×56
-// (tank); we step background-position with the shorthand + explicit `0` Y so
-// Firefox animates it.
-const SPARTAN_RATIO = 48 / 68;
-const TANK_RATIO = 96 / 56;
+const BACKDROPS = SCENES.map((s) => s.backdrop);
+const SCROLL_VH = 300;
 
-const ACTOR_STYLES = `
-.ws-pixel { image-rendering: pixelated; image-rendering: crisp-edges; image-rendering: -moz-crisp-edges; }
-@keyframes ws-walk { from { background-position: 0 0; } to { background-position: var(--sheetNeg) 0; } }
-@keyframes ws-wave { from { background-position: var(--fw1) 0; } to { background-position: var(--fw3) 0; } }
-@keyframes ws-movein { from { transform: translateX(var(--from)) scaleX(var(--flip, 1)); } to { transform: translateX(var(--to)) scaleX(var(--flip, 1)); } }
-@keyframes ws-march { from { transform: translateX(var(--from)); } to { transform: translateX(var(--to)); } }
-@keyframes ws-fade-in { from { opacity: 0; } to { opacity: 1; } }
-@keyframes ws-fade-out { from { opacity: 1; } to { opacity: 0; } }
-@media (prefers-reduced-motion: reduce) {
-  .ws-pixel, .ws-actor { animation: none !important; }
-}
+const STYLES = `
+  .warscene2 [data-leg] {
+    image-rendering: pixelated; image-rendering: -moz-crisp-edges; image-rendering: crisp-edges;
+    animation-name: wf2; animation-timing-function: steps(4); animation-iteration-count: infinite;
+    animation-duration: var(--ms); animation-play-state: paused;
+  }
+  .warscene2.is-scrolling [data-leg] { animation-play-state: running; }
+  @keyframes wf2 { from { background-position: 0 0; } to { background-position: calc(var(--sw) * -1) 0; } }
+  @media (prefers-reduced-motion: reduce) { .warscene2 [data-leg] { animation: none !important; } }
+
+  .warscene2 .bd {
+    position: absolute; left: 0; right: 0; bottom: var(--strip);
+    width: 100%; height: auto; max-width: none; display: block;
+  }
+  @media (max-width: 767px) {
+    .warscene2 .bd { top: 0; bottom: 0; height: 100%; object-fit: cover; object-position: center bottom; }
+  }
 `;
 
-const v = (key: string, value: string | number) => ({ [key]: value }) as CSSProperties;
+const SPAN = 240;
 
-// Scene 1 — a legionnaire marches in from the left, turns front, waves, then holds.
-function Legionnaire({ active }: { active: boolean }) {
-  const H = 104;
-  const ww = Math.round(H * SPARTAN_RATIO);
-  const walkSheet = ww * 4;
-  const frontSheet = ww * 3;
-
-  return (
-    <div
-      className="ws-actor"
-      style={{
-        position: 'absolute',
-        bottom: '7%',
-        left: 0,
-        height: H,
-        width: ww,
-        transform: 'translateX(-6vw)',
-        animation: active ? 'ws-movein 2600ms linear forwards' : 'none',
-        ...v('--from', '-6vw'),
-        ...v('--to', '24vw'),
-      }}
-    >
-      <div
-        className="ws-pixel"
-        style={{
-          position: 'absolute',
-          inset: 0,
-          backgroundImage: 'url(/spartan_walk.png)',
-          backgroundRepeat: 'no-repeat',
-          backgroundSize: `${walkSheet}px ${H}px`,
-          ...v('--sheetNeg', `-${walkSheet}px`),
-          animation: active
-            ? 'ws-walk 600ms steps(4) infinite, ws-fade-out 160ms linear 2600ms forwards'
-            : 'none',
-        }}
-      />
-      <div
-        className="ws-pixel"
-        style={{
-          position: 'absolute',
-          inset: 0,
-          opacity: 0,
-          backgroundImage: 'url(/spartan_front.png)',
-          backgroundRepeat: 'no-repeat',
-          backgroundPosition: '0 0',
-          backgroundSize: `${frontSheet}px ${H}px`,
-          ...v('--fw1', `-${ww}px`),
-          ...v('--fw3', `-${ww * 3}px`),
-          animation: active
-            ? 'ws-fade-in 160ms linear 2600ms forwards, ws-wave 460ms steps(2) 2780ms 3'
-            : 'none',
-        }}
-      />
-    </div>
-  );
-}
-
-// Scene 2 — the BAML tank rolls in from the right (sheet faces right, so flip it).
-function Tank({ active }: { active: boolean }) {
-  const H = 86;
-  const ww = Math.round(H * TANK_RATIO);
-  const sheet = ww * 4;
-
-  return (
-    <div
-      className="ws-actor ws-pixel"
-      style={{
-        position: 'absolute',
-        bottom: '5%',
-        left: 0,
-        height: H,
-        width: ww,
-        backgroundImage: 'url(/tank_roll.png)',
-        backgroundRepeat: 'no-repeat',
-        backgroundSize: `${sheet}px ${H}px`,
-        transform: 'translateX(86vw) scaleX(-1)',
-        animation: active
-          ? 'ws-movein 3200ms linear forwards, ws-walk 360ms steps(4) infinite'
-          : 'none',
-        ...v('--sheetNeg', `-${sheet}px`),
-        ...v('--from', '86vw'),
-        ...v('--to', '34vw'),
-        ...v('--flip', -1),
-      }}
-    />
-  );
-}
-
-// Scene 3 — a loose file of legionnaires walking out across the frame from the left.
-const MARCHERS = [
-  { H: 98, bottom: '6%', dur: 9000, delay: 0 },
-  { H: 84, bottom: '11%', dur: 11000, delay: 1600 },
-  { H: 108, bottom: '3%', dur: 8200, delay: 3400 },
-  { H: 90, bottom: '8%', dur: 10000, delay: 5200 },
+const COLUMN: { kind: Kind; size: number; off: number }[] = [
+  { kind: 'walk', size: 92, off: -4 },
+  { kind: 'walk', size: 86, off: -11 },
+  { kind: 'walk', size: 96, off: -18 },
+  { kind: 'walk', size: 90, off: -25 },
+  { kind: 'walk', size: 94, off: -32 },
+  { kind: 'walk', size: 88, off: -39 },
+  { kind: 'walk', size: 97, off: -46 },
+  { kind: 'tank', size: 118, off: -56 },
+  { kind: 'walk', size: 93, off: -68 },
+  { kind: 'walk', size: 91, off: -75 },
+  { kind: 'walk', size: 95, off: -82 },
+  { kind: 'walk', size: 89, off: -89 },
+  { kind: 'walk', size: 96, off: -96 },
+  { kind: 'tank', size: 112, off: -106 },
+  { kind: 'walk', size: 94, off: -118 },
+  { kind: 'walk', size: 87, off: -125 },
+  { kind: 'walk', size: 92, off: -132 },
+  { kind: 'walk', size: 98, off: -139 },
 ];
 
-function MarchOut({ active }: { active: boolean }) {
-  return (
-    <>
-      {MARCHERS.map((m, i) => {
-        const ww = Math.round(m.H * SPARTAN_RATIO);
-        const sheet = ww * 4;
-        return (
-          <div
-            key={i}
-            className="ws-actor ws-pixel"
-            style={{
-              position: 'absolute',
-              bottom: m.bottom,
-              left: 0,
-              height: m.H,
-              width: ww,
-              backgroundImage: 'url(/spartan_walk.png)',
-              backgroundRepeat: 'no-repeat',
-              backgroundSize: `${sheet}px ${m.H}px`,
-              transform: 'translateX(-14vw)',
-              animation: active
-                ? `ws-march ${m.dur}ms linear ${m.delay}ms infinite, ws-walk 600ms steps(4) ${-(i % 4) * 150}ms infinite`
-                : 'none',
-              ...v('--sheetNeg', `-${sheet}px`),
-              ...v('--from', '-14vw'),
-              ...v('--to', '120vw'),
-            }}
-          />
-        );
-      })}
-    </>
-  );
+function sprite(kind: Kind, height: number): CSSProperties {
+  const f = F[kind];
+  const w = Math.round((height * f.fw) / f.fh);
+  return {
+    position: 'absolute',
+    width: w,
+    height,
+    backgroundImage: `url(${f.src})`,
+    backgroundRepeat: 'no-repeat',
+    backgroundSize: `${w * f.n}px ${height}px`,
+    ['--sw' as string]: `${w * f.n}px`,
+    ['--ms' as string]: `${f.ms}ms`,
+  };
 }
 
-function ActorLayer({ actor, active }: { actor: Actor; active: boolean }) {
-  if (actor === 'legionnaire') return <Legionnaire active={active} />;
-  if (actor === 'tank') return <Tank active={active} />;
-  return <MarchOut active={active} />;
-}
+const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n));
 
-const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
-
-// A tiled grid of dots that grow with --r, so the image "assembles" from
-// particles as the scene scrolls into view (and scatters back out as it leaves).
-const PARTICLE_MASK =
-  'radial-gradient(circle, #000 calc(var(--r) * 145% - 14%), transparent calc(var(--r) * 145%))';
-
-const materializeStyle = (fromLeft: boolean): CSSProperties =>
-  ({
-    opacity: 'calc(var(--r) * 1.25)',
-    filter: 'blur(calc((1 - var(--r)) * 5px))',
-    transform: `translateX(calc((1 - var(--r)) * ${fromLeft ? '-4vw' : '4vw'})) translateY(calc((1 - var(--r)) * 14px)) scale(calc(0.96 + var(--r) * 0.04))`,
-    maskImage: PARTICLE_MASK,
-    WebkitMaskImage: PARTICLE_MASK,
-    maskSize: '8px 8px',
-    WebkitMaskSize: '8px 8px',
-    maskRepeat: 'repeat',
-    WebkitMaskRepeat: 'repeat',
-    willChange: 'opacity, transform, mask-image',
-  }) as CSSProperties;
-
-function FloatingScene({ scene }: { scene: Scene }) {
-  const fromLeft = scene.side === 'left';
-  const textOnRight = fromLeft;
-  const imgRef = useRef<HTMLImageElement | null>(null);
-  const cardRef = useRef<HTMLDivElement | null>(null);
-  const sectionRef = useRef<HTMLElement | null>(null);
-  const [actorActive, setActorActive] = useState(false);
-
-  useEffect(() => {
-    const img = imgRef.current;
-    const card = cardRef.current;
-    if (!img || !card) return;
-
-    const sync = () => {
-      card.style.height = window.innerWidth >= 1024 ? `${img.offsetHeight}px` : '';
-    };
-
-    sync();
-    const observer = new ResizeObserver(sync);
-    observer.observe(img);
-    window.addEventListener('resize', sync);
-    img.addEventListener('load', sync);
-
-    return () => {
-      observer.disconnect();
-      window.removeEventListener('resize', sync);
-      img.removeEventListener('load', sync);
-    };
-  }, []);
-
-  // Kick off the sprite choreography once the scene is meaningfully in view.
-  useEffect(() => {
-    const el = sectionRef.current;
-    if (!el || !scene.actor) return;
-
-    const io = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          if (entry.isIntersecting && entry.intersectionRatio >= 0.35) {
-            setActorActive(true);
-            io.disconnect();
-            break;
-          }
-        }
-      },
-      { threshold: [0, 0.35, 0.6] },
-    );
-    io.observe(el);
-    return () => io.disconnect();
-  }, [scene.actor]);
+function ScenePanel({
+  scene,
+  index,
+  active,
+}: {
+  scene: BattleScene;
+  index: number;
+  active: boolean;
+}) {
+  const multi = scene.images.length > 1;
 
   return (
-    <section
-      ref={sectionRef}
-      className="relative flex min-h-[72vh] items-center overflow-hidden py-2 sm:min-h-[86vh] sm:py-4"
+    <div
+      className="absolute inset-x-0 top-0 z-20 px-3 pt-12 sm:px-6 sm:pt-14 lg:px-8"
+      style={{
+        opacity: `var(--b${index})` as unknown as number,
+        transform: `translateY(calc((1 - var(--b${index})) * 14px))`,
+        pointerEvents: active ? 'auto' : 'none',
+      }}
+      aria-hidden={!active}
     >
-      <div
-        className={[
-          'relative w-[118vw] max-w-none sm:w-[94vw] lg:w-[82vw]',
-          fromLeft ? '-ml-[18vw] sm:-ml-[10vw] lg:-ml-[7vw]' : 'ml-auto -mr-[18vw] sm:-mr-[10vw] lg:-mr-[7vw]',
-        ].join(' ')}
-      >
-        <div className="relative w-full" style={materializeStyle(fromLeft)}>
-          <img
-            ref={imgRef}
-            src={scene.image}
-            alt=""
-            aria-hidden="true"
-            className="block h-auto w-full select-none"
-            draggable={false}
-          />
+      <div className="tweet-font mx-auto grid max-w-7xl gap-5 rounded-2xl border border-line/60 bg-cream-hi/60 p-5 shadow-sm backdrop-blur-lg sm:gap-7 sm:p-7 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] lg:p-9">
+        <div className="min-w-0">
+          <p
+            className="text-xs font-bold uppercase tracking-[0.14em] text-ink-2 sm:text-[13px]"
+            style={{ fontFamily: "ui-monospace, 'SFMono-Regular', Menlo, monospace" }}
+          >
+            {scene.caption}
+          </p>
+          <h3 className="mt-2 text-2xl font-bold leading-tight text-ink sm:text-4xl">{scene.title}</h3>
+          <p className="mt-3 text-base leading-relaxed text-ink sm:text-[19px] sm:leading-relaxed">{scene.body}</p>
+          {scene.link && (
+            <a
+              href={scene.link.href}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-4 inline-block text-base font-bold text-accent underline underline-offset-4 hover:text-accent-deep sm:text-lg"
+            >
+              {scene.link.label}
+            </a>
+          )}
         </div>
 
-        {scene.actor && (
-          <div className="pointer-events-none absolute inset-0 z-[5] hidden lg:block">
-            <ActorLayer actor={scene.actor} active={actorActive} />
-          </div>
-        )}
+        <div
+          className={
+            multi
+              ? 'grid min-w-0 grid-cols-3 gap-2 sm:gap-3'
+              : 'flex min-w-0 items-start justify-center lg:justify-end'
+          }
+        >
+          {scene.images.map((img) => (
+            <img
+              key={img.src}
+              src={img.src}
+              alt={img.alt}
+              className={
+                multi
+                  ? 'h-[120px] w-full rounded-lg border border-line bg-white object-cover object-top shadow-sm sm:h-[170px] lg:h-[210px]'
+                  : 'max-h-[210px] w-full rounded-lg border border-line bg-white object-contain object-top shadow-sm sm:max-h-[290px] lg:max-h-[360px] lg:max-w-full'
+              }
+              loading="lazy"
+            />
+          ))}
+        </div>
       </div>
-
-      <div
-        ref={cardRef}
-        className={[
-          'absolute top-1/2 z-10 flex flex-col justify-center rounded-2xl px-8 py-7 text-balance text-ink',
-          'max-lg:bottom-8 max-lg:left-6 max-lg:right-6 max-lg:top-auto',
-          textOnRight ? 'lg:left-[75vw] lg:right-0' : 'lg:left-0 lg:right-[75vw]',
-        ].join(' ')}
-        style={{
-          backgroundColor: '#fffef5',
-          opacity: 'calc((var(--r) - 0.75) * 4)' as unknown as number,
-          transform: 'translateY(calc(-50% + (1 - var(--r)) * 18px))',
-        }}
-      >
-        <h3 className="text-[26px] font-bold leading-tight">{scene.title}</h3>
-        <p className="tweet-font mt-4 text-[19px] leading-8 text-ink">{scene.body}</p>
-      </div>
-    </section>
+    </div>
   );
 }
 
 export default function WarScene() {
-  const rowRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const sceneRef = useRef<HTMLDivElement>(null);
+  const idleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastIdx = useRef(0);
+  const [scene, setScene] = useState(0);
+  const [scale, setScale] = useState(1);
+  const [started, setStarted] = useState(false);
 
   useEffect(() => {
-    const updateProgress = () => {
-      const viewportHeight = window.innerHeight;
+    const onResize = () => {
+      setScale(clamp(Math.min(window.innerWidth / 1280, window.innerHeight / 760), 0.62, 1.3));
+    };
+    onResize();
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
 
-      for (const row of rowRefs.current) {
-        if (!row) continue;
-        const rect = row.getBoundingClientRect();
-        // Assemble as the scene enters from the bottom...
-        const enter = clamp((viewportHeight - rect.top) / (viewportHeight * 0.6), 0, 1);
-        // ...and scatter back out only once it starts leaving past the top.
-        const exit = clamp(rect.bottom / (viewportHeight * 0.4), 0, 1);
-        const progress = Math.min(enter, exit);
-        row.style.setProperty('--r', progress.toFixed(3));
+  useEffect(() => {
+    const wrap = wrapRef.current;
+    const root = sceneRef.current;
+    if (!wrap || !root) return;
+
+    const apply = () => {
+      const total = wrap.offsetHeight - window.innerHeight;
+      const p = total > 0 ? clamp(-wrap.getBoundingClientRect().top / total, 0, 1) : 0;
+      root.style.setProperty('--p', String(p));
+      const s = p * (BACKDROPS.length - 1);
+      for (let i = 0; i < BACKDROPS.length; i++) {
+        root.style.setProperty(`--b${i}`, String(clamp(1 - Math.abs(s - i), 0, 1)));
       }
+      const idx = Math.round(s);
+      if (idx !== lastIdx.current) {
+        lastIdx.current = idx;
+        setScene(idx);
+      }
+      if (p > 0.004) setStarted(true);
     };
 
-    updateProgress();
-    window.addEventListener('scroll', updateProgress, { passive: true });
-    window.addEventListener('resize', updateProgress);
+    const onScroll = () => {
+      apply();
+      root.classList.add('is-scrolling');
+      if (idleTimer.current) clearTimeout(idleTimer.current);
+      idleTimer.current = setTimeout(() => root.classList.remove('is-scrolling'), 150);
+    };
 
+    apply();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', apply);
     return () => {
-      window.removeEventListener('scroll', updateProgress);
-      window.removeEventListener('resize', updateProgress);
+      window.removeEventListener('scroll', onScroll);
+      window.removeEventListener('resize', apply);
+      if (idleTimer.current) clearTimeout(idleTimer.current);
     };
   }, []);
 
+  const strip = Math.round(20 * scale);
+  const ground = Math.round(6 * scale);
+
   return (
-    <div className="mt-4 sm:mt-0">
-      <style>{ACTOR_STYLES}</style>
-      {SCENES.map((scene, index) => (
+    <section ref={wrapRef} className="relative mt-2 sm:mt-0" style={{ height: `${SCROLL_VH}vh` }}>
+      <div
+        ref={sceneRef}
+        className="warscene2 sticky top-0 h-screen w-full overflow-hidden"
+        style={{
+          ['--p' as string]: '0',
+          ['--b0' as string]: '1',
+          ['--b1' as string]: '0',
+          ['--b2' as string]: '0',
+          ['--strip' as string]: `${strip}px`,
+        }}
+      >
+        <style>{STYLES}</style>
+
+        {BACKDROPS.map((src, i) => (
+          <img
+            key={src}
+            src={src}
+            alt=""
+            aria-hidden="true"
+            className="bd"
+            style={{ opacity: `var(--b${i})` as unknown as number }}
+          />
+        ))}
+
         <div
-          key={scene.image}
-          ref={(element) => {
-            rowRefs.current[index] = element;
+          aria-hidden="true"
+          style={{
+            position: 'absolute',
+            left: 0,
+            right: 0,
+            bottom: 0,
+            height: strip,
+            background: '#d8c39a',
+            borderTop: '1px solid rgba(169, 142, 97, 0.45)',
           }}
-          style={{ ['--r' as string]: '0' }}
+        />
+
+        {COLUMN.map((m, i) => {
+          const size = Math.round(m.size * scale);
+          return (
+            <div
+              key={i}
+              data-leg
+              style={{
+                ...sprite(m.kind, size),
+                left: 0,
+                bottom: ground,
+                zIndex: 10,
+                transform: `translateX(calc((var(--p) * ${SPAN} + ${m.off}) * 1vw))`,
+              }}
+            />
+          );
+        })}
+
+        {SCENES.map((s, i) => (
+          <ScenePanel key={s.id} scene={s} index={i} active={scene === i} />
+        ))}
+
+        <div
+          className="pointer-events-none absolute inset-x-0 bottom-7 z-30 flex justify-center transition-opacity duration-500"
+          style={{ opacity: started ? 0 : 1 }}
         >
-          <FloatingScene scene={scene} />
+          <span className="tweet-font animate-bounce text-xs font-bold uppercase tracking-widest text-ink-2">
+            scroll to march ↓
+          </span>
         </div>
-      ))}
-    </div>
+      </div>
+    </section>
   );
 }

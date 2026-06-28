@@ -1,10 +1,11 @@
 import WarScene from '@/components/WarScene';
+import WarEpilogue from '@/components/WarEpilogue';
 import PledgeForm from '@/components/PledgeForm';
 import PledgeWall from '@/components/PledgeWall';
 
 export default function Home() {
   return (
-    <main className="w-full overflow-hidden">
+    <main className="w-full overflow-x-clip">
       <section className="relative z-10 px-6 pt-20 text-center sm:pt-28">
         <h1 className="text-4xl font-bold tracking-tight text-ink sm:text-6xl">fight slop with slop</h1>
         <p className="tweet-font mt-3 text-sm text-accent">
@@ -17,13 +18,7 @@ export default function Home() {
 
       <WarScene />
 
-      <section className="mx-auto max-w-2xl px-6 pb-24 pt-4 sm:pb-32 sm:pt-8">
-        <p className="tweet-font text-center text-2xl font-medium leading-relaxed text-ink sm:text-[2rem] sm:leading-snug">
-          {'Our bet at '}
-          <span className="font-bold text-accent">BAML</span>
-          {': the best way to reduce slop is by developing clean constructs at the language level'}
-        </p>
-      </section>
+      <WarEpilogue />
 
       <section className="pb-16 sm:pb-20">
         <PledgeWall />
