@@ -1,0 +1,27 @@
+// B-246 regression: a *braceless* `return` as a catch-arm value.
+//
+// `return` now parses as a diverging expression (type `never`), so a braceless
+// `_ => return e` no longer triggers the old cascade of misleading parse/type
+// errors. A genuinely wrong return value must still be caught — and it should
+// produce the SAME single, clear type error as the block form
+// (`=> { return e }`, see the sibling `catch_return_type_mismatch` project),
+// not a wall of downstream parse failures.
+
+enum Errors {
+  AuthenticationError
+  AuthorizationError
+  NotFoundError
+  InternalServerError
+}
+
+function callee() -> bool throws Errors {
+  return true
+}
+
+// BUG: `return e` returns an `Errors` enum but the function declares `-> bool`.
+// Expect exactly one diagnostic: `type mismatch: expected bool, got Errors`.
+function caller() -> bool {
+  callee() catch (e) {
+    Errors.AuthenticationError => return e
+  }
+}

@@ -1,0 +1,20 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== TIR2 ===
+enum user.Errors
+function user.callee() -> bool throws user.Errors {
+  { : never
+    return true : true
+  }
+  ?? 626..632: extraneous throws declaration: Errors
+}
+function user.caller() -> bool throws never {
+  { : bool
+    catch (callee() : bool) : bool
+      catch (e)
+        Errors.AuthenticationError =>
+          return e : never
+  }
+  !! 903..904: type mismatch: expected bool, got Errors
+}
