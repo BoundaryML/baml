@@ -22,7 +22,9 @@
 use std::{collections::HashSet, fmt::Write as _};
 
 use baml_base::{FileId, Name, SourceFile, Span};
-use baml_compiler_diagnostics::{Diagnostic, DiagnosticId, DiagnosticPhase, ToDiagnostic};
+use baml_compiler_diagnostics::{
+    Diagnostic, DiagnosticId, DiagnosticPhase, ParseError, ToDiagnostic,
+};
 use baml_compiler2_hir::{body::FunctionBody, file_semantic_index, scope::ScopeKind};
 use baml_compiler2_tir::{
     infer_context::{DiagnosticLocation, TirTypeError},
@@ -76,7 +78,25 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
     // `render_scope_diagnostics` calls `infer_scope_types(db, scope_id)` (Salsa-
     // cached per scope) and resolves the arena IDs in each diagnostic to source
     // `TextRange` values via the function body's `AstSourceMap`.
-    for scope_id in &index.scope_ids {
+    //
+    // Suppress type-inference diagnostics for any scope whose body failed to
+    // parse. When a function or lambda body contains a syntax error, parser
+    // error recovery produces a malformed AST that then yields cascading,
+    // misleading type errors. For example, the braceless lambda
+    // `(x: int) => x + 1` makes the parser consume `x` as the lambda's *return
+    // type* and leaves `+ 1` dangling, emitting `unresolved type: x` and
+    // `operator + cannot be applied to a function` *before* the real
+    // `Expected lambda body '{'` syntax error. Tainting the innermost executable
+    // scope containing each parse error (plus its descendant scopes) keeps the
+    // syntax error as the only diagnostic surfaced for the broken body. Parse
+    // errors at structural positions (class/enum names, top-level declarations)
+    // never taint a scope, so unrelated type errors elsewhere in the file are
+    // unaffected.
+    let tainted = parse_error_tainted_scopes(index, &parse_errors);
+    for (file_scope_idx, scope_id) in index.scope_ids.iter().enumerate() {
+        if tainted.contains(&file_scope_idx) {
+            continue;
+        }
         let rendered = render_scope_diagnostics(db, *scope_id);
         for r in rendered {
             diagnostics.push(tir_rendered_to_diagnostic_for_file(db, file, r));
@@ -422,6 +442,49 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
     });
 
     diagnostics
+}
+
+/// Indices (into the file's scope arena) of scopes whose TIR type-inference
+/// diagnostics should be suppressed because the scope body failed to parse.
+///
+/// Parser error recovery turns broken syntax into a malformed AST that then
+/// produces cascading, misleading type errors. We taint the innermost
+/// *executable* scope containing each parse error, plus all of its descendant
+/// scopes, so a single syntax error doesn't drag a pile of spurious type errors
+/// along with it. Parse errors at structural positions (class/enum names,
+/// top-level declarations, type-alias bodies) resolve to a structural scope and
+/// are ignored here, leaving genuine type errors elsewhere in the file intact.
+fn parse_error_tainted_scopes(
+    index: &baml_compiler2_hir::semantic_index::FileSemanticIndex<'_>,
+    parse_errors: &[ParseError],
+) -> HashSet<usize> {
+    let mut tainted = HashSet::new();
+    for err in parse_errors {
+        let span = match err {
+            ParseError::UnexpectedToken { span, .. }
+            | ParseError::UnexpectedEof { span, .. }
+            | ParseError::InvalidSyntax { span, .. } => span,
+        };
+        let fsid = index.scope_at_offset(span.range.start(), None);
+        let scope = &index.scopes[fsid.index() as usize];
+        if !matches!(
+            scope.kind,
+            ScopeKind::Function
+                | ScopeKind::Lambda
+                | ScopeKind::Block
+                | ScopeKind::Let
+                | ScopeKind::MatchArm
+                | ScopeKind::CatchClause
+                | ScopeKind::CatchArm
+        ) {
+            continue;
+        }
+        tainted.insert(fsid.index() as usize);
+        for d in scope.descendants.start.index()..scope.descendants.end.index() {
+            tainted.insert(d as usize);
+        }
+    }
+    tainted
 }
 
 /// Validate `interface` and `implements` blocks for a single file.
