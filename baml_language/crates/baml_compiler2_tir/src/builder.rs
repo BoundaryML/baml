@@ -6207,6 +6207,10 @@ impl<'db> TypeInferenceBuilder<'db> {
         checked.result
     }
 
+    /// Emit a warning when `baml.Array.filled` receives a mutable literal value.
+    ///
+    /// `Array.filled` stores the same reference in every slot for reference
+    /// types, so literals like `[]`, `{}`, and object literals alias.
     fn warn_on_array_filled_mutable_literal(
         &mut self,
         call_expr_id: ExprId,
@@ -6232,6 +6236,10 @@ impl<'db> TypeInferenceBuilder<'db> {
         );
     }
 
+    /// Resolve the `value` argument expression in an `Array.filled` call.
+    ///
+    /// Supports both named (`value = ...`) and positional forms, where the
+    /// second positional argument is the fill value.
     fn array_filled_value_arg(args: &[ast::CallArg]) -> Option<ExprId> {
         for arg in args {
             if arg
@@ -6255,6 +6263,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         None
     }
 
+    /// Returns whether an expression is a mutable literal that aliases by reference.
     fn is_mutable_literal_expr(expr: &Expr) -> bool {
         matches!(
             expr,
