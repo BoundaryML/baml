@@ -1949,11 +1949,12 @@ impl Printable for CatchExpr {
     }
 }
 
-/// The `catch` or `catch_all` keyword that starts a catch clause.
+/// The `catch`, `catch_all`, or `catch_all_panics` keyword that starts a catch clause.
 #[derive(Debug)]
 pub enum CatchKeyword {
     Catch(t::Catch),
     CatchAll(t::CatchAll),
+    CatchAllPanics(t::CatchAllPanics),
 }
 
 impl FromCST for CatchKeyword {
@@ -1961,8 +1962,11 @@ impl FromCST for CatchKeyword {
         match elem.kind() {
             SyntaxKind::KW_CATCH => t::Catch::from_cst(elem).map(Self::Catch),
             SyntaxKind::KW_CATCH_ALL => t::CatchAll::from_cst(elem).map(Self::CatchAll),
+            SyntaxKind::KW_CATCH_ALL_PANICS => {
+                t::CatchAllPanics::from_cst(elem).map(Self::CatchAllPanics)
+            }
             found => Err(StrongAstError::UnexpectedKindDesc {
-                expected_desc: "KW_CATCH or KW_CATCH_ALL".into(),
+                expected_desc: "KW_CATCH, KW_CATCH_ALL, or KW_CATCH_ALL_PANICS".into(),
                 found,
                 at: elem.text_range(),
             }),
@@ -1975,6 +1979,7 @@ impl Token for CatchKeyword {
         match self {
             CatchKeyword::Catch(keyword) => keyword.span(),
             CatchKeyword::CatchAll(keyword) => keyword.span(),
+            CatchKeyword::CatchAllPanics(keyword) => keyword.span(),
         }
     }
 }
