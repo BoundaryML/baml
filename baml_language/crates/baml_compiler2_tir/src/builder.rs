@@ -6855,8 +6855,11 @@ impl<'db> TypeInferenceBuilder<'db> {
                         }
                     }
 
+                    let diag_count_before_pattern = self.context.diagnostic_count();
                     let result =
                         self.analyze_and_lower(*pattern, &flow_ty, body, initializer.unwrap());
+                    let pattern_had_error =
+                        self.context.diagnostic_count() > diag_count_before_pattern;
                     // Irrefutable-pattern check differs by binding form:
                     //   - plain `let`: refutable patterns are an error
                     //     (RefutablePatternInLet) — they'd fail at runtime
@@ -6865,7 +6868,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     //     irrefutable pattern makes the else branch dead, so
                     //     warn (IrrefutablePatternInLetElse) and suggest
                     //     dropping the else.
-                    let irrefutable_ctx = if else_branch.is_some() {
+                    let irrefutable_ctx = if pattern_had_error || else_branch.is_some() {
                         None
                     } else {
                         Some(IrrefutablePatternContext {
@@ -6880,7 +6883,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                         irrefutable_ctx,
                         &flow_ty,
                     );
-                    if else_branch.is_some() {
+                    if else_branch.is_some() && !pattern_had_error {
                         let scrut_for_matrix = self.matrix_normalize_scrut(&flow_ty);
                         let report = crate::pattern_lowering::compute_match_usefulness(
                             self,
@@ -6983,7 +6986,9 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // Lower the refutable pattern against the scrutinee — same
                 // machinery as `match` arms / `if let`. Populates
                 // `pattern_types` and yields `matched_ty` + `dpat`.
+                let diag_count_before_pattern = self.context.diagnostic_count();
                 let result = self.analyze_and_lower(*pattern, &scrutinee_ty, body, *while_body);
+                let pattern_had_error = self.context.diagnostic_count() > diag_count_before_pattern;
 
                 // Body scope: narrow the scrutinee to the matched type and
                 // register the pattern bindings for the body only, then restore.
@@ -7001,19 +7006,21 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // irrefutable `while let` never exits via pattern failure, so it
                 // is an unconditional infinite loop with a pointless pattern;
                 // warn and suggest a plain `while`/`loop`.
-                let scrutinee_ty_for_matrix = self.matrix_normalize_scrut(&scrutinee_ty);
-                let report = crate::pattern_lowering::compute_match_usefulness(
-                    self,
-                    std::slice::from_ref(&result.dpat),
-                    scrutinee_ty_for_matrix,
-                );
-                if report.missing.is_empty() {
-                    let err = crate::infer_context::TirTypeError::IrrefutablePatternInWhileLet;
-                    if let Some(sm) = self.body_source_map.as_ref() {
-                        self.context
-                            .report_warning_at_span(err, sm.pattern_span(*pattern));
-                    } else {
-                        self.context.report_warning_simple(err, *scrutinee);
+                if !pattern_had_error {
+                    let scrutinee_ty_for_matrix = self.matrix_normalize_scrut(&scrutinee_ty);
+                    let report = crate::pattern_lowering::compute_match_usefulness(
+                        self,
+                        std::slice::from_ref(&result.dpat),
+                        scrutinee_ty_for_matrix,
+                    );
+                    if report.missing.is_empty() {
+                        let err = crate::infer_context::TirTypeError::IrrefutablePatternInWhileLet;
+                        if let Some(sm) = self.body_source_map.as_ref() {
+                            self.context
+                                .report_warning_at_span(err, sm.pattern_span(*pattern));
+                        } else {
+                            self.context.report_warning_simple(err, *scrutinee);
+                        }
                     }
                 }
 
@@ -7066,15 +7073,21 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // 4. Bind every Pattern::Bind reachable in the loop binding
                 // pattern to the validated flow type.
                 let snapshot = self.snapshot_scoped_locals();
+                let diag_count_before_pattern = self.context.diagnostic_count();
                 let result = self.analyze_and_lower(*binding, &flow_ty, body, *for_body);
+                let pattern_had_error = self.context.diagnostic_count() > diag_count_before_pattern;
                 self.finalize_pattern_lowering(
                     *binding,
                     &result,
                     declared_for_scope.as_ref(),
-                    Some(IrrefutablePatternContext {
-                        context: IrrefutableContextKind::ForLet,
-                        fallback_expr: Some(*collection),
-                    }),
+                    if pattern_had_error {
+                        None
+                    } else {
+                        Some(IrrefutablePatternContext {
+                            context: IrrefutableContextKind::ForLet,
+                            fallback_expr: Some(*collection),
+                        })
+                    },
                     &flow_ty,
                 );
 
@@ -7541,7 +7554,9 @@ impl<'db> TypeInferenceBuilder<'db> {
             let arm = &body.match_arms[*arm_id];
             let pattern_id = arm.pattern;
 
+            let diag_count_before_pattern = self.context.diagnostic_count();
             let result = self.analyze_and_lower(pattern_id, &scrutinee_ty, body, arm.body);
+            let pattern_had_error = self.context.diagnostic_count() > diag_count_before_pattern;
             let narrowed = result.matched_ty.clone();
 
             // Snapshot/restore the scope for this arm's bindings.
@@ -7573,7 +7588,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             // For now, drop guarded arms from coverage analysis entirely
             // — matches existing behaviour where guard suppressed both
             // coverage and unreachable detection for that arm.
-            if arm.guard.is_none() {
+            if arm.guard.is_none() && !pattern_had_error {
                 matrix_arms.push(result.dpat);
                 matrix_arm_ids.push(arm.body);
             }
@@ -13208,6 +13223,43 @@ impl<'db> TypeInferenceBuilder<'db> {
             .collect()
     }
 
+    /// Best-effort typo suggestions for unknown class-pattern fields.
+    ///
+    /// We keep this local to pattern lowering so we can avoid adding heavier
+    /// symbol-table machinery for a single-field-name hint.
+    fn class_pattern_field_suggestions(
+        &self,
+        unknown_field: &Name,
+        declared_fields: &[Name],
+    ) -> Vec<Name> {
+        let needle = unknown_field.as_str().to_ascii_lowercase();
+        if needle.is_empty() {
+            return Vec::new();
+        }
+        let mut scored: Vec<(f64, Name)> = declared_fields
+            .iter()
+            .map(|candidate| {
+                let candidate_lower = candidate.as_str().to_ascii_lowercase();
+                let mut score = strsim::jaro_winkler(&needle, &candidate_lower);
+                if candidate_lower.starts_with(&needle) || needle.starts_with(&candidate_lower) {
+                    score += 0.15;
+                }
+                if candidate_lower.contains(&needle) || needle.contains(&candidate_lower) {
+                    score += 0.10;
+                }
+                (score.min(1.0), candidate.clone())
+            })
+            .filter(|(score, _)| *score >= 0.80)
+            .collect();
+
+        scored.sort_by(|(sa, na), (sb, nb)| {
+            sb.partial_cmp(sa)
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then_with(|| na.as_str().cmp(nb.as_str()))
+        });
+        scored.into_iter().map(|(_, name)| name).take(3).collect()
+    }
+
     /// Interface field `(name, type)` pairs in requires-closure order with
     /// generic substitution applied. This mirrors `resolve_interface_member`
     /// but is side-effect-free for matrix construction.
@@ -18166,9 +18218,13 @@ impl TypeInferenceBuilder<'_> {
         // `class_field_infos_ordered`.
         let field_infos = self.class_field_infos_ordered(&qtn, &args);
 
+        let mut declared_fields: Vec<Name> = Vec::with_capacity(field_infos.len());
+        let mut declared_field_set: FxHashSet<Name> = FxHashSet::default();
         let mut sub_dpats: Vec<DPat> = Vec::with_capacity(field_infos.len());
         let mut bindings: Vec<PatternBinding> = Vec::new();
         for (field_name, field_ty) in field_infos {
+            declared_fields.push(field_name.clone());
+            declared_field_set.insert(field_name.clone());
             match by_name.get(&field_name) {
                 Some(fp) => {
                     let r = self.analyze_and_lower(fp.pat, &field_ty, body, at_expr);
@@ -18180,6 +18236,26 @@ impl TypeInferenceBuilder<'_> {
                     sub_dpats.push(DPat::wildcard(field_ty));
                 }
             }
+        }
+
+        for fp in fields {
+            if declared_field_set.contains(&fp.field) {
+                continue;
+            }
+            self.report_at_pat_or_expr(
+                TirTypeError::UnknownClassPatternField {
+                    class_name: qtn.clone(),
+                    field_name: fp.field.clone(),
+                    suggestions: self.class_pattern_field_suggestions(&fp.field, &declared_fields),
+                },
+                pat_id,
+                at_expr,
+            );
+            let unknown = Ty::Unknown {
+                attr: TyAttr::default(),
+            };
+            let r = self.analyze_and_lower(fp.pat, &unknown, body, at_expr);
+            bindings.extend(r.bindings);
         }
 
         PatternResult {
