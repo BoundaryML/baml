@@ -4,9 +4,10 @@
 
 #[cfg(test)]
 mod tests {
+    use std::path::Path;
+
     use baml_lsp2_actions::tokens::{semantic_tokens, semantic_tokens_in_range};
     use baml_project::ProjectDatabase;
-    use std::path::Path;
 
     fn check(src: &str) {
         let mut db = ProjectDatabase::new();

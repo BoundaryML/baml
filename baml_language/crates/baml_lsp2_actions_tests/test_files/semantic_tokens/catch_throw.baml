@@ -37,4 +37,5 @@ function Handled(x: int) -> string {
 // catch_throw.baml:10:3 (function) len=7 "MayFail"
 // catch_throw.baml:10:11 (parameter) len=1 "x"
 // catch_throw.baml:10:14 (keyword) len=5 "catch"
+// catch_throw.baml:10:21 (parameter) [declaration] len=1 "e"
 // catch_throw.baml:11:10 (string) len=8 "\"caught\""

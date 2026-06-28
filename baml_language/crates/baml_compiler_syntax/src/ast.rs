@@ -189,6 +189,23 @@ ast_node!(DynamicTypeDef, DYNAMIC_TYPE_DEF);
 ast_node!(ObjectField, OBJECT_FIELD);
 ast_node!(GenericParam, GENERIC_PARAM);
 
+impl CallArg {
+    /// The name of a named argument `name = value` — a leading `WORD` (or
+    /// `client`) immediately followed by `=`. `None` for a positional argument
+    /// (whose first element is the value expression, not a name token).
+    pub fn name(&self) -> Option<SyntaxToken> {
+        let mut elements = self
+            .syntax
+            .children_with_tokens()
+            .filter(|element| !element.kind().is_trivia());
+        let first = elements.next()?.into_token()?;
+        if !matches!(first.kind(), SyntaxKind::WORD | SyntaxKind::KW_CLIENT) {
+            return None;
+        }
+        (elements.next()?.kind() == SyntaxKind::EQUALS).then_some(first)
+    }
+}
+
 impl ObjectField {
     /// The bare-word key of `key: value` (or shorthand `key`).
     ///
@@ -333,11 +350,7 @@ impl UnionMemberParts {
         {
             return None;
         }
-        if !self
-            .tokens
-            .iter()
-            .any(|t| t.kind() == SyntaxKind::KW_AS)
-        {
+        if !self.tokens.iter().any(|t| t.kind() == SyntaxKind::KW_AS) {
             return None;
         }
         let dot_idx = self
@@ -461,10 +474,7 @@ impl TypeExpr {
         {
             return None;
         }
-        if !tokens
-            .iter()
-            .any(|t| t.kind() == SyntaxKind::KW_AS)
-        {
+        if !tokens.iter().any(|t| t.kind() == SyntaxKind::KW_AS) {
             return None;
         }
         let dot_idx = tokens.iter().rposition(|t| t.kind() == SyntaxKind::DOT)?;

@@ -8,7 +8,10 @@
 
 use std::{
     path::Path,
-    sync::{Arc, atomic::{AtomicBool, Ordering}},
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
@@ -51,7 +54,10 @@ fn newest_under(dir: &Path, newest: &mut Option<SystemTime>) {
         let path = entry.path();
         if path.is_dir() {
             newest_under(&path, newest);
-        } else if matches!(path.extension().and_then(|e| e.to_str()), Some("rs" | "html")) {
+        } else if matches!(
+            path.extension().and_then(|e| e.to_str()),
+            Some("rs" | "html")
+        ) {
             if let Ok(m) = entry.metadata().and_then(|md| md.modified()) {
                 if newest.is_none_or(|n| m > n) {
                     *newest = Some(m);

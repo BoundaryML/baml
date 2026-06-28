@@ -955,7 +955,7 @@ impl<'db> SemanticIndexBuilder<'db> {
         let binding_visible_from = source_map.pattern_span(clause.binding).start();
         self.register_local_pattern(
             clause.binding,
-            DefinitionSite::PatternBinding(clause.binding),
+            DefinitionSite::CatchBinding(clause.binding),
             body,
             source_map,
             binding_visible_from,
@@ -964,7 +964,7 @@ impl<'db> SemanticIndexBuilder<'db> {
             let st_visible_from = source_map.pattern_span(st_pat).start();
             self.register_local_pattern(
                 st_pat,
-                DefinitionSite::PatternBinding(st_pat),
+                DefinitionSite::CatchBinding(st_pat),
                 body,
                 source_map,
                 st_visible_from,

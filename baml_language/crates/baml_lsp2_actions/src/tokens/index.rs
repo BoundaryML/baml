@@ -16,15 +16,14 @@
 //! name resolution — never the `Ty`. Pattern bindings (`let x`, match arms) are
 //! handled by the walker from their `BINDING_PATTERN` CST nodes, not here.
 
-use std::collections::HashMap;
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 use baml_base::SourceFile;
 use baml_compiler2_ast::{Expr, ExprBody, ExprId};
 use baml_compiler2_hir::scope::{ScopeId, ScopeKind};
 use baml_compiler2_tir::{
     inference::{ScopeInference, infer_scope_types, scope_body},
-    resolve::{ResolvedName, resolve_name_at, resolve_path_at},
+    resolve::{ResolvedName, resolve_name_at, resolve_namespace_prefix, resolve_path_at},
 };
 use text_size::{TextRange, TextSize};
 
@@ -128,8 +127,6 @@ fn index_function(
     inference: &ScopeInference<'_>,
     index: &mut ResolutionIndex,
 ) {
-    let ns = (SemanticTokenType::Namespace, ModifierSet::empty());
-
     for (expr_id, expr) in expr_body.exprs.iter() {
         match expr {
             Expr::Path(segments) if !segments.is_empty() => {
@@ -137,13 +134,25 @@ fn index_function(
                 // For a generic-applied callee (`id<int>(...)`), segment 0's span
                 // covers the whole `id<int>`; narrow it to the root identifier so
                 // it matches the WORD token the walker emits.
-                let root_span =
-                    TextRange::at(seg_span.start(), TextSize::of(segments[0].as_str()));
+                let root_span = TextRange::at(seg_span.start(), TextSize::of(segments[0].as_str()));
                 let resolved_root = resolve_name_at(db, file, root_span.start(), &segments[0]);
                 match classify::classify_resolved(&resolved_root) {
                     Some(class) => record(index, root_span, class),
-                    // Unresolved root of a dotted path => a package/namespace.
-                    None if segments.len() > 1 => record(index, root_span, ns),
+                    // A primitive type as a path root (`string.from(...)`) — the
+                    // same `defaultLibrary` Type as in type position.
+                    None if classify::classify_primitive(segments[0].as_str()).is_some() => {
+                        if let Some(class) = classify::classify_primitive(segments[0].as_str()) {
+                            record(index, root_span, class);
+                        }
+                    }
+                    // Root of a dotted path: a namespace ONLY if it actually
+                    // resolves as one (a real package/namespace), never guessed —
+                    // a typo'd prefix stays neutral.
+                    None if segments.len() > 1 => {
+                        if let Some(builtin) = resolve_namespace_prefix(db, file, &segments[0..1]) {
+                            record(index, root_span, classify::namespace_class(builtin));
+                        }
+                    }
                     None => {}
                 }
 
@@ -220,7 +229,13 @@ fn index_path_tail(
         let resolved = resolve_path_at(db, file, span.start(), &segments[0..=k], None);
         match classify::classify_resolved(&resolved) {
             Some(class) => record(index, span, class),
-            None => record(index, span, (SemanticTokenType::Namespace, ModifierSet::empty())),
+            // A namespace ONLY if the prefix actually resolves as one — never
+            // guessed, so a typo'd segment stays neutral instead of bogus-namespace.
+            None => {
+                if let Some(builtin) = resolve_namespace_prefix(db, file, &segments[0..=k]) {
+                    record(index, span, classify::namespace_class(builtin));
+                }
+            }
         }
     }
 }

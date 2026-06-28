@@ -550,6 +550,9 @@ fn describe_locals(db: &dyn Db, files: &[SourceFile], name: &str) -> Vec<SymbolD
                         }
                         baml_compiler2_hir::semantic_index::DefinitionSite::PatternBinding(
                             pat_id,
+                        )
+                        | baml_compiler2_hir::semantic_index::DefinitionSite::CatchBinding(
+                            pat_id,
                         ) => inference
                             .binding_type(pat_id)
                             .map(crate::utils::display_ty)

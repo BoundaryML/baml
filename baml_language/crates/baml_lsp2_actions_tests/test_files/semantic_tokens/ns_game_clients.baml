@@ -339,7 +339,7 @@ function double() -> void {
 // ns_game_clients.baml:152:26 (number) len=1 "3"
 // ns_game_clients.baml:152:29 (method) len=3 "map"
 // ns_game_clients.baml:152:33 (function) len=11 "will_double"
-// ns_game_clients.baml:153:5 (namespace) len=3 "log"
+// ns_game_clients.baml:153:5 (namespace) [defaultLibrary] len=3 "log"
 // ns_game_clients.baml:153:9 (function) len=4 "info"
 // ns_game_clients.baml:153:16 (string) len=9 "\"doubled\""
 // ns_game_clients.baml:153:27 (variable) len=7 "doubled"

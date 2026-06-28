@@ -363,14 +363,12 @@ impl BexLspRequest for BexMulitProject {
         let result_id = self.cache_semantic_tokens(&path, new_tokens.clone());
 
         match prev {
-            Some(prev_tokens) => Ok(Some(
-                lsp_types::SemanticTokensFullDeltaResult::TokensDelta(
-                    lsp_types::SemanticTokensDelta {
-                        result_id: Some(result_id),
-                        edits: diff_semantic_tokens(&prev_tokens, &new_tokens),
-                    },
-                ),
-            )),
+            Some(prev_tokens) => Ok(Some(lsp_types::SemanticTokensFullDeltaResult::TokensDelta(
+                lsp_types::SemanticTokensDelta {
+                    result_id: Some(result_id),
+                    edits: diff_semantic_tokens(&prev_tokens, &new_tokens),
+                },
+            ))),
             None => Ok(Some(lsp_types::SemanticTokensFullDeltaResult::Tokens(
                 lsp_types::SemanticTokens {
                     result_id: Some(result_id),
@@ -962,7 +960,9 @@ fn diff_semantic_tokens(
         p += 1;
     }
     let mut s = 0;
-    while s < prev.len() - p && s < new.len() - p && prev[prev.len() - 1 - s] == new[new.len() - 1 - s]
+    while s < prev.len() - p
+        && s < new.len() - p
+        && prev[prev.len() - 1 - s] == new[new.len() - 1 - s]
     {
         s += 1;
     }

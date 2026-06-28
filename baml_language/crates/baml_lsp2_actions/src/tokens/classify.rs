@@ -14,6 +14,49 @@ use baml_compiler2_tir::{inference::MemberResolution, resolve::ResolvedName};
 
 use super::{ModifierSet, SemanticTokenType};
 
+/// Primitive type names — the built-in scalar / collection types.
+const PRIMITIVE_TYPES: &[&str] = &[
+    "int",
+    "bigint",
+    "float",
+    "string",
+    "bool",
+    "bytes",
+    "uint8array",
+    "null",
+    "image",
+    "audio",
+    "video",
+    "pdf",
+    "json",
+    "map",
+    "unknown",
+    "never",
+];
+
+/// Classify a name iff it is a primitive type (`string`, `int`, ...): a
+/// `defaultLibrary` `Type`. Used for both type-position names and value-position
+/// path roots (`string.from(...)`), so a primitive is highlighted identically
+/// wherever it appears.
+pub(super) fn classify_primitive(name: &str) -> Option<(SemanticTokenType, ModifierSet)> {
+    PRIMITIVE_TYPES
+        .contains(&name)
+        .then_some((SemanticTokenType::Type, ModifierSet::DEFAULT_LIBRARY))
+}
+
+/// A namespace classification, flagged `defaultLibrary` when it belongs to a
+/// builtin / dependency package (`baml`, ...) rather than the file's own
+/// package. Shared by value-position (path roots/tails) and type-position
+/// (`type_run`) so a namespace is highlighted identically wherever it appears.
+pub(super) fn namespace_class(is_builtin: bool) -> (SemanticTokenType, ModifierSet) {
+    let modifiers = if is_builtin {
+        ModifierSet::DEFAULT_LIBRARY
+    } else {
+        ModifierSet::empty()
+    };
+    (SemanticTokenType::Namespace, modifiers)
+}
+
 /// The base token type for a definition kind.
 ///
 /// Mirrors `baml_cli::paint::kind_style` so terminal `describe` highlighting and
@@ -48,7 +91,10 @@ pub(super) fn classify_resolved(
             definition_site, ..
         } => {
             let token_type = match definition_site {
-                Some(DefinitionSite::Parameter(_)) => SemanticTokenType::Parameter,
+                // Function parameters and catch bindings highlight as parameters.
+                Some(DefinitionSite::Parameter(_) | DefinitionSite::CatchBinding(_)) => {
+                    SemanticTokenType::Parameter
+                }
                 // `let` bindings and pattern bindings are both plain variables.
                 _ => SemanticTokenType::Variable,
             };

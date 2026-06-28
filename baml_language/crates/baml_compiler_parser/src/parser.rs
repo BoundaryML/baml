@@ -1736,11 +1736,13 @@ impl<'a> Parser<'a> {
                 hashes_seen += 1;
                 i += 1;
                 if hashes_seen == hash_count {
-                    // Found all hashes, now skip basic trivia to find next token
+                    // Found all hashes, now skip basic trivia to find next token.
                     while i < self.tokens.len() && self.is_basic_trivia(self.tokens[i].kind) {
                         i += 1;
                     }
-                    return Some(i);
+                    // `None` if the hashes run to EOF with no token after them,
+                    // so callers never index past the end on incomplete input.
+                    return (i < self.tokens.len()).then_some(i);
                 }
             } else if self.is_basic_trivia(token.kind) {
                 i += 1;
@@ -1903,7 +1905,9 @@ impl<'a> Parser<'a> {
         // Must be followed by opening quote - check after consuming hashes
         // We need to peek ahead past the hashes to see if there's a quote
         let quote_pos = self.find_token_after_hashes(opening_hashes);
-        if quote_pos.is_none() || quote_pos.map(|i| self.tokens[i].kind) != Some(TokenKind::Quote) {
+        // `find_token_after_hashes` can point at the EOF slot (== tokens.len())
+        // on incomplete input, so index through `get` rather than `[]`.
+        if quote_pos.and_then(|i| self.tokens.get(i)).map(|t| t.kind) != Some(TokenKind::Quote) {
             // Just hashes, not a raw string
             return false;
         }

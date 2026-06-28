@@ -701,8 +701,8 @@ fn local_type_info(
             })
         }
 
-        DefinitionSite::PatternBinding(_) => {
-            // Pattern bindings — report as local variable with unknown type for now.
+        DefinitionSite::PatternBinding(_) | DefinitionSite::CatchBinding(_) => {
+            // Pattern / catch bindings — report as local variable with unknown type for now.
             Some(TypeInfo::LocalVar {
                 name: name.as_str().to_string(),
                 ty: "unknown".to_string(),
