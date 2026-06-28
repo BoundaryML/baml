@@ -154,12 +154,42 @@ async fn fs_remove_on_directory_points_at_remove_dir() {
     let Some(BexExternalValue::String(message)) = fields.get("message") else {
         panic!("expected `message` String field, got: {fields:?}");
     };
+    // Pin the actual guidance: the message must explain it's a directory and
+    // name both removal APIs (checking the full phrase, since "remove_dir" alone
+    // is a substring of "remove_dir_all" and would be a vacuous assertion).
     assert!(
-        message.contains("remove_dir"),
-        "error should point at remove_dir, got: {message}"
+        message.contains("it is a directory")
+            && message.contains("baml.fs.remove_dir or baml.fs.remove_dir_all"),
+        "error should explain it's a directory and point at both removal APIs, got: {message}"
     );
     // The directory must still be there — the failed remove left it untouched.
     assert!(std::path::Path::new(&format!("{root}/a_dir")).is_dir());
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn fs_remove_on_symlink_to_dir_removes_link() {
+    // remove() detects directories via symlink_metadata, which does NOT follow
+    // the final component — so a symlink pointing at a directory is removed as a
+    // link (it does not trigger the "it is a directory" guidance), and the real
+    // directory it targets survives.
+    let (_tmp, root) = tmp(indexmap! {});
+    std::fs::create_dir(format!("{root}/real_dir")).unwrap();
+    std::fs::write(format!("{root}/real_dir/keep.txt"), "x").unwrap();
+    std::os::unix::fs::symlink(format!("{root}/real_dir"), format!("{root}/link")).unwrap();
+
+    let output = baml_test!(&format!(
+        r#"
+            function main() -> null {{
+                baml.fs.remove("{root}/link")
+            }}
+        "#
+    ));
+
+    assert!(output.result.is_ok(), "got: {:?}", output.result);
+    assert!(!std::path::Path::new(&format!("{root}/link")).exists());
+    // The symlink's target and its contents are untouched.
+    assert!(std::path::Path::new(&format!("{root}/real_dir/keep.txt")).exists());
 }
 
 #[tokio::test]
@@ -200,6 +230,40 @@ async fn fs_remove_dir_on_nonempty_errors() {
 }
 
 #[tokio::test]
+async fn fs_remove_dir_on_missing_errors() {
+    // Unlike remove_dir_all, remove_dir is NOT idempotent: a missing path errors.
+    let (_tmp, root) = tmp(indexmap! {});
+
+    let output = baml_test!(&format!(
+        r#"
+            function main() -> null {{
+                baml.fs.remove_dir("{root}/missing")
+            }}
+        "#
+    ));
+
+    assert!(output.result.is_err());
+}
+
+#[tokio::test]
+async fn fs_remove_dir_on_file_errors() {
+    // remove_dir targets directories only: handed a regular file it errors and
+    // leaves the file in place.
+    let (_tmp, root) = tmp(indexmap! { "a_file.txt" => "x" });
+
+    let output = baml_test!(&format!(
+        r#"
+            function main() -> null {{
+                baml.fs.remove_dir("{root}/a_file.txt")
+            }}
+        "#
+    ));
+
+    assert!(output.result.is_err());
+    assert!(std::path::Path::new(&format!("{root}/a_file.txt")).exists());
+}
+
+#[tokio::test]
 async fn fs_remove_dir_all_removes_tree() {
     // remove_dir_all mirrors `rm -rf`: it removes a populated directory tree.
     let (_tmp, root) = tmp(indexmap! {});
@@ -233,6 +297,27 @@ async fn fs_remove_dir_all_idempotent_on_missing() {
     ));
 
     assert!(output.result.is_ok(), "got: {:?}", output.result);
+}
+
+#[tokio::test]
+async fn fs_remove_dir_all_on_file_errors() {
+    // remove_dir_all targets directories: handed a regular file it errors here
+    // (native tokio::fs::remove_dir_all -> NotADirectory). The WASM backend
+    // rejects the same case in bridge_wasm's
+    // wasm_runtime_remove_dir_all_rejects_regular_file rather than deleting it.
+    let (_tmp, root) = tmp(indexmap! { "a_file.txt" => "x" });
+
+    let output = baml_test!(&format!(
+        r#"
+            function main() -> null {{
+                baml.fs.remove_dir_all("{root}/a_file.txt")
+            }}
+        "#
+    ));
+
+    assert!(output.result.is_err());
+    // The file must survive the rejected removal — no accidental data loss.
+    assert!(std::path::Path::new(&format!("{root}/a_file.txt")).exists());
 }
 
 #[tokio::test]

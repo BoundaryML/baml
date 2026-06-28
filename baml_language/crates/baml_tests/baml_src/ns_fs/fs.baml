@@ -4,11 +4,12 @@
 // top-level `function` (to avoid the test-block local-boxing VM bug) + a
 // `test` block that calls it.
 //
-// HERMETICITY: every test uses a unique path under /tmp and removes anything
-// it creates before returning. Files are removed via baml.fs.remove; directory
-// trees via baml.fs.remove_dir_all. Older directory-creating tests still rely
-// on unique paths + idempotent mkdir(recursive:true) so the suite is safe to
-// re-run and safe under the parallel .baml runner.
+// HERMETICITY: every test uses a unique path under /tmp. File-creating tests
+// remove their files via baml.fs.remove, and the remove_dir/remove_dir_all
+// tests clean up the directories they make. The older directory-creating tests
+// (mkdir/read_dir) do NOT delete their dirs; they rely on unique paths +
+// idempotent mkdir(recursive:true) so the suite stays safe to re-run and safe
+// under the parallel .baml runner.
 //
 // Tests left in Rust (not converted):
 //

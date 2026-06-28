@@ -123,8 +123,10 @@ function remove_dir(path: string) -> null throws root.errors.Io {
 }
 
 /// Recursively removes the directory at `path` and all of its contents.
-/// Idempotent: returns successfully if `path` does not exist. Mirrors Bun's
-/// `fs.promises.rm(path, { recursive: true, force: true })`.
+/// Idempotent: returns successfully if `path` does not exist. Like Bun's
+/// `fs.promises.rm(path, { recursive: true, force: true })` for directory trees
+/// and missing paths — but, unlike `rm -rf`, it targets directories only and
+/// throws `Io` if `path` is a regular file.
 function remove_dir_all(path: string) -> null throws root.errors.Io {
   $rust_io_function
 }

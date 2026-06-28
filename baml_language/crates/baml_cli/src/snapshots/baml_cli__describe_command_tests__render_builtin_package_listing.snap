@@ -102,7 +102,7 @@ class            baml.fs.MkdirOptions             <builtin>/baml/ns_fs/fs.baml:1
 function         baml.fs.read_dir                 <builtin>/baml/ns_fs/fs.baml:110
 function         baml.fs.mkdir                    <builtin>/baml/ns_fs/fs.baml:115
 function         baml.fs.remove_dir               <builtin>/baml/ns_fs/fs.baml:121
-function         baml.fs.remove_dir_all           <builtin>/baml/ns_fs/fs.baml:128
+function         baml.fs.remove_dir_all           <builtin>/baml/ns_fs/fs.baml:130
 enum             baml.future.FutureState          <builtin>/baml/ns_future/future.baml:21
 class            baml.future.Future               <builtin>/baml/ns_future/future.baml:28
 function         baml.future.all_complete         <builtin>/baml/ns_future/future.baml:80
