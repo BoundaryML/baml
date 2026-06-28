@@ -25,7 +25,10 @@ export default function Home() {
       </section>
 
       <section className="mx-auto max-w-2xl px-6 pb-28">
-        <h2 className="mb-8 text-center text-3xl font-bold tracking-tight text-ink sm:text-4xl">Share</h2>
+        <h2 className="text-center text-3xl font-bold tracking-tight text-ink sm:text-4xl">Share</h2>
+        <p className="tweet-font mb-8 mt-2 text-center text-sm text-ink-2 sm:text-base">
+          Tell us how your team fights slop with slop
+        </p>
         <PledgeForm />
       </section>
     </main>
