@@ -1584,7 +1584,16 @@ fn lower_method_sig(
     let throws = sig.throws_clause().and_then(|tc| tc.type_expr()).map(|te| {
         let mut expr = lower_type_expr::lower_type_expr_node(&te);
         let te_span = te.syntax().span_range();
-        lower_type_expr::check_throws_wildcard(&mut expr, te_span, diags);
+        // A bodyless method signature (interface required method) has nothing to
+        // infer an open `throws … | _` from, and its declared throws is compared
+        // structurally during conformance checking — so reject ANY `_` here
+        // (unlike a function with a body, where a top-level `_` is the open slot).
+        lower_type_expr::check_wildcard_type(
+            &mut expr,
+            "a method signature `throws` clause",
+            te_span,
+            diags,
+        );
         expr.with_span(te_span)
     });
 

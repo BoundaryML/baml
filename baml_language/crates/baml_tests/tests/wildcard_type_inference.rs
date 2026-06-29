@@ -156,6 +156,17 @@ async fn wildcard_unfillable_union_member_is_rejected() {
     );
 }
 
+/// An interface required method has no body to infer an open `throws … | _`
+/// from, and its declared throws is compared structurally during conformance
+/// checking — so even a top-level `_` is rejected here (cleanly, not a panic).
+#[tokio::test]
+#[should_panic(expected = "[E0147]")]
+async fn wildcard_in_interface_method_throws_is_rejected() {
+    let _ = baml_test!(
+        "interface I {\n  function run(self) -> int throws _\n}\nfunction main() -> int { 0 }"
+    );
+}
+
 // ===========================================================================
 // B-247 — `_` in a `throws` clause + stdlib throw precision
 // ===========================================================================
