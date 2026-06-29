@@ -456,9 +456,12 @@ function ReadName(p: Person) -> string {
             .as_ref()
             .map(|l| test.format_location_with_name(l))
             .unwrap_or_else(|| "No definition found".into());
+        // Assert the exact target location (interface field `Named.fullname` at
+        // 3:3), so the test can't pass by landing on the `fullname as ...` alias
+        // entry or the interface header (both of which also read "-> fullname").
         assert!(
-            desc.contains("-> fullname") && !desc.contains("-> Named"),
-            "Should navigate to interface field 'fullname', not the interface header, got: {desc}"
+            desc.contains(":3:3 -> fullname"),
+            "Should navigate to the interface field declaration Named.fullname (3:3), got: {desc}"
         );
     }
 
@@ -487,9 +490,12 @@ function PickText(d: Data) -> string {
             .as_ref()
             .map(|l| test.format_location_with_name(l))
             .unwrap_or_else(|| "No definition found".into());
+        // Assert the exact target location (interface method `Serializer.encode`
+        // at 3:12), so the test can't pass by landing on the class impl method or
+        // the interface header (both of which also read "-> encode").
         assert!(
-            desc.contains("-> encode") && !desc.contains("-> Serializer"),
-            "Should navigate to interface method 'encode', not the interface header, got: {desc}"
+            desc.contains(":3:12 -> encode"),
+            "Should navigate to the interface method declaration Serializer.encode (3:12), got: {desc}"
         );
     }
 }

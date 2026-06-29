@@ -24,6 +24,7 @@ const PRIMITIVE_TYPES: &[&str] = &[
     "bytes",
     "uint8array",
     "null",
+    "void",
     "image",
     "audio",
     "video",

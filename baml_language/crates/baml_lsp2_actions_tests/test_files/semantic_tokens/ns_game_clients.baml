@@ -330,7 +330,7 @@ function double() -> void {
 // ns_game_clients.baml:148:9 (number) len=1 "2"
 // ns_game_clients.baml:151:1 (keyword) len=8 "function"
 // ns_game_clients.baml:151:10 (function) [declaration] len=6 "double"
-// ns_game_clients.baml:151:22 (type) len=4 "void"
+// ns_game_clients.baml:151:22 (type) [defaultLibrary] len=4 "void"
 // ns_game_clients.baml:152:5 (keyword) len=3 "let"
 // ns_game_clients.baml:152:9 (variable) [declaration] len=7 "doubled"
 // ns_game_clients.baml:152:17 (operator) len=1 "="
