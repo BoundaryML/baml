@@ -307,6 +307,20 @@
 .l6-cta-wrap {
   padding-top: 0.5rem;
 }
+/* subtle, centered text-only community link (between parts) */
+.l6-join {
+  padding: 0.5rem 0;
+  text-align: center;
+}
+.l6-join-link {
+  font-size: 13px;
+  color: var(--l6-soft);
+  text-decoration: none;
+  transition: color 140ms ease;
+}
+.l6-join-link:hover {
+  color: var(--l6-accent);
+}
 .l6-cta-row {
   display: flex;
   flex-wrap: wrap;

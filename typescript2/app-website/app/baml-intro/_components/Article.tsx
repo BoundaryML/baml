@@ -209,10 +209,10 @@ const TOC: { id: string; label: string; sub?: boolean }[] = [
   { id: 'human-tools', label: 'Part 3 · Tools for humans' },
   { id: 'nav-viz', label: '1 · Navigation', sub: true },
   { id: 'observability', label: '2 · Observability', sub: true },
-  { id: 'usable', label: 'Part 4 · Making BAML usable' },
-  { id: 'adoption', label: '1 · Incremental adoption', sub: true },
-  { id: 'self-improvement', label: '2 · Self-improvement', sub: true },
-  { id: 'supply-chain', label: '3 · Supply chain', sub: true },
+  { id: 'usable', label: 'Part 4 · Adopting BAML' },
+  { id: 'adoption', label: '1 · Drops into your stack', sub: true },
+  { id: 'self-improvement', label: '2 · Stable, and improving', sub: true },
+  { id: 'supply-chain', label: '3 · No supply chain attacks', sub: true },
   { id: 'agents', label: 'Part 5 · Building agents' },
   { id: 'llm-functions', label: '1 · LLM functions', sub: true },
   { id: 'claude-code', label: '2 · Claude APIs', sub: true },
@@ -751,6 +751,18 @@ export function Article({ view = 'all' }: { view?: 'all' | 'intro' | 'deep' }) {
               <Scheduler />
             </Section>
 
+            {/* community CTA between Part 1 and Part 2 */}
+            <div className="l6-section l6-join">
+              <Link
+                className="l6-join-link"
+                href="https://boundaryml.com/discord"
+                rel="noreferrer"
+                target="_blank"
+              >
+                {'Join the community on Discord →'}
+              </Link>
+            </div>
+
             {/* ===== Part 2 · Tools for agents ===== */}
             <Part eyebrow="Part 2" id="agent-tools" title="Tools for agents">
               <p>
@@ -952,11 +964,11 @@ export function Article({ view = 'all' }: { view?: 'all' | 'intro' | 'deep' }) {
               </p>
             </Section>
 
-            {/* ===== Part 4 · How we make BAML usable ===== */}
-            <Part eyebrow="Part 4" id="usable" title="How we make BAML usable">
+            {/* ===== Part 4 · Adopting BAML ===== */}
+            <Part eyebrow="Part 4" id="usable" title="Adopting BAML">
               <p>
                 {
-                  "A language is only as strong as its community. Here are some features we added to help make it easier to adopt."
+                  "Although we are still pre-1.0, BAML is ready to use today. Here's how we make it easier to use and trust in production."
                 }
               </p>
             </Part>
@@ -965,7 +977,7 @@ export function Article({ view = 'all' }: { view?: 'all' | 'intro' | 'deep' }) {
             <Section
               id="adoption"
               num="1"
-              title="BAML is incrementally adoptable"
+              title="Drops into your existing stack"
             >
               <p>
                 {
@@ -974,7 +986,7 @@ export function Article({ view = 'all' }: { view?: 'all' | 'intro' | 'deep' }) {
               </p>
               <p>
                 {
-                  'BAML can now generate SDKs for your favorite language, and call your functions using these type-safe interfaces — even if they include generics, or class methods. Think of an OpenAPI client generator, except the contract carries real business logic, not just data shapes. (For more details, check out our '
+                  'BAML can generate SDKs for your favorite language, and call your functions using these type-safe interfaces — even if they include generics, or class methods. Think of an OpenAPI client generator, except the contract carries real business logic, not just data shapes. (For more details, check out our '
                 }
                 <a
                   className="l6-link"
@@ -1001,7 +1013,7 @@ export function Article({ view = 'all' }: { view?: 'all' | 'intro' | 'deep' }) {
             <Section
               id="self-improvement"
               num="2"
-              title="Recursive self-improvement"
+              title="Stable, and getting more so"
             >
               <p>
                 {
@@ -1042,7 +1054,7 @@ export function Article({ view = 'all' }: { view?: 'all' | 'intro' | 'deep' }) {
             <Section
               id="supply-chain"
               num="3"
-              title="No supply chain attacks (yet)"
+              title="No supply chain attacks"
             >
               <p>
                 {"Okay, to be fair, BAML doesn't "}

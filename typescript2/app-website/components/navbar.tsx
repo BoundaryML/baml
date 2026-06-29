@@ -102,6 +102,20 @@ function NavStars() {
   );
 }
 
+function NavDiscord() {
+  return (
+    <Link
+      aria-label="Join the BAML Discord"
+      className="nav-social"
+      href="https://boundaryml.com/discord"
+      rel="noopener noreferrer"
+      target="_blank"
+    >
+      <Image alt="Discord" height={16} src="/discord-icon.svg" width={16} />
+    </Link>
+  );
+}
+
 export function Navbar() {
   const [open, setOpen] = useState(false);
 
@@ -125,6 +139,7 @@ export function Navbar() {
           </Link>
         </div>
         <div className="nav-desktop-actions">
+          <NavDiscord />
           <NavStars />
         </div>
 
@@ -168,6 +183,7 @@ export function Navbar() {
             agent tries baml
           </Link>
           <div className="nav-mobile-footer">
+            <NavDiscord />
             <NavStars />
           </div>
         </div>
@@ -191,7 +207,22 @@ export function Navbar() {
             color: #1A1612;
           }
           .nav-desktop-actions {
-            display: contents;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+          }
+          .nav-social {
+            display: inline-flex;
+            align-items: center;
+            padding: 5px 10px;
+          }
+          .nav-social img {
+            opacity: 0.6;
+            transition: opacity 140ms ease, filter 140ms ease;
+          }
+          .nav-social:hover img {
+            opacity: 1;
+            filter: invert(27%) sepia(80%) saturate(800%) hue-rotate(240deg) brightness(90%);
           }
           .nav-toggle { display: none; }
           .nav-mobile-panel { display: none; }
