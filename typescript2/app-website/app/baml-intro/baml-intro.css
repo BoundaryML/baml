@@ -241,6 +241,33 @@
   color: var(--l6-ink);
   letter-spacing: -0.02em;
 }
+/* Share anchor revealed on header hover — links to (and copies) the section URL. */
+.l6-anchor {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 0.4em;
+  color: var(--l6-soft);
+  vertical-align: middle;
+  opacity: 0;
+  transition:
+    opacity 140ms ease,
+    color 140ms ease;
+}
+.l6-anchor:hover {
+  color: var(--l6-accent);
+}
+.l6 h2:hover .l6-anchor,
+.l6 h3:hover .l6-anchor,
+.l6 .l6-part-title:hover .l6-anchor,
+.l6-anchor:focus-visible {
+  opacity: 1;
+}
+/* Touch devices have no hover — keep the anchor faintly visible so it's tappable. */
+@media (hover: none) {
+  .l6-anchor {
+    opacity: 0.45;
+  }
+}
 .l6 p {
   margin: 0 0 1rem;
 }

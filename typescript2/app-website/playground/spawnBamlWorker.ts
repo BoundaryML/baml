@@ -21,6 +21,41 @@ export function createRawBamlWorker(): Worker {
   });
 }
 
+/**
+ * Create a fresh, fully-initialised worker that is NOT memoised — one per
+ * caller. Use this when a page mounts more than one playground at once: the
+ * shared `getBamlWorker` worker keys every project on the same
+ * `baml_src/main.baml`, so two playgrounds sharing it clobber each other's
+ * state. An isolated worker keeps each playground's project independent. The
+ * caller owns it and must `terminate()` it on unmount.
+ */
+export function createInitializedBamlWorker(
+  initialCode: string,
+): Promise<Worker> {
+  return new Promise<Worker>((resolve, reject) => {
+    let worker: Worker;
+    try {
+      worker = createRawBamlWorker();
+    } catch (err) {
+      reject(err instanceof Error ? err : new Error(String(err)));
+      return;
+    }
+
+    const onReady = (event: MessageEvent) => {
+      if (event.data?.type !== 'ready') return;
+      worker.removeEventListener('message', onReady);
+      resolve(worker);
+    };
+    worker.addEventListener('message', onReady);
+
+    worker.postMessage({
+      type: 'init',
+      initialFiles: { 'baml_src/main.baml': initialCode },
+      rootPath: '/workspace',
+    });
+  });
+}
+
 let readyPromise: Promise<Worker> | null = null;
 
 export function getBamlWorker(initialCode: string): Promise<Worker> {

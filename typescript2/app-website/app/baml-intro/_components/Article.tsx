@@ -40,6 +40,7 @@ import {
   DESCRIBE_EVENTS,
   GREP_EVENTS,
   LS_EVENTS,
+  NAV_CODEBASE,
   NS_BAD,
   NS_GOOD,
   PACK_EVENTS,
@@ -53,6 +54,37 @@ import {
 /* All sections share one reading-column width so every header aligns.
  * Editors, playgrounds, and side-by-side pairs break out wider via
  * .l6-pair / .l6-breakout — text never does. */
+/* A share affordance on each header: revealed on hover, it links to the
+ * section anchor and copies the full URL to the clipboard on click. */
+function AnchorLink({ id }: { id: string }) {
+  return (
+    <a
+      aria-label="Link to this section"
+      className="l6-anchor"
+      href={`#${id}`}
+      onClick={() => {
+        const url = `${window.location.origin}${window.location.pathname}#${id}`;
+        navigator.clipboard?.writeText(url).catch(() => {});
+      }}
+    >
+      <svg
+        aria-hidden
+        fill="none"
+        height="14"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="2"
+        viewBox="0 0 24 24"
+        width="14"
+      >
+        <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+        <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+      </svg>
+    </a>
+  );
+}
+
 function Section({
   id,
   num,
@@ -69,6 +101,7 @@ function Section({
       <h2>
         {num ? <span className="l6-num font-mono">{num}</span> : null}
         {title}
+        <AnchorLink id={id} />
       </h2>
       {children}
     </section>
@@ -91,6 +124,7 @@ function Sub({
       <h3>
         {num ? <span className="l6-num font-mono">{num}</span> : null}
         {title}
+        {id ? <AnchorLink id={id} /> : null}
       </h3>
       {children}
     </div>
@@ -115,7 +149,10 @@ function Part({
   return (
     <section className="l6-section l6-part" id={id}>
       {eyebrow ? <p className="l6-part-eyebrow font-mono">{eyebrow}</p> : null}
-      <h2 className="l6-part-title">{title}</h2>
+      <h2 className="l6-part-title">
+        {title}
+        <AnchorLink id={id} />
+      </h2>
       {children}
     </section>
   );
@@ -211,7 +248,7 @@ const TOC: { id: string; label: string; sub?: boolean }[] = [
   { id: 'observability', label: '2 · Observability', sub: true },
   { id: 'usable', label: 'Part 4 · Adopting BAML' },
   { id: 'adoption', label: '1 · Drops into your stack', sub: true },
-  { id: 'self-improvement', label: '2 · Stable, and improving', sub: true },
+  { id: 'self-improvement', label: '2 · Self-improvement', sub: true },
   { id: 'supply-chain', label: '3 · No supply chain attacks', sub: true },
   { id: 'agents', label: 'Part 5 · Building agents' },
   { id: 'llm-functions', label: '1 · LLM functions', sub: true },
@@ -938,17 +975,28 @@ export function Article({ view = 'all' }: { view?: 'all' | 'intro' | 'deep' }) {
               </p>
             </Part>
 
-            {/* ---- navigating codebases (placeholder) ---- */}
-            <Section
-              id="nav-viz"
-              num="1"
-              title="[placeholder: navigating codebases]"
-            >
+            {/* ---- navigating codebases ---- */}
+            <Section id="nav-viz" num="1" title="Navigating a codebase">
               <p>
                 {
-                  '[placeholder: a visualization for navigating a BAML codebase — the visual counterpart to baml describe.]'
+                  "Here's a fuller BAML project — an LLM “Heads Up” guessing game with an agent loop, a non-LLM binary search, classes, and a couple of testsets. The graph view is the visual counterpart to "
+                }
+                <code>baml describe</code>
+                {
+                  ': a map you can click through instead of grepping. Open the graph tab and jump around.'
                 }
               </p>
+              <div className="l6-breakout l6-breakout--xl">
+                <LivePlayground
+                  filename="game.baml"
+                  initialCode={NAV_CODEBASE}
+                  initialFunction="GuessGameAgent"
+                  initialSidebarOpen={false}
+                  initialTab="graph"
+                  isolated
+                  loadingLabel="Loading codebase…"
+                />
+              </div>
             </Section>
 
             {/* ---- flame graphs / observable code (placeholder) ---- */}
@@ -1013,7 +1061,7 @@ export function Article({ view = 'all' }: { view?: 'all' | 'intro' | 'deep' }) {
             <Section
               id="self-improvement"
               num="2"
-              title="Stable, and getting more so"
+              title="Recursive self-improvement"
             >
               <p>
                 {

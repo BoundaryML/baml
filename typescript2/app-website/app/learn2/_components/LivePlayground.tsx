@@ -13,7 +13,10 @@ import {
   ResizablePanel,
   ResizablePanelGroup,
 } from '@/components/ui/resizable';
-import { getBamlWorker } from '@/playground/spawnBamlWorker';
+import {
+  createInitializedBamlWorker,
+  getBamlWorker,
+} from '@/playground/spawnBamlWorker';
 import { useCodeTheme } from '../_lib/code-theme';
 import { registerBaml } from '../_lib/baml-monarch';
 // Self-contained styling: embeds outside the /learn decks (homepage hero)
@@ -43,6 +46,11 @@ interface LivePlaygroundProps {
    *  editor) until the first graph for this code is ready. Defaults to
    *  "Loading…". Pass to label which workflow is loading. */
   loadingLabel?: string;
+  /** Use a dedicated worker instead of the page-shared one. Required when a
+   *  page mounts more than one playground at once — the shared worker keys
+   *  every project on the same `baml_src/main.baml`, so siblings would clobber
+   *  each other's project state. The worker is terminated on unmount. */
+  isolated?: boolean;
 }
 
 type EditorInstance = Parameters<OnMount>[0];
@@ -92,6 +100,7 @@ export default function LivePlayground({
   highlightLines,
   onReady,
   loadingLabel = 'Loading…',
+  isolated = false,
 }: LivePlaygroundProps) {
   const [port, setPort] = useState<RuntimePort | null>(null);
   const [version, setVersion] = useState(0);
@@ -120,6 +129,9 @@ export default function LivePlayground({
   // piles up zombie handlers and slows every later switch).
   const workerRef = useRef<Worker | null>(null);
   const msgHandlerRef = useRef<((e: MessageEvent) => void) | null>(null);
+  // True when this mount owns a dedicated (isolated) worker — terminate it on
+  // unmount. The shared worker is never terminated (other mounts reuse it).
+  const ownsWorkerRef = useRef(false);
   // Don't treat the worker's pre-existing (previous example's) project state as
   // "ready" — only fire onReady once we've pushed THIS mount's code.
   const nudgedRef = useRef(false);
@@ -251,7 +263,11 @@ export default function LivePlayground({
         cursorDebounceRef.current = setTimeout(postCursor, 50);
       });
 
-      getBamlWorker(codeRef.current)
+      ownsWorkerRef.current = isolated;
+      (isolated
+        ? createInitializedBamlWorker(codeRef.current)
+        : getBamlWorker(codeRef.current)
+      )
         .then((worker) => {
           const onMessage = (e: MessageEvent) => {
             if (e.data?.type === 'lspDiagnostics') {
@@ -299,7 +315,7 @@ export default function LivePlayground({
           setReady(true);
         });
     },
-    [applyDiagnostics, postCursor, highlightLines],
+    [applyDiagnostics, postCursor, highlightLines, isolated],
   );
 
   const onChange = useCallback((value?: string) => {
@@ -330,6 +346,15 @@ export default function LivePlayground({
       const w = workerRef.current;
       const h = msgHandlerRef.current;
       if (w && h) w.removeEventListener('message', h);
+      // A dedicated (isolated) worker is owned by this mount — terminate it so
+      // it doesn't leak. The page-shared worker is left running for reuse.
+      if (w && ownsWorkerRef.current) {
+        try {
+          w.terminate();
+        } catch {
+          /* already gone */
+        }
+      }
       workerRef.current = null;
       msgHandlerRef.current = null;
     };
