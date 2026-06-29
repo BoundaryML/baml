@@ -6842,8 +6842,16 @@ impl<'db> TypeInferenceBuilder<'db> {
                             // user had written the filled type, so the non-hole
                             // positions are validated element-wise (e.g. a wrong
                             // `Future<string, _>` against an `int` body still fails).
+                            //
+                            // The free inference is only a probe to read the type;
+                            // roll back any diagnostics it emits so the re-check
+                            // below is the single source of initializer errors.
+                            // The pattern ascription owns the un-inferable-`_`
+                            // diagnostic, so fill silently (`None`) here.
+                            let probe = self.context.diagnostic_count();
                             let actual = self.infer_expr(init, body);
-                            let filled = Self::fill_infer_holes(expected, &actual);
+                            self.context.truncate_diagnostics(probe);
+                            let filled = self.fill_infer_holes_or_error(expected, &actual, None);
                             self.check_expr(init, body, &filled)
                         } else {
                             self.check_expr(init, body, expected)
@@ -6891,7 +6899,9 @@ impl<'db> TypeInferenceBuilder<'db> {
                         // spawned body's real error type) rather than the hole,
                         // which would otherwise reach runtime lowering.
                         let bound = if Self::ty_has_infer_hole(&expected) {
-                            Self::fill_infer_holes(&expected, &ty)
+                            // Silent: the pattern ascription reports the
+                            // un-inferable `_` once (see `fill_infer_holes_or_error`).
+                            self.fill_infer_holes_or_error(&expected, &ty, None)
                         } else {
                             expected
                         };
@@ -8451,6 +8461,44 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
             _ => expected.clone(),
         }
+    }
+
+    /// Fill `_` holes in the annotation `expected` from the initializer's actual
+    /// type, falling back to `Ty::Error` for any hole that cannot be filled.
+    ///
+    /// [`fill_infer_holes`](Self::fill_infer_holes) only aligns structural
+    /// container positions (lists, maps, futures, class/interface args). A `_`
+    /// in a position it does not align — a union member (`Box<int | _>`), a
+    /// function component (`() -> _`), or where the two types' shapes diverge —
+    /// would survive the fill and then trip the runtime-lowering boundary. Here
+    /// any survivor is reported as an un-inferable `_` (when `report_at` is set)
+    /// and replaced with `Ty::Error`, so it never reaches runtime. `report_at`
+    /// is `None` at the speculative let-binding sites, which all funnel through
+    /// the pattern ascription (`lower_type_pat`) where the single diagnostic is
+    /// emitted.
+    fn fill_infer_holes_or_error(
+        &mut self,
+        expected: &Ty,
+        actual: &Ty,
+        report_at: Option<ExprId>,
+    ) -> Ty {
+        let filled = Self::fill_infer_holes(expected, actual);
+        if Self::ty_has_infer_hole(&filled) {
+            if let Some(at) = report_at {
+                self.context.report_simple(
+                    TirTypeError::UnresolvedType {
+                        name: Name::new("_"),
+                        suggestions: Vec::new(),
+                        span: TextRange::default(),
+                    },
+                    at,
+                );
+            }
+            return Ty::Error {
+                attr: TyAttr::default(),
+            };
+        }
+        filled
     }
 
     /// Strict resolution-failure check: only the recovery placeholders
@@ -18081,9 +18129,11 @@ impl TypeInferenceBuilder<'_> {
         // A `_` inference hole in the ascription (`let fs: Future<int, _> = …`)
         // is filled from the scrutinee/initializer type flowing in, so the bound
         // type and its runtime metadata are precise rather than carrying a hole
-        // that cannot be lowered to a `RuntimeTy`.
+        // that cannot be lowered to a `RuntimeTy`. This is the single place that
+        // reports a `_` which cannot be inferred (a union member, function
+        // component, or shape mismatch) — every annotated `let`/arm funnels here.
         let resolved = if Self::ty_has_infer_hole(&resolved) {
-            Self::fill_infer_holes(&resolved, scrut_ty)
+            self.fill_infer_holes_or_error(&resolved, scrut_ty, Some(at_expr))
         } else {
             resolved
         };

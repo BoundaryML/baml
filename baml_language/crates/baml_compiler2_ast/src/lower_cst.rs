@@ -277,6 +277,9 @@ fn lower_function(
         .into_iter()
         .map(|(_, b)| b)
         .collect();
+    for bound in generic_param_bounds.iter().flatten() {
+        lower_type_expr::check_wildcard_type(bound, "a generic type bound", bound.span, diags);
+    }
     let parameter_context = format!("function `{}`", name.as_str());
 
     let (mut params, mut defaults) = func
@@ -312,7 +315,12 @@ fn lower_function(
     let throws = func
         .throws_clause()
         .and_then(|tc| tc.type_expr())
-        .map(|te| lower_type_expr::lower_type_expr_node(&te).with_span(te.syntax().span_range()));
+        .map(|te| {
+            let expr = lower_type_expr::lower_type_expr_node(&te);
+            let te_span = te.syntax().span_range();
+            lower_type_expr::check_throws_wildcard(&expr, te_span, diags);
+            expr.with_span(te_span)
+        });
 
     let (body, declarative_meta) = if let Some(llm) = func.llm_body() {
         let mut llm_body_def = lower_llm_body(&llm);
@@ -1061,6 +1069,9 @@ fn lower_class(
         .into_iter()
         .map(|(_, b)| b)
         .collect();
+    for bound in generic_param_bounds.iter().flatten() {
+        lower_type_expr::check_wildcard_type(bound, "a generic type bound", bound.span, diags);
+    }
     let class_name = name_token.text().to_string();
 
     let fields = class
@@ -1349,6 +1360,12 @@ fn lower_interface(
                 te_span,
                 diags,
             );
+            lower_type_expr::check_wildcard_type(
+                &expr,
+                "an interface `requires` clause",
+                te_span,
+                diags,
+            );
             expr.with_span(te_span)
         })
         .collect();
@@ -1549,10 +1566,12 @@ fn lower_method_sig(
         expr.with_span(te_span)
     });
 
-    let throws = sig
-        .throws_clause()
-        .and_then(|tc| tc.type_expr())
-        .map(|te| lower_type_expr::lower_type_expr_node(&te).with_span(te.syntax().span_range()));
+    let throws = sig.throws_clause().and_then(|tc| tc.type_expr()).map(|te| {
+        let expr = lower_type_expr::lower_type_expr_node(&te);
+        let te_span = te.syntax().span_range();
+        lower_type_expr::check_throws_wildcard(&expr, te_span, diags);
+        expr.with_span(te_span)
+    });
 
     Some(MethodSigDef {
         name,

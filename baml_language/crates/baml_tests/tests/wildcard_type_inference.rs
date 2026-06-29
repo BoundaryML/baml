@@ -121,6 +121,41 @@ async fn wildcard_in_field_type_is_rejected() {
     let _ = baml_test!("class C { x _ }\nfunction main() -> int { 0 }");
 }
 
+/// `_` is rejected in a generic bound (`<T extends _>`) — there is nothing to
+/// infer a bound from.
+#[tokio::test]
+#[should_panic(expected = "[E0147]")]
+async fn wildcard_in_generic_bound_is_rejected() {
+    let _ = baml_test!("function f<T extends _>(x: T) -> int { 0 }\nfunction main() -> int { 0 }");
+}
+
+/// `_` is rejected in an interface `requires` clause.
+#[tokio::test]
+#[should_panic(expected = "[E0147]")]
+async fn wildcard_in_requires_clause_is_rejected() {
+    let _ = baml_test!("interface I requires _ {}\nfunction main() -> int { 0 }");
+}
+
+/// A `_` nested inside a thrown type (`throws Err<_>`) is rejected — only a
+/// top-level `_` union member is the open-contract marker.
+#[tokio::test]
+#[should_panic(expected = "[E0147]")]
+async fn wildcard_nested_in_throws_is_rejected() {
+    let _ = baml_test!(
+        "class Err<T> { v T }\nfunction f() -> int throws Err<_> { throw Err<int> { v: 1 }; }\nfunction main() -> int { 0 }"
+    );
+}
+
+/// A `_` that fill cannot align — a union member nested in an invariant class —
+/// is a clean error (`E0002`), not a compiler panic.
+#[tokio::test]
+#[should_panic(expected = "unresolved type: _")]
+async fn wildcard_unfillable_union_member_is_rejected() {
+    let _ = baml_test!(
+        "class Box<T> { v T }\nfunction main() -> int { let b: Box<int | _> = Box<int|string> { v: 1 }; 0 }"
+    );
+}
+
 // ===========================================================================
 // B-247 — `_` in a `throws` clause + stdlib throw precision
 // ===========================================================================

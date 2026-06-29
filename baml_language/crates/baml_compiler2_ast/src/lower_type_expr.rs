@@ -596,6 +596,34 @@ pub(crate) fn check_void_type(
     }
 }
 
+/// Validate `_` placement in a `throws` clause.
+///
+/// `_` is the open-contract marker (`throws AppError | _` or bare `throws _`),
+/// so it is allowed as a top-level member of the clause. But a `_` *nested*
+/// inside a thrown type (`throws Err<_>`) has nothing to infer from and would
+/// otherwise be flattened into a throw fact with the hole still embedded —
+/// reject it like any other non-inferable position.
+pub(crate) fn check_throws_wildcard(
+    type_expr: &TypeExpr,
+    span: TextRange,
+    diags: &mut Vec<LoweringDiagnostic>,
+) {
+    match &type_expr.kind {
+        // Bare `throws _` — the whole error set is inferred.
+        TypeExprKind::Infer { .. } => {}
+        TypeExprKind::Union { variants, .. } => {
+            for v in variants {
+                // A top-level `_` member is the open slot; anything deeper is a
+                // non-inferable nested hole.
+                if !matches!(v.kind, TypeExprKind::Infer { .. }) {
+                    check_wildcard_type(v, "a `throws` clause", span, diags);
+                }
+            }
+        }
+        _ => check_wildcard_type(type_expr, "a `throws` clause", span, diags),
+    }
+}
+
 /// Recursively reject the `_` wildcard type where it cannot be inferred.
 ///
 /// `_` is an inference hole: it is only meaningful in a `let` binding
