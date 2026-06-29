@@ -23,6 +23,7 @@
 mod array;
 pub(crate) mod bigint;
 mod csv;
+mod error_context;
 mod float;
 mod future;
 mod id;

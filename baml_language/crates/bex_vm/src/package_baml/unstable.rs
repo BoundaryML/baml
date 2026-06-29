@@ -17,7 +17,11 @@ impl BamlNamespaceUnstable for PackageBamlImpl {
     }
 }
 
-fn format_value_recursive(vm: &BexVm, value: Value, depth: usize) -> Result<String, VmRustFnError> {
+pub(super) fn format_value_recursive(
+    vm: &BexVm,
+    value: Value,
+    depth: usize,
+) -> Result<String, VmRustFnError> {
     let available_frames = crate::vm::MAX_FRAMES.saturating_sub(vm.frames.len());
 
     if depth >= available_frames {
