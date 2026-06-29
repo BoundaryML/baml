@@ -14,6 +14,7 @@ import {
   ResizablePanelGroup,
 } from '@/components/ui/resizable';
 import { getBamlWorker } from '@/playground/spawnBamlWorker';
+import { useCodeTheme } from '../_lib/code-theme';
 import { registerBaml } from '../_lib/baml-monarch';
 // Self-contained styling: embeds outside the /learn decks (homepage hero)
 // don't import learn2.css at the page level, so bring the l2-live styles in.
@@ -98,6 +99,11 @@ export default function LivePlayground({
   // The result/graph pane is veiled until the first graph for this code is
   // ready (only the pane — never the editor).
   const [ready, setReady] = useState(false);
+  // Monaco theme chosen by the page (CodeThemeProvider); ref so the stable
+  // onMount callback reads it.
+  const codeTheme = useCodeTheme();
+  const monacoThemeRef = useRef(codeTheme.monaco);
+  monacoThemeRef.current = codeTheme.monaco;
   const portRef = useRef<RuntimePort | null>(null);
   const codeRef = useRef(initialCode);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -221,7 +227,7 @@ export default function LivePlayground({
     (editor, monaco) => {
       editorRef.current = editor;
       monacoRef.current = monaco;
-      monaco.editor.setTheme('baml-paper');
+      monaco.editor.setTheme(monacoThemeRef.current);
 
       // Showcase highlight: a static whole-line tint marking the entry
       // function of the shipped snippet (not tracked across edits).
@@ -381,7 +387,7 @@ export default function LivePlayground({
                   tabSize: 2,
                   wordWrap: 'on',
                 }}
-                theme="baml-paper"
+                theme={codeTheme.monaco}
               />
             </div>
           </div>

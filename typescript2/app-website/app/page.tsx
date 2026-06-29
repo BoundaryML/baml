@@ -17,7 +17,7 @@ export const metadata: Metadata = {
 export default function Page() {
   return (
     <Suspense>
-      <Article />
+      <Article view="intro" />
     </Suspense>
   );
 }

@@ -29,8 +29,16 @@ export const BAML_UNKNOWN = `class User {
 }
 
 function load(raw: unknown) -> string {
-  // no \`as\`, no \`any\` -- prove it with \`match\` first
-  raw.email.to_lower_case()
+  if (raw is User) {
+    return raw.email.to_lower_case();
+  } else {
+    // this fails!
+    // there is no \`as\`, no \`any\`
+    // \`raw\` must be proven to a \`User\`
+    raw.email.to_lower_case();
+
+    throw "failed!";
+  }
 }`;
 
 /* ---------------- 1b · error handling ---------------- */

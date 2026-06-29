@@ -3,6 +3,7 @@
 import { type CSSProperties, use } from 'react';
 import type { BundledLanguage } from 'shiki';
 import { cn } from '@/lib/utils';
+import { useCodeTheme } from '../_lib/code-theme';
 import { getLearnHighlighter } from '../_lib/highlighter';
 import type { BamlCodeProps, Diagnostic, Severity } from '../_lib/types';
 
@@ -46,15 +47,16 @@ export function BamlCode({
   startLine = 1,
   noLineNumbers = false,
 }: BamlCodeProps) {
+  const theme = useCodeTheme();
   const highlighter = use(getLearnHighlighter());
   const { tokens } = highlighter.codeToTokens(code.replace(/\n+$/, ''), {
     // `baml`/`baml-jinja` are registered at runtime but aren't in Shiki's
     // BundledLanguage literal union; the cast is safe given the registration.
     lang: lang as BundledLanguage,
-    theme: 'github-light',
-    // github-light paints keywords red (#cf222e); in the deck, red belongs to
-    // diagnostics only. Remap keyword red to blue (matches the Monaco theme).
-    colorReplacements: { '#cf222e': '#0550ae' },
+    theme: theme.shiki,
+    // light themes paint keywords red (#cf222e); in the deck, red belongs to
+    // diagnostics only, so remap keyword red to blue. Dark themes don't need it.
+    colorReplacements: theme.shikiKeywordRemap,
   });
 
   const diagByLine = new Map<number, Diagnostic>();
@@ -66,7 +68,12 @@ export function BamlCode({
   return (
     <figure className={`l2-code l2-code--${lang}`}>
       {filename ? (
-        <figcaption className="l2-code-head">
+        <figcaption
+          className={cn(
+            'l2-code-head',
+            filename.toLowerCase().endsWith('.baml') && 'l2-code-head--baml',
+          )}
+        >
           <span className="l2-code-dots" aria-hidden>
             <i />
             <i />

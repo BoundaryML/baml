@@ -2,6 +2,7 @@
 
 import Editor, { type BeforeMount, type OnMount } from '@monaco-editor/react';
 import { useCallback, useRef, useState } from 'react';
+import { useCodeTheme } from '../_lib/code-theme';
 import { registerBaml } from '../_lib/baml-monarch';
 import {
   type CellHandle,
@@ -358,6 +359,12 @@ export function BamlEditor({
   const idRef = useRef<string>('');
   if (!idRef.current) idRef.current = `cell${cellCounter++}`;
 
+  // Monaco theme is chosen by the page (CodeThemeProvider). Held in a ref so
+  // the stable onMount callback can read it without re-creating.
+  const codeTheme = useCodeTheme();
+  const monacoThemeRef = useRef(codeTheme.monaco);
+  monacoThemeRef.current = codeTheme.monaco;
+
   const [runs, setRuns] = useState<RunLine[]>([]);
   const runIdRef = useRef(0);
 
@@ -474,7 +481,7 @@ export function BamlEditor({
     (editor, monaco) => {
       editorRef.current = editor;
       monacoRef.current = monaco;
-      monaco.editor.setTheme('baml-paper');
+      monaco.editor.setTheme(monacoThemeRef.current);
       const handle = registerCell(idRef.current, codeRef.current);
       handleRef.current = handle;
       handle.onDiagnostics(applyDiagnostics);
@@ -532,7 +539,13 @@ export function BamlEditor({
     <div className="l2-bamled-wrap nokey">
       <div className="l2-bamled-frame">
         {filename || hasTests ? (
-          <div className="l2-code-head">
+          <div
+            className={`l2-code-head${
+              filename?.toLowerCase().endsWith('.baml')
+                ? ' l2-code-head--baml'
+                : ''
+            }`}
+          >
             <span className="l2-code-dots" aria-hidden>
               <i />
               <i />
@@ -557,7 +570,7 @@ export function BamlEditor({
           <Editor
             defaultLanguage="baml"
             defaultValue={initialCode}
-            theme="baml-paper"
+            theme={codeTheme.monaco}
             beforeMount={beforeMount}
             onMount={onMount}
             onChange={onChange}

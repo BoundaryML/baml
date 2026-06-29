@@ -14,7 +14,9 @@ let highlighterPromise: Promise<Highlighter> | null = null;
 export function getLearnHighlighter(): Promise<Highlighter> {
   if (!highlighterPromise) {
     highlighterPromise = createHighlighter({
-      themes: ['github-light'],
+      // light + dark presets (see code-theme.tsx). Loading extras is cheap and
+      // lets a page swap the BamlCode theme without re-creating the highlighter.
+      themes: ['github-light', 'github-dark', 'tokyo-night'],
       langs: [
         // Custom BAML grammar (TextMate -> Shiki) reused from the docs/MDX stack.
         bamlTextmate,

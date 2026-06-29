@@ -141,4 +141,59 @@ export function registerBaml(monaco: Monaco) {
       'editorIndentGuide.background1': '#EFE8D8',
     },
   });
+
+  // Dark presets (see code-theme.tsx). Keywords stay blue-ish, red is still
+  // reserved for diagnostics. Classic VS Code "Dark+" palette.
+  monaco.editor.defineTheme('baml-dark', {
+    base: 'vs-dark',
+    inherit: true,
+    rules: [
+      { token: 'keyword', foreground: '569CD6' },
+      { token: 'type', foreground: '4EC9B0' },
+      { token: 'type.identifier', foreground: '4EC9B0' },
+      { token: 'string', foreground: 'CE9178' },
+      { token: 'comment', foreground: '6A9955' },
+      { token: 'number', foreground: 'B5CEA8' },
+      { token: 'variable', foreground: 'C586C0' },
+      { token: 'operator', foreground: 'D4D4D4' },
+      { token: 'identifier', foreground: 'D4D4D4' },
+    ],
+    colors: {
+      'editor.background': '#1E1E1E',
+      'editor.foreground': '#D4D4D4',
+      'editorLineNumber.foreground': '#5A5A5A',
+      'editorLineNumber.activeForeground': '#C6C6C6',
+      'editor.lineHighlightBackground': '#2A2A2A',
+      'editor.selectionBackground': '#3A3D5C',
+      'editorCursor.foreground': '#A78BFA',
+      'editorIndentGuide.background1': '#2A2A2A',
+    },
+  });
+
+  // Cooler, deeper dark (Tokyo Night-ish) for comparison.
+  monaco.editor.defineTheme('baml-midnight', {
+    base: 'vs-dark',
+    inherit: true,
+    rules: [
+      { token: 'keyword', foreground: '7AA2F7' },
+      { token: 'type', foreground: '2AC3DE' },
+      { token: 'type.identifier', foreground: '2AC3DE' },
+      { token: 'string', foreground: '9ECE6A' },
+      { token: 'comment', foreground: '565F89' },
+      { token: 'number', foreground: 'FF9E64' },
+      { token: 'variable', foreground: 'BB9AF7' },
+      { token: 'operator', foreground: '89DDFF' },
+      { token: 'identifier', foreground: 'C0CAF5' },
+    ],
+    colors: {
+      'editor.background': '#1A1B26',
+      'editor.foreground': '#C0CAF5',
+      'editorLineNumber.foreground': '#3B4261',
+      'editorLineNumber.activeForeground': '#737AA2',
+      'editor.lineHighlightBackground': '#1F2233',
+      'editor.selectionBackground': '#33467C',
+      'editorCursor.foreground': '#C0CAF5',
+      'editorIndentGuide.background1': '#1F2233',
+    },
+  });
 }

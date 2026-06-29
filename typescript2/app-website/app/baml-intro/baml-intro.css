@@ -278,6 +278,52 @@
   color: var(--l6-accent);
 }
 
+/* ---- homepage CTAs (after the design philosophy list) ---- */
+.l6-cta-wrap {
+  padding-top: 0.5rem;
+}
+.l6-cta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.9rem;
+}
+.l6-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.7rem 1.3rem;
+  font-size: 15px;
+  font-weight: 550;
+  color: var(--l6-ink);
+  text-decoration: none;
+  background: #fffdf7;
+  border: 1px solid #d8cfbd;
+  border-radius: 10px;
+  transition:
+    border-color 140ms ease,
+    background-color 140ms ease,
+    transform 140ms ease;
+}
+.l6-cta span {
+  transition: transform 140ms ease;
+}
+.l6-cta:hover {
+  border-color: var(--l6-accent);
+  transform: translateY(-1px);
+}
+.l6-cta:hover span {
+  transform: translateX(3px);
+}
+.l6-cta--primary {
+  color: #fff;
+  background: var(--l6-accent);
+  border-color: var(--l6-accent);
+}
+.l6-cta--primary:hover {
+  background: #5b21b6;
+  border-color: #5b21b6;
+}
+
 /* ---- hero ---- */
 .l6-hero {
   padding-top: 4.5rem;
@@ -883,4 +929,95 @@
   .l6-glow {
     animation: none;
   }
+}
+
+/* =========================================================================
+   BAML files get a branded header. Any code block whose filename ends in
+   `.baml` (BamlCode or the Monaco BamlEditor) carries .l2-code-head--baml, so
+   it's clear which panes are BAML vs TypeScript/Python/etc. Kept tasteful: a
+   subtle purple-tinted bar + a 2px accent line + purple filename, not a
+   saturated block. `--l6-code-head` falls back to the paper header color when
+   no dark theme is set. Works on every code theme.
+   ========================================================================= */
+.l6 .l2-code-head--baml {
+  background: color-mix(
+    in srgb,
+    var(--l6-accent) 14%,
+    var(--l6-code-head, #f3ecdf)
+  );
+  border-bottom: 2px solid var(--l6-accent);
+}
+.l6 .l2-code-head--baml .l2-code-name {
+  color: var(--l6-baml-name, #6d28d9);
+  font-weight: 600;
+}
+.l6 .l2-code-head--baml .l2-code-dots i {
+  background: var(--l6-accent);
+  opacity: 0.6;
+}
+/* on dark frames, lighten the filename so it reads on the tinted-dark bar */
+.l6:is([data-code-theme="dark"], [data-code-theme="midnight"]) {
+  --l6-baml-name: #c4b5fd;
+}
+
+/* =========================================================================
+   Dark code themes. Driven by CODE_THEME in Article.tsx, which sets
+   data-code-theme="<name>" on .l6 (and picks the matching Monaco + Shiki
+   themes). Each preset sets frame-chrome variables so the editor *wrapper*
+   matches the editor interior; the shared rules below paint the frames from
+   those variables. Token colors come from the dark Shiki/Monaco themes
+   themselves. Scoped to .l6 so the /learn2 deck is untouched.
+   ========================================================================= */
+.l6[data-code-theme="dark"] {
+  --l6-code-bg: #1e1e1e;
+  --l6-code-head: #252526;
+  --l6-code-border: #34343a;
+  --l6-code-name: #c9c9c9;
+  --l6-code-ln: #5a5a5a;
+  --l6-code-dot: #4a4a4a;
+}
+.l6[data-code-theme="midnight"] {
+  --l6-code-bg: #1a1b26;
+  --l6-code-head: #1f2233;
+  --l6-code-border: #2a2e42;
+  --l6-code-name: #a9b1d6;
+  --l6-code-ln: #3b4261;
+  --l6-code-dot: #3b4261;
+}
+
+/* static highlighted code (BamlCode) */
+.l6:is([data-code-theme="dark"], [data-code-theme="midnight"]) .l2-code {
+  background: var(--l6-code-bg);
+  border-color: var(--l6-code-border);
+}
+.l6:is([data-code-theme="dark"], [data-code-theme="midnight"])
+  .l2-code-head:not(.l2-code-head--baml) {
+  background: var(--l6-code-head);
+  border-bottom-color: var(--l6-code-border);
+}
+.l6:is([data-code-theme="dark"], [data-code-theme="midnight"]) .l2-code-name {
+  color: var(--l6-code-name);
+}
+.l6:is([data-code-theme="dark"], [data-code-theme="midnight"]) .l2-code-dots i {
+  background: var(--l6-code-dot);
+}
+.l6:is([data-code-theme="dark"], [data-code-theme="midnight"]) .l2-ln {
+  color: var(--l6-code-ln);
+}
+
+/* Monaco editor + live playground wrappers (the editor interior background
+   comes from the Monaco theme; these cover the frame, header, and loading
+   states so nothing flashes cream). */
+.l6:is([data-code-theme="dark"], [data-code-theme="midnight"]) .l2-bamled-frame,
+.l6:is([data-code-theme="dark"], [data-code-theme="midnight"]) .l2-live {
+  background: var(--l6-code-bg);
+  border-color: var(--l6-code-border);
+}
+.l6:is([data-code-theme="dark"], [data-code-theme="midnight"]) .l2-bamled,
+.l6:is([data-code-theme="dark"], [data-code-theme="midnight"])
+  .l2-bamled-loading,
+.l6:is([data-code-theme="dark"], [data-code-theme="midnight"])
+  .l2-live-loading {
+  background: var(--l6-code-bg);
+  color: var(--l6-code-name);
 }
