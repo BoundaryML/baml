@@ -677,6 +677,46 @@ metric extract_resume {
  * plus a non-LLM binary search and two testsets. The graph view is the point —
  * it's the visual counterpart to \`baml describe\`. */
 export const NAV_CODEBASE = `// Interactive demo: uses baml.io.input — run from the playground, not headless CI.
+function GuessGameAgent() -> GuessResponse {
+    // comments
+    let history: Message[] = [];
+    //# set up system
+    let famous_person_name = generate_famous_person_name([]);
+
+    let user_input = "Is it Marie Curie?";
+
+    let guess_response = take_guess("", famous_person_name, history);
+    //# update history
+    history.push(Message { role: "user", content: user_input });
+    history.push(Message { role: "assistant", content: guess_response.text });
+
+    let max_guesses = 10;
+    while (!guess_response.game_won && max_guesses > 0) {
+        if (guess_response.game_won) {
+            break;
+        } else {
+            //# Bad Guess
+            user_input = simulate_human_guess(history);
+            //# take guess
+            guess_response = take_guess(user_input, famous_person_name, history);
+            log.info({ "user_input": user_input, "guess_response": guess_response.text });
+
+            history.push(Message { role: "user", content: user_input });
+            history.push(Message { role: "assistant", content: guess_response.text });
+
+            max_guesses = max_guesses - 1;
+        }
+    }
+
+    if (guess_response.game_won) {
+        log.info({ "game_won": true });
+    } else {
+        log.info({ "game_won": false });
+    }
+
+    guess_response
+}
+
 function generate_famous_person_name(previous_names: string[]) -> string {
     client: "openai-responses/gpt-5.5"
     prompt: #"
@@ -779,46 +819,6 @@ class Memory {
 function test_image() -> image {
     image
         .from_url("https://upload.wikimedia.org/wikipedia/commons/2/2e/George-Washington.jpg", null)
-}
-
-function GuessGameAgent() -> GuessResponse {
-    // comments
-    let history: Message[] = [];
-    //# set up system
-    let famous_person_name = generate_famous_person_name([]);
-
-    let user_input = "Is it Marie Curie?";
-
-    let guess_response = take_guess("", famous_person_name, history);
-    //# update history
-    history.push(Message { role: "user", content: user_input });
-    history.push(Message { role: "assistant", content: guess_response.text });
-
-    let max_guesses = 10;
-    while (!guess_response.game_won && max_guesses > 0) {
-        if (guess_response.game_won) {
-            break;
-        } else {
-            //# Bad Guess
-            user_input = simulate_human_guess(history);
-            //# take guess
-            guess_response = take_guess(user_input, famous_person_name, history);
-            log.info({ "user_input": user_input, "guess_response": guess_response.text });
-
-            history.push(Message { role: "user", content: user_input });
-            history.push(Message { role: "assistant", content: guess_response.text });
-
-            max_guesses = max_guesses - 1;
-        }
-    }
-
-    if (guess_response.game_won) {
-        log.info({ "game_won": true });
-    } else {
-        log.info({ "game_won": false });
-    }
-
-    guess_response
 }
 
 function BinarySearch(array: int[], target: int) -> int {
