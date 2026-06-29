@@ -183,6 +183,7 @@ function main() -> string {
     Traceback (most recent call last):
       File "test.baml", line 7, in user.main
       File "test.baml", line 3, in user.inner
+    boom
     "#);
 }
 
@@ -215,6 +216,9 @@ function main() -> int | string {
     Traceback (most recent call last):
       File "test.baml", line 7, in user.main
       File "test.baml", line 3, in user.divider
+    baml.panics.DivisionByZero {
+        dividend: 42
+    }
     "#);
 }
 

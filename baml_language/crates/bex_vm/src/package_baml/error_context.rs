@@ -51,8 +51,14 @@ impl BamlClassErrorsErrorContext for PackageBamlImpl {
                 <PackageBamlImpl as BamlClassErrorsStackTrace>::_to_string_impl(vm, &st_view);
             let _ = write!(out, "{trace}");
 
-            let rendered =
-                format_value_recursive(vm, *error, 0).unwrap_or_else(|_| "<error>".to_string());
+            // A thrown string is its own message — render it verbatim (no
+            // quotes); structured errors fall back to the recursive value dump.
+            let rendered = match vm.as_string(error) {
+                Ok(message) => message.to_string(),
+                Err(_) => {
+                    format_value_recursive(vm, *error, 0).unwrap_or_else(|_| "<error>".to_string())
+                }
+            };
             let _ = write!(out, "\n{rendered}");
         }
 

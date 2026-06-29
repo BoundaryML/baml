@@ -2777,6 +2777,23 @@ impl BexVm {
         self.alloc_error_value(ErrorClass::StackTrace, vec![frames_array])
     }
 
+    /// Construct a `baml.errors.ErrorContext` for a thrown value: the error
+    /// itself, the `StackTrace` where it was thrown, and the `cause` it
+    /// superseded while unwinding (or `Value::NULL` for a fresh error).
+    ///
+    /// Field order — error, `stack_trace`, cause — matches the class declared in
+    /// `ns_errors/error_context.baml` (the constructor ABI). Only called when a
+    /// catch handler binds the second `catch (e, ctx)` parameter.
+    pub(crate) fn alloc_error_context(
+        &mut self,
+        error: Value,
+        trace: &[StackFrame],
+        cause: Value,
+    ) -> Value {
+        let stack_trace = self.alloc_stack_trace(trace);
+        self.alloc_error_value(ErrorClass::ErrorContext, vec![error, stack_trace, cause])
+    }
+
     pub fn panic_to_exception_value(&mut self, panic: VmPanic) -> Value {
         let (class, fields) = match panic {
             VmPanic::DivisionByZero { left, .. } => (PanicClass::DivisionByZero, vec![left]),
@@ -3141,10 +3158,13 @@ impl BexVm {
 
                 // Store stack trace in stack_trace_slot if the catch clause binds it.
                 if entry.has_stack_trace_slot() {
-                    let st_value = self.alloc_stack_trace(&trace);
-                    let st_stack_slot =
+                    // BEP-042 Part 3: the second `catch (e, ctx)` binding is an
+                    // `ErrorContext`, not a bare `StackTrace`. `cause` is null
+                    // here; the cause-chain pre-walk fills it in a later step.
+                    let ctx_value = self.alloc_error_context(exception_value, &trace, Value::NULL);
+                    let ctx_slot =
                         Self::local_slot_stack_index(locals_offset, entry.stack_trace_slot);
-                    self.stack[st_stack_slot] = st_value;
+                    self.stack[ctx_slot] = ctx_value;
                 }
 
                 // Jump to the handler.
