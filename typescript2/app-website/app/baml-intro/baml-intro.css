@@ -72,7 +72,7 @@
   scroll-behavior: smooth;
 }
 .l6-section {
-  max-width: min(760px, calc(100vw - 2 * var(--l6-gutter)));
+  max-width: min(800px, calc(100vw - 2 * var(--l6-gutter)));
   padding: 4.4rem 0 1.2rem;
   margin: 0 auto;
   scroll-margin-top: calc(var(--l6-chrome) + 1rem);
@@ -85,7 +85,9 @@
    that misplaces the playground's fixed-position Monaco popups.) */
 .l6-breakout,
 .l6-pair {
-  --l6-bw: min(1200px, calc(100vw - 2 * var(--l6-gutter)));
+  /* ~10% wider than the 800px reading column, so the boxes feel tied to the
+     text rather than spanning the full page. */
+  --l6-bw: min(880px, calc(100vw - 2 * var(--l6-gutter)));
   width: var(--l6-bw);
   margin-left: calc(50% - var(--l6-bw) / 2);
   margin-right: 0;

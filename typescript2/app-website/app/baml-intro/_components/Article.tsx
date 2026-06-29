@@ -453,9 +453,9 @@ export function Article({ view = 'all' }: { view?: 'all' | 'intro' | 'deep' }) {
               {view === 'intro' && <DesignGoalsCard />}
               {view === 'intro' && (
                 <p>
-                  {'TypeScript was designed for '}
+                  {'What they meant was '}
                   <em>
-                    <strong>human</strong>
+                    <strong style={{ color: 'var(--l6-accent)' }}>human</strong>
                   </em>
                   {
                     ' productivity. AI agents are a new paradigm that requires a new programming language, just like in the past:'
@@ -482,8 +482,10 @@ export function Article({ view = 'all' }: { view?: 'all' | 'intro' | 'deep' }) {
                 }
               </p>
               <p>
+                {'In one sentence: '}
+                <strong style={{ color: 'var(--l6-accent)' }}>BAML</strong>
                 {
-                  'In one sentence: BAML feels like TypeScript, but with better error handling, no '
+                  ' feels like TypeScript, but with better error handling, no '
                 }
                 <code>any</code>
                 {', and more.'}
@@ -510,6 +512,14 @@ export function Article({ view = 'all' }: { view?: 'all' | 'intro' | 'deep' }) {
                     <span aria-hidden>{'→'}</span>
                   </Link>
                   <Link className="l6-cta l6-cta--primary" href="/explore">
+                    <Image
+                      alt=""
+                      aria-hidden
+                      height={18}
+                      src="/baml-lamb-white.png"
+                      style={{ filter: 'brightness(0) invert(1)' }}
+                      width={18}
+                    />
                     {'Explore BAML'}
                     <span aria-hidden>{'→'}</span>
                   </Link>
@@ -911,7 +921,7 @@ export function Article({ view = 'all' }: { view?: 'all' | 'intro' | 'deep' }) {
             <Part eyebrow="Part 3" id="human-tools" title="Tools for humans">
               <p>
                 {
-                  "Now that most code isn't being read by humans, we created tooling to help humans understand what software is doing at a glance."
+                  "We also built tools to keep humans in the loop. Even if most code isn't being read, these tools can help humans dive deep and iterate quickly when they need to."
                 }
               </p>
             </Part>
