@@ -88,9 +88,10 @@ struct FixturesResponse {
     fixtures: Vec<FixtureSummary>,
 }
 
-async fn fixtures(State(state): State<AppState>) -> Json<FixturesResponse> {
+async fn fixtures(State(state): State<AppState>) -> Result<Json<FixturesResponse>, ApiError> {
     let dir = state.fixtures_dir.as_ref();
-    let names = analysis::list_fixture_names(dir);
+    let names = analysis::list_fixture_names(dir)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     // Each fixture builds its own ProjectDatabase + runs the compiler, so compute
     // the diff badges in parallel (one thread per fixture) rather than serially.
@@ -115,9 +116,9 @@ async fn fixtures(State(state): State<AppState>) -> Json<FixturesResponse> {
             .collect()
     });
 
-    Json(FixturesResponse {
+    Ok(Json(FixturesResponse {
         fixtures: summaries,
-    })
+    }))
 }
 
 #[derive(Deserialize)]
@@ -192,8 +193,19 @@ fn resolve_fixture(dir: &Path, name: &str) -> Result<PathBuf, ApiError> {
     if !is_basename || !is_baml {
         return Err((StatusCode::BAD_REQUEST, "invalid fixture name".to_string()));
     }
+    let root = dir
+        .canonicalize()
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     let path = dir.join(name);
-    if !path.is_file() {
+    let meta = std::fs::symlink_metadata(&path)
+        .map_err(|_| (StatusCode::NOT_FOUND, "unknown fixture".to_string()))?;
+    if meta.file_type().is_symlink() {
+        return Err((StatusCode::BAD_REQUEST, "invalid fixture name".to_string()));
+    }
+    let path = path
+        .canonicalize()
+        .map_err(|_| (StatusCode::NOT_FOUND, "unknown fixture".to_string()))?;
+    if !path.starts_with(&root) || !path.is_file() {
         return Err((StatusCode::NOT_FOUND, "unknown fixture".to_string()));
     }
     Ok(path)

@@ -22,7 +22,7 @@ use baml_base::SourceFile;
 use baml_compiler2_ast::{Expr, ExprBody, ExprId};
 use baml_compiler2_hir::scope::{ScopeId, ScopeKind};
 use baml_compiler2_tir::{
-    inference::{ScopeInference, infer_scope_types, scope_body},
+    inference::{ScopeInference, infer_scope_types, scope_body, scope_inference_owner},
     resolve::{ResolvedName, resolve_name_at, resolve_namespace_prefix, resolve_path_at},
 };
 use text_size::{TextRange, TextSize};
@@ -60,7 +60,12 @@ pub(super) fn resolve_token_class(
     let mut fsi = sem_index.scope_at_offset(range.start(), None);
     loop {
         let scope_id = sem_index.scope_ids[fsi.index() as usize];
-        if let Some(class) = scope_resolution_index(db, scope_id).get(&range).copied() {
+        // Normalize to the inference-owner scope so sibling block/template
+        // scopes that share an owner body hit one Salsa cache entry instead of
+        // each rebuilding the same `scope_resolution_index` under a distinct key
+        // (the `build` whole-file path already keys by the owner scope id).
+        let owner = scope_inference_owner(db, scope_id);
+        if let Some(class) = scope_resolution_index(db, owner).get(&range).copied() {
             return Some(class);
         }
         match sem_index.scopes[fsi.index() as usize].parent {

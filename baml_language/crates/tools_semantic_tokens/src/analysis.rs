@@ -204,7 +204,12 @@ pub(crate) fn load_fixture(path: &Path) -> std::io::Result<Fixture> {
         .values()
         .next()
         .map(|f| f.content.clone())
-        .unwrap_or_default();
+        .ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                format!("no virtual file parsed from fixture {}", path.display()),
+            )
+        })?;
 
     let current = compute_tokens(&source);
     let expected = parsed
@@ -221,13 +226,26 @@ pub(crate) fn load_fixture(path: &Path) -> std::io::Result<Fixture> {
 }
 
 /// Number of tokens that differ between current and expected (changed type,
-/// added, or removed) — keyed by (line, col, len), matching the snapshot.
+/// modifiers, or lexeme; added; or removed), keyed by (line, col, len) to match
+/// the snapshot. The lexeme is compared so a same-length rename that keeps its
+/// classification still counts as a diff (otherwise accept would silently
+/// rewrite the committed line while the viewer showed zero diffs).
 pub(crate) fn diff_count(current: &[Token], expected: &[Token]) -> usize {
     let key = |t: &Token| (t.line, t.col, t.len);
-    // Signature = type + modifiers, so a modifier change registers as a diff.
-    let sig = |t: &Token| (t.ty.clone(), t.mods.clone());
-    let cur: HashMap<_, _> = current.iter().map(|t| (key(t), sig(t))).collect();
-    let exp: HashMap<_, _> = expected.iter().map(|t| (key(t), sig(t))).collect();
+    // The committed block stores each lexeme in Rust debug form (escaped, no
+    // outer quotes), so escape `current` the same way before comparing.
+    let cur_sig = |t: &Token| {
+        let dbg = format!("{:?}", t.text);
+        (
+            t.ty.clone(),
+            t.mods.clone(),
+            dbg[1..dbg.len() - 1].to_string(),
+        )
+    };
+    // `expected` lexemes were parsed straight out of that debug form already.
+    let exp_sig = |t: &Token| (t.ty.clone(), t.mods.clone(), t.text.clone());
+    let cur: HashMap<_, _> = current.iter().map(|t| (key(t), cur_sig(t))).collect();
+    let exp: HashMap<_, _> = expected.iter().map(|t| (key(t), exp_sig(t))).collect();
 
     let mut diff = 0;
     for (k, v) in &cur {
@@ -259,14 +277,12 @@ pub(crate) fn accept_fixture(path: &Path) -> anyhow::Result<()> {
 }
 
 /// List `*.baml` fixture file names in `dir`, sorted.
-pub(crate) fn list_fixture_names(dir: &Path) -> Vec<String> {
-    let mut names: Vec<String> = fs::read_dir(dir)
-        .into_iter()
-        .flatten()
-        .flatten()
+pub(crate) fn list_fixture_names(dir: &Path) -> std::io::Result<Vec<String>> {
+    let mut names: Vec<String> = fs::read_dir(dir)?
+        .filter_map(Result::ok)
         .filter(|entry| entry.path().extension().and_then(|s| s.to_str()) == Some("baml"))
         .map(|entry| entry.file_name().to_string_lossy().into_owned())
         .collect();
     names.sort();
-    names
+    Ok(names)
 }

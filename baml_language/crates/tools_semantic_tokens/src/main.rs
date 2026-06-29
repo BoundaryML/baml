@@ -85,14 +85,13 @@ async fn main() -> Result<()> {
 
 /// Bind to `base`, falling back to the next free port within a small range.
 async fn bind(base: u16) -> Result<(TcpListener, u16)> {
-    for offset in 0..50 {
-        let port = base + offset;
+    for port in base..=base.saturating_add(49) {
         let addr = SocketAddr::from(([127, 0, 0, 1], port));
         if let Ok(listener) = TcpListener::bind(addr).await {
             return Ok((listener, port));
         }
     }
-    anyhow::bail!("no free port in {base}..{}", base + 50)
+    anyhow::bail!("no free port in {base}..={}", base.saturating_add(49))
 }
 
 /// Best-effort open the default browser; failure is silently ignored.

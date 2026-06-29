@@ -423,15 +423,45 @@ fn resolve_field_access_at(
                 range: *name_range,
             })
         }
-        MemberResolution::InterfaceMethod { iface_loc, .. }
-        | MemberResolution::InterfaceField { iface_loc, .. } => {
-            // An interface member accessed on an interface-typed value: navigate
-            // to the declaring interface.
-            let def = baml_compiler2_hir::contributions::Definition::Interface(*iface_loc);
-            let (def_file, range) = utils::definition_span(db, def)?;
+        MemberResolution::InterfaceMethod {
+            iface_loc,
+            method_name,
+        } => {
+            // A required interface method accessed on an interface-typed value:
+            // navigate to the method signature in the declaring interface.
+            let target_file = iface_loc.file(db);
+            let target_item_tree = baml_compiler2_hir::file_item_tree(db, target_file);
+            let target_source_map = baml_compiler2_hir::file_item_tree_source_map(db, target_file);
+            let iface = &target_item_tree[iface_loc.id(db)];
+            let method_idx = iface
+                .required_methods
+                .iter()
+                .position(|m| m.name == *method_name)?;
+            let method_spans = target_source_map
+                .interface_method_spans
+                .get(&iface_loc.id(db))?;
             Some(Location {
-                file: def_file,
-                range,
+                file: target_file,
+                range: method_spans[method_idx],
+            })
+        }
+        MemberResolution::InterfaceField {
+            iface_loc,
+            field_name,
+        } => {
+            // An interface field accessed on an interface-typed value: navigate
+            // to the field declaration in the declaring interface.
+            let target_file = iface_loc.file(db);
+            let target_item_tree = baml_compiler2_hir::file_item_tree(db, target_file);
+            let target_source_map = baml_compiler2_hir::file_item_tree_source_map(db, target_file);
+            let iface = &target_item_tree[iface_loc.id(db)];
+            let field_idx = iface.fields.iter().position(|f| f.name == *field_name)?;
+            let field_spans = target_source_map
+                .interface_field_spans
+                .get(&iface_loc.id(db))?;
+            Some(Location {
+                file: target_file,
+                range: field_spans[field_idx],
             })
         }
     }

@@ -408,6 +408,11 @@ pub struct ItemTreeSourceMap {
     pub enum_variant_spans: FxHashMap<LocalItemId<EnumMarker>, Vec<TextRange>>,
     /// `name_span` for each function.
     pub function_name_spans: FxHashMap<LocalItemId<FunctionMarker>, TextRange>,
+    /// `name_span` for each interface's fields, parallel to `Interface::fields`.
+    pub interface_field_spans: FxHashMap<LocalItemId<InterfaceMarker>, Vec<TextRange>>,
+    /// `name_span` for each interface's required methods, parallel to
+    /// `Interface::required_methods`.
+    pub interface_method_spans: FxHashMap<LocalItemId<InterfaceMarker>, Vec<TextRange>>,
 }
 
 // ── ItemTree ─────────────────────────────────────────────────────────────────
@@ -691,6 +696,22 @@ impl ItemTree {
     ) {
         let spans: Vec<TextRange> = enum_def.variants.iter().map(|v| v.name_span).collect();
         source_map.enum_variant_spans.insert(id, spans);
+    }
+
+    /// Populate source map spans for an interface allocated via `alloc_interface`.
+    pub fn collect_interface_spans(
+        source_map: &mut ItemTreeSourceMap,
+        id: LocalItemId<InterfaceMarker>,
+        iface_def: &ast::InterfaceDef,
+    ) {
+        let field_spans: Vec<TextRange> = iface_def.fields.iter().map(|f| f.name_span).collect();
+        source_map.interface_field_spans.insert(id, field_spans);
+        let method_spans: Vec<TextRange> = iface_def
+            .required_methods
+            .iter()
+            .map(|m| m.name_span)
+            .collect();
+        source_map.interface_method_spans.insert(id, method_spans);
     }
 
     /// Allocate an interface (BEP-044) in the `ItemTree`.

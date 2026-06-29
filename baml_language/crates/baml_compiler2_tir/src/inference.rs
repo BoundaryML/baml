@@ -162,6 +162,18 @@ pub fn scope_body<'db>(db: &'db dyn crate::Db, scope_id: ScopeId<'db>) -> Option
     })
 }
 
+/// The inference-owner scope of `scope_id` (its nearest enclosing `Function` /
+/// `Let` / `Lambda` body) WITHOUT fetching or cloning the body — the cheap
+/// key-normalization counterpart to [`scope_body`]. Use it to memoize a
+/// per-body index (e.g. the LSP `scope_resolution_index`) under one stable
+/// Salsa key, so sibling block/template scopes that share an owner don't each
+/// rebuild the same body index under a distinct key.
+pub fn scope_inference_owner<'db>(db: &'db dyn crate::Db, scope_id: ScopeId<'db>) -> ScopeId<'db> {
+    let index = baml_compiler2_ppir::file_semantic_index(db, scope_id.file(db));
+    let owner = inference_owner_scope(index, scope_id.file_scope_id(db));
+    index.scope_ids[owner.index() as usize]
+}
+
 /// Fetch the `(ExprBody, AstSourceMap)` for an inference-owner scope.
 fn fetch_scope_body<'db>(
     db: &'db dyn crate::Db,

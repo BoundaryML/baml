@@ -216,7 +216,7 @@ impl ObjectField {
             .children_with_tokens()
             .find(|element| !element.kind().is_trivia())
             .and_then(rowan::NodeOrToken::into_token)
-            .filter(|token| token.kind() == SyntaxKind::WORD)
+            .filter(|token| matches!(token.kind(), SyntaxKind::WORD | SyntaxKind::KW_CLIENT))
     }
 }
 

@@ -31,12 +31,15 @@ pub(crate) fn build_id(started: Option<SystemTime>) -> u64 {
         .map_or(0, |d| u64::try_from(d.as_millis()).unwrap_or(u64::MAX))
 }
 
-/// Newest mtime among the classifier (`baml_lsp2_actions`) and viewer sources.
+/// Newest mtime among the viewer, the classifier (`baml_lsp2_actions`), and the
+/// compiler crates the classifier depends on for token output.
 fn newest_source_mtime() -> Option<SystemTime> {
     let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
     let roots = [
         manifest.join("src"),
         manifest.join("../baml_lsp2_actions/src"),
+        manifest.join("../baml_compiler2_tir/src"),
+        manifest.join("../baml_compiler_syntax/src"),
     ];
     let mut newest = None;
     for root in roots {

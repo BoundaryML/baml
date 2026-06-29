@@ -294,22 +294,37 @@ function greet(user User) -> string {
 
       // ── sidebar ──────────────────────────────────────────────────────────
       function renderList() {
-        const scratchRow =
-          `<button type="button" class="row ${selected === SCRATCH ? "selected" : ""}" data-name="${SCRATCH}">` +
-          `<span class="row-name">Scratchpad</span><span class="badge">live</span></button>`;
-        const rows = fixtures
-          .map((f) => {
-            const cls = f.diff_count === 0 ? "same" : "different";
-            const label = f.diff_count === 0 ? "Same" : `Diff ${f.diff_count}`;
-            const sel = selected === f.name ? "selected" : "";
-            return (
-              `<button type="button" class="row ${sel}" data-name="${esc(f.name)}" title="${esc(f.name)}">` +
-              `<span class="row-name">${esc(f.name)}</span>` +
-              `<span class="badge ${cls}">${label}</span></button>`
-            );
-          })
-          .join("");
-        listEl.innerHTML = scratchRow + rows;
+        const makeRow = (dataName, label, badgeText, badgeClass, isSelected) => {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = `row ${isSelected ? "selected" : ""}`.trim();
+          button.dataset.name = dataName;
+          button.title = label;
+
+          const nameEl = document.createElement("span");
+          nameEl.className = "row-name";
+          nameEl.textContent = label;
+
+          const badge = document.createElement("span");
+          badge.className = `badge ${badgeClass}`.trim();
+          badge.textContent = badgeText;
+
+          button.append(nameEl, badge);
+          return button;
+        };
+
+        listEl.replaceChildren(
+          makeRow(SCRATCH, "Scratchpad", "live", "", selected === SCRATCH),
+          ...fixtures.map((f) =>
+            makeRow(
+              f.name,
+              f.name,
+              f.diff_count === 0 ? "Same" : `Diff ${f.diff_count}`,
+              f.diff_count === 0 ? "same" : "different",
+              selected === f.name,
+            ),
+          ),
+        );
       }
 
       // ── inspector + legend ───────────────────────────────────────────────
@@ -411,20 +426,25 @@ function greet(user User) -> string {
         clearTimeout(scratchTimer);
         scratchTimer = setTimeout(renderScratch, 250);
       }
+      let scratchRequestId = 0;
       async function renderScratch() {
+        const source = scratchText;
+        const requestId = ++scratchRequestId;
         try {
           const res = await getJson("/api/tokens", {
             method: "POST",
             headers: { "content-type": "application/json" },
-            body: JSON.stringify({ source: scratchText }),
+            body: JSON.stringify({ source }),
           });
+          if (requestId !== scratchRequestId || source !== scratchText) return;
           scratchTokens = res.tokens.map((t) => ({ ...t, diff: null }));
         } catch {
+          if (requestId !== scratchRequestId || source !== scratchText) return;
           scratchTokens = [];
         }
         if (selected !== SCRATCH) return;
         const out = document.getElementById("scratchOut");
-        if (out) out.innerHTML = renderTokens(scratchText, scratchTokens, "scratch");
+        if (out) out.innerHTML = renderTokens(source, scratchTokens, "scratch");
       }
 
       // ── selection ────────────────────────────────────────────────────────
@@ -440,7 +460,16 @@ function greet(user User) -> string {
         try {
           detail = await getJson(`/api/fixture?name=${encodeURIComponent(name)}`);
         } catch (e) {
+          if (selected !== name) return;
+          detail = null;
+          curMap = new Map();
+          expMap = new Map();
+          panesEl.className = "panes single";
           panesEl.innerHTML = `<div class="pane-body"><span class="muted">${esc(String(e))}</span></div>`;
+          statusEl.textContent = "Load failed";
+          statusEl.className = "status";
+          acceptEl.disabled = true;
+          renderInspect(null);
           return;
         }
         if (selected !== name) return;
@@ -466,6 +495,7 @@ function greet(user User) -> string {
           await select(selected);
         } catch (e) {
           statusEl.textContent = `Accept failed: ${e}`;
+          acceptEl.disabled = selected === SCRATCH;
         }
       });
 

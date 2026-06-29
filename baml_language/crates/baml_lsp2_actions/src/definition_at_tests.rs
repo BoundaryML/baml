@@ -428,4 +428,68 @@ function Foo(t: TypeValue) -> string {
             "Should navigate to keyword-named method 'implements', got: {desc}"
         );
     }
+
+    #[test]
+    fn test_goto_def_interface_field() {
+        let test = CursorTest::new(
+            r#"
+interface Named {
+  fullname: string
+}
+
+class Person {
+  display_name: string
+
+  implements Named {
+    fullname as display_name
+  }
+}
+
+function ReadName(p: Person) -> string {
+  return p.as<Named>.<[CURSOR]fullname
+}
+"#,
+        );
+
+        let loc = test.goto_definition();
+        let desc = loc
+            .as_ref()
+            .map(|l| test.format_location_with_name(l))
+            .unwrap_or_else(|| "No definition found".into());
+        assert!(
+            desc.contains("-> fullname") && !desc.contains("-> Named"),
+            "Should navigate to interface field 'fullname', not the interface header, got: {desc}"
+        );
+    }
+
+    #[test]
+    fn test_goto_def_interface_method() {
+        let test = CursorTest::new(
+            r#"
+interface Serializer {
+  function encode(self) -> string
+}
+
+class Data {
+  implements Serializer {
+    function encode(self) -> string { return "json" }
+  }
+}
+
+function PickText(d: Data) -> string {
+  return d.as<Serializer>.<[CURSOR]encode()
+}
+"#,
+        );
+
+        let loc = test.goto_definition();
+        let desc = loc
+            .as_ref()
+            .map(|l| test.format_location_with_name(l))
+            .unwrap_or_else(|| "No definition found".into());
+        assert!(
+            desc.contains("-> encode") && !desc.contains("-> Serializer"),
+            "Should navigate to interface method 'encode', not the interface header, got: {desc}"
+        );
+    }
 }

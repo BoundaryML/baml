@@ -12394,15 +12394,6 @@ impl<'db> TypeInferenceBuilder<'db> {
                     continue;
                 }
                 let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(db, file, fn_id);
-                if bound {
-                    self.resolutions.insert(
-                        at,
-                        crate::inference::MemberResolution::InterfaceMethod {
-                            iface_loc,
-                            method_name: member.clone(),
-                        },
-                    );
-                }
                 let sig = baml_compiler2_ppir::elaborated_function_signature(db, func_loc);
                 // An exact receiver pins `Self` to its own type, not to a fresh
                 // method generic, so suppress the unbound-reference generic there.

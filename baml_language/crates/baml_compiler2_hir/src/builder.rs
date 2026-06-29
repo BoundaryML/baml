@@ -1429,6 +1429,7 @@ impl<'db> SemanticIndexBuilder<'db> {
         self.class_depth -= 1;
 
         let local_id = self.item_tree.alloc_interface(i, default_method_ids);
+        ItemTree::collect_interface_spans(&mut self.item_tree_source_map, local_id, i);
         let loc = InterfaceLoc::new(self.db, self.file, local_id);
         self.type_contributions.push((
             i.name.clone(),
