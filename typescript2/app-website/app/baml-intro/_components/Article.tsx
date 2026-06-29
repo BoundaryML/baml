@@ -16,6 +16,7 @@ import { InfectionGraph } from '../../learn3/_components/InfectionGraph';
 // import { MetricsDag } from '../../learn3/_components/MetricsDag'; // metrics section hidden
 import { TermPlay } from '../../learn3/_components/TermPlay';
 import { SdkPipeline } from '../../learn4/_components/SdkPipeline';
+import { DesignGoalsCard } from './DesignGoalsCard';
 import { PackChart, SpawnChart } from './PackChart';
 import { Scheduler } from './Scheduler';
 import { SdkExplorer } from './SdkExplorer';
@@ -445,22 +446,35 @@ export function Article({ view = 'all' }: { view?: 'all' | 'intro' | 'deep' }) {
                 />
                 {'BAML is the programming language for agents'}
               </h1>
-              <p className="l6-lead">
-                {'How we code will never be the same again.'}
-              </p>
-              <p className="l6-lead">
-                {'And every time coding changed, we built a new language.'}
-              </p>
-              <ul className="l6-tenets font-mono">
-                <li className="l6-tenet">Hardware -&gt; Assembly</li>
-                <li className="l6-tenet">Operating Systems -&gt; Java</li>
-                <li className="l6-tenet">Web -&gt; Javascript</li>
-                <li className="l6-tenet">Agentic Coding -&gt; ????</li>
+              {view === 'intro' && <DesignGoalsCard />}
+              {view === 'intro' && (
+                <p>
+                  {'What they meant was '}
+                  <em>
+                    <strong>human</strong>
+                  </em>
+                  {
+                    ' productivity. AI agents are a new paradigm that require a new programming language, just like in the past:'
+                  }
+                </p>
+              )}
+              <ul className="l6-tenets">
+                <li className="l6-tenet" style={{ fontSize: 'inherit' }}>
+                  Hardware -&gt; Assembly
+                </li>
+                <li className="l6-tenet" style={{ fontSize: 'inherit' }}>
+                  Operating Systems -&gt; Java
+                </li>
+                <li className="l6-tenet" style={{ fontSize: 'inherit' }}>
+                  Web -&gt; Javascript
+                </li>
+                <li className="l6-tenet" style={{ fontSize: 'inherit' }}>
+                  Agentic Coding -&gt; ????
+                </li>
               </ul>
-              <p className="l6-lead">{''}</p>
               <p>
                 {
-                  'In BAML, every feature is designed to prevent context pollution and churn when coding with AI. We opt for features that prevent mistakes at runtime (like Rust), while maintaining the dynamasism necessary for codemode (like Python).'
+                  'BAML is a language designed to prevent context pollution and churn when coding with AI. Every feature opts to prevent mistakes at runtime (like Rust), while maintaining the dynamism necessary for writing and running code (like Python).'
                 }
               </p>
               <p>

@@ -49,7 +49,7 @@ export function SiteBanner() {
   return (
     <Link
       className="site-banner"
-      href="/thesis"
+      href="/blog"
       style={{
         alignItems: 'center',
         background: CARD_BG,
@@ -87,11 +87,11 @@ export function SiteBanner() {
         New
       </span>
       <span style={{ color: MUTED }}>
-        T-minus 45 days until{' '}
+        60 days until{' '}
         <span style={{ color: INK, fontWeight: 600 }}>
           launch
         </span>
-        .
+        {' — join our email list'}
       </span>
       <span
         aria-hidden
