@@ -170,6 +170,34 @@ pub(super) struct ConcreteFieldSource<'db> {
     pub(super) class_field: Name,
 }
 
+/// One realized interface a union arm provides (implements or `requires`): its decl loc plus
+/// the applied generic args and associated-type bindings. A union's member surface is the
+/// *intersection* of these across all arms — an existential `dyn (I1 + I2 + ...)` — so an
+/// interface is shared only when every arm provides it at the same args AND associated
+/// bindings (the existential uniformity constraint).
+struct ArmInterface<'db> {
+    iface_loc: baml_compiler2_hir::loc::InterfaceLoc<'db>,
+    type_args: Vec<Ty>,
+    associated_bindings: Vec<(Name, Ty)>,
+}
+
+/// Whether a shared interface declares the queried member as a field or a method — selects
+/// the field vs method ambiguity diagnostic when two shared interfaces both declare it.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum UnionMemberKind {
+    Field,
+    Method,
+}
+
+/// The outcome of resolving a member on a union receiver. `Resolved` already recorded the
+/// virtual access/call; the caller reports the prebuilt `Unresolved`/`Ambiguous` diagnostic
+/// against its own span (expression vs path segment).
+pub(super) enum UnionMemberResolution {
+    Resolved(Ty),
+    Unresolved(TirTypeError),
+    Ambiguous(TirTypeError),
+}
+
 impl<'db> TypeInferenceBuilder<'db> {
     /// a matching field or method. Default methods (with bodies) are
     /// resolved via `FunctionLoc` like class methods. Required methods are
@@ -443,6 +471,222 @@ impl<'db> TypeInferenceBuilder<'db> {
         sources
     }
 
+    /// Resolve `member` on a **union** receiver. A union behaves as the intersection
+    /// existential `dyn (I1 + I2 + ...)` over the interfaces every arm provides: `member`
+    /// resolves through the *single* shared interface that declares it — inference sugar for
+    /// `union.as<I>.member`, recorded as a virtual access/call (the union upcast to `I`, valid
+    /// because `I` is implemented by every arm). Zero shared declarers → `Unresolved`; two or
+    /// more → `Ambiguous`. Only interface members are reachable on a union — never an arm's
+    /// own class fields/methods, which need not agree across arms.
+    pub(super) fn resolve_union_member(
+        &mut self,
+        union_ty: &Ty,
+        members: &[Ty],
+        member: &Name,
+        at: ExprId,
+        bound: bool,
+    ) -> UnionMemberResolution {
+        let declaring: Vec<(ArmInterface<'db>, UnionMemberKind)> = self
+            .union_shared_interfaces(members)
+            .into_iter()
+            .filter_map(|ai| {
+                self.interface_member_kind(ai.iface_loc, member)
+                    .map(|kind| (ai, kind))
+            })
+            .collect();
+        let unresolved = || {
+            UnionMemberResolution::Unresolved(TirTypeError::UnresolvedMember {
+                base_type: union_ty.clone(),
+                member: member.clone(),
+            })
+        };
+        match declaring.as_slice() {
+            [] => unresolved(),
+            [(ai, _)] => match self
+                .resolve_member_through_shared_interface(ai, union_ty, member, at, bound)
+            {
+                Some(ty) => UnionMemberResolution::Resolved(ty),
+                None => unresolved(),
+            },
+            // ≥2 shared interfaces declare `member`: resolving it would silently pick one. The
+            // receiver renders as the union; the `as<I>` projection hint in the diagnostic
+            // still applies (`union.as<I>.member`).
+            _ => {
+                let is_field = declaring[0].1 == UnionMemberKind::Field;
+                let db = self.context.db();
+                let receiver = Name::new(union_ty.render_user_facing());
+                let sources: Vec<String> = declaring
+                    .iter()
+                    .filter_map(|(ai, _)| {
+                        let qtn = crate::interfaces::interface_loc_qtn(db, ai.iface_loc)?;
+                        Some(format_interface_display(qtn.name(), &ai.type_args))
+                    })
+                    .collect();
+                let err = if is_field {
+                    TirTypeError::AmbiguousInterfaceField {
+                        class_name: receiver,
+                        field_name: member.clone(),
+                        sources: sources.into_iter().map(Name::new).collect(),
+                    }
+                } else {
+                    TirTypeError::AmbiguousInterfaceMethod {
+                        class_name: receiver,
+                        method_name: member.clone(),
+                        sources,
+                    }
+                };
+                UnionMemberResolution::Ambiguous(err)
+            }
+        }
+    }
+
+    /// The interfaces shared by **every** arm of `members` — the union's member surface. An
+    /// interface counts only when each arm provides it at equivalent generic args AND
+    /// associated bindings (see [`ArmInterface`]).
+    fn union_shared_interfaces(&self, members: &[Ty]) -> Vec<ArmInterface<'db>> {
+        let mut arms = members.iter();
+        let Some(first) = arms.next() else {
+            return Vec::new();
+        };
+        let mut shared = self.union_arm_interfaces(first);
+        for arm in arms {
+            if shared.is_empty() {
+                break;
+            }
+            let arm_ifaces = self.union_arm_interfaces(arm);
+            shared.retain(|s| {
+                arm_ifaces
+                    .iter()
+                    .any(|other| self.same_realized_interface(s, other))
+            });
+        }
+        shared
+    }
+
+    /// The realized interfaces a single union arm provides. A concrete arm contributes its
+    /// own impl blocks (coherence has already materialized the `requires` closure as separate
+    /// impls); an interface-existential or type-var arm contributes the bound interface plus
+    /// its transitive `requires` closure.
+    fn union_arm_interfaces(&self, arm: &Ty) -> Vec<ArmInterface<'db>> {
+        let db = self.context.db();
+        match arm {
+            Ty::Interface(qtn, args, assoc, _) => {
+                let Some(pkg_items) = self.resolve_class_pkg_items(qtn.package()) else {
+                    return Vec::new();
+                };
+                let Some(Definition::Interface(root_loc)) =
+                    pkg_items.lookup_type(qtn.namespace(), qtn.name())
+                else {
+                    return Vec::new();
+                };
+                let pkg_ns = baml_compiler2_hir::file_package::file_package(db, root_loc.file(db))
+                    .namespace_path;
+                crate::interfaces::interface_closure_locs_with_args_and_assoc(
+                    db, root_loc, args, assoc, pkg_items, &pkg_ns,
+                )
+                .into_iter()
+                .map(|(iface_loc, type_args, associated_bindings)| ArmInterface {
+                    iface_loc,
+                    type_args,
+                    associated_bindings,
+                })
+                .collect()
+            }
+            Ty::TypeVar(name, _) => match self.generic_param_bounds.get(name) {
+                Some(bound) => self.union_arm_interfaces(&bound.clone()),
+                None => Vec::new(),
+            },
+            _ => self
+                .type_impls(arm)
+                .iter()
+                .filter_map(|resolved_impl| {
+                    let Ok(data) = crate::interfaces::impl_data(db, resolved_impl.impl_loc) else {
+                        return None;
+                    };
+                    Some(ArmInterface {
+                        iface_loc: data.interface,
+                        type_args: data.interface_args.clone(),
+                        associated_bindings: data.associated_types.clone(),
+                    })
+                })
+                .collect(),
+        }
+    }
+
+    /// Two realized interfaces are the same instantiation: same decl, equivalent generic args,
+    /// and equivalent associated bindings (matched by name, order-independent).
+    fn same_realized_interface(&self, a: &ArmInterface<'db>, b: &ArmInterface<'db>) -> bool {
+        if a.iface_loc != b.iface_loc
+            || a.type_args.len() != b.type_args.len()
+            || a.associated_bindings.len() != b.associated_bindings.len()
+        {
+            return false;
+        }
+        let ctx = NormalizeCtx(self);
+        a.type_args
+            .iter()
+            .zip(&b.type_args)
+            .all(|(x, y)| baml_type::normalize::equivalent(x, y, &ctx))
+            && a.associated_bindings.iter().all(|(name, ty)| {
+                b.associated_bindings.iter().any(|(other_name, other_ty)| {
+                    other_name == name && baml_type::normalize::equivalent(ty, other_ty, &ctx)
+                })
+            })
+    }
+
+    /// Whether interface `iface_loc` declares `member`, and as which kind. Side-effect-free —
+    /// used to count shared declarers before committing to a virtual resolution.
+    fn interface_member_kind(
+        &self,
+        iface_loc: baml_compiler2_hir::loc::InterfaceLoc<'db>,
+        member: &Name,
+    ) -> Option<UnionMemberKind> {
+        let db = self.context.db();
+        let iface_tree = baml_compiler2_hir::file_item_tree(db, iface_loc.file(db));
+        let iface_data = iface_tree.interfaces.get(&iface_loc.id(db))?;
+        if iface_data.fields.iter().any(|field| &field.name == member) {
+            return Some(UnionMemberKind::Field);
+        }
+        if iface_data
+            .default_methods
+            .iter()
+            .any(|&fn_id| iface_tree[fn_id].name == *member)
+            || iface_data
+                .required_methods
+                .iter()
+                .any(|sig| &sig.name == member)
+        {
+            return Some(UnionMemberKind::Method);
+        }
+        None
+    }
+
+    /// Resolve `member` through one shared interface `ai`. The virtual dispatch goes through
+    /// `ai` (the `union.as<I>` view — recording the interface slot), but `Self` binds to
+    /// `union_ty` itself ([`SelfReceiver::Union`]), the subtype of the interface existential,
+    /// so a `Self`-returning method yields the union rather than the erased interface.
+    fn resolve_member_through_shared_interface(
+        &mut self,
+        ai: &ArmInterface<'db>,
+        union_ty: &Ty,
+        member: &Name,
+        at: ExprId,
+        bound: bool,
+    ) -> Option<Ty> {
+        let db = self.context.db();
+        let qtn = crate::interfaces::interface_loc_qtn(db, ai.iface_loc)?;
+        let pkg_items = self.resolve_class_pkg_items(qtn.package())?;
+        self.resolve_member_on_one_interface(
+            ai.iface_loc,
+            &ai.type_args,
+            &ai.associated_bindings,
+            &qtn,
+            pkg_items,
+            SelfReceiver::Union(union_ty),
+            &MemberAccess { member, at, bound },
+        )
+    }
+
     /// Resolve `member` on **one** interface instantiation — its own fields and methods,
     /// with **no** `requires`-closure walk. [`Self::resolve_interface_member`] calls this
     /// per interface in an existential/type-var receiver's bound closure. `root_iface_qtn`
@@ -588,10 +832,9 @@ impl<'db> TypeInferenceBuilder<'db> {
 
         // An exact receiver pins `Self` to its own type, not to a fresh method generic,
         // so suppress the unbound-reference generic there.
-        let receiver_generic =
-            (!access.bound && !matches!(recv, SelfReceiver::ExactTy(_))).then(|| {
-                self.fresh_interface_method_receiver_generic(iface.iface_data, &generic_names)
-            });
+        let receiver_generic = (!access.bound
+            && !matches!(recv, SelfReceiver::ExactTy(_) | SelfReceiver::Union(_)))
+        .then(|| self.fresh_interface_method_receiver_generic(iface.iface_data, &generic_names));
 
         let mut diags = Vec::new();
         let mut bindings = if iface.iface_type_args.is_empty() {
@@ -660,7 +903,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         // object-safety restriction only applies to a bare existential receiver. The `self`
         // receiver itself is `self: Self` by construction — exclude it, only *other* params
         // referencing `Self` break object safety.
-        if matches!(recv, SelfReceiver::Existential(_))
+        if matches!(recv, SelfReceiver::Existential(_) | SelfReceiver::Union(_))
             && access.bound
             && spec
                 .args

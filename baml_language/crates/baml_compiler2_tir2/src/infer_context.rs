@@ -379,11 +379,6 @@ pub enum TirTypeError {
     /// BEP-044: a value almost satisfies an interface via a blanket impl, but a
     /// generic bound (`T extends Bound`) is not met. Names the failed bound.
     BlanketBoundNotSatisfied { value_type: Ty, bound: Ty },
-    /// BEP-044 wf3 #18: a class provides the SAME interface instantiation via
-    /// more than one `implements` block (distinct generic blocks that collapse
-    /// under the concrete type args, e.g. `Getter<L>`+`Getter<R>` at
-    /// `Pair<int, int>`). Coercing to that interface is ambiguous.
-    AmbiguousInterfaceInstantiation { class_name: Name, interface: Ty },
     /// `$id` cannot be the target of a compound assignment (`$id += ...`):
     /// the runtime ID can only be replaced wholesale with an override from
     /// `baml.id.new()` via `$id = ...`.
@@ -959,16 +954,6 @@ impl fmt::Display for TirTypeError {
                  `implements` rule",
                 value_type.render_user_facing(),
                 bound.render_user_facing()
-            ),
-            TirTypeError::AmbiguousInterfaceInstantiation {
-                class_name,
-                interface,
-            } => write!(
-                f,
-                "class `{class_name}` implements `{}` through more than one `implements` block at \
-                 this instantiation (distinct generic blocks collapse to the same type); the \
-                 projection is ambiguous",
-                interface.render_user_facing()
             ),
             TirTypeError::RuntimeIdCompoundAssignment => write!(
                 f,

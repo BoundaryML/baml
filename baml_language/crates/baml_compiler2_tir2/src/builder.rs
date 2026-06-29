@@ -39,6 +39,7 @@ use crate::{
 
 /// Interface member/method resolution for existential / type-var receivers.
 mod interface_resolution;
+use interface_resolution::UnionMemberResolution;
 
 // ── Well-known type constructors ──────────────────────────────────────────────
 //
@@ -410,6 +411,12 @@ enum SelfReceiver<'a> {
     /// classes/primitives and abstract-but-rigid associated projections such as
     /// `H.Item`.
     ExactTy(&'a Ty),
+    /// `Self` is a union receiver reached through one shared interface of an
+    /// intersection-existential union (`union.foo()` ≡ `union.as<I>.foo()`). `Self` binds to
+    /// the union — the subtype of the interface existential — so `Self`-returning methods
+    /// yield the union, not the erased interface; but like [`SelfReceiver::Existential`] the
+    /// runtime arm is unknown, so `Self`-typed *parameters* are not callable (object safety).
+    Union(&'a Ty),
 }
 
 impl SelfReceiver<'_> {
@@ -421,6 +428,7 @@ impl SelfReceiver<'_> {
             SelfReceiver::Existential(ty) => (*ty).clone(),
             SelfReceiver::RigidVar(name) => Ty::TypeVar((*name).clone(), TyAttr::default()),
             SelfReceiver::ExactTy(ty) => (*ty).clone(),
+            SelfReceiver::Union(ty) => (*ty).clone(),
         }
     }
 }
@@ -434,15 +442,6 @@ enum BuiltinResolution<'db> {
         func_loc: baml_compiler2_hir::loc::FunctionLoc<'db>,
     },
     Field(Ty),
-}
-
-impl BuiltinResolution<'_> {
-    fn into_ty(self) -> Ty {
-        match self {
-            BuiltinResolution::Method { ty, .. } => ty,
-            BuiltinResolution::Field(ty) => ty,
-        }
-    }
 }
 
 struct OptionalBaseInfo {
@@ -471,8 +470,6 @@ struct CheckedCallInner {
     /// as a concrete type for contextual mismatch reporting.
     recovered_unresolved_generics: bool,
 }
-
-type RegistryInterfaceMethodSource = (crate::ty::QualifiedTypeName, Vec<Ty>, Vec<(Name, Ty)>);
 
 #[derive(Clone, Copy)]
 struct CallContext<'a> {
@@ -6731,22 +6728,6 @@ impl<'db> TypeInferenceBuilder<'db> {
                         Vec::new(),
                     );
                 } else {
-                    // BEP-044 wf3 #18: coercing a concrete class to an interface
-                    // it provides via >1 in-body block at this instantiation is
-                    // ambiguous (`Getter<L>`+`Getter<R>` collapse at `Pair<int,int>`).
-                    if let (Ty::Class(cqtn, ctargs, _), Ty::Interface(iqtn, iargs, _, _)) =
-                        (&inferred, expected)
-                        && self.class_interface_instantiation_count(cqtn, ctargs, iqtn, iargs) > 1
-                    {
-                        self.context.report(
-                            TirTypeError::AmbiguousInterfaceInstantiation {
-                                class_name: cqtn.name().clone(),
-                                interface: expected.clone(),
-                            },
-                            expr_id,
-                            Vec::new(),
-                        );
-                    }
                     self.record_function_coercion_if_needed(expr_id, &inferred, expected);
                 }
                 inferred
@@ -10668,60 +10649,17 @@ impl<'db> TypeInferenceBuilder<'db> {
                 }
             }
             Ty::Union(members, _) => {
-                // For union types, try to resolve the field on each member.
-                // If ALL members have the field, return Union(resolved_types).
-                // If any member is missing the field, report per-member errors.
+                // A union resolves a member through the single interface shared by every arm
+                // that declares it — sugar for `union.as<I>.member` (a virtual access/call).
                 let members = members.clone();
-                // A shared implementor of two of the union's interfaces makes an
-                // unqualified method call ambiguous (E0121) — reject it instead
-                // of silently picking the first interface's default.
-                if let Some((class_name, sources)) =
-                    self.union_interface_method_ambiguity(&members, member)
-                {
-                    self.context.report_at_member(
-                        TirTypeError::AmbiguousInterfaceMethod {
-                            class_name,
-                            method_name: member.clone(),
-                            sources,
-                        },
-                        at,
-                        Vec::new(),
-                    );
-                    return Ty::Unknown {
-                        attr: TyAttr::default(),
-                    };
-                }
-                let mut resolved: Vec<(Ty, Option<Ty>)> = Vec::with_capacity(members.len());
-                for m in &members {
-                    let r = self.resolve_union_member_ty(m, member, at, bound);
-                    resolved.push((m.clone(), r));
-                }
-
-                if resolved.iter().all(|(_, r)| r.is_some()) {
-                    // All members have the field — return union of resolved types
-                    let field_tys: Vec<Ty> =
-                        resolved.into_iter().map(|(_, r)| r.unwrap()).collect();
-                    // TODO(TyAttr): This union is synthesized from per-member field resolutions,
-                    // not a transform of the original union. The original union's attr describes
-                    // the union-as-a-whole (e.g. @stream.done), but the result describes field
-                    // types which may have different streaming semantics. TyAttr::default() is
-                    // probably correct but needs confirmation.
-                    Ty::Union(field_tys, TyAttr::default())
-                } else {
-                    // Report an error for each member that's missing the field
-                    for (member_ty, result) in &resolved {
-                        if result.is_none() {
-                            self.context.report_at_member_simple(
-                                TirTypeError::UnresolvedMember {
-                                    base_type: member_ty.clone(),
-                                    member: member.clone(),
-                                },
-                                at,
-                            );
+                match self.resolve_union_member(base_ty, &members, member, at, bound) {
+                    UnionMemberResolution::Resolved(ty) => ty,
+                    UnionMemberResolution::Unresolved(err)
+                    | UnionMemberResolution::Ambiguous(err) => {
+                        self.context.report_at_member(err, at, Vec::new());
+                        Ty::Unknown {
+                            attr: TyAttr::default(),
                         }
-                    }
-                    Ty::Unknown {
-                        attr: TyAttr::default(),
                     }
                 }
             }
@@ -11403,56 +11341,19 @@ impl<'db> TypeInferenceBuilder<'db> {
                 }
             }
             Ty::Union(members, _) => {
-                // For union types, try to resolve the member on each constituent.
-                // Use report_at_segment for missing members so the span points at the
-                // segment token, not the full path.
+                // A union resolves a member through the single interface shared by every arm
+                // that declares it (`union.as<I>.member`). `report_at_segment` points the span
+                // at the segment token rather than the whole path.
                 let members = members.clone();
-                // A shared implementor of two of the union's interfaces makes an
-                // unqualified method call ambiguous (E0121) — reject it instead
-                // of silently picking the first interface's default.
-                if let Some((class_name, sources)) =
-                    self.union_interface_method_ambiguity(&members, member)
-                {
-                    self.context.report_at_segment(
-                        TirTypeError::AmbiguousInterfaceMethod {
-                            class_name,
-                            method_name: member.clone(),
-                            sources,
-                        },
-                        path_id,
-                        seg_idx,
-                        Vec::new(),
-                    );
-                    return Ty::Unknown {
-                        attr: TyAttr::default(),
-                    };
-                }
-                let mut resolved: Vec<(Ty, Option<Ty>)> = Vec::with_capacity(members.len());
-                for m in &members {
-                    let r = self.resolve_union_member_ty(m, member, path_id, bound);
-                    resolved.push((m.clone(), r));
-                }
-
-                if resolved.iter().all(|(_, r)| r.is_some()) {
-                    let field_tys: Vec<Ty> =
-                        resolved.into_iter().map(|(_, r)| r.unwrap()).collect();
-                    Ty::Union(field_tys, TyAttr::default())
-                } else {
-                    for (member_ty, result) in &resolved {
-                        if result.is_none() {
-                            self.context.report_at_segment(
-                                TirTypeError::UnresolvedMember {
-                                    base_type: member_ty.clone(),
-                                    member: member.clone(),
-                                },
-                                path_id,
-                                seg_idx,
-                                Vec::new(),
-                            );
+                match self.resolve_union_member(base_ty, &members, member, path_id, bound) {
+                    UnionMemberResolution::Resolved(ty) => ty,
+                    UnionMemberResolution::Unresolved(err)
+                    | UnionMemberResolution::Ambiguous(err) => {
+                        self.context
+                            .report_at_segment(err, path_id, seg_idx, Vec::new());
+                        Ty::Unknown {
+                            attr: TyAttr::default(),
                         }
-                    }
-                    Ty::Unknown {
-                        attr: TyAttr::default(),
                     }
                 }
             }
@@ -11485,407 +11386,6 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // to resolve_member which handles them with proper error reporting.
                 self.resolve_member(base_ty, member, path_id, bound)
             }
-        }
-    }
-
-    /// Conservative ambiguity check for accessing `member` (a method) on a union
-    /// whose members include interfaces. If some class implements two or more of
-    /// the union's interfaces and `member` is declared by ≥2 of them, then a
-    /// value of the union could be that class — for which a direct
-    /// `value.member()` is rejected as ambiguous (E0121). The static union type
-    /// admits such a class, so the call is genuinely ambiguous; report it rather
-    /// than silently dispatching to the first interface's default.
-    ///
-    /// Returns `(class_name, formatted_sources)` for the E0121 diagnostic, or
-    /// `None` when no shared implementor makes the call ambiguous.
-    #[deprecated = "Detects union interface-method ambiguity by walking the L2 registry and matching \
-        only `Ty::Class` members — misses generic/primitive members and per-instantiation differences \
-        (`Foo<int>` vs `Foo<string>`). Rebuild on `impls_for_type` membership over each union member."]
-    fn union_interface_method_ambiguity(
-        &self,
-        members: &[Ty],
-        member: &Name,
-    ) -> Option<(Name, Vec<String>)> {
-        let iface_qtns: FxHashSet<crate::ty::QualifiedTypeName> = members
-            .iter()
-            .filter_map(|m| match m {
-                Ty::Interface(qtn, _, _, _) => Some(qtn.clone()),
-                _ => None,
-            })
-            .collect();
-        // A single interface can't have a cross-member shared-implementor clash.
-        if iface_qtns.len() < 2 {
-            return None;
-        }
-        let db = self.context.db();
-        let registry = crate::interfaces::package_implements_registry(db, self.package_id);
-        let mut seen: FxHashSet<crate::ty::QualifiedTypeName> = FxHashSet::default();
-        for rule in &registry.interface_impl_rules {
-            let Ty::Interface(rule_iface, _, _, _) = &rule.interface_ty else {
-                continue;
-            };
-            if !iface_qtns.contains(rule_iface) {
-                continue;
-            }
-            let Ty::Class(class_qtn, _, _) = &rule.for_ty_pattern else {
-                continue;
-            };
-            if !seen.insert(class_qtn.clone()) {
-                continue;
-            }
-            // Which of THIS union's interfaces declare `member` on the class.
-            let sources: Vec<(crate::ty::QualifiedTypeName, Vec<Ty>)> = self
-                .implemented_interface_method_sources(class_qtn, &[], member)
-                .into_iter()
-                .filter(|(_, qtn, _)| iface_qtns.contains(qtn))
-                .map(|(_, qtn, args)| (qtn, args))
-                .collect();
-            if sources.len() >= 2 {
-                return Some((
-                    class_qtn.name().clone(),
-                    self.format_interface_method_sources(sources.into_iter()),
-                ));
-            }
-        }
-        None
-    }
-
-    /// Resolve `member` on one constituent `m` of a union receiver.
-    ///
-    /// Interface members can't be resolved by the read-only
-    /// [`try_resolve_member_on_ty`](Self::try_resolve_member_on_ty) probe — it
-    /// returns the `Ty::Unknown` sentinel, which makes a method present on
-    /// every member collapse into a non-callable `unknown | unknown` union
-    /// (BEP-044 union dispatch, formerly E0006). Resolve interface members
-    /// through the full interface machinery instead, but suppress the
-    /// diagnostics and the single-interface `MemberResolution` it records: a
-    /// union method/field access dispatches on the runtime class (see MIR
-    /// `try_lower_union_iface_dispatch` / `try_lower_interface_field_access`),
-    /// not a stored per-member resolution.
-    fn resolve_union_member_ty(
-        &mut self,
-        m: &Ty,
-        member: &Name,
-        at: ExprId,
-        bound: bool,
-    ) -> Option<Ty> {
-        if let Ty::Interface(iface_name, type_args, associated_bindings, _) = m {
-            let iface_name = iface_name.clone();
-            let type_args = type_args.clone();
-            let associated_bindings = associated_bindings.clone();
-            let self_ty = Ty::Interface(
-                iface_name.clone(),
-                type_args.clone(),
-                associated_bindings.clone(),
-                TyAttr::default(),
-            );
-            // A union member that is a bare interface is an existential ("dyn")
-            // receiver, so a method with an extra `Self` parameter is not callable
-            // on it (object safety). `resolve_interface_member` reports this, but
-            // the call below suppresses its diagnostics — so surface it here,
-            // outside the suppressed region (mirrors `union_interface_method_ambiguity`).
-            if bound && self.interface_method_has_extra_self_param(&iface_name, member) {
-                self.context.report_simple(
-                    TirTypeError::InvalidSelfCallThroughInterface {
-                        interface_name: iface_name.name().clone(),
-                        method_name: member.clone(),
-                    },
-                    at,
-                );
-            }
-            let ty = self.resolve_member_suppressing_side_effects(at, |this| {
-                // The object-safety restriction (reported above) still applies;
-                // resolution proceeds to recover the member's shape for the union.
-                this.resolve_interface_member(
-                    InterfaceBound {
-                        name: &iface_name,
-                        type_args: &type_args,
-                        associated_bindings: &associated_bindings,
-                    },
-                    SelfReceiver::Existential(&self_ty),
-                    MemberAccess { member, at, bound },
-                )
-            });
-            // A bound interface *method* comes back self-stripped, but class
-            // method members of the same union keep `self` (the unbound form).
-            // The union-callee fold requires every arm to share a shape and
-            // skips `self` for method calls, so re-attach a `self` param here
-            // to match the class arms (`(self: Animal) -> R`, not `() -> R`).
-            // Only for actual methods — a function-typed interface *field* must
-            // keep its declared signature rather than gain a phantom `self`.
-            let is_method = self.interface_closure_declares_method(&iface_name, member);
-            return ty.map(|t| {
-                if is_method {
-                    Self::prepend_self_param_if_method(t, self_ty.clone(), bound)
-                } else {
-                    t
-                }
-            });
-        }
-        // Class / primitive member: the read-only probe handles its own fields
-        // and methods.
-        if let Some(ty) = self.try_resolve_member_on_ty(m, member) {
-            return Some(ty);
-        }
-        // A class member contributed by two or more interfaces is genuinely
-        // ambiguous — emit the same E0131 (field) / E0121 (method) the
-        // single-class receiver path emits, with the `.as<I>` projection hint.
-        // Surface it directly (not suppressed) and treat the member as resolved,
-        // so the union doesn't instead collapse to a misleading
-        // `unknown | unknown` (E0006) or blame the member with a false E0007.
-        if let Ty::Class(class_name, type_args, _) = m {
-            let related = || {
-                self.package_items
-                    .lookup_type(class_name.namespace(), class_name.name())
-                    .map(|def| {
-                        vec![RelatedNote::new(
-                            RelatedLocation::Item(def),
-                            "class defined here",
-                        )]
-                    })
-                    .unwrap_or_default()
-            };
-            let field_sources = self.class_interface_field_sources(class_name, member);
-            if field_sources.len() > 1 {
-                self.context.report_at_member(
-                    TirTypeError::AmbiguousInterfaceField {
-                        class_name: class_name.name().clone(),
-                        field_name: member.clone(),
-                        sources: field_sources,
-                    },
-                    at,
-                    related(),
-                );
-                return Some(Ty::Unknown {
-                    attr: TyAttr::default(),
-                });
-            }
-            let method_sources: Vec<String> = self.format_interface_method_sources(
-                self.implemented_interface_method_sources(class_name, type_args, member)
-                    .into_iter()
-                    .map(|(_, qtn, args)| (qtn, args)),
-            );
-            if method_sources.len() >= 2 {
-                self.context.report_at_member(
-                    TirTypeError::AmbiguousInterfaceMethod {
-                        class_name: class_name.name().clone(),
-                        method_name: member.clone(),
-                        sources: method_sources,
-                    },
-                    at,
-                    related(),
-                );
-                return Some(Ty::Unknown {
-                    attr: TyAttr::default(),
-                });
-            }
-        }
-        // Out-of-body / blanket `implements I for T` rules aren't in the type's
-        // in-body members, so a union member backed only by such a rule (e.g.
-        // `int` in `int | Dog` with `implements Debuggable for int`) is missed
-        // above. Resolve through the type's own impls — suppressing diagnostics +
-        // the recorded resolution — so the member resolves (and a genuinely-lacking
-        // member like `Dog` is the only one blamed).
-        let receiver_name = match m {
-            Ty::Class(qtn, _, _) => qtn.name().clone(),
-            _ => Name::new("value"),
-        };
-        let member_ty = m.clone();
-        let self_ty = m.clone();
-        let ty = self.resolve_member_suppressing_side_effects(at, |this| {
-            this.resolve_member_from_impls(&member_ty, receiver_name.clone(), member, at, bound)
-        });
-        // Only re-attach `self` for methods (mirrors the interface branch). The
-        // registry resolves `member` as a method exactly when some out-of-body
-        // interface declares it as one; a function-typed interface *field*
-        // satisfied out-of-body must keep its declared signature rather than
-        // gain a phantom `self`.
-        let is_method = !self
-            .registry_interface_method_sources(&member_ty, member)
-            .is_empty();
-        ty.map(|t| {
-            if is_method {
-                Self::prepend_self_param_if_method(t, self_ty.clone(), bound)
-            } else {
-                t
-            }
-        })
-    }
-
-    /// Run `f` (a member-resolution probe that may report diagnostics and record
-    /// a single `MemberResolution` at `at`) and roll back both side effects.
-    /// Used by union-member resolution, where the real diagnostics/dispatch are
-    /// decided across all members (and at the MIR layer), not per-member.
-    fn resolve_member_suppressing_side_effects(
-        &mut self,
-        at: ExprId,
-        f: impl FnOnce(&mut Self) -> Option<Ty>,
-    ) -> Option<Ty> {
-        let diag_snapshot = self.context.diagnostic_count();
-        let saved_resolution = self.resolutions.remove(&at);
-        let saved_generics = self.interface_method_generic_params.remove(&at);
-        let ty = f(self);
-        self.context.truncate_diagnostics(diag_snapshot);
-        self.resolutions.remove(&at);
-        self.interface_method_generic_params.remove(&at);
-        if let Some(r) = saved_resolution {
-            self.resolutions.insert(at, r);
-        }
-        if let Some(g) = saved_generics {
-            self.interface_method_generic_params.insert(at, g);
-        }
-        ty
-    }
-
-    /// Re-attach a `self` parameter (typed `self_ty`) to a self-stripped bound
-    /// method type, so it shares the self-included shape of class method members
-    /// in a union callee. No-op for non-function types or unbound calls.
-    fn prepend_self_param_if_method(ty: Ty, self_ty: Ty, bound: bool) -> Ty {
-        match ty {
-            Ty::Function {
-                params,
-                ret,
-                throws,
-                attr,
-            } if bound => {
-                let mut with_self = Vec::with_capacity(params.len() + 1);
-                with_self.push(FunctionParamTy {
-                    name: Some(Name::new("self")),
-                    ty: self_ty,
-                    mode: FunctionParamMode::Required,
-                });
-                with_self.extend(params);
-                Ty::Function {
-                    params: with_self,
-                    ret,
-                    throws,
-                    attr,
-                }
-            }
-            other => other,
-        }
-    }
-
-    /// Try to resolve a member on a type without emitting diagnostics.
-    ///
-    /// Returns `Some(Ty)` if the member exists, `None` if it doesn't.
-    /// Used by `resolve_member` for union type handling.
-    fn try_resolve_member_on_ty(&self, ty: &Ty, member: &Name) -> Option<Ty> {
-        match ty {
-            Ty::Class(class_name, type_args, _) => {
-                let fields = self.lookup_class_fields(class_name, type_args);
-                if let Some(field_ty) = fields.get(member) {
-                    return Some(field_ty.clone());
-                }
-                if let Some((method_ty, _, _)) =
-                    self.lookup_class_method(class_name, type_args, member)
-                {
-                    return Some(method_ty);
-                }
-                None
-            }
-            Ty::List(element_ty, _) => self
-                .resolve_builtin_method(&["Array"], &[element_ty.as_ref().clone()], member)
-                .map(BuiltinResolution::into_ty),
-            Ty::Map {
-                key: key_ty,
-                value: val_ty,
-                ..
-            } => self
-                .resolve_builtin_method(
-                    &["Map"],
-                    &[key_ty.as_ref().clone(), val_ty.as_ref().clone()],
-                    member,
-                )
-                .map(BuiltinResolution::into_ty),
-            Ty::Future(value_ty, error_ty, _) => self
-                .resolve_builtin_method(
-                    &["future", "Future"],
-                    &[value_ty.as_ref().clone(), error_ty.as_ref().clone()],
-                    member,
-                )
-                .map(BuiltinResolution::into_ty),
-            Ty::String { .. } | Ty::Literal(baml_base::Literal::String(_), _, _) => self
-                .resolve_builtin_method(&["String"], &[], member)
-                .map(BuiltinResolution::into_ty),
-            Ty::Int { .. } | Ty::Literal(baml_base::Literal::Int(_), _, _) => self
-                .resolve_builtin_method(&["Int"], &[], member)
-                .map(BuiltinResolution::into_ty),
-            Ty::Bigint { .. } | Ty::Literal(baml_base::Literal::Bigint(_), _, _) => self
-                .resolve_builtin_method(&["Bigint"], &[], member)
-                .map(BuiltinResolution::into_ty),
-            Ty::Float { .. } | Ty::Literal(baml_base::Literal::Float(_), _, _) => self
-                .resolve_builtin_method(&["Float"], &[], member)
-                .map(BuiltinResolution::into_ty),
-            Ty::Bool { .. } | Ty::Literal(baml_base::Literal::Bool(_), _, _) => self
-                .resolve_builtin_method(&["Bool"], &[], member)
-                .map(BuiltinResolution::into_ty),
-            Ty::Null { .. } => self
-                .resolve_builtin_method(&["Null"], &[], member)
-                .map(BuiltinResolution::into_ty),
-            Ty::Uint8Array { .. } | Ty::Media(_, _) => {
-                let p = match ty {
-                    Ty::Uint8Array { .. } => PrimitiveType::Uint8Array,
-                    Ty::Media(MediaKind::Image, _) => PrimitiveType::Image,
-                    Ty::Media(MediaKind::Audio, _) => PrimitiveType::Audio,
-                    Ty::Media(MediaKind::Video, _) => PrimitiveType::Video,
-                    Ty::Media(MediaKind::Pdf, _) => PrimitiveType::Pdf,
-                    _ => unreachable!("matched Uint8Array or Media above"),
-                };
-                self.resolve_builtin_method(p.builtin_class_path(), &[], member)
-                    .map(BuiltinResolution::into_ty)
-            }
-            Ty::Type { .. } => self
-                .resolve_builtin_method(&["TypeValue"], &[], member)
-                .map(BuiltinResolution::into_ty),
-            // Synthesized builtin `from_json` on generic type variables (`to_json`
-            // is no longer universal — it desugars to `baml.json.from`).
-            // Mirrors the arm in `resolve_member` — no side effects needed here.
-            Ty::TypeVar(name, _) if member.as_str() == "from_json" => Some(Ty::Function {
-                params: vec![FunctionParamTy::required(
-                    Some(Name::new("j")),
-                    json_alias_ty(),
-                )],
-                ret: Box::new(Ty::TypeVar(name.clone(), TyAttr::default())),
-                throws: Box::new(json_decode_error_ty()),
-                attr: TyAttr::default(),
-            }),
-            Ty::TypeAlias(qtn, _) => {
-                if let Some(expanded) = self.aliases.get(qtn) {
-                    let expanded = expanded.clone();
-                    self.try_resolve_member_on_ty(&expanded, member)
-                } else {
-                    None
-                }
-            }
-            Ty::Unknown { .. } => {
-                // Unknown propagates — treat as if the field exists with Unknown type
-                Some(Ty::Unknown {
-                    attr: TyAttr::default(),
-                })
-            }
-            // BEP-044 wf3 #G9c: read-only probe for an interface member, so a
-            // union like `Animal | Swimmer` attributes a missing `.speak()` only
-            // to the arm that actually lacks it (`Swimmer`) instead of falsely
-            // blaming `Animal` too. The only caller is union-member resolution,
-            // which needs Some/None; a precise member type isn't required here.
-            Ty::Interface(iface_qtn, _, _, _) => (self
-                .interface_closure_declares_method(iface_qtn, member)
-                || self.interface_closure_declares_field(iface_qtn, member))
-            .then(|| Ty::Unknown {
-                attr: TyAttr::default(),
-            }),
-            // A union exposes `member` iff EVERY arm does (BEP-044 union member
-            // access — e.g. a field shared across all variants of `A | B | C`).
-            // The real `resolve_member` dispatches per-arm at the call site; this
-            // read-only probe only needs Some/None, so return the first arm's
-            // resolution as a representative type.
-            Ty::Union(members, _) => members
-                .iter()
-                .map(|m| self.try_resolve_member_on_ty(m, member))
-                .collect::<Option<Vec<_>>>()
-                .and_then(|tys| tys.into_iter().next()),
-            _ => None,
         }
     }
 
@@ -12051,6 +11551,15 @@ impl<'db> TypeInferenceBuilder<'db> {
                 Some(ty.clone()),
             ),
             SelfReceiver::Existential(_) => (receiver_generic.cloned(), None),
+            // A union pins `Self` to itself (like an exact receiver), so `Self`-returning
+            // methods yield the union; the object-safety guard separately forbids `Self`
+            // *parameters*.
+            SelfReceiver::Union(ty) => (
+                Some(
+                    self.fresh_interface_method_receiver_generic(iface_data, method_generic_params),
+                ),
+                Some(ty.clone()),
+            ),
         }
     }
 
@@ -12413,400 +11922,6 @@ impl<'db> TypeInferenceBuilder<'db> {
         Some((source.class_field, declared_ty))
     }
 
-    #[deprecated = "Finds a class's interface-field sources via legacy `class_data.implements` + \
-        the `requires` closure (class-only, in-body-only, blanket/out-of-body-blind). Rebuild on \
-        `impl_data`/`impls_for_type`: `requires` is a bound (closure only for type-var/existential), \
-        a concrete type's interface fields come from its own per-interface impls' `field_links`."]
-    fn class_interface_field_sources(
-        &self,
-        class_name: &crate::ty::QualifiedTypeName,
-        member: &Name,
-    ) -> Vec<Name> {
-        let Some(pkg_items) = self.resolve_class_pkg_items(class_name.package()) else {
-            return Vec::new();
-        };
-        let Some(Definition::Class(class_loc)) =
-            pkg_items.lookup_type(class_name.namespace(), class_name.name())
-        else {
-            return Vec::new();
-        };
-        let db = self.context.db();
-        let item_tree = baml_compiler2_ppir::file_item_tree(db, class_loc.file(db));
-        let class_data = &item_tree[class_loc.id(db)];
-        let ns =
-            baml_compiler2_hir::file_package::file_package(db, class_loc.file(db)).namespace_path;
-        let mut seen = FxHashSet::default();
-        let mut sources = Vec::new();
-
-        for impl_target in &class_data.implements {
-            let Some(root_iface_loc) = crate::interfaces::resolve_path_to_interface(
-                db,
-                &impl_target.target.expr,
-                pkg_items,
-                &ns,
-            ) else {
-                continue;
-            };
-            // Recover the instantiation the user wrote (e.g. `Box<int>`) so the
-            // source carries its type args. Two instantiations of one generic
-            // interface (`Box<int>` vs `Box<string>`) then stay distinct — the
-            // access is ambiguous, and diagnostics can suggest `as<Box<int>>`.
-            let mut diags = Vec::new();
-            let root_args = match crate::lower_type_expr::lower_type_expr_in_ns(
-                db,
-                &impl_target.target.expr,
-                pkg_items,
-                &ns,
-                &class_data.generic_params,
-                &mut diags,
-            ) {
-                Ty::Interface(_, args, _, _) => args,
-                _ => Vec::new(),
-            };
-            for (iface_loc, iface_args, _iface_assoc) in
-                crate::interfaces::interface_closure_locs_with_args_and_assoc(
-                    db,
-                    root_iface_loc,
-                    &root_args,
-                    &[],
-                    pkg_items,
-                    &ns,
-                )
-            {
-                let iface_tree = baml_compiler2_hir::file_item_tree(db, iface_loc.file(db));
-                let Some(iface_data) = iface_tree.interfaces.get(&iface_loc.id(db)) else {
-                    continue;
-                };
-                if iface_data.fields.iter().any(|field| &field.name == member) {
-                    let display = format_interface_display(&iface_data.name, &iface_args);
-                    if seen.insert(display.clone()) {
-                        sources.push(Name::new(display));
-                    }
-                }
-            }
-        }
-
-        sources
-    }
-
-    /// Directly-implemented interfaces (named by the `implements` clause) whose
-    /// `requires`-closure declares a method `member`, as a default *or* a
-    /// required method. Returns, per such interface, its simple name (for
-    /// diagnostics), root qualified name, and lowered type args (so an
-    /// inherited default can be resolved through the interface machinery).
-    ///
-    /// This is the method analogue of [`Self::class_interface_field_sources`].
-    /// It powers two BEP-044 rules at once: unqualified-call ambiguity (when
-    /// two interfaces contribute the same method name → E0121) and inherited
-    /// default-method visibility on the concrete class (when exactly one does).
-    #[deprecated = "Finds a class's interface-method sources via legacy `class_data.implements` + \
-        the `requires` closure (class-only, in-body-only, blanket/out-of-body-blind; conflates \
-        membership with enumeration). Rebuild on `impl_data`/`impls_for_type`: `requires` is a bound \
-        (closure only for type-var/existential), methods come from the type's own per-interface impls."]
-    fn implemented_interface_method_sources(
-        &self,
-        class_name: &crate::ty::QualifiedTypeName,
-        type_args: &[Ty],
-        member: &Name,
-    ) -> Vec<(Name, crate::ty::QualifiedTypeName, Vec<Ty>)> {
-        let Some(pkg_items) = self.resolve_class_pkg_items(class_name.package()) else {
-            return Vec::new();
-        };
-        let Some(Definition::Class(class_loc)) =
-            pkg_items.lookup_type(class_name.namespace(), class_name.name())
-        else {
-            return Vec::new();
-        };
-        let db = self.context.db();
-        let item_tree = baml_compiler2_ppir::file_item_tree(db, class_loc.file(db));
-        let class_data = &item_tree[class_loc.id(db)];
-        let ns =
-            baml_compiler2_hir::file_package::file_package(db, class_loc.file(db)).namespace_path;
-        // Map the receiver's concrete class type args onto the class's generic
-        // params so a declaring interface's args (which carry the class's type
-        // vars, e.g. `Getter<L>`) render and dispatch with the concrete
-        // instantiation (`Getter<int>`). Dedup still keys on the pre-substitution
-        // form so `Pair<int,int>`'s `Getter<L>`/`Getter<R>` stay two sources
-        // (genuine ambiguity) rather than collapsing (BEP-044 wf3 #20).
-        let bindings = crate::generics::bind_type_vars(&class_data.generic_params, type_args);
-        let mut seen = FxHashSet::default();
-        let mut sources = Vec::new();
-
-        for impl_target in &class_data.implements {
-            let Some(root_iface_loc) = crate::interfaces::resolve_path_to_interface(
-                db,
-                &impl_target.target.expr,
-                pkg_items,
-                &ns,
-            ) else {
-                continue;
-            };
-
-            // Recover the block root's qtn + type args by lowering the path the
-            // user wrote (e.g. `Container<int>`); class generics stay as type
-            // vars, which is what `resolve_interface_member` expects.
-            let mut diags = Vec::new();
-            let lowered = crate::lower_type_expr::lower_type_expr_in_ns(
-                db,
-                &impl_target.target.expr,
-                pkg_items,
-                &ns,
-                &class_data.generic_params,
-                &mut diags,
-            );
-            let Ty::Interface(_root_qtn, root_args, _, _) = lowered else {
-                continue;
-            };
-
-            // BEP-044 wf3 #11: record the interface that actually DECLARES
-            // `member`, not the block root. Walk the `requires` closure in
-            // BFS order (most-derived first) and take the first declarer — its
-            // own declaration shadows inherited ones, and a method declared
-            // once but reached via several `requires` paths (`Left`/`Right`
-            // both `requires Base`) collapses to a single source instead of
-            // spuriously appearing as N (which produced a false E0121). A real
-            // override (e.g. both `Base` and `Left` declare `id`) still yields
-            // two distinct declarers across the two blocks → genuine E0121.
-            let closure = crate::interfaces::interface_closure_locs_with_args_and_assoc(
-                db,
-                root_iface_loc,
-                &root_args,
-                &[],
-                pkg_items,
-                &ns,
-            );
-            let mut declarer: Option<(Name, crate::ty::QualifiedTypeName, Vec<Ty>)> = None;
-            for (iface_loc, iface_args, _iface_assoc) in &closure {
-                let iface_tree = baml_compiler2_hir::file_item_tree(db, iface_loc.file(db));
-                let Some(iface_data) = iface_tree.interfaces.get(&iface_loc.id(db)) else {
-                    continue;
-                };
-                let declares_here = iface_data
-                    .required_methods
-                    .iter()
-                    .any(|s| s.name == *member)
-                    || iface_data
-                        .default_methods
-                        .iter()
-                        .any(|&fn_id| iface_tree[fn_id].name == *member);
-                if declares_here {
-                    let iface_pkg =
-                        baml_compiler2_hir::file_package::file_package(db, iface_loc.file(db));
-                    let qtn = crate::ty::QualifiedTypeName::new(
-                        iface_pkg.package.clone(),
-                        iface_pkg.namespace_path.clone(),
-                        iface_data.name.clone(),
-                    );
-                    declarer = Some((iface_data.name.clone(), qtn, iface_args.clone()));
-                    break;
-                }
-            }
-
-            // Dedup by (declaring interface, type args): the same declaration
-            // reached via multiple `requires` paths collapses, but two distinct
-            // instantiations of one generic interface (`Converter<int>` vs
-            // `Converter<float>`) stay separate so an unqualified call is
-            // correctly ambiguous (E0121).
-            if let Some((name, qtn, args)) = declarer
-                && seen.insert((qtn.clone(), args.clone()))
-            {
-                let subst_args = args
-                    .iter()
-                    .map(|a| crate::generics::substitute_ty(a, &bindings))
-                    .collect();
-                sources.push((name, qtn, subst_args));
-            }
-        }
-
-        sources
-    }
-
-    /// Whether `iface_qtn` or any interface in its `requires` closure declares a
-    /// method named `member` (required or default). Side-effect-free; used by the
-    /// registry fallback in `resolve_member` to find blanket / out-of-body impls.
-    fn interface_closure_declares_method(
-        &self,
-        iface_qtn: &crate::ty::QualifiedTypeName,
-        member: &Name,
-    ) -> bool {
-        let db = self.context.db();
-        let Some(pkg_items) = self.resolve_class_pkg_items(iface_qtn.package()) else {
-            return false;
-        };
-        let Some(Definition::Interface(root_loc)) =
-            pkg_items.lookup_type(iface_qtn.namespace(), iface_qtn.name())
-        else {
-            return false;
-        };
-        let root_pkg = baml_compiler2_hir::file_package::file_package(db, root_loc.file(db));
-        crate::interfaces::interface_closure_locs(db, root_loc, pkg_items, &root_pkg.namespace_path)
-            .into_iter()
-            .any(|iface_loc| {
-                let iface_tree = baml_compiler2_hir::file_item_tree(db, iface_loc.file(db));
-                iface_tree
-                    .interfaces
-                    .get(&iface_loc.id(db))
-                    .is_some_and(|iface_data| {
-                        iface_data
-                            .required_methods
-                            .iter()
-                            .any(|s| s.name == *member)
-                            || iface_data
-                                .default_methods
-                                .iter()
-                                .any(|&fn_id| iface_tree[fn_id].name == *member)
-                    })
-            })
-    }
-
-    /// Whether `member`, resolved through `iface_qtn`'s closure, has a non-`self`
-    /// parameter typed with `Self` — i.e. it is *not* callable on a bare interface
-    /// ("dyn"/existential) receiver (object safety). Mirrors the existential guard
-    /// in [`Self::resolve_interface_member`], for callers that need the answer
-    /// where that resolution's diagnostics are suppressed (e.g. the union-member
-    /// path).
-    fn interface_method_has_extra_self_param(
-        &self,
-        iface_qtn: &crate::ty::QualifiedTypeName,
-        member: &Name,
-    ) -> bool {
-        let db = self.context.db();
-        let Some(pkg_items) = self.resolve_class_pkg_items(iface_qtn.package()) else {
-            return false;
-        };
-        let Some(Definition::Interface(root_loc)) =
-            pkg_items.lookup_type(iface_qtn.namespace(), iface_qtn.name())
-        else {
-            return false;
-        };
-        let root_pkg = baml_compiler2_hir::file_package::file_package(db, root_loc.file(db));
-        crate::interfaces::interface_closure_locs(db, root_loc, pkg_items, &root_pkg.namespace_path)
-            .into_iter()
-            .any(|iface_loc| {
-                let iface_tree = baml_compiler2_hir::file_item_tree(db, iface_loc.file(db));
-                let Some(iface_data) = iface_tree.interfaces.get(&iface_loc.id(db)) else {
-                    return false;
-                };
-                // Required method: params carry `type_expr: Option<SpannedTypeExpr>`.
-                if let Some(sig) = iface_data
-                    .required_methods
-                    .iter()
-                    .find(|s| s.name == *member)
-                {
-                    return sig
-                        .params
-                        .iter()
-                        .filter(|param| param.name.as_str() != "self")
-                        .filter_map(|param| param.type_expr.as_ref())
-                        .any(|te| Self::type_expr_contains_self(&te.expr));
-                }
-                // Default method: an elaborated function signature with `ty: TypeExpr`.
-                if let Some(&fn_id) = iface_data
-                    .default_methods
-                    .iter()
-                    .find(|&&fn_id| iface_tree[fn_id].name == *member)
-                {
-                    let func_loc =
-                        baml_compiler2_hir::loc::FunctionLoc::new(db, iface_loc.file(db), fn_id);
-                    let sig = baml_compiler2_ppir::elaborated_function_signature(db, func_loc);
-                    return sig
-                        .params
-                        .iter()
-                        .filter(|param| param.name.as_str() != "self")
-                        .any(|param| Self::type_expr_contains_self(&param.ty));
-                }
-                false
-            })
-    }
-
-    /// Count how many of `class`'s in-body `implements` blocks resolve to the
-    /// SAME interface instantiation `target` once the class's concrete
-    /// `type_args` are substituted. `>1` means distinct generic blocks collapsed
-    /// (e.g. `Getter<L>`+`Getter<R>` at `Pair<int,int>`), so coercing to that
-    /// interface is ambiguous (BEP-044 wf3 #18). Per-instantiation, so
-    /// `Pair<int,string>` with `Slot<L,R>`/`Slot<R,L>` is fine (counts 1).
-    #[deprecated = "Counts a class's interface instantiations from legacy `class_data.implements` \
-        (class-only, in-body-only; conflates membership enumeration with resolution). Rebuild on \
-        `impl_data`/`impls_for_type` so the count reflects real per-instantiation membership."]
-    fn class_interface_instantiation_count(
-        &self,
-        class_name: &crate::ty::QualifiedTypeName,
-        type_args: &[Ty],
-        target_iface_qtn: &crate::ty::QualifiedTypeName,
-        target_iface_args: &[Ty],
-    ) -> usize {
-        let Some(pkg_items) = self.resolve_class_pkg_items(class_name.package()) else {
-            return 0;
-        };
-        let Some(Definition::Class(class_loc)) =
-            pkg_items.lookup_type(class_name.namespace(), class_name.name())
-        else {
-            return 0;
-        };
-        let db = self.context.db();
-        let item_tree = baml_compiler2_ppir::file_item_tree(db, class_loc.file(db));
-        let class_data = &item_tree[class_loc.id(db)];
-        let ns =
-            baml_compiler2_hir::file_package::file_package(db, class_loc.file(db)).namespace_path;
-        let bindings = crate::generics::bind_type_vars(&class_data.generic_params, type_args);
-        let mut count = 0;
-        for impl_target in &class_data.implements {
-            let mut diags = Vec::new();
-            let lowered = crate::lower_type_expr::lower_type_expr_in_ns(
-                db,
-                &impl_target.target.expr,
-                pkg_items,
-                &ns,
-                &class_data.generic_params,
-                &mut diags,
-            );
-            if let Ty::Interface(qtn, args, _, _) = lowered
-                && &qtn == target_iface_qtn
-            {
-                let subst: Vec<Ty> = args
-                    .iter()
-                    .map(|a| crate::generics::substitute_ty(a, &bindings))
-                    .collect();
-                if subst.len() == target_iface_args.len()
-                    && subst.iter().zip(target_iface_args).all(|(a, b)| {
-                        crate::normalize::is_same_normalized_type(a, b, &self.aliases)
-                    })
-                {
-                    count += 1;
-                }
-            }
-        }
-        count
-    }
-
-    /// Whether `iface_qtn` or any interface in its `requires` closure declares a
-    /// field named `member`. Side-effect-free (G9c union-member probing).
-    fn interface_closure_declares_field(
-        &self,
-        iface_qtn: &crate::ty::QualifiedTypeName,
-        member: &Name,
-    ) -> bool {
-        let db = self.context.db();
-        let Some(pkg_items) = self.resolve_class_pkg_items(iface_qtn.package()) else {
-            return false;
-        };
-        let Some(Definition::Interface(root_loc)) =
-            pkg_items.lookup_type(iface_qtn.namespace(), iface_qtn.name())
-        else {
-            return false;
-        };
-        let root_pkg = baml_compiler2_hir::file_package::file_package(db, root_loc.file(db));
-        crate::interfaces::interface_closure_locs(db, root_loc, pkg_items, &root_pkg.namespace_path)
-            .into_iter()
-            .any(|iface_loc| {
-                let iface_tree = baml_compiler2_hir::file_item_tree(db, iface_loc.file(db));
-                iface_tree
-                    .interfaces
-                    .get(&iface_loc.id(db))
-                    .is_some_and(|iface_data| iface_data.fields.iter().any(|f| f.name == *member))
-            })
-    }
-
     fn type_package_name(ty: &Ty) -> Option<Name> {
         match ty {
             Ty::Class(qtn, _, _)
@@ -12860,96 +11975,6 @@ impl<'db> TypeInferenceBuilder<'db> {
             .into_iter()
             .filter(|name| self.res_ctx.items_for_package(db, name).is_some())
             .map(|name| PackageId::new(db, name))
-            .collect()
-    }
-
-    /// Find interfaces the receiver `base_ty` implements via registry rules
-    /// that declare `member`. This includes rules from visible dependency
-    /// packages, so stdlib blanket impls like `implements<T> Iterable for T[]`
-    /// are available in user code.
-    fn registry_interface_method_sources(
-        &self,
-        base_ty: &Ty,
-        member: &Name,
-    ) -> Vec<RegistryInterfaceMethodSource> {
-        let db = self.context.db();
-        let mut seen = FxHashSet::default();
-        let mut out: Vec<RegistryInterfaceMethodSource> = Vec::new();
-        for pkg_id in self.registry_packages_for_interface_lookup(Some(base_ty), None) {
-            let registry = crate::interfaces::package_implements_registry(db, pkg_id);
-            for rule in &registry.interface_impl_rules {
-                let Some(b) = crate::interfaces::match_ty_pattern(
-                    &rule.for_ty_pattern,
-                    base_ty,
-                    &rule.generic_params,
-                    &self.aliases,
-                ) else {
-                    continue;
-                };
-                let iface_ty = crate::generics::substitute_ty(&rule.interface_ty, &b);
-                let Ty::Interface(iface_qtn, iface_args, associated_bindings, _) = iface_ty else {
-                    continue;
-                };
-                if !self.interface_closure_declares_method(&iface_qtn, member) {
-                    continue;
-                }
-                // Confirm via the canonical membership seam so generic bounds are
-                // honored (e.g. `implements<T extends Named> Printable for Box<T>`).
-                let requested = baml_type::Interface {
-                    name: iface_qtn.clone(),
-                    generics: iface_args.clone(),
-                    associated_types: vec![],
-                };
-                if !crate::interfaces::implements_interface(
-                    db,
-                    base_ty,
-                    &requested,
-                    &self.aliases,
-                    |a, c| self.is_subtype(a, c),
-                ) {
-                    continue;
-                }
-                if seen.insert((iface_qtn.clone(), iface_args.clone())) {
-                    out.push((iface_qtn, iface_args, associated_bindings));
-                }
-            }
-        }
-        out
-    }
-
-    /// Render interface method/field sources for an E0121 message: each as a
-    /// namespace-qualified, type-arg-instantiated display (`zoo.Animal`,
-    /// `Getter<int>`) so two same-simple-name interfaces are distinguishable and
-    /// the suggested `as<…>` projection actually compiles. Root-namespace
-    /// interfaces stay bare. Shared by the in-body and registry E0121 sites (C6).
-    fn format_interface_method_sources(
-        &self,
-        sources: impl Iterator<Item = (crate::ty::QualifiedTypeName, Vec<Ty>)>,
-    ) -> Vec<String> {
-        sources
-            .map(|(qtn, args)| {
-                let base = format_interface_display(qtn.name(), &args);
-                if qtn.namespace().is_empty() {
-                    base
-                } else {
-                    let ns = qtn
-                        .namespace()
-                        .iter()
-                        .map(std::string::ToString::to_string)
-                        .collect::<Vec<_>>()
-                        .join(".");
-                    // BEP-044 wf3 #10: when the call site is itself inside a
-                    // namespace, a bare `zoo.Animal` resolves relative-first
-                    // (→ `birds.zoo.Animal`) and the suggested `as<…>` fix
-                    // wouldn't compile. Use the absolute `root.`-qualified form
-                    // there; at the root namespace keep the bare relative form.
-                    if self.ns_context.is_empty() {
-                        format!("{ns}.{base}")
-                    } else {
-                        format!("root.{ns}.{base}")
-                    }
-                }
-            })
             .collect()
     }
 
