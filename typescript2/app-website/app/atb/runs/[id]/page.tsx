@@ -56,12 +56,22 @@ export default function RunPage({
     );
 
   const m = trophy.metrics ?? {};
+  // bamlVersion is now a concrete toolchain version (e.g. "0.12.2-nightly.2026…")
+  // for v2 runs; legacy runs stored a build sha matched against bamlBuilds. Show the
+  // build ref if it matches, else the full version string, else (a raw sha) abbreviate.
+  const looksLikeVersion = (v: string) =>
+    v.includes(".") || v.includes("nightly") || v.includes("canary");
   const bamlLabel =
     trophy.bamlVersion === "coldstart"
       ? "cold start"
       : bamlRefLabel(
           (state?.builds ?? []).find((b) => b.sha === trophy.bamlVersion)?.ref,
-        ) ?? (trophy.bamlVersion ? trophy.bamlVersion.slice(0, 8) : null);
+        ) ??
+        (trophy.bamlVersion
+          ? looksLikeVersion(trophy.bamlVersion)
+            ? trophy.bamlVersion
+            : trophy.bamlVersion.slice(0, 8)
+          : null);
 
   const files = Object.entries(trophy.filesCreated ?? {});
 

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { useAtbState, issueStatusLabel, OPEN_ISSUE_STATUSES } from "@/app/atb/_lib/api";
+import { useAtbState, issueStatusLabel, isOpenIssueStatus } from "@/app/atb/_lib/api";
 import { timeAgo } from "@/app/atb/_lib/format";
 import { EASE, EmptyState, KindChip, Skeleton, StatusPill } from "@/app/atb/_components/ui";
 import { useNow } from "@/app/atb/_components/use-now";
@@ -23,7 +23,7 @@ export default function IssuesPage() {
     return [...issues]
       .filter((i) => {
         if (kind !== "all" && i.kind !== kind) return false;
-        const isOpen = OPEN_ISSUE_STATUSES.has(i.status);
+        const isOpen = isOpenIssueStatus(i.status);
         if (openState === "open" && !isOpen) return false;
         if (openState === "closed" && isOpen) return false;
         return true;

@@ -72,14 +72,23 @@ export function useDoc<T>(
 
 // ---- shared helpers ----
 
-export const OPEN_ISSUE_STATUSES = new Set([
-  "open",
-  "confirmed",
-  "approved",
-  "fixing",
-]);
+// An issue is "done" only at a terminal status; everything else is still in-flight.
+// Defined as the complement (terminal set) so a NEW backend status surfaces on the
+// open tab instead of vanishing. The old hardcoded open-set
+// ({open,confirmed,approved,fixing}) dropped every dispatching/tocursor/prprep/
+// pr_ready/verifying/redraft/redrafting/needs_human issue off the default view
+// (and "fixing" was never even a real backend status).
+// `failed` is terminal: it's a dead-end (a give-up / queue-failure state, not an
+// in-flight one), so it rests on the closed tab alongside closed/rejected rather
+// than flooding the actionable "open" view (it's the single largest bucket).
+export const TERMINAL_ISSUE_STATUSES = new Set(["closed", "rejected", "failed"]);
 
-/** Reader-facing lifecycle label: reported, fixing, fixed, rejected. */
+/** True while an issue is still in the pipeline (anything not terminal). */
+export function isOpenIssueStatus(status: string): boolean {
+  return !TERMINAL_ISSUE_STATUSES.has(status);
+}
+
+/** Reader-facing lifecycle label across the full issue lifecycle. */
 export function issueStatusLabel(i: {
   status: string;
   fixSlackTs?: string | null;
@@ -89,10 +98,24 @@ export function issueStatusLabel(i: {
     case "confirmed":
       return i.fixSlackTs ? "fixing" : "reported";
     case "approved":
-    case "fixing":
+    case "dispatching":
+    case "tocursor":
+    case "prprep":
+    case "pr_ready":
       return "fixing";
+    case "verifying":
+      return "verifying";
+    case "redraft":
+    case "redrafting":
+      return "redrafting";
+    case "needs_human":
+      return "needs human";
+    case "failed":
+      return "failed";
     case "closed":
       return "fixed";
+    case "rejected":
+      return "rejected";
     default:
       return i.status;
   }
