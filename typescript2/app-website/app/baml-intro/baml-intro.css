@@ -351,6 +351,11 @@
 .l6-hero {
   padding-top: 4.5rem;
 }
+/* Tighten the gap between the hero and the "Our design philosophy" section
+   that follows it (hero bottom padding + this section's top padding). */
+#philosophy {
+  padding-top: 3rem;
+}
 /* The sheep flows inline with the text, so it sits on the first line next
    to "BAML" instead of centering against the whole wrapped headline. */
 .l6-hero-sheep {
