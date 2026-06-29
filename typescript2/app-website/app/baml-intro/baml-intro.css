@@ -951,11 +951,23 @@
   color: var(--l6-baml-name, #6d28d9);
   font-weight: 600;
 }
-.l6 .l2-code-head--baml .l2-code-dots i {
-  background: var(--l6-accent);
-  opacity: 0.6;
+/* swap the generic window dots for the BAML lamb — these are BAML "IDEs". */
+.l6 .l2-code-head--baml .l2-code-dots {
+  display: none;
 }
-/* on dark frames, lighten the filename so it reads on the tinted-dark bar */
+.l6 .l2-code-head--baml::before {
+  content: "";
+  flex: none;
+  width: 18px;
+  height: 18px;
+  background: url("/bamllogopurple.svg") center / contain no-repeat;
+}
+/* on dark frames, use the white lamb + lighten the filename so both read on
+   the tinted-dark bar */
+.l6:is([data-code-theme="dark"], [data-code-theme="midnight"])
+.l2-code-head--baml::before {
+  background-image: url("/baml-lamb-white.png");
+}
 .l6:is([data-code-theme="dark"], [data-code-theme="midnight"]) {
   --l6-baml-name: #c4b5fd;
 }
