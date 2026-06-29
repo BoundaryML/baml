@@ -1422,6 +1422,9 @@ function baml.String.char_count(self: baml.String) -> int {
 function baml.String.chars(self: baml.String) -> string[] {
 }
 
+function baml.String.code_point_at(self: baml.String, index: int) -> int {
+}
+
 function baml.String.ends_with(self: baml.String, suffix: string) -> bool {
 }
 
@@ -1523,6 +1526,9 @@ function baml.String.starts_with(self: baml.String, prefix: string) -> bool {
 }
 
 function baml.String.substring(self: baml.String, start: int, end: int) -> string {
+}
+
+function baml.String.to_code_points(self: baml.String) -> int[] {
 }
 
 function baml.String.to_lower_case(self: baml.String) -> string {

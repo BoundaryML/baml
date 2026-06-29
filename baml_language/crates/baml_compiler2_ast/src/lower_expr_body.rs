@@ -2094,7 +2094,7 @@ impl LoweringContext {
                 rowan::NodeOrToken::Token(token) => match token.kind() {
                     SyntaxKind::KW_CATCH => kind = CatchClauseKind::Catch,
                     SyntaxKind::KW_CATCH_ALL => kind = CatchClauseKind::CatchAll,
-                    SyntaxKind::WORD if token.text() == "catch_all_panics" => {
+                    SyntaxKind::KW_CATCH_ALL_PANICS => {
                         kind = CatchClauseKind::CatchAllPanics;
                     }
                     _ => {}

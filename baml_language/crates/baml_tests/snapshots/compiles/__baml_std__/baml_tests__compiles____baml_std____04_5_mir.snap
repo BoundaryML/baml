@@ -14564,6 +14564,8 @@ fn baml.String.char_count = builtin(vm)
 
 fn baml.String.chars = builtin(vm)
 
+fn baml.String.code_point_at = builtin(vm)
+
 fn baml.String.ends_with = builtin(vm)
 
 fn baml.String.from(value: T) -> string {
@@ -14643,6 +14645,8 @@ fn baml.String.split = builtin(vm)
 fn baml.String.starts_with = builtin(vm)
 
 fn baml.String.substring = builtin(vm)
+
+fn baml.String.to_code_points = builtin(vm)
 
 fn baml.String.to_lower_case = builtin(vm)
 

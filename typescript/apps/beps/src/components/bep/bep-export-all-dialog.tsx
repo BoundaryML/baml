@@ -56,7 +56,7 @@ const STATUS_CONFIG: Record<string, { icon: React.ReactNode; color: string; labe
   draft: {
     icon: <Circle className="h-3 w-3" />,
     color: "bg-gray-500/20 text-gray-700 dark:bg-gray-500/30 dark:text-gray-300",
-    label: "Draft",
+    label: "Slop",
   },
   superseded: {
     icon: <RefreshCw className="h-3 w-3" />,
