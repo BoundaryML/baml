@@ -5421,9 +5421,18 @@ impl LoweringContext<'_> {
         // break/continue — run defers via the inline `replay_defers_to_depth`
         // path instead.)
         let block_incoming_catch = self.catch_context;
-        // (landing-pad block, defer body, context to cascade to after replay)
-        let mut defer_pads: Vec<(BlockId, AstExprId, Option<CatchContext>)> = Vec::new();
+        // (landing-pad block, defer body, context to cascade to after replay,
+        // catch-region index — to fill in the pad's handler_body once its body
+        // is lowered below)
+        let mut defer_pads: Vec<(BlockId, AstExprId, Option<CatchContext>, usize)> = Vec::new();
         let mut shared_error: Option<Local> = None;
+        // BEP-042 cause chain: a throw inside a defer pad — a sibling defer that
+        // throws while the scope is already unwinding — is "during handling of"
+        // the in-flight error. All pads in this block share one ErrorContext
+        // slot; the throw funnel materializes the in-flight error into it when
+        // an error reaches a pad, and the next sibling defer's throw chains onto
+        // it. Lazily declared alongside `shared_error`.
+        let mut shared_ctx: Option<Local> = None;
 
         for &stmt_id in stmts {
             let defer_body = match &self.body.stmts[stmt_id] {
@@ -5445,6 +5454,16 @@ impl LoweringContext<'_> {
                             false,
                         )
                     });
+                    let ctx_local = *shared_ctx.get_or_insert_with(|| {
+                        self.builder.declare_local(
+                            None,
+                            RuntimeTy::BuiltinUnknown {
+                                attr: TyAttr::default(),
+                            },
+                            None,
+                            false,
+                        )
+                    });
                     let pad = self.builder.create_block();
                     // Split into a fresh block so the region covers only the
                     // code AFTER this defer (a throw before it must not run it).
@@ -5453,18 +5472,20 @@ impl LoweringContext<'_> {
                         self.builder.goto(region_start);
                     }
                     self.builder.set_current_block(region_start);
+                    let region_idx = self.builder.catch_regions.len();
                     self.builder.catch_regions.push(CatchRegion {
                         body_entry: region_start,
                         handler: pad,
-                        // Defer-pad chaining is handled in a later step; an
-                        // empty handler body means a throw inside the pad does
-                        // not yet chain.
+                        // handler_body is filled in once the pad body is lowered
+                        // (below). `stack_trace_local` holds the in-flight
+                        // error's ErrorContext so a sibling defer that throws
+                        // while unwinding chains onto it (BEP-042 cause chain).
                         handler_body: Vec::new(),
                         error_local,
-                        stack_trace_local: None,
+                        stack_trace_local: Some(ctx_local),
                     });
                     let route_ctx = self.catch_context;
-                    defer_pads.push((pad, body, route_ctx));
+                    defer_pads.push((pad, body, route_ctx, region_idx));
                     self.catch_context = Some(CatchContext {
                         unwind_target: pad,
                         error_local,
@@ -5502,7 +5523,7 @@ impl LoweringContext<'_> {
         // Reverse order so the innermost (last-declared) pad is laid out first.
         if !defer_pads.is_empty() {
             let continuation = self.builder.current_block();
-            for &(pad, body, route_ctx) in defer_pads.iter().rev() {
+            for &(pad, body, route_ctx, region_idx) in defer_pads.iter().rev() {
                 self.builder.set_current_block(pad);
                 // Lower the defer body under the ENCLOSING context, not this
                 // pad's `route_ctx`. A throw/call inside the body is routed to
@@ -5517,6 +5538,11 @@ impl LoweringContext<'_> {
                 let tmp = self.builder.temp(RuntimeTy::Void {
                     attr: TyAttr::default(),
                 });
+                // The pad body IS this defer's handler body: a throw inside it
+                // is "during handling of" the in-flight error. Capture every
+                // block the body lowers into (the pad plus any it creates) so
+                // the cause pre-walk covers them all.
+                let pad_body_lo = self.builder.num_blocks();
                 self.lower_expr(body, Place::local(tmp));
                 if !self.builder.is_current_terminated() {
                     let error =
@@ -5532,10 +5558,16 @@ impl LoweringContext<'_> {
                             self.builder.goto(outer.unwind_target);
                         }
                         None => {
-                            self.builder.throw(Operand::Copy(Place::Local(error)));
+                            // Re-raise the in-flight error unchanged: a rethrow,
+                            // not a fresh throw, so the cause pre-walk does not
+                            // chain it onto its own context (a self-link).
+                            self.builder.rethrow(Operand::Copy(Place::Local(error)));
                         }
                     }
                 }
+                self.builder.catch_regions[region_idx].handler_body = std::iter::once(pad)
+                    .chain((pad_body_lo..self.builder.num_blocks()).map(BlockId))
+                    .collect();
             }
             self.builder.set_current_block(continuation);
         }

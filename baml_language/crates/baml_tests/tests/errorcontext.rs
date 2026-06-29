@@ -174,6 +174,37 @@ function main() -> string {
     assert_eq!(expect_string(output.result.unwrap()), "recovered");
 }
 
+/// Sibling defers that throw while a scope unwinds form a cause chain. `scope`
+/// throws "X"; three sibling defers each throw while unwinding. They run LIFO
+/// (C, then B, then A), and each throw is "during handling of" the previous
+/// in-flight error, so the surviving error "A" chains A -> B -> C -> X.
+/// `root_cause` walks to the original failure "X".
+#[tokio::test]
+async fn sibling_defers_that_throw_chain_to_root_cause() {
+    let output = baml_test!(
+        r#"
+function scope() -> string {
+  defer { throw "A" }
+  defer { throw "B" }
+  defer { throw "C" }
+  throw "X"
+}
+
+function main() -> string {
+  scope() catch (e, ctx) {
+    _ => {
+      match (ctx.root_cause().error) {
+        let s: string => s
+        _ => "no root cause found"
+      }
+    }
+  }
+}
+"#
+    );
+    assert_eq!(expect_string(output.result.unwrap()), "X");
+}
+
 /// HAZARD B — `error_local` / context-slot liveness across the whole handler
 /// body. The outer handler binds `ctx` but never reads it, so the cause
 /// pre-walk's runtime read of the context slot must keep it alive (handled via
