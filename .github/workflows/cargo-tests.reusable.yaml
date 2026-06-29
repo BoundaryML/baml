@@ -830,7 +830,9 @@ jobs:
       - name: "Install tools (mise)"
         uses: ./.github/actions/setup-mise
         with:
-          install_args: "sccache direnv python uv cargo:cargo-insta cargo:cargo-nextest"
+          # Snapshot tests are Rust-only; skip Python/uv setup to avoid
+          # unnecessary install latency and intermittent timeout flakiness.
+          install_args: "sccache direnv cargo:cargo-insta cargo:cargo-nextest"
 
       - name: "Verify sccache"
         run: sccache --version
