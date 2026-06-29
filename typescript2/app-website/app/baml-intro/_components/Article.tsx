@@ -449,7 +449,7 @@ export function Article({ view = 'all' }: { view?: 'all' | 'intro' | 'deep' }) {
               {view === 'intro' && <DesignGoalsCard />}
               {view === 'intro' && (
                 <p>
-                  {'What they meant was '}
+                  {'TypeScript was designed for '}
                   <em>
                     <strong>human</strong>
                   </em>
