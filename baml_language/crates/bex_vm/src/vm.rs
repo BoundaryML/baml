@@ -3373,13 +3373,20 @@ impl BexVm {
         // If this throw happened inside a handler body, that handler's caught
         // error becomes the new error's `cause`.
         //
-        // A *rethrow* carries the already-thrown value forward unchanged: a
-        // bare re-raise inside a handler, or the no-match fall-through that
-        // re-enters this funnel (and `ThrowIfPanic`, which also passes
-        // `is_rethrow`). None of these is a *new* failure "during handling of"
-        // the caught error, so they must not graft another link onto the
-        // chain — they skip the cause walk and keep whatever cause the value
-        // already carries.
+        // A *rethrow* re-raises an already-thrown value: a bare re-raise inside
+        // a handler, the no-match fall-through that re-enters this funnel, or
+        // `ThrowIfPanic` (all pass `is_rethrow`). None is a *new* failure
+        // "during handling of" the caught error, so none may graft another link
+        // onto the chain — in particular the no-match fall-through re-raises
+        // from inside the catch's own handler body, which the cause walk would
+        // otherwise mis-read as a self-link. So we skip the walk and give the
+        // re-raised value a fresh context with `cause = null`.
+        //
+        // Caveat: a prior chain carried by the rethrown value is NOT preserved
+        // across the re-raise (its next catch sees `cause = null`). Recovering
+        // it would need a value->context association we don't track; reusing the
+        // walk result instead is unsafe — rethrowing an *outer* binding from an
+        // inner handler would bind the inner handler's mismatched error.
         let cause_context = if is_rethrow {
             Value::NULL
         } else {
