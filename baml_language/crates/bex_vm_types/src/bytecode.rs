@@ -1742,13 +1742,6 @@ pub struct ExceptionTableEntry {
     pub end_pc: usize,
     /// Instruction pointer of the handler block.
     pub handler_pc: usize,
-    /// End of the handler body (exclusive). The handler body occupies
-    /// `[handler_pc, handler_end_pc)`. Used by the BEP-042 cause-chain
-    /// pre-walk: a throw whose PC lies in this range is "during handling of"
-    /// the error in `error_slot`, which becomes the new error's cause.
-    /// `handler_end_pc == handler_pc` means "no handler-body range" (the
-    /// handler was optimized away or its extent is unknown) — never chains.
-    pub handler_end_pc: usize,
     /// Frame-local slot index for the caught error value.
     pub error_slot: usize,
     /// Frame-local slot for the stack trace value.
@@ -1761,6 +1754,42 @@ impl ExceptionTableEntry {
 
     pub fn has_stack_trace_slot(&self) -> bool {
         self.stack_trace_slot != Self::NO_STACK_TRACE
+    }
+}
+
+/// One handler-body PC range, for the BEP-042 cause-chain pre-walk.
+///
+/// A throw whose PC lies in `[start_pc, end_pc)` happened *during handling of*
+/// the error caught by the owning catch (or while unwinding through a defer
+/// pad). That caught error's materialized `ErrorContext` lives in
+/// `stack_trace_slot` and becomes the new error's `cause`.
+///
+/// One catch contributes one entry *per handler-body block*. A handler body is
+/// the union of blocks captured at lowering; layout can fragment it across
+/// non-contiguous PCs, so per-block ranges keep the coverage exact — unlike a
+/// single `[handler_pc, max_end)` span, which over-covers the gaps between
+/// fragments (and would mis-chain a throw in code laid out there).
+///
+/// `handler_pc` identifies the owning catch and keys nesting depth: among all
+/// entries covering a PC, the one with the largest `handler_pc` is the
+/// innermost (narrowest) handler and wins.
+#[derive(Clone, Debug, PartialEq, BorshSerialize, BorshDeserialize)]
+pub struct HandlerContextEntry {
+    /// First instruction of this handler-body block (inclusive).
+    pub start_pc: usize,
+    /// One past the last instruction of this handler-body block (exclusive).
+    pub end_pc: usize,
+    /// Handler block PC of the owning catch — the nesting key.
+    pub handler_pc: usize,
+    /// Frame-local slot holding the owning catch's `ErrorContext`.
+    /// `ExceptionTableEntry::NO_STACK_TRACE` means the catch bound no `ctx`, so
+    /// there is no context object to chain — the pre-walk stops with `null`.
+    pub stack_trace_slot: usize,
+}
+
+impl HandlerContextEntry {
+    pub fn has_stack_trace_slot(&self) -> bool {
+        self.stack_trace_slot != ExceptionTableEntry::NO_STACK_TRACE
     }
 }
 
@@ -1802,6 +1831,9 @@ pub struct CompactCode {
     pub line_table: Vec<LineTableEntry>,
     /// Exception table with PCs translated to byte offsets.
     pub exception_table: Vec<ExceptionTableEntry>,
+    /// Handler-body ranges (BEP-042 cause chain) with PCs translated to byte
+    /// offsets. Parallel to `Bytecode::handler_context_table`.
+    pub handler_context_table: Vec<HandlerContextEntry>,
     /// Jump tables with offsets translated to byte offsets.
     /// Parallel to `Bytecode::jump_tables`.
     pub jump_tables: Vec<CompactJumpTable>,
@@ -1832,13 +1864,15 @@ impl CompactCode {
             .filter(move |e| pc >= e.start_pc && pc < e.end_pc)
     }
 
-    /// Iterate exception table entries whose HANDLER body covers `pc`
-    /// (byte-offset). BEP-042 cause-chain pre-walk: a throw here is "during
-    /// handling of" the error in `error_slot`.
-    pub fn handler_contexts_for_pc(&self, pc: usize) -> impl Iterator<Item = &ExceptionTableEntry> {
-        self.exception_table
+    /// The innermost handler-body range (byte-offset) covering `pc`, or `None`.
+    /// BEP-042 cause-chain pre-walk: a throw here is "during handling of" the
+    /// error whose `ErrorContext` lives in the entry's `stack_trace_slot`.
+    /// Innermost = largest `handler_pc` among covering ranges.
+    pub fn handler_context_for_pc(&self, pc: usize) -> Option<&HandlerContextEntry> {
+        self.handler_context_table
             .iter()
-            .filter(move |e| pc >= e.handler_pc && pc < e.handler_end_pc)
+            .filter(|e| pc >= e.start_pc && pc < e.end_pc)
+            .max_by_key(|e| e.handler_pc)
     }
 }
 
@@ -1889,6 +1923,12 @@ pub struct Bytecode {
     /// to find a handler covering the faulting instruction.
     pub exception_table: Vec<ExceptionTableEntry>,
 
+    /// Handler-body PC ranges for the BEP-042 cause chain. One entry per
+    /// handler-body block (a catch arm body, or a defer pad body). The cause
+    /// pre-walk scans this table — *not* the exception table — to decide
+    /// whether a throw happened "during handling of" another error.
+    pub handler_context_table: Vec<HandlerContextEntry>,
+
     /// Compact bytecode encoding. Populated at engine load time by
     /// `lower_to_compact()`. `None` until lowering runs.
     #[borsh(skip)]
@@ -1914,6 +1954,7 @@ impl Bytecode {
             line_table: Vec::new(),
             meta: Vec::new(),
             exception_table: Vec::new(),
+            handler_context_table: Vec::new(),
             compact: None,
         }
     }
@@ -1946,13 +1987,15 @@ impl Bytecode {
             .filter(move |e| pc >= e.start_pc && pc < e.end_pc)
     }
 
-    /// Iterate exception table entries whose HANDLER body covers `pc`.
-    /// BEP-042 cause-chain pre-walk: a throw here is "during handling of"
-    /// the error in `error_slot`.
-    pub fn handler_contexts_for_pc(&self, pc: usize) -> impl Iterator<Item = &ExceptionTableEntry> {
-        self.exception_table
+    /// The innermost handler-body range covering `pc`, or `None`.
+    /// BEP-042 cause-chain pre-walk: a throw here is "during handling of" the
+    /// error whose `ErrorContext` lives in the entry's `stack_trace_slot`.
+    /// Innermost = largest `handler_pc` among covering ranges.
+    pub fn handler_context_for_pc(&self, pc: usize) -> Option<&HandlerContextEntry> {
+        self.handler_context_table
             .iter()
-            .filter(move |e| pc >= e.handler_pc && pc < e.handler_end_pc)
+            .filter(|e| pc >= e.start_pc && pc < e.end_pc)
+            .max_by_key(|e| e.handler_pc)
     }
 
     /// Resolve constants from `ConstValue` to Value using a resolver function.
@@ -2282,14 +2325,24 @@ impl Bytecode {
                 start_pc: index_to_offset[entry.start_pc],
                 end_pc: index_to_offset[entry.end_pc],
                 handler_pc: index_to_offset[entry.handler_pc],
-                // `handler_end_pc` may equal `instructions.len()` when the
-                // handler body runs to the end of the function; map that to the
-                // total byte length.
-                handler_end_pc: index_to_offset
-                    .get(entry.handler_end_pc)
+                error_slot: entry.error_slot,
+                stack_trace_slot: entry.stack_trace_slot,
+            })
+            .collect();
+
+        let handler_context_table = self
+            .handler_context_table
+            .iter()
+            .map(|entry| HandlerContextEntry {
+                start_pc: index_to_offset[entry.start_pc],
+                // `end_pc` may equal `instructions.len()` when a handler-body
+                // block runs to the end of the function; map that to the total
+                // byte length.
+                end_pc: index_to_offset
+                    .get(entry.end_pc)
                     .copied()
                     .unwrap_or(code.len()),
-                error_slot: entry.error_slot,
+                handler_pc: index_to_offset[entry.handler_pc],
                 stack_trace_slot: entry.stack_trace_slot,
             })
             .collect();
@@ -2345,6 +2398,7 @@ impl Bytecode {
             code,
             line_table,
             exception_table,
+            handler_context_table,
             jump_tables,
         }
     }
@@ -2539,6 +2593,7 @@ mod compact_tests {
             line_table: Vec::new(),
             meta,
             exception_table: Vec::new(),
+            handler_context_table: Vec::new(),
             compact: None,
         }
     }
@@ -2707,6 +2762,7 @@ mod compact_tests {
             ],
             meta: vec![InstructionMeta { operand: None }; 2],
             exception_table: Vec::new(),
+            handler_context_table: Vec::new(),
             compact: None,
         };
         let compact = bc.lower_to_compact();
@@ -2734,9 +2790,14 @@ mod compact_tests {
                 start_pc: 0,
                 end_pc: 2,
                 handler_pc: 2,
-                handler_end_pc: 2,
                 error_slot: 0,
                 stack_trace_slot: ExceptionTableEntry::NO_STACK_TRACE,
+            }],
+            handler_context_table: vec![HandlerContextEntry {
+                start_pc: 2,
+                end_pc: 3, // one past the last instruction → mapped to total byte length
+                handler_pc: 2,
+                stack_trace_slot: 0,
             }],
             compact: None,
         };
@@ -2745,5 +2806,10 @@ mod compact_tests {
         assert_eq!(entry.start_pc, 0); // instruction 0 → byte 0
         assert_eq!(entry.end_pc, 3); // instruction 2 → byte 3 (2-byte LoadIntSmall + 1-byte Return)
         assert_eq!(entry.handler_pc, 3); // instruction 2 → byte 3
+
+        let hc = &compact.handler_context_table[0];
+        assert_eq!(hc.start_pc, 3); // instruction 2 → byte 3
+        assert_eq!(hc.end_pc, 4); // instruction 3 (end) → total byte length 4
+        assert_eq!(hc.handler_pc, 3);
     }
 }

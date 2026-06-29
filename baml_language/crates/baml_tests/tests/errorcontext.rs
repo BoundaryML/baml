@@ -102,6 +102,78 @@ function main() -> string {
     assert_eq!(expect_string(output.result.unwrap()), "E");
 }
 
+/// A *rethrow* must not graft a spurious cause link. When a `catch` has no
+/// matching arm, the error re-raises (the no-match fall-through, which the VM
+/// flags as a rethrow). The re-raise executes from the catch's own dispatch
+/// block, which lies inside that catch's handler body — so without the rethrow
+/// guard the cause pre-walk would chain the re-raised "B" onto the very error
+/// the catch is examining (also "B"), a self-link. Because nothing was being
+/// handled when "B" arose, its `cause` must stay empty.
+#[tokio::test]
+async fn no_match_rethrow_does_not_self_chain() {
+    let output = baml_test!(
+        r#"
+function fail_b() -> string { throw "B" }
+
+function main() -> string {
+  // The inner catch binds `ictx`, so "B" is materialized into its context
+  // slot. The arm does not match the string "B", so "B" re-raises from the
+  // dispatch block — which must NOT chain "B" onto its own context.
+  (
+    fail_b() catch (inner, ictx) {
+      baml.errors.InvalidArgument => { "unreachable" }
+    }
+  ) catch (e2, ctx2) {
+    _ => {
+      match (ctx2.cause) {
+        null => "no cause"
+        let c: baml.errors.ErrorContext => "MISCHAINED: rethrow self-linked"
+      }
+    }
+  }
+}
+"#
+    );
+    assert_eq!(expect_string(output.result.unwrap()), "no cause");
+}
+
+/// Per-block handler-body coverage. A throw in code laid out in the PC *gap*
+/// between a catch arm's fragmented blocks must not be attributed to that
+/// catch. The first catch fully handles "A"; its arm is fragmented by a nested
+/// `defer` whose pad is laid out out-of-line, so the later `throw "C"` sits
+/// between the arm's main block and that pad. A single `[handler_pc, max_end)`
+/// span would over-cover it and mis-chain "C" onto "A"; per-block ranges keep
+/// it outside, so "C" has no cause.
+#[tokio::test]
+async fn throw_after_catch_in_layout_gap_does_not_chain() {
+    let output = baml_test!(
+        r#"
+function fail_a() -> string { throw "A" }
+function fail_c() -> string { throw "C" }
+
+function main() -> string {
+  let recovered = fail_a() catch (e, ctx) {
+    _ => {
+      defer { }
+      "recovered"
+    }
+  }
+  // "A" is fully handled; this is a brand-new failure, not "during handling
+  // of A". Its context must have no cause.
+  fail_c() catch (e2, ctx2) {
+    _ => {
+      match (ctx2.cause) {
+        null => recovered
+        let c: baml.errors.ErrorContext => "MISCHAINED: gap over-covered"
+      }
+    }
+  }
+}
+"#
+    );
+    assert_eq!(expect_string(output.result.unwrap()), "recovered");
+}
+
 /// HAZARD B — `error_local` / context-slot liveness across the whole handler
 /// body. The outer handler binds `ctx` but never reads it, so the cause
 /// pre-walk's runtime read of the context slot must keep it alive (handled via

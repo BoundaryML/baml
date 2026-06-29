@@ -2427,7 +2427,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
     /// ranges. The try body spans from the entry block's first instruction up
     /// to (but not including) the handler block's first instruction.
     fn build_exception_table(&mut self, mir: &MirFunctionBody) {
-        use bex_vm_types::bytecode::ExceptionTableEntry;
+        use bex_vm_types::bytecode::{ExceptionTableEntry, HandlerContextEntry};
 
         for region in &mir.catch_regions {
             let body_entry = self.analysis.resolve_jump_target(region.body_entry);
@@ -2472,24 +2472,36 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
 
             // BEP-042 cause chain: a throw inside the handler body is "during
             // handling of" this catch's error. The handler body is the union of
-            // the arm blocks captured at lowering; the layout can fragment them
-            // across non-contiguous PCs, so cover [handler_pc, max end of those
-            // blocks). NOTE: a gap between fragments is over-covered (a known
-            // limitation; the robust fix is per-block ranges in a dedicated
-            // table). An empty body (e.g. a defer pad) yields handler_pc — an
-            // empty range that never chains.
-            let handler_end_pc = region
-                .handler_body
-                .iter()
-                .filter_map(|b| self.block_end_addresses.get(b).copied())
-                .max()
-                .unwrap_or(handler_pc);
+            // the arm blocks (or defer-pad body blocks) captured at lowering;
+            // the layout can fragment them across non-contiguous PCs. Emit one
+            // `HandlerContextEntry` per block so the coverage is exact — a
+            // single `[handler_pc, max_end)` span would over-cover the gaps
+            // between fragments and mis-chain a throw laid out there. An empty
+            // or fully-dropped body contributes no entries and never chains.
+            for &block in &region.handler_body {
+                let (Some(&block_start), Some(&block_end)) = (
+                    self.block_addresses.get(&block),
+                    self.block_end_addresses.get(&block),
+                ) else {
+                    continue; // block dropped by layout / DCE
+                };
+                if block_start >= block_end {
+                    continue; // empty block — nothing to cover
+                }
+                self.bytecode
+                    .handler_context_table
+                    .push(HandlerContextEntry {
+                        start_pc: block_start,
+                        end_pc: block_end,
+                        handler_pc,
+                        stack_trace_slot,
+                    });
+            }
 
             self.bytecode.exception_table.push(ExceptionTableEntry {
                 start_pc,
                 end_pc: handler_pc,
                 handler_pc,
-                handler_end_pc,
                 error_slot,
                 stack_trace_slot,
             });

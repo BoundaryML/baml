@@ -3372,7 +3372,19 @@ impl BexVm {
         // the throw site (read-only, before unwinding mutates frames/slots).
         // If this throw happened inside a handler body, that handler's caught
         // error becomes the new error's `cause`.
-        let cause_context = self.find_cause_context();
+        //
+        // A *rethrow* carries the already-thrown value forward unchanged: a
+        // bare re-raise inside a handler, or the no-match fall-through that
+        // re-enters this funnel (and `ThrowIfPanic`, which also passes
+        // `is_rethrow`). None of these is a *new* failure "during handling of"
+        // the caught error, so they must not graft another link onto the
+        // chain — they skip the cause walk and keep whatever cause the value
+        // already carries.
+        let cause_context = if is_rethrow {
+            Value::NULL
+        } else {
+            self.find_cause_context()
+        };
 
         // Frames popped by this unwind close with a status derived from the
         // thrown value's class (Exited / Cancelled / Errored) — chosen once
@@ -3580,8 +3592,8 @@ impl BexVm {
 
     /// BEP-042 cause chain: find the error currently being *handled* at the
     /// throw site, by walking the live frames (read-only). A throw whose PC
-    /// lies in a handler body — the `[handler_pc, handler_end_pc)` range of an
-    /// exception-table entry — is "during handling of" that handler's caught
+    /// lies in a handler body — a `HandlerContextEntry` range in the
+    /// `handler_context_table` — is "during handling of" that handler's caught
     /// error, which becomes the new error's `cause`. Returns `Value::NULL`
     /// when no enclosing handler is active (a fresh, unchained error).
     ///
@@ -3608,13 +3620,9 @@ impl BexVm {
             };
             // Innermost (narrowest) handler body wins — largest handler_pc.
             let entry = if let Some(compact) = &func.bytecode.compact {
-                compact
-                    .handler_contexts_for_pc(pc)
-                    .max_by_key(|e| e.handler_pc)
+                compact.handler_context_for_pc(pc)
             } else {
-                func.bytecode
-                    .handler_contexts_for_pc(pc)
-                    .max_by_key(|e| e.handler_pc)
+                func.bytecode.handler_context_for_pc(pc)
             };
             if let Some(entry) = entry {
                 // The cause is the enclosing handler's `ErrorContext`, which
