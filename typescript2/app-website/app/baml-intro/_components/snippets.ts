@@ -71,19 +71,23 @@ class ParseError { detail: string }`;
 /* ---------------- 1c · match on types or values ---------------- */
 
 export const TS_INSTANCEOF = `function route(msg: Refund | Question | string) {
-  // a grab-bag: typeof, instanceof, "has key" -- and
-  // instanceof lies on JSON-parsed data
+  // a grab-bag of typeof + "key in obj" checks -- no real
+  // match, so overlapping keys quietly pick the wrong arm
   if (typeof msg === "string") return "text: " + msg;
-  if (msg instanceof Refund) return "refund " + msg.id;
+  if ("id" in msg) return "refund " + msg.id;
   if ("text" in msg) return "answer: " + msg.text;
   // miss a case -> silently returns undefined
-}`;
+}
+
+interface Refund { id: string }
+interface Question { text: string }`;
 
 export const BAML_MATCH = `function route(msg: Refund | Question | string) -> string {
   match (msg) {
-    Refund => "refund " + msg.id,
-    Question => "answer: " + msg.text,
-    string => "text: " + msg,
+    Refund => \`refund \${msg.id}\`,
+    // with destructuring!
+    Question { text } => \`answer: \${text}\`,
+    string => \`text: \${msg}\`,
   }
 }
 

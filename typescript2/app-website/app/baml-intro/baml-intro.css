@@ -153,6 +153,29 @@
   border: 1px solid #d8cfbd;
 }
 
+/* Stop mobile Safari from auto-inflating code text. It inflates the Monaco
+   editors' wrapped lines but not the static <pre> panes, so the same 13px code
+   rendered at two different sizes on iPhone (and the inflated text then
+   wrapped while the static didn't). Pin everything to the declared size. */
+.l6 .l2-code,
+.l6 .l2-bamled-frame,
+.l6 .l2-live {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+/* The inline error-lens message in the static panes sits at the end of a line
+   inside a horizontal-scroll box, so without a width cap it runs off the right
+   edge instead of wrapping (the Monaco editor wraps via wordWrap). It's an
+   inline <span>, so it needs inline-block for max-width to apply; then it wraps
+   like the BAML editor's diagnostics. */
+.l6 .l2-errorlens {
+  display: inline-block;
+  max-width: 34ch;
+  white-space: pre-wrap;
+  vertical-align: top;
+}
+
 .l6 h1 {
   margin: 1.2rem 0 1.4rem;
   font-size: clamp(34px, 5vw, 52px);
@@ -363,9 +386,17 @@
   margin-top: 1.2rem;
   margin-bottom: 1.2rem;
 }
+/* min-width:0 so a pane can shrink below its (wide) code content instead of
+   blowing the column out past the viewport. */
+.l6-pair > * {
+  min-width: 0;
+}
 @media (max-width: 880px) {
   .l6-pair {
-    grid-template-columns: 1fr;
+    /* minmax(0, 1fr), not 1fr — plain `1fr` keeps min-width:auto, which lets
+       the Monaco editor's content force the column wider than the screen (the
+       single-column .l6-block sections fit because they don't do this). */
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 .l6-pane-label {
@@ -1032,4 +1063,52 @@
   .l2-live-loading {
   background: var(--l6-code-bg);
   color: var(--l6-code-name);
+}
+
+/* Diagnostics + line highlights are tuned for the cream page; on dark frames
+   their faint tints disappear. Brighten them and add a left accent bar so the
+   highlighted line and the inline runtime error read clearly. */
+.l6:is([data-code-theme="dark"], [data-code-theme="midnight"]) .l2-line-hl {
+  background: rgba(167, 139, 250, 0.16);
+  box-shadow: inset 3px 0 0 var(--l6-accent-soft);
+}
+.l6:is([data-code-theme="dark"], [data-code-theme="midnight"]) .l2-ed-hl {
+  background: rgba(167, 139, 250, 0.16);
+}
+.l6:is([data-code-theme="dark"], [data-code-theme="midnight"]) .l6-wf-hl {
+  background: rgba(167, 139, 250, 0.18);
+}
+.l6:is([data-code-theme="dark"], [data-code-theme="midnight"])
+  .l2-line-diag.l2-sev-error {
+  background: rgba(248, 81, 73, 0.14);
+  box-shadow: inset 3px 0 0 #f85149;
+}
+.l6:is([data-code-theme="dark"], [data-code-theme="midnight"])
+  .l2-line-diag.l2-sev-warning {
+  background: rgba(210, 153, 34, 0.14);
+  box-shadow: inset 3px 0 0 #d29922;
+}
+.l6:is([data-code-theme="dark"], [data-code-theme="midnight"]) .l2-errorlens {
+  opacity: 1;
+}
+.l6:is([data-code-theme="dark"], [data-code-theme="midnight"])
+  .l2-errorlens.l2-sev-error {
+  color: #ff7b72;
+}
+.l6:is([data-code-theme="dark"], [data-code-theme="midnight"])
+  .l2-errorlens.l2-sev-warning {
+  color: #e3b341;
+}
+.l6:is([data-code-theme="dark"], [data-code-theme="midnight"])
+  .l2-errorlens.l2-sev-info {
+  color: #8b949e;
+}
+/* Monaco inline-diagnostic line tints */
+.l6:is([data-code-theme="dark"], [data-code-theme="midnight"])
+.l2-el-line-error {
+  background: rgba(248, 81, 73, 0.12);
+}
+.l6:is([data-code-theme="dark"], [data-code-theme="midnight"])
+  .l2-el-line-warning {
+  background: rgba(210, 153, 34, 0.12);
 }

@@ -348,7 +348,7 @@ const TENETS: string[] = [
 // Code-block theme for this page. Flip this to try IDE themes: 'paper' (the
 // light default), 'dark' (VS Code Dark+), or 'midnight' (Tokyo Night-ish). It
 // drives the Monaco editors, the Shiki static panes, and the frame CSS at once.
-const CODE_THEME: CodeThemeName = 'midnight';
+const CODE_THEME: CodeThemeName = 'dark';
 
 export function Article({ view = 'all' }: { view?: 'all' | 'intro' | 'deep' }) {
   const [activeId, setActiveId] = useState(
@@ -631,10 +631,13 @@ export function Article({ view = 'all' }: { view?: 'all' | 'intro' | 'deep' }) {
           <Section
             id="threads"
             num="4"
-            title="Green threads a.k.a ‘make any function run in parallel'"
+            title="Green threads a.k.a 'async without async'"
           >
             <p>
-              {'Like Go, BAML supports lightweight green threads via '}
+              Doing work in parallel is important. But we always hated having an {' '}<code>async</code> and non-async version of my code. We chose Go's approach to concurrency, but with a typescript feel.
+            </p>
+            <p>
+              BAML supports lightweight green threads via {' '}
               <code>spawn</code>
               {' and '}
               <code>await</code>
