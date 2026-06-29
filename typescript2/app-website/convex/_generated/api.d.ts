@@ -11,6 +11,7 @@
 import type * as council from "../council.js";
 import type * as discord from "../discord.js";
 import type * as loops from "../loops.js";
+import type * as slopPledges from "../slopPledges.js";
 import type * as triggers from "../triggers.js";
 
 import type {
@@ -23,6 +24,7 @@ declare const fullApi: ApiFromModules<{
   council: typeof council;
   discord: typeof discord;
   loops: typeof loops;
+  slopPledges: typeof slopPledges;
   triggers: typeof triggers;
 }>;
 

@@ -26,4 +26,19 @@ export default defineSchema({
     loopsError: v.optional(v.string()),
     loopsSyncedAt: v.optional(v.number()),
   }).index('by_discord_role_sync', ['discordRoleSyncedAt']),
+
+  // War-on-slop pledges: how someone fights slop with slop (see
+  // convex/slopPledges.ts and app/fight-slop-with-slop).
+  slopPledges: defineTable({
+    name: v.string(),
+    email: v.string(), // collected, never exposed publicly
+    description: v.string(),
+    createdAt: v.number(),
+    // Moderation gate: undefined/0 = pending review, 1 = approved & shown on the
+    // site. Flip to 1 manually in the Convex dashboard to publish a pledge.
+    approved: v.optional(v.number()),
+  })
+    .index('by_created', ['createdAt'])
+    .index('by_email', ['email'])
+    .index('by_approved', ['approved', 'createdAt']),
 });

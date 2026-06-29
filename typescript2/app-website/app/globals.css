@@ -123,6 +123,17 @@
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
 
+  /* War-on-slop palette (scoped to the /fight-slop-with-slop route via the
+     `.war-on-slop` wrapper). Namespaced `wos-` so the campaign's purple accent
+     never collides with the site's shadcn `accent` token. */
+  --color-wos-cream: #fbf7ed;
+  --color-wos-cream-hi: #fffdf6;
+  --color-wos-ink: #1f1e1b;
+  --color-wos-ink-2: #5e5a4f;
+  --color-wos-accent: #7c3aed;
+  --color-wos-accent-deep: #6d28d9;
+  --color-wos-line: #e3dfd3;
+
   --animate-accordion-down: accordion-down 0.2s ease-out;
   --animate-accordion-up: accordion-up 0.2s ease-out;
   --animate-border-beam: border-beam calc(var(--duration) * 1s) infinite linear;
