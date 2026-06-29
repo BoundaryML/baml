@@ -2,22 +2,12 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] warning: extraneous throws declaration: Errors
-    ╭─[ repro.baml:17:34 ]
+  [type] error: type mismatch: expected bool, got string
+    ╭─[ repro.baml:23:22 ]
     │
- 17 │ function callee() -> bool throws Errors {
-    │                                  ───┬──  
-    │                                     ╰──── extraneous throws declaration: Errors
-    │ 
-    │ Note: Error code: E0097
-────╯
-
-  [type] error: type mismatch: expected bool, got Errors
-    ╭─[ repro.baml:25:42 ]
-    │
- 25 │     Errors.AuthenticationError => return e
-    │                                          ┬  
-    │                                          ╰── type mismatch: expected bool, got Errors
+ 23 │     string => return e
+    │                      ┬  
+    │                      ╰── type mismatch: expected bool, got string
     │ 
     │ Note: Error code: E0001
 ────╯

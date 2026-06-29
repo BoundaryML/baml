@@ -3,44 +3,58 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 === SYNTAX TREE ===
 SOURCE_FILE
-  ENUM_DEF
-    KW_ENUM "enum"
-    WORD "Errors"
-    L_BRACE "{"
-    ENUM_VARIANT "AuthenticationError"
-      WORD "AuthenticationError"
-    ENUM_VARIANT "AuthorizationError"
-      WORD "AuthorizationError"
-    ENUM_VARIANT "NotFoundError"
-      WORD "NotFoundError"
-    ENUM_VARIANT "InternalServerError"
-      WORD "InternalServerError"
-    R_BRACE "}"
   FUNCTION_DEF
     KW_FUNCTION "function"
     WORD "callee"
-    PARAMETER_LIST "()"
+    PARAMETER_LIST
       L_PAREN "("
+      PARAMETER
+        WORD "x"
+        COLON ":"
+        TYPE_EXPR "int"
+          WORD "int"
       R_PAREN ")"
     ARROW "->"
     TYPE_EXPR "bool"
       WORD "bool"
     THROWS_CLAUSE
       KW_THROWS "throws"
-      TYPE_EXPR "Errors"
-        WORD "Errors"
+      TYPE_EXPR "string"
+        WORD "string"
     EXPR_FUNCTION_BODY
       BLOCK_EXPR
         L_BRACE "{"
-        RETURN_STMT "return true"
-          KW_RETURN "return"
-          WORD "true"
+        IF_EXPR
+          KW_IF "if"
+          PAREN_EXPR
+            L_PAREN "("
+            BINARY_EXPR "x == 0"
+              WORD "x"
+              EQUALS_EQUALS "=="
+              INTEGER_LITERAL "0"
+            R_PAREN ")"
+          BLOCK_EXPR
+            L_BRACE "{"
+            THROW_STMT
+              THROW_EXPR
+                KW_THROW "throw"
+                STRING_LITERAL "boom"
+                  QUOTE """
+                  WORD "boom"
+                  QUOTE """
+            R_BRACE "}"
+        WORD "true"
         R_BRACE "}"
   FUNCTION_DEF
     KW_FUNCTION "function"
     WORD "caller"
-    PARAMETER_LIST "()"
+    PARAMETER_LIST
       L_PAREN "("
+      PARAMETER
+        WORD "x"
+        COLON ":"
+        TYPE_EXPR "int"
+          WORD "int"
       R_PAREN ")"
     ARROW "->"
     TYPE_EXPR "bool"
@@ -51,8 +65,10 @@ SOURCE_FILE
         CATCH_EXPR
           CALL_EXPR
             WORD "callee"
-            CALL_ARGS "()"
+            CALL_ARGS
               L_PAREN "("
+              CALL_ARG "x"
+                WORD "x"
               R_PAREN ")"
           CATCH_CLAUSE
             KW_CATCH "catch"
@@ -64,10 +80,8 @@ SOURCE_FILE
             CATCH_ARM
               PATTERN
                 TYPE_PATTERN
-                  TYPE_EXPR "Errors.AuthenticationError"
-                    WORD "Errors"
-                    DOT "."
-                    WORD "AuthenticationError"
+                  TYPE_EXPR "string"
+                    WORD "string"
               FAT_ARROW "=>"
               RETURN_EXPR "return e"
                 KW_RETURN "return"

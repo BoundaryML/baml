@@ -2,19 +2,21 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === TIR2 ===
-enum user.Errors
-function user.callee() -> bool throws user.Errors {
-  { : never
-    return true : true
+function user.callee(x: int) -> bool throws string {
+  { : true
+    if (x == 0 : bool) : void
+      { : never
+        throw "boom" : "boom"
+      }
+    true : true
   }
-  ?? 626..632: extraneous throws declaration: Errors
 }
-function user.caller() -> bool throws never {
+function user.caller(x: int) -> bool throws never {
   { : bool
-    catch (callee() : bool) : bool
+    catch (callee(x) : bool) : bool
       catch (e)
-        Errors.AuthenticationError =>
+        string =>
           return e : never
   }
-  !! 903..904: type mismatch: expected bool, got Errors
+  !! 901..902: type mismatch: expected bool, got string
 }
