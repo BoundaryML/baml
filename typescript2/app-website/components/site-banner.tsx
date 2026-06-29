@@ -47,9 +47,8 @@ export function SiteBanner() {
   }
 
   return (
-    <Link
+    <div
       className="site-banner"
-      href="/blog"
       style={{
         alignItems: 'center',
         background: CARD_BG,
@@ -57,60 +56,87 @@ export function SiteBanner() {
         color: INK,
         display: 'flex',
         fontSize: 13,
-        gap: 14,
         justifyContent: 'center',
         letterSpacing: '0.01em',
         minHeight: RESERVED_HEIGHT,
         padding: '10px 16px',
         position: 'fixed',
-        textDecoration: 'none',
         top: 0,
-        transition: 'background-color 200ms ease',
         width: '100%',
         zIndex: 60,
       }}
     >
-      <span
+      <Link
+        className="site-banner-cta"
+        href="/blog"
         style={{
           alignItems: 'center',
-          background: ACCENT,
-          borderRadius: 999,
-          color: '#ffffff',
-          display: 'inline-flex',
-          fontSize: 10,
-          fontWeight: 600,
-          letterSpacing: '0.14em',
-          padding: '2px 8px',
-          textTransform: 'uppercase',
+          color: INK,
+          display: 'flex',
+          gap: 14,
+          textDecoration: 'none',
         }}
       >
-        New
-      </span>
-      <span style={{ color: MUTED }}>
-        60 days until{' '}
-        <span style={{ color: INK, fontWeight: 600 }}>
-          launch
+        <span
+          style={{
+            alignItems: 'center',
+            background: ACCENT,
+            borderRadius: 999,
+            color: '#ffffff',
+            display: 'inline-flex',
+            fontSize: 10,
+            fontWeight: 600,
+            letterSpacing: '0.14em',
+            padding: '2px 8px',
+            textTransform: 'uppercase',
+          }}
+        >
+          New
         </span>
-        {' — join our email list'}
-      </span>
-      <span
-        aria-hidden
-        className="site-banner-arrow"
+        <span style={{ color: MUTED }}>
+          60 days until{' '}
+          <span style={{ color: INK, fontWeight: 600 }}>
+            launch
+          </span>
+          {' — join our email list'}
+        </span>
+        <span
+          aria-hidden
+          className="site-banner-arrow"
+          style={{
+            color: ACCENT,
+            fontWeight: 500,
+            transition: 'transform 200ms ease',
+          }}
+        >
+          →
+        </span>
+      </Link>
+      <a
+        className="site-banner-olddocs"
+        href="https://docs.boundaryml.com"
+        rel="noopener noreferrer"
         style={{
-          color: ACCENT,
+          color: MUTED,
           fontWeight: 500,
-          transition: 'transform 200ms ease',
+          position: 'absolute',
+          right: 16,
+          textDecoration: 'none',
+          transition: 'color 200ms ease',
         }}
       >
-        →
-      </span>
+        Old Docs
+      </a>
       <style>{`
-        .site-banner:hover { background-color: #F5EFE3; }
-        .site-banner:hover .site-banner-arrow { transform: translateX(4px); }
+        .site-banner-cta:hover { color: ${ACCENT}; }
+        .site-banner-cta:hover .site-banner-arrow { transform: translateX(4px); }
+        .site-banner-olddocs:hover { color: ${ACCENT}; }
         @media (max-width: 600px) {
-          .site-banner { font-size: 12px; padding: 8px 12px; gap: 10px; }
+          .site-banner { font-size: 12px; padding: 8px 12px; }
+          .site-banner-cta { gap: 10px; }
+          .site-banner-olddocs { right: 12px; }
         }
       `}</style>
-    </Link>
+    </div>
   );
 }
