@@ -5,14 +5,6 @@
 //! `find_cause_context` + the handler-body extent on `ExceptionTableEntry`,
 //! built from the catch region's `handler_body` blocks). See
 //! `thoughts/antonio/errorcontext-impl-plan.md`.
-//!
-//! The chaining MECHANISM is in place and verified at the VM level (the funnel
-//! materializes `B.cause = A`'s `ErrorContext`). The multi-link tests below are
-//! `#[ignore]`d pending a separate fix: reading a *non-null* `cause`
-//! (`match (self.cause) { let c: ErrorContext => ... }`) and `to_string` over a
-//! chained context hit a runtime type error / `Unreachable` — a BAML-level
-//! issue with the self-referential `cause: ErrorContext?` field, independent of
-//! the chaining itself.
 
 use baml_tests::baml_test;
 use bex_engine::BexExternalValue;
@@ -51,7 +43,6 @@ function main() -> string {
 /// Nested `catch`: throwing a different error while handling one chains the
 /// new error onto the error being handled (Python `__context__`-style).
 #[tokio::test]
-#[ignore = "BEP-042 Part 3: chaining materializes correctly, but reading a non-null cause hits a recursive-type runtime issue (see module docs)"]
 async fn nested_catch_chains_to_handled_error() {
     let output = baml_test!(
         r#"
@@ -85,7 +76,6 @@ function main() -> string {
 /// `defer` pad and a nested `catch`) that fragment the handler body across
 /// basic blocks.
 #[tokio::test]
-#[ignore = "BEP-042 Part 3: see nested_catch_chains_to_handled_error"]
 async fn hazard_a_nested_construct_in_catch_arm_chains_to_outer_error() {
     let output = baml_test!(
         r#"
@@ -117,7 +107,6 @@ function main() -> string {
 /// pre-walk's runtime read of the context slot must keep it alive (handled via
 /// the analysis use-injection in `analysis.rs` + `optimize.rs`).
 #[tokio::test]
-#[ignore = "BEP-042 Part 3: see nested_catch_chains_to_handled_error"]
 async fn hazard_b_unused_binding_slot_liveness_preserves_cause() {
     let output = baml_test!(
         r#"

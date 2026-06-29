@@ -1150,10 +1150,19 @@ fn eliminate_dead_locals(body: &mut MirFunctionBody, arity: usize) {
         }
     }
 
-    // Rewrite catch_regions error locals
+    // Rewrite catch_regions error + context locals. Both the first (`e`) and
+    // second (`ctx`/`st`) catch bindings have a payload local the VM writes
+    // into; if the context local isn't renumbered alongside the error local,
+    // the emitter computes a stale `stack_trace_slot` and the binding reads an
+    // uninitialized (Null) slot — see BEP-042 ErrorContext nested-catch bug.
     for region in &mut body.catch_regions {
         if let Some(new_local) = old_to_new[region.error_local.0] {
             region.error_local = new_local;
+        }
+        if let Some(st_local) = region.stack_trace_local
+            && let Some(new_local) = old_to_new[st_local.0]
+        {
+            region.stack_trace_local = Some(new_local);
         }
     }
 
