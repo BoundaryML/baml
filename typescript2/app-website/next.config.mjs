@@ -88,13 +88,6 @@ const nextConfig = {
         source: '/relay-JkOu/flags',
         destination: 'https://us.i.posthog.com/flags',
       },
-      // Edge-proxied so the static /changelog page can fetch entries from the
-      // changelog service same-origin (no CORS) without invoking a serverless
-      // function. Vercel handles this rewrite at the edge.
-      {
-        source: '/api/changelog-feed/:path*',
-        destination: 'https://bammy-service.fly.dev/:path*',
-      },
     ];
   },
   // This is required to support PostHog trailing slash API requests

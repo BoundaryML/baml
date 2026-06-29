@@ -4,12 +4,13 @@ import { Navbar } from '@/components/navbar';
 import { ChangelogList } from './changelog-list';
 
 // This page is intentionally STATIC (no `force-dynamic`, no server-side data
-// fetch). It is prerendered to plain HTML and served from the CDN, so it can
-// never invoke a serverless function and therefore can never 500. The entries
-// are loaded client-side from `/api/changelog-feed/*` (a Vercel edge rewrite to
-// the changelog service — see next.config.mjs), and code blocks are syntax-
-// highlighted client-side with shiki (incl. the BAML grammar). Clicking a
-// release opens its article via a `?v=` query param, handled fully client-side.
+// fetch). It is prerendered to plain HTML and served from the CDN, so the page
+// itself can never 500. The entries are loaded client-side from
+// `/api/changelog-feed/entries`, a Next route handler that reads the
+// changelogEntries table DIRECTLY from Convex (see that route) — no dependency
+// on a running changelog backend service. Code blocks are syntax-highlighted
+// client-side with shiki (incl. the BAML grammar). Clicking a release opens its
+// article via a `?v=` query param, handled fully client-side.
 
 export const metadata = createMetadata({
   description: 'The latest releases of BAML, shipped continuously.',
