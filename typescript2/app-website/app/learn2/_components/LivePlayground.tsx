@@ -170,6 +170,10 @@ export default function LivePlayground({
           d.message.length > 100 ? `${d.message.slice(0, 100)}…` : d.message;
         return {
           options: {
+            // Whole-line tint marking the errored span, plus the inline
+            // ErrorLens message at the end of the line.
+            className: `l2-el-line-${kind}`,
+            isWholeLine: true,
             after: {
               content: `    ${inline}`,
               inlineClassName: `l2-el-msg l2-el-msg-${kind}`,
@@ -334,6 +338,7 @@ export default function LivePlayground({
   return (
     <div
       className={`baml-playground-root l2-live${fill ? ' l2-live--fill' : ''}`}
+      data-theme={codeTheme.dark ? 'dark' : 'light'}
       ref={teardownRef}
     >
       <ResizablePanelGroup direction="horizontal">

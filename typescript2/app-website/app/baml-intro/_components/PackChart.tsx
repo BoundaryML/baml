@@ -76,32 +76,24 @@ function BenchChart({ groups }: { groups: ChartGroup[] }) {
   );
 }
 
-/* `baml pack` vs `bun build --compile`: same hello world, binary size and
- * startup (median of 20 runs). */
+/* `baml pack` vs `bun build --compile`: same hello world, binary size. */
 const PACK_GROUPS: ChartGroup[] = [
   {
     label: 'binary size',
     rows: [
       {
         baml: true,
-        frac: 7.9 / 60.5,
+        frac: 12.1 / 63.1,
         name: 'baml pack',
-        sub: '3.4 MB gzipped',
-        value: '7.9 MB',
+        sub: '5.7 MB gzipped',
+        value: '12.1 MB',
       },
       {
         frac: 1,
         name: 'bun build --compile',
-        sub: '22.8 MB gzipped',
-        value: '60.5 MB',
+        sub: '23.5 MB gzipped',
+        value: '63.1 MB',
       },
-    ],
-  },
-  {
-    label: 'startup · median of 20 runs',
-    rows: [
-      { baml: true, frac: 5.2 / 7.6, name: 'baml pack', value: '5.2 ms' },
-      { frac: 1, name: 'bun build --compile', value: '7.6 ms' },
     ],
   },
 ];

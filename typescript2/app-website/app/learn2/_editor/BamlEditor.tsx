@@ -456,6 +456,10 @@ export function BamlEditor({
           return {
             range: new monaco.Range(line, 1, line, endCol),
             options: {
+              // Whole-line tint marking the errored span, plus the inline
+              // ErrorLens message at the end of the line.
+              className: `l2-el-line-${kind}`,
+              isWholeLine: true,
               after: {
                 content: `    ${inline}`,
                 inlineClassName: `l2-el-msg l2-el-msg-${kind}`,

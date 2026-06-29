@@ -657,6 +657,25 @@
   text-transform: uppercase;
   letter-spacing: 0.08em;
 }
+/* Placeholder shown in the generated-SDK pane for languages that don't ship
+   yet (Go, Rust) — a quiet dashed box inviting people to the Discord. */
+.l6-sdk-soon-pane {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 180px;
+  padding: 1.4rem 1.6rem;
+  text-align: center;
+  color: var(--l6-muted);
+  background: #fffdf6;
+  border: 1px dashed var(--l6-rule);
+  border-radius: 10px;
+}
+.l6-sdk-soon-pane p {
+  margin: 0;
+  max-width: 28ch;
+  line-height: 1.5;
+}
 
 /* ---- Native LLM Functions: example switcher above the playground ---- */
 .l6-wf-tabs {
@@ -951,6 +970,13 @@
 }
 .l6 .monaco-editor .codelens-decoration a {
   color: var(--l6-accent) !important;
+}
+/* On the dark page the deep --l6-accent purple is nearly black against the
+   editor; use the lighter accent so the run/test codelens stays legible. Scoped
+   to the page code-theme so it reaches both the LivePlayground and the
+   standalone BamlEditor panes (the latter isn't a .baml-playground-root). */
+.l6[data-code-theme="dark"] .monaco-editor .codelens-decoration a {
+  color: #a78bfa !important;
 }
 
 /* Reduced motion: only quiet the attention-grabbing inline glow. The

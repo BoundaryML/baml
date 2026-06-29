@@ -224,6 +224,29 @@ export const PACK_BENCH = [
   },
 ] as const;
 
+/* ---------------- 4b · baml run <function> ---------------- *
+ * Captured from `baml run` on a throwaway `baml init` project whose
+ * main.baml is the same greet/main/Greeting program shown above. The
+ * `user.` package prefix the CLI currently prints on class values is a
+ * known display wart and is omitted here. */
+export const RUN_FN_EVENTS: TermEvent[] = [
+  { cmd: 'baml run main' },
+  { text: '   Compiling 1 file(s)', tone: 'dim' },
+  { text: '    Compiled 1 file(s) in 1s', tone: 'dim' },
+  { text: '"hi, world"', tone: 'accent' },
+  { cmd: 'baml run greet -- --name "hacker news"', pause: 0.5 },
+  { text: 'Greeting { message: "hi, hacker news" }', tone: 'accent' },
+  { cmd: 'baml run greet -- --help', pause: 0.5 },
+  { text: 'function greet(name: string) -> Greeting' },
+  { text: 'Options:' },
+  { text: '      --name <string>' },
+  {
+    pause: 0.4,
+    text: '# any function is a target; its params become --flags',
+    tone: 'dim',
+  },
+];
+
 /* ---------------- 5 · baml run -e ---------------- */
 
 // Captured output from this branch's release CLI.
@@ -606,73 +629,3 @@ metric extract_resume {
     2.0 * precision * recall / (precision + recall)
   }
 }`;
-
-/* ---------------- incremental adoption · SDK switcher ---------------- */
-
-export const SDK_BAML = `// app/baml_src/classify.baml — the function every SDK calls
-class Verdict {
-  label: "positive" | "negative" | "neutral",
-  confidence: float,
-}
-
-function classify(text: string) -> Verdict {
-  client: "openai/gpt5.5"
-  prompt: #"
-    Classify the sentiment. {{ text }}
-    {{ ctx.output_format }}
-  "#
-}`;
-
-export const SDK_SNIPPETS = {
-  go: {
-    code: `import "app/baml_sdk"
-
-verdict, err := bamlsdk.Classify(ctx, bamlsdk.ClassifyArgs{
-    Text: "absolutely loved it!",
-})
-
-verdict.Label      // bamlsdk.LabelPositive
-verdict.Confidence // float64`,
-    filename: 'main.go',
-    lang: 'go' as const,
-    note: 'In progress — typed structs, no reflection at the call site.',
-  },
-  python: {
-    code: `from baml_sdk import classify
-
-verdict = classify(text="absolutely loved it!")
-
-verdict.label        # "positive" — a Literal union
-verdict.confidence   # float
-verdict.model_dump() # it's a pydantic model`,
-    filename: 'app.py',
-    lang: 'python' as const,
-    note: 'Verdict is a real pydantic model — validators, .model_dump(), the lot.',
-  },
-  rust: {
-    code: `use baml_sdk::classify;
-
-let verdict = classify(ClassifyArgs {
-    text: "absolutely loved it!".into(),
-}).await?;
-
-verdict.label;      // Label::Positive
-verdict.confidence; // f64`,
-    filename: 'main.rs',
-    lang: 'rust' as const,
-    note: 'In progress — serde types, Result for the typed error set.',
-  },
-  typescript: {
-    code: `import { classify } from './baml_sdk';
-
-const verdict = await classify({ text: 'absolutely loved it!' });
-
-verdict.label;       // "positive" | "negative" | "neutral"
-verdict.confidence;  // number`,
-    filename: 'app.ts',
-    lang: 'typescript' as const,
-    note: 'A typed class with methods — not a bag of any.',
-  },
-} as const;
-
-export type SdkLang = keyof typeof SDK_SNIPPETS;

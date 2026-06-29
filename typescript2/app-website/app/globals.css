@@ -524,6 +524,62 @@
   color: var(--vsc-text);
 }
 
+/* Dark variant of the playground surface. Activated when the page's code
+ * theme is dark (LivePlayground sets data-theme="dark" on the root). Mirrors
+ * the VS Code Dark+ surfaces the Monaco editor uses, so the ExecutionPanel
+ * chrome and dialogs match the editor instead of staying light. Keeps the
+ * brand purple as the accent, but lightened so it reads on a dark panel
+ * (the old #6d28d9 codelens/link was nearly invisible on dark). */
+.baml-playground-root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --vsc-bg: #1e1e1e;
+  --vsc-bg-secondary: #252526;
+  --vsc-surface: #252526;
+  --vsc-panel: #1e1e1e;
+  --vsc-border: #333333;
+  --vsc-border-subtle: #2a2a2a;
+  --vsc-text: #d4d4d4;
+  --vsc-text-bright: #ffffff;
+  --vsc-text-muted: #9d9d9d;
+  --vsc-text-faint: #6e6e6e;
+  --vsc-accent: #a78bfa;
+  --vsc-accent-fg: #1a1612;
+  --vsc-accent-hover: #c4b5fd;
+  --vsc-list-hover: #2a2d2e;
+  --vsc-green: #4ec9b0;
+  --vsc-red: #f48771;
+  --vsc-yellow: #d7ba7d;
+  --vsc-yellow-subtle: rgba(215, 186, 125, 0.14);
+  --vsc-link: #a78bfa;
+  --vsc-input-bg: #3c3c3c;
+  --vsc-input-fg: #d4d4d4;
+  --vsc-input-border: #3c3c3c;
+
+  --background: #1e1e1e;
+  --foreground: #d4d4d4;
+  --card: #1e1e1e;
+  --card-foreground: #d4d4d4;
+  --popover: #252526;
+  --popover-foreground: #d4d4d4;
+  --primary: #8b5cf6;
+  --primary-foreground: #ffffff;
+  --secondary: #252526;
+  --secondary-foreground: #d4d4d4;
+  --muted: #252526;
+  --muted-foreground: #9d9d9d;
+  --accent: #2a2d2e;
+  --accent-foreground: #ffffff;
+  --destructive: #f48771;
+  --destructive-foreground: #ffffff;
+  --border: #333333;
+  --input: #3c3c3c;
+  --ring: #8b5cf6;
+
+  background-color: var(--vsc-bg);
+  color: var(--vsc-text);
+}
+
 .dark {
   --background: oklch(0% 0 0);
   --foreground: oklch(98% 0 0);

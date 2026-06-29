@@ -1027,6 +1027,30 @@
   color: #2563eb !important;
 }
 
+/* Dark page: the paper-theme reds/blues above are too dark to read on a dark
+ * editor — brighten the inline messages and line tints. Scoped to a dark
+ * code-theme page (data-code-theme="dark" on the page root), which covers both
+ * the LivePlayground and the standalone BamlEditor panes. The light /learn2
+ * deck (no data-code-theme) keeps its values. */
+[data-code-theme="dark"] .l2-el-line-error {
+  background: rgba(248, 113, 113, 0.1);
+}
+[data-code-theme="dark"] .l2-el-line-warning {
+  background: rgba(234, 179, 8, 0.1);
+}
+[data-code-theme="dark"] .l2-el-line-info {
+  background: rgba(96, 165, 250, 0.1);
+}
+[data-code-theme="dark"] .l2-el-msg-error {
+  color: #f87171 !important;
+}
+[data-code-theme="dark"] .l2-el-msg-warning {
+  color: #e0af68 !important;
+}
+[data-code-theme="dark"] .l2-el-msg-info {
+  color: #60a5fa !important;
+}
+
 /* =================== terminal box =================== */
 .l2-terminal {
   max-width: 520px;
