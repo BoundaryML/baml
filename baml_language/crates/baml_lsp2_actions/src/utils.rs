@@ -395,6 +395,7 @@ pub fn display_type_expr(te: &TypeExpr) -> String {
         TypeExprKind::Void { .. } => "void".to_string(),
         TypeExprKind::Type { .. } => "type".to_string(),
         TypeExprKind::Rust { .. } => "$rust_type".to_string(),
+        TypeExprKind::Infer { .. } => "_".to_string(),
         TypeExprKind::Error { .. } | TypeExprKind::Unknown { .. } => "unknown".to_string(),
     };
     humanize_type_string(&rendered)

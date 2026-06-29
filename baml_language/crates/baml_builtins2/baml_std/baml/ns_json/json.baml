@@ -65,7 +65,7 @@ function to_string<T>(v: T) -> string throws JsonSerializationError {
 /// `Array<T>.to_json`, etc.
 //baml:mut_vm
 //baml:may_yield
-function to_json<T>(v: T) -> json throws JsonSerializationError | JsonParseError {
+function to_json<T>(v: T) -> json throws JsonSerializationError {
   $rust_function
 }
 
@@ -174,7 +174,7 @@ function field(j: json, key: string) -> json throws never {
 /// instead of two, and a place to evolve the override semantics if they
 /// drift. Remove this if the host gains a direct way to invoke generic
 /// compositions without a named landing pad.
-function serialize<T>(v: T) -> string throws JsonSerializationError | JsonParseError {
+function serialize<T>(v: T) -> string throws JsonSerializationError {
   stringify(to_json<T>(v))
 }
 

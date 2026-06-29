@@ -480,6 +480,9 @@ fn lower_from_type_name_with_generic_args(
         "never" => TypeExprKind::Never { attrs: vec![] },
         "void" => TypeExprKind::Void { attrs: vec![] },
         "unknown" => TypeExprKind::BuiltinUnknown { attrs: vec![] },
+        // The wildcard `_` is an inference hole, not a named type. Any stray
+        // generic args on it (`_<...>`, nonsensical) are dropped.
+        "_" => TypeExprKind::Infer { attrs: vec![] },
         "type" => TypeExprKind::Type { attrs: vec![] },
         "$rust_type" => TypeExprKind::Rust { attrs: vec![] },
         "image" => TypeExprKind::Media {
@@ -589,6 +592,80 @@ pub(crate) fn check_void_type(
             }
         }
         // All other variants (primitives, path, etc.) cannot contain void.
+        _ => {}
+    }
+}
+
+/// Recursively reject the `_` wildcard type where it cannot be inferred.
+///
+/// `_` is an inference hole: it is only meaningful in a `let` binding
+/// annotation (filled from the initializer) or as a `throws`-clause member
+/// (filled from the body's inferred throw set). In a signature, field, or alias
+/// type there is nothing to infer it from, so it would otherwise leak through
+/// type checking and reach runtime lowering. Reject it here with a clear
+/// diagnostic instead.
+///
+/// Emits `WildcardTypeNotAllowed` for every occurrence at any depth.
+pub(crate) fn check_wildcard_type(
+    type_expr: &TypeExpr,
+    context: &str,
+    span: TextRange,
+    diags: &mut Vec<LoweringDiagnostic>,
+) {
+    match &type_expr.kind {
+        TypeExprKind::Infer { .. } => {
+            diags.push(LoweringDiagnostic::WildcardTypeNotAllowed {
+                context: context.to_string(),
+                span,
+            });
+        }
+        TypeExprKind::Optional { inner, .. } | TypeExprKind::List { inner, .. } => {
+            check_wildcard_type(inner, context, span, diags);
+        }
+        TypeExprKind::Map { key, value, .. } => {
+            check_wildcard_type(key, context, span, diags);
+            check_wildcard_type(value, context, span, diags);
+        }
+        TypeExprKind::Union { variants, .. } => {
+            for v in variants {
+                check_wildcard_type(v, context, span, diags);
+            }
+        }
+        TypeExprKind::Path {
+            generic_args,
+            associated_type_bindings,
+            ..
+        } => {
+            for arg in generic_args {
+                check_wildcard_type(arg, context, span, diags);
+            }
+            for binding in associated_type_bindings {
+                check_wildcard_type(&binding.ty, context, span, diags);
+            }
+        }
+        TypeExprKind::Function {
+            params,
+            ret,
+            throws,
+            ..
+        } => {
+            for p in params {
+                check_wildcard_type(&p.ty, context, span, diags);
+            }
+            check_wildcard_type(ret, context, span, diags);
+            if let Some(throws) = throws {
+                check_wildcard_type(throws, context, span, diags);
+            }
+        }
+        TypeExprKind::AssociatedTypeProjection {
+            base, interface, ..
+        } => {
+            check_wildcard_type(base, context, span, diags);
+            if let Some(iface) = interface {
+                check_wildcard_type(iface, context, span, diags);
+            }
+        }
+        // Primitives and other leaves cannot contain a wildcard.
         _ => {}
     }
 }

@@ -561,7 +561,11 @@ impl NormalTy {
             Ty::PromptAst { .. } => NormalTy::PromptAst,
             Ty::BuiltinUnknown { .. } => NormalTy::BuiltinUnknown,
             Ty::Never { .. } => NormalTy::Never,
-            Ty::Unknown { .. } => NormalTy::Unknown,
+            // An unfilled inference hole normalizes to the bidirectionally-
+            // compatible `Unknown` sentinel: a `_` that survives to normalization
+            // (e.g. in a subtype check) must match anything at its slot. Precise
+            // filling happens earlier, at the `Ty` level, before normalization.
+            Ty::Unknown { .. } | Ty::Infer { .. } => NormalTy::Unknown,
             Ty::Error { .. } => NormalTy::Error,
             // Freshness is a compiler-only widening flag, irrelevant to type identity.
             Ty::Literal(lit, _freshness, _) => NormalTy::Literal(lit.clone()),

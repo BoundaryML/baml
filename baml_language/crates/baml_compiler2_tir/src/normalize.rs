@@ -556,7 +556,10 @@ fn normalize_impl(
         Ty::Never { .. } => StructuralTy::Never,
         Ty::Void { .. } => StructuralTy::Void,
         Ty::BuiltinUnknown { .. } => StructuralTy::BuiltinUnknown,
-        Ty::Unknown { .. } => StructuralTy::Unknown,
+        // An unfilled inference hole behaves as the bidirectionally-compatible
+        // `Unknown` sentinel during structural comparison (matches anything at
+        // its slot); precise filling happens earlier at the `Ty` level.
+        Ty::Unknown { .. } | Ty::Infer { .. } => StructuralTy::Unknown,
         Ty::Error { .. } => StructuralTy::Error,
         Ty::Literal(lit, _freshness, _) => StructuralTy::Literal(lit.clone()),
         Ty::Class(qn, type_args, _) => {

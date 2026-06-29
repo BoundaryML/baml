@@ -328,6 +328,9 @@ mod tests {
             TypeExprKind::Unknown { attrs } => TypeExprKind::Unknown {
                 attrs: strip_attrs(attrs),
             },
+            TypeExprKind::Infer { attrs } => TypeExprKind::Infer {
+                attrs: strip_attrs(attrs),
+            },
         };
         __stripped.at(text_size::TextRange::default())
     }

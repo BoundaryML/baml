@@ -2087,7 +2087,7 @@ function baml.json.to<T>(j: baml.json.json) -> T throws baml.json.JsonDecodeErro
     root._from_json_shim<T>(j) : T
   }
 }
-function baml.json.serialize<T>(v: T) -> string throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+function baml.json.serialize<T>(v: T) -> string throws baml.json.JsonSerializationError {
   { : string
     stringify(to_json<T>(v)) : string
   }

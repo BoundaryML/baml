@@ -305,6 +305,7 @@ fn lower_function(
             true,
             diags,
         );
+        lower_type_expr::check_wildcard_type(&expr, "a return type", te_span, diags);
         expr.with_span(te_span)
     });
 
@@ -589,6 +590,7 @@ pub(crate) fn lower_param(
                 false,
                 diags,
             );
+            lower_type_expr::check_wildcard_type(&expr, "a parameter type", te_span, diags);
             expr.with_span(te_span)
         }),
         default: None,
@@ -1089,6 +1091,7 @@ fn lower_class(
                     false,
                     diags,
                 );
+                lower_type_expr::check_wildcard_type(&expr, "a class field type", te_span, diags);
 
                 // Hoist field attrs from the outermost TypeExpr to FieldDef.
                 // Only attrs that are direct ATTRIBUTE children of the outermost
@@ -1377,6 +1380,12 @@ fn lower_interface(
                     false,
                     diags,
                 );
+                lower_type_expr::check_wildcard_type(
+                    &expr,
+                    "an interface field type",
+                    te_span,
+                    diags,
+                );
                 expr.with_span(te_span)
             });
             Some(FieldDef {
@@ -1536,6 +1545,7 @@ fn lower_method_sig(
             true,
             diags,
         );
+        lower_type_expr::check_wildcard_type(&expr, "a return type", te_span, diags);
         expr.with_span(te_span)
     });
 
@@ -1757,6 +1767,7 @@ fn lower_type_alias(
                 false,
                 diags,
             );
+            lower_type_expr::check_wildcard_type(&expr, "a type alias", te_span, diags);
             expr.with_span(te_span)
         }),
         span: node.span_range(),

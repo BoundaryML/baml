@@ -1504,6 +1504,7 @@ pub(crate) mod support {
                 baml_compiler2_ast::TypeExprKind::Rust { .. } => "$rust_type".into(),
                 baml_compiler2_ast::TypeExprKind::Error { .. } => "error".into(),
                 baml_compiler2_ast::TypeExprKind::Unknown { .. } => "?".into(),
+                baml_compiler2_ast::TypeExprKind::Infer { .. } => "_".into(),
             }
         }
 
