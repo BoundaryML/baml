@@ -103,6 +103,48 @@ function grade(n: int) -> string {
 class Refund { id: string }
 class Question { text: string }`;
 
+/* ---------------- 1d · eval / codemode (coming soon) ----------------
+ * Direction-of-travel only; the reflection API below is not yet shipped. */
+export const BAML_EVAL = `let raw = baml.reflect.new_package("my_package");
+baml.package.set_file("virtual/path/to/file.baml", \`
+   function hello() -> string {
+     "hello world"
+   }
+\`)
+let pkg = raw.build();
+
+let cb = pkg.get<() -> string>("hello");
+print(cb());
+
+// and its typesafe!
+let cb = pkg.get<() -> int>("hello") catch (e) {
+    baml.reflect.CompilerTypeError => {
+        print(\`"hello" is not a function that returns int. \${e}\`)
+    }
+};`;
+
+/* ---------------- 1e · sandboxing via function mocking (coming soon) ----
+ * Direction-of-travel only; baml.mock (BEP-058) is not yet shipped. */
+export const BAML_SANDBOX = `// inside a mock scope, baml.http.fetch is whatever you say it is.
+let net = baml.mock.new(baml.http.fetch);
+net.replace((req: baml.http.Request) -> baml.http.Response {
+  // lets ban fetch! so even if the llm uses it, we get an error
+  throw baml.NotImplementedError { message: "fetch is disabled in this scope" };
+});
+
+let shell = baml.mock.new(baml.sys.shell);
+shell.replace((command: string) -> baml.std.ShellOut {
+  // lets ban shell! so even if the llm uses it, we get an error
+  throw baml.NotImplementedError { message: "shell is disabled in this scope" };
+});
+
+
+baml.mock.scope([net, shell], () -> void {
+  run_generated();   // every fetch/shell in here hits the stand-in
+});
+
+// out here, fetch and shell are the real thing again -- the scope undoes itself.`;
+
 /* ---------------- 2 · namespaces are directories ---------------- */
 
 export const NS_BAD = `// baml_src/ns_b/b.baml — referencing another namespace, unqualified

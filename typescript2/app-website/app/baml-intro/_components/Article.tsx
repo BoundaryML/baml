@@ -4,14 +4,14 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { type ReactNode, useCallback, useState } from 'react';
 import { Navbar } from '@/components/navbar';
-import {
-  type CodeThemeName,
-  CODE_THEMES,
-  CodeThemeProvider,
-} from '../../learn2/_lib/code-theme';
 import { BamlCode } from '../../learn2/_components/BamlCode';
 import BamlEditor from '../../learn2/_components/BamlEditorLazy';
 import LivePlayground from '../../learn2/_components/LivePlaygroundLazy';
+import {
+  CODE_THEMES,
+  type CodeThemeName,
+  CodeThemeProvider,
+} from '../../learn2/_lib/code-theme';
 import { InfectionGraph } from '../../learn3/_components/InfectionGraph';
 // import { MetricsDag } from '../../learn3/_components/MetricsDag'; // metrics section hidden
 import { TermPlay } from '../../learn3/_components/TermPlay';
@@ -23,12 +23,14 @@ import { SdkExplorer } from './SdkExplorer';
 import { SelfImprove } from './SelfImprove';
 import {
   BAML_CSV_TESTS,
+  BAML_EVAL,
   BAML_HTTP_TESTS,
   BAML_IMAGE,
   BAML_MATCH,
   // BAML_METRIC, // metrics section hidden
   BAML_PACKED,
   BAML_RUNNER,
+  BAML_SANDBOX,
   BAML_SPAWN,
   BAML_UNKNOWN,
   BAML_UNREACHABLE,
@@ -216,6 +218,7 @@ const TOC: { id: string; label: string; sub?: boolean }[] = [
   { id: 'claude-code', label: '2 · Claude APIs', sub: true },
   { id: 'testing', label: '3 · Tests', sub: true },
   { id: 'eval', label: '4 · eval / codemode', sub: true },
+  { id: 'sandboxing', label: '5 · Sandboxing', sub: true },
   { id: 'close', label: 'Try it out!' },
 ];
 
@@ -419,8 +422,9 @@ export function Article({ view = 'all' }: { view?: 'all' | 'intro' | 'deep' }) {
               ).map((item) => (
                 <li key={item.id}>
                   <a
-                    className={`${item.sub ? 'l6-toc-sub' : ''}${activeId === item.id ? ' l6-toc-active' : ''
-                      }`}
+                    className={`${item.sub ? 'l6-toc-sub' : ''}${
+                      activeId === item.id ? ' l6-toc-active' : ''
+                    }`}
                     href={`#${item.id}`}
                   >
                     {item.label}
@@ -521,13 +525,23 @@ export function Article({ view = 'all' }: { view?: 'all' | 'intro' | 'deep' }) {
             {/* ===== Part 1 · A better language ===== */}
             <Part eyebrow="Part 1" id="language" title="A better language">
               <p>
-                BAML aims to be an agent friendly language. We'll start with the <u>syntax and type system decisions</u> we made. Then explore the <u>agent-first cli tooling</u>.
+                BAML aims to be an agent friendly language. We'll start with the{' '}
+                <u>syntax and type system decisions</u> we made. Then explore
+                the <u>agent-first cli tooling</u>.
               </p>
               <p>
-                As much as we want agents to write code, humans trust is still a vital part of a healthy software system. The third section focuses on <u>tooling for humans</u>, and the fourth shares how we made <u>BAML incrementally adoptable</u>, so you won't need to re-write your whole codebase in BAML.
+                As much as we want agents to write code, humans trust is still a
+                vital part of a healthy software system. The third section
+                focuses on <u>tooling for humans</u>, and the fourth shares how
+                we made <u>BAML incrementally adoptable</u>, so you won't need
+                to re-write your whole codebase in BAML.
               </p>
               <p>
-                And lastly, not only has the way we write code changed, but also the <i>kind</i> of code we write as well. More and more code is agentic loops, created by LLMs on the fly, and probabilstic. We added a few syntax constructs to help <u>reign in the non-determinism.</u>
+                And lastly, not only has the way we write code changed, but also
+                the <i>kind</i> of code we write as well. More and more code is
+                agentic loops, created by LLMs on the fly, and probabilstic. We
+                added a few syntax constructs to help{' '}
+                <u>reign in the non-determinism.</u>
               </p>
             </Part>
 
@@ -538,7 +552,9 @@ export function Article({ view = 'all' }: { view?: 'all' | 'intro' | 'deep' }) {
               title="A type-system like TypeScript, but without type erasure"
             >
               <p>
-                {'BAML has a type system like TypeScript, but persists it at runtime. TypeScript '}
+                {
+                  'BAML has a type system like TypeScript, but persists it at runtime. TypeScript '
+                }
                 <a
                   className="l6-link"
                   href="https://github.com/Microsoft/TypeScript/wiki/TypeScript-Design-Goals#non-goals"
@@ -585,7 +601,6 @@ export function Article({ view = 'all' }: { view?: 'all' | 'intro' | 'deep' }) {
                   <BamlEditor filename="load.baml" initialCode={BAML_UNKNOWN} />
                 </div>
               </div>
-
             </Section>
 
             {/* ---- match ---- */}
@@ -664,11 +679,12 @@ export function Article({ view = 'all' }: { view?: 'all' | 'intro' | 'deep' }) {
               title="Green threads a.k.a 'async without async'"
             >
               <p>
-                Doing work in parallel is important. But we always hated having an {' '}<code>async</code> and non-async version of our code. We chose Go's approach to concurrency, but with a typescript feel.
+                Doing work in parallel is important. But we always hated having
+                an <code>async</code> and non-async version of our code. We
+                chose Go's approach to concurrency, but with a typescript feel.
               </p>
               <p>
-                BAML supports lightweight green threads via {' '}
-                <code>spawn</code>
+                BAML supports lightweight green threads via <code>spawn</code>
                 {' and '}
                 <code>await</code>
                 {'. Run any function asynchronously without having to write '}
@@ -750,7 +766,10 @@ export function Article({ view = 'all' }: { view?: 'all' | 'intro' | 'deep' }) {
                 }
               </p>
               <div className="l6-block">
-                <TermPlay events={LS_EVENTS} title="the filesystem is the map" />
+                <TermPlay
+                  events={LS_EVENTS}
+                  title="the filesystem is the map"
+                />
               </div>
               <div className="l6-block">
                 <BamlCode
@@ -797,7 +816,10 @@ export function Article({ view = 'all' }: { view?: 'all' | 'intro' | 'deep' }) {
               <div className="l6-pair">
                 <div>
                   <p className="l6-pane-label">agent with grep</p>
-                  <TermPlay events={GREP_EVENTS} title="agent without describe" />
+                  <TermPlay
+                    events={GREP_EVENTS}
+                    title="agent without describe"
+                  />
                 </div>
                 <div>
                   <p className="l6-pane-label l6-pane-label--after">
@@ -939,15 +961,15 @@ export function Article({ view = 'all' }: { view?: 'all' | 'intro' | 'deep' }) {
               </p>
               <p>
                 {
-                  'BAML can now generate SDKs for your favorite language, and call your functions using these type-safe interfaces — even if they include generics, or class methods. Think of an OpenAPI client generator, except the contract carries real business logic, not just data shapes. (For a more in-depth technical write-up, please check out our '
+                  'BAML can now generate SDKs for your favorite language, and call your functions using these type-safe interfaces — even if they include generics, or class methods. Think of an OpenAPI client generator, except the contract carries real business logic, not just data shapes. (For more details, check out our '
                 }
                 <a
                   className="l6-link"
-                  href="https://boundaryml.com/blog"
+                  href="https://www.youtube.com/watch?v=ve33hCLHbcg"
                   rel="noreferrer"
                   target="_blank"
                 >
-                  blog post
+                  talk at rust conf
                 </a>
                 {'.)'}
               </p>
@@ -1098,13 +1120,44 @@ export function Article({ view = 'all' }: { view?: 'all' | 'intro' | 'deep' }) {
               </p>
             </Section>
 
-            {/* ---- eval / codemode (placeholder) ---- */}
-            <Section id="eval" num="4" title="[placeholder: eval / codemode]">
+            {/* ---- eval / codemode (coming soon) ---- */}
+            <Section id="eval" num="4" title="eval(), but type-safe">
               <p>
-                {
-                  "[placeholder: a type-safe eval(), the equivalent of Python's eval — our answer to codemode, but with type-safety. Syntax TBD.]"
-                }
+                Agents don't just call tools, they also write and run code. <s>Twitter</s> X calls it codemode.
               </p>
+              <p>
+                In python, you would write {' '}
+              <code>eval('print("hello world")')</code>{' '}
+                to do codemode. But {' '}<code>eval</code>{' '} is unsafe and loses all type-safety and predictability.
+              </p>
+              <p>
+                BAML's reflection gives you eval, but with typed compiler error. If the string has the wrong signature, you can get a runtime-compiler error that you can feed back to the agent so it can fix its code.
+              </p>
+              <p className="l6-note">
+                Coming soon: the reflection API below isn't available yet.
+              </p>
+              <div className="l6-block">
+                <BamlCode code={BAML_EVAL} filename="codemode.baml" />
+              </div>
+            </Section>
+
+            {/* ---- sandboxing (coming soon) ---- */}
+            <Section id="sandboxing" num="5" title="Sandboxing">
+              <p>
+                Running code an agent just wrote is scary. We've started using machine sandboxing to isolate the code from the rest of the system, but what if we wanted to guarantee that the code doesn't make any network calls? We could just prompt it, but...
+              </p>
+              <p>
+                We can do a bit better. We can scoped-mock any function, and swap it out for a temporary function you define.
+              </p>
+              <p>
+                This doesn't replace the need for machine sandboxing. {' '}<code>mock</code>{' '} can't sandbox machine state (though vfs's are much simpler now). However, it does give you an option to not require machine sandboxing for every problem.
+              </p>
+              <p className="l6-note">
+                Coming soon: the mocking primitive below isn't available yet.
+              </p>
+              <div className="l6-block">
+                <BamlCode code={BAML_SANDBOX} filename="sandbox.baml" />
+              </div>
             </Section>
 
             {/* ---- close ---- */}
