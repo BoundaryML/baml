@@ -802,6 +802,14 @@ pub enum Expr {
     Throw {
         value: ExprId,
     },
+    /// `return expr?` in expression position — a diverging expression of type
+    /// `never`, mirroring [`Expr::Throw`]. Lets `return` be a `catch`/`match`
+    /// arm value. The value is optional (`None` for a bare `return`), matching
+    /// [`Stmt::Return`]. Control transfer is to the enclosing function's exit,
+    /// not the surrounding `catch`.
+    Return {
+        value: Option<ExprId>,
+    },
     /// BEP-034 `spawn name_expr? (with expr (, expr)*)? { body }`. The body is
     /// always a block expression that runs on a freshly-spawned green thread;
     /// the optional `name` is any expression that evaluates to a string and

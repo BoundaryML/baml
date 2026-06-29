@@ -4582,6 +4582,31 @@ impl<'a> Parser<'a> {
         });
     }
 
+    /// Parse `return expr?` in expression position as a `RETURN_EXPR` — a
+    /// diverging expression of type `never`. This is what lets a braceless
+    /// `return` be a `catch`/`match` arm value (`_ => return 0`). Statement
+    /// position is still handled by `parse_return_stmt` (see `parse_stmt`),
+    /// so this only fires when `return` is reached through expression parsing.
+    ///
+    /// Like `parse_return_stmt`, the value is optional: a bare `return` (e.g.
+    /// in a void function) is valid, so we stop before a token that cannot
+    /// begin an expression. We don't eat a trailing `;` here — that belongs to
+    /// the enclosing statement, not the expression.
+    fn parse_return_expr(&mut self) {
+        self.with_node(SyntaxKind::RETURN_EXPR, |p| {
+            p.expect(TokenKind::Return);
+
+            // Optional return value — bare `return` yields unit before diverging.
+            if !p.at(TokenKind::Semicolon)
+                && !p.at(TokenKind::Comma)
+                && !p.at(TokenKind::RBrace)
+                && !p.at_end()
+            {
+                p.parse_expr_bp_no_catch(0);
+            }
+        });
+    }
+
     fn parse_if_expr(&mut self) {
         // `if let PATTERN = SCRUTINEE { ... }` is a distinct refutable form.
         // Decided here by peeking past `if` for a `let` token — patterns
@@ -6209,6 +6234,11 @@ impl<'a> Parser<'a> {
         } else if self.at(TokenKind::Throw) {
             // Throw expression
             self.parse_throw_expr();
+        } else if self.at(TokenKind::Return) {
+            // Return expression (diverging, type `never`) — lets `return` be a
+            // `catch`/`match` arm value. Statement-position `return` is taken by
+            // `parse_stmt` before reaching here.
+            self.parse_return_expr();
         } else if self.at(TokenKind::Word) {
             // Collect text as owned String so the borrow is released before any &mut calls.
             let text: String = self.current().map(|t| t.text.clone()).unwrap_or_default();
