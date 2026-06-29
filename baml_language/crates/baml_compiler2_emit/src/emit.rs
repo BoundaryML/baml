@@ -294,6 +294,11 @@ struct StackifyCodegen<'ctx, 'obj> {
     /// Maps `BlockId` -> bytecode instruction index (for jump patching).
     block_addresses: HashMap<BlockId, usize>,
 
+    /// Maps `BlockId` -> instruction index just past the block's last
+    /// instruction (its exclusive end). Used to compute catch handler-body PC
+    /// extents for the BEP-042 cause chain.
+    block_end_addresses: HashMap<BlockId, usize>,
+
     /// Pending jumps that need patching: (`instruction_index`, `target_block`).
     pending_jumps: Vec<(usize, PendingJumpTarget)>,
 
@@ -397,6 +402,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             local_slots: HashMap::new(),
             real_local_count: 0,
             block_addresses: HashMap::new(),
+            block_end_addresses: HashMap::new(),
             pending_jumps: Vec::new(),
             pending_jump_tables: Vec::new(),
             dead_unreachable_blocks: HashSet::new(),
@@ -936,6 +942,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             self.current_block_start = block_start;
             let block = mir.block(block_id);
             self.emit_block(block);
+            self.block_end_addresses.insert(block_id, self.current_pc());
         }
 
         // If any pending edges target dead-unreachable MIR blocks, patch them
@@ -2420,10 +2427,26 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 .and_then(|local| self.local_slots.get(&local).copied())
                 .unwrap_or(ExceptionTableEntry::NO_STACK_TRACE);
 
+            // BEP-042 cause chain: a throw inside the handler body is "during
+            // handling of" this catch's error. The handler body is the union of
+            // the arm blocks captured at lowering; the layout can fragment them
+            // across non-contiguous PCs, so cover [handler_pc, max end of those
+            // blocks). NOTE: a gap between fragments is over-covered (a known
+            // limitation; the robust fix is per-block ranges in a dedicated
+            // table). An empty body (e.g. a defer pad) yields handler_pc — an
+            // empty range that never chains.
+            let handler_end_pc = region
+                .handler_body
+                .iter()
+                .filter_map(|b| self.block_end_addresses.get(b).copied())
+                .max()
+                .unwrap_or(handler_pc);
+
             self.bytecode.exception_table.push(ExceptionTableEntry {
                 start_pc,
                 end_pc: handler_pc,
                 handler_pc,
+                handler_end_pc,
                 error_slot,
                 stack_trace_slot,
             });

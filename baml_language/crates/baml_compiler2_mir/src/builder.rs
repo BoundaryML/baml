@@ -144,6 +144,13 @@ impl MirBuilder {
         id
     }
 
+    /// Number of blocks created so far. Block IDs are dense `0..num_blocks()`,
+    /// so a range captured around a lowering step names exactly the blocks that
+    /// step created (used to record a catch handler body, BEP-042).
+    pub(crate) fn num_blocks(&self) -> usize {
+        self.blocks.len()
+    }
+
     /// Set the current block for emitting statements and terminators.
     pub(crate) fn set_current_block(&mut self, block: BlockId) {
         self.current_block = Some(block);

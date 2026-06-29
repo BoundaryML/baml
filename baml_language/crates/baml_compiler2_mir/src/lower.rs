@@ -5438,6 +5438,10 @@ impl LoweringContext<'_> {
                     self.builder.catch_regions.push(CatchRegion {
                         body_entry: region_start,
                         handler: pad,
+                        // Defer-pad chaining is handled in a later step; an
+                        // empty handler body means a throw inside the pad does
+                        // not yet chain.
+                        handler_body: Vec::new(),
                         error_local,
                         stack_trace_local: None,
                     });
@@ -15773,10 +15777,15 @@ impl LoweringContext<'_> {
             .any(|clause| matches!(clause.kind, CatchClauseKind::CatchAllPanics));
 
         // Record the catch region (always one handler, one exception table entry).
+        // `handler_body` is filled in after the arms are lowered (below): the
+        // blocks created while lowering the arms ARE the handler body, and they
+        // can be laid out non-contiguously, so `[handler, join)` is not enough.
         let body_entry = self.builder.current_block();
+        let catch_region_idx = self.builder.catch_regions.len();
         self.builder.catch_regions.push(CatchRegion {
             body_entry,
             handler: bb_handler,
+            handler_body: vec![bb_handler],
             error_local,
             stack_trace_local,
         });
@@ -15807,6 +15816,9 @@ impl LoweringContext<'_> {
             .iter()
             .map(|(arm, _, _)| (arm.pattern, arm.body, None))
             .collect();
+        // Everything created from here until the join belongs to the handler
+        // body (the arms), captured into the catch region for the cause chain.
+        let arm_blocks_lo = self.builder.num_blocks();
         self.builder.set_current_block(bb_handler);
         if clauses.len() == 1 {
             install_clause_locals(self, error_local, &clause_locals[0]);
@@ -15824,6 +15836,9 @@ impl LoweringContext<'_> {
                 None,
             )
         {
+            self.builder.catch_regions[catch_region_idx].handler_body = std::iter::once(bb_handler)
+                .chain((arm_blocks_lo..self.builder.num_blocks()).map(BlockId))
+                .collect();
             self.builder.set_current_block(bb_join);
             self.restore_active_locals(saved_catch_outer_locals);
             return;
@@ -15882,6 +15897,9 @@ impl LoweringContext<'_> {
             self.restore_locals_after_scope(saved_locals, watched_depth);
         }
 
+        self.builder.catch_regions[catch_region_idx].handler_body = std::iter::once(bb_handler)
+            .chain((arm_blocks_lo..self.builder.num_blocks()).map(BlockId))
+            .collect();
         self.builder.set_current_block(bb_join);
         self.restore_active_locals(saved_catch_outer_locals);
     }

@@ -1676,6 +1676,13 @@ pub struct ExceptionTableEntry {
     pub end_pc: usize,
     /// Instruction pointer of the handler block.
     pub handler_pc: usize,
+    /// End of the handler body (exclusive). The handler body occupies
+    /// `[handler_pc, handler_end_pc)`. Used by the BEP-042 cause-chain
+    /// pre-walk: a throw whose PC lies in this range is "during handling of"
+    /// the error in `error_slot`, which becomes the new error's cause.
+    /// `handler_end_pc == handler_pc` means "no handler-body range" (the
+    /// handler was optimized away or its extent is unknown) — never chains.
+    pub handler_end_pc: usize,
     /// Frame-local slot index for the caught error value.
     pub error_slot: usize,
     /// Frame-local slot for the stack trace value.
@@ -1757,6 +1764,15 @@ impl CompactCode {
         self.exception_table
             .iter()
             .filter(move |e| pc >= e.start_pc && pc < e.end_pc)
+    }
+
+    /// Iterate exception table entries whose HANDLER body covers `pc`
+    /// (byte-offset). BEP-042 cause-chain pre-walk: a throw here is "during
+    /// handling of" the error in `error_slot`.
+    pub fn handler_contexts_for_pc(&self, pc: usize) -> impl Iterator<Item = &ExceptionTableEntry> {
+        self.exception_table
+            .iter()
+            .filter(move |e| pc >= e.handler_pc && pc < e.handler_end_pc)
     }
 }
 
@@ -1862,6 +1878,15 @@ impl Bytecode {
         self.exception_table
             .iter()
             .filter(move |e| pc >= e.start_pc && pc < e.end_pc)
+    }
+
+    /// Iterate exception table entries whose HANDLER body covers `pc`.
+    /// BEP-042 cause-chain pre-walk: a throw here is "during handling of"
+    /// the error in `error_slot`.
+    pub fn handler_contexts_for_pc(&self, pc: usize) -> impl Iterator<Item = &ExceptionTableEntry> {
+        self.exception_table
+            .iter()
+            .filter(move |e| pc >= e.handler_pc && pc < e.handler_end_pc)
     }
 
     /// Resolve constants from `ConstValue` to Value using a resolver function.
@@ -2186,6 +2211,13 @@ impl Bytecode {
                 start_pc: index_to_offset[entry.start_pc],
                 end_pc: index_to_offset[entry.end_pc],
                 handler_pc: index_to_offset[entry.handler_pc],
+                // `handler_end_pc` may equal `instructions.len()` when the
+                // handler body runs to the end of the function; map that to the
+                // total byte length.
+                handler_end_pc: index_to_offset
+                    .get(entry.handler_end_pc)
+                    .copied()
+                    .unwrap_or(code.len()),
                 error_slot: entry.error_slot,
                 stack_trace_slot: entry.stack_trace_slot,
             })
@@ -2626,6 +2658,7 @@ mod compact_tests {
                 start_pc: 0,
                 end_pc: 2,
                 handler_pc: 2,
+                handler_end_pc: 2,
                 error_slot: 0,
                 stack_trace_slot: ExceptionTableEntry::NO_STACK_TRACE,
             }],
