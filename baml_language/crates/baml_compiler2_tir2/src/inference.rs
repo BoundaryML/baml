@@ -641,6 +641,15 @@ pub enum MemberResolution<'db> {
         impl_loc: ImplLoc<'db>,
         func_loc: FunctionLoc<'db>,
     },
+    /// A **virtual** interface-field access (`named.field` on an interface-existential, or
+    /// the projected `obj.as<I>.field`): the concrete type is unknown, so the field is read
+    /// through the interface. A *concrete* receiver's interface field instead resolves to
+    /// the linked class field it backs ([`MemberResolution::Field`]), so only the virtual
+    /// case needs its own variant.
+    InterfaceVirtualField {
+        iface_loc: InterfaceLoc<'db>,
+        field: Name,
+    },
 }
 
 // ── Per-Scope Inference Result ─────────────────────────────────────────────

@@ -2534,9 +2534,9 @@ impl<'db> TypeInferenceBuilder<'db> {
                 .get(&callee_id)
                 .map(|(_, params, _)| params.clone())
                 .unwrap_or_else(|| callee_generic_params.to_vec()),
-            MemberResolution::Field { .. } | MemberResolution::Variant { .. } => {
-                callee_generic_params.to_vec()
-            }
+            MemberResolution::Field { .. }
+            | MemberResolution::Variant { .. }
+            | MemberResolution::InterfaceVirtualField { .. } => callee_generic_params.to_vec(),
         }
     }
 
@@ -12313,13 +12313,10 @@ impl<'db> TypeInferenceBuilder<'db> {
         out
     }
 
-    /// For an exact interface instantiation that a class implements, find the
-    /// concrete class field backing one interface field. Side-effect-free
+    /// The class field that an interface field (`field_name` on the realized interface
+    /// `target_iface_name<target_iface_args>`) links to, via the class's own impl of that
+    /// interface (`ImplData.field_links`, defaulting to the same name). Side-effect-free
     /// counterpart to `qualified_interface_field_for_construction`.
-    #[deprecated = "Maps an interface field to a class field via legacy `class_data.implements` + \
-        the `requires` closure (class-only, in-body-only). Rebuild on `impl_data`/`impls_for_type`: \
-        `requires` is a bound (closure only for type-var/existential), the link comes from the \
-        concrete type's own per-interface impl `field_links` (incl. blanket/out-of-body)."]
     fn class_field_name_for_interface_field(
         &self,
         class_name: &crate::ty::QualifiedTypeName,
@@ -12328,238 +12325,92 @@ impl<'db> TypeInferenceBuilder<'db> {
         target_iface_args: &[Ty],
         field_name: &Name,
     ) -> Option<Name> {
-        let pkg_items = self.resolve_class_pkg_items(class_name.package())?;
-        let Definition::Class(class_loc) =
-            pkg_items.lookup_type(class_name.namespace(), class_name.name())?
-        else {
-            return None;
-        };
-        let db = self.context.db();
-        let item_tree = baml_compiler2_ppir::file_item_tree(db, class_loc.file(db));
-        let class_data = &item_tree[class_loc.id(db)];
-        let class_ns =
-            baml_compiler2_hir::file_package::file_package(db, class_loc.file(db)).namespace_path;
-        let class_bindings =
-            crate::generics::bind_type_vars(&class_data.generic_params, class_type_args);
-
-        for impl_target in &class_data.implements {
-            let Some(root_iface_loc) = crate::interfaces::resolve_path_to_interface(
-                db,
-                &impl_target.target.expr,
-                pkg_items,
-                &class_ns,
-            ) else {
-                continue;
-            };
-
-            let root_iface_type_args = match &impl_target.target.expr {
-                TypeExpr::Path { generic_args, .. } => {
-                    let mut diags = Vec::new();
-                    generic_args
+        let concrete = Ty::Class(
+            class_name.clone(),
+            class_type_args.to_vec(),
+            TyAttr::default(),
+        );
+        let impls = self.type_impls(&concrete);
+        self.concrete_interface_field_sources(&impls, field_name)
+            .into_iter()
+            .find(|source| {
+                &source.iface_qtn == target_iface_name
+                    && source.iface_args.len() == target_iface_args.len()
+                    && source
+                        .iface_args
                         .iter()
-                        .map(|arg| {
-                            if class_bindings.is_empty() {
-                                crate::lower_type_expr::lower_type_expr_in_ns(
-                                    db,
-                                    arg,
-                                    pkg_items,
-                                    &class_ns,
-                                    &class_data.generic_params,
-                                    &mut diags,
-                                )
-                            } else {
-                                crate::generics::lower_type_expr_with_generics(
-                                    db,
-                                    arg,
-                                    pkg_items,
-                                    &class_ns,
-                                    &class_bindings,
-                                    &mut diags,
-                                )
-                            }
-                        })
-                        .collect::<Vec<_>>()
-                }
-                _ => Vec::new(),
-            };
-
-            for (iface_loc, iface_type_args, _iface_assoc) in
-                crate::interfaces::interface_closure_locs_with_args_and_assoc(
-                    db,
-                    root_iface_loc,
-                    &root_iface_type_args,
-                    &[],
-                    pkg_items,
-                    &class_ns,
-                )
-            {
-                let iface_tree = baml_compiler2_hir::file_item_tree(db, iface_loc.file(db));
-                let Some(iface_data) = iface_tree.interfaces.get(&iface_loc.id(db)) else {
-                    continue;
-                };
-                let iface_qtn = crate::lower_type_expr::qualify_def(
-                    db,
-                    Definition::Interface(iface_loc),
-                    &iface_data.name,
-                );
-                if &iface_qtn != target_iface_name
-                    || iface_type_args.len() != target_iface_args.len()
-                    || !iface_type_args
-                        .iter()
-                        .zip(target_iface_args.iter())
-                        .all(|(a, b)| self.types_equivalent(a, b))
-                {
-                    continue;
-                }
-                let Some(field) = iface_data
-                    .fields
-                    .iter()
-                    .find(|field| field.name == *field_name)
-                else {
-                    continue;
-                };
-                return Some(
-                    impl_target
-                        .field_links
-                        .iter()
-                        .find(|link| link.interface_field == field.name)
-                        .map(|link| link.class_field.clone())
-                        .unwrap_or_else(|| field.name.clone()),
-                );
-            }
-        }
-
-        None
+                        .zip(target_iface_args)
+                        .all(|(a, b)| baml_type::normalize::equivalent(a, b, &NormalizeCtx(self)))
+            })
+            .map(|source| source.class_field)
     }
 
-    #[deprecated = "Resolves an interface field for construction via legacy `class_data.implements` \
-        + the `requires` closure (class-only, in-body-only). Rebuild on `impl_data`/`impls_for_type`: \
-        `requires` is a bound (closure only for type-var/existential), the field comes from the \
-        concrete type's own per-interface impl (incl. blanket/out-of-body)."]
+    /// Resolve a constructor field `field_name` to the `(class field, declared type)` it
+    /// denotes through an interface the class implements: the interface declares the field,
+    /// `ImplData.field_links` maps it to a class field, and the type is the interface's
+    /// declaration with its generic args applied. `None` when no implemented interface
+    /// declares `field_name`.
     fn qualified_interface_field_for_construction(
         &self,
         class_name: &crate::ty::QualifiedTypeName,
         class_type_args: &[Ty],
         field_name: &Name,
     ) -> Option<(Name, Ty)> {
-        let pkg_items = self.resolve_class_pkg_items(class_name.package())?;
-        let Definition::Class(class_loc) =
-            pkg_items.lookup_type(class_name.namespace(), class_name.name())?
-        else {
-            return None;
-        };
+        let concrete = Ty::Class(
+            class_name.clone(),
+            class_type_args.to_vec(),
+            TyAttr::default(),
+        );
+        let impls = self.type_impls(&concrete);
+        let source = self
+            .concrete_interface_field_sources(&impls, field_name)
+            .into_iter()
+            .next()?;
+        // The field's declared type lives in the interface's scope, its generic params bound
+        // to the realized interface args.
         let db = self.context.db();
-        let item_tree = baml_compiler2_ppir::file_item_tree(db, class_loc.file(db));
-        let class_data = &item_tree[class_loc.id(db)];
-        let class_ns =
-            baml_compiler2_hir::file_package::file_package(db, class_loc.file(db)).namespace_path;
-        let class_bindings =
-            crate::generics::bind_type_vars(&class_data.generic_params, class_type_args);
-
-        for impl_target in &class_data.implements {
-            let Some(root_iface_loc) = crate::interfaces::resolve_path_to_interface(
-                db,
-                &impl_target.target.expr,
-                pkg_items,
-                &class_ns,
-            ) else {
-                continue;
-            };
-
-            let root_iface_type_args = match &impl_target.target.expr {
-                TypeExpr::Path { generic_args, .. } => {
-                    let mut diags = Vec::new();
-                    generic_args
-                        .iter()
-                        .map(|arg| {
-                            if class_bindings.is_empty() {
-                                crate::lower_type_expr::lower_type_expr_in_ns(
-                                    db,
-                                    arg,
-                                    pkg_items,
-                                    &class_ns,
-                                    &class_data.generic_params,
-                                    &mut diags,
-                                )
-                            } else {
-                                crate::generics::lower_type_expr_with_generics(
-                                    db,
-                                    arg,
-                                    pkg_items,
-                                    &class_ns,
-                                    &class_bindings,
-                                    &mut diags,
-                                )
-                            }
-                        })
-                        .collect::<Vec<_>>()
+        let iface_tree = baml_compiler2_hir::file_item_tree(db, source.iface_loc.file(db));
+        let iface_data = iface_tree.interfaces.get(&source.iface_loc.id(db))?;
+        let field = iface_data.fields.iter().find(|f| f.name == *field_name)?;
+        let iface_pkg_items = self.resolve_class_pkg_items(source.iface_qtn.package())?;
+        let iface_ns =
+            baml_compiler2_hir::file_package::file_package(db, source.iface_loc.file(db))
+                .namespace_path;
+        let bindings =
+            crate::generics::bind_type_vars(&iface_data.generic_params, &source.iface_args);
+        let declared_ty = field
+            .type_expr
+            .as_ref()
+            .map(|te| {
+                let mut diags = Vec::new();
+                let ty = if bindings.is_empty() {
+                    crate::lower_type_expr::lower_type_expr_in_ns(
+                        db,
+                        &te.expr,
+                        iface_pkg_items,
+                        &iface_ns,
+                        &iface_data.generic_params,
+                        &mut diags,
+                    )
+                } else {
+                    crate::generics::lower_type_expr_with_generics(
+                        db,
+                        &te.expr,
+                        iface_pkg_items,
+                        &iface_ns,
+                        &bindings,
+                        &mut diags,
+                    )
+                };
+                for diag in diags {
+                    self.context.report_at_span(diag, te.span);
                 }
-                _ => Vec::new(),
-            };
-
-            for (iface_loc, iface_type_args, _iface_assoc) in
-                crate::interfaces::interface_closure_locs_with_args_and_assoc(
-                    db,
-                    root_iface_loc,
-                    &root_iface_type_args,
-                    &[],
-                    pkg_items,
-                    &class_ns,
-                )
-            {
-                let iface_tree = baml_compiler2_hir::file_item_tree(db, iface_loc.file(db));
-                let Some(iface_data) = iface_tree.interfaces.get(&iface_loc.id(db)) else {
-                    continue;
-                };
-                let Some(field) = iface_data
-                    .fields
-                    .iter()
-                    .find(|field| field.name == *field_name)
-                else {
-                    continue;
-                };
-                let class_field_name = impl_target
-                    .field_links
-                    .iter()
-                    .find(|link| link.interface_field == field.name)
-                    .map(|link| link.class_field.clone())
-                    .unwrap_or_else(|| field.name.clone());
-                let iface_ns =
-                    baml_compiler2_hir::file_package::file_package(db, iface_loc.file(db))
-                        .namespace_path;
-                let bindings =
-                    crate::generics::bind_type_vars(&iface_data.generic_params, &iface_type_args);
-                let declared_ty = field
-                    .type_expr
-                    .as_ref()
-                    .map(|te| {
-                        let mut diags = Vec::new();
-                        let ty = if bindings.is_empty() {
-                            crate::lower_type_expr::lower_type_expr_in_ns(
-                                db,
-                                &te.expr,
-                                pkg_items,
-                                &iface_ns,
-                                &iface_data.generic_params,
-                                &mut diags,
-                            )
-                        } else {
-                            crate::generics::lower_type_expr_with_generics(
-                                db, &te.expr, pkg_items, &iface_ns, &bindings, &mut diags,
-                            )
-                        };
-                        for diag in diags {
-                            self.context.report_at_span(diag, te.span);
-                        }
-                        ty
-                    })
-                    .unwrap_or(Ty::Unknown {
-                        attr: TyAttr::default(),
-                    });
-                return Some((class_field_name, declared_ty));
-            }
-        }
-        None
+                ty
+            })
+            .unwrap_or(Ty::Unknown {
+                attr: TyAttr::default(),
+            });
+        Some((source.class_field, declared_ty))
     }
 
     #[deprecated = "Finds a class's interface-field sources via legacy `class_data.implements` + \

@@ -160,6 +160,16 @@ fn split_params(
     (args, kwargs)
 }
 
+/// An interface a concrete receiver implements that declares a queried field, paired with
+/// the class field it links to. Returned by
+/// [`TypeInferenceBuilder::concrete_interface_field_sources`].
+pub(super) struct ConcreteFieldSource<'db> {
+    pub(super) iface_loc: baml_compiler2_hir::loc::InterfaceLoc<'db>,
+    pub(super) iface_qtn: crate::ty::QualifiedTypeName,
+    pub(super) iface_args: Vec<Ty>,
+    pub(super) class_field: Name,
+}
+
 impl<'db> TypeInferenceBuilder<'db> {
     /// a matching field or method. Default methods (with bodies) are
     /// resolved via `FunctionLoc` like class methods. Required methods are
@@ -251,19 +261,17 @@ impl<'db> TypeInferenceBuilder<'db> {
         bound: bool,
     ) -> Option<Ty> {
         let db = self.context.db();
-        let pkg_id = self.package_id;
-        let impls =
-            crate::interfaces::impls_for_type(db, pkg_id, base_ty, &self.aliases, |a, b| {
-                baml_type::normalize::is_subtype(a, b, &NormalizeCtx(self))
-            });
+        let impls = self.type_impls(base_ty);
 
         // Partition the type's own impls by realized interface `(qtn, args)`: those declaring
         // `member` as a method, and (separately) those declaring it as a field. Coherence
         // forbids two impls of the same realized interface, so dedup defensively.
         let mut method_candidates: Vec<((crate::ty::QualifiedTypeName, Vec<Ty>), _, _, _)> =
             Vec::new();
-        let mut field_sources: Vec<Name> = Vec::new();
         for resolved_impl in &impls {
+            let Some(resolved_method) = resolved_impl.get_method(db, member) else {
+                continue;
+            };
             let Ok(data) = crate::interfaces::impl_data(db, resolved_impl.impl_loc) else {
                 continue;
             };
@@ -271,34 +279,23 @@ impl<'db> TypeInferenceBuilder<'db> {
                 continue;
             };
             let realized = (iface_qtn, data.interface_args.clone());
-            if let Some(resolved_method) = resolved_impl.get_method(db, member) {
-                if !method_candidates.iter().any(|(r, ..)| *r == realized) {
-                    method_candidates.push((
-                        realized,
-                        resolved_impl.impl_loc,
-                        data,
-                        resolved_method,
-                    ));
-                }
-            } else if baml_compiler2_hir::file_item_tree(db, data.interface.file(db))
-                .interfaces
-                .get(&data.interface.id(db))
-                .is_some_and(|iface| iface.fields.iter().any(|f| &f.name == member))
-            {
-                let display = Name::new(format_interface_display(realized.0.name(), &realized.1));
-                if !field_sources.contains(&display) {
-                    field_sources.push(display);
-                }
+            if !method_candidates.iter().any(|(r, ..)| *r == realized) {
+                method_candidates.push((realized, resolved_impl.impl_loc, data, resolved_method));
             }
         }
+        let field_sources = self.concrete_interface_field_sources(&impls, member);
 
         // Interface fields are reachable only through an explicit projection.
         if field_sources.len() >= 2 {
+            let sources = field_sources
+                .iter()
+                .map(|s| Name::new(format_interface_display(s.iface_qtn.name(), &s.iface_args)))
+                .collect();
             self.context.report_at_member(
                 TirTypeError::AmbiguousInterfaceField {
                     class_name: receiver_name,
                     field_name: member.clone(),
-                    sources: field_sources,
+                    sources,
                 },
                 at,
                 Vec::new(),
@@ -307,7 +304,11 @@ impl<'db> TypeInferenceBuilder<'db> {
                 attr: TyAttr::default(),
             });
         }
-        if let Some(interface_name) = field_sources.into_iter().next() {
+        if let Some(source) = field_sources.into_iter().next() {
+            let interface_name = Name::new(format_interface_display(
+                source.iface_qtn.name(),
+                &source.iface_args,
+            ));
             self.context.report_at_member(
                 TirTypeError::InterfaceFieldRequiresProjection {
                     class_name: receiver_name,
@@ -378,6 +379,68 @@ impl<'db> TypeInferenceBuilder<'db> {
             self.owner_type_arg_binding_seed.insert(at, frame);
         }
         Some(ty)
+    }
+
+    /// All impl blocks the concrete `base_ty` satisfies — `impls_for_type` with the builder's
+    /// package, aliases, and canonical subtyping wired in. `impls_for_type` is *not* a salsa
+    /// query (it takes a closure), so callers compute this once and reuse the `Vec` rather
+    /// than re-enumerating per member kind.
+    pub(super) fn type_impls(&self, base_ty: &Ty) -> Vec<crate::interfaces::ResolvedImpl<'db>> {
+        crate::interfaces::impls_for_type(
+            self.context.db(),
+            self.package_id,
+            base_ty,
+            &self.aliases,
+            |a, b| baml_type::normalize::is_subtype(a, b, &NormalizeCtx(self)),
+        )
+    }
+
+    /// Among `impls` (from [`Self::type_impls`]), the interfaces that declare `field`, each
+    /// paired with the class field it links to (`ImplData.field_links`, default same name),
+    /// deduped by realized interface. The shared concrete-field path: member access uses it
+    /// for the projection/ambiguity diagnostics, construction for the `field_links` mapping.
+    pub(super) fn concrete_interface_field_sources(
+        &self,
+        impls: &[crate::interfaces::ResolvedImpl<'db>],
+        field: &Name,
+    ) -> Vec<ConcreteFieldSource<'db>> {
+        let db = self.context.db();
+        let mut sources: Vec<ConcreteFieldSource<'db>> = Vec::new();
+        for resolved_impl in impls {
+            let Ok(data) = crate::interfaces::impl_data(db, resolved_impl.impl_loc) else {
+                continue;
+            };
+            let Some(iface_qtn) = crate::interfaces::interface_loc_qtn(db, data.interface) else {
+                continue;
+            };
+            let declares_field = baml_compiler2_hir::file_item_tree(db, data.interface.file(db))
+                .interfaces
+                .get(&data.interface.id(db))
+                .is_some_and(|iface| iface.fields.iter().any(|f| &f.name == field));
+            if !declares_field {
+                continue;
+            }
+            // Coherence forbids two impls of the same realized interface; dedup defensively.
+            if sources
+                .iter()
+                .any(|s| s.iface_qtn == iface_qtn && s.iface_args == data.interface_args)
+            {
+                continue;
+            }
+            let class_field = data
+                .field_links
+                .iter()
+                .find(|(interface_field, _)| interface_field == field)
+                .map(|(_, class_field)| class_field.clone())
+                .unwrap_or_else(|| field.clone());
+            sources.push(ConcreteFieldSource {
+                iface_loc: data.interface,
+                iface_qtn,
+                iface_args: data.interface_args.clone(),
+                class_field,
+            });
+        }
+        sources
     }
 
     /// Resolve `member` on **one** interface instantiation — its own fields and methods,
@@ -469,6 +532,13 @@ impl<'db> TypeInferenceBuilder<'db> {
                 .unwrap_or(Ty::Unknown {
                     attr: TyAttr::default(),
                 });
+            self.resolutions.insert(
+                access.at,
+                crate::inference::MemberResolution::InterfaceVirtualField {
+                    iface_loc: iface.iface_loc,
+                    field: access.member.clone(),
+                },
+            );
             return Some(ty);
         }
 
