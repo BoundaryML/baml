@@ -832,7 +832,10 @@ jobs:
         with:
           # Snapshot tests are Rust-only; skip Python/uv setup to avoid
           # unnecessary install latency and intermittent timeout flakiness.
-          install_args: "sccache direnv cargo:cargo-insta cargo:cargo-nextest"
+          install_args: "sccache direnv cargo:cargo-nextest"
+
+      - name: "Install cargo-insta"
+        run: cargo binstall --no-confirm --version 1.48.0 cargo-insta || cargo install --locked --version 1.48.0 cargo-insta
 
       - name: "Verify sccache"
         run: sccache --version
