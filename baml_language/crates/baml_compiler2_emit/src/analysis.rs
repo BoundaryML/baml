@@ -2014,8 +2014,8 @@ mod tests {
         }
     }
 
-    #[test]
     /// Verifies `Rvalue::Len` bindings are always classified as materialized locals.
+    #[test]
     fn len_bindings_are_not_virtualized() {
         let arr = Local(1);
         let len = Local(2);
