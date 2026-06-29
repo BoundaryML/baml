@@ -596,25 +596,26 @@ pub(crate) fn check_void_type(
     }
 }
 
-/// Validate `_` placement in a `throws` clause.
+/// Validate `_` placement in a `throws` clause, neutralizing illegal holes.
 ///
 /// `_` is the open-contract marker (`throws AppError | _` or bare `throws _`),
-/// so it is allowed as a top-level member of the clause. But a `_` *nested*
-/// inside a thrown type (`throws Err<_>`) has nothing to infer from and would
-/// otherwise be flattened into a throw fact with the hole still embedded —
-/// reject it like any other non-inferable position.
+/// so it is allowed as a top-level member of the clause and is left in place
+/// (the TIR firewall fills it from the inferred throw set). But a `_` *nested*
+/// inside a thrown type (`throws Err<_>`) has nothing to infer from; it is
+/// reported and rewritten to an error sentinel (see [`check_wildcard_type`]) so
+/// it never reaches type checking as a `Ty::Infer`.
 pub(crate) fn check_throws_wildcard(
-    type_expr: &TypeExpr,
+    type_expr: &mut TypeExpr,
     span: TextRange,
     diags: &mut Vec<LoweringDiagnostic>,
 ) {
-    match &type_expr.kind {
-        // Bare `throws _` — the whole error set is inferred.
+    match &mut type_expr.kind {
+        // Bare `throws _` — the whole error set is inferred; keep the hole.
         TypeExprKind::Infer { .. } => {}
         TypeExprKind::Union { variants, .. } => {
             for v in variants {
-                // A top-level `_` member is the open slot; anything deeper is a
-                // non-inferable nested hole.
+                // A top-level `_` member is the open slot (kept); anything
+                // deeper is a non-inferable nested hole (rewritten to an error).
                 if !matches!(v.kind, TypeExprKind::Infer { .. }) {
                     check_wildcard_type(v, "a `throws` clause", span, diags);
                 }
@@ -624,28 +625,33 @@ pub(crate) fn check_throws_wildcard(
     }
 }
 
-/// Recursively reject the `_` wildcard type where it cannot be inferred.
+/// Reject — and neutralize — the `_` wildcard type where it cannot be inferred.
 ///
-/// `_` is an inference hole: it is only meaningful in a `let` binding
-/// annotation (filled from the initializer) or as a `throws`-clause member
-/// (filled from the body's inferred throw set). In a signature, field, or alias
-/// type there is nothing to infer it from, so it would otherwise leak through
-/// type checking and reach runtime lowering. Reject it here with a clear
-/// diagnostic instead.
+/// `_` is an inference hole: it is only meaningful in a `let` binding annotation
+/// (filled from the initializer) or as a top-level `throws`-clause member
+/// (filled from the body's inferred throw set). In a signature, field, alias, or
+/// bound type there is nothing to infer it from. Every such occurrence is
+/// reported AND rewritten to [`TypeExprKind::Error`], so it lowers to the
+/// error-recovery `Ty::Unknown` sentinel rather than a `Ty::Infer` — which would
+/// otherwise reach type normalization, where an inference hole has no sound
+/// form (see `baml_type::normalize`). This keeps the invariant that a
+/// `Ty::Infer` only ever originates from the two hole-handling contexts.
 ///
 /// Emits `WildcardTypeNotAllowed` for every occurrence at any depth.
 pub(crate) fn check_wildcard_type(
-    type_expr: &TypeExpr,
+    type_expr: &mut TypeExpr,
     context: &str,
     span: TextRange,
     diags: &mut Vec<LoweringDiagnostic>,
 ) {
-    match &type_expr.kind {
+    match &mut type_expr.kind {
         TypeExprKind::Infer { .. } => {
             diags.push(LoweringDiagnostic::WildcardTypeNotAllowed {
                 context: context.to_string(),
                 span,
             });
+            // Neutralize: a hole must never survive into TIR type checking.
+            type_expr.kind = TypeExprKind::Error { attrs: vec![] };
         }
         TypeExprKind::Optional { inner, .. } | TypeExprKind::List { inner, .. } => {
             check_wildcard_type(inner, context, span, diags);
@@ -668,7 +674,7 @@ pub(crate) fn check_wildcard_type(
                 check_wildcard_type(arg, context, span, diags);
             }
             for binding in associated_type_bindings {
-                check_wildcard_type(&binding.ty, context, span, diags);
+                check_wildcard_type(&mut binding.ty, context, span, diags);
             }
         }
         TypeExprKind::Function {
@@ -678,7 +684,7 @@ pub(crate) fn check_wildcard_type(
             ..
         } => {
             for p in params {
-                check_wildcard_type(&p.ty, context, span, diags);
+                check_wildcard_type(&mut p.ty, context, span, diags);
             }
             check_wildcard_type(ret, context, span, diags);
             if let Some(throws) = throws {

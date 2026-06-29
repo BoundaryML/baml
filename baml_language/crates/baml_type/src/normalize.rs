@@ -561,11 +561,22 @@ impl NormalTy {
             Ty::PromptAst { .. } => NormalTy::PromptAst,
             Ty::BuiltinUnknown { .. } => NormalTy::BuiltinUnknown,
             Ty::Never { .. } => NormalTy::Never,
-            // An unfilled inference hole normalizes to the bidirectionally-
-            // compatible `Unknown` sentinel: a `_` that survives to normalization
-            // (e.g. in a subtype check) must match anything at its slot. Precise
-            // filling happens earlier, at the `Ty` level, before normalization.
-            Ty::Unknown { .. } | Ty::Infer { .. } => NormalTy::Unknown,
+            Ty::Unknown { .. } => NormalTy::Unknown,
+            // INVARIANT: every `_` inference hole is filled — or replaced with
+            // `Ty::Error` — during inference, BEFORE any normalization /
+            // equivalence / subtype check. Normalizing a hole is unsound: a
+            // "matches-anything" sentinel makes both `Box<int>` and `Box<string>`
+            // equal to `Box<_>`, which transitively (and falsely) equates
+            // `Box<int>` with `Box<string>`. There is no sound sentinel here, so a
+            // hole reaching normalization is a compiler bug, not a case to
+            // tolerate. (See `compiler2_tir::builder`: the `let`-binding path
+            // infers, fills, and only then checks; un-fillable holes become
+            // `Ty::Error` at the pattern ascription before any check runs.)
+            Ty::Infer { .. } => unreachable!(
+                "inference hole `_` reached type normalization; it must be filled \
+                 (or replaced with `Ty::Error`) during inference before any \
+                 equivalence/subtype check"
+            ),
             Ty::Error { .. } => NormalTy::Error,
             // Freshness is a compiler-only widening flag, irrelevant to type identity.
             Ty::Literal(lit, _freshness, _) => NormalTy::Literal(lit.clone()),
