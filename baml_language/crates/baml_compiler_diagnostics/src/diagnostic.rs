@@ -125,6 +125,9 @@ pub enum DiagnosticId {
     WatchOnNonVariable,
     WatchOnUnwatchedVariable,
 
+    // Control-flow diagnostics (E0146)
+    UnreachableCode,
+
     // Syntax errors (E0028-E0031)
     MissingSemicolon,
     MissingConditionParens,
@@ -374,6 +377,9 @@ impl DiagnosticId {
             DiagnosticId::UnknownEnumVariant => "E0064",
             DiagnosticId::WatchOnNonVariable => "E0065",
             DiagnosticId::WatchOnUnwatchedVariable => "E0066",
+
+            // Control-flow diagnostics
+            DiagnosticId::UnreachableCode => "E0146",
 
             // Syntax errors
             DiagnosticId::MissingSemicolon => "E0028",

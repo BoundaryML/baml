@@ -527,20 +527,20 @@ fn render_implements_block(block: &baml_compiler2_hir::item_tree::ImplementsBloc
         let ty = binding
             .type_expr
             .as_ref()
-            .map(|type_expr| type_expr.expr.to_string())
+            .map(std::string::ToString::to_string)
             .unwrap_or_else(|| "unknown".to_string());
         format!("type {} = {}", binding.name.as_str(), ty)
     }));
 
     if members.is_empty() {
-        format!("implements {} {{}}", block.target.expr)
+        format!("implements {} {{}}", block.target)
     } else {
         let members = members
             .into_iter()
             .map(|member| format!("    {member}"))
             .collect::<Vec<_>>()
             .join("\n");
-        format!("implements {} {{\n{members}\n}}", block.target.expr)
+        format!("implements {} {{\n{members}\n}}", block.target)
     }
 }
 

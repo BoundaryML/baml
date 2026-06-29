@@ -3,45 +3,41 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
   [type] error: type mismatch: expected string, got string | null
-    ╭─[ main.baml:20:57 ]
+    ╭─[ main.baml:21:5 ]
     │
- 20 │ ╭─▶ function RootUsesOwnStream(c: Config$stream) -> string {
- 21 │ ├─▶     c.key
-    │ │               
-    │ ╰─────────────── type mismatch: expected string, got string | null
-    │     
-    │     Note: Error code: E0001
+ 21 │     c.key
+    │     ──┬──  
+    │       ╰──── type mismatch: expected string, got string | null
+    │ 
+    │ Note: Error code: E0001
 ────╯
 
   [type] error: type mismatch: expected string, got string | null
-    ╭─[ main.baml:25:68 ]
+    ╭─[ main.baml:26:5 ]
     │
- 25 │ ╭─▶ function RootUsesLlmStream(r: root.llm.Response$stream) -> string {
- 26 │ ├─▶     r.text
-    │ │                
-    │ ╰──────────────── type mismatch: expected string, got string | null
-    │     
-    │     Note: Error code: E0001
+ 26 │     r.text
+    │     ───┬──  
+    │        ╰──── type mismatch: expected string, got string | null
+    │ 
+    │ Note: Error code: E0001
 ────╯
 
   [type] error: type mismatch: expected string, got string | null
-    ╭─[ models.baml:12:58 ]
+    ╭─[ models.baml:13:5 ]
     │
- 12 │ ╭─▶ function LlmUsesOwnStream(r: Response$stream) -> string {
- 13 │ ├─▶     r.text
-    │ │                
-    │ ╰──────────────── type mismatch: expected string, got string | null
-    │     
-    │     Note: Error code: E0001
+ 13 │     r.text
+    │     ───┬──  
+    │        ╰──── type mismatch: expected string, got string | null
+    │ 
+    │ Note: Error code: E0001
 ────╯
 
   [type] error: type mismatch: expected string, got string | null
-    ╭─[ models.baml:17:62 ]
+    ╭─[ models.baml:18:5 ]
     │
- 17 │ ╭─▶ function LlmUsesRootStream(c: root.Config$stream) -> string {
- 18 │ ├─▶     c.key
-    │ │               
-    │ ╰─────────────── type mismatch: expected string, got string | null
-    │     
-    │     Note: Error code: E0001
+ 18 │     c.key
+    │     ──┬──  
+    │       ╰──── type mismatch: expected string, got string | null
+    │ 
+    │ Note: Error code: E0001
 ────╯

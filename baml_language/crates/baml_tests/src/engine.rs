@@ -27,7 +27,7 @@ pub use baml_project::testing::{
 };
 use bex_engine::{BexCallArg, BexEngine, BexExternalValue, FunctionCallContextBuilder};
 use bex_vm::debug::{BytecodeFormat, display_program};
-use bex_vm_types::{Function, FunctionOrigin, Object, Program};
+use bex_vm_types::{Function, Object, Program};
 pub use indexmap::IndexMap;
 #[cfg(test)]
 use insta::{assert_snapshot, with_settings};
@@ -72,16 +72,12 @@ pub fn display_user_functions_with_options(program: &Program, show_auto_derive: 
     let mut functions: Vec<(String, &Function)> = program
         .function_indices
         .iter()
-        .filter(|(name, _)| {
-            !name.starts_with("baml.")
-                && !name.starts_with("testing.")
-                && !name.starts_with("assert.")
-                && !name.starts_with("log.")
-                && !name.starts_with("env.")
-        })
         .filter_map(|(name, idx)| match program.objects.get(*idx) {
             Some(Object::Function(f)) => {
-                if !show_auto_derive && f.origin == FunctionOrigin::AutoDerive {
+                if !f.origin.is_user_callable() {
+                    return None;
+                }
+                if !show_auto_derive && f.origin.is_auto_derived() {
                     return None;
                 }
                 // Strip leading "user." package prefix for display.

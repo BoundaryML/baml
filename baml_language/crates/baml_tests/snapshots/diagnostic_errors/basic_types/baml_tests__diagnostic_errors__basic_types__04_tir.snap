@@ -40,51 +40,51 @@ function user.GetUser$build_request_stream(id: int, client: baml.llm.Client = ..
 }
 function user.GetStatus(client: baml.llm.Client = GPT4) -> user.Status throws never {
   baml.llm.call_llm_function<T>(client, "GetStatus", map {  }) : user.Status
-  !! 127..173: unresolved name: GPT4
+  !! 128..173: unresolved name: GPT4
 }
 function user.GetStatus$render_prompt(client: baml.llm.Client = GPT4) -> baml.llm.PromptAst throws never {
   baml.llm.render_prompt(client, "GetStatus", map {  }) : baml.llm.PromptAst
-  !! 127..173: unresolved name: GPT4
+  !! 128..173: unresolved name: GPT4
 }
 function user.GetStatus$build_request(client: baml.llm.Client = GPT4) -> baml.http.Request throws never {
   baml.llm.build_request(client, "GetStatus", map {  }) : baml.http.Request
-  !! 127..173: unresolved name: GPT4
+  !! 128..173: unresolved name: GPT4
 }
 function user.GetStatus$build_request_stream(client: baml.llm.Client = GPT4) -> baml.http.Request throws never {
   baml.llm.build_request_stream(client, "GetStatus", map {  }) : baml.http.Request
-  !! 127..173: unresolved name: GPT4
+  !! 128..173: unresolved name: GPT4
 }
 function user.GetMixedList(client: baml.llm.Client = GPT4) -> (int | string)[] throws never {
   baml.llm.call_llm_function<T>(client, "GetMixedList", map {  }) : (int | string)[]
-  !! 258..308: unresolved name: GPT4
+  !! 259..308: unresolved name: GPT4
 }
 function user.GetMixedList$render_prompt(client: baml.llm.Client = GPT4) -> baml.llm.PromptAst throws never {
   baml.llm.render_prompt(client, "GetMixedList", map {  }) : baml.llm.PromptAst
-  !! 258..308: unresolved name: GPT4
+  !! 259..308: unresolved name: GPT4
 }
 function user.GetMixedList$build_request(client: baml.llm.Client = GPT4) -> baml.http.Request throws never {
   baml.llm.build_request(client, "GetMixedList", map {  }) : baml.http.Request
-  !! 258..308: unresolved name: GPT4
+  !! 259..308: unresolved name: GPT4
 }
 function user.GetMixedList$build_request_stream(client: baml.llm.Client = GPT4) -> baml.http.Request throws never {
   baml.llm.build_request_stream(client, "GetMixedList", map {  }) : baml.http.Request
-  !! 258..308: unresolved name: GPT4
+  !! 259..308: unresolved name: GPT4
 }
 function user.GetMixedMap(client: baml.llm.Client = GPT4) -> map<string, int | string> throws never {
   baml.llm.call_llm_function<T>(client, "GetMixedMap", map {  }) : map<string, int | string>
-  !! 361..410: unresolved name: GPT4
+  !! 362..410: unresolved name: GPT4
 }
 function user.GetMixedMap$render_prompt(client: baml.llm.Client = GPT4) -> baml.llm.PromptAst throws never {
   baml.llm.render_prompt(client, "GetMixedMap", map {  }) : baml.llm.PromptAst
-  !! 361..410: unresolved name: GPT4
+  !! 362..410: unresolved name: GPT4
 }
 function user.GetMixedMap$build_request(client: baml.llm.Client = GPT4) -> baml.http.Request throws never {
   baml.llm.build_request(client, "GetMixedMap", map {  }) : baml.http.Request
-  !! 361..410: unresolved name: GPT4
+  !! 362..410: unresolved name: GPT4
 }
 function user.GetMixedMap$build_request_stream(client: baml.llm.Client = GPT4) -> baml.http.Request throws never {
   baml.llm.build_request_stream(client, "GetMixedMap", map {  }) : baml.http.Request
-  !! 361..410: unresolved name: GPT4
+  !! 362..410: unresolved name: GPT4
 }
 function user.GetUser$stream(id: int, client: baml.llm.Client = ...) -> baml.llm.Stream<user.User$stream | null, user.User> throws never {
   baml.llm.stream_llm_function(client, "GetUser", map { "id": id }) : baml.llm.Stream<user.User$stream | null, user.User>
@@ -97,39 +97,39 @@ function user.GetUser$parse(json: string, client: baml.llm.Client = ...) -> user
 }
 function user.GetStatus$stream(client: baml.llm.Client = GPT4) -> baml.llm.Stream<user.Status | null, user.Status> throws never {
   baml.llm.stream_llm_function(client, "GetStatus", map {  }) : baml.llm.Stream<user.Status | null, user.Status>
-  !! 127..173: unresolved name: GPT4
+  !! 128..173: unresolved name: GPT4
 }
 function user.GetStatus$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client = GPT4) -> baml.llm.Stream<user.Status | null, user.Status> throws never {
   client.__make_stream(sse) : baml.llm.Stream<user.Status | null, user.Status>
-  !! 127..173: unresolved name: GPT4
+  !! 128..173: unresolved name: GPT4
 }
 function user.GetStatus$parse(json: string, client: baml.llm.Client = GPT4) -> user.Status throws never {
   baml.llm.parse<TFinal>(json) : user.Status
-  !! 127..173: unresolved name: GPT4
+  !! 128..173: unresolved name: GPT4
 }
 function user.GetMixedList$stream(client: baml.llm.Client = GPT4) -> baml.llm.Stream<(int | string)[], (int | string)[]> throws never {
   baml.llm.stream_llm_function(client, "GetMixedList", map {  }) : baml.llm.Stream<(int | string)[], (int | string)[]>
-  !! 258..308: unresolved name: GPT4
+  !! 259..308: unresolved name: GPT4
 }
 function user.GetMixedList$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client = GPT4) -> baml.llm.Stream<(int | string)[], (int | string)[]> throws never {
   client.__make_stream(sse) : baml.llm.Stream<(int | string)[], (int | string)[]>
-  !! 258..308: unresolved name: GPT4
+  !! 259..308: unresolved name: GPT4
 }
 function user.GetMixedList$parse(json: string, client: baml.llm.Client = GPT4) -> (int | string)[] throws never {
   baml.llm.parse<TFinal>(json) : (int | string)[]
-  !! 258..308: unresolved name: GPT4
+  !! 259..308: unresolved name: GPT4
 }
 function user.GetMixedMap$stream(client: baml.llm.Client = GPT4) -> baml.llm.Stream<map<string, int | string>, map<string, int | string>> throws never {
   baml.llm.stream_llm_function(client, "GetMixedMap", map {  }) : baml.llm.Stream<map<string, int | string>, map<string, int | string>>
-  !! 361..410: unresolved name: GPT4
+  !! 362..410: unresolved name: GPT4
 }
 function user.GetMixedMap$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client = GPT4) -> baml.llm.Stream<map<string, int | string>, map<string, int | string>> throws never {
   client.__make_stream(sse) : baml.llm.Stream<map<string, int | string>, map<string, int | string>>
-  !! 361..410: unresolved name: GPT4
+  !! 362..410: unresolved name: GPT4
 }
 function user.GetMixedMap$parse(json: string, client: baml.llm.Client = GPT4) -> map<string, int | string> throws never {
   baml.llm.parse<TFinal>(json) : map<string, int | string>
-  !! 361..410: unresolved name: GPT4
+  !! 362..410: unresolved name: GPT4
 }
 class user.User {
   id: int

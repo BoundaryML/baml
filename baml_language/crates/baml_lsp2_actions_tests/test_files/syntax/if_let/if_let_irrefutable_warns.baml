@@ -10,11 +10,11 @@ function IrrefutablePlainBinding(x: int) -> int {
 //----
 //- diagnostics
 // warning: irrefutable `if let` pattern; the `else` branch is unreachable — use a plain `let` binding instead
-//    ╭─[ if_let_if_let_irrefutable_warns.baml:3:5 ]
+//    ╭─[ if_let_if_let_irrefutable_warns.baml:3:6 ]
 //    │
 //  3 │   if let v = x {
-//    │     ───┬──  
+//    │      ──┬──
 //    │        ╰──── irrefutable `if let` pattern; the `else` branch is unreachable — use a plain `let` binding instead
-//    │ 
+//    │
 //    │ Note: Error code: E0112
 // ───╯

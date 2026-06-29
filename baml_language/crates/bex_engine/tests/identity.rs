@@ -6,7 +6,8 @@
 //! that layer; what survives here are the tests that pin the *identity*
 //! contract of the surviving system:
 //!
-//! - `$id` reads decode to the current call's default `CallRef`
+//! - root `$id` reads decode to the host-created `BoundaryId`, while child
+//!   calls without an override decode to the current call's default `CallRef`
 //!   (`process_euid` / `engine_id` / `thread_id` / `call_id`),
 //! - `baml.id.new()` / `baml.id.set()` / `$id = ...` override semantics
 //!   (per-call, stack-scoped, not inherited by callees),
@@ -24,7 +25,7 @@ mod common;
 use std::sync::Arc;
 
 use bex_engine::{BexEngine, BexExternalValue, FunctionCallContextBuilder};
-use bex_events::ids::RuntimeId;
+use bex_events::ids::{BoundaryId, RuntimeId};
 use common::compile_for_engine;
 use sys_native::SysOpsExt;
 
@@ -42,7 +43,10 @@ async fn baml_id_inside_spawn_uses_child_thread_root_call() {
         BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new()).unwrap(),
     );
 
-    let call_ctx = FunctionCallContextBuilder::new(sys_types::CallId::next()).build();
+    let boundary_id = BoundaryId::from_bytes([1; 16]);
+    let call_ctx = FunctionCallContextBuilder::new(sys_types::CallId::next())
+        .with_boundary_id(boundary_id)
+        .build();
     let value = engine
         .call_function("main", vec![], call_ctx, true)
         .await
@@ -73,7 +77,10 @@ async fn call_function_with_trace_surfaces_entry_call_ref() {
         BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new()).unwrap(),
     );
 
-    let call_ctx = FunctionCallContextBuilder::new(sys_types::CallId::next()).build();
+    let boundary_id = BoundaryId::from_bytes([1; 16]);
+    let call_ctx = FunctionCallContextBuilder::new(sys_types::CallId::next())
+        .with_boundary_id(boundary_id)
+        .build();
     let result = engine
         .call_function_with_trace("main", vec![], call_ctx, true)
         .await
@@ -87,10 +94,49 @@ async fn call_function_with_trace_surfaces_entry_call_ref() {
     let BexExternalValue::String(id) = result.value.unwrap() else {
         panic!("expected $id string result");
     };
-    let RuntimeId::DefaultCall(call_ref) = RuntimeId::decode(id.as_str()).unwrap() else {
-        panic!("expected default call runtime ID");
+    let RuntimeId::Boundary(actual_boundary_id) = RuntimeId::decode(id.as_str()).unwrap() else {
+        panic!("expected root boundary runtime ID");
     };
-    assert_eq!(call_ref, result.entry_call_ref);
+    assert_eq!(actual_boundary_id, boundary_id);
+}
+
+#[tokio::test]
+async fn boundary_id_current_matches_root_id() {
+    let source = r#"
+        function main() -> string {
+            boundary.id.current() + "|" + $id
+        }
+    "#;
+
+    let snapshot = compile_for_engine(source);
+    let engine = Arc::new(
+        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new()).unwrap(),
+    );
+
+    let boundary_id = BoundaryId::from_bytes([3; 16]);
+    let value = engine
+        .call_function(
+            "main",
+            vec![],
+            FunctionCallContextBuilder::new(sys_types::CallId::next())
+                .with_boundary_id(boundary_id)
+                .build(),
+            true,
+        )
+        .await
+        .unwrap();
+
+    let BexExternalValue::String(result) = value else {
+        panic!("expected boundary id string result");
+    };
+    let parts: Vec<&str> = result.as_str().split('|').collect();
+    assert_eq!(parts.len(), 2);
+    assert_eq!(parts[0], parts[1]);
+    assert_eq!(parts[0], boundary_id.to_wire_string());
+    let RuntimeId::Boundary(actual_boundary_id) = RuntimeId::decode(parts[0]).unwrap() else {
+        panic!("expected root boundary runtime ID");
+    };
+    assert_eq!(actual_boundary_id, boundary_id);
 }
 
 #[tokio::test]
@@ -124,11 +170,14 @@ async fn call_callable_with_trace_surfaces_callable_entry_call_ref() {
         other => panic!("expected callable handle, got {other:?}"),
     };
 
+    let boundary_id = BoundaryId::from_bytes([2; 16]);
     let result = engine
         .call_callable_with_trace(
             handle,
             vec![],
-            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            FunctionCallContextBuilder::new(sys_types::CallId::next())
+                .with_boundary_id(boundary_id)
+                .build(),
             true,
         )
         .await
@@ -142,10 +191,10 @@ async fn call_callable_with_trace_surfaces_callable_entry_call_ref() {
     let BexExternalValue::String(id) = result.value.unwrap() else {
         panic!("expected callable $id string result");
     };
-    let RuntimeId::DefaultCall(call_ref) = RuntimeId::decode(id.as_str()).unwrap() else {
-        panic!("expected default call runtime ID");
+    let RuntimeId::Boundary(actual_boundary_id) = RuntimeId::decode(id.as_str()).unwrap() else {
+        panic!("expected callable root boundary runtime ID");
     };
-    assert_eq!(call_ref, result.entry_call_ref);
+    assert_eq!(actual_boundary_id, boundary_id);
 }
 
 #[tokio::test]
@@ -270,19 +319,16 @@ async fn baml_id_current_new_and_set_roundtrip() {
     let parts: Vec<&str> = result.as_str().split('|').collect();
     assert_eq!(parts.len(), 4);
 
-    let RuntimeId::DefaultCall(call_ref) = RuntimeId::decode(parts[0]).unwrap() else {
-        panic!("expected default call runtime ID");
+    let RuntimeId::Boundary(root_boundary_id) = RuntimeId::decode(parts[0]).unwrap() else {
+        panic!("expected root boundary runtime ID");
     };
-    assert_eq!(call_ref.process_euid, engine.process_euid());
-    assert_eq!(call_ref.engine_id, engine.engine_id());
-    assert_eq!(call_ref.thread_id, bex_engine::BexThreadId(1));
-    assert_eq!(call_ref.call_id, bex_engine::BexCallId(1));
 
     assert_eq!(parts[1], parts[2]);
     assert_eq!(parts[2], parts[3]);
-    let RuntimeId::OverrideUuid(_override_id) = RuntimeId::decode(parts[3]).unwrap() else {
+    let RuntimeId::Boundary(override_id) = RuntimeId::decode(parts[3]).unwrap() else {
         panic!("expected override runtime ID");
     };
+    assert_ne!(root_boundary_id, override_id);
 
     // The SetFunctionId record assertion lives in prof_gate.rs
     // (set_function_id_recorded) against the .bamlprof stream.
@@ -317,18 +363,15 @@ async fn baml_id_assignment_overrides_current_id() {
     let parts: Vec<&str> = result.as_str().split('|').collect();
     assert_eq!(parts.len(), 3);
 
-    let RuntimeId::DefaultCall(call_ref) = RuntimeId::decode(parts[0]).unwrap() else {
-        panic!("expected default call runtime ID");
+    let RuntimeId::Boundary(root_boundary_id) = RuntimeId::decode(parts[0]).unwrap() else {
+        panic!("expected root boundary runtime ID");
     };
-    assert_eq!(call_ref.process_euid, engine.process_euid());
-    assert_eq!(call_ref.engine_id, engine.engine_id());
-    assert_eq!(call_ref.thread_id, bex_engine::BexThreadId(1));
-    assert_eq!(call_ref.call_id, bex_engine::BexCallId(1));
 
     assert_eq!(parts[1], parts[2]);
-    let RuntimeId::OverrideUuid(_override_id) = RuntimeId::decode(parts[2]).unwrap() else {
+    let RuntimeId::Boundary(override_id) = RuntimeId::decode(parts[2]).unwrap() else {
         panic!("expected override runtime ID");
     };
+    assert_ne!(root_boundary_id, override_id);
 
     // The SetFunctionId record assertion lives in prof_gate.rs
     // (set_function_id_recorded) against the .bamlprof stream.
@@ -513,10 +556,10 @@ async fn id_override_survives_callee_override() {
     let parts: Vec<&str> = result.as_str().split('|').collect();
     assert_eq!(parts.len(), 3);
 
-    let RuntimeId::OverrideUuid(_) = RuntimeId::decode(parts[0]).unwrap() else {
+    let RuntimeId::Boundary(_) = RuntimeId::decode(parts[0]).unwrap() else {
         panic!("outer should be an override ID");
     };
-    let RuntimeId::OverrideUuid(_) = RuntimeId::decode(parts[1]).unwrap() else {
+    let RuntimeId::Boundary(_) = RuntimeId::decode(parts[1]).unwrap() else {
         panic!("helper's $id should be the helper's own override");
     };
     assert_ne!(
@@ -564,7 +607,7 @@ async fn id_override_read_at_return_is_override_uuid() {
     let BexExternalValue::String(id) = value else {
         panic!("expected string result");
     };
-    let RuntimeId::OverrideUuid(_override_id) = RuntimeId::decode(id.as_str()).unwrap() else {
+    let RuntimeId::Boundary(_override_id) = RuntimeId::decode(id.as_str()).unwrap() else {
         panic!("expected override runtime ID, got {id}");
     };
 
@@ -609,15 +652,9 @@ async fn id_is_correct_after_caught_exception() {
     let BexExternalValue::String(id) = value else {
         panic!("expected string result");
     };
-    let RuntimeId::DefaultCall(call_ref) = RuntimeId::decode(id.as_str()).unwrap() else {
-        panic!("expected default CallRef, got {id}");
+    let RuntimeId::Boundary(_) = RuntimeId::decode(id.as_str()).unwrap() else {
+        panic!("expected root BoundaryId after catch, got {id}");
     };
-    assert_eq!(call_ref.thread_id, bex_engine::BexThreadId(1));
-    assert_eq!(
-        call_ref.call_id,
-        bex_engine::BexCallId(1),
-        "$id after a catch must be the root call, not a stale unwound call"
-    );
 }
 
 // ── §3.3 contract: baml.id.set throws clause (T25) ─────────────────────────
@@ -628,10 +665,14 @@ async fn id_is_correct_after_caught_exception() {
 #[tokio::test]
 async fn baml_id_set_invalid_inputs_throw_catchable_invalid_argument() {
     let source = r#"
-        function set_current() -> string {
+        function child_current() -> string {
             baml.id.set(baml.id.current()) catch (e) {
                 baml.errors.InvalidArgument => "caught"
             }
+        }
+
+        function set_child_current() -> string {
+            child_current()
         }
 
         function set_garbage() -> string {
@@ -646,7 +687,7 @@ async fn baml_id_set_invalid_inputs_throw_catchable_invalid_argument() {
         BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new()).unwrap(),
     );
 
-    for entry in ["set_current", "set_garbage"] {
+    for entry in ["set_child_current", "set_garbage"] {
         let call_ctx = FunctionCallContextBuilder::new(sys_types::CallId::next()).build();
         let value = engine
             .call_function(entry, vec![], call_ctx, true)
@@ -698,9 +739,10 @@ async fn sinkless_engine_still_mints_correct_ids() {
     let BexExternalValue::String(result) = value else {
         panic!("expected string result");
     };
-    let ids: Vec<(u64, u64)> = result
-        .as_str()
-        .split('|')
+    let parts: Vec<&str> = result.as_str().split('|').collect();
+    assert_eq!(parts.len(), 4);
+    let ids: Vec<(u64, u64)> = [parts[0], parts[1], parts[3]]
+        .iter()
         .map(|part| {
             let RuntimeId::DefaultCall(call_ref) = RuntimeId::decode(part).unwrap() else {
                 panic!("expected default CallRef, got {part}");
@@ -708,15 +750,17 @@ async fn sinkless_engine_still_mints_correct_ids() {
             (call_ref.thread_id.0, call_ref.call_id.0)
         })
         .collect();
+    let RuntimeId::Boundary(_) = RuntimeId::decode(parts[2]).unwrap() else {
+        panic!("main root should expose BoundaryId, got {}", parts[2]);
+    };
 
-    // deep (called by mid), mid, main root, spawned child root.
+    // deep (called by mid), mid, main root boundary, spawned child root.
     // Call ids on the main thread: main=1, spawn-closure-thread is separate,
     // mid=2, deep=3 (spawn dispatch happens before mid()).
-    assert_eq!(ids[2], (1, 1), "main is thread 1 call 1: {ids:?}");
     assert_eq!(ids[0].0, 1, "deep runs on the main thread: {ids:?}");
     assert_eq!(ids[1].0, 1, "mid runs on the main thread: {ids:?}");
     assert!(ids[0].1 > ids[1].1, "deep is called by mid: {ids:?}");
-    assert_eq!(ids[3], (2, 1), "spawned body is thread 2 call 1: {ids:?}");
+    assert_eq!(ids[2], (2, 1), "spawned body is thread 2 call 1: {ids:?}");
 }
 
 /// TICKET §11.2's two-engine row: two engines in one process get distinct
@@ -725,8 +769,12 @@ async fn sinkless_engine_still_mints_correct_ids() {
 #[tokio::test]
 async fn two_engines_mint_distinct_call_refs() {
     let source = r#"
-        function main() -> string {
+        function inner() -> string {
             $id
+        }
+
+        function main() -> string {
+            inner()
         }
     "#;
 
@@ -752,7 +800,7 @@ async fn two_engines_mint_distinct_call_refs() {
     assert_ne!(engine_ids[0], engine_ids[1]);
     assert_ne!(
         encoded[0], encoded[1],
-        "thread 1 / call 1 in two engines must encode to distinct CallRefs"
+        "the same nested call in two engines must encode to distinct CallRefs"
     );
     for (id, engine_id) in encoded.iter().zip(&engine_ids) {
         let RuntimeId::DefaultCall(call_ref) = RuntimeId::decode(id).unwrap() else {
@@ -760,6 +808,6 @@ async fn two_engines_mint_distinct_call_refs() {
         };
         assert_eq!(call_ref.engine_id, *engine_id);
         assert_eq!(call_ref.thread_id, bex_engine::BexThreadId(1));
-        assert_eq!(call_ref.call_id, bex_engine::BexCallId(1));
+        assert_eq!(call_ref.call_id, bex_engine::BexCallId(2));
     }
 }

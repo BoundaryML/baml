@@ -72,9 +72,9 @@ pub struct Function {
     /// Function parameter default expression arena.
     pub defaults: ast::FunctionDefaults,
     /// Return type with its source span.
-    pub return_type: Option<ast::SpannedTypeExpr>,
+    pub return_type: Option<ast::TypeExpr>,
     /// Throws contract type with its source span.
-    pub throws: Option<ast::SpannedTypeExpr>,
+    pub throws: Option<ast::TypeExpr>,
     /// Function body — either an expression or a builtin.
     pub body: Option<ast::FunctionBodyDef>,
     /// Declarative metadata, if this function was declared with declarative syntax.
@@ -94,7 +94,7 @@ pub struct Function {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FunctionParam {
     pub name: Name,
-    pub type_expr: Option<ast::SpannedTypeExpr>,
+    pub type_expr: Option<ast::TypeExpr>,
     pub default: Option<DefaultExprRef>,
     pub span: TextRange,
 }
@@ -109,7 +109,7 @@ pub struct DefaultExprRef {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ClassField {
     pub name: Name,
-    pub type_expr: Option<ast::SpannedTypeExpr>,
+    pub type_expr: Option<ast::TypeExpr>,
     pub attributes: Vec<Attribute>,
     /// Joined `///` doc-comment lines preceding this declaration.
     pub docstring: Option<String>,
@@ -146,7 +146,7 @@ pub struct Class {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ImplementsBlock {
-    pub target: ast::SpannedTypeExpr,
+    pub target: ast::TypeExpr,
     pub field_links: Vec<InterfaceFieldLink>,
     pub associated_type_bindings: Vec<ast::AssociatedTypeBindingDef>,
     pub is_out_of_body: bool,
@@ -157,8 +157,8 @@ pub struct ImplementsBlock {
 pub struct ImplementsFor {
     pub generic_params: Vec<Name>,
     pub generic_param_bounds: Vec<Option<ast::TypeExpr>>,
-    pub interface_target: ast::SpannedTypeExpr,
-    pub for_target: ast::SpannedTypeExpr,
+    pub interface_target: ast::TypeExpr,
+    pub for_target: ast::TypeExpr,
     pub field_links: Vec<InterfaceFieldLink>,
     pub associated_type_bindings: Vec<ast::AssociatedTypeBindingDef>,
     pub methods: Vec<LocalItemId<FunctionMarker>>,
@@ -213,7 +213,7 @@ pub enum ImplSubject {
     /// `implement<…> I for <for_target> { … }`: an explicit for-type plus the
     /// block's own generic parameters.
     Free {
-        for_target: ast::SpannedTypeExpr,
+        for_target: ast::TypeExpr,
         generics: Vec<GenericParam>,
     },
 }
@@ -225,7 +225,7 @@ pub enum ImplSubject {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ImplBlock {
     pub subject: ImplSubject,
-    pub interface_target: ast::SpannedTypeExpr,
+    pub interface_target: ast::TypeExpr,
     pub field_links: Vec<InterfaceFieldLink>,
     pub associated_type_bindings: Vec<ast::AssociatedTypeBindingDef>,
     pub methods: Vec<LocalItemId<FunctionMarker>>,
@@ -264,8 +264,8 @@ pub struct InterfaceMethodSig {
     /// BEP-044 generic bounds parallel to `generic_params`.
     pub generic_param_bounds: Vec<Option<ast::TypeExpr>>,
     pub params: Vec<FunctionParam>,
-    pub return_type: Option<ast::SpannedTypeExpr>,
-    pub throws: Option<ast::SpannedTypeExpr>,
+    pub return_type: Option<ast::TypeExpr>,
+    pub throws: Option<ast::TypeExpr>,
     pub attributes: Vec<Attribute>,
     pub docstring: Option<String>,
     pub span: TextRange,
@@ -283,7 +283,7 @@ pub struct Interface {
     /// BEP-044 generic bounds parallel to `generic_params`.
     pub generic_param_bounds: Vec<Option<ast::TypeExpr>>,
     /// Required interfaces from `requires I1, I2, …`.
-    pub requires: Vec<ast::SpannedTypeExpr>,
+    pub requires: Vec<ast::TypeExpr>,
     /// Field signatures declared on the interface. Interface fields cannot
     /// have default values.
     pub fields: Vec<ClassField>,
@@ -302,7 +302,7 @@ pub struct Interface {
 pub struct TypeAlias {
     pub name: Name,
     /// The type expression on the RHS of the alias, if present.
-    pub type_expr: Option<ast::SpannedTypeExpr>,
+    pub type_expr: Option<ast::TypeExpr>,
     /// Full source span of the type alias declaration.
     pub span: TextRange,
 }
@@ -456,7 +456,7 @@ pub struct ItemTree {
     /// block) and for interface default-methods themselves. Consumers
     /// resolve the path to an `InterfaceLoc` lazily so HIR construction
     /// stays independent of name resolution.
-    pub method_to_iface_target: FxHashMap<LocalItemId<FunctionMarker>, ast::SpannedTypeExpr>,
+    pub method_to_iface_target: FxHashMap<LocalItemId<FunctionMarker>, ast::TypeExpr>,
     pub method_to_iface_associated_type_bindings:
         FxHashMap<LocalItemId<FunctionMarker>, Vec<ast::AssociatedTypeBindingDef>>,
 

@@ -23,7 +23,7 @@ source: crates/baml_tests/src/generated_tests.rs
 ────╯
 
   [type] error: unresolved name: GPT4
-    ╭─[ extra_greater.baml:23:50 ]
+    ╭─[ extra_greater.baml:23:51 ]
     │
  23 │ ╭─▶ function BadParam(x: map<string, int>>) -> string {
     ┆ ┆   
@@ -45,7 +45,7 @@ source: crates/baml_tests/src/generated_tests.rs
 ────╯
 
   [type] error: unresolved name: GPT4
-    ╭─[ extra_greater.baml:29:46 ]
+    ╭─[ extra_greater.baml:29:47 ]
     │
  29 │ ╭─▶ function BadReturnType() -> map<string, int>> {
     ┆ ┆   

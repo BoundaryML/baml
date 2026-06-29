@@ -222,6 +222,29 @@ function f(s: Sentiment) -> string {
 }
 
 #[test]
+fn unresolved_dotted_root_span_should_narrow_to_root() {
+    // B-539 regression: when the root of a dotted access (`o.value`) is an
+    // unresolved name, the diagnostic should underline only `o`, not the whole
+    // `o.value` expression.
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        "\
+function f() -> string {
+  return o.value;
+}",
+    );
+    insta::assert_snapshot!(render_tir(&db, file), @"
+    function user.f() -> string throws never {
+      { : never
+        return o.value : unknown
+      }
+      !! 34..35: unresolved name: o
+    }
+    ");
+}
+
+#[test]
 fn unknown_field_access_uses_narrowing_diagnostic() {
     let mut db = make_db();
     let file = db.add_file(

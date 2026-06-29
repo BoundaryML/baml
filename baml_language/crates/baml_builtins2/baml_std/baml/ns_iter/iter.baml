@@ -503,3 +503,12 @@ implements<T> Iterable for T[] {
     ArrayIterator.new(self)
   }
 }
+
+implements Iterable for string {
+  type Item = string
+  type Error = never
+
+  function iter(self) -> Iterator<Item = string, Error = never> throws never {
+    self.chars().iter()
+  }
+}

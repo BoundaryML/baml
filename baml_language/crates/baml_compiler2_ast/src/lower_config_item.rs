@@ -6,7 +6,7 @@
 //! a typed `Expr::Object` rather than hand-parsing each field.
 
 use baml_base::{Literal, Name};
-use baml_compiler_syntax::{SyntaxKind, SyntaxNode, ast as cst};
+use baml_compiler_syntax::{SyntaxKind, SyntaxNode, SyntaxNodeExt, ast as cst};
 use rowan::ast::AstNode;
 
 use crate::{
@@ -35,7 +35,7 @@ pub(crate) fn lower_config_value_with_env_refs(
     let Some(cv_node) = item.config_value_node() else {
         return alloc(Expr::Null);
     };
-    lower_config_value_node(&cv_node, item.syntax().text_range(), alloc, env_var_refs)
+    lower_config_value_node(&cv_node, cv_node.span_range(), alloc, env_var_refs)
 }
 
 /// Lower a `CONFIG_VALUE` node into an `Expr`.
@@ -64,7 +64,7 @@ fn lower_config_value_node(
             .children()
             .filter_map(|element| match element.kind() {
                 SyntaxKind::CONFIG_VALUE => {
-                    let element_range = element.text_range();
+                    let element_range = element.span_range();
                     Some(lower_config_value_node(
                         &element,
                         element_range,

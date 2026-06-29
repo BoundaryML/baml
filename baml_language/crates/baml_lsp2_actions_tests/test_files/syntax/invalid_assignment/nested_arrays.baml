@@ -72,11 +72,11 @@ function NestedArrayAssignments() -> int {
 //     │ Note: Error code: E0001
 // ────╯
 // error: type mismatch: expected int[], got int[][]
-//     ╭─[ invalid_assignment_nested_arrays.baml:32:5 ]
+//     ╭─[ invalid_assignment_nested_arrays.baml:32:6 ]
 //     │
 //  32 │     e = [[4, 5], [6, 7]];
-//     │        ────────┬────────
-//     │                ╰────────── type mismatch: expected int[], got int[][]
+//     │         ────────┬───────
+//     │                 ╰───────── type mismatch: expected int[], got int[][]
 //     │
 //     │ Note: Error code: E0001
 // ────╯

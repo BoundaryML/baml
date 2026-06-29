@@ -545,7 +545,7 @@ impl<'a, 'db, B: TypeVarBounds + ?Sized> AssociatedProjectionResolver<'a, 'db, B
             let mut diags = Vec::new();
             let bound_ty = crate::generics::lower_type_expr_with_generics(
                 self.db,
-                &bound.expr,
+                bound,
                 current_pkg_items,
                 &current_pkg.namespace_path,
                 &bindings,
@@ -593,7 +593,7 @@ impl<'a, 'db, B: TypeVarBounds + ?Sized> AssociatedProjectionResolver<'a, 'db, B
         'impls: for impl_target in &class_data.implements {
             let Some(iface_loc) = crate::interfaces::resolve_path_to_interface(
                 self.db,
-                &impl_target.target.expr,
+                &impl_target.target,
                 pkg_items,
                 &class_ns,
             ) else {
@@ -618,7 +618,7 @@ impl<'a, 'db, B: TypeVarBounds + ?Sized> AssociatedProjectionResolver<'a, 'db, B
             let mut diags = Vec::new();
             let lowered_iface = crate::lower_type_expr::lower_type_expr_in_ns(
                 self.db,
-                &impl_target.target.expr,
+                &impl_target.target,
                 pkg_items,
                 &class_ns,
                 &class_data.generic_params,
@@ -658,7 +658,7 @@ impl<'a, 'db, B: TypeVarBounds + ?Sized> AssociatedProjectionResolver<'a, 'db, B
                             assoc.name.clone(),
                             crate::generics::lower_type_expr_with_generics(
                                 self.db,
-                                &te.expr,
+                                te,
                                 pkg_items,
                                 &class_ns,
                                 &iface_bindings,
@@ -672,7 +672,7 @@ impl<'a, 'db, B: TypeVarBounds + ?Sized> AssociatedProjectionResolver<'a, 'db, B
                             assoc.name.clone(),
                             crate::generics::lower_type_expr_with_generics(
                                 self.db,
-                                &default.expr,
+                                default,
                                 pkg_items,
                                 &iface_pkg.namespace_path,
                                 &iface_bindings,
@@ -746,7 +746,7 @@ impl<'a, 'db, B: TypeVarBounds + ?Sized> AssociatedProjectionResolver<'a, 'db, B
         for impl_target in &class_data.implements {
             let Some(iface_loc) = crate::interfaces::resolve_path_to_interface(
                 self.db,
-                &impl_target.target.expr,
+                &impl_target.target,
                 pkg_items,
                 &class_pkg.namespace_path,
             ) else {
@@ -771,7 +771,7 @@ impl<'a, 'db, B: TypeVarBounds + ?Sized> AssociatedProjectionResolver<'a, 'db, B
             let mut diags = Vec::new();
             let lowered_iface = crate::lower_type_expr::lower_type_expr_in_ns(
                 self.db,
-                &impl_target.target.expr,
+                &impl_target.target,
                 pkg_items,
                 &class_pkg.namespace_path,
                 &class_data.generic_params,
@@ -800,7 +800,7 @@ impl<'a, 'db, B: TypeVarBounds + ?Sized> AssociatedProjectionResolver<'a, 'db, B
             let mut bound_diags = Vec::new();
             let bound_ty = crate::generics::lower_type_expr_with_generics(
                 self.db,
-                &bound.expr,
+                bound,
                 pkg_items,
                 &iface_pkg.namespace_path,
                 &bindings,

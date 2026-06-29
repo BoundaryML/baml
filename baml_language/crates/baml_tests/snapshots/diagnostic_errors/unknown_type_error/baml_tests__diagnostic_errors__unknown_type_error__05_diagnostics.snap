@@ -3,40 +3,40 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
   [type] error: unresolved type: blah
-   ╭─[ unknown_type_error.baml:3:18 ]
+   ╭─[ unknown_type_error.baml:3:19 ]
    │
  3 │ function Foo() -> blah {
-   │                  ──┬──  
-   │                    ╰──── unresolved type: blah
+   │                   ──┬─  
+   │                     ╰─── unresolved type: blah
    │ 
    │ Note: Error code: E0002
 ───╯
 
   [type] error: unresolved type: unknown_param_type
-   ╭─[ unknown_type_error.baml:8:16 ]
+   ╭─[ unknown_type_error.baml:8:17 ]
    │
  8 │ function Bar(x: unknown_param_type) -> int {
-   │                ─────────┬─────────  
-   │                         ╰─────────── unresolved type: unknown_param_type
+   │                 ─────────┬────────  
+   │                          ╰────────── unresolved type: unknown_param_type
    │ 
    │ Note: Error code: E0002
 ───╯
 
   [type] error: unresolved type: unknown_optional
-    ╭─[ unknown_type_error.baml:13:18 ]
+    ╭─[ unknown_type_error.baml:13:19 ]
     │
  13 │ function Baz() -> unknown_optional? {
-    │                  ─────────┬────────  
+    │                   ────────┬────────  
     │                           ╰────────── unresolved type: unknown_optional
     │ 
     │ Note: Error code: E0002
 ────╯
 
   [type] error: unresolved type: Status.Typo
-    ╭─[ unknown_type_error.baml:26:37 ]
+    ╭─[ unknown_type_error.baml:26:38 ]
     │
  26 │ function StatusTypoInTypePosition(s: Status.Typo) -> int {
-    │                                     ──────┬─────  
+    │                                      ─────┬─────  
     │                                           ╰─────── unresolved type: Status.Typo
     │ 
     │ Note: Error code: E0002

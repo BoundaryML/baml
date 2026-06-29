@@ -28,11 +28,11 @@ function MayThrowMultiple(x: int) -> string throws string | int {
 //----
 //- diagnostics
 // warning: extraneous throws declaration: int
-//     ╭─[ throws_clause.baml:21:51 ]
+//     ╭─[ throws_clause.baml:21:52 ]
 //     │
 //  21 │ function MayThrowMultiple(x: int) -> string throws string | int {
-//     │                                                   ──────┬──────
-//     │                                                         ╰──────── extraneous throws declaration: int
+//     │                                                    ──────┬─────
+//     │                                                          ╰─────── extraneous throws declaration: int
 //     │
 //     │ Note: Error code: E0097
 // ────╯

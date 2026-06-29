@@ -69,7 +69,7 @@ function cancel_token.await_token_cancelled_catches() -> int {
 
   L0:
     load_var e
-    throw
+    rethrow
 
   L1:
     load_const 0

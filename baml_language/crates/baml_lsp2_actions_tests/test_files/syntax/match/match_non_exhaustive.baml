@@ -21,24 +21,24 @@ function MissingMultipleVariants(c: Color) -> string {
 //----
 //- diagnostics
 // error: non-exhaustive match on type Color; missing: user.Color.Blue
-//     ╭─[ match_match_non_exhaustive.baml:8:49 ]
+//     ╭─[ match_match_non_exhaustive.baml:9:3 ]
 //     │
-//   8 │ ╭─▶ function MissingOneVariant(c: Color) -> string {
-//     ┆ ┆   
+//   9 │ ╭─▶   match (c) {
+//     ┆ ┆
 //  12 │ ├─▶   }
-//     │ │         
+//     │ │
 //     │ ╰───────── non-exhaustive match on type Color; missing: user.Color.Blue
-//     │     
+//     │
 //     │     Note: Error code: E0062
 // ────╯
 // error: non-exhaustive match on type Color; missing: user.Color.Green, user.Color.Blue
-//     ╭─[ match_match_non_exhaustive.baml:15:55 ]
+//     ╭─[ match_match_non_exhaustive.baml:16:3 ]
 //     │
-//  15 │ ╭─▶ function MissingMultipleVariants(c: Color) -> string {
-//     ┆ ┆   
+//  16 │ ╭─▶   match (c) {
+//     ┆ ┆
 //  18 │ ├─▶   }
-//     │ │         
+//     │ │
 //     │ ╰───────── non-exhaustive match on type Color; missing: user.Color.Green, user.Color.Blue
-//     │     
+//     │
 //     │     Note: Error code: E0062
 // ────╯

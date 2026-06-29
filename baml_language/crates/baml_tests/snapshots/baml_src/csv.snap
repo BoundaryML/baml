@@ -1049,7 +1049,7 @@ function csv.csv_decode_error_details() -> string {
 
   L0:
     load_var e
-    throw
+    rethrow
 
   L1:
     load_var e
@@ -1267,7 +1267,7 @@ function csv.csv_decode_missing_column_is_header_error() -> string {
 
   L0:
     load_var e
-    throw
+    rethrow
 
   L1:
     load_var e
@@ -1315,7 +1315,7 @@ function csv.csv_decode_one_cases() -> string {
 
   L0:
     load_var e
-    throw
+    rethrow
 
   L1:
     load_var e
@@ -1374,7 +1374,7 @@ function csv.csv_decode_one_cases() -> string {
 
   L4:
     load_var e
-    throw
+    rethrow
 
   L5:
     load_var e
@@ -1464,7 +1464,7 @@ function csv.csv_decode_optional_cases() -> string {
 
   L6:
     load_var e
-    throw
+    rethrow
 
   L7:
     load_var e
@@ -1560,7 +1560,7 @@ function csv.csv_decode_rejects_locale_numbers() -> string {
 
   L0:
     load_var e
-    throw
+    rethrow
 
   L1:
     load_var e
@@ -1587,7 +1587,7 @@ function csv.csv_decode_rejects_locale_numbers() -> string {
 
   L4:
     load_var e
-    throw
+    rethrow
 
   L5:
     load_var e
@@ -1623,7 +1623,7 @@ function csv.csv_decode_rejects_nonfinite_floats() -> string {
 
   L0:
     load_var e
-    throw
+    rethrow
 
   L1:
     load_var e
@@ -1652,7 +1652,7 @@ function csv.csv_duplicate_column_matched_is_header_error() -> string {
 
   L0:
     load_var e
-    throw
+    rethrow
 
   L1:
     load_var e
@@ -1899,7 +1899,7 @@ function csv.csv_encoding_strict_throws() -> string {
 
   L0:
     load_var e
-    throw
+    rethrow
 
   L1:
     load_var e
@@ -2242,7 +2242,7 @@ function csv.csv_header_encoding_failure_is_terminal_for_headers() -> string {
 
   L20:
     load_var e
-    throw
+    rethrow
 
   L21:
     load_var e
@@ -2284,7 +2284,7 @@ function csv.csv_header_encoding_failure_is_terminal_for_headers() -> string {
 
   L25:
     load_var e
-    throw
+    rethrow
 
   L26:
     load_var e
@@ -2906,7 +2906,7 @@ function csv.csv_malformed_header_exhausts_reader() -> string {
 
   L20:
     load_var e
-    throw
+    rethrow
 
   L21:
     load_var e
@@ -3233,7 +3233,7 @@ function csv.csv_malformed_header_failure_is_terminal_for_headers() -> string {
 
   L20:
     load_var e
-    throw
+    rethrow
 
   L21:
     load_var e
@@ -3275,7 +3275,7 @@ function csv.csv_malformed_header_failure_is_terminal_for_headers() -> string {
 
   L25:
     load_var e
-    throw
+    rethrow
 
   L26:
     load_var e
@@ -3570,7 +3570,7 @@ function csv.csv_null_semantics_quoted_empty() -> string {
 
   L4:
     load_var e
-    throw
+    rethrow
 
   L5:
     load_var e
@@ -3681,7 +3681,7 @@ function csv.csv_null_values_option() -> string {
 
   L4:
     load_var e
-    throw
+    rethrow
 
   L5:
     load_var e
@@ -4371,7 +4371,7 @@ function csv.csv_options_validation() -> string {
 
   L0:
     load_var e
-    throw
+    rethrow
 
   L1:
     load_var e
@@ -4415,7 +4415,7 @@ function csv.csv_options_validation() -> string {
 
   L4:
     load_var e
-    throw
+    rethrow
 
   L5:
     load_var e
@@ -5156,7 +5156,7 @@ function csv.csv_plaindate_cells_roundtrip() -> string {
 
   L65:
     load_var e
-    throw
+    rethrow
 
   L66:
     load_var e
@@ -5249,7 +5249,7 @@ function csv.csv_ragged_pad() -> string {
 
   L0:
     load_var e
-    throw
+    rethrow
 
   L1:
     load_var e
@@ -5284,7 +5284,7 @@ function csv.csv_ragged_strict() -> string {
 
   L0:
     load_var e
-    throw
+    rethrow
 
   L1:
     load_var e
@@ -5357,7 +5357,7 @@ function csv.csv_ragged_truncate() -> string {
 
   L0:
     load_var e
-    throw
+    rethrow
 
   L1:
     load_var e
@@ -5650,7 +5650,7 @@ function csv.csv_reader_close() -> string {
 
   L37:
     load_var e
-    throw
+    rethrow
 
   L38:
     load_var e
@@ -6066,7 +6066,7 @@ function csv.csv_reader_resumes_after_throw() -> string {
 
   L21:
     load_var e
-    throw
+    rethrow
 
   L22:
     load_var bad
@@ -6672,7 +6672,7 @@ function csv.csv_record_get_decode_error() -> string {
 
   L20:
     load_var e
-    throw
+    rethrow
 
   L21:
     load_var e
@@ -6882,7 +6882,7 @@ function csv.csv_record_get_without_headers() -> string {
 
   L20:
     load_var e
-    throw
+    rethrow
 
   L21:
     load_var e
@@ -7363,7 +7363,7 @@ function csv.csv_rows_rejects_nested_class() -> string {
 
   L0:
     load_var e
-    throw
+    rethrow
 
   L1:
     load_var e
@@ -7395,7 +7395,7 @@ function csv.csv_rows_validates_eagerly() -> string {
 
   L0:
     load_var e
-    throw
+    rethrow
 
   L1:
     load_var e
@@ -8866,7 +8866,7 @@ function csv.csv_unterminated_quote_exhausts() -> string {
 
   L42:
     load_var e
-    throw
+    rethrow
 
   L43:
     load_var e
@@ -9066,7 +9066,7 @@ function csv.csv_write_rows_batch_is_atomic() -> string {
 
   L0:
     load_var e
-    throw
+    rethrow
 
   L1:
     load_var e
@@ -9191,7 +9191,7 @@ function csv.csv_writer_bom_survives_encode_error() -> string {
 
   L0:
     load_var e
-    throw
+    rethrow
 
   L1:
     load_var e
@@ -9298,7 +9298,7 @@ function csv.csv_writer_closed_throws() -> string {
 
   L0:
     load_var e
-    throw
+    rethrow
 
   L1:
     load_var e
@@ -9376,7 +9376,7 @@ function csv.csv_writer_explicit_header() -> string {
 
   L0:
     load_var e
-    throw
+    rethrow
 
   L1:
     load_var e
@@ -9479,7 +9479,7 @@ function csv.csv_writer_nonfinite_float_throws() -> string {
 
   L0:
     load_var e
-    throw
+    rethrow
 
   L1:
     load_var e
@@ -9541,7 +9541,7 @@ function csv.csv_writer_quote_styles() -> string {
 
   L0:
     load_var e
-    throw
+    rethrow
 
   L1:
     load_var e
@@ -9610,7 +9610,7 @@ function csv.csv_writer_state_survives_encode_error() -> string {
 
   L0:
     load_var e
-    throw
+    rethrow
 
   L1:
     load_var e
@@ -9675,7 +9675,7 @@ function csv.csv_writer_text_on_file_writer_throws() -> string {
 
   L0:
     load_var e
-    throw
+    rethrow
 
   L1:
     load_var e

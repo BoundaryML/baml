@@ -809,6 +809,7 @@ name = "baml_compiler2_hir"
 version = "0.1.0"
 dependencies = [
  "baml_base",
+ "baml_builtins2",
  "baml_compiler2_ast",
  "baml_compiler_diagnostics",
  "baml_compiler_parser",
@@ -1023,6 +1024,7 @@ dependencies = [
  "bex_events",
  "bex_heap",
  "bex_project",
+ "bex_vm_types",
  "bridge_ctypes",
  "crossbeam-channel",
  "futures",
@@ -1263,6 +1265,7 @@ dependencies = [
  "prost-build",
  "protoc-bin-vendored",
  "serde_json",
+ "sha2",
  "smallvec",
  "sys_types",
  "uuid",
@@ -1551,7 +1554,6 @@ version = "0.1.0"
 dependencies = [
  "baml_type",
  "base64",
- "bex_events",
  "bex_project",
  "indexmap",
  "num-bigint",

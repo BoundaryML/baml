@@ -33,6 +33,13 @@ export type {
   SessionStoreStorage,
 } from './session-store';
 export {
+  BOUNDARY_PROXY_URL_KEY,
+  configureProxyEnvVar,
+  getProxyEnvVarConfig,
+} from './proxy-config';
+export type { ProxyEnvVarConfig } from './proxy-config';
+export { initPlaygroundEnv, setGatewayEnabled } from './gateway';
+export {
   normalizeSerializedTestTree,
   parseSerializedTestTreeJson,
 } from './serialized-test-tree';
@@ -77,7 +84,7 @@ export type {
   Run,
   RunCursor,
   RunCursorExpiredReason,
-  RunId,
+  BoundaryId,
   RunPatch,
   RunPatchChange,
   RunStatus,

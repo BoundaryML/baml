@@ -154,7 +154,7 @@ message EventFileHeaderV1 {
   uint64 tick_ns_denom = 8;
   ClockQuality clock_quality = 9;
   // Durable source/revision metadata when available. These are artifact
-  // metadata, not playground RunId and not hot-path semantic hashes.
+  // metadata, not playground BoundaryId and not hot-path semantic hashes.
   optional string source_snapshot_id = 10;
   optional string revision_id = 11;
 }

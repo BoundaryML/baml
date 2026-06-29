@@ -3411,13 +3411,13 @@ fn testing.glob_match(subject: string, pattern: string) -> bool {
     let _35: int
     let _36: bool
     let _37: string
-    let _38: int // idx
+    let _38: int | null
     let _39: string
     let _40: int
     let _41: int
     let _42: string
     let _43: bool
-    let _44: int
+    let _44: int // idx
     let _45: int
     let _46: int
     let _47: int
@@ -3510,7 +3510,7 @@ fn testing.glob_match(subject: string, pattern: string) -> bool {
         _33 = copy _34[_35];
         _37 = copy _33;
         _36 = copy _37 != const "";
-        branch copy _36 -> [bb15, bb20];
+        branch copy _36 -> [bb15, bb21];
     }
 
     bb15: {
@@ -3525,31 +3525,31 @@ fn testing.glob_match(subject: string, pattern: string) -> bool {
     }
 
     bb17: {
-        _44 = copy _38;
-        _43 = copy _44 < const 0_i64;
-        branch copy _43 -> [bb21, bb18];
+        _43 = is_type(copy _38, int);
+        branch copy _43 -> [bb19, bb18];
     }
 
     bb18: {
-        _46 = copy _27;
-        _47 = copy _38;
-        _45 = copy _46 + copy _47;
-        _48 = call const fn baml.String.length(copy _33) -> [bb19];
+        _0 = const false;
+        goto -> bb26;
     }
 
     bb19: {
-        _27 = copy _45 + copy _48;
-        goto -> bb20;
+        _44 = copy _38;
+        _46 = copy _27;
+        _47 = copy _44;
+        _45 = copy _46 + copy _47;
+        _48 = call const fn baml.String.length(copy _33) -> [bb20];
     }
 
     bb20: {
-        _28 = copy _28 + const 1_i64;
-        goto -> bb12;
+        _27 = copy _45 + copy _48;
+        goto -> bb21;
     }
 
     bb21: {
-        _0 = const false;
-        goto -> bb26;
+        _28 = copy _28 + const 1_i64;
+        goto -> bb12;
     }
 
     bb22: {
@@ -3727,21 +3727,21 @@ fn testing.parse_filter_patterns(raw: string[]) -> testing.FilterPat[] {
     let _33: string
     let _34: string // s
     let _35: void
-    let _36: int // idx
+    let _36: int | null
     let _37: bool
-    let _38: int
-    let _39: int
-    let _40: testing.FilterPat
-    let _41: string
-    let _42: testing.FilterPat
-    let _43: string
-    let _44: testing.FilterPat
-    let _45: string
+    let _38: int // idx
+    let _39: testing.FilterPat
+    let _40: string
+    let _41: int
+    let _42: string
+    let _43: int
+    let _44: int
+    let _45: int
     let _46: int
-    let _47: string
-    let _48: int
-    let _49: int
-    let _50: int
+    let _47: testing.FilterPat
+    let _48: string
+    let _49: testing.FilterPat
+    let _50: string
 
     bb0: {
         _2 = []: testing.FilterPat[];
@@ -3876,41 +3876,41 @@ fn testing.parse_filter_patterns(raw: string[]) -> testing.FilterPat[] {
     }
 
     bb25: {
-        _38 = copy _36;
-        _37 = copy _38 < const 0_i64;
-        branch copy _37 -> [bb30, bb26];
+        _37 = is_type(copy _36, int);
+        branch copy _37 -> [bb28, bb26];
     }
 
     bb26: {
-        _46 = copy _36;
-        _45 = call const fn baml.String.substring(copy _34, const 0_i64, copy _46) -> [bb27];
+        _48 = copy _34;
+        _47 = testing.FilterPat { copy _48, const "" };
+        _46 = call const fn baml.Array.push(copy _2, copy _47) -> [bb27];
     }
 
     bb27: {
-        _49 = copy _36;
-        _48 = copy _49 + const 2_i64;
-        _50 = call const fn baml.String.length(copy _34) -> [bb28];
+        _50 = copy _34;
+        _49 = testing.FilterPat { const "", copy _50 };
+        _35 = call const fn baml.Array.push(copy _2, copy _49) -> [bb2];
     }
 
     bb28: {
-        _47 = call const fn baml.String.substring(copy _34, copy _48, copy _50) -> [bb29];
+        _38 = copy _36;
+        _41 = copy _38;
+        _40 = call const fn baml.String.substring(copy _34, const 0_i64, copy _41) -> [bb29];
     }
 
     bb29: {
-        _44 = testing.FilterPat { copy _45, copy _47 };
-        _35 = call const fn baml.Array.push(copy _2, copy _44) -> [bb2];
+        _44 = copy _38;
+        _43 = copy _44 + const 2_i64;
+        _45 = call const fn baml.String.length(copy _34) -> [bb30];
     }
 
     bb30: {
-        _41 = copy _34;
-        _40 = testing.FilterPat { copy _41, const "" };
-        _39 = call const fn baml.Array.push(copy _2, copy _40) -> [bb31];
+        _42 = call const fn baml.String.substring(copy _34, copy _43, copy _45) -> [bb31];
     }
 
     bb31: {
-        _43 = copy _34;
-        _42 = testing.FilterPat { const "", copy _43 };
-        _35 = call const fn baml.Array.push(copy _2, copy _42) -> [bb2];
+        _39 = testing.FilterPat { copy _40, copy _42 };
+        _35 = call const fn baml.Array.push(copy _2, copy _39) -> [bb2];
     }
 
     bb32: {
@@ -6374,9 +6374,9 @@ fn testing.split_top(path: string) -> testing.NameSplit {
     // Locals:
     let _0: testing.NameSplit // _0 // return
     let _1: string // path // param
-    let _2: int // idx
+    let _2: int | null
     let _3: bool
-    let _4: int
+    let _4: int // idx
     let _5: string
     let _6: int
     let _7: string
@@ -6389,33 +6389,33 @@ fn testing.split_top(path: string) -> testing.NameSplit {
     }
 
     bb1: {
-        _4 = copy _2;
-        _3 = copy _4 < const 0_i64;
-        branch copy _3 -> [bb6, bb2];
+        _3 = is_type(copy _2, int);
+        branch copy _3 -> [bb3, bb2];
     }
 
     bb2: {
-        _6 = copy _2;
-        _5 = call const fn baml.String.substring(copy _1, const 0_i64, copy _6) -> [bb3];
-    }
-
-    bb3: {
-        _9 = copy _2;
-        _8 = copy _9 + const 1_i64;
-        _10 = call const fn baml.String.length(copy _1) -> [bb4];
-    }
-
-    bb4: {
-        _7 = call const fn baml.String.substring(copy _1, copy _8, copy _10) -> [bb5];
-    }
-
-    bb5: {
-        _0 = testing.NameSplit { copy _5, copy _7 };
+        _0 = testing.NameSplit { const "", copy _1 };
         goto -> bb7;
     }
 
+    bb3: {
+        _4 = copy _2;
+        _6 = copy _4;
+        _5 = call const fn baml.String.substring(copy _1, const 0_i64, copy _6) -> [bb4];
+    }
+
+    bb4: {
+        _9 = copy _4;
+        _8 = copy _9 + const 1_i64;
+        _10 = call const fn baml.String.length(copy _1) -> [bb5];
+    }
+
+    bb5: {
+        _7 = call const fn baml.String.substring(copy _1, copy _8, copy _10) -> [bb6];
+    }
+
     bb6: {
-        _0 = testing.NameSplit { const "", copy _1 };
+        _0 = testing.NameSplit { copy _5, copy _7 };
         goto -> bb7;
     }
 

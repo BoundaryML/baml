@@ -16,6 +16,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
+import { BOUNDARY_PROXY_URL_KEY } from '../proxy-config';
 
 function apiKeyInputProps(key: string) {
   return {
@@ -47,6 +48,15 @@ interface ApiKeysDialogProps {
   onImportEnvVars: (vars: Record<string, string>) => void;
   /** Revert a key to its original shell value. */
   onRevertToShell: (key: string) => void;
+  /**
+   * Whether to surface the Boundary gateway toggle. promptfiddle shows it; the
+   * VS Code extension and CLI playground hide it even if present in the env.
+   */
+  showProxyEnvVar?: boolean;
+  /** Whether the gateway is on (BOUNDARY_PROXY_URL present in the BAML env). */
+  proxyEnabled?: boolean;
+  /** Flip the gateway on/off. */
+  onToggleProxy?: (enabled: boolean) => void;
 }
 
 export const ApiKeysDialog: FC<ApiKeysDialogProps> = ({
@@ -61,6 +71,9 @@ export const ApiKeysDialog: FC<ApiKeysDialogProps> = ({
   onDeleteEnvVar,
   onImportEnvVars,
   onRevertToShell,
+  showProxyEnvVar = false,
+  proxyEnabled = false,
+  onToggleProxy,
 }) => {
   const [showValues, setShowValues] = useState<Set<string>>(new Set());
   const [newKey, setNewKey] = useState('');
@@ -85,6 +98,9 @@ export const ApiKeysDialog: FC<ApiKeysDialogProps> = ({
     for (const k of Object.keys(envVars)) {
       if (!(k in shellEnvVars)) keys.add(k);
     }
+    // BOUNDARY_PROXY_URL never appears as a normal row: promptfiddle renders it
+    // in its own toggle section, everywhere else it's hidden entirely.
+    keys.delete(BOUNDARY_PROXY_URL_KEY);
     return [...keys].sort();
   }, [
     envVars,
@@ -94,10 +110,13 @@ export const ApiKeysDialog: FC<ApiKeysDialogProps> = ({
     shellOverriddenKeys,
   ]);
 
-  // Shell keys not already shown in primary section
+  // Shell keys not already shown in primary section. The proxy var is never
+  // listed here — it's either pinned to the primary section or fully hidden.
   const shellOnlyKeys = useMemo(() => {
     const primarySet = new Set(primaryKeys);
-    const keys = Object.keys(shellEnvVars).filter((k) => !primarySet.has(k));
+    const keys = Object.keys(shellEnvVars).filter(
+      (k) => !primarySet.has(k) && k !== BOUNDARY_PROXY_URL_KEY,
+    );
     if (!shellFilter) return keys.sort();
     const lower = shellFilter.toLowerCase();
     return keys.filter((k) => k.toLowerCase().includes(lower)).sort();
@@ -148,6 +167,39 @@ export const ApiKeysDialog: FC<ApiKeysDialogProps> = ({
     setImportText('');
     setImportMode(false);
   };
+
+  const renderProxySection = () => (
+    <div className="space-y-1.5 pb-3 border-b border-vsc-border">
+      <div className="flex items-center gap-2">
+        <span
+          className={`flex-1 text-[12px] ${proxyEnabled ? 'text-vsc-text' : 'text-vsc-description'}`}
+        >
+          Use Boundary LLM gateway free tier
+        </span>
+        {/* Reserve the same trailing width as the two icon buttons (eye +
+            trash) on normal rows so it lines up, and center the switch
+            between those two columns. */}
+        <div className="flex items-center justify-center shrink-0 w-16">
+          <button
+            type="button"
+            role="switch"
+            aria-checked={proxyEnabled}
+            aria-label="Use Boundary LLM gateway free tier"
+            onClick={() => onToggleProxy?.(!proxyEnabled)}
+            className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring/50 ${proxyEnabled ? 'bg-primary' : 'bg-vsc-border'}`}
+          >
+            <span
+              className={`inline-block h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${proxyEnabled ? 'translate-x-[18px]' : 'translate-x-0.5'}`}
+            />
+          </button>
+        </div>
+      </div>
+      <p className="text-[10px] text-vsc-description leading-snug">
+        On, requests use Boundary&rsquo;s keys through our proxy. Off, they use
+        the API keys below.
+      </p>
+    </div>
+  );
 
   const renderRow = (key: string) => {
     const value = envVars[key] ?? '';
@@ -256,6 +308,9 @@ export const ApiKeysDialog: FC<ApiKeysDialogProps> = ({
         </DialogHeader>
 
         <div className="flex-1 overflow-auto p-4 space-y-3">
+          {/* Proxy toggle: pinned first, always visible (promptfiddle only) */}
+          {showProxyEnvVar && renderProxySection()}
+
           {/* Primary section: required + manually added */}
           {primaryKeys.length > 0 && (
             <div className="space-y-2">{primaryKeys.map(renderRow)}</div>

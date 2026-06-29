@@ -36,7 +36,7 @@ import { AIAssistantPanel } from "@/components/ai-assistant/ai-assistant-panel";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeft, Check, Copy, Edit, History, Maximize2, Minimize2, Pencil } from "lucide-react";
+import { ArrowLeft, Check, Copy, Edit, History, LogIn, Maximize2, Minimize2, Pencil } from "lucide-react";
 import {
   MAIN_CONTENT_ID,
   RESERVED_PAGE_SLUGS,
@@ -182,11 +182,6 @@ const [copied, setCopied] = useState(false);
       : "skip"
   );
 
-  useEffect(() => {
-    if (!userLoading && !userId) {
-      router.push("/login");
-    }
-  }, [userLoading, userId, router]);
 
   useEffect(() => {
     if (!hasValidBepNumber) {
@@ -653,7 +648,7 @@ const [copied, setCopied] = useState(false);
     }
   };
 
-  if (userLoading || bep === undefined) {
+  if (bep === undefined) {
     return (
       <div className="min-h-screen bg-background">
         <header className="border-b">
@@ -677,9 +672,7 @@ const [copied, setCopied] = useState(false);
     );
   }
 
-  if (!user) {
-    return null;
-  }
+  const isLoggedIn = !!user;
 
   if (!hasValidBepNumber) {
     return null;
@@ -806,7 +799,7 @@ const [copied, setCopied] = useState(false);
               )}
             </Button>
             <BepExportDialog bepId={bep._id} bepNumber={bep.number} />
-            <BepImportDialog bepId={bep._id} bepNumber={bep.number} />
+            {isLoggedIn && <BepImportDialog bepId={bep._id} bepNumber={bep.number} />}
             <BepVersionSelect
               versions={bep.versions}
               currentVersionNumber={
@@ -814,7 +807,7 @@ const [copied, setCopied] = useState(false);
               }
               onVersionChange={handleVersionRouteChange}
             />
-            {!isViewingHistorical && (
+            {!isViewingHistorical && isLoggedIn && (
               <Button
                 variant={isEditMode ? "default" : "outline"}
                 size="sm"
@@ -832,6 +825,14 @@ const [copied, setCopied] = useState(false);
                   </>
                 )}
               </Button>
+            )}
+            {!isLoggedIn && (
+              <Link href="/login">
+                <Button variant="outline" size="sm" className="gap-2">
+                  <LogIn className="h-4 w-4" />
+                  Sign In
+                </Button>
+              </Link>
             )}
           </div>
         </div>
@@ -879,7 +880,7 @@ const [copied, setCopied] = useState(false);
                   )}
                 </Button>
               )}
-              {!isViewingHistorical && (
+              {!isViewingHistorical && isLoggedIn && (
                 <>
                   <BepGoodReferenceToggle
                     bepId={bep._id}
@@ -908,7 +909,7 @@ const [copied, setCopied] = useState(false);
                 bepId={bep._id}
                 versionId={currentVersionId}
                 versionNumber={latestVersionNumber ?? 1}
-                readOnly={isViewingHistorical}
+                readOnly={isViewingHistorical || !isLoggedIn}
               />
             )}
           </div>
@@ -926,9 +927,9 @@ const [copied, setCopied] = useState(false);
                 openIssueCount={isViewingHistorical ? 0 : openIssueCount}
                 decisionCount={isViewingHistorical ? 0 : bep.decisions.length}
                 hideMetaSections={isViewingHistorical}
-                isEditMode={isEditMode}
+                isEditMode={isEditMode && isLoggedIn}
                 pageStatuses={pageStatuses}
-                onAddPage={() => setShowAddPageModal(true)}
+                onAddPage={isLoggedIn ? () => setShowAddPageModal(true) : undefined}
               />
             </div>
           </aside>
@@ -1016,7 +1017,7 @@ const [copied, setCopied] = useState(false);
                               bepId={bep._id}
                               versionId={effectiveVersionId}
                               pageId={currentPageId}
-                              readOnly={isViewingHistorical}
+                              readOnly={isViewingHistorical || !isLoggedIn}
                               comments={(pageComments ?? [])
                                 .filter((c) => c.anchor)
                                 .map((c) => ({
@@ -1048,7 +1049,7 @@ const [copied, setCopied] = useState(false);
                       versionId={effectiveVersionId}
                       pageId={currentPageId}
                       viewingVersionId={viewingVersionId ?? undefined}
-                      readOnly={isViewingHistorical}
+                      readOnly={isViewingHistorical || !isLoggedIn}
                       linkContext={{
                         bepNumber,
                         isHistorical: isViewingHistorical,

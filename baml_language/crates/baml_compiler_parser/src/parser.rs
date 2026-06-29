@@ -1550,6 +1550,53 @@ impl<'a> Parser<'a> {
         true
     }
 
+    /// The span to attach to an "expected …, found …" / point-at-here error.
+    ///
+    /// Points at the current token — `current()` already skips trivia, so its
+    /// span is tight. At end of input there is no token to point at (the error
+    /// is the *absence* of a token), so we emit a zero-width caret just past the
+    /// last real token, matching rustc's `prev_token.span.shrink_to_hi()`. This
+    /// never points at trailing trivia: the old fallback reached into the raw
+    /// `self.tokens.last()`, which could be a trailing newline and produced a
+    /// span covering `"\n"`.
+    fn error_span(&self) -> baml_base::Span {
+        if let Some(token) = self.current() {
+            return token.span;
+        }
+        match self.last_non_trivia_token() {
+            Some(token) => {
+                let end = token.span.range.end();
+                baml_base::Span::new(token.span.file_id, TextRange::new(end, end))
+            }
+            None => baml_base::Span::new(baml_base::FileId::new(0), TextRange::default()),
+        }
+    }
+
+    /// The last non-trivia token in the stream, used to anchor end-of-input
+    /// error spans so they never land on trailing whitespace or comments.
+    ///
+    /// Comments are token sequences (e.g. `// …`), not single trivia tokens, so
+    /// a reverse scan can't recognize them; mirror `current_impl` and walk
+    /// forward, skipping comment runs with `skip_comment_at`, tracking the last
+    /// real (non-basic-trivia) token.
+    fn last_non_trivia_token(&self) -> Option<&Token> {
+        let mut last = None;
+        let mut i = 0;
+        while i < self.tokens.len() {
+            let new_i = self.skip_comment_at(i);
+            if new_i != i {
+                i = new_i;
+                continue;
+            }
+            let token = &self.tokens[i];
+            if !self.is_basic_trivia(token.kind) {
+                last = Some(token);
+            }
+            i += 1;
+        }
+        last
+    }
+
     /// Expect a token, emit error if not found
     fn expect(&mut self, kind: TokenKind) -> bool {
         if self.eat(kind) {
@@ -1560,12 +1607,7 @@ impl<'a> Parser<'a> {
                 .map(|t| format!("{}", t.kind))
                 .unwrap_or_else(|| "EOF".to_string());
 
-            let span = self.current().map(|t| t.span).unwrap_or_else(|| {
-                // Use the span of the last token if available, or a default empty span
-                self.tokens.last().map(|t| t.span).unwrap_or_else(|| {
-                    baml_base::Span::new(baml_base::FileId::new(0), TextRange::default())
-                })
-            });
+            let span = self.error_span();
 
             self.events.push(Event::UnexpectedToken {
                 expected: format!("{kind}"),
@@ -1592,12 +1634,7 @@ impl<'a> Parser<'a> {
             .map(|t| format!("{}", t.kind))
             .unwrap_or_else(|| "EOF".to_string());
 
-        let span = self.current().map(|t| t.span).unwrap_or_else(|| {
-            // Use the span of the last token if available, or a default empty span
-            self.tokens.last().map(|t| t.span).unwrap_or_else(|| {
-                baml_base::Span::new(baml_base::FileId::new(0), TextRange::default())
-            })
-        });
+        let span = self.error_span();
 
         self.events.push(Event::UnexpectedToken {
             expected,
@@ -1613,11 +1650,7 @@ impl<'a> Parser<'a> {
 
     /// Emit a hard syntax error (custom message) at the current token's span.
     fn error_here(&mut self, message: String) {
-        let span = self.current().map(|t| t.span).unwrap_or_else(|| {
-            self.tokens.last().map(|t| t.span).unwrap_or_else(|| {
-                baml_base::Span::new(baml_base::FileId::new(0), TextRange::default())
-            })
-        });
+        let span = self.error_span();
         self.error(message, span);
     }
 
@@ -4397,12 +4430,8 @@ impl<'a> Parser<'a> {
             if self.testset_body_depth > 0 {
                 self.parse_test_expr();
             } else {
-                let span = self.current().map(|t| t.span).unwrap_or_else(|| {
-                    baml_base::Span::new(baml_base::FileId::new(0), TextRange::default())
-                });
-                self.error(
+                self.error_here(
                     "test blocks are only allowed at the top level or inside a testset".to_string(),
-                    span,
                 );
                 self.parse_test_expr(); // still parse to recover
             }
@@ -4410,13 +4439,9 @@ impl<'a> Parser<'a> {
             if self.testset_body_depth > 0 {
                 self.parse_testset();
             } else {
-                let span = self.current().map(|t| t.span).unwrap_or_else(|| {
-                    baml_base::Span::new(baml_base::FileId::new(0), TextRange::default())
-                });
-                self.error(
+                self.error_here(
                     "testset blocks are only allowed at the top level or inside a testset"
                         .to_string(),
-                    span,
                 );
                 self.parse_testset(); // still parse to recover
             }
@@ -5295,7 +5320,12 @@ impl<'a> Parser<'a> {
     }
 
     fn at_catch_clause_start(&self) -> bool {
-        self.at(TokenKind::Catch) || self.at(TokenKind::CatchAll)
+        self.at(TokenKind::Catch)
+            || self.at(TokenKind::CatchAll)
+            // `catch_all_panics` is a contextual keyword: the lexer treats it as
+            // a plain identifier so it stays usable as one elsewhere, but in
+            // catch-clause position it introduces a clause like `catch_all`.
+            || self.at_contextual_kw("catch_all_panics")
     }
 
     fn parse_catch_expr(&mut self, expr_start: usize) {
@@ -5309,8 +5339,12 @@ impl<'a> Parser<'a> {
 
     fn parse_catch_clause(&mut self) {
         self.with_node(SyntaxKind::CATCH_CLAUSE, |p| {
-            if p.at_catch_clause_start() {
+            if p.at(TokenKind::Catch) || p.at(TokenKind::CatchAll) {
                 p.bump();
+            } else if p.at_contextual_kw("catch_all_panics") {
+                // Re-label the contextual `Word` as a dedicated keyword so the
+                // AST lowering and tooling can recognize the clause kind.
+                p.bump_contextual_kw_as("catch_all_panics", SyntaxKind::KW_CATCH_ALL_PANICS);
             } else {
                 p.error_unexpected_token("catch clause keyword".to_string());
                 return;
@@ -9068,6 +9102,58 @@ function Demo() -> int {
         let child_kinds: Vec<_> = catch_expr.children().map(|n| n.kind()).collect();
         assert_eq!(child_kinds[0], SyntaxKind::THROW_EXPR);
         assert_eq!(child_kinds[1], SyntaxKind::CATCH_CLAUSE);
+    }
+
+    /// `catch_all_panics` is a contextual keyword: the lexer emits a plain
+    /// `Word`, and the parser must still recognize it in catch-clause position
+    /// (B-504 — it previously only handled `catch`/`catch_all`).
+    #[test]
+    fn parses_catch_all_panics_clause() {
+        let source = r#"
+function Demo() -> int {
+  throw 1 catch_all_panics (e) {
+    _ => 1
+  }
+}
+"#;
+
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let catch_expr = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::CATCH_EXPR)
+            .expect("expected CATCH_EXPR node");
+        let child_kinds: Vec<_> = catch_expr.children().map(|n| n.kind()).collect();
+        assert_eq!(child_kinds[0], SyntaxKind::THROW_EXPR);
+        assert_eq!(child_kinds[1], SyntaxKind::CATCH_CLAUSE);
+
+        // The `Word` is re-labelled as a dedicated keyword token inside the clause.
+        let has_kw = catch_expr.descendants_with_tokens().any(|elem| {
+            matches!(
+                elem,
+                rowan::NodeOrToken::Token(t)
+                    if t.kind() == SyntaxKind::KW_CATCH_ALL_PANICS && t.text() == "catch_all_panics"
+            )
+        });
+        assert!(has_kw, "expected a KW_CATCH_ALL_PANICS token in the clause");
+    }
+
+    /// `catch_all_panics` is contextual, not reserved: outside catch-clause
+    /// position it is still a perfectly good identifier (e.g. a function name).
+    #[test]
+    fn catch_all_panics_is_a_normal_identifier_outside_catch() {
+        let source = r#"
+function catch_all_panics() -> int { 1 }
+
+function Demo() -> int {
+  let x = catch_all_panics()
+  x
+}
+"#;
+
+        let (_root, errors) = parse_source(source);
+        assert_no_errors(&errors);
     }
 
     #[test]

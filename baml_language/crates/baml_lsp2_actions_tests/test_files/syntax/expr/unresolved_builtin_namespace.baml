@@ -19,42 +19,38 @@ function TestBamlEventsTypo() -> void {
 //----
 //- diagnostics
 // error: unresolved name: ev
-//    ╭─[ expr_unresolved_builtin_namespace.baml:3:32 ]
+//    ╭─[ expr_unresolved_builtin_namespace.baml:4:5 ]
 //    │
-//  3 │ ╭─▶ function TestBamlEv() -> void {
-//  4 │ ├─▶     baml.ev.send("test", {})
-//    │ │                                  
-//    │ ╰────────────────────────────────── unresolved name: ev
-//    │     
-//    │     Note: Error code: E0003
+//  4 │     baml.ev.send("test", {})
+//    │     ──────┬─────
+//    │           ╰─────── unresolved name: ev
+//    │
+//    │ Note: Error code: E0003
 // ───╯
 // error: unresolved name: lo
-//    ╭─[ expr_unresolved_builtin_namespace.baml:7:32 ]
+//    ╭─[ expr_unresolved_builtin_namespace.baml:8:5 ]
 //    │
-//  7 │ ╭─▶ function TestBamlLo() -> void {
-//  8 │ ├─▶     baml.lo.info("test")
-//    │ │                              
-//    │ ╰────────────────────────────── unresolved name: lo
-//    │     
-//    │     Note: Error code: E0003
+//  8 │     baml.lo.info("test")
+//    │     ──────┬─────
+//    │           ╰─────── unresolved name: lo
+//    │
+//    │ Note: Error code: E0003
 // ───╯
 // error: unresolved name: inf
-//     ╭─[ expr_unresolved_builtin_namespace.baml:11:32 ]
+//     ╭─[ expr_unresolved_builtin_namespace.baml:12:5 ]
 //     │
-//  11 │ ╭─▶ function TestLogInf() -> void {
-//  12 │ ├─▶     log.inf("test")
-//     │ │                         
-//     │ ╰───────────────────────── unresolved name: inf
-//     │     
-//     │     Note: Error code: E0003
+//  12 │     log.inf("test")
+//     │     ───┬───
+//     │        ╰───── unresolved name: inf
+//     │
+//     │ Note: Error code: E0003
 // ────╯
 // error: unresolved name: event
-//     ╭─[ expr_unresolved_builtin_namespace.baml:15:40 ]
+//     ╭─[ expr_unresolved_builtin_namespace.baml:16:5 ]
 //     │
-//  15 │ ╭─▶ function TestBamlEventsTypo() -> void {
-//  16 │ ├─▶     baml.event.send("test", {})
-//     │ │                                     
-//     │ ╰───────────────────────────────────── unresolved name: event
-//     │     
-//     │     Note: Error code: E0003
+//  16 │     baml.event.send("test", {})
+//     │     ───────┬───────
+//     │            ╰───────── unresolved name: event
+//     │
+//     │ Note: Error code: E0003
 // ────╯

@@ -257,6 +257,37 @@ impl UnionMemberParts {
         self.tokens.is_empty() && self.child_nodes.is_empty()
     }
 
+    /// Source range of this member's type name — the leading run of `WORD`/`DOT`
+    /// tokens (e.g. `long_word_123.foobar`), excluding postfix `[]`/`?` modifiers
+    /// and generic args. Lets diagnostics like "unresolved type" point at the
+    /// offending identifier rather than the whole union/compound type.
+    ///
+    /// Falls back to the full extent of the member's tokens and child nodes when
+    /// there is no leading name (e.g. a string-literal member), and to `None`
+    /// when the member is empty.
+    pub fn span(&self) -> Option<rowan::TextRange> {
+        let name: Vec<_> = self
+            .tokens
+            .iter()
+            .take_while(|t| matches!(t.kind(), SyntaxKind::WORD | SyntaxKind::DOT))
+            .collect();
+        if let (Some(first), Some(last)) = (name.first(), name.last()) {
+            return Some(rowan::TextRange::new(
+                first.text_range().start(),
+                last.text_range().end(),
+            ));
+        }
+        let ranges = || {
+            self.tokens
+                .iter()
+                .map(rowan::SyntaxToken::text_range)
+                .chain(self.child_nodes.iter().map(rowan::SyntaxNode::text_range))
+        };
+        let start = ranges().map(rowan::TextRange::start).min()?;
+        let end = ranges().map(rowan::TextRange::end).max()?;
+        Some(rowan::TextRange::new(start, end))
+    }
+
     /// Get the first WORD token's text, if any.
     pub fn first_word(&self) -> Option<&str> {
         self.tokens
@@ -4016,12 +4047,19 @@ impl CatchExpr {
 }
 
 impl CatchClause {
-    /// Get the clause keyword token (`catch`, `catch_all`).
+    /// Get the clause keyword token (`catch`, `catch_all`, `catch_all_panics`).
     pub fn keyword(&self) -> Option<SyntaxToken> {
         self.syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
-            .find(|t| matches!(t.kind(), SyntaxKind::KW_CATCH | SyntaxKind::KW_CATCH_ALL))
+            .find(|t| {
+                matches!(
+                    t.kind(),
+                    SyntaxKind::KW_CATCH
+                        | SyntaxKind::KW_CATCH_ALL
+                        | SyntaxKind::KW_CATCH_ALL_PANICS
+                )
+            })
     }
 
     /// Get the binding pattern from `catch (...)`.

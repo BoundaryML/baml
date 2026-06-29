@@ -488,12 +488,12 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
 // Type resolution
 // ---------------------------------------------------------------------------
 
-/// Resolve an optional `SpannedTypeExpr` to a codegen `Ty`.
+/// Resolve an optional `TypeExpr` to a codegen `Ty`.
 ///
 /// Returns `None` if the type expression is missing.
 fn resolve_type_expr(
     db: &ProjectDatabase,
-    spanned: Option<&baml_compiler2_ast::SpannedTypeExpr>,
+    spanned: Option<&baml_compiler2_ast::TypeExpr>,
     package_items: &baml_compiler2_hir::package::PackageItems<'_>,
     ns_context: &[Name],
     generic_params: &[Name],
@@ -504,7 +504,7 @@ fn resolve_type_expr(
     let mut diagnostics = Vec::new();
     let tir_ty = lower_type_expr::lower_type_expr_in_ns(
         db,
-        &spanned.expr,
+        spanned,
         package_items,
         ns_context,
         generic_params,
