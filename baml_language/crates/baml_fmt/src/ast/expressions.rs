@@ -194,7 +194,20 @@ impl Expression {
             Expression::ByteString(bs) => Some(usize::from(bs.span().len())),
             Expression::Lambda(_) => None,
             Expression::Return(_) => None,
-            Expression::Unknown(_) => None,
+            Expression::Unknown(range) => {
+                // Unmodeled nodes (e.g. `await f`, `x.as<T>`, `spawn { … }`,
+                // `throw e`) print their source verbatim (see `print`). When that
+                // text is a single line it occupies a known width and can sit
+                // inline like any other fitting expression. Reporting `None` here
+                // used to force every *enclosing* expression to wrap even when the
+                // whole thing fit the width budget (B-231).
+                let text = &input.input[*range];
+                if text.contains('\n') {
+                    None
+                } else {
+                    Some(text.trim_start().len())
+                }
+            }
         }
     }
 }
@@ -232,11 +245,24 @@ impl Printable for Expression {
             Expression::BacktickString(bt) => bt.print(shape, printer),
             Expression::ByteString(bs) => bs.print(shape, printer),
             Expression::Lambda(lambda) => lambda.print(shape, printer),
-            // Print the raw `return …` text like `Unknown`. The arm printers add
-            // the `;` when they wrap this into a block (see `CatchArm`/`MatchArm`).
-            Expression::Return(range) | Expression::Unknown(range) => {
+            // Print the raw `return …` text. The arm printers add the `;` when
+            // they wrap this into a block (see `CatchArm`/`MatchArm`). A braceless
+            // `return` only appears as a whole arm value, never nested inside
+            // another expression, so it always reports multi-lined.
+            Expression::Return(range) => {
                 printer.print_input_range_trimmed_start(*range);
                 PrintInfo::default_multi_lined()
+            }
+            // Unmodeled nodes print their source verbatim. Report `multi_lined`
+            // honestly from whether that text spans multiple lines: a single-line
+            // unknown node (`await f`, `x.as<T>`, …) must not claim to be
+            // multi-line, or it force-wraps its parents even when everything fits
+            // on one line (B-231).
+            Expression::Unknown(range) => {
+                printer.print_input_range_trimmed_start(*range);
+                PrintInfo {
+                    multi_lined: printer.input[*range].contains('\n'),
+                }
             }
         }
     }
