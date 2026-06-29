@@ -817,7 +817,7 @@ jobs:
   snapshot-tests:
     name: "snapshot tests"
     runs-on: blacksmith-8vcpu-ubuntu-2404
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - uses: useblacksmith/checkout@v1
         with:
