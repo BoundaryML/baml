@@ -5767,6 +5767,28 @@ impl LoweringContext<'_> {
                 self.builder.set_current_block(dead);
             }
 
+            AstExpr::Return { value } => {
+                // A `return` expression (e.g. a braceless `catch`/`match` arm
+                // value, `_ => return 0`) transfers control to the enclosing
+                // function's exit. Unlike `throw`, it is NOT routed through
+                // `catch_context` — it returns from the function rather than
+                // being handled by the surrounding `catch`. This mirrors
+                // `AstStmt::Return`; `dest` is never written because we diverge.
+                let ret = Local(0); // _0 is always the return place
+                if let Some(e) = value {
+                    self.lower_expr(e, Place::local(ret));
+                }
+                // Run pending defers (LIFO) then unwatch all watched locals in
+                // this function before jumping to the exit (depth=0 covers the
+                // current function; stacks are swapped at lambda boundaries).
+                self.replay_defers_to_depth(0);
+                self.emit_unwatch_to_depth(0);
+                self.builder.goto(self.exit_block);
+                // Subsequent code is unreachable; lower it into a dead block.
+                let dead = self.builder.create_block();
+                self.builder.set_current_block(dead);
+            }
+
             AstExpr::Lambda(func_def) => {
                 self.lower_lambda(&func_def, expr_id, dest);
             }

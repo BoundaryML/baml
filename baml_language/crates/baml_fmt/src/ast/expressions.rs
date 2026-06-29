@@ -46,6 +46,13 @@ pub enum Expression {
     BacktickString(t::BacktickString),
     ByteString(t::ByteString),
     Lambda(Box<LambdaExpr>),
+    /// A braceless `return …` in expression position (a `RETURN_EXPR`, e.g. a
+    /// `catch`/`match` arm value like `_ => return 0`). Held as a raw text range
+    /// like [`Expression::Unknown`], but kept as a distinct variant so the arm
+    /// printers can recognize it: when they wrap a braceless arm body into a
+    /// block they append the `;` that a block-position `return` requires, so the
+    /// output round-trips through `RETURN_STMT` (i.e. is idempotent).
+    Return(TextRange),
     Unknown(TextRange),
 }
 
@@ -139,6 +146,7 @@ impl FromCST for Expression {
                 t::ByteString::from_cst(elem).map(Expression::ByteString)?
             }
             SyntaxKind::LAMBDA_EXPR => Expression::Lambda(Box::new(LambdaExpr::from_cst(elem)?)),
+            SyntaxKind::RETURN_EXPR => Expression::Return(elem.text_range()),
             _ => Expression::Unknown(elem.text_range()),
         };
         Ok(expr)
@@ -188,6 +196,7 @@ impl Expression {
             }
             Expression::ByteString(bs) => Some(usize::from(bs.span().len())),
             Expression::Lambda(_) => None,
+            Expression::Return(_) => None,
             Expression::Unknown(_) => None,
         }
     }
@@ -226,7 +235,9 @@ impl Printable for Expression {
             Expression::BacktickString(bt) => bt.print(shape, printer),
             Expression::ByteString(bs) => bs.print(shape, printer),
             Expression::Lambda(lambda) => lambda.print(shape, printer),
-            Expression::Unknown(range) => {
+            // Print the raw `return …` text like `Unknown`. The arm printers add
+            // the `;` when they wrap this into a block (see `CatchArm`/`MatchArm`).
+            Expression::Return(range) | Expression::Unknown(range) => {
                 printer.print_input_range_trimmed_start(*range);
                 PrintInfo::default_multi_lined()
             }
@@ -260,7 +271,7 @@ impl Printable for Expression {
             Expression::BacktickString(bt) => bt.leftmost_token(),
             Expression::ByteString(bs) => bs.leftmost_token(),
             Expression::Lambda(lambda) => lambda.leftmost_token(),
-            Expression::Unknown(range) => *range,
+            Expression::Return(range) | Expression::Unknown(range) => *range,
         }
     }
     fn rightmost_token(&self) -> TextRange {
@@ -291,7 +302,7 @@ impl Printable for Expression {
             Expression::BacktickString(bt) => bt.rightmost_token(),
             Expression::ByteString(bs) => bs.rightmost_token(),
             Expression::Lambda(lambda) => lambda.rightmost_token(),
-            Expression::Unknown(range) => *range,
+            Expression::Return(range) | Expression::Unknown(range) => *range,
         }
     }
 }
@@ -1765,6 +1776,11 @@ impl Printable for MatchArm {
                     &self.body,
                     shape.indent + printer.config.indent_width,
                 );
+                // A braceless `return` wrapped into a block needs its statement
+                // `;` so the output round-trips through `RETURN_STMT`.
+                if matches!(&self.body, Expression::Return(_)) {
+                    printer.print_str(";");
+                }
                 printer.print_newline();
                 printer.print_spaces(shape.indent);
                 printer.print_str("},");
@@ -1825,6 +1841,11 @@ impl Printable for MatchArm {
                 &self.body,
                 shape.indent + printer.config.indent_width,
             );
+            // A braceless `return` wrapped into a block needs its statement `;`
+            // so the output round-trips through `RETURN_STMT`.
+            if matches!(&self.body, Expression::Return(_)) {
+                printer.print_str(";");
+            }
             printer.print_newline();
             printer.print_spaces(shape.indent);
             printer.print_str("},");
@@ -2219,6 +2240,11 @@ impl Printable for CatchArm {
                 &self.body,
                 shape.indent + printer.config.indent_width,
             );
+            // A braceless `return` wrapped into a block needs its statement `;`
+            // so the output round-trips through `RETURN_STMT` (idempotent).
+            if matches!(&self.body, Expression::Return(_)) {
+                printer.print_str(";");
+            }
             printer.print_newline();
             printer.print_spaces(shape.indent);
             printer.print_str("}");

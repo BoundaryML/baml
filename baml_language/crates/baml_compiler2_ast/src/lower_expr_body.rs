@@ -794,6 +794,7 @@ impl LoweringContext {
             SyntaxKind::MATCH_EXPR => self.lower_match_expr(node),
             SyntaxKind::CATCH_EXPR => self.lower_catch_expr(node),
             SyntaxKind::THROW_EXPR => self.lower_throw_expr(node),
+            SyntaxKind::RETURN_EXPR => self.lower_return_expr(node),
             SyntaxKind::BLOCK_EXPR => {
                 if let Some(block) = baml_compiler_syntax::ast::BlockExpr::cast(node.clone()) {
                     self.lower_block_expr(&block)
@@ -4444,9 +4445,21 @@ impl LoweringContext {
     }
 
     fn lower_return_stmt(&mut self, node: &SyntaxNode) -> StmtId {
-        // RETURN_STMT: KW_RETURN expr?
+        let expr = self.lower_optional_return_value(node);
+        self.alloc_stmt(Stmt::Return(expr), node.span_range())
+    }
+
+    /// Lower the optional value of a `return` node — shared by `RETURN_STMT`
+    /// (statement position) and `RETURN_EXPR` (expression position), which have
+    /// the identical shape `KW_RETURN expr?` (the statement may also carry a
+    /// trailing `;`). Returns `None` for a bare `return`.
+    ///
+    /// The token-level fallback mirrors `lower_throw_expr`: the parser emits
+    /// bare literal/identifier tokens (not wrapper expression nodes) for simple
+    /// values, so those must be reconstructed here.
+    fn lower_optional_return_value(&mut self, node: &SyntaxNode) -> Option<ExprId> {
         // Try child nodes first, then fall back to token-level expressions
-        let expr = if let Some(child_node) = node.children().next() {
+        if let Some(child_node) = node.children().next() {
             Some(self.lower_expr(&child_node))
         } else {
             // No child node — check for a token-level expression (e.g. `return 1;`)
@@ -4497,8 +4510,15 @@ impl LoweringContext {
                 }
             }
             result
-        };
-        self.alloc_stmt(Stmt::Return(expr), node.span_range())
+        }
+    }
+
+    /// Lower `return expr?` in expression position to [`Expr::Return`] — a
+    /// diverging expression of type `never` (mirrors `lower_throw_expr`). Shares
+    /// value extraction with `lower_return_stmt` via `lower_optional_return_value`.
+    fn lower_return_expr(&mut self, node: &SyntaxNode) -> ExprId {
+        let value = self.lower_optional_return_value(node);
+        self.alloc_expr(Expr::Return { value }, node.span_range())
     }
 
     /// Lower `defer { BODY }` (BEP-042). The CST shape is

@@ -233,6 +233,10 @@ pub(crate) mod support {
                 format!("{base_desc} {}", clause_descs.join(" "))
             }
             Expr::Throw { value } => format!("throw {}", expr_desc(*value, body)),
+            Expr::Return { value } => match value {
+                Some(value) => format!("return {}", expr_desc(*value, body)),
+                None => "return".into(),
+            },
             Expr::Binary { op, lhs, rhs } => {
                 format!("{} {op} {}", expr_desc(*lhs, body), expr_desc(*rhs, body))
             }
@@ -1713,6 +1717,13 @@ pub(crate) mod support {
                         expr_desc_hir(*value, body, prefix, local_type_names)
                     )
                 }
+                Expr::Return { value } => match value {
+                    Some(value) => format!(
+                        "return {}",
+                        expr_desc_hir(*value, body, prefix, local_type_names)
+                    ),
+                    None => "return".into(),
+                },
                 Expr::Binary { op, lhs, rhs } => format!(
                     "{} {op:?} {}",
                     expr_desc_hir(*lhs, body, prefix, local_type_names),

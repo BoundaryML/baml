@@ -563,6 +563,11 @@ impl<'db> SemanticIndexBuilder<'db> {
             ast::Expr::Throw { value } => {
                 self.walk_expr(*value, body, source_map, true);
             }
+            ast::Expr::Return { value } => {
+                if let Some(value) = value {
+                    self.walk_expr(*value, body, source_map, true);
+                }
+            }
             ast::Expr::Spawn {
                 name,
                 with_exprs,
