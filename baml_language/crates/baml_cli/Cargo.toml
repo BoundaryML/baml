@@ -53,6 +53,7 @@ tar = { workspace = true }
 text-size = { workspace = true }
 tokio = { workspace = true }
 toml = { workspace = true }
+webbrowser = { workspace = true }
 
 [features]
 default = [ "aws-crypto" ]

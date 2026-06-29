@@ -116,6 +116,9 @@ pub(crate) enum Commands {
     #[command(about = "Install BAML agent skills for this project")]
     Agent(crate::agent_command::AgentArgs),
 
+    #[command(about = "Open a GitHub issue to share feedback about BAML")]
+    Feedback(crate::feedback_command::FeedbackArgs),
+
     #[command(about = "Starts a language server", name = "lsp")]
     LanguageServer(crate::lsp::LanguageServerArgs),
     // #[command(about = "Start an interactive REPL for BAML expressions", hide = true)]
@@ -194,6 +197,7 @@ impl RuntimeCli {
             Commands::Pack(args) => args.run(),
             Commands::Ide(args) => args.run(),
             Commands::Agent(args) => args.run(),
+            Commands::Feedback(args) => args.run(),
             Commands::Describe(args) => args.run(),
             Commands::Generate(args) => args.run(),
             Commands::Grep(args) => args.run(),

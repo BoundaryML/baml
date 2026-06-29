@@ -757,6 +757,7 @@ dependencies = [
  "text-size",
  "tokio",
  "toml 0.8.23",
+ "webbrowser",
  "yaml_serde",
 ]
 

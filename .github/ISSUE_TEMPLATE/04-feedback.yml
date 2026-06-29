@@ -1,0 +1,22 @@
+name: 💬 Feedback
+description: Share feedback about BAML (often opened via `baml feedback`)
+title: "feedback: "
+labels: ["feedback"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for sharing your feedback on BAML! Tell us what's on your mind — what works well, what's confusing, or what you'd love to see.
+  - type: textarea
+    id: feedback
+    attributes:
+      label: Your feedback
+      description: What would you like to share? Praise, frustrations, ideas — all welcome.
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Machine and environment details. Auto-filled when opened via `baml feedback`.
+      render: text
