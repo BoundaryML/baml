@@ -8,7 +8,7 @@
 //!   positions and these non-name tokens.
 //!
 //! - **Identifiers inside expression bodies** are classified by what they
-//!   *resolve to*, via a pre-built resolution index ([`index`]) keyed by exact
+//!   *resolve to*, via a pre-built resolution index (`index`) keyed by exact
 //!   name spans. The type system is never used to pick a tag; only resolution
 //!   facts (`MemberResolution`, `ResolvedName`, `DefinitionKind`) are. There is
 //!   no substring scanning.
@@ -345,7 +345,7 @@ pub fn semantic_tokens(db: &dyn Db, file: SourceFile) -> Vec<SemanticToken> {
 
 /// Semantic tokens for a viewport `range` only — rust-analyzer's
 /// `highlight_range`. Names are resolved on demand through
-/// [`index::resolve_token_class`], so only the scopes the viewport touches are
+/// `index::resolve_token_class`, so only the scopes the viewport touches are
 /// indexed (the rest of the file is never resolved). Not a Salsa query — keying
 /// on the range would blow the cache; the underlying per-scope indices and name
 /// resolution it calls *are* memoized.
@@ -467,14 +467,18 @@ impl Walk<'_> {
         }
         // Boolean / null literals: a dedicated `KW_TRUE`/`KW_FALSE`/`KW_NULL`
         // token (value position, re-lexed by the parser). `true`/`false` ->
-        // `boolean`, `null` -> `keyword`.
+        // `boolean`. `null` is the null type's literal, so it goes through the
+        // shared builtin classification (defaultLibrary `type`) — matching its
+        // type position and every other builtin, instead of reading as a keyword.
         match kind {
             SyntaxKind::KW_TRUE | SyntaxKind::KW_FALSE => {
                 emit(token.text_range(), plain(SemanticTokenType::Boolean), out);
                 return;
             }
             SyntaxKind::KW_NULL => {
-                emit(token.text_range(), plain(SemanticTokenType::Keyword), out);
+                let class = classify::classify_primitive(token.text())
+                    .unwrap_or_else(|| plain(SemanticTokenType::Keyword));
+                emit(token.text_range(), class, out);
                 return;
             }
             _ => {}

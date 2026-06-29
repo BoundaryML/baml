@@ -81,6 +81,7 @@ sys_native = { path = "crates/sys_native", default-features = false }
 baml_db = { path = "crates/baml_db" }
 baml_fmt = { path = "crates/baml_fmt" }
 baml_lsp2_actions = { path = "crates/baml_lsp2_actions" }
+baml_lsp2_actions_tests = { path = "crates/baml_lsp2_actions_tests" }
 baml_lsp_server = { path = "crates/baml_lsp_server", default-features = false }
 baml_project = { path = "crates/baml_project" }
 baml_release = { path = "crates/baml_release" }

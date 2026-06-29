@@ -27,7 +27,7 @@ function use_method_type_args() -> int {
 // method_explicit_type_args.baml:3:18 (operator) len=1 ">"
 // method_explicit_type_args.baml:3:20 (parameter) [declaration] len=4 "self"
 // method_explicit_type_args.baml:3:29 (type) len=1 "T"
-// method_explicit_type_args.baml:4:5 (keyword) len=4 "null"
+// method_explicit_type_args.baml:4:5 (type) [defaultLibrary] len=4 "null"
 // method_explicit_type_args.baml:8:1 (keyword) len=8 "function"
 // method_explicit_type_args.baml:8:10 (function) [declaration] len=20 "use_method_type_args"
 // method_explicit_type_args.baml:8:36 (type) [defaultLibrary] len=3 "int"

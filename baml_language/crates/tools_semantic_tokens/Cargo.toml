@@ -11,10 +11,7 @@ path = "src/main.rs"
 
 [dependencies]
 baml_lsp2_actions = { workspace = true }
-# Reuses the inline-assertion test harness (parser / runner / updater) so the
-# viewer computes the exact same token output the tests do, reads the committed
-# `//- semantic_tokens` expectations, and "accepts" via the real UPDATE_EXPECT path.
-baml_lsp2_actions_tests = { path = "../baml_lsp2_actions_tests" }
+baml_lsp2_actions_tests = { workspace = true }
 baml_project = { workspace = true }
 anyhow = { workspace = true }
 axum = { workspace = true, features = [ "json" ] }

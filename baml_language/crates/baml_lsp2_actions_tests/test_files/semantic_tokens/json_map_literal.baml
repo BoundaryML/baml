@@ -22,4 +22,4 @@ function NestedMapLiteral() -> json {
 // json_map_literal.baml:5:21 (number) len=1 "3"
 // json_map_literal.baml:5:25 (string) len=3 "\"c\""
 // json_map_literal.baml:5:31 (string) len=8 "\"nested\""
-// json_map_literal.baml:5:41 (keyword) len=4 "null"
+// json_map_literal.baml:5:41 (type) [defaultLibrary] len=4 "null"

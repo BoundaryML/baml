@@ -871,7 +871,7 @@ class Chain<T, E> {
 // interfaces_iter_core.baml:108:25 (variable) len=1 "x"
 // interfaces_iter_core.baml:109:13 (keyword) len=6 "return"
 // interfaces_iter_core.baml:109:20 (variable) len=1 "x"
-// interfaces_iter_core.baml:114:5 (keyword) len=4 "null"
+// interfaces_iter_core.baml:114:5 (type) [defaultLibrary] len=4 "null"
 // interfaces_iter_core.baml:118:1 (keyword) len=8 "function"
 // interfaces_iter_core.baml:118:10 (function) [declaration] len=7 "flatten"
 // interfaces_iter_core.baml:118:17 (operator) len=1 "<"
