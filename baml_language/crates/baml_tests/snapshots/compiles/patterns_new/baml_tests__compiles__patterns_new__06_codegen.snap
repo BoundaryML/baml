@@ -1,6 +1,15 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
+function boundary.LocalId.capture(self: boundary.LocalId, inputs: bool | null, output: bool | null, error: bool | null) -> boundary.LocalId {
+}
+
+function boundary.id() -> boundary.LocalId {
+}
+
+function boundary.id.current() -> string {
+}
+
 function user.bare_type_arm(v: int | string) -> int {
     load_var v
     is_type int
@@ -80,7 +89,7 @@ function user.catch_chain_union(mode: int) -> int {
 
   L1:
     load_var e
-    throw
+    rethrow
 
   L2:
     load_const 1
@@ -106,7 +115,7 @@ function user.catch_paren_or_chain(mode: int) -> int {
 
   L1:
     load_var e
-    throw
+    rethrow
 
   L2:
     load_const 1
@@ -132,7 +141,7 @@ function user.catch_widening_chain(mode: int) -> int {
 
   L1:
     load_var e
-    throw
+    rethrow
 
   L2:
     load_const 2

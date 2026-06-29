@@ -8,6 +8,14 @@ use crate::{
     errors::{VmBamlError, VmRustFnError},
 };
 
+fn char_substrings(string: &BexStr) -> Vec<BexStr> {
+    string
+        .as_str()
+        .char_indices()
+        .map(|(start, ch)| string.substring(start, start + ch.len_utf8()))
+        .collect()
+}
+
 impl BamlClassString for PackageBamlImpl {
     #[allow(clippy::cast_possible_wrap)]
     fn length(string: &BexStr) -> i64 {
@@ -78,6 +86,9 @@ impl BamlClassString for PackageBamlImpl {
     fn split(string: &BexStr, delimiter: &BexStr) -> Vec<BexStr> {
         let s = string.as_str();
         let d = delimiter.as_str();
+        if d.is_empty() {
+            return char_substrings(string);
+        }
         let base = s.as_ptr() as usize;
         s.split(d)
             .map(|part| {
@@ -85,6 +96,10 @@ impl BamlClassString for PackageBamlImpl {
                 string.substring(start, start + part.len())
             })
             .collect()
+    }
+
+    fn chars(string: &BexStr) -> Vec<BexStr> {
+        char_substrings(string)
     }
 
     fn lines(string: &BexStr) -> Vec<BexStr> {
@@ -116,10 +131,8 @@ impl BamlClassString for PackageBamlImpl {
     }
 
     #[allow(clippy::cast_possible_wrap)]
-    fn index_of(string: &BexStr, search: &BexStr) -> i64 {
-        string
-            .char_index_of(search.as_str())
-            .map_or(-1, |i| i as i64)
+    fn index_of(string: &BexStr, search: &BexStr) -> Option<i64> {
+        string.char_index_of(search.as_str()).map(|i| i as i64)
     }
 
     fn char_at(string: &BexStr, index: i64) -> Result<BexStr, VmRustFnError> {
@@ -129,6 +142,19 @@ impl BamlClassString for PackageBamlImpl {
         let len = string.char_count();
         resolve_index(index, len)
             .and_then(|i| string.char_at_codepoint(i))
+            .ok_or_else(|| VmPanic::IndexOutOfBounds { index, length: len }.into())
+    }
+
+    fn code_point_at(string: &BexStr, index: i64) -> Result<i64, VmRustFnError> {
+        // The numeric counterpart of `char_at`: same codepoint-indexing and
+        // bounds rules (negative counts from the end, out-of-range raises
+        // `IndexOutOfBounds`), but yields the code point's value rather than a
+        // one-character string. A `char` is always in `[0, 0x10FFFF]`, so the
+        // widening to `i64` is lossless.
+        let len = string.char_count();
+        resolve_index(index, len)
+            .and_then(|i| string.as_str().chars().nth(i))
+            .map(|c| i64::from(u32::from(c)))
             .ok_or_else(|| VmPanic::IndexOutOfBounds { index, length: len }.into())
     }
 
@@ -248,6 +274,16 @@ impl BamlClassString for PackageBamlImpl {
             }
             .into()
         })
+    }
+
+    fn to_code_points(string: &BexStr) -> Vec<Value> {
+        // The exact inverse of `from_code_points`: one `int` per character. Each
+        // `char` is in `[0, 0x10FFFF]`, so `Value::int` is always in range.
+        string
+            .as_str()
+            .chars()
+            .map(|c| Value::int(i64::from(u32::from(c))))
+            .collect()
     }
 
     fn from_code_points(unicode: &[Value]) -> Result<BexStr, VmRustFnError> {

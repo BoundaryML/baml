@@ -40,35 +40,29 @@ function BindingDoesNotLeakIntoElse(r: Ok | Err) -> string {
 //----
 //- diagnostics
 // error: unresolved name: o
-//     ╭─[ if_let_if_let_binding_scope.baml:13:4 ]
+//     ╭─[ if_let_if_let_binding_scope.baml:15:3 ]
 //     │
-//  13 │ ╭─▶   }
-//     ┆ ┆   
-//  15 │ ├─▶   o.value
-//     │ │               
-//     │ ╰─────────────── unresolved name: o
-//     │     
-//     │     Note: Error code: E0003
+//  15 │   o.value
+//     │   ┬
+//     │   ╰── unresolved name: o
+//     │
+//     │ Note: Error code: E0003
 // ────╯
 // error: unresolved name: o
-//     ╭─[ if_let_if_let_binding_scope.baml:25:4 ]
+//     ╭─[ if_let_if_let_binding_scope.baml:27:3 ]
 //     │
-//  25 │ ╭─▶   }
-//     ┆ ┆   
-//  27 │ ├─▶   o.value
-//     │ │               
-//     │ ╰─────────────── unresolved name: o
-//     │     
-//     │     Note: Error code: E0003
+//  27 │   o.value
+//     │   ┬
+//     │   ╰── unresolved name: o
+//     │
+//     │ Note: Error code: E0003
 // ────╯
 // error: unresolved name: o
-//     ╭─[ if_let_if_let_binding_scope.baml:34:11 ]
+//     ╭─[ if_let_if_let_binding_scope.baml:36:5 ]
 //     │
-//  34 │ ╭─▶   } else {
-//     ┆ ┆   
-//  36 │ ├─▶     o.value
-//     │ │                 
-//     │ ╰───────────────── unresolved name: o
-//     │     
-//     │     Note: Error code: E0003
+//  36 │     o.value
+//     │     ┬
+//     │     ╰── unresolved name: o
+//     │
+//     │ Note: Error code: E0003
 // ────╯

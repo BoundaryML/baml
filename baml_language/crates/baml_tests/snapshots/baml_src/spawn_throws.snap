@@ -34,7 +34,7 @@ function spawn_throws.await_rethrows_caught_by_user_catch_fn() -> int {
 
   L0:
     load_var e
-    throw
+    rethrow
 
   L1:
     load_const 99

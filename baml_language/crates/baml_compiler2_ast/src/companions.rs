@@ -12,7 +12,7 @@ use baml_base::Name;
 
 use crate::{
     DeclarativeMeta,
-    ast::{FunctionBodyDef, FunctionDef, Param, SpannedTypeExpr, TypeExpr},
+    ast::{FunctionBodyDef, FunctionDef, Param, TypeExpr, TypeExprKind},
     lower_cst::{synthesize_llm_builtin_call, synthesize_llm_parse_call},
 };
 
@@ -93,10 +93,7 @@ pub fn llm_parse(parent: &FunctionDef, type_args: Vec<TypeExpr>) -> Option<Funct
     // params, but keeps the LLM client's default override for API consistency.
     let json_param = Param {
         name: Name::new("json"),
-        type_expr: Some(SpannedTypeExpr {
-            expr: TypeExpr::String { attrs: vec![] },
-            span: parent.span,
-        }),
+        type_expr: Some((TypeExprKind::String { attrs: vec![] }).at(parent.span)),
         default: None,
         span: parent.span,
         name_span: parent.name_span,
@@ -136,15 +133,13 @@ fn make_llm_companion(
     return_type_path: &[&str],
 ) -> FunctionDef {
     let name = Name::new(format!("{}${}", parent.name, target));
-    let return_type = SpannedTypeExpr {
-        expr: TypeExpr::Path {
-            segments: return_type_path.iter().map(Name::new).collect(),
-            generic_args: vec![],
-            associated_type_bindings: vec![],
-            attrs: vec![],
-        },
-        span: parent.span,
-    };
+    let return_type = (TypeExprKind::Path {
+        segments: return_type_path.iter().map(Name::new).collect(),
+        generic_args: vec![],
+        associated_type_bindings: vec![],
+        attrs: vec![],
+    })
+    .at(parent.span);
     let param_names: Vec<Name> = parent
         .params
         .iter()

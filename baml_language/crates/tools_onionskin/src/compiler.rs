@@ -628,6 +628,14 @@ fn expr_desc_spans<'db>(
             spans.push(DetailSpan::Code("throw ".into()));
             spans.extend(expr_desc_spans(*value, body, inference));
         }
+        Expr::Return { value } => {
+            if let Some(value) = value {
+                spans.push(DetailSpan::Code("return ".into()));
+                spans.extend(expr_desc_spans(*value, body, inference));
+            } else {
+                spans.push(DetailSpan::Code("return".into()));
+            }
+        }
         Expr::ByteStringLiteral(bytes) => {
             spans.push(DetailSpan::Code(format!("b\"<{} bytes>\"", bytes.len())));
         }
@@ -1182,7 +1190,7 @@ impl CompilerRunner {
                                     format!(
                                         "{}: {}",
                                         p.name.as_str(),
-                                        hir2_type_expr_to_string(&te.expr)
+                                        hir2_type_expr_to_string(&te)
                                     )
                                 })
                                 .unwrap_or_else(|| p.name.as_str().to_string())
@@ -1191,7 +1199,7 @@ impl CompilerRunner {
                     let return_str = func
                         .return_type
                         .as_ref()
-                        .map(|te| hir2_type_expr_to_string(&te.expr))
+                        .map(|te| hir2_type_expr_to_string(&te))
                         .unwrap_or_else(|| "?".to_string());
 
                     match &func.body {
@@ -1275,7 +1283,7 @@ impl CompilerRunner {
                         let ty_str = field
                             .type_expr
                             .as_ref()
-                            .map(|te| hir2_type_expr_to_string(&te.expr))
+                            .map(|te| hir2_type_expr_to_string(&te))
                             .unwrap_or_else(|| "?".to_string());
                         let field_str = format!("  {}: {}", field.name, ty_str);
                         writeln!(output, "{field_str}").ok();
@@ -1303,7 +1311,7 @@ impl CompilerRunner {
                     let ty_str = alias
                         .type_expr
                         .as_ref()
-                        .map(|te| hir2_type_expr_to_string(&te.expr))
+                        .map(|te| hir2_type_expr_to_string(&te))
                         .unwrap_or_else(|| "?".to_string());
                     let line = format!("type {} = {}", alias.name, ty_str);
                     writeln!(output, "{line}").ok();
@@ -1660,7 +1668,7 @@ impl CompilerRunner {
                                         format!(
                                             "{}: {}",
                                             p.name.as_str(),
-                                            hir2_type_expr_to_string(&te.expr)
+                                            hir2_type_expr_to_string(&te)
                                         )
                                     })
                                     .unwrap_or_else(|| p.name.as_str().to_string())
@@ -1669,7 +1677,7 @@ impl CompilerRunner {
                         let ret_str = f
                             .return_type
                             .as_ref()
-                            .map(|te| hir2_type_expr_to_string(&te.expr))
+                            .map(|te| hir2_type_expr_to_string(&te))
                             .unwrap_or_else(|| "?".to_string());
                         let body_kind = match &f.body {
                             Some(FunctionBodyDef::Expr(_, _)) => "expr",
@@ -1688,7 +1696,7 @@ impl CompilerRunner {
                                 detail.push(format!(
                                     "  param {}: {}",
                                     p.name,
-                                    hir2_type_expr_to_string(&te.expr)
+                                    hir2_type_expr_to_string(&te)
                                 ));
                             }
                         }
@@ -1790,7 +1798,7 @@ impl CompilerRunner {
                             let ty_str = field
                                 .type_expr
                                 .as_ref()
-                                .map(|te| hir2_type_expr_to_string(&te.expr))
+                                .map(|te| hir2_type_expr_to_string(&te))
                                 .unwrap_or_else(|| "?".to_string());
                             detail.push(format!("    {}: {}", field.name, ty_str));
                         }
@@ -1847,7 +1855,7 @@ impl CompilerRunner {
                     let ty_str = ta
                         .type_expr
                         .as_ref()
-                        .map(|te| hir2_type_expr_to_string(&te.expr))
+                        .map(|te| hir2_type_expr_to_string(&te))
                         .unwrap_or_else(|| "?".to_string());
                     let mut detail = vec![format!("type {}", ta.name), format!("  = {}", ty_str)];
                     let errors = item_errors(ta.name.as_str());
@@ -2068,6 +2076,10 @@ impl CompilerRunner {
                 }
                 Expr::Catch { .. } => "catch ...".into(),
                 Expr::Throw { value } => format!("throw {}", expr_desc(*value, body)),
+                Expr::Return { value } => match value {
+                    Some(value) => format!("return {}", expr_desc(*value, body)),
+                    None => "return".into(),
+                },
                 Expr::Binary { op, .. } => format!("... {op:?} ..."),
                 Expr::Unary { op, expr: inner } => format!("{op:?} {}", expr_desc(*inner, body)),
                 Expr::Call { callee, args, .. } => {
@@ -3075,7 +3087,7 @@ impl CompilerRunner {
                         let raw = ta
                             .type_expr
                             .as_ref()
-                            .map(|te| hir2_type_expr_to_string(&te.expr))
+                            .map(|te| hir2_type_expr_to_string(&te))
                             .unwrap_or_else(|| "?".to_string());
                         detail.push(plain(format!("  = {raw} (unresolved)")));
                         format!("= {raw}")

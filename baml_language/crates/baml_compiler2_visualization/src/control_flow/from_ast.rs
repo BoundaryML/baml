@@ -913,6 +913,11 @@ fn collect_callee_names_expr(body: &ast::ExprBody, id: ast::ExprId, names: &mut 
             }
         }
         ast::Expr::Throw { value } => collect_callee_names_expr(body, *value, names),
+        ast::Expr::Return { value } => {
+            if let Some(value) = value {
+                collect_callee_names_expr(body, *value, names);
+            }
+        }
         ast::Expr::Spawn {
             name,
             with_exprs,
@@ -1450,14 +1455,20 @@ mod tests {
     fn match_creates_branch_group_with_arms() {
         let body = make_ast_body(|exprs, _, patterns, match_arms| {
             let scrutinee = exprs.alloc(ast::Expr::Path(vec!["x".into()]));
-            let pat1 = patterns.alloc(ast::Pattern::Type(ast::TypeExpr::Literal {
-                value: ast::Literal::Int(1),
-                attrs: vec![],
-            }));
-            let pat2 = patterns.alloc(ast::Pattern::Type(ast::TypeExpr::Literal {
-                value: ast::Literal::Int(2),
-                attrs: vec![],
-            }));
+            let pat1 = patterns.alloc(ast::Pattern::Type(
+                ast::TypeExprKind::Literal {
+                    value: ast::Literal::Int(1),
+                    attrs: vec![],
+                }
+                .at(baml_compiler2_ast::TextRange::default()),
+            ));
+            let pat2 = patterns.alloc(ast::Pattern::Type(
+                ast::TypeExprKind::Literal {
+                    value: ast::Literal::Int(2),
+                    attrs: vec![],
+                }
+                .at(baml_compiler2_ast::TextRange::default()),
+            ));
             let body1 = exprs.alloc(ast::Expr::Null);
             let body2 = exprs.alloc(ast::Expr::Null);
             let arm1 = match_arms.alloc(ast::MatchArm {
@@ -1506,12 +1517,13 @@ mod tests {
     fn format_pattern_bind_with_ascription_renders_chain() {
         // `let x: int` is now Bind { name: x, subpat: Some(Type(int)) }.
         let body = make_ast_body(|_, _, patterns, _| {
-            let int_ty = ast::TypeExpr::Path {
+            let int_ty = ast::TypeExprKind::Path {
                 segments: vec!["int".into()],
                 generic_args: vec![],
                 associated_type_bindings: vec![],
                 attrs: vec![],
-            };
+            }
+            .at(baml_compiler2_ast::TextRange::default());
             let inner = patterns.alloc(ast::Pattern::Type(int_ty));
             patterns.alloc(ast::Pattern::Bind {
                 name: "x".into(),

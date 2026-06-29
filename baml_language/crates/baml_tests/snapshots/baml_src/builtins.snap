@@ -49,7 +49,7 @@ function builtins.builtins_any_value_to_string() -> string {
     load_type int
     alloc_map 2
     init_instance user.builtins.BuiltinsPerson .name, .age, .location, .hobbies, .scores
-    call baml.unstable.string
+    call baml.String.from
     return
 }
 
@@ -66,24 +66,24 @@ function builtins.builtins_bind_method_call() -> int {
 function builtins.builtins_float_to_string_concat() -> string {
     load_type float
     load_const 1.0
-    call baml.unstable.string
+    call baml.String.from
     store_var a
     load_type float
     load_const 0.0
-    call baml.unstable.string
+    call baml.String.from
     store_var b
     load_type float
     load_const 1.0
     unary_op -
-    call baml.unstable.string
+    call baml.String.from
     store_var c
     load_type float
     load_const 3.14
-    call baml.unstable.string
+    call baml.String.from
     store_var d
     load_type int
     load_const 2
-    call baml.unstable.string
+    call baml.String.from
     store_var e
     load_var a
     load_const " "

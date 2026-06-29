@@ -13,11 +13,11 @@ source: crates/baml_tests/src/generated_tests.rs
 ────╯
 
   [type] error: unresolved type: name
-   ╭─[ type_aliases_json.baml:4:8 ]
+   ╭─[ type_aliases_json.baml:4:9 ]
    │
  4 │   inner name
-   │        ──┬──  
-   │          ╰──── unresolved type: name
+   │         ──┬─  
+   │           ╰─── unresolved type: name
    │ 
    │ Note: Error code: E0002
 ───╯

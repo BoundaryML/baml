@@ -22,12 +22,6 @@ use crate::types::{BamlType, NativeBuiltin, NativeClassDef, Receiver, VmUsage};
 /// Returns `true` if the clean trait method for this builtin should return
 /// `Result<T, VmError>` instead of plain `T`.
 ///
-/// A builtin is fallible if it declares a `throws` clause in its `.baml` source,
-/// or if its path is in the implicit allowlist below (for builtins that fail
-/// without a declared throws clause — e.g. `baml.sys.panic` always throws,
-/// `baml.unstable.string` can fail at runtime on certain values, and the
-/// random methods can raise a `HostUnavailable` panic if the OS entropy source
-/// is inaccessible).
 /// A builtin is fallible (its trait method returns `Result<T, VmRustFnError>`) when
 /// it declares a non-empty `throws` clause, or is explicitly `//baml:fallible`.
 ///
@@ -2233,10 +2227,6 @@ mod tests {
         assert!(
             output.contains("pub trait BamlNamespaceMedia"),
             "missing BamlNamespaceMedia trait:\n{output}"
-        );
-        assert!(
-            output.contains("pub trait BamlNamespaceUnstable"),
-            "missing BamlNamespaceUnstable trait:\n{output}"
         );
     }
 

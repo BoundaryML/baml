@@ -17,11 +17,11 @@ function bad() -> string {
 //----
 //- diagnostics
 // error: type mismatch: expected Named, got int
-//     ╭─[ interface_error_generic_bound_violation.baml:14:9 ]
+//     ╭─[ interface_error_generic_bound_violation.baml:14:10 ]
 //     │
 //  14 │   return first_named<int>(ints)
-//     │         ───────────┬───────────  
-//     │                    ╰───────────── type mismatch: expected Named, got int
-//     │ 
+//     │          ───────────┬──────────
+//     │                     ╰──────────── type mismatch: expected Named, got int
+//     │
 //     │ Note: Error code: E0001
 // ────╯

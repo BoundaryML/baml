@@ -98,7 +98,7 @@ export const BaseNode: ComponentType<NodeProps> = memo(({ data }) => {
   // Deeper nodes render smaller (semantic-zoom hierarchy) — but not when a
   // preview is shown, so the content matches the (unshrunk) layout box.
   const hasPreview =
-    (d.imageOutputs?.length ?? 0) > 0 || !!d.errorMessage || !!d.hasResult;
+    (d.valuePreviews?.length ?? 0) > 0 || !!d.errorMessage || !!d.hasResult;
   const s = hasPreview
     ? 1
     : depthScale(typeof d.depth === 'number' ? d.depth : 0);
@@ -188,7 +188,7 @@ export const BaseNode: ComponentType<NodeProps> = memo(({ data }) => {
         <NodeOutputPreview
           result={d.result}
           hasResult={d.hasResult}
-          images={d.imageOutputs}
+          valuePreviews={d.valuePreviews}
           errorMessage={d.errorMessage}
           customRenderers={d.customRenderers}
         />

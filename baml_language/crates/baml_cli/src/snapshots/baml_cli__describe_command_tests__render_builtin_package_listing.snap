@@ -269,7 +269,6 @@ function         baml.toml.table_from_json        <builtin>/baml/ns_toml/toml.ba
 function         baml.toml.item_to_json           <builtin>/baml/ns_toml/toml.baml:61
 function         baml.toml.item_from_json         <builtin>/baml/ns_toml/toml.baml:74
 class            baml.toml.TomlParseError         <builtin>/baml/ns_toml/toml.baml:83
-function         baml.unstable.string             <builtin>/baml/ns_unstable/unstable.baml:5
 class            baml.yaml.YamlParseError         <builtin>/baml/ns_yaml/yaml.baml:3
 function         baml.yaml.parse                  <builtin>/baml/ns_yaml/yaml.baml:15
 function         baml.yaml.deserialize            <builtin>/baml/ns_yaml/yaml.baml:24

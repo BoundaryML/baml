@@ -13,11 +13,11 @@ source: crates/baml_tests/src/generated_tests.rs
 ───╯
 
   [type] error: cannot infer type of lambda parameter `x` — add a type annotation or provide context
-   ╭─[ lambda_errors.baml:9:14 ]
+   ╭─[ lambda_errors.baml:9:15 ]
    │
  9 │     let bad = (x) -> { x * 2 }
-   │              ────────┬────────  
-   │                      ╰────────── cannot infer type of lambda parameter `x` — add a type annotation or provide context
+   │               ────────┬───────  
+   │                       ╰───────── cannot infer type of lambda parameter `x` — add a type annotation or provide context
    │ 
    │ Note: Error code: E0002
 ───╯
@@ -53,20 +53,20 @@ source: crates/baml_tests/src/generated_tests.rs
 ────╯
 
   [type] error: unresolved type: NonExistentType
-    ╭─[ lambda_errors.baml:27:16 ]
+    ╭─[ lambda_errors.baml:27:17 ]
     │
  27 │     let f = (x: NonExistentType) -> { 0 }
-    │                ────────┬───────  
+    │                 ───────┬───────  
     │                        ╰───────── unresolved type: NonExistentType
     │ 
     │ Note: Error code: E0002
 ────╯
 
   [type] error: unresolved type: NonExistentType
-    ╭─[ lambda_errors.baml:33:24 ]
+    ╭─[ lambda_errors.baml:33:25 ]
     │
  33 │     let f = (x: int) -> NonExistentType { x }
-    │                        ────────┬───────  
+    │                         ───────┬───────  
     │                                ╰───────── unresolved type: NonExistentType
     │ 
     │ Note: Error code: E0002

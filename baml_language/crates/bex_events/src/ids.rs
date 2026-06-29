@@ -14,7 +14,7 @@
 //!
 //! # Encodings
 //!
-//! [`ThreadRef`] / [`CallRef`] / [`RuntimeId`] encode to prefixed,
+//! [`ThreadRef`] / [`CallRef`] / [`BoundaryId`] / [`RuntimeId`] encode to prefixed,
 //! versioned, base64url strings (`baml_thread_1_…`, `baml_call_1_…`,
 //! `baml_id_1_…`) and decode losslessly back; decoding validates prefix,
 //! base64, payload length, and version, and never panics on malformed
@@ -26,11 +26,11 @@ use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 
 const CALL_REF_PREFIX: &str = "baml_call_1_";
 const THREAD_REF_PREFIX: &str = "baml_thread_1_";
-const OVERRIDE_ID_PREFIX: &str = "baml_id_1_";
+const BOUNDARY_ID_PREFIX: &str = "baml_id_1_";
 const PAYLOAD_VERSION: u8 = 1;
 const CALL_REF_LEN: usize = 1 + 16 + 8 + 8 + 8;
 const THREAD_REF_LEN: usize = 1 + 16 + 8 + 8;
-const OVERRIDE_ID_LEN: usize = 16;
+const BOUNDARY_ID_LEN: usize = 16;
 
 /// Effectively-unique process identifier, minted once per process
 /// ([`ProcessEuid::current`]) — the outermost scope of the identity quad.
@@ -114,14 +114,22 @@ pub struct CallRef {
     pub call_id: BexCallId,
 }
 
-/// The value of `$id`: either the call's default [`CallRef`], or a 16-byte
-/// override minted by `baml.id.new()` and installed via `baml.id.set` /
-/// `$id = …` (`baml_id_1_…`). An override applies to exactly one call —
-/// absence of a `SetFunctionId` record for a call in the `.bamlprof` stream means its `$id` is the [`CallRef`].
+/// Public execution boundary identity, allocated by the host before BEX
+/// execution starts. It intentionally keeps the existing `baml_id_1_` raw
+/// 16-byte encoding so runtime-id overrides and boundary history share one
+/// typed payload shape.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct BoundaryId([u8; 16]);
+
+/// The value of `$id`: either the call's default [`CallRef`], or the active
+/// execution [`BoundaryId`] / explicit child boundary (`baml_id_1_…`). A
+/// boundary override applies to exactly one call — absence of a
+/// `SetFunctionId` record for a call in the `.bamlprof` stream means its
+/// `$id` is the [`CallRef`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum RuntimeId {
     DefaultCall(CallRef),
-    OverrideUuid([u8; 16]),
+    Boundary(BoundaryId),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -206,14 +214,62 @@ impl CallRef {
     }
 }
 
+impl BoundaryId {
+    #[must_use]
+    pub fn new_random() -> Self {
+        Self(*uuid::Uuid::new_v4().as_bytes())
+    }
+
+    #[must_use]
+    pub fn from_bytes(bytes: [u8; 16]) -> Self {
+        Self(bytes)
+    }
+
+    #[must_use]
+    pub fn as_bytes(self) -> [u8; 16] {
+        self.0
+    }
+
+    #[must_use]
+    pub fn to_wire_string(self) -> String {
+        self.encode()
+    }
+
+    #[must_use]
+    pub fn from_wire_str(value: &str) -> Option<Self> {
+        Self::decode(value).ok()
+    }
+
+    #[must_use]
+    pub fn encode(self) -> String {
+        format!("{BOUNDARY_ID_PREFIX}{}", URL_SAFE_NO_PAD.encode(self.0))
+    }
+
+    pub fn decode(s: &str) -> Result<Self, DecodeError> {
+        let encoded = s
+            .strip_prefix(BOUNDARY_ID_PREFIX)
+            .ok_or(DecodeError::InvalidPrefix)?;
+        let payload = URL_SAFE_NO_PAD
+            .decode(encoded)
+            .map_err(|_| DecodeError::InvalidBase64)?;
+        if payload.len() != BOUNDARY_ID_LEN {
+            return Err(DecodeError::InvalidLength {
+                expected: BOUNDARY_ID_LEN,
+                actual: payload.len(),
+            });
+        }
+        Ok(Self(
+            payload.as_slice().try_into().expect("fixed-width slice"),
+        ))
+    }
+}
+
 impl RuntimeId {
     #[must_use]
     pub fn encode(&self) -> String {
         match self {
             Self::DefaultCall(call_ref) => call_ref.encode(),
-            Self::OverrideUuid(id) => {
-                format!("{OVERRIDE_ID_PREFIX}{}", URL_SAFE_NO_PAD.encode(id))
-            }
+            Self::Boundary(boundary_id) => boundary_id.encode(),
         }
     }
 
@@ -221,23 +277,7 @@ impl RuntimeId {
         if s.starts_with(CALL_REF_PREFIX) {
             return CallRef::decode(s).map(Self::DefaultCall);
         }
-
-        let encoded = s
-            .strip_prefix(OVERRIDE_ID_PREFIX)
-            .ok_or(DecodeError::InvalidPrefix)?;
-        let payload = URL_SAFE_NO_PAD
-            .decode(encoded)
-            .map_err(|_| DecodeError::InvalidBase64)?;
-        if payload.len() != OVERRIDE_ID_LEN {
-            return Err(DecodeError::InvalidLength {
-                expected: OVERRIDE_ID_LEN,
-                actual: payload.len(),
-            });
-        }
-
-        Ok(Self::OverrideUuid(
-            payload.as_slice().try_into().expect("fixed-width slice"),
-        ))
+        BoundaryId::decode(s).map(Self::Boundary)
     }
 }
 
@@ -288,11 +328,28 @@ mod tests {
     }
 
     #[test]
-    fn runtime_ids_round_trip_default_and_override_forms() {
+    fn boundary_id_round_trips_with_existing_wire_shape() {
+        let boundary_id = BoundaryId::from_bytes([11; 16]);
+        assert_eq!(
+            boundary_id.to_wire_string(),
+            "baml_id_1_CwsLCwsLCwsLCwsLCwsLCw"
+        );
+        assert_eq!(
+            BoundaryId::decode(&boundary_id.encode()).unwrap(),
+            boundary_id
+        );
+        assert_eq!(
+            BoundaryId::from_wire_str(&boundary_id.to_wire_string()),
+            Some(boundary_id)
+        );
+    }
+
+    #[test]
+    fn runtime_ids_round_trip_default_and_boundary_forms() {
         let default = RuntimeId::DefaultCall(sample_call_ref());
         assert_eq!(RuntimeId::decode(&default.encode()).unwrap(), default);
 
-        let override_id = RuntimeId::OverrideUuid([11; 16]);
+        let override_id = RuntimeId::Boundary(BoundaryId::from_bytes([11; 16]));
         assert_eq!(
             RuntimeId::decode(&override_id.encode()).unwrap(),
             override_id
@@ -393,14 +450,14 @@ mod tests {
             })
         );
 
-        // Override payloads are raw 16-byte uuids (no version byte).
-        let short = vec![0u8; OVERRIDE_ID_LEN - 1];
-        let encoded = format!("{OVERRIDE_ID_PREFIX}{}", URL_SAFE_NO_PAD.encode(short));
+        // Boundary payloads are raw 16 bytes (no version byte).
+        let short = vec![0u8; BOUNDARY_ID_LEN - 1];
+        let encoded = format!("{BOUNDARY_ID_PREFIX}{}", URL_SAFE_NO_PAD.encode(short));
         assert_eq!(
             RuntimeId::decode(&encoded),
             Err(DecodeError::InvalidLength {
-                expected: OVERRIDE_ID_LEN,
-                actual: OVERRIDE_ID_LEN - 1,
+                expected: BOUNDARY_ID_LEN,
+                actual: BOUNDARY_ID_LEN - 1,
             })
         );
     }
@@ -412,7 +469,7 @@ mod tests {
             engine_id: EngineId(10),
             thread_id: BexThreadId(11),
         };
-        // A thread ref is not a runtime id (only call refs and overrides are).
+        // A thread ref is not a runtime id (only call refs and boundary ids are).
         assert_eq!(
             RuntimeId::decode(&thread_ref.encode()),
             Err(DecodeError::InvalidPrefix)

@@ -73,20 +73,20 @@ function ClassArrayAssignments() -> int {
 //     │ Note: Error code: E0001
 // ────╯
 // error: type mismatch: expected Person, got Person[]
-//     ╭─[ invalid_assignment_class_arrays.baml:37:6 ]
+//     ╭─[ invalid_assignment_class_arrays.baml:37:7 ]
 //     │
 //  37 │     p3 = [Person { name: "H", age: 8 }];
-//     │         ───────────────┬───────────────
-//     │                        ╰───────────────── type mismatch: expected Person, got Person[]
+//     │          ───────────────┬──────────────
+//     │                         ╰──────────────── type mismatch: expected Person, got Person[]
 //     │
 //     │ Note: Error code: E0001
 // ────╯
 // error: type mismatch: expected int[], got Person[]
-//     ╭─[ invalid_assignment_class_arrays.baml:41:8 ]
+//     ╭─[ invalid_assignment_class_arrays.baml:41:9 ]
 //     │
 //  41 │     nums = [Person { name: "I", age: 9 }];
-//     │           ───────────────┬───────────────
-//     │                          ╰───────────────── type mismatch: expected int[], got Person[]
+//     │            ───────────────┬──────────────
+//     │                           ╰──────────────── type mismatch: expected int[], got Person[]
 //     │
 //     │ Note: Error code: E0001
 // ────╯

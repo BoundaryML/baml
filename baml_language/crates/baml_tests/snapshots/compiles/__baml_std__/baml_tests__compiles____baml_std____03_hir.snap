@@ -749,6 +749,9 @@ function baml.iter.iter(self: ?) -> Iterator<Item = R, Error = E | E2 | E3>  [ex
 function baml.iter.iter(self: ?) -> Iterator<Item = T, Error = E>  [expr] {
   {  } self
 }
+function baml.iter.iter(self: ?) -> Iterator<Item = string, Error = never>  [expr] {
+  {  } self.chars().iter()
+}
 function baml.iter.iter(self: ?) -> Iterator<Item = T, Error = never>  [expr] {
   {  } self
 }
@@ -1678,9 +1681,6 @@ function baml.toml.to_json(self: ?) -> baml.json.json  [expr] {
   {  } baml.json.from(self.items)
 }
 
---- <builtin>/baml/ns_unstable/unstable.baml ---
-function baml.unstable.string(value: T) -> string  [builtin]
-
 --- <builtin>/baml/ns_yaml/yaml.baml ---
 class baml.yaml.YamlParseError {
   message: string
@@ -1700,6 +1700,8 @@ class baml.String {
 function baml.byte_length(self: ?) -> int  [builtin]
 function baml.char_at(self: ?, index: int) -> string  [builtin]
 function baml.char_count(self: ?) -> int  [builtin]
+function baml.chars(self: ?) -> string[]  [builtin]
+function baml.code_point_at(self: ?, index: int) -> int  [builtin]
 function baml.ends_with(self: ?, suffix: string) -> bool  [builtin]
 function baml.from(value: T) -> string  [expr] {
   {  } root._to_string_shim(value)
@@ -1707,7 +1709,7 @@ function baml.from(value: T) -> string  [expr] {
 function baml.from_code_points(unicode: int[]) -> string  [builtin]
 function baml.from_utf8(utf8: uint8array) -> string  [builtin]
 function baml.includes(self: ?, search: string) -> bool  [builtin]
-function baml.index_of(self: ?, search: string) -> int  [builtin]
+function baml.index_of(self: ?, search: string) -> int?  [builtin]
 function baml.is_alphabetic(self: ?) -> bool  [builtin]
 function baml.is_alphanumeric(self: ?) -> bool  [builtin]
 function baml.is_ascii(self: ?) -> bool  [builtin]
@@ -1735,6 +1737,7 @@ function baml.replace_all(self: ?, search: string, replacement: string) -> strin
 function baml.split(self: ?, delimiter: string) -> string[]  [builtin]
 function baml.starts_with(self: ?, prefix: string) -> bool  [builtin]
 function baml.substring(self: ?, start: int, end: int) -> string  [builtin]
+function baml.to_code_points(self: ?) -> int[]  [builtin]
 function baml.to_lower_case(self: ?) -> string  [builtin]
 function baml.to_upper_case(self: ?) -> string  [builtin]
 function baml.to_utf8(self: ?) -> uint8array  [builtin]

@@ -15,27 +15,26 @@ function InvalidArmSyntax(x: int) -> string {
 //    ╭─[ catch_invalid_arm_syntax.baml:8:11 ]
 //    │
 //  8 │     let y = "hi";
-//    │           ┬  
+//    │           ┬
 //    │           ╰── Expected '=>' after catch pattern, found '='
-//    │ 
+//    │
 //    │ Note: Error code: E0010
 // ───╯
 // warning: unreachable arm
 //    ╭─[ catch_invalid_arm_syntax.baml:7:15 ]
 //    │
 //  7 │     string => "ok",
-//    │               ──┬─  
+//    │               ──┬─
 //    │                 ╰─── unreachable arm
-//    │ 
+//    │
 //    │ Note: Error code: E0063
 // ───╯
 // warning: unreachable arm
-//    ╭─[ catch_invalid_arm_syntax.baml:7:20 ]
+//    ╭─[ catch_invalid_arm_syntax.baml:8:5 ]
 //    │
-//  7 │ ╭─▶     string => "ok",
-//  8 │ ├─▶     let y = "hi";
-//    │ │                       
-//    │ ╰─────────────────────── unreachable arm
-//    │     
-//    │     Note: Error code: E0063
+//  8 │     let y = "hi";
+//    │     ──────┬──────
+//    │           ╰──────── unreachable arm
+//    │
+//    │ Note: Error code: E0063
 // ───╯

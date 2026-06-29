@@ -189,7 +189,7 @@ function task_group.group_cancel_cancels_member() -> int {
 
   L0:
     load_var e
-    throw
+    rethrow
 
   L1:
     load_const 0

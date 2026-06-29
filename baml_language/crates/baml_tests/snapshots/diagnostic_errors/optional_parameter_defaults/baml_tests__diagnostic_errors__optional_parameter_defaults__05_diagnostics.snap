@@ -63,11 +63,11 @@ source: crates/baml_tests/src/generated_tests.rs
 ────╯
 
   [type] error: required parameter `b` cannot appear after a defaulted parameter
-    ╭─[ call_binding.baml:41:45 ]
+    ╭─[ call_binding.baml:41:46 ]
     │
  41 │ function BadRequiredAfterDefault(a: int = 1, b: int) -> int {
-    │                                             ───┬───  
-    │                                                ╰───── required parameter `b` cannot appear after a defaulted parameter
+    │                                              ───┬──  
+    │                                                 ╰──── required parameter `b` cannot appear after a defaulted parameter
     │ 
     │ Note: Error code: E0001
 ────╯

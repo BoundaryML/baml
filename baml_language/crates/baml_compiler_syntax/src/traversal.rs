@@ -23,6 +23,16 @@ pub trait SyntaxNodeExt {
 
     /// Get all non-trivia tokens in this subtree.
     fn non_trivia_tokens(&self) -> impl Iterator<Item = SyntaxToken>;
+
+    /// The text range of this node for use as a diagnostic / editor span,
+    /// excluding leading and trailing trivia (whitespace, newlines, comments).
+    ///
+    /// Rowan attaches trivia as child tokens, so a node's raw `text_range()`
+    /// can start on the inter-token whitespace before its first real token
+    /// (e.g. the space after `->` in a return type). Spans must tightly cover
+    /// the construct, so build them with this instead of `text_range()`.
+    /// See [`trimmed_range`].
+    fn span_range(&self) -> TextRange;
 }
 
 impl SyntaxNodeExt for SyntaxNode {
@@ -56,6 +66,10 @@ impl SyntaxNodeExt for SyntaxNode {
 
     fn non_trivia_tokens(&self) -> impl Iterator<Item = SyntaxToken> {
         self.tokens().filter(|token| !token.kind().is_trivia())
+    }
+
+    fn span_range(&self) -> TextRange {
+        trimmed_range(self)
     }
 }
 

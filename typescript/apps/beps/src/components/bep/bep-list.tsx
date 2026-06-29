@@ -24,7 +24,7 @@ type ViewMode = "list" | "kanban";
 
 const STATUS_OPTIONS: { value: BepStatus | "all"; label: string }[] = [
   { value: "all", label: "All" },
-  { value: "draft", label: "Draft" },
+  { value: "draft", label: "Slop" },
   { value: "proposed", label: "Proposed" },
   { value: "pending", label: "Pending" },
   { value: "accepted", label: "Accepted" },
@@ -34,7 +34,7 @@ const STATUS_OPTIONS: { value: BepStatus | "all"; label: string }[] = [
 ];
 
 const KANBAN_COLUMNS: { status: BepStatus; label: string; color: string }[] = [
-  { status: "draft", label: "Draft", color: "bg-slate-500" },
+  { status: "draft", label: "Slop", color: "bg-slate-500" },
   { status: "proposed", label: "Proposed", color: "bg-blue-500" },
   { status: "pending", label: "Pending", color: "bg-yellow-500" },
   { status: "accepted", label: "Accepted", color: "bg-green-500" },

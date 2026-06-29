@@ -45,6 +45,16 @@ pub(crate) struct BamlToml {
     pub unknown: IndexMap<String, toml::Value>,
 }
 
+/// Top-level keys that are valid in `baml.toml` but are *not* consumed by
+/// this internal binary, so they legitimately land in [`BamlToml::unknown`].
+/// They must not be flagged as typos. Currently just `toolchain` (typically a
+/// `[toolchain]` table, e.g. `channel = "nightly"`), which the `baml` wrapper
+/// reads to pick a toolchain version *before* exec'ing this binary — by the
+/// time we parse the manifest the choice is already made, so there is nothing
+/// here to act on, only a key to not warn about. Matching is by key name, so
+/// both the `[toolchain]` table and a bare `toolchain = "…"` are covered.
+const KNOWN_UNHANDLED_TOP_LEVEL_KEYS: &[&str] = &["toolchain"];
+
 #[derive(Debug, Deserialize)]
 pub(crate) struct Package {
     /// `[package].name`. Optional here so a missing name produces our own
@@ -138,6 +148,9 @@ pub(crate) fn package_name(
 pub(crate) fn unknown_field_warnings(manifest: &BamlToml) -> Vec<String> {
     let mut warnings = Vec::new();
     for key in manifest.unknown.keys() {
+        if KNOWN_UNHANDLED_TOP_LEVEL_KEYS.contains(&key.as_str()) {
+            continue;
+        }
         warnings.push(format!(
             "ignoring unrecognized top-level key `{key}` in baml.toml"
         ));
@@ -192,6 +205,25 @@ mod tests {
         let warns = unknown_field_warnings(&m);
         assert!(warns.iter().any(|w| w.contains("nmae")), "got: {warns:?}");
         assert!(warns.iter().any(|w| w.contains("wat")), "got: {warns:?}");
+    }
+
+    #[test]
+    fn toolchain_key_is_known_and_not_warned() {
+        // `[toolchain]` is consumed by the `baml` wrapper, not this binary, so
+        // it lands in `unknown` — but it's a legitimate key, not a typo, and
+        // must not produce a warning. This mirrors a real manifest: a
+        // `[toolchain]` table sitting alongside `[package]`. A genuine
+        // top-level typo (`nmae`, before any table header) still warns.
+        let m = parse(
+            "nmae = \"typo\"\n\n[package]\nname = \"a\"\n\n[toolchain]\nchannel = \"nightly\"\n",
+        )
+        .unwrap();
+        let warns = unknown_field_warnings(&m);
+        assert!(
+            !warns.iter().any(|w| w.contains("toolchain")),
+            "toolchain must not warn, got: {warns:?}"
+        );
+        assert!(warns.iter().any(|w| w.contains("nmae")), "got: {warns:?}");
     }
 
     #[test]

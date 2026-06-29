@@ -17,7 +17,7 @@
 //!    `substitute_ty` to replace any residual type-variable references.
 
 use baml_base::Name;
-use baml_compiler2_ast::TypeExpr;
+use baml_compiler2_ast::{TypeExpr, TypeExprKind};
 use rustc_hash::FxHashMap;
 
 use crate::{
@@ -157,8 +157,8 @@ pub fn substitute_ty(ty: &Ty, bindings: &FxHashMap<Name, Ty>) -> Ty {
 /// This is called at the `TypeExpr` level, before `lower_type_expr`, so we can
 /// intercept `T` references that would otherwise produce `Ty::Unknown`.
 fn substitute_type_expr(expr: &TypeExpr, bindings: &FxHashMap<Name, Ty>) -> Option<Ty> {
-    match expr {
-        TypeExpr::Path {
+    match &expr.kind {
+        TypeExprKind::Path {
             segments,
             generic_args,
             associated_type_bindings,
@@ -170,7 +170,7 @@ fn substitute_type_expr(expr: &TypeExpr, bindings: &FxHashMap<Name, Ty>) -> Opti
         {
             bindings.get(&segments[1]).cloned()
         }
-        TypeExpr::Path {
+        TypeExprKind::Path {
             segments,
             generic_args,
             associated_type_bindings,
@@ -221,9 +221,9 @@ pub fn lower_type_expr_with_generics(
     // For composite types (List, Map, Optional, Union), recurse with substitution
     // rather than lowering first then substituting, so that type-variable references
     // in nested positions are also intercepted before triggering "unresolved type".
-    match expr {
+    match &expr.kind {
         // `T?` is sugar for `T | null` — lower it directly to a nullable union.
-        TypeExpr::Optional { inner, .. } => Ty::optional(lower_type_expr_with_generics(
+        TypeExprKind::Optional { inner, .. } => Ty::optional(lower_type_expr_with_generics(
             db,
             inner,
             package_items,
@@ -231,7 +231,7 @@ pub fn lower_type_expr_with_generics(
             bindings,
             diagnostics,
         )),
-        TypeExpr::List { inner, .. } => Ty::List(
+        TypeExprKind::List { inner, .. } => Ty::List(
             Box::new(lower_type_expr_with_generics(
                 db,
                 inner,
@@ -242,7 +242,7 @@ pub fn lower_type_expr_with_generics(
             )),
             TyAttr::default(),
         ),
-        TypeExpr::Map { key, value, .. } => Ty::Map {
+        TypeExprKind::Map { key, value, .. } => Ty::Map {
             key: Box::new(lower_type_expr_with_generics(
                 db,
                 key,
@@ -261,7 +261,7 @@ pub fn lower_type_expr_with_generics(
             )),
             attr: TyAttr::default(),
         },
-        TypeExpr::Union {
+        TypeExprKind::Union {
             variants: members, ..
         } => Ty::Union(
             members
@@ -279,7 +279,7 @@ pub fn lower_type_expr_with_generics(
                 .collect(),
             TyAttr::default(),
         ),
-        TypeExpr::Function {
+        TypeExprKind::Function {
             params,
             ret,
             throws,
@@ -335,7 +335,7 @@ pub fn lower_type_expr_with_generics(
                 attr: TyAttr::default(),
             }
         }
-        TypeExpr::AssociatedTypeProjection {
+        TypeExprKind::AssociatedTypeProjection {
             base,
             interface,
             member,
@@ -378,11 +378,11 @@ pub fn lower_type_expr_with_generics(
         // as `Ty::TypeVar` by `lower_type_expr_in_ns` rather than triggering "unresolved
         // type" diagnostics. `substitute_ty` then replaces those TypeVars with the
         // concrete bound types.
-        other => {
+        _ => {
             let binding_keys: Vec<Name> = bindings.keys().cloned().collect();
             let ty = lower_type_expr_in_ns(
                 db,
-                other,
+                expr,
                 package_items,
                 ns_context,
                 &binding_keys,
