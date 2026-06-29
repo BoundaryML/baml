@@ -65,9 +65,7 @@ function AuthAliasParam(t: TokenAlias) -> string {
 // Bare class in throw
 function AuthThrowClass(x: int) -> string {
     match (x) {
-        0 => {
-            throw Error { realm: "auth failed", expired: true }
-        },
+        0 => throw Error { realm: "auth failed", expired: true },
         _ => "ok",
     }
 }
@@ -75,9 +73,7 @@ function AuthThrowClass(x: int) -> string {
 // Bare enum in throw
 function AuthThrowEnum(x: int) -> string {
     match (x) {
-        0 => {
-            throw Role.Guest
-        },
+        0 => throw Role.Guest,
         _ => "ok",
     }
 }
@@ -107,9 +103,7 @@ function AuthMatchesRootStatus(s: root.Status) -> string {
 
 function AuthThrowsRootError(x: int) -> string {
     match (x) {
-        0 => {
-            throw root.Error { code: 403, message: "forbidden" }
-        },
+        0 => throw root.Error { code: 403, message: "forbidden" },
         _ => "ok",
     }
 }
