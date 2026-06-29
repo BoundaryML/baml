@@ -27,7 +27,7 @@ const SCENES: BattleScene[] = [
     backdrop: '/scene_design.png',
     caption: 'I · The Battle of Design',
     title: 'The battle of design',
-    body: 'Code can be slop, writing cannot. We built BEPS, a full site for writing, reviewing, and managing detailed design specs for the BAML language.',
+    body: 'Writing cannot be slop. We built BEPS, a full site for writing, reviewing, and managing detailed design specs for the BAML language.',
     link: { href: 'https://beps.boundaryml.com', label: 'beps.boundaryml.com' },
     images: [
       { src: '/battle-design-kanban.png', alt: 'BEPS kanban board of proposals' },
@@ -55,7 +55,30 @@ const SCENES: BattleScene[] = [
 ];
 
 const BACKDROPS = SCENES.map((s) => s.backdrop);
-const SCROLL_VH = 300;
+const SCROLL_VH = 380;
+
+// Cross-fade curve WITH HOLDS. A plain triangle (1 - |s - i|) leaves the stage
+// perpetually mid-dissolve (reads as "blurry"); instead each scene stays fully
+// crisp for most of its slot and only blends into the next over a short window.
+const TRANSITION = 0.12; // fraction of the scroll spent cross-fading between scenes
+function sceneOpacities(p: number, n: number): number[] {
+  if (n <= 1) return [1];
+  const holdW = (1 - (n - 1) * TRANSITION) / n; // crisp "hold" width per scene
+  const step = holdW + TRANSITION;
+  const out: number[] = [];
+  for (let i = 0; i < n; i++) {
+    const holdStart = i * step;
+    const holdEnd = holdStart + holdW;
+    let o: number;
+    if (p <= holdStart - TRANSITION) o = 0;
+    else if (p < holdStart) o = (p - (holdStart - TRANSITION)) / TRANSITION; // fade in
+    else if (p <= holdEnd) o = 1; // hold — fully crisp
+    else if (p <= holdEnd + TRANSITION) o = 1 - (p - holdEnd) / TRANSITION; // fade out
+    else o = 0;
+    out.push(Math.min(1, Math.max(0, o)));
+  }
+  return out;
+}
 
 const STYLES = `
   .warscene2 [data-leg] {
@@ -212,11 +235,12 @@ export default function WarScene() {
       const total = wrap.offsetHeight - window.innerHeight;
       const p = total > 0 ? clamp(-wrap.getBoundingClientRect().top / total, 0, 1) : 0;
       root.style.setProperty('--p', String(p));
-      const s = p * (BACKDROPS.length - 1);
+      const ops = sceneOpacities(p, BACKDROPS.length);
+      let idx = 0;
       for (let i = 0; i < BACKDROPS.length; i++) {
-        root.style.setProperty(`--b${i}`, String(clamp(1 - Math.abs(s - i), 0, 1)));
+        root.style.setProperty(`--b${i}`, String(ops[i]));
+        if (ops[i] > ops[idx]) idx = i; // active = most-visible scene
       }
-      const idx = Math.round(s);
       if (idx !== lastIdx.current) {
         lastIdx.current = idx;
         setScene(idx);

@@ -1,4 +1,4 @@
-import { mutation, query } from './_generated/server';
+import { internalMutation, mutation, query } from './_generated/server';
 import { v } from 'convex/values';
 
 const MAX_NAME = 80;
@@ -77,6 +77,26 @@ export const submit = mutation({
       createdAt: now,
       approved: 0, // pending manual review
     });
+  },
+});
+
+// Admin-only (internal: not callable from the client). Give every legacy pledge
+// that has no approval state yet an explicit value (default 0 = pending), so the
+// moderation column exists on every row. Pass { value: 1 } to grandfather the
+// existing pledges in as approved. Idempotent.
+export const backfillApproved = internalMutation({
+  args: { value: v.optional(v.number()) },
+  handler: async (ctx, { value }) => {
+    const target = value ?? 0;
+    const rows = await ctx.db.query('submissions').collect();
+    let patched = 0;
+    for (const r of rows) {
+      if (r.approved === undefined) {
+        await ctx.db.patch(r._id, { approved: target });
+        patched++;
+      }
+    }
+    return { patched, total: rows.length };
   },
 });
 

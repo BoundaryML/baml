@@ -6,7 +6,7 @@ import { api } from '../../convex/_generated/api';
 
 const MAX_DESC = 280;
 
-const SHARE_URL = 'https://waronslop.com';
+const SHARE_URL = 'https://fightslopwithslop.com';
 
 // ── Shareable card ───────────────────────────────────────────────────────────
 // Paint the user's dispatch onto a 1200×675 (Twitter card ratio) canvas they can
@@ -68,7 +68,7 @@ function drawCard(canvas: HTMLCanvasElement, name: string, dispatch: string) {
   // Footer.
   ctx.font = '400 26px "Bitcount Grid Double", ui-monospace, monospace';
   ctx.fillStyle = '#7c3aed';
-  ctx.fillText('waronslop.com', 80, H - 96);
+  ctx.fillText('fightslopwithslop.com', 80, H - 96);
   ctx.fillStyle = '#5e5a4f';
   const handle = '@boundaryml';
   ctx.fillText(handle, W - 80 - ctx.measureText(handle).width, H - 96);
