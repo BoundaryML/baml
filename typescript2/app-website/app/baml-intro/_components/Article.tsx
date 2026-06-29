@@ -458,7 +458,7 @@ export function Article({ view = 'all' }: { view?: 'all' | 'intro' | 'deep' }) {
                     <strong>human</strong>
                   </em>
                   {
-                    ' productivity. AI agents are a new paradigm that require a new programming language, just like in the past:'
+                    ' productivity. AI agents are a new paradigm that requires a new programming language, just like in the past:'
                   }
                 </p>
               )}
@@ -525,12 +525,12 @@ export function Article({ view = 'all' }: { view?: 'all' | 'intro' | 'deep' }) {
             {/* ===== Part 1 · A better language ===== */}
             <Part eyebrow="Part 1" id="language" title="A better language">
               <p>
-                BAML aims to be an agent friendly language. We'll start with the{' '}
+                BAML aims to be an agent-friendly language. We'll start with the{' '}
                 <u>syntax and type system decisions</u> we made. Then explore
                 the <u>agent-first cli tooling</u>.
               </p>
               <p>
-                As much as we want agents to write code, humans trust is still a
+                As much as we want agents to write code, human trust is still a
                 vital part of a healthy software system. The third section
                 focuses on <u>tooling for humans</u>, and the fourth shares how
                 we made <u>BAML incrementally adoptable</u>, so you won't need
@@ -539,9 +539,9 @@ export function Article({ view = 'all' }: { view?: 'all' | 'intro' | 'deep' }) {
               <p>
                 And lastly, not only has the way we write code changed, but also
                 the <i>kind</i> of code we write as well. More and more code is
-                agentic loops, created by LLMs on the fly, and probabilstic. We
+                agentic loops, created by LLMs on the fly, and probabilistic. We
                 added a few syntax constructs to help{' '}
-                <u>reign in the non-determinism.</u>
+                <u>rein in the non-determinism.</u>
               </p>
             </Part>
 
@@ -564,7 +564,7 @@ export function Article({ view = 'all' }: { view?: 'all' | 'intro' | 'deep' }) {
                   explicitly chose not to be sound
                 </a>
                 {
-                  ", trading it away for productivity. That was the right move for humans, but it's the wrong default when agents are writing the code. It's not a conicidence there are 5 different schema validation libraries for TS: the type system doesn't mean enough."
+                  ", trading it away for productivity. That was the right move for humans, but it's the wrong default when agents are writing the code. It's not a coincidence there are 5 different schema validation libraries for TS: the type system doesn't mean enough."
                 }
               </p>
               <p>
@@ -637,7 +637,7 @@ export function Article({ view = 'all' }: { view?: 'all' | 'intro' | 'deep' }) {
             >
               <p>
                 {
-                  'TypeScript exceptions have no types, resulting in ugly code to handle the right error. BAML analyzes of every '
+                  'TypeScript exceptions have no types, resulting in ugly code to handle the right error. BAML analyzes every '
                 }
                 <code>throws</code>
                 {
@@ -744,9 +744,8 @@ export function Article({ view = 'all' }: { view?: 'all' | 'intro' | 'deep' }) {
             {/* ===== Part 2 · Tools for agents ===== */}
             <Part eyebrow="Part 2" id="agent-tools" title="Tools for agents">
               <p>
-                {
-                  '[placeholder: intro — these are CLI tools built for an agent at a terminal, not a human in an IDE.]'
-                }
+                BAML ships with various tools to make agents find, test and
+                distribute code more easily.
               </p>
             </Part>
 
@@ -754,15 +753,19 @@ export function Article({ view = 'all' }: { view?: 'all' | 'intro' | 'deep' }) {
             <Section
               id="namespaces"
               num="1"
-              title="Namespaces are just directories, and there are no imports"
+              title="ls — the filesystem is the namespace structure"
             >
               <p>
                 {
-                  'AI agents spend too much time searching for things in large projects. In BAML the project structure is self-describing. Namespaces are just directories with a '
+                  'AI agents spend too much time searching for things in large projects. In BAML the project structure is self-describing: an agent can '
+                }
+                <code>ls</code>
+                {
+                  " a BAML project and know how it's laid out, because namespaces are just directories with a "
                 }
                 <code>ns_</code>
                 {
-                  ' prefix. There are no imports because everything is referred with its fully qualified name, like Go. Inside a namespace directory, all types, functions and objects are available in every file by default.'
+                  ' prefix. There are no imports — everything is referred to by its fully qualified name, like Go. Inside a namespace directory, all types, functions and objects are available in every file by default.'
                 }
               </p>
               <div className="l6-block">
@@ -810,7 +813,7 @@ export function Article({ view = 'all' }: { view?: 'all' | 'intro' | 'deep' }) {
               <p>
                 <code>describe</code>
                 {
-                  " is easier for agents to use than an LSP, and more informative than grep — agents writing BAML code don't need to search through 10 files to figure out how things work. Here's a transcript of an agent searching with grep, versus with baml describe:"
+                  " is easier for agents to use than an LSP, and more informative than grep. Agents writing BAML code don't need to search through 10 files to figure out how things work. Here's a transcript of an agent searching with grep, versus with baml describe:"
                 }
               </p>
               <div className="l6-pair">
@@ -943,7 +946,7 @@ export function Article({ view = 'all' }: { view?: 'all' | 'intro' | 'deep' }) {
             <Part eyebrow="Part 4" id="usable" title="How we make BAML usable">
               <p>
                 {
-                  "A language is only as strong as its community. Here's some features we added to help make it easier to adopt."
+                  "A language is only as strong as its community. Here are some features we added to help make it easier to adopt."
                 }
               </p>
             </Part>
@@ -1131,7 +1134,7 @@ export function Article({ view = 'all' }: { view?: 'all' | 'intro' | 'deep' }) {
                 to do codemode. But {' '}<code>eval</code>{' '} is unsafe and loses all type-safety and predictability.
               </p>
               <p>
-                BAML's reflection gives you eval, but with typed compiler error. If the string has the wrong signature, you can get a runtime-compiler error that you can feed back to the agent so it can fix its code.
+                BAML's reflection gives you eval, but with typed compiler errors. If the string has the wrong signature, you can get a runtime-compiler error that you can feed back to the agent so it can fix its code.
               </p>
               <p className="l6-note">
                 Coming soon: the reflection API below isn't available yet.

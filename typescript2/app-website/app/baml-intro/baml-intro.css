@@ -1095,6 +1095,13 @@
   background: var(--l6-code-bg);
   color: var(--l6-code-name);
 }
+/* The loading veil over the result pane is a translucent white wash on the
+   cream page; on dark frames that flashes a bright box, so swap it for a dark
+   wash and lift the label/spinner to a readable tone. */
+.l6:is([data-code-theme="dark"], [data-code-theme="midnight"]) .l2-live-veil {
+  background: color-mix(in srgb, var(--l6-code-bg) 72%, transparent);
+  color: var(--l6-code-name);
+}
 
 /* Diagnostics + line highlights are tuned for the cream page; on dark frames
    their faint tints disappear. Brighten them and add a left accent bar so the
