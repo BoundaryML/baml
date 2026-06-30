@@ -1233,13 +1233,10 @@ impl BexVm {
     /// Create a new VM with a shared heap.
     ///
     /// The heap is shared across all VMs. Each VM gets its own TLAB
-    /// for contention-free allocation. `resolved_class_names` is consumed only to
-    /// pre-resolve the error/panic class pointers; class/enum lookups otherwise go
-    /// through `packages`.
+    /// for contention-free allocation.
     pub fn new(
         heap: Arc<BexHeap>,
         globals: VmGlobals,
-        resolved_class_names: &HashMap<String, HeapPtr>,
         #[cfg(not(target_arch = "wasm32"))] park_requested: Arc<AtomicBool>,
         argv: Arc<[String]>,
         packages: Arc<IndexMap<Name, HeapPtr>>,
@@ -1252,23 +1249,23 @@ impl BexVm {
         // fires in the engine's pre-permit window.
         let tlab = Tlab::new_empty(Arc::clone(&heap));
 
-        // Pre-resolve error class pointers indexed by Error discriminant.
+        // Pre-resolve error class pointers indexed by Error discriminant, through
+        // the package index (builtin `baml.errors.*` classes).
         let error_class_ptrs: Vec<HeapPtr> = ErrorClass::ALL
             .iter()
             .map(|ec| {
-                *resolved_class_names.get(ec.fqn()).unwrap_or_else(|| {
-                    panic!("error class {:?} not in resolved_class_names", ec.fqn())
-                })
+                crate::package_load::lookup_type_by_fqn(&packages, ec.fqn())
+                    .unwrap_or_else(|| panic!("error class {:?} not in packages", ec.fqn()))
             })
             .collect();
 
-        // Pre-resolve panic class pointers indexed by PanicClass discriminant.
+        // Pre-resolve panic class pointers indexed by PanicClass discriminant,
+        // through the package index (builtin `baml.panics.*` classes).
         let panic_class_ptrs: Vec<HeapPtr> = PanicClass::ALL
             .iter()
             .map(|pc| {
-                *resolved_class_names.get(pc.fqn()).unwrap_or_else(|| {
-                    panic!("panic class {:?} not in resolved_class_names", pc.fqn())
-                })
+                crate::package_load::lookup_type_by_fqn(&packages, pc.fqn())
+                    .unwrap_or_else(|| panic!("panic class {:?} not in packages", pc.fqn()))
             })
             .collect();
 
@@ -1596,22 +1593,7 @@ impl BexVm {
     /// referenced by constant FQN; not valid for `user`-package types, whose
     /// rendered name elides the package — use [`Self::lookup_type`] there.
     pub fn lookup_type_by_fqn(&self, fqn: &str) -> Option<HeapPtr> {
-        let mut parts: Vec<Name> = fqn.split('.').map(Name::new).collect();
-        let name = parts.pop()?;
-        if parts.is_empty() {
-            return None;
-        }
-        let pkg = parts.remove(0);
-        let package = self.package(&pkg)?;
-        let local = bex_vm_types::types::LocalName {
-            namespace: parts,
-            name,
-        };
-        package
-            .classes
-            .get(&local)
-            .or_else(|| package.enums.get(&local))
-            .copied()
+        crate::package_load::lookup_type_by_fqn(&self.packages, fqn)
     }
 
     /// The recursive type-alias definition for `qtn`, if any (only recursive
@@ -2017,29 +1999,9 @@ impl BexVm {
             .collect();
         let globals = VmGlobals::Owned(bex_vm_types::GlobalPool::from_vec(globals_vec));
 
-        // Build resolved_class_names: convert ObjectIndex -> HeapPtr.
-        //
-        // Enum HeapPtrs are folded into the same map: BAML's type namespace is
-        // shared across classes and enums (a class and an enum cannot share an
-        // FQN), so callers that need name-based runtime lookup (e.g.
-        // `baml.json.from_string<Color>(...)`) can dispatch on the resulting
-        // `Object` kind.
-        let mut resolved_class_names: HashMap<String, HeapPtr> = bytecode
-            .resolved_class_names
-            .into_iter()
-            .map(|(name, idx)| (name, heap.compile_time_ptr(idx.into_raw())))
-            .collect();
-        resolved_class_names.extend(
-            bytecode
-                .resolved_enums_names
-                .into_iter()
-                .map(|(name, idx)| (name, heap.compile_time_ptr(idx.into_raw()))),
-        );
-
         Ok(Self::new(
             heap,
             globals,
-            &resolved_class_names,
             #[cfg(not(target_arch = "wasm32"))]
             park_requested,
             Arc::from(Vec::<String>::new()),

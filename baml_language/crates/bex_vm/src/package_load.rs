@@ -156,6 +156,32 @@ fn fill_package_slots(
     vm_packages
 }
 
+/// Look up a class or enum object pointer by its fully-qualified dotted name —
+/// package as the leading segment — through the package index. The free-function
+/// form of [`crate::vm::BexVm::lookup_type_by_fqn`], usable before a `BexVm`
+/// exists (e.g. to pre-resolve builtin error/panic classes in `BexVm::new`).
+pub fn lookup_type_by_fqn(packages: &IndexMap<Name, HeapPtr>, fqn: &str) -> Option<HeapPtr> {
+    let mut parts: Vec<Name> = fqn.split('.').map(Name::new).collect();
+    let name = parts.pop()?;
+    if parts.is_empty() {
+        return None;
+    }
+    let pkg = parts.remove(0);
+    let &pkg_ptr = packages.get(&pkg)?;
+    // SAFETY: `packages` only ever holds compile-time `Object::Package` pointers.
+    #[expect(unsafe_code, reason = "deref a compile-time package pointer")]
+    let package = (unsafe { pkg_ptr.get() }).as_package()?;
+    let local = LocalName {
+        namespace: parts,
+        name,
+    };
+    package
+        .classes
+        .get(&local)
+        .or_else(|| package.enums.get(&local))
+        .copied()
+}
+
 /// Flatten every package's recursive type aliases into one `TypeName → RuntimeTy`
 /// map (the shape `SysOpContext::type_alias_definitions` wants for output-format
 /// rendering), reconstructing each qualified name from its package + `LocalName`.

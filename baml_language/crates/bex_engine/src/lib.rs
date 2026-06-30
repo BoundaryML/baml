@@ -1432,11 +1432,6 @@ impl BexEngine {
                 let mut vm = BexVm::new(
                     Arc::clone(&heap),
                     VmGlobals::Owned(globals_pool.clone()),
-                    &resolved_class_names
-                        .iter()
-                        .chain(resolved_enum_names.iter())
-                        .map(|(k, v)| (k.clone(), *v))
-                        .collect::<HashMap<_, _>>(),
                     #[cfg(not(target_arch = "wasm32"))]
                     Arc::clone(&park_requested),
                     Arc::clone(&argv),
@@ -2414,12 +2409,6 @@ impl BexEngine {
         let vm = BexVm::new(
             Arc::clone(&self.heap),
             VmGlobals::Shared(self.globals.clone()),
-            &self
-                .resolved_class_names
-                .iter()
-                .chain(self.resolved_enum_names.iter())
-                .map(|(k, v)| (k.clone(), *v))
-                .collect::<HashMap<_, _>>(),
             #[cfg(not(target_arch = "wasm32"))]
             Arc::clone(&self.park_requested),
             Arc::clone(&self.argv),
@@ -3867,12 +3856,6 @@ impl BexEngine {
         let mut child_vm = BexVm::new(
             Arc::clone(&self.heap),
             VmGlobals::Shared(self.globals.clone()),
-            &self
-                .resolved_class_names
-                .iter()
-                .chain(self.resolved_enum_names.iter())
-                .map(|(k, v)| (k.clone(), *v))
-                .collect::<HashMap<_, _>>(),
             #[cfg(not(target_arch = "wasm32"))]
             Arc::clone(&self.park_requested),
             Arc::clone(&self.argv),
