@@ -79,14 +79,21 @@ fn build_interface_def(
     let generics = &iface_data.generic_params;
 
     // Lower a type expr in `scope` (diagnostics discarded — the declaration was
-    // validated upstream) and narrow to a runtime type.
+    // validated upstream) and narrow to a runtime type. This can legitimately fail
+    // for a *valid* program: an interface method signature may mention `Self` or an
+    // associated type (`Self.Item`), which this isolated scope does not substitute
+    // (unlike the MIR's `lower_signature_runtime_ty`), so they lower to `Unknown`
+    // and are dropped. (Faithfully lowering them is future work, tracked for when a
+    // consumer actually reads the method signatures — see the interface reflection
+    // follow-up.)
     let lower_rt = |expr: &TypeExpr, scope: &[Name]| -> Option<RuntimeTy> {
         let mut diags = Vec::new();
         let ty = lower_type_expr_in_ns(db, expr, pkg_items, ns, scope, &mut diags);
         baml_type::lower_to_runtime(&ty, resolved).ok()
     };
     // Lower an interface bound / `requires` target to its runtime form. A
-    // non-interface bound (rejected upstream) yields `None` and is skipped.
+    // non-interface bound (rejected upstream) yields `None` and is skipped, as does
+    // a bound that mentions an unsubstituted `Self`/associated type (see `lower_rt`).
     let lower_iface = |expr: &TypeExpr, scope: &[Name]| -> Option<RuntimeInterface> {
         let mut diags = Vec::new();
         let ty::Ty::Interface(qtn, args, assoc, _) =
@@ -664,6 +671,12 @@ fn build_packages(
     // + `Converter<float>`) orders by content rather than declaration order.
     // Package-level ordering is finalized by the caller once every map is built.
     for pkg in program_packages.values_mut() {
+        // Sort every per-package map so the serialized `Program` is byte-reproducible
+        // regardless of the source map's iteration order (`recursive_type_aliases` in
+        // particular is sourced from a `std::HashMap` with a per-process seed).
+        pkg.classes.sort_keys();
+        pkg.enums.sort_keys();
+        pkg.recursive_type_aliases.sort_keys();
         pkg.interfaces.sort_keys();
         pkg.impl_rules.sort_keys();
         for rules in pkg.impl_rules.values_mut() {
@@ -1200,11 +1213,11 @@ pub fn generate_project_bytecode_with_opt(
 
     // --- Pass 3b: Build interface objects + start the per-package structure ---
     // Each interface becomes an `Object::Interface` so impl rules can point at it
-    // (`interface_head`) and packages can reference it by index. Only `.name` is
-    // read at runtime today, so the signature (args/requires/assoc/fields/methods)
-    // is left empty and filled when reflection needs it. `program_packages` is the
-    // per-package structure the loader builds `Object::Package` + `vm.packages`
-    // from; `build_packages` fills in each package's impl rules below.
+    // (`interface_head`) and packages can reference it by index. The full signature
+    // (args/requires/assoc/fields/methods) is filled by `build_interface_def`.
+    // `program_packages` is the per-package structure the loader builds
+    // `Object::Package` + `vm.packages` from; `build_packages` fills in each
+    // package's impl rules below.
     for file in &all_files {
         let item_tree = file_item_tree(db, *file);
         let pkg_info = file_package(db, *file);

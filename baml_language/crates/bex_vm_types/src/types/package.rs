@@ -15,15 +15,10 @@ pub struct LocalName {
 /// Contains lookups for named items defined in the package.
 #[derive(Debug, Clone, BorshSerialize, BorshDeserialize)]
 pub struct Package {
-    /// The package's dependencies as pointers to other `Package` objects.
-    /// May not contain circular references.
-    pub dependencies: Vec<HeapPtr>,
     /// Classes defined in the package.
     pub classes: IndexMap<LocalName, HeapPtr>,
     /// Enums defined in the package.
     pub enums: IndexMap<LocalName, HeapPtr>,
-    /// Free functions defined in the package.
-    pub functions: IndexMap<LocalName, HeapPtr>,
     /// Interfaces defined in the package.
     pub interfaces: IndexMap<LocalName, HeapPtr>,
     /// Implementation rules defined in the package.
@@ -42,12 +37,8 @@ pub struct Package {
 /// functions are carried as pooled objects referenced by index.
 #[derive(Debug, Clone, Default, BorshSerialize, BorshDeserialize)]
 pub struct ProgramPackage {
-    /// Dependency package names; resolved to `Package` pointers at load (this
-    /// package's deps are always loaded first — topological order).
-    pub dependencies: Vec<Name>,
     pub classes: IndexMap<LocalName, ObjectIndex>,
     pub enums: IndexMap<LocalName, ObjectIndex>,
-    pub functions: IndexMap<LocalName, ObjectIndex>,
     pub interfaces: IndexMap<LocalName, ObjectIndex>,
     /// Implemented-interface `ObjectIndex` → the impl rules of it declared in
     /// this package (may target an interface from a dependency).

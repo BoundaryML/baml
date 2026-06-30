@@ -688,6 +688,12 @@ pub struct BexEngine {
     /// dispatch, recursive aliases, and named-item lookup.
     packages: Arc<indexmap::IndexMap<baml_type::Name, bex_vm_types::HeapPtr>>,
 
+    /// Builtin `baml.errors.*` / `baml.panics.*` class pointers, resolved once
+    /// from `packages` and shared with every spawned VM (each `BexVm` would
+    /// otherwise re-resolve them from `packages` on construction).
+    error_class_ptrs: Arc<[bex_vm_types::HeapPtr]>,
+    panic_class_ptrs: Arc<[bex_vm_types::HeapPtr]>,
+
     /// Snapshot of the `BAML_PROFILE` master switch, taken once at
     /// construction (the config is read-once per process). Gates every
     /// profiling emission and the per-resume ring refresh.
@@ -1368,9 +1374,13 @@ impl BexEngine {
             compile_time_objects,
             &bytecode.packages,
         );
-        // Shared with every VM (mirrors `interface_impls`), so spawned workers
-        // see the same package index without re-resolving it.
+        // Shared with every VM so spawned workers see the same package index
+        // without re-resolving it.
         let packages = Arc::new(vm_packages);
+        // Resolve the builtin error/panic class pointers once; shared with every
+        // spawned VM rather than re-resolved per `BexVm::new`.
+        let error_class_ptrs = bex_vm::vm::resolve_error_class_ptrs(&packages);
+        let panic_class_ptrs = bex_vm::vm::resolve_panic_class_ptrs(&packages);
 
         // Convert ObjectIndex -> HeapPtr for function lookup table.
         // Now that the heap exists, we can get stable pointers to compile-time objects.
@@ -1436,6 +1446,8 @@ impl BexEngine {
                     Arc::clone(&park_requested),
                     Arc::clone(&argv),
                     Arc::clone(&packages),
+                    Arc::clone(&error_class_ptrs),
+                    Arc::clone(&panic_class_ptrs),
                 );
                 vm.set_entry_point(*init_ptr, &[]);
                 // Drive the VM to completion. $init only contains synchronous
@@ -1565,6 +1577,8 @@ impl BexEngine {
             active_calls: Mutex::new(HashMap::new()),
             futures: FutureManager::new(futures_permit),
             packages,
+            error_class_ptrs,
+            panic_class_ptrs,
             prof_enabled,
         })
     }
@@ -2413,6 +2427,8 @@ impl BexEngine {
             Arc::clone(&self.park_requested),
             Arc::clone(&self.argv),
             Arc::clone(&self.packages),
+            Arc::clone(&self.error_class_ptrs),
+            Arc::clone(&self.panic_class_ptrs),
         );
         // BEP-034: wrap the root VM in a `BexThread` from the outset so the
         // permit's `RootHaver` is the thread (delegating to the inner VM).
@@ -3860,6 +3876,8 @@ impl BexEngine {
             Arc::clone(&self.park_requested),
             Arc::clone(&self.argv),
             Arc::clone(&self.packages),
+            Arc::clone(&self.error_class_ptrs),
+            Arc::clone(&self.panic_class_ptrs),
         );
         child_vm.prof_thread_id = prof_thread_id;
         child_vm.prof_suppressed = prof_suppressed;

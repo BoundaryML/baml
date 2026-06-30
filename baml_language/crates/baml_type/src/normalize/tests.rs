@@ -551,6 +551,41 @@ fn symbolic_associated_type_projection_subtypes_via_its_bound() {
     assert!(!is_subtype(&proj(None), &iface("Summarizable"), &ctx));
 }
 
+#[test]
+fn projection_with_unresolved_interface_is_opaque() {
+    // A projection whose interface the TIR has not yet determined (`interface:
+    // None`) canonicalizes opaquely: it equals only a structurally-identical
+    // projection. In particular the two spellings of the *same* associated type —
+    // `(T as ?).Item` (unresolved) and `(T as Iter).Item` (resolved) — are NOT
+    // equated by this algebra, unlike the TIR's legacy
+    // `projection_views_equivalent`. This is the known gap (review item L3): it is
+    // resolved upstream by the TIR determining the interface (filling `Some(I)`,
+    // per `Ty::AssociatedTypeProjection`'s field TODO) BEFORE equivalence is flipped
+    // onto this algebra. If that flip lands while `None` can still occur, a real
+    // `(T as ?).M` vs `(T as I).M` comparison would give a false negative — this
+    // test pins the current opaque behavior so the gap can't be crossed silently.
+    let ctx = Ctx::default();
+    let proj =
+        |base: &str, interface: Option<Interface>, member: &str| Ty::AssociatedTypeProjection {
+            base: Box::new(typevar(base)),
+            interface: interface.map(Box::new),
+            member: Name::new(member),
+            attr: TyAttr::default(),
+        };
+    let unresolved = proj("T", None, "Item");
+    let resolved = proj("T", iface("Iter").as_interface(), "Item");
+
+    // Opaque: each spelling equals only itself.
+    assert!(equivalent(&unresolved, &unresolved, &ctx));
+    assert!(equivalent(&resolved, &resolved, &ctx));
+    // The gap: unresolved and resolved spellings of the same projection are not
+    // equated structurally (the legacy view-equivalence would equate them).
+    assert!(!equivalent(&unresolved, &resolved, &ctx));
+    // Distinct member / base are never equated.
+    assert!(!equivalent(&unresolved, &proj("T", None, "Other"), &ctx));
+    assert!(!equivalent(&unresolved, &proj("U", None, "Item"), &ctx));
+}
+
 // ── aliases & recursion ──────────────────────────────────────────────────--
 
 #[test]

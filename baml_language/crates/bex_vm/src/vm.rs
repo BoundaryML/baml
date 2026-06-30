@@ -410,8 +410,8 @@ mod tests {
             early_yield: early_yield_for_test(),
             tlab: Tlab::new(heap),
             globals: VmGlobals::Owned(GlobalPool::new()),
-            error_class_ptrs: Vec::new(),
-            panic_class_ptrs: Vec::new(),
+            error_class_ptrs: Arc::from(Vec::new()),
+            panic_class_ptrs: Arc::from(Vec::new()),
             watch: Watch::new(),
             watched_vars: HashMap::new(),
             interrupt_frame: None,
@@ -794,17 +794,19 @@ pub struct BexVm {
     pub globals: VmGlobals,
 
     /// All loaded packages, indexed by their name; each value is an
-    /// `Object::Package` pointer. Shared (`Arc`) across spawned VMs like
-    /// [`Self::interface_impls`].
+    /// `Object::Package` pointer. Shared (`Arc`) across spawned VMs so workers
+    /// resolve types, interfaces, and impls against the same index without
+    /// rebuilding it.
     pub packages: Arc<IndexMap<Name, HeapPtr>>,
 
     /// Pre-resolved heap pointers for `baml.errors.*` classes, indexed by
-    /// `ErrorClass` discriminant.
-    error_class_ptrs: Vec<HeapPtr>,
+    /// `ErrorClass` discriminant. Shared (`Arc`) across spawned VMs — resolved
+    /// once from `packages` rather than per construction.
+    error_class_ptrs: Arc<[HeapPtr]>,
 
     /// Pre-resolved heap pointers for `baml.panics.*` classes, indexed by
-    /// `PanicClass` discriminant.
-    panic_class_ptrs: Vec<HeapPtr>,
+    /// `PanicClass` discriminant. Shared (`Arc`) across spawned VMs.
+    panic_class_ptrs: Arc<[HeapPtr]>,
 
     /// Emit dependency graph.
     pub watch: Watch,
@@ -1036,8 +1038,6 @@ pub struct BytecodeProgram {
     /// Compile-time globals (converted to runtime Values in `BexEngine::new`).
     pub globals: Vec<bex_vm_types::ConstValue>,
     pub resolved_function_names: HashMap<String, (ObjectIndex, FunctionKind)>,
-    pub resolved_class_names: HashMap<String, ObjectIndex>,
-    pub resolved_enums_names: HashMap<String, ObjectIndex>,
     /// Maps function names to their global indices.
     /// Used for dynamic function lookup at runtime.
     pub function_global_indices: HashMap<String, usize>,
@@ -1078,24 +1078,13 @@ pub fn convert_program(program: bex_vm_types::Program) -> Result<BytecodeProgram
         }
     }
 
-    // Build resolved name maps by scanning objects
+    // Build the function-name lookup by scanning objects. Classes and enums are
+    // resolved through `packages` at runtime, so they need no separate index here.
     let mut resolved_function_names = HashMap::new();
-    let mut resolved_class_names = HashMap::new();
-    let mut resolved_enums_names = HashMap::new();
-
     for (idx, obj) in objects.iter().enumerate() {
-        let obj_idx = ObjectIndex::from_raw(idx);
-        match obj {
-            Object::Function(func) => {
-                resolved_function_names.insert(func.name.clone(), (obj_idx, func.kind));
-            }
-            Object::Class(class) => {
-                resolved_class_names.insert(class.name.to_string(), obj_idx);
-            }
-            Object::Enum(enum_def) => {
-                resolved_enums_names.insert(enum_def.name.to_string(), obj_idx);
-            }
-            _ => {}
+        if let Object::Function(func) = obj {
+            resolved_function_names
+                .insert(func.name.clone(), (ObjectIndex::from_raw(idx), func.kind));
         }
     }
 
@@ -1103,14 +1092,39 @@ pub fn convert_program(program: bex_vm_types::Program) -> Result<BytecodeProgram
         objects: ObjectPool::from_vec(objects),
         globals: program.globals,
         resolved_function_names,
-        resolved_class_names,
-        resolved_enums_names,
         function_global_indices: program.function_global_indices,
         template_strings_macros: program.template_strings_macros,
         client_metadata: program.client_metadata,
         test_cases: program.test_cases,
         packages: program.packages,
     })
+}
+
+/// Resolve the heap pointers for the builtin `baml.errors.*` classes, indexed by
+/// [`ErrorClass`] discriminant. The result is identical for every VM sharing a
+/// `packages` index, so it is resolved once and shared (`Arc`) across spawns
+/// rather than re-resolved per [`BexVm::new`].
+pub fn resolve_error_class_ptrs(packages: &IndexMap<Name, HeapPtr>) -> Arc<[HeapPtr]> {
+    ErrorClass::ALL
+        .iter()
+        .map(|ec| {
+            crate::package_load::lookup_type_by_fqn(packages, ec.fqn())
+                .unwrap_or_else(|| panic!("error class {:?} not in packages", ec.fqn()))
+        })
+        .collect()
+}
+
+/// Resolve the heap pointers for the builtin `baml.panics.*` classes, indexed by
+/// [`PanicClass`] discriminant. Shared across spawns like
+/// [`resolve_error_class_ptrs`].
+pub fn resolve_panic_class_ptrs(packages: &IndexMap<Name, HeapPtr>) -> Arc<[HeapPtr]> {
+    PanicClass::ALL
+        .iter()
+        .map(|pc| {
+            crate::package_load::lookup_type_by_fqn(packages, pc.fqn())
+                .unwrap_or_else(|| panic!("panic class {:?} not in packages", pc.fqn()))
+        })
+        .collect()
 }
 
 /// Extract an `f64` if `value` carries a heap-boxed float.
@@ -1240,6 +1254,8 @@ impl BexVm {
         #[cfg(not(target_arch = "wasm32"))] park_requested: Arc<AtomicBool>,
         argv: Arc<[String]>,
         packages: Arc<IndexMap<Name, HeapPtr>>,
+        error_class_ptrs: Arc<[HeapPtr]>,
+        panic_class_ptrs: Arc<[HeapPtr]>,
     ) -> Self {
         // Defer the first TLAB chunk reservation until the first `tlab.alloc`,
         // which the engine reaches only after the VM has been registered as a
@@ -1249,25 +1265,9 @@ impl BexVm {
         // fires in the engine's pre-permit window.
         let tlab = Tlab::new_empty(Arc::clone(&heap));
 
-        // Pre-resolve error class pointers indexed by Error discriminant, through
-        // the package index (builtin `baml.errors.*` classes).
-        let error_class_ptrs: Vec<HeapPtr> = ErrorClass::ALL
-            .iter()
-            .map(|ec| {
-                crate::package_load::lookup_type_by_fqn(&packages, ec.fqn())
-                    .unwrap_or_else(|| panic!("error class {:?} not in packages", ec.fqn()))
-            })
-            .collect();
-
-        // Pre-resolve panic class pointers indexed by PanicClass discriminant,
-        // through the package index (builtin `baml.panics.*` classes).
-        let panic_class_ptrs: Vec<HeapPtr> = PanicClass::ALL
-            .iter()
-            .map(|pc| {
-                crate::package_load::lookup_type_by_fqn(&packages, pc.fqn())
-                    .unwrap_or_else(|| panic!("panic class {:?} not in packages", pc.fqn()))
-            })
-            .collect();
+        // `error_class_ptrs` / `panic_class_ptrs` are resolved once from `packages`
+        // by the caller (`resolve_error_class_ptrs` / `resolve_panic_class_ptrs`)
+        // and shared across spawned VMs.
 
         let early_yield = EarlyYieldCheck::new(
             #[cfg(not(target_arch = "wasm32"))]
@@ -1586,6 +1586,18 @@ impl BexVm {
             .get(&local)
             .or_else(|| package.enums.get(&local))
             .copied()
+    }
+
+    /// Look up an interface object by its qualified type name. The returned
+    /// pointer is the canonical `Object::Interface` for the interface — the same
+    /// pointer that keys every package's [`Package::impl_rules`], so it can be
+    /// used to resolve an interface's impls in O(1).
+    pub fn lookup_interface(&self, qtn: &baml_type::TypeName) -> Option<HeapPtr> {
+        let local = bex_vm_types::types::LocalName {
+            namespace: qtn.namespace().clone(),
+            name: qtn.name().clone(),
+        };
+        self.package(qtn.package())?.interfaces.get(&local).copied()
     }
 
     /// Look up a class or enum object by its fully-qualified dotted name, with the
@@ -1999,6 +2011,8 @@ impl BexVm {
             .collect();
         let globals = VmGlobals::Owned(bex_vm_types::GlobalPool::from_vec(globals_vec));
 
+        let error_class_ptrs = resolve_error_class_ptrs(&vm_packages);
+        let panic_class_ptrs = resolve_panic_class_ptrs(&vm_packages);
         Ok(Self::new(
             heap,
             globals,
@@ -2006,6 +2020,8 @@ impl BexVm {
             park_requested,
             Arc::from(Vec::<String>::new()),
             Arc::new(vm_packages),
+            error_class_ptrs,
+            panic_class_ptrs,
         ))
     }
 

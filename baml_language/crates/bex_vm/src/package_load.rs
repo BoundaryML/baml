@@ -132,6 +132,14 @@ fn fill_package_slots(
         for (iface_idx, rules) in &pkg.impl_rules {
             let iface_ptr = heap.compile_time_ptr(iface_idx.into_raw());
             let rule_slots = &slots.impl_rule_slots[iface_idx];
+            // The reserve pass allocated one slot per rule from this same map, so
+            // the counts must match; a mismatch would leave a reserved slot as a
+            // never-overwritten `HeapPtr::null()` placeholder (UB on first deref).
+            debug_assert_eq!(
+                rules.len(),
+                rule_slots.len(),
+                "impl-rule reserve/fill count mismatch for an interface",
+            );
             let mut rule_ptrs = Vec::with_capacity(rules.len());
             for (rule, &slot) in rules.iter().zip(rule_slots) {
                 let resolved = resolve_impl_rule(heap, rule);
@@ -141,11 +149,8 @@ fn fill_package_slots(
             impl_rules.insert(iface_ptr, rule_ptrs);
         }
         let package = Package {
-            // Dependency pointers are not populated yet (no consumer needs them).
-            dependencies: Vec::new(),
             classes: resolve_members(heap, &pkg.classes),
             enums: resolve_members(heap, &pkg.enums),
-            functions: resolve_members(heap, &pkg.functions),
             interfaces: resolve_members(heap, &pkg.interfaces),
             impl_rules,
             recursive_type_aliases: pkg.recursive_type_aliases.clone(),

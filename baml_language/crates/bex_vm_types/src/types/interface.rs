@@ -58,7 +58,9 @@ pub struct InterfaceBound {
 /// interface's frame (its body refers to the interface's associated types), not
 /// the implementor's generics. Realizing this frame is what lets a default like
 /// `Iterator.collect` resolve `Item`/`Error` under an open-world virtual call.
-#[derive(Clone, Debug, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
+// No `PartialEq`/`Eq`: `fqn` is a `HeapPtr`, so a derived `Eq` would be pointer
+// identity rather than structural equality — a footgun with no current caller.
+#[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub struct MethodImpl {
     pub fqn: HeapPtr,
     pub frame: Vec<baml_type::TyTemplate>,
@@ -68,7 +70,9 @@ pub struct MethodImpl {
 /// (`resolve_implements_rule`) — the analog of a rustc `ImplSource` plus its
 /// resolved method `Instance`s. Mirrors the compiler's `InterfaceImplRule`
 /// (`baml_compiler2_tir::interfaces`) with the method handles attached.
-#[derive(Clone, Debug, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
+// No `PartialEq`/`Eq`: `interface_head` (and `methods`' `fqn`) is a `HeapPtr`, so
+// a derived `Eq` would be pointer identity, not structural equality.
+#[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub struct RuntimeImplRule {
     /// Points at the [`InterfaceDef`] for this implementation.
     pub interface_head: HeapPtr,
@@ -94,24 +98,10 @@ pub struct RuntimeImplRule {
     pub interface_args: Vec<baml_type::TyTemplate>,
     /// Associated-type bindings of the implemented interface.
     pub interface_assoc: Vec<(baml_type::Name, baml_type::TyTemplate)>,
-    /// Method name → its [`MethodImpl`] (callee FQN + invocation frame), resolved
-    /// to a callee at dispatch time. Complete: the methods this impl overrides
-    /// *plus* the interface's inherited default methods (the bake merges them in,
-    /// an override winning over the default), so a lookup resolves any interface
-    /// method. (A direct global index/handle would be faster and may replace the
-    /// FQN later.)
+    /// Method name → its [`MethodImpl`] (the callee's `Object::Function` pointer +
+    /// invocation frame), resolved at dispatch time. Complete: the methods this
+    /// impl overrides *plus* the interface's inherited default methods (the bake
+    /// merges them in, an override winning over the default), so a lookup resolves
+    /// any interface method.
     pub methods: IndexMap<baml_type::Name, MethodImpl>,
 }
-
-/// A single package's interface-implementation table, keyed by the implemented
-/// interface's base `TypeName`; each value lists the impls of that interface
-/// **declared in this package**. The runtime resolver selects the rule whose
-/// `for_ty_pattern` matches a value's concrete type (with bounds satisfied),
-/// mirroring rustc trait selection. See `Program::interface_impls` for how these
-/// per-package tables are combined.
-pub type InterfaceImpls = IndexMap<baml_type::TypeName, Vec<RuntimeImplRule>>;
-
-/// The whole-program interface registry: package name → that package's
-/// [`InterfaceImpls`]. Split by package so a dynamically-loaded package adds an
-/// entry without rebuilding the others.
-pub type InterfaceImplsByPackage = IndexMap<baml_type::Name, InterfaceImpls>;

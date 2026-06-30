@@ -1918,17 +1918,26 @@ fn value_cell_text(vm: &BexVm, v: Value, null_value: &str) -> Result<String, Cel
                 })?
             }
             Object::Instance(inst) => {
-                let class_is = |fqn: &str| vm.lookup_type_by_fqn(fqn) == Some(inst.class);
-                if class_is(INSTANT_FQN) {
-                    instant_cell_text(inst)?
-                } else if class_is(PLAINDATE_FQN) {
-                    plaindate_cell_text(inst)?
-                } else if class_is(PLAINDATETIME_FQN) {
-                    plaindatetime_cell_text(inst)?
-                } else {
-                    return Err(CellTextErr::Unsupported(
-                        "nested class values are not CSV cells; serialize explicitly (e.g. baml.json.to_string)".to_string(),
-                    ));
+                // Resolve the instance's class FQN once and match against the
+                // builtin date/time classes, rather than re-resolving each
+                // candidate FQN through the package index per cell.
+                let class_fqn = match vm.get_object(inst.class) {
+                    Object::Class(class) => class_key(&class.name),
+                    _ => {
+                        return Err(CellTextErr::Unsupported(
+                            "value is not representable as a CSV cell".to_string(),
+                        ));
+                    }
+                };
+                match class_fqn.as_str() {
+                    INSTANT_FQN => instant_cell_text(inst)?,
+                    PLAINDATE_FQN => plaindate_cell_text(inst)?,
+                    PLAINDATETIME_FQN => plaindatetime_cell_text(inst)?,
+                    _ => {
+                        return Err(CellTextErr::Unsupported(
+                            "nested class values are not CSV cells; serialize explicitly (e.g. baml.json.to_string)".to_string(),
+                        ));
+                    }
                 }
             }
             _ => {

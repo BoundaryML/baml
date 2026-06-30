@@ -1,5 +1,5 @@
-//! Runtime interface-method resolver — rustc-style trait selection over the
-//! baked `interface_impls` registry.
+//! Runtime interface-method resolver — rustc-style trait selection over each
+//! package's baked impl-rule tables (`Package::impl_rules`, via `vm.packages`).
 //!
 //! Given a value's concrete runtime type plus an interface and method name, it
 //! returns the applicable impl's method — a concrete callee and the impl's bound
@@ -31,27 +31,21 @@ fn deref_package(vm: &BexVm, ptr: HeapPtr) -> &Package {
         .unwrap_or_else(|| unreachable!("vm.packages pointer is not an Object::Package"))
 }
 
-/// Append every impl rule of `iface` declared in `package` to `out`. `impl_rules`
-/// is keyed by the interface's `Object::Interface` pointer, so the interface is
-/// matched by its resolved name (per-package impl sets are small).
+/// Append every impl rule of the interface at `iface_ptr` declared in `package`
+/// to `out`. `impl_rules` is keyed by the interface's canonical `Object::Interface`
+/// pointer, so this is an O(1) lookup.
 fn collect_package_rules<'a>(
     vm: &'a BexVm,
     package: &'a Package,
-    iface: &TypeName,
+    iface_ptr: HeapPtr,
     out: &mut Vec<&'a RuntimeImplRule>,
 ) {
-    for (iface_ptr, rule_ptrs) in &package.impl_rules {
-        let matches = vm
-            .get_object(*iface_ptr)
-            .as_interface()
-            .is_some_and(|def| def.name == *iface);
-        if !matches {
-            continue;
-        }
-        for &rule_ptr in rule_ptrs {
-            if let Some(rule) = vm.get_object(rule_ptr).as_impl_rule() {
-                out.push(rule);
-            }
+    let Some(rule_ptrs) = package.impl_rules.get(&iface_ptr) else {
+        return;
+    };
+    for &rule_ptr in rule_ptrs {
+        if let Some(rule) = vm.get_object(rule_ptr).as_impl_rule() {
+            out.push(rule);
         }
     }
 }
@@ -121,6 +115,12 @@ fn candidate_rules<'a>(
 ) -> Vec<&'a RuntimeImplRule> {
     let base = concrete_base(concrete_ty);
     let concrete_ty = &*base;
+    // Resolve the interface's canonical object pointer once; every package's
+    // `impl_rules` is keyed by it, turning rule collection into an O(1) lookup.
+    // An unknown interface has no impls anywhere.
+    let Some(iface_ptr) = vm.lookup_interface(iface) else {
+        return Vec::new();
+    };
     let mut pkgs: Vec<&Name> = Vec::with_capacity(2);
     if let Some(p) = type_package(concrete_ty) {
         pkgs.push(p);
@@ -134,7 +134,7 @@ fn candidate_rules<'a>(
         let Some(&pkg_ptr) = vm.packages.get(pkg) else {
             continue;
         };
-        collect_package_rules(vm, deref_package(vm, pkg_ptr), iface, &mut out);
+        collect_package_rules(vm, deref_package(vm, pkg_ptr), iface_ptr, &mut out);
     }
     out
 }
@@ -678,9 +678,14 @@ type ImplementorEntry = (RuntimeTy, Vec<RuntimeTy>, Vec<(Name, RuntimeTy)>);
 /// satisfies. Container/union for-types have no nominal implementor to list.
 pub(super) fn implementor_entries(vm: &BexVm, iface: &TypeName) -> Vec<ImplementorEntry> {
     let mut out: Vec<ImplementorEntry> = Vec::new();
+    // Resolve the interface's canonical object pointer once; an unknown interface
+    // has no implementors. Every package's `impl_rules` is keyed by this pointer.
+    let Some(iface_ptr) = vm.lookup_interface(iface) else {
+        return out;
+    };
     for &pkg_ptr in vm.packages.values() {
         let mut rules: Vec<&RuntimeImplRule> = Vec::new();
-        collect_package_rules(vm, deref_package(vm, pkg_ptr), iface, &mut rules);
+        collect_package_rules(vm, deref_package(vm, pkg_ptr), iface_ptr, &mut rules);
         for rule in rules {
             match &rule.for_ty_pattern {
                 TyTemplate::TypeArgRef(_) => {
@@ -795,8 +800,8 @@ fn template_has_type_arg_ref(t: &TyTemplate) -> bool {
 /// Every loaded concrete type — classes, enums, and the primitives — as a `RuntimeTy` at
 /// its base (no type args). The candidate set a blanket impl's bounds are checked
 /// against: a blanket `for T` can be satisfied by any concrete type, not just
-/// classes. (`resolved_class_names` holds both classes and enums; both VM
-/// construction paths merge enums in.) `$stream` companions are filtered later by
+/// classes. (`all_class_and_enum_ptrs` covers both classes and enums across every
+/// loaded package.) `$stream` companions are filtered later by
 /// `push_unique`.
 fn concrete_types(vm: &BexVm) -> Vec<RuntimeTy> {
     let mut types: Vec<RuntimeTy> = vm
@@ -814,7 +819,7 @@ fn concrete_types(vm: &BexVm) -> Vec<RuntimeTy> {
         })
         .collect();
     // Primitives and the other arg-less builtin value types have no owning object, so
-    // they aren't in `resolved_class_names`; a blanket `for T` (or one whose bound they
+    // they aren't in any package's class/enum tables; a blanket `for T` (or one whose bound they
     // satisfy) admits them, so add the fixed set. This mirrors `Ty::is_valid_impl_subject`'s
     // arg-less accepted variants — keeping reflection's blanket-implementor enumeration
     // from silently dropping, e.g., `uint8array` (which has a builtin `Equals` impl).
