@@ -24,8 +24,8 @@ For everything else, see the website: <https://www.boundaryml.com>.
 
 ```bash
 brew install boundaryml/tap/baml
-baml init
 baml agent install
+baml init
 baml ide install --code
 ```
 
