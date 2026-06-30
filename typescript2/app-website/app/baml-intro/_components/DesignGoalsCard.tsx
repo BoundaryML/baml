@@ -64,25 +64,6 @@ const NON_GOALS: { text: string; soundness?: boolean }[] = [
 
 const SOUNDNESS_INDEX = NON_GOALS.findIndex((g) => g.soundness);
 
-// vertical ".." that brackets the highlighted goal — signals the rest of the
-// list continues above and below the one we're calling out.
-function Ellipsis() {
-  return (
-    <li
-      aria-hidden
-      style={{
-        color: C.muted,
-        letterSpacing: 2,
-        lineHeight: 1,
-        margin: '2px 0',
-        paddingLeft: 'calc(1.6em + 13px)',
-      }}
-    >
-      ..
-    </li>
-  );
-}
-
 function Octocat() {
   return (
     <svg aria-hidden height={32} viewBox="0 0 16 16" width={32}>
@@ -180,9 +161,7 @@ export function DesignGoalsCard() {
             padding: 0,
           }}
         >
-          {/* Only the one we're calling out — #3, the soundness non-goal —
-              bracketed by ".." so it reads as one item lifted out of the list. */}
-          <Ellipsis />
+          {/* Only the one we're calling out — #3, the soundness non-goal. */}
           <li
             style={{
               background: C.markBg,

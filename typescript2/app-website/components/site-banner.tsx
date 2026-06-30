@@ -16,12 +16,24 @@ const CARD_BG = '#FBF8F1';
 // the Link only on the client sidesteps the mismatch.
 const RESERVED_HEIGHT = 41;
 
+// Launch target — the banner counts down to this date, floored at 0.
+const LAUNCH = new Date('2026-08-30T00:00:00');
+const MS_PER_DAY = 1000 * 60 * 60 * 24;
+
+// Whole days from now until launch, never below 0. Computed on the client
+// (after mount) so the number reflects the visitor's current date.
+function daysUntilLaunch(): number {
+  const diff = LAUNCH.getTime() - Date.now();
+  return Math.max(0, Math.ceil(diff / MS_PER_DAY));
+}
+
 export function SiteBanner() {
   const [mounted, setMounted] = useState(false);
   const pathname = usePathname();
   useEffect(() => {
     setMounted(true);
   }, []);
+  const days = daysUntilLaunch();
 
   // The /learn* pages are self-contained presentations — no marketing banner.
   if (pathname?.startsWith('/learn')) {
@@ -94,7 +106,7 @@ export function SiteBanner() {
           New
         </span>
         <span style={{ color: MUTED }}>
-          60 days until{' '}
+          {days} {days === 1 ? 'day' : 'days'} until{' '}
           <span style={{ color: INK, fontWeight: 600 }}>
             launch
           </span>

@@ -435,9 +435,9 @@ export default function WhoAreWePage() {
         }
         .team-name {
           margin: 5px 0 0;
-          font-family: var(--font-serif), Georgia, 'Times New Roman', serif;
-          font-style: italic;
-          font-weight: 400;
+          font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+          font-style: normal;
+          font-weight: 600;
           font-size: 22px;
           line-height: 1.1;
           letter-spacing: -0.01em;
