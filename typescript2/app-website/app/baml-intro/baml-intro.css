@@ -334,6 +334,17 @@
 .l6-cta-wrap {
   padding-top: 0.5rem;
 }
+/* Product screenshots embedded in the article (e.g. the Flame tab): fill the
+   breakout width, keep aspect ratio, and clip to rounded corners with a faint
+   frame so they sit cleanly on the dark page. */
+.l6-shot {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 12px;
+  border: 1px solid var(--l6-code-border, #34343a);
+}
+
 /* subtle, centered text-only community link (between parts) */
 .l6-join {
   padding: 0.5rem 0;

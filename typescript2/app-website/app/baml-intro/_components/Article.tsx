@@ -165,7 +165,13 @@ const TRY_TABS = [
   {
     id: 'humans',
     label: 'for humans',
-    lines: ['brew install boundaryml/tap/baml'],
+    lines: [
+      'brew install boundaryml/tap/baml',
+      'baml toolchain use canary',
+      'baml init',
+      'baml agent install',
+      'baml ide install --code',
+    ],
     prompt: '$ ',
   },
   {
@@ -244,15 +250,15 @@ const TOC: { id: string; label: string; sub?: boolean }[] = [
   { id: 'run-e', label: '4 · baml run -e', sub: true },
   { id: 'pack', label: '5 · baml pack', sub: true },
   { id: 'human-tools', label: 'Part 3 · Tools for humans' },
-  { id: 'nav-viz', label: '1 · Navigation', sub: true },
-  { id: 'observability', label: '2 · Observability', sub: true },
+  { id: 'nav-viz', label: '1 · Workflow View', sub: true },
+  { id: 'observability', label: '2 · Profiler', sub: true },
   { id: 'usable', label: 'Part 4 · Adopting BAML' },
   { id: 'adoption', label: '1 · Drops into your stack', sub: true },
   { id: 'self-improvement', label: '2 · Self-improvement', sub: true },
   { id: 'supply-chain', label: '3 · No supply chain attacks', sub: true },
   { id: 'agents', label: 'Part 5 · Building agents' },
   { id: 'llm-functions', label: '1 · LLM functions', sub: true },
-  { id: 'claude-code', label: '2 · Claude APIs', sub: true },
+  { id: 'claude-code', label: '2 · Agents & harnesses', sub: true },
   { id: 'testing', label: '3 · Tests', sub: true },
   { id: 'eval', label: '4 · eval / codemode', sub: true },
   { id: 'sandboxing', label: '5 · Sandboxing', sub: true },
@@ -976,7 +982,11 @@ export function Article({ view = 'all' }: { view?: 'all' | 'intro' | 'deep' }) {
             </Part>
 
             {/* ---- navigating codebases ---- */}
-            <Section id="nav-viz" num="1" title="Navigating a codebase">
+            <Section
+              id="nav-viz"
+              num="1"
+              title="BAML Workflow View — navigate and understand your code"
+            >
               <p>
                 {
                   "Here's a fuller BAML project — an LLM “Heads Up” guessing game with an agent loop, a non-LLM binary search, classes, and a couple of testsets. The graph view is the visual counterpart to "
@@ -999,17 +1009,23 @@ export function Article({ view = 'all' }: { view?: 'all' | 'intro' | 'deep' }) {
               </div>
             </Section>
 
-            {/* ---- flame graphs / observable code (placeholder) ---- */}
-            <Section
-              id="observability"
-              num="2"
-              title="[placeholder: flame graphs / observable code]"
-            >
+            {/* ---- flame graphs / observable code ---- */}
+            <Section id="observability" num="2" title="BAML Profiler">
               <p>
                 {
-                  '[placeholder: flame graphs and observable execution for humans. Callout: this same data is accessible to agents too.]'
+                  "We also shipped a profiler to help you visualize flame graphs and see what's causing potential slowness. Agents can use this tool too, but humans can also visualize and dive into the nitty-gritty details."
                 }
               </p>
+              <div style={{ margin: '0.5rem auto 0', maxWidth: 600 }}>
+                <Image
+                  alt="BAML playground Flame tab — a flame graph of a run with a per-function self-time table on the left."
+                  className="l6-shot"
+                  height={1077}
+                  sizes="(max-width: 640px) 100vw, 600px"
+                  src="/flamegraph-flame-view.png"
+                  width={1160}
+                />
+              </div>
             </Section>
 
             {/* ===== Part 4 · Adopting BAML ===== */}
@@ -1149,21 +1165,34 @@ export function Article({ view = 'all' }: { view?: 'all' | 'intro' | 'deep' }) {
               <WorkflowPlayground />
             </Section>
 
-            {/* ---- claude apis as functions (placeholder) ---- */}
+            {/* ---- claude apis as functions ---- */}
             <Section
               id="claude-code"
               num="2"
-              title="[placeholder: Claude APIs as functions]"
+              title="Build harnesses, agents, or delegate to Claude Code"
             >
               <p>
                 {
-                  "[placeholder: use claude-code as a client option, with its tools etc. Provider/client wrapping for Claude's agentic API surface.]"
+                  "We're currently building our first-class standard library to build AI agents and harnesses, or call other kinds of agents (Claude Code). It will support anything from realtime voice agents to batched APIs. "
                 }
+                <a
+                  className="l6-link"
+                  href="https://boundaryml.com/discord"
+                  rel="noreferrer"
+                  target="_blank"
+                >
+                  Let us know
+                </a>
+                {" if you're interested in an early preview!"}
               </p>
             </Section>
 
             {/* ---- testing ---- */}
-            <Section id="testing" num="3" title="BAML Tests">
+            <Section
+              id="testing"
+              num="3"
+              title="Write tests anywhere, or load them at runtime"
+            >
               <p>{'Write tests anywhere, in any file.'}</p>
               <p>
                 {
@@ -1204,7 +1233,7 @@ export function Article({ view = 'all' }: { view?: 'all' | 'intro' | 'deep' }) {
                 to do codemode. But {' '}<code>eval</code>{' '} is unsafe and loses all type-safety and predictability.
               </p>
               <p>
-                BAML's reflection gives you eval, but with typed compiler errors. If the string has the wrong signature, you can get a runtime-compiler error that you can feed back to the agent so it can fix its code.
+                BAML's reflection APIs give you eval, but with typed compiler errors. If the string has the wrong signature, you can get a runtime-compiler error that you can feed back to the agent so it can fix its code.
               </p>
               <p className="l6-note">
                 Coming soon: the reflection API below isn't available yet.
@@ -1220,7 +1249,7 @@ export function Article({ view = 'all' }: { view?: 'all' | 'intro' | 'deep' }) {
                 Running code an agent just wrote is scary. We've started using machine sandboxing to isolate the code from the rest of the system, but what if we wanted to guarantee that the code doesn't make any network calls? We could just prompt it, but...
               </p>
               <p>
-                We can do a bit better. We can scoped-mock any function, and swap it out for a temporary function you define.
+                We can do a bit better. BAML supports mocking any function, whether it's in the standard library or in your own package. You can swap it out with another implementation, and it only works in a certain scope.
               </p>
               <p>
                 This doesn't replace the need for machine sandboxing. {' '}<code>mock</code>{' '} can't sandbox machine state (though vfs's are much simpler now). However, it does give you an option to not require machine sandboxing for every problem.
