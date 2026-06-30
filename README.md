@@ -18,7 +18,13 @@ BAML is the programming language for agents.
 
 Use it to build AI workflows, call AI models, or create your own agents.
 
-It looks like TypeScript, but it is statically typed like Rust and with colorless concurrency like Go. Every feature is built so agents make fewer mistakes: types persist at runtime, there is no `any`, errors are checked, and the filesystem is the namespace. It drops into your existing stack and calls into Python, TypeScript, Ruby, Go, and more.
+It looks like TypeScript, but every feature is built so agents make fewer mistakes:
+
+- Statically typed like Rust, with colorless concurrency like Go.
+- Types persist at runtime. There is no `any`.
+- Errors are checked.
+- The filesystem is the namespace.
+- Drops into your existing stack and calls into Python, TypeScript, Ruby, Go, and more.
 
 [Explore the website and examples](https://www.boundaryml.com/explore).
 
