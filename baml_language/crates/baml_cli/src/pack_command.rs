@@ -243,11 +243,9 @@ impl PackArgs {
             self.load_project(reporter)?
         };
 
-        // One "Compiling N file(s)" line covers diagnostics + bytecode emit;
-        // file count is the meaningful unit (`self.from` is usually `.` and
-        // reads as noise). A separate "Checking" line just repeated the count.
-        let file_count = db.get_source_files().len();
-        reporter.spin("Compiling", format!("{file_count} file(s)"));
+        // Keep `baml pack` quiet during compilation. Its visible progress is
+        // packaging/downloading/output-oriented; compile/count status belongs
+        // to `check` and `generate`.
         check_diagnostics(&db, "Cannot pack: compilation errors found", reporter)?;
 
         let program = baml_compiler2_emit::generate_project_bytecode(

@@ -155,3 +155,16 @@ pub fn write_project(dir: &std::path::Path, main_source: &str) {
     std::fs::create_dir_all(&src).unwrap();
     std::fs::write(src.join("main.baml"), main_source).unwrap();
 }
+
+pub fn assert_no_compile_file_status(stderr: &str) {
+    for line in stderr.lines() {
+        assert!(
+            !(line.contains("Compiling ") && line.contains(" file(s)")),
+            "unexpected compile file-count status in stderr:\n{stderr}"
+        );
+        assert!(
+            !(line.contains("Compiled ") && line.contains(" file(s)")),
+            "unexpected compiled file-count status in stderr:\n{stderr}"
+        );
+    }
+}
