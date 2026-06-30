@@ -8,13 +8,15 @@
 
 # BAML: Basically A Made-up Language
 
+BAML is the programming language for agents.
+
 [![BAML Version](https://img.shields.io/pypi/v/baml-py?color=006dad&label=BAML%20Version)](https://pypi.org/project/baml-py/)
 
 [Homepage](https://www.boundaryml.com/) | [Explore BAML](https://www.boundaryml.com/explore) | [Docs](https://docs.boundaryml.com) | [Discord](https://www.boundaryml.com/discord)
 
 </div>
 
-BAML is the programming language for agents. Use it to build AI workflows, call AI models, or create your own agents.
+Use it to build AI workflows, call AI models, or create your own agents.
 
 It looks like TypeScript, but it is statically typed like Rust and with colorless concurrency like Go. Every feature is built so agents make fewer mistakes: types persist at runtime, there is no `any`, errors are checked, and the filesystem is the namespace. It drops into your existing stack and calls into Python, TypeScript, Ruby, Go, and more.
 
