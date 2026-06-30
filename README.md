@@ -10,7 +10,7 @@
 
 [![BAML Version](https://img.shields.io/pypi/v/baml-py?color=006dad&label=BAML%20Version)](https://pypi.org/project/baml-py/)
 
-[Homepage](https://www.boundaryml.com/) | [Explore BAML](https://www.boundaryml.com/explore) | [Docs](https://docs.boundaryml.com) | [Discord](https://discord.gg/BTNBeXGuaS)
+[Homepage](https://www.boundaryml.com/) | [Explore BAML](https://www.boundaryml.com/explore) | [Docs](https://docs.boundaryml.com) | [Discord](https://www.boundaryml.com/discord)
 
 </div>
 
@@ -39,4 +39,4 @@ See our [guide on getting started](/CONTRIBUTING.md).
 
 Made with ❤️ by Boundary. HQ in Seattle, WA.
 
-We're hiring software engineers who love Rust. [Email us](mailto:founders@boundaryml.com) or reach out on [Discord](https://discord.gg/ENtBB6kkXH).
+We're hiring software engineers who love Rust. [Email us](mailto:founders@boundaryml.com) or reach out on [Discord](https://www.boundaryml.com/discord).
