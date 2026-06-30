@@ -6,7 +6,7 @@
   </picture>
 </a>
 
-# BAML
+# BAML: Basically A Made-up Language
 
 [![BAML Version](https://img.shields.io/pypi/v/baml-py?color=006dad&label=BAML%20Version)](https://pypi.org/project/baml-py/)
 
@@ -16,9 +16,9 @@
 
 BAML is the programming language for agents.
 
-It looks like TypeScript, but it is statically typed like Rust and with [colorless concurrency like Go](https://www.boundaryml.com/explore). Every feature is built so agents make fewer mistakes: types persist at runtime, there is no `any`, errors are checked, and the filesystem is the namespace. It drops into your existing stack and calls into Python, TypeScript, Ruby, Go, and more.
+It looks like TypeScript, but it is statically typed like Rust and with colorless concurrency like Go. Every feature is built so agents make fewer mistakes: types persist at runtime, there is no `any`, errors are checked, and the filesystem is the namespace. It drops into your existing stack and calls into Python, TypeScript, Ruby, Go, and more.
 
-For everything else, see the website: <https://www.boundaryml.com>.
+For everything else, [explore the website](https://www.boundaryml.com/explore).
 
 ## Try it out
 
@@ -40,5 +40,3 @@ See our [guide on getting started](/CONTRIBUTING.md).
 Made with ❤️ by Boundary. HQ in Seattle, WA.
 
 We're hiring software engineers who love Rust. [Email us](mailto:founders@boundaryml.com) or reach out on [Discord](https://discord.gg/ENtBB6kkXH).
-
-P.S. BAML is Basically, A Made-up Language (but we promise this is a real project).
