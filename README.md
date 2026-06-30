@@ -16,20 +16,7 @@
 
 BAML is the programming language for agents.
 
-It is statically typed like Rust, flexible like TypeScript, and parallel like Go. Every feature is built so agents make fewer mistakes: types persist at runtime, there is no `any`, errors are checked, and the filesystem is the namespace. It drops into your existing stack and calls into Python, TypeScript, Ruby, Go, and more.
-
-It looks like this:
-
-```baml
-function ChatAgent(message: string, tone: "happy" | "sad") -> string {
-  client "openai/gpt-4o-mini"
-  prompt #"
-    Be a {{ tone }} bot.
-
-    {{ message }}
-  "#
-}
-```
+It looks like TypeScript, but it is statically typed like Rust and parallel like Go. Every feature is built so agents make fewer mistakes: types persist at runtime, there is no `any`, errors are checked, and the filesystem is the namespace. It drops into your existing stack and calls into Python, TypeScript, Ruby, Go, and more.
 
 For everything else, see the website: <https://www.boundaryml.com>.
 
@@ -47,17 +34,6 @@ Or read the [quickstart](https://docs.boundaryml.com/get-started/quickstart).
 ## Contributing
 
 See our [guide on getting started](/CONTRIBUTING.md).
-
-## Citation
-
-```bibtex
-@software{baml,
-  author = {Boundary ML},
-  title = {BAML},
-  url = {https://github.com/boundaryml/baml},
-  year = {2024}
-}
-```
 
 ---
 
