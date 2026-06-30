@@ -283,7 +283,7 @@ function onPlaygroundNotification(notification: PlaygroundNotification): void {
       postOut({
         type: 'runSnapshot',
         requestId: notification.requestId,
-        runId: notification.runId,
+        boundaryId: notification.boundaryId,
         snapshot: notification.snapshot,
       } as WorkerOutMessage);
       break;
@@ -294,12 +294,31 @@ function onPlaygroundNotification(notification: PlaygroundNotification): void {
         runs: notification.runs,
       } as WorkerOutMessage);
       break;
+    case 'historyList':
+      postOut({
+        type: 'historyList',
+        requestId: notification.requestId,
+        runs: notification.runs,
+      } as WorkerOutMessage);
+      break;
+    case 'valueBody':
+      postOut({
+        type: 'valueBody',
+        requestId: notification.requestId,
+        boundaryId: notification.boundaryId,
+        valueRefId: notification.valueRefId,
+        codec: notification.codec,
+        availability: notification.availability,
+        bodyBase64: notification.bodyBase64,
+        diagnostic: notification.diagnostic,
+      } as WorkerOutMessage);
+      break;
     case 'runCursorExpired':
       postOut({
         type: 'runCursorExpired',
         requestId: notification.requestId,
         subscriptionId: notification.subscriptionId,
-        runId: notification.runId,
+        boundaryId: notification.boundaryId,
         reason: notification.reason,
       } as WorkerOutMessage);
       break;
@@ -628,7 +647,7 @@ self.onmessage = async (event: MessageEvent) => {
       const rt = runtimeForCommand(msg.requestId, 'wasmRuntimeNotReady');
       if (!rt) return;
       try {
-        rt.cancelRun(msg.requestId, msg.runId);
+        rt.cancelRun(msg.requestId, msg.boundaryId);
       } catch (e) {
         postOut({
           type: 'commandError',
@@ -644,7 +663,7 @@ self.onmessage = async (event: MessageEvent) => {
       const rt = runtimeForCommand(msg.requestId, 'wasmRuntimeNotReady');
       if (!rt) return;
       try {
-        rt.respondToInput(msg.requestId, msg.runId, msg.inputRequestId);
+        rt.respondToInput(msg.requestId, msg.boundaryId, msg.inputRequestId);
       } catch (e) {
         postOut({
           type: 'commandError',
@@ -662,7 +681,7 @@ self.onmessage = async (event: MessageEvent) => {
       try {
         const outcome = rt.respondToEnv(
           msg.requestId,
-          msg.runId,
+          msg.boundaryId,
           msg.envRequestId,
           msg.value,
         );
@@ -710,7 +729,7 @@ self.onmessage = async (event: MessageEvent) => {
       const rt = runtimeForCommand(msg.requestId, 'wasmRuntimeNotReady');
       if (!rt) return;
       try {
-        rt.snapshot(msg.requestId, msg.runId);
+        rt.snapshot(msg.requestId, msg.boundaryId);
       } catch (e) {
         postOut({
           type: 'commandError',
@@ -729,7 +748,7 @@ self.onmessage = async (event: MessageEvent) => {
         rt.subscribe(
           msg.requestId,
           msg.subscriptionId,
-          msg.runId,
+          msg.boundaryId,
           msg.afterCursor == null ? undefined : BigInt(msg.afterCursor),
         );
       } catch (e) {
@@ -822,6 +841,54 @@ self.onmessage = async (event: MessageEvent) => {
     case 'expandTestSet':
       runtime?.expandTestSet(msg.project, msg.generation, msg.testsetName);
       return;
+
+    case 'listHistory': {
+      const rt = runtimeForCommand(msg.requestId, 'wasmRuntimeNotReady');
+      if (!rt) return;
+      try {
+        rt.listHistory(msg.requestId, msg.filter);
+      } catch (e) {
+        postOut({
+          type: 'commandError',
+          requestId: msg.requestId,
+          code: 'wasmListHistoryFailed',
+          message: e instanceof Error ? e.message : String(e),
+        });
+      }
+      return;
+    }
+
+    case 'openHistory': {
+      const rt = runtimeForCommand(msg.requestId, 'wasmRuntimeNotReady');
+      if (!rt) return;
+      try {
+        rt.openHistory(msg.requestId, msg.boundaryId);
+      } catch (e) {
+        postOut({
+          type: 'commandError',
+          requestId: msg.requestId,
+          code: 'wasmOpenHistoryFailed',
+          message: e instanceof Error ? e.message : String(e),
+        });
+      }
+      return;
+    }
+
+    case 'readValue': {
+      const rt = runtimeForCommand(msg.requestId, 'wasmRuntimeNotReady');
+      if (!rt) return;
+      try {
+        rt.readValue(msg.requestId, msg.boundaryId, msg.valueRef);
+      } catch (e) {
+        postOut({
+          type: 'commandError',
+          requestId: msg.requestId,
+          code: 'wasmReadValueFailed',
+          message: e instanceof Error ? e.message : String(e),
+        });
+      }
+      return;
+    }
 
     case 'dispose':
       dispose();
