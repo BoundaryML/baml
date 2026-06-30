@@ -38,6 +38,11 @@ import {
   maxNodeDepth,
   zoomToRevealDepth,
 } from './lod';
+import {
+  groupValuePreviewSourceNodeId,
+  isGroupValuePreviewNode,
+  liftGroupValuePreviews,
+} from './value-previews';
 import { kNodeTypes } from './nodes';
 import { kEdgeTypes, ColorfulMarkerDefinitions } from './edges';
 import { GraphThemeContext, useGraphTheme } from './theme';
@@ -327,11 +332,13 @@ function GraphViewInner({
         : zoomToRevealDepth(viewportZoom, maxDepth);
 
   const lodModel = useMemo(
-    () =>
-      applyLevelOfDetail(graphModel.rfNodes, graphModel.rfEdges, {
+    () => {
+      const model = applyLevelOfDetail(graphModel.rfNodes, graphModel.rfEdges, {
         revealDepth,
         expanded,
-      }),
+      });
+      return liftGroupValuePreviews(model.nodes, model.edges);
+    },
     [graphModel, revealDepth, expanded],
   );
 
@@ -354,9 +361,20 @@ function GraphViewInner({
 
   const effectiveRunStatus = runStatus ?? run?.status;
   const effectiveRunError = runError ?? run?.error?.message ?? null;
+  const rootGraphNodeId =
+    graphModel.graphNodes.find((node) => node.type === 'function')?.id ?? null;
   const graphNodeValues = useMemo(
-    () => runToGraphNodeValues(run, graphRuntimeOverlay, valueBodyCache),
-    [run, graphRuntimeOverlay, valueBodyCache, valueBodyCacheVersion],
+    () =>
+      runToGraphNodeValues(run, graphRuntimeOverlay, valueBodyCache, {
+        rootGraphNodeId,
+      }),
+    [
+      run,
+      graphRuntimeOverlay,
+      valueBodyCache,
+      valueBodyCacheVersion,
+      rootGraphNodeId,
+    ],
   );
 
   const runtimeInputsRef = useRef({
@@ -403,7 +421,22 @@ function GraphViewInner({
 
       return baseNodes.map((node) => {
         const runtime = runtimeByNode.get(node.id);
-        const valuePreviews = latestGraphNodeValues.get(node.id) ?? [];
+        const previewSourceNodeId = groupValuePreviewSourceNodeId(node);
+        const valuePreviews = previewSourceNodeId
+          ? (latestGraphNodeValues.get(previewSourceNodeId) ?? [])
+          : node.data.groupValuePreviewsLifted
+            ? []
+            : (latestGraphNodeValues.get(node.id) ?? []);
+        const executionState =
+          previewSourceNodeId != null
+            ? (runtimeByNode.get(previewSourceNodeId)?.executionState ??
+              runtime?.executionState)
+            : runtime?.executionState;
+        const errorMessage =
+          previewSourceNodeId != null
+            ? (runtimeByNode.get(previewSourceNodeId)?.errorMessage ??
+              runtime?.errorMessage)
+            : runtime?.errorMessage;
 
         return {
           ...node,
@@ -412,10 +445,13 @@ function GraphViewInner({
             result: undefined,
             hasResult: undefined,
             valuePreviews,
-            executionState: runtime?.executionState ?? ('not-started' as const),
-            errorMessage: runtime?.errorMessage,
+            executionState: executionState ?? ('not-started' as const),
+            errorMessage,
             customRenderers: latestCustomRenderers,
-            selected: node.id === selectedId,
+            selected:
+              node.id === selectedId ||
+              (previewSourceNodeId != null &&
+                previewSourceNodeId === selectedId),
           },
         };
       });
@@ -510,16 +546,6 @@ function GraphViewInner({
     decorateNodesWithRuntime,
   ]);
 
-  // Update selected state on nodes
-  useEffect(() => {
-    setNodes((nds) =>
-      nds.map((n) => ({
-        ...n,
-        data: { ...n.data, selected: n.id === String(selectedNodeId) },
-      })),
-    );
-  }, [selectedNodeId, setNodes]);
-
   // Auto-pan viewport to center the selected node — only when it's off-screen
   const { setCenter, getNode, getViewport, fitView } = useReactFlow();
   const containerWidth = useStore((s) => s.width);
@@ -601,7 +627,13 @@ function GraphViewInner({
         toggleExpanded(node.id);
         return;
       }
-      onNodeClick(Number(node.id));
+      const nodeId = isGroupValuePreviewNode(node)
+        ? (groupValuePreviewSourceNodeId(node) ?? node.id)
+        : node.id;
+      const numericNodeId = Number(nodeId);
+      if (Number.isFinite(numericNodeId)) {
+        onNodeClick(numericNodeId);
+      }
     },
     [onNodeClick, expanded, toggleExpanded],
   );
