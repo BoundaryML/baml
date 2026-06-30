@@ -114,6 +114,7 @@ fn pack_e2e_omits_compile_file_status() {
     let out_bin = tmp.path().join("out");
 
     let output = Command::new(&built.baml_cli)
+        .env("BAML_CLI_ALLOW_DIRECT", "1")
         .arg("pack")
         .arg("--from")
         .arg(tmp.path())

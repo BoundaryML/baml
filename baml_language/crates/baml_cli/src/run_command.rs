@@ -200,9 +200,6 @@ impl RunArgs {
     /// Collect diagnostics on `db` and bail with `bail_context` if any are errors.
     /// Warnings are intentionally not surfaced by `baml run`: successful
     /// execution should print only the program output.
-    ///
-    /// Diagnostic output is routed through `reporter.suspend()` to preserve
-    /// the call shape used by the rest of the CLI.
     fn check_project_diagnostics(
         &self,
         db: &ProjectDatabase,
