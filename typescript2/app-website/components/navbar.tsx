@@ -139,6 +139,9 @@ export function Navbar() {
           </Link>
         </div>
         <div className="nav-desktop-actions">
+          <Link className="nav-link nav-link--accent" href="/explore">
+            Learn BAML
+          </Link>
           <NavDiscord />
           <NavStars />
         </div>
@@ -156,6 +159,13 @@ export function Navbar() {
         </button>
 
         <div className={`nav-mobile-panel${open ? ' is-open' : ''}`}>
+          <Link
+            className="nav-mobile-link nav-mobile-link--accent"
+            href="/explore"
+            onClick={() => setOpen(false)}
+          >
+            Learn BAML
+          </Link>
           {siteConfig.nav.links.map((link) => (
             <Link
               className="nav-mobile-link"
@@ -205,6 +215,18 @@ export function Navbar() {
           .nav-link:hover {
             background-color: #F0ECE0;
             color: #1A1612;
+          }
+          .nav-link--accent {
+            color: #6D28D9;
+            font-weight: 600;
+          }
+          .nav-link--accent:hover {
+            background-color: #F1ECFB;
+            color: #5B21B6;
+          }
+          .nav-mobile-link--accent {
+            color: #6D28D9;
+            font-weight: 600;
           }
           .nav-desktop-actions {
             display: flex;

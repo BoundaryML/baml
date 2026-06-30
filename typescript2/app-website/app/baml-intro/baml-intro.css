@@ -298,6 +298,22 @@
 .l6-link:hover {
   border-bottom-color: var(--l6-accent);
 }
+/* In-prose cross-reference jumps to other sections — keep the underlined look
+   of plain emphasis, but make them clickable and tint on hover. */
+.l6-xref {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: rgba(109, 40, 217, 0.4);
+  text-underline-offset: 2px;
+  cursor: pointer;
+  transition:
+    color 140ms ease,
+    text-decoration-color 140ms ease;
+}
+.l6-xref:hover {
+  color: var(--l6-accent);
+  text-decoration-color: var(--l6-accent);
+}
 .l6-sub {
   margin-top: 3rem;
 }
@@ -408,7 +424,7 @@
 /* Tighten the gap between the hero and the "Our design philosophy" section
    that follows it (hero bottom padding + this section's top padding). */
 #philosophy {
-  padding-top: 3rem;
+  padding-top: 1.5rem;
 }
 /* The sheep flows inline with the text, so it sits on the first line next
    to "BAML" instead of centering against the whole wrapped headline. */

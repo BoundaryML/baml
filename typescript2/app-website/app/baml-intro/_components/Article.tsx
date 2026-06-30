@@ -167,7 +167,6 @@ const TRY_TABS = [
     label: 'for humans',
     lines: [
       'brew install boundaryml/tap/baml',
-      'baml toolchain use canary',
       'baml init',
       'baml agent install',
       'baml ide install --code',
@@ -546,14 +545,16 @@ export function Article({ view = 'all' }: { view?: 'all' | 'intro' | 'deep' }) {
               </ul>
             </Section>
 
-            {/* two CTAs — only on the homepage landing */}
+            {/* CTA — only on the homepage landing */}
             {view === 'intro' && (
               <div className="l6-section l6-cta-wrap">
                 <div className="l6-cta-row">
+                  {/* "Built with BAML" CTA hidden for now.
                   <Link className="l6-cta" href="/built-with-baml">
                     {'Built with BAML'}
                     <span aria-hidden>{'→'}</span>
                   </Link>
+                  */}
                   <Link className="l6-cta l6-cta--primary" href="/explore">
                     <Image
                       alt=""
@@ -579,22 +580,37 @@ export function Article({ view = 'all' }: { view?: 'all' | 'intro' | 'deep' }) {
             <Part eyebrow="Part 1" id="language" title="A better language">
               <p>
                 BAML aims to be an agent-friendly language. We'll start with the{' '}
-                <u>syntax and type system decisions</u> we made. Then explore
-                the <u>agent-first cli tooling</u>.
+                <a className="l6-xref" href="#types">
+                  syntax and type system decisions
+                </a>{' '}
+                we made. Then explore the{' '}
+                <a className="l6-xref" href="#agent-tools">
+                  agent-first cli tooling
+                </a>
+                .
               </p>
               <p>
                 As much as we want agents to write code, human trust is still a
                 vital part of a healthy software system. The third section
-                focuses on <u>tooling for humans</u>, and the fourth shares how
-                we made <u>BAML incrementally adoptable</u>, so you won't need
-                to re-write your whole codebase in BAML.
+                focuses on{' '}
+                <a className="l6-xref" href="#human-tools">
+                  tooling for humans
+                </a>
+                , and the fourth shares how we made{' '}
+                <a className="l6-xref" href="#adoption">
+                  BAML incrementally adoptable
+                </a>
+                , so you won't need to re-write your whole codebase in BAML.
               </p>
               <p>
                 And lastly, not only has the way we write code changed, but also
                 the <i>kind</i> of code we write as well. More and more code is
                 agentic loops, created by LLMs on the fly, and probabilistic. We
                 added a few syntax constructs to help{' '}
-                <u>rein in the non-determinism.</u>
+                <a className="l6-xref" href="#agents">
+                  rein in the non-determinism
+                </a>
+                .
               </p>
             </Part>
 
