@@ -44,6 +44,14 @@ pub struct CatchRegion {
     pub body_entry: BlockId,
     /// Handler block that receives the exception.
     pub handler: BlockId,
+    /// All blocks making up the handler body (the arms). BEP-042 cause-chain: a
+    /// throw whose PC lies in any of these blocks is "during handling of"
+    /// `error_local`, so that error's `ErrorContext` becomes the new error's
+    /// cause. Captured as the blocks created while lowering the arms (plus the
+    /// handler block itself); empty means "never chains" (e.g. a defer pad).
+    /// Layout can fragment these across non-contiguous PCs, so the emitter must
+    /// take their union rather than a single `[handler, join)` span.
+    pub handler_body: Vec<BlockId>,
     /// Frame-local slot for the caught error value.
     pub error_local: Local,
     /// Frame-local slot for the stack trace value, if the catch clause

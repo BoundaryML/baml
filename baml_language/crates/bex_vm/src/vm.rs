@@ -3095,6 +3095,23 @@ impl BexVm {
         self.alloc_error_value(ErrorClass::StackTrace, vec![frames_array])
     }
 
+    /// Construct a `baml.errors.ErrorContext` for a thrown value: the error
+    /// itself, the `StackTrace` where it was thrown, and the `cause` it
+    /// superseded while unwinding (or `Value::NULL` for a fresh error).
+    ///
+    /// Field order — error, `stack_trace`, cause — matches the class declared in
+    /// `ns_errors/error_context.baml` (the constructor ABI). Only called when a
+    /// catch handler binds the second `catch (e, ctx)` parameter.
+    pub(crate) fn alloc_error_context(
+        &mut self,
+        error: Value,
+        trace: &[StackFrame],
+        cause: Value,
+    ) -> Value {
+        let stack_trace = self.alloc_stack_trace(trace);
+        self.alloc_error_value(ErrorClass::ErrorContext, vec![error, stack_trace, cause])
+    }
+
     pub fn panic_to_exception_value(&mut self, panic: VmPanic) -> Value {
         let (class, fields) = match panic {
             VmPanic::DivisionByZero { left, .. } => (PanicClass::DivisionByZero, vec![left]),
@@ -3351,6 +3368,31 @@ impl BexVm {
         // Capture the stack trace before unwinding destroys frame information.
         let trace: Vec<StackFrame> = self.capture_stack_trace();
 
+        // BEP-042 cause chain: identify the error currently being handled at
+        // the throw site (read-only, before unwinding mutates frames/slots).
+        // If this throw happened inside a handler body, that handler's caught
+        // error becomes the new error's `cause`.
+        //
+        // A *rethrow* re-raises an already-thrown value: a bare re-raise inside
+        // a handler, the no-match fall-through that re-enters this funnel, or
+        // `ThrowIfPanic` (all pass `is_rethrow`). None is a *new* failure
+        // "during handling of" the caught error, so none may graft another link
+        // onto the chain — in particular the no-match fall-through re-raises
+        // from inside the catch's own handler body, which the cause walk would
+        // otherwise mis-read as a self-link. So we skip the walk and give the
+        // re-raised value a fresh context with `cause = null`.
+        //
+        // Caveat: a prior chain carried by the rethrown value is NOT preserved
+        // across the re-raise (its next catch sees `cause = null`). Recovering
+        // it would need a value->context association we don't track; reusing the
+        // walk result instead is unsafe — rethrowing an *outer* binding from an
+        // inner handler would bind the inner handler's mismatched error.
+        let cause_context = if is_rethrow {
+            Value::NULL
+        } else {
+            self.find_cause_context()
+        };
+
         // Frames popped by this unwind close with a status derived from the
         // thrown value's class (Exited / Cancelled / Errored) — chosen once
         // here; per-frame truthful whether or not a handler catches it.
@@ -3489,10 +3531,15 @@ impl BexVm {
 
                 // Store stack trace in stack_trace_slot if the catch clause binds it.
                 if entry.has_stack_trace_slot() {
-                    let st_value = self.alloc_stack_trace(&trace);
-                    let st_stack_slot =
+                    // BEP-042 Part 3: the second `catch (e, ctx)` binding is an
+                    // `ErrorContext` — the thrown value, its trace, and the
+                    // error it superseded (`cause_context`, computed at the
+                    // funnel top before unwinding).
+                    let ctx_value =
+                        self.alloc_error_context(exception_value, &trace, cause_context);
+                    let ctx_slot =
                         Self::local_slot_stack_index(locals_offset, entry.stack_trace_slot);
-                    self.stack[st_stack_slot] = st_value;
+                    self.stack[ctx_slot] = ctx_value;
                 }
 
                 // Jump to the handler.
@@ -3548,6 +3595,58 @@ impl BexVm {
                 crossed_interrupt_boundary = true;
             }
         }
+    }
+
+    /// BEP-042 cause chain: find the error currently being *handled* at the
+    /// throw site, by walking the live frames (read-only). A throw whose PC
+    /// lies in a handler body — a `HandlerContextEntry` range in the
+    /// `handler_context_table` — is "during handling of" that handler's caught
+    /// error, which becomes the new error's `cause`. Returns `Value::NULL`
+    /// when no enclosing handler is active (a fresh, unchained error).
+    ///
+    /// Mirrors the PC selection of [`Self::try_unwind_exception`]'s frame walk
+    /// (innermost bytecode frame uses the live `cur_pc`; outer frames use the
+    /// recorded call-site `faulting_pc`), but never mutates and stops at the
+    /// innermost active handler.
+    fn find_cause_context(&self) -> Value {
+        let mut innermost_bc = true;
+        for depth in (0..self.frames.len()).rev() {
+            let Frame::Bytecode(bf) = &self.frames[depth] else {
+                continue; // native frames hold no handler bodies
+            };
+            let pc = if innermost_bc {
+                self.cur_pc
+            } else {
+                bf.faulting_pc
+            };
+            innermost_bc = false;
+
+            // SAFETY: same `load_function` contract as the unwind walk.
+            let Ok(func) = (unsafe { self.load_function(depth) }) else {
+                return Value::NULL;
+            };
+            // Innermost (narrowest) handler body wins — largest handler_pc.
+            let entry = if let Some(compact) = &func.bytecode.compact {
+                compact.handler_context_for_pc(pc)
+            } else {
+                func.bytecode.handler_context_for_pc(pc)
+            };
+            if let Some(entry) = entry {
+                // The cause is the enclosing handler's `ErrorContext`, which
+                // lives in its context slot — itself a link in the chain (with
+                // its own `cause`). It exists only if that handler bound `ctx`;
+                // a handler that didn't materialize one has no context object
+                // to chain, so we stop with null rather than mis-linking to a
+                // further-out error.
+                if entry.has_stack_trace_slot() {
+                    let slot =
+                        Self::local_slot_stack_index(bf.locals_offset, entry.stack_trace_slot);
+                    return self.stack[slot];
+                }
+                return Value::NULL;
+            }
+        }
+        Value::NULL
     }
 
     fn resolve_callable_target(

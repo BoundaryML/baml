@@ -281,6 +281,16 @@ ty_family! {
         /// Evolving map — the map analogue of [`Ty::EvolvingList`].
         #[axis(tir)]
         EvolvingMap(Box<Ty>, Box<Ty>, TyAttr),
+        /// Inference hole — the wildcard `_` written in a type-argument or
+        /// `throws`-clause position. A leaf placeholder that asks the checker to
+        /// infer the type at this slot from surrounding context (the initializer
+        /// of a `let`, or the inferred effective throw set). Filled during TIR
+        /// checking; like the other `tir`-axis sentinels it must never survive to
+        /// the runtime boundary (`lower_to_runtime` rejects it).
+        #[axis(tir)]
+        Infer {
+            attr: TyAttr,
+        },
     }
 }
 
@@ -429,7 +439,6 @@ mod tests {
             tag(borsh::to_vec(&Ty::List(Box::new(Ty::Bool { attr: a() }), a())).unwrap()),
             13
         );
-        // `EvolvingMap` is the last (33rd) `Ty` variant.
         assert_eq!(
             tag(borsh::to_vec(&Ty::EvolvingMap(
                 Box::new(Ty::Never { attr: a() }),
@@ -439,6 +448,8 @@ mod tests {
             .unwrap()),
             32
         );
+        // `Infer` is the last (34th) `Ty` variant.
+        assert_eq!(tag(borsh::to_vec(&Ty::Infer { attr: a() }).unwrap()), 33);
         // `RuntimeTy` keeps `Ty`'s order through the non-`tir` variants.
         assert_eq!(
             tag(borsh::to_vec(&RuntimeTy::Int { attr: a() }).unwrap()),

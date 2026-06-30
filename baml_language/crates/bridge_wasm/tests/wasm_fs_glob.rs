@@ -551,6 +551,25 @@ function GlobScanDirectoryOptions() -> string[] {
   let glob = baml.glob.new("**/*.txt");
   glob.scan(baml.glob.ScanOptions { cwd: "/workspace/data", only_files: false })
 }
+
+function RemoveDirEmptyThenGone() -> bool {
+  baml.fs.remove_dir("/workspace/data/dir.txt");
+  !baml.fs.exists("/workspace/data/dir.txt")
+}
+
+function RemoveDirAllTreeThenGone() -> bool {
+  baml.fs.remove_dir_all("/workspace/data");
+  !baml.fs.exists("/workspace/data")
+}
+
+function RemoveDirAllRejectsFile() -> null {
+  baml.fs.remove_dir_all("/workspace/data/a.txt")
+}
+
+function RemoveDirAllMissingIdempotent() -> bool {
+  baml.fs.remove_dir_all("/workspace/does_not_exist");
+  !baml.fs.exists("/workspace/does_not_exist")
+}
 "#;
 
 const PROFILE_SOURCE: &str = r#"
@@ -765,6 +784,51 @@ async fn wasm_runtime_read_dir_surfaces_symlink_flag() {
         tagged,
         vec!["F:.hidden.txt", "F:b.rs", "F:dir.txt", "F:sub", "L:a.txt",]
     );
+}
+
+#[wasm_bindgen_test]
+async fn wasm_runtime_remove_dir_removes_empty_directory() {
+    let files = runtime_files();
+    let dirs = runtime_dirs();
+    let runtime = runtime(&files, &dirs, FS_GLOB_SOURCE);
+
+    let result = call_no_args(&runtime, 20, "RemoveDirEmptyThenGone").await;
+    assert!(bool_value(result));
+}
+
+#[wasm_bindgen_test]
+async fn wasm_runtime_remove_dir_all_removes_tree() {
+    let files = runtime_files();
+    let dirs = runtime_dirs();
+    let runtime = runtime(&files, &dirs, FS_GLOB_SOURCE);
+
+    let result = call_no_args(&runtime, 21, "RemoveDirAllTreeThenGone").await;
+    assert!(bool_value(result));
+}
+
+#[wasm_bindgen_test]
+async fn wasm_runtime_remove_dir_all_rejects_regular_file() {
+    // Regression guard for CodeRabbit finding B: on WASM, remove_dir_all handed a
+    // regular file must error (matching native), not silently delete the file.
+    let files = runtime_files();
+    let dirs = runtime_dirs();
+    let runtime = runtime(&files, &dirs, FS_GLOB_SOURCE);
+
+    let result = call_no_args_result(&runtime, 22, "RemoveDirAllRejectsFile").await;
+    assert!(
+        result.is_err(),
+        "remove_dir_all on a regular file must error, got: {result:?}"
+    );
+}
+
+#[wasm_bindgen_test]
+async fn wasm_runtime_remove_dir_all_idempotent_on_missing() {
+    let files = runtime_files();
+    let dirs = runtime_dirs();
+    let runtime = runtime(&files, &dirs, FS_GLOB_SOURCE);
+
+    let result = call_no_args(&runtime, 23, "RemoveDirAllMissingIdempotent").await;
+    assert!(bool_value(result));
 }
 
 #[wasm_bindgen_test]

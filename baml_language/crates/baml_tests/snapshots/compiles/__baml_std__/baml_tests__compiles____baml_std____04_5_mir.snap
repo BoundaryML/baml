@@ -3707,6 +3707,51 @@ fn baml.env.get_or_panic(key: string) -> string {
     }
 }
 
+fn baml.errors.ErrorContext._to_string_impl = builtin(vm)
+
+fn baml.errors.ErrorContext.root_cause(self: baml.errors.ErrorContext) -> baml.errors.ErrorContext {
+    // Locals:
+    let _0: baml.errors.ErrorContext // _0 // return
+    let _1: baml.errors.ErrorContext // self // param
+    let _2: baml.errors.ErrorContext | null
+    let _3: bool
+    let _4: baml.errors.ErrorContext // c
+
+    bb0: {
+        _2 = copy _1.2;
+        _3 = copy _2 == const null;
+        branch copy _3 -> [bb2, bb1];
+    }
+
+    bb1: {
+        _4 = copy _2;
+        _0 = call const fn baml.errors.ErrorContext.root_cause(copy _4) -> [bb3];
+    }
+
+    bb2: {
+        _0 = copy _1;
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+}
+
+fn baml.errors.ErrorContext.baml.ToString.to_string(self: null) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: null // self // param
+
+    bb0: {
+        _0 = call const fn baml.errors.ErrorContext._to_string_impl(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
 fn baml.errors.StackTrace._to_string_impl = builtin(vm)
 
 fn baml.errors.StackTrace.baml.ToString.to_string(self: null) -> string {
@@ -3742,6 +3787,10 @@ fn baml.fs.File.read_bytes = builtin(io)
 fn baml.fs.read_dir = builtin(io)
 
 fn baml.fs.remove = builtin(io)
+
+fn baml.fs.remove_dir = builtin(io)
+
+fn baml.fs.remove_dir_all = builtin(io)
 
 fn baml.fs.File.seek_from = builtin(io)
 
@@ -12365,162 +12414,182 @@ fn baml.time.PlainTime.baml.ToJson.to_json(self: null) -> baml.json.json {
     let _16: bool
     let _17: bool
     let _18: bool
-    let _19: type
+    let _19: bool
+    let _20: bool
+    let _21: type
 
     bb0: {
         _3 = is_type(copy _1, baml.Uint8Array);
-        branch copy _3 -> [bb32, bb1];
+        branch copy _3 -> [bb36, bb1];
     }
 
     bb1: {
         _4 = is_type(copy _1, baml.Uint8Array);
-        branch copy _4 -> [bb31, bb2];
+        branch copy _4 -> [bb35, bb2];
     }
 
     bb2: {
         _5 = is_type(copy _1, baml.TypeValue);
-        branch copy _5 -> [bb30, bb3];
+        branch copy _5 -> [bb34, bb3];
     }
 
     bb3: {
         _6 = is_type(copy _1, baml.TypeValue);
-        branch copy _6 -> [bb29, bb4];
+        branch copy _6 -> [bb33, bb4];
     }
 
     bb4: {
         _7 = is_type(copy _1, baml.errors.StackTrace);
-        branch copy _7 -> [bb28, bb5];
+        branch copy _7 -> [bb32, bb5];
     }
 
     bb5: {
         _8 = is_type(copy _1, baml.errors.StackTrace);
-        branch copy _8 -> [bb27, bb6];
+        branch copy _8 -> [bb31, bb6];
     }
 
     bb6: {
-        _9 = is_type(copy _1, baml.time.PlainDateTime);
-        branch copy _9 -> [bb26, bb7];
+        _9 = is_type(copy _1, baml.errors.ErrorContext);
+        branch copy _9 -> [bb30, bb7];
     }
 
     bb7: {
-        _10 = is_type(copy _1, baml.time.PlainDateTime);
-        branch copy _10 -> [bb25, bb8];
+        _10 = is_type(copy _1, baml.errors.ErrorContext);
+        branch copy _10 -> [bb29, bb8];
     }
 
     bb8: {
-        _11 = is_type(copy _1, baml.time.PlainTime);
-        branch copy _11 -> [bb24, bb9];
+        _11 = is_type(copy _1, baml.time.PlainDateTime);
+        branch copy _11 -> [bb28, bb9];
     }
 
     bb9: {
-        _12 = is_type(copy _1, baml.time.PlainTime);
-        branch copy _12 -> [bb23, bb10];
+        _12 = is_type(copy _1, baml.time.PlainDateTime);
+        branch copy _12 -> [bb27, bb10];
     }
 
     bb10: {
-        _13 = is_type(copy _1, baml.time.ZonedDateTime);
-        branch copy _13 -> [bb22, bb11];
+        _13 = is_type(copy _1, baml.time.PlainTime);
+        branch copy _13 -> [bb26, bb11];
     }
 
     bb11: {
-        _14 = is_type(copy _1, baml.time.ZonedDateTime);
-        branch copy _14 -> [bb21, bb12];
+        _14 = is_type(copy _1, baml.time.PlainTime);
+        branch copy _14 -> [bb25, bb12];
     }
 
     bb12: {
-        _15 = is_type(copy _1, baml.time.Instant);
-        branch copy _15 -> [bb20, bb13];
+        _15 = is_type(copy _1, baml.time.ZonedDateTime);
+        branch copy _15 -> [bb24, bb13];
     }
 
     bb13: {
-        _16 = is_type(copy _1, baml.time.Instant);
-        branch copy _16 -> [bb19, bb14];
+        _16 = is_type(copy _1, baml.time.ZonedDateTime);
+        branch copy _16 -> [bb23, bb14];
     }
 
     bb14: {
-        _17 = is_type(copy _1, baml.time.PlainDate);
-        branch copy _17 -> [bb18, bb15];
+        _17 = is_type(copy _1, baml.time.Instant);
+        branch copy _17 -> [bb22, bb15];
     }
 
     bb15: {
-        _18 = is_type(copy _1, baml.time.PlainDate);
-        branch copy _18 -> [bb17, bb16];
+        _18 = is_type(copy _1, baml.time.Instant);
+        branch copy _18 -> [bb21, bb16];
     }
 
     bb16: {
-        unreachable;
+        _19 = is_type(copy _1, baml.time.PlainDate);
+        branch copy _19 -> [bb20, bb17];
     }
 
     bb17: {
-        _2 = call const fn baml.ToString.to_string(copy _1) -> [bb33];
+        _20 = is_type(copy _1, baml.time.PlainDate);
+        branch copy _20 -> [bb19, bb18];
     }
 
     bb18: {
-        _2 = call const fn baml.time.PlainDate.baml.ToString.to_string(copy _1) -> [bb33];
+        unreachable;
     }
 
     bb19: {
-        _2 = call const fn baml.ToString.to_string(copy _1) -> [bb33];
+        _2 = call const fn baml.ToString.to_string(copy _1) -> [bb37];
     }
 
     bb20: {
-        _2 = call const fn baml.time.Instant.baml.ToString.to_string(copy _1) -> [bb33];
+        _2 = call const fn baml.time.PlainDate.baml.ToString.to_string(copy _1) -> [bb37];
     }
 
     bb21: {
-        _2 = call const fn baml.ToString.to_string(copy _1) -> [bb33];
+        _2 = call const fn baml.ToString.to_string(copy _1) -> [bb37];
     }
 
     bb22: {
-        _2 = call const fn baml.time.ZonedDateTime.baml.ToString.to_string(copy _1) -> [bb33];
+        _2 = call const fn baml.time.Instant.baml.ToString.to_string(copy _1) -> [bb37];
     }
 
     bb23: {
-        _2 = call const fn baml.ToString.to_string(copy _1) -> [bb33];
+        _2 = call const fn baml.ToString.to_string(copy _1) -> [bb37];
     }
 
     bb24: {
-        _2 = call const fn baml.time.PlainTime.baml.ToString.to_string(copy _1) -> [bb33];
+        _2 = call const fn baml.time.ZonedDateTime.baml.ToString.to_string(copy _1) -> [bb37];
     }
 
     bb25: {
-        _2 = call const fn baml.ToString.to_string(copy _1) -> [bb33];
+        _2 = call const fn baml.ToString.to_string(copy _1) -> [bb37];
     }
 
     bb26: {
-        _2 = call const fn baml.time.PlainDateTime.baml.ToString.to_string(copy _1) -> [bb33];
+        _2 = call const fn baml.time.PlainTime.baml.ToString.to_string(copy _1) -> [bb37];
     }
 
     bb27: {
-        _2 = call const fn baml.ToString.to_string(copy _1) -> [bb33];
+        _2 = call const fn baml.ToString.to_string(copy _1) -> [bb37];
     }
 
     bb28: {
-        _2 = call const fn baml.errors.StackTrace.baml.ToString.to_string(copy _1) -> [bb33];
+        _2 = call const fn baml.time.PlainDateTime.baml.ToString.to_string(copy _1) -> [bb37];
     }
 
     bb29: {
-        _2 = call const fn baml.ToString.to_string(copy _1) -> [bb33];
+        _2 = call const fn baml.ToString.to_string(copy _1) -> [bb37];
     }
 
     bb30: {
-        _2 = call const fn baml.TypeValue.baml.ToString.to_string(copy _1) -> [bb33];
+        _2 = call const fn baml.errors.ErrorContext.baml.ToString.to_string(copy _1) -> [bb37];
     }
 
     bb31: {
-        _2 = call const fn baml.ToString.to_string(copy _1) -> [bb33];
+        _2 = call const fn baml.ToString.to_string(copy _1) -> [bb37];
     }
 
     bb32: {
-        _2 = call const fn baml.Uint8Array.baml.ToString.to_string(copy _1) -> [bb33];
+        _2 = call const fn baml.errors.StackTrace.baml.ToString.to_string(copy _1) -> [bb37];
     }
 
     bb33: {
-        _19 = load_type(string);
-        _0 = call const fn baml.json.from<copy _19>(copy _2) -> [bb34];
+        _2 = call const fn baml.ToString.to_string(copy _1) -> [bb37];
     }
 
     bb34: {
+        _2 = call const fn baml.TypeValue.baml.ToString.to_string(copy _1) -> [bb37];
+    }
+
+    bb35: {
+        _2 = call const fn baml.ToString.to_string(copy _1) -> [bb37];
+    }
+
+    bb36: {
+        _2 = call const fn baml.Uint8Array.baml.ToString.to_string(copy _1) -> [bb37];
+    }
+
+    bb37: {
+        _21 = load_type(string);
+        _0 = call const fn baml.json.from<copy _21>(copy _2) -> [bb38];
+    }
+
+    bb38: {
         return;
     }
 }

@@ -173,6 +173,13 @@ fn rewrite_catch_region_blocks(regions: &mut Vec<CatchRegion>, map: &[Option<Blo
         };
         region.body_entry = new_body;
         region.handler = new_handler;
+        // Remap the handler-body blocks too (drop any that were removed) so the
+        // BEP-042 cause-chain extent stays accurate after block renumbering.
+        region.handler_body = region
+            .handler_body
+            .iter()
+            .filter_map(|b| map[b.0])
+            .collect();
         true
     });
 }
@@ -282,6 +289,11 @@ fn merge_passthrough_blocks(body: &mut MirFunctionBody) {
         }
         if let Some(&new_handler) = resolved.get(&region.handler) {
             region.handler = new_handler;
+        }
+        for b in &mut region.handler_body {
+            if let Some(&new_b) = resolved.get(b) {
+                *b = new_b;
+            }
         }
     }
 
@@ -553,6 +565,16 @@ fn count_local_uses(body: &MirFunctionBody) -> Vec<usize> {
     // Count uses in catch region error locals (VM writes into these slots).
     for (_, local) in body.unwind_error_locals() {
         uses[local.0] += 1;
+    }
+
+    // The VM also materializes the caught error's `ErrorContext` into the
+    // context (second-binding) slot at unwind time, and the BEP-042 cause-chain
+    // pre-walk reads it from an *enclosing* handler — a use the static analysis
+    // can't see. Keep it alive even when the `ctx` binding looks dead.
+    for region in &body.catch_regions {
+        if let Some(ctx_local) = region.stack_trace_local {
+            uses[ctx_local.0] += 1;
+        }
     }
 
     uses
@@ -1189,10 +1211,19 @@ fn eliminate_dead_locals(body: &mut MirFunctionBody, arity: usize) {
         }
     }
 
-    // Rewrite catch_regions error locals
+    // Rewrite catch_regions error + context locals. Both the first (`e`) and
+    // second (`ctx`/`st`) catch bindings have a payload local the VM writes
+    // into; if the context local isn't renumbered alongside the error local,
+    // the emitter computes a stale `stack_trace_slot` and the binding reads an
+    // uninitialized (Null) slot — see BEP-042 ErrorContext nested-catch bug.
     for region in &mut body.catch_regions {
         if let Some(new_local) = old_to_new[region.error_local.0] {
             region.error_local = new_local;
+        }
+        if let Some(st_local) = region.stack_trace_local
+            && let Some(new_local) = old_to_new[st_local.0]
+        {
+            region.stack_trace_local = Some(new_local);
         }
     }
 

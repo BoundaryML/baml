@@ -76,6 +76,7 @@ import {
   selectDefaultFunctionName,
   selectMainFunctionName,
 } from './default-function-selection';
+import { findLatestGraphRunSnapshot } from './graph-run-selection';
 import { ExecutionProfileView } from './ExecutionProfileView';
 import {
   parseSerializedTestTreeJson,
@@ -210,39 +211,6 @@ function hasLazyTestSets(items: SerializedTestDef[]): boolean {
     if (isExpandedTestSet(item) && hasLazyTestSets(item.items)) return true;
   }
   return false;
-}
-
-function findLatestGraphRunSnapshot(
-  runs: Run[],
-  selectedFn: string | null,
-  selectedProject: string | null,
-): Run | undefined {
-  if (!selectedFn) return undefined;
-
-  for (let i = runs.length - 1; i >= 0; i -= 1) {
-    const run = runs[i];
-    if (!run) continue;
-    if (selectedProject && run.request.projectId !== selectedProject) continue;
-
-    if (
-      (run.target.kind === 'function' ||
-        run.target.kind === 'companion') &&
-      run.target.functionName === selectedFn
-    ) {
-      return run;
-    }
-    if (
-      run.target.kind === 'preview' &&
-      run.target.parentFunctionName === selectedFn
-    ) {
-      return run;
-    }
-    if (run.calls.some((call) => call.functionName === selectedFn)) {
-      return run;
-    }
-  }
-
-  return undefined;
 }
 
 function isInternalFunction(fn: FunctionInfo): boolean {
