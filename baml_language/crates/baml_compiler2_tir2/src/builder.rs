@@ -525,7 +525,7 @@ struct NormalizeCtx<'a, 'db>(&'a TypeInferenceBuilder<'db>);
 
 impl baml_type::normalize::TypeContext for NormalizeCtx<'_, '_> {
     fn alias_def(&self, name: &crate::ty::QualifiedTypeName) -> Option<Ty> {
-        self.0.aliases.get(name).cloned()
+        crate::inference::alias_def(self.0.context.db(), name)
     }
 
     fn implements_interface(&self, concrete: &Ty, interface: &baml_type::Interface) -> bool {

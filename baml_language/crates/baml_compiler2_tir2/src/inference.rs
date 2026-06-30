@@ -2208,6 +2208,23 @@ pub fn collect_type_aliases<'db>(
     aliases
 }
 
+/// Resolve a type alias by qualified name to the type it expands to (one level).
+///
+/// A global function of the name alone — `qtn` carries its package, so the alias's
+/// definition is found without any scope or prebuilt alias map, composing the cached
+/// [`baml_compiler2_ppir::package_items`] and [`resolve_type_alias`] queries. Returns
+/// `None` when `qtn` does not name a type alias. Equivalent to a [`collect_type_aliases`]
+/// lookup, but resolved on demand and reaching every dependency (not only the aliases a
+/// package happens to re-export).
+pub fn alias_def(db: &dyn crate::Db, qtn: &crate::ty::QualifiedTypeName) -> Option<Ty> {
+    let pkg_id = PackageId::new(db, qtn.package().clone());
+    let items = baml_compiler2_ppir::package_items(db, pkg_id);
+    match items.lookup_type(qtn.namespace(), qtn.name())? {
+        Definition::TypeAlias(loc) => Some(resolve_type_alias(db, loc).ty.clone()),
+        _ => None,
+    }
+}
+
 /// Build the type-alias map visible from a package: its own aliases plus those
 /// re-exported by its dependencies. Shared by per-scope inference and throws
 /// analysis so both expand the same aliases (e.g. `testing.TestSetBody`).
