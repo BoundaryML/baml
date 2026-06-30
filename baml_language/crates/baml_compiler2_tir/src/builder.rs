@@ -7950,11 +7950,11 @@ impl<'db> TypeInferenceBuilder<'db> {
                     .items_for_package(db, &baml_name)
                     .and_then(|items| {
                         let errors_ns = [baml_base::Name::new("errors")];
-                        let st_name = baml_base::Name::new("StackTrace");
+                        let st_name = baml_base::Name::new("ErrorContext");
                         items.lookup_type(&errors_ns, &st_name)
                     })
                     .map(|def| {
-                        let st_name = baml_base::Name::new("StackTrace");
+                        let st_name = baml_base::Name::new("ErrorContext");
                         Ty::Class(
                             crate::lower_type_expr::qualify_def(db, def, &st_name),
                             Vec::new(),

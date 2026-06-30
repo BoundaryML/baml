@@ -295,6 +295,11 @@ struct StackifyCodegen<'ctx, 'obj> {
     /// Maps `BlockId` -> bytecode instruction index (for jump patching).
     block_addresses: HashMap<BlockId, usize>,
 
+    /// Maps `BlockId` -> instruction index just past the block's last
+    /// instruction (its exclusive end). Used to compute catch handler-body PC
+    /// extents for the BEP-042 cause chain.
+    block_end_addresses: HashMap<BlockId, usize>,
+
     /// Pending jumps that need patching: (`instruction_index`, `target_block`).
     pending_jumps: Vec<(usize, PendingJumpTarget)>,
 
@@ -398,6 +403,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             local_slots: HashMap::new(),
             real_local_count: 0,
             block_addresses: HashMap::new(),
+            block_end_addresses: HashMap::new(),
             pending_jumps: Vec::new(),
             pending_jump_tables: Vec::new(),
             dead_unreachable_blocks: HashSet::new(),
@@ -937,6 +943,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             self.current_block_start = block_start;
             let block = mir.block(block_id);
             self.emit_block(block);
+            self.block_end_addresses.insert(block_id, self.current_pc());
         }
 
         // If any pending edges target dead-unreachable MIR blocks, patch them
@@ -2420,7 +2427,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
     /// ranges. The try body spans from the entry block's first instruction up
     /// to (but not including) the handler block's first instruction.
     fn build_exception_table(&mut self, mir: &MirFunctionBody) {
-        use bex_vm_types::bytecode::ExceptionTableEntry;
+        use bex_vm_types::bytecode::{ExceptionTableEntry, HandlerContextEntry};
 
         for region in &mir.catch_regions {
             let body_entry = self.analysis.resolve_jump_target(region.body_entry);
@@ -2462,6 +2469,34 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 .stack_trace_local
                 .and_then(|local| self.local_slots.get(&local).copied())
                 .unwrap_or(ExceptionTableEntry::NO_STACK_TRACE);
+
+            // BEP-042 cause chain: a throw inside the handler body is "during
+            // handling of" this catch's error. The handler body is the union of
+            // the arm blocks (or defer-pad body blocks) captured at lowering;
+            // the layout can fragment them across non-contiguous PCs. Emit one
+            // `HandlerContextEntry` per block so the coverage is exact — a
+            // single `[handler_pc, max_end)` span would over-cover the gaps
+            // between fragments and mis-chain a throw laid out there. An empty
+            // or fully-dropped body contributes no entries and never chains.
+            for &block in &region.handler_body {
+                let (Some(&block_start), Some(&block_end)) = (
+                    self.block_addresses.get(&block),
+                    self.block_end_addresses.get(&block),
+                ) else {
+                    continue; // block dropped by layout / DCE
+                };
+                if block_start >= block_end {
+                    continue; // empty block — nothing to cover
+                }
+                self.bytecode
+                    .handler_context_table
+                    .push(HandlerContextEntry {
+                        start_pc: block_start,
+                        end_pc: block_end,
+                        handler_pc,
+                        stack_trace_slot,
+                    });
+            }
 
             self.bytecode.exception_table.push(ExceptionTableEntry {
                 start_pc,

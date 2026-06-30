@@ -413,6 +413,20 @@ function baml.env.get_or_panic(key: string) -> string  [expr] {
   {  } get(key) NullCoalesce root.sys.panic("env var not found: " Add key)
 }
 
+--- <builtin>/baml/ns_errors/error_context.baml ---
+class baml.errors.ErrorContext {
+  error: unknown
+  stack_trace: StackTrace
+  cause: baml.errors.ErrorContext?
+}
+function baml.errors._to_string_impl(self: ?) -> string  [builtin]
+function baml.errors.root_cause(self: ?) -> baml.errors.ErrorContext  [expr] {
+  {  } match (self.cause) { null => self, c: baml.errors.ErrorContext => c.root_cause() }
+}
+function baml.errors.to_string(self: ?) -> string  [expr] {
+  {  } self._to_string_impl()
+}
+
 --- <builtin>/baml/ns_errors/errors.baml ---
 class baml.errors.AccessError {
   message: string

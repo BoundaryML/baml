@@ -73,6 +73,7 @@ function         baml.csv._to_markdown_records    <builtin>/baml/ns_csv/csv.baml
 function         baml.csv._error                  <builtin>/baml/ns_csv/csv.baml:814
 function         baml.env.get                     <builtin>/baml/ns_env/env.baml:6
 function         baml.env.get_or_panic            <builtin>/baml/ns_env/env.baml:11
+class            baml.errors.ErrorContext         <builtin>/baml/ns_errors/error_context.baml:9
 class            baml.errors.InvalidArgument      <builtin>/baml/ns_errors/errors.baml:2
 class            baml.errors.ParseError           <builtin>/baml/ns_errors/errors.baml:8
 class            baml.errors.Io                   <builtin>/baml/ns_errors/errors.baml:13
