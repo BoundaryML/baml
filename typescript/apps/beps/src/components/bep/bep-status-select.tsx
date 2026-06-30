@@ -35,7 +35,7 @@ type BepStatus =
   | "superseded";
 
 const STATUS_OPTIONS: { value: BepStatus; label: string; description: string }[] = [
-  { value: "draft", label: "Draft", description: "Work in progress" },
+  { value: "draft", label: "Slop", description: "Work in progress" },
   { value: "proposed", label: "Proposed", description: "Ready for review" },
   { value: "pending", label: "Pending", description: "Under consideration" },
   { value: "accepted", label: "Accepted", description: "Approved for implementation" },
@@ -108,8 +108,12 @@ export function BepStatusSelect({
     );
   };
 
+  const getDisplayLabel = (status: BepStatus) => {
+    return STATUS_OPTIONS.find((o) => o.value === status)?.label ?? status;
+  };
+
   if (!canEdit) {
-    return <Badge variant={currentStatus}>{currentStatus}</Badge>;
+    return <Badge variant={currentStatus}>{getDisplayLabel(currentStatus)}</Badge>;
   }
 
   return (
@@ -121,8 +125,8 @@ export function BepStatusSelect({
       >
         <SelectTrigger className="w-40">
           <SelectValue>
-            <Badge variant={currentStatus} className="capitalize">
-              {currentStatus}
+            <Badge variant={currentStatus}>
+              {getDisplayLabel(currentStatus)}
             </Badge>
           </SelectValue>
         </SelectTrigger>
@@ -130,7 +134,7 @@ export function BepStatusSelect({
           {STATUS_OPTIONS.map((option) => (
             <SelectItem key={option.value} value={option.value}>
               <div className="flex items-center gap-2">
-                <Badge variant={option.value} className="capitalize">
+                <Badge variant={option.value}>
                   {option.label}
                 </Badge>
                 <span className="text-xs text-muted-foreground">

@@ -20,7 +20,7 @@ use sys_native::{CallId, SysOpsExt};
 
 use crate::{
     project_load::{
-        find_project_root_from, load_project_from_reporting, load_project_or_default,
+        find_project_root_from, load_project_for_build, load_project_or_default,
         resolve_standalone_file, validate_file_from_flags,
     },
     reporter::Reporter,
@@ -605,8 +605,9 @@ impl RunArgs {
         Ok((entries, lookups))
     }
 
-    /// Shared tail: spawn the runtime, run dispatch, render the
-    /// `Running` / `Finished` lines.
+    /// Shared tail: spawn the runtime and run dispatch. Compilation already
+    /// emitted the final `Compiled … in <t>` line and cleared the spinner, so
+    /// the program runs silently — its own stdout is the output that matters.
     fn dispatch_and_finish(
         &self,
         engine: BexEngine,
@@ -616,7 +617,8 @@ impl RunArgs {
         reporter: &Reporter,
     ) -> Result<crate::ExitCode> {
         self.vlog(format_args!("Calling {function_name}"));
-        reporter.status("Running", function_name);
+        // Belt-and-suspenders: the compile step already finished the spinner,
+        // but make sure nothing is left animating over the program's output.
         reporter.abandon();
 
         let rt = tokio::runtime::Runtime::new().context("Failed to create tokio runtime")?;
@@ -634,10 +636,7 @@ impl RunArgs {
         self.vlog(format_args!("Completed in {:.2?}", start.elapsed()));
 
         match dispatch_result {
-            Ok(baml_exec::DispatchResult::Ok) => {
-                reporter.finish("Finished", function_name);
-                Ok(crate::ExitCode::Success)
-            }
+            Ok(baml_exec::DispatchResult::Ok) => Ok(crate::ExitCode::Success),
             Ok(baml_exec::DispatchResult::TargetError) => Ok(crate::ExitCode::TargetError),
             Ok(baml_exec::DispatchResult::Exit(code)) => {
                 std::process::exit(baml_exec::clamp_exit_code(code));
@@ -717,10 +716,11 @@ impl RunArgs {
             return self.load_and_compile_standalone(file, argv, reporter);
         }
 
-        // `load_project_from_reporting` emits one `Loading <file>`
-        // line per discovered source file (cargo-style per-unit
-        // progress) — no aggregate `Loading <project>` needed.
-        let (db, from, baml_files) = load_project_from_reporting(self.from.as_deref(), reporter)?;
+        // Per-file `Loading <file>` progress is verbose-only — by default
+        // the single `Compiling N file(s)` line below is the only progress a
+        // run shows.
+        let (db, from, baml_files) =
+            load_project_for_build(self.from.as_deref(), reporter, self.verbose)?;
         self.vlog(format_args!("Loading project from {}", from.display()));
         if baml_files.is_empty() {
             anyhow::bail!("No .baml files found in {}", from.display());
@@ -732,22 +732,29 @@ impl RunArgs {
                 .unwrap_or(false)
         });
 
-        reporter.spin("Checking", format!("{} file(s)", baml_files.len()));
-        self.check_project_diagnostics(&db, "Cannot run: compilation errors found", reporter)?;
-        // For `--list` the bytecode emit isn't preparing the program
-        // for execution — it's just there so we can call
-        // `engine.user_functions()` to enumerate signatures. Showing
-        // "Compiling" in that case is technically true but misleading
-        // ("am I about to run something?"). Use "Resolving" so the
-        // verb reflects what the user is actually waiting on.
+        // One verb covers the whole compile pipeline (diagnostics + bytecode
+        // emit); a separate "Checking" line was redundant — same file count,
+        // same wait. For `--list` nothing is executed, so "Resolving" is the
+        // honest verb (the emit only exists to enumerate signatures).
         let compile_verb = if self.list { "Resolving" } else { "Compiling" };
         reporter.spin(compile_verb, format!("{} file(s)", baml_files.len()));
+        self.check_project_diagnostics(&db, "Cannot run: compilation errors found", reporter)?;
         self.vlog(format_args!("Compiling..."));
         let engine = self.compile_to_engine(&db, argv)?;
         self.vlog(format_args!(
             "Compiled {} user function(s)",
             engine.user_functions().len()
         ));
+        // Close out compilation with its elapsed time, then let the program
+        // run silently — its output is the point, not our status lines.
+        // `--list` has no program run to time, and `print_list` writes straight
+        // to stdout, so just clear the spinner to keep it from smearing over
+        // the listing.
+        if self.list {
+            reporter.abandon();
+        } else {
+            reporter.finish("Compiled", format!("{} file(s)", baml_files.len()));
+        }
         Ok((db, engine, needs_format_hint))
     }
 
@@ -762,7 +769,6 @@ impl RunArgs {
         reporter: &Reporter,
     ) -> Result<(ProjectDatabase, BexEngine, bool)> {
         let display = file_path.display().to_string();
-        reporter.spin("Loading", &display);
         let canonical = resolve_standalone_file(file_path)?;
         self.vlog(format_args!(
             "Standalone mode: loading {}",
@@ -780,21 +786,27 @@ impl RunArgs {
         db.set_project_root(parent);
         db.add_or_update_file(&canonical, &content);
 
-        reporter.spin("Checking", &display);
+        // Single "Compiling" verb covers load + diagnostics + emit; see the
+        // note in `load_and_compile`. "Resolving" when --list is the target.
+        let compile_verb = if self.list { "Resolving" } else { "Compiling" };
+        reporter.spin(compile_verb, &display);
         self.check_project_diagnostics(
             &db,
             &format!("Cannot run: compilation errors in {display}"),
             reporter,
         )?;
-        // See note in `load_and_compile`: "Resolving" is the honest
-        // verb when --list is the destination, "Compiling" otherwise.
-        let compile_verb = if self.list { "Resolving" } else { "Compiling" };
-        reporter.spin(compile_verb, &display);
         let engine = self.compile_to_engine(&db, argv)?;
         self.vlog(format_args!(
             "Compiled {} function(s) from standalone file",
             engine.user_functions().len()
         ));
+        // See `load_and_compile`: clear the spinner before `--list` output,
+        // otherwise finish with the elapsed-time line.
+        if self.list {
+            reporter.abandon();
+        } else {
+            reporter.finish("Compiled", &display);
+        }
         Ok((db, engine, needs_format_hint))
     }
 
@@ -852,11 +864,9 @@ impl RunArgs {
         // `file` containing `2 + 2`) produce the same argv.
         let engine = self.compile_to_engine(&db, self.build_argv_for_expression(expr_body))?;
 
-        // Cargo-shape `     Running …` before the program's stdout
-        // starts; then clear the spinner so the evaluated expression's
-        // output doesn't collide with a still-ticking lamb.
-        reporter.status("Running", "expression");
-        reporter.abandon();
+        // Close out compilation with its elapsed time and clear the spinner,
+        // then evaluate silently — the expression's value is the output.
+        reporter.finish("Compiled", "expression");
 
         let rt = tokio::runtime::Runtime::new().context("Failed to create tokio runtime")?;
         let engine = Arc::new(engine);
@@ -887,10 +897,7 @@ impl RunArgs {
         });
 
         match result {
-            Ok(()) => {
-                reporter.finish("Finished", "expression");
-                Ok(crate::ExitCode::Success)
-            }
+            Ok(()) => Ok(crate::ExitCode::Success),
             Err(bex_engine::EngineError::Exit { code }) => {
                 std::process::exit(baml_exec::clamp_exit_code(code));
             }
@@ -1458,8 +1465,7 @@ impl RunArgs {
 // Reserved verbs & namespace helpers
 // ============================================================================
 
-pub(crate) const FORMAT_HINT: &str =
-    "Your code is unformatted — run `baml fmt` to format it. Continuing.";
+pub(crate) const FORMAT_HINT: &str = "Code is unformatted — run `baml fmt`.";
 
 pub(crate) fn source_needs_format_hint(source: &str) -> bool {
     let options = baml_fmt::FormatOptions::default();
@@ -1611,10 +1617,7 @@ mod tests {
     fn format_hint_text_matches_ticket() {
         // Pinned because the wording is user-facing copy: any change
         // here is a deliberate UX call, not a casual refactor.
-        assert_eq!(
-            FORMAT_HINT,
-            "Your code is unformatted — run `baml fmt` to format it. Continuing."
-        );
+        assert_eq!(FORMAT_HINT, "Code is unformatted — run `baml fmt`.");
     }
 
     // Tests that touch the filesystem build paths under $TMPDIR. Appending

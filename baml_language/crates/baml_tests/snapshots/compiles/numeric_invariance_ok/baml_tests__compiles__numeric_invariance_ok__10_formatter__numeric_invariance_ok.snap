@@ -5,10 +5,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
 // Explicit bigint literals satisfy a `bigint[]` slot.
 function BigintLiteralArray() -> bigint[] {
-    [
-        1n,
-        2n,
-    ]
+    [1n, 2n]
 }
 
 // An empty array literal is assignable to any typed list.
@@ -30,9 +27,7 @@ function IntArrayIdentity() -> int[] {
 
 // A map literal with bigint values satisfies a `map<string, bigint>` slot.
 function BigintMapLiteral() -> map<string, bigint> {
-    {
-        "a": 1n,
-    }
+    { "a": 1n }
 }
 
 // A class literal with bigint field literals satisfies the class type.
@@ -41,7 +36,5 @@ class BigintCounter {
 }
 
 function BigintFieldOk() -> BigintCounter {
-    BigintCounter {
-        count: 1n,
-    }
+    BigintCounter { count: 1n }
 }

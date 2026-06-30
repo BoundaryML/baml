@@ -2874,6 +2874,17 @@ impl<'db> TypeInferenceBuilder<'db> {
                     refs,
                 );
             }
+            Expr::Return { value } => {
+                if let Some(value) = value {
+                    Self::collect_default_expr_forward_references(
+                        *value,
+                        body,
+                        later_params,
+                        shadowed,
+                        refs,
+                    );
+                }
+            }
             Expr::Binary { lhs, rhs, .. } => {
                 Self::collect_default_expr_forward_references(
                     *lhs,
@@ -4504,6 +4515,37 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
             Expr::Throw { value } => {
                 self.infer_expr(*value, body);
+                Ty::Never {
+                    attr: TyAttr::default(),
+                }
+            }
+            Expr::Return { value } => {
+                // A `return` expression (e.g. a braceless `catch`/`match` arm
+                // value) diverges, so it has type `never` — exactly like
+                // `throw`. The returned value is still checked against the
+                // enclosing function's declared return type, mirroring
+                // `Stmt::Return` so the typing is identical to the block form.
+                if self.in_defer()
+                    && let Some(span) = self
+                        .body_source_map
+                        .as_ref()
+                        .map(|sm| sm.expr_span(expr_id))
+                {
+                    self.report_at_span(
+                        crate::infer_context::TirTypeError::DeferControlFlowEscape {
+                            keyword: "return",
+                        },
+                        span,
+                    );
+                }
+                if let Some(value) = value {
+                    if let Some(ret_ty) = &self.declared_return_ty {
+                        let ret_ty = ret_ty.clone();
+                        self.check_expr(*value, body, &ret_ty);
+                    } else {
+                        self.infer_expr(*value, body);
+                    }
+                }
                 Ty::Never {
                     attr: TyAttr::default(),
                 }
@@ -8819,6 +8861,14 @@ impl<'db> TypeInferenceBuilder<'db> {
             Expr::Throw { value } => {
                 self.collect_throw_facts_from_expr(*value, body, out);
                 self.collect_throw_facts_from_value(*value, out);
+            }
+            Expr::Return { value } => {
+                // Evaluating the returned value may itself throw, so walk it —
+                // but unlike `throw`, the value is returned normally, not
+                // raised as an error (no `collect_throw_facts_from_value`).
+                if let Some(value) = value {
+                    self.collect_throw_facts_from_expr(*value, body, out);
+                }
             }
             Expr::Call { callee, args, .. } => {
                 self.collect_throw_facts_from_expr(*callee, body, out);

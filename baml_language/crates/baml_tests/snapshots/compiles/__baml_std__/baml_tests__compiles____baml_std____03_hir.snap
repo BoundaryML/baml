@@ -1687,6 +1687,7 @@ function baml.byte_length(self: ?) -> int  [builtin]
 function baml.char_at(self: ?, index: int) -> string  [builtin]
 function baml.char_count(self: ?) -> int  [builtin]
 function baml.chars(self: ?) -> string[]  [builtin]
+function baml.code_point_at(self: ?, index: int) -> int  [builtin]
 function baml.ends_with(self: ?, suffix: string) -> bool  [builtin]
 function baml.from(value: T) -> string  [expr] {
   {  } root._to_string_shim(value)
@@ -1722,6 +1723,7 @@ function baml.replace_all(self: ?, search: string, replacement: string) -> strin
 function baml.split(self: ?, delimiter: string) -> string[]  [builtin]
 function baml.starts_with(self: ?, prefix: string) -> bool  [builtin]
 function baml.substring(self: ?, start: int, end: int) -> string  [builtin]
+function baml.to_code_points(self: ?) -> int[]  [builtin]
 function baml.to_lower_case(self: ?) -> string  [builtin]
 function baml.to_upper_case(self: ?) -> string  [builtin]
 function baml.to_utf8(self: ?) -> uint8array  [builtin]

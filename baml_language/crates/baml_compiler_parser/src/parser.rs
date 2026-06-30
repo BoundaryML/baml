@@ -4582,6 +4582,31 @@ impl<'a> Parser<'a> {
         });
     }
 
+    /// Parse `return expr?` in expression position as a `RETURN_EXPR` — a
+    /// diverging expression of type `never`. This is what lets a braceless
+    /// `return` be a `catch`/`match` arm value (`_ => return 0`). Statement
+    /// position is still handled by `parse_return_stmt` (see `parse_stmt`),
+    /// so this only fires when `return` is reached through expression parsing.
+    ///
+    /// Like `parse_return_stmt`, the value is optional: a bare `return` (e.g.
+    /// in a void function) is valid, so we stop before a token that cannot
+    /// begin an expression. We don't eat a trailing `;` here — that belongs to
+    /// the enclosing statement, not the expression.
+    fn parse_return_expr(&mut self) {
+        self.with_node(SyntaxKind::RETURN_EXPR, |p| {
+            p.expect(TokenKind::Return);
+
+            // Optional return value — bare `return` yields unit before diverging.
+            if !p.at(TokenKind::Semicolon)
+                && !p.at(TokenKind::Comma)
+                && !p.at(TokenKind::RBrace)
+                && !p.at_end()
+            {
+                p.parse_expr_bp_no_catch(0);
+            }
+        });
+    }
+
     fn parse_if_expr(&mut self) {
         // `if let PATTERN = SCRUTINEE { ... }` is a distinct refutable form.
         // Decided here by peeking past `if` for a `let` token — patterns
@@ -5316,7 +5341,12 @@ impl<'a> Parser<'a> {
     }
 
     fn at_catch_clause_start(&self) -> bool {
-        self.at(TokenKind::Catch) || self.at(TokenKind::CatchAll)
+        self.at(TokenKind::Catch)
+            || self.at(TokenKind::CatchAll)
+            // `catch_all_panics` is a contextual keyword: the lexer treats it as
+            // a plain identifier so it stays usable as one elsewhere, but in
+            // catch-clause position it introduces a clause like `catch_all`.
+            || self.at_contextual_kw("catch_all_panics")
     }
 
     fn parse_catch_expr(&mut self, expr_start: usize) {
@@ -5330,8 +5360,12 @@ impl<'a> Parser<'a> {
 
     fn parse_catch_clause(&mut self) {
         self.with_node(SyntaxKind::CATCH_CLAUSE, |p| {
-            if p.at_catch_clause_start() {
+            if p.at(TokenKind::Catch) || p.at(TokenKind::CatchAll) {
                 p.bump();
+            } else if p.at_contextual_kw("catch_all_panics") {
+                // Re-label the contextual `Word` as a dedicated keyword so the
+                // AST lowering and tooling can recognize the clause kind.
+                p.bump_contextual_kw_as("catch_all_panics", SyntaxKind::KW_CATCH_ALL_PANICS);
             } else {
                 p.error_unexpected_token("catch clause keyword".to_string());
                 return;
@@ -6200,6 +6234,11 @@ impl<'a> Parser<'a> {
         } else if self.at(TokenKind::Throw) {
             // Throw expression
             self.parse_throw_expr();
+        } else if self.at(TokenKind::Return) {
+            // Return expression (diverging, type `never`) — lets `return` be a
+            // `catch`/`match` arm value. Statement-position `return` is taken by
+            // `parse_stmt` before reaching here.
+            self.parse_return_expr();
         } else if self.at(TokenKind::Word) {
             // Collect text as owned String so the borrow is released before any &mut calls.
             let text: String = self.current().map(|t| t.text.clone()).unwrap_or_default();
@@ -9089,6 +9128,58 @@ function Demo() -> int {
         let child_kinds: Vec<_> = catch_expr.children().map(|n| n.kind()).collect();
         assert_eq!(child_kinds[0], SyntaxKind::THROW_EXPR);
         assert_eq!(child_kinds[1], SyntaxKind::CATCH_CLAUSE);
+    }
+
+    /// `catch_all_panics` is a contextual keyword: the lexer emits a plain
+    /// `Word`, and the parser must still recognize it in catch-clause position
+    /// (B-504 — it previously only handled `catch`/`catch_all`).
+    #[test]
+    fn parses_catch_all_panics_clause() {
+        let source = r#"
+function Demo() -> int {
+  throw 1 catch_all_panics (e) {
+    _ => 1
+  }
+}
+"#;
+
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let catch_expr = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::CATCH_EXPR)
+            .expect("expected CATCH_EXPR node");
+        let child_kinds: Vec<_> = catch_expr.children().map(|n| n.kind()).collect();
+        assert_eq!(child_kinds[0], SyntaxKind::THROW_EXPR);
+        assert_eq!(child_kinds[1], SyntaxKind::CATCH_CLAUSE);
+
+        // The `Word` is re-labelled as a dedicated keyword token inside the clause.
+        let has_kw = catch_expr.descendants_with_tokens().any(|elem| {
+            matches!(
+                elem,
+                rowan::NodeOrToken::Token(t)
+                    if t.kind() == SyntaxKind::KW_CATCH_ALL_PANICS && t.text() == "catch_all_panics"
+            )
+        });
+        assert!(has_kw, "expected a KW_CATCH_ALL_PANICS token in the clause");
+    }
+
+    /// `catch_all_panics` is contextual, not reserved: outside catch-clause
+    /// position it is still a perfectly good identifier (e.g. a function name).
+    #[test]
+    fn catch_all_panics_is_a_normal_identifier_outside_catch() {
+        let source = r#"
+function catch_all_panics() -> int { 1 }
+
+function Demo() -> int {
+  let x = catch_all_panics()
+  x
+}
+"#;
+
+        let (_root, errors) = parse_source(source);
+        assert_no_errors(&errors);
     }
 
     #[test]

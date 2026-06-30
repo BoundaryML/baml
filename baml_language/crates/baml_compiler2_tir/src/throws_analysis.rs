@@ -302,6 +302,13 @@ fn collect_from_expr<C: ThrowsAnalysisContext>(
             collect_from_expr(context, *value, body, out);
             collect_value_throw_facts(context, *value, out);
         }
+        Expr::Return { value } => {
+            // Evaluating the returned value may throw; walk it. The value is
+            // returned, not raised, so do not charge it as a thrown error.
+            if let Some(value) = value {
+                collect_from_expr(context, *value, body, out);
+            }
+        }
         Expr::Call { callee, args, .. } => {
             collect_from_expr(context, *callee, body, out);
             let arg_exprs: Vec<_> = args.iter().map(|arg| arg.expr).collect();

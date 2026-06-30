@@ -5,5 +5,6 @@ expression: output
 function         assert.is_true                   <builtin>/assert/assert.baml:4
 function         assert.not_null                  <builtin>/assert/assert.baml:13
 function         assert.format_operand            <builtin>/assert/assert.baml:31
-function         assert.equal                     <builtin>/assert/assert.baml:36
-function         assert.contains                  <builtin>/assert/assert.baml:50
+function         assert.equal                     <builtin>/assert/assert.baml:49
+function         assert.approx_equal              <builtin>/assert/assert.baml:76
+function         assert.contains                  <builtin>/assert/assert.baml:99

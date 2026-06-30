@@ -44,6 +44,7 @@ methods:
   /// Returns the **character index** of the first occurrence of `search`, or
   function index_of(self, search: string) -> int | null
   function char_at(self, index: int) -> string
+  function code_point_at(self, index: int) -> int
   /// Returns a new string that repeats `self` the given number of times.
   function repeat(self, count: int) -> string
   /// Returns true if the string contains the given `substring`.
@@ -88,6 +89,8 @@ methods:
   function is_ascii_hex(self) -> bool
   /// Returns the string encoded as a `uint8array` of UTF-8 bytes.
   function to_utf8(self) -> uint8array
+  /// Returns the string's Unicode code points as an array of `int`s.
+  function to_code_points(self) -> int[]
 static_methods:
   /// Renders any value as a human-readable string.
   function from(value: T) -> string

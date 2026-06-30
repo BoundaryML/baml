@@ -40,6 +40,7 @@ pub enum SyntaxKind {
     KW_MATCH,
     KW_CATCH,
     KW_CATCH_ALL,
+    KW_CATCH_ALL_PANICS,
     KW_THROWS,
     KW_SPAWN,
     KW_AWAIT,
@@ -337,6 +338,11 @@ pub enum SyntaxKind {
     /// `BINDING_PATTERN` so downstream code doesn't have to text-match `_`.
     WILDCARD_PATTERN,
     THROW_EXPR,
+    /// `return expr?` in expression position — a diverging expression of type
+    /// `never` (mirrors `THROW_EXPR`). Lets `return` appear as a `catch`/`match`
+    /// arm value (e.g. `_ => return 0`) without the statement-only restriction.
+    /// Statement-position `return` still parses as `RETURN_STMT`.
+    RETURN_EXPR,
     /// `spawn name_expr? block` — BEP-034 spawn expression.
     /// Structure: `KW_SPAWN [expr] BLOCK_EXPR`.
     SPAWN_EXPR,
@@ -537,6 +543,7 @@ impl SyntaxKind {
                 | Self::KW_MATCH
                 | Self::KW_CATCH
                 | Self::KW_CATCH_ALL
+                | Self::KW_CATCH_ALL_PANICS
                 | Self::KW_THROWS
                 | Self::KW_SPAWN
                 | Self::KW_AWAIT

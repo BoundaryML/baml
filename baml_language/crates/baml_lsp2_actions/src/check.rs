@@ -22,7 +22,9 @@
 use std::{collections::HashSet, fmt::Write as _};
 
 use baml_base::{FileId, Name, SourceFile, Span};
-use baml_compiler_diagnostics::{Diagnostic, DiagnosticId, DiagnosticPhase, ToDiagnostic};
+use baml_compiler_diagnostics::{
+    Diagnostic, DiagnosticId, DiagnosticPhase, ParseError, ToDiagnostic,
+};
 use baml_compiler2_hir::{body::FunctionBody, file_semantic_index, scope::ScopeKind};
 use baml_compiler2_tir::{
     infer_context::{DiagnosticLocation, TirTypeError},
@@ -76,7 +78,25 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
     // `render_scope_diagnostics` calls `infer_scope_types(db, scope_id)` (Salsa-
     // cached per scope) and resolves the arena IDs in each diagnostic to source
     // `TextRange` values via the function body's `AstSourceMap`.
-    for scope_id in &index.scope_ids {
+    //
+    // Suppress type-inference diagnostics for any scope whose body failed to
+    // parse. When a function or lambda body contains a syntax error, parser
+    // error recovery produces a malformed AST that then yields cascading,
+    // misleading type errors. For example, the braceless lambda
+    // `(x: int) => x + 1` makes the parser consume `x` as the lambda's *return
+    // type* and leaves `+ 1` dangling, emitting `unresolved type: x` and
+    // `operator + cannot be applied to a function` *before* the real
+    // `Expected lambda body '{'` syntax error. Tainting the innermost executable
+    // scope containing each parse error (plus its descendant scopes) keeps the
+    // syntax error as the only diagnostic surfaced for the broken body. Parse
+    // errors at structural positions (class/enum names, top-level declarations)
+    // never taint a scope, so unrelated type errors elsewhere in the file are
+    // unaffected.
+    let tainted = parse_error_tainted_scopes(index, &parse_errors);
+    for (file_scope_idx, scope_id) in index.scope_ids.iter().enumerate() {
+        if tainted.contains(&file_scope_idx) {
+            continue;
+        }
         let rendered = render_scope_diagnostics(db, *scope_id);
         for r in rendered {
             diagnostics.push(tir_rendered_to_diagnostic_for_file(db, file, r));
@@ -422,6 +442,49 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
     });
 
     diagnostics
+}
+
+/// Indices (into the file's scope arena) of scopes whose TIR type-inference
+/// diagnostics should be suppressed because the scope body failed to parse.
+///
+/// Parser error recovery turns broken syntax into a malformed AST that then
+/// produces cascading, misleading type errors. We taint the innermost
+/// *executable* scope containing each parse error, plus all of its descendant
+/// scopes, so a single syntax error doesn't drag a pile of spurious type errors
+/// along with it. Parse errors at structural positions (class/enum names,
+/// top-level declarations, type-alias bodies) resolve to a structural scope and
+/// are ignored here, leaving genuine type errors elsewhere in the file intact.
+fn parse_error_tainted_scopes(
+    index: &baml_compiler2_hir::semantic_index::FileSemanticIndex<'_>,
+    parse_errors: &[ParseError],
+) -> HashSet<usize> {
+    let mut tainted = HashSet::new();
+    for err in parse_errors {
+        let span = match err {
+            ParseError::UnexpectedToken { span, .. }
+            | ParseError::UnexpectedEof { span, .. }
+            | ParseError::InvalidSyntax { span, .. } => span,
+        };
+        let fsid = index.scope_at_offset(span.range.start(), None);
+        let scope = &index.scopes[fsid.index() as usize];
+        if !matches!(
+            scope.kind,
+            ScopeKind::Function
+                | ScopeKind::Lambda
+                | ScopeKind::Block
+                | ScopeKind::Let
+                | ScopeKind::MatchArm
+                | ScopeKind::CatchClause
+                | ScopeKind::CatchArm
+        ) {
+            continue;
+        }
+        tainted.insert(fsid.index() as usize);
+        for d in scope.descendants.start.index()..scope.descendants.end.index() {
+            tainted.insert(d as usize);
+        }
+    }
+    tainted
 }
 
 /// Validate `interface` and `implements` blocks for a single file.
@@ -6208,7 +6271,7 @@ mod tests {
     use text_size::{TextRange, TextSize};
 
     use super::*;
-    use crate::testing::CursorTest;
+    use crate::testing::{CursorTest, ProjectTest};
 
     fn dummy_file_id() -> FileId {
         // Use index 0 — sufficient for span construction in unit tests.
@@ -6538,6 +6601,85 @@ function TakeGuess(person: Person) -> string {
                 .iter()
                 .any(|message| message == "`self` cannot have a default value"),
             "missing self-default diagnostic; got {messages:#?}"
+        );
+    }
+
+    #[test]
+    fn parse_error_in_body_taints_scope_and_descendants() {
+        // A braceless lambda is a syntax error; parser recovery leaves a
+        // malformed lambda that would otherwise emit cascading type errors. The
+        // function-body scope containing the parse error — and its descendant
+        // lambda scope — must be tainted so those type errors are suppressed.
+        let mut builder = ProjectTest::builder();
+        builder.source(
+            "test.baml",
+            "function Braceless() -> int {\n  let f = (x: int) => x + 1;\n  f(2)\n}\n",
+        );
+        let test = builder.build();
+        let file = test.files[0];
+
+        let index = file_semantic_index(&test.db, file);
+        let parse_errors = baml_compiler_parser::parse_errors(&test.db, file);
+        assert!(
+            !parse_errors.is_empty(),
+            "braceless lambda should produce a parse error"
+        );
+
+        let tainted = parse_error_tainted_scopes(index, &parse_errors);
+        assert!(
+            !tainted.is_empty(),
+            "the broken function body should be tainted"
+        );
+
+        // The lambda scope is a *descendant* of the function-body scope that
+        // holds the parse error, so descendant tainting must reach it.
+        let lambda_idx = index
+            .scopes
+            .iter()
+            .position(|s| s.kind == ScopeKind::Lambda)
+            .expect("a lambda scope should exist for the braceless lambda");
+        assert!(
+            tainted.contains(&lambda_idx),
+            "descendant lambda scope (index {lambda_idx}) must be tainted, got {tainted:?}"
+        );
+
+        // Invariant the suppression relies on: every descendant of a tainted
+        // scope is itself tainted.
+        for &i in &tainted {
+            let scope = &index.scopes[i];
+            for d in scope.descendants.start.index()..scope.descendants.end.index() {
+                assert!(
+                    tainted.contains(&(d as usize)),
+                    "descendant {d} of tainted scope {i} must also be tainted"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn structural_parse_error_does_not_taint_scopes() {
+        // A parse error at a structural position (an invalid class name)
+        // resolves to a structural scope, which must never be tainted — so a
+        // type error in an unrelated executable body stays visible.
+        let mut builder = ProjectTest::builder();
+        builder.source(
+            "test.baml",
+            "class 123Bad {\n  field string\n}\n\nfunction Good() -> int {\n  42\n}\n",
+        );
+        let test = builder.build();
+        let file = test.files[0];
+
+        let index = file_semantic_index(&test.db, file);
+        let parse_errors = baml_compiler_parser::parse_errors(&test.db, file);
+        assert!(
+            !parse_errors.is_empty(),
+            "invalid class name should produce a parse error"
+        );
+
+        let tainted = parse_error_tainted_scopes(index, &parse_errors);
+        assert!(
+            tainted.is_empty(),
+            "a structural parse error must not taint any scope, got {tainted:?}"
         );
     }
 }
