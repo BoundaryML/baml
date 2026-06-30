@@ -785,7 +785,7 @@ export function Article({ view = 'all' }: { view?: 'all' | 'intro' | 'deep' }) {
               >
                 <p>
                   {
-                    'This is the part Promise.all cannot do: JavaScript fans out I/O, but compute still shares one thread. We scanned 38 GB of log-like text and got a 9x improvement when parallelized into chunks with BAML.'
+                    'In BAML you can split 38 GB of logs into chunks and scan them in parallel, 9x faster.'
                   }
                 </p>
                 <SpawnChart />
