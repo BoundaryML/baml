@@ -1,8 +1,8 @@
 <div align="center">
 <a href="https://boundaryml.com?utm_source=github" target="_blank" rel="noopener noreferrer">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="fern/assets/baml-lamb-white.png">
-    <img src="fern/assets/baml-lamb-white.png" height="64" id="top">
+    <source media="(prefers-color-scheme: dark)" srcset="fern/assets/baml-logo-white.png">
+    <img src="fern/assets/baml-logo-white.png" height="128" id="top">
   </picture>
 </a>
 
