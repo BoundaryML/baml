@@ -1358,11 +1358,11 @@ export function Article({ view = 'all' }: { view?: 'all' | 'intro' | 'deep' }) {
               <p>
                 <a
                   className="l6-link"
-                  href="https://new.boundaryml.com/quickstart"
+                  href="https://boundaryml.com/quickstart"
                   rel="noreferrer"
                   target="_blank"
                 >
-                  new.boundaryml.com/quickstart →
+                  boundaryml.com/quickstart →
                 </a>
               </p>
               <p>
