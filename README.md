@@ -2,7 +2,7 @@
 <a href="https://boundaryml.com?utm_source=github" target="_blank" rel="noopener noreferrer">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="fern/assets/baml-logo-white.png">
-    <img src="fern/assets/baml-logo-white.png" height="128" id="top">
+    <img src="fern/assets/baml-logo-white.png" height="220" id="top">
   </picture>
 </a>
 
