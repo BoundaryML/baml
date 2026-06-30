@@ -144,6 +144,13 @@ pub enum TypeExprKind {
     Unknown {
         attrs: Vec<RawAttribute>,
     },
+    /// The wildcard `_` — an inference hole. Valid only where the type at this
+    /// slot can be inferred from context (a generic type argument whose binding
+    /// is fixed by an initializer, or a `throws`-clause member). Lowered to
+    /// `Ty::Infer` and filled during TIR checking.
+    Infer {
+        attrs: Vec<RawAttribute>,
+    },
 }
 
 /// A type expression node paired with its source span. Every node in the tree
@@ -231,7 +238,8 @@ impl TypeExprKind {
             | Self::Type { attrs }
             | Self::Rust { attrs }
             | Self::Error { attrs }
-            | Self::Unknown { attrs } => attrs,
+            | Self::Unknown { attrs }
+            | Self::Infer { attrs } => attrs,
         }
     }
 
@@ -260,7 +268,8 @@ impl TypeExprKind {
             | Self::Type { attrs }
             | Self::Rust { attrs }
             | Self::Error { attrs }
-            | Self::Unknown { attrs } => attrs,
+            | Self::Unknown { attrs }
+            | Self::Infer { attrs } => attrs,
         }
     }
 }
@@ -402,6 +411,7 @@ impl std::fmt::Display for TypeExprKind {
             TypeExprKind::Rust { .. } => write!(f, "$rust_type"),
             TypeExprKind::Error { .. } => write!(f, "error"),
             TypeExprKind::Unknown { .. } => write!(f, "?"),
+            TypeExprKind::Infer { .. } => write!(f, "_"),
         }
     }
 }
@@ -801,6 +811,14 @@ pub enum Expr {
     },
     Throw {
         value: ExprId,
+    },
+    /// `return expr?` in expression position — a diverging expression of type
+    /// `never`, mirroring [`Expr::Throw`]. Lets `return` be a `catch`/`match`
+    /// arm value. The value is optional (`None` for a bare `return`), matching
+    /// [`Stmt::Return`]. Control transfer is to the enclosing function's exit,
+    /// not the surrounding `catch`.
+    Return {
+        value: Option<ExprId>,
     },
     /// BEP-034 `spawn name_expr? (with expr (, expr)*)? { body }`. The body is
     /// always a block expression that runs on a freshly-spawned green thread;

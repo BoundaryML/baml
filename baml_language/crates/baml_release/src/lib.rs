@@ -14,6 +14,28 @@ use anyhow::{Context, Result};
 pub use manifest::{Artifact, Channel, ToolchainManifest, WrapperManifest};
 use sha2::{Digest, Sha256};
 
+/// Resolve the BAML home directory (`~/.baml`), the root under which the
+/// toolchain stores installed releases, config, and other per-user state.
+///
+/// Resolution order:
+///   1. `$BAML_HOME`, if set.
+///   2. `$HOME` (or `$USERPROFILE` on Windows) joined with `.baml`.
+///   3. A relative `.baml` as a last resort when no home directory is known.
+///
+/// This is the single source of truth shared by the `baml` wrapper and the
+/// `baml-cli` toolchain binary; don't reimplement it.
+pub fn baml_home() -> PathBuf {
+    std::env::var_os("BAML_HOME")
+        .map(PathBuf::from)
+        .or_else(|| {
+            std::env::var_os("HOME")
+                .map(PathBuf::from)
+                .or_else(|| std::env::var_os("USERPROFILE").map(PathBuf::from))
+                .map(|home| home.join(".baml"))
+        })
+        .unwrap_or_else(|| PathBuf::from(".baml"))
+}
+
 pub const MANIFEST_SCHEMA: u32 = 1;
 pub const DEFAULT_MANIFEST_BASE_URL: &str = "https://pkg.boundaryml.com/manifest/v1";
 pub const DEFAULT_RELEASE_REPO: &str = "BoundaryML/baml";

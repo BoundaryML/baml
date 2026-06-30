@@ -57,12 +57,3 @@ function UseReserved() -> int {
 //    │
 //    │ Note: Error code: E0010
 // ───╯
-// warning: unreachable code: 2 statement(s) after diverging statement
-//    ╭─[ expr_var_keyword_let_await.baml:2:7 ]
-//    │
-//  2 │   let await = 1;
-//    │       ───┬───
-//    │          ╰───── unreachable code: 2 statement(s) after diverging statement
-//    │
-//    │ Note: Error code: E0146
-// ───╯

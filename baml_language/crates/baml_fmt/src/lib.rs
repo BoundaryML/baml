@@ -909,3 +909,71 @@ mod map_literal_format_tests {
         assert_formats_to(source, source);
     }
 }
+
+#[cfg(test)]
+mod over_split_regression_tests {
+    //! Regression tests for B-231: `baml fmt` used to force-wrap expressions
+    //! that fit the line-width budget whenever they contained a node the
+    //! strong AST doesn't model (`await`, `spawn`, the `.as<T>` projection,
+    //! `throw`, bigint literals, …). Those nodes are held as
+    //! [`crate::ast::Expression::Unknown`] and printed verbatim, but they used
+    //! to report `single_line_width = None` and `multi_lined = true`
+    //! unconditionally — which poisoned every *enclosing* expression's
+    //! single-line attempt, exploding concise one-liners into deeply-indented
+    //! blocks. The fix makes `Unknown` report its shape honestly from the raw
+    //! source text, so a single-line unknown node stays inline like any other
+    //! expression that fits.
+
+    use super::*;
+
+    fn assert_formats_to(source: &str, expected: &str) {
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).expect("formatter should succeed");
+        assert_eq!(
+            formatted, expected,
+            "formatter output didn't match expected\n--- got ---\n{formatted}\n--- want ---\n{expected}"
+        );
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second, "formatter should be idempotent");
+    }
+
+    #[test]
+    fn test_await_in_paren_and_binary_stays_inline() {
+        // The headline case from the ticket: `"got " + (await f)` was blown up
+        // into a 5-line block with `await f` alone inside triple-indented parens.
+        let source = "function main() -> string {\n    let f = spawn { compute() };\n    \"got \" + (await f)\n}\n\nfunction compute() -> string {\n    \"x\"\n}\n";
+        assert_formats_to(source, source);
+    }
+
+    #[test]
+    fn test_await_in_binary_no_string_stays_inline() {
+        let source = "function main() -> int {\n    let f = spawn { 1 };\n    1 + (await f)\n}\n";
+        assert_formats_to(source, source);
+    }
+
+    #[test]
+    fn test_as_projection_field_access_stays_inline() {
+        // `self.as<Dog>.name` (a `.as<T>` projection followed by a field access)
+        // used to split across two lines because the projection is an unmodeled
+        // node sitting at the head of the access chain.
+        let source = "class Animal {\n    function name(self) -> string throws never {\n        self.as<Dog>.name\n    }\n}\n";
+        assert_formats_to(source, source);
+    }
+
+    #[test]
+    fn test_nested_call_chain_with_bigint_stays_inline() {
+        // A bigint literal (`100n`) is also an unmodeled node. Nested inside a
+        // call chain it used to force the whole chain to fan out across ~9 lines.
+        let source = "function f() -> int throws never {\n    baml.sys.sleep(baml.time.Duration.from_milliseconds(100n))\n}\n";
+        assert_formats_to(source, source);
+    }
+
+    #[test]
+    fn test_braceless_throw_arm_stays_braceless() {
+        // A braceless `=> throw …,` catch arm that fits the budget must not be
+        // wrapped into a `=> { throw … }` block. `throw` is an unmodeled node, so
+        // it used to report itself as multi-line and force the block wrap.
+        let source = "function f(s: string) -> int throws Boom {\n    baml.json.from_string<int>(s) catch (e) {\n        baml.json.JsonParseError => throw Boom {},\n        baml.json.JsonDecodeError => 0,\n    }\n}\n\nclass Boom {\n}\n";
+        assert_formats_to(source, source);
+    }
+}

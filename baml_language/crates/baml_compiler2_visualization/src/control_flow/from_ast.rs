@@ -913,6 +913,11 @@ fn collect_callee_names_expr(body: &ast::ExprBody, id: ast::ExprId, names: &mut 
             }
         }
         ast::Expr::Throw { value } => collect_callee_names_expr(body, *value, names),
+        ast::Expr::Return { value } => {
+            if let Some(value) = value {
+                collect_callee_names_expr(body, *value, names);
+            }
+        }
         ast::Expr::Spawn {
             name,
             with_exprs,

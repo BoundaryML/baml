@@ -71,42 +71,6 @@ function Bar(a: string, b: int | bool) -> int {
 //    │
 //    │ Note: Error code: E0010
 // ───╯
-// error: unresolved name: input
-//    ╭─[ functions_v2_duplicate_names.baml:2:3 ]
-//    │
-//  2 │   input string
-//    │   ──┬──
-//    │     ╰──── unresolved name: input
-//    │
-//    │ Note: Error code: E0003
-// ───╯
-// error: unresolved name: string
-//    ╭─[ functions_v2_duplicate_names.baml:2:9 ]
-//    │
-//  2 │   input string
-//    │         ───┬──
-//    │            ╰──── unresolved name: string
-//    │
-//    │ Note: Error code: E0003
-// ───╯
-// error: unresolved name: output
-//    ╭─[ functions_v2_duplicate_names.baml:3:3 ]
-//    │
-//  3 │   output string
-//    │   ───┬──
-//    │      ╰──── unresolved name: output
-//    │
-//    │ Note: Error code: E0003
-// ───╯
-// error: unresolved name: string
-//    ╭─[ functions_v2_duplicate_names.baml:3:10 ]
-//    │
-//  3 │   output string
-//    │          ───┬──
-//    │             ╰──── unresolved name: string
-//    │
-//    │ Note: Error code: E0003
-// ───╯
 // error: type mismatch: expected baml.llm.Client, got () -> unknown throws never
 //    ╭─[ functions_v2_duplicate_names.baml:6:47 ]
 //    │
