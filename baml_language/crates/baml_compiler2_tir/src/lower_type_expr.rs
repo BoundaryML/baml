@@ -1185,6 +1185,12 @@ pub fn lower_type_expr_in_ns<'db>(
         TypeExprKind::Error { .. } | TypeExprKind::Unknown { .. } => Ty::Unknown {
             attr: TyAttr::default(),
         },
+        // The wildcard `_` lowers to the inference hole, to be filled during
+        // checking (a generic-arg slot from its initializer, a `throws` member
+        // from the inferred effective throw set).
+        TypeExprKind::Infer { .. } => Ty::Infer {
+            attr: TyAttr::default(),
+        },
         // Dedicated Ty::Type variant — see ty.rs doc comment for design rationale.
         TypeExprKind::Type { .. } => Ty::Type {
             attr: TyAttr::default(),
