@@ -1,10 +1,9 @@
 import {
-  applyRunPatch,
+  awaitRunCompletion,
   createRunStoreClient,
-  decodeRunResultValue,
-  type Run,
+  createValueBodyCache,
   type RunStoreClient,
-  type RunSubscriptionEvent,
+  type ValueBodyCache,
   WorkerRuntimePort,
 } from '@b/pkg-playground';
 import { createRawBamlWorker } from '@/playground/spawnBamlWorker';
@@ -87,6 +86,12 @@ interface Cell {
   generation?: number;
   /** Latest decoded test tree for this project. */
   tree?: SerializedNode[];
+  /** Set when the runtime fires `updateProject` for this project — i.e. it has
+   *  (re)built the executable "bex". Runs are gated on this; without it the
+   *  runtime reports "engine not ready: No bex has been created yet". */
+  built?: boolean;
+  /** Latest file contents, so a pre-run rebuild re-sends the current code. */
+  code?: string;
 }
 
 const ROOT = '/workspace';
@@ -99,21 +104,22 @@ const pendingLsp = new Map<number, (result: unknown) => void>();
 // Test runs go through the shared RunStore client — the same execution path the
 // playground's ExecutionPanel uses — layered over the existing worker via
 // WorkerRuntimePort (which uses addEventListener, so it coexists with the raw
-// diagnostics/codelens listener below).
-let runClientPromise: Promise<RunStoreClient> | null = null;
-const TERMINAL_RUN_STATUS = new Set([
-  'succeeded',
-  'failed',
-  'cancelled',
-  'panicked',
-]);
+// diagnostics/codelens listener below). The valueBodyCache fetches the result
+// `valueRef` bodies the runtime returns instead of inline values.
+interface RunContext {
+  client: RunStoreClient;
+  valueBodyCache: ValueBodyCache;
+}
+let runContextPromise: Promise<RunContext> | null = null;
 
-function ensureRunClient(): Promise<RunStoreClient> {
-  if (runClientPromise) return runClientPromise;
-  runClientPromise = ensureWorker().then((worker) =>
-    createRunStoreClient(new WorkerRuntimePort(worker)),
-  );
-  return runClientPromise;
+function ensureRunContext(): Promise<RunContext> {
+  if (runContextPromise) return runContextPromise;
+  runContextPromise = ensureWorker().then((worker) => {
+    const client = createRunStoreClient(new WorkerRuntimePort(worker));
+    const valueBodyCache = createValueBodyCache(client);
+    return { client, valueBodyCache };
+  });
+  return runContextPromise;
 }
 
 function projectMatchesCell(projectKey: string, id: string): boolean {
@@ -193,7 +199,11 @@ function ensureWorker(): Promise<Worker> {
         const n = d.notification;
         if (n?.type === 'updateProject' && typeof n.project === 'string') {
           for (const c of cells.values()) {
-            if (projectMatchesCell(n.project, c.id)) c.project = n.project;
+            if (projectMatchesCell(n.project, c.id)) {
+              c.project = n.project;
+              // updateProject fires after the runtime (re)builds the bex.
+              c.built = true;
+            }
           }
         } else if (
           n?.type === 'testCollectionResult' &&
@@ -222,7 +232,7 @@ async function callOneTest(
   generation: number,
   testName: string,
 ): Promise<RunResult> {
-  const client = await ensureRunClient();
+  const { client, valueBodyCache } = await ensureRunContext();
   let runId: string;
   try {
     runId = await client.startTestRun({ project, generation, testName });
@@ -230,40 +240,18 @@ async function callOneTest(
     return { ok: false, error: e instanceof Error ? e.message : 'run failed' };
   }
 
-  // Apply the snapshot + patch stream until the run hits a terminal status,
-  // racing a timeout so a hung run can't wedge the codelens forever.
-  const handle = client.subscribe(runId);
-  const iterator = handle.events[Symbol.asyncIterator]();
-  const timeout = new Promise<'timeout'>((resolve) =>
-    setTimeout(() => resolve('timeout'), 30000),
+  // Drain the run to a terminal status and decode its result via the shared
+  // RunStore helper — terminal detection, valueRef-body fetch, and decode all
+  // live in one place so a protocol change can't silently break this copy.
+  const { run, status, value } = await awaitRunCompletion(
+    client,
+    valueBodyCache,
+    runId,
   );
-  let run: Run | null = null;
-  try {
-    while (true) {
-      const next = await Promise.race([iterator.next(), timeout]);
-      if (next === 'timeout') return { ok: false, error: 'timed out' };
-      if (next.done) break;
-      const event = next.value as RunSubscriptionEvent;
-      if (event.type === 'snapshot') run = event.snapshot;
-      else if (event.type === 'patch' && run)
-        run = applyRunPatch(run, event.patch);
-      else if (event.type === 'cursorExpired')
-        run = await client.snapshot(runId);
-      if (run && TERMINAL_RUN_STATUS.has(run.status)) break;
-    }
-  } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : 'run failed' };
-  } finally {
-    void handle.unsubscribe();
-  }
-
-  if (!run || !TERMINAL_RUN_STATUS.has(run.status)) {
-    return { ok: false, error: 'run did not complete' };
-  }
-  if (run.status === 'cancelled') return { ok: false, error: 'cancelled' };
-  // A failed assertion still produces a decodable TestReport (outcome 'fail');
-  // only a runtime error / panic leaves no value.
-  const value = decodeRunResultValue(run);
+  if (!run) return { ok: false, error: 'run did not complete' };
+  if (status === 'cancelled') return { ok: false, error: 'cancelled' };
+  // A failed assertion still decodes to a TestReport (outcome 'fail'); only a
+  // runtime error / panic leaves no value.
   if (value == null) {
     return { ok: false, error: run.error?.message ?? 'run failed' };
   }
@@ -319,7 +307,7 @@ export function registerCell(id: string, initialCode: string): CellHandle {
   // e.g. /workspace/cell0 — NOT /workspace/cell0/baml_src. Using the wrong key
   // spins up a phantom second project (churn + cancelled collects).
   const fallbackProject = `${ROOT}/${id}`;
-  const cell: Cell = { id, mainUri };
+  const cell: Cell = { id, mainUri, code: initialCode };
   cells.set(id, cell);
 
   void ensureWorker().then((worker) => {
@@ -331,6 +319,20 @@ export function registerCell(id: string, initialCode: string): CellHandle {
       },
     });
   });
+
+  // Force a fresh project re-eval and wait for the runtime to (re)build the bex
+  // before a run. Several editors register `openFiles` at page load, and that
+  // async build races — earlier projects can be left without a bex, so a run
+  // fires into "engine not ready". Re-sending this one cell's file via
+  // `filesChanged` (didChange) reliably re-triggers the build + `updateProject`.
+  async function ensureBuilt(worker: Worker): Promise<void> {
+    cell.built = false;
+    worker.postMessage({
+      type: 'filesChanged',
+      files: { [mainRel]: cell.code ?? initialCode },
+    });
+    await waitUntil(() => cell.built === true, 6000);
+  }
 
   async function ensureGeneration(worker: Worker): Promise<void> {
     if (cell.generation != null) return;
@@ -385,6 +387,7 @@ export function registerCell(id: string, initialCode: string): CellHandle {
   return {
     projectPath: fallbackProject,
     updateCode(code: string) {
+      cell.code = code;
       void ensureWorker().then((worker) =>
         worker.postMessage({
           type: 'filesChanged',
@@ -451,6 +454,7 @@ export function registerCell(id: string, initialCode: string): CellHandle {
     },
     async runTest(name: string): Promise<RunResult> {
       const worker = await ensureWorker();
+      await ensureBuilt(worker);
       await ensureGeneration(worker);
       const node = findNode(cell.tree, name);
       if (node && isTestSetNode(node)) {

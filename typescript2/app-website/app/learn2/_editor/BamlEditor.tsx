@@ -404,10 +404,16 @@ export function BamlEditor({
       for (const l of picks) {
         const a = (l.command?.arguments?.[0] ?? {}) as {
           functionName?: string;
+          testsetName?: string;
+          testName?: string;
+          name?: string;
         };
-        if (!a.functionName) continue;
-        const runId = out.start(a.functionName);
-        const result = await handle.runTest(a.functionName);
+        // Testset lenses carry their name under a different key than test
+        // lenses, so try each; runTest() routes test vs testset by the tree.
+        const name = a.functionName ?? a.testsetName ?? a.testName ?? a.name;
+        if (!name) continue;
+        const runId = out.start(name);
+        const result = await handle.runTest(name);
         out.finish(runId, result);
       }
     } finally {

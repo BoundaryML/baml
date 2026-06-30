@@ -521,6 +521,12 @@ self.onmessage = async (event: MessageEvent) => {
     const files = (data.files ?? {}) as Record<string, string>;
     vfs.setFiles(files);
     for (const [rel, content] of Object.entries(files)) {
+      // Only open BAML sources as language documents. baml.toml lives in the
+      // vfs (above) for project config, but didOpen-ing it as `languageId: baml`
+      // makes the parser read TOML as BAML — "Expected top-level declaration"
+      // errors that mark the project as having diagnostics, which makes the
+      // runtime skip building the bex ("engine not ready" at run time).
+      if (!rel.endsWith('.baml')) continue;
       // didOpen triggers a full project refresh (builds the bex + fires
       // updateProject/diagnostics + auto-collect). Do NOT also call
       // requestPlaygroundState here — with several editors registering at once
