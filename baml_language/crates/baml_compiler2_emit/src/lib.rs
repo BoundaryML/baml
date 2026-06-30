@@ -50,6 +50,175 @@ fn build_alias_caches(
     caches
 }
 
+/// Build the runtime [`InterfaceDef`](bex_vm_types::types::InterfaceDef) signature
+/// — generic-param bounds, `requires`, associated-type bounds, fields, and method
+/// signatures — for one interface, from its item-tree declaration.
+///
+/// Type expressions are lowered in the interface's own scope (so its generic
+/// params resolve to `TypeVar`s) and narrowed to runtime types via
+/// [`baml_type::lower_to_runtime`] — the faithful converter that preserves type
+/// vars for reflection, NOT the value-erasing `convert_tir_ty_for_runtime`. Bound
+/// and `requires` targets become [`baml_type::RuntimeInterface`] (via
+/// `RuntimeInterface::new`, which canonicalizes associated-binding order).
+fn build_interface_def(
+    db: &dyn baml_compiler2_mir::Db,
+    file: baml_base::SourceFile,
+    iface_data: &baml_compiler2_hir::item_tree::Interface,
+    iface_tn: baml_type::TypeName,
+    resolved: &ResolvedAliases,
+) -> bex_vm_types::types::InterfaceDef {
+    use baml_compiler2_tir::{lower_type_expr::lower_type_expr_in_ns, ty};
+    use baml_type::RuntimeInterface;
+    use bex_vm_types::types::{InterfaceDef, InterfaceMethodDef};
+
+    let item_tree = file_item_tree(db, file);
+    let pkg_info = file_package(db, file);
+    let pkg_id = PackageId::new(db, pkg_info.package.clone());
+    let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
+    let ns = &pkg_info.namespace_path;
+    let generics = &iface_data.generic_params;
+
+    // Lower a type expr in `scope` (diagnostics discarded — the declaration was
+    // validated upstream) and narrow to a runtime type.
+    let lower_rt = |expr: &TypeExpr, scope: &[Name]| -> Option<RuntimeTy> {
+        let mut diags = Vec::new();
+        let ty = lower_type_expr_in_ns(db, expr, pkg_items, ns, scope, &mut diags);
+        baml_type::lower_to_runtime(&ty, resolved).ok()
+    };
+    // Lower an interface bound / `requires` target to its runtime form. A
+    // non-interface bound (rejected upstream) yields `None` and is skipped.
+    let lower_iface = |expr: &TypeExpr, scope: &[Name]| -> Option<RuntimeInterface> {
+        let mut diags = Vec::new();
+        let ty::Ty::Interface(qtn, args, assoc, _) =
+            lower_type_expr_in_ns(db, expr, pkg_items, ns, scope, &mut diags)
+        else {
+            return None;
+        };
+        let generics = args
+            .iter()
+            .map(|a| baml_type::lower_to_runtime(a, resolved))
+            .collect::<Result<Vec<_>, _>>()
+            .ok()?;
+        let associated_types = assoc
+            .iter()
+            .map(|(n, t)| baml_type::lower_to_runtime(t, resolved).map(|rt| (n.clone(), rt)))
+            .collect::<Result<Vec<_>, _>>()
+            .ok()?;
+        Some(RuntimeInterface::new(qtn, generics, associated_types))
+    };
+    // A method's runtime signature: Required params → positional `args`, optional
+    // (defaulted) params → `kwargs`; the `self` receiver is dropped; absent
+    // return/throws lower to `Void`. The method's own generics extend the scope.
+    let build_method = |name: &Name,
+                        method_generics: &[Name],
+                        params: &[baml_compiler2_hir::item_tree::FunctionParam],
+                        return_type: Option<&TypeExpr>,
+                        throws: Option<&TypeExpr>|
+     -> InterfaceMethodDef {
+        let scope: Vec<Name> = generics.iter().chain(method_generics).cloned().collect();
+        let void = || RuntimeTy::Void {
+            attr: TyAttr::default(),
+        };
+        let mut args = Vec::new();
+        let mut kwargs = Vec::new();
+        for p in params {
+            if p.name.as_str() == "self" {
+                continue;
+            }
+            let Some(ty) = p.type_expr.as_ref().and_then(|te| lower_rt(te, &scope)) else {
+                continue;
+            };
+            if p.default.is_some() {
+                kwargs.push((p.name.clone(), ty));
+            } else {
+                args.push(ty);
+            }
+        }
+        InterfaceMethodDef {
+            name: name.clone(),
+            args,
+            kwargs,
+            returns: return_type
+                .and_then(|te| lower_rt(te, &scope))
+                .unwrap_or_else(void),
+            errors: throws
+                .and_then(|te| lower_rt(te, &scope))
+                .unwrap_or_else(void),
+        }
+    };
+
+    // A generic param carries at most one bound today; lower it (or none).
+    let args = generics
+        .iter()
+        .enumerate()
+        .map(|(i, param)| {
+            let bound = iface_data
+                .generic_param_bounds
+                .get(i)
+                .and_then(Option::as_ref)
+                .and_then(|expr| lower_iface(expr, generics));
+            (param.clone(), bound.into_iter().collect())
+        })
+        .collect();
+    let requires = iface_data
+        .requires
+        .iter()
+        .filter_map(|expr| lower_iface(expr, generics))
+        .collect();
+    let assoc = iface_data
+        .associated_types
+        .iter()
+        .filter_map(|at| {
+            at.bound
+                .as_ref()
+                .and_then(|b| lower_iface(b, generics))
+                .map(|ri| (at.name.clone(), ri))
+        })
+        .collect();
+    let fields = iface_data
+        .fields
+        .iter()
+        .filter_map(|f| {
+            f.type_expr
+                .as_ref()
+                .and_then(|te| lower_rt(te, generics))
+                .map(|rt| (f.name.clone(), rt))
+        })
+        .collect();
+    let mut methods: Vec<InterfaceMethodDef> = iface_data
+        .required_methods
+        .iter()
+        .map(|m| {
+            build_method(
+                &m.name,
+                &m.generic_params,
+                &m.params,
+                m.return_type.as_ref(),
+                m.throws.as_ref(),
+            )
+        })
+        .collect();
+    methods.extend(iface_data.default_methods.iter().map(|&fid| {
+        let f = &item_tree[fid];
+        build_method(
+            &f.name,
+            &f.generic_params,
+            &f.params,
+            f.return_type.as_ref(),
+            f.throws.as_ref(),
+        )
+    }));
+
+    InterfaceDef {
+        name: iface_tn,
+        args,
+        requires,
+        assoc,
+        fields,
+        methods,
+    }
+}
+
 /// Build the program-wide interface-implementation registry for the runtime
 /// resolver.
 ///
@@ -1039,22 +1208,15 @@ pub fn generate_project_bytecode_with_opt(
     for file in &all_files {
         let item_tree = file_item_tree(db, *file);
         let pkg_info = file_package(db, *file);
+        let resolved = &alias_caches[&pkg_info.package];
         for (iface_id, iface_data) in &item_tree.interfaces {
             let iface_tn = baml_compiler2_tir::lower_type_expr::qualify_def(
                 db,
                 Definition::Interface(InterfaceLoc::new(db, *file, *iface_id)),
                 &iface_data.name,
             );
-            let iface_obj_idx = program.add_object(Object::Interface(Box::new(
-                bex_vm_types::types::InterfaceDef {
-                    name: iface_tn.clone(),
-                    args: Vec::new(),
-                    requires: Vec::new(),
-                    assoc: Vec::new(),
-                    fields: Vec::new(),
-                    methods: Vec::new(),
-                },
-            )));
+            let iface_def = build_interface_def(db, *file, iface_data, iface_tn.clone(), resolved);
+            let iface_obj_idx = program.add_object(Object::Interface(Box::new(iface_def)));
             interface_object_indices.insert(iface_tn, iface_obj_idx);
             program_packages
                 .entry(pkg_info.package.clone())
