@@ -785,7 +785,7 @@ export function Article({ view = 'all' }: { view?: 'all' | 'intro' | 'deep' }) {
               >
                 <p>
                   {
-                    'In BAML you can split 38 GB of logs into chunks and scan them in parallel, 9x faster.'
+                    'Promise.all only parallelizes I/O; compute still runs on one thread. In BAML you can split 38 GB of logs into chunks and scan them in parallel, 9x faster.'
                   }
                 </p>
                 <SpawnChart />
