@@ -14,7 +14,7 @@
 
 </div>
 
-BAML is the programming language for agents.
+BAML is the programming language for agents. Use it to build agents and harnesses, call AI models, and write everything around them, from web servers to data pipelines.
 
 It looks like TypeScript, but it is statically typed like Rust and with colorless concurrency like Go. Every feature is built so agents make fewer mistakes: types persist at runtime, there is no `any`, errors are checked, and the filesystem is the namespace. It drops into your existing stack and calls into Python, TypeScript, Ruby, Go, and more.
 
