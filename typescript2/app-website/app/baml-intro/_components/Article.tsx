@@ -706,15 +706,15 @@ export function Article({ view = 'all' }: { view?: 'all' | 'intro' | 'deep' }) {
             >
               <p>
                 {
-                  'TypeScript exceptions have no types, resulting in ugly code to handle the right error. BAML analyzes every '
+                  "TypeScript exceptions have no types, so catching the right one means ugly code. BAML reads every "
                 }
                 <code>throws</code>
                 {
-                  ' statement, and tells you every single error a function could throw. Hover '
+                  ' statement and tells you every single error a function can throw. Hover '
                 }
                 <code className="l6-glow">fetch_page</code>
                 {
-                  ' in the editor below — the tooltip shows its full inferred error set. The warning is real: the compiler proves the '
+                  ' below to see its full inferred error set. That live warning is the compiler proving the '
                 }
                 <code>ParseError</code>
                 {' arm can never fire.'}
@@ -1005,7 +1005,7 @@ export function Article({ view = 'all' }: { view?: 'all' | 'intro' | 'deep' }) {
             >
               <p>
                 {
-                  "Here's a fuller BAML project — an LLM “Heads Up” guessing game with an agent loop, a non-LLM binary search, classes, and a couple of testsets. The graph view is the visual counterpart to "
+                  "Here's a fuller BAML project: an LLM “Heads Up” guessing game with an agent loop, a non-LLM binary search, classes, and a couple of testsets. The graph view is the visual counterpart to "
                 }
                 <code>baml describe</code>
                 {
