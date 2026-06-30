@@ -147,21 +147,21 @@ baml.mock.scope([net, shell], () -> void {
 
 /* ---------------- 2 · namespaces are directories ---------------- */
 
-export const NS_BAD = `// baml_src/ns_b/b.baml — referencing another namespace, unqualified
-function use_widget() -> Widget {
-  Widget { label: "x" }
+export const NS_BAD = `// baml_src/ns_orders/order.baml — referencing another namespace, unqualified
+function line_item() -> Product {
+  Product { name: "Keyboard" }
 }`;
 
 export const NS_GOOD = `// there's a single fully qualified name, every time
-function use_widget() -> root.a.Widget {
-  root.a.Widget { label: "x" }
+function line_item() -> root.catalog.Product {
+  root.catalog.Product { name: "Keyboard" }
 }`;
 
 export const LS_EVENTS: TermEvent[] = [
   { cmd: 'ls baml_src/' },
-  { text: 'ns_a  ns_b' },
-  { cmd: 'ls baml_src/ns_a/', pause: 0.4 },
-  { text: 'a.baml' },
+  { text: 'ns_catalog  ns_orders' },
+  { cmd: 'ls baml_src/ns_catalog/', pause: 0.4 },
+  { text: 'product.baml' },
   { pause: 0.4, text: '# the layout of baml_src/ is the layout', tone: 'dim' },
   { text: '# of the program. ls is a map of it.', tone: 'dim' },
 ];
@@ -208,7 +208,7 @@ export const DESCRIBE_EVENTS: TermEvent[] = [
   { text: '' },
   {
     pause: 0.3,
-    text: '✓ one call: signature, deps, every reference',
+    text: '✓ baml describe gives you signature, deps, every reference',
     tone: 'ok',
   },
 ];

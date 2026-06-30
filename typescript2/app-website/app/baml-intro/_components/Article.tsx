@@ -846,7 +846,7 @@ export function Article({ view = 'all' }: { view?: 'all' | 'intro' | 'deep' }) {
                 }
                 <code>ns_</code>
                 {
-                  ' prefix. There are no imports — everything is referred to by its fully qualified name, like Go. Inside a namespace directory, all types, functions and objects are available in every file by default.'
+                  ' prefix. There are no imports, since everything is referred to by its fully qualified name, like Go. Inside a namespace directory, all types, functions and objects are available in every file by default.'
                 }
               </p>
               <div className="l6-block">
@@ -862,17 +862,17 @@ export function Article({ view = 'all' }: { view?: 'all' | 'intro' | 'deep' }) {
                     {
                       line: 2,
                       message:
-                        'unresolved type: Widget. Did you mean `root.a.Widget`?',
+                        'unresolved type: Product. Did you mean `root.catalog.Product`?',
                       severity: 'error',
                     },
                   ]}
-                  filename="ns_b/b.baml"
+                  filename="ns_orders/order.baml"
                 />
               </div>
               <div className="l6-block">
                 <BamlCode
                   code={NS_GOOD}
-                  filename="ns_b/b.baml"
+                  filename="ns_orders/order.baml"
                   highlightLines={[2, 3]}
                 />
               </div>
@@ -1066,7 +1066,7 @@ export function Article({ view = 'all' }: { view?: 'all' | 'intro' | 'deep' }) {
               </p>
               <p>
                 {
-                  'BAML can generate SDKs for your favorite language, and call your functions using these type-safe interfaces — even if they include generics, or class methods. Think of an OpenAPI client generator, except the contract carries real business logic, not just data shapes. (For more details, check out our '
+                  'BAML can generate SDKs for your favorite language, and call your functions using these type-safe interfaces, even if they include generics or class methods. Think of an OpenAPI client generator, except the contract carries real business logic, not just data shapes. (For more details, check out our '
                 }
                 <a
                   className="l6-link"
@@ -1124,7 +1124,7 @@ export function Article({ view = 'all' }: { view?: 'all' | 'intro' | 'deep' }) {
               </p>
               <p>
                 {
-                  "BAML is still < 1.0, but we're close to reaching full stability — feel free to join our language experiments if you're curious about this process."
+                  "BAML is still < 1.0, but we're close to reaching full stability. Feel free to join our language experiments if you're curious about this process."
                 }
               </p>
               <SelfImprove />
@@ -1218,7 +1218,7 @@ export function Article({ view = 'all' }: { view?: 'all' | 'intro' | 'deep' }) {
               <TestExampleTabs />
               <p className="l6-dim">
                 {
-                  'View tests in the Playground — in case a human needs to see things, we have nice utilities — or just have agents run '
+                  'View tests in the Playground: in case a human needs to see things, we have nice utilities. Or just have agents run '
                 }
                 <code>baml test</code>
                 {'.'}

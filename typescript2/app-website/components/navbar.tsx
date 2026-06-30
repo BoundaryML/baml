@@ -139,11 +139,19 @@ export function Navbar() {
           </Link>
         </div>
         <div className="nav-desktop-actions">
-          <Link className="nav-link nav-link--accent" href="/explore">
-            Learn BAML
-          </Link>
           <NavDiscord />
           <NavStars />
+          <Link className="nav-cta" href="/explore">
+            <Image
+              alt=""
+              aria-hidden
+              className="nav-cta-lamb"
+              height={16}
+              src="/baml-lamb-white.png"
+              width={16}
+            />
+            Learn BAML
+          </Link>
         </div>
 
         <button
@@ -160,10 +168,18 @@ export function Navbar() {
 
         <div className={`nav-mobile-panel${open ? ' is-open' : ''}`}>
           <Link
-            className="nav-mobile-link nav-mobile-link--accent"
+            className="nav-cta nav-cta--mobile"
             href="/explore"
             onClick={() => setOpen(false)}
           >
+            <Image
+              alt=""
+              aria-hidden
+              className="nav-cta-lamb"
+              height={18}
+              src="/baml-lamb-white.png"
+              width={18}
+            />
             Learn BAML
           </Link>
           {siteConfig.nav.links.map((link) => (
@@ -216,17 +232,43 @@ export function Navbar() {
             background-color: #F0ECE0;
             color: #1A1612;
           }
-          .nav-link--accent {
-            color: #6D28D9;
+          /* "Learn BAML" — a filled purple CTA that mirrors the homepage
+             "Explore BAML" button so it stands out in the nav. */
+          .nav-cta {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            margin-left: 6px;
+            padding: 7px 15px;
+            border-radius: 9px;
+            font-size: 13.5px;
             font-weight: 600;
+            letter-spacing: 0.01em;
+            text-transform: none;
+            white-space: nowrap;
+            color: #fff;
+            background-color: #6D28D9;
+            border: 1px solid #6D28D9;
+            box-shadow: 0 1px 2px rgba(109, 40, 217, 0.25);
+            transition: background-color 140ms ease, border-color 140ms ease,
+              transform 140ms ease, box-shadow 140ms ease;
           }
-          .nav-link--accent:hover {
-            background-color: #F1ECFB;
-            color: #5B21B6;
+          .nav-cta:hover {
+            background-color: #5B21B6;
+            border-color: #5B21B6;
+            transform: translateY(-1px);
+            box-shadow: 0 3px 10px rgba(109, 40, 217, 0.35);
           }
-          .nav-mobile-link--accent {
-            color: #6D28D9;
-            font-weight: 600;
+          /* the lamb asset is purple; brighten it to white for the filled CTA */
+          .nav-cta-lamb {
+            filter: brightness(0) invert(1);
+          }
+          .nav-cta--mobile {
+            justify-content: center;
+            margin: 8px 6px 4px;
+            padding: 13px 16px;
+            font-size: 15px;
+            border-radius: 10px;
           }
           .nav-desktop-actions {
             display: flex;
