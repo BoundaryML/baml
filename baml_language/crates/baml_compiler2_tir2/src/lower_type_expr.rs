@@ -1039,6 +1039,133 @@ pub fn qualify_def(
     QualifiedTypeName::new(pkg_info.package, pkg_info.namespace_path, name.clone())
 }
 
+/// Lower a declaration's generic-parameter interface bounds to `(name, bound_ty)` pairs,
+/// keyed by parameter name with unbounded parameters omitted. Delegates the per-bound
+/// lowering to [`crate::builder::lower_generic_param_bounds`] (every sibling parameter in
+/// scope, so a bound naming another parameter resolves); bound-lowering diagnostics are
+/// discarded — the declaration's bounds are checked where the declaration is, not here.
+fn lower_decl_generic_param_bounds(
+    db: &dyn crate::Db,
+    package_items: &PackageItems<'_>,
+    ns_context: &[baml_base::Name],
+    generic_params: &[baml_base::Name],
+    generic_param_bounds: &[Option<TypeExpr>],
+) -> Vec<(baml_base::Name, Ty)> {
+    let mut diagnostics = Vec::new();
+    crate::builder::lower_generic_param_bounds(
+        db,
+        generic_param_bounds,
+        package_items,
+        ns_context,
+        generic_params,
+        None,
+        &mut diagnostics,
+    )
+    .into_iter()
+    .zip(generic_params)
+    .filter_map(|(bound_ty, name)| bound_ty.map(|bound_ty| (name.clone(), bound_ty)))
+    .collect()
+}
+
+/// A class's generic-parameter interface bounds, keyed by parameter name — lets a
+/// projection `T.member` on a class type variable find `T`'s bound interface.
+#[salsa::tracked(returns(ref))]
+pub fn class_generic_param_bounds<'db>(
+    db: &'db dyn crate::Db,
+    class_loc: baml_compiler2_hir::loc::ClassLoc<'db>,
+) -> Vec<(baml_base::Name, Ty)> {
+    let file = class_loc.file(db);
+    let item_tree = baml_compiler2_hir::file_item_tree(db, file);
+    let Some(class) = item_tree.classes.get(&class_loc.id(db)) else {
+        return Vec::new();
+    };
+    let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
+    let package_items =
+        baml_compiler2_ppir::package_items(db, PackageId::new(db, pkg_info.package.clone()));
+    lower_decl_generic_param_bounds(
+        db,
+        package_items,
+        &pkg_info.namespace_path,
+        &class.generic_params,
+        &class.generic_param_bounds,
+    )
+}
+
+/// An interface's generic-parameter interface bounds, keyed by parameter name.
+#[salsa::tracked(returns(ref))]
+pub fn interface_generic_param_bounds<'db>(
+    db: &'db dyn crate::Db,
+    interface_loc: baml_compiler2_hir::loc::InterfaceLoc<'db>,
+) -> Vec<(baml_base::Name, Ty)> {
+    let file = interface_loc.file(db);
+    let item_tree = baml_compiler2_hir::file_item_tree(db, file);
+    let Some(interface) = item_tree.interfaces.get(&interface_loc.id(db)) else {
+        return Vec::new();
+    };
+    let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
+    let package_items =
+        baml_compiler2_ppir::package_items(db, PackageId::new(db, pkg_info.package.clone()));
+    lower_decl_generic_param_bounds(
+        db,
+        package_items,
+        &pkg_info.namespace_path,
+        &interface.generic_params,
+        &interface.generic_param_bounds,
+    )
+}
+
+/// Every generic-parameter interface bound in scope for a function's signature or body: the
+/// enclosing class or interface's parameters (when the function is a method), followed by
+/// the function's own parameters. Keyed by parameter name; own parameters are appended last
+/// so a map built by insertion lets them shadow an enclosing parameter of the same name.
+#[salsa::tracked(returns(ref))]
+pub fn function_in_scope_generic_param_bounds<'db>(
+    db: &'db dyn crate::Db,
+    function_loc: baml_compiler2_hir::loc::FunctionLoc<'db>,
+) -> Vec<(baml_base::Name, Ty)> {
+    let file = function_loc.file(db);
+    let item_tree = baml_compiler2_hir::file_item_tree(db, file);
+    let function_id = function_loc.id(db);
+    let mut bounds = Vec::new();
+    for (class_id, class) in &item_tree.classes {
+        if class.methods.contains(&function_id) {
+            bounds.extend(
+                class_generic_param_bounds(
+                    db,
+                    baml_compiler2_hir::loc::ClassLoc::new(db, file, *class_id),
+                )
+                .iter()
+                .cloned(),
+            );
+        }
+    }
+    for (interface_id, interface) in &item_tree.interfaces {
+        if interface.default_methods.contains(&function_id) {
+            bounds.extend(
+                interface_generic_param_bounds(
+                    db,
+                    baml_compiler2_hir::loc::InterfaceLoc::new(db, file, *interface_id),
+                )
+                .iter()
+                .cloned(),
+            );
+        }
+    }
+    if let Some(function) = item_tree.functions.get(&function_id) {
+        let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
+        let package_items =
+            baml_compiler2_ppir::package_items(db, PackageId::new(db, pkg_info.package.clone()));
+        bounds.extend(lower_decl_generic_param_bounds(
+            db,
+            package_items,
+            &pkg_info.namespace_path,
+            &function.generic_params,
+            &function.generic_param_bounds,
+        ));
+    }
+    bounds
+}
+
 #[cfg(test)]
 mod tests {
     use std::path::PathBuf;
