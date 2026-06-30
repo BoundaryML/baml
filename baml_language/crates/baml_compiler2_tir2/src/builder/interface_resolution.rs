@@ -27,21 +27,16 @@ struct OneInterface<'a, 'db> {
     current_iface_qtn: &'a crate::ty::QualifiedTypeName,
     iface_ns: &'a [Name],
     pkg_items: &'db PackageItems<'db>,
-    qualify_symbolic_projection: bool,
     prefer_symbolic_projections: bool,
 }
 
 impl<'a, 'db> OneInterface<'a, 'db> {
-    fn binding_inputs(&self, projection_base: Ty) -> InterfaceBindingInputs<'a, 'db> {
+    fn binding_inputs(&self) -> InterfaceBindingInputs<'a, 'db> {
         InterfaceBindingInputs {
-            iface_name: self.current_iface_qtn,
             iface_data: self.iface_data,
-            iface_type_args: self.iface_type_args,
             associated_bindings: self.iface_associated_bindings,
             pkg_items: self.pkg_items,
             iface_ns: self.iface_ns,
-            receiver_projection_base: projection_base,
-            qualify_symbolic_projection: self.qualify_symbolic_projection,
             prefer_symbolic_projections: self.prefer_symbolic_projections,
         }
     }
@@ -260,7 +255,6 @@ impl<'db> TypeInferenceBuilder<'db> {
                 iface_loc,
                 &iface_type_args,
                 &iface_associated_bindings,
-                bound.name,
                 pkg_items,
                 recv,
                 &access,
@@ -386,7 +380,6 @@ impl<'db> TypeInferenceBuilder<'db> {
             data.interface,
             &data.interface_args,
             &data.associated_types,
-            &realized.0,
             pkg_items,
             SelfReceiver::ExactTy(base_ty),
             &access,
@@ -677,7 +670,6 @@ impl<'db> TypeInferenceBuilder<'db> {
             ai.iface_loc,
             &ai.interface.generics,
             &ai.interface.associated_types,
-            &ai.interface.name,
             pkg_items,
             SelfReceiver::Union(union_ty),
             &MemberAccess { member, at, bound },
@@ -686,20 +678,12 @@ impl<'db> TypeInferenceBuilder<'db> {
 
     /// Resolve `member` on **one** interface instantiation — its own fields and methods,
     /// with **no** `requires`-closure walk. [`Self::resolve_interface_member`] calls this
-    /// per interface in an existential/type-var receiver's bound closure. `root_iface_qtn`
-    /// is the originally-requested interface head, used to decide whether a member's
-    /// associated-type projections need re-qualifying.
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "per-interface resolver: the interface instance, root interface, package \
-                  items, receiver, and access are independent inputs"
-    )]
+    /// per interface in an existential/type-var receiver's bound closure.
     fn resolve_member_on_one_interface(
         &mut self,
         iface_loc: baml_compiler2_hir::loc::InterfaceLoc<'db>,
         iface_type_args: &[Ty],
         iface_associated_bindings: &[(Name, Ty)],
-        root_iface_qtn: &crate::ty::QualifiedTypeName,
         pkg_items: &'db PackageItems<'db>,
         recv: SelfReceiver<'_>,
         access: &MemberAccess<'_>,
@@ -722,7 +706,6 @@ impl<'db> TypeInferenceBuilder<'db> {
             current_iface_qtn: &current_iface_qtn,
             iface_ns: &iface_ns,
             pkg_items,
-            qualify_symbolic_projection: current_iface_qtn != *root_iface_qtn,
             prefer_symbolic_projections: matches!(recv, SelfReceiver::RigidVar(_)),
         };
 
@@ -758,7 +741,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                         });
                     }
                     self.add_interface_associated_type_bindings(
-                        &iface.binding_inputs(recv.projection_base()),
+                        &iface.binding_inputs(),
                         &mut bindings,
                         &mut diags,
                     );
@@ -845,7 +828,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 .or_insert_with(|| Ty::TypeVar(generic_param.clone(), TyAttr::default()));
         }
         self.add_interface_associated_type_bindings(
-            &iface.binding_inputs(recv.projection_base()),
+            &iface.binding_inputs(),
             &mut bindings,
             &mut diags,
         );
@@ -953,7 +936,6 @@ impl<'db> TypeInferenceBuilder<'db> {
                     &mut diags,
                 )
             };
-            let param_ty = self.resolve_associated_projections_deep(&param_ty);
             params.push(FunctionParamTy {
                 name: Some(param.name.clone()),
                 ty: param_ty,
@@ -962,13 +944,13 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
 
         let lower_signature_ty =
-            |this: &mut Self, te: &baml_compiler2_ast::TypeExpr, diags: &mut Vec<_>| {
+            |_this: &mut Self, te: &baml_compiler2_ast::TypeExpr, diags: &mut Vec<_>| {
                 let ty_expr = Self::substitute_interface_self_in(
                     te,
                     &self_replacement,
                     preserve_self_associated_projections,
                 );
-                let ty = if bindings.is_empty() {
+                if bindings.is_empty() {
                     crate::lower_type_expr::lower_type_expr_in_ns(
                         db,
                         &ty_expr,
@@ -986,8 +968,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                         &bindings,
                         diags,
                     )
-                };
-                this.resolve_associated_projections_deep(&ty)
+                }
             };
         let ret_ty = lower_signature_ty(self, &spec.return_type, &mut diags);
         let throws_ty = lower_signature_ty(self, &spec.throws, &mut diags);

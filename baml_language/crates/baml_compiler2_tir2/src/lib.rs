@@ -25,7 +25,6 @@ pub(crate) const INT_MIN: i64 = !(i64::MAX >> 1);
 pub(crate) const INT_MAX: i64 = i64::MAX >> 1;
 
 pub mod analysis;
-pub mod associated_projection;
 pub mod builder;
 pub mod callable;
 pub mod cycle_detector;

@@ -336,40 +336,30 @@ pub fn lower_type_expr_with_generics(
             }
         }
         TypeExpr::AssociatedTypeProjection {
-            base,
-            interface,
-            member,
-            ..
-        } => Ty::AssociatedTypeProjection {
-            base: Box::new(lower_type_expr_with_generics(
+            base, interface, ..
+        } => {
+            let _ = lower_type_expr_with_generics(
                 db,
                 base,
                 package_items,
                 ns_context,
                 bindings,
                 diagnostics,
-            )),
-            interface: {
-                let interface_ty = interface.as_ref().map(|interface| {
-                    lower_type_expr_with_generics(
-                        db,
-                        interface,
-                        package_items,
-                        ns_context,
-                        bindings,
-                        diagnostics,
-                    )
-                });
-                crate::lower_type_expr::lower_explicit_projection_qualifier(
+            );
+            if let Some(interface) = interface {
+                let _ = lower_type_expr_with_generics(
                     db,
-                    interface_ty,
-                    member,
+                    interface,
+                    package_items,
+                    ns_context,
+                    bindings,
                     diagnostics,
-                )
-            },
-            member: member.clone(),
-            attr: TyAttr::default(),
-        },
+                );
+            }
+            Ty::Error {
+                attr: TyAttr::default(),
+            }
+        }
         // For all other type expressions (primitives, multi-segment paths, etc.),
         // lower normally and then substitute in the result.
         //

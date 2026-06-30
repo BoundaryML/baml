@@ -278,65 +278,6 @@ fn type_bindings_for_params(params: &[Name]) -> FxHashMap<Name, Ty> {
         .collect()
 }
 
-/// Signature-scope type bindings for a method declared directly inside an
-/// interface (a default method or a required-method stub). `Self` is the rigid
-/// type variable bound by the interface, and each associated type — the
-/// interface's own plus those inherited through `requires` — maps to the
-/// projection `Self.<name>`.
-///
-/// This mirrors the bindings [`infer_scope_types`] installs for the method
-/// *body*, so a signature and its body resolve `Item`/`Error`/`Self`
-/// identically. Lowering a signature with these bindings (via
-/// [`crate::generics::lower_type_expr_with_generics`]) keeps associated-type
-/// references as faithful `Self.<name>` projections instead of letting a bare
-/// [`crate::lower_type_expr::lower_type_expr_in_ns`] erase them to `Ty::Unknown`
-/// — which would otherwise reach the runtime lowering boundary and panic.
-///
-/// Callers merge these over the method's in-scope generic parameters (each
-/// mapped to its own `TypeVar`); the keys here (`Self` and the associated-type
-/// names) take precedence.
-pub fn interface_self_projection_bindings(
-    db: &dyn crate::Db,
-    iface_loc: InterfaceLoc<'_>,
-    iface_data: &baml_compiler2_hir::item_tree::Interface,
-    pkg_items: &PackageItems<'_>,
-    ns_context: &[Name],
-) -> FxHashMap<Name, Ty> {
-    let self_var = || Ty::TypeVar(Name::new("Self"), TyAttr::default());
-    let projection = |member: Name| Ty::AssociatedTypeProjection {
-        base: Box::new(self_var()),
-        interface: None,
-        member,
-        attr: TyAttr::default(),
-    };
-
-    let mut bindings = FxHashMap::default();
-    bindings.insert(Name::new("Self"), self_var());
-    for assoc in &iface_data.associated_types {
-        bindings.insert(assoc.name.clone(), projection(assoc.name.clone()));
-    }
-    // Inherited associated types are bound as `Self.<name>` only when the name
-    // is unambiguous. A name inherited from more than one `requires` interface
-    // is excluded from the interface's type-level params (see
-    // `interface_type_level_params_and_bounds`, which applies the same
-    // `count == 1` filter) and must be disambiguated explicitly; binding it to a
-    // single `Self.<name>` projection here would silently resolve an ambiguous
-    // reference and diverge from body inference.
-    let inherited = inherited_interface_associated_type_names(db, iface_loc, pkg_items, ns_context);
-    let mut counts: FxHashMap<Name, usize> = FxHashMap::default();
-    for name in &inherited {
-        *counts.entry(name.clone()).or_default() += 1;
-    }
-    for name in inherited {
-        if counts.get(&name).copied().unwrap_or_default() == 1 {
-            bindings
-                .entry(name.clone())
-                .or_insert_with(|| projection(name));
-        }
-    }
-    bindings
-}
-
 fn install_generic_param_bounds(
     db: &dyn crate::Db,
     builder: &mut TypeInferenceBuilder<'_>,
@@ -1277,13 +1218,7 @@ pub fn infer_scope_types<'db>(
                                 .map(|assoc| {
                                     (
                                         assoc.name.clone(),
-                                        Ty::AssociatedTypeProjection {
-                                            base: Box::new(Ty::TypeVar(
-                                                Name::new("Self"),
-                                                TyAttr::default(),
-                                            )),
-                                            interface: None,
-                                            member: assoc.name.clone(),
+                                        Ty::Error {
                                             attr: TyAttr::default(),
                                         },
                                     )
@@ -1492,16 +1427,9 @@ pub fn infer_scope_types<'db>(
                                 let iface_ns =
                                     baml_compiler2_hir::file_package::file_package(db, iface_file)
                                         .namespace_path;
-                                let self_assoc_projection =
-                                    |member: Name| Ty::AssociatedTypeProjection {
-                                        base: Box::new(Ty::TypeVar(
-                                            Name::new("Self"),
-                                            TyAttr::default(),
-                                        )),
-                                        interface: None,
-                                        member,
-                                        attr: TyAttr::default(),
-                                    };
+                                let self_assoc_projection = |_member: Name| Ty::Error {
+                                    attr: TyAttr::default(),
+                                };
                                 for assoc in &iface_data.associated_types {
                                     if let Some(default) = &assoc.default {
                                         let mut default_diags = Vec::new();
