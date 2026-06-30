@@ -24,7 +24,7 @@ It looks like TypeScript, but every feature is built so agents make fewer mistak
 - Types persist at runtime. There is no `any`.
 - Errors are checked.
 - The filesystem is the namespace.
-- Run it standalone, or call it from any language of your choice (Python, TypeScript, Go, and more).
+- Run BAML standalone, or call it from any language of your choice (Python, TypeScript, Go, and more).
 
 [Explore the website and examples](https://www.boundaryml.com/explore).
 
