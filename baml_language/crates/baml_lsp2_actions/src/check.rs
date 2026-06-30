@@ -4231,7 +4231,8 @@ fn expand_type_alias_rec(
         | Ty::BuiltinUnknown { .. }
         | Ty::Never { .. }
         | Ty::Unknown { .. }
-        | Ty::Error { .. } => ty.clone(),
+        | Ty::Error { .. }
+        | Ty::Infer { .. } => ty.clone(),
     }
 }
 
@@ -5796,6 +5797,7 @@ fn jinja_type_from_type_expr_inner(
         | TypeExprKind::Rust { .. }
         | TypeExprKind::Error { .. }
         | TypeExprKind::Unknown { .. }
+        | TypeExprKind::Infer { .. }
         | TypeExprKind::Path { .. } => Type::Unknown,
     }
 }

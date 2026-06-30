@@ -2157,6 +2157,7 @@ impl<'db> SemanticIndexBuilder<'db> {
             ast::TypeExprKind::Rust { .. } => "$rust_type".to_string(),
             ast::TypeExprKind::Error { .. } => "<error>".to_string(),
             ast::TypeExprKind::Unknown { .. } => "<unknown>".to_string(),
+            ast::TypeExprKind::Infer { .. } => "_".to_string(),
         }
     }
 }

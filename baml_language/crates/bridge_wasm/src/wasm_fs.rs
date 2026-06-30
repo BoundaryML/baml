@@ -161,6 +161,10 @@ impl WasmVfs {
     pub(crate) fn vfs_remove_file(&self, path: &str) -> Result<(), JsValue> {
         self.remove_file(path)
     }
+
+    pub(crate) fn vfs_remove_dir(&self, path: &str) -> Result<(), JsValue> {
+        self.remove_dir(path)
+    }
 }
 
 #[derive(Clone)]
