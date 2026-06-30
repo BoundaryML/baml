@@ -49,8 +49,12 @@ const navStyles = {
   } as React.CSSProperties,
 };
 
+// Fallback star count shown before the live GitHub fetch resolves (or if it
+// fails), so the nav always renders a real number instead of a spinner/blank.
+const FALLBACK_STARS = 8423;
+
 function NavStars() {
-  const [stars, setStars] = useState<number | undefined>(undefined);
+  const [stars, setStars] = useState<number>(FALLBACK_STARS);
   const [hovered, setHovered] = useState(false);
 
   useEffect(() => {
@@ -64,18 +68,11 @@ function NavStars() {
       .catch(() => {});
   }, []);
 
-  const display =
-    stars !== undefined
-      ? (hovered ? stars + 1 : stars).toLocaleString()
-      : '...';
+  const display = (hovered ? stars + 1 : stars).toLocaleString();
 
   return (
     <Link
-      aria-label={
-        stars !== undefined
-          ? `BAML on GitHub, ${stars.toLocaleString()} stars`
-          : 'BAML on GitHub, loading star count'
-      }
+      aria-label={`BAML on GitHub, ${stars.toLocaleString()} stars`}
       className="flex items-center gap-1.5 hover:text-[#6D28D9] transition-colors"
       href="https://github.com/boundaryml/baml"
       onMouseEnter={() => setHovered(true)}
