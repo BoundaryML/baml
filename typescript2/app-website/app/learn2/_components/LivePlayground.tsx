@@ -1,7 +1,9 @@
 'use client';
 
 import {
+  configureProxyEnvVar,
   ExecutionPanel,
+  initPlaygroundEnv,
   type RuntimePort,
   type SourceNavigationTarget,
   WorkerRuntimePort,
@@ -22,6 +24,14 @@ import { registerBaml } from '../_lib/baml-monarch';
 // Self-contained styling: embeds outside the /learn decks (homepage hero)
 // don't import learn2.css at the page level, so bring the l2-live styles in.
 import '../learn2.css';
+
+// Route the WASM runtime's LLM requests through the Boundary gateway proxy (a
+// Cloudflare Worker that injects our provider API keys server-side and bypasses
+// CORS) so visitors can run the playground with no keys of their own. The
+// runtime reads BOUNDARY_PROXY_URL and prepends it to each request URL, so it
+// must include a scheme. `visible: true` surfaces the gateway on/off toggle in
+// the env-vars dialog. Configured at import, before the ExecutionPanel mounts.
+configureProxyEnvVar({ url: 'https://proxy.promptfiddle.com', visible: true });
 
 interface LivePlaygroundProps {
   initialCode: string;
@@ -244,6 +254,13 @@ export default function LivePlayground({
       editorRef.current = editor;
       monacoRef.current = monaco;
       monaco.editor.setTheme(monacoThemeRef.current);
+
+      // Seed playground env defaults once (placeholder provider keys + gateway
+      // on) into pkg-playground's defaultSessionStore — the same store the
+      // ExecutionPanel's `useEnvVars(port)` pushes to the worker. Idempotent
+      // (localStorage-gated) and user-entered keys always win, so a per-mount
+      // call never clobbers anything. No useEffect — done at editor mount.
+      initPlaygroundEnv();
 
       // Showcase highlight: a static whole-line tint marking the entry
       // function of the shipped snippet (not tracked across edits).

@@ -453,37 +453,37 @@ class Verdict {
 
 function classify(text: string) -> Verdict {
   client: "openai/gpt5.5"
-  prompt: #"
+  prompt: \`
     Classify the sentiment of the text. Sarcasm counts
     as the sentiment actually expressed.
-    Text: {{ text }}
-    {{ ctx.output_format }}
-  "#
+    Text: \${text}
+    \${ctx.output_format}
+  \`
 }`;
 
 // `illustrate` lives at the top so the entry point is the first thing you
 // read; the WorkflowPlayground highlights its lines (2-5) by default.
 export const BAML_IMAGE = `// the pipeline: generate an image, then have an LLM describe it
-function illustrate(thing: string) -> string {
-  let img = generate_image(thing);
+function illustrate() -> string {
+  let img = generate_image("a purple lamb");
   describe(img)
 }
 
 function generate_image(thing: string) -> image {
   client: AiGatewayImagen
-  prompt: #"
-    Create an image from this prompt: {{ thing }}
-    {{ ctx.output_format }}
-  "#
+  prompt: \`
+    Create an image from this prompt: \${thing}
+    \${ctx.output_format}
+  \`
 }
 
 function describe(img: image) -> string {
   client: "openai/gpt5.5"
-  prompt: #"
+  prompt: \`
     Describe this image in one vivid sentence.
-    {{ img }}
-    {{ ctx.output_format }}
-  "#
+    \${img}
+    \${ctx.output_format}
+  \`
 }
 
 client AiGatewayImagen {
@@ -719,8 +719,8 @@ function GuessGameAgent() -> GuessResponse {
 
 function generate_famous_person_name(previous_names: string[]) -> string {
     client: "openai-responses/gpt-5.5"
-    prompt: #"
-        {{ _.role("user") }}
+    prompt: \`
+        \${role("user")}
         You are a famous person generator for a "Heads Up" guessing game.
 
         Generate the name of a well-known famous person who:
@@ -733,12 +733,12 @@ function generate_famous_person_name(previous_names: string[]) -> string {
         and NEVER repeat a person you've already suggested.
 
         Already suggested names:
-        {{ previous_names }}
+        \${previous_names}
 
         Examples: Albert Einstein, Beyoncé, Leonardo da Vinci, Oprah Winfrey, Michael Jordan
 
         Return only the person's name, nothing else.
-    "#
+    \`
 }
 
 class GuessResponse {
@@ -757,7 +757,7 @@ function take_guess(
     history: Message[],
 ) -> GuessResponse {
     client: "openai-responses/gpt-5.5"
-    prompt: #"
+    prompt: \`
         You are a helpful game assistant for a "Heads Up" guessing game.
 
         CRITICAL: You know the famous person's name but you must NEVER reveal it in any response.
@@ -778,32 +778,32 @@ function take_guess(
 
         Encourage players to make a guess when they seem to have enough information.
 
-        {{ ctx.output_format }}
+        \${ctx.output_format}
 
         Conversation history:
 
-        {{ history }}
+        \${history}
 
         Famous person:
 
-        {{ famous_person_name }}
+        \${famous_person_name}
 
         Here's the user input:
 
-        {{ user_guess }}
-    "#
+        \${user_guess}
+    \`
 }
 
 function simulate_human_guess(history: Message[]) -> string {
     client: "openai-responses/gpt-5.5"
-    prompt: #"
+    prompt: \`
         You are playing a "Heads Up" guessing game. Given the conversation history,
         you must take a guess at the famous person's name or ask a question about them.
 
         Conversation history:
 
-        {{ history }}
-    "#
+        \${history}
+    \`
 }
 
 class Memory {

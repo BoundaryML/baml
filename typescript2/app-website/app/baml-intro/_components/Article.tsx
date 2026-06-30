@@ -85,15 +85,36 @@ function AnchorLink({ id }: { id: string }) {
   );
 }
 
+/* A small "spec" chip linking the section to its design proposal (BEP) on
+ * beps.boundaryml.com. The site routes on the bare number (/beps/16); the
+ * label shows the canonical zero-padded form (BEP-016). Opens in a new tab. */
+function BepLink({ n }: { n: number }) {
+  const label = `BEP-${String(n).padStart(3, '0')}`;
+  return (
+    <a
+      aria-label={`${label} — read the design proposal`}
+      className="l6-bep font-mono"
+      href={`https://beps.boundaryml.com/beps/${n}`}
+      rel="noreferrer"
+      target="_blank"
+    >
+      {label}
+      <span aria-hidden>{'↗'}</span>
+    </a>
+  );
+}
+
 function Section({
   id,
   num,
   title,
+  bep,
   children,
 }: {
   id: string;
   num?: string;
   title: string;
+  bep?: number;
   children: ReactNode;
 }) {
   return (
@@ -101,6 +122,7 @@ function Section({
       <h2>
         {num ? <span className="l6-num font-mono">{num}</span> : null}
         {title}
+        {bep ? <BepLink n={bep} /> : null}
         <AnchorLink id={id} />
       </h2>
       {children}
@@ -162,32 +184,43 @@ function Part({
  * editor-like frame. Humans get brew, agents get the plugin commands
  * (mirrors the homepage hero's install paths). */
 const TRY_TABS = [
+  { id: 'humans', label: 'for humans' },
+  { id: 'agents', label: 'for agents' },
+] as const;
+
+/* The human install: pick how to get the `baml` wrapper (Homebrew or the
+ * keyless curl one-liner, mirroring the quickstart page), then the same setup
+ * steps. Agents get the plugin commands instead. */
+const HUMAN_INSTALL = [
+  { cmd: 'brew install boundaryml/tap/baml', id: 'brew', label: 'Homebrew' },
   {
-    id: 'humans',
-    label: 'for humans',
-    lines: [
-      'brew install boundaryml/tap/baml',
-      'baml init',
-      'baml agent install',
-      'baml ide install --code',
-    ],
-    prompt: '$ ',
-  },
-  {
-    id: 'agents',
-    label: 'for agents',
-    lines: [
-      '/plugin marketplace add BoundaryML/baml-skill',
-      '/plugin install baml@boundaryml-baml',
-    ],
-    prompt: '',
+    cmd: 'curl -fsSL https://pkg.boundaryml.com/install.sh | sh -s',
+    id: 'curl',
+    label: 'curl',
   },
 ] as const;
+const HUMAN_STEPS = [
+  'baml init',
+  'baml agent install',
+  'baml ide install --code',
+];
+const AGENT_LINES = [
+  '/plugin marketplace add BoundaryML/baml-skill',
+  '/plugin install baml@boundaryml-baml',
+];
+
+type InstallMethod = (typeof HUMAN_INSTALL)[number]['id'];
 
 function TryItTabs() {
   const [tab, setTab] = useState<'humans' | 'agents'>('humans');
+  const [method, setMethod] = useState<InstallMethod>('brew');
   const [copied, setCopied] = useState(false);
-  const active = TRY_TABS.find((t) => t.id === tab) ?? TRY_TABS[0];
+
+  const install =
+    HUMAN_INSTALL.find((m) => m.id === method) ?? HUMAN_INSTALL[0];
+  const lines = tab === 'humans' ? [install.cmd, ...HUMAN_STEPS] : AGENT_LINES;
+  const prompt = tab === 'humans' ? '$ ' : '';
+
   return (
     <div className="l6-block">
       <div className="l6-try font-mono">
@@ -210,7 +243,7 @@ function TryItTabs() {
           <button
             className="l6-try-copy font-mono"
             onClick={() => {
-              navigator.clipboard.writeText(active.lines.join('\n'));
+              navigator.clipboard.writeText(lines.join('\n'));
               setCopied(true);
               setTimeout(() => setCopied(false), 1600);
             }}
@@ -219,12 +252,34 @@ function TryItTabs() {
             {copied ? 'copied!' : 'copy'}
           </button>
         </div>
+        {tab === 'humans' ? (
+          <div
+            aria-label="Install method"
+            className="l6-try-method"
+            role="tablist"
+          >
+            <span className="l6-try-method-cap">install with</span>
+            {HUMAN_INSTALL.map((m) => (
+              <button
+                aria-selected={method === m.id}
+                className={`l6-try-method-btn font-mono${method === m.id ? ' l6-try-method-btn--on' : ''}`}
+                key={m.id}
+                onClick={() => {
+                  setMethod(m.id);
+                  setCopied(false);
+                }}
+                role="tab"
+                type="button"
+              >
+                {m.label}
+              </button>
+            ))}
+          </div>
+        ) : null}
         <div className="l6-try-body">
-          {active.lines.map((line) => (
+          {lines.map((line) => (
             <div key={line}>
-              {active.prompt ? (
-                <span className="l6-try-prompt">{active.prompt}</span>
-              ) : null}
+              {prompt ? <span className="l6-try-prompt">{prompt}</span> : null}
               {line}
             </div>
           ))}
@@ -526,9 +581,7 @@ export function Article({ view = 'all' }: { view?: 'all' | 'intro' | 'deep' }) {
               <p>
                 {'In one sentence: '}
                 <strong style={{ color: 'var(--l6-accent)' }}>BAML</strong>
-                {
-                  ' feels like TypeScript, but with better error handling, no '
-                }
+                {' feels like TypeScript, but with better error handling, no '}
                 <code>any</code>
                 {', and more.'}
               </p>
@@ -579,7 +632,8 @@ export function Article({ view = 'all' }: { view?: 'all' | 'intro' | 'deep' }) {
             {/* ===== Part 1 · A better language ===== */}
             <Part eyebrow="Part 1" id="language" title="A better language">
               <p>
-                BAML aims to be an agent-friendly language. We'll start with the{' '}
+                BAML aims to be an agent-friendly language. In this overview,
+                we'll start with the{' '}
                 <a className="l6-xref" href="#types">
                   syntax and type system decisions
                 </a>{' '}
@@ -673,7 +727,12 @@ export function Article({ view = 'all' }: { view?: 'all' | 'intro' | 'deep' }) {
             </Section>
 
             {/* ---- match ---- */}
-            <Section id="match" num="2" title="Match on types, or values">
+            <Section
+              bep={15}
+              id="match"
+              num="2"
+              title="Match on types, or values"
+            >
               <p>
                 {"Any of 'em work. No need for "}
                 <code>instanceof</code>
@@ -700,13 +759,14 @@ export function Article({ view = 'all' }: { view?: 'all' | 'intro' | 'deep' }) {
 
             {/* ---- error handling ---- */}
             <Section
+              bep={16}
               id="error-handling"
               num="3"
               title="Error handling (it reads like match)"
             >
               <p>
                 {
-                  "TypeScript exceptions have no types, so catching the right one means ugly code. BAML reads every "
+                  'TypeScript exceptions have no types, so catching the right one means ugly code. BAML reads every '
                 }
                 <code>throws</code>
                 {
@@ -743,6 +803,7 @@ export function Article({ view = 'all' }: { view?: 'all' | 'intro' | 'deep' }) {
 
             {/* ---- green threads ---- */}
             <Section
+              bep={34}
               id="threads"
               num="4"
               title="Green threads a.k.a 'async without async'"
@@ -832,6 +893,7 @@ export function Article({ view = 'all' }: { view?: 'all' | 'intro' | 'deep' }) {
 
             {/* ---- namespaces ---- */}
             <Section
+              bep={8}
               id="namespaces"
               num="1"
               title="ls — the filesystem is the namespace structure"
@@ -923,7 +985,7 @@ export function Article({ view = 'all' }: { view?: 'all' | 'intro' | 'deep' }) {
             </Section>
 
             {/* ---- run <function> ---- */}
-            <Section id="run-fn" num="3" title="baml run <function>">
+            <Section bep={27} id="run-fn" num="3" title="baml run <function>">
               <p>
                 {
                   'BAML makes it easy for agents to run any function in your project as if it were a CLI command. Function parameters get parsed automatically and can be set with CLI flags.'
@@ -1055,6 +1117,7 @@ export function Article({ view = 'all' }: { view?: 'all' | 'intro' | 'deep' }) {
 
             {/* ---- incremental adoption ---- */}
             <Section
+              bep={30}
               id="adoption"
               num="1"
               title="Drops into your existing stack"
@@ -1131,11 +1194,7 @@ export function Article({ view = 'all' }: { view?: 'all' | 'intro' | 'deep' }) {
             </Section>
 
             {/* ---- supply chain (aside) ---- */}
-            <Section
-              id="supply-chain"
-              num="3"
-              title="No supply chain attacks"
-            >
+            <Section id="supply-chain" num="3" title="No supply chain attacks">
               <p>
                 {"Okay, to be fair, BAML doesn't "}
                 <em>yet</em>
@@ -1205,6 +1264,7 @@ export function Article({ view = 'all' }: { view?: 'all' | 'intro' | 'deep' }) {
 
             {/* ---- testing ---- */}
             <Section
+              bep={23}
               id="testing"
               num="3"
               title="Write tests anywhere, or load them at runtime"
@@ -1241,15 +1301,20 @@ export function Article({ view = 'all' }: { view?: 'all' | 'intro' | 'deep' }) {
             {/* ---- eval / codemode (coming soon) ---- */}
             <Section id="eval" num="4" title="eval(), but type-safe">
               <p>
-                Agents don't just call tools, they also write and run code. <s>Twitter</s> X calls it codemode.
+                Agents don't just call tools, they also write and run code.{' '}
+                <s>Twitter</s> X calls it codemode.
               </p>
               <p>
-                In python, you would write {' '}
-              <code>eval('print("hello world")')</code>{' '}
-                to do codemode. But {' '}<code>eval</code>{' '} is unsafe and loses all type-safety and predictability.
+                In python, you would write{' '}
+                <code>eval('print("hello world")')</code> to do codemode. But{' '}
+                <code>eval</code> is unsafe and loses all type-safety and
+                predictability.
               </p>
               <p>
-                BAML's reflection APIs give you eval, but with typed compiler errors. If the string has the wrong signature, you can get a runtime-compiler error that you can feed back to the agent so it can fix its code.
+                BAML's reflection APIs give you eval, but with typed compiler
+                errors. If the string has the wrong signature, you can get a
+                runtime-compiler error that you can feed back to the agent so it
+                can fix its code.
               </p>
               <p className="l6-note">
                 Coming soon: the reflection API below isn't available yet.
@@ -1260,15 +1325,24 @@ export function Article({ view = 'all' }: { view?: 'all' | 'intro' | 'deep' }) {
             </Section>
 
             {/* ---- sandboxing (coming soon) ---- */}
-            <Section id="sandboxing" num="5" title="Sandboxing">
+            <Section bep={58} id="sandboxing" num="5" title="Sandboxing">
               <p>
-                Running code an agent just wrote is scary. We've started using machine sandboxing to isolate the code from the rest of the system, but what if we wanted to guarantee that the code doesn't make any network calls? We could just prompt it, but...
+                Running code an agent just wrote is scary. We've started using
+                machine sandboxing to isolate the code from the rest of the
+                system, but what if we wanted to guarantee that the code doesn't
+                make any network calls? We could just prompt it, but...
               </p>
               <p>
-                We can do a bit better. BAML supports mocking any function, whether it's in the standard library or in your own package. You can swap it out with another implementation, and it only works in a certain scope.
+                We can do a bit better. BAML supports mocking any function,
+                whether it's in the standard library or in your own package. You
+                can swap it out with another implementation, and it only works
+                in a certain scope.
               </p>
               <p>
-                This doesn't replace the need for machine sandboxing. {' '}<code>mock</code>{' '} can't sandbox machine state (though vfs's are much simpler now). However, it does give you an option to not require machine sandboxing for every problem.
+                This doesn't replace the need for machine sandboxing.{' '}
+                <code>mock</code> can't sandbox machine state (though vfs's are
+                much simpler now). However, it does give you an option to not
+                require machine sandboxing for every problem.
               </p>
               <p className="l6-note">
                 Coming soon: the mocking primitive below isn't available yet.

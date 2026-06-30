@@ -89,8 +89,8 @@
      text rather than spanning the full page. */
   --l6-bw: min(880px, calc(100vw - 2 * var(--l6-gutter)));
   width: var(--l6-bw);
-  margin-left: calc(50% - var(--l6-bw) / 2);
   margin-right: 0;
+  margin-left: calc(50% - var(--l6-bw) / 2);
 }
 .l6-breakout--xl {
   --l6-bw: min(1400px, calc(100vw - 2 * var(--l6-gutter)));
@@ -174,8 +174,8 @@
 .l6 .l2-errorlens {
   display: inline-block;
   max-width: 34ch;
-  white-space: pre-wrap;
   vertical-align: top;
+  white-space: pre-wrap;
 }
 
 .l6 h1 {
@@ -246,8 +246,8 @@
   display: inline-flex;
   align-items: center;
   margin-left: 0.4em;
-  color: var(--l6-soft);
   vertical-align: middle;
+  color: var(--l6-soft);
   opacity: 0;
   transition:
     opacity 140ms ease,
@@ -298,6 +298,35 @@
 .l6-link:hover {
   border-bottom-color: var(--l6-accent);
 }
+/* "Spec" chip in a section header linking to its design proposal (BEP). Small,
+   monospace, accent-tinted pill that sits after the title and before the share
+   anchor. Always visible (unlike the hover-only anchor) so the reference is
+   discoverable. */
+.l6-bep {
+  display: inline-flex;
+  gap: 0.2em;
+  align-items: center;
+  padding: 2px 8px;
+  margin-left: 0.55em;
+  font-size: 11px;
+  font-weight: 500;
+  vertical-align: middle;
+  color: var(--l6-accent);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  text-decoration: none;
+  background: rgba(109, 40, 217, 0.07);
+  border: 1px solid rgba(109, 40, 217, 0.28);
+  border-radius: 999px;
+  transition:
+    background 140ms ease,
+    border-color 140ms ease;
+}
+.l6-bep:hover {
+  background: rgba(109, 40, 217, 0.14);
+  border-color: var(--l6-accent);
+}
+
 /* In-prose cross-reference jumps to other sections — keep the underlined look
    of plain emphasis, but make them clickable and tint on hover. */
 .l6-xref {
@@ -341,9 +370,9 @@
   text-indent: -1.5rem;
 }
 .l6-tenet::before {
-  content: "—";
   margin-right: 0.7rem;
   color: var(--l6-accent);
+  content: "—";
 }
 
 /* ---- homepage CTAs (after the design philosophy list) ---- */
@@ -357,8 +386,8 @@
   display: block;
   width: 100%;
   height: auto;
-  border-radius: 12px;
   border: 1px solid var(--l6-code-border, #34343a);
+  border-radius: 12px;
 }
 
 /* subtle, centered text-only community link (between parts) */
@@ -382,8 +411,8 @@
 }
 .l6-cta {
   display: inline-flex;
-  align-items: center;
   gap: 0.5rem;
+  align-items: center;
   padding: 0.7rem 1.3rem;
   font-size: 15px;
   font-weight: 550;
@@ -651,6 +680,39 @@
 .l6-try-copy:hover {
   color: var(--l6-ink);
 }
+/* Install-method toggle (Homebrew / curl) — a secondary row under the head,
+   shown only on the "for humans" tab. Lighter than the main tabs. */
+.l6-try-method {
+  display: flex;
+  gap: 0.3rem;
+  align-items: center;
+  padding: 8px 10px 0;
+}
+.l6-try-method-cap {
+  margin-right: 0.15rem;
+  font-size: 10px;
+  color: var(--l6-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.l6-try-method-btn {
+  padding: 2px 9px;
+  font-size: 10.5px;
+  color: var(--l6-muted);
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 999px;
+}
+.l6-try-method-btn:hover {
+  color: var(--l6-ink);
+}
+.l6-try-method-btn--on {
+  color: var(--l6-accent);
+  background: #fffdf7;
+  border-color: #d8cfbd;
+}
 .l6-try-body {
   padding: 0.75rem 0.95rem;
   font-size: 13px;
@@ -740,15 +802,15 @@
   justify-content: center;
   min-height: 180px;
   padding: 1.4rem 1.6rem;
-  text-align: center;
   color: var(--l6-muted);
+  text-align: center;
   background: #fffdf6;
   border: 1px dashed var(--l6-rule);
   border-radius: 10px;
 }
 .l6-sdk-soon-pane p {
-  margin: 0;
   max-width: 28ch;
+  margin: 0;
   line-height: 1.5;
 }
 
@@ -1080,18 +1142,18 @@
   border-bottom: 2px solid var(--l6-accent);
 }
 .l6 .l2-code-head--baml .l2-code-name {
-  color: var(--l6-baml-name, #6d28d9);
   font-weight: 600;
+  color: var(--l6-baml-name, #6d28d9);
 }
 /* swap the generic window dots for the BAML lamb — these are BAML "IDEs". */
 .l6 .l2-code-head--baml .l2-code-dots {
   display: none;
 }
 .l6 .l2-code-head--baml::before {
-  content: "";
   flex: none;
   width: 18px;
   height: 18px;
+  content: "";
   background: url("/bamllogopurple.svg") center / contain no-repeat;
 }
 /* on dark frames, use the white lamb + lighten the filename so both read on
@@ -1162,15 +1224,15 @@
   .l2-bamled-loading,
 .l6:is([data-code-theme="dark"], [data-code-theme="midnight"])
   .l2-live-loading {
-  background: var(--l6-code-bg);
   color: var(--l6-code-name);
+  background: var(--l6-code-bg);
 }
 /* The loading veil over the result pane is a translucent white wash on the
    cream page; on dark frames that flashes a bright box, so swap it for a dark
    wash and lift the label/spinner to a readable tone. */
 .l6:is([data-code-theme="dark"], [data-code-theme="midnight"]) .l2-live-veil {
-  background: color-mix(in srgb, var(--l6-code-bg) 72%, transparent);
   color: var(--l6-code-name);
+  background: color-mix(in srgb, var(--l6-code-bg) 72%, transparent);
 }
 
 /* Diagnostics + line highlights are tuned for the cream page; on dark frames

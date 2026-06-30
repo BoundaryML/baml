@@ -105,8 +105,15 @@ function runtimeForCommand(
 // Env vars
 // ---------------------------------------------------------------------------
 
+// Internal env vars the runtime probes optionally — resolve to undefined when
+// unset rather than prompting. BOUNDARY_PROXY_URL is controlled solely by the
+// gateway toggle: when off it's simply absent (no proxy), and a missing-key
+// popup for it would make no sense. Every other unset var still opens the popup.
+const OPTIONAL_INTERNAL_ENV = new Set<string>(['BOUNDARY_PROXY_URL']);
+
 function resolveEnv(variable: string): Promise<string | undefined> {
   if (variable in envVars) return Promise.resolve(envVars[variable]);
+  if (OPTIONAL_INTERNAL_ENV.has(variable)) return Promise.resolve(undefined);
   return new Promise<string | undefined>((resolve) => {
     const id = nextEnvReqId++;
     pendingEnvResolvers.set(id, resolve);
