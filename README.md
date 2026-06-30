@@ -40,3 +40,5 @@ See our [guide on getting started](/CONTRIBUTING.md).
 Made with ❤️ by Boundary. HQ in Seattle, WA.
 
 We're hiring software engineers who love Rust. [Email us](mailto:founders@boundaryml.com) or reach out on [Discord](https://discord.gg/ENtBB6kkXH).
+
+P.S. BAML is Basically, A Made-up Language (but we promise this is a real project).
