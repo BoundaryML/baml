@@ -10966,48 +10966,28 @@ impl<'db> TypeInferenceBuilder<'db> {
         let actual_ty = self.expand_alias_chains(actual_ty.clone());
         let mut candidate = None;
 
+        // The actual may itself be an interface / type-var whose `requires` closure reaches the
+        // formal interface.
         if let Some(view) = self.interface_view_in_requires_closure(&actual_ty, formal_qtn)
             && !self.merge_interface_inference_candidate(&mut candidate, view)
         {
             return None;
         }
 
+        // A concrete actual's interfaces come from its own impls. `type_impls` matches the impl
+        // head and discharges its bounds, so each `implemented_interface` is the realized view
+        // (`ArrayIterator<int>` provides `Iterator<int, never>`) — no manual pattern-match or
+        // `implements_interface` recheck needed. Keep the one whose `requires` closure reaches
+        // the formal interface.
         let db = self.context.db();
-        for pkg_id in
-            self.registry_packages_for_interface_lookup(Some(&actual_ty), Some(formal_qtn))
-        {
-            let registry = crate::interfaces::package_implements_registry(db, pkg_id);
-            for rule in &registry.interface_impl_rules {
-                let Some(bindings) = crate::interfaces::match_ty_pattern(
-                    &rule.for_ty_pattern,
-                    &actual_ty,
-                    &rule.generic_params,
-                    &self.aliases,
-                ) else {
-                    continue;
-                };
-                let implemented_iface =
-                    crate::generics::substitute_ty(&rule.interface_ty, &bindings);
-                let Some(view) =
-                    self.interface_view_in_requires_closure(&implemented_iface, formal_qtn)
-                else {
-                    continue;
-                };
-                let Some(requested) = implemented_iface.as_interface() else {
-                    continue;
-                };
-                if !crate::interfaces::implements_interface(
-                    db,
-                    &actual_ty,
-                    &requested,
-                    &self.aliases,
-                    |actual, bound| self.is_subtype(actual, bound),
-                ) {
-                    continue;
-                }
-                if !self.merge_interface_inference_candidate(&mut candidate, view) {
-                    return None;
-                }
+        for resolved_impl in self.type_impls(&actual_ty) {
+            let implemented = resolved_impl.implemented_interface(db).to_ty();
+            let Some(view) = self.interface_view_in_requires_closure(&implemented, formal_qtn)
+            else {
+                continue;
+            };
+            if !self.merge_interface_inference_candidate(&mut candidate, view) {
+                return None;
             }
         }
 
@@ -11843,10 +11823,11 @@ impl<'db> TypeInferenceBuilder<'db> {
         self.concrete_interface_field_sources(&impls, field_name)
             .into_iter()
             .find(|source| {
-                &source.iface_qtn == target_iface_name
-                    && source.iface_args.len() == target_iface_args.len()
+                &source.interface.name == target_iface_name
+                    && source.interface.generics.len() == target_iface_args.len()
                     && source
-                        .iface_args
+                        .interface
+                        .generics
                         .iter()
                         .zip(target_iface_args)
                         .all(|(a, b)| baml_type::normalize::equivalent(a, b, &NormalizeCtx(self)))
@@ -11878,15 +11859,22 @@ impl<'db> TypeInferenceBuilder<'db> {
         // The field's declared type lives in the interface's scope, its generic params bound
         // to the realized interface args.
         let db = self.context.db();
+        // `iface_loc` reads the field; `interface` supplies the realized args. Derived from one
+        // interface at construction — assert they haven't drifted apart.
+        debug_assert_eq!(
+            crate::interfaces::interface_loc_qtn(db, source.iface_loc).as_ref(),
+            Some(&source.interface.name),
+            "ConcreteFieldSource.iface_loc and .interface must name the same interface",
+        );
         let iface_tree = baml_compiler2_hir::file_item_tree(db, source.iface_loc.file(db));
         let iface_data = iface_tree.interfaces.get(&source.iface_loc.id(db))?;
         let field = iface_data.fields.iter().find(|f| f.name == *field_name)?;
-        let iface_pkg_items = self.resolve_class_pkg_items(source.iface_qtn.package())?;
+        let iface_pkg_items = self.resolve_class_pkg_items(source.interface.name.package())?;
         let iface_ns =
             baml_compiler2_hir::file_package::file_package(db, source.iface_loc.file(db))
                 .namespace_path;
         let bindings =
-            crate::generics::bind_type_vars(&iface_data.generic_params, &source.iface_args);
+            crate::generics::bind_type_vars(&iface_data.generic_params, &source.interface.generics);
         let declared_ty = field
             .type_expr
             .as_ref()
@@ -11920,62 +11908,6 @@ impl<'db> TypeInferenceBuilder<'db> {
                 attr: TyAttr::default(),
             });
         Some((source.class_field, declared_ty))
-    }
-
-    fn type_package_name(ty: &Ty) -> Option<Name> {
-        match ty {
-            Ty::Class(qtn, _, _)
-            | Ty::Enum(qtn, _)
-            | Ty::Interface(qtn, _, _, _)
-            | Ty::TypeAlias(qtn, _) => Some(qtn.package().clone()),
-            Ty::Union(members, _) => {
-                let mut out = None;
-                for member in members {
-                    let Some(pkg) = Self::type_package_name(member) else {
-                        continue;
-                    };
-                    match &out {
-                        Some(existing) if existing != &pkg => return None,
-                        None => out = Some(pkg),
-                        _ => {}
-                    }
-                }
-                out
-            }
-            _ => None,
-        }
-    }
-
-    fn registry_packages_for_interface_lookup(
-        &self,
-        actual_ty: Option<&Ty>,
-        target_iface_qtn: Option<&crate::ty::QualifiedTypeName>,
-    ) -> Vec<PackageId<'db>> {
-        let db = self.context.db();
-        let mut names = Vec::new();
-        let mut seen = FxHashSet::default();
-        let mut push_name = |name: Name| {
-            if seen.insert(name.clone()) {
-                names.push(name);
-            }
-        };
-
-        push_name(self.package_id.name(db));
-        for (dep_name, _) in &self.res_ctx.dep_interfaces {
-            push_name(dep_name.clone());
-        }
-        if let Some(pkg) = actual_ty.and_then(Self::type_package_name) {
-            push_name(pkg);
-        }
-        if let Some(qtn) = target_iface_qtn {
-            push_name(qtn.package().clone());
-        }
-
-        names
-            .into_iter()
-            .filter(|name| self.res_ctx.items_for_package(db, name).is_some())
-            .map(|name| PackageId::new(db, name))
-            .collect()
     }
 
     /// Check whether an enum has a variant with the given name.

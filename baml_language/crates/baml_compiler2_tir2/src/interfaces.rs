@@ -967,20 +967,6 @@ fn contains_rule_match_symbolic_ty(ty: &Ty) -> bool {
     }
 }
 
-#[deprecated = "L2 single-pair rule unifier. The kept multi-pair matcher is \
-    `match_ty_patterns` (used by L1 `get_implements_block`); this single-pair form \
-    serves only the registry rule-walks being migrated off `package_implements_registry`."]
-pub fn match_ty_pattern(
-    pattern: &Ty,
-    concrete: &Ty,
-    generic_params: &[Name],
-    aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
-) -> Option<TypeBindings> {
-    let mut bindings = TypeBindings::default();
-    match_ty_pattern_into(pattern, concrete, generic_params, aliases, &mut bindings)?;
-    Some(bindings)
-}
-
 /// Match several `(pattern, concrete)` pairs into one consistent set of
 /// bindings, threading them across every pair — a `generic_param` that occurs
 /// in more than one pattern must unify to the same type in all of them. Returns
@@ -1824,18 +1810,16 @@ mod tests {
         let params = vec![Name::new("T")];
 
         assert!(
-            match_ty_pattern(
-                &pattern,
-                &good,
+            match_ty_patterns(
+                &[(&pattern, &good)],
                 &params,
                 &std::collections::HashMap::default()
             )
             .is_some()
         );
         assert!(
-            match_ty_pattern(
-                &pattern,
-                &bad,
+            match_ty_patterns(
+                &[(&pattern, &bad)],
                 &params,
                 &std::collections::HashMap::default()
             )
@@ -1855,9 +1839,8 @@ mod tests {
         );
         let params = vec![Name::new("T")];
 
-        let bindings = match_ty_pattern(
-            &pattern,
-            &actual,
+        let bindings = match_ty_patterns(
+            &[(&pattern, &actual)],
             &params,
             &std::collections::HashMap::default(),
         )
@@ -1956,9 +1939,8 @@ mod tests {
         let same_short_name = class(&["beta"], "Thing", vec![]);
 
         assert!(
-            match_ty_pattern(
-                &pattern,
-                &same_short_name,
+            match_ty_patterns(
+                &[(&pattern, &same_short_name)],
                 &[],
                 &std::collections::HashMap::default()
             )
@@ -1973,9 +1955,8 @@ mod tests {
         let actual = Ty::Union(vec![string(), int()], TyAttr::default());
         let params = vec![Name::new("T")];
 
-        let bindings = match_ty_pattern(
-            &pattern,
-            &actual,
+        let bindings = match_ty_patterns(
+            &[(&pattern, &actual)],
             &params,
             &std::collections::HashMap::default(),
         )

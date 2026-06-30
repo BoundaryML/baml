@@ -986,4 +986,33 @@ impl<'db> ResolvedImpl<'db> {
         }
         None
     }
+
+    /// The interface this impl provides at its resolved instantiation: the declared interface
+    /// with the impl's [`bindings`](Self::bindings) substituted in — `impl<U> I<U> for Box<U>`
+    /// resolved at `Box<int>` yields `I<int>`, and at `Box<T>` (a generic caller) yields
+    /// `I<T>`. NOT necessarily typevar-free: a generic caller's *rigid* params survive
+    /// realization, so this is an [`Interface`] *constraint*, deliberately not a
+    /// `RealizedInterface`.
+    pub fn implemented_interface(&self, db: &'db dyn crate::Db) -> baml_type::Interface {
+        // A `ResolvedImpl` is only ever constructed for an `impl_data`-Ok impl — every producer
+        // (`impls_for_type`, `get_implements_block`) filters with `let Ok(data) = ...` — and an
+        // Ok impl resolved its interface target (`InterfaceUnresolved` would be the `Err`), so
+        // its loc always has a qualified name. Both branches below are therefore unreachable.
+        let data = impl_data(db, self.impl_loc)
+            .as_ref()
+            .unwrap_or_else(|_| unreachable!("a ResolvedImpl carries an impl_data-Ok impl"));
+        let name = interface_loc_qtn(db, data.interface)
+            .unwrap_or_else(|| unreachable!("an impl_data-Ok impl has a named interface target"));
+        let generics = data
+            .interface_args
+            .iter()
+            .map(|arg| substitute_ty(arg, &self.bindings))
+            .collect();
+        let associated_types = data
+            .associated_types
+            .iter()
+            .map(|(name, ty)| (name.clone(), substitute_ty(ty, &self.bindings)))
+            .collect();
+        baml_type::Interface::new(name, generics, associated_types)
+    }
 }

@@ -165,20 +165,20 @@ fn split_params(
 /// [`TypeInferenceBuilder::concrete_interface_field_sources`].
 pub(super) struct ConcreteFieldSource<'db> {
     pub(super) iface_loc: baml_compiler2_hir::loc::InterfaceLoc<'db>,
-    pub(super) iface_qtn: crate::ty::QualifiedTypeName,
-    pub(super) iface_args: Vec<Ty>,
+    pub(super) interface: baml_type::Interface,
     pub(super) class_field: Name,
 }
 
-/// One realized interface a union arm provides (implements or `requires`): its decl loc plus
-/// the applied generic args and associated-type bindings. A union's member surface is the
+/// One interface a union arm provides (implements or `requires`): its decl loc (the HIR handle
+/// for member reads) plus the realized [`baml_type::Interface`] constraint — the interface head
+/// with the providing impl's bindings substituted in. A union's member surface is the
 /// *intersection* of these across all arms — an existential `dyn (I1 + I2 + ...)` — so an
-/// interface is shared only when every arm provides it at the same args AND associated
-/// bindings (the existential uniformity constraint).
+/// interface is shared only when every arm provides the *same* realized `Interface` (its
+/// derived `Eq` keys on name + generics + associated bindings — the existential uniformity
+/// constraint — with binding order canonicalized by `Interface::new`).
 struct ArmInterface<'db> {
     iface_loc: baml_compiler2_hir::loc::InterfaceLoc<'db>,
-    type_args: Vec<Ty>,
-    associated_bindings: Vec<(Name, Ty)>,
+    interface: baml_type::Interface,
 }
 
 /// Whether a shared interface declares the queried member as a field or a method — selects
@@ -317,7 +317,12 @@ impl<'db> TypeInferenceBuilder<'db> {
         if field_sources.len() >= 2 {
             let sources = field_sources
                 .iter()
-                .map(|s| Name::new(format_interface_display(s.iface_qtn.name(), &s.iface_args)))
+                .map(|s| {
+                    Name::new(format_interface_display(
+                        s.interface.name.name(),
+                        &s.interface.generics,
+                    ))
+                })
                 .collect();
             self.context.report_at_member(
                 TirTypeError::AmbiguousInterfaceField {
@@ -334,8 +339,8 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
         if let Some(source) = field_sources.into_iter().next() {
             let interface_name = Name::new(format_interface_display(
-                source.iface_qtn.name(),
-                &source.iface_args,
+                source.interface.name.name(),
+                &source.interface.generics,
             ));
             self.context.report_at_member(
                 TirTypeError::InterfaceFieldRequiresProjection {
@@ -438,9 +443,6 @@ impl<'db> TypeInferenceBuilder<'db> {
             let Ok(data) = crate::interfaces::impl_data(db, resolved_impl.impl_loc) else {
                 continue;
             };
-            let Some(iface_qtn) = crate::interfaces::interface_loc_qtn(db, data.interface) else {
-                continue;
-            };
             let declares_field = baml_compiler2_hir::file_item_tree(db, data.interface.file(db))
                 .interfaces
                 .get(&data.interface.id(db))
@@ -448,11 +450,10 @@ impl<'db> TypeInferenceBuilder<'db> {
             if !declares_field {
                 continue;
             }
-            // Coherence forbids two impls of the same realized interface; dedup defensively.
-            if sources
-                .iter()
-                .any(|s| s.iface_qtn == iface_qtn && s.iface_args == data.interface_args)
-            {
+            // The realized interface (the impl's bindings substituted into its head), keyed for
+            // dedup — coherence forbids two impls of the same realized interface anyway.
+            let interface = resolved_impl.implemented_interface(db);
+            if sources.iter().any(|s| s.interface == interface) {
                 continue;
             }
             let class_field = data
@@ -463,8 +464,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 .unwrap_or_else(|| field.clone());
             sources.push(ConcreteFieldSource {
                 iface_loc: data.interface,
-                iface_qtn,
-                iface_args: data.interface_args.clone(),
+                interface,
                 class_field,
             });
         }
@@ -506,20 +506,28 @@ impl<'db> TypeInferenceBuilder<'db> {
                 .resolve_member_through_shared_interface(ai, union_ty, member, at, bound)
             {
                 Some(ty) => UnionMemberResolution::Resolved(ty),
-                None => unresolved(),
+                // `interface_member_kind` already confirmed this interface declares `member`,
+                // and per-interface resolution reads the same `iface_data`, so this is
+                // unreachable — fall back to unresolved rather than panic in release.
+                None => {
+                    debug_assert!(
+                        false,
+                        "a shared interface declares `{member}` (per interface_member_kind) but \
+                         resolving it through that interface failed",
+                    );
+                    unresolved()
+                }
             },
             // ≥2 shared interfaces declare `member`: resolving it would silently pick one. The
             // receiver renders as the union; the `as<I>` projection hint in the diagnostic
             // still applies (`union.as<I>.member`).
             _ => {
                 let is_field = declaring[0].1 == UnionMemberKind::Field;
-                let db = self.context.db();
                 let receiver = Name::new(union_ty.render_user_facing());
                 let sources: Vec<String> = declaring
                     .iter()
-                    .filter_map(|(ai, _)| {
-                        let qtn = crate::interfaces::interface_loc_qtn(db, ai.iface_loc)?;
-                        Some(format_interface_display(qtn.name(), &ai.type_args))
+                    .map(|(ai, _)| {
+                        format_interface_display(ai.interface.name.name(), &ai.interface.generics)
                     })
                     .collect();
                 let err = if is_field {
@@ -557,7 +565,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             shared.retain(|s| {
                 arm_ifaces
                     .iter()
-                    .any(|other| self.same_realized_interface(s, other))
+                    .any(|other| s.interface == other.interface)
             });
         }
         shared
@@ -585,10 +593,12 @@ impl<'db> TypeInferenceBuilder<'db> {
                     db, root_loc, args, assoc, pkg_items, &pkg_ns,
                 )
                 .into_iter()
-                .map(|(iface_loc, type_args, associated_bindings)| ArmInterface {
-                    iface_loc,
-                    type_args,
-                    associated_bindings,
+                .filter_map(|(iface_loc, type_args, associated_bindings)| {
+                    let name = crate::interfaces::interface_loc_qtn(db, iface_loc)?;
+                    Some(ArmInterface {
+                        iface_loc,
+                        interface: baml_type::Interface::new(name, type_args, associated_bindings),
+                    })
                 })
                 .collect()
             }
@@ -596,6 +606,9 @@ impl<'db> TypeInferenceBuilder<'db> {
                 Some(bound) => self.union_arm_interfaces(&bound.clone()),
                 None => Vec::new(),
             },
+            // A concrete arm's interfaces come from its own impls, with each impl's bindings
+            // substituted into the interface head — so a blanket `impl<U> I<U> for Box<U>` at
+            // `Box<int>` yields the *realized* `I<int>`, not the impl-space `I<U>`.
             _ => self
                 .type_impls(arm)
                 .iter()
@@ -605,33 +618,11 @@ impl<'db> TypeInferenceBuilder<'db> {
                     };
                     Some(ArmInterface {
                         iface_loc: data.interface,
-                        type_args: data.interface_args.clone(),
-                        associated_bindings: data.associated_types.clone(),
+                        interface: resolved_impl.implemented_interface(db),
                     })
                 })
                 .collect(),
         }
-    }
-
-    /// Two realized interfaces are the same instantiation: same decl, equivalent generic args,
-    /// and equivalent associated bindings (matched by name, order-independent).
-    fn same_realized_interface(&self, a: &ArmInterface<'db>, b: &ArmInterface<'db>) -> bool {
-        if a.iface_loc != b.iface_loc
-            || a.type_args.len() != b.type_args.len()
-            || a.associated_bindings.len() != b.associated_bindings.len()
-        {
-            return false;
-        }
-        let ctx = NormalizeCtx(self);
-        a.type_args
-            .iter()
-            .zip(&b.type_args)
-            .all(|(x, y)| baml_type::normalize::equivalent(x, y, &ctx))
-            && a.associated_bindings.iter().all(|(name, ty)| {
-                b.associated_bindings.iter().any(|(other_name, other_ty)| {
-                    other_name == name && baml_type::normalize::equivalent(ty, other_ty, &ctx)
-                })
-            })
     }
 
     /// Whether interface `iface_loc` declares `member`, and as which kind. Side-effect-free —
@@ -673,14 +664,20 @@ impl<'db> TypeInferenceBuilder<'db> {
         at: ExprId,
         bound: bool,
     ) -> Option<Ty> {
-        let db = self.context.db();
-        let qtn = crate::interfaces::interface_loc_qtn(db, ai.iface_loc)?;
-        let pkg_items = self.resolve_class_pkg_items(qtn.package())?;
+        // The loc reads the members; the `interface` supplies the realized args/qtn. They are
+        // derived from the same interface at construction, but nothing in the type forbids a
+        // future divergence that would read one interface's members and bind another's args.
+        debug_assert_eq!(
+            crate::interfaces::interface_loc_qtn(self.context.db(), ai.iface_loc).as_ref(),
+            Some(&ai.interface.name),
+            "ArmInterface.iface_loc and .interface must name the same interface",
+        );
+        let pkg_items = self.resolve_class_pkg_items(ai.interface.name.package())?;
         self.resolve_member_on_one_interface(
             ai.iface_loc,
-            &ai.type_args,
-            &ai.associated_bindings,
-            &qtn,
+            &ai.interface.generics,
+            &ai.interface.associated_types,
+            &ai.interface.name,
             pkg_items,
             SelfReceiver::Union(union_ty),
             &MemberAccess { member, at, bound },
