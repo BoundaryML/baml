@@ -91,10 +91,8 @@ impl TestArgs {
             .ok_or_else(|| anyhow!("No project context"))?;
 
         // ── 2. Diagnostics ─────────────────────────────────────────────────
-        // One "Compiling" spinner stays up for the whole diagnostics +
-        // bytecode-build span below; a separate "Checking" line (or a second
-        // "Compiling") would just repeat the file count.
-        reporter.spin("Compiling", format!("{} file(s)", baml_files.len()));
+        // Keep `baml test` quiet during the compile phase. `baml check` and
+        // `baml generate` own the compile/count progress lines.
         let source_files = db.get_source_files();
         let diagnostics = baml_project::collect_diagnostics(&db, project, &source_files);
         let errors: Vec<_> = diagnostics
@@ -127,8 +125,6 @@ impl TestArgs {
         let legacy = discover_legacy_tests(&db, project);
 
         // ── 4. Compile + engine + runtime ──────────────────────────────────
-        // The "Compiling N file(s)" spinner from step 2 is still up — no need
-        // to re-issue it here.
         let compile_options = baml_compiler2_emit::CompileOptions {
             emit_test_cases: true,
         };

@@ -101,6 +101,38 @@ fn pack_e2e_root_main() {
     assert!(String::from_utf8_lossy(&out.stdout).contains("hi, Ada"));
 }
 
+/// `baml pack` keeps packaging progress, but should not emit the compile
+/// file-count status pair reserved for `check` and `generate`.
+#[test]
+fn pack_e2e_omits_compile_file_status() {
+    let built = common::ensure_built();
+    let tmp = tempfile::tempdir().unwrap();
+    common::write_project(
+        tmp.path(),
+        "function main() -> string { \"packed quietly\" }\n",
+    );
+    let out_bin = tmp.path().join("out");
+
+    let output = Command::new(&built.baml_cli)
+        .arg("pack")
+        .arg("--from")
+        .arg(tmp.path())
+        .arg("-o")
+        .arg(&out_bin)
+        .arg("main")
+        .output()
+        .expect("spawn baml-cli pack");
+
+    assert!(
+        output.status.success(),
+        "pack failed: {:?}\nstdout: {}\nstderr: {}",
+        output.status.code(),
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+    common::assert_no_compile_file_status(&String::from_utf8_lossy(&output.stderr));
+}
+
 /// `--function` produces a subcommand-mode binary even with a single
 /// target. The function name becomes `argv[1]` and parameter flags
 /// follow it — a different dispatch path than the positional `pack
