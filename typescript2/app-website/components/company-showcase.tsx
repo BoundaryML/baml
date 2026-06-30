@@ -1,9 +1,6 @@
 'use client';
 
-import { useTheme } from 'next-themes';
 import Image from 'next/image';
-
-const BRANDFETCH_CLIENT_ID = '1idQbe1D_SxVi_WjGRi';
 
 const customerLogos = [
   {
@@ -47,19 +44,10 @@ function LogoCell({ alt, src }: { alt: string; src: string }) {
 }
 
 export function CompanyShowcase() {
-  const theme = useTheme();
-  const isDark = theme.theme === 'dark';
-
-  const logosWithUrls = customerLogos.map((logo) => {
-    if (logo.type === 'brandfetch') {
-      const themeSegment = isDark ? 'theme/light' : 'theme/dark';
-      return {
-        alt: logo.alt,
-        src: `https://cdn.brandfetch.io/${logo.domain}/w/256/h/128/${themeSegment}/symbol?c=${BRANDFETCH_CLIENT_ID}`,
-      };
-    }
-    return { alt: logo.alt, src: logo.src };
-  });
+  const logosWithUrls = customerLogos.map((logo) => ({
+    alt: logo.alt,
+    src: logo.src,
+  }));
 
   return (
     <section

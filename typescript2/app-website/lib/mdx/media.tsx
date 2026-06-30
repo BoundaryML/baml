@@ -5,15 +5,14 @@ import { useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 
 export function MDXMedia({
-  src,
-  alt,
+  // Defaults narrow src/alt to `string` while matching MDX's `img` slot, whose
+  // props type them as optional.
+  src = '',
+  alt = '',
 }: React.DetailedHTMLProps<
   React.ImgHTMLAttributes<HTMLImageElement>,
   HTMLImageElement
-> & {
-  src: string;
-  alt: string;
-}) {
+>) {
   const [hasBeenFullyVisible, setHasBeenFullyVisible] = useState(false);
   const imageRef = useRef<HTMLSpanElement>(null);
   const isGif = src.toLowerCase().endsWith('.gif');

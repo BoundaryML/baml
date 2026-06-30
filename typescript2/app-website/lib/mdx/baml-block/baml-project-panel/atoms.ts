@@ -155,13 +155,21 @@ export const CodeMirrorDiagnosticsAtom = atom((get) => {
 
 export const isPanelVisibleAtom = atom(false);
 
+// SSR fallback: createJSONStorage's getter must return a string storage, not
+// `undefined`, so hand back a no-op when localStorage isn't available.
+const noopStringStorage = {
+  getItem: () => null,
+  setItem: () => {},
+  removeItem: () => {},
+};
+
 const browserStorage = createJSONStorage<{
   [key: string]: string | undefined;
 }>(() =>
   typeof window !== 'undefined' &&
   typeof window.localStorage?.getItem === 'function'
     ? window.localStorage
-    : undefined,
+    : noopStringStorage,
 );
 
 export const envVarsAtom = atomWithStorage<{

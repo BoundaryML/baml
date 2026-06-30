@@ -52,10 +52,10 @@ function rehypeFixInvalidNesting() {
 export async function PostBody({ children }: { children: string }) {
   const { content }: CompileMDXResult = await compileMDX({
     components: mdxComponents,
-    // Blog MDX uses JS expressions in props (e.g. DevSpotlight users={[...]}, SapTechniqueTitle takeaways={{...}}).
-    // Content is trusted (from repo). blockDangerousJS stays default for safety.
-    blockJS: false,
     options: {
+      // Blog MDX uses JS expressions in props (e.g. DevSpotlight users={[...]}, SapTechniqueTitle takeaways={{...}}).
+      // Content is trusted (from repo). blockDangerousJS stays default for safety.
+      blockJS: false,
       mdxOptions: {
         format: 'mdx',
         rehypePlugins: [

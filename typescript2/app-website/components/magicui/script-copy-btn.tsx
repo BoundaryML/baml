@@ -7,7 +7,9 @@ import { type HTMLAttributes, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
-interface ScriptCopyBtnProps extends HTMLAttributes<HTMLDivElement> {
+// Omit the DOM `onCopy` (ClipboardEventHandler) so our command-string `onCopy`
+// callback below doesn't conflict with it.
+interface ScriptCopyBtnProps extends Omit<HTMLAttributes<HTMLDivElement>, 'onCopy'> {
   showMultiplePackageOptions?: boolean;
   codeLanguage: string;
   lightTheme: string;

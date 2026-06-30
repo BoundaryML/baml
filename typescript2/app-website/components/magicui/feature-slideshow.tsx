@@ -1,6 +1,6 @@
 'use client';
 
-import { motion } from 'motion/react';
+import { motion, type Variants } from 'motion/react';
 import Image from 'next/image';
 import { cn } from '@/lib/utils';
 
@@ -28,7 +28,7 @@ export const Feature = ({ featureItems }: FeatureProps) => {
     },
   };
 
-  const itemVariants = {
+  const itemVariants: Variants = {
     hidden: {
       opacity: 0,
       scale: 0.95,
@@ -45,7 +45,7 @@ export const Feature = ({ featureItems }: FeatureProps) => {
     },
   };
 
-  const textVariants = (isEven: boolean) => ({
+  const textVariants = (isEven: boolean): Variants => ({
     hidden: {
       opacity: 0,
       x: isEven ? -50 : 50,
@@ -61,7 +61,7 @@ export const Feature = ({ featureItems }: FeatureProps) => {
     },
   });
 
-  const mediaVariants = {
+  const mediaVariants: Variants = {
     hidden: {
       opacity: 0,
       scale: 0.95,
