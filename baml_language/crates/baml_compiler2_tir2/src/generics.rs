@@ -228,7 +228,7 @@ pub fn lower_type_expr_with_generics_bounded(
     package_items: &baml_compiler2_hir::package::PackageItems<'_>,
     ns_context: &[Name],
     bindings: &FxHashMap<Name, Ty>,
-    bounds: &FxHashMap<Name, Ty>,
+    bounds: &FxHashMap<Name, baml_type::Interface>,
     diagnostics: &mut Vec<TirTypeError>,
 ) -> Ty {
     // Fast path: empty bindings — no substitution needed.

@@ -395,17 +395,10 @@ impl ThrowsAnalysisContext for BuilderThrowsAnalysis<'_, '_> {
 /// parameters resolve to. See [`TypeInferenceBuilder::resolve_interface_member`].
 #[derive(Clone, Copy)]
 enum SelfReceiver<'a> {
-    /// Bare interface ("dyn"/existential) receiver, carrying its interface type. `Self` is
-    /// otherwise hidden, so the type is kept here as the projection base; and
-    /// `Self`-parameter methods are not callable on it (object safety).
-    Existential(
-        #[expect(
-            dead_code,
-            reason = "the existential's interface type is the associated-type projection base; \
-                      read again once projection resolution is rebuilt"
-        )]
-        &'a Ty,
-    ),
+    /// Bare interface ("dyn"/existential) receiver, carrying its interface existential type —
+    /// used as `Self` for a bound call (a complete `Ty::Interface`, unlike a reconstructed
+    /// constraint). `Self`-parameter methods are not callable on it (object safety).
+    Existential(&'a Ty),
     /// `Self` is a single rigid type variable — a generic bound `T extends I`, or
     /// `self` inside a default method. Pinned; never inferred from an argument,
     /// checked by identity.
@@ -11304,72 +11297,6 @@ impl<'db> TypeInferenceBuilder<'db> {
                     attr: TyAttr::default(),
                 },
             );
-        }
-    }
-
-    fn interface_self_type_expr(iface_data: &baml_compiler2_hir::item_tree::Interface) -> TypeExpr {
-        TypeExpr::Path {
-            segments: vec![iface_data.name.clone()],
-            generic_args: iface_data
-                .generic_params
-                .iter()
-                .cloned()
-                .map(crate::lower_type_expr::type_expr_for_name)
-                .collect(),
-            associated_type_bindings: Vec::new(),
-            attrs: Vec::new(),
-        }
-    }
-
-    fn substitute_interface_self_in(
-        ty: &TypeExpr,
-        self_replacement: &TypeExpr,
-        preserve_associated_projections: bool,
-    ) -> TypeExpr {
-        if preserve_associated_projections {
-            crate::lower_type_expr::substitute_self_in_preserving_associated_projections(
-                ty,
-                self_replacement,
-            )
-        } else {
-            crate::lower_type_expr::substitute_self_in(ty, self_replacement)
-        }
-    }
-
-    /// Resolve how `Self` substitutes for an interface-member resolution.
-    ///
-    /// Returns the `Self` placeholder type variable (if any) and the exact
-    /// type it stands for. A `None` exact type means the placeholder is itself
-    /// a type variable — a rigid generic bound, or the fresh generic used for an
-    /// unbound existential reference. A `Some(ty)` means `Self` (and the
-    /// placeholder) lowers to `ty`. For an exact receiver the
-    /// placeholder is a fresh name bound to `ty` in the substitution map, so it
-    /// fully resolves away rather than leaking as a type variable.
-    fn self_substitution(
-        &self,
-        self_recv: SelfReceiver<'_>,
-        iface_data: &baml_compiler2_hir::item_tree::Interface,
-        method_generic_params: &[Name],
-        receiver_generic: Option<&Name>,
-    ) -> (Option<Name>, Option<Ty>) {
-        match self_recv {
-            SelfReceiver::RigidVar(name) => (Some(name.clone()), None),
-            SelfReceiver::ExactTy(ty) => (
-                Some(
-                    self.fresh_interface_method_receiver_generic(iface_data, method_generic_params),
-                ),
-                Some(ty.clone()),
-            ),
-            SelfReceiver::Existential(_) => (receiver_generic.cloned(), None),
-            // A union pins `Self` to itself (like an exact receiver), so `Self`-returning
-            // methods yield the union; the object-safety guard separately forbids `Self`
-            // *parameters*.
-            SelfReceiver::Union(ty) => (
-                Some(
-                    self.fresh_interface_method_receiver_generic(iface_data, method_generic_params),
-                ),
-                Some(ty.clone()),
-            ),
         }
     }
 

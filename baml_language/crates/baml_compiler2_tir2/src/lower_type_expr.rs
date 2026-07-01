@@ -86,7 +86,10 @@ pub(crate) struct ScopeCtx<'a, 'db> {
     pub package_items: &'a PackageItems<'db>,
     pub ns_context: &'a [baml_base::Name],
     pub generic_params: &'a [baml_base::Name],
-    pub bounds: &'a rustc_hash::FxHashMap<baml_base::Name, Ty>,
+    /// Each in-scope type variable's interface bound, as a *constraint*
+    /// ([`baml_type::Interface`], which may pin only some associated types) — never a
+    /// [`Ty::Interface`] existential, which would have to specify them all.
+    pub bounds: &'a rustc_hash::FxHashMap<baml_base::Name, baml_type::Interface>,
     /// What `Self` lowers to in this scope, or `None` where `Self` isn't valid.
     pub self_ty: Option<Ty>,
 }
@@ -109,13 +112,9 @@ impl<'db> TypeExprContext<'db> for ScopeCtx<'_, 'db> {
     }
 
     fn type_var_bounds(&self, name: &baml_base::Name) -> Option<Box<[baml_type::Interface]>> {
-        self.generic_params.contains(name).then(|| {
-            self.bounds
-                .get(name)
-                .and_then(baml_type::Ty::as_interface)
-                .into_iter()
-                .collect()
-        })
+        self.generic_params
+            .contains(name)
+            .then(|| self.bounds.get(name).cloned().into_iter().collect())
     }
 }
 
@@ -1009,7 +1008,7 @@ pub fn lower_type_expr_in_ns_bounded(
     package_items: &PackageItems<'_>,
     ns_context: &[baml_base::Name],
     generic_params: &[baml_base::Name],
-    bounds: &rustc_hash::FxHashMap<baml_base::Name, Ty>,
+    bounds: &rustc_hash::FxHashMap<baml_base::Name, baml_type::Interface>,
     diagnostics: &mut Vec<TirTypeError>,
 ) -> Ty {
     let ctx = ScopeCtx {
@@ -1034,18 +1033,22 @@ pub fn qualify_def(
     QualifiedTypeName::new(pkg_info.package, pkg_info.namespace_path, name.clone())
 }
 
-/// Lower a declaration's generic-parameter interface bounds to `(name, bound_ty)` pairs,
+/// Lower a declaration's generic-parameter interface bounds to `(name, constraint)` pairs,
 /// keyed by parameter name with unbounded parameters omitted. Delegates the per-bound
 /// lowering to [`crate::builder::lower_generic_param_bounds`] (every sibling parameter in
 /// scope, so a bound naming another parameter resolves); bound-lowering diagnostics are
 /// discarded — the declaration's bounds are checked where the declaration is, not here.
+///
+/// Each bound is kept as a [`baml_type::Interface`] *constraint* (a bare `T extends Iterator`
+/// pins no associated types), never a [`Ty::Interface`] existential; a bound that does not
+/// lower to an interface is dropped.
 fn lower_decl_generic_param_bounds(
     db: &dyn crate::Db,
     package_items: &PackageItems<'_>,
     ns_context: &[baml_base::Name],
     generic_params: &[baml_base::Name],
     generic_param_bounds: &[Option<TypeExpr>],
-) -> Vec<(baml_base::Name, Ty)> {
+) -> Vec<(baml_base::Name, baml_type::Interface)> {
     let mut diagnostics = Vec::new();
     crate::builder::lower_generic_param_bounds(
         db,
@@ -1058,7 +1061,11 @@ fn lower_decl_generic_param_bounds(
     )
     .into_iter()
     .zip(generic_params)
-    .filter_map(|(bound_ty, name)| bound_ty.map(|bound_ty| (name.clone(), bound_ty)))
+    .filter_map(|(bound_ty, name)| {
+        bound_ty
+            .and_then(|bound_ty| bound_ty.as_interface())
+            .map(|constraint| (name.clone(), constraint))
+    })
     .collect()
 }
 
@@ -1068,7 +1075,7 @@ fn lower_decl_generic_param_bounds(
 pub fn class_generic_param_bounds<'db>(
     db: &'db dyn crate::Db,
     class_loc: baml_compiler2_hir::loc::ClassLoc<'db>,
-) -> Vec<(baml_base::Name, Ty)> {
+) -> Vec<(baml_base::Name, baml_type::Interface)> {
     let file = class_loc.file(db);
     let item_tree = baml_compiler2_hir::file_item_tree(db, file);
     let Some(class) = item_tree.classes.get(&class_loc.id(db)) else {
@@ -1091,7 +1098,7 @@ pub fn class_generic_param_bounds<'db>(
 pub fn interface_generic_param_bounds<'db>(
     db: &'db dyn crate::Db,
     interface_loc: baml_compiler2_hir::loc::InterfaceLoc<'db>,
-) -> Vec<(baml_base::Name, Ty)> {
+) -> Vec<(baml_base::Name, baml_type::Interface)> {
     let file = interface_loc.file(db);
     let item_tree = baml_compiler2_hir::file_item_tree(db, file);
     let Some(interface) = item_tree.interfaces.get(&interface_loc.id(db)) else {
@@ -1117,7 +1124,7 @@ pub fn interface_generic_param_bounds<'db>(
 pub fn function_in_scope_generic_param_bounds<'db>(
     db: &'db dyn crate::Db,
     function_loc: baml_compiler2_hir::loc::FunctionLoc<'db>,
-) -> Vec<(baml_base::Name, Ty)> {
+) -> Vec<(baml_base::Name, baml_type::Interface)> {
     let file = function_loc.file(db);
     let item_tree = baml_compiler2_hir::file_item_tree(db, file);
     let function_id = function_loc.id(db);
@@ -1257,7 +1264,7 @@ mod tests {
             let mut bounds = FxHashMap::default();
             bounds.insert(
                 Name::new("Self"),
-                Ty::Interface(iterator.clone(), vec![], bound_assoc, TyAttr::default()),
+                baml_type::Interface::new(iterator.clone(), vec![], bound_assoc),
             );
             let self_param = [Name::new("Self")];
             let ctx = ScopeCtx {

@@ -245,7 +245,7 @@ fn lower_class_method_signature<'db>(
     // The method's in-scope type-variable bounds (its own params plus the enclosing
     // class's) so an associated-type projection `T.member` in the signature can resolve
     // `T`'s declaring interface.
-    let method_bounds: rustc_hash::FxHashMap<Name, Ty> =
+    let method_bounds: rustc_hash::FxHashMap<Name, baml_type::Interface> =
         crate::lower_type_expr::function_in_scope_generic_param_bounds(db, method_loc)
             .iter()
             .cloned()
@@ -330,7 +330,7 @@ pub fn package_interface<'db>(db: &'db dyn crate::Db, pkg_id: PackageId<'db>) ->
 
                     // Lower fields. The class's type-variable bounds let an associated-type
                     // projection `T.member` in a field type resolve `T`'s declaring interface.
-                    let class_bounds: rustc_hash::FxHashMap<Name, Ty> =
+                    let class_bounds: rustc_hash::FxHashMap<Name, baml_type::Interface> =
                         crate::lower_type_expr::class_generic_param_bounds(db, *class_loc)
                             .iter()
                             .cloned()
@@ -442,7 +442,7 @@ pub fn package_interface<'db>(db: &'db dyn crate::Db, pkg_id: PackageId<'db>) ->
                 .collect();
             // The function's in-scope type-variable bounds, so an associated-type
             // projection `T.member` in the signature can resolve `T`'s declaring interface.
-            let function_bounds: rustc_hash::FxHashMap<Name, Ty> =
+            let function_bounds: rustc_hash::FxHashMap<Name, baml_type::Interface> =
                 crate::lower_type_expr::function_in_scope_generic_param_bounds(db, *func_loc)
                     .iter()
                     .cloned()
@@ -827,7 +827,7 @@ impl<'db> PackageResolutionContext<'db> {
         let item_tree = baml_compiler2_ppir::file_item_tree(db, class_loc.file(db));
         let class_data = &item_tree[class_loc.id(db)];
         let ns = file_package::file_package(db, class_loc.file(db)).namespace_path;
-        let class_bounds: rustc_hash::FxHashMap<Name, Ty> =
+        let class_bounds: rustc_hash::FxHashMap<Name, baml_type::Interface> =
             crate::lower_type_expr::class_generic_param_bounds(db, class_loc)
                 .iter()
                 .cloned()

@@ -39,6 +39,7 @@ pub mod normalize;
 pub mod package_interface;
 pub mod pattern_lowering;
 pub mod resolve;
+pub mod signature;
 pub mod throw_inference;
 pub mod throws_analysis;
 pub mod ty;
