@@ -310,6 +310,8 @@ impl PpirTy {
             | TypeExprKind::AssociatedTypeProjection { .. }
             | TypeExprKind::Type { .. }
             | TypeExprKind::Function { .. }
+            // A `_` inference hole is opaque to streaming analysis.
+            | TypeExprKind::Infer { .. }
             | TypeExprKind::Unknown { .. } => PpirTy::CannotBeStreamed {
                 origin: CannotBeStreamedOrigin::Unknown,
                 attrs,

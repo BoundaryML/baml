@@ -328,6 +328,9 @@ mod tests {
             TypeExprKind::Unknown { attrs } => TypeExprKind::Unknown {
                 attrs: strip_attrs(attrs),
             },
+            TypeExprKind::Infer { attrs } => TypeExprKind::Infer {
+                attrs: strip_attrs(attrs),
+            },
         };
         __stripped.at(text_size::TextRange::default())
     }
@@ -562,10 +565,10 @@ function Demo(items: string[]) -> string {
             ..
         } = &body.exprs[root]
         else {
-            panic!("expected block root, got {:?}", &body.exprs[root]);
+            panic!("expected block root, got {:?}", body.exprs[root]);
         };
         let Expr::Template { tag, segments } = &body.exprs[*tail] else {
-            panic!("expected Template tail, got {:?}", &body.exprs[*tail]);
+            panic!("expected Template tail, got {:?}", body.exprs[*tail]);
         };
 
         // A tagged template carries `TemplateTag::Custom`, whose tag expr
@@ -577,7 +580,7 @@ function Demo(items: string[]) -> string {
         assert!(
             matches!(&body.exprs[*tag], Expr::Path(p) if p.len() == 1 && p[0].as_str() == "sql"),
             "tag should lower to Path([sql]), got {:?}",
-            &body.exprs[*tag]
+            body.exprs[*tag]
         );
 
         // Top-level segments include a leading Text, an Interp, a For block
@@ -2324,7 +2327,7 @@ function Demo(name: string) -> string {
             ..
         } = &body.exprs[root]
         else {
-            panic!("expected Block at root, got {:?}", &body.exprs[root]);
+            panic!("expected Block at root, got {:?}", body.exprs[root]);
         };
         let Expr::Template {
             tag: crate::ast::TemplateTag::Default { elaborated },
@@ -2333,13 +2336,13 @@ function Demo(name: string) -> string {
         else {
             panic!(
                 "expected untagged Template at tail, got {:?}",
-                &body.exprs[*tail]
+                body.exprs[*tail]
             );
         };
         let Expr::Binary { op, lhs, rhs } = &body.exprs[*elaborated] else {
             panic!(
                 "expected Binary at elaborated root, got {:?}",
-                &body.exprs[*elaborated]
+                body.exprs[*elaborated]
             );
         };
         assert!(matches!(op, crate::ast::BinaryOp::Add));

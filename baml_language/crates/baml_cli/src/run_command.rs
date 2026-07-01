@@ -182,30 +182,24 @@ pub use baml_exec::OutputFormat;
 // ============================================================================
 
 impl RunArgs {
-    /// Emit the "your code is unformatted" advisory above the active
-    /// spinner. Routed through the reporter (rather than a raw
-    /// `eprintln!`) so the message both takes the bold-yellow
-    /// `warning:` header — matching ariadne — *and* doesn't interleave
-    /// with the spinner ticks that would otherwise still be running.
+    /// Emit the "your code is unformatted" advisory. This is the one
+    /// user-facing warning `baml run` keeps on successful execution.
     fn emit_format_hint_if_needed(reporter: &Reporter, needs_format_hint: bool) {
         if needs_format_hint {
             reporter.warning(FORMAT_HINT);
         }
     }
 
-    /// Print a `[verbose]`-prefixed line when `--verbose` is set; no-op otherwise.
+    /// Keep execution silent even when legacy call sites still pass
+    /// diagnostics-oriented strings through `vlog`. `--verbose` only affects
+    /// explicit listing output, not successful program execution.
     fn vlog(&self, args: std::fmt::Arguments<'_>) {
-        if self.verbose {
-            eprintln!("[verbose] {args}");
-        }
+        let _ = args;
     }
 
     /// Collect diagnostics on `db` and bail with `bail_context` if any are errors.
-    /// Warnings are surfaced only in verbose mode.
-    ///
-    /// When a [`Reporter`] is active, diagnostic output is routed through
-    /// `reporter.suspend()` so the multi-line ariadne block doesn't
-    /// interleave with the spinner.
+    /// Warnings are intentionally not surfaced by `baml run`: successful
+    /// execution should print only the program output.
     fn check_project_diagnostics(
         &self,
         db: &ProjectDatabase,
@@ -222,12 +216,7 @@ impl RunArgs {
             .iter()
             .filter(|d| d.severity == Severity::Error)
             .collect();
-        let warnings: Vec<_> = diagnostics
-            .iter()
-            .filter(|d| d.severity == Severity::Warning)
-            .collect();
-
-        let needs_sources = !errors.is_empty() || (self.verbose && !warnings.is_empty());
+        let needs_sources = !errors.is_empty();
         let (sources, file_paths) = if needs_sources {
             let mut sources = HashMap::new();
             let mut file_paths = HashMap::new();
@@ -240,16 +229,6 @@ impl RunArgs {
         } else {
             (HashMap::new(), HashMap::new())
         };
-
-        if self.verbose && !warnings.is_empty() {
-            let rendered = render::render_diagnostics(
-                &warnings.iter().copied().cloned().collect::<Vec<_>>(),
-                &sources,
-                &file_paths,
-                &render::RenderConfig::cli_auto(),
-            );
-            reporter.suspend(|| eprintln!("{rendered}"));
-        }
 
         if !errors.is_empty() {
             let rendered = render::render_diagnostics(
@@ -280,8 +259,7 @@ impl RunArgs {
 
     pub fn run(&self) -> Result<crate::ExitCode> {
         // Short-circuit verb-level `--help` (no target / function /
-        // expression given) before constructing the Reporter, so the
-        // spinner doesn't briefly draw a frame above the help text.
+        // expression given) before constructing the Reporter.
         if self.help
             && self.functions.is_empty()
             && self.target.is_none()
@@ -429,8 +407,7 @@ impl RunArgs {
             let parsed = Self::parse_scripts(&content);
             (toml_path, content, parsed)
         };
-        let namespaces = collect_namespaces(&engine);
-        self.validate_scripts(&engine, &scripts, &namespaces, &toml_path, &toml_content)?;
+        self.validate_scripts(&engine, &scripts, &toml_path, &toml_content)?;
 
         // Resolve to (function_name, effective_args, was_script).
         let (function_name, effective_target_args, was_script) =
@@ -605,9 +582,8 @@ impl RunArgs {
         Ok((entries, lookups))
     }
 
-    /// Shared tail: spawn the runtime and run dispatch. Compilation already
-    /// emitted the final `Compiled … in <t>` line and cleared the spinner, so
-    /// the program runs silently — its own stdout is the output that matters.
+    /// Shared tail: spawn the runtime and run dispatch. The program runs
+    /// silently — its own stdout is the output that matters.
     fn dispatch_and_finish(
         &self,
         engine: BexEngine,
@@ -617,8 +593,7 @@ impl RunArgs {
         reporter: &Reporter,
     ) -> Result<crate::ExitCode> {
         self.vlog(format_args!("Calling {function_name}"));
-        // Belt-and-suspenders: the compile step already finished the spinner,
-        // but make sure nothing is left animating over the program's output.
+        // Preserve the old cleanup call shape before program output.
         reporter.abandon();
 
         let rt = tokio::runtime::Runtime::new().context("Failed to create tokio runtime")?;
@@ -719,8 +694,7 @@ impl RunArgs {
         // Per-file `Loading <file>` progress is verbose-only — by default
         // the single `Compiling N file(s)` line below is the only progress a
         // run shows.
-        let (db, from, baml_files) =
-            load_project_for_build(self.from.as_deref(), reporter, self.verbose)?;
+        let (db, from, baml_files) = load_project_for_build(self.from.as_deref(), reporter, false)?;
         self.vlog(format_args!("Loading project from {}", from.display()));
         if baml_files.is_empty() {
             anyhow::bail!("No .baml files found in {}", from.display());
@@ -732,12 +706,8 @@ impl RunArgs {
                 .unwrap_or(false)
         });
 
-        // One verb covers the whole compile pipeline (diagnostics + bytecode
-        // emit); a separate "Checking" line was redundant — same file count,
-        // same wait. For `--list` nothing is executed, so "Resolving" is the
-        // honest verb (the emit only exists to enumerate signatures).
-        let compile_verb = if self.list { "Resolving" } else { "Compiling" };
-        reporter.spin(compile_verb, format!("{} file(s)", baml_files.len()));
+        // `baml run` keeps the compile phase silent; the program's output is
+        // the point. Compile/count progress belongs to `check` and `generate`.
         self.check_project_diagnostics(&db, "Cannot run: compilation errors found", reporter)?;
         self.vlog(format_args!("Compiling..."));
         let engine = self.compile_to_engine(&db, argv)?;
@@ -745,16 +715,6 @@ impl RunArgs {
             "Compiled {} user function(s)",
             engine.user_functions().len()
         ));
-        // Close out compilation with its elapsed time, then let the program
-        // run silently — its output is the point, not our status lines.
-        // `--list` has no program run to time, and `print_list` writes straight
-        // to stdout, so just clear the spinner to keep it from smearing over
-        // the listing.
-        if self.list {
-            reporter.abandon();
-        } else {
-            reporter.finish("Compiled", format!("{} file(s)", baml_files.len()));
-        }
         Ok((db, engine, needs_format_hint))
     }
 
@@ -786,10 +746,8 @@ impl RunArgs {
         db.set_project_root(parent);
         db.add_or_update_file(&canonical, &content);
 
-        // Single "Compiling" verb covers load + diagnostics + emit; see the
-        // note in `load_and_compile`. "Resolving" when --list is the target.
-        let compile_verb = if self.list { "Resolving" } else { "Compiling" };
-        reporter.spin(compile_verb, &display);
+        // Keep standalone compilation quiet for `baml run`; diagnostics still
+        // render through the reporter when needed.
         self.check_project_diagnostics(
             &db,
             &format!("Cannot run: compilation errors in {display}"),
@@ -800,13 +758,6 @@ impl RunArgs {
             "Compiled {} function(s) from standalone file",
             engine.user_functions().len()
         ));
-        // See `load_and_compile`: clear the spinner before `--list` output,
-        // otherwise finish with the elapsed-time line.
-        if self.list {
-            reporter.abandon();
-        } else {
-            reporter.finish("Compiled", &display);
-        }
         Ok((db, engine, needs_format_hint))
     }
 
@@ -823,7 +774,6 @@ impl RunArgs {
     /// from inline / `@file` / stdin by the caller. We avoid re-reading
     /// because `-e -` reads stdin once.
     fn run_expression(&self, expr_body: &str, reporter: &Reporter) -> Result<crate::ExitCode> {
-        reporter.spin("Compiling", "expression");
         self.vlog(format_args!(
             "Expression mode: evaluating {} byte(s)",
             expr_body.len()
@@ -863,10 +813,6 @@ impl RunArgs {
         // matches the inline case: `-e '2 + 2'` and `-e @file` (with
         // `file` containing `2 + 2`) produce the same argv.
         let engine = self.compile_to_engine(&db, self.build_argv_for_expression(expr_body))?;
-
-        // Close out compilation with its elapsed time and clear the spinner,
-        // then evaluate silently — the expression's value is the output.
-        reporter.finish("Compiled", "expression");
 
         let rt = tokio::runtime::Runtime::new().context("Failed to create tokio runtime")?;
         let engine = Arc::new(engine);
@@ -914,21 +860,13 @@ impl RunArgs {
 
     /// Parse `[scripts]` from raw `baml.toml` content.
     ///
-    /// Emits a styled `Warning:` on TOML parse failures so a typo in
-    /// `baml.toml` doesn't silently disable every script. A missing
-    /// `baml.toml` (empty content) is normal and stays quiet. Routed
-    /// through `print_warning` so the bold-yellow `Warning:` prefix
-    /// matches every other advisory the CLI emits.
+    /// Parse failures leave the scripts map empty so a typo in `baml.toml`
+    /// does not block direct function execution. `baml run` stays quiet on
+    /// successful execution; validation errors are surfaced separately.
     fn parse_scripts(content: &str) -> HashMap<String, Vec<String>> {
-        let trimmed = content.trim();
         let manifest = match crate::manifest::parse(content) {
             Ok(m) => m,
-            Err(e) => {
-                if !trimmed.is_empty() {
-                    crate::reporter::print_warning(format_args!(
-                        "failed to parse `baml.toml` ({e}); [scripts] entries will be ignored"
-                    ));
-                }
+            Err(_e) => {
                 return HashMap::new();
             }
         };
@@ -985,7 +923,6 @@ impl RunArgs {
         &self,
         engine: &BexEngine,
         scripts: &HashMap<String, Vec<String>>,
-        namespaces: &HashSet<String>,
         toml_path: &Path,
         toml_content: &str,
     ) -> Result<()> {
@@ -1004,16 +941,6 @@ impl RunArgs {
                     "name is a reserved verb and cannot be used as a script name",
                 ));
                 continue;
-            }
-
-            if namespaces.contains(name) {
-                let loc = Self::find_script_line(toml_content, name)
-                    .map(|l| format!("{}:{l}", toml_path.display()))
-                    .unwrap_or_else(|| toml_path.display().to_string());
-                crate::reporter::print_warning(format_args!(
-                    "{loc}: [scripts] `{name}` shadows namespace `{name}` — \
-                     the script takes precedence"
-                ));
             }
 
             match parse_script_body(tokens) {
@@ -1535,8 +1462,7 @@ fn looks_like_path(target: &str) -> bool {
 
 /// Render a clap error and return the matching CLI exit code.
 /// Help / version requests render to stdout and exit success; all other
-/// kinds go to stderr with a non-zero exit. The spinner is abandoned
-/// first so the multi-line clap block lands cleanly above the cursor.
+/// kinds go to stderr with a non-zero exit.
 fn surface_clap_error(reporter: &Reporter, err: clap::Error) -> Result<crate::ExitCode> {
     use baml_exec::clap_reexport::ErrorKind;
     let kind = err.kind();

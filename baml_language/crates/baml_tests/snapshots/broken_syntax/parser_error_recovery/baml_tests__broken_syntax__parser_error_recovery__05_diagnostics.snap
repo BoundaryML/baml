@@ -112,16 +112,6 @@ source: crates/baml_tests/src/generated_tests.rs
     │ Note: Error code: E0010
 ────╯
 
-  [type] error: unresolved name: GPT4
-    ╭─[ invalid_syntax.baml:11:10 ]
-    │
- 11 │   client GPT4
-    │          ──┬─  
-    │            ╰─── unresolved name: GPT4
-    │ 
-    │ Note: Error code: E0003
-────╯
-
   [parse] error: Expected '}', found class
    ╭─[ missing_braces.baml:5:1 ]
    │

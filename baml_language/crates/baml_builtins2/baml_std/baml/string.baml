@@ -239,6 +239,31 @@ class String {
     $rust_function
   }
 
+  /// Returns the **Unicode code point** of the character at the given codepoint
+  /// index, as an `int`.
+  ///
+  /// This is the numeric counterpart of `char_at`, which returns the character
+  /// as a one-character string. Negative indices count from the end: `-1` is the last
+  /// character. Raises `IndexOutOfBounds` when the index is out of range after
+  /// counting from the end, mirroring `char_at` and array subscripting.
+  ///
+  /// The returned value is always in `[0, 0x10FFFF]`, so it round-trips through
+  /// `string.from_code_points([cp])`.
+  ///
+  /// # Examples
+  /// ```
+  /// "A".code_point_at(0)        // 65
+  /// "é".code_point_at(0)        // 233
+  /// "🐑".code_point_at(0)       // 128017
+  /// "hello".code_point_at(-1)   // 111 ("o")
+  /// "😀hello".code_point_at(1)  // 104 ("h", not a UTF-16 unit)
+  /// "hi".code_point_at(99)      // raises IndexOutOfBounds
+  /// ```
+  //baml:fallible
+  function code_point_at(self, index: int) -> int throws never {
+    $rust_function
+  }
+
   /// Returns a new string that repeats `self` the given number of times.
   /// Negative counts are treated as 0.
   ///
@@ -497,6 +522,28 @@ class String {
   /// string.from_utf8(b"\xFF")              // throws — 0xFF is invalid UTF-8
   /// ```
   function from_utf8(utf8: uint8array) -> string throws root.errors.InvalidArgument {
+    $rust_function
+  }
+
+  /// Returns the string's Unicode code points as an array of `int`s.
+  ///
+  /// This is the exact inverse of `string.from_code_points`: for any string
+  /// `s`, `string.from_code_points(s.to_code_points())` equals `s`. The result
+  /// has one element per character (`self.length()` elements), each in
+  /// `[0, 0x10FFFF]`. Never throws.
+  ///
+  /// Use this for char → integer mappings (checksums, base-N encoding, hashing,
+  /// character classification) instead of indexing into a literal alphabet
+  /// string.
+  ///
+  /// # Examples
+  /// ```
+  /// "hi".to_code_points()    // [104, 105]
+  /// "é".to_code_points()     // [233]
+  /// "🐑".to_code_points()    // [128017]
+  /// "".to_code_points()      // []
+  /// ```
+  function to_code_points(self) -> int[] throws never {
     $rust_function
   }
 

@@ -197,6 +197,7 @@ impl Ty {
             | Ty::BuiltinUnknown { .. }
             | Ty::Unknown { .. }
             | Ty::Error { .. }
+            | Ty::Infer { .. }
             | Ty::EvolvingList(..)
             | Ty::EvolvingMap(..) => false,
         }
@@ -626,6 +627,7 @@ impl Ty {
             | Ty::Never { .. }
             | Ty::Unknown { .. }
             | Ty::Error { .. }
+            | Ty::Infer { .. }
             | Ty::EvolvingList(..)
             | Ty::EvolvingMap(..) => Err("compiler-only type should not reach runtime".to_string()),
             Ty::Int { .. }
@@ -863,6 +865,8 @@ impl Ty {
             Ty::Never { .. } => "never".to_string(),
             Ty::Void { .. } => "void".to_string(),
             Ty::BuiltinUnknown { .. } | Ty::Unknown { .. } => "unknown".to_string(),
+            // The wildcard hole renders as the `_` the user wrote.
+            Ty::Infer { .. } => "_".to_string(),
             Ty::RustType { .. } => "$rust_type".to_string(),
             Ty::Type { .. } => "type".to_string(),
             // Opaque leaf types render as their fixed qualified names; these
@@ -1067,6 +1071,7 @@ impl fmt::Display for Ty {
             Ty::Never { .. } => write!(f, "never"),
             Ty::Unknown { .. } => write!(f, "unknown"),
             Ty::Error { .. } => write!(f, "<error>"),
+            Ty::Infer { .. } => write!(f, "_"),
             Ty::EvolvingList(inner, _) => write!(f, "{inner}[]"),
             Ty::EvolvingMap(key, value, _) => write!(f, "map<{key}, {value}>"),
             // Opaque leaf types: render identically to `render_with` so the two

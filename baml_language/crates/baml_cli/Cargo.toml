@@ -44,7 +44,7 @@ indicatif = { workspace = true }
 libsui = { workspace = true }
 object = { workspace = true }
 regex = { workspace = true }
-reqwest = { workspace = true }
+reqwest = { workspace = true, features = [ "blocking", "json", "rustls" ] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 serde_yaml = { workspace = true }
@@ -53,6 +53,7 @@ tar = { workspace = true }
 text-size = { workspace = true }
 tokio = { workspace = true }
 toml = { workspace = true }
+uuid = { workspace = true }
 
 [features]
 default = [ "aws-crypto" ]

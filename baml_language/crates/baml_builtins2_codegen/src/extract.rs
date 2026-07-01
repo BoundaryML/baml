@@ -816,7 +816,8 @@ fn type_expr_to_baml_type(ty: &TypeExpr, generics: &[String]) -> BamlType {
         TypeExprKind::AssociatedTypeProjection { .. }
         | TypeExprKind::BuiltinUnknown { .. }
         | TypeExprKind::Unknown { .. }
-        | TypeExprKind::Error { .. } => BamlType::Named("unknown".to_string()),
+        | TypeExprKind::Error { .. }
+        | TypeExprKind::Infer { .. } => BamlType::Named("unknown".to_string()),
         TypeExprKind::Type { .. } => BamlType::Named("type".to_string()),
         TypeExprKind::Rust { .. } => BamlType::RustType,
     }

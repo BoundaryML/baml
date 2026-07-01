@@ -273,10 +273,14 @@ fn lower_function(
         .iter()
         .map(|(n, _)| n.clone())
         .collect();
-    let generic_param_bounds: Vec<Option<crate::ast::TypeExpr>> = generic_params_with_bounds
+    let mut generic_param_bounds: Vec<Option<crate::ast::TypeExpr>> = generic_params_with_bounds
         .into_iter()
         .map(|(_, b)| b)
         .collect();
+    for bound in generic_param_bounds.iter_mut().flatten() {
+        let bspan = bound.span;
+        lower_type_expr::check_wildcard_type(bound, "a generic type bound", bspan, diags);
+    }
     let parameter_context = format!("function `{}`", name.as_str());
 
     let (mut params, mut defaults) = func
@@ -294,7 +298,7 @@ fn lower_function(
         .unwrap_or_else(|| (Vec::new(), FunctionDefaults::empty()));
 
     let return_type = func.return_type().map(|te| {
-        let expr = lower_type_expr::lower_type_expr_node(&te);
+        let mut expr = lower_type_expr::lower_type_expr_node(&te);
         let te_span = te.syntax().span_range();
         check_unknown_type(&expr, format!("return type of `{name}`"), te_span, diags);
         // void is allowed as a bare return type, but not wrapped (void?, void[], etc.).
@@ -305,13 +309,19 @@ fn lower_function(
             true,
             diags,
         );
+        lower_type_expr::check_wildcard_type(&mut expr, "a return type", te_span, diags);
         expr.with_span(te_span)
     });
 
     let throws = func
         .throws_clause()
         .and_then(|tc| tc.type_expr())
-        .map(|te| lower_type_expr::lower_type_expr_node(&te).with_span(te.syntax().span_range()));
+        .map(|te| {
+            let mut expr = lower_type_expr::lower_type_expr_node(&te);
+            let te_span = te.syntax().span_range();
+            lower_type_expr::check_throws_wildcard(&mut expr, te_span, diags);
+            expr.with_span(te_span)
+        });
 
     let (body, declarative_meta) = if let Some(llm) = func.llm_body() {
         let mut llm_body_def = lower_llm_body(&llm);
@@ -574,7 +584,7 @@ pub(crate) fn lower_param(
     Some(Param {
         name: Name::new(&param_name_str),
         type_expr: param.ty().map(|te| {
-            let expr = lower_type_expr::lower_type_expr_node(&te);
+            let mut expr = lower_type_expr::lower_type_expr_node(&te);
             let te_span = te.syntax().span_range();
             check_unknown_type(
                 &expr,
@@ -589,6 +599,7 @@ pub(crate) fn lower_param(
                 false,
                 diags,
             );
+            lower_type_expr::check_wildcard_type(&mut expr, "a parameter type", te_span, diags);
             expr.with_span(te_span)
         }),
         default: None,
@@ -1055,10 +1066,14 @@ fn lower_class(
         .iter()
         .map(|(n, _)| n.clone())
         .collect();
-    let generic_param_bounds: Vec<Option<crate::ast::TypeExpr>> = generic_params_with_bounds
+    let mut generic_param_bounds: Vec<Option<crate::ast::TypeExpr>> = generic_params_with_bounds
         .into_iter()
         .map(|(_, b)| b)
         .collect();
+    for bound in generic_param_bounds.iter_mut().flatten() {
+        let bspan = bound.span;
+        lower_type_expr::check_wildcard_type(bound, "a generic type bound", bspan, diags);
+    }
     let class_name = name_token.text().to_string();
 
     let fields = class
@@ -1087,6 +1102,12 @@ fn lower_class(
                     "a class field type".to_string(),
                     te_span,
                     false,
+                    diags,
+                );
+                lower_type_expr::check_wildcard_type(
+                    &mut expr,
+                    "a class field type",
+                    te_span,
                     diags,
                 );
 
@@ -1324,10 +1345,14 @@ fn lower_interface(
         .iter()
         .map(|(n, _)| n.clone())
         .collect();
-    let generic_param_bounds: Vec<Option<crate::ast::TypeExpr>> = generic_params_with_bounds
+    let mut generic_param_bounds: Vec<Option<crate::ast::TypeExpr>> = generic_params_with_bounds
         .into_iter()
         .map(|(_, b)| b)
         .collect();
+    for bound in generic_param_bounds.iter_mut().flatten() {
+        let bspan = bound.span;
+        lower_type_expr::check_wildcard_type(bound, "a generic type bound", bspan, diags);
+    }
 
     let parent_type_nodes: Vec<baml_compiler_syntax::ast::TypeExpr> =
         if let Some(c) = iface.requires_clause() {
@@ -1338,11 +1363,17 @@ fn lower_interface(
     let requires: Vec<TypeExpr> = parent_type_nodes
         .into_iter()
         .map(|te| {
-            let expr = lower_type_expr::lower_type_expr_node(&te);
+            let mut expr = lower_type_expr::lower_type_expr_node(&te);
             let te_span = te.syntax().span_range();
             check_unknown_type(
                 &expr,
                 format!("requires clause of interface `{iface_name}`"),
+                te_span,
+                diags,
+            );
+            lower_type_expr::check_wildcard_type(
+                &mut expr,
+                "an interface `requires` clause",
                 te_span,
                 diags,
             );
@@ -1362,7 +1393,7 @@ fn lower_interface(
             };
             let field_name_str = fname.text().to_string();
             let type_expr = f.ty().map(|te| {
-                let expr = lower_type_expr::lower_type_expr_node(&te);
+                let mut expr = lower_type_expr::lower_type_expr_node(&te);
                 let te_span = te.syntax().span_range();
                 check_unknown_type(
                     &expr,
@@ -1375,6 +1406,12 @@ fn lower_interface(
                     "an interface field type".to_string(),
                     te_span,
                     false,
+                    diags,
+                );
+                lower_type_expr::check_wildcard_type(
+                    &mut expr,
+                    "an interface field type",
+                    te_span,
                     diags,
                 );
                 expr.with_span(te_span)
@@ -1513,10 +1550,14 @@ fn lower_method_sig(
         .iter()
         .map(|(n, _)| n.clone())
         .collect();
-    let generic_param_bounds: Vec<Option<crate::ast::TypeExpr>> = generic_params_with_bounds
+    let mut generic_param_bounds: Vec<Option<crate::ast::TypeExpr>> = generic_params_with_bounds
         .into_iter()
         .map(|(_, b)| b)
         .collect();
+    for bound in generic_param_bounds.iter_mut().flatten() {
+        let bspan = bound.span;
+        lower_type_expr::check_wildcard_type(bound, "a generic type bound", bspan, diags);
+    }
     let parameter_context = format!("method signature `{}`", name.as_str());
 
     let (params, defaults) = sig
@@ -1526,7 +1567,7 @@ fn lower_method_sig(
         .unwrap_or_else(|| (Vec::new(), FunctionDefaults::empty()));
 
     let return_type = sig.return_type().map(|te| {
-        let expr = lower_type_expr::lower_type_expr_node(&te);
+        let mut expr = lower_type_expr::lower_type_expr_node(&te);
         let te_span = te.syntax().span_range();
         check_unknown_type(&expr, format!("return type of `{name}`"), te_span, diags);
         lower_type_expr::check_void_type(
@@ -1536,13 +1577,25 @@ fn lower_method_sig(
             true,
             diags,
         );
+        lower_type_expr::check_wildcard_type(&mut expr, "a return type", te_span, diags);
         expr.with_span(te_span)
     });
 
-    let throws = sig
-        .throws_clause()
-        .and_then(|tc| tc.type_expr())
-        .map(|te| lower_type_expr::lower_type_expr_node(&te).with_span(te.syntax().span_range()));
+    let throws = sig.throws_clause().and_then(|tc| tc.type_expr()).map(|te| {
+        let mut expr = lower_type_expr::lower_type_expr_node(&te);
+        let te_span = te.syntax().span_range();
+        // A bodyless method signature (interface required method) has nothing to
+        // infer an open `throws … | _` from, and its declared throws is compared
+        // structurally during conformance checking — so reject ANY `_` here
+        // (unlike a function with a body, where a top-level `_` is the open slot).
+        lower_type_expr::check_wildcard_type(
+            &mut expr,
+            "a method signature `throws` clause",
+            te_span,
+            diags,
+        );
+        expr.with_span(te_span)
+    });
 
     Some(MethodSigDef {
         name,
@@ -1747,7 +1800,7 @@ fn lower_type_alias(
     Some(TypeAliasDef {
         name: Name::new(&alias_name),
         type_expr: alias.ty().map(|te| {
-            let expr = lower_type_expr::lower_type_expr_node(&te);
+            let mut expr = lower_type_expr::lower_type_expr_node(&te);
             let te_span = te.syntax().span_range();
             check_unknown_type(&expr, format!("type alias `{alias_name}`"), te_span, diags);
             lower_type_expr::check_void_type(
@@ -1757,6 +1810,7 @@ fn lower_type_alias(
                 false,
                 diags,
             );
+            lower_type_expr::check_wildcard_type(&mut expr, "a type alias", te_span, diags);
             expr.with_span(te_span)
         }),
         span: node.span_range(),

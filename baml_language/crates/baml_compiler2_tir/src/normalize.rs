@@ -557,6 +557,17 @@ fn normalize_impl(
         Ty::Void { .. } => StructuralTy::Void,
         Ty::BuiltinUnknown { .. } => StructuralTy::BuiltinUnknown,
         Ty::Unknown { .. } => StructuralTy::Unknown,
+        // INVARIANT: a `_` inference hole is filled (or replaced with `Ty::Error`)
+        // during inference, before any structural equivalence/subtype check. A
+        // hole has no sound normal form — treating it as "matches anything" would
+        // make `Box<int>` and `Box<string>` both equal to `Box<_>` and break
+        // transitivity — so reaching here is a compiler bug. (See `builder`'s
+        // `let`-binding hole path, which infers, fills, then checks.)
+        Ty::Infer { .. } => unreachable!(
+            "inference hole `_` reached structural normalization; it must be \
+             filled (or replaced with `Ty::Error`) during inference before any \
+             equivalence/subtype check"
+        ),
         Ty::Error { .. } => StructuralTy::Error,
         Ty::Literal(lit, _freshness, _) => StructuralTy::Literal(lit.clone()),
         Ty::Class(qn, type_args, _) => {
