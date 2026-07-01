@@ -2633,16 +2633,18 @@ impl LoweringContext {
                 rowan::NodeOrToken::Token(token) => {
                     if matches!(token.kind(), SyntaxKind::DOT | SyntaxKind::DOLLAR) {
                         seen_accessor = true;
-                    } else if is_ident_token(token.kind()) {
-                        if !seen_accessor && base.is_none() {
-                            // Base is a bare identifier token, e.g.
-                            // `value.implements()` where `implements` lexes as
-                            // a keyword and the parser cannot build a PATH_EXPR.
-                            base = self.try_lower_bare_token(&token);
-                        } else if seen_accessor {
-                            field = Some(Name::new(token.text()));
-                            field_range = Some(token.text_range());
-                        }
+                    } else if !seen_accessor && base.is_none() {
+                        // Base is a bare token that the parser emits without a
+                        // wrapper node: a numeric literal (`7.to_string()`), or
+                        // an identifier/keyword like `value.implements()` where
+                        // `implements` lexes as a keyword and the parser cannot
+                        // build a PATH_EXPR. `try_lower_bare_token` handles all
+                        // of these (and returns None for anything else, leaving
+                        // the Missing recovery below intact).
+                        base = self.try_lower_bare_token(&token);
+                    } else if seen_accessor && is_ident_token(token.kind()) {
+                        field = Some(Name::new(token.text()));
+                        field_range = Some(token.text_range());
                     }
                 }
             }
@@ -2794,17 +2796,14 @@ impl LoweringContext {
                 rowan::NodeOrToken::Token(token) => {
                     if token.kind() == SyntaxKind::QUESTION_DOT {
                         seen_question_dot = true;
-                    } else if is_ident_token(token.kind()) {
-                        if !seen_question_dot && base.is_none() {
-                            // Base is a bare WORD token (e.g. `user` in `user?.name`)
-                            base = Some(self.alloc_expr(
-                                Expr::Path(vec![Name::new(token.text())]),
-                                token.text_range(),
-                            ));
-                        } else if seen_question_dot {
-                            field = Some(Name::new(token.text()));
-                            field_range = Some(token.text_range());
-                        }
+                    } else if !seen_question_dot && base.is_none() {
+                        // Base is a bare token (e.g. `user` in `user?.name`, or a
+                        // numeric literal in `7?.foo`). `try_lower_bare_token`
+                        // handles identifiers, keywords, and numeric literals.
+                        base = self.try_lower_bare_token(&token);
+                    } else if seen_question_dot && is_ident_token(token.kind()) {
+                        field = Some(Name::new(token.text()));
+                        field_range = Some(token.text_range());
                     }
                 }
             }
