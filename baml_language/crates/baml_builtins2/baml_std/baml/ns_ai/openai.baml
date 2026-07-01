@@ -121,4 +121,55 @@ class OpenAi {
             OpenAiResponseMeta { raw: from }
         }
     }
+
+    implements root.ai.Streaming {
+        // Build a streaming Chat Completions request in BAML, open the SSE stream, and
+        // wrap it in `baml.llm.Stream`. SSE-delta accumulation + finish-reason validation
+        // reuse the existing (leaf) accumulator via a shorthand-built PrimitiveClient; the
+        // request itself (endpoint/headers/body, incl. `api_key`/`base_url`) is BAML.
+        function stream<TStream, TFinal>(
+            self,
+            prompt: string,
+        ) -> root.llm.Stream<TStream, TFinal> throws root.errors.StreamError | root.errors.UnknownError {
+            let schema: string = root.llm.render_output_format(reflect.type_of<TFinal>());
+            let content: string = if (schema == "") {
+                prompt
+            } else {
+                prompt + "\n\n" + schema
+            };
+            let body: json = {
+                "model": self.model,
+                "messages": [{ "role": "user", "content": content }],
+                "stream": true,
+            };
+            let req = root.http.Request {
+                method: "POST",
+                url: (self.base_url ?? "https://api.openai.com/v1") + "/chat/completions",
+                headers: { "Authorization": "Bearer " + self.api_key, "Content-Type": "application/json" },
+                body: root.json.stringify(body),
+            };
+            let sse = root.http.fetch_sse(req) catch (e) {
+                _ => {
+                    throw root.errors.UnknownError { data: e, message: ["openai fetch_sse failed"] }
+                },
+            };
+            let primitive = root.llm.from_shorthand("openai/" + self.model) catch (e) {
+                _ => {
+                    throw root.errors.UnknownError { data: e, message: ["openai stream setup failed"] }
+                },
+            };
+            let acc = primitive.new_stream_accumulator() catch (e) {
+                _ => {
+                    throw root.errors.UnknownError { data: e, message: ["openai accumulator failed"] }
+                },
+            };
+            let cache = root.llm.StreamCache.new(reflect.type_of<TStream>(), reflect.type_of<TFinal>());
+            root.llm.Stream<TStream, TFinal> {
+                _client: primitive,
+                _acc: acc,
+                _sse: sse,
+                _cache: cache,
+            }
+        }
+    }
 }

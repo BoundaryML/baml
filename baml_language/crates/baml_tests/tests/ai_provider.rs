@@ -369,3 +369,85 @@ async fn retry_exhausts_and_throws() {
         BexExternalValue::String("ERR".into())
     );
 }
+
+/// Live streaming through `OpenAi.stream`: drain partials, assert the final value.
+#[tokio::test]
+async fn openai_stream_live() {
+    if std::env::var("OPENAI_API_KEY").is_err() {
+        eprintln!("skipping openai_stream_live: OPENAI_API_KEY not set");
+        return;
+    }
+    let output = baml_test!(
+        r#"
+        function main() -> string {
+            let p = baml.ai.OpenAi {
+                model: "gpt-5.4-mini",
+                api_key: baml.env.get_or_panic("OPENAI_API_KEY"),
+                base_url: null,
+            };
+            let s = p.stream<string, string>("Reply with exactly the lowercase word: streamed") catch (e) {
+                let u: baml.errors.UnknownError => return "ERR:" + u.message.join(","),
+            };
+            let n = 0;
+            while (n < 500) {
+                match (s.next()) {
+                    baml.stream.StreamFinished => { break; },
+                    let part: string => { n = n + 1; },
+                }
+            }
+            s.final() catch (e) { _ => "FINAL_ERR" }
+        }
+        "#
+    );
+    let got = output.result.unwrap();
+    let BexExternalValue::String(s) = got else {
+        panic!("expected string, got {got:?}")
+    };
+    assert!(
+        s.to_lowercase().contains("streamed"),
+        "stream final unexpected: {s:?}"
+    );
+}
+
+/// Streaming through a mocked SSE endpoint: OpenAI-format deltas accumulate to the final.
+#[tokio::test]
+async fn openai_stream_via_mock() {
+    let server = MockServer::start().await;
+    let sse_body = "data: {\"choices\":[{\"index\":0,\"delta\":{\"content\":\"po\"}}]}\n\n\
+                    data: {\"choices\":[{\"index\":0,\"delta\":{\"content\":\"ng\"}}]}\n\n\
+                    data: {\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}]}\n\n\
+                    data: [DONE]\n\n";
+    Mock::given(method("POST"))
+        .and(path("/chat/completions"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .insert_header("content-type", "text/event-stream")
+                .set_body_string(sse_body),
+        )
+        .mount(&server)
+        .await;
+    let uri = server.uri();
+
+    let output = baml_test!(&format!(
+        r#"
+        function main() -> string {{
+            let p = baml.ai.OpenAi {{ model: "gpt-5.4-mini", api_key: "test-key", base_url: "{uri}" }};
+            let s = p.stream<string, string>("hi") catch (e) {{
+                let u: baml.errors.UnknownError => return "ERR:" + u.message.join(","),
+            }};
+            let n = 0;
+            while (n < 100) {{
+                match (s.next()) {{
+                    baml.stream.StreamFinished => {{ break; }},
+                    let part: string => {{ n = n + 1; }},
+                }}
+            }}
+            s.final() catch (e) {{ _ => "FINAL_ERR" }}
+        }}
+        "#
+    ));
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("pong".into())
+    );
+}

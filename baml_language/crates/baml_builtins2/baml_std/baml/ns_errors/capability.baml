@@ -33,3 +33,9 @@ interface CallError {
   function is_rate_limit(self) -> bool
   function is_parse_error(self) -> bool
 }
+
+/// Incremental (streaming) failures. The same concrete error can arise on the call
+/// path and mid-stream, so a provider error may implement both `CallError` and this.
+interface StreamError {
+  function is_network_error(self) -> bool
+}

@@ -65,6 +65,31 @@ class Fallback {
             throw root.errors.UnknownError { data: null, message: ["fallback: all providers failed"] };
         }
     }
+
+    implements root.ai.Streaming {
+        // Route .stream to the first streaming member whose stream opens successfully.
+        function stream<TStream, TFinal>(
+            self,
+            prompt: string,
+        ) -> root.llm.Stream<TStream, TFinal> throws root.errors.StreamError | root.errors.UnknownError {
+            for (let m in self.members) {
+                match (m) {
+                    let s: root.ai.Streaming => {
+                        let st: root.llm.Stream<TStream, TFinal> = s.stream<TStream, TFinal>(prompt) catch (e) {
+                            _ => {
+                                continue;
+                            }
+                        };
+                        return st;
+                    },
+                    _ => {
+                        continue;
+                    },
+                }
+            }
+            throw root.errors.UnknownError { data: null, message: ["fallback: no streaming member"] };
+        }
+    }
 }
 
 /// Retry the wrapped provider up to `max` extra attempts on failure.
@@ -128,6 +153,22 @@ class Retry {
                 }
             }
             root.sys.panic("unreachable")
+        }
+    }
+
+    implements root.ai.Streaming {
+        // A broken stream can't be transparently retried (partial output already
+        // emitted), so `Retry` forwards `.stream` once to a streaming inner member.
+        function stream<TStream, TFinal>(
+            self,
+            prompt: string,
+        ) -> root.llm.Stream<TStream, TFinal> throws root.errors.StreamError | root.errors.UnknownError {
+            match (self.inner) {
+                let s: root.ai.Streaming => s.stream<TStream, TFinal>(prompt),
+                _ => {
+                    throw root.errors.UnknownError { data: null, message: ["retry: inner is not streaming"] }
+                },
+            }
         }
     }
 }

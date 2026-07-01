@@ -79,6 +79,18 @@ Legend: **[lang]** forced by a missing/limited language feature · **[scope]** d
   `match (request_body.get("model")) { let rm: string => …, _ => … }` fallback hit a **new language finding**
   (below) and was dropped.
 
+## Streaming
+
+- **`Streaming` reuses the existing `baml.llm.Stream` + accumulator (leaf primitives).** **[scope]** The
+  request (endpoint/headers/body incl. `api_key`/`base_url`, `"stream": true`) is built in BAML and opened
+  with `baml.http.fetch_sse`; SSE-delta accumulation + finish-reason validation reuse the existing
+  `StreamAccumulator` via a `from_shorthand("openai/<model>")`-built `PrimitiveClient` (both are
+  provider-config leaves, not request logic). No new host fn. `from_shorthand` works without an env key.
+
+- **`Retry` does not retry streams.** **[design]** A broken stream can't be transparently retried (partial
+  output already emitted), so `Retry` forwards `.stream` once — matching the design note that streaming retry
+  is connect-only.
+
 ## Language findings surfaced during wiring (worth a compiler look)
 
 - **Matching `unknown` / `unknown?` with a typed binding is an irrefutable catch-all.** `match (v) { let x: string => …, _ => … }`
