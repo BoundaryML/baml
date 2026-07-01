@@ -1218,6 +1218,91 @@ mod tests {
         }
     }
 
+    /// Compile a single-file `.baml` source into a `TestDb`. It's a *user* file (builtin
+    /// paths are filtered out of `compiler2_all_files`), so it lands in package `user`,
+    /// root namespace. Lets tir2 tests exercise the real HIR/PPIR pipeline end-to-end
+    /// rather than hand-constructing `Ty` values.
+    fn compile(source: &str) -> TestDb {
+        let mut db = TestDb::default();
+        let file = baml_base::SourceFile::new(
+            &db,
+            source.to_string(),
+            PathBuf::from("test.baml"),
+            baml_base::FileId::new(0),
+        );
+        db.project = Some(Project::new(&db, PathBuf::from("."), vec![file]));
+        db
+    }
+
+    #[test]
+    fn source_fixture_compiles_an_interface() {
+        let db = compile("interface Iterator {\n  type Item\n}\n");
+        let items = baml_compiler2_ppir::package_items(&db, PackageId::new(&db, Name::new("user")));
+        assert!(
+            items.lookup_type(&[], &Name::new("Iterator")).is_some(),
+            "Iterator interface should resolve in package_items",
+        );
+    }
+
+    // `Self.Item` (an associated-type projection on the receiver) lowers through the
+    // context: `Self` is a rigid type variable whose bound is the receiver interface.
+    // When the bound pins `Item` it collapses to that type; otherwise it stays symbolic.
+    #[test]
+    fn self_item_projection_resolves_and_collapses() {
+        let db = compile("interface Iterator {\n  type Item\n}\n");
+        let items = baml_compiler2_ppir::package_items(&db, PackageId::new(&db, Name::new("user")));
+        let iterator = QualifiedTypeName::new(Name::new("user"), vec![], Name::new("Iterator"));
+
+        let lower_self_item = |bound_assoc: Vec<(Name, Ty)>| -> Ty {
+            let mut bounds = FxHashMap::default();
+            bounds.insert(
+                Name::new("Self"),
+                Ty::Interface(iterator.clone(), vec![], bound_assoc, TyAttr::default()),
+            );
+            let self_param = [Name::new("Self")];
+            let ctx = ScopeCtx {
+                db: &db,
+                package_items: items,
+                ns_context: &[],
+                generic_params: &self_param,
+                bounds: &bounds,
+                self_ty: Some(Ty::TypeVar(Name::new("Self"), TyAttr::default())),
+            };
+            let mut diags = Vec::new();
+            lower_type_expr(&path_segments(&["Self", "Item"]), &ctx, &mut diags)
+        };
+
+        // Rigid `Self`, `Item` unbound → a symbolic projection through `Iterator`.
+        match lower_self_item(vec![]) {
+            Ty::AssociatedTypeProjection {
+                interface, member, ..
+            } => {
+                assert_eq!(member.as_str(), "Item");
+                assert_eq!(
+                    interface
+                        .expect("interface determined")
+                        .name
+                        .name()
+                        .as_str(),
+                    "Iterator"
+                );
+            }
+            other => panic!("expected a symbolic Self.Item projection, got {other:?}"),
+        }
+
+        // Pinned `Item = int` → collapses to `int`.
+        let pinned = lower_self_item(vec![(
+            Name::new("Item"),
+            Ty::Int {
+                attr: TyAttr::default(),
+            },
+        )]);
+        assert!(
+            matches!(pinned, Ty::Int { .. }),
+            "expected Self.Item to collapse to int, got {pinned:?}"
+        );
+    }
+
     #[test]
     fn substitute_paths_recurses_into_function_type() {
         let type_expr = TypeExpr::Function {
