@@ -1,0 +1,5 @@
+# 13 — Scaling the catalog: deferred & searchable tools
+
+When an agent has dozens of tools, shipping every JSON Schema on every turn dominates the prompt and defeats prompt caching. This scenario shows the proposed model handling deferred/searchable catalogs: a net-new `SearchableTools requires Tools` capability that takes a namespaced `Catalog` (with per-tool `defer` flags) plus a `SearchResolver` hook, and a default loop that intercepts a synthetic `tool_search` call. The teaching point is the divergence the seam *cannot* hide: OpenAI Responses does deferral on the wire (`tool_search` + `defer_loading`), while Anthropic has no native deferral and must be *emulated* client-side by withholding schemas and splicing them in on demand — which invalidates the prompt cache on the turns that load tools. `McpProvider` shows MCP as the cross-provider analog (discovery federated to remote servers) and where reconciling two registries gets hand-rolled. `implement.baml` is the library code (capabilities + providers + resolver); `usage.baml` is the application code; `evaluation.md` stresses it.
+
+Background: background/02-tools-and-agents.md → ## ◆ Scaling the tool catalog

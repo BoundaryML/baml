@@ -1,0 +1,5 @@
+# 17 — Within-run history + sessions (the transcript)
+
+The transcript *is* the memory: the conversation is an array of `Turn`s, you append the user **and** assistant turns (and, once tools enter, tool_use / tool_result turns), and resend the whole thing every call. This scenario models that as a new `Conversational` capability (`requires Provider`) whose `build_chat` is where the real provider divergence lives — OpenAI puts the system prompt as the first in-array message and flattens turns, Anthropic hoists `system` to a top-level field and nests content-blocks with id-correlated `tool_result`. A `Session` binds a conversation id to a pluggable 4-method `SessionStore`, and unbounded transcript growth is handled by `Windowed` / `Summarizing` providers that wrap a conversational provider and rewrite history before delegating. `implement.baml` is the library code; `usage.baml` shows the app threading a `Session` through a `.chat` companion; `evaluation.md` stresses where the stateless-client rule and server-authoritative state leak.
+
+Background: background/03-state-sessions-memory.md → ## 1. ★ Within-run history
