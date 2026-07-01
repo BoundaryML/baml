@@ -4247,6 +4247,38 @@ impl BexEngine {
                         return Err(cancelled_unhandled_throw());
                     }
 
+                    // End-of-run drain: the root task is finalizing without
+                    // ever having awaited. Fire-and-forget child errors
+                    // (default spawns whose spawner never awaited, and
+                    // `detach = true` spawns that route their unhandled
+                    // errors to the root task) are parked on this thread's
+                    // `pending_child_errors` queue, which is otherwise drained
+                    // ONLY at `Await` opcodes. Without this, a root that
+                    // completes normally drops the parked error at teardown
+                    // and exits 0, silently swallowing the throw and violating
+                    // the documented `spawn`/`detach` routing contract.
+                    //
+                    // Surface the first still-unobserved child error as an
+                    // `UnhandledThrow` — the exact variant `await f` produces,
+                    // which the host maps to a diagnostic + exit 1.
+                    // `drain_one_pending_child_error` skips errors an awaiter
+                    // already consumed (via the `deferred_errors` stash), so a
+                    // root that DID await (and possibly `catch`) its children
+                    // does not re-surface a handled error. The value is used
+                    // synchronously while the heap permit is still held (same
+                    // safety envelope as the `Await`-arm drain above), so
+                    // there is no GC-rooting concern. This branch is only
+                    // reached on the root path: children settle their future
+                    // and return early above, so `thread` here never settles a
+                    // future.
+                    if let Some(value) = self.drain_one_pending_child_error(&mut thread).await? {
+                        let external = self.vm_value_to_owned(thread.proof(), value);
+                        return Err(EngineError::UnhandledThrow {
+                            value: Box::new(external),
+                            trace: Vec::new(),
+                        });
+                    }
+
                     if let Some(capture) = root_capture.as_ref() {
                         self.capture_root_value(&thread, capture, CaptureKind::RootOutput, value);
                     }

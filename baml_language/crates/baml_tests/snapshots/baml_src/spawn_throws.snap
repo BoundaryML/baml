@@ -14,6 +14,12 @@ function spawn_throws.$init_test_ns_spawn_throws_spawn_throws(registry: testing.
     load_const null
     call testing.TestCollector.register_test
     pop 1
+    load_var registry
+    load_const "caught_after_sleep_not_double_surfaced"
+    make_closure .<lambda($init_test_ns_spawn_throws_spawn_throws, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
     load_const null
     return
 }
@@ -64,4 +70,33 @@ function spawn_throws.boom_io_x() -> int {
     load_const "x"
     init_instance baml.errors.Io .message
     throw
+}
+
+function spawn_throws.caught_after_sleep_not_double_surfaced_fn() -> int {
+    make_closure .<lambda(caught_after_sleep_not_double_surfaced_fn, 0)>, 0
+    load_const null
+    load_const null
+    spawn
+    store_var _3
+    load_const 30n
+    call baml.time.Duration.from_milliseconds
+    sys_op baml.sys.sleep
+    pop 1
+    load_var _3
+    await
+    jump L2
+    load_var e
+    is_type baml.errors.Io
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var e
+    rethrow
+
+  L1:
+    load_const 99
+
+  L2:
+    return
 }

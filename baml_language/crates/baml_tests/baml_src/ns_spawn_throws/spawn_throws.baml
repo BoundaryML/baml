@@ -46,3 +46,19 @@ function await_rethrows_caught_by_user_catch_fn() -> int {
 test "await_rethrows_caught_by_user_catch" {
     assert.is_true(baml.deep_equals(await_rethrows_caught_by_user_catch_fn(), 99))
 }
+
+// B-612 regression lock: an erroring child whose error IS observed (awaited and
+// caught) must NOT be re-surfaced by the end-of-run drain. The `sleep` lets the
+// child throw and enqueue its error on the parent's fire-and-forget queue BEFORE
+// the await, so the await path consumes the deferred error; the drain that runs
+// when this function's root completes must then find nothing (the stash entry is
+// gone) and return the caught value cleanly rather than double-surfacing.
+function caught_after_sleep_not_double_surfaced_fn() -> int {
+    let f = spawn { boom_io_x() };
+    baml.sys.sleep(baml.time.Duration.from_milliseconds(30n));
+    (await f) catch (e) { baml.errors.Io => 99 }
+}
+
+test "caught_after_sleep_not_double_surfaced" {
+    assert.is_true(baml.deep_equals(caught_after_sleep_not_double_surfaced_fn(), 99))
+}
