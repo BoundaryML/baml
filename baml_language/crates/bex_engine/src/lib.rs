@@ -85,10 +85,7 @@ use std::{
 
 use ::bex_heap::{HeapPermit as _, Tlab};
 // Re-export event types for callers.
-use ::bex_vm_types::{
-    RootHaver,
-    types::{FutureId, InterfaceImplsByPackage},
-};
+use ::bex_vm_types::{RootHaver, types::FutureId};
 use ::core::sync::atomic::AtomicBool;
 use async_trait::async_trait;
 pub use bex_events::{
@@ -686,11 +683,16 @@ pub struct BexEngine {
 
     futures: FutureManager,
 
-    /// Per-program interface-impl registry (BEP-044), kept here so every spawned
-    /// VM (including post-`$init` workers) sees the same map without cloning the
-    /// underlying `IndexMap`. Drives the interface-method resolver and `type`
-    /// reflection.
-    interface_impls: Arc<InterfaceImplsByPackage>,
+    /// Loaded packages (name → `Object::Package` pointer), shared with every VM
+    /// so spawned workers see the same index. The source of truth for interface
+    /// dispatch, recursive aliases, and named-item lookup.
+    packages: Arc<indexmap::IndexMap<baml_type::Name, bex_vm_types::HeapPtr>>,
+
+    /// Builtin `baml.errors.*` / `baml.panics.*` class pointers, resolved once
+    /// from `packages` and shared with every spawned VM (each `BexVm` would
+    /// otherwise re-resolve them from `packages` on construction).
+    error_class_ptrs: Arc<[bex_vm_types::HeapPtr]>,
+    panic_class_ptrs: Arc<[bex_vm_types::HeapPtr]>,
 
     /// Snapshot of the `BAML_PROFILE` master switch, taken once at
     /// construction (the config is read-once per process). Gates every
@@ -1365,8 +1367,20 @@ impl BexEngine {
             })
             .collect();
 
-        // Create the unified heap with compile-time objects
-        let heap = BexHeap::new(compile_time_objects);
+        // Create the unified heap with compile-time objects, additionally
+        // allocating the per-package `Object::Package` / `Object::ImplRule`
+        // objects and the `vm.packages` index.
+        let (heap, vm_packages) = bex_vm::package_load::build_heap_with_packages(
+            compile_time_objects,
+            &bytecode.packages,
+        );
+        // Shared with every VM so spawned workers see the same package index
+        // without re-resolving it.
+        let packages = Arc::new(vm_packages);
+        // Resolve the builtin error/panic class pointers once; shared with every
+        // spawned VM rather than re-resolved per `BexVm::new`.
+        let error_class_ptrs = bex_vm::vm::resolve_error_class_ptrs(&packages);
+        let panic_class_ptrs = bex_vm::vm::resolve_panic_class_ptrs(&packages);
 
         // Convert ObjectIndex -> HeapPtr for function lookup table.
         // Now that the heap exists, we can get stable pointers to compile-time objects.
@@ -1419,9 +1433,6 @@ impl BexEngine {
         #[cfg(not(target_arch = "wasm32"))]
         let park_requested = Arc::new(AtomicBool::new(false));
 
-        let interface_impls: Arc<InterfaceImplsByPackage> =
-            Arc::new(bytecode.interface_impls.clone());
-
         // Run $init for each package in dependency order.
         // $init evaluates top-level let-binding initializers and stores their
         // results into the global slots via StoreGlobal instructions.
@@ -1431,15 +1442,12 @@ impl BexEngine {
                 let mut vm = BexVm::new(
                     Arc::clone(&heap),
                     VmGlobals::Owned(globals_pool.clone()),
-                    resolved_class_names
-                        .iter()
-                        .chain(resolved_enum_names.iter())
-                        .map(|(k, v)| (k.clone(), *v))
-                        .collect(),
                     #[cfg(not(target_arch = "wasm32"))]
                     Arc::clone(&park_requested),
                     Arc::clone(&argv),
-                    Arc::clone(&interface_impls),
+                    Arc::clone(&packages),
+                    Arc::clone(&error_class_ptrs),
+                    Arc::clone(&panic_class_ptrs),
                 );
                 vm.set_entry_point(*init_ptr, &[]);
                 // Drive the VM to completion. $init only contains synchronous
@@ -1541,7 +1549,9 @@ impl BexEngine {
             template_strings_macros: Arc::new(bytecode.template_strings_macros),
             class_definitions: Arc::new(class_definitions),
             enum_definitions: Arc::new(enum_definitions),
-            type_alias_definitions: Arc::new(bytecode.recursive_type_alias_defs),
+            type_alias_definitions: Arc::new(bex_vm::package_load::all_recursive_type_aliases(
+                &packages,
+            )),
             runtime_io,
         };
 
@@ -1566,7 +1576,9 @@ impl BexEngine {
             park_requested,
             active_calls: Mutex::new(HashMap::new()),
             futures: FutureManager::new(futures_permit),
-            interface_impls,
+            packages,
+            error_class_ptrs,
+            panic_class_ptrs,
             prof_enabled,
         })
     }
@@ -2411,15 +2423,12 @@ impl BexEngine {
         let vm = BexVm::new(
             Arc::clone(&self.heap),
             VmGlobals::Shared(self.globals.clone()),
-            self.resolved_class_names
-                .iter()
-                .chain(self.resolved_enum_names.iter())
-                .map(|(k, v)| (k.clone(), *v))
-                .collect(),
             #[cfg(not(target_arch = "wasm32"))]
             Arc::clone(&self.park_requested),
             Arc::clone(&self.argv),
-            Arc::clone(&self.interface_impls),
+            Arc::clone(&self.packages),
+            Arc::clone(&self.error_class_ptrs),
+            Arc::clone(&self.panic_class_ptrs),
         );
         // BEP-034: wrap the root VM in a `BexThread` from the outset so the
         // permit's `RootHaver` is the thread (delegating to the inner VM).
@@ -3863,15 +3872,12 @@ impl BexEngine {
         let mut child_vm = BexVm::new(
             Arc::clone(&self.heap),
             VmGlobals::Shared(self.globals.clone()),
-            self.resolved_class_names
-                .iter()
-                .chain(self.resolved_enum_names.iter())
-                .map(|(k, v)| (k.clone(), *v))
-                .collect(),
             #[cfg(not(target_arch = "wasm32"))]
             Arc::clone(&self.park_requested),
             Arc::clone(&self.argv),
-            Arc::clone(&self.interface_impls),
+            Arc::clone(&self.packages),
+            Arc::clone(&self.error_class_ptrs),
+            Arc::clone(&self.panic_class_ptrs),
         );
         child_vm.prof_thread_id = prof_thread_id;
         child_vm.prof_suppressed = prof_suppressed;

@@ -50,6 +50,182 @@ fn build_alias_caches(
     caches
 }
 
+/// Build the runtime [`InterfaceDef`](bex_vm_types::types::InterfaceDef) signature
+/// — generic-param bounds, `requires`, associated-type bounds, fields, and method
+/// signatures — for one interface, from its item-tree declaration.
+///
+/// Type expressions are lowered in the interface's own scope (so its generic
+/// params resolve to `TypeVar`s) and narrowed to runtime types via
+/// [`baml_type::lower_to_runtime`] — the faithful converter that preserves type
+/// vars for reflection, NOT the value-erasing `convert_tir_ty_for_runtime`. Bound
+/// and `requires` targets become [`baml_type::RuntimeInterface`] (via
+/// `RuntimeInterface::new`, which canonicalizes associated-binding order).
+fn build_interface_def(
+    db: &dyn baml_compiler2_mir::Db,
+    file: baml_base::SourceFile,
+    iface_data: &baml_compiler2_hir::item_tree::Interface,
+    iface_tn: baml_type::TypeName,
+    resolved: &ResolvedAliases,
+) -> bex_vm_types::types::InterfaceDef {
+    use baml_compiler2_tir::{lower_type_expr::lower_type_expr_in_ns, ty};
+    use baml_type::RuntimeInterface;
+    use bex_vm_types::types::{InterfaceDef, InterfaceMethodDef};
+
+    let item_tree = file_item_tree(db, file);
+    let pkg_info = file_package(db, file);
+    let pkg_id = PackageId::new(db, pkg_info.package.clone());
+    let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
+    let ns = &pkg_info.namespace_path;
+    let generics = &iface_data.generic_params;
+
+    // Lower a type expr in `scope` (diagnostics discarded — the declaration was
+    // validated upstream) and narrow to a runtime type. This can legitimately fail
+    // for a *valid* program: an interface method signature may mention `Self` or an
+    // associated type (`Self.Item`), which this isolated scope does not substitute
+    // (unlike the MIR's `lower_signature_runtime_ty`), so they lower to `Unknown`
+    // and are dropped. (Faithfully lowering them is future work, tracked for when a
+    // consumer actually reads the method signatures — see the interface reflection
+    // follow-up.)
+    let lower_rt = |expr: &TypeExpr, scope: &[Name]| -> Option<RuntimeTy> {
+        let mut diags = Vec::new();
+        let ty = lower_type_expr_in_ns(db, expr, pkg_items, ns, scope, &mut diags);
+        baml_type::lower_to_runtime(&ty, resolved).ok()
+    };
+    // Lower an interface bound / `requires` target to its runtime form. A
+    // non-interface bound (rejected upstream) yields `None` and is skipped, as does
+    // a bound that mentions an unsubstituted `Self`/associated type (see `lower_rt`).
+    let lower_iface = |expr: &TypeExpr, scope: &[Name]| -> Option<RuntimeInterface> {
+        let mut diags = Vec::new();
+        let ty::Ty::Interface(qtn, args, assoc, _) =
+            lower_type_expr_in_ns(db, expr, pkg_items, ns, scope, &mut diags)
+        else {
+            return None;
+        };
+        let generics = args
+            .iter()
+            .map(|a| baml_type::lower_to_runtime(a, resolved))
+            .collect::<Result<Vec<_>, _>>()
+            .ok()?;
+        let associated_types = assoc
+            .iter()
+            .map(|(n, t)| baml_type::lower_to_runtime(t, resolved).map(|rt| (n.clone(), rt)))
+            .collect::<Result<Vec<_>, _>>()
+            .ok()?;
+        Some(RuntimeInterface::new(qtn, generics, associated_types))
+    };
+    // A method's runtime signature: Required params → positional `args`, optional
+    // (defaulted) params → `kwargs`; the `self` receiver is dropped; absent
+    // return/throws lower to `Void`. The method's own generics extend the scope.
+    let build_method = |name: &Name,
+                        method_generics: &[Name],
+                        params: &[baml_compiler2_hir::item_tree::FunctionParam],
+                        return_type: Option<&TypeExpr>,
+                        throws: Option<&TypeExpr>|
+     -> InterfaceMethodDef {
+        let scope: Vec<Name> = generics.iter().chain(method_generics).cloned().collect();
+        let void = || RuntimeTy::Void {
+            attr: TyAttr::default(),
+        };
+        let mut args = Vec::new();
+        let mut kwargs = Vec::new();
+        for p in params {
+            if p.name.as_str() == "self" {
+                continue;
+            }
+            let Some(ty) = p.type_expr.as_ref().and_then(|te| lower_rt(te, &scope)) else {
+                continue;
+            };
+            if p.default.is_some() {
+                kwargs.push((p.name.clone(), ty));
+            } else {
+                args.push(ty);
+            }
+        }
+        InterfaceMethodDef {
+            name: name.clone(),
+            args,
+            kwargs,
+            returns: return_type
+                .and_then(|te| lower_rt(te, &scope))
+                .unwrap_or_else(void),
+            errors: throws
+                .and_then(|te| lower_rt(te, &scope))
+                .unwrap_or_else(void),
+        }
+    };
+
+    // A generic param carries at most one bound today; lower it (or none).
+    let args = generics
+        .iter()
+        .enumerate()
+        .map(|(i, param)| {
+            let bound = iface_data
+                .generic_param_bounds
+                .get(i)
+                .and_then(Option::as_ref)
+                .and_then(|expr| lower_iface(expr, generics));
+            (param.clone(), bound.into_iter().collect())
+        })
+        .collect();
+    let requires = iface_data
+        .requires
+        .iter()
+        .filter_map(|expr| lower_iface(expr, generics))
+        .collect();
+    let assoc = iface_data
+        .associated_types
+        .iter()
+        .filter_map(|at| {
+            at.bound
+                .as_ref()
+                .and_then(|b| lower_iface(b, generics))
+                .map(|ri| (at.name.clone(), ri))
+        })
+        .collect();
+    let fields = iface_data
+        .fields
+        .iter()
+        .filter_map(|f| {
+            f.type_expr
+                .as_ref()
+                .and_then(|te| lower_rt(te, generics))
+                .map(|rt| (f.name.clone(), rt))
+        })
+        .collect();
+    let mut methods: Vec<InterfaceMethodDef> = iface_data
+        .required_methods
+        .iter()
+        .map(|m| {
+            build_method(
+                &m.name,
+                &m.generic_params,
+                &m.params,
+                m.return_type.as_ref(),
+                m.throws.as_ref(),
+            )
+        })
+        .collect();
+    methods.extend(iface_data.default_methods.iter().map(|&fid| {
+        let f = &item_tree[fid];
+        build_method(
+            &f.name,
+            &f.generic_params,
+            &f.params,
+            f.return_type.as_ref(),
+            f.throws.as_ref(),
+        )
+    }));
+
+    InterfaceDef {
+        name: iface_tn,
+        args,
+        requires,
+        assoc,
+        fields,
+        methods,
+    }
+}
+
 /// Build the program-wide interface-implementation registry for the runtime
 /// resolver.
 ///
@@ -60,17 +236,21 @@ fn build_alias_caches(
 /// selection) to dispatch an interface method — operator overloading today;
 /// reflection once unified. Built from the item tree in two parts: (a)
 /// out-of-body `implements_for` blocks; (b) methods folded onto a class.
-fn build_interface_impls(
+fn build_packages(
     db: &dyn baml_compiler2_mir::Db,
     all_files: &[baml_base::SourceFile],
     alias_caches: &HashMap<Name, ResolvedAliases>,
-) -> bex_vm_types::types::InterfaceImplsByPackage {
+    function_indices: &HashMap<String, usize>,
+    interface_indices: &HashMap<baml_type::TypeName, usize>,
+    program_packages: &mut indexmap::IndexMap<Name, bex_vm_types::types::ProgramPackage>,
+) {
     use baml_compiler2_tir::{
         lower_type_expr::{lower_type_expr_in_ns, qualify_def},
         ty,
     };
-    use bex_vm_types::types::{
-        InterfaceBound, InterfaceImplsByPackage, MethodImpl, RuntimeImplRule,
+    use bex_vm_types::{
+        ObjectIndex,
+        types::{InterfaceBound, ProgramImplRule, ProgramMethodImpl},
     };
 
     type IfaceParts = (
@@ -104,11 +284,25 @@ fn build_interface_impls(
         Some((qtn.clone(), arg_templates, assoc_templates))
     }
 
-    // Sort key for a deterministic registry order. `display_name` is excluded from
-    // `Eq`, so key on the module path plus the short name.
-    fn tn_sort_key(tn: &baml_type::TypeName) -> (Vec<Name>, Name) {
-        (tn.module_path(), tn.name().clone())
-    }
+    // Resolve a function FQN to its emitted object index. `function_indices` holds
+    // every function except `$compiler_intrinsic` / `$await_any` bodies, which
+    // Pass 4 does not emit as callable objects — so a `None` here means the impl/
+    // default method has such a body. The stdlib only ever uses those bodies on
+    // free functions, never interface methods, so this is currently unreachable;
+    // but that convention isn't enforced, so we drop just that method (losing a
+    // dispatch, never adding a wrong one) rather than panic, and the `debug_assert`
+    // catches any regression in the tested corpus.
+    // TODO: make this unrepresentable — reject `$compiler_intrinsic`/`$await_any`
+    // bodies on interface impl and default methods upstream (a check-time
+    // diagnostic), after which this can become a hard `expect`.
+    let resolve_fqn = |fqn: &str| -> Option<ObjectIndex> {
+        let idx = function_indices.get(fqn).copied();
+        debug_assert!(
+            idx.is_some(),
+            "impl method `{fqn}` has no emitted function object",
+        );
+        idx.map(ObjectIndex::from_raw)
+    };
 
     // Per interface, its default methods (`name → fn FQN`). An implementing rule
     // inherits these for any method it doesn't override, so each baked rule's
@@ -198,20 +392,24 @@ fn build_interface_impls(
     };
     // Fill a rule's method table with the interface's defaults (override winning),
     // each carrying the interface frame it is invoked with.
-    let merge_defaults = |methods: &mut indexmap::IndexMap<Name, MethodImpl>,
+    let merge_defaults = |methods: &mut indexmap::IndexMap<Name, ProgramMethodImpl>,
                           iface_tn: &baml_type::TypeName,
                           interface_frame: &[baml_type::TyTemplate]| {
         if let Some(defaults) = iface_defaults.get(iface_tn) {
             for (name, fqn) in defaults {
-                methods.entry(name.clone()).or_insert_with(|| MethodImpl {
-                    fqn: fqn.clone(),
-                    frame: interface_frame.to_vec(),
-                });
+                let Some(fqn_idx) = resolve_fqn(fqn) else {
+                    continue;
+                };
+                methods
+                    .entry(name.clone())
+                    .or_insert_with(|| ProgramMethodImpl {
+                        fqn: fqn_idx,
+                        frame: interface_frame.to_vec(),
+                    });
             }
         }
     };
 
-    let mut interface_impls: InterfaceImplsByPackage = indexmap::IndexMap::new();
     for file in all_files {
         let item_tree = file_item_tree(db, *file);
         let pkg_info = file_package(db, *file);
@@ -304,28 +502,38 @@ fn build_interface_impls(
                 (0..u32::try_from(imp.generic_params.len()).expect("generic arity fits u32"))
                     .map(baml_type::TyTemplate::TypeArgRef)
                     .collect();
+            let Some(interface_head) = interface_indices
+                .get(&iface_tn)
+                .copied()
+                .map(ObjectIndex::from_raw)
+            else {
+                continue;
+            };
             let mut methods = indexmap::IndexMap::new();
             for &m in &imp.methods {
+                let fqn = def_to_item_ref(db, Definition::Function(FunctionLoc::new(db, *file, m)))
+                    .to_string();
+                let Some(fqn) = resolve_fqn(&fqn) else {
+                    continue;
+                };
                 methods.insert(
                     item_tree[m].name.clone(),
-                    MethodImpl {
-                        fqn: def_to_item_ref(
-                            db,
-                            Definition::Function(FunctionLoc::new(db, *file, m)),
-                        )
-                        .to_string(),
+                    ProgramMethodImpl {
+                        fqn,
                         frame: impl_frame.clone(),
                     },
                 );
             }
             let iface_frame = interface_frame(&iface_tn, &interface_args, &interface_assoc);
             merge_defaults(&mut methods, &iface_tn, &iface_frame);
-            interface_impls
+            program_packages
                 .entry(pkg_info.package.clone())
                 .or_default()
-                .entry(iface_tn)
+                .impl_rules
+                .entry(interface_head)
                 .or_default()
-                .push(RuntimeImplRule {
+                .push(ProgramImplRule {
+                    interface_head,
                     for_ty_pattern,
                     generic_param_bounds,
                     interface_args,
@@ -416,29 +624,38 @@ fn build_interface_impls(
                 // given `(type, Iface<Args>)` unique, so this picks exactly this
                 // block's methods even when the class implements the same
                 // interface at another instantiation.
-                let mut methods: indexmap::IndexMap<Name, MethodImpl> = class_method_impls
+                let Some(interface_head) = interface_indices
+                    .get(&iface_tn)
+                    .copied()
+                    .map(ObjectIndex::from_raw)
+                else {
+                    continue;
+                };
+                let mut methods: indexmap::IndexMap<Name, ProgramMethodImpl> = class_method_impls
                     .iter()
                     .filter(|(m_iface_tn, m_args, _, _)| {
                         *m_iface_tn == iface_tn && *m_args == interface_args
                     })
-                    .map(|(_, _, name, fqn)| {
-                        (
+                    .filter_map(|(_, _, name, fqn)| {
+                        Some((
                             name.clone(),
-                            MethodImpl {
-                                fqn: fqn.clone(),
+                            ProgramMethodImpl {
+                                fqn: resolve_fqn(fqn)?,
                                 frame: impl_frame.clone(),
                             },
-                        )
+                        ))
                     })
                     .collect();
                 let iface_frame = interface_frame(&iface_tn, &interface_args, &interface_assoc);
                 merge_defaults(&mut methods, &iface_tn, &iface_frame);
-                interface_impls
+                program_packages
                     .entry(pkg_info.package.clone())
                     .or_default()
-                    .entry(iface_tn)
+                    .impl_rules
+                    .entry(interface_head)
                     .or_default()
-                    .push(RuntimeImplRule {
+                    .push(ProgramImplRule {
+                        interface_head,
                         for_ty_pattern: for_ty_pattern.clone(),
                         generic_param_bounds: generic_param_bounds.clone(),
                         interface_args,
@@ -449,21 +666,27 @@ fn build_interface_impls(
         }
     }
 
-    // Deterministic order: files/classes iterate from unordered maps, so sort by
-    // package, then interface, then rule. Within one interface a `for_ty_pattern`
-    // is unique (overlap is a coherence error).
-    interface_impls.sort_keys();
-    for pkg_impls in interface_impls.values_mut() {
-        pkg_impls.sort_by_cached_key(|tn, _| tn_sort_key(tn));
-        for rules in pkg_impls.values_mut() {
-            // Primary key is the rendered pattern; its `Display` drops module paths,
-            // so two distinct same-short-name for-types tie. `{:?}` carries the
-            // module-qualified identity and breaks the tie deterministically (rather
-            // than falling back to unordered-map insertion order). The interface
-            // instantiation (args + associated bindings) is folded in last so the
-            // same for-type implementing one interface at several instantiations
-            // (e.g. `Converter<int>` + `Converter<float>`) orders by content rather
-            // than declaration order.
+    // Deterministic order: files/classes iterate from unordered maps. Impl rules
+    // are keyed by their interface's object index (assigned in deterministic
+    // emission order); within one interface a `for_ty_pattern` is unique (overlap
+    // is a coherence error). The primary rule key is the rendered pattern; its
+    // `Display` drops module paths, so two distinct same-short-name for-types tie.
+    // `{:?}` carries the module-qualified identity and breaks the tie (rather than
+    // falling back to unordered-map insertion order). The interface instantiation
+    // (args + associated bindings) is folded in last so the same for-type
+    // implementing one interface at several instantiations (e.g. `Converter<int>`
+    // + `Converter<float>`) orders by content rather than declaration order.
+    // Package-level ordering is finalized by the caller once every map is built.
+    for pkg in program_packages.values_mut() {
+        // Sort every per-package map so the serialized `Program` is byte-reproducible
+        // regardless of the source map's iteration order (`recursive_type_aliases` in
+        // particular is sourced from a `std::HashMap` with a per-process seed).
+        pkg.classes.sort_keys();
+        pkg.enums.sort_keys();
+        pkg.recursive_type_aliases.sort_keys();
+        pkg.interfaces.sort_keys();
+        pkg.impl_rules.sort_keys();
+        for rules in pkg.impl_rules.values_mut() {
             rules.sort_by_cached_key(|rule| {
                 (
                     rule.for_ty_pattern.to_string(),
@@ -474,7 +697,6 @@ fn build_interface_impls(
             });
         }
     }
-    interface_impls
 }
 
 pub(crate) use emit::compile_mir_function;
@@ -743,6 +965,14 @@ pub fn generate_project_bytecode_with_opt(
         }
     }
 
+    // The per-package program structure the loader builds `Object::Package` +
+    // `vm.packages` from. Accumulated across passes 2/3/3b (classes, enums,
+    // interfaces) and `build_packages` (impl rules); interface object indices are
+    // tracked alongside so impl rules can point at them by index.
+    let mut interface_object_indices: HashMap<baml_type::TypeName, usize> = HashMap::new();
+    let mut program_packages: indexmap::IndexMap<Name, bex_vm_types::types::ProgramPackage> =
+        indexmap::IndexMap::new();
+
     // --- Pass 2: Build classes table ---
     // Maps fully-qualified class name -> (field name -> field index).
     // Also builds class_object_indices: class fq_name -> object index in program.objects.
@@ -875,6 +1105,17 @@ pub fn generate_project_bytecode_with_opt(
             })));
             // Register with fully-qualified name for inter-package lookups.
             class_object_indices.insert(fq_name.clone(), class_obj_idx);
+            program_packages
+                .entry(pkg_info.package.clone())
+                .or_default()
+                .classes
+                .insert(
+                    bex_vm_types::types::LocalName {
+                        namespace: pkg_info.namespace_path.clone(),
+                        name: class_data.name.clone(),
+                    },
+                    ObjectIndex::from_raw(class_obj_idx),
+                );
             classes.insert(fq_name.clone(), field_indices);
             // MIR TypeName display for user-defined classes omits the `user.`
             // package prefix in diagnostics/snapshots. Register the same key
@@ -962,7 +1203,52 @@ pub fn generate_project_bytecode_with_opt(
                 ty_attr: TyAttr::default(),
             })));
             enum_object_indices.insert(fq_name.clone(), enum_obj_idx);
+            program_packages
+                .entry(pkg_info.package.clone())
+                .or_default()
+                .enums
+                .insert(
+                    bex_vm_types::types::LocalName {
+                        namespace: pkg_info.namespace_path.clone(),
+                        name: enum_data.name.clone(),
+                    },
+                    ObjectIndex::from_raw(enum_obj_idx),
+                );
             enum_variants.insert(fq_name, variant_map);
+        }
+    }
+
+    // --- Pass 3b: Build interface objects + start the per-package structure ---
+    // Each interface becomes an `Object::Interface` so impl rules can point at it
+    // (`interface_head`) and packages can reference it by index. The full signature
+    // (args/requires/assoc/fields/methods) is filled by `build_interface_def`.
+    // `program_packages` is the per-package structure the loader builds
+    // `Object::Package` + `vm.packages` from; `build_packages` fills in each
+    // package's impl rules below.
+    for file in &all_files {
+        let item_tree = file_item_tree(db, *file);
+        let pkg_info = file_package(db, *file);
+        let resolved = &alias_caches[&pkg_info.package];
+        for (iface_id, iface_data) in &item_tree.interfaces {
+            let iface_tn = baml_compiler2_tir::lower_type_expr::qualify_def(
+                db,
+                Definition::Interface(InterfaceLoc::new(db, *file, *iface_id)),
+                &iface_data.name,
+            );
+            let iface_def = build_interface_def(db, *file, iface_data, iface_tn.clone(), resolved);
+            let iface_obj_idx = program.add_object(Object::Interface(Box::new(iface_def)));
+            interface_object_indices.insert(iface_tn, iface_obj_idx);
+            program_packages
+                .entry(pkg_info.package.clone())
+                .or_default()
+                .interfaces
+                .insert(
+                    bex_vm_types::types::LocalName {
+                        namespace: pkg_info.namespace_path.clone(),
+                        name: iface_data.name.clone(),
+                    },
+                    ObjectIndex::from_raw(iface_obj_idx),
+                );
         }
     }
 
@@ -1385,20 +1671,38 @@ pub fn generate_project_bytecode_with_opt(
     // Pass 7 is intentionally empty.
 
     // --- Pass 7.5: Recursive type alias definitions (ctx.output_format bridge) ---
-    // Mirrors the legacy pipeline: only recursive aliases are stored in
-    // `Program.recursive_type_alias_defs`; non-recursive aliases are expanded inline
+    // Mirrors the legacy pipeline: only recursive aliases are stored per package
+    // (`Package.recursive_type_aliases`); non-recursive aliases are expanded inline
     // by `convert_tir_ty_for_runtime`. This is required for correct output_format rendering at runtime.
     for cache in alias_caches.values() {
         for (qtn, tir_ty) in &cache.aliases {
             if cache.recursive.contains(qtn) {
                 let mir_ty = cache.convert(tir_ty);
-                let type_name = qtn.clone();
-                program.recursive_type_alias_defs.insert(type_name, mir_ty);
+                program_packages
+                    .entry(qtn.package().clone())
+                    .or_default()
+                    .recursive_type_aliases
+                    .insert(
+                        bex_vm_types::types::LocalName {
+                            namespace: qtn.namespace().clone(),
+                            name: qtn.name().clone(),
+                        },
+                        mir_ty,
+                    );
             }
         }
     }
 
-    program.interface_impls = build_interface_impls(db, &all_files, &alias_caches);
+    build_packages(
+        db,
+        &all_files,
+        &alias_caches,
+        &program.function_indices,
+        &interface_object_indices,
+        &mut program_packages,
+    );
+    program_packages.sort_keys();
+    program.packages = program_packages;
 
     // --- Pass 8: Test cases (only when requested) ---
     if options.emit_test_cases {

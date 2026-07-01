@@ -133,13 +133,11 @@ fn opt_int_value(o: Option<i64>) -> Value {
 }
 
 fn error_value(vm: &mut BexVm, e: &ErrInfo) -> Result<Value, VmRustFnError> {
-    let enm_ptr = vm
-        .resolved_class_names
-        .get(CSV_ERROR_KIND_FQN)
-        .copied()
-        .ok_or_else(|| VmInternalError::MissingNativeFunction {
+    let enm_ptr = vm.lookup_type_by_fqn(CSV_ERROR_KIND_FQN).ok_or_else(|| {
+        VmInternalError::MissingNativeFunction {
             name: CSV_ERROR_KIND_FQN.to_string(),
-        })?;
+        }
+    })?;
     let idx = match vm.get_object(enm_ptr) {
         Object::Enum(en) => en
             .variants
@@ -182,13 +180,11 @@ fn need_data_value(vm: &mut BexVm) -> Value {
 }
 
 fn done_value(vm: &mut BexVm) -> Result<Value, VmRustFnError> {
-    let class_ptr = vm
-        .resolved_class_names
-        .get(ITER_DONE_FQN)
-        .copied()
-        .ok_or_else(|| VmInternalError::MissingNativeFunction {
+    let class_ptr = vm.lookup_type_by_fqn(ITER_DONE_FQN).ok_or_else(|| {
+        VmInternalError::MissingNativeFunction {
             name: ITER_DONE_FQN.to_string(),
-        })?;
+        }
+    })?;
     Ok(Value::object(vm.alloc_instance(class_ptr, vec![])))
 }
 
@@ -1314,7 +1310,11 @@ enum Target {
     Bigint,
     Float,
     Bool,
-    Enum(String),
+    // Keep the enum's `TypeName` (not its rendered string) so it can be resolved
+    // through `vm.lookup_type`, which handles user-package enums; the rendered
+    // `class_key` elides the `user.` prefix and is not a valid `lookup_type_by_fqn`
+    // key.
+    Enum(baml_type::TypeName),
     Instant,
     PlainDate,
     PlainDateTime,
@@ -1343,7 +1343,7 @@ fn classify_cell_ty(ty: &baml_type::RuntimeTy) -> Result<CellTy, String> {
         RuntimeTy::Bigint { .. } => Target::Bigint,
         RuntimeTy::Float { .. } => Target::Float,
         RuntimeTy::Bool { .. } => Target::Bool,
-        RuntimeTy::Enum(qtn, _) => Target::Enum(class_key(qtn)),
+        RuntimeTy::Enum(qtn, _) => Target::Enum(qtn.clone()),
         RuntimeTy::Class(qtn, _, _) if class_key(qtn) == INSTANT_FQN => Target::Instant,
         RuntimeTy::Class(qtn, _, _) if class_key(qtn) == PLAINDATE_FQN => Target::PlainDate,
         RuntimeTy::Class(qtn, _, _) if class_key(qtn) == PLAINDATETIME_FQN => Target::PlainDateTime,
@@ -1406,9 +1406,9 @@ fn convert_cell(vm: &mut BexVm, text: &str, target: &Target) -> Result<Conv, VmR
                 Conv::Bad(format!("cannot convert {text:?} to bool"))
             }
         }
-        Target::Enum(key) => {
-            let Some(enm_ptr) = vm.resolved_class_names.get(key.as_str()).copied() else {
-                return Ok(Conv::Bad(format!("enum `{key}` not found")));
+        Target::Enum(qtn) => {
+            let Some(enm_ptr) = vm.lookup_type(qtn) else {
+                return Ok(Conv::Bad(format!("enum `{}` not found", class_key(qtn))));
             };
             let idx = match vm.get_object(enm_ptr) {
                 Object::Enum(en) => en.variants.iter().position(|v| v.name == text),
@@ -1416,7 +1416,7 @@ fn convert_cell(vm: &mut BexVm, text: &str, target: &Target) -> Result<Conv, VmR
             };
             match idx {
                 Some(i) => Conv::Ok(Value::object(vm.alloc_variant(enm_ptr, i))),
-                None => Conv::Bad(format!("{text:?} is not a variant of `{key}`")),
+                None => Conv::Bad(format!("{text:?} is not a variant of `{}`", class_key(qtn))),
             }
         }
         Target::Instant => {
@@ -1511,7 +1511,7 @@ fn decode_record_to_instance(
         )));
     };
     let key = class_key(qtn);
-    let Some(class_ptr) = vm.resolved_class_names.get(&key).copied() else {
+    let Some(class_ptr) = vm.lookup_type(qtn) else {
         return Err(DecodeFail::Info(ErrInfo::new(
             Kind::Options,
             format!("class `{key}` not found"),
@@ -1922,18 +1922,26 @@ fn value_cell_text(vm: &BexVm, v: Value, null_value: &str) -> Result<String, Cel
                 })?
             }
             Object::Instance(inst) => {
-                let class_is =
-                    |fqn: &str| vm.resolved_class_names.get(fqn).copied() == Some(inst.class);
-                if class_is(INSTANT_FQN) {
-                    instant_cell_text(inst)?
-                } else if class_is(PLAINDATE_FQN) {
-                    plaindate_cell_text(inst)?
-                } else if class_is(PLAINDATETIME_FQN) {
-                    plaindatetime_cell_text(inst)?
-                } else {
-                    return Err(CellTextErr::Unsupported(
-                        "nested class values are not CSV cells; serialize explicitly (e.g. baml.json.to_string)".to_string(),
-                    ));
+                // Resolve the instance's class FQN once and match against the
+                // builtin date/time classes, rather than re-resolving each
+                // candidate FQN through the package index per cell.
+                let class_fqn = match vm.get_object(inst.class) {
+                    Object::Class(class) => class_key(&class.name),
+                    _ => {
+                        return Err(CellTextErr::Unsupported(
+                            "value is not representable as a CSV cell".to_string(),
+                        ));
+                    }
+                };
+                match class_fqn.as_str() {
+                    INSTANT_FQN => instant_cell_text(inst)?,
+                    PLAINDATE_FQN => plaindate_cell_text(inst)?,
+                    PLAINDATETIME_FQN => plaindatetime_cell_text(inst)?,
+                    _ => {
+                        return Err(CellTextErr::Unsupported(
+                            "nested class values are not CSV cells; serialize explicitly (e.g. baml.json.to_string)".to_string(),
+                        ));
+                    }
                 }
             }
             _ => {
@@ -2419,7 +2427,7 @@ impl BamlNamespaceCsv for PackageBamlImpl {
             return Err(throw_err(vm, &info));
         };
         let key = class_key(qtn);
-        let class_ptr = vm.resolved_class_names.get(&key).copied().ok_or_else(|| {
+        let class_ptr = vm.lookup_type(qtn).ok_or_else(|| {
             VmRustFnError::InternalError(VmInternalError::MissingNativeFunction {
                 name: format!("class `{key}` not found"),
             })
@@ -2617,9 +2625,8 @@ impl BamlNamespaceCsv for PackageBamlImpl {
         // Header names + field types from T (or the first row's class).
         let class_info = match &ty {
             Some(RuntimeTy::Class(qtn, type_args, _)) => {
-                let key = class_key(qtn);
-                vm.resolved_class_names.get(&key).copied().and_then(|ptr| {
-                    match vm.get_object(ptr) {
+                vm.lookup_type(qtn)
+                    .and_then(|ptr| match vm.get_object(ptr) {
                         Object::Class(c) => Some(
                             c.fields
                                 .iter()
@@ -2627,8 +2634,7 @@ impl BamlNamespaceCsv for PackageBamlImpl {
                                 .collect::<Vec<_>>(),
                         ),
                         _ => None,
-                    }
-                })
+                    })
             }
             _ => None,
         };

@@ -96,6 +96,37 @@ pub trait TypeContext {
     /// Powers the completeness collapse `E.A | E.B | … == E` (a union of *all* of
     /// an enum's variants is the enum itself). `None` ⇒ no collapse.
     fn enum_variants(&self, name: &QualifiedTypeName) -> Option<Vec<Name>>;
+
+    /// The declared interface bounds of associated type `assoc` on `interface` —
+    /// the `extends` clause on `type assoc extends …`, specialized through
+    /// `interface`'s generic arguments. Empty if the member is unbounded or
+    /// unknown (fail-safe → opaque, never over-claims).
+    ///
+    /// The returned `Vec` is the *conjunction* (intersection) of the bound: an
+    /// associated-type `extends` clause is always an intersection of interfaces —
+    /// never a union, and never a non-interface type such as `int` or `string`.
+    /// Because a value satisfies *every* bound, the projection is a subtype of the
+    /// supertypes of *any* one of them (the `.any()` at the rule site), matching
+    /// [`type_var_bound`](Self::type_var_bound)'s conjunction contract.
+    ///
+    /// Will power `(_ as I<…>).assoc <: B` for a *still-symbolic* projection: it
+    /// is a subtype of its bound's supertypes — the projection analogue of
+    /// [`type_var_bound`](Self::type_var_bound). Staged subtyping infrastructure:
+    /// no production `TypeContext` overrides this yet, so the default empty bound
+    /// leaves such projections opaque until a context is wired to supply bounds
+    /// (and an upstream pre-pass is expected to resolve realized-base projections
+    /// to a concrete type before they reach the rule).
+    ///
+    /// The bound is a function of `(interface, assoc)` only; a `Self`-referential
+    /// bound (one mentioning the implementor) is not expressible here — resolving
+    /// `Self` over each returned [`Interface`] would be a later step.
+    ///
+    /// Defaults to no bound, so a context that does not resolve associated types
+    /// leaves such projections opaque.
+    fn associated_type_bound(&self, interface: &Interface, assoc: Name) -> Vec<Interface> {
+        let _ = (interface, assoc);
+        Vec::new()
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -635,6 +666,20 @@ impl NormalTy {
                 ..
             } => NormalTy::AssociatedTypeProjection {
                 base: Box::new(Self::from_ty(base, ctx, expanding)),
+                // `interface: None` means the TIR has not yet determined this
+                // projection's interface (see the field's TODO on
+                // `Ty::AssociatedTypeProjection`). It is kept opaque here: the
+                // canonical form is equal only to a structurally-identical
+                // projection, so the two spellings `(T as ?).M` and `(T as I).M` of
+                // the *same* associated type are NOT equated (unlike the TIR's legacy
+                // `AssociatedProjectionResolver::projection_views_equivalent`, which
+                // resolves the `None` view against `T`'s bound).
+                //
+                // GATE: before equivalence/subtyping is flipped onto this algebra
+                // (normalization-unification plan, stage 5), the TIR must resolve
+                // interfaces to `Some(I)` so structural equality can't produce a
+                // false negative between the two spellings. Pinned by the
+                // `projection_with_unresolved_interface_is_opaque` test.
                 interface: interface
                     .as_ref()
                     .map(|i| Box::new(Self::from_ty(&i.to_ty(), ctx, expanding))),
@@ -918,6 +963,34 @@ impl NormalTy {
             // `T <: T | U` are handled by the rules above.)
             (NormalTy::TypeVar(name), _) => ctx.type_var_bound(name).iter().any(|bound| {
                 NormalTy::canonical(&bound.to_ty(), ctx).is_subtype_of(sup, ctx, assumptions)
+            }),
+
+            // A still-symbolic associated-type projection is a subtype of `sup` if
+            // any of its associated type's declared bounds is — the projection
+            // analogue of the `TypeVar` rule above. Fires only when the projection
+            // carries a resolved interface; an unresolved one (`interface: None`)
+            // stays opaque (equal only to itself, via reflexivity). A realized-base
+            // projection is intended to be resolved to a concrete type by an
+            // upstream pre-pass before reaching here. Must precede the interface
+            // arms below, which would otherwise ask `implements_interface` about a
+            // non-concrete projection.
+            (
+                NormalTy::AssociatedTypeProjection {
+                    interface: Some(iface),
+                    member,
+                    ..
+                },
+                _,
+            ) => (**iface).clone().into_interface().is_some_and(|i| {
+                ctx.associated_type_bound(&i, member.clone())
+                    .iter()
+                    .any(|bound| {
+                        NormalTy::canonical(&bound.to_ty(), ctx).is_subtype_of(
+                            sup,
+                            ctx,
+                            assumptions,
+                        )
+                    })
             }),
 
             // Concrete (or any non-interface) type implementing an interface.

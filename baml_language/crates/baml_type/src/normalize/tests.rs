@@ -4,7 +4,7 @@
 use std::collections::HashMap;
 
 use super::*;
-use crate::{Freshness, Literal, Name, QualifiedTypeName, Ty, TyAttr};
+use crate::{Freshness, FunctionParamTy, Literal, Name, QualifiedTypeName, Ty, TyAttr};
 
 // ── stub context ───────────────────────────────────────────────────────────
 
@@ -20,6 +20,8 @@ struct Ctx {
     /// Conjunction (`T: A + B`) bounds per type variable.
     var_bounds: HashMap<Name, Vec<Ty>>,
     enums: HashMap<QualifiedTypeName, Vec<Name>>,
+    /// Declared `extends` bounds per `(interface head, associated-type name)`.
+    assoc_bounds: HashMap<(QualifiedTypeName, Name), Vec<Ty>>,
 }
 
 fn nominal_head(ty: &Ty) -> Option<QualifiedTypeName> {
@@ -77,6 +79,15 @@ impl TypeContext for Ctx {
 
     fn enum_variants(&self, name: &QualifiedTypeName) -> Option<Vec<Name>> {
         self.enums.get(name).cloned()
+    }
+
+    fn associated_type_bound(&self, interface: &Interface, assoc: Name) -> Vec<Interface> {
+        self.assoc_bounds
+            .get(&(interface.name.clone(), assoc))
+            .into_iter()
+            .flatten()
+            .filter_map(Ty::as_interface)
+            .collect()
     }
 }
 
@@ -385,6 +396,194 @@ fn subtype_basics() {
         &Ty::int(),
         &ctx
     ));
+}
+
+// ── subtyping: variance, holes, unions (flip de-risk) ─────────────────────--
+
+#[test]
+fn invariant_arg_distinguishes_top_from_recovery_hole() {
+    // The exact divergence the subtyping migration relies on. Generics are
+    // invariant (TYPE_SYSTEM.md §Variance), so the genuine top type `unknown`
+    // (`BuiltinUnknown`) is invariant-distinct: `Box<unknown>` is NOT `Box<int>`.
+    // The error-recovery sentinel (`Unknown`) is different — it stays
+    // bidirectionally compatible, so a recovered `Box<Unknown>` never cascades a
+    // subtype error. Keeping the two apart is what lets error recovery use the
+    // recovery sentinel while `unknown` keeps its sound invariant identity.
+    let ctx = Ctx::default();
+    let top = Ty::BuiltinUnknown {
+        attr: TyAttr::default(),
+    };
+    let hole = Ty::Unknown {
+        attr: TyAttr::default(),
+    };
+
+    assert!(!is_subtype(
+        &class1("Box", top.clone()),
+        &class1("Box", Ty::int()),
+        &ctx
+    ));
+    assert!(!is_subtype(
+        &class1("Box", Ty::int()),
+        &class1("Box", top),
+        &ctx
+    ));
+
+    assert!(is_subtype(
+        &class1("Box", hole.clone()),
+        &class1("Box", Ty::int()),
+        &ctx
+    ));
+    assert!(is_subtype(
+        &class1("Box", Ty::int()),
+        &class1("Box", hole),
+        &ctx
+    ));
+}
+
+#[test]
+fn function_subtyping_is_contravariant_in_params_covariant_in_return() {
+    // TYPE_SYSTEM.md §Variance: `foo: (int | string) -> bool throws never` is a
+    // subtype of `(int) -> bool | float throws never` — the parameter is
+    // contravariant (`int <: int | string`) and the return covariant
+    // (`bool <: bool | float`).
+    let ctx = Ctx::default();
+    let never = Ty::Never {
+        attr: TyAttr::default(),
+    };
+    let float = Ty::Float {
+        attr: TyAttr::default(),
+    };
+    let foo = Ty::Function {
+        params: vec![FunctionParamTy::required(
+            None,
+            union(vec![Ty::int(), Ty::string()]),
+        )],
+        ret: Box::new(Ty::bool()),
+        throws: Box::new(never.clone()),
+        attr: TyAttr::default(),
+    };
+    let expected = Ty::Function {
+        params: vec![FunctionParamTy::required(None, Ty::int())],
+        ret: Box::new(union(vec![Ty::bool(), float])),
+        throws: Box::new(never),
+        attr: TyAttr::default(),
+    };
+    assert!(is_subtype(&foo, &expected, &ctx));
+    // The reverse fails: `int | string` (foo's param) is not <: `int`, so the
+    // contravariant direction rejects it.
+    assert!(!is_subtype(&expected, &foo, &ctx));
+}
+
+#[test]
+fn interface_membership_through_unions() {
+    let mut ctx = Ctx::default();
+    ctx.impls.push((qtn("Dog"), qtn("Animal")));
+    ctx.impls.push((qtn("Cat"), qtn("Animal")));
+
+    // A concrete implementor is a subtype of an interface wrapped in a union.
+    assert!(is_subtype(
+        &class("Dog"),
+        &union(vec![iface("Animal"), Ty::null()]),
+        &ctx,
+    ));
+    // A union of implementors is a subtype of the interface (left-union rule).
+    assert!(is_subtype(
+        &union(vec![class("Dog"), class("Cat")]),
+        &iface("Animal"),
+        &ctx,
+    ));
+    // …but `null` is not a member of the bare interface.
+    assert!(!is_subtype(
+        &Ty::optional(class("Dog")),
+        &iface("Animal"),
+        &ctx
+    ));
+}
+
+#[test]
+fn type_var_is_reflexive_independent_of_its_bound() {
+    // A type variable is a subtype of itself, of a union containing itself, and
+    // of its own optional — by identity, no bound needed. (The legacy oracle
+    // special-cased this before bound expansion; the canonical algebra gets it
+    // from reflexivity + the right-union rule.)
+    let ctx = Ctx::default();
+    assert!(is_subtype(&typevar("T"), &typevar("T"), &ctx));
+    assert!(is_subtype(
+        &typevar("T"),
+        &union(vec![typevar("T"), typevar("U")]),
+        &ctx,
+    ));
+    assert!(is_subtype(&typevar("T"), &Ty::optional(typevar("T")), &ctx));
+    // An unbounded `T` is not a subtype of an unrelated concrete type.
+    assert!(!is_subtype(&typevar("T"), &Ty::int(), &ctx));
+}
+
+#[test]
+fn symbolic_associated_type_projection_subtypes_via_its_bound() {
+    // `interface Iter { type Item extends Summarizable }`, with `Summarizable`
+    // transitively requiring `Displayable`. A still-symbolic projection
+    // `(T as Iter).Item` (the base is a type variable, so it can't be resolved
+    // to a concrete type) is a subtype of its declared bound's supertypes — the
+    // projection analogue of a type-var bound.
+    let mut ctx = Ctx::default();
+    ctx.assoc_bounds.insert(
+        (qtn("Iter"), Name::new("Item")),
+        vec![iface("Summarizable")],
+    );
+    ctx.requires.push((qtn("Summarizable"), qtn("Displayable")));
+
+    let proj = |interface: Option<Interface>| Ty::AssociatedTypeProjection {
+        base: Box::new(typevar("T")),
+        interface: interface.map(Box::new),
+        member: Name::new("Item"),
+        attr: TyAttr::default(),
+    };
+    let iter_proj = proj(iface("Iter").as_interface());
+
+    assert!(is_subtype(&iter_proj, &iface("Summarizable"), &ctx));
+    // …including transitively through the bound's `requires`.
+    assert!(is_subtype(&iter_proj, &iface("Displayable"), &ctx));
+    // Not a subtype of an interface the bound doesn't provide.
+    assert!(!is_subtype(&iter_proj, &iface("Unrelated"), &ctx));
+    // Reflexivity still holds (the projection is equal to itself).
+    assert!(is_subtype(&iter_proj, &iter_proj, &ctx));
+    // An unresolved-interface projection is opaque — no bound to reason through.
+    assert!(!is_subtype(&proj(None), &iface("Summarizable"), &ctx));
+}
+
+#[test]
+fn projection_with_unresolved_interface_is_opaque() {
+    // A projection whose interface the TIR has not yet determined (`interface:
+    // None`) canonicalizes opaquely: it equals only a structurally-identical
+    // projection. In particular the two spellings of the *same* associated type —
+    // `(T as ?).Item` (unresolved) and `(T as Iter).Item` (resolved) — are NOT
+    // equated by this algebra, unlike the TIR's legacy
+    // `projection_views_equivalent`. This is the known gap (review item L3): it is
+    // resolved upstream by the TIR determining the interface (filling `Some(I)`,
+    // per `Ty::AssociatedTypeProjection`'s field TODO) BEFORE equivalence is flipped
+    // onto this algebra. If that flip lands while `None` can still occur, a real
+    // `(T as ?).M` vs `(T as I).M` comparison would give a false negative — this
+    // test pins the current opaque behavior so the gap can't be crossed silently.
+    let ctx = Ctx::default();
+    let proj =
+        |base: &str, interface: Option<Interface>, member: &str| Ty::AssociatedTypeProjection {
+            base: Box::new(typevar(base)),
+            interface: interface.map(Box::new),
+            member: Name::new(member),
+            attr: TyAttr::default(),
+        };
+    let unresolved = proj("T", None, "Item");
+    let resolved = proj("T", iface("Iter").as_interface(), "Item");
+
+    // Opaque: each spelling equals only itself.
+    assert!(equivalent(&unresolved, &unresolved, &ctx));
+    assert!(equivalent(&resolved, &resolved, &ctx));
+    // The gap: unresolved and resolved spellings of the same projection are not
+    // equated structurally (the legacy view-equivalence would equate them).
+    assert!(!equivalent(&unresolved, &resolved, &ctx));
+    // Distinct member / base are never equated.
+    assert!(!equivalent(&unresolved, &proj("T", None, "Other"), &ctx));
+    assert!(!equivalent(&unresolved, &proj("U", None, "Item"), &ctx));
 }
 
 // ── aliases & recursion ──────────────────────────────────────────────────--
