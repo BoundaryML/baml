@@ -67,6 +67,17 @@ pub enum Hir2Diagnostic {
     DuplicatePatternBinding { name: Name, sites: Vec<TextRange> },
     /// A class destructure names the same field more than once.
     DuplicatePatternField { name: Name, sites: Vec<TextRange> },
+    /// Two or more fields of a class serialize to the same JSON key — either
+    /// two fields share an `@alias("k")`, or one field's name equals another
+    /// field's `@alias`. Because an aliased field's real name is never used for
+    /// matching (see `bex_sap`'s `AnnotatedField::key_matches`), such fields are
+    /// indistinguishable in the serialized schema: `ctx.output_format` renders
+    /// duplicate keys and only one field can ever be populated at parse time.
+    ///
+    /// `key` is the shared serialized key. `sites` lists the name span of every
+    /// contributing field in source order; the first is treated as the original
+    /// and the rest as duplicates.
+    DuplicateFieldAlias { key: String, sites: Vec<TextRange> },
     /// An `Or` pattern's alternatives don't all bind the same name set.
     /// A name introduced in some alternatives but not others would only
     /// sometimes be in scope in the arm body — semantically incoherent.
@@ -417,6 +428,31 @@ impl Hir2Diagnostic {
                             range: *range,
                         },
                         format!("field `{name}` destructured again here"),
+                    );
+                }
+                diag.with_phase(DiagnosticPhase::Hir)
+            }
+            Hir2Diagnostic::DuplicateFieldAlias { key, sites } => {
+                let first = sites.first().copied().unwrap_or_default();
+                let rest = sites.get(1..).unwrap_or(&[]);
+                let mut diag = Diagnostic::error(
+                    DiagnosticId::DuplicateFieldAlias,
+                    format!("Duplicate serialized key `{key}` in class"),
+                )
+                .with_secondary(
+                    Span {
+                        file_id,
+                        range: first,
+                    },
+                    format!("key `{key}` first serialized here"),
+                );
+                for range in rest {
+                    diag = diag.with_primary(
+                        Span {
+                            file_id,
+                            range: *range,
+                        },
+                        format!("also serialized as `{key}` here"),
                     );
                 }
                 diag.with_phase(DiagnosticPhase::Hir)
