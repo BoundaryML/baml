@@ -817,7 +817,7 @@ jobs:
   snapshot-tests:
     name: "snapshot tests"
     runs-on: blacksmith-8vcpu-ubuntu-2404
-    timeout-minutes: 45
+    timeout-minutes: 30
     steps:
       - uses: useblacksmith/checkout@v1
         with:
@@ -830,12 +830,7 @@ jobs:
       - name: "Install tools (mise)"
         uses: ./.github/actions/setup-mise
         with:
-          # Snapshot tests are Rust-only; skip Python/uv setup to avoid
-          # unnecessary install latency and intermittent timeout flakiness.
-          install_args: "sccache direnv cargo:cargo-nextest"
-
-      - name: "Install cargo-insta"
-        run: cargo binstall --no-confirm --version 1.48.0 cargo-insta || cargo install --locked --version 1.48.0 cargo-insta
+          install_args: "sccache direnv python uv cargo:cargo-insta cargo:cargo-nextest"
 
       - name: "Verify sccache"
         run: sccache --version
