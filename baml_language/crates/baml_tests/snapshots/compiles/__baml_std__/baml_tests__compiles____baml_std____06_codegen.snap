@@ -9340,6 +9340,15 @@ function baml.llm.stream_llm_function(client: baml.llm.Client, function_name: st
     return
 }
 
+function baml.math.mean(values: float[]) -> float {
+}
+
+function baml.math.median(values: float[]) -> float {
+}
+
+function baml.math.sum(values: float[]) -> float {
+}
+
 function baml.math.trunc(value: float) -> int {
 }
 

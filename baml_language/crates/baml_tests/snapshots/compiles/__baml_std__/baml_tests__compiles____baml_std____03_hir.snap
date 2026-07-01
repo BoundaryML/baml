@@ -1095,6 +1095,9 @@ function baml.llm.validate_finish_reason(self: ?, finish_reason: string) -> null
 lambda (ctx) in prompt: captures [body]
 
 --- <builtin>/baml/ns_math/math.baml ---
+function baml.math.mean(values: float[]) -> float  [builtin]
+function baml.math.median(values: float[]) -> float  [builtin]
+function baml.math.sum(values: float[]) -> float  [builtin]
 function baml.math.trunc(value: float) -> int  [builtin]
 
 --- <builtin>/baml/ns_media/media.baml ---

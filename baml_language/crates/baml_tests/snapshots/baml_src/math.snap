@@ -1,0 +1,79 @@
+---
+source: crates/baml_tests/tests/baml_src.rs
+---
+function math.$init_test_ns_math_math(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "math_sum_basic"
+    make_closure .<lambda($init_test_ns_math_math, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "math_sum_single"
+    make_closure .<lambda($init_test_ns_math_math, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "math_sum_negatives"
+    make_closure .<lambda($init_test_ns_math_math, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "math_sum_empty_is_zero"
+    make_closure .<lambda($init_test_ns_math_math, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "math_mean_basic"
+    make_closure .<lambda($init_test_ns_math_math, 4)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "math_mean_single"
+    make_closure .<lambda($init_test_ns_math_math, 5)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "math_mean_empty_throws"
+    make_closure .<lambda($init_test_ns_math_math, 6)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "math_median_odd"
+    make_closure .<lambda($init_test_ns_math_math, 7)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "math_median_even"
+    make_closure .<lambda($init_test_ns_math_math, 8)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "math_median_unsorted_input"
+    make_closure .<lambda($init_test_ns_math_math, 9)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "math_median_does_not_mutate_input"
+    make_closure .<lambda($init_test_ns_math_math, 10)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "math_median_empty_throws"
+    make_closure .<lambda($init_test_ns_math_math, 11)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_const null
+    return
+}

@@ -222,6 +222,9 @@ namespace baml.llm:
   function render_prompt
   function stream_llm_function<TStream, TFinal>
 namespace baml.math:
+  function mean
+  function median
+  function sum
   function trunc
 namespace baml.media:
   class Audio { methods: [url, file, base64, mime_type, from_url, from_file, from_base64] }

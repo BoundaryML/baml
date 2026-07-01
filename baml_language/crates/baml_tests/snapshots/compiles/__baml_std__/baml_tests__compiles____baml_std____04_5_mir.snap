@@ -10053,6 +10053,12 @@ fn baml.llm.Client.to_primitive_client(self: baml.llm.Client) -> baml.llm.Primit
 
 fn baml.llm.PrimitiveClient.validate_finish_reason = builtin(io)
 
+fn baml.math.mean = builtin(vm)
+
+fn baml.math.median = builtin(vm)
+
+fn baml.math.sum = builtin(vm)
+
 fn baml.math.trunc = builtin(vm)
 
 fn baml.media.Video.base64 = builtin(vm)
