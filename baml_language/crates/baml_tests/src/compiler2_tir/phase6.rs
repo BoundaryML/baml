@@ -1827,6 +1827,7 @@ function f(xs: int[]) -> int {
     );
 }
 
+/// Ensures nested subpatterns under `..` are rejected in let patterns.
 #[test]
 fn nested_refutable_array_under_rest_is_rejected_in_let() {
     let mut db = make_db();
@@ -1842,8 +1843,8 @@ function f(xs: int[]) -> int {
     let output = render_tir(&db, file);
 
     assert!(
-        output.contains("refutable pattern in let binding"),
-        "nested exact array under rest should still make the let refutable, got:\n{output}"
+        output.contains("rest pattern `..` cannot carry a sub-pattern"),
+        "nested exact array under rest should be rejected as invalid rest syntax, got:\n{output}"
     );
 }
 
@@ -1896,6 +1897,139 @@ function f(value: A | B) -> int {
     assert!(
         output.contains("Or-pattern alternatives bind `x` with conflicting types"),
         "same or-pattern binding name with incompatible types should be rejected, got:\n{output}"
+    );
+}
+
+#[test]
+fn class_destructure_unknown_field_in_let_reports_field_error() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+class Point {
+    value int
+}
+
+function f() -> int {
+    let Point { valeu } = Point { value: 1 }
+    valeu
+    return 0
+}
+"#,
+    );
+    let output = render_tir(&db, file);
+
+    assert!(
+        output.contains("class `Point` has no field `valeu`"),
+        "unknown field in let-pattern should be diagnosed at the pattern, got:\n{output}"
+    );
+    assert!(
+        output.contains("Did you mean `value`?"),
+        "unknown let-pattern field should include typo suggestion, got:\n{output}"
+    );
+    assert!(
+        !output.contains("unresolved name: valeu"),
+        "unknown field pattern should not cascade into unresolved binding errors, got:\n{output}"
+    );
+}
+
+#[test]
+fn class_destructure_unknown_field_in_match_does_not_make_next_arm_unreachable() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+class Point {
+    x int
+    y int
+}
+
+function f(p: Point) -> string {
+    match (p) {
+        Point { xx: 5 } => "a",
+        Point { x, y } => "b",
+    }
+}
+"#,
+    );
+    let output = render_tir(&db, file);
+
+    assert!(
+        output.contains("class `Point` has no field `xx`"),
+        "unknown field in match-pattern should be diagnosed, got:\n{output}"
+    );
+    assert!(
+        !output.contains("unreachable arm"),
+        "unknown class field should not collapse the arm into an irrefutable class pattern, got:\n{output}"
+    );
+}
+
+/// Ensures an unknown-field arm still counts for exhaustiveness coverage.
+#[test]
+fn class_destructure_unknown_field_arm_does_not_emit_non_exhaustive_match() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+class A {
+    value int
+}
+
+class B {
+    value int
+}
+
+function f(v: A | B) -> string {
+    match (v) {
+        A { valeu: 1 } => "a",
+        B { value } => "b",
+    }
+}
+"#,
+    );
+    let output = render_tir(&db, file);
+
+    assert!(
+        output.contains("class `A` has no field `valeu`"),
+        "unknown field in match-pattern should be diagnosed, got:\n{output}"
+    );
+    assert!(
+        !output.contains("non-exhaustive match"),
+        "invalid match arms should still participate in coverage to avoid duplicate non-exhaustive diagnostics, got:\n{output}"
+    );
+}
+
+#[test]
+fn class_destructure_unknown_field_in_for_binding_reports_field_error() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+class Item {
+    value int
+}
+
+function f(items: Item[]) -> int {
+    for (let Item { valeu } in items) {
+        valeu
+    }
+    return 0
+}
+"#,
+    );
+    let output = render_tir(&db, file);
+
+    assert!(
+        output.contains("class `Item` has no field `valeu`"),
+        "unknown field in for-binding pattern should be diagnosed, got:\n{output}"
+    );
+    assert!(
+        output.contains("Did you mean `value`?"),
+        "unknown for-binding field should include typo suggestion, got:\n{output}"
+    );
+    assert!(
+        !output.contains("unresolved name: valeu"),
+        "for-binding unknown fields should not cascade into unresolved-name diagnostics, got:\n{output}"
     );
 }
 

@@ -25,6 +25,7 @@ function user.class_destructure_unknown_field_in_let() -> int throws never {
     let Person { missing: missing } = Person { age: 1, flexible_age: 2, address: Address { zip: 3 } } : user.Person
     0 : 0
   }
+  !! 540..562: class `Person` has no field `missing`
 }
 function user.class_destructure_duplicate_field_key_in_let() -> int throws never {
   { : unknown
@@ -63,6 +64,7 @@ function user.nested_class_destructure_unknown_field_in_let() -> int throws neve
     let Person { address: Address { missing: missing } } = Person { age: 1, flexible_age: 2, address: Address { zip: 3 } } : user.Person
     0 : 0
   }
+  !! 2063..2082: class `Address` has no field `missing`
 }
 function user.match_class_destructure_unknown_field() -> int throws never {
   { : 1 | 0
@@ -72,7 +74,7 @@ function user.match_class_destructure_unknown_field() -> int throws never {
       _ =>
         0 : 0
   }
-  !! 2375..2376: unreachable arm
+  !! 2337..2355: class `Person` has no field `missing`
 }
 function user.class_destructure_unresolved_class() -> int throws never {
   { : 0
@@ -90,7 +92,6 @@ function user.class_destructure_field_pattern_type_mismatch() -> int throws neve
         0 : 0
   }
   !! 2740..2746: type mismatch: expected int, got string
-  !! 2768..2769: unreachable arm
 }
 function user.class_destructure_invalid_chain_type() -> int throws never {
   { : int
@@ -236,14 +237,13 @@ function user.nested_class_destructure_field_pattern_type_mismatch() -> int thro
         0 : 0
   }
   !! 6495..6501: type mismatch: expected int, got string
-  !! 6525..6526: unreachable arm
 }
 function user.class_destructure_unknown_renamed_field_span() -> int throws never {
   { : unknown
     let Person { missing: renamed } = Person { age: 1, flexible_age: 2, address: Address { zip: 3 } } : user.Person
     renamed : unknown
   }
-  !! 6752..6759: unresolved name: renamed
+  !! 6605..6652: class `Person` has no field `missing`
 }
 function user.lambda_class_destructure_field_pattern_type_mismatch_span() -> int throws never {
   { : int

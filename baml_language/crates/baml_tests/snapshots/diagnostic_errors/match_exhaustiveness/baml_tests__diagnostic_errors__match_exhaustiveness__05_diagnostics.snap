@@ -90,16 +90,6 @@ source: crates/baml_tests/src/generated_tests.rs
      │ Note: Error code: E0001
 ─────╯
 
-  [type] error: unreachable arm
-     ╭─[ match_exhaustiveness.baml:297:18 ]
-     │
- 297 │         false => "wrong!"
-     │                  ────┬───  
-     │                      ╰───── unreachable arm
-     │ 
-     │ Note: Error code: E0063
-─────╯
-
   [type] error: non-exhaustive match on type CustomBool; missing: false
      ╭─[ match_exhaustiveness.baml:303:5 ]
      │
@@ -424,16 +414,6 @@ source: crates/baml_tests/src/generated_tests.rs
      │          ╰── type mismatch: expected bool, got 42
      │ 
      │ Note: Error code: E0001
-─────╯
-
-  [type] error: unreachable arm
-     ╭─[ match_exhaustiveness.baml:746:15 ]
-     │
- 746 │         42 => "wrong type"
-     │               ──────┬─────  
-     │                     ╰─────── unreachable arm
-     │ 
-     │ Note: Error code: E0063
 ─────╯
 
   [type] error: non-exhaustive match on type int; missing: _

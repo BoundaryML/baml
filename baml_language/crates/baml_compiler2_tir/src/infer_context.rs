@@ -37,6 +37,12 @@ pub enum TirTypeError {
     /// - Class: "Class `X` has no member `y`"
     /// - Enum: "Enum `X` has no variant `y`"
     UnresolvedMember { base_type: Ty, member: Name },
+    /// A class destructuring pattern names a field the class does not declare.
+    UnknownClassPatternField {
+        class_name: QualifiedTypeName,
+        field_name: Name,
+        suggestions: Vec<Name>,
+    },
     /// Name could not be resolved at all.
     UnresolvedName { name: Name },
     /// Unreachable code after a diverging statement (return/break/continue).
@@ -459,6 +465,37 @@ impl fmt::Display for TirTypeError {
                         f,
                         "type `{}` has no member `{member}`",
                         base_type.render_user_facing()
+                    )
+                }
+            }
+            TirTypeError::UnknownClassPatternField {
+                class_name,
+                field_name,
+                suggestions,
+            } => {
+                if suggestions.is_empty() {
+                    write!(
+                        f,
+                        "class `{}` has no field `{field_name}`",
+                        class_name.render_user_facing()
+                    )
+                } else if suggestions.len() == 1 {
+                    write!(
+                        f,
+                        "class `{}` has no field `{field_name}`. Did you mean `{}`?",
+                        class_name.render_user_facing(),
+                        suggestions[0]
+                    )
+                } else {
+                    let joined = suggestions
+                        .iter()
+                        .map(std::string::ToString::to_string)
+                        .collect::<Vec<_>>()
+                        .join("`, `");
+                    write!(
+                        f,
+                        "class `{}` has no field `{field_name}`. Did you mean one of these: `{joined}`?",
+                        class_name.render_user_facing()
                     )
                 }
             }

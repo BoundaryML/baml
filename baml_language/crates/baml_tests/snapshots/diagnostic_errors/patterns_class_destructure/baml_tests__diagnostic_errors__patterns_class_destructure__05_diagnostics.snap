@@ -2,6 +2,16 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
+  [type] error: class `Person` has no field `missing`
+    ╭─[ patterns_class_destructure.baml:31:5 ]
+    │
+ 31 │     let Person { missing } = Person {
+    │     ───────────┬──────────  
+    │                ╰──────────── class `Person` has no field `missing`
+    │ 
+    │ Note: Error code: E0007
+────╯
+
   [hir] error: Duplicate field `age` in class destructure pattern
     ╭─[ patterns_class_destructure.baml:42:9 ]
     │
@@ -75,14 +85,24 @@ source: crates/baml_tests/src/generated_tests.rs
     │ Note: Error code: E0094
 ────╯
 
-  [type] error: unreachable arm
-     ╭─[ patterns_class_destructure.baml:104:14 ]
+  [type] error: class `Address` has no field `missing`
+    ╭─[ patterns_class_destructure.baml:92:18 ]
+    │
+ 92 │         address: Address { missing }
+    │                  ─────────┬─────────  
+    │                           ╰─────────── class `Address` has no field `missing`
+    │ 
+    │ Note: Error code: E0007
+────╯
+
+  [type] error: class `Person` has no field `missing`
+     ╭─[ patterns_class_destructure.baml:103:9 ]
      │
- 104 │         _ => 0
-     │              ┬  
-     │              ╰── unreachable arm
+ 103 │         Person { missing } => 1,
+     │         ─────────┬────────  
+     │                  ╰────────── class `Person` has no field `missing`
      │ 
-     │ Note: Error code: E0063
+     │ Note: Error code: E0007
 ─────╯
 
   [type] error: unresolved name: MissingClass
@@ -103,16 +123,6 @@ source: crates/baml_tests/src/generated_tests.rs
      │                          ╰──── type mismatch: expected int, got string
      │ 
      │ Note: Error code: E0001
-─────╯
-
-  [type] error: unreachable arm
-     ╭─[ patterns_class_destructure.baml:120:14 ]
-     │
- 120 │         _ => 0
-     │              ┬  
-     │              ╰── unreachable arm
-     │ 
-     │ Note: Error code: E0063
 ─────╯
 
   [type] error: type mismatch: expected Box<int>, got Box
@@ -289,24 +299,16 @@ source: crates/baml_tests/src/generated_tests.rs
      │ Note: Error code: E0001
 ─────╯
 
-  [type] error: unreachable arm
-     ╭─[ patterns_class_destructure.baml:266:14 ]
+  [type] error: class `Person` has no field `missing`
+     ╭─[ patterns_class_destructure.baml:271:5 ]
      │
- 266 │         _ => 0
-     │              ┬  
-     │              ╰── unreachable arm
-     │ 
-     │ Note: Error code: E0063
-─────╯
-
-  [type] error: unresolved name: renamed
-     ╭─[ patterns_class_destructure.baml:278:5 ]
-     │
- 278 │     renamed
-     │     ───┬───  
-     │        ╰───── unresolved name: renamed
-     │ 
-     │ Note: Error code: E0003
+ 271 │ ╭─▶     let Person {
+     ┆ ┆   
+ 273 │ ├─▶     } = Person {
+     │ │                      
+     │ ╰────────────────────── class `Person` has no field `missing`
+     │     
+     │     Note: Error code: E0007
 ─────╯
 
   [type] error: type mismatch: expected int, got string
