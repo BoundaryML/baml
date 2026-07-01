@@ -141,3 +141,70 @@ async fn openai_live_call() {
         "live model reply did not contain 'pong': {s:?}"
     );
 }
+
+/// Structured output: `call<Resume>` against a mocked response whose content is a
+/// markdown-fenced JSON object. SAP decodes it into the typed value.
+#[tokio::test]
+async fn openai_structured_via_mock() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/chat/completions"))
+        .respond_with(ResponseTemplate::new(200).set_body_string(
+            r#"{"choices":[{"message":{"content":"```json\n{\"name\": \"Ada Lovelace\", \"years\": 36}\n```"},"finish_reason":"stop"}]}"#,
+        ))
+        .mount(&server)
+        .await;
+    let uri = server.uri();
+
+    let output = baml_test!(&format!(
+        r#"
+        class Resume {{ name string, years int }}
+        function main() -> string {{
+            let p = baml.ai.OpenAi {{ model: "gpt-5.4-mini", api_key: "test-key", base_url: "{uri}" }};
+            let r: Resume = p.call<Resume>("Extract the resume.") catch (e) {{
+                let u: baml.errors.UnknownError => return "ERR:" + u.message.join(","),
+                let c: baml.errors.CallError => return "CALLERR",
+            }};
+            r.name + "|" + r.years.to_string()
+        }}
+        "#
+    ));
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("Ada Lovelace|36".into())
+    );
+}
+
+/// Live structured output against the real API. Skipped unless `OPENAI_API_KEY` is set.
+#[tokio::test]
+async fn openai_structured_live_call() {
+    if std::env::var("OPENAI_API_KEY").is_err() {
+        eprintln!("skipping openai_structured_live_call: OPENAI_API_KEY not set");
+        return;
+    }
+    let output = baml_test!(
+        r#"
+        class Person { name string, age int }
+        function main() -> string {
+            let p = baml.ai.OpenAi {
+                model: "gpt-5.4-mini",
+                api_key: baml.env.get_or_panic("OPENAI_API_KEY"),
+                base_url: null,
+            };
+            let r: Person = p.call<Person>("Ada Lovelace is 36 years old. Extract her as a Person.") catch (e) {
+                let u: baml.errors.UnknownError => return "ERR:" + u.message.join(","),
+                let c: baml.errors.CallError => return "CALLERR",
+            };
+            r.name + "|" + r.age.to_string()
+        }
+        "#
+    );
+    let got = output.result.unwrap();
+    let BexExternalValue::String(s) = got else {
+        panic!("expected string, got {got:?}");
+    };
+    assert!(
+        s.to_lowercase().contains("ada") && s.contains("36"),
+        "live structured reply unexpected: {s:?}"
+    );
+}

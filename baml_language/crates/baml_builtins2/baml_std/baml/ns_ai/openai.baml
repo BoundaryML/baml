@@ -53,7 +53,15 @@ class OpenAi {
             self,
             prompt: string,
         ) -> root.http.Request throws root.errors.CallError | root.errors.UnknownError {
-            let body: json = { "model": self.model, "messages": [{ "role": "user", "content": prompt }] };
+            // Inject the output schema so the model knows the shape to return.
+            // Empty for `T = string` (free-form text), non-empty for a structured `T`.
+            let schema: string = root.llm.render_output_format(reflect.type_of<T>());
+            let content: string = if (schema == "") {
+                prompt
+            } else {
+                prompt + "\n\n" + schema
+            };
+            let body: json = { "model": self.model, "messages": [{ "role": "user", "content": content }] };
             root.http.Request {
                 method: "POST",
                 url: (self.base_url ?? "https://api.openai.com/v1") + "/chat/completions",
@@ -71,9 +79,9 @@ class OpenAi {
             }
         }
 
-        // Extracts choices[0].message.content, then coerces the content to `T`.
-        // For `T = string` the content passes through; for a class `T` the content is a
-        // JSON string SAP/from_json can decode. (Full SAP repair-parse is a later step.)
+        // Extracts choices[0].message.content, then coerces it to `T` via SAP
+        // (Schema-Aligned Parsing) — robust to markdown fences and minor JSON deviations;
+        // for `T = string` the text passes through unchanged.
         function parse<T>(
             self,
             from: root.http.Response,
@@ -83,9 +91,9 @@ class OpenAi {
             };
             match (wire.choices.at(0)) {
                 let c: OpenAiChoiceWire => {
-                    root.json.from_json<T>(c.message.content) catch (e) {
+                    root.sap.parse<T>(c.message.content) catch (e) {
                         _ => {
-                            throw root.errors.UnknownError { data: e, message: ["openai content coerce failed"] }
+                            throw root.errors.UnknownError { data: e, message: ["openai SAP parse failed"] }
                         },
                     }
                 },
