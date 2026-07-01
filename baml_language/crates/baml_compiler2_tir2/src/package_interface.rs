@@ -237,7 +237,7 @@ fn lower_class_method_signature<'db>(
     // `Self` is the enclosing class's full receiver type (`Foo<T>`, or `Array<T>`→`List<T>`
     // for the builtin containers) — resolved through the lowering context, not erased to a
     // bare `Ty::Class` by a name-substitution pre-pass.
-    let self_ty = build_self_type_for_class(
+    let self_ty = crate::self_type::self_type_for_class(
         class_data,
         ns_path,
         file_package::file_package(db, method_loc.file(db)).package,
@@ -523,46 +523,6 @@ pub fn package_interface<'db>(db: &'db dyn crate::Db, pkg_id: PackageId<'db>) ->
         types,
         functions,
         throw_sets: throw_sets.clone(),
-    }
-}
-
-/// Build the self-type for a class with `TypeVar` placeholders for generic params.
-fn build_self_type_for_class(
-    class_data: &baml_compiler2_hir::item_tree::Class,
-    ns_path: &[Name],
-    package: Name,
-) -> Ty {
-    // For known builtin containers, return the corresponding Ty variant
-    match class_data.name.as_str() {
-        "Array" if class_data.generic_params.len() == 1 => Ty::List(
-            Box::new(Ty::TypeVar(
-                class_data.generic_params[0].clone(),
-                TyAttr::default(),
-            )),
-            TyAttr::default(),
-        ),
-        "Map" if class_data.generic_params.len() == 2 => Ty::Map {
-            key: Box::new(Ty::TypeVar(
-                class_data.generic_params[0].clone(),
-                TyAttr::default(),
-            )),
-            value: Box::new(Ty::TypeVar(
-                class_data.generic_params[1].clone(),
-                TyAttr::default(),
-            )),
-            attr: TyAttr::default(),
-        },
-        _ => {
-            let qtn = QualifiedTypeName::new(package, ns_path.to_vec(), class_data.name.clone());
-            // Declared generics live on the type as `TypeVar` args (an
-            // unspecialized generic class is `Foo<T>`), not on the name.
-            let args = class_data
-                .generic_params
-                .iter()
-                .map(|p| Ty::TypeVar(p.clone(), TyAttr::default()))
-                .collect();
-            Ty::Class(qtn, args, TyAttr::default())
-        }
     }
 }
 
