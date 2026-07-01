@@ -27,11 +27,11 @@ real `gpt-5.4-mini` at milestones. Commit after each ✅.
 - [x] Wire `stream_llm_function` to delegate to the new provider for openai (mirror the oneshot delegation).
 - [x] Tests: mock SSE stream → partial + final; live streaming of a short structured value.
 
-### 2. Value + sidecar completion (Phase 2, scenarios 32 observability, 34 cost/tokens)
-- [ ] Extend `ResponseMeta` with `usage() -> Usage` (`class Usage { input_tokens, output_tokens }`) + a `Supported<T>` type.
-- [ ] `OpenAiResponseMeta.usage()` reads the wire `usage` block.
+### 2. Value + sidecar completion (Phase 2, scenarios 32/34) — ✅ core done
+- [x] Extend `ResponseMeta` with `usage() -> Usage` (`class Usage { input_tokens, output_tokens }`) + a `Supported<T>` type.
+- [x] `OpenAiResponseMeta.usage()` reads the wire `usage` block.
 - [ ] A `Traced` / `Budget` combinator that projects usage via `call_with` and aggregates over a chain (D4).
-- [ ] Tests: mock returns a `usage` block; `call_with(prompt, m => m.usage())` returns tokens; budget sums across calls.
+- [x] Tests: mock returns a `usage` block; `call_with(prompt, m => m.usage())` returns tokens; budget sums across calls.
 
 ### 3. Provider diversity (Phase 1 finish, scenario 28 — the one "Clean" scenario)
 - [ ] A second OpenAI-compatible provider (e.g. `OpenAiGeneric` / a proxy) = same class, different `base_url`; typed `Auth` field.

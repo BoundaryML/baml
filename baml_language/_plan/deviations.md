@@ -91,6 +91,19 @@ Legend: **[lang]** forced by a missing/limited language feature · **[scope]** d
   output already emitted), so `Retry` forwards `.stream` once — matching the design note that streaming retry
   is connect-only.
 
+## Value + sidecar / usage
+
+- **`type Body = string` (not `baml.http.Response`).** **[lang]** `Response.text()` is **not idempotent**
+  (reading the body consumes it), so a codec that reads the body in both `parse` and `meta_of` gets an empty
+  string on the second read (usage came back `0|0`). Fixed by making the `HttpProvider.Body` associated type
+  the **already-read body text** (`send` reads it once, `parse`/`meta_of` share the string). The design's
+  `Body = Response` assumes re-readable bodies; ours reads once. *(Worth a compiler/runtime look: either make
+  `Response.text()` idempotent for buffered bodies, or document it.)*
+
+- **`ResponseMeta` accessors are `throws never` (best-effort).** **[design]** `finish_reason`/`usage` return a
+  default on malformed wire rather than throwing, so a `call_with` projection is infallible (`E2 = never`).
+  Scenarios 32/34: metering rides `call_with(prompt, m => m.usage())` returning `(value, Usage)`.
+
 ## Language findings surfaced during wiring (worth a compiler look)
 
 - **Matching `unknown` / `unknown?` with a typed binding is an irrefutable catch-all.** `match (v) { let x: string => …, _ => … }`

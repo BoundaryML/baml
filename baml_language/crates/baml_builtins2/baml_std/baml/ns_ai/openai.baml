@@ -13,26 +13,51 @@ class OpenAiChoiceWire {
     finish_reason: string?,
 }
 
-class OpenAiResponseWire {
-    choices: OpenAiChoiceWire[],
+class OpenAiUsageWire {
+    prompt_tokens: int,
+    completion_tokens: int,
 }
 
-/// Lazy `ResponseMeta` over the raw HTTP response — each dimension re-reads the body.
+class OpenAiResponseWire {
+    choices: OpenAiChoiceWire[],
+    usage: OpenAiUsageWire?,
+}
+
+/// Lazy `ResponseMeta` over the raw response body text. Accessors are best-effort
+/// (`throws never`): a missing/malformed wire shape yields a default rather than an
+/// error, so projecting the meta never fails the call.
 class OpenAiResponseMeta {
-    raw: root.http.Response,
+    raw_text: string,
+
+    function _wire(self) -> OpenAiResponseWire? throws never {
+        root.json.from_json<OpenAiResponseWire>(root.json.parse(self.raw_text)) catch (e) {
+            _ => null
+        }
+    }
 
     implements root.ai.ResponseMeta {
-        function finish_reason(
-            self,
-        ) -> string throws root.errors.CallError | root.errors.UnknownError {
-            let wire: OpenAiResponseWire = root.json.from_json<OpenAiResponseWire>(root.json.parse(self.raw.text())) catch (e) {
-                _ => {
-                    throw root.errors.UnknownError { data: e, message: ["openai meta parse failed"] }
+        function finish_reason(self) -> string throws never {
+            match (self._wire()) {
+                let w: OpenAiResponseWire => match (w.choices.at(0)) {
+                    let c: OpenAiChoiceWire => c.finish_reason ?? "",
+                    _ => "",
                 },
-            };
-            match (wire.choices.at(0)) {
-                let c: OpenAiChoiceWire => c.finish_reason ?? "",
                 _ => "",
+            }
+        }
+
+        function usage(self) -> root.ai.Usage throws never {
+            match (self._wire()) {
+                let w: OpenAiResponseWire => match (w.usage) {
+                    let u: OpenAiUsageWire => {
+                        root.ai.Usage {
+                            input_tokens: u.prompt_tokens,
+                            output_tokens: u.completion_tokens,
+                        }
+                    },
+                    _ => root.ai.Usage { input_tokens: 0, output_tokens: 0 },
+                },
+                _ => root.ai.Usage { input_tokens: 0, output_tokens: 0 },
             }
         }
     }
@@ -47,7 +72,9 @@ class OpenAi {
     implements root.ai.Provider {}
 
     implements root.ai.HttpProvider {
-        type Body = root.http.Response
+        // Body is the raw response body TEXT (read once in `send`), so `parse` and
+        // `meta_of` both read the same buffer — `Response.text()` is not idempotent.
+        type Body = string
 
         function build_request<T>(
             self,
@@ -73,20 +100,20 @@ class OpenAi {
         function send(
             self,
             request: root.http.Request,
-        ) -> root.http.Response throws root.errors.CallError | root.errors.UnknownError {
+        ) -> string throws root.errors.CallError | root.errors.UnknownError {
             let resp = root.http.send(request) catch (e) {
                 _ => throw root.errors.UnknownError { data: e, message: ["openai send failed"] },
             };
+            let text = resp.text() catch (e) {
+                _ => {
+                    throw root.errors.UnknownError { data: e, message: ["openai body read failed"] }
+                },
+            };
             if (resp.ok()) {
-                resp
+                text
             } else {
-                let body = resp.text() catch (e) {
-                    _ => {
-                        ""
-                    }
-                };
                 throw root.errors.UnknownError {
-                    data: body,
+                    data: text,
                     message: ["openai http " + resp.status_code.to_string()],
                 }
             }
@@ -97,9 +124,9 @@ class OpenAi {
         // for `T = string` the text passes through unchanged.
         function parse<T>(
             self,
-            from: root.http.Response,
+            from: string,
         ) -> T throws root.errors.CallError | root.errors.UnknownError {
-            let wire: OpenAiResponseWire = root.json.from_json<OpenAiResponseWire>(root.json.parse(from.text())) catch (e) {
+            let wire: OpenAiResponseWire = root.json.from_json<OpenAiResponseWire>(root.json.parse(from)) catch (e) {
                 _ => throw root.errors.UnknownError { data: e, message: ["openai parse failed"] },
             };
             match (wire.choices.at(0)) {
@@ -116,9 +143,9 @@ class OpenAi {
 
         function meta_of(
             self,
-            from: root.http.Response,
+            from: string,
         ) -> root.ai.ResponseMeta throws root.errors.CallError | root.errors.UnknownError {
-            OpenAiResponseMeta { raw: from }
+            OpenAiResponseMeta { raw_text: from }
         }
     }
 

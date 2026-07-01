@@ -13,11 +13,19 @@ class CallResult<T, V> {
     meta: V,
 }
 
+/// Token accounting for one call.
+class Usage {
+    input_tokens: int,
+    output_tokens: int,
+}
+
 /// Out-of-band response metadata (finish reason, usage, …), normalized lazily by
-/// each provider. Projected via `HttpProvider.call_with`.
+/// each provider. Projected via `HttpProvider.call_with`. Metadata accessors are
+/// best-effort (`throws never`): they return a sensible default if the wire shape
+/// is missing, so a projection over them is infallible.
 interface ResponseMeta {
-  function finish_reason(self) -> string
-      throws root.errors.CallError | root.errors.UnknownError
+  function finish_reason(self) -> string throws never
+  function usage(self) -> Usage throws never
 }
 
 /// The bare capability marker. Carries no interaction method — `call`/`call_with`

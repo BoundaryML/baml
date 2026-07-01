@@ -496,5 +496,42 @@ async fn e2e_function_stream_via_new_provider_mock() {
         }}
         "#
     ));
-    assert_eq!(output.result.unwrap(), BexExternalValue::String("pong".into()));
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("pong".into())
+    );
+}
+
+/// Value + sidecar (scenarios 32/34): `call_with` returns the answer AND a projected
+/// `Usage` from `ResponseMeta`. The mock returns a `usage` block.
+#[tokio::test]
+async fn call_with_projects_usage() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/chat/completions"))
+        .respond_with(ResponseTemplate::new(200).set_body_string(
+            r#"{"choices":[{"message":{"content":"pong"}}],"usage":{"prompt_tokens":12,"completion_tokens":5}}"#,
+        ))
+        .mount(&server)
+        .await;
+    let uri = server.uri();
+
+    let output = baml_test!(&format!(
+        r#"
+        function main() -> string {{
+            let p = baml.ai.OpenAi {{ model: "m", api_key: "k", base_url: "{uri}" }};
+            let r = p.call_with<string, baml.ai.Usage, never>(
+                "hi",
+                (m: baml.ai.ResponseMeta) -> baml.ai.Usage {{ m.usage() }},
+            ) catch (e) {{
+                let u: baml.errors.UnknownError => return "ERR:" + u.message.join(","),
+            }};
+            r.value + "|" + r.meta.input_tokens.to_string() + "|" + r.meta.output_tokens.to_string()
+        }}
+        "#
+    ));
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("pong|12|5".into())
+    );
 }
