@@ -11792,16 +11792,30 @@ impl<'db> TypeInferenceBuilder<'db> {
                 };
                 let class_ty = Ty::Class(class_name.clone(), class_ty_args, TyAttr::default());
 
-                // All generic params for fallback lowering (class + method).
+                // All generic params in scope for lowering (class + method).
                 let mut all_generic_params = class_data.generic_params.clone();
                 all_generic_params.extend(sig.user_generic_params.iter().cloned());
                 all_generic_params.extend(sig.synthetic_effect_params.iter().cloned());
 
-                // BEP-044: pre-substitute `Self` to the enclosing class
-                // name so signatures like `function clone() -> Self`
-                // surface as `Ty::Class(<class>)`.
-                let self_replacement =
-                    crate::lower_type_expr::type_expr_for_name(class_data.name.clone());
+                // The method's in-scope type-variable bounds (class + method params), so a
+                // `T.member` projection in the signature can resolve `T`'s declaring interface.
+                let method_bounds: rustc_hash::FxHashMap<Name, baml_type::Interface> =
+                    crate::lower_type_expr::function_in_scope_generic_param_bounds(db, func_loc)
+                        .iter()
+                        .cloned()
+                        .collect();
+                // `Self` is the enclosing class's full receiver type (`Foo<T>`, carrying its
+                // generics as `TypeVar` args) — resolved through the lowering context, not erased
+                // to a bare `Ty::Class` by a name-substitution pre-pass. Each signature type then
+                // substitutes the generics via `bindings`.
+                let ctx = crate::lower_type_expr::ScopeCtx {
+                    db,
+                    package_items: pkg_items_for_class,
+                    ns_context: &ns_context,
+                    generic_params: &all_generic_params,
+                    bounds: &method_bounds,
+                    self_ty: Some(class_ty.clone()),
+                };
 
                 if let Some(target) = item_tree.method_to_iface_target.get(&method_id)
                     && let Some(iface_loc) = crate::interfaces::resolve_path_to_interface(
@@ -11858,17 +11872,11 @@ impl<'db> TypeInferenceBuilder<'db> {
                             let Some(te) = &binding.type_expr else {
                                 continue;
                             };
-                            let resolved = crate::lower_type_expr::substitute_self_in(
-                                &te.expr,
-                                &self_replacement,
-                            );
-                            let ty = crate::generics::lower_type_expr_with_generics(
-                                db,
-                                &resolved,
-                                pkg_items_for_class,
-                                &ns_context,
+                            let ty = crate::generics::substitute_ty(
+                                &crate::lower_type_expr::lower_type_expr(
+                                    &te.expr, &ctx, &mut diags,
+                                ),
                                 &bindings,
-                                &mut diags,
                             );
                             bindings.insert(binding.name.clone(), ty);
                         }
@@ -11888,29 +11896,12 @@ impl<'db> TypeInferenceBuilder<'db> {
                                 // self with no annotation → use the enclosing class type
                                 class_ty.clone()
                             } else {
-                                let resolved = crate::lower_type_expr::substitute_self_in(
-                                    &param.ty,
-                                    &self_replacement,
-                                );
-                                if bindings.is_empty() {
-                                    crate::lower_type_expr::lower_type_expr_in_ns(
-                                        db,
-                                        &resolved,
-                                        pkg_items_for_class,
-                                        &ns_context,
-                                        &all_generic_params,
-                                        &mut diags,
-                                    )
-                                } else {
-                                    crate::generics::lower_type_expr_with_generics(
-                                        db,
-                                        &resolved,
-                                        pkg_items_for_class,
-                                        &ns_context,
-                                        &bindings,
-                                        &mut diags,
-                                    )
-                                }
+                                crate::generics::substitute_ty(
+                                    &crate::lower_type_expr::lower_type_expr(
+                                        &param.ty, &ctx, &mut diags,
+                                    ),
+                                    &bindings,
+                                )
                             };
                             FunctionParamTy {
                                 name: Some(param.name.clone()),
@@ -11927,29 +11918,10 @@ impl<'db> TypeInferenceBuilder<'db> {
                         sig.return_type
                             .as_ref()
                             .map(|te| {
-                                let resolved = crate::lower_type_expr::substitute_self_in(
-                                    te,
-                                    &self_replacement,
-                                );
-                                if bindings.is_empty() {
-                                    crate::lower_type_expr::lower_type_expr_in_ns(
-                                        db,
-                                        &resolved,
-                                        pkg_items_for_class,
-                                        &ns_context,
-                                        &all_generic_params,
-                                        &mut diags,
-                                    )
-                                } else {
-                                    crate::generics::lower_type_expr_with_generics(
-                                        db,
-                                        &resolved,
-                                        pkg_items_for_class,
-                                        &ns_context,
-                                        &bindings,
-                                        &mut diags,
-                                    )
-                                }
+                                crate::generics::substitute_ty(
+                                    &crate::lower_type_expr::lower_type_expr(te, &ctx, &mut diags),
+                                    &bindings,
+                                )
                             })
                             .unwrap_or(Ty::Unknown {
                                 attr: TyAttr::default(),
