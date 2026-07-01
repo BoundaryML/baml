@@ -74,7 +74,7 @@ async fn never_awaited_spawn_error_surfaces_at_completion() {
         r#"
         function main() -> string {
             let f = spawn { throw baml.errors.Io { message: "boom" } };
-            baml.sys.sleep(baml.time.Duration.from_milliseconds(30n));
+            baml.sys.sleep(baml.time.Duration.from_milliseconds(250n));
             "done"
         }
         "#,
@@ -100,7 +100,7 @@ async fn never_awaited_detached_spawn_error_surfaces_at_completion() {
             let f = spawn with baml.spawn.options(detach = true) {
                 throw baml.errors.Io { message: "boom" }
             };
-            baml.sys.sleep(baml.time.Duration.from_milliseconds(30n));
+            baml.sys.sleep(baml.time.Duration.from_milliseconds(250n));
             "done"
         }
         "#,
@@ -123,7 +123,7 @@ async fn never_awaited_successful_spawn_returns_cleanly() {
         r#"
         function main() -> string {
             let f = spawn { 42 };
-            baml.sys.sleep(baml.time.Duration.from_milliseconds(30n));
+            baml.sys.sleep(baml.time.Duration.from_milliseconds(250n));
             "done"
         }
         "#,
