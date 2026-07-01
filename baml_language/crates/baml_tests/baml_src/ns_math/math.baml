@@ -1,6 +1,6 @@
 // Tests for the `baml.math` aggregation builtins: sum / mean / median.
 //
-// These are pure-BAML stdlib functions (no `$rust_function`), so the coverage
+// These are native VM functions (`$rust_function`, `//baml:vm`), so the coverage
 // here exercises both the happy path and the empty-array error path. Exact
 // (integer-valued or terminating-binary) float results are compared with
 // `baml.deep_equals`; the empty-array cases assert the `InvalidArgument` throw.
