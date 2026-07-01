@@ -563,6 +563,11 @@ impl<'db> SemanticIndexBuilder<'db> {
             ast::Expr::Throw { value } => {
                 self.walk_expr(*value, body, source_map, true);
             }
+            ast::Expr::Return { value } => {
+                if let Some(value) = value {
+                    self.walk_expr(*value, body, source_map, true);
+                }
+            }
             ast::Expr::Spawn {
                 name,
                 with_exprs,
@@ -2152,6 +2157,7 @@ impl<'db> SemanticIndexBuilder<'db> {
             ast::TypeExprKind::Rust { .. } => "$rust_type".to_string(),
             ast::TypeExprKind::Error { .. } => "<error>".to_string(),
             ast::TypeExprKind::Unknown { .. } => "<unknown>".to_string(),
+            ast::TypeExprKind::Infer { .. } => "_".to_string(),
         }
     }
 }

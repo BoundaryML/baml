@@ -628,6 +628,14 @@ fn expr_desc_spans<'db>(
             spans.push(DetailSpan::Code("throw ".into()));
             spans.extend(expr_desc_spans(*value, body, inference));
         }
+        Expr::Return { value } => {
+            if let Some(value) = value {
+                spans.push(DetailSpan::Code("return ".into()));
+                spans.extend(expr_desc_spans(*value, body, inference));
+            } else {
+                spans.push(DetailSpan::Code("return".into()));
+            }
+        }
         Expr::ByteStringLiteral(bytes) => {
             spans.push(DetailSpan::Code(format!("b\"<{} bytes>\"", bytes.len())));
         }
@@ -2068,6 +2076,10 @@ impl CompilerRunner {
                 }
                 Expr::Catch { .. } => "catch ...".into(),
                 Expr::Throw { value } => format!("throw {}", expr_desc(*value, body)),
+                Expr::Return { value } => match value {
+                    Some(value) => format!("return {}", expr_desc(*value, body)),
+                    None => "return".into(),
+                },
                 Expr::Binary { op, .. } => format!("... {op:?} ..."),
                 Expr::Unary { op, expr: inner } => format!("{op:?} {}", expr_desc(*inner, body)),
                 Expr::Call { callee, args, .. } => {

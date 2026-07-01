@@ -12,26 +12,6 @@ source: crates/baml_tests/src/generated_tests.rs
    │ Note: Error code: E0010
 ───╯
 
-  [type] error: unresolved name: b
-   ╭─[ banned_expressions.baml:3:15 ]
-   │
- 3 │   let a = let b = 42
-   │               ┬  
-   │               ╰── unresolved name: b
-   │ 
-   │ Note: Error code: E0003
-───╯
-
-  [type] error: unresolved name: a
-   ╭─[ banned_expressions.baml:4:3 ]
-   │
- 4 │   a
-   │   ┬  
-   │   ╰── unresolved name: a
-   │ 
-   │ Note: Error code: E0003
-───╯
-
   [type] error: missing return value of type int
     ╭─[ banned_expressions.baml:8:23 ]
     │

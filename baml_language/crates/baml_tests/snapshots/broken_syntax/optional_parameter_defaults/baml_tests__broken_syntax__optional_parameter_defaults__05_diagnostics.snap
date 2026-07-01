@@ -12,16 +12,6 @@ source: crates/baml_tests/src/generated_tests.rs
    │ Note: Error code: E0010
 ───╯
 
-  [type] error: expected 2 argument(s), got 1
-   ╭─[ callback_param_defaults.baml:8:5 ]
-   │
- 8 │     callback(x)
-   │     ─────┬─────  
-   │          ╰─────── expected 2 argument(s), got 1
-   │ 
-   │ Note: Error code: E0005
-───╯
-
   [parse] error: default expressions are not allowed in function types
    ╭─[ function_type_defaults.baml:1:68 ]
    │

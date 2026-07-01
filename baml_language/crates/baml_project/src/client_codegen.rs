@@ -655,11 +655,13 @@ fn convert_tir_leaf(
         // their own opaque-handle mapping.
         TirTy::RustType { .. } => cg::Ty::RustType,
 
-        // Bottom / sentinel / error recovery — map to Unit.
+        // Bottom / sentinel / error recovery — map to Unit. An inference hole
+        // (`_`) should have been filled before codegen; map defensively to Unit.
         TirTy::Void { .. }
         | TirTy::Never { .. }
         | TirTy::Unknown { .. }
         | TirTy::Error { .. }
+        | TirTy::Infer { .. }
         | TirTy::Type { .. } => cg::Ty::Unit,
 
         // BEP-034: surface a `Future<T, E>` as the codegen-side `Unit`

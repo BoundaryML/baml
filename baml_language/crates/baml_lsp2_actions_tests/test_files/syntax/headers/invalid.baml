@@ -67,71 +67,35 @@ client<llm> GPT4 {
 //     ╭─[ headers_invalid.baml:12:21 ]
 //     │
 //  12 │     let x = "hello" ## Inline Header // Should fail
-//     │                     ┬  
+//     │                     ┬
 //     │                     ╰── Expected expression, found '#'
-//     │ 
+//     │
 //     │ Note: Error code: E0010
 // ────╯
 // error: Expected expression, found '#'
 //     ╭─[ headers_invalid.baml:12:22 ]
 //     │
 //  12 │     let x = "hello" ## Inline Header // Should fail
-//     │                      ┬  
+//     │                      ┬
 //     │                      ╰── Expected expression, found '#'
-//     │ 
+//     │
 //     │ Note: Error code: E0010
 // ────╯
 // error: Expected expression, found '#'
 //     ╭─[ headers_invalid.baml:33:23 ]
 //     │
 //  33 │     let x = "start" + # Middle Header // Should fail
-//     │                       ┬  
+//     │                       ┬
 //     │                       ╰── Expected expression, found '#'
-//     │ 
+//     │
 //     │ Note: Error code: E0010
 // ────╯
 // error: Header comments (//#) are not allowed inside LLM functions
 //     ╭─[ headers_invalid.baml:50:5 ]
 //     │
 //  50 │     //# Section Header
-//     │     ─────────┬────────  
+//     │     ─────────┬────────
 //     │              ╰────────── Header comments (//#) are not allowed inside LLM functions
-//     │ 
+//     │
 //     │ Note: Error code: E0010
-// ────╯
-// error: unresolved name: Inline
-//     ╭─[ headers_invalid.baml:12:24 ]
-//     │
-//  12 │     let x = "hello" ## Inline Header // Should fail
-//     │                        ───┬──  
-//     │                           ╰──── unresolved name: Inline
-//     │ 
-//     │ Note: Error code: E0003
-// ────╯
-// error: unresolved name: Header
-//     ╭─[ headers_invalid.baml:12:31 ]
-//     │
-//  12 │     let x = "hello" ## Inline Header // Should fail
-//     │                               ───┬──  
-//     │                                  ╰──── unresolved name: Header
-//     │ 
-//     │ Note: Error code: E0003
-// ────╯
-// error: unresolved name: Middle
-//     ╭─[ headers_invalid.baml:33:25 ]
-//     │
-//  33 │     let x = "start" + # Middle Header // Should fail
-//     │                         ───┬──  
-//     │                            ╰──── unresolved name: Middle
-//     │ 
-//     │ Note: Error code: E0003
-// ────╯
-// error: unresolved name: Header
-//     ╭─[ headers_invalid.baml:33:32 ]
-//     │
-//  33 │     let x = "start" + # Middle Header // Should fail
-//     │                                ───┬──  
-//     │                                   ╰──── unresolved name: Header
-//     │ 
-//     │ Note: Error code: E0003
 // ────╯

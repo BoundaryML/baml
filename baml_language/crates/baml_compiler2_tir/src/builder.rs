@@ -1429,6 +1429,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     | Ty::Unknown { .. }
                     | Ty::BuiltinUnknown { .. }
                     | Ty::Error { .. }
+                    | Ty::Infer { .. }
             )
         })
     }
@@ -1634,7 +1635,11 @@ impl<'db> TypeInferenceBuilder<'db> {
     ) {
         let declared = crate::throw_inference::flatten_ty_to_facts(throws_ty);
         let effective = self.collect_effective_throws(body);
-        let has_open_slot = Self::throws_surface_has_open_slot(&declared);
+        // `flatten_ty_to_facts` drops a `_` hole, so detect it from the raw
+        // `throws_ty`: `throws AppError | _` is an open contract that absorbs the
+        // body's inferred (e.g. stdlib) throws without an E0096/E0097 violation.
+        let has_open_slot = Self::throws_surface_has_open_slot(&declared)
+            || crate::throw_inference::throws_ty_has_infer_hole(throws_ty);
 
         // Throws tracking is otherwise *exact* (so e.g. enum-variant throws stay
         // precise — `throws Errors` does not absorb `throws Errors.AuthError`).
@@ -2873,6 +2878,17 @@ impl<'db> TypeInferenceBuilder<'db> {
                     shadowed,
                     refs,
                 );
+            }
+            Expr::Return { value } => {
+                if let Some(value) = value {
+                    Self::collect_default_expr_forward_references(
+                        *value,
+                        body,
+                        later_params,
+                        shadowed,
+                        refs,
+                    );
+                }
             }
             Expr::Binary { lhs, rhs, .. } => {
                 Self::collect_default_expr_forward_references(
@@ -4504,6 +4520,37 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
             Expr::Throw { value } => {
                 self.infer_expr(*value, body);
+                Ty::Never {
+                    attr: TyAttr::default(),
+                }
+            }
+            Expr::Return { value } => {
+                // A `return` expression (e.g. a braceless `catch`/`match` arm
+                // value) diverges, so it has type `never` — exactly like
+                // `throw`. The returned value is still checked against the
+                // enclosing function's declared return type, mirroring
+                // `Stmt::Return` so the typing is identical to the block form.
+                if self.in_defer()
+                    && let Some(span) = self
+                        .body_source_map
+                        .as_ref()
+                        .map(|sm| sm.expr_span(expr_id))
+                {
+                    self.report_at_span(
+                        crate::infer_context::TirTypeError::DeferControlFlowEscape {
+                            keyword: "return",
+                        },
+                        span,
+                    );
+                }
+                if let Some(value) = value {
+                    if let Some(ret_ty) = &self.declared_return_ty {
+                        let ret_ty = ret_ty.clone();
+                        self.check_expr(*value, body, &ret_ty);
+                    } else {
+                        self.infer_expr(*value, body);
+                    }
+                }
                 Ty::Never {
                     attr: TyAttr::default(),
                 }
@@ -6784,7 +6831,31 @@ impl<'db> TypeInferenceBuilder<'db> {
                     let ty = if let Some(expected) = expected_for_check.as_ref()
                         && !matches!(expected, Ty::Void { .. })
                     {
-                        self.check_expr(init, body, expected)
+                        if Self::ty_has_infer_hole(expected) {
+                            // A partial annotation (`let fs: Future<int, _>[] = …`)
+                            // cannot be pushed down as a bidirectional expected
+                            // type — the `_` hole would poison the checked result
+                            // (e.g. the array arm clones the expected container).
+                            // Infer the initializer freely so its concrete type
+                            // fills the holes, then re-check against the now-filled
+                            // annotation. That second pass behaves exactly as if the
+                            // user had written the filled type, so the non-hole
+                            // positions are validated element-wise (e.g. a wrong
+                            // `Future<string, _>` against an `int` body still fails).
+                            //
+                            // The free inference is only a probe to read the type;
+                            // roll back any diagnostics it emits so the re-check
+                            // below is the single source of initializer errors.
+                            // The pattern ascription owns the un-inferable-`_`
+                            // diagnostic, so fill silently (`None`) here.
+                            let probe = self.context.diagnostic_count();
+                            let actual = self.infer_expr(init, body);
+                            self.context.truncate_diagnostics(probe);
+                            let filled = self.fill_infer_holes_or_error(expected, &actual, None);
+                            self.check_expr(init, body, &filled)
+                        } else {
+                            self.check_expr(init, body, expected)
+                        }
                     } else {
                         self.infer_expr(init, body)
                     };
@@ -6822,7 +6893,19 @@ impl<'db> TypeInferenceBuilder<'db> {
                         self.context.report_simple(err, init);
                     }
                     if let Some(expected) = expected_for_check {
-                        (Some(ty), Some(expected.clone()), Some(expected))
+                        // A partial annotation (`Future<int, _>[]`) carries `_`
+                        // inference holes: fill them from the initializer's actual
+                        // type so the binding records the precise type (e.g. the
+                        // spawned body's real error type) rather than the hole,
+                        // which would otherwise reach runtime lowering.
+                        let bound = if Self::ty_has_infer_hole(&expected) {
+                            // Silent: the pattern ascription reports the
+                            // un-inferable `_` once (see `fill_infer_holes_or_error`).
+                            self.fill_infer_holes_or_error(&expected, &ty, None)
+                        } else {
+                            expected
+                        };
+                        (Some(ty), Some(bound.clone()), Some(bound))
                     } else {
                         let flow_ty = ty.clone().widen_fresh().make_evolving();
                         (Some(ty), Some(flow_ty), None)
@@ -7895,11 +7978,11 @@ impl<'db> TypeInferenceBuilder<'db> {
                     .items_for_package(db, &baml_name)
                     .and_then(|items| {
                         let errors_ns = [baml_base::Name::new("errors")];
-                        let st_name = baml_base::Name::new("StackTrace");
+                        let st_name = baml_base::Name::new("ErrorContext");
                         items.lookup_type(&errors_ns, &st_name)
                     })
                     .map(|def| {
-                        let st_name = baml_base::Name::new("StackTrace");
+                        let st_name = baml_base::Name::new("ErrorContext");
                         Ty::Class(
                             crate::lower_type_expr::qualify_def(db, def, &st_name),
                             Vec::new(),
@@ -8231,7 +8314,11 @@ impl<'db> TypeInferenceBuilder<'db> {
     fn ty_contains_unknown_like(ty: &Ty, count_builtin: bool) -> bool {
         match ty {
             Ty::Unknown { .. } | Ty::Error { .. } => true,
-            Ty::BuiltinUnknown { .. } => count_builtin,
+            // An inference hole (`_`) is unconstrained like the top type, not a
+            // resolution failure: the `pattern_expected_ty` gate (count_builtin =
+            // false) must keep a `Future<int, _>` annotation usable so the hole
+            // can be filled from the initializer.
+            Ty::BuiltinUnknown { .. } | Ty::Infer { .. } => count_builtin,
             Ty::Class(_, args, _) | Ty::Interface(_, args, _, _) | Ty::Union(args, _) => args
                 .iter()
                 .any(|arg| Self::ty_contains_unknown_like(arg, count_builtin)),
@@ -8298,6 +8385,148 @@ impl<'db> TypeInferenceBuilder<'db> {
     /// either a resolution failure or genuinely `unknown`.
     fn ty_contains_recovery_unknown(ty: &Ty) -> bool {
         Self::ty_contains_unknown_like(ty, true)
+    }
+
+    /// Does `ty` contain a `_` inference hole (`Ty::Infer`) at any depth?
+    fn ty_has_infer_hole(ty: &Ty) -> bool {
+        match ty {
+            Ty::Infer { .. } => true,
+            Ty::List(inner, _) | Ty::EvolvingList(inner, _) | Ty::WatchAccessor(inner, _) => {
+                Self::ty_has_infer_hole(inner)
+            }
+            Ty::Map { key, value, .. } | Ty::EvolvingMap(key, value, _) => {
+                Self::ty_has_infer_hole(key) || Self::ty_has_infer_hole(value)
+            }
+            Ty::Future(value, error, _) => {
+                Self::ty_has_infer_hole(value) || Self::ty_has_infer_hole(error)
+            }
+            Ty::Class(_, args, _) | Ty::Union(args, _) => args.iter().any(Self::ty_has_infer_hole),
+            Ty::Interface(_, args, bindings, _) => {
+                args.iter().any(Self::ty_has_infer_hole)
+                    || bindings.iter().any(|(_, t)| Self::ty_has_infer_hole(t))
+            }
+            Ty::Function {
+                params,
+                ret,
+                throws,
+                ..
+            } => {
+                params.iter().any(|p| Self::ty_has_infer_hole(&p.ty))
+                    || Self::ty_has_infer_hole(ret)
+                    || Self::ty_has_infer_hole(throws)
+            }
+            _ => false,
+        }
+    }
+
+    /// Fill each `Ty::Infer` hole in the annotation `expected` with the type at
+    /// the corresponding position of the initializer's actual type `actual`,
+    /// while preserving every non-hole position of `expected` (so an
+    /// intentionally-widening annotation like `int?` is kept). The two types
+    /// have already passed the assignability check, so their constructors align
+    /// wherever `expected` carries a hole. Where shapes do not align (the hole,
+    /// if any, is unreachable), `expected` is returned unchanged.
+    fn fill_infer_holes(expected: &Ty, actual: &Ty) -> Ty {
+        if matches!(expected, Ty::Infer { .. }) {
+            return actual.clone();
+        }
+        match (expected, actual) {
+            (Ty::Future(ev, ee, attr), Ty::Future(av, ae, _)) => Ty::Future(
+                Box::new(Self::fill_infer_holes(ev, av)),
+                Box::new(Self::fill_infer_holes(ee, ae)),
+                attr.clone(),
+            ),
+            (Ty::List(ei, attr), Ty::List(ai, _)) => {
+                Ty::List(Box::new(Self::fill_infer_holes(ei, ai)), attr.clone())
+            }
+            (Ty::EvolvingList(ei, attr), Ty::EvolvingList(ai, _)) => {
+                Ty::EvolvingList(Box::new(Self::fill_infer_holes(ei, ai)), attr.clone())
+            }
+            (
+                Ty::Map {
+                    key: ek,
+                    value: ev,
+                    attr,
+                },
+                Ty::Map {
+                    key: ak, value: av, ..
+                },
+            ) => Ty::Map {
+                key: Box::new(Self::fill_infer_holes(ek, ak)),
+                value: Box::new(Self::fill_infer_holes(ev, av)),
+                attr: attr.clone(),
+            },
+            (Ty::EvolvingMap(ek, ev, attr), Ty::EvolvingMap(ak, av, _)) => Ty::EvolvingMap(
+                Box::new(Self::fill_infer_holes(ek, ak)),
+                Box::new(Self::fill_infer_holes(ev, av)),
+                attr.clone(),
+            ),
+            (Ty::Class(eq, ea, attr), Ty::Class(aq, aa, _)) if eq == aq && ea.len() == aa.len() => {
+                Ty::Class(
+                    eq.clone(),
+                    ea.iter()
+                        .zip(aa)
+                        .map(|(e, a)| Self::fill_infer_holes(e, a))
+                        .collect(),
+                    attr.clone(),
+                )
+            }
+            (Ty::Interface(eq, ea, eb, attr), Ty::Interface(aq, aa, ab, _))
+                if eq == aq && ea.len() == aa.len() && eb.len() == ab.len() =>
+            {
+                Ty::Interface(
+                    eq.clone(),
+                    ea.iter()
+                        .zip(aa)
+                        .map(|(e, a)| Self::fill_infer_holes(e, a))
+                        .collect(),
+                    eb.iter()
+                        .zip(ab)
+                        .map(|((n, e), (_, a))| (n.clone(), Self::fill_infer_holes(e, a)))
+                        .collect(),
+                    attr.clone(),
+                )
+            }
+            _ => expected.clone(),
+        }
+    }
+
+    /// Fill `_` holes in the annotation `expected` from the initializer's actual
+    /// type, falling back to `Ty::Error` for any hole that cannot be filled.
+    ///
+    /// [`fill_infer_holes`](Self::fill_infer_holes) only aligns structural
+    /// container positions (lists, maps, futures, class/interface args). A `_`
+    /// in a position it does not align — a union member (`Box<int | _>`), a
+    /// function component (`() -> _`), or where the two types' shapes diverge —
+    /// would survive the fill and then trip the runtime-lowering boundary. Here
+    /// any survivor is reported as an un-inferable `_` (when `report_at` is set)
+    /// and replaced with `Ty::Error`, so it never reaches runtime. `report_at`
+    /// is `None` at the speculative let-binding sites, which all funnel through
+    /// the pattern ascription (`lower_type_pat`) where the single diagnostic is
+    /// emitted.
+    fn fill_infer_holes_or_error(
+        &mut self,
+        expected: &Ty,
+        actual: &Ty,
+        report_at: Option<ExprId>,
+    ) -> Ty {
+        let filled = Self::fill_infer_holes(expected, actual);
+        if Self::ty_has_infer_hole(&filled) {
+            if let Some(at) = report_at {
+                self.context.report_simple(
+                    TirTypeError::UnresolvedType {
+                        name: Name::new("_"),
+                        suggestions: Vec::new(),
+                        span: TextRange::default(),
+                    },
+                    at,
+                );
+            }
+            return Ty::Error {
+                attr: TyAttr::default(),
+            };
+        }
+        filled
     }
 
     /// Strict resolution-failure check: only the recovery placeholders
@@ -8847,6 +9076,14 @@ impl<'db> TypeInferenceBuilder<'db> {
             Expr::Throw { value } => {
                 self.collect_throw_facts_from_expr(*value, body, out);
                 self.collect_throw_facts_from_value(*value, out);
+            }
+            Expr::Return { value } => {
+                // Evaluating the returned value may itself throw, so walk it —
+                // but unlike `throw`, the value is returned normally, not
+                // raised as an error (no `collect_throw_facts_from_value`).
+                if let Some(value) = value {
+                    self.collect_throw_facts_from_expr(*value, body, out);
+                }
             }
             Expr::Call { callee, args, .. } => {
                 self.collect_throw_facts_from_expr(*callee, body, out);
@@ -17007,6 +17244,7 @@ impl crate::exhaustiveness::PatCtx for TypeInferenceBuilder<'_> {
             | Ty::BuiltinUnknown { .. }
             | Ty::Unknown { .. }
             | Ty::Error { .. }
+            | Ty::Infer { .. }
             | Ty::WatchAccessor(..)
             | Ty::TypeVar(_, _)
             | Ty::AssociatedTypeProjection { .. } => vec![Ctor::NonExhaustive],
@@ -17952,6 +18190,17 @@ impl TypeInferenceBuilder<'_> {
         // squiggle lands on the type name (e.g. `Frobnitz`), not the
         // scrutinee.
         let resolved = self.resolve_type_expr_at_pat(ty_expr, pat_id, at_expr);
+        // A `_` inference hole in the ascription (`let fs: Future<int, _> = …`)
+        // is filled from the scrutinee/initializer type flowing in, so the bound
+        // type and its runtime metadata are precise rather than carrying a hole
+        // that cannot be lowered to a `RuntimeTy`. This is the single place that
+        // reports a `_` which cannot be inferred (a union member, function
+        // component, or shape mismatch) — every annotated `let`/arm funnels here.
+        let resolved = if Self::ty_has_infer_hole(&resolved) {
+            self.fill_infer_holes_or_error(&resolved, scrut_ty, Some(at_expr))
+        } else {
+            resolved
+        };
         let dpat = self.dpat_for_type(&resolved, scrut_ty);
         let matched = self.intersect_pattern_flow_types(scrut_ty, &resolved);
         crate::pattern_lowering::PatternResult {

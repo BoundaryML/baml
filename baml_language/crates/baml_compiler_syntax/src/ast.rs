@@ -1014,6 +1014,7 @@ ast_node!(CatchClause, CATCH_CLAUSE);
 ast_node!(CatchArm, CATCH_ARM);
 ast_node!(CatchPattern, CATCH_PATTERN);
 ast_node!(ThrowExpr, THROW_EXPR);
+ast_node!(ReturnExpr, RETURN_EXPR);
 ast_node!(ThrowsClause, THROWS_CLAUSE);
 
 // Implement accessor methods
@@ -3986,6 +3987,13 @@ impl ThrowExpr {
     }
 }
 
+impl ReturnExpr {
+    /// Get the returned value expression, if present (bare `return` has none).
+    pub fn value(&self) -> Option<SyntaxNode> {
+        self.syntax.children().next()
+    }
+}
+
 impl ThrowsClause {
     /// Get the type expression for the throws clause.
     pub fn type_expr(&self) -> Option<TypeExpr> {
@@ -4008,12 +4016,19 @@ impl CatchExpr {
 }
 
 impl CatchClause {
-    /// Get the clause keyword token (`catch`, `catch_all`).
+    /// Get the clause keyword token (`catch`, `catch_all`, `catch_all_panics`).
     pub fn keyword(&self) -> Option<SyntaxToken> {
         self.syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
-            .find(|t| matches!(t.kind(), SyntaxKind::KW_CATCH | SyntaxKind::KW_CATCH_ALL))
+            .find(|t| {
+                matches!(
+                    t.kind(),
+                    SyntaxKind::KW_CATCH
+                        | SyntaxKind::KW_CATCH_ALL
+                        | SyntaxKind::KW_CATCH_ALL_PANICS
+                )
+            })
     }
 
     /// Get the binding pattern from `catch (...)`.

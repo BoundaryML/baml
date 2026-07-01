@@ -757,6 +757,7 @@ dependencies = [
  "text-size",
  "tokio",
  "toml 0.8.23",
+ "uuid",
  "yaml_serde",
 ]
 
@@ -6111,6 +6112,8 @@ dependencies = [
  "rustls",
  "rustls-pki-types",
  "rustls-platform-verifier",
+ "serde",
+ "serde_json",
  "sync_wrapper",
  "tokio",
  "tokio-native-tls",

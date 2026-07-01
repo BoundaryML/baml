@@ -816,6 +816,39 @@ function baml.env.get_or_panic(key: string) -> string throws never {
   }
 }
 
+--- <builtin>/baml/ns_errors/error_context.baml ---
+class baml.errors.ErrorContext {
+  error: unknown
+  stack_trace: baml.errors.StackTrace
+  cause: baml.errors.ErrorContext | null
+}
+function baml.errors.ErrorContext.root_cause(self: baml.errors.ErrorContext) -> baml.errors.ErrorContext throws never {
+  { : baml.errors.ErrorContext
+    match (self.cause : baml.errors.ErrorContext | null) : baml.errors.ErrorContext
+      null =>
+        self : baml.errors.ErrorContext
+      c: ErrorContext =>
+        c.root_cause() : baml.errors.ErrorContext
+  }
+}
+function baml.errors.ErrorContext.to_string(self: baml.errors.ErrorContext) -> string throws never {
+  { : string
+    self._to_string_impl() : string
+  }
+}
+class baml.errors.ErrorContext$stream {
+  error: unknown
+  stack_trace: baml.errors.StackTrace$stream | null
+  cause: baml.errors.ErrorContext$stream | null
+}
+function baml.errors.ErrorContext$stream.to_string(self: baml.errors.ErrorContext$stream) -> string throws never {
+  { : unknown
+    self._to_string_impl() : unknown
+  }
+  !! 964..979: type `baml.errors.ErrorContext$stream` has no member `_to_string_impl`
+  !! 945..950: declared throws is `never`, but this function may also throw `unknown`
+}
+
 --- <builtin>/baml/ns_errors/errors.baml ---
 class baml.errors.InvalidArgument {
   message: string
@@ -2085,7 +2118,7 @@ function baml.json.to<T>(j: baml.json.json) -> T throws baml.json.JsonDecodeErro
     root._from_json_shim<T>(j) : T
   }
 }
-function baml.json.serialize<T>(v: T) -> string throws baml.json.JsonSerializationError | baml.json.JsonParseError {
+function baml.json.serialize<T>(v: T) -> string throws baml.json.JsonSerializationError {
   { : string
     stringify(to_json<T>(v)) : string
   }

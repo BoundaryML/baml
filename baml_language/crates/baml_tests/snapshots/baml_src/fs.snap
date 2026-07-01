@@ -200,6 +200,24 @@ function fs.$init_test_ns_fs_fs(registry: testing.TestCollector) -> null {
     load_const null
     call testing.TestCollector.register_test
     pop 1
+    load_var registry
+    load_const "fs_remove_dir_removes_empty"
+    make_closure .<lambda($init_test_ns_fs_fs, 33)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "fs_remove_dir_all_removes_tree"
+    make_closure .<lambda($init_test_ns_fs_fs, 34)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "fs_remove_dir_all_idempotent"
+    make_closure .<lambda($init_test_ns_fs_fs, 35)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
     load_const null
     return
 }
@@ -969,6 +987,81 @@ function fs.fs_remove_deletes_file_fn() -> bool {
     store_var _6
     load_type bool
     load_var _6
+    load_const false
+    call baml.deep_equals
+    return
+}
+
+function fs.fs_remove_dir_all_idempotent_fn() -> bool {
+    load_const "remove_dir_all_missing"
+    call user.fs.fs_tmp
+    store_var dir
+    load_var dir
+    sys_op baml.fs.remove_dir_all
+    pop 1
+    load_var dir
+    sys_op baml.fs.exists
+    store_var _4
+    load_type bool
+    load_var _4
+    load_const false
+    call baml.deep_equals
+    return
+}
+
+function fs.fs_remove_dir_all_removes_tree_fn() -> bool {
+    load_const "remove_dir_all_tree"
+    call user.fs.fs_tmp
+    store_var dir
+    load_var dir
+    load_const "/sub"
+    bin_op +
+    load_const true
+    init_instance baml.fs.MkdirOptions .recursive
+    sys_op baml.fs.mkdir
+    pop 1
+    load_var dir
+    load_const "/a.txt"
+    bin_op +
+    load_const "a"
+    sys_op baml.fs.write
+    pop 1
+    load_var dir
+    load_const "/sub/b.txt"
+    bin_op +
+    load_const "b"
+    sys_op baml.fs.write
+    pop 1
+    load_var dir
+    sys_op baml.fs.remove_dir_all
+    pop 1
+    load_var dir
+    sys_op baml.fs.exists
+    store_var _14
+    load_type bool
+    load_var _14
+    load_const false
+    call baml.deep_equals
+    return
+}
+
+function fs.fs_remove_dir_removes_empty_fn() -> bool {
+    load_const "remove_dir_empty"
+    call user.fs.fs_tmp
+    store_var dir
+    load_var dir
+    load_const true
+    init_instance baml.fs.MkdirOptions .recursive
+    sys_op baml.fs.mkdir
+    pop 1
+    load_var dir
+    sys_op baml.fs.remove_dir
+    pop 1
+    load_var dir
+    sys_op baml.fs.exists
+    store_var _7
+    load_type bool
+    load_var _7
     load_const false
     call baml.deep_equals
     return

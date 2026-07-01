@@ -428,6 +428,8 @@ pub fn lower_to_runtime(ty: &Ty, resolved: &ResolvedAliases) -> Result<RuntimeTy
         // Error-recovery sentinels cannot exist in a type-checked program.
         Ty::Unknown { .. } => return Err(NotRuntimeTy { variant: "Unknown" }),
         Ty::Error { .. } => return Err(NotRuntimeTy { variant: "Error" }),
+        // An inference hole must have been filled during type checking.
+        Ty::Infer { .. } => return Err(NotRuntimeTy { variant: "Infer" }),
     })
 }
 
