@@ -74,8 +74,21 @@ class OpenAi {
             self,
             request: root.http.Request,
         ) -> root.http.Response throws root.errors.CallError | root.errors.UnknownError {
-            root.http.send(request) catch (e) {
+            let resp = root.http.send(request) catch (e) {
                 _ => throw root.errors.UnknownError { data: e, message: ["openai send failed"] },
+            };
+            if (resp.ok()) {
+                resp
+            } else {
+                let body = resp.text() catch (e) {
+                    _ => {
+                        ""
+                    }
+                };
+                throw root.errors.UnknownError {
+                    data: body,
+                    message: ["openai http " + resp.status_code.to_string()],
+                }
             }
         }
 

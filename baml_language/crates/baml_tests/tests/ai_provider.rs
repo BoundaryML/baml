@@ -280,3 +280,92 @@ async fn e2e_client_function_via_new_provider_live() {
         "live e2e reply did not contain 'pong': {s:?}"
     );
 }
+
+/// `fallback_to` routes to the first HTTP-capable member that succeeds: a broken
+/// provider (connection refused) falls through to a working mocked one.
+#[tokio::test]
+async fn fallback_routes_to_first_working_member() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/chat/completions"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_string(r#"{"choices":[{"message":{"content":"pong"}}]}"#),
+        )
+        .mount(&server)
+        .await;
+    let uri = server.uri();
+
+    let output = baml_test!(&format!(
+        r#"
+        function main() -> string {{
+            let broken = baml.ai.OpenAi {{ model: "m", api_key: "k", base_url: "http://127.0.0.1:1/v1" }};
+            let good   = baml.ai.OpenAi {{ model: "m", api_key: "k", base_url: "{uri}" }};
+            let fb = broken.fallback_to(good);
+            fb.call<string>("hi") catch (e) {{
+                let u: baml.errors.UnknownError => "ERR:" + u.message.join(","),
+            }}
+        }}
+        "#
+    ));
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("pong".into())
+    );
+}
+
+/// `with_retry` re-drives the wrapped provider: two 500s (which fail parsing) then a
+/// 200 succeeds within the retry budget.
+#[tokio::test]
+async fn retry_recovers_after_transient_failures() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/chat/completions"))
+        .respond_with(ResponseTemplate::new(500))
+        .up_to_n_times(2)
+        .mount(&server)
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/chat/completions"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_string(r#"{"choices":[{"message":{"content":"pong"}}]}"#),
+        )
+        .mount(&server)
+        .await;
+    let uri = server.uri();
+
+    let output = baml_test!(&format!(
+        r#"
+        function main() -> string {{
+            let p = baml.ai.OpenAi {{ model: "m", api_key: "k", base_url: "{uri}" }}.with_retry(3);
+            p.call<string>("hi") catch (e) {{
+                let u: baml.errors.UnknownError => "ERR:" + u.message.join(","),
+            }}
+        }}
+        "#
+    ));
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("pong".into())
+    );
+}
+
+/// `with_retry` gives up and surfaces the error after exhausting its budget.
+#[tokio::test]
+async fn retry_exhausts_and_throws() {
+    let output = baml_test!(
+        r#"
+        function main() -> string {
+            let p = baml.ai.OpenAi { model: "m", api_key: "k", base_url: "http://127.0.0.1:1/v1" }.with_retry(2);
+            p.call<string>("hi") catch (e) {
+                let u: baml.errors.UnknownError => "ERR",
+            }
+        }
+        "#
+    );
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("ERR".into())
+    );
+}
