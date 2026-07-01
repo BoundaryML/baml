@@ -252,8 +252,10 @@ fn lower_class_method_signature<'db>(
     let mut params = Vec::new();
     for param in &sig.params {
         let param_ty = if param.name.as_str() == "self"
-            && matches!(param.ty, baml_compiler2_ast::TypeExpr::Unknown { .. })
-        {
+            && matches!(
+                param.ty.kind,
+                baml_compiler2_ast::TypeExprKind::Unknown { .. }
+            ) {
             build_self_type_for_class(
                 class_data,
                 ns_path,
@@ -326,7 +328,7 @@ pub fn package_interface<'db>(db: &'db dyn crate::Db, pkg_id: PackageId<'db>) ->
                         if let Some(te) = &field.type_expr {
                             let field_ty = lower_type_expr_in_ns(
                                 db,
-                                &te.expr,
+                                te,
                                 pkg_items,
                                 &class_ns,
                                 &class_data.generic_params,
@@ -392,9 +394,7 @@ pub fn package_interface<'db>(db: &'db dyn crate::Db, pkg_id: PackageId<'db>) ->
                     let resolved = ta_data
                         .type_expr
                         .as_ref()
-                        .map(|te| {
-                            lower_type_expr_in_ns(db, &te.expr, pkg_items, &ta_ns, &[], &mut diags)
-                        })
+                        .map(|te| lower_type_expr_in_ns(db, te, pkg_items, &ta_ns, &[], &mut diags))
                         .unwrap_or(Ty::Unknown {
                             attr: TyAttr::default(),
                         });
@@ -807,7 +807,7 @@ impl<'db> PackageResolutionContext<'db> {
             if let Some(te) = &field.type_expr {
                 let field_ty = lower_type_expr_in_ns(
                     db,
-                    &te.expr,
+                    te,
                     &self.own_items,
                     &ns,
                     &class_data.generic_params,

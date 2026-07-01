@@ -32,9 +32,3 @@ function user.ReturnNull() -> baml.json.json  [expr] {
 function user.ReturnString() -> baml.json.json  [expr] {
   {  } "hello"
 }
-function user.from_json(j: baml.json.json) -> user.Wrapper  [expr] {
-  user.Wrapper { data: baml.json.from_json(baml.json.field(j, "data")) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "data": baml.json.to_json(self.data) }
-}

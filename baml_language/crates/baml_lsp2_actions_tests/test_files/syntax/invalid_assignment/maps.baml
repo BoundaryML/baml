@@ -48,21 +48,21 @@ function MapAssignments() -> int {
 
 //----
 //- diagnostics
-// error: type mismatch: expected map<string, int>, got map<string, string>
-//     ╭─[ invalid_assignment_maps.baml:28:5 ]
+// error: type mismatch: expected int, got "wrong"
+//     ╭─[ invalid_assignment_maps.baml:28:12 ]
 //     │
 //  28 │     d = {"y": "wrong"};
-//     │        ───────┬───────
-//     │               ╰───────── type mismatch: expected map<string, int>, got map<string, string>
+//     │               ───┬───
+//     │                  ╰───── type mismatch: expected int, got "wrong"
 //     │
 //     │ Note: Error code: E0001
 // ────╯
-// error: type mismatch: expected map<string, Person>, got map<string, Animal>
-//     ╭─[ invalid_assignment_maps.baml:32:5 ]
+// error: type mismatch: expected Person, got Animal
+//     ╭─[ invalid_assignment_maps.baml:32:12 ]
 //     │
 //  32 │     e = {"a": Animal { species: "Cat", legs: 4 }};
-//     │        ─────────────────────┬────────────────────
-//     │                             ╰────────────────────── type mismatch: expected map<string, Person>, got map<string, Animal>
+//     │               ─────────────────┬────────────────
+//     │                                ╰────────────────── type mismatch: expected Person, got Animal
 //     │
 //     │ Note: Error code: E0001
 // ────╯
@@ -85,11 +85,11 @@ function MapAssignments() -> int {
 //     │ Note: Error code: E0001
 // ────╯
 // error: type mismatch: expected string, got map<string, int>
-//     ╭─[ invalid_assignment_maps.baml:44:5 ]
+//     ╭─[ invalid_assignment_maps.baml:44:6 ]
 //     │
 //  44 │     h = {"k": 7};
-//     │        ────┬────
-//     │            ╰────── type mismatch: expected string, got map<string, int>
+//     │         ────┬───
+//     │             ╰───── type mismatch: expected string, got map<string, int>
 //     │
 //     │ Note: Error code: E0001
 // ────╯

@@ -11,11 +11,11 @@ function ThrowsViolation(x: int) -> string throws string {
 //----
 //- diagnostics
 // error: declared throws is `string`, but this function may also throw `int`
-//    ╭─[ throw_throws_contract_violation.baml:3:50 ]
+//    ╭─[ throw_throws_contract_violation.baml:3:51 ]
 //    │
 //  3 │ function ThrowsViolation(x: int) -> string throws string {
-//    │                                                  ───┬───  
-//    │                                                     ╰───── declared throws is `string`, but this function may also throw `int`
-//    │ 
+//    │                                                   ───┬──
+//    │                                                      ╰──── declared throws is `string`, but this function may also throw `int`
+//    │
 //    │ Note: Error code: E0096
 // ───╯

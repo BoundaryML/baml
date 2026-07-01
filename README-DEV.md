@@ -196,11 +196,6 @@ pnpm build              # TypeScript components
 - Ensure you're using the correct Rust version: `rustc --version`
 - Clear cargo cache: `cargo clean`
 
-**Rust snapshot test failures (`insta`)**
-- Install snapshot tooling once: `cargo install cargo-insta`
-- From `baml_language/`, accept updated snapshots: `cargo insta accept --all`
-- Re-run the specific failing Rust test target to confirm clean output.
-
 **Go module errors**
 - Clear module cache: `go clean -modcache`
 - Ensure GOPATH is set correctly

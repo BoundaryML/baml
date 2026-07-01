@@ -71,7 +71,7 @@ fn user.test_capture_in_map_inferred() -> int[] {
     let _6: type
 
     bb0: {
-        _1 = [const 1_i64, const 2_i64, const 3_i64];
+        _1 = [const 1_i64, const 2_i64, const 3_i64]: int[];
         _2 = const 10_i64;
         _3 = make_closure lambda[0](copy _2);
         _4 = load_type(int);
@@ -171,7 +171,7 @@ fn user.test_chained_map() -> int[] {
     let _10: type
 
     bb0: {
-        _1 = [const 1_i64, const 2_i64, const 3_i64];
+        _1 = [const 1_i64, const 2_i64, const 3_i64]: int[];
         _3 = make_closure lambda[0]();
         _4 = load_type(int);
         _5 = load_type(never);
@@ -239,7 +239,7 @@ fn user.test_compose_inferred() -> int[] {
     let _10: type
 
     bb0: {
-        _1 = [const 1_i64, const 2_i64, const 3_i64];
+        _1 = [const 1_i64, const 2_i64, const 3_i64]: int[];
         _3 = make_closure lambda[0]();
         _4 = load_type(int);
         _5 = load_type(never);
@@ -422,7 +422,7 @@ fn user.test_fully_inferred_map() -> int[] {
     let _5: type
 
     bb0: {
-        _1 = [const 1_i64, const 2_i64, const 3_i64];
+        _1 = [const 1_i64, const 2_i64, const 3_i64]: int[];
         _2 = make_closure lambda[0]();
         _3 = load_type(int);
         _4 = load_type(never);
@@ -801,7 +801,7 @@ fn user.test_lambda_variable_then_pass() -> int[] {
     let _6: type
 
     bb0: {
-        _1 = [const 10_i64, const 20_i64, const 30_i64];
+        _1 = [const 10_i64, const 20_i64, const 30_i64]: int[];
         _2 = make_closure lambda[0]();
         _3 = copy _2;
         _4 = load_type(int);
@@ -943,7 +943,7 @@ fn user.test_literal_return_inference() -> int[] {
     let _5: type
 
     bb0: {
-        _1 = [const 1_i64, const 2_i64, const 3_i64];
+        _1 = [const 1_i64, const 2_i64, const 3_i64]: int[];
         _2 = make_closure lambda[0]();
         _3 = load_type(int);
         _4 = load_type(never);
@@ -982,7 +982,7 @@ fn user.test_map_multi_statement() -> int[] {
     let _5: type
 
     bb0: {
-        _1 = [const 1_i64, const 2_i64, const 3_i64];
+        _1 = [const 1_i64, const 2_i64, const 3_i64]: int[];
         _2 = make_closure lambda[0]();
         _3 = load_type(int);
         _4 = load_type(never);
@@ -1029,7 +1029,7 @@ fn user.test_map_optional_inferred() -> int[] {
     let _5: type
 
     bb0: {
-        _1 = [const 1_i64, const null, const 3_i64];
+        _1 = [const 1_i64, const null, const 3_i64]: int | null[];
         _2 = make_closure lambda[0]();
         _3 = load_type(int);
         _4 = load_type(never);
@@ -1079,7 +1079,7 @@ fn user.test_map_string_to_int() -> int[] {
     let _5: type
 
     bb0: {
-        _1 = [const "hello", const "world"];
+        _1 = [const "hello", const "world"]: string[];
         _2 = make_closure lambda[0]();
         _3 = load_type(int);
         _4 = load_type(never);
@@ -1117,7 +1117,7 @@ fn user.test_map_type_change_inferred() -> string[] {
     let _5: type
 
     bb0: {
-        _1 = [const 1_i64, const 2_i64, const 3_i64];
+        _1 = [const 1_i64, const 2_i64, const 3_i64]: int[];
         _2 = make_closure lambda[0]();
         _3 = load_type(string);
         _4 = load_type(never);
@@ -1171,7 +1171,7 @@ fn user.test_map_with_capture() -> int[] {
     let _6: type
 
     bb0: {
-        _1 = [const 1_i64, const 2_i64, const 3_i64];
+        _1 = [const 1_i64, const 2_i64, const 3_i64]: int[];
         _2 = const 10_i64;
         _3 = make_closure lambda[0](copy _2);
         _4 = load_type(int);
@@ -1215,9 +1215,9 @@ fn user.test_nested_map() -> int[][] {
     let _7: type
 
     bb0: {
-        _2 = [const 1_i64, const 2_i64];
-        _3 = [const 3_i64, const 4_i64];
-        _1 = [copy _2, copy _3];
+        _2 = [const 1_i64, const 2_i64]: int[];
+        _3 = [const 3_i64, const 4_i64]: int[];
+        _1 = [copy _2, copy _3]: int[][];
         _4 = make_closure lambda[0]();
         _5 = load_type(int[]);
         _6 = load_type(never);
@@ -1364,7 +1364,7 @@ fn user.test_shadowing() -> string {
 
     bb0: {
         _1 = const "999";
-        _2 = [const 1_i64, const 2_i64, const 3_i64];
+        _2 = [const 1_i64, const 2_i64, const 3_i64]: int[];
         _4 = make_closure lambda[0]();
         _5 = load_type(int);
         _6 = load_type(never);
@@ -1563,7 +1563,7 @@ fn user.test_shadowing_inferred() -> int[] {
     let _5: type
 
     bb0: {
-        _1 = [const 1_i64, const 2_i64, const 3_i64];
+        _1 = [const 1_i64, const 2_i64, const 3_i64]: int[];
         _2 = make_closure lambda[0]();
         _3 = load_type(int);
         _4 = load_type(never);

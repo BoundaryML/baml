@@ -1,0 +1,134 @@
+1:1-6        "class"            source.baml meta.class.baml keyword.declaration.class.baml
+1:7-10       "Foo"              source.baml meta.class.baml meta.class.header.baml entity.name.type.class.baml
+1:11-12      "{"                source.baml meta.class.baml meta.class.body.baml punctuation.definition.block.begin.baml
+2:5-9        "name"             source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
+2:10-16      "string"           source.baml meta.class.baml meta.class.body.baml meta.field.baml support.type.primitive.baml
+3:5-8        "age"              source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
+3:9-12       "int"              source.baml meta.class.baml meta.class.body.baml meta.field.baml support.type.primitive.baml
+4:1-2        "}"                source.baml meta.class.baml meta.class.body.baml punctuation.definition.block.end.baml
+6:1-4        "let"              source.baml meta.statement.let.baml meta.pattern.statement.baml meta.pattern.binding.baml keyword.declaration.binding.baml
+6:5-8        "foo"              source.baml meta.statement.let.baml meta.pattern.statement.baml meta.pattern.binding.baml variable.other.binding.baml
+6:9-10       "="                source.baml meta.statement.let.baml keyword.operator.assignment.baml
+6:11-14      "Foo"              source.baml meta.statement.let.baml meta.constructor.expression.baml entity.name.type.baml
+6:15-16      "{"                source.baml meta.statement.let.baml meta.constructor.expression.baml meta.constructor.body.baml punctuation.definition.constructor.body.begin.baml
+7:5-9        "name"             source.baml meta.statement.let.baml meta.constructor.expression.baml meta.constructor.body.baml meta.constructor.field.baml variable.other.property.baml
+7:9-10       ":"                source.baml meta.statement.let.baml meta.constructor.expression.baml meta.constructor.body.baml meta.constructor.field.baml punctuation.separator.colon.baml
+7:11-12      "\""               source.baml meta.statement.let.baml meta.constructor.expression.baml meta.constructor.body.baml meta.constructor.field.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+7:12-16      "John"             source.baml meta.statement.let.baml meta.constructor.expression.baml meta.constructor.body.baml meta.constructor.field.baml string.quoted.double.baml
+7:16-17      "\""               source.baml meta.statement.let.baml meta.constructor.expression.baml meta.constructor.body.baml meta.constructor.field.baml string.quoted.double.baml punctuation.definition.string.end.baml
+7:17-18      ","                source.baml meta.statement.let.baml meta.constructor.expression.baml meta.constructor.body.baml punctuation.separator.comma.baml
+8:5-8        "age"              source.baml meta.statement.let.baml meta.constructor.expression.baml meta.constructor.body.baml meta.constructor.field.baml variable.other.property.baml
+8:8-9        ":"                source.baml meta.statement.let.baml meta.constructor.expression.baml meta.constructor.body.baml meta.constructor.field.baml punctuation.separator.colon.baml
+8:10-11      "2"                source.baml meta.statement.let.baml meta.constructor.expression.baml meta.constructor.body.baml meta.constructor.field.baml constant.numeric.integer.baml
+8:11-12      ","                source.baml meta.statement.let.baml meta.constructor.expression.baml meta.constructor.body.baml punctuation.separator.comma.baml
+9:1-2        "}"                source.baml meta.statement.let.baml meta.constructor.expression.baml meta.constructor.body.baml punctuation.definition.constructor.body.end.baml
+9:2-3        ";"                source.baml punctuation.terminator.statement.baml
+10:1-4       "let"              source.baml meta.statement.let.baml meta.pattern.statement.baml meta.pattern.binding.baml keyword.declaration.binding.baml
+10:5-9       "name"             source.baml meta.statement.let.baml meta.pattern.statement.baml meta.pattern.binding.baml variable.other.binding.baml
+10:10-11     "="                source.baml meta.statement.let.baml keyword.operator.assignment.baml
+10:12-15     "foo"              source.baml meta.statement.let.baml meta.dotted-expression.baml variable.other.readwrite.baml
+10:15-16     "."                source.baml meta.statement.let.baml meta.dotted-expression.baml punctuation.accessor.baml
+10:16-20     "name"             source.baml meta.statement.let.baml meta.dotted-expression.baml variable.other.readwrite.baml
+10:20-21     ";"                source.baml punctuation.terminator.statement.baml
+11:1-4       "let"              source.baml meta.statement.let.baml meta.pattern.statement.baml meta.pattern.binding.baml keyword.declaration.binding.baml
+11:5-16      "misspelling"      source.baml meta.statement.let.baml meta.pattern.statement.baml meta.pattern.binding.baml variable.other.binding.baml
+11:17-18     "="                source.baml meta.statement.let.baml keyword.operator.assignment.baml
+11:19-22     "foo"              source.baml meta.statement.let.baml meta.dotted-expression.baml variable.other.readwrite.baml
+11:22-23     "."                source.baml meta.statement.let.baml meta.dotted-expression.baml punctuation.accessor.baml
+11:23-28     "names"            source.baml meta.statement.let.baml meta.dotted-expression.baml variable.other.readwrite.baml
+11:28-29     ";"                source.baml punctuation.terminator.statement.baml
+12:1-4       "let"              source.baml meta.statement.let.baml meta.pattern.statement.baml meta.pattern.binding.baml keyword.declaration.binding.baml
+12:5-13      "nonsense"         source.baml meta.statement.let.baml meta.pattern.statement.baml meta.pattern.binding.baml variable.other.binding.baml
+12:14-15     "="                source.baml meta.statement.let.baml keyword.operator.assignment.baml
+12:16-19     "foo"              source.baml meta.statement.let.baml meta.dotted-expression.baml variable.other.readwrite.baml
+12:19-20     "."                source.baml meta.statement.let.baml meta.dotted-expression.baml punctuation.accessor.baml
+12:20-24     "name"             source.baml meta.statement.let.baml meta.dotted-expression.baml variable.other.readwrite.baml
+12:24-25     "."                source.baml meta.statement.let.baml meta.dotted-expression.baml punctuation.accessor.baml
+12:25-30     "field"            source.baml meta.statement.let.baml meta.dotted-expression.baml variable.other.readwrite.baml
+12:30-31     ";"                source.baml punctuation.terminator.statement.baml
+14:1-4       "let"              source.baml meta.statement.let.baml meta.pattern.statement.baml meta.pattern.binding.baml keyword.declaration.binding.baml
+14:5-19      "array_access_1"   source.baml meta.statement.let.baml meta.pattern.statement.baml meta.pattern.binding.baml variable.other.binding.baml
+14:20-21     "="                source.baml meta.statement.let.baml keyword.operator.assignment.baml
+14:22-23     "["                source.baml meta.statement.let.baml meta.expression.array.baml punctuation.definition.array.begin.baml
+14:23-24     "1"                source.baml meta.statement.let.baml meta.expression.array.baml constant.numeric.integer.baml
+14:24-25     ","                source.baml meta.statement.let.baml meta.expression.array.baml punctuation.separator.comma.baml
+14:26-27     "2"                source.baml meta.statement.let.baml meta.expression.array.baml constant.numeric.integer.baml
+14:27-28     ","                source.baml meta.statement.let.baml meta.expression.array.baml punctuation.separator.comma.baml
+14:29-30     "3"                source.baml meta.statement.let.baml meta.expression.array.baml constant.numeric.integer.baml
+14:30-31     "]"                source.baml meta.statement.let.baml meta.expression.array.baml punctuation.definition.array.end.baml
+14:31-32     "["                source.baml meta.statement.let.baml meta.expression.array.baml punctuation.definition.array.begin.baml
+14:32-33     "0"                source.baml meta.statement.let.baml meta.expression.array.baml constant.numeric.integer.baml
+14:33-34     "]"                source.baml meta.statement.let.baml meta.expression.array.baml punctuation.definition.array.end.baml
+14:34-35     ";"                source.baml punctuation.terminator.statement.baml
+15:1-4       "let"              source.baml meta.statement.let.baml meta.pattern.statement.baml meta.pattern.binding.baml keyword.declaration.binding.baml
+15:5-19      "array_access_2"   source.baml meta.statement.let.baml meta.pattern.statement.baml meta.pattern.binding.baml variable.other.binding.baml
+15:20-21     "="                source.baml meta.statement.let.baml keyword.operator.assignment.baml
+15:22-23     "["                source.baml meta.statement.let.baml meta.expression.array.baml punctuation.definition.array.begin.baml
+15:23-24     "1"                source.baml meta.statement.let.baml meta.expression.array.baml constant.numeric.integer.baml
+15:24-25     ","                source.baml meta.statement.let.baml meta.expression.array.baml punctuation.separator.comma.baml
+15:25-26     "2"                source.baml meta.statement.let.baml meta.expression.array.baml constant.numeric.integer.baml
+15:26-27     ","                source.baml meta.statement.let.baml meta.expression.array.baml punctuation.separator.comma.baml
+15:28-29     "3"                source.baml meta.statement.let.baml meta.expression.array.baml constant.numeric.integer.baml
+15:29-30     "]"                source.baml meta.statement.let.baml meta.expression.array.baml punctuation.definition.array.end.baml
+15:30-31     "["                source.baml meta.statement.let.baml meta.expression.array.baml punctuation.definition.array.begin.baml
+15:31-32     "\""               source.baml meta.statement.let.baml meta.expression.array.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+15:32-34     "hi"               source.baml meta.statement.let.baml meta.expression.array.baml string.quoted.double.baml
+15:34-35     "\""               source.baml meta.statement.let.baml meta.expression.array.baml string.quoted.double.baml punctuation.definition.string.end.baml
+15:35-36     "]"                source.baml meta.statement.let.baml meta.expression.array.baml punctuation.definition.array.end.baml
+15:36-37     ";"                source.baml punctuation.terminator.statement.baml
+16:1-4       "let"              source.baml meta.statement.let.baml meta.pattern.statement.baml meta.pattern.binding.baml keyword.declaration.binding.baml
+16:5-19      "array_access_3"   source.baml meta.statement.let.baml meta.pattern.statement.baml meta.pattern.binding.baml variable.other.binding.baml
+16:20-21     "="                source.baml meta.statement.let.baml keyword.operator.assignment.baml
+16:22-23     "["                source.baml meta.statement.let.baml meta.expression.array.baml punctuation.definition.array.begin.baml
+16:23-24     "1"                source.baml meta.statement.let.baml meta.expression.array.baml constant.numeric.integer.baml
+16:24-25     ","                source.baml meta.statement.let.baml meta.expression.array.baml punctuation.separator.comma.baml
+16:25-26     "2"                source.baml meta.statement.let.baml meta.expression.array.baml constant.numeric.integer.baml
+16:26-27     ","                source.baml meta.statement.let.baml meta.expression.array.baml punctuation.separator.comma.baml
+16:28-29     "3"                source.baml meta.statement.let.baml meta.expression.array.baml constant.numeric.integer.baml
+16:29-30     "]"                source.baml meta.statement.let.baml meta.expression.array.baml punctuation.definition.array.end.baml
+16:30-31     "["                source.baml meta.statement.let.baml meta.expression.array.baml punctuation.definition.array.begin.baml
+16:31-34     "foo"              source.baml meta.statement.let.baml meta.expression.array.baml meta.dotted-expression.baml variable.other.readwrite.baml
+16:34-35     "."                source.baml meta.statement.let.baml meta.expression.array.baml meta.dotted-expression.baml punctuation.accessor.baml
+16:35-38     "age"              source.baml meta.statement.let.baml meta.expression.array.baml meta.dotted-expression.baml variable.other.readwrite.baml
+16:38-39     "]"                source.baml meta.statement.let.baml meta.expression.array.baml punctuation.definition.array.end.baml
+16:39-40     ";"                source.baml punctuation.terminator.statement.baml
+17:1-4       "let"              source.baml meta.statement.let.baml meta.pattern.statement.baml meta.pattern.binding.baml keyword.declaration.binding.baml
+17:5-19      "array_access_4"   source.baml meta.statement.let.baml meta.pattern.statement.baml meta.pattern.binding.baml variable.other.binding.baml
+17:20-21     "="                source.baml meta.statement.let.baml keyword.operator.assignment.baml
+17:22-23     "["                source.baml meta.statement.let.baml meta.expression.array.baml punctuation.definition.array.begin.baml
+17:23-24     "1"                source.baml meta.statement.let.baml meta.expression.array.baml constant.numeric.integer.baml
+17:24-25     ","                source.baml meta.statement.let.baml meta.expression.array.baml punctuation.separator.comma.baml
+17:25-26     "2"                source.baml meta.statement.let.baml meta.expression.array.baml constant.numeric.integer.baml
+17:26-27     ","                source.baml meta.statement.let.baml meta.expression.array.baml punctuation.separator.comma.baml
+17:28-29     "3"                source.baml meta.statement.let.baml meta.expression.array.baml constant.numeric.integer.baml
+17:29-30     "]"                source.baml meta.statement.let.baml meta.expression.array.baml punctuation.definition.array.end.baml
+17:30-31     "["                source.baml meta.statement.let.baml meta.expression.array.baml punctuation.definition.array.begin.baml
+17:31-34     "foo"              source.baml meta.statement.let.baml meta.expression.array.baml meta.dotted-expression.baml variable.other.readwrite.baml
+17:34-35     "."                source.baml meta.statement.let.baml meta.expression.array.baml meta.dotted-expression.baml punctuation.accessor.baml
+17:35-39     "name"             source.baml meta.statement.let.baml meta.expression.array.baml meta.dotted-expression.baml variable.other.readwrite.baml
+17:39-40     "]"                source.baml meta.statement.let.baml meta.expression.array.baml punctuation.definition.array.end.baml
+17:40-41     ";"                source.baml punctuation.terminator.statement.baml
+19:1-57      "// error: Error validating: Class Foo has no field names" source.baml comment.line.double-slash.baml
+20:1-30      "//   -->  expr/access.baml:11" source.baml comment.line.double-slash.baml
+21:1-8       "//    |"          source.baml comment.line.double-slash.baml
+22:1-29      "// 10 | let name = foo.name;" source.baml comment.line.double-slash.baml
+23:1-37      "// 11 | let misspelling = foo.names;" source.baml comment.line.double-slash.baml
+24:1-8       "//    |"          source.baml comment.line.double-slash.baml
+25:1-70      "// error: Error validating: Can only access fields on class instances" source.baml comment.line.double-slash.baml
+26:1-30      "//   -->  expr/access.baml:12" source.baml comment.line.double-slash.baml
+27:1-8       "//    |"          source.baml comment.line.double-slash.baml
+28:1-37      "// 11 | let misspelling = foo.names;" source.baml comment.line.double-slash.baml
+29:1-39      "// 12 | let nonsense = foo.name.field;" source.baml comment.line.double-slash.baml
+30:1-8       "//    |"          source.baml comment.line.double-slash.baml
+31:1-56      "// error: Error validating: Array index must be integer" source.baml comment.line.double-slash.baml
+32:1-30      "//   -->  expr/access.baml:15" source.baml comment.line.double-slash.baml
+33:1-8       "//    |"          source.baml comment.line.double-slash.baml
+34:1-43      "// 14 | let array_access_1 = [1, 2, 3][0];" source.baml comment.line.double-slash.baml
+35:1-45      "// 15 | let array_access_2 = [1,2, 3][\"hi\"];" source.baml comment.line.double-slash.baml
+36:1-8       "//    |"          source.baml comment.line.double-slash.baml
+37:1-56      "// error: Error validating: Array index must be integer" source.baml comment.line.double-slash.baml
+38:1-30      "//   -->  expr/access.baml:17" source.baml comment.line.double-slash.baml
+39:1-8       "//    |"          source.baml comment.line.double-slash.baml
+40:1-48      "// 16 | let array_access_3 = [1,2, 3][foo.age];" source.baml comment.line.double-slash.baml
+41:1-49      "// 17 | let array_access_4 = [1,2, 3][foo.name];" source.baml comment.line.double-slash.baml
+42:1-8       "//    |"          source.baml comment.line.double-slash.baml

@@ -163,7 +163,7 @@ fn user.catch_chain_union(mode: int) -> int {
     }
 
     bb3: {
-        throw copy _2;
+        rethrow copy _2;
     }
 
     bb4: {
@@ -199,7 +199,7 @@ fn user.catch_paren_or_chain(mode: int) -> int {
     }
 
     bb3: {
-        throw copy _2;
+        rethrow copy _2;
     }
 
     bb4: {
@@ -235,7 +235,7 @@ fn user.catch_widening_chain(mode: int) -> int {
     }
 
     bb3: {
-        throw copy _2;
+        rethrow copy _2;
     }
 
     bb4: {
@@ -958,87 +958,6 @@ fn user.for_let_with_narrow(items: int[]) -> int {
     }
 }
 
-fn user.PatternBucket.from_json(j: baml.json.json) -> PatternBucket {
-    // Locals:
-    let _0: PatternBucket // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: int[]
-    let _3: baml.json.json
-    let _4: type
-
-    bb0: {
-        _3 = call const fn baml.json.field(copy _1, const "values") -> [bb1];
-    }
-
-    bb1: {
-        _4 = load_type(int[]);
-        _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
-    }
-
-    bb2: {
-        _0 = user.PatternBucket { copy _2 };
-        goto -> bb3;
-    }
-
-    bb3: {
-        return;
-    }
-}
-
-fn user.AppError.from_json(j: baml.json.json) -> AppError {
-    // Locals:
-    let _0: AppError // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: int
-    let _3: baml.json.json
-    let _4: type
-
-    bb0: {
-        _3 = call const fn baml.json.field(copy _1, const "code") -> [bb1];
-    }
-
-    bb1: {
-        _4 = load_type(int);
-        _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
-    }
-
-    bb2: {
-        _0 = user.AppError { copy _2 };
-        goto -> bb3;
-    }
-
-    bb3: {
-        return;
-    }
-}
-
-fn user.PatternMatrix.from_json(j: baml.json.json) -> PatternMatrix {
-    // Locals:
-    let _0: PatternMatrix // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: int[][]
-    let _3: baml.json.json
-    let _4: type
-
-    bb0: {
-        _3 = call const fn baml.json.field(copy _1, const "rows") -> [bb1];
-    }
-
-    bb1: {
-        _4 = load_type(int[][]);
-        _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
-    }
-
-    bb2: {
-        _0 = user.PatternMatrix { copy _2 };
-        goto -> bb3;
-    }
-
-    bb3: {
-        return;
-    }
-}
-
 fn user.int_widens_to_alias(v: int | float) -> int {
     // Locals:
     let _0: int // _0 // return
@@ -1259,84 +1178,6 @@ fn user.risky_error(mode: int) -> int {
     bb2: {
         _3 = user.AppError { const 1_i64 };
         throw copy _3;
-    }
-}
-
-fn user.PatternBucket.to_json(self: PatternBucket) -> baml.json.json {
-    // Locals:
-    let _0: baml.json.json // _0 // return
-    let _1: PatternBucket // self // param
-    let _2: baml.json.json
-    let _3: int[]
-    let _4: PatternBucket
-    let _5: type
-
-    bb0: {
-        _4 = copy _1;
-        _3 = copy _4.0;
-        _5 = load_type(int[]);
-        _2 = call const fn baml.json.to_json<copy _5>(copy _3) -> [bb1];
-    }
-
-    bb1: {
-        _0 = { const "values": copy _2 };
-        goto -> bb2;
-    }
-
-    bb2: {
-        return;
-    }
-}
-
-fn user.AppError.to_json(self: AppError) -> baml.json.json {
-    // Locals:
-    let _0: baml.json.json // _0 // return
-    let _1: AppError // self // param
-    let _2: baml.json.json
-    let _3: int
-    let _4: AppError
-    let _5: type
-
-    bb0: {
-        _4 = copy _1;
-        _3 = copy _4.0;
-        _5 = load_type(int);
-        _2 = call const fn baml.json.to_json<copy _5>(copy _3) -> [bb1];
-    }
-
-    bb1: {
-        _0 = { const "code": copy _2 };
-        goto -> bb2;
-    }
-
-    bb2: {
-        return;
-    }
-}
-
-fn user.PatternMatrix.to_json(self: PatternMatrix) -> baml.json.json {
-    // Locals:
-    let _0: baml.json.json // _0 // return
-    let _1: PatternMatrix // self // param
-    let _2: baml.json.json
-    let _3: int[][]
-    let _4: PatternMatrix
-    let _5: type
-
-    bb0: {
-        _4 = copy _1;
-        _3 = copy _4.0;
-        _5 = load_type(int[][]);
-        _2 = call const fn baml.json.to_json<copy _5>(copy _3) -> [bb1];
-    }
-
-    bb1: {
-        _0 = { const "rows": copy _2 };
-        goto -> bb2;
-    }
-
-    bb2: {
-        return;
     }
 }
 

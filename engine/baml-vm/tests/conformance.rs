@@ -379,3 +379,63 @@ async fn update_through_reference_conformance() -> Result<()> {
 
     suite.assert_cases(&cases).await
 }
+
+#[tokio::test]
+async fn to_fixed_conformance() -> Result<()> {
+    let project = InMemoryBamlProject::new().with_file(
+        "main.baml",
+        r#"
+        function ToFixed(value: float, digits: int) -> string {
+            value.to_fixed(digits)
+        }
+
+        function ToFixedDefault(value: float) -> string {
+            value.to_fixed()
+        }
+
+        function ToFixedInt(value: int, digits: int) -> string {
+            value.to_fixed(digits)
+        }
+    "#,
+    );
+
+    let suite = ConformanceSuite::new(project)?;
+    let cases = vec![
+        ExpressionCase::new(
+            "ToFixed",
+            bm(vec![
+                ("value", BamlValue::Float(3.14159)),
+                ("digits", BamlValue::Int(2)),
+            ]),
+        )
+        .with_expected(BamlValue::String("3.14".to_string())),
+        ExpressionCase::new(
+            "ToFixed",
+            bm(vec![
+                ("value", BamlValue::Float(1.005)),
+                ("digits", BamlValue::Int(2)),
+            ]),
+        )
+        .with_expected(BamlValue::String("1.00".to_string())),
+        ExpressionCase::new(
+            "ToFixed",
+            bm(vec![
+                ("value", BamlValue::Float(1e21)),
+                ("digits", BamlValue::Int(2)),
+            ]),
+        )
+        .with_expected(BamlValue::String("1e+21".to_string())),
+        ExpressionCase::new("ToFixedDefault", bm(vec![("value", BamlValue::Float(3.7))]))
+            .with_expected(BamlValue::String("4".to_string())),
+        ExpressionCase::new(
+            "ToFixedInt",
+            bm(vec![
+                ("value", BamlValue::Int(5)),
+                ("digits", BamlValue::Int(2)),
+            ]),
+        )
+        .with_expected(BamlValue::String("5.00".to_string())),
+    ];
+
+    suite.assert_cases(&cases).await
+}

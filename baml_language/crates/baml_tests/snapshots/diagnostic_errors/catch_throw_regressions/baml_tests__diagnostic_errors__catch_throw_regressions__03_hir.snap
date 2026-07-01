@@ -42,9 +42,3 @@ function user.UnreachableTailStillChecked() -> string  [expr] {
 function user.WrapperAlwaysThrows(n: int) -> user.Status  [expr] {
   {  } AlwaysThrowsStatus(n)
 }
-function user.from_json(j: baml.json.json) -> user.BuildError  [expr] {
-  user.BuildError { reason: baml.json.from_json(baml.json.field(j, "reason")) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "reason": baml.json.to_json(self.reason) }
-}

@@ -14,24 +14,6 @@ class user.WithBlockAttrs {
   a: int
   b: string
 }
-function user.from_json(j: baml.json.json) -> user.Config  [expr] {
-  user.Config { id: baml.json.from_json(baml.json.field(j, "id")), name: baml.json.from_json(baml.json.field(j, "name")), data: baml.json.from_json(baml.json.field(j, "data")) }
-}
-function user.from_json(j: baml.json.json) -> user.AttrFoo  [expr] {
-  user.AttrFoo { x: baml.json.from_json(baml.json.field(j, "x")) }
-}
-function user.from_json(j: baml.json.json) -> user.WithBlockAttrs  [expr] {
-  user.WithBlockAttrs { a: baml.json.from_json(baml.json.field(j, "a")), b: baml.json.from_json(baml.json.field(j, "b")) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "x": baml.json.to_json(self.x) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "id": baml.json.to_json(self.id), "name": baml.json.to_json(self.name), "data": baml.json.to_json(self.data) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "a": baml.json.to_json(self.a), "b": baml.json.to_json(self.b) }
-}
 class user.Bar {
   ref: user.Foo
   items: int[]
@@ -44,18 +26,6 @@ class user.Foo {
   b: string
   c: float
   d: bool
-}
-function user.from_json(j: baml.json.json) -> user.Foo  [expr] {
-  user.Foo { a: baml.json.from_json(baml.json.field(j, "a")), b: baml.json.from_json(baml.json.field(j, "b")), c: baml.json.from_json(baml.json.field(j, "c")), d: baml.json.from_json(baml.json.field(j, "d")) }
-}
-function user.from_json(j: baml.json.json) -> user.Bar  [expr] {
-  user.Bar { ref: baml.json.from_json(baml.json.field(j, "ref")), items: baml.json.from_json(baml.json.field(j, "items")), nested: baml.json.from_json(baml.json.field(j, "nested")), mapping: baml.json.from_json(baml.json.field(j, "mapping")), opt: baml.json.from_json(baml.json.field(j, "opt")) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "ref": baml.json.to_json(self.ref), "items": baml.json.to_json(self.items), "nested": baml.json.to_json(self.nested), "mapping": baml.json.to_json(self.mapping), "opt": baml.json.to_json(self.opt) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "a": baml.json.to_json(self.a), "b": baml.json.to_json(self.b), "c": baml.json.to_json(self.c), "d": baml.json.to_json(self.d) }
 }
 class user.ApiCall {
   request: baml.http.Request
@@ -74,30 +44,6 @@ class user.WithResponse {
 class user.WithStreamRef {
   partial: baml.http.Request$stream
 }
-function user.from_json(j: baml.json.json) -> user.ApiCall  [expr] {
-  user.ApiCall { request: baml.json.from_json(baml.json.field(j, "request")), label: baml.json.from_json(baml.json.field(j, "label")) }
-}
-function user.from_json(j: baml.json.json) -> user.WithStreamRef  [expr] {
-  user.WithStreamRef { partial: baml.json.from_json(baml.json.field(j, "partial")) }
-}
-function user.from_json(j: baml.json.json) -> user.MixedBuiltin  [expr] {
-  user.MixedBuiltin { requests: baml.json.from_json(baml.json.field(j, "requests")), metadata: baml.json.from_json(baml.json.field(j, "metadata")), maybe_request: baml.json.from_json(baml.json.field(j, "maybe_request")), union_request: baml.json.from_json(baml.json.field(j, "union_request")) }
-}
-function user.from_json(j: baml.json.json) -> user.WithResponse  [expr] {
-  user.WithResponse { response: baml.json.from_json(baml.json.field(j, "response")), status: baml.json.from_json(baml.json.field(j, "status")) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "response": baml.json.to_json(self.response), "status": baml.json.to_json(self.status) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "request": baml.json.to_json(self.request), "label": baml.json.to_json(self.label) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "partial": baml.json.to_json(self.partial) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "requests": baml.json.to_json(self.requests), "metadata": baml.json.to_json(self.metadata), "maybe_request": baml.json.to_json(self.maybe_request), "union_request": baml.json.to_json(self.union_request) }
-}
 class user.Complex {
   color: user.Color
   literal: 5
@@ -114,18 +60,6 @@ class user.Inner {
 enum user.Color {Red, Green, Blue}
 type user.AliasToClass = user.Inner
 type user.StringAlias = string
-function user.from_json(j: baml.json.json) -> user.Inner  [expr] {
-  user.Inner { value: baml.json.from_json(baml.json.field(j, "value")) }
-}
-function user.from_json(j: baml.json.json) -> user.Complex  [expr] {
-  user.Complex { color: baml.json.from_json(baml.json.field(j, "color")), literal: baml.json.from_json(baml.json.field(j, "literal")), str_literal: baml.json.from_json(baml.json.field(j, "str_literal")), union_field: baml.json.from_json(baml.json.field(j, "union_field")), alias_field: baml.json.from_json(baml.json.field(j, "alias_field")), nested_list: baml.json.from_json(baml.json.field(j, "nested_list")), optional_class: baml.json.from_json(baml.json.field(j, "optional_class")), union_with_null: baml.json.from_json(baml.json.field(j, "union_with_null")) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "color": baml.json.to_json(self.color), "literal": baml.json.to_json(self.literal), "str_literal": baml.json.to_json(self.str_literal), "union_field": baml.json.to_json(self.union_field), "alias_field": baml.json.to_json(self.alias_field), "nested_list": baml.json.to_json(self.nested_list), "optional_class": baml.json.to_json(self.optional_class), "union_with_null": baml.json.to_json(self.union_with_null) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "value": baml.json.to_json(self.value) }
-}
 class user.AllDone {
   a: int
   b: string
@@ -153,48 +87,6 @@ class user.SelfRef {
 }
 class user.UnionWithMustExist {
   mixed: user.MustExistClass | 5
-}
-function user.from_json(j: baml.json.json) -> user.SelfRef  [expr] {
-  user.SelfRef { name: baml.json.from_json(baml.json.field(j, "name")), children: baml.json.from_json(baml.json.field(j, "children")) }
-}
-function user.from_json(j: baml.json.json) -> user.EdgeFoo  [expr] {
-  user.EdgeFoo { x: baml.json.from_json(baml.json.field(j, "x")) }
-}
-function user.from_json(j: baml.json.json) -> user.UnionWithMustExist  [expr] {
-  user.UnionWithMustExist { mixed: baml.json.from_json(baml.json.field(j, "mixed")) }
-}
-function user.from_json(j: baml.json.json) -> user.AllDone  [expr] {
-  user.AllDone { a: baml.json.from_json(baml.json.field(j, "a")), b: baml.json.from_json(baml.json.field(j, "b")), c: baml.json.from_json(baml.json.field(j, "c")) }
-}
-function user.from_json(j: baml.json.json) -> user.MustExistClass  [expr] {
-  user.MustExistClass { v: baml.json.from_json(baml.json.field(j, "v")) }
-}
-function user.from_json(j: baml.json.json) -> user.AllMustExist  [expr] {
-  user.AllMustExist { a: baml.json.from_json(baml.json.field(j, "a")), b: baml.json.from_json(baml.json.field(j, "b")), c: baml.json.from_json(baml.json.field(j, "c")) }
-}
-function user.from_json(j: baml.json.json) -> user.NeverFields  [expr] {
-  user.NeverFields { lit_int: baml.json.from_json(baml.json.field(j, "lit_int")), lit_str: baml.json.from_json(baml.json.field(j, "lit_str")), lit_bool: baml.json.from_json(baml.json.field(j, "lit_bool")) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "a": baml.json.to_json(self.a), "b": baml.json.to_json(self.b), "c": baml.json.to_json(self.c) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "v": baml.json.to_json(self.v) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "lit_int": baml.json.to_json(self.lit_int), "lit_str": baml.json.to_json(self.lit_str), "lit_bool": baml.json.to_json(self.lit_bool) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "name": baml.json.to_json(self.name), "children": baml.json.to_json(self.children) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "x": baml.json.to_json(self.x) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "mixed": baml.json.to_json(self.mixed) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "a": baml.json.to_json(self.a), "b": baml.json.to_json(self.b), "c": baml.json.to_json(self.c) }
 }
 class user.AllDefaults {
   name: string
@@ -293,102 +185,6 @@ type user.MixedType = int | user.Education
 type user.OptionalAlias = user.Inner?
 type user.SimpleAlias = string
 type user.UnionAlias = int | user.Inner
-function user.from_json(j: baml.json.json) -> user.Education  [expr] {
-  user.Education { school: baml.json.from_json(baml.json.field(j, "school")), year: baml.json.from_json(baml.json.field(j, "year")) }
-}
-function user.from_json(j: baml.json.json) -> user.TreeNode  [expr] {
-  user.TreeNode { value: baml.json.from_json(baml.json.field(j, "value")), children: baml.json.from_json(baml.json.field(j, "children")) }
-}
-function user.from_json(j: baml.json.json) -> user.WithEnum  [expr] {
-  user.WithEnum { status: baml.json.from_json(baml.json.field(j, "status")) }
-}
-function user.from_json(j: baml.json.json) -> user.Outer  [expr] {
-  user.Outer { inner: baml.json.from_json(baml.json.field(j, "inner")) }
-}
-function user.from_json(j: baml.json.json) -> user.WithNested  [expr] {
-  user.WithNested { matrix: baml.json.from_json(baml.json.field(j, "matrix")), class_matrix: baml.json.from_json(baml.json.field(j, "class_matrix")), nested_map: baml.json.from_json(baml.json.field(j, "nested_map")), class_nested_map: baml.json.from_json(baml.json.field(j, "class_nested_map")) }
-}
-function user.from_json(j: baml.json.json) -> user.DynamicClass  [expr] {
-  user.DynamicClass { name: baml.json.from_json(baml.json.field(j, "name")) }
-}
-function user.from_json(j: baml.json.json) -> user.Resume  [expr] {
-  user.Resume { name: baml.json.from_json(baml.json.field(j, "name")), age: baml.json.from_json(baml.json.field(j, "age")), type: baml.json.from_json(baml.json.field(j, "type")), status: baml.json.from_json(baml.json.field(j, "status")), education: baml.json.from_json(baml.json.field(j, "education")), scores: baml.json.from_json(baml.json.field(j, "scores")), metadata: baml.json.from_json(baml.json.field(j, "metadata")) }
-}
-function user.from_json(j: baml.json.json) -> user.Primitives  [expr] {
-  user.Primitives { name: baml.json.from_json(baml.json.field(j, "name")), count: baml.json.from_json(baml.json.field(j, "count")), flag: baml.json.from_json(baml.json.field(j, "flag")), score: baml.json.from_json(baml.json.field(j, "score")) }
-}
-function user.from_json(j: baml.json.json) -> user.Inner  [expr] {
-  user.Inner { value: baml.json.from_json(baml.json.field(j, "value")) }
-}
-function user.from_json(j: baml.json.json) -> user.WithMaps  [expr] {
-  user.WithMaps { simple: baml.json.from_json(baml.json.field(j, "simple")), complex: baml.json.from_json(baml.json.field(j, "complex")) }
-}
-function user.from_json(j: baml.json.json) -> user.WithOptionals  [expr] {
-  user.WithOptionals { name: baml.json.from_json(baml.json.field(j, "name")), inner: baml.json.from_json(baml.json.field(j, "inner")), items: baml.json.from_json(baml.json.field(j, "items")) }
-}
-function user.from_json(j: baml.json.json) -> user.AllDefaults  [expr] {
-  user.AllDefaults { name: baml.json.from_json(baml.json.field(j, "name")), age: baml.json.from_json(baml.json.field(j, "age")), score: baml.json.from_json(baml.json.field(j, "score")), active: baml.json.from_json(baml.json.field(j, "active")), type: baml.json.from_json(baml.json.field(j, "type")), version: baml.json.from_json(baml.json.field(j, "version")), status: baml.json.from_json(baml.json.field(j, "status")), edu: baml.json.from_json(baml.json.field(j, "edu")), scores: baml.json.from_json(baml.json.field(j, "scores")), education: baml.json.from_json(baml.json.field(j, "education")), nested_edu: baml.json.from_json(baml.json.field(j, "nested_edu")), edu_map: baml.json.from_json(baml.json.field(j, "edu_map")), data: baml.json.from_json(baml.json.field(j, "data")), mixed: baml.json.from_json(baml.json.field(j, "mixed")), maybe: baml.json.from_json(baml.json.field(j, "maybe")), maybe_list: baml.json.from_json(baml.json.field(j, "maybe_list")) }
-}
-function user.from_json(j: baml.json.json) -> user.Container  [expr] {
-  user.Container { matrix: baml.json.from_json(baml.json.field(j, "matrix")), grid: baml.json.from_json(baml.json.field(j, "grid")), groups: baml.json.from_json(baml.json.field(j, "groups")) }
-}
-function user.from_json(j: baml.json.json) -> user.WithLiterals  [expr] {
-  user.WithLiterals { type: baml.json.from_json(baml.json.field(j, "type")), version: baml.json.from_json(baml.json.field(j, "version")), enabled: baml.json.from_json(baml.json.field(j, "enabled")) }
-}
-function user.from_json(j: baml.json.json) -> user.WithLists  [expr] {
-  user.WithLists { strings: baml.json.from_json(baml.json.field(j, "strings")), ints: baml.json.from_json(baml.json.field(j, "ints")), classes: baml.json.from_json(baml.json.field(j, "classes")) }
-}
-function user.from_json(j: baml.json.json) -> user.WithUnions  [expr] {
-  user.WithUnions { simple: baml.json.from_json(baml.json.field(j, "simple")), with_class: baml.json.from_json(baml.json.field(j, "with_class")), mixed: baml.json.from_json(baml.json.field(j, "mixed")) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "simple": baml.json.to_json(self.simple), "with_class": baml.json.to_json(self.with_class), "mixed": baml.json.to_json(self.mixed) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "school": baml.json.to_json(self.school), "year": baml.json.to_json(self.year) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "value": baml.json.to_json(self.value), "children": baml.json.to_json(self.children) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "status": baml.json.to_json(self.status) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "inner": baml.json.to_json(self.inner) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "matrix": baml.json.to_json(self.matrix), "class_matrix": baml.json.to_json(self.class_matrix), "nested_map": baml.json.to_json(self.nested_map), "class_nested_map": baml.json.to_json(self.class_nested_map) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "name": baml.json.to_json(self.name) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "name": baml.json.to_json(self.name), "age": baml.json.to_json(self.age), "type": baml.json.to_json(self.type), "status": baml.json.to_json(self.status), "education": baml.json.to_json(self.education), "scores": baml.json.to_json(self.scores), "metadata": baml.json.to_json(self.metadata) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "name": baml.json.to_json(self.name), "count": baml.json.to_json(self.count), "flag": baml.json.to_json(self.flag), "score": baml.json.to_json(self.score) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "value": baml.json.to_json(self.value) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "simple": baml.json.to_json(self.simple), "complex": baml.json.to_json(self.complex) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "name": baml.json.to_json(self.name), "inner": baml.json.to_json(self.inner), "items": baml.json.to_json(self.items) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "name": baml.json.to_json(self.name), "age": baml.json.to_json(self.age), "score": baml.json.to_json(self.score), "active": baml.json.to_json(self.active), "type": baml.json.to_json(self.type), "version": baml.json.to_json(self.version), "status": baml.json.to_json(self.status), "edu": baml.json.to_json(self.edu), "scores": baml.json.to_json(self.scores), "education": baml.json.to_json(self.education), "nested_edu": baml.json.to_json(self.nested_edu), "edu_map": baml.json.to_json(self.edu_map), "data": baml.json.to_json(self.data), "mixed": baml.json.to_json(self.mixed), "maybe": baml.json.to_json(self.maybe), "maybe_list": baml.json.to_json(self.maybe_list) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "matrix": baml.json.to_json(self.matrix), "grid": baml.json.to_json(self.grid), "groups": baml.json.to_json(self.groups) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "type": baml.json.to_json(self.type), "version": baml.json.to_json(self.version), "enabled": baml.json.to_json(self.enabled) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "strings": baml.json.to_json(self.strings), "ints": baml.json.to_json(self.ints), "classes": baml.json.to_json(self.classes) }
-}
 class user.foo.NsClass {
   value: string
 }
@@ -400,28 +196,10 @@ class user.foo.NsRefToTop {
 }
 enum user.foo.NsEnum {Alpha, Beta}
 type user.foo.NsAlias = string | int
-function user.foo.from_json(j: baml.json.json) -> user.foo.NsClass  [expr] {
-  user.foo.NsClass { value: baml.json.from_json(baml.json.field(j, "value")) }
-}
-function user.foo.from_json(j: baml.json.json) -> user.foo.NsRefToTop  [expr] {
-  user.foo.NsRefToTop { inner: baml.json.from_json(baml.json.field(j, "inner")), status: baml.json.from_json(baml.json.field(j, "status")), items: baml.json.from_json(baml.json.field(j, "items")), alias_ref: baml.json.from_json(baml.json.field(j, "alias_ref")) }
-}
-function user.foo.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "inner": baml.json.to_json(self.inner), "status": baml.json.to_json(self.status), "items": baml.json.to_json(self.items), "alias_ref": baml.json.to_json(self.alias_ref) }
-}
-function user.foo.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "value": baml.json.to_json(self.value) }
-}
 class user.TopRefToNs {
   ns_class: root.foo.NsClass
   ns_enum: root.foo.NsEnum
   ns_items: root.foo.NsClass[]
   ns_map: map<string, root.foo.NsClass>
   ns_alias: root.foo.NsAlias
-}
-function user.from_json(j: baml.json.json) -> user.TopRefToNs  [expr] {
-  user.TopRefToNs { ns_class: baml.json.from_json(baml.json.field(j, "ns_class")), ns_enum: baml.json.from_json(baml.json.field(j, "ns_enum")), ns_items: baml.json.from_json(baml.json.field(j, "ns_items")), ns_map: baml.json.from_json(baml.json.field(j, "ns_map")), ns_alias: baml.json.from_json(baml.json.field(j, "ns_alias")) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "ns_class": baml.json.to_json(self.ns_class), "ns_enum": baml.json.to_json(self.ns_enum), "ns_items": baml.json.to_json(self.ns_items), "ns_map": baml.json.to_json(self.ns_map), "ns_alias": baml.json.to_json(self.ns_alias) }
 }

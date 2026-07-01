@@ -16,8 +16,8 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::{
-    Freshness, Name, NotRuntimeTy, QualifiedTypeName, RuntimeFunctionParamTy, RuntimeTy, Ty,
-    TyAttr, TypeName,
+    Freshness, Interface, Name, NotRuntimeTy, QualifiedTypeName, RuntimeFunctionParamTy,
+    RuntimeInterface, RuntimeTy, Ty, TyAttr, TypeName,
 };
 
 impl RuntimeTy {
@@ -77,6 +77,15 @@ impl RuntimeTy {
     /// `T[]` (list) with default attributes.
     pub fn list(inner: RuntimeTy) -> Self {
         RuntimeTy::List(Box::new(inner), TyAttr::default())
+    }
+
+    /// `map<K, V>` with default attributes.
+    pub fn map(key: RuntimeTy, value: RuntimeTy) -> Self {
+        RuntimeTy::Map {
+            key: Box::new(key),
+            value: Box::new(value),
+            attr: TyAttr::default(),
+        }
     }
 
     /// `A | B | ...` (union) with default attributes.
@@ -399,7 +408,7 @@ pub fn lower_to_runtime(ty: &Ty, resolved: &ResolvedAliases) -> Result<RuntimeTy
             base: Box::new(lower_to_runtime(base, resolved)?),
             interface: interface
                 .as_ref()
-                .map(|i| Ok::<_, NotRuntimeTy>(Box::new(lower_to_runtime(i, resolved)?)))
+                .map(|i| lower_interface_to_runtime(i, resolved).map(Box::new))
                 .transpose()?,
             member: member.clone(),
             attr: attr.clone(),
@@ -419,6 +428,8 @@ pub fn lower_to_runtime(ty: &Ty, resolved: &ResolvedAliases) -> Result<RuntimeTy
         // Error-recovery sentinels cannot exist in a type-checked program.
         Ty::Unknown { .. } => return Err(NotRuntimeTy { variant: "Unknown" }),
         Ty::Error { .. } => return Err(NotRuntimeTy { variant: "Error" }),
+        // An inference hole must have been filled during type checking.
+        Ty::Infer { .. } => return Err(NotRuntimeTy { variant: "Infer" }),
     })
 }
 
@@ -426,6 +437,25 @@ pub fn lower_to_runtime(ty: &Ty, resolved: &ResolvedAliases) -> Result<RuntimeTy
 /// sentinel encountered (at any nesting depth).
 fn lower_vec(tys: &[Ty], resolved: &ResolvedAliases) -> Result<Vec<RuntimeTy>, NotRuntimeTy> {
     tys.iter().map(|t| lower_to_runtime(t, resolved)).collect()
+}
+
+/// Lower an interface *constraint* (the `as I` of an associated-type
+/// projection) to its runtime form, lowering every generic argument and
+/// associated-type binding. Mirrors the `Ty::Interface` arm of
+/// [`lower_to_runtime`].
+fn lower_interface_to_runtime(
+    interface: &Interface,
+    resolved: &ResolvedAliases,
+) -> Result<RuntimeInterface, NotRuntimeTy> {
+    Ok(RuntimeInterface {
+        name: interface.name.clone(),
+        generics: lower_vec(&interface.generics, resolved)?,
+        associated_types: interface
+            .associated_types
+            .iter()
+            .map(|(name, ty)| Ok((name.clone(), lower_to_runtime(ty, resolved)?)))
+            .collect::<Result<Vec<_>, NotRuntimeTy>>()?,
+    })
 }
 
 #[cfg(test)]
@@ -513,7 +543,11 @@ mod tests {
     fn round_trip_associated_type_projection() {
         let ty = Ty::AssociatedTypeProjection {
             base: Box::new(Ty::TypeVar(Name::new("T"), def())),
-            interface: Some(Box::new(Ty::TypeAlias(qtn("Iterator"), def()))),
+            interface: Some(Box::new(Interface {
+                name: qtn("Iterator"),
+                generics: vec![],
+                associated_types: vec![],
+            })),
             member: Name::new("Item"),
             attr: def(),
         };

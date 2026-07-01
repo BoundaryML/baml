@@ -11,7 +11,9 @@ use crate::{
     inference::{CallPlan, MemberResolution, ScopeInference, infer_scope_types},
     lower_type_expr::lower_type_expr_in_ns,
     package_interface::package_resolution_context,
-    throw_inference::{function_throw_sets, throw_set_key},
+    throw_inference::{
+        flatten_ty_to_facts, function_throw_sets, throw_set_key, throws_ty_has_infer_hole,
+    },
     throws_analysis::ThrowsAnalysisContext,
     ty::{Ty, TyAttr},
 };
@@ -255,6 +257,17 @@ impl ThrowsAnalysisContext for CallableThrowsAnalysis<'_, '_> {
         // builder impl.
         lookup_named_throw_summary(self.db, self.pkg_id, &Name::new("id.set"))
     }
+
+    fn to_json_fallback_throws(&self) -> Option<BTreeSet<Ty>> {
+        // `recv.to_json()` lowers to `baml.json.from(recv)` — see the builder impl.
+        lookup_named_throw_summary(self.db, self.pkg_id, &Name::new("json.from"))
+    }
+
+    #[allow(clippy::wrong_self_convention)]
+    fn from_json_fallback_throws(&self) -> Option<BTreeSet<Ty>> {
+        // `Type.from_json(j)` lowers to `baml.json.to<Type>(j)` — see the builder impl.
+        lookup_named_throw_summary(self.db, self.pkg_id, &Name::new("json.to"))
+    }
 }
 
 fn callee_uses_method_call_convention(
@@ -351,21 +364,39 @@ fn callable_throws_cycle_initial<'db>(
     _id: salsa::Id,
     function: FunctionLoc<'db>,
 ) -> Ty {
-    lowered_declared_callable_throws(db, function)
-        .unwrap_or_else(|| signature_cycle_initial_callable_throws(db, function))
+    match lowered_declared_callable_throws(db, function) {
+        // An open `throws X | _` contract seeds the fixpoint with just its named
+        // members — never the `_` hole — so a recursive cycle never observes a
+        // hole in a callable type. The fixpoint adds the inferred throws on top.
+        Some(declared) if throws_ty_has_infer_hole(&declared) => {
+            join_throw_facts(&flatten_ty_to_facts(&declared))
+        }
+        Some(declared) => declared,
+        None => signature_cycle_initial_callable_throws(db, function),
+    }
 }
 
 #[salsa::tracked(returns(ref), cycle_initial=callable_throws_cycle_initial)]
 pub fn callable_throws<'db>(db: &'db dyn crate::Db, function: FunctionLoc<'db>) -> Ty {
-    if let Some(declared_throws) = lowered_declared_callable_throws(db, function) {
-        return declared_throws;
+    let declared = lowered_declared_callable_throws(db, function);
+    let declared_has_hole = declared.as_ref().is_some_and(throws_ty_has_infer_hole);
+
+    // A closed declaration (`throws X`, no `_`) is the exact contract callers see.
+    if let Some(declared_throws) = &declared
+        && !declared_has_hole
+    {
+        return declared_throws.clone();
     }
 
+    // Otherwise infer the body's effective throw set: either no declaration at
+    // all, or an open `throws X | _` contract whose hole is filled from the body.
+    // For the open contract we also union in the declared named members, so a
+    // caller sees the full set (declared ∪ inferred) rather than just the hole.
     let file = function.file(db);
     let pkg_info = file_package::file_package(db, file);
     let pkg_id = PackageId::new(db, pkg_info.package.clone());
 
-    match baml_compiler2_ppir::function_body(db, function).as_ref() {
+    let mut facts: BTreeSet<Ty> = match baml_compiler2_ppir::function_body(db, function).as_ref() {
         FunctionBody::Expr(body) => {
             let Some(scope_id) = function_scope_id(db, function) else {
                 return Ty::Unknown {
@@ -375,7 +406,7 @@ pub fn callable_throws<'db>(db: &'db dyn crate::Db, function: FunctionLoc<'db>) 
             let inference = infer_scope_types(db, scope_id);
             let res_ctx = package_resolution_context(db, pkg_id);
             let aliases = crate::inference::package_alias_map(db, res_ctx);
-            let facts = crate::throws_analysis::collect_escaping_throws(
+            crate::throws_analysis::collect_escaping_throws(
                 &CallableThrowsAnalysis {
                     db,
                     pkg_id,
@@ -384,14 +415,21 @@ pub fn callable_throws<'db>(db: &'db dyn crate::Db, function: FunctionLoc<'db>) 
                     aliases: &aliases,
                 },
                 body,
-            );
-            join_throw_facts(&facts)
+            )
         }
-        FunctionBody::Builtin(_) => Ty::Never {
-            attr: TyAttr::default(),
-        },
-        FunctionBody::Missing => Ty::Unknown {
-            attr: TyAttr::default(),
-        },
+        // A builtin/missing body contributes no inferred facts; an open contract
+        // then reduces to just its declared named members.
+        FunctionBody::Builtin(_) => BTreeSet::new(),
+        FunctionBody::Missing if declared_has_hole => BTreeSet::new(),
+        FunctionBody::Missing => {
+            return Ty::Unknown {
+                attr: TyAttr::default(),
+            };
+        }
+    };
+
+    if let Some(declared_throws) = &declared {
+        facts.extend(flatten_ty_to_facts(declared_throws));
     }
+    join_throw_facts(&facts)
 }

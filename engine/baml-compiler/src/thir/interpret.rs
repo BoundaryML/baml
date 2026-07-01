@@ -2989,6 +2989,30 @@ fn evaluate_method_call(
             let result = s.replacen(search.as_str(), replacement.as_str(), 1);
             Ok(BamlValueWithMeta::String(result, meta.clone()))
         }
+        "to_fixed" => {
+            let value = match receiver {
+                BamlValueWithMeta::Float(v, _) => *v,
+                BamlValueWithMeta::Int(v, _) => *v as f64,
+                _ => bail!(
+                    "to_fixed() method only available on floats and ints at {:?}",
+                    meta.0
+                ),
+            };
+
+            if args.len() > 1 {
+                bail!("to_fixed() method takes at most 1 argument at {:?}", meta.0);
+            }
+
+            let digits = match args.first() {
+                Some(BamlValueWithMeta::Int(v, _)) => *v,
+                Some(_) => bail!("to_fixed() digits argument must be an int at {:?}", meta.0),
+                None => 0,
+            };
+
+            let formatted = baml_vm::native::number_to_fixed(value, digits)
+                .map_err(|msg| anyhow::anyhow!("{msg} at {:?}", meta.0))?;
+            Ok(BamlValueWithMeta::String(formatted, meta.clone()))
+        }
         _ => bail!(
             "unknown method '{}' at {:?}, should have been caught during typechecking",
             method_name,

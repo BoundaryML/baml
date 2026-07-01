@@ -46,6 +46,8 @@ jobs:
       docs: ${{ steps.check_docs.outputs.changed }}
       # Flag for typescript2/webview changes
       webview: ${{ steps.check_webview.outputs.changed }}
+      # Flag for typescript2 grammar changes
+      grammar: ${{ steps.check_grammar.outputs.changed }}
       # Flag for unsafe code changes (bex_heap) - triggers Miri tests
       unsafe: ${{ steps.check_unsafe.outputs.changed }}
       # Flag for proto codegen changes - triggers generated file sync check
@@ -203,6 +205,24 @@ jobs:
             ':typescript2/pkg-proto/**' \
             ':baml_language/crates/bridge_ctypes/types/**' \
             ':.github/workflows/webview-tests.reusable.yaml' \
+          ; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check if grammar changed
+        id: check_grammar
+        env:
+          MERGE_BASE: ${{ steps.merge_base.outputs.sha }}
+        run: |
+          if git diff --quiet "${MERGE_BASE}...HEAD" -- \
+            ':typescript2/pkg-grammar/**' \
+            ':typescript2/app-vscode-ext/syntaxes/**' \
+            ':typescript2/app-vscode-ext/package.json' \
+            ':typescript2/pnpm-lock.yaml' \
+            ':.github/actions/setup-node2/**' \
+            ':.github/workflows/ci.yaml' \
           ; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
           else
@@ -467,6 +487,24 @@ jobs:
     if: needs.determine_changes.outputs.webview == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary'
     uses: ./.github/workflows/webview-tests.reusable.yaml
     secrets: inherit
+
+  grammar-tests:
+    name: "Grammar Tests"
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    needs: determine_changes
+    if: needs.determine_changes.outputs.grammar == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary'
+    steps:
+      - name: "Checkout Branch"
+        uses: useblacksmith/checkout@v1
+        with:
+          persist-credentials: false
+
+      - name: "Setup Node.js for typescript2"
+        uses: ./.github/actions/setup-node2
+
+      - name: "Run grammar snapshot tests"
+        run: pnpm --filter @b/pkg-grammar test
+        working-directory: typescript2
 
   miri-tests:
     name: "Miri (unsafe code verification)"
@@ -919,6 +957,7 @@ jobs:
       - wasm-pack-tests
       - docs
       - webview-tests
+      - grammar-tests
       # - miri-tests  # TEMPORARILY DISABLED: miri tests timing out
       - prof-concurrency
       - proto-sync
@@ -944,6 +983,7 @@ jobs:
           echo "| wasm-pack-tests | ${{ needs.wasm-pack-tests.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| docs | ${{ needs.docs.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| webview-tests | ${{ needs.webview-tests.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| grammar-tests | ${{ needs.grammar-tests.result }} |" >> $GITHUB_STEP_SUMMARY
           # echo "| miri-tests | ${{ needs.miri-tests.result }} |" >> $GITHUB_STEP_SUMMARY  # TEMPORARILY DISABLED
           echo "| prof-concurrency | ${{ needs.prof-concurrency.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| proto-sync | ${{ needs.proto-sync.result }} |" >> $GITHUB_STEP_SUMMARY

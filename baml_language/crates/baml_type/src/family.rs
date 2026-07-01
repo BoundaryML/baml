@@ -74,6 +74,22 @@ ty_family! {
         /// part of the interface, never stripped; sorted by name for a
         /// deterministic order.
         pub associated_types: Vec<(Name, Ty)>,
+    } methods {
+        /// Build an interface constraint, sorting `associated_types` by name so the
+        /// invariant the field documents holds and the derived `Eq`/`Hash`/`Ord`
+        /// are order-insensitive. Normalization sorts bindings identically, so a
+        /// constraint built here compares equal to its normalized form. Generated
+        /// for every family member (`Interface`, `RuntimeInterface`, …), so every
+        /// construction site — including the untrusted ctypes decode boundary —
+        /// can route through it instead of sorting by hand.
+        pub fn new(name: TypeName, generics: Vec<Ty>, mut associated_types: Vec<(Name, Ty)>) -> Self {
+            associated_types.sort_by(|(a, _), (b, _)| a.cmp(b));
+            Self {
+                name,
+                generics,
+                associated_types,
+            }
+        }
     }
 
     /// The unified type representation for BAML, used from VIR through runtime.
@@ -125,6 +141,8 @@ ty_family! {
         Literal(Literal, Freshness, TyAttr),
         #[axis(concrete)]
         Class(TypeName, Vec<Ty>, TyAttr),
+        /// An interface existential type, equivalent to Rust `dyn Trait`.
+        /// Must specify all generic type args and all associated types.
         #[axis(abstract)]
         Interface(TypeName, Vec<Ty>, Vec<(Name, Ty)>, TyAttr),
         #[axis(concrete)]
@@ -217,7 +235,8 @@ ty_family! {
         #[axis(typevar)]
         AssociatedTypeProjection {
             base: Box<Ty>,
-            interface: Option<Box<Ty>>,
+            /// TODO: Should not be an `Option`; fix once the TIR is able to determine correctly.
+            interface: Option<Box<Interface>>,
             member: Name,
             attr: TyAttr,
         },
@@ -262,6 +281,16 @@ ty_family! {
         /// Evolving map — the map analogue of [`Ty::EvolvingList`].
         #[axis(tir)]
         EvolvingMap(Box<Ty>, Box<Ty>, TyAttr),
+        /// Inference hole — the wildcard `_` written in a type-argument or
+        /// `throws`-clause position. A leaf placeholder that asks the checker to
+        /// infer the type at this slot from surrounding context (the initializer
+        /// of a `let`, or the inferred effective throw set). Filled during TIR
+        /// checking; like the other `tir`-axis sentinels it must never survive to
+        /// the runtime boundary (`lower_to_runtime` rejects it).
+        #[axis(tir)]
+        Infer {
+            attr: TyAttr,
+        },
     }
 }
 
@@ -410,7 +439,6 @@ mod tests {
             tag(borsh::to_vec(&Ty::List(Box::new(Ty::Bool { attr: a() }), a())).unwrap()),
             13
         );
-        // `EvolvingMap` is the last (33rd) `Ty` variant.
         assert_eq!(
             tag(borsh::to_vec(&Ty::EvolvingMap(
                 Box::new(Ty::Never { attr: a() }),
@@ -420,6 +448,8 @@ mod tests {
             .unwrap()),
             32
         );
+        // `Infer` is the last (34th) `Ty` variant.
+        assert_eq!(tag(borsh::to_vec(&Ty::Infer { attr: a() }).unwrap()), 33);
         // `RuntimeTy` keeps `Ty`'s order through the non-`tir` variants.
         assert_eq!(
             tag(borsh::to_vec(&RuntimeTy::Int { attr: a() }).unwrap()),

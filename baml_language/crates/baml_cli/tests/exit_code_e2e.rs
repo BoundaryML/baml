@@ -25,6 +25,7 @@ fn run_baml_cli(built: &BuiltPaths, dir: &Path, args: &[&str]) -> Output {
         cmd.arg(arg);
     }
     cmd.current_dir(dir);
+    cmd.env("BAML_CLI_ALLOW_DIRECT", "1");
     cmd.output().expect("spawn baml-cli")
 }
 
@@ -238,6 +239,10 @@ fn generate_valid_project_returns_zero_exit_code() {
         )),
         "Expected generate output to include CLI version, got: {stderr}",
     );
+    assert!(
+        stderr.contains("Compiling 1 file(s)"),
+        "`baml generate` should keep compile progress, got: {stderr}",
+    );
 }
 
 // ============================================================================
@@ -266,6 +271,60 @@ fn run_list_compilation_error_returns_nonzero_exit_code() {
         Some(4),
         "Expected exit code 4 for compilation error",
     );
+}
+
+/// `baml run` should only emit the program output for a formatted project.
+/// Compile progress remains reserved for `baml check` and `baml generate`.
+#[test]
+fn run_valid_project_outputs_only_program_output() {
+    let built = common::ensure_built();
+    let tmp = tempfile::tempdir().unwrap();
+
+    create_project(tmp.path(), "function answer() -> int {\n    42\n}\n");
+
+    let output = run_baml_cli(built, tmp.path(), &["run", "answer", "--from", "."]);
+
+    assert!(
+        output.status.success(),
+        "Expected exit code 0 for valid run, got: {:?}\nstdout: {}\nstderr: {}",
+        output.status.code(),
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("42"), "Expected run result, got:\n{stdout}");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.trim().is_empty(),
+        "Expected empty stderr, got:\n{stderr}"
+    );
+}
+
+/// The formatter advisory is the allowed `baml run` stderr exception.
+#[test]
+fn run_unformatted_project_keeps_format_warning() {
+    let built = common::ensure_built();
+    let tmp = tempfile::tempdir().unwrap();
+
+    create_project(tmp.path(), "function answer()->int {\n42\n}\n");
+
+    let output = run_baml_cli(built, tmp.path(), &["run", "answer", "--from", "."]);
+
+    assert!(
+        output.status.success(),
+        "Expected exit code 0 for valid run, got: {:?}\nstdout: {}\nstderr: {}",
+        output.status.code(),
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("42"), "Expected run result, got:\n{stdout}");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("Code is unformatted"),
+        "Expected format warning, got:\n{stderr}"
+    );
+    common::assert_no_compile_file_status(&stderr);
 }
 
 // ============================================================================
@@ -320,6 +379,38 @@ fn test_no_tests_returns_specific_exit_code() {
     );
 }
 
+/// `baml test` should not emit the compile file-count status pair.
+#[test]
+fn test_valid_project_omits_compile_file_status() {
+    let built = common::ensure_built();
+    let tmp = tempfile::tempdir().unwrap();
+
+    create_project(
+        tmp.path(),
+        r#"
+test "passes" {
+  assert.equal(1, 1)
+}
+"#,
+    );
+
+    let output = run_baml_cli(built, tmp.path(), &["test", "--from", "."]);
+
+    assert!(
+        output.status.success(),
+        "Expected exit code 0 for valid test, got: {:?}\nstdout: {}\nstderr: {}",
+        output.status.code(),
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("PASS"),
+        "Expected passing test output, got:\n{stdout}"
+    );
+    common::assert_no_compile_file_status(&String::from_utf8_lossy(&output.stderr));
+}
+
 /// Failing `assert.equal` should surface both operand values and keep stack
 /// traces user-facing (no internal `Span`/`FileId` debug structs).
 #[test]
@@ -362,6 +453,47 @@ test "assert-equal-failure" {
     );
 }
 
+/// `assert.approx_equal` lets float assertions pass with a tolerance so normal
+/// floating-point rounding artifacts do not fail tests.
+///
+/// Returns:
+/// - Nothing; this test passes when `baml test` exits successfully.
+///
+/// Panics:
+/// - Panics if `baml test` fails or does not report the passing test case.
+#[test]
+fn test_assert_approx_equal_accepts_float_tolerance() {
+    let built = common::ensure_built();
+    let tmp = tempfile::tempdir().unwrap();
+
+    create_project(
+        tmp.path(),
+        r#"
+test "assert-approx-equal-passes" {
+  let total = 9.99 + 5.50 + 2.00
+  assert.approx_equal(total, 17.49, 0.000001)
+}
+"#,
+    );
+
+    let output = run_baml_cli(built, tmp.path(), &["test", "--from", "."]);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let combined = format!("{stdout}{stderr}");
+
+    assert!(
+        output.status.success(),
+        "Expected assert.approx_equal to tolerate float rounding, got: {:?}\nstdout: {}\nstderr: {}",
+        output.status.code(),
+        stdout,
+        stderr,
+    );
+    assert!(
+        combined.contains("1 passed, 0 failed, 1 total"),
+        "Expected a passing aggregate summary, got:\n{combined}",
+    );
+}
+
 #[test]
 fn test_unfiltered_testset_run_honors_pass_rate_runner() {
     let built = common::ensure_built();
@@ -391,13 +523,17 @@ testset "suite" with testing.PassRate(0.6) {
         stderr,
     );
     assert!(
-        combined.contains("2 passed, 1 failed, 3 total"),
-        "Expected unfiltered aggregate output to report leaf test totals, got:\n{combined}"
+        combined.contains("PASS testing::* [outcome=pass; 1 tolerated failure]"),
+        "Expected unfiltered aggregate output to identify tolerated failures, got:\n{combined}"
+    );
+    assert!(
+        combined.contains("aggregate passed — 2 passed, 1 tolerated failure, 3 total"),
+        "Expected unfiltered aggregate summary to report tolerated leaf totals, got:\n{combined}"
     );
 }
 
 #[test]
-fn test_filtered_testset_run_executes_leaf_without_parent_runner() {
+fn test_filtered_testset_run_honors_pass_rate_runner_for_selected_set() {
     let built = common::ensure_built();
     let tmp = tempfile::tempdir().unwrap();
 
@@ -412,19 +548,103 @@ testset "suite" with testing.PassRate(0.6) {
 "#,
     );
 
+    let output = run_baml_cli(built, tmp.path(), &["test", "--from", ".", "-i", "suite::"]);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let combined = format!("{stdout}{stderr}");
+
+    assert!(
+        output.status.success(),
+        "Expected filtered testset run to honor PassRate and pass, got: {:?}\nstdout: {}\nstderr: {}",
+        output.status.code(),
+        stdout,
+        stderr,
+    );
+    assert!(
+        combined.contains("PASS testing::* [outcome=pass; 1 tolerated failure]"),
+        "Expected filtered aggregate output to identify tolerated failures, got:\n{combined}"
+    );
+    assert!(
+        combined.contains("aggregate passed — 2 passed, 1 tolerated failure, 3 total"),
+        "Expected filtered aggregate summary to report selected leaf totals, got:\n{combined}"
+    );
+}
+
+#[test]
+fn test_filtered_testset_leaf_runs_under_parent_runner() {
+    let built = common::ensure_built();
+    let tmp = tempfile::tempdir().unwrap();
+
+    create_project(
+        tmp.path(),
+        r#"
+testset "suite" with testing.PassRate(0.0) {
+  test "failing leaf" { assert.is_true(false) }
+}
+"#,
+    );
+
     let output = run_baml_cli(
         built,
         tmp.path(),
-        &["test", "--from", ".", "-i", "suite::three"],
+        &["test", "--from", ".", "-i", "suite::failing leaf"],
     );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let combined = format!("{stdout}{stderr}");
+
+    assert!(
+        output.status.success(),
+        "Expected filtered leaf to run under parent PassRate and pass, got: {:?}\nstdout: {}\nstderr: {}",
+        output.status.code(),
+        stdout,
+        stderr,
+    );
+    assert!(
+        combined.contains("PASS testing::* [outcome=pass; 1 tolerated failure]"),
+        "Expected filtered leaf output to identify tolerated failures, got:\n{combined}"
+    );
+    assert!(
+        combined.contains("aggregate passed — 0 passed, 1 tolerated failure, 1 total"),
+        "Expected filtered leaf output to report selected leaf totals, got:\n{combined}"
+    );
+}
+
+#[test]
+fn test_mixed_testset_run_keeps_tolerated_failures_out_of_failed_total() {
+    let built = common::ensure_built();
+    let tmp = tempfile::tempdir().unwrap();
+
+    create_project(
+        tmp.path(),
+        r#"
+testset "tolerant" with testing.PassRate(0.0) {
+  test "tolerated failure" { assert.is_true(false) }
+}
+
+testset "hard" {
+  test "passes" { assert.is_true(true) }
+  test "fails" { assert.is_true(false) }
+}
+"#,
+    );
+
+    let output = run_baml_cli(built, tmp.path(), &["test", "--from", "."]);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let combined = format!("{stdout}{stderr}");
 
     assert_eq!(
         output.status.code(),
         Some(2),
-        "Expected filtered failing leaf to bypass parent PassRate and fail, got: {:?}\nstdout: {}\nstderr: {}",
+        "Expected hard failing sibling testset to fail the command, got: {:?}\nstdout: {}\nstderr: {}",
         output.status.code(),
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr),
+        stdout,
+        stderr,
+    );
+    assert!(
+        combined.contains("1 passed, 1 failed, 1 tolerated failure, 3 total"),
+        "Expected tolerated leaf to stay out of hard failure count, got:\n{combined}"
     );
 }
 

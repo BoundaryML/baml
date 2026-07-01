@@ -14,20 +14,8 @@ function user.binding_leak_if() -> int  [expr] {
 function user.binding_leak_scope() -> int  [expr] {
   { let v: int | string = 7; let _ = v is x: int } x
 }
-function user.from_json(j: baml.json.json) -> user.WrapNonGeneric  [expr] {
-  user.WrapNonGeneric { x: baml.json.from_json(baml.json.field(j, "x")) }
-}
-function user.from_json(j: baml.json.json) -> user.WrapGeneric<T>  [expr] {
-  user.WrapGeneric { val: baml.json.from_json(baml.json.field(j, "val")) }
-}
 function user.or_pattern_leak() -> int  [expr] {
   { let v: int | string = 7; let _ = v is x: int | x: string } x
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "val": baml.json.to_json(self.val) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "x": baml.json.to_json(self.x) }
 }
 function user.unresolved_class_head(v: user.WrapNonGeneric) -> bool  [expr] {
   {  } v is Frobnitz { x: x }

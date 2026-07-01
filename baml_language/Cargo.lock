@@ -757,6 +757,7 @@ dependencies = [
  "text-size",
  "tokio",
  "toml 0.8.23",
+ "uuid",
  "yaml_serde",
 ]
 
@@ -808,6 +809,7 @@ name = "baml_compiler2_hir"
 version = "0.1.0"
 dependencies = [
  "baml_base",
+ "baml_builtins2",
  "baml_compiler2_ast",
  "baml_compiler_diagnostics",
  "baml_compiler_parser",
@@ -860,6 +862,7 @@ dependencies = [
  "baml_compiler2_hir",
  "baml_compiler2_ppir",
  "baml_type",
+ "baml_type_runtime",
  "baml_workspace",
  "indexmap",
  "num-bigint",
@@ -1020,6 +1023,7 @@ dependencies = [
  "bex_events",
  "bex_heap",
  "bex_project",
+ "bex_vm_types",
  "bridge_ctypes",
  "crossbeam-channel",
  "futures",
@@ -1150,6 +1154,7 @@ dependencies = [
  "baml_base",
  "baml_type_macros",
  "borsh",
+ "rustc-hash 2.1.2",
 ]
 
 [[package]]
@@ -1159,6 +1164,14 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.117",
+]
+
+[[package]]
+name = "baml_type_runtime"
+version = "0.0.0-beta"
+dependencies = [
+ "baml_type",
+ "rustc-hash 2.1.2",
 ]
 
 [[package]]
@@ -1210,6 +1223,7 @@ dependencies = [
  "baml_builtins2",
  "baml_project",
  "baml_type",
+ "baml_type_runtime",
  "bex_events",
  "bex_external_types",
  "bex_heap",
@@ -1221,6 +1235,7 @@ dependencies = [
  "indexmap",
  "num-bigint",
  "prost",
+ "rustc-hash 2.1.2",
  "serde_json",
  "sys_llm",
  "sys_native",
@@ -1249,6 +1264,7 @@ dependencies = [
  "prost-build",
  "protoc-bin-vendored",
  "serde_json",
+ "sha2",
  "smallvec",
  "sys_types",
  "uuid",
@@ -1537,7 +1553,6 @@ version = "0.1.0"
 dependencies = [
  "baml_type",
  "base64",
- "bex_events",
  "bex_project",
  "indexmap",
  "num-bigint",
@@ -6096,6 +6111,8 @@ dependencies = [
  "rustls",
  "rustls-pki-types",
  "rustls-platform-verifier",
+ "serde",
+ "serde_json",
  "sync_wrapper",
  "tokio",
  "tokio-native-tls",

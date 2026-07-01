@@ -93,3 +93,20 @@ class User(BaseModel):
 # #########################################################################
 # Generated type aliases (0)
 # #########################################################################
+
+
+# #########################################################################
+# Model rebuilds (8)
+# #########################################################################
+# Resolve string forward references now that every model above is defined so
+# class declaration order never breaks Pydantic construction (issue #793).
+# Recursive models are intentionally omitted (Pydantic resolves those lazily;
+# eagerly rebuilding them can recurse).
+ArrayWithConstraints.model_rebuild()
+MixedArrays.model_rebuild()
+NestedArrays.model_rebuild()
+ObjectArrays.model_rebuild()
+Product.model_rebuild()
+SimpleArrays.model_rebuild()
+Tag.model_rebuild()
+User.model_rebuild()

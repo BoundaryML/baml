@@ -1,14 +1,18 @@
 use serde_json::{Value, json};
 
-use crate::run::{
-    CallNode, CallStatus, DiagnosticSeverity, EnvResolutionStatus, PayloadBody, PayloadBodyState,
-    PayloadEvent, PayloadId, PayloadKind, Run, RunDiagnostic, RunOutcome, RunPatch, RunPatchChange,
-    RunRequestState, RunStatus, RunSummary, RunTarget, RunVisibility, ThreadNode, ThreadStatus,
+use crate::{
+    run::{
+        CallNode, CallStatus, CapturedValueRole, DiagnosticSeverity, EnvResolutionStatus,
+        PayloadBody, PayloadBodyState, PayloadEvent, PayloadId, PayloadKind, Run, RunDiagnostic,
+        RunError, RunOutcome, RunPatch, RunPatchChange, RunRequestState, RunResult, RunStatus,
+        RunSummary, RunTarget, RunVisibility, ThreadNode, ThreadStatus,
+    },
+    value::ValueRef,
 };
 
 pub fn run_to_wire(run: &Run) -> Value {
     json!({
-        "runId": run.run_id.to_wire_string(),
+        "boundaryId": run.boundary_id.to_wire_string(),
         "target": target_to_wire(&run.target),
         "visibility": visibility_to_wire(&run.visibility),
         "status": status_to_wire(run.status),
@@ -26,16 +30,8 @@ pub fn run_to_wire(run: &Run) -> Value {
             "argsSummary": run.request.args_summary,
             "optionsSummary": run.request.options_summary,
         },
-        "result": run.result.as_ref().map(|result| json!({
-            "value": result.value,
-            "rendererHint": result.renderer_hint,
-            "supportingPayloadIds": result.supporting_payload_ids.iter().copied().map(payload_id_to_wire).collect::<Vec<_>>(),
-        })),
-        "error": run.error.as_ref().map(|error| json!({
-            "class": format!("{:?}", error.class),
-            "message": error.message,
-            "details": error.details,
-        })),
+        "result": run.result.as_ref().map(result_to_wire),
+        "error": run.error.as_ref().map(error_to_wire),
         "cancellation": run.cancellation.as_ref().map(|cancellation| json!({
             "requestedAtMs": cancellation.requested_at_ms,
             "completedAtMs": cancellation.completed_at_ms,
@@ -53,7 +49,7 @@ pub fn run_to_wire(run: &Run) -> Value {
 
 pub fn patch_to_wire(patch: &RunPatch) -> Value {
     json!({
-        "runId": patch.run_id.to_wire_string(),
+        "boundaryId": patch.boundary_id.to_wire_string(),
         "cursor": patch.cursor.0,
         "changes": patch.changes.iter().map(patch_change_to_wire).collect::<Vec<_>>(),
     })
@@ -61,7 +57,7 @@ pub fn patch_to_wire(patch: &RunPatch) -> Value {
 
 pub fn run_summary_to_wire(summary: &RunSummary) -> Value {
     json!({
-        "runId": summary.run_id.to_wire_string(),
+        "boundaryId": summary.boundary_id.to_wire_string(),
         "target": target_to_wire(&summary.target),
         "visibility": visibility_to_wire(&summary.visibility),
         "status": status_to_wire(summary.status),
@@ -95,11 +91,11 @@ fn target_to_wire(target: &RunTarget) -> Value {
             json!({ "kind": "preview", "parentFunctionName": parent_function_name, "helper": helper })
         }
         RunTarget::Companion {
-            parent_run_id,
+            parent_boundary_id,
             function_name,
         } => json!({
             "kind": "companion",
-            "parentRunId": parent_run_id.map(super::run::RunId::to_wire_string),
+            "parentBoundaryId": parent_boundary_id.map(super::run::BoundaryId::to_wire_string),
             "functionName": function_name,
         }),
         RunTarget::Internal { name } => json!({ "kind": "internal", "name": name }),
@@ -176,7 +172,7 @@ fn call_to_wire(call: &CallNode) -> Value {
 
 fn graph_runtime_overlay_to_wire(overlay: &crate::run::GraphRuntimeOverlay) -> Value {
     json!({
-        "runId": overlay.run_id.to_wire_string(),
+        "boundaryId": overlay.boundary_id.to_wire_string(),
         "projectGeneration": overlay.project_generation.0,
         "entries": overlay.entries.iter().map(|entry| json!({
             "cfgNodeId": entry.cfg_node_id.0,
@@ -250,6 +246,7 @@ fn payload_kind_to_wire(kind: &PayloadKind) -> Value {
             "requestHeaders": fetch.request_headers.iter().map(|header| json!({
                 "name": &header.name,
                 "valueRedacted": header.value_redacted,
+                "value": header.value.as_ref(),
             })).collect::<Vec<_>>(),
         }),
         PayloadKind::FetchUpdated(fetch) => json!({
@@ -260,6 +257,7 @@ fn payload_kind_to_wire(kind: &PayloadKind) -> Value {
             "responseHeaders": fetch.response_headers.iter().map(|header| json!({
                 "name": &header.name,
                 "valueRedacted": header.value_redacted,
+                "value": header.value.as_ref(),
             })).collect::<Vec<_>>(),
             "error": fetch.error.as_ref(),
         }),
@@ -294,8 +292,53 @@ fn payload_kind_to_wire(kind: &PayloadKind) -> Value {
             "type": "log",
             "level": log.level.as_ref(),
             "message": &log.message,
+            "source": log.source.as_ref().map(source_location_to_wire),
+            "valueRef": log.value_ref.as_ref().map(value_ref_to_wire),
+        }),
+        PayloadKind::CapturedValue(captured) => json!({
+            "type": "capturedValue",
+            "role": captured_value_role_to_wire(captured.role),
+            "label": captured.label.as_ref(),
+            "valueRef": captured.value_ref.as_ref().map(value_ref_to_wire),
         }),
     }
+}
+
+fn captured_value_role_to_wire(role: CapturedValueRole) -> &'static str {
+    match role {
+        CapturedValueRole::RootInput => "rootInput",
+        CapturedValueRole::CallInput => "callInput",
+        CapturedValueRole::CallOutput => "callOutput",
+        CapturedValueRole::CallError => "callError",
+    }
+}
+
+fn value_ref_to_wire(value_ref: &ValueRef) -> Value {
+    json!({
+        "id": value_ref.id,
+        "codec": value_ref.codec.as_wire_str(),
+        "availability": value_ref.availability.as_wire_str(),
+        "originalSizeBytes": value_ref.original_size_bytes,
+        "retainedSizeBytes": value_ref.retained_size_bytes,
+        "diagnostic": value_ref.diagnostic.as_ref(),
+    })
+}
+
+fn result_to_wire(result: &RunResult) -> Value {
+    json!({
+        "valueRef": result.value_ref.as_ref().map(value_ref_to_wire),
+        "rendererHint": result.renderer_hint,
+        "supportingPayloadIds": result.supporting_payload_ids.iter().copied().map(payload_id_to_wire).collect::<Vec<_>>(),
+    })
+}
+
+fn error_to_wire(error: &RunError) -> Value {
+    json!({
+        "class": format!("{:?}", error.class),
+        "message": error.message,
+        "details": error.details,
+        "valueRef": error.value_ref.as_ref().map(value_ref_to_wire),
+    })
 }
 
 fn payload_body_to_wire(body: &PayloadBody) -> Value {
@@ -334,15 +377,11 @@ fn outcome_to_wire(outcome: &RunOutcome) -> Value {
     match outcome {
         RunOutcome::Succeeded(result) => json!({
             "status": "succeeded",
-            "result": {
-                "value": result.value,
-                "rendererHint": result.renderer_hint,
-                "supportingPayloadIds": result.supporting_payload_ids.iter().copied().map(payload_id_to_wire).collect::<Vec<_>>(),
-            },
+            "result": result_to_wire(result),
         }),
         RunOutcome::Failed(error) => json!({
             "status": "failed",
-            "error": { "class": format!("{:?}", error.class), "message": error.message, "details": error.details },
+            "error": error_to_wire(error),
         }),
         RunOutcome::Cancelled(cancellation) => json!({
             "status": "cancelled",
@@ -354,7 +393,7 @@ fn outcome_to_wire(outcome: &RunOutcome) -> Value {
         }),
         RunOutcome::Panicked(error) => json!({
             "status": "panicked",
-            "error": { "class": format!("{:?}", error.class), "message": error.message, "details": error.details },
+            "error": error_to_wire(error),
         }),
     }
 }

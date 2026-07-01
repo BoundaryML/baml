@@ -1,6 +1,6 @@
 //! `TypeExpr → Ty` lowering using package-level name resolution.
 
-use baml_compiler2_ast::TypeExpr;
+use baml_compiler2_ast::{TypeExpr, TypeExprKind};
 use baml_compiler2_hir::{
     contributions::Definition,
     package::{PackageId, PackageItems},
@@ -12,6 +12,48 @@ use crate::{
     ty::{Freshness, FunctionParamMode, FunctionParamTy, MediaKind, QualifiedTypeName, Ty, TyAttr},
 };
 
+fn is_supported_map_key_type(
+    db: &dyn crate::Db,
+    ty: &Ty,
+    seen_aliases: &mut FxHashSet<QualifiedTypeName>,
+) -> bool {
+    match ty {
+        Ty::String { .. }
+        | Ty::Never { .. }
+        | Ty::Unknown { .. }
+        | Ty::Error { .. }
+        | Ty::TypeVar(..) => true,
+        Ty::Literal(baml_base::Literal::String(_), _, _) => true,
+        Ty::Union(members, _) => members
+            .iter()
+            .all(|member| is_supported_map_key_type(db, member, seen_aliases)),
+        Ty::TypeAlias(qtn, _) => {
+            if !seen_aliases.insert(qtn.clone()) {
+                return false;
+            }
+            let supported = resolve_type_alias_target(db, qtn)
+                .is_some_and(|expanded| is_supported_map_key_type(db, &expanded, seen_aliases));
+            seen_aliases.remove(qtn);
+            supported
+        }
+        _ => false,
+    }
+}
+
+fn resolve_type_alias_target(db: &dyn crate::Db, qtn: &QualifiedTypeName) -> Option<Ty> {
+    let pkg_id = PackageId::new(db, qtn.package().clone());
+    let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
+    let Some(Definition::TypeAlias(alias_loc)) = pkg_items.lookup_type(qtn.namespace(), qtn.name())
+    else {
+        return None;
+    };
+    Some(
+        crate::inference::resolve_type_alias(db, alias_loc)
+            .ty
+            .clone(),
+    )
+}
+
 /// Resolve an AST `TypeExpr` to a `Ty` using package-level name resolution.
 ///
 /// Names are resolved against `package_items`: classes, enums, and type aliases
@@ -19,10 +61,10 @@ use crate::{
 /// and push an `UnresolvedType` diagnostic to `diagnostics`.
 /// The package for each resolved type is derived from the **definition's** file,
 /// not the referencing file.
-pub fn lower_type_expr(
-    db: &dyn crate::Db,
+pub fn lower_type_expr<'db>(
+    db: &'db dyn crate::Db,
     type_expr: &TypeExpr,
-    package_items: &PackageItems<'_>,
+    package_items: &PackageItems<'db>,
     generic_params: &[baml_base::Name],
     diagnostics: &mut Vec<TirTypeError>,
 ) -> Ty {
@@ -68,7 +110,8 @@ fn projection_chain_from_root(
         .iter()
         .enumerate()
         .fold(root, |base, (idx, member)| {
-            TypeExpr::AssociatedTypeProjection {
+            let span = base.span;
+            TypeExprKind::AssociatedTypeProjection {
                 base: Box::new(base),
                 interface: None,
                 member: member.clone(),
@@ -78,6 +121,7 @@ fn projection_chain_from_root(
                     Vec::new()
                 },
             }
+            .at(span)
         })
 }
 
@@ -100,8 +144,8 @@ fn substitute_paths_walk(
     ty: &TypeExpr,
     subst: &std::collections::HashMap<baml_base::Name, TypeExpr>,
 ) -> TypeExpr {
-    match ty {
-        TypeExpr::Path {
+    match &ty.kind {
+        TypeExprKind::Path {
             segments,
             generic_args,
             associated_type_bindings,
@@ -116,7 +160,7 @@ fn substitute_paths_walk(
                 }
                 return projection_chain_from_root(replacement.clone(), &segments[1..], attrs);
             }
-            TypeExpr::Path {
+            TypeExprKind::Path {
                 segments: segments.clone(),
                 generic_args: generic_args
                     .iter()
@@ -131,46 +175,52 @@ fn substitute_paths_walk(
                     .collect(),
                 attrs: attrs.clone(),
             }
+            .at(ty.span)
         }
-        TypeExpr::AssociatedTypeProjection {
+        TypeExprKind::AssociatedTypeProjection {
             base,
             interface,
             member,
             attrs,
-        } => TypeExpr::AssociatedTypeProjection {
+        } => TypeExprKind::AssociatedTypeProjection {
             base: Box::new(substitute_paths_walk(base, subst)),
             interface: interface
                 .as_ref()
                 .map(|interface| Box::new(substitute_paths_walk(interface, subst))),
             member: member.clone(),
             attrs: attrs.clone(),
-        },
-        TypeExpr::List { inner, attrs } => TypeExpr::List {
+        }
+        .at(ty.span),
+        TypeExprKind::List { inner, attrs } => TypeExprKind::List {
             inner: Box::new(substitute_paths_walk(inner, subst)),
             attrs: attrs.clone(),
-        },
-        TypeExpr::Optional { inner, attrs } => TypeExpr::Optional {
+        }
+        .at(ty.span),
+        TypeExprKind::Optional { inner, attrs } => TypeExprKind::Optional {
             inner: Box::new(substitute_paths_walk(inner, subst)),
             attrs: attrs.clone(),
-        },
-        TypeExpr::Map { key, value, attrs } => TypeExpr::Map {
+        }
+        .at(ty.span),
+        TypeExprKind::Map { key, value, attrs } => TypeExprKind::Map {
             key: Box::new(substitute_paths_walk(key, subst)),
             value: Box::new(substitute_paths_walk(value, subst)),
             attrs: attrs.clone(),
-        },
-        TypeExpr::Union { variants, attrs } => TypeExpr::Union {
+        }
+        .at(ty.span),
+        TypeExprKind::Union { variants, attrs } => TypeExprKind::Union {
             variants: variants
                 .iter()
                 .map(|v| substitute_paths_walk(v, subst))
                 .collect(),
             attrs: attrs.clone(),
-        },
-        TypeExpr::Function {
+        }
+        .at(ty.span),
+        TypeExprKind::Function {
             params,
             ret,
             throws,
             attrs,
-        } => TypeExpr::Function {
+        } => TypeExprKind::Function {
             params: params
                 .iter()
                 .map(|param| {
@@ -184,7 +234,8 @@ fn substitute_paths_walk(
                 .as_ref()
                 .map(|ty| Box::new(substitute_paths_walk(ty, subst))),
             attrs: attrs.clone(),
-        },
+        }
+        .at(ty.span),
         _ => ty.clone(),
     }
 }
@@ -194,8 +245,8 @@ fn substitute_paths_walk(
 /// the enclosing class/interface's type expression before regular
 /// resolution runs.
 fn substitute_self(type_expr: &TypeExpr, replacement: &TypeExpr) -> TypeExpr {
-    match type_expr {
-        TypeExpr::Path {
+    match &type_expr.kind {
+        TypeExprKind::Path {
             segments,
             generic_args,
             associated_type_bindings,
@@ -210,7 +261,7 @@ fn substitute_self(type_expr: &TypeExpr, replacement: &TypeExpr) -> TypeExpr {
                 }
                 return projection_chain_from_root(replacement.clone(), &segments[1..], attrs);
             }
-            TypeExpr::Path {
+            TypeExprKind::Path {
                 segments: segments.clone(),
                 generic_args: generic_args
                     .iter()
@@ -225,46 +276,52 @@ fn substitute_self(type_expr: &TypeExpr, replacement: &TypeExpr) -> TypeExpr {
                     .collect(),
                 attrs: attrs.clone(),
             }
+            .at(type_expr.span)
         }
-        TypeExpr::AssociatedTypeProjection {
+        TypeExprKind::AssociatedTypeProjection {
             base,
             interface,
             member,
             attrs,
-        } => TypeExpr::AssociatedTypeProjection {
+        } => TypeExprKind::AssociatedTypeProjection {
             base: Box::new(substitute_self(base, replacement)),
             interface: interface
                 .as_ref()
                 .map(|interface| Box::new(substitute_self(interface, replacement))),
             member: member.clone(),
             attrs: attrs.clone(),
-        },
-        TypeExpr::List { inner, attrs } => TypeExpr::List {
+        }
+        .at(type_expr.span),
+        TypeExprKind::List { inner, attrs } => TypeExprKind::List {
             inner: Box::new(substitute_self(inner, replacement)),
             attrs: attrs.clone(),
-        },
-        TypeExpr::Optional { inner, attrs } => TypeExpr::Optional {
+        }
+        .at(type_expr.span),
+        TypeExprKind::Optional { inner, attrs } => TypeExprKind::Optional {
             inner: Box::new(substitute_self(inner, replacement)),
             attrs: attrs.clone(),
-        },
-        TypeExpr::Map { key, value, attrs } => TypeExpr::Map {
+        }
+        .at(type_expr.span),
+        TypeExprKind::Map { key, value, attrs } => TypeExprKind::Map {
             key: Box::new(substitute_self(key, replacement)),
             value: Box::new(substitute_self(value, replacement)),
             attrs: attrs.clone(),
-        },
-        TypeExpr::Union { variants, attrs } => TypeExpr::Union {
+        }
+        .at(type_expr.span),
+        TypeExprKind::Union { variants, attrs } => TypeExprKind::Union {
             variants: variants
                 .iter()
                 .map(|v| substitute_self(v, replacement))
                 .collect(),
             attrs: attrs.clone(),
-        },
-        TypeExpr::Function {
+        }
+        .at(type_expr.span),
+        TypeExprKind::Function {
             params,
             ret,
             throws,
             attrs,
-        } => TypeExpr::Function {
+        } => TypeExprKind::Function {
             params: params
                 .iter()
                 .map(|param| {
@@ -278,7 +335,8 @@ fn substitute_self(type_expr: &TypeExpr, replacement: &TypeExpr) -> TypeExpr {
                 .as_ref()
                 .map(|ty| Box::new(substitute_self(ty, replacement))),
             attrs: attrs.clone(),
-        },
+        }
+        .at(type_expr.span),
         _ => type_expr.clone(),
     }
 }
@@ -287,8 +345,8 @@ fn substitute_self_preserving_associated_projections(
     type_expr: &TypeExpr,
     replacement: &TypeExpr,
 ) -> TypeExpr {
-    match type_expr {
-        TypeExpr::Path {
+    match &type_expr.kind {
+        TypeExprKind::Path {
             segments,
             generic_args,
             associated_type_bindings,
@@ -301,14 +359,15 @@ fn substitute_self_preserving_associated_projections(
                 if segments.len() == 1 {
                     return replacement.clone();
                 }
-                return TypeExpr::Path {
+                return TypeExprKind::Path {
                     segments: segments.clone(),
                     generic_args: Vec::new(),
                     associated_type_bindings: Vec::new(),
                     attrs: attrs.clone(),
-                };
+                }
+                .at(type_expr.span);
             }
-            TypeExpr::Path {
+            TypeExprKind::Path {
                 segments: segments.clone(),
                 generic_args: generic_args
                     .iter()
@@ -326,13 +385,14 @@ fn substitute_self_preserving_associated_projections(
                     .collect(),
                 attrs: attrs.clone(),
             }
+            .at(type_expr.span)
         }
-        TypeExpr::AssociatedTypeProjection {
+        TypeExprKind::AssociatedTypeProjection {
             base,
             interface,
             member,
             attrs,
-        } => TypeExpr::AssociatedTypeProjection {
+        } => TypeExprKind::AssociatedTypeProjection {
             base: Box::new(substitute_self_preserving_associated_projections(
                 base,
                 replacement,
@@ -345,22 +405,25 @@ fn substitute_self_preserving_associated_projections(
             }),
             member: member.clone(),
             attrs: attrs.clone(),
-        },
-        TypeExpr::List { inner, attrs } => TypeExpr::List {
+        }
+        .at(type_expr.span),
+        TypeExprKind::List { inner, attrs } => TypeExprKind::List {
             inner: Box::new(substitute_self_preserving_associated_projections(
                 inner,
                 replacement,
             )),
             attrs: attrs.clone(),
-        },
-        TypeExpr::Optional { inner, attrs } => TypeExpr::Optional {
+        }
+        .at(type_expr.span),
+        TypeExprKind::Optional { inner, attrs } => TypeExprKind::Optional {
             inner: Box::new(substitute_self_preserving_associated_projections(
                 inner,
                 replacement,
             )),
             attrs: attrs.clone(),
-        },
-        TypeExpr::Map { key, value, attrs } => TypeExpr::Map {
+        }
+        .at(type_expr.span),
+        TypeExprKind::Map { key, value, attrs } => TypeExprKind::Map {
             key: Box::new(substitute_self_preserving_associated_projections(
                 key,
                 replacement,
@@ -370,20 +433,22 @@ fn substitute_self_preserving_associated_projections(
                 replacement,
             )),
             attrs: attrs.clone(),
-        },
-        TypeExpr::Union { variants, attrs } => TypeExpr::Union {
+        }
+        .at(type_expr.span),
+        TypeExprKind::Union { variants, attrs } => TypeExprKind::Union {
             variants: variants
                 .iter()
                 .map(|v| substitute_self_preserving_associated_projections(v, replacement))
                 .collect(),
             attrs: attrs.clone(),
-        },
-        TypeExpr::Function {
+        }
+        .at(type_expr.span),
+        TypeExprKind::Function {
             params,
             ret,
             throws,
             attrs,
-        } => TypeExpr::Function {
+        } => TypeExprKind::Function {
             params: params
                 .iter()
                 .map(|param| {
@@ -404,21 +469,23 @@ fn substitute_self_preserving_associated_projections(
                 ))
             }),
             attrs: attrs.clone(),
-        },
+        }
+        .at(type_expr.span),
         _ => type_expr.clone(),
     }
 }
 
-/// Build a `TypeExpr::Path` referring to a single named type, so
+/// Build a `TypeExprKind::Path` referring to a single named type, so
 /// `substitute_self` can swap `Self` for the enclosing class /
 /// interface name.
 pub fn type_expr_for_name(name: baml_base::Name) -> TypeExpr {
-    TypeExpr::Path {
+    TypeExprKind::Path {
         segments: vec![name],
         generic_args: Vec::new(),
         associated_type_bindings: Vec::new(),
         attrs: Vec::new(),
     }
+    .at(text_size::TextRange::default())
 }
 
 fn can_be_associated_type_projection_base(ty: &Ty) -> bool {
@@ -432,16 +499,92 @@ fn can_be_associated_type_projection_base(ty: &Ty) -> bool {
     )
 }
 
-pub fn lower_type_expr_in_ns(
+/// Lower an associated-type projection's explicit `as I` qualifier (already
+/// lowered to `interface_ty`) into the interface *constraint* it denotes,
+/// diagnosing a qualifier that resolves to something other than an interface.
+///
+/// Shared by both type-expr lowering paths ([`lower_type_expr_in_ns`] and
+/// `generics::lower_type_expr_with_generics`) so the qualifier is validated
+/// identically regardless of which one runs — the whole point of doing this in
+/// the compiler rather than the LSP.
+///
+/// A `None` qualifier (an unqualified `Base.Member` projection) is accepted
+/// today and returns `None`. This is transitional: we intend to always resolve a
+/// (possibly parameterized) interface at compile time and drop the `Option`, at
+/// which point a missing qualifier becomes its own diagnostic here too.
+pub(crate) fn lower_explicit_projection_qualifier(
     db: &dyn crate::Db,
+    interface_ty: Option<Ty>,
+    member: &baml_base::Name,
+    diagnostics: &mut Vec<TirTypeError>,
+) -> Option<Box<baml_type::Interface>> {
+    let interface_ty = interface_ty?;
+    match interface_ty.as_interface() {
+        Some(interface) => {
+            // Own-only: the explicit qualifier must declare `member` *itself*.
+            // Interfaces do not inherit associated types through `requires` (it's
+            // a bound, not inheritance), so `(Foo as RequiresIterator).Item` — with
+            // `Item` declared on the required `Iterator` — is an error, matching the
+            // resolver (which only resolves a member on the exact qualifier).
+            if !interface_declares_member(db, &interface.name, member) {
+                diagnostics.push(TirTypeError::UnknownAssociatedType {
+                    member: member.clone(),
+                    container: interface.name.clone(),
+                    container_is_interface: true,
+                });
+            }
+            Some(Box::new(interface))
+        }
+        None => {
+            // The qualifier lowered to a non-interface type. An *unresolved*
+            // qualifier path already reported `UnresolvedType` (and lowers to
+            // `Unknown`/`Error`), so only a qualifier that resolved to a concrete
+            // non-interface — a class, alias, etc. — is diagnosed here, avoiding a
+            // double report.
+            if !matches!(interface_ty, Ty::Unknown { .. } | Ty::Error { .. }) {
+                diagnostics.push(TirTypeError::NonInterfaceProjectionQualifier);
+            }
+            None
+        }
+    }
+}
+
+/// Whether interface `iface_qtn` declares `member` as one of its *own* associated
+/// types (not via `requires` — interfaces don't inherit). Returns `true` when the
+/// interface can't be resolved, leaving that to the qualifier-path diagnostics.
+fn interface_declares_member(
+    db: &dyn crate::Db,
+    iface_qtn: &QualifiedTypeName,
+    member: &baml_base::Name,
+) -> bool {
+    let pkg_id = baml_compiler2_hir::package::PackageId::new(db, iface_qtn.package().clone());
+    let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
+    let Some(baml_compiler2_hir::contributions::Definition::Interface(iface_loc)) =
+        pkg_items.lookup_type(iface_qtn.namespace(), iface_qtn.name())
+    else {
+        return true;
+    };
+    baml_compiler2_hir::file_item_tree(db, iface_loc.file(db))
+        .interfaces
+        .get(&iface_loc.id(db))
+        .is_some_and(|iface| {
+            iface
+                .associated_types
+                .iter()
+                .any(|assoc| assoc.name == *member)
+        })
+}
+
+pub fn lower_type_expr_in_ns<'db>(
+    db: &'db dyn crate::Db,
     type_expr: &TypeExpr,
-    package_items: &PackageItems<'_>,
+    package_items: &PackageItems<'db>,
     ns_context: &[baml_base::Name],
     generic_params: &[baml_base::Name],
     diagnostics: &mut Vec<TirTypeError>,
 ) -> Ty {
-    match type_expr {
-        TypeExpr::Path {
+    match &type_expr.kind {
+        TypeExprKind::Path {
             segments,
             generic_args,
             associated_type_bindings,
@@ -539,6 +682,13 @@ pub fn lower_type_expr_in_ns(
                             .get(&class_loc.id(db))
                             .map(|class| class.generic_params.len())
                             .unwrap_or(0);
+                        // A bare generic name (`generic_args.is_empty()`) is left
+                        // unchecked here: it is a deliberate wildcard in several
+                        // positions (`reflect.type_of<Box>()`, construction
+                        // `Box { .. }` where args infer from fields, an interface's
+                        // own `Self` type). Object construction that cannot infer
+                        // its args is reported by `infer_object_expr`
+                        // (`CannotInferTypeParameter`) instead.
                         if !generic_args.is_empty() && generic_args.len() != expected_type_args {
                             diagnostics.push(TirTypeError::WrongNumberOfTypeArgs {
                                 type_name: short.clone(),
@@ -624,6 +774,7 @@ pub fn lower_type_expr_in_ns(
                                                 .iter()
                                                 .map(ToString::to_string)
                                                 .collect(),
+                                            span: type_expr.span,
                                         });
                                     }
                                     if !seen_associated_bindings.insert(binding.name.clone()) {
@@ -767,12 +918,13 @@ pub fn lower_type_expr_in_ns(
                     && associated_type_bindings.is_empty()
                 {
                     let member = segments.last().expect("non-empty path").clone();
-                    let base_expr = TypeExpr::Path {
+                    let base_expr = TypeExprKind::Path {
                         segments: segments[..segments.len() - 1].to_vec(),
                         generic_args: Vec::new(),
                         associated_type_bindings: Vec::new(),
                         attrs: Vec::new(),
-                    };
+                    }
+                    .at(type_expr.span);
                     let mut base_diags = Vec::new();
                     let base_ty = lower_type_expr_in_ns(
                         db,
@@ -820,40 +972,41 @@ pub fn lower_type_expr_in_ns(
                 diagnostics.push(TirTypeError::UnresolvedType {
                     name: baml_base::Name::new(&name_str),
                     suggestions,
+                    span: type_expr.span,
                 });
                 Ty::Unknown {
                     attr: TyAttr::default(),
                 }
             }
         }
-        TypeExpr::Int { .. } => Ty::Int {
+        TypeExprKind::Int { .. } => Ty::Int {
             attr: TyAttr::default(),
         },
-        TypeExpr::Bigint { .. } => Ty::Bigint {
+        TypeExprKind::Bigint { .. } => Ty::Bigint {
             attr: TyAttr::default(),
         },
-        TypeExpr::Float { .. } => Ty::Float {
+        TypeExprKind::Float { .. } => Ty::Float {
             attr: TyAttr::default(),
         },
-        TypeExpr::String { .. } => Ty::String {
+        TypeExprKind::String { .. } => Ty::String {
             attr: TyAttr::default(),
         },
-        TypeExpr::Bool { .. } => Ty::Bool {
+        TypeExprKind::Bool { .. } => Ty::Bool {
             attr: TyAttr::default(),
         },
-        TypeExpr::Null { .. } => Ty::Null {
+        TypeExprKind::Null { .. } => Ty::Null {
             attr: TyAttr::default(),
         },
-        TypeExpr::Never { .. } => Ty::Never {
+        TypeExprKind::Never { .. } => Ty::Never {
             attr: TyAttr::default(),
         },
-        TypeExpr::Void { .. } => Ty::Void {
+        TypeExprKind::Void { .. } => Ty::Void {
             attr: TyAttr::default(),
         },
-        TypeExpr::Uint8Array { .. } => Ty::Uint8Array {
+        TypeExprKind::Uint8Array { .. } => Ty::Uint8Array {
             attr: TyAttr::default(),
         },
-        TypeExpr::Media { kind, .. } => match kind {
+        TypeExprKind::Media { kind, .. } => match kind {
             baml_base::MediaKind::Image => Ty::Media(MediaKind::Image, TyAttr::default()),
             baml_base::MediaKind::Audio => Ty::Media(MediaKind::Audio, TyAttr::default()),
             baml_base::MediaKind::Video => Ty::Media(MediaKind::Video, TyAttr::default()),
@@ -864,7 +1017,7 @@ pub fn lower_type_expr_in_ns(
             },
         },
         // `T?` is sugar for `T | null` — lower it directly to a nullable union.
-        TypeExpr::Optional { inner, .. } => Ty::optional(lower_type_expr_in_ns(
+        TypeExprKind::Optional { inner, .. } => Ty::optional(lower_type_expr_in_ns(
             db,
             inner,
             package_items,
@@ -872,7 +1025,7 @@ pub fn lower_type_expr_in_ns(
             generic_params,
             diagnostics,
         )),
-        TypeExpr::List { inner, .. } => Ty::List(
+        TypeExprKind::List { inner, .. } => Ty::List(
             Box::new(lower_type_expr_in_ns(
                 db,
                 inner,
@@ -883,26 +1036,37 @@ pub fn lower_type_expr_in_ns(
             )),
             TyAttr::default(),
         ),
-        TypeExpr::Map { key, value, .. } => Ty::Map {
-            key: Box::new(lower_type_expr_in_ns(
+        TypeExprKind::Map { key, value, .. } => {
+            let key_ty = lower_type_expr_in_ns(
                 db,
                 key,
                 package_items,
                 ns_context,
                 generic_params,
                 diagnostics,
-            )),
-            value: Box::new(lower_type_expr_in_ns(
+            );
+            let value_ty = lower_type_expr_in_ns(
                 db,
                 value,
                 package_items,
                 ns_context,
                 generic_params,
                 diagnostics,
-            )),
-            attr: TyAttr::default(),
-        },
-        TypeExpr::Union {
+            );
+            let supported_key_type =
+                is_supported_map_key_type(db, &key_ty, &mut FxHashSet::default());
+            if !supported_key_type {
+                diagnostics.push(TirTypeError::InvalidMapKeyType {
+                    key: key_ty.clone(),
+                });
+            }
+            Ty::Map {
+                key: Box::new(key_ty),
+                value: Box::new(value_ty),
+                attr: TyAttr::default(),
+            }
+        }
+        TypeExprKind::Union {
             variants: members, ..
         } => Ty::Union(
             members
@@ -920,7 +1084,7 @@ pub fn lower_type_expr_in_ns(
                 .collect(),
             TyAttr::default(),
         ),
-        TypeExpr::Function {
+        TypeExprKind::Function {
             params,
             ret,
             throws,
@@ -976,7 +1140,7 @@ pub fn lower_type_expr_in_ns(
                 attr: TyAttr::default(),
             }
         }
-        TypeExpr::AssociatedTypeProjection {
+        TypeExprKind::AssociatedTypeProjection {
             base,
             interface,
             member,
@@ -1002,26 +1166,37 @@ pub fn lower_type_expr_in_ns(
             });
             Ty::AssociatedTypeProjection {
                 base: Box::new(base_ty),
-                interface: interface_ty.map(Box::new),
+                interface: lower_explicit_projection_qualifier(
+                    db,
+                    interface_ty,
+                    member,
+                    diagnostics,
+                ),
                 member: member.clone(),
                 attr: TyAttr::default(),
             }
         }
-        TypeExpr::Literal { value: lit, .. } => {
+        TypeExprKind::Literal { value: lit, .. } => {
             Ty::Literal(lit.clone(), Freshness::Regular, TyAttr::default())
         }
-        TypeExpr::BuiltinUnknown { .. } => Ty::BuiltinUnknown {
+        TypeExprKind::BuiltinUnknown { .. } => Ty::BuiltinUnknown {
             attr: TyAttr::default(),
         },
-        TypeExpr::Error { .. } | TypeExpr::Unknown { .. } => Ty::Unknown {
+        TypeExprKind::Error { .. } | TypeExprKind::Unknown { .. } => Ty::Unknown {
+            attr: TyAttr::default(),
+        },
+        // The wildcard `_` lowers to the inference hole, to be filled during
+        // checking (a generic-arg slot from its initializer, a `throws` member
+        // from the inferred effective throw set).
+        TypeExprKind::Infer { .. } => Ty::Infer {
             attr: TyAttr::default(),
         },
         // Dedicated Ty::Type variant — see ty.rs doc comment for design rationale.
-        TypeExpr::Type { .. } => Ty::Type {
+        TypeExprKind::Type { .. } => Ty::Type {
             attr: TyAttr::default(),
         },
         // `$rust_type` — opaque Rust-managed state field type.
-        TypeExpr::Rust { .. } => Ty::RustType {
+        TypeExprKind::Rust { .. } => Ty::RustType {
             attr: TyAttr::default(),
         },
     }
@@ -1043,7 +1218,7 @@ mod tests {
     use std::path::PathBuf;
 
     use baml_base::Name;
-    use baml_compiler2_ast::{FunctionTypeParam, TypeExpr};
+    use baml_compiler2_ast::{FunctionTypeParam, TextRange, TypeExpr, TypeExprKind};
     use baml_compiler2_hir::package::PackageItems;
     use baml_workspace::Project;
     use rustc_hash::FxHashMap;
@@ -1087,17 +1262,18 @@ mod tests {
     }
 
     fn path_segments(names: &[&str]) -> TypeExpr {
-        TypeExpr::Path {
+        TypeExprKind::Path {
             segments: names.iter().map(|name| Name::new(*name)).collect(),
             generic_args: vec![],
             associated_type_bindings: vec![],
             attrs: vec![],
         }
+        .at(TextRange::default())
     }
 
     #[test]
     fn substitute_paths_recurses_into_function_type() {
-        let type_expr = TypeExpr::Function {
+        let type_expr = TypeExprKind::Function {
             params: vec![FunctionTypeParam {
                 name: Some(Name::new("value")),
                 optional: false,
@@ -1106,24 +1282,34 @@ mod tests {
             ret: Box::new(path("T")),
             throws: Some(Box::new(path("E"))),
             attrs: vec![],
-        };
+        }
+        .at(TextRange::default());
         let mut subst = std::collections::HashMap::new();
-        subst.insert(Name::new("T"), TypeExpr::String { attrs: vec![] });
-        subst.insert(Name::new("E"), TypeExpr::Bool { attrs: vec![] });
+        subst.insert(
+            Name::new("T"),
+            TypeExprKind::String { attrs: vec![] }.at(TextRange::default()),
+        );
+        subst.insert(
+            Name::new("E"),
+            TypeExprKind::Bool { attrs: vec![] }.at(TextRange::default()),
+        );
 
-        let TypeExpr::Function {
+        let TypeExprKind::Function {
             params,
             ret,
             throws,
             ..
-        } = substitute_paths_in(&type_expr, &subst)
+        } = substitute_paths_in(&type_expr, &subst).kind
         else {
             panic!("expected function type");
         };
 
-        assert!(matches!(params[0].ty, TypeExpr::String { .. }));
-        assert!(matches!(*ret, TypeExpr::String { .. }));
-        assert!(matches!(throws.as_deref(), Some(TypeExpr::Bool { .. })));
+        assert!(matches!(params[0].ty.kind, TypeExprKind::String { .. }));
+        assert!(matches!(ret.kind, TypeExprKind::String { .. }));
+        assert!(matches!(
+            throws.as_ref().map(|t| &t.kind),
+            Some(TypeExprKind::Bool { .. })
+        ));
     }
 
     #[test]
@@ -1133,12 +1319,12 @@ mod tests {
         let mut subst = std::collections::HashMap::new();
         subst.insert(Name::new("T"), replacement.clone());
 
-        let TypeExpr::AssociatedTypeProjection {
+        let TypeExprKind::AssociatedTypeProjection {
             base,
             interface,
             member,
             ..
-        } = substitute_paths_in(&type_expr, &subst)
+        } = substitute_paths_in(&type_expr, &subst).kind
         else {
             panic!("expected associated type projection");
         };
@@ -1150,7 +1336,7 @@ mod tests {
 
     #[test]
     fn substitute_self_recurses_into_function_type() {
-        let type_expr = TypeExpr::Function {
+        let type_expr = TypeExprKind::Function {
             params: vec![FunctionTypeParam {
                 name: Some(Name::new("value")),
                 optional: false,
@@ -1159,20 +1345,22 @@ mod tests {
             ret: Box::new(path("Self")),
             throws: Some(Box::new(path("Self"))),
             attrs: vec![],
-        };
-        let replacement = TypeExpr::Path {
+        }
+        .at(TextRange::default());
+        let replacement = TypeExprKind::Path {
             segments: vec![Name::new("Named")],
-            generic_args: vec![TypeExpr::Int { attrs: vec![] }],
+            generic_args: vec![TypeExprKind::Int { attrs: vec![] }.at(TextRange::default())],
             associated_type_bindings: vec![],
             attrs: vec![],
-        };
+        }
+        .at(TextRange::default());
 
-        let TypeExpr::Function {
+        let TypeExprKind::Function {
             params,
             ret,
             throws,
             ..
-        } = substitute_self_in(&type_expr, &replacement)
+        } = substitute_self_in(&type_expr, &replacement).kind
         else {
             panic!("expected function type");
         };
@@ -1187,12 +1375,12 @@ mod tests {
         let type_expr = path_segments(&["Self", "Record"]);
         let replacement = path("UserRepository");
 
-        let TypeExpr::AssociatedTypeProjection {
+        let TypeExprKind::AssociatedTypeProjection {
             base,
             interface,
             member,
             ..
-        } = substitute_self_in(&type_expr, &replacement)
+        } = substitute_self_in(&type_expr, &replacement).kind
         else {
             panic!("expected associated type projection");
         };
@@ -1210,23 +1398,24 @@ mod tests {
             namespaces: FxHashMap::default(),
             extra: None,
         };
-        let type_expr = TypeExpr::Function {
+        let type_expr = TypeExprKind::Function {
             params: vec![
                 FunctionTypeParam {
                     name: Some(Name::new("query")),
                     optional: false,
-                    ty: TypeExpr::String { attrs: vec![] },
+                    ty: TypeExprKind::String { attrs: vec![] }.at(TextRange::default()),
                 },
                 FunctionTypeParam {
                     name: Some(Name::new("limit")),
                     optional: true,
-                    ty: TypeExpr::Int { attrs: vec![] },
+                    ty: TypeExprKind::Int { attrs: vec![] }.at(TextRange::default()),
                 },
             ],
-            ret: Box::new(TypeExpr::Bool { attrs: vec![] }),
+            ret: Box::new(TypeExprKind::Bool { attrs: vec![] }.at(TextRange::default())),
             throws: None,
             attrs: vec![],
-        };
+        }
+        .at(TextRange::default());
         let mut diagnostics = Vec::new();
 
         let ty = lower_type_expr_in_ns(&db, &type_expr, &package_items, &[], &[], &mut diagnostics);
@@ -1244,5 +1433,83 @@ mod tests {
         assert_eq!(params[0].mode, FunctionParamMode::Required);
         assert_eq!(params[1].name.as_deref(), Some("limit"));
         assert_eq!(params[1].mode, FunctionParamMode::Optional);
+    }
+
+    #[test]
+    fn explicit_projection_qualifier_accepts_interface() {
+        let mut db = TestDb::default();
+        db.init();
+        let mut diags = Vec::new();
+        let iface = Ty::Interface(
+            QualifiedTypeName::from_dotted_path("user.Iterator"),
+            Vec::new(),
+            Vec::new(),
+            TyAttr::default(),
+        );
+        // The interface isn't defined in this bare db, so the own-member check
+        // can't resolve it and conservatively accepts (no spurious member error).
+        // Real member-checking is covered by the `interfaces_associated_types`
+        // integration tests.
+        let member = Name::new("Item");
+        assert!(
+            lower_explicit_projection_qualifier(&db, Some(iface), &member, &mut diags).is_some()
+        );
+        assert!(diags.is_empty());
+    }
+
+    #[test]
+    fn explicit_projection_qualifier_rejects_non_interface() {
+        let db = TestDb::default();
+        let mut diags = Vec::new();
+        let class = Ty::Class(
+            QualifiedTypeName::from_dotted_path("user.Foo"),
+            Vec::new(),
+            TyAttr::default(),
+        );
+        let member = Name::new("Item");
+        assert!(
+            lower_explicit_projection_qualifier(&db, Some(class), &member, &mut diags).is_none(),
+            "a class qualifier must not yield an interface"
+        );
+        assert!(
+            matches!(
+                diags.as_slice(),
+                [TirTypeError::NonInterfaceProjectionQualifier]
+            ),
+            "expected NonInterfaceProjectionQualifier, got {diags:?}"
+        );
+    }
+
+    #[test]
+    fn explicit_projection_qualifier_does_not_double_report_already_erroneous() {
+        // An unresolved qualifier path already emitted `UnresolvedType` and lowers
+        // to `Unknown`, so the helper must not add a second diagnostic on top.
+        let db = TestDb::default();
+        let mut diags = Vec::new();
+        let member = Name::new("Item");
+        assert!(
+            lower_explicit_projection_qualifier(
+                &db,
+                Some(Ty::Unknown {
+                    attr: TyAttr::default()
+                }),
+                &member,
+                &mut diags,
+            )
+            .is_none()
+        );
+        assert!(
+            diags.is_empty(),
+            "an already-erroneous qualifier must not double-report, got {diags:?}"
+        );
+    }
+
+    #[test]
+    fn explicit_projection_qualifier_none_is_unqualified() {
+        let db = TestDb::default();
+        let mut diags = Vec::new();
+        let member = Name::new("Item");
+        assert!(lower_explicit_projection_qualifier(&db, None, &member, &mut diags).is_none());
+        assert!(diags.is_empty());
     }
 }

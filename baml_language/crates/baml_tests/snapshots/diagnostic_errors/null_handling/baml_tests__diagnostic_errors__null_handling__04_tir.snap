@@ -6,45 +6,21 @@ class user.Address {
   street: string
   zip: string | null
 }
-function user.Address.to_json(self: user.Address) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "street": baml.json.to_json(self.street), "zip": baml.json.to_json(self.zip) } : map<string, baml.json.json>
-}
-function user.Address.from_json(j: baml.json.json) -> user.Address throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  Address { street: baml.json.from_json<string>(baml.json.field(j, "street")), zip: baml.json.from_json<string?>(baml.json.field(j, "zip")) } : user.Address
-}
 class user.Profile {
   name: string
   address: user.Address | null
   scores: int[] | null
   settings: map<string, string> | null
 }
-function user.Profile.to_json(self: user.Profile) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "name": baml.json.to_json(self.name), "address": baml.json.to_json(self.address), "scores": baml.json.to_json(self.scores), "settings": baml.json.to_json(self.settings) } : map<string, baml.json.json>
-}
-function user.Profile.from_json(j: baml.json.json) -> user.Profile throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  Profile { name: baml.json.from_json<string>(baml.json.field(j, "name")), address: baml.json.from_json<Address?>(baml.json.field(j, "address")), scores: baml.json.from_json<int[]?>(baml.json.field(j, "scores")), settings: baml.json.from_json<map<string, string>?>(baml.json.field(j, "settings")) } : user.Profile
-}
 class user.User {
   id: int
   profile: user.Profile | null
-}
-function user.User.to_json(self: user.User) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "id": baml.json.to_json(self.id), "profile": baml.json.to_json(self.profile) } : map<string, baml.json.json>
-}
-function user.User.from_json(j: baml.json.json) -> user.User throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  User { id: baml.json.from_json<int>(baml.json.field(j, "id")), profile: baml.json.from_json<Profile?>(baml.json.field(j, "profile")) } : user.User
 }
 class user.Node {
   value: int
   next: user.Node | null
   children: user.Node[] | null
   labels: map<string, user.Node> | null
-}
-function user.Node.to_json(self: user.Node) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "value": baml.json.to_json(self.value), "next": baml.json.to_json(self.next), "children": baml.json.to_json(self.children), "labels": baml.json.to_json(self.labels) } : map<string, baml.json.json>
-}
-function user.Node.from_json(j: baml.json.json) -> user.Node throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  Node { value: baml.json.from_json<int>(baml.json.field(j, "value")), next: baml.json.from_json<Node?>(baml.json.field(j, "next")), children: baml.json.from_json<Node[]?>(baml.json.field(j, "children")), labels: baml.json.from_json<map<string, Node>?>(baml.json.field(j, "labels")) } : user.Node
 }
 function user.OptionalChaining(user: user.User | null, nonNullUser: user.User, node: user.Node | null) -> string throws never {
   { : never
@@ -65,9 +41,9 @@ function user.OptionalChaining(user: user.User | null, nonNullUser: user.User, n
     let a11 = <missing> : never
     return a2 ?? "default" : unknown
   }
-  !! 1727..1748: did you mean `user?.profile?.name`? `user?.profile.name` does not handle the case when `user?.profile` is null
+  !! 1728..1748: did you mean `user?.profile?.name`? `user?.profile.name` does not handle the case when `user?.profile` is null
   !! 2014..2029: did you mean `nonNullUser.id`? `nonNullUser?.id` is unnecessary, because `nonNullUser` cannot be null
-  ?? 2393..2542: unreachable code: 1 statement(s) after diverging statement
+  ?? 2497..2542: unreachable code: 1 statement(s) after diverging statement
 }
 function user.OptionalIndex(node: user.Node | null, items: int[] | null, lookup: map<string, int> | null, nonNullItems: int[]) -> int throws never {
   { : never
@@ -79,7 +55,7 @@ function user.OptionalIndex(node: user.Node | null, items: int[] | null, lookup:
     let b6 = node?.labels?.["main"] : user.Node | null
     let b7 = node?.labels?.["main"].value : int | null
     let b8 = node?.children?.[0] : user.Node | null
-    let b9 = items?.[0].to_string() : unknown
+    let b9 = items?.[0].to_string() : string
     let b10 = node?.children?.[node?.value] : user.Node | null
     let b11 = node?.children?.[items?.[0] ?? 0] : user.Node | null
     let b12 = nonNullItems?.[0] : int | null
@@ -92,11 +68,8 @@ function user.OptionalIndex(node: user.Node | null, items: int[] | null, lookup:
     let b13 = <missing> : never
     return b1 ?? 0 : unknown
   }
-  !! 3611..3634: did you mean `items?.[0]?.to_string`? `items?.[0].to_string` does not handle the case when `items?.[0]` is null
-  !! 3625..3634: type `int` has no member `to_string`
-  !! 3611..3636: `unknown | null` is not a function — it cannot be called
   !! 3926..3943: did you mean `nonNullItems[0]`? `nonNullItems?.[0]` is unnecessary, because `nonNullItems` cannot be null
-  ?? 4309..4390: unreachable code: 1 statement(s) after diverging statement
+  ?? 4362..4390: unreachable code: 1 statement(s) after diverging statement
 }
 function user.OptionalCall(callback: (int) -> string | null throws never, nonNullCb: (int) -> string throws never, name: string | null) -> string throws never {
   { : never
@@ -110,7 +83,7 @@ function user.OptionalCall(callback: (int) -> string | null throws never, nonNul
   !! 4812..4826: did you mean `callback(42)`? `callback?.(42)` is unnecessary, because `callback` cannot be null
   !! 4918..4932: did you mean `callback(42)`? `callback?.(42)` is unnecessary, because `callback` cannot be null
   !! 5144..5158: did you mean `callback(42)`? `callback?.(42)` is unnecessary, because `callback` cannot be null
-  !! 5142..5166: did you mean `callback?.(42)?.length`? `callback?.(42).length` does not handle the case when `callback?.(42)` is null
+  !! 5143..5166: did you mean `callback?.(42)?.length`? `callback?.(42).length` does not handle the case when `callback?.(42)` is null
   !! 5242..5252: `string` is not a function — it cannot be called
   !! 5325..5340: did you mean `nonNullCb(42)`? `nonNullCb?.(42)` is unnecessary, because `nonNullCb` cannot be null
 }
@@ -130,8 +103,8 @@ function user.NullCoalescing(user: user.User | null, fallback: string, count: in
     return d1 : string
   }
   !! 7267..7277: did you mean `count`? `count ?? 0` is unnecessary, because `count` cannot be null
-  ?? 7347..7375: did you mean `user?.profile?.name`? `... ?? null` is unnecessary because `user?.profile?.name` is already nullable
-  ?? 7457..7492: did you mean `user?.profile?.name ?? "Anonymous"`? BAML uses `??` instead of `||` for null coalescing
+  ?? 7348..7375: did you mean `user?.profile?.name`? `... ?? null` is unnecessary because `user?.profile?.name` is already nullable
+  ?? 7458..7492: did you mean `user?.profile?.name ?? "Anonymous"`? BAML uses `??` instead of `||` for null coalescing
 }
 function user.Combined(user: user.User | null, node: user.Node | null, items: int[] | null) -> string throws never {
   { : never
@@ -148,10 +121,8 @@ function user.Combined(user: user.User | null, node: user.Node | null, items: in
     node?.children?.[node?.value ?? 0]?.next?.value = node?.value ?? 0 : unknown
     return e3 : unknown
   }
-  !! 8142..8151: type `int` has no member `to_string`
-  !! 8111..8153: `unknown | null` is not a function — it cannot be called
-  !! 8080..8175: did you mean `user?.profile?.name ?? node?.labels?.["name"]?.value.to_string()`? `user?.profile?.name ?? node?.labels?.["name"]?.value.to_string() ?? "fallback"` is unnecessary, because `user?.profile?.name ?? node?.labels?.["name"]?.value.to_string()` cannot be null
-  ?? 8369..8478: unreachable code: 6 statement(s) after diverging statement
+  !! 8081..8175: did you mean `user?.profile?.name ?? node?.labels?.["name"]?.value.to_string()`? `user?.profile?.name ?? node?.labels?.["name"]?.value.to_string() ?? "fallback"` is unnecessary, because `user?.profile?.name ?? node?.labels?.["name"]?.value.to_string()` cannot be null
+  ?? 8444..8478: unreachable code: 6 statement(s) after diverging statement
 }
 class user.Address$stream {
   street: string | null

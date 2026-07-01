@@ -1,6 +1,15 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
+function boundary.LocalId.capture(self: boundary.LocalId, inputs: bool | null, output: bool | null, error: bool | null) -> boundary.LocalId {
+}
+
+function boundary.id() -> boundary.LocalId {
+}
+
+function boundary.id.current() -> string {
+}
+
 function user.ConditionalLogic(age: int) -> string {
     load_var age
     load_const 18
@@ -27,62 +36,6 @@ function user.ConditionalLogic(age: int) -> string {
     load_const "minor"
 
   L4:
-    return
-}
-
-function user.EdgeFoo.from_json(j: baml.json.json) -> EdgeFoo {
-    load_var j
-    load_const "x"
-    call baml.json.field
-    store_var _3
-    load_type int
-    load_var _3
-    call baml.json.from_json
-    init_instance user.EdgeFoo .x
-    return
-}
-
-function user.EdgeFoo.to_json(self: EdgeFoo) -> baml.json.json {
-    load_type int
-    load_var self
-    load_field .x
-    call baml.json.to_json
-    load_const "x"
-    alloc_map 1
-    return
-}
-
-function user.Point.from_json(j: baml.json.json) -> Point {
-    load_var j
-    load_const "x"
-    call baml.json.field
-    store_var _3
-    load_type int
-    load_var _3
-    call baml.json.from_json
-    load_var j
-    load_const "y"
-    call baml.json.field
-    store_var _6
-    load_type int
-    load_var _6
-    call baml.json.from_json
-    init_instance user.Point .x, .y
-    return
-}
-
-function user.Point.to_json(self: Point) -> baml.json.json {
-    load_type int
-    load_var self
-    load_field .x
-    call baml.json.to_json
-    load_type int
-    load_var self
-    load_field .y
-    call baml.json.to_json
-    load_const "x"
-    load_const "y"
-    alloc_map 2
     return
 }
 
@@ -272,6 +225,7 @@ function user.iterator_style_for_loop() -> int {
     load_const 1
     load_const 2
     load_const 3
+    load_type int
     alloc_array 3
     call baml.iter.Iterable$for$T[].iter
     store_var _3
@@ -514,6 +468,7 @@ function user.nested_for_loop() -> int {
     load_const 1
     load_const 2
     load_const 3
+    load_type int
     alloc_array 3
     call baml.iter.Iterable$for$T[].iter
     store_var _3
@@ -675,6 +630,7 @@ function user.nested_for_loop() -> int {
     load_const 4
     load_const 5
     load_const 6
+    load_type int
     alloc_array 3
     call baml.iter.Iterable$for$T[].iter
     store_var _37

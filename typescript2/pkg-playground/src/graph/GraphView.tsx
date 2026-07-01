@@ -27,9 +27,22 @@ import type {
   Run,
 } from '../worker-protocol';
 import type { ResultRendererProps } from '../result-renderers';
+import type { ValueBodyCache } from '../value-body-cache';
+import { runToGraphNodeValues } from '../run-store-projections';
 import { getChrome } from './constants';
 import { cfgToGraphNodes, graphToReactflow } from './convert';
 import { layoutGraph } from './layout';
+import {
+  applyLevelOfDetail,
+  computeNodeDepths,
+  maxNodeDepth,
+  zoomToRevealDepth,
+} from './lod';
+import {
+  groupValuePreviewSourceNodeId,
+  isGroupValuePreviewNode,
+  liftGroupValuePreviews,
+} from './value-previews';
 import { kNodeTypes } from './nodes';
 import { kEdgeTypes, ColorfulMarkerDefinitions } from './edges';
 import { GraphThemeContext, useGraphTheme } from './theme';
@@ -47,6 +60,9 @@ interface GraphViewProps {
   functionName?: string | null;
   graphRuntimeOverlay?: GraphRuntimeOverlay | null;
   calls?: CallNode[];
+  run?: Run | null;
+  valueBodyCache?: ValueBodyCache;
+  valueBodyCacheVersion?: number;
   runStatus?: Run['status'];
   runError?: string | null;
   customRenderers?: Record<string, FC<ResultRendererProps>>;
@@ -57,6 +73,23 @@ interface GraphViewProps {
 const EMPTY_CALLS: CallNode[] = [];
 
 type LayoutDirection = 'horizontal' | 'vertical';
+
+/** How the graph decides which subgraphs to reveal vs. collapse. */
+type ExpandMode = 'zoom' | 'click' | 'all';
+
+const EXPAND_MODES: { id: ExpandMode; label: string; title: string }[] = [
+  { id: 'zoom', label: 'Zoom', title: 'Reveal subgraphs as you zoom in' },
+  {
+    id: 'click',
+    label: 'Click',
+    title: 'Shows the first 2 levels — click a node to expand deeper',
+  },
+  { id: 'all', label: 'All', title: 'Expand every subgraph' },
+];
+
+/** Click mode (the default) reveals this many levels up front; deeper
+ *  subgraphs collapse to leaves until the user clicks one open. */
+const CLICK_REVEAL_DEPTH = 2;
 
 const DIRECTION_STORAGE_PREFIX = 'baml-graph-direction:';
 
@@ -85,6 +118,29 @@ function storeDirection(
     );
   } catch {
     /* private browsing / quota — direction just won't persist */
+  }
+}
+
+const WRAP_STORAGE_KEY = 'baml-graph-wrap';
+
+/** Whether long chains wrap into rows to keep a bounded aspect ratio.
+ *  Off = unbounded single row/column (full horizontal or vertical). Bounded
+ *  is the default; remembered globally across functions and sessions. */
+function storedWrap(): boolean {
+  if (typeof window === 'undefined') return true;
+  try {
+    // Only an explicit opt-out disables wrapping; anything else stays bounded.
+    return window.localStorage.getItem(WRAP_STORAGE_KEY) !== 'false';
+  } catch {
+    return true;
+  }
+}
+
+function storeWrap(wrap: boolean) {
+  try {
+    window.localStorage.setItem(WRAP_STORAGE_KEY, wrap ? 'true' : 'false');
+  } catch {
+    /* private browsing / quota — preference just won't persist */
   }
 }
 
@@ -203,6 +259,9 @@ function GraphViewInner({
   functionName,
   graphRuntimeOverlay,
   calls = EMPTY_CALLS,
+  run,
+  valueBodyCache,
+  valueBodyCacheVersion,
   runStatus,
   runError,
   customRenderers,
@@ -218,6 +277,9 @@ function GraphViewInner({
   const [direction, setDirection] = useState<LayoutDirection>(() =>
     storedDirection(functionName),
   );
+  // Whether long chains wrap into rows (bounded aspect ratio) or extend
+  // unbounded in a single row/column. Remembered globally.
+  const [wrap, setWrap] = useState<boolean>(() => storedWrap());
   // Set when the user toggles layout direction — the next completed layout
   // re-fits the viewport so the rotated graph is fully visible.
   const refitAfterLayoutRef = useRef(false);
@@ -239,18 +301,96 @@ function GraphViewInner({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [graph, theme]);
 
+  // ── Level of detail: semantic zoom + click-to-expand ─────────────────────
+  // The full CFG is deeply nested; we render only down to a reveal depth and
+  // collapse deeper subgraphs into a single leaf. How that depth is chosen is
+  // the "Expand" mode (bottom-right menu):
+  //   • zoom  — depth follows the viewport zoom (semantic zoom)
+  //   • click — first 2 levels shown; click a node to expand deeper
+  //   • all   — everything expanded
+  // `expanded` holds containers the user clicked open; it layers on any mode.
+  const maxDepth = useMemo(() => maxNodeDepth(graphModel.rfNodes), [graphModel]);
+  const [expandMode, setExpandMode] = useState<ExpandMode>('click');
+  const [expanded, setExpanded] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+  // Enables node position/size transitions only after the first layout, so the
+  // initial paint snaps into place instead of flying in from the origin.
+  const [layoutReady, setLayoutReady] = useState(false);
+
+  // Live viewport zoom (transform[2]). Driving the reveal depth off this — vs a
+  // separate state updated in onMove — means the initial `fitView` already maps
+  // to the right LOD, instead of showing a default depth until the first move.
+  const viewportZoom = useStore((s) => s.transform[2]);
+  const revealDepth =
+    expandMode === 'all'
+      ? // Reveal everything with a finite depth (not Infinity) so the LOD pass
+        // still runs and stamps `data.depth` for depth-scaled layout/rendering.
+        maxDepth + 1
+      : expandMode === 'click'
+        ? CLICK_REVEAL_DEPTH
+        : zoomToRevealDepth(viewportZoom, maxDepth);
+
+  const lodModel = useMemo(
+    () => {
+      const model = applyLevelOfDetail(graphModel.rfNodes, graphModel.rfEdges, {
+        revealDepth,
+        expanded,
+      });
+      return liftGroupValuePreviews(model.nodes, model.edges);
+    },
+    [graphModel, revealDepth, expanded],
+  );
+
+  // Switching modes clears manual expansions and refits to the new extent.
+  const selectExpandMode = useCallback((mode: ExpandMode) => {
+    setExpandMode(mode);
+    setExpanded(new Set());
+    refitAfterLayoutRef.current = true;
+  }, []);
+
+  // Click a collapsed node to reveal its subgraph; click again to collapse.
+  const toggleExpanded = useCallback((nodeId: string) => {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(nodeId)) next.delete(nodeId);
+      else next.add(nodeId);
+      return next;
+    });
+  }, []);
+
+  const effectiveRunStatus = runStatus ?? run?.status;
+  const effectiveRunError = runError ?? run?.error?.message ?? null;
+  const rootGraphNodeId =
+    graphModel.graphNodes.find((node) => node.type === 'function')?.id ?? null;
+  const graphNodeValues = useMemo(
+    () =>
+      runToGraphNodeValues(run, graphRuntimeOverlay, valueBodyCache, {
+        rootGraphNodeId,
+      }),
+    [
+      run,
+      graphRuntimeOverlay,
+      valueBodyCache,
+      valueBodyCacheVersion,
+      rootGraphNodeId,
+    ],
+  );
+
   const runtimeInputsRef = useRef({
     graphRuntimeOverlay,
     calls,
-    runStatus,
-    runError,
+    runStatus: effectiveRunStatus,
+    runError: effectiveRunError,
+    graphNodeValues,
     customRenderers,
   });
   runtimeInputsRef.current = {
     graphRuntimeOverlay,
     calls,
-    runStatus,
-    runError,
+    runStatus: effectiveRunStatus,
+    runError: effectiveRunError,
+    graphNodeValues,
     customRenderers,
   };
 
@@ -264,6 +404,7 @@ function GraphViewInner({
         calls: latestCalls,
         runStatus: latestRunStatus,
         runError: latestRunError,
+        graphNodeValues: latestGraphNodeValues,
         customRenderers: latestCustomRenderers,
       } = runtimeInputsRef.current;
       const runtimeByNode = collectOverlayNodeRuntime(
@@ -280,21 +421,22 @@ function GraphViewInner({
 
       return baseNodes.map((node) => {
         const runtime = runtimeByNode.get(node.id);
-        if (!runtime) {
-          return {
-            ...node,
-            data: {
-              ...node.data,
-              result: undefined,
-              hasResult: undefined,
-              imageOutputs: [],
-              executionState: 'not-started' as const,
-              errorMessage: undefined,
-              customRenderers: latestCustomRenderers,
-              selected: node.id === selectedId,
-            },
-          };
-        }
+        const previewSourceNodeId = groupValuePreviewSourceNodeId(node);
+        const valuePreviews = previewSourceNodeId
+          ? (latestGraphNodeValues.get(previewSourceNodeId) ?? [])
+          : node.data.groupValuePreviewsLifted
+            ? []
+            : (latestGraphNodeValues.get(node.id) ?? []);
+        const executionState =
+          previewSourceNodeId != null
+            ? (runtimeByNode.get(previewSourceNodeId)?.executionState ??
+              runtime?.executionState)
+            : runtime?.executionState;
+        const errorMessage =
+          previewSourceNodeId != null
+            ? (runtimeByNode.get(previewSourceNodeId)?.errorMessage ??
+              runtime?.errorMessage)
+            : runtime?.errorMessage;
 
         return {
           ...node,
@@ -302,11 +444,14 @@ function GraphViewInner({
             ...node.data,
             result: undefined,
             hasResult: undefined,
-            imageOutputs: [],
-            executionState: runtime.executionState,
-            errorMessage: runtime.errorMessage,
+            valuePreviews,
+            executionState: executionState ?? ('not-started' as const),
+            errorMessage,
             customRenderers: latestCustomRenderers,
-            selected: node.id === selectedId,
+            selected:
+              node.id === selectedId ||
+              (previewSourceNodeId != null &&
+                previewSourceNodeId === selectedId),
           },
         };
       });
@@ -320,18 +465,20 @@ function GraphViewInner({
   // Runtime overlay can affect geometry when an error preview is visible.
   useEffect(() => {
     const layoutRunId = ++layoutRunIdRef.current;
-    const nodesWithRuntime = decorateNodesWithRuntime(graphModel.rfNodes);
+    const nodesWithRuntime = decorateNodesWithRuntime(lodModel.nodes);
 
-    layoutGraph(nodesWithRuntime, graphModel.rfEdges, direction)
+    layoutGraph(nodesWithRuntime, lodModel.edges, direction, wrap)
       .then(({ nodes: laid, edges: laidEdges }) => {
         if (layoutRunId !== layoutRunIdRef.current) return;
         setNodes(decorateNodesWithRuntime(laid));
         setEdges(laidEdges);
+        // Arm transitions for subsequent (expand/collapse) re-layouts.
+        setLayoutReady(true);
         if (refitAfterLayoutRef.current) {
           refitAfterLayoutRef.current = false;
           // Wait a frame so ReactFlow has measured the re-laid nodes.
           requestAnimationFrame(() => {
-            fitView({ padding: 0.2, minZoom: 0.3, maxZoom: 0.85, duration: 250 });
+            fitView({ padding: 0.2, minZoom: 0.3, maxZoom: 1.5, duration: 250 });
           });
         }
       })
@@ -339,16 +486,50 @@ function GraphViewInner({
         console.error('[GraphView] Layout failed:', err);
       });
   }, [
-    graphModel,
+    lodModel,
     graphRuntimeOverlay,
     calls,
-    runStatus,
-    runError,
+    effectiveRunStatus,
+    effectiveRunError,
+    graphNodeValues,
     direction,
+    wrap,
     setNodes,
     setEdges,
     decorateNodesWithRuntime,
   ]);
+
+  // Keep the selected node visible under LOD: if it's currently hidden, open
+  // its ancestor containers. Re-runs when the selection OR the graph/LOD model
+  // changes, so a graph update that would hide the selection re-reveals it
+  // (converges — once the ancestors are expanded the node stays visible).
+  useEffect(() => {
+    if (selectedNodeId == null) return;
+    const id = String(selectedNodeId);
+    if (lodModel.nodes.some((n) => n.id === id)) return;
+    const parentById = new Map(
+      graphModel.rfNodes.map((n) => [n.id, n.parentId]),
+    );
+    const depths = computeNodeDepths(graphModel.rfNodes);
+    const ancestors: string[] = [];
+    let cur = parentById.get(id);
+    let guard = 0;
+    while (cur != null && guard++ < 1000) {
+      ancestors.push(cur);
+      cur = parentById.get(cur);
+    }
+    // Only open ancestors that are actually closed at this zoom (depth past the
+    // reveal threshold) and not already manually expanded — leave open ones be.
+    const toOpen = ancestors.filter(
+      (a) => (depths.get(a) ?? 0) >= revealDepth && !expanded.has(a),
+    );
+    if (toOpen.length === 0) return;
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      for (const a of toOpen) next.add(a);
+      return next;
+    });
+  }, [selectedNodeId, lodModel, graphModel, revealDepth, expanded]);
 
   // Keep runtime node data fresh while a new ELK layout is pending.
   useEffect(() => {
@@ -356,40 +537,46 @@ function GraphViewInner({
   }, [
     graphRuntimeOverlay,
     calls,
-    runStatus,
-    runError,
+    effectiveRunStatus,
+    effectiveRunError,
+    graphNodeValues,
     customRenderers,
     selectedNodeId,
     setNodes,
     decorateNodesWithRuntime,
   ]);
 
-  // Update selected state on nodes
-  useEffect(() => {
-    setNodes((nds) =>
-      nds.map((n) => ({
-        ...n,
-        data: { ...n.data, selected: n.id === String(selectedNodeId) },
-      })),
-    );
-  }, [selectedNodeId, setNodes]);
-
   // Auto-pan viewport to center the selected node — only when it's off-screen
   const { setCenter, getNode, getViewport, fitView } = useReactFlow();
   const containerWidth = useStore((s) => s.width);
   const containerHeight = useStore((s) => s.height);
+  // Auto-pan to the selected node — but the node may not be laid out yet (e.g.
+  // the LOD reveal effect above surfaces it only on a later layout). So record
+  // the request on selection change, then fulfill it once the node actually
+  // exists (the fulfill effect re-runs as `nodes` updates).
   const prevGraphRef = useRef(graph);
+  const panRequestRef = useRef<string | null>(null);
   useEffect(() => {
-    if (selectedNodeId == null) return;
-    // Skip auto-pan when the graph itself just changed (fitView handles that)
-    if (prevGraphRef.current !== graph) {
-      prevGraphRef.current = graph;
+    if (selectedNodeId == null) {
+      panRequestRef.current = null;
       return;
     }
-    const target = getNode(String(selectedNodeId));
-    if (!target) return;
+    // Skip auto-pan when the graph itself just changed (fitView handles that).
+    if (prevGraphRef.current !== graph) {
+      prevGraphRef.current = graph;
+      panRequestRef.current = null;
+      return;
+    }
+    panRequestRef.current = String(selectedNodeId);
+  }, [selectedNodeId, graph]);
 
-    // Compute absolute position by walking up parentId chain
+  useEffect(() => {
+    const id = panRequestRef.current;
+    if (id == null) return;
+    const target = getNode(id);
+    if (!target) return; // not laid out yet — a later layout re-runs this
+
+    // Absolute position by walking up the parentId chain.
     let absX = target.position.x;
     let absY = target.position.y;
     let current = target;
@@ -406,7 +593,6 @@ function GraphViewInner({
     const centerX = absX + w / 2;
     const centerY = absY + h / 2;
 
-    // Check if node center is already visible in the viewport
     const { x: vx, y: vy, zoom } = getViewport();
     const screenX = centerX * zoom + vx;
     const screenY = centerY * zoom + vy;
@@ -416,15 +602,15 @@ function GraphViewInner({
       screenX <= containerWidth - pad &&
       screenY >= pad &&
       screenY <= containerHeight - pad;
-
     if (!isVisible) {
-      // Pan to the node; if over-zoomed, ease back to 1.0
+      // Pan to the node; if over-zoomed, ease back to 1.0.
       const targetZoom = Math.min(zoom, 1.0);
       setCenter(centerX, centerY, { duration: 300, zoom: targetZoom });
     }
+    panRequestRef.current = null; // fulfilled
   }, [
+    nodes,
     selectedNodeId,
-    graph,
     setCenter,
     getNode,
     getViewport,
@@ -434,14 +620,30 @@ function GraphViewInner({
 
   const handleNodeClick: NodeMouseHandler<WorkflowNode> = useCallback(
     (_event, node) => {
-      onNodeClick(Number(node.id));
+      // Click-to-expand / collapse: a collapsed node reveals its subgraph; a
+      // node the user previously expanded collapses again. Both short-circuit
+      // the normal navigate/select.
+      if (node.data?.collapsed || expanded.has(node.id)) {
+        toggleExpanded(node.id);
+        return;
+      }
+      const nodeId = isGroupValuePreviewNode(node)
+        ? (groupValuePreviewSourceNodeId(node) ?? node.id)
+        : node.id;
+      const numericNodeId = Number(nodeId);
+      if (Number.isFinite(numericNodeId)) {
+        onNodeClick(numericNodeId);
+      }
     },
-    [onNodeClick],
+    [onNodeClick, expanded, toggleExpanded],
   );
 
   return (
     <GraphThemeContext.Provider value={theme}>
-    <div style={{ width: '100%', height: '100%', position: 'relative' }}>
+    <div
+      className={layoutReady ? 'baml-graph baml-graph--animate' : 'baml-graph'}
+      style={{ width: '100%', height: '100%', position: 'relative' }}
+    >
       {/* Override @xyflow/react defaults:
             - .react-flow__node-group has a built-in light gray fill + 1px
               border (so nested groups stack into visible gray patches).
@@ -508,6 +710,29 @@ function GraphViewInner({
           to { transform: rotate(360deg); }
         }
         .react-flow__attribution { display: none !important; }
+        /* Level-of-detail transitions: when expand/collapse re-layouts, nodes
+           glide to their new spot and containers grow/shrink, and freshly
+           revealed nodes fade in. Armed only after the first layout so the
+           initial paint doesn't fly in from the origin. */
+        .baml-graph--animate .react-flow__node {
+          transition:
+            transform 280ms cubic-bezier(0.4, 0, 0.2, 1),
+            width 280ms cubic-bezier(0.4, 0, 0.2, 1),
+            height 280ms cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .baml-graph--animate .react-flow__node {
+          animation: baml-lod-in 280ms ease both;
+        }
+        @keyframes baml-lod-in {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .baml-graph--animate .react-flow__node {
+            transition: none;
+            animation: none;
+          }
+        }
       `}</style>
       <ReactFlow
         nodes={nodes}
@@ -528,7 +753,7 @@ function GraphViewInner({
         panOnScroll
         panActivationKeyCode={null}
         fitView
-        fitViewOptions={{ minZoom: 0.3, maxZoom: 0.85, padding: 0.2 }}
+        fitViewOptions={{ minZoom: 0.3, maxZoom: 1.5, padding: 0.2 }}
         proOptions={{ hideAttribution: true }}
         colorMode={theme}
       >
@@ -589,6 +814,123 @@ function GraphViewInner({
       >
         {direction === 'horizontal' ? '\u2195' : '\u2194'}
       </button>
+      {/* Bottom-right layout controls: aspect-ratio wrap toggle + expand mode. */}
+      <div
+        style={{
+          position: 'absolute',
+          bottom: 10,
+          right: 10,
+          zIndex: 10,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+        }}
+      >
+        {/* Wrap toggle: bounded aspect ratio (chain wraps into rows) vs.
+            unbounded — full horizontal / full vertical single line. */}
+        <button
+          type="button"
+          role="switch"
+          aria-checked={wrap}
+          aria-label="Wrap long chains into rows"
+          title={
+            wrap
+              ? 'Bounded: long chains wrap into rows. Click for unbounded (full horizontal/vertical).'
+              : 'Unbounded: full horizontal/vertical. Click to wrap long chains into rows.'
+          }
+          onClick={() => {
+            refitAfterLayoutRef.current = true;
+            setWrap((w) => {
+              const next = !w;
+              storeWrap(next);
+              return next;
+            });
+          }}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 5,
+            padding: '5px 10px',
+            borderRadius: 10,
+            border: `1px solid ${wrap ? chrome.selectionRing.color : chrome.button.border}`,
+            background: chrome.button.bg,
+            backdropFilter: 'blur(8px)',
+            WebkitBackdropFilter: 'blur(8px)',
+            boxShadow: chrome.button.shadow,
+            color: wrap ? chrome.selectionRing.color : chrome.button.text,
+            cursor: 'pointer',
+            fontSize: 11.5,
+            fontWeight: wrap ? 700 : 500,
+            fontFamily:
+              'ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif',
+            transition: 'color 120ms ease, border-color 120ms ease',
+          }}
+        >
+          <span aria-hidden="true" style={{ fontSize: 13, lineHeight: 1 }}>
+            {wrap ? '↵' : '→'}
+          </span>
+          Wrap
+        </button>
+        {/* Expand mode: how subgraphs are revealed (semantic zoom / click / all). */}
+        <div
+          role="radiogroup"
+          aria-label="Subgraph expand mode"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 4,
+            padding: '4px 6px',
+            borderRadius: 10,
+            border: `1px solid ${chrome.button.border}`,
+            background: chrome.button.bg,
+            backdropFilter: 'blur(8px)',
+            WebkitBackdropFilter: 'blur(8px)',
+            boxShadow: chrome.button.shadow,
+            fontFamily:
+              'ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif',
+          }}
+        >
+        <span
+          style={{
+            fontSize: 10,
+            fontWeight: 600,
+            letterSpacing: '0.05em',
+            textTransform: 'uppercase',
+            color: chrome.button.text,
+            opacity: 0.55,
+            padding: '0 2px',
+          }}
+        >
+          Expand
+        </span>
+        {EXPAND_MODES.map((m) => {
+          const on = expandMode === m.id;
+          return (
+            <button
+              key={m.id}
+              type="button"
+              role="radio"
+              aria-checked={on}
+              title={m.title}
+              onClick={() => selectExpandMode(m.id)}
+              style={{
+                padding: '3px 9px',
+                borderRadius: 7,
+                fontSize: 11.5,
+                fontWeight: on ? 700 : 500,
+                cursor: 'pointer',
+                color: on ? chrome.selectionRing.color : chrome.button.text,
+                background: 'transparent',
+                border: `1px solid ${on ? chrome.selectionRing.color : 'transparent'}`,
+                transition: 'color 120ms ease, border-color 120ms ease',
+              }}
+            >
+              {m.label}
+            </button>
+          );
+        })}
+        </div>
+      </div>
     </div>
     </GraphThemeContext.Provider>
   );

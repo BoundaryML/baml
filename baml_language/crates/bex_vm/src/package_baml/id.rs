@@ -1,5 +1,4 @@
-//! The `baml.id` namespace (M1): the `$id` surface over BEX runtime
-//! identity.
+//! Deprecated `baml.id` aliases for the boundary/runtime-id surface.
 //!
 //! Identity is sourced VM-live — `(process_euid, engine_id)` from the seed
 //! the engine attaches at VM construction, plus the VM's own logical thread
@@ -9,7 +8,7 @@
 //! the `.bamlprof` event stream. `CallRef` encoding happens lazily, only
 //! when `$id` is actually read.
 
-use bex_events::ids::{BexCallId, BexThreadId, CallRef, DecodeError, RuntimeId};
+use bex_events::ids::{BexCallId, BexThreadId, BoundaryId, CallRef, DecodeError, RuntimeId};
 
 use super::{BamlNamespaceId, PackageBamlImpl};
 use crate::{
@@ -33,16 +32,18 @@ impl BamlNamespaceId for PackageBamlImpl {
             message: format!("getrandom failed in baml.id.new: {e}"),
         })?;
         Ok(bex_str::BexStr::from(
-            RuntimeId::OverrideUuid(id).encode().as_str(),
+            RuntimeId::Boundary(BoundaryId::from_bytes(id))
+                .encode()
+                .as_str(),
         ))
     }
 
     fn set(vm: &mut BexVm, id: &bex_str::BexStr) -> Result<bex_str::BexStr, VmRustFnError> {
         let id = id.to_string();
         let runtime_id = RuntimeId::decode(&id).map_err(|e| invalid_id_error(&id, &e))?;
-        let RuntimeId::OverrideUuid(uuid) = runtime_id else {
+        let RuntimeId::Boundary(boundary_id) = runtime_id else {
             return Err(VmBamlError::InvalidArgument {
-                message: "baml.id.set expects an override ID created by baml.id.new()".to_string(),
+                message: "baml.id.set expects a boundary ID created by baml.id.new()".to_string(),
             }
             .into());
         };
@@ -70,7 +71,7 @@ impl BamlNamespaceId for PackageBamlImpl {
 
         // Record the override in the event stream (tag 0x05; gated on the
         // ring like every emission — the override itself works regardless).
-        vm.prof_push_set_function_id(call_id, uuid);
+        vm.prof_push_set_function_id(call_id, boundary_id.as_bytes());
 
         Ok(bex_str::BexStr::from(id.as_str()))
     }
@@ -79,7 +80,7 @@ impl BamlNamespaceId for PackageBamlImpl {
 /// The current call's runtime id: the override if one was set for this call,
 /// otherwise the call's `CallRef`, encoded on demand. `None` outside a call
 /// (or before the engine attached identity).
-fn current_runtime_id(vm: &BexVm) -> Option<String> {
+pub(crate) fn current_runtime_id(vm: &BexVm) -> Option<String> {
     let call_id = vm.current_call_id();
     if call_id == 0 {
         return None;

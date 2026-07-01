@@ -72,6 +72,7 @@ function future_methods.methods_after_successful_settle() -> bool[] {
     call baml.future.Future.is_cancelled
     load_var f
     call baml.future.Future.cancel
+    load_type bool
     alloc_array 5
     return
 }
@@ -94,7 +95,7 @@ function future_methods.methods_on_errored_future() -> baml.future.FutureState {
 
   L0:
     load_var e
-    throw
+    rethrow
 
   L1:
     load_var f

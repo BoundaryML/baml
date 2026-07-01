@@ -191,19 +191,23 @@ class ZonedDateTime {
         self.to_plain().millisecond()
     }
 
-    function from_json(j: baml.json.json) -> ZonedDateTime throws root.json.JsonDecodeError {
-        match (j) {
-            string => ZonedDateTime.parse(j) catch (_) {
-                root.errors.ParseError { message } => throw root.json.JsonDecodeError { message: message, path: "" },
-            },
-            _ => throw root.json.JsonDecodeError { message: "Expected RFC 3339 / RFC 9557 timestamp string" }
+    implements baml.FromJson {
+        function from_json(j: baml.json.json) -> Self throws baml.json.JsonDecodeError {
+            match (j) {
+                string => ZonedDateTime.parse(j) catch (_) {
+                    root.errors.ParseError { message } => throw baml.json.JsonDecodeError { message: message, path: "" },
+                },
+                _ => throw baml.json.JsonDecodeError { message: "Expected RFC 3339 / RFC 9557 timestamp string", path: "" }
+            }
         }
     }
-    function to_json(self) -> string throws root.json.JsonSerializationError {
-        self._to_string_impl() catch (_) {
-            root.errors.InvalidArgument { message } => throw root.json.JsonSerializationError { message: message, path: "" },
-            UnknownTimezoneError { timezone } => throw root.json.JsonSerializationError { message: "unknown timezone: " + timezone, path: "" },
-            root.errors.Io { message } => throw root.json.JsonSerializationError { message: message, path: "" },
+    implements baml.ToJson {
+        function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError {
+            self._to_string_impl() catch (_) {
+                root.errors.InvalidArgument { message } => throw baml.json.JsonSerializationError { message: message, path: "" },
+                UnknownTimezoneError { timezone } => throw baml.json.JsonSerializationError { message: "unknown timezone: " + timezone, path: "" },
+                root.errors.Io { message } => throw baml.json.JsonSerializationError { message: message, path: "" },
+            }
         }
     }
 }

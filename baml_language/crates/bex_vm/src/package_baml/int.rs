@@ -4,10 +4,6 @@ use super::{BamlClassInt, PackageBamlImpl};
 use crate::errors::{VmBamlError, VmPanic, VmRustFnError};
 
 impl BamlClassInt for PackageBamlImpl {
-    fn to_json(int: i64) -> Value {
-        Value::int(int)
-    }
-
     // ── Comparisons / clamping ────────────────────────────────────────────────
 
     fn abs(int: i64) -> Result<i64, VmRustFnError> {

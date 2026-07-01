@@ -557,6 +557,17 @@ fn normalize_impl(
         Ty::Void { .. } => StructuralTy::Void,
         Ty::BuiltinUnknown { .. } => StructuralTy::BuiltinUnknown,
         Ty::Unknown { .. } => StructuralTy::Unknown,
+        // INVARIANT: a `_` inference hole is filled (or replaced with `Ty::Error`)
+        // during inference, before any structural equivalence/subtype check. A
+        // hole has no sound normal form — treating it as "matches anything" would
+        // make `Box<int>` and `Box<string>` both equal to `Box<_>` and break
+        // transitivity — so reaching here is a compiler bug. (See `builder`'s
+        // `let`-binding hole path, which infers, fills, then checks.)
+        Ty::Infer { .. } => unreachable!(
+            "inference hole `_` reached structural normalization; it must be \
+             filled (or replaced with `Ty::Error`) during inference before any \
+             equivalence/subtype check"
+        ),
         Ty::Error { .. } => StructuralTy::Error,
         Ty::Literal(lit, _freshness, _) => StructuralTy::Literal(lit.clone()),
         Ty::Class(qn, type_args, _) => {
@@ -647,7 +658,12 @@ fn normalize_impl(
         } => StructuralTy::AssociatedTypeProjection {
             base: Box::new(normalize_impl(base, aliases, recursive, expanding)),
             interface: interface.as_ref().map(|interface| {
-                Box::new(normalize_impl(interface, aliases, recursive, expanding))
+                Box::new(normalize_impl(
+                    &interface.to_ty(),
+                    aliases,
+                    recursive,
+                    expanding,
+                ))
             }),
             member: member.clone(),
         },
@@ -728,9 +744,11 @@ fn ty_has_cycle(
             base, interface, ..
         } => {
             ty_has_cycle(base, aliases, visited, stack)
-                || interface
-                    .as_ref()
-                    .is_some_and(|interface| ty_has_cycle(interface, aliases, visited, stack))
+                || interface.as_ref().is_some_and(|interface| {
+                    interface
+                        .tys()
+                        .any(|t| ty_has_cycle(t, aliases, visited, stack))
+                })
         }
         Ty::Function {
             params,
@@ -892,13 +910,9 @@ fn extract_type_alias_deps(
             } => {
                 visit(base, aliases, non_structural, structural, in_structural);
                 if let Some(interface) = interface {
-                    visit(
-                        interface,
-                        aliases,
-                        non_structural,
-                        structural,
-                        in_structural,
-                    );
+                    for ty in interface.tys() {
+                        visit(ty, aliases, non_structural, structural, in_structural);
+                    }
                 }
             }
             Ty::Function {

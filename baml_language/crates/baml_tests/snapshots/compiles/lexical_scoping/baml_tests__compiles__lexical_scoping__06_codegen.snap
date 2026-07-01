@@ -1,6 +1,15 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
+function boundary.LocalId.capture(self: boundary.LocalId, inputs: bool | null, output: bool | null, error: bool | null) -> boundary.LocalId {
+}
+
+function boundary.id() -> boundary.LocalId {
+}
+
+function boundary.id.current() -> string {
+}
+
 function user.branch_locals(b: bool) -> int {
     load_var b
     pop_jump_if_false L0
@@ -53,6 +62,7 @@ function user.for_loop_restores_outer() -> int {
     load_type int
     load_const 2
     load_const 3
+    load_type int
     alloc_array 2
     call baml.iter.Iterable$for$T[].iter
     store_var _3

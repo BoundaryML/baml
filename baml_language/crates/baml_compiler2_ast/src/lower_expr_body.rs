@@ -5,7 +5,7 @@
 //! (parallel span storage) in one pass.
 
 use baml_base::{Name, TypePath};
-use baml_compiler_syntax::{SyntaxKind, SyntaxNode};
+use baml_compiler_syntax::{SyntaxKind, SyntaxNode, SyntaxNodeExt};
 use la_arena::Arena;
 use rowan::ast::AstNode;
 use text_size::TextRange;
@@ -16,8 +16,8 @@ use crate::{
         ArrayRestPat, AssignOp, AstSourceMap, BinaryOp, CallArg, CatchArm, CatchArmId, CatchClause,
         CatchClauseKind, DefaultExprId, Expr, ExprBody, ExprId, FieldPat, FunctionBodyDef,
         FunctionDef, FunctionDefaults, LetOrigin, Literal, LoopOrigin, MatchArm, MatchArmId, Param,
-        PatId, Pattern, SpannedTypeExpr, SpreadField, Stmt, StmtId, TemplateIfBranch,
-        TemplateSegment, TemplateTag, TypeAnnotId, TypeExpr, UnaryOp,
+        PatId, Pattern, SpreadField, Stmt, StmtId, TemplateIfBranch, TemplateSegment, TemplateTag,
+        TypeAnnotId, TypeExpr, TypeExprKind, UnaryOp,
     },
 };
 
@@ -193,7 +193,7 @@ pub(crate) fn lower_testset_block_node(
     for name in param_names {
         ctx.names_in_scope.insert(name.to_string());
     }
-    let range = block_node.text_range();
+    let range = block_node.span_range();
     let root_expr = baml_compiler_syntax::ast::BlockExpr::cast(block_node.clone()).map(|block| {
         let inner_block_id = ctx.lower_block_expr(&block);
         ctx.ensure_null_tail(inner_block_id, range)
@@ -662,30 +662,30 @@ impl LoweringContext {
                         SyntaxKind::WHILE_STMT => self.lower_while_stmt(node),
                         SyntaxKind::WHILE_LET_STMT => self.lower_while_let_stmt(node),
                         SyntaxKind::FOR_EXPR => self.lower_for_stmt(node),
-                        SyntaxKind::BREAK_STMT => self.alloc_stmt(Stmt::Break, node.text_range()),
+                        SyntaxKind::BREAK_STMT => self.alloc_stmt(Stmt::Break, node.span_range()),
                         SyntaxKind::CONTINUE_STMT => {
-                            self.alloc_stmt(Stmt::Continue, node.text_range())
+                            self.alloc_stmt(Stmt::Continue, node.span_range())
                         }
                         SyntaxKind::DEFER_STMT => self.lower_defer_stmt(node),
                         SyntaxKind::TEST_EXPR_DEF => {
                             if self.testset_collector_var.is_some() {
                                 let expr_id = self.lower_test_expr_as_register_call(node);
-                                self.alloc_stmt(Stmt::Expr(expr_id), node.text_range())
+                                self.alloc_stmt(Stmt::Expr(expr_id), node.span_range())
                             } else {
                                 // Invalid context — parser already emitted a diagnostic
-                                self.alloc_stmt(Stmt::Missing, node.text_range())
+                                self.alloc_stmt(Stmt::Missing, node.span_range())
                             }
                         }
                         SyntaxKind::TESTSET_DEF => {
                             if self.testset_collector_var.is_some() {
                                 let expr_id = self.lower_testset_as_register_call(node);
-                                self.alloc_stmt(Stmt::Expr(expr_id), node.text_range())
+                                self.alloc_stmt(Stmt::Expr(expr_id), node.span_range())
                             } else {
                                 // Invalid context — parser already emitted a diagnostic
-                                self.alloc_stmt(Stmt::Missing, node.text_range())
+                                self.alloc_stmt(Stmt::Missing, node.span_range())
                             }
                         }
-                        _ => self.alloc_stmt(Stmt::Missing, node.text_range()),
+                        _ => self.alloc_stmt(Stmt::Missing, node.span_range()),
                     };
                     stmts.push(stmt_id);
                 }
@@ -702,7 +702,7 @@ impl LoweringContext {
                     if is_last && !has_semicolon {
                         tail_expr = Some(expr_id);
                     } else {
-                        stmts.push(self.alloc_stmt(Stmt::Expr(expr_id), node.text_range()));
+                        stmts.push(self.alloc_stmt(Stmt::Expr(expr_id), node.span_range()));
                     }
                 }
                 BlockElement::ExprToken(token) => {
@@ -754,7 +754,7 @@ impl LoweringContext {
 
         self.alloc_expr(
             Expr::Block { stmts, tail_expr },
-            block.syntax().text_range(),
+            block.syntax().span_range(),
         )
     }
 
@@ -762,7 +762,7 @@ impl LoweringContext {
     fn lower_expr(&mut self, node: &SyntaxNode) -> ExprId {
         let id = self.lower_expr_inner(node);
         if self.needs_chain_wrap.remove(&id) {
-            self.alloc_expr(Expr::OptionalChain { expr: id }, node.text_range())
+            self.alloc_expr(Expr::OptionalChain { expr: id }, node.span_range())
         } else {
             id
         }
@@ -786,11 +786,12 @@ impl LoweringContext {
             SyntaxKind::MATCH_EXPR => self.lower_match_expr(node),
             SyntaxKind::CATCH_EXPR => self.lower_catch_expr(node),
             SyntaxKind::THROW_EXPR => self.lower_throw_expr(node),
+            SyntaxKind::RETURN_EXPR => self.lower_return_expr(node),
             SyntaxKind::BLOCK_EXPR => {
                 if let Some(block) = baml_compiler_syntax::ast::BlockExpr::cast(node.clone()) {
                     self.lower_block_expr(&block)
                 } else {
-                    self.alloc_expr(Expr::Missing, node.text_range())
+                    self.alloc_expr(Expr::Missing, node.span_range())
                 }
             }
             SyntaxKind::PATH_EXPR => self.lower_path_expr(node),
@@ -807,7 +808,7 @@ impl LoweringContext {
                     self.lower_expr(&inner)
                 } else {
                     self.try_lower_paren_token_content(node)
-                        .unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.text_range()))
+                        .unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.span_range()))
                 }
             }
             SyntaxKind::STRING_LITERAL | SyntaxKind::RAW_STRING_LITERAL => {
@@ -825,7 +826,7 @@ impl LoweringContext {
                 if let Some(literal) = self.try_lower_literal_token(node) {
                     literal
                 } else {
-                    self.alloc_expr(Expr::Missing, node.text_range())
+                    self.alloc_expr(Expr::Missing, node.span_range())
                 }
             }
         }
@@ -926,13 +927,13 @@ impl LoweringContext {
                         attributes: Vec::new(),
                         docstring: None,
                         is_tagged_template_tag: false,
-                        span: child.text_range(),
-                        name_span: child.text_range(),
+                        span: child.span_range(),
+                        name_span: child.span_range(),
                     }
                 });
                 if let Some(fd) = func_def {
                     body_lambda =
-                        Some(self.alloc_expr(Expr::Lambda(Box::new(fd)), child.text_range()));
+                        Some(self.alloc_expr(Expr::Lambda(Box::new(fd)), child.span_range()));
                 }
             } else if seen_with {
                 with_exprs.push(self.lower_expr(child));
@@ -941,14 +942,14 @@ impl LoweringContext {
             }
         }
 
-        let body = body_lambda.unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.text_range()));
+        let body = body_lambda.unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.span_range()));
         self.alloc_expr(
             Expr::Spawn {
                 name,
                 with_exprs,
                 body,
             },
-            node.text_range(),
+            node.span_range(),
         )
     }
 
@@ -964,18 +965,18 @@ impl LoweringContext {
             match elem {
                 rowan::NodeOrToken::Node(child) if child.kind() != SyntaxKind::KW_AWAIT => {
                     let future = self.lower_expr(&child);
-                    return self.alloc_expr(Expr::Await { future }, node.text_range());
+                    return self.alloc_expr(Expr::Await { future }, node.span_range());
                 }
                 rowan::NodeOrToken::Token(token) if token.kind() != SyntaxKind::KW_AWAIT => {
                     if let Some(future) = self.try_lower_bare_token(&token) {
-                        return self.alloc_expr(Expr::Await { future }, node.text_range());
+                        return self.alloc_expr(Expr::Await { future }, node.span_range());
                     }
                 }
                 _ => {}
             }
         }
-        let future = self.alloc_expr(Expr::Missing, node.text_range());
-        self.alloc_expr(Expr::Await { future }, node.text_range())
+        let future = self.alloc_expr(Expr::Missing, node.span_range());
+        self.alloc_expr(Expr::Await { future }, node.span_range())
     }
 
     fn lower_binary_expr(&mut self, node: &SyntaxNode) -> ExprId {
@@ -1017,7 +1018,7 @@ impl LoweringContext {
                         SyntaxKind::KW_INSTANCEOF => {
                             self.diags
                                 .push(LoweringDiagnostic::InstanceofRemoved { span });
-                            return self.alloc_expr(Expr::Missing, node.text_range());
+                            return self.alloc_expr(Expr::Missing, node.span_range());
                         }
                         SyntaxKind::QUESTION_QUESTION => op = Some(BinaryOp::NullCoalesce),
                         SyntaxKind::QUESTION if op.is_none() => {
@@ -1090,9 +1091,9 @@ impl LoweringContext {
                         | SyntaxKind::GREATER_GREATER_EQUALS => {
                             self.diags
                                 .push(LoweringDiagnostic::AssignmentInExpressionPosition {
-                                    span: node.text_range(),
+                                    span: node.span_range(),
                                 });
-                            return self.alloc_expr(Expr::Missing, node.text_range());
+                            return self.alloc_expr(Expr::Missing, node.span_range());
                         }
                         _ => {}
                     }
@@ -1100,11 +1101,11 @@ impl LoweringContext {
             }
         }
 
-        let lhs = lhs.unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.text_range()));
-        let rhs = rhs.unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.text_range()));
+        let lhs = lhs.unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.span_range()));
+        let rhs = rhs.unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.span_range()));
         let op = op.unwrap_or(BinaryOp::Add);
 
-        self.alloc_expr(Expr::Binary { op, lhs, rhs }, node.text_range())
+        self.alloc_expr(Expr::Binary { op, lhs, rhs }, node.span_range())
     }
 
     /// Lower `<expr> is <pattern>` to `Expr::Is`. The pattern-test semantics
@@ -1166,7 +1167,7 @@ impl LoweringContext {
             }
         }
 
-        let span = node.text_range();
+        let span = node.span_range();
         let scrutinee = scrutinee.unwrap_or_else(|| self.alloc_expr(Expr::Missing, span));
         let pattern = pattern.unwrap_or_else(|| self.alloc_pattern(Pattern::Wildcard, span));
 
@@ -1259,15 +1260,15 @@ impl LoweringContext {
             }
         }
 
-        let target = lhs.unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.text_range()));
-        let value = rhs.unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.text_range()));
+        let target = lhs.unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.span_range()));
+        let value = rhs.unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.span_range()));
 
         let stmt = match assign_op {
             None => Stmt::Assign { target, value },
             Some(op) => Stmt::AssignOp { target, op, value },
         };
 
-        Some(self.alloc_stmt(stmt, node.text_range()))
+        Some(self.alloc_stmt(stmt, node.span_range()))
     }
 
     fn lower_unary_expr(&mut self, node: &SyntaxNode) -> ExprId {
@@ -1327,7 +1328,7 @@ impl LoweringContext {
             }
         }
 
-        let expr = operand.unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.text_range()));
+        let expr = operand.unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.span_range()));
 
         let Some(op) = op else {
             return expr;
@@ -1355,14 +1356,14 @@ impl LoweringContext {
         {
             return self.alloc_expr(
                 Expr::Literal(Literal::Int(v.wrapping_neg())),
-                node.text_range(),
+                node.span_range(),
             );
         }
 
-        let result = self.alloc_expr(Expr::Unary { op, expr }, node.text_range());
+        let result = self.alloc_expr(Expr::Unary { op, expr }, node.span_range());
 
         if double_op {
-            self.alloc_expr(Expr::Unary { op, expr: result }, node.text_range())
+            self.alloc_expr(Expr::Unary { op, expr: result }, node.span_range())
         } else {
             result
         }
@@ -1387,12 +1388,12 @@ impl LoweringContext {
         let condition = sub_exprs
             .first()
             .copied()
-            .unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.text_range()));
+            .unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.span_range()));
 
         let then_branch = sub_exprs
             .get(1)
             .copied()
-            .unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.text_range()));
+            .unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.span_range()));
 
         let else_branch = sub_exprs.get(2).copied();
 
@@ -1402,7 +1403,7 @@ impl LoweringContext {
                 then_branch,
                 else_branch,
             },
-            node.text_range(),
+            node.span_range(),
         )
     }
 
@@ -1442,15 +1443,15 @@ impl LoweringContext {
         }
 
         let pattern =
-            pattern.unwrap_or_else(|| self.alloc_pattern(Pattern::Wildcard, node.text_range()));
+            pattern.unwrap_or_else(|| self.alloc_pattern(Pattern::Wildcard, node.span_range()));
         let scrutinee = exprs
             .first()
             .copied()
-            .unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.text_range()));
+            .unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.span_range()));
         let then_branch = exprs
             .get(1)
             .copied()
-            .unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.text_range()));
+            .unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.span_range()));
         let else_branch = exprs.get(2).copied();
 
         self.alloc_expr(
@@ -1460,7 +1461,7 @@ impl LoweringContext {
                 then_branch,
                 else_branch,
             },
-            node.text_range(),
+            node.span_range(),
         )
     }
 
@@ -1492,15 +1493,15 @@ impl LoweringContext {
         }
 
         let pattern =
-            pattern.unwrap_or_else(|| self.alloc_pattern(Pattern::Wildcard, node.text_range()));
+            pattern.unwrap_or_else(|| self.alloc_pattern(Pattern::Wildcard, node.span_range()));
         let scrutinee = exprs
             .first()
             .copied()
-            .unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.text_range()));
+            .unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.span_range()));
         let body = exprs
             .get(1)
             .copied()
-            .unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.text_range()));
+            .unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.span_range()));
 
         self.alloc_stmt(
             Stmt::WhileLet {
@@ -1508,7 +1509,7 @@ impl LoweringContext {
                 scrutinee,
                 body,
             },
-            node.text_range(),
+            node.span_range(),
         )
     }
 
@@ -1528,7 +1529,7 @@ impl LoweringContext {
                         if let Some(type_expr) =
                             baml_compiler_syntax::ast::TypeExpr::cast(child.clone())
                         {
-                            let span = child.text_range();
+                            let span = child.span_range();
                             let ty = crate::lower_type_expr::lower_type_expr_node(&type_expr);
                             scrutinee_type = Some(self.alloc_type_annot(ty, span));
                         }
@@ -1580,12 +1581,12 @@ impl LoweringContext {
                 scrutinee_type,
                 arms: arm_ids,
             },
-            node.text_range(),
+            node.span_range(),
         )
     }
 
     fn lower_match_arm(&mut self, node: &SyntaxNode) -> MatchArmId {
-        let arm_span = node.text_range();
+        let arm_span = node.span_range();
         let mut pattern = None;
         let mut guard = None;
         let mut body = None;
@@ -1730,7 +1731,7 @@ impl LoweringContext {
         debug_assert_eq!(node.kind(), SyntaxKind::PATTERN);
         match node.children().next() {
             Some(inner) => self.lower_pattern_atom_node(&inner),
-            None => self.alloc_pattern(Pattern::Wildcard, node.text_range()),
+            None => self.alloc_pattern(Pattern::Wildcard, node.span_range()),
         }
     }
 
@@ -1745,7 +1746,7 @@ impl LoweringContext {
             SyntaxKind::UNION_PATTERN => self.lower_union_pattern(node),
             SyntaxKind::BINDING_PATTERN => self.lower_binding_pattern(node),
             SyntaxKind::WILDCARD_PATTERN => {
-                self.alloc_pattern(Pattern::Wildcard, node.text_range())
+                self.alloc_pattern(Pattern::Wildcard, node.span_range())
             }
             SyntaxKind::DESTRUCTURE_PATTERN => self.lower_destructure_pattern(node),
             SyntaxKind::ARRAY_PATTERN => self.lower_array_pattern(node),
@@ -1753,13 +1754,13 @@ impl LoweringContext {
             SyntaxKind::PAREN_PATTERN => {
                 match node.children().find(|n| n.kind() == SyntaxKind::PATTERN) {
                     Some(inner) => self.lower_pattern(&inner),
-                    None => self.alloc_pattern(Pattern::Wildcard, node.text_range()),
+                    None => self.alloc_pattern(Pattern::Wildcard, node.span_range()),
                 }
             }
             // Defensive: an unexpected node where a pattern atom should be.
             // Lower as wildcard so downstream doesn't crash; the parse error
             // (if any) will surface elsewhere.
-            _ => self.alloc_pattern(Pattern::Wildcard, node.text_range()),
+            _ => self.alloc_pattern(Pattern::Wildcard, node.span_range()),
         }
     }
 
@@ -1771,9 +1772,9 @@ impl LoweringContext {
             .map(|child| self.lower_pattern_atom_node(&child))
             .collect();
         match parts.len() {
-            0 => self.alloc_pattern(Pattern::Wildcard, node.text_range()),
+            0 => self.alloc_pattern(Pattern::Wildcard, node.span_range()),
             1 => parts[0],
-            _ => self.alloc_pattern(Pattern::Or(parts), node.text_range()),
+            _ => self.alloc_pattern(Pattern::Or(parts), node.span_range()),
         }
     }
 
@@ -1819,7 +1820,7 @@ impl LoweringContext {
             Some(name) => Pattern::Bind { name, subpat },
             None => Pattern::Wildcard,
         };
-        self.alloc_pattern(pat, node.text_range())
+        self.alloc_pattern(pat, node.span_range())
     }
 
     /// Walk a pattern and emit `VoidInNonReturnPosition` for any `Pattern::Type`
@@ -1889,10 +1890,10 @@ impl LoweringContext {
             .children()
             .find_map(baml_compiler_syntax::ast::TypeExpr::cast)
         else {
-            return self.alloc_pattern(Pattern::Wildcard, node.text_range());
+            return self.alloc_pattern(Pattern::Wildcard, node.span_range());
         };
         let ty = crate::lower_type_expr::lower_type_expr_node(&type_expr);
-        self.alloc_pattern(Pattern::Type(ty), node.text_range())
+        self.alloc_pattern(Pattern::Type(ty), node.span_range())
     }
 
     /// Lower a `DESTRUCTURE_PATTERN` (`(let|const)? PATH ('<' types '>')? '{' field_list '}'`).
@@ -1954,7 +1955,7 @@ impl LoweringContext {
                 associated_type_bindings,
                 fields,
             },
-            node.text_range(),
+            node.span_range(),
         )
     }
 
@@ -1968,7 +1969,7 @@ impl LoweringContext {
         let field_span = field_token
             .as_ref()
             .map(rowan::SyntaxToken::text_range)
-            .unwrap_or_else(|| node.text_range());
+            .unwrap_or_else(|| node.span_range());
         let field_name = field_token
             .map(|t| Name::new(t.text()))
             .unwrap_or_else(|| Name::new("_"));
@@ -1997,7 +1998,7 @@ impl LoweringContext {
                         subpat: None,
                     }
                 };
-                self.alloc_pattern(synth, node.text_range())
+                self.alloc_pattern(synth, node.span_range())
             }
         };
 
@@ -2057,7 +2058,7 @@ impl LoweringContext {
                 suffix,
                 ascription,
             },
-            node.text_range(),
+            node.span_range(),
         )
     }
 
@@ -2077,8 +2078,8 @@ impl LoweringContext {
             }
         }
 
-        let base = base.unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.text_range()));
-        self.alloc_expr(Expr::Catch { base, clauses }, node.text_range())
+        let base = base.unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.span_range()));
+        self.alloc_expr(Expr::Catch { base, clauses }, node.span_range())
     }
 
     fn lower_catch_clause(&mut self, node: &SyntaxNode) -> CatchClause {
@@ -2094,7 +2095,7 @@ impl LoweringContext {
                 rowan::NodeOrToken::Token(token) => match token.kind() {
                     SyntaxKind::KW_CATCH => kind = CatchClauseKind::Catch,
                     SyntaxKind::KW_CATCH_ALL => kind = CatchClauseKind::CatchAll,
-                    SyntaxKind::WORD if token.text() == "catch_all_panics" => {
+                    SyntaxKind::KW_CATCH_ALL_PANICS => {
                         kind = CatchClauseKind::CatchAllPanics;
                     }
                     _ => {}
@@ -2114,7 +2115,7 @@ impl LoweringContext {
                             .unwrap_or_else(|| Name::new("_"));
                         binding = Some(self.alloc_pattern(
                             Pattern::Bind { name, subpat: None },
-                            child.text_range(),
+                            child.span_range(),
                         ));
                     }
                     SyntaxKind::CATCH_STACK_TRACE_BINDING => {
@@ -2132,7 +2133,7 @@ impl LoweringContext {
                             .unwrap_or_else(|| Name::new("_"));
                         stack_trace_binding = Some(self.alloc_pattern(
                             Pattern::Bind { name, subpat: None },
-                            child.text_range(),
+                            child.span_range(),
                         ));
                     }
                     SyntaxKind::CATCH_ARM => {
@@ -2147,7 +2148,7 @@ impl LoweringContext {
         CatchClause {
             kind,
             binding: binding
-                .unwrap_or_else(|| self.alloc_pattern(Pattern::Wildcard, node.text_range())),
+                .unwrap_or_else(|| self.alloc_pattern(Pattern::Wildcard, node.span_range())),
             stack_trace_binding,
             arms,
         }
@@ -2222,14 +2223,14 @@ impl LoweringContext {
 
         let pattern = match pattern {
             Some(pattern) => pattern,
-            None => self.alloc_pattern(Pattern::Wildcard, node.text_range()),
+            None => self.alloc_pattern(Pattern::Wildcard, node.span_range()),
         };
         let body = match body {
             Some(body) => body,
-            None => self.alloc_expr(Expr::Missing, node.text_range()),
+            None => self.alloc_expr(Expr::Missing, node.span_range()),
         };
 
-        self.alloc_catch_arm(CatchArm { pattern, body }, node.text_range())
+        self.alloc_catch_arm(CatchArm { pattern, body }, node.span_range())
     }
 
     fn lower_throw_expr(&mut self, node: &SyntaxNode) -> ExprId {
@@ -2237,9 +2238,9 @@ impl LoweringContext {
             self.lower_expr(&child)
         } else {
             self.lower_throw_value_token(node)
-                .unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.text_range()))
+                .unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.span_range()))
         };
-        self.alloc_expr(Expr::Throw { value }, node.text_range())
+        self.alloc_expr(Expr::Throw { value }, node.span_range())
     }
 
     fn lower_throw_stmt(&mut self, node: &SyntaxNode) -> StmtId {
@@ -2275,7 +2276,7 @@ impl LoweringContext {
         if let Some(child) = expr_child.clone() {
             if child.kind() != SyntaxKind::THROW_EXPR {
                 let expr_id = self.lower_expr(&child);
-                return self.alloc_stmt(Stmt::Expr(expr_id), node.text_range());
+                return self.alloc_stmt(Stmt::Expr(expr_id), node.span_range());
             }
         }
 
@@ -2287,13 +2288,13 @@ impl LoweringContext {
                 } else {
                     self.lower_throw_value_token(&throw_expr_node)
                         .unwrap_or_else(|| {
-                            self.alloc_expr(Expr::Missing, throw_expr_node.text_range())
+                            self.alloc_expr(Expr::Missing, throw_expr_node.span_range())
                         })
                 }
             })
-            .unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.text_range()));
+            .unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.span_range()));
 
-        self.alloc_stmt(Stmt::Throw { value }, node.text_range())
+        self.alloc_stmt(Stmt::Throw { value }, node.span_range())
     }
 
     fn lower_throw_value_token(&mut self, node: &SyntaxNode) -> Option<ExprId> {
@@ -2397,7 +2398,7 @@ impl LoweringContext {
                     token.text_range(),
                 )
             } else {
-                self.alloc_expr(Expr::Missing, node.text_range())
+                self.alloc_expr(Expr::Missing, node.span_range())
             }
         };
 
@@ -2414,7 +2415,7 @@ impl LoweringContext {
                 type_args,
                 args,
             },
-            node.text_range(),
+            node.span_range(),
         );
         self.record_call_arg_label_spans(id, label_spans);
         if self.needs_chain_wrap.remove(&callee) {
@@ -2578,9 +2579,9 @@ impl LoweringContext {
                 .find(|n| n.kind() != SyntaxKind::GENERIC_ARGS)
             {
                 let base = self.lower_expr_in_chain(&inner);
-                return self.wrap_generic_apply(node, base, node.text_range());
+                return self.wrap_generic_apply(node, base, node.span_range());
             }
-            return self.alloc_expr(Expr::Missing, node.text_range());
+            return self.alloc_expr(Expr::Missing, node.span_range());
         }
 
         // Check if single segment is a literal keyword.
@@ -2593,12 +2594,12 @@ impl LoweringContext {
         if segments.len() == 1 {
             match segments[0].0.as_str() {
                 "true" => {
-                    return self.alloc_expr(Expr::Literal(Literal::Bool(true)), node.text_range());
+                    return self.alloc_expr(Expr::Literal(Literal::Bool(true)), node.span_range());
                 }
                 "false" => {
-                    return self.alloc_expr(Expr::Literal(Literal::Bool(false)), node.text_range());
+                    return self.alloc_expr(Expr::Literal(Literal::Bool(false)), node.span_range());
                 }
-                "null" => return self.alloc_expr(Expr::Null, node.text_range()),
+                "null" => return self.alloc_expr(Expr::Null, node.span_range()),
                 _ => {}
             }
         }
@@ -2606,14 +2607,14 @@ impl LoweringContext {
         // Multi-segment paths stay as Path(["a", "b", "c"]).
         // Record per-segment spans for diagnostics and LSP.
         let names: Vec<Name> = segments.iter().map(|(n, _)| n.clone()).collect();
-        let id = self.alloc_expr(Expr::Path(names), node.text_range());
+        let id = self.alloc_expr(Expr::Path(names), node.span_range());
         if segments.len() > 1 {
             let spans: Vec<TextRange> = segments.iter().map(|(_, r)| *r).collect();
             self.source_map.path_segment_spans.insert(id, spans);
         }
         // `foo<int>` in value position: the GENERIC_ARGS is a direct child of
         // this PATH_EXPR. Wrap unless an enclosing call already consumed it.
-        self.wrap_generic_apply(node, id, node.text_range())
+        self.wrap_generic_apply(node, id, node.span_range())
     }
 
     fn lower_field_access_expr(&mut self, node: &SyntaxNode) -> ExprId {
@@ -2647,10 +2648,10 @@ impl LoweringContext {
             }
         }
 
-        let base = base.unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.text_range()));
+        let base = base.unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.span_range()));
         let member = field.unwrap_or_else(|| Name::new("_"));
 
-        let id = self.alloc_expr(Expr::MemberAccess { base, member }, node.text_range());
+        let id = self.alloc_expr(Expr::MemberAccess { base, member }, node.span_range());
         if let Some(range) = field_range {
             self.source_map.member_access_member_spans.insert(id, range);
         }
@@ -2675,7 +2676,7 @@ impl LoweringContext {
                 _ => {}
             }
         }
-        let base = base.unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.text_range()));
+        let base = base.unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.span_range()));
 
         let target = node
             .children()
@@ -2686,9 +2687,9 @@ impl LoweringContext {
             })
             .and_then(baml_compiler_syntax::ast::TypeExpr::cast)
             .map(|te| crate::lower_type_expr::lower_type_expr_node(&te))
-            .unwrap_or_else(|| TypeExpr::Unknown { attrs: Vec::new() });
+            .unwrap_or_else(|| TypeExprKind::Unknown { attrs: Vec::new() }.at(node.span_range()));
 
-        let id = self.alloc_expr(Expr::Upcast { base, target }, node.text_range());
+        let id = self.alloc_expr(Expr::Upcast { base, target }, node.span_range());
         if self.needs_chain_wrap.remove(&base) {
             self.needs_chain_wrap.insert(id);
         }
@@ -2697,7 +2698,7 @@ impl LoweringContext {
 
     fn lower_env_access_expr(&mut self, node: &SyntaxNode) -> ExprId {
         // Desugar `env.VAR_NAME` → `baml.env.get_or_panic("VAR_NAME")`
-        let range = node.text_range();
+        let range = node.span_range();
 
         let mut field_text = None;
         let mut seen_dot = false;
@@ -2764,10 +2765,10 @@ impl LoweringContext {
             }
         }
 
-        let base = base.unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.text_range()));
-        let index = index.unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.text_range()));
+        let base = base.unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.span_range()));
+        let index = index.unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.span_range()));
 
-        let id = self.alloc_expr(Expr::Index { base, index }, node.text_range());
+        let id = self.alloc_expr(Expr::Index { base, index }, node.span_range());
         if self.needs_chain_wrap.remove(&base) {
             self.needs_chain_wrap.insert(id);
         }
@@ -2809,12 +2810,12 @@ impl LoweringContext {
             }
         }
 
-        let base = base.unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.text_range()));
+        let base = base.unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.span_range()));
         let member = field.unwrap_or_else(|| Name::new("_"));
 
         let id = self.alloc_expr(
             Expr::OptionalMemberAccess { base, member },
-            node.text_range(),
+            node.span_range(),
         );
         if let Some(range) = field_range {
             self.source_map.member_access_member_spans.insert(id, range);
@@ -2853,10 +2854,10 @@ impl LoweringContext {
             }
         }
 
-        let base = base.unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.text_range()));
-        let index = index.unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.text_range()));
+        let base = base.unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.span_range()));
+        let index = index.unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.span_range()));
 
-        let id = self.alloc_expr(Expr::OptionalIndex { base, index }, node.text_range());
+        let id = self.alloc_expr(Expr::OptionalIndex { base, index }, node.span_range());
         self.needs_chain_wrap.remove(&base);
         self.needs_chain_wrap.insert(id);
         id
@@ -2880,7 +2881,7 @@ impl LoweringContext {
                     token.text_range(),
                 )
             } else {
-                self.alloc_expr(Expr::Missing, node.text_range())
+                self.alloc_expr(Expr::Missing, node.span_range())
             }
         };
 
@@ -2891,7 +2892,7 @@ impl LoweringContext {
             .unwrap_or_default();
         let (args, label_spans) = Self::finalize_call_args(lowered_args);
 
-        let id = self.alloc_expr(Expr::OptionalCall { callee, args }, node.text_range());
+        let id = self.alloc_expr(Expr::OptionalCall { callee, args }, node.span_range());
         self.record_call_arg_label_spans(id, label_spans);
         self.needs_chain_wrap.remove(&callee);
         self.needs_chain_wrap.insert(id);
@@ -2901,7 +2902,7 @@ impl LoweringContext {
     fn lower_string_literal(&mut self, node: &SyntaxNode) -> ExprId {
         let text = node.text().to_string();
         let content = strip_string_delimiters(&text);
-        self.alloc_expr(Expr::Literal(Literal::String(content)), node.text_range())
+        self.alloc_expr(Expr::Literal(Literal::String(content)), node.span_range())
     }
 
     /// Lower a BEP-049 untagged backtick string literal to a first-class
@@ -2919,7 +2920,7 @@ impl LoweringContext {
         use baml_compiler_syntax::BacktickStringLiteral;
         use rowan::ast::AstNode;
 
-        let span = node.text_range();
+        let span = node.span_range();
         let Some(lit) = BacktickStringLiteral::cast(node.clone()) else {
             return self.alloc_expr(Expr::Missing, span);
         };
@@ -3352,7 +3353,7 @@ impl LoweringContext {
     fn lower_tagged_template_expr(&mut self, node: &SyntaxNode) -> ExprId {
         use baml_compiler_syntax::BacktickStringLiteral;
 
-        let span = node.text_range();
+        let span = node.span_range();
 
         // The backtick literal child; the tag is the first *other* child node.
         let backtick_node = node
@@ -3470,13 +3471,13 @@ impl LoweringContext {
         // let __tt_parts: string[] = [];
         stmts.push(self.tt_let_typed_empty_list(
             &parts,
-            TypeExpr::String { attrs: Vec::new() },
+            TypeExprKind::String { attrs: Vec::new() }.at(span),
             span,
         ));
         // let __tt_values: unknown[] = [];
         stmts.push(self.tt_let_typed_empty_list(
             &values,
-            TypeExpr::BuiltinUnknown { attrs: Vec::new() },
+            TypeExprKind::BuiltinUnknown { attrs: Vec::new() }.at(span),
             span,
         ));
         // let __tt_cur = "";
@@ -3681,10 +3682,11 @@ impl LoweringContext {
         // (`visible_from == let.span.end`) begins at `span.start`, letting the
         // start-anchored accumulator references (see `tt_path`) resolve to it.
         let at = TextRange::empty(span.start());
-        let list_ty = TypeExpr::List {
+        let list_ty = TypeExprKind::List {
             inner: Box::new(elem),
             attrs: Vec::new(),
-        };
+        }
+        .at(span);
         let type_pat = self.alloc_pattern(Pattern::Type(list_ty), at);
         let pat = self.alloc_pattern(
             Pattern::Bind {
@@ -3815,7 +3817,7 @@ impl LoweringContext {
             .is_some_and(|inner| inner.trim().is_empty());
         if inner_empty {
             self.diags.push(LoweringDiagnostic::EmptyInterpolation {
-                span: interp_node.text_range(),
+                span: interp_node.span_range(),
             });
         }
         match interp_node
@@ -3823,7 +3825,7 @@ impl LoweringContext {
             .find(|c| c.kind() == SyntaxKind::BLOCK_EXPR)
         {
             Some(b) => self.lower_expr(&b),
-            None => self.alloc_expr(Expr::Missing, interp_node.text_range()),
+            None => self.alloc_expr(Expr::Missing, interp_node.span_range()),
         }
     }
 
@@ -3927,7 +3929,7 @@ impl LoweringContext {
     ) -> TemplateSegment {
         let mut branches = Vec::with_capacity(if_seg.branches.len());
         for branch in if_seg.branches {
-            let header_span = branch.header.text_range();
+            let header_span = branch.header.span_range();
             let mut cond: Option<ExprId> = None;
             for elem in branch.header.children_with_tokens() {
                 match elem {
@@ -3965,14 +3967,14 @@ impl LoweringContext {
             .and_then(|s| s.strip_suffix('"'))
             .unwrap_or("");
         match parse_byte_string_escapes(content) {
-            Ok(bytes) => self.alloc_expr(Expr::ByteStringLiteral(bytes), node.text_range()),
+            Ok(bytes) => self.alloc_expr(Expr::ByteStringLiteral(bytes), node.span_range()),
             Err(message) => {
                 self.diags
                     .push(LoweringDiagnostic::InvalidByteStringEscape {
                         message,
-                        span: node.text_range(),
+                        span: node.span_range(),
                     });
-                self.alloc_expr(Expr::Missing, node.text_range())
+                self.alloc_expr(Expr::Missing, node.span_range())
             }
         }
     }
@@ -3991,7 +3993,7 @@ impl LoweringContext {
                 }
             }
         }
-        self.alloc_expr(Expr::Array { elements }, node.text_range())
+        self.alloc_expr(Expr::Array { elements }, node.span_range())
     }
 
     fn lower_object_literal(&mut self, node: &SyntaxNode) -> ExprId {
@@ -4121,7 +4123,7 @@ impl LoweringContext {
                 fields,
                 spreads,
             },
-            node.text_range(),
+            node.span_range(),
         )
     }
 
@@ -4181,7 +4183,7 @@ impl LoweringContext {
             })
             .collect();
 
-        self.alloc_expr(Expr::Map { entries }, node.text_range())
+        self.alloc_expr(Expr::Map { entries }, node.span_range())
     }
 
     fn lower_lambda_expr(&mut self, node: &SyntaxNode) -> ExprId {
@@ -4216,7 +4218,7 @@ impl LoweringContext {
         // We scan children in order, skipping items until after PARAMETER_LIST.
         let return_type = {
             let mut after_params = false;
-            let mut found: Option<SpannedTypeExpr> = None;
+            let mut found: Option<TypeExpr> = None;
             for child in node.children() {
                 match child.kind() {
                     SyntaxKind::PARAMETER_LIST | SyntaxKind::GENERIC_PARAM_LIST => {
@@ -4227,10 +4229,10 @@ impl LoweringContext {
                     }
                     SyntaxKind::TYPE_EXPR if after_params && found.is_none() => {
                         if let Some(te) = ast::TypeExpr::cast(child.clone()) {
-                            found = Some(SpannedTypeExpr {
-                                expr: crate::lower_type_expr::lower_type_expr_node(&te),
-                                span: child.text_range(),
-                            });
+                            found = Some(
+                                crate::lower_type_expr::lower_type_expr_node(&te)
+                                    .with_span(child.span_range()),
+                            );
                         }
                     }
                     _ => {}
@@ -4245,9 +4247,9 @@ impl LoweringContext {
             .find(|n| n.kind() == SyntaxKind::THROWS_CLAUSE)
             .and_then(ast::ThrowsClause::cast)
             .and_then(|tc| tc.type_expr())
-            .map(|te| SpannedTypeExpr {
-                span: te.syntax().text_range(),
-                expr: crate::lower_type_expr::lower_type_expr_node(&te),
+            .map(|te| {
+                crate::lower_type_expr::lower_type_expr_node(&te)
+                    .with_span(te.syntax().span_range())
             });
 
         // Lower body via a FRESH LoweringContext — lambda gets its own ExprBody.
@@ -4282,11 +4284,11 @@ impl LoweringContext {
             attributes: Vec::new(),
             docstring: None,
             is_tagged_template_tag: false,
-            span: node.text_range(),
-            name_span: node.text_range(), // synthetic: use the lambda span
+            span: node.span_range(),
+            name_span: node.span_range(), // synthetic: use the lambda span
         };
 
-        self.alloc_expr(Expr::Lambda(Box::new(func_def)), node.text_range())
+        self.alloc_expr(Expr::Lambda(Box::new(func_def)), node.span_range())
     }
 
     fn try_lower_paren_token_content(&mut self, node: &SyntaxNode) -> Option<ExprId> {
@@ -4411,7 +4413,7 @@ impl LoweringContext {
         }
 
         let pattern =
-            pattern_id.unwrap_or_else(|| self.alloc_pattern(Pattern::Wildcard, node.text_range()));
+            pattern_id.unwrap_or_else(|| self.alloc_pattern(Pattern::Wildcard, node.span_range()));
 
         self.check_pattern_void_in_annotation(pattern, "a let binding annotation");
 
@@ -4430,14 +4432,26 @@ impl LoweringContext {
                 origin,
                 else_branch,
             },
-            node.text_range(),
+            node.span_range(),
         )
     }
 
     fn lower_return_stmt(&mut self, node: &SyntaxNode) -> StmtId {
-        // RETURN_STMT: KW_RETURN expr?
+        let expr = self.lower_optional_return_value(node);
+        self.alloc_stmt(Stmt::Return(expr), node.span_range())
+    }
+
+    /// Lower the optional value of a `return` node — shared by `RETURN_STMT`
+    /// (statement position) and `RETURN_EXPR` (expression position), which have
+    /// the identical shape `KW_RETURN expr?` (the statement may also carry a
+    /// trailing `;`). Returns `None` for a bare `return`.
+    ///
+    /// The token-level fallback mirrors `lower_throw_expr`: the parser emits
+    /// bare literal/identifier tokens (not wrapper expression nodes) for simple
+    /// values, so those must be reconstructed here.
+    fn lower_optional_return_value(&mut self, node: &SyntaxNode) -> Option<ExprId> {
         // Try child nodes first, then fall back to token-level expressions
-        let expr = if let Some(child_node) = node.children().next() {
+        if let Some(child_node) = node.children().next() {
             Some(self.lower_expr(&child_node))
         } else {
             // No child node — check for a token-level expression (e.g. `return 1;`)
@@ -4488,8 +4502,15 @@ impl LoweringContext {
                 }
             }
             result
-        };
-        self.alloc_stmt(Stmt::Return(expr), node.text_range())
+        }
+    }
+
+    /// Lower `return expr?` in expression position to [`Expr::Return`] — a
+    /// diverging expression of type `never` (mirrors `lower_throw_expr`). Shares
+    /// value extraction with `lower_return_stmt` via `lower_optional_return_value`.
+    fn lower_return_expr(&mut self, node: &SyntaxNode) -> ExprId {
+        let value = self.lower_optional_return_value(node);
+        self.alloc_expr(Expr::Return { value }, node.span_range())
     }
 
     /// Lower `defer { BODY }` (BEP-042). The CST shape is
@@ -4503,8 +4524,8 @@ impl LoweringContext {
             .children()
             .find(|c| c.kind() == SyntaxKind::BLOCK_EXPR)
             .map(|block| self.lower_expr(&block))
-            .unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.text_range()));
-        self.alloc_stmt(Stmt::Defer { body }, node.text_range())
+            .unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.span_range()));
+        self.alloc_stmt(Stmt::Defer { body }, node.span_range())
     }
 
     fn lower_while_stmt(&mut self, node: &SyntaxNode) -> StmtId {
@@ -4525,11 +4546,11 @@ impl LoweringContext {
         let condition = sub_exprs
             .first()
             .copied()
-            .unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.text_range()));
+            .unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.span_range()));
         let body = sub_exprs
             .get(1)
             .copied()
-            .unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.text_range()));
+            .unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.span_range()));
 
         self.alloc_stmt(
             Stmt::While {
@@ -4538,7 +4559,7 @@ impl LoweringContext {
                 after: None,
                 origin: LoopOrigin::While,
             },
-            node.text_range(),
+            node.span_range(),
         )
     }
 
@@ -4555,7 +4576,7 @@ impl LoweringContext {
         //   Stmt::While { condition, body, after: Some(update_stmt), origin: LoopOrigin::For }
         // These two statements are wrapped in Expr::Block → Stmt::Expr so the
         // function can return a single StmtId.
-        let range = node.text_range();
+        let range = node.span_range();
 
         // Determine if this is a C-style for loop by checking for KW_IN.
         let is_c_style = !node
@@ -4687,7 +4708,7 @@ impl LoweringContext {
         // Lower the update expression (second BINARY_EXPR) as a statement.
         // `i += 1` is an assignment-op, so try_lower_assignment handles it.
         let after_stmt = if let Some(update_node) = binary_exprs.get(1) {
-            let update_range = update_node.text_range();
+            let update_range = update_node.span_range();
             let stmt_opt = self.try_lower_assignment(update_node);
             Some(stmt_opt.unwrap_or_else(|| {
                 // Plain expression update (e.g. function call)
@@ -4732,7 +4753,7 @@ impl LoweringContext {
     /// Used when `test` appears inside a testset body (possibly nested inside a `for`/`if`).
     /// Requires `self.testset_collector_var` to be set.
     fn lower_test_expr_as_register_call(&mut self, node: &SyntaxNode) -> ExprId {
-        let span = node.text_range();
+        let span = node.span_range();
         let collector_name = self
             .testset_collector_var
             .clone()
@@ -4816,7 +4837,7 @@ impl LoweringContext {
     /// The sub-collector lambda body is produced by recursively lowering the testset's
     /// `BLOCK_EXPR` body using a nested `LoweringContext` with `testset_collector_var = "testset"`.
     fn lower_testset_as_register_call(&mut self, node: &SyntaxNode) -> ExprId {
-        let span = node.text_range();
+        let span = node.span_range();
         let collector_name = self
             .testset_collector_var
             .clone()
@@ -4845,15 +4866,15 @@ impl LoweringContext {
 
         let sub_param = Param {
             name: Name::new("testset"),
-            type_expr: Some(SpannedTypeExpr {
-                expr: TypeExpr::Path {
+            type_expr: Some(
+                TypeExprKind::Path {
                     segments: vec![Name::new("testing"), Name::new("TestCollector")],
                     generic_args: vec![],
                     associated_type_bindings: vec![],
                     attrs: vec![],
-                },
-                span,
-            }),
+                }
+                .at(span),
+            ),
             default: None,
             span,
             name_span: span,
@@ -4956,7 +4977,7 @@ impl LoweringContext {
             Name::new(title)
         };
 
-        self.alloc_stmt(Stmt::HeaderComment { name, level }, node.text_range())
+        self.alloc_stmt(Stmt::HeaderComment { name, level }, node.span_range())
     }
 }
 

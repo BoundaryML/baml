@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 36436
 ---
 === COMPILER2 DIAGNOSTICS ===
   [type] error: expected 1 argument(s), got 2
@@ -34,21 +33,21 @@ assertion_line: 36436
 ────╯
 
   [type] error: type mismatch: expected (Counter) -> int throws never, got () -> int throws never
-    ╭─[ closure_errors.baml:33:30 ]
+    ╭─[ closure_errors.baml:33:31 ]
     │
  33 │   let inc: (Counter) -> int = c.increment;
-    │                              ──────┬─────  
+    │                               ─────┬─────  
     │                                    ╰─────── type mismatch: expected (Counter) -> int throws never, got () -> int throws never
     │ 
     │ Note: Error code: E0001
 ────╯
 
   [type] error: type mismatch: expected () -> string throws never, got (self: Employee) -> string throws never
-    ╭─[ closure_errors.baml:39:24 ]
+    ╭─[ closure_errors.baml:39:25 ]
     │
  39 │   let f: () -> string = Employee.full_name;
-    │                        ─────────┬─────────  
-    │                                 ╰─────────── type mismatch: expected () -> string throws never, got (self: Employee) -> string throws never
+    │                         ─────────┬────────  
+    │                                  ╰────────── type mismatch: expected () -> string throws never, got (self: Employee) -> string throws never
     │ 
     │ Note: Error code: E0001
 ────╯

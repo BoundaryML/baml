@@ -583,6 +583,7 @@ function csv.csv_bom_stripped_by_default() -> string {
     load_const null
     cmp_op ==
     pop_jump_if_false L0
+    load_type never
     alloc_array 0
     store_var h
 
@@ -622,6 +623,7 @@ function csv.csv_caller_owned_handles_stay_open() -> string {
     load_var w
     load_const "x"
     load_const 1
+    load_type null | bool | int | bigint | float | string
     alloc_array 2
     call baml.csv.CsvWriter.write_record
     pop 1
@@ -723,12 +725,14 @@ function csv.csv_create_then_fs_read() -> string {
     load_var w
     load_const "k"
     load_const "v"
+    load_type string
     alloc_array 2
     call baml.csv.CsvWriter.write_header
     pop 1
     load_var w
     load_const "x"
     load_const 1
+    load_type null | bool | int | bigint | float | string
     alloc_array 2
     call baml.csv.CsvWriter.write_record
     pop 1
@@ -760,11 +764,12 @@ function csv.csv_decode_all_cell_types() -> string {
     load_const null
     cmp_op ==
     pop_jump_if_false L0
-    jump L35
+    jump L39
 
   L0:
     load_var _2
     store_var r
+    load_type string
     alloc_array 0
     store_var parts
     load_var2 4 3
@@ -825,208 +830,232 @@ function csv.csv_decode_all_cell_types() -> string {
     load_var r
     load_field .at
     store_var_load_var _31
-    is_type baml.TypeValue
+    is_type baml.Uint8Array
     pop_jump_if_false L4
-    jump L33
+    jump L37
 
   L4:
     load_var _31
-    is_type baml.TypeValue
+    is_type baml.Uint8Array
     pop_jump_if_false L5
-    jump L32
+    jump L36
 
   L5:
     load_var _31
-    is_type baml.Uint8Array
+    is_type baml.TypeValue
     pop_jump_if_false L6
-    jump L31
+    jump L35
 
   L6:
     load_var _31
-    is_type baml.Uint8Array
+    is_type baml.TypeValue
     pop_jump_if_false L7
-    jump L30
+    jump L34
 
   L7:
     load_var _31
     is_type baml.errors.StackTrace
     pop_jump_if_false L8
-    jump L29
+    jump L33
 
   L8:
     load_var _31
     is_type baml.errors.StackTrace
     pop_jump_if_false L9
-    jump L28
+    jump L32
 
   L9:
     load_var _31
-    is_type baml.time.PlainDateTime
+    is_type baml.errors.ErrorContext
     pop_jump_if_false L10
-    jump L27
+    jump L31
 
   L10:
     load_var _31
-    is_type baml.time.PlainDateTime
+    is_type baml.errors.ErrorContext
     pop_jump_if_false L11
-    jump L26
+    jump L30
 
   L11:
     load_var _31
-    is_type baml.time.PlainTime
+    is_type baml.time.PlainDateTime
     pop_jump_if_false L12
-    jump L25
+    jump L29
 
   L12:
     load_var _31
-    is_type baml.time.PlainTime
+    is_type baml.time.PlainDateTime
     pop_jump_if_false L13
-    jump L24
+    jump L28
 
   L13:
     load_var _31
-    is_type baml.time.ZonedDateTime
+    is_type baml.time.PlainTime
     pop_jump_if_false L14
-    jump L23
+    jump L27
 
   L14:
     load_var _31
-    is_type baml.time.ZonedDateTime
+    is_type baml.time.PlainTime
     pop_jump_if_false L15
-    jump L22
+    jump L26
 
   L15:
     load_var _31
-    is_type baml.time.Instant
+    is_type baml.time.ZonedDateTime
     pop_jump_if_false L16
-    jump L21
+    jump L25
 
   L16:
     load_var _31
-    is_type baml.time.Instant
+    is_type baml.time.ZonedDateTime
     pop_jump_if_false L17
-    jump L20
+    jump L24
 
   L17:
     load_var _31
-    is_type baml.time.PlainDate
+    is_type baml.time.Instant
     pop_jump_if_false L18
-    jump L19
+    jump L23
 
   L18:
     load_var _31
-    is_type baml.time.PlainDate
-    pop_jump_if_false L37
-    load_var _31
-    call baml.ToString.to_string
-    store_var _30
-    jump L34
+    is_type baml.time.Instant
+    pop_jump_if_false L19
+    jump L22
 
   L19:
     load_var _31
-    call baml.time.PlainDate.baml.ToString.to_string
-    store_var _30
-    jump L34
+    is_type baml.time.PlainDate
+    pop_jump_if_false L20
+    jump L21
 
   L20:
     load_var _31
+    is_type baml.time.PlainDate
+    pop_jump_if_false L41
+    load_var _31
     call baml.ToString.to_string
     store_var _30
-    jump L34
+    jump L38
 
   L21:
     load_var _31
-    call baml.time.Instant.baml.ToString.to_string
+    call baml.time.PlainDate.baml.ToString.to_string
     store_var _30
-    jump L34
+    jump L38
 
   L22:
     load_var _31
     call baml.ToString.to_string
     store_var _30
-    jump L34
+    jump L38
 
   L23:
     load_var _31
-    call baml.time.ZonedDateTime.baml.ToString.to_string
+    call baml.time.Instant.baml.ToString.to_string
     store_var _30
-    jump L34
+    jump L38
 
   L24:
     load_var _31
     call baml.ToString.to_string
     store_var _30
-    jump L34
+    jump L38
 
   L25:
     load_var _31
-    call baml.time.PlainTime.baml.ToString.to_string
+    call baml.time.ZonedDateTime.baml.ToString.to_string
     store_var _30
-    jump L34
+    jump L38
 
   L26:
     load_var _31
     call baml.ToString.to_string
     store_var _30
-    jump L34
+    jump L38
 
   L27:
     load_var _31
-    call baml.time.PlainDateTime.baml.ToString.to_string
+    call baml.time.PlainTime.baml.ToString.to_string
     store_var _30
-    jump L34
+    jump L38
 
   L28:
     load_var _31
     call baml.ToString.to_string
     store_var _30
-    jump L34
+    jump L38
 
   L29:
     load_var _31
-    call baml.errors.StackTrace.baml.ToString.to_string
+    call baml.time.PlainDateTime.baml.ToString.to_string
     store_var _30
-    jump L34
+    jump L38
 
   L30:
     load_var _31
     call baml.ToString.to_string
     store_var _30
-    jump L34
+    jump L38
 
   L31:
     load_var _31
-    call baml.Uint8Array.baml.ToString.to_string
+    call baml.errors.ErrorContext.baml.ToString.to_string
     store_var _30
-    jump L34
+    jump L38
 
   L32:
     load_var _31
     call baml.ToString.to_string
     store_var _30
-    jump L34
+    jump L38
 
   L33:
     load_var _31
-    call baml.TypeValue.baml.ToString.to_string
+    call baml.errors.StackTrace.baml.ToString.to_string
     store_var _30
+    jump L38
 
   L34:
+    load_var _31
+    call baml.ToString.to_string
+    store_var _30
+    jump L38
+
+  L35:
+    load_var _31
+    call baml.TypeValue.baml.ToString.to_string
+    store_var _30
+    jump L38
+
+  L36:
+    load_var _31
+    call baml.ToString.to_string
+    store_var _30
+    jump L38
+
+  L37:
+    load_var _31
+    call baml.Uint8Array.baml.ToString.to_string
+    store_var _30
+
+  L38:
     load_var2 4 10
     call baml.Array.push
     pop 1
     load_var parts
     load_const " "
     call user.csv.join
-    jump L36
+    jump L40
 
-  L35:
+  L39:
     load_const "missing"
 
-  L36:
+  L40:
     return
 
-  L37:
+  L41:
     unreachable
 }
 
@@ -1044,7 +1073,7 @@ function csv.csv_decode_error_details() -> string {
 
   L0:
     load_var e
-    throw
+    rethrow
 
   L1:
     load_var e
@@ -1135,6 +1164,7 @@ function csv.csv_decode_headers_override() -> string {
     load_const null
     load_const "first"
     load_const "second"
+    load_type string
     alloc_array 2
     load_const null
     load_const null
@@ -1191,6 +1221,7 @@ function csv.csv_decode_headers_override() -> string {
     load_const false
     load_const "second"
     load_const "first"
+    load_type string
     alloc_array 2
     load_const null
     load_const null
@@ -1260,7 +1291,7 @@ function csv.csv_decode_missing_column_is_header_error() -> string {
 
   L0:
     load_var e
-    throw
+    rethrow
 
   L1:
     load_var e
@@ -1308,7 +1339,7 @@ function csv.csv_decode_one_cases() -> string {
 
   L0:
     load_var e
-    throw
+    rethrow
 
   L1:
     load_var e
@@ -1367,7 +1398,7 @@ function csv.csv_decode_one_cases() -> string {
 
   L4:
     load_var e
-    throw
+    rethrow
 
   L5:
     load_var e
@@ -1457,7 +1488,7 @@ function csv.csv_decode_optional_cases() -> string {
 
   L6:
     load_var e
-    throw
+    rethrow
 
   L7:
     load_var e
@@ -1553,7 +1584,7 @@ function csv.csv_decode_rejects_locale_numbers() -> string {
 
   L0:
     load_var e
-    throw
+    rethrow
 
   L1:
     load_var e
@@ -1580,7 +1611,7 @@ function csv.csv_decode_rejects_locale_numbers() -> string {
 
   L4:
     load_var e
-    throw
+    rethrow
 
   L5:
     load_var e
@@ -1616,7 +1647,7 @@ function csv.csv_decode_rejects_nonfinite_floats() -> string {
 
   L0:
     load_var e
-    throw
+    rethrow
 
   L1:
     load_var e
@@ -1645,7 +1676,7 @@ function csv.csv_duplicate_column_matched_is_header_error() -> string {
 
   L0:
     load_var e
-    throw
+    rethrow
 
   L1:
     load_var e
@@ -1892,7 +1923,7 @@ function csv.csv_encoding_strict_throws() -> string {
 
   L0:
     load_var e
-    throw
+    rethrow
 
   L1:
     load_var e
@@ -1953,7 +1984,9 @@ function csv.csv_excel_profile() -> string {
     call baml.csv.parse
     store_var rows
     load_const "x"
+    load_type null | bool | int | bigint | float | string
     alloc_array 1
+    load_type null | bool | int | bigint | float | string[]
     alloc_array 1
     load_const null
     load_const null
@@ -2017,6 +2050,7 @@ function csv.csv_file_roundtrip() -> string {
     load_const 2
     load_const null
     init_instance user.csv.OutRow .id, .note
+    load_type csv.OutRow
     alloc_array 2
     load_const <omitted>
     call baml.csv.write
@@ -2232,7 +2266,7 @@ function csv.csv_header_encoding_failure_is_terminal_for_headers() -> string {
 
   L20:
     load_var e
-    throw
+    rethrow
 
   L21:
     load_var e
@@ -2274,7 +2308,7 @@ function csv.csv_header_encoding_failure_is_terminal_for_headers() -> string {
 
   L25:
     load_var e
-    throw
+    rethrow
 
   L26:
     load_var e
@@ -2467,6 +2501,7 @@ function csv.csv_headers_variants() -> string {
     cmp_op ==
     pop_jump_if_false L0
     load_const "<null>"
+    load_type string
     alloc_array 1
     store_var _2
 
@@ -2895,7 +2930,7 @@ function csv.csv_malformed_header_exhausts_reader() -> string {
 
   L20:
     load_var e
-    throw
+    rethrow
 
   L21:
     load_var e
@@ -3222,7 +3257,7 @@ function csv.csv_malformed_header_failure_is_terminal_for_headers() -> string {
 
   L20:
     load_var e
-    throw
+    rethrow
 
   L21:
     load_var e
@@ -3264,7 +3299,7 @@ function csv.csv_malformed_header_failure_is_terminal_for_headers() -> string {
 
   L25:
     load_var e
-    throw
+    rethrow
 
   L26:
     load_var e
@@ -3559,7 +3594,7 @@ function csv.csv_null_semantics_quoted_empty() -> string {
 
   L4:
     load_var e
-    throw
+    rethrow
 
   L5:
     load_var e
@@ -3594,6 +3629,7 @@ function csv.csv_null_values_option() -> string {
     load_const null
     load_const null
     load_const "N/A"
+    load_type string
     alloc_array 1
     load_const null
     load_const null
@@ -3669,7 +3705,7 @@ function csv.csv_null_values_option() -> string {
 
   L4:
     load_var e
-    throw
+    rethrow
 
   L5:
     load_var e
@@ -3734,6 +3770,7 @@ function csv.csv_on_skip_observer() -> string {
     load_var ?1
     make_cell
     store_var ?1
+    load_type string
     alloc_array 0
     store_deref ?1
     load_const "a,b\n1\n2,3\n"
@@ -4358,7 +4395,7 @@ function csv.csv_options_validation() -> string {
 
   L0:
     load_var e
-    throw
+    rethrow
 
   L1:
     load_var e
@@ -4402,7 +4439,7 @@ function csv.csv_options_validation() -> string {
 
   L4:
     load_var e
-    throw
+    rethrow
 
   L5:
     load_var e
@@ -4743,7 +4780,7 @@ function csv.csv_plaindate_cells_roundtrip() -> string {
     load_const null
     cmp_op ==
     pop_jump_if_false L0
-    jump L63
+    jump L71
 
   L0:
     load_var _4
@@ -4751,380 +4788,426 @@ function csv.csv_plaindate_cells_roundtrip() -> string {
     load_var r
     load_field .day
     store_var_load_var _10
-    is_type baml.TypeValue
+    is_type baml.Uint8Array
     pop_jump_if_false L1
-    jump L30
+    jump L34
 
   L1:
     load_var _10
-    is_type baml.TypeValue
+    is_type baml.Uint8Array
     pop_jump_if_false L2
-    jump L29
+    jump L33
 
   L2:
     load_var _10
-    is_type baml.Uint8Array
+    is_type baml.TypeValue
     pop_jump_if_false L3
-    jump L28
+    jump L32
 
   L3:
     load_var _10
-    is_type baml.Uint8Array
+    is_type baml.TypeValue
     pop_jump_if_false L4
-    jump L27
+    jump L31
 
   L4:
     load_var _10
     is_type baml.errors.StackTrace
     pop_jump_if_false L5
-    jump L26
+    jump L30
 
   L5:
     load_var _10
     is_type baml.errors.StackTrace
     pop_jump_if_false L6
-    jump L25
+    jump L29
 
   L6:
     load_var _10
-    is_type baml.time.PlainDateTime
+    is_type baml.errors.ErrorContext
     pop_jump_if_false L7
-    jump L24
+    jump L28
 
   L7:
     load_var _10
-    is_type baml.time.PlainDateTime
+    is_type baml.errors.ErrorContext
     pop_jump_if_false L8
-    jump L23
+    jump L27
 
   L8:
     load_var _10
-    is_type baml.time.PlainTime
+    is_type baml.time.PlainDateTime
     pop_jump_if_false L9
-    jump L22
+    jump L26
 
   L9:
     load_var _10
-    is_type baml.time.PlainTime
+    is_type baml.time.PlainDateTime
     pop_jump_if_false L10
-    jump L21
+    jump L25
 
   L10:
     load_var _10
-    is_type baml.time.ZonedDateTime
+    is_type baml.time.PlainTime
     pop_jump_if_false L11
-    jump L20
+    jump L24
 
   L11:
     load_var _10
-    is_type baml.time.ZonedDateTime
+    is_type baml.time.PlainTime
     pop_jump_if_false L12
-    jump L19
+    jump L23
 
   L12:
     load_var _10
-    is_type baml.time.Instant
+    is_type baml.time.ZonedDateTime
     pop_jump_if_false L13
-    jump L18
+    jump L22
 
   L13:
     load_var _10
-    is_type baml.time.Instant
+    is_type baml.time.ZonedDateTime
     pop_jump_if_false L14
-    jump L17
+    jump L21
 
   L14:
     load_var _10
-    is_type baml.time.PlainDate
+    is_type baml.time.Instant
     pop_jump_if_false L15
-    jump L16
+    jump L20
 
   L15:
     load_var _10
-    is_type baml.time.PlainDate
-    pop_jump_if_false L69
-    load_var _10
-    call baml.ToString.to_string
-    jump L31
+    is_type baml.time.Instant
+    pop_jump_if_false L16
+    jump L19
 
   L16:
     load_var _10
-    call baml.time.PlainDate.baml.ToString.to_string
-    jump L31
+    is_type baml.time.PlainDate
+    pop_jump_if_false L17
+    jump L18
 
   L17:
     load_var _10
+    is_type baml.time.PlainDate
+    pop_jump_if_false L77
+    load_var _10
     call baml.ToString.to_string
-    jump L31
+    jump L35
 
   L18:
     load_var _10
-    call baml.time.Instant.baml.ToString.to_string
-    jump L31
+    call baml.time.PlainDate.baml.ToString.to_string
+    jump L35
 
   L19:
     load_var _10
     call baml.ToString.to_string
-    jump L31
+    jump L35
 
   L20:
     load_var _10
-    call baml.time.ZonedDateTime.baml.ToString.to_string
-    jump L31
+    call baml.time.Instant.baml.ToString.to_string
+    jump L35
 
   L21:
     load_var _10
     call baml.ToString.to_string
-    jump L31
+    jump L35
 
   L22:
     load_var _10
-    call baml.time.PlainTime.baml.ToString.to_string
-    jump L31
+    call baml.time.ZonedDateTime.baml.ToString.to_string
+    jump L35
 
   L23:
     load_var _10
     call baml.ToString.to_string
-    jump L31
+    jump L35
 
   L24:
     load_var _10
-    call baml.time.PlainDateTime.baml.ToString.to_string
-    jump L31
+    call baml.time.PlainTime.baml.ToString.to_string
+    jump L35
 
   L25:
     load_var _10
     call baml.ToString.to_string
-    jump L31
+    jump L35
 
   L26:
     load_var _10
-    call baml.errors.StackTrace.baml.ToString.to_string
-    jump L31
+    call baml.time.PlainDateTime.baml.ToString.to_string
+    jump L35
 
   L27:
     load_var _10
     call baml.ToString.to_string
-    jump L31
+    jump L35
 
   L28:
     load_var _10
-    call baml.Uint8Array.baml.ToString.to_string
-    jump L31
+    call baml.errors.ErrorContext.baml.ToString.to_string
+    jump L35
 
   L29:
     load_var _10
     call baml.ToString.to_string
-    jump L31
+    jump L35
 
   L30:
     load_var _10
-    call baml.TypeValue.baml.ToString.to_string
+    call baml.errors.StackTrace.baml.ToString.to_string
+    jump L35
 
   L31:
+    load_var _10
+    call baml.ToString.to_string
+    jump L35
+
+  L32:
+    load_var _10
+    call baml.TypeValue.baml.ToString.to_string
+    jump L35
+
+  L33:
+    load_var _10
+    call baml.ToString.to_string
+    jump L35
+
+  L34:
+    load_var _10
+    call baml.Uint8Array.baml.ToString.to_string
+
+  L35:
     load_const " "
     bin_op +
     store_var _8
     load_var r
     load_field .at
-    store_var_load_var _28
-    is_type baml.TypeValue
-    pop_jump_if_false L32
-    jump L61
-
-  L32:
-    load_var _28
-    is_type baml.TypeValue
-    pop_jump_if_false L33
-    jump L60
-
-  L33:
-    load_var _28
+    store_var_load_var _30
     is_type baml.Uint8Array
-    pop_jump_if_false L34
-    jump L59
-
-  L34:
-    load_var _28
-    is_type baml.Uint8Array
-    pop_jump_if_false L35
-    jump L58
-
-  L35:
-    load_var _28
-    is_type baml.errors.StackTrace
     pop_jump_if_false L36
-    jump L57
+    jump L69
 
   L36:
-    load_var _28
-    is_type baml.errors.StackTrace
+    load_var _30
+    is_type baml.Uint8Array
     pop_jump_if_false L37
-    jump L56
+    jump L68
 
   L37:
-    load_var _28
-    is_type baml.time.PlainDateTime
+    load_var _30
+    is_type baml.TypeValue
     pop_jump_if_false L38
-    jump L55
+    jump L67
 
   L38:
-    load_var _28
-    is_type baml.time.PlainDateTime
+    load_var _30
+    is_type baml.TypeValue
     pop_jump_if_false L39
-    jump L54
+    jump L66
 
   L39:
-    load_var _28
-    is_type baml.time.PlainTime
+    load_var _30
+    is_type baml.errors.StackTrace
     pop_jump_if_false L40
-    jump L53
+    jump L65
 
   L40:
-    load_var _28
-    is_type baml.time.PlainTime
+    load_var _30
+    is_type baml.errors.StackTrace
     pop_jump_if_false L41
-    jump L52
+    jump L64
 
   L41:
-    load_var _28
-    is_type baml.time.ZonedDateTime
+    load_var _30
+    is_type baml.errors.ErrorContext
     pop_jump_if_false L42
-    jump L51
+    jump L63
 
   L42:
-    load_var _28
-    is_type baml.time.ZonedDateTime
+    load_var _30
+    is_type baml.errors.ErrorContext
     pop_jump_if_false L43
-    jump L50
+    jump L62
 
   L43:
-    load_var _28
-    is_type baml.time.Instant
+    load_var _30
+    is_type baml.time.PlainDateTime
     pop_jump_if_false L44
-    jump L49
+    jump L61
 
   L44:
-    load_var _28
-    is_type baml.time.Instant
+    load_var _30
+    is_type baml.time.PlainDateTime
     pop_jump_if_false L45
-    jump L48
+    jump L60
 
   L45:
-    load_var _28
-    is_type baml.time.PlainDate
+    load_var _30
+    is_type baml.time.PlainTime
     pop_jump_if_false L46
-    jump L47
+    jump L59
 
   L46:
-    load_var _28
-    is_type baml.time.PlainDate
-    pop_jump_if_false L69
-    load_var _28
-    call baml.ToString.to_string
-    store_var _27
-    jump L62
+    load_var _30
+    is_type baml.time.PlainTime
+    pop_jump_if_false L47
+    jump L58
 
   L47:
-    load_var _28
-    call baml.time.PlainDate.baml.ToString.to_string
-    store_var _27
-    jump L62
+    load_var _30
+    is_type baml.time.ZonedDateTime
+    pop_jump_if_false L48
+    jump L57
 
   L48:
-    load_var _28
-    call baml.ToString.to_string
-    store_var _27
-    jump L62
+    load_var _30
+    is_type baml.time.ZonedDateTime
+    pop_jump_if_false L49
+    jump L56
 
   L49:
-    load_var _28
-    call baml.time.Instant.baml.ToString.to_string
-    store_var _27
-    jump L62
+    load_var _30
+    is_type baml.time.Instant
+    pop_jump_if_false L50
+    jump L55
 
   L50:
-    load_var _28
-    call baml.ToString.to_string
-    store_var _27
-    jump L62
+    load_var _30
+    is_type baml.time.Instant
+    pop_jump_if_false L51
+    jump L54
 
   L51:
-    load_var _28
-    call baml.time.ZonedDateTime.baml.ToString.to_string
-    store_var _27
-    jump L62
+    load_var _30
+    is_type baml.time.PlainDate
+    pop_jump_if_false L52
+    jump L53
 
   L52:
-    load_var _28
+    load_var _30
+    is_type baml.time.PlainDate
+    pop_jump_if_false L77
+    load_var _30
     call baml.ToString.to_string
-    store_var _27
-    jump L62
+    store_var _29
+    jump L70
 
   L53:
-    load_var _28
-    call baml.time.PlainTime.baml.ToString.to_string
-    store_var _27
-    jump L62
+    load_var _30
+    call baml.time.PlainDate.baml.ToString.to_string
+    store_var _29
+    jump L70
 
   L54:
-    load_var _28
+    load_var _30
     call baml.ToString.to_string
-    store_var _27
-    jump L62
+    store_var _29
+    jump L70
 
   L55:
-    load_var _28
-    call baml.time.PlainDateTime.baml.ToString.to_string
-    store_var _27
-    jump L62
+    load_var _30
+    call baml.time.Instant.baml.ToString.to_string
+    store_var _29
+    jump L70
 
   L56:
-    load_var _28
+    load_var _30
     call baml.ToString.to_string
-    store_var _27
-    jump L62
+    store_var _29
+    jump L70
 
   L57:
-    load_var _28
-    call baml.errors.StackTrace.baml.ToString.to_string
-    store_var _27
-    jump L62
+    load_var _30
+    call baml.time.ZonedDateTime.baml.ToString.to_string
+    store_var _29
+    jump L70
 
   L58:
-    load_var _28
+    load_var _30
     call baml.ToString.to_string
-    store_var _27
-    jump L62
+    store_var _29
+    jump L70
 
   L59:
-    load_var _28
-    call baml.Uint8Array.baml.ToString.to_string
-    store_var _27
-    jump L62
+    load_var _30
+    call baml.time.PlainTime.baml.ToString.to_string
+    store_var _29
+    jump L70
 
   L60:
-    load_var _28
+    load_var _30
     call baml.ToString.to_string
-    store_var _27
-    jump L62
+    store_var _29
+    jump L70
 
   L61:
-    load_var _28
-    call baml.TypeValue.baml.ToString.to_string
-    store_var _27
+    load_var _30
+    call baml.time.PlainDateTime.baml.ToString.to_string
+    store_var _29
+    jump L70
 
   L62:
+    load_var _30
+    call baml.ToString.to_string
+    store_var _29
+    jump L70
+
+  L63:
+    load_var _30
+    call baml.errors.ErrorContext.baml.ToString.to_string
+    store_var _29
+    jump L70
+
+  L64:
+    load_var _30
+    call baml.ToString.to_string
+    store_var _29
+    jump L70
+
+  L65:
+    load_var _30
+    call baml.errors.StackTrace.baml.ToString.to_string
+    store_var _29
+    jump L70
+
+  L66:
+    load_var _30
+    call baml.ToString.to_string
+    store_var _29
+    jump L70
+
+  L67:
+    load_var _30
+    call baml.TypeValue.baml.ToString.to_string
+    store_var _29
+    jump L70
+
+  L68:
+    load_var _30
+    call baml.ToString.to_string
+    store_var _29
+    jump L70
+
+  L69:
+    load_var _30
+    call baml.Uint8Array.baml.ToString.to_string
+    store_var _29
+
+  L70:
     load_var2 5 7
     bin_op +
     store_var rendered
-    jump L64
+    jump L72
 
-  L63:
+  L71:
     load_const "missing"
     store_var rendered
 
-  L64:
+  L72:
     load_type csv.DatedRow
     load_var rows
     load_const <omitted>
@@ -5135,28 +5218,28 @@ function csv.csv_plaindate_cells_roundtrip() -> string {
     load_const <omitted>
     call baml.csv.decode
     pop 1
-    jump L67
+    jump L75
     load_var e
     is_type baml.csv.CsvError
-    pop_jump_if_false L65
-    jump L66
+    pop_jump_if_false L73
+    jump L74
 
-  L65:
+  L73:
     load_var e
-    throw
+    rethrow
 
-  L66:
+  L74:
     load_var e
     load_field .kind
     call user.csv.kind_name
     store_var bad
-    jump L68
+    jump L76
 
-  L67:
+  L75:
     load_const "no-throw"
     store_var bad
 
-  L68:
+  L76:
     load_var rendered
     load_const "#"
     bin_op +
@@ -5168,7 +5251,7 @@ function csv.csv_plaindate_cells_roundtrip() -> string {
     bin_op +
     return
 
-  L69:
+  L77:
     unreachable
 }
 
@@ -5236,7 +5319,7 @@ function csv.csv_ragged_pad() -> string {
 
   L0:
     load_var e
-    throw
+    rethrow
 
   L1:
     load_var e
@@ -5271,7 +5354,7 @@ function csv.csv_ragged_strict() -> string {
 
   L0:
     load_var e
-    throw
+    rethrow
 
   L1:
     load_var e
@@ -5344,7 +5427,7 @@ function csv.csv_ragged_truncate() -> string {
 
   L0:
     load_var e
-    throw
+    rethrow
 
   L1:
     load_var e
@@ -5637,7 +5720,7 @@ function csv.csv_reader_close() -> string {
 
   L37:
     load_var e
-    throw
+    rethrow
 
   L38:
     load_var e
@@ -5898,6 +5981,7 @@ function csv.csv_reader_resumes_after_throw() -> string {
     load_const <omitted>
     call baml.csv.reader
     store_var r
+    load_type string
     alloc_array 0
     store_var seen
     load_const 0
@@ -6052,7 +6136,7 @@ function csv.csv_reader_resumes_after_throw() -> string {
 
   L21:
     load_var e
-    throw
+    rethrow
 
   L22:
     load_var bad
@@ -6247,6 +6331,7 @@ function csv.csv_record_api() -> string {
   L19:
     load_var _2
     store_var rec
+    load_type string
     alloc_array 0
     store_var parts
     load_var rec
@@ -6657,7 +6742,7 @@ function csv.csv_record_get_decode_error() -> string {
 
   L20:
     load_var e
-    throw
+    rethrow
 
   L21:
     load_var e
@@ -6867,7 +6952,7 @@ function csv.csv_record_get_without_headers() -> string {
 
   L20:
     load_var e
-    throw
+    rethrow
 
   L21:
     load_var e
@@ -6894,6 +6979,7 @@ function csv.csv_record_snapshot_outlives_reader() -> string {
     load_const <omitted>
     call baml.csv.reader
     store_var r
+    load_type baml.csv.CsvRecord
     alloc_array 0
     store_var kept
     load_var r
@@ -7163,6 +7249,7 @@ function csv.csv_record_snapshot_outlives_reader() -> string {
     jump L18
 
   L39:
+    load_type string
     alloc_array 0
     store_var parts
     load_type baml.csv.CsvRecord
@@ -7346,7 +7433,7 @@ function csv.csv_rows_rejects_nested_class() -> string {
 
   L0:
     load_var e
-    throw
+    rethrow
 
   L1:
     load_var e
@@ -7378,7 +7465,7 @@ function csv.csv_rows_validates_eagerly() -> string {
 
   L0:
     load_var e
-    throw
+    rethrow
 
   L1:
     load_var e
@@ -8183,10 +8270,13 @@ function csv.csv_spectrum_core_fixtures() -> string {
 function csv.csv_stringify_records_roundtrip() -> string {
     load_const "a"
     load_const "b"
+    load_type null | bool | int | bigint | float | string
     alloc_array 2
     load_const "1"
     load_const "x\ny"
+    load_type null | bool | int | bigint | float | string
     alloc_array 2
+    load_type null | bool | int | bigint | float | string[]
     alloc_array 2
     load_const <omitted>
     call baml.csv.stringify_records
@@ -8229,6 +8319,7 @@ function csv.csv_to_markdown_nonfinite() -> string {
     load_const "nan"
     load_var _3
     init_instance user.csv.MdRow .metric, .value
+    load_type csv.MdRow
     alloc_array 1
     load_const <omitted>
     call baml.csv.to_markdown
@@ -8238,7 +8329,9 @@ function csv.csv_to_markdown_nonfinite() -> string {
 function csv.csv_to_markdown_records_default_headers() -> string {
     load_const "1"
     load_const "x"
+    load_type string
     alloc_array 2
+    load_type string[]
     alloc_array 1
     load_const <omitted>
     load_const <omitted>
@@ -8249,10 +8342,13 @@ function csv.csv_to_markdown_records_default_headers() -> string {
 function csv.csv_to_markdown_records_with_headers() -> string {
     load_const "1"
     load_const "x"
+    load_type string
     alloc_array 2
+    load_type string[]
     alloc_array 1
     load_const "id"
     load_const "name"
+    load_type string
     alloc_array 2
     load_const <omitted>
     call baml.csv.to_markdown_records
@@ -8270,6 +8366,7 @@ function csv.csv_to_markdown_truncation() -> string {
     load_const "c"
     load_const 3.0
     init_instance user.csv.MdRow .metric, .value
+    load_type csv.MdRow
     alloc_array 3
     load_const 2
     call baml.csv.to_markdown
@@ -8308,6 +8405,7 @@ function csv.csv_trim_all() -> string {
     load_const null
     cmp_op ==
     pop_jump_if_false L0
+    load_type never
     alloc_array 0
     store_var _4
 
@@ -8838,7 +8936,7 @@ function csv.csv_unterminated_quote_exhausts() -> string {
 
   L42:
     load_var e
-    throw
+    rethrow
 
   L43:
     load_var e
@@ -9026,6 +9124,7 @@ function csv.csv_write_rows_batch_is_atomic() -> string {
     load_const "bad"
     load_var _8
     init_instance user.csv.MdRow .metric, .value
+    load_type csv.MdRow
     alloc_array 2
     call baml.csv.CsvWriter.write_rows
     pop 1
@@ -9037,7 +9136,7 @@ function csv.csv_write_rows_batch_is_atomic() -> string {
 
   L0:
     load_var e
-    throw
+    rethrow
 
   L1:
     load_var e
@@ -9084,6 +9183,7 @@ function csv.csv_writer_bom() -> string {
     store_var w
     load_var w
     load_const "x"
+    load_type null | bool | int | bigint | float | string
     alloc_array 1
     call baml.csv.CsvWriter.write_record
     pop 1
@@ -9149,6 +9249,7 @@ function csv.csv_writer_bom_survives_encode_error() -> string {
     store_var w
     load_var w
     load_const "a,b"
+    load_type null | bool | int | bigint | float | string
     alloc_array 1
     call baml.csv.CsvWriter.write_record
     pop 1
@@ -9160,7 +9261,7 @@ function csv.csv_writer_bom_survives_encode_error() -> string {
 
   L0:
     load_var e
-    throw
+    rethrow
 
   L1:
     load_var e
@@ -9176,6 +9277,7 @@ function csv.csv_writer_bom_survives_encode_error() -> string {
   L3:
     load_var w
     load_const "x"
+    load_type null | bool | int | bigint | float | string
     alloc_array 1
     call baml.csv.CsvWriter.write_record
     pop 1
@@ -9215,6 +9317,7 @@ function csv.csv_writer_buffer_basics() -> string {
     load_const 2
     load_const null
     init_instance user.csv.OutRow .id, .note
+    load_type csv.OutRow
     alloc_array 2
     call baml.csv.CsvWriter.write_rows
     pop 1
@@ -9265,7 +9368,7 @@ function csv.csv_writer_closed_throws() -> string {
 
   L0:
     load_var e
-    throw
+    rethrow
 
   L1:
     load_var e
@@ -9294,6 +9397,7 @@ function csv.csv_writer_crlf_and_null_value() -> string {
     load_const 1
     load_const null
     init_instance user.csv.OutRow .id, .note
+    load_type csv.OutRow
     alloc_array 1
     load_const null
     load_const null
@@ -9317,6 +9421,7 @@ function csv.csv_writer_explicit_header() -> string {
     load_var w
     load_const "a"
     load_const "b"
+    load_type string
     alloc_array 2
     call baml.csv.CsvWriter.write_header
     pop 1
@@ -9329,6 +9434,7 @@ function csv.csv_writer_explicit_header() -> string {
     pop 1
     load_var w
     load_const "x"
+    load_type string
     alloc_array 1
     call baml.csv.CsvWriter.write_header
     pop 1
@@ -9340,7 +9446,7 @@ function csv.csv_writer_explicit_header() -> string {
 
   L0:
     load_var e
-    throw
+    rethrow
 
   L1:
     load_var e
@@ -9380,6 +9486,7 @@ function csv.csv_writer_float_canonical() -> string {
     load_var w
     load_const 2.0
     load_const 0.1
+    load_type null | bool | int | bigint | float | string
     alloc_array 2
     call baml.csv.CsvWriter.write_record
     pop 1
@@ -9393,6 +9500,7 @@ function csv.csv_writer_headers_override() -> string {
     load_const 1
     load_const "x"
     init_instance user.csv.OutRow .id, .note
+    load_type csv.OutRow
     alloc_array 1
     load_const null
     load_const null
@@ -9402,6 +9510,7 @@ function csv.csv_writer_headers_override() -> string {
     load_const null
     load_const "ID"
     load_const "Note"
+    load_type string
     alloc_array 2
     load_const null
     load_const null
@@ -9428,6 +9537,7 @@ function csv.csv_writer_nonfinite_float_throws() -> string {
     call baml.Float.nan
     store_var _4
     load_var2 1 2
+    load_type null | bool | int | bigint | float | string
     alloc_array 1
     call baml.csv.CsvWriter.write_record
     pop 1
@@ -9439,7 +9549,7 @@ function csv.csv_writer_nonfinite_float_throws() -> string {
 
   L0:
     load_var e
-    throw
+    rethrow
 
   L1:
     load_var e
@@ -9459,6 +9569,7 @@ function csv.csv_writer_quote_styles() -> string {
     load_const 1
     load_const "x"
     init_instance user.csv.OutRow .id, .note
+    load_type csv.OutRow
     alloc_array 1
     load_const null
     load_const null
@@ -9477,6 +9588,7 @@ function csv.csv_writer_quote_styles() -> string {
     load_const 1
     load_const "a,b"
     init_instance user.csv.OutRow .id, .note
+    load_type csv.OutRow
     alloc_array 1
     load_const null
     load_const null
@@ -9499,7 +9611,7 @@ function csv.csv_writer_quote_styles() -> string {
 
   L0:
     load_var e
-    throw
+    rethrow
 
   L1:
     load_var e
@@ -9538,6 +9650,7 @@ function csv.csv_writer_sanitize_formulas() -> string {
     load_var w
     load_const "=SUM(A1)"
     load_const "safe"
+    load_type null | bool | int | bigint | float | string
     alloc_array 2
     call baml.csv.CsvWriter.write_record
     pop 1
@@ -9567,7 +9680,7 @@ function csv.csv_writer_state_survives_encode_error() -> string {
 
   L0:
     load_var e
-    throw
+    rethrow
 
   L1:
     load_var e
@@ -9632,7 +9745,7 @@ function csv.csv_writer_text_on_file_writer_throws() -> string {
 
   L0:
     load_var e
-    throw
+    rethrow
 
   L1:
     load_var e
@@ -9677,6 +9790,7 @@ function csv.csv_writer_write_record_raw() -> string {
     load_const 12345678901234567890123n
     load_const 2.5
     load_const "txt"
+    load_type null | bool | int | bigint | float | string
     alloc_array 6
     call baml.csv.CsvWriter.write_record
     pop 1
@@ -9686,6 +9800,7 @@ function csv.csv_writer_write_record_raw() -> string {
 }
 
 function csv.grid(rows: string[][]) -> string {
+    load_type string
     alloc_array 0
     store_var out
     load_type string[]

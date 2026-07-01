@@ -144,6 +144,13 @@ impl MirBuilder {
         id
     }
 
+    /// Number of blocks created so far. Block IDs are dense `0..num_blocks()`,
+    /// so a range captured around a lowering step names exactly the blocks that
+    /// step created (used to record a catch handler body, BEP-042).
+    pub(crate) fn num_blocks(&self) -> usize {
+        self.blocks.len()
+    }
+
     /// Set the current block for emitting statements and terminators.
     pub(crate) fn set_current_block(&mut self, block: BlockId) {
         self.current_block = Some(block);
@@ -333,6 +340,29 @@ impl MirBuilder {
         target: BlockId,
         unwind: Option<BlockId>,
     ) {
+        self.call_with_type_args_and_runtime_id(
+            callee,
+            args,
+            ntypeargs,
+            None,
+            destination,
+            target,
+            unwind,
+        );
+    }
+
+    /// Emit a function call with an optional hidden runtime-id operand.
+    #[expect(clippy::too_many_arguments)]
+    pub(crate) fn call_with_type_args_and_runtime_id(
+        &mut self,
+        callee: Operand,
+        args: Vec<Operand>,
+        ntypeargs: usize,
+        runtime_id: Option<Operand>,
+        destination: Place,
+        target: BlockId,
+        unwind: Option<BlockId>,
+    ) {
         debug_assert!(
             matches!(destination, Place::Local(_)),
             "Call destination must be a local place"
@@ -341,6 +371,7 @@ impl MirBuilder {
             callee,
             args,
             ntypeargs,
+            runtime_id,
             destination,
             target,
             unwind,
@@ -362,6 +393,32 @@ impl MirBuilder {
         target: BlockId,
         unwind: Option<BlockId>,
     ) {
+        self.virtual_call_with_runtime_id(
+            iface,
+            method,
+            args,
+            ntypeargs,
+            None,
+            destination,
+            target,
+            unwind,
+        );
+    }
+
+    /// Emit an open-world virtual interface-method call with an optional hidden
+    /// runtime-id operand.
+    #[expect(clippy::too_many_arguments)]
+    pub(crate) fn virtual_call_with_runtime_id(
+        &mut self,
+        iface: baml_type::TyTemplate,
+        method: String,
+        args: Vec<Operand>,
+        ntypeargs: usize,
+        runtime_id: Option<Operand>,
+        destination: Place,
+        target: BlockId,
+        unwind: Option<BlockId>,
+    ) {
         debug_assert!(
             matches!(destination, Place::Local(_)),
             "VirtualCall destination must be a local place"
@@ -375,6 +432,7 @@ impl MirBuilder {
             method,
             args,
             ntypeargs,
+            runtime_id,
             destination,
             target,
             unwind,
@@ -389,6 +447,11 @@ impl MirBuilder {
     /// Emit a throw terminator (unwind with error value).
     pub(crate) fn throw(&mut self, value: Operand) {
         self.set_terminator(Terminator::Throw { value });
+    }
+
+    /// Emit a rethrow terminator for a caught error value.
+    pub(crate) fn rethrow(&mut self, value: Operand) {
+        self.set_terminator(Terminator::Rethrow { value });
     }
 
     /// Emit a throw-if-panic terminator: if the value is a panic instance,
@@ -408,6 +471,19 @@ impl MirBuilder {
         target: BlockId,
         unwind: Option<BlockId>,
     ) {
+        self.sys_op_with_runtime_id(callee, args, None, destination, target, unwind);
+    }
+
+    /// BEP-034 phase D′ sys-op call with an optional hidden runtime-id operand.
+    pub(crate) fn sys_op_with_runtime_id(
+        &mut self,
+        callee: Operand,
+        args: Vec<Operand>,
+        runtime_id: Option<Operand>,
+        destination: Place,
+        target: BlockId,
+        unwind: Option<BlockId>,
+    ) {
         debug_assert!(
             matches!(destination, Place::Local(_)),
             "SysOp destination must be a local place"
@@ -415,6 +491,7 @@ impl MirBuilder {
         self.set_terminator(Terminator::SysOp {
             callee,
             args,
+            runtime_id,
             destination,
             target,
             unwind,

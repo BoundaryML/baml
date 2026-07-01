@@ -45,7 +45,7 @@ function cancel_cascade.cancel_from_handle_then_await_catches_cancelled() -> int
 
   L0:
     load_var e
-    throw
+    rethrow
 
   L1:
     load_const 0

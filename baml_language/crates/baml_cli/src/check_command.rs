@@ -4,7 +4,7 @@ use anyhow::{Context, Result};
 use baml_db::baml_compiler_diagnostics::{Severity, render};
 use clap::Args;
 
-use crate::{project_load::load_project_from_reporting, reporter::Reporter};
+use crate::{project_load::load_project_for_build, reporter::Reporter};
 
 #[derive(Args, Debug)]
 pub struct CheckArgs {
@@ -16,7 +16,8 @@ pub struct CheckArgs {
 impl CheckArgs {
     pub fn run(&self) -> Result<crate::ExitCode> {
         let reporter = Reporter::new();
-        let (db, from, baml_files) = load_project_from_reporting(self.from.as_deref(), &reporter)?;
+        let (db, from, baml_files) =
+            load_project_for_build(self.from.as_deref(), &reporter, false)?;
         if baml_files.is_empty() {
             reporter.abandon();
             crate::reporter::print_error(format_args!(
@@ -53,7 +54,8 @@ impl CheckArgs {
             return Ok(crate::ExitCode::Other);
         }
 
-        reporter.spin("Compiling", format!("{} file(s)", baml_files.len()));
+        // The bytecode build runs under the same "Checking" spinner — a
+        // separate "Compiling N file(s)" line would just repeat the count.
         if let Err(err) = db
             .get_bytecode()
             .with_context(|| format!("failed to compile BAML project at {}", from.display()))

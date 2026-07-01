@@ -65,8 +65,26 @@ function to_string<T>(v: T) -> string throws JsonSerializationError {
 /// `Array<T>.to_json`, etc.
 //baml:mut_vm
 //baml:may_yield
-function to_json<T>(v: T) -> json throws JsonSerializationError | JsonParseError {
+function to_json<T>(v: T) -> json throws JsonSerializationError {
   $rust_function
+}
+
+/// Serialize any BAML value `value` of type `T` to its `json` representation,
+/// honoring user-defined `baml.ToJson` overrides on classes at every depth.
+///
+/// The json analog of `string.from`: a structural conversion that renders
+/// primitives, lists, maps, class instances (as `{"field": value}`), enums (as
+/// their variant name), and media (as the tagged form) to their natural json
+/// shape, routing any value whose runtime class `implements baml.ToJson` through
+/// that override. Resolution is on the value's *runtime* class (via the
+/// `baml._to_json_shim` native), for the same package-boundary reason
+/// `string.from` uses `_to_string_shim` rather than the literal `is baml.ToJson`
+/// match form.
+///
+/// Throws `JsonSerializationError` for non-representable values (`uint8array`
+/// without explicit encoding, function values, etc.).
+function from<T>(value: T) -> json throws JsonSerializationError {
+  root._to_json_shim(value)
 }
 
 /// Parse a JSON string and coerce it to a BAML value of type `T`.
@@ -102,11 +120,31 @@ function from_string<T>(s: string) -> T throws JsonParseError | JsonDecodeError 
 /// - Primitives, enums, media, type-aliases: structural decode equivalent
 ///   to `from_string<T>(stringify(j))`.
 ///
-/// Throws `JsonParseError` / `JsonDecodeError` on shape mismatch.
+/// Throws `JsonDecodeError` on shape mismatch (decoding an already-parsed
+/// `json` value never re-parses, so no `JsonParseError` arises here).
 //baml:mut_vm
 //baml:may_yield
-function from_json<T>(j: json) -> T throws JsonParseError | JsonDecodeError {
+function from_json<T>(j: json) -> T throws JsonDecodeError {
   $rust_function
+}
+
+/// Decode a `json` value `j` into a BAML value of type `T`, honoring user
+/// `baml.FromJson` overrides on the target type at every depth.
+///
+/// The deserialize counterpart of `baml.json.from<T>` (`json.from` serializes a
+/// `T` to json; `json.to` decodes json back to a `T`). Resolution is on the
+/// target type `T` (delivered via the type-arg channel), via the
+/// `baml._from_json_shim` native — for the same package-boundary reason
+/// `baml.json.from` uses `_to_json_shim`. A type that `implements baml.FromJson`
+/// is constructed via its override; everything else decodes structurally
+/// (per-field, walking lists/maps/optionals and honoring nested overrides).
+///
+/// Throws `JsonDecodeError` on shape mismatch (decoding an already-parsed
+/// `json` value never re-parses, so no `JsonParseError` arises here).
+//baml:mut_vm
+//baml:may_yield
+function to<T>(j: json) -> T throws JsonDecodeError {
+  root._from_json_shim<T>(j)
 }
 
 /// Look up `key` in a `json` value when it is a `map<string, json>`; returns
@@ -136,7 +174,7 @@ function field(j: json, key: string) -> json throws never {
 /// instead of two, and a place to evolve the override semantics if they
 /// drift. Remove this if the host gains a direct way to invoke generic
 /// compositions without a named landing pad.
-function serialize<T>(v: T) -> string throws JsonSerializationError | JsonParseError {
+function serialize<T>(v: T) -> string throws JsonSerializationError {
   stringify(to_json<T>(v))
 }
 

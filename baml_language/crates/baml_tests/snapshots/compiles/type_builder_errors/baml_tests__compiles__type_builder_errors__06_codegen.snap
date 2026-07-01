@@ -1,26 +1,13 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-function user.Resume.from_json(j: baml.json.json) -> Resume {
-    load_var j
-    load_const "name"
-    call baml.json.field
-    store_var _3
-    load_type string
-    load_var _3
-    call baml.json.from_json
-    init_instance user.Resume .name
-    return
+function boundary.LocalId.capture(self: boundary.LocalId, inputs: bool | null, output: bool | null, error: bool | null) -> boundary.LocalId {
 }
 
-function user.Resume.to_json(self: Resume) -> baml.json.json {
-    load_type string
-    load_var self
-    load_field .name
-    call baml.json.to_json
-    load_const "name"
-    alloc_map 1
-    return
+function boundary.id() -> boundary.LocalId {
+}
+
+function boundary.id.current() -> string {
 }
 
 function user.TypeBuilderFn(from_text: string, client: baml.llm.Client) -> Resume {
@@ -31,6 +18,7 @@ function user.TypeBuilderFn(from_text: string, client: baml.llm.Client) -> Resum
     load_const "openai/gpt-4o-mini"
     load_const baml.llm.ClientType.Primitive
     alloc_variant baml.llm.ClientType
+    load_type baml.llm.Client
     alloc_array 0
     load_const null
     load_const 0
@@ -43,6 +31,8 @@ function user.TypeBuilderFn(from_text: string, client: baml.llm.Client) -> Resum
     load_const "TypeBuilderFn"
     load_var from_text
     load_const "from_text"
+    load_type string
+    load_type unknown
     alloc_map 1
     load_const <omitted>
     call baml.llm.call_llm_function
@@ -57,6 +47,7 @@ function user.TypeBuilderFn$build_request(from_text: string, client: baml.llm.Cl
     load_const "openai/gpt-4o-mini"
     load_const baml.llm.ClientType.Primitive
     alloc_variant baml.llm.ClientType
+    load_type baml.llm.Client
     alloc_array 0
     load_const null
     load_const 0
@@ -68,6 +59,8 @@ function user.TypeBuilderFn$build_request(from_text: string, client: baml.llm.Cl
     load_const "TypeBuilderFn"
     load_var from_text
     load_const "from_text"
+    load_type string
+    load_type unknown
     alloc_map 1
     load_const <omitted>
     call baml.llm.build_request
@@ -82,6 +75,7 @@ function user.TypeBuilderFn$build_request_stream(from_text: string, client: baml
     load_const "openai/gpt-4o-mini"
     load_const baml.llm.ClientType.Primitive
     alloc_variant baml.llm.ClientType
+    load_type baml.llm.Client
     alloc_array 0
     load_const null
     load_const 0
@@ -93,6 +87,8 @@ function user.TypeBuilderFn$build_request_stream(from_text: string, client: baml
     load_const "TypeBuilderFn"
     load_var from_text
     load_const "from_text"
+    load_type string
+    load_type unknown
     alloc_map 1
     load_const <omitted>
     call baml.llm.build_request_stream
@@ -107,6 +103,7 @@ function user.TypeBuilderFn$parse(json: string, client: baml.llm.Client) -> Resu
     load_const "openai/gpt-4o-mini"
     load_const baml.llm.ClientType.Primitive
     alloc_variant baml.llm.ClientType
+    load_type baml.llm.Client
     alloc_array 0
     load_const null
     load_const 0
@@ -129,6 +126,7 @@ function user.TypeBuilderFn$parse_stream(sse: baml.http.SseStream, client: baml.
     load_const "openai/gpt-4o-mini"
     load_const baml.llm.ClientType.Primitive
     alloc_variant baml.llm.ClientType
+    load_type baml.llm.Client
     alloc_array 0
     load_const null
     load_const 0
@@ -151,6 +149,7 @@ function user.TypeBuilderFn$render_prompt(from_text: string, client: baml.llm.Cl
     load_const "openai/gpt-4o-mini"
     load_const baml.llm.ClientType.Primitive
     alloc_variant baml.llm.ClientType
+    load_type baml.llm.Client
     alloc_array 0
     load_const null
     load_const 0
@@ -162,6 +161,8 @@ function user.TypeBuilderFn$render_prompt(from_text: string, client: baml.llm.Cl
     load_const "TypeBuilderFn"
     load_var from_text
     load_const "from_text"
+    load_type string
+    load_type unknown
     alloc_map 1
     load_const <omitted>
     call baml.llm.render_prompt
@@ -176,6 +177,7 @@ function user.TypeBuilderFn$stream(from_text: string, client: baml.llm.Client) -
     load_const "openai/gpt-4o-mini"
     load_const baml.llm.ClientType.Primitive
     alloc_variant baml.llm.ClientType
+    load_type baml.llm.Client
     alloc_array 0
     load_const null
     load_const 0
@@ -189,6 +191,8 @@ function user.TypeBuilderFn$stream(from_text: string, client: baml.llm.Client) -
     load_const "TypeBuilderFn"
     load_var from_text
     load_const "from_text"
+    load_type string
+    load_type unknown
     alloc_map 1
     load_const <omitted>
     call baml.llm.stream_llm_function

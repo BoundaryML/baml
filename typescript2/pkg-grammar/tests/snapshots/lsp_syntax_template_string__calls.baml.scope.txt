@@ -1,0 +1,38 @@
+1:1-16       "template_string"  source.baml meta.template-string.baml keyword.declaration.template-string.baml
+1:17-27      "WithParams"       source.baml meta.template-string.baml entity.name.function.template-string.baml
+1:27-28      "("                source.baml meta.template-string.baml meta.parameters.baml punctuation.definition.parameters.begin.baml
+1:28-29      "a"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml variable.parameter.baml
+1:29-30      ":"                source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml punctuation.separator.colon.baml
+1:31-34      "int"              source.baml meta.template-string.baml meta.parameters.baml meta.parameter.baml support.type.primitive.baml
+1:34-35      ")"                source.baml meta.template-string.baml meta.parameters.baml punctuation.definition.parameters.end.baml
+1:36-37      "#"                source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.begin.baml
+1:37-38      "\""               source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.begin.baml
+2:1-6        "  ..."            source.baml meta.template-string.baml string.quoted.raw.template.baml
+3:1-2        "\""               source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.end.baml
+3:2-3        "#"                source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.end.baml
+5:1-16       "template_string"  source.baml meta.template-string.baml keyword.declaration.template-string.baml
+5:17-26      "GoodCall1"        source.baml meta.template-string.baml entity.name.function.template-string.baml
+5:27-28      "#"                source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.begin.baml
+5:28-29      "\""               source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.begin.baml
+6:3-5        "{{"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.begin.baml
+6:6-16       "WithParams"       source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.function-call.baml entity.name.function.baml
+6:16-17      "("                source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.function-call.baml meta.function-call.arguments.baml punctuation.definition.arguments.begin.baml
+6:17-18      "a"                source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.function-call.baml meta.function-call.arguments.baml meta.dotted-expression.baml variable.other.readwrite.baml
+6:18-19      "="                source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.function-call.baml meta.function-call.arguments.baml keyword.operator.assignment.baml
+6:19-20      "2"                source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.function-call.baml meta.function-call.arguments.baml constant.numeric.integer.baml
+6:20-21      ")"                source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.function-call.baml meta.function-call.arguments.baml punctuation.definition.arguments.end.baml
+6:22-24      "}}"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.end.baml
+7:1-2        "\""               source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.end.baml
+7:2-3        "#"                source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.end.baml
+9:1-16       "template_string"  source.baml meta.template-string.baml keyword.declaration.template-string.baml
+9:17-26      "GoodCall2"        source.baml meta.template-string.baml entity.name.function.template-string.baml
+9:27-28      "#"                source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.begin.baml
+9:28-29      "\""               source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.begin.baml
+10:3-5       "{{"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.begin.baml
+10:6-16      "WithParams"       source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.function-call.baml entity.name.function.baml
+10:16-17     "("                source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.function-call.baml meta.function-call.arguments.baml punctuation.definition.arguments.begin.baml
+10:17-18     "2"                source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.function-call.baml meta.function-call.arguments.baml constant.numeric.integer.baml
+10:18-19     ")"                source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml meta.function-call.baml meta.function-call.arguments.baml punctuation.definition.arguments.end.baml
+10:20-22     "}}"               source.baml meta.template-string.baml string.quoted.raw.template.baml meta.template.interpolation.baml punctuation.section.interpolation.end.baml
+11:1-2       "\""               source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.end.baml
+11:2-3       "#"                source.baml meta.template-string.baml string.quoted.raw.template.baml punctuation.definition.string.end.baml

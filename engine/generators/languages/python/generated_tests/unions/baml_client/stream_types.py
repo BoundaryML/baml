@@ -54,3 +54,13 @@ Recursive1: typing_extensions.TypeAlias = typing.Optional[typing.Union[int, typi
 
 
 SystemComponentCategory: typing_extensions.TypeAlias = typing.Optional[typing.Union[typing_extensions.Literal['service'], typing_extensions.Literal['resource']]]
+
+
+# #########################################################################
+# Model rebuilds (1)
+# #########################################################################
+# Resolve string forward references now that every model above is defined so
+# class declaration order never breaks Pydantic construction (issue #793).
+# Recursive models are intentionally omitted (Pydantic resolves those lazily;
+# eagerly rebuilding them can recurse).
+ExistingSystemComponent.model_rebuild()

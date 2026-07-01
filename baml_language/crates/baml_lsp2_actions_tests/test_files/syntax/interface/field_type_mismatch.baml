@@ -15,11 +15,11 @@ class Server {
 //----
 //- diagnostics
 // error: class `Server` declares field `port: string` but interface `Config` requires `port` to have type `int`
-//     ╭─[ interface_field_type_mismatch.baml:10:8 ]
+//     ╭─[ interface_field_type_mismatch.baml:10:9 ]
 //     │
 //  10 │   port: string
-//     │        ───┬───  
-//     │           ╰───── expected `int`, found `string`
-//     │ 
+//     │         ───┬──
+//     │            ╰──── expected `int`, found `string`
+//     │
 //     │ Note: Error code: E0116
 // ────╯

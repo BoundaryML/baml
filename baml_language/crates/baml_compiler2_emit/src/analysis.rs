@@ -649,6 +649,22 @@ fn collect_def_use(body: &MirFunctionBody) -> HashMap<Local, LocalDefUse> {
         }
     }
 
+    // The VM also materializes the caught error's `ErrorContext` into the
+    // context (second-binding) slot, and the BEP-042 cause-chain pre-walk reads
+    // it from an *enclosing* handler — uses the static walk can't see. Mark it
+    // used so it isn't classified Dead and always gets a slot, even when the
+    // `ctx` binding looks statically dead.
+    for region in &body.catch_regions {
+        if let Some(ctx_local) = region.stack_trace_local
+            && let Some(du) = def_use.get_mut(&ctx_local)
+        {
+            du.uses.push(UseLocation {
+                block: region.handler,
+                statement_ref: StatementRef::Terminator,
+            });
+        }
+    }
+
     def_use
 }
 
@@ -688,13 +704,13 @@ fn walk_rvalue_locals(rvalue: &Rvalue, f: &mut impl FnMut(Local)) {
             walk_operand_locals(right, f);
         }
         Rvalue::UnaryOp { operand, .. } => walk_operand_locals(operand, f),
-        Rvalue::Array(elements) => {
+        Rvalue::Array(_, elements) => {
             for elem in elements {
                 walk_operand_locals(elem, f);
             }
         }
         Rvalue::Uint8Array(_) => {}
-        Rvalue::Map(entries) => {
+        Rvalue::Map(_, _, entries) => {
             for (key, value) in entries {
                 walk_operand_locals(key, f);
                 walk_operand_locals(value, f);
@@ -806,12 +822,16 @@ fn collect_uses_in_terminator(
         Terminator::Call {
             callee,
             args,
+            runtime_id,
             destination,
             ..
         } => {
             collect_uses_in_operand(callee, block, StatementRef::Terminator, def_use);
             for arg in args {
                 collect_uses_in_operand(arg, block, StatementRef::Terminator, def_use);
+            }
+            if let Some(runtime_id) = runtime_id {
+                collect_uses_in_operand(runtime_id, block, StatementRef::Terminator, def_use);
             }
             // Record the def for the destination (where call result is stored)
             if let Place::Local(local) = destination {
@@ -829,11 +849,17 @@ fn collect_uses_in_terminator(
             }
         }
         Terminator::VirtualCall {
-            args, destination, ..
+            args,
+            runtime_id,
+            destination,
+            ..
         } => {
             // No callee operand — the method is resolved at runtime from `iface`.
             for arg in args {
                 collect_uses_in_operand(arg, block, StatementRef::Terminator, def_use);
+            }
+            if let Some(runtime_id) = runtime_id {
+                collect_uses_in_operand(runtime_id, block, StatementRef::Terminator, def_use);
             }
             // Record the def for the destination (where the call result is stored).
             if let Place::Local(local) = destination {
@@ -850,12 +876,16 @@ fn collect_uses_in_terminator(
         Terminator::SysOp {
             callee,
             args,
+            runtime_id,
             destination,
             ..
         } => {
             collect_uses_in_operand(callee, block, StatementRef::Terminator, def_use);
             for arg in args {
                 collect_uses_in_operand(arg, block, StatementRef::Terminator, def_use);
+            }
+            if let Some(runtime_id) = runtime_id {
+                collect_uses_in_operand(runtime_id, block, StatementRef::Terminator, def_use);
             }
             // Record the def for the destination place
             if let Place::Local(local) = destination {
@@ -928,7 +958,9 @@ fn collect_uses_in_terminator(
                 }
             }
         }
-        Terminator::Throw { value } | Terminator::ThrowIfPanic { value, .. } => {
+        Terminator::Throw { value }
+        | Terminator::Rethrow { value }
+        | Terminator::ThrowIfPanic { value, .. } => {
             collect_uses_in_operand(value, block, StatementRef::Terminator, def_use);
         }
         Terminator::ShortCircuit {
@@ -1495,9 +1527,9 @@ fn rvalue_has_projection_reads(rvalue: &Rvalue) -> bool {
             operand_has_projection(left) || operand_has_projection(right)
         }
         Rvalue::UnaryOp { operand, .. } => operand_has_projection(operand),
-        Rvalue::Array(elements) => elements.iter().any(operand_has_projection),
+        Rvalue::Array(_, elements) => elements.iter().any(operand_has_projection),
         Rvalue::Uint8Array(_) => false,
-        Rvalue::Map(entries) => entries
+        Rvalue::Map(_, _, entries) => entries
             .iter()
             .any(|(key, value)| operand_has_projection(key) || operand_has_projection(value)),
         Rvalue::Aggregate { fields, .. } => fields.iter().any(operand_has_projection),
@@ -1753,11 +1785,11 @@ fn is_call_result_aggregate_operand(
 
 fn aggregate_stack_prefix_operands(rvalue: &Rvalue) -> Option<Vec<&Operand>> {
     match rvalue {
-        Rvalue::Array(elements) => Some(elements.iter().collect()),
+        Rvalue::Array(_, elements) => Some(elements.iter().collect()),
         // Map lowering emits all values first, then all keys, because the VM
         // consumes maps as `[v1, v2, ..., k1, k2, ...]`. A carried key would sit
         // below the emitted values, so only value positions are stack-carryable.
-        Rvalue::Map(entries) => Some(entries.iter().map(|(_key, value)| value).collect()),
+        Rvalue::Map(_, _, entries) => Some(entries.iter().map(|(_key, value)| value).collect()),
         Rvalue::Aggregate {
             kind: baml_compiler2_mir::AggregateKind::Array,
             fields,
@@ -1922,6 +1954,7 @@ mod tests {
                         callee: Operand::Constant(Constant::Null),
                         args: vec![],
                         ntypeargs: 0,
+                        runtime_id: None,
                         destination: Place::Local(target),
                         target: BlockId(1),
                         unwind: None,
@@ -1934,10 +1967,13 @@ mod tests {
                     statements: vec![Statement {
                         kind: StatementKind::Assign {
                             destination: Place::Local(Local(0)),
-                            value: Rvalue::Array(vec![
-                                Operand::copy_local(target),
-                                Operand::Constant(Constant::Int(1)),
-                            ]),
+                            value: Rvalue::Array(
+                                baml_type::TyTemplate::Concrete(baml_type::RuntimeTy::unknown()),
+                                vec![
+                                    Operand::copy_local(target),
+                                    Operand::Constant(Constant::Int(1)),
+                                ],
+                            ),
                         },
                         span: None,
                     }],

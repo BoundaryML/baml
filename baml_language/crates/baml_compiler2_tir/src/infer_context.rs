@@ -18,7 +18,7 @@ use baml_compiler2_hir::{
 };
 use text_size::TextRange;
 
-use crate::ty::Ty;
+use crate::ty::{QualifiedTypeName, Ty};
 
 // ── Error kinds ──────────────────────────────────────────────────────────────
 
@@ -60,6 +60,9 @@ pub enum TirTypeError {
     NotIterable { ty: Ty },
     /// Expression is not indexable (e.g. `true[0]`).
     NotIndexable { ty: Ty },
+    /// A `map<K, V>` annotation used a concrete key type that cannot be represented
+    /// by the runtime's string-keyed map container.
+    InvalidMapKeyType { key: Ty },
     /// Invalid operand types for a binary operator (e.g. `true + false`).
     InvalidBinaryOp {
         op: baml_compiler2_ast::BinaryOp,
@@ -98,6 +101,35 @@ pub enum TirTypeError {
     UnresolvedType {
         name: Name,
         suggestions: Vec<String>,
+        /// Span of just the offending type name (the union/map/compound member),
+        /// or `TextRange::default()` if unknown. Preferred over the surrounding
+        /// type-expr span when reporting, so the squiggle lands on the member
+        /// rather than the whole compound type (B-538).
+        span: TextRange,
+    },
+    /// An associated-type projection's explicit `as X` qualifier resolved to a
+    /// non-interface type (a class, alias, etc.). The qualifier must name an
+    /// interface; without one the projection cannot be resolved, so it must not
+    /// silently fall back to an unqualified projection.
+    NonInterfaceProjectionQualifier,
+    /// An associated-type projection references `member`, but the interface or
+    /// class it projects through does not declare it as an associated type.
+    ///
+    /// Interfaces do not inherit associated types through `requires` (it is a
+    /// bound, not inheritance), so a member declared on a *required* interface
+    /// must be projected through that interface directly: `(Foo as Iterator).Item`,
+    /// not `(Foo as RequiresIterator).Item`.
+    UnknownAssociatedType {
+        member: Name,
+        container: QualifiedTypeName,
+        container_is_interface: bool,
+    },
+    /// An unqualified associated-type projection `Base.member` matches more than
+    /// one interface that declares `member`; it must be disambiguated with an
+    /// explicit `(Base as Interface).member` qualifier.
+    AmbiguousAssociatedTypeProjection {
+        member: Name,
+        candidates: Vec<QualifiedTypeName>,
     },
     /// Wrong number of arguments in a function call.
     ArgumentCountMismatch { expected: usize, got: usize },
@@ -383,6 +415,25 @@ pub enum TirTypeError {
     /// the representable `int` range `[-2^62, 2^62-1]`. `int` is 63-bit; larger
     /// magnitudes need a `bigint` literal (`n` suffix).
     IntegerLiteralOutOfRange { value: i64 },
+    /// BEP-044: a generic parameter's bound (`<T extends X>`) resolved to a
+    /// concrete non-interface type. Generic bounds must be interfaces.
+    GenericBoundNotInterface { bound: Ty },
+}
+
+impl TirTypeError {
+    /// The span of just the offending construct (e.g. an unresolved type's name
+    /// inside a compound type), if this error carries one more precise than the
+    /// surrounding type-expr span. Callers reporting a `TirTypeError` against a
+    /// whole type-annotation span should prefer this:
+    /// `self.precise_span().unwrap_or(annotation_span)` (B-538).
+    pub fn precise_span(&self) -> Option<TextRange> {
+        match self {
+            TirTypeError::UnresolvedType { span, .. } if *span != TextRange::default() => {
+                Some(*span)
+            }
+            _ => None,
+        }
+    }
 }
 
 impl fmt::Display for TirTypeError {
@@ -397,11 +448,15 @@ impl fmt::Display for TirTypeError {
                 )
             }
             TirTypeError::UnresolvedMember { base_type, member } => {
-                write!(
-                    f,
-                    "type `{}` has no member `{member}`",
-                    base_type.render_user_facing()
-                )
+                if matches!(base_type, Ty::BuiltinUnknown { .. }) {
+                    write!(f, "cannot access field `{member}` on `unknown`")
+                } else {
+                    write!(
+                        f,
+                        "type `{}` has no member `{member}`",
+                        base_type.render_user_facing()
+                    )
+                }
             }
             TirTypeError::UnresolvedName { name } => {
                 write!(f, "unresolved name: {name}")
@@ -447,6 +502,13 @@ impl fmt::Display for TirTypeError {
             TirTypeError::NotIndexable { ty } => {
                 write!(f, "type `{}` is not indexable", ty.render_user_facing())
             }
+            TirTypeError::InvalidMapKeyType { key } => {
+                write!(
+                    f,
+                    "map keys must be `string`; got `{}`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`",
+                    key.render_user_facing()
+                )
+            }
             TirTypeError::InvalidBinaryOp { op, lhs, rhs } => {
                 write!(
                     f,
@@ -491,7 +553,43 @@ impl fmt::Display for TirTypeError {
                     operand.render_user_facing()
                 )
             }
-            TirTypeError::UnresolvedType { name, suggestions } => {
+            TirTypeError::NonInterfaceProjectionQualifier => {
+                write!(
+                    f,
+                    "qualified associated type projection must use an interface"
+                )
+            }
+            TirTypeError::UnknownAssociatedType {
+                member,
+                container,
+                container_is_interface,
+            } => {
+                let kind = if *container_is_interface {
+                    "interface"
+                } else {
+                    "class"
+                };
+                write!(
+                    f,
+                    "unknown associated type `{member}` for {kind} `{}`",
+                    container.render_user_facing()
+                )
+            }
+            TirTypeError::AmbiguousAssociatedTypeProjection { member, candidates } => {
+                let names = candidates
+                    .iter()
+                    .map(|c| format!("`{}`", c.render_user_facing()))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                write!(
+                    f,
+                    "ambiguous associated type `{member}`: declared by multiple interfaces \
+                     ({names}); qualify the projection with `(... as Interface).{member}`"
+                )
+            }
+            TirTypeError::UnresolvedType {
+                name, suggestions, ..
+            } => {
                 if suggestions.is_empty() {
                     write!(f, "unresolved type: {name}")
                 } else if suggestions.len() == 1 {
@@ -659,7 +757,7 @@ impl fmt::Display for TirTypeError {
                 } else {
                     write!(
                         f,
-                        "Add an explicit `throws` to the callback, catch the call, or make the callback non-throwing."
+                        "The callback type does not say what it can throw. If `{callback_name}` is an infallible host callback, annotate it with `throws never`; otherwise catch the call or let the enclosing function declare/propagate the callback's throws."
                     )
                 }
             }
@@ -942,6 +1040,11 @@ impl fmt::Display for TirTypeError {
                  (which holds -4611686018427387904 to 4611686018427387903); \
                  append `n` to write it as a `bigint`"
             ),
+            TirTypeError::GenericBoundNotInterface { bound } => write!(
+                f,
+                "generic bound `{}` is not an interface; bounds must be interfaces",
+                bound.render_user_facing()
+            ),
         }
     }
 }
@@ -963,6 +1066,8 @@ pub enum DiagnosticSeverity {
 pub enum RelatedLocation<'db> {
     /// Expression in the same scope's `ExprBody`.
     Expr(ExprId),
+    /// A specific segment of a multi-segment `Path` expression.
+    ExprSegment(ExprId, usize),
     /// Statement in the same scope's `ExprBody`.
     Stmt(StmtId),
     /// A function parameter (possibly in another file).
@@ -1080,6 +1185,9 @@ fn resolve_related_location<'db>(
     match location {
         RelatedLocation::Expr(id) => {
             source_map.map(|sm| (scope_file.file_id(db), sm.expr_span(*id)))
+        }
+        RelatedLocation::ExprSegment(id, seg_idx) => {
+            source_map.map(|sm| (scope_file.file_id(db), sm.path_segment_span(*id, *seg_idx)))
         }
         RelatedLocation::Stmt(id) => {
             source_map.map(|sm| (scope_file.file_id(db), sm.stmt_span(*id)))
@@ -1411,6 +1519,9 @@ impl<'db> InferContext<'db> {
         if self.suppress_member_lookup_errors.get() && is_synthesized_code_diag(&error) {
             return;
         }
+        // Prefer the error's own precise span (e.g. an unresolved member of a
+        // compound type) over the whole type-expr span (B-538).
+        let span = error.precise_span().unwrap_or(span);
         self.diagnostics
             .borrow_mut()
             .diagnostics

@@ -1,14 +1,17 @@
 import { describe, expect, it } from 'vitest';
+import { BamlOutboundValue } from '@b/pkg-proto';
 
 import {
   buildExecutionProfileProjection,
   executionProfileColorKey,
   executionProfileSearchFunctionKeys,
   filterExecutionProfileProjection,
+  runToGraphNodeValues,
   runToDisplayRun,
   runToTraceRows,
 } from './run-store-projections';
-import type { Run } from './worker-protocol';
+import type { GraphRuntimeOverlay, Run, ValueRef } from './worker-protocol';
+import type { ValueBodyCache } from './value-body-cache';
 
 describe('run-store-projections', () => {
   it('projects fetch payloads from RunStore snapshots without exposing values', () => {
@@ -84,6 +87,7 @@ describe('run-store-projections', () => {
         class: 'Runtime',
         message: 'boom',
         details: null,
+        valueRef: null,
       },
     });
 
@@ -92,6 +96,84 @@ describe('run-store-projections', () => {
     expect(display?.status).toBe('error');
     expect(display?.durationMs).toBe(65);
     expect(display?.error).toBe('boom');
+  });
+
+  it('hydrates RunResult valueRef bytes through the value body cache', () => {
+    const bytes = outboundStringBytes('hello from ref');
+    const valueRef = valueRefFixture('value_1', bytes);
+    const cache = cacheWith('value_1', bytes);
+    const run = runFixture({
+      result: {
+        valueRef,
+        rendererHint: 'baml.outbound.base64',
+        supportingPayloadIds: [],
+      },
+    });
+
+    const display = runToDisplayRun(run, {}, cache);
+
+    expect(display?.result).toBe('hello from ref');
+  });
+
+  it('hydrates root thrown value refs through the value body cache', () => {
+    const bytes = outboundStringBytes('bad input');
+    const valueRef = valueRefFixture('error_value', bytes);
+    const display = runToDisplayRun(
+      runFixture({
+        status: 'failed',
+        error: {
+          class: 'Runtime',
+          message: 'failed',
+          details: null,
+          valueRef,
+        },
+      }),
+      {},
+      cacheWith('error_value', bytes),
+    );
+
+    expect(display?.error).toBe('failed');
+    expect(display?.errorValue).toBe('bad input');
+  });
+
+  it('hydrates root input capturedValue payload refs through the value body cache', () => {
+    const bytes = BamlOutboundValue.encode({
+      value: {
+        $case: 'mapValue',
+        mapValue: {
+          keyType: undefined,
+          valueType: undefined,
+          entries: [
+            {
+              key: 'topic',
+              value: {
+                value: { $case: 'stringValue', stringValue: 'volcanoes' },
+              },
+            },
+          ],
+        },
+      },
+    }).finish();
+    const valueRef = valueRefFixture('input_value', bytes);
+    const display = runToDisplayRun(
+      runFixture({
+        payloads: [
+          payloadFixture({
+            id: 'payload-input',
+            kind: {
+              type: 'capturedValue',
+              role: 'rootInput',
+              label: 'inputs',
+              valueRef,
+            },
+          }),
+        ],
+      }),
+      {},
+      cacheWith('input_value', bytes),
+    );
+
+    expect(display?.rootInput).toEqual({ topic: 'volcanoes' });
   });
 
   it('projects test execution runs without modeling discovery as a run', () => {
@@ -196,6 +278,644 @@ describe('run-store-projections', () => {
         durationMs: 50,
         sourceLine: 12,
       }),
+    ]);
+  });
+
+  it('projects identified logs under their owning call node', () => {
+    const run = runFixture({
+      calls: [
+        callFixture({
+          id: 'root',
+          parentId: null,
+          functionName: 'user.Main',
+          startedAtNs: '100000000',
+          endedAtNs: '200000000',
+        }),
+        callFixture({
+          id: 'child',
+          parentId: 'root',
+          functionName: 'user.Work',
+          startedAtNs: '125000000',
+          endedAtNs: '175000000',
+        }),
+      ],
+      payloads: [
+        payloadFixture({
+          id: 'log-1',
+          callNodeId: 'child',
+          timestampMs: 120,
+          kind: {
+            type: 'log',
+            level: 'warn',
+            message: 'watch this',
+            source: { line: 12, column: 3 },
+            valueRef: null,
+          },
+        }),
+      ],
+    });
+
+    const rows = runToTraceRows(run);
+
+    expect(rows.find((row) => row.id === 'root')?.logs).toEqual([]);
+    expect(rows.find((row) => row.id === 'child')?.logs).toEqual([
+      expect.objectContaining({
+        id: 'log-1',
+        level: 'warn',
+        message: 'watch this',
+        sourceLine: 12,
+        state: 'unavailable',
+        value: null,
+      }),
+    ]);
+  });
+
+  it('attaches logs through call payload ids and hydrates value refs', () => {
+    const bytes = outboundStringBytes('full log body');
+    const valueRef = valueRefFixture('log_value', bytes);
+    const run = runFixture({
+      calls: [
+        callFixture({
+          id: 'root',
+          payloadIds: ['log-1'],
+        }),
+      ],
+      payloads: [
+        payloadFixture({
+          id: 'log-1',
+          callNodeId: null,
+          kind: {
+            type: 'log',
+            level: 'info',
+            message: 'full log body',
+            source: null,
+            valueRef,
+          },
+        }),
+      ],
+    });
+
+    expect(runToTraceRows(run, cacheWith('log_value', bytes))).toEqual([
+      expect.objectContaining({
+        id: 'root',
+        logs: [
+          expect.objectContaining({
+            id: 'log-1',
+            state: 'available',
+            value: 'full log body',
+          }),
+        ],
+      }),
+    ]);
+  });
+
+  it('attaches call input/output/error captured values under their owning call nodes', () => {
+    const inputBytes = outboundStringBytes('args');
+    const outputBytes = outboundStringBytes('ok');
+    const errorBytes = outboundStringBytes('boom');
+    const inputRef = valueRefFixture('call_input', inputBytes);
+    const outputRef = valueRefFixture('call_output', outputBytes);
+    const errorRef = valueRefFixture('call_error', errorBytes);
+    const run = runFixture({
+      calls: [
+        callFixture({
+          id: 'root',
+          payloadIds: [],
+        }),
+        callFixture({
+          id: 'child',
+          parentId: 'root',
+          functionName: 'user.leaf',
+          payloadIds: ['payload-input', 'payload-error'],
+        }),
+      ],
+      payloads: [
+        payloadFixture({
+          id: 'payload-input',
+          callNodeId: 'child',
+          timestampMs: 100,
+          kind: {
+            type: 'capturedValue',
+            role: 'callInput',
+            label: 'inputs',
+            valueRef: inputRef,
+          },
+        }),
+        payloadFixture({
+          id: 'payload-output',
+          callNodeId: 'child',
+          timestampMs: 101,
+          kind: {
+            type: 'capturedValue',
+            role: 'callOutput',
+            label: 'output',
+            valueRef: outputRef,
+          },
+        }),
+        payloadFixture({
+          id: 'payload-error',
+          callNodeId: null,
+          timestampMs: 102,
+          kind: {
+            type: 'capturedValue',
+            role: 'callError',
+            label: 'error',
+            valueRef: errorRef,
+          },
+        }),
+      ],
+    });
+
+    const rows = runToTraceRows(
+      run,
+      cacheWithEntries({
+        call_input: inputBytes,
+        call_output: outputBytes,
+        call_error: errorBytes,
+      }),
+    );
+
+    expect(rows.find((row) => row.id === 'root')?.callValues).toEqual([]);
+    expect(rows.find((row) => row.id === 'child')?.callValues).toEqual([
+      expect.objectContaining({
+        id: 'payload-input',
+        role: 'callInput',
+        label: 'inputs',
+        state: 'available',
+        value: 'args',
+      }),
+      expect.objectContaining({
+        id: 'payload-output',
+        role: 'callOutput',
+        label: 'output',
+        state: 'available',
+        value: 'ok',
+      }),
+      expect.objectContaining({
+        id: 'payload-error',
+        role: 'callError',
+        label: 'error',
+        state: 'available',
+        value: 'boom',
+      }),
+    ]);
+  });
+
+  it('projects graph node value previews from captured call values', () => {
+    const inputBytes = outboundStringBytes('prompt text');
+    const outputBytes = outboundImageBytes('https://example.com/generated.png');
+    const errorBytes = outboundStringBytes('bad image');
+    const inputRef = valueRefFixture('graph_input', inputBytes);
+    const outputRef = valueRefFixture('image_output', outputBytes);
+    const errorRef = valueRefFixture('graph_error', errorBytes);
+    const run = runFixture({
+      calls: [
+        callFixture({
+          id: 'image-call',
+          payloadIds: ['payload-input', 'payload-output', 'payload-error'],
+        }),
+      ],
+      payloads: [
+        payloadFixture({
+          id: 'payload-input',
+          callNodeId: null,
+          timestampMs: 99,
+          kind: {
+            type: 'capturedValue',
+            role: 'callInput',
+            label: 'inputs',
+            valueRef: inputRef,
+          },
+        }),
+        payloadFixture({
+          id: 'payload-output',
+          callNodeId: null,
+          timestampMs: 100,
+          kind: {
+            type: 'capturedValue',
+            role: 'callOutput',
+            label: 'generated',
+            valueRef: outputRef,
+          },
+        }),
+        payloadFixture({
+          id: 'payload-error',
+          callNodeId: null,
+          timestampMs: 101,
+          kind: {
+            type: 'capturedValue',
+            role: 'callError',
+            label: 'error',
+            valueRef: errorRef,
+          },
+        }),
+      ],
+    });
+
+    const values = runToGraphNodeValues(
+      run,
+      graphOverlayFixture(7, ['image-call']),
+      cacheWithEntries({
+        graph_input: inputBytes,
+        image_output: outputBytes,
+        graph_error: errorBytes,
+      }),
+    ).get('7');
+
+    expect(values).toEqual([
+      expect.objectContaining({
+        id: 'payload-input',
+        role: 'callInput',
+        label: 'inputs',
+        value: 'prompt text',
+      }),
+      expect.objectContaining({
+        id: 'payload-output',
+        role: 'callOutput',
+        label: 'generated',
+        value: expect.objectContaining({
+          media_type: 'image',
+          content_type: 'url',
+          url: 'https://example.com/generated.png',
+        }),
+      }),
+      expect.objectContaining({
+        id: 'payload-error',
+        role: 'callError',
+        label: 'error',
+        value: 'bad image',
+      }),
+    ]);
+  });
+
+  it('projects root input values onto the root call graph node', () => {
+    const inputBytes = outboundStringBytes('a happy golden retriever');
+    const inputRef = valueRefFixture('root_input', inputBytes);
+    const run = runFixture({
+      rootCallNodeId: 'root-call',
+      calls: [callFixture({ id: 'root-call', payloadIds: [] })],
+      payloads: [
+        payloadFixture({
+          id: 'payload-root-input',
+          timestampMs: 98,
+          kind: {
+            type: 'capturedValue',
+            role: 'rootInput',
+            label: 'inputs',
+            valueRef: inputRef,
+          },
+        }),
+      ],
+    });
+
+    const values = runToGraphNodeValues(
+      run,
+      graphOverlayFixture(7, ['root-call']),
+      cacheWith('root_input', inputBytes),
+    ).get('7');
+
+    expect(values).toEqual([
+      expect.objectContaining({
+        id: 'payload-root-input',
+        role: 'callInput',
+        label: 'inputs',
+        value: 'a happy golden retriever',
+      }),
+    ]);
+  });
+
+  it('projects direct root run result values onto the root call graph node', () => {
+    const bytes = outboundImageBytes('https://example.com/root-result.png');
+    const valueRef = valueRefFixture('root_result', bytes);
+    const run = runFixture({
+      status: 'succeeded',
+      completedAtMs: 150,
+      rootCallNodeId: 'root-llm-call',
+      result: {
+        valueRef,
+        rendererHint: null,
+        supportingPayloadIds: [],
+      },
+      calls: [callFixture({ id: 'root-llm-call', payloadIds: [] })],
+      payloads: [],
+    });
+
+    const values = runToGraphNodeValues(
+      run,
+      graphOverlayFixture(11, ['root-llm-call']),
+      cacheWith('root_result', bytes),
+    ).get('11');
+
+    expect(values).toEqual([
+      expect.objectContaining({
+        id: 'root-result',
+        role: 'callOutput',
+        label: 'output',
+        value: expect.objectContaining({
+          media_type: 'image',
+          url: 'https://example.com/root-result.png',
+        }),
+      }),
+    ]);
+  });
+
+  it('projects root run result values onto the provided root graph node instead of the only visible descendant', () => {
+    const bytes = outboundImageBytes('https://example.com/direct-llm.png');
+    const valueRef = valueRefFixture('direct_llm_result', bytes);
+    const run = runFixture({
+      status: 'succeeded',
+      completedAtMs: 150,
+      rootCallNodeId: 'root-user-function',
+      result: {
+        valueRef,
+        rendererHint: null,
+        supportingPayloadIds: [],
+      },
+      calls: [
+        callFixture({
+          id: 'root-user-function',
+          functionName: 'user.generate_image',
+          payloadIds: [],
+        }),
+        callFixture({
+          id: 'inner-llm-call',
+          functionName: 'baml.llm.call_llm_function',
+          parentId: 'root-user-function',
+          payloadIds: [],
+        }),
+      ],
+      payloads: [],
+    });
+
+    const valuesByNodeId = runToGraphNodeValues(
+      run,
+      {
+        ...graphOverlayFixture(12, ['inner-llm-call']),
+        unattachedCallNodeIds: ['root-user-function'],
+      },
+      cacheWith('direct_llm_result', bytes),
+      { rootGraphNodeId: '1' },
+    );
+
+    expect(valuesByNodeId.get('12')).toBeUndefined();
+    expect(valuesByNodeId.get('1')).toEqual([
+      expect.objectContaining({
+        id: 'root-result',
+        role: 'callOutput',
+        label: 'output',
+        value: expect.objectContaining({
+          media_type: 'image',
+          url: 'https://example.com/direct-llm.png',
+        }),
+      }),
+    ]);
+  });
+
+  it('keeps root input and result separate from child call values', () => {
+    const rootInputBytes = outboundStringBytes('Paulo Rodrigues');
+    const rootResultBytes = outboundStringBytes(
+      'Hello, Paulo. Your full name is Paulo Rodrigues!',
+    );
+    const childInputBytes = outboundStringBytes('Paulo Rodrigues');
+    const childOutputBytes = outboundStringBytes('["Paulo","Rodrigues"]');
+    const rootInputRef = valueRefFixture('root_input_screenshot', rootInputBytes);
+    const rootResultRef = valueRefFixture('root_result_screenshot', rootResultBytes);
+    const childInputRef = valueRefFixture('child_input', childInputBytes);
+    const childOutputRef = valueRefFixture('child_output', childOutputBytes);
+    const run = runFixture({
+      status: 'succeeded',
+      completedAtMs: 150,
+      rootCallNodeId: 'root-main',
+      result: {
+        valueRef: rootResultRef,
+        rendererHint: null,
+        supportingPayloadIds: [],
+      },
+      calls: [
+        callFixture({
+          id: 'root-main',
+          functionName: 'throws.main',
+          payloadIds: [],
+        }),
+        callFixture({
+          id: 'child-call',
+          functionName: 'throws.child',
+          parentId: 'root-main',
+          payloadIds: ['payload-child-input', 'payload-child-output'],
+        }),
+      ],
+      payloads: [
+        payloadFixture({
+          id: 'payload-root-input',
+          timestampMs: 98,
+          kind: {
+            type: 'capturedValue',
+            role: 'rootInput',
+            label: 'inputs',
+            valueRef: rootInputRef,
+          },
+        }),
+        payloadFixture({
+          id: 'payload-child-input',
+          callNodeId: 'child-call',
+          timestampMs: 99,
+          kind: {
+            type: 'capturedValue',
+            role: 'callInput',
+            label: 'inputs',
+            valueRef: childInputRef,
+          },
+        }),
+        payloadFixture({
+          id: 'payload-child-output',
+          callNodeId: 'child-call',
+          timestampMs: 100,
+          kind: {
+            type: 'capturedValue',
+            role: 'callOutput',
+            label: 'output',
+            valueRef: childOutputRef,
+          },
+        }),
+      ],
+    });
+
+    const valuesByNodeId = runToGraphNodeValues(
+      run,
+      {
+        ...graphOverlayFixture(12, ['child-call']),
+        unattachedCallNodeIds: ['root-main'],
+      },
+      cacheWithEntries({
+        root_input_screenshot: rootInputBytes,
+        root_result_screenshot: rootResultBytes,
+        child_input: childInputBytes,
+        child_output: childOutputBytes,
+      }),
+      { rootGraphNodeId: '1' },
+    );
+
+    expect(valuesByNodeId.get('12')).toEqual([
+      expect.objectContaining({
+        id: 'payload-child-input',
+        role: 'callInput',
+        label: 'inputs',
+        value: 'Paulo Rodrigues',
+      }),
+      expect.objectContaining({
+        id: 'payload-child-output',
+        role: 'callOutput',
+        label: 'output',
+        value: '["Paulo","Rodrigues"]',
+      }),
+    ]);
+    expect(valuesByNodeId.get('1')).toEqual([
+      expect.objectContaining({
+        id: 'payload-root-input',
+        role: 'callInput',
+        label: 'inputs',
+        value: 'Paulo Rodrigues',
+      }),
+      expect.objectContaining({
+        id: 'root-result',
+        role: 'callOutput',
+        label: 'output',
+        value: 'Hello, Paulo. Your full name is Paulo Rodrigues!',
+      }),
+    ]);
+  });
+
+  it('keeps child call errors separate from root errors', () => {
+    const childErrorBytes = outboundStringBytes('child failed');
+    const rootErrorBytes = outboundStringBytes('root failed');
+    const childErrorRef = valueRefFixture('child_error', childErrorBytes);
+    const rootErrorRef = valueRefFixture('root_error', rootErrorBytes);
+    const run = runFixture({
+      status: 'failed',
+      completedAtMs: 150,
+      rootCallNodeId: 'root-main',
+      error: {
+        class: 'Runtime',
+        message: 'root failed',
+        details: null,
+        valueRef: rootErrorRef,
+      },
+      calls: [
+        callFixture({
+          id: 'root-main',
+          functionName: 'throws.main',
+          payloadIds: [],
+          status: 'errored',
+        }),
+        callFixture({
+          id: 'child-call',
+          functionName: 'throws.child',
+          parentId: 'root-main',
+          payloadIds: ['payload-child-error'],
+          status: 'errored',
+        }),
+      ],
+      payloads: [
+        payloadFixture({
+          id: 'payload-child-error',
+          callNodeId: 'child-call',
+          timestampMs: 100,
+          kind: {
+            type: 'capturedValue',
+            role: 'callError',
+            label: 'error',
+            valueRef: childErrorRef,
+          },
+        }),
+      ],
+    });
+
+    const valuesByNodeId = runToGraphNodeValues(
+      run,
+      {
+        ...graphOverlayFixture(12, ['child-call']),
+        unattachedCallNodeIds: ['root-main'],
+      },
+      cacheWithEntries({
+        child_error: childErrorBytes,
+        root_error: rootErrorBytes,
+      }),
+      { rootGraphNodeId: '1' },
+    );
+
+    expect(valuesByNodeId.get('12')).toEqual([
+      expect.objectContaining({
+        id: 'payload-child-error',
+        role: 'callError',
+        label: 'error',
+        value: 'child failed',
+      }),
+    ]);
+    expect(valuesByNodeId.get('1')).toEqual([
+      expect.objectContaining({
+        id: 'root-error',
+        role: 'callError',
+        label: 'error',
+        value: 'root failed',
+      }),
+    ]);
+  });
+
+  it('projects explicit log body availability states', () => {
+    const run = runFixture({
+      calls: [
+        callFixture({
+          id: 'root',
+          payloadIds: ['log-lost', 'log-truncated', 'log-omitted'],
+        }),
+      ],
+      payloads: [
+        payloadFixture({
+          id: 'log-lost',
+          timestampMs: 101,
+          kind: {
+            type: 'log',
+            level: 'error',
+            message: 'lost',
+            source: null,
+            valueRef: {
+              ...valueRefFixture('lost_value', new Uint8Array()),
+              availability: 'lost',
+              originalSizeBytes: null,
+              retainedSizeBytes: null,
+              diagnostic: 'queue full',
+            },
+          },
+        }),
+        payloadFixture({
+          id: 'log-truncated',
+          timestampMs: 102,
+          body: {
+            state: { kind: 'truncated' },
+            contentType: null,
+            originalSizeBytes: 512,
+            retainedSizeBytes: 128,
+          },
+        }),
+        payloadFixture({
+          id: 'log-omitted',
+          timestampMs: 103,
+          body: {
+            state: { kind: 'omittedByPolicy' },
+            contentType: null,
+            originalSizeBytes: null,
+            retainedSizeBytes: null,
+          },
+        }),
+      ],
+    });
+
+    const logs = runToTraceRows(run)[0].logs;
+
+    expect(logs.map((log) => [log.id, log.state, log.diagnostic])).toEqual([
+      ['log-lost', 'lost', 'queue full'],
+      ['log-truncated', 'truncated', null],
+      ['log-omitted', 'omitted', null],
     ]);
   });
 
@@ -486,7 +1206,7 @@ describe('run-store-projections', () => {
 
 function runFixture(overrides: Partial<Run>): Run {
   return {
-    runId: 'run-1',
+    boundaryId: 'run-1',
     target: { kind: 'function', functionName: 'main' },
     visibility: { kind: 'history' },
     status: 'running',
@@ -529,6 +1249,8 @@ function payloadFixture(
       type: 'log',
       level: 'info',
       message: 'placeholder',
+      source: null,
+      valueRef: null,
     },
     redaction: {
       valueRedacted: false,
@@ -538,6 +1260,74 @@ function payloadFixture(
     },
     body: null,
     ...overrides,
+  };
+}
+
+function outboundStringBytes(value: string): Uint8Array {
+  return BamlOutboundValue.encode({
+    value: { $case: 'stringValue', stringValue: value },
+  }).finish();
+}
+
+function outboundImageBytes(url: string): Uint8Array {
+  return BamlOutboundValue.encode({
+    value: {
+      $case: 'mediaValue',
+      mediaValue: {
+        media: 1,
+        mimeType: 'image/png',
+        value: { $case: 'url', url },
+      },
+    },
+  }).finish();
+}
+
+function valueRefFixture(id: string, bytes: Uint8Array): ValueRef {
+  return {
+    id,
+    codec: 'bamlOutboundValue',
+    availability: 'available',
+    originalSizeBytes: bytes.length,
+    retainedSizeBytes: bytes.length,
+    diagnostic: null,
+  };
+}
+
+function graphOverlayFixture(
+  cfgNodeId: number,
+  callNodeIds: string[],
+): GraphRuntimeOverlay {
+  return {
+    boundaryId: 'run-1',
+    projectGeneration: 1,
+    entries: [{ cfgNodeId, callNodeIds }],
+    unattachedCallNodeIds: [],
+    diagnostics: [],
+  };
+}
+
+function cacheWith(valueRefId: string, bytes: Uint8Array): ValueBodyCache {
+  return cacheWithEntries({ [valueRefId]: bytes });
+}
+
+function cacheWithEntries(entries: Record<string, Uint8Array>): ValueBodyCache {
+  return {
+    get: (_boundaryId, valueRef) => {
+      const bytes = entries[valueRef.id];
+      if (!bytes) return undefined;
+      return {
+        boundaryId: 'run-1',
+        valueRefId: valueRef.id,
+        codec: 'bamlOutboundValue',
+        availability: 'available',
+        bytes,
+        diagnostic: null,
+      };
+    },
+    read: async () => {
+      throw new Error('cache hit should not read');
+    },
+    subscribe: () => () => {},
   };
 }
 

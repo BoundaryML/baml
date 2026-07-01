@@ -7,7 +7,9 @@
 //! ATTRIBUTE children of the corresponding CST `TYPE_EXPR` node.
 
 use baml_base::Name;
-use baml_compiler_syntax::{FunctionTypeParam, SyntaxKind, ast::TypeExpr as CstTypeExpr};
+use baml_compiler_syntax::{
+    FunctionTypeParam, SyntaxKind, SyntaxNodeExt, ast::TypeExpr as CstTypeExpr,
+};
 use rowan::ast::AstNode;
 use text_size::TextRange;
 
@@ -15,6 +17,7 @@ use crate::{
     LoweringDiagnostic,
     ast::{
         AssociatedTypeBinding, FunctionTypeParam as AstFunctionTypeParam, RawAttribute, TypeExpr,
+        TypeExprKind,
     },
     lower_cst::lower_attribute,
 };
@@ -87,7 +90,7 @@ fn lower_union_with_attrs(type_expr: &CstTypeExpr, hoist_trailing: bool) -> Type
             for child in &children[(last_pipe_idx + 1)..] {
                 if let rowan::NodeOrToken::Node(node) = child {
                     if node.kind() == SyntaxKind::ATTRIBUTE {
-                        trailing_attr_spans.push(node.text_range());
+                        trailing_attr_spans.push(node.span_range());
                     }
                 }
             }
@@ -108,10 +111,11 @@ fn lower_union_with_attrs(type_expr: &CstTypeExpr, hoist_trailing: bool) -> Type
 
     // Apply postfix modifiers (e.g., `(A | B)[]`)
     apply_modifiers(
-        TypeExpr::Union {
+        TypeExprKind::Union {
             variants,
             attrs: union_attrs,
-        },
+        }
+        .at(type_expr.syntax().span_range()),
         &type_expr.postfix_modifiers(),
     )
 }
@@ -124,18 +128,21 @@ fn apply_modifiers(
 ) -> TypeExpr {
     let mut result = base;
     for modifier in modifiers {
+        let span = result.span;
         match modifier {
             baml_compiler_syntax::ast::TypePostFixModifier::Optional => {
-                result = TypeExpr::Optional {
+                result = TypeExprKind::Optional {
                     inner: Box::new(result),
                     attrs: vec![],
-                };
+                }
+                .at(span);
             }
             baml_compiler_syntax::ast::TypePostFixModifier::Array => {
-                result = TypeExpr::List {
+                result = TypeExprKind::List {
                     inner: Box::new(result),
                     attrs: vec![],
-                };
+                }
+                .at(span);
             }
         }
     }
@@ -150,13 +157,15 @@ fn lower_base(type_expr: &CstTypeExpr) -> TypeExpr {
 
 /// Parse the base type (no modifiers, not a union).
 fn lower_base_terminal(type_expr: &CstTypeExpr) -> TypeExpr {
+    let span = type_expr.syntax().span_range();
     if let Some((base, interface, member)) = type_expr.associated_type_projection() {
-        return TypeExpr::AssociatedTypeProjection {
+        return TypeExprKind::AssociatedTypeProjection {
             base: Box::new(lower_type_expr_inner(&base, false)),
             interface: Some(Box::new(lower_type_expr_inner(&interface, false))),
             member: Name::new(member.text()),
             attrs: vec![],
-        };
+        }
+        .at(span);
     }
 
     // Handle function types like `(x: int, y: int) -> bool`. A function type
@@ -172,23 +181,24 @@ fn lower_base_terminal(type_expr: &CstTypeExpr) -> TypeExpr {
                 let ty = p
                     .ty()
                     .map(|t| lower_type_expr_inner(&t, false))
-                    .unwrap_or(TypeExpr::Unknown { attrs: vec![] });
+                    .unwrap_or_else(|| TypeExprKind::Unknown { attrs: vec![] }.at(span));
                 AstFunctionTypeParam { name, optional, ty }
             })
             .collect();
         let ret = type_expr
             .function_return_type()
             .map(|t| lower_type_expr_inner(&t, false))
-            .unwrap_or(TypeExpr::Unknown { attrs: vec![] });
+            .unwrap_or_else(|| TypeExprKind::Unknown { attrs: vec![] }.at(span));
         let throws = type_expr
             .function_throws_type()
             .map(|t| Box::new(lower_type_expr_inner(&t, false)));
-        return TypeExpr::Function {
+        return TypeExprKind::Function {
             params,
             ret: Box::new(ret),
             throws,
             attrs: vec![],
-        };
+        }
+        .at(span);
     }
 
     // Handle parenthesized types like `(int | string)`
@@ -209,10 +219,11 @@ fn lower_base_terminal(type_expr: &CstTypeExpr) -> TypeExpr {
                 .map(|t| lower_type_expr_inner(&t, false))
                 .collect();
             if !members.is_empty() {
-                return TypeExpr::Union {
+                return TypeExprKind::Union {
                     variants: members,
                     attrs: vec![],
-                };
+                }
+                .at(span);
             }
         }
     }
@@ -221,40 +232,46 @@ fn lower_base_terminal(type_expr: &CstTypeExpr) -> TypeExpr {
 }
 
 fn lower_base_type(type_expr: &CstTypeExpr) -> TypeExpr {
+    let span = type_expr.syntax().span_range();
     if let Some(s) = type_expr.string_literal() {
-        return TypeExpr::Literal {
+        return TypeExprKind::Literal {
             value: baml_base::Literal::String(s),
             attrs: vec![],
-        };
+        }
+        .at(span);
     }
 
     if let Some(digits_str) = type_expr.bigint_literal() {
         let value = crate::parse_bigint_literal_digits(&digits_str);
-        return TypeExpr::Literal {
+        return TypeExprKind::Literal {
             value: baml_base::Literal::Bigint(value),
             attrs: vec![],
-        };
+        }
+        .at(span);
     }
 
     if let Some(i) = type_expr.integer_literal() {
-        return TypeExpr::Literal {
+        return TypeExprKind::Literal {
             value: baml_base::Literal::Int(i),
             attrs: vec![],
-        };
+        }
+        .at(span);
     }
 
     if let Some(f) = type_expr.float_literal() {
-        return TypeExpr::Literal {
+        return TypeExprKind::Literal {
             value: baml_base::Literal::Float(f),
             attrs: vec![],
-        };
+        }
+        .at(span);
     }
 
     if let Some(b) = type_expr.bool_literal() {
-        return TypeExpr::Literal {
+        return TypeExprKind::Literal {
             value: baml_base::Literal::Bool(b),
             attrs: vec![],
-        };
+        }
+        .at(span);
     }
 
     // Check for map type with type args
@@ -268,11 +285,12 @@ fn lower_base_type(type_expr: &CstTypeExpr) -> TypeExpr {
         if name == "map" && args.len() == 2 {
             let key = lower_type_expr_inner(&args[0], false);
             let value = lower_type_expr_inner(&args[1], false);
-            return TypeExpr::Map {
+            return TypeExprKind::Map {
                 key: Box::new(key),
                 value: Box::new(value),
                 attrs: vec![],
-            };
+            }
+            .at(span);
         }
 
         // Named type (primitive or user-defined), preserving generic args
@@ -284,10 +302,11 @@ fn lower_base_type(type_expr: &CstTypeExpr) -> TypeExpr {
             &name,
             generic_args,
             associated_type_bindings,
+            span,
         );
     }
 
-    TypeExpr::Unknown { attrs: vec![] }
+    TypeExprKind::Unknown { attrs: vec![] }.at(span)
 }
 
 /// Parse a union member from its structured parts.
@@ -306,13 +325,15 @@ fn lower_union_member(parts: &baml_compiler_syntax::ast::UnionMemberParts) -> Ty
 
 /// Extract the base type from union member parts (no modifiers or attrs).
 fn lower_union_member_base(parts: &baml_compiler_syntax::ast::UnionMemberParts) -> TypeExpr {
+    let span = parts.span().unwrap_or_default();
     if let Some((base, interface, member)) = parts.associated_type_projection() {
-        return TypeExpr::AssociatedTypeProjection {
+        return TypeExprKind::AssociatedTypeProjection {
             base: Box::new(lower_type_expr_inner(&base, false)),
             interface: Some(Box::new(lower_type_expr_inner(&interface, false))),
             member: Name::new(member.text()),
             attrs: vec![],
-        };
+        }
+        .at(span);
     }
 
     // Check for parenthesized type first (e.g., `(int | string)` in `A | (int | string)`)
@@ -333,32 +354,36 @@ fn lower_union_member_base(parts: &baml_compiler_syntax::ast::UnionMemberParts) 
     }
 
     if let Some(s) = parts.string_literal() {
-        return TypeExpr::Literal {
+        return TypeExprKind::Literal {
             value: baml_base::Literal::String(s),
             attrs: vec![],
-        };
+        }
+        .at(span);
     }
 
     if let Some(digits_str) = parts.bigint_literal() {
         let value = crate::parse_bigint_literal_digits(&digits_str);
-        return TypeExpr::Literal {
+        return TypeExprKind::Literal {
             value: baml_base::Literal::Bigint(value),
             attrs: vec![],
-        };
+        }
+        .at(span);
     }
 
     if let Some(i) = parts.integer_literal() {
-        return TypeExpr::Literal {
+        return TypeExprKind::Literal {
             value: baml_base::Literal::Int(i),
             attrs: vec![],
-        };
+        }
+        .at(span);
     }
 
     if let Some(f) = parts.float_literal() {
-        return TypeExpr::Literal {
+        return TypeExprKind::Literal {
             value: baml_base::Literal::Float(f),
             attrs: vec![],
-        };
+        }
+        .at(span);
     }
 
     // Check for named/primitive type or map type
@@ -384,11 +409,12 @@ fn lower_union_member_base(parts: &baml_compiler_syntax::ast::UnionMemberParts) 
             if type_arg_exprs.len() == 2 {
                 let key = lower_type_expr_inner(&type_arg_exprs[0], false);
                 let value = lower_type_expr_inner(&type_arg_exprs[1], false);
-                return TypeExpr::Map {
+                return TypeExprKind::Map {
                     key: Box::new(key),
                     value: Box::new(value),
                     attrs: vec![],
-                };
+                }
+                .at(span);
             }
         }
 
@@ -398,23 +424,26 @@ fn lower_union_member_base(parts: &baml_compiler_syntax::ast::UnionMemberParts) 
             .collect();
 
         return match name.as_str() {
-            "true" => TypeExpr::Literal {
+            "true" => TypeExprKind::Literal {
                 value: baml_base::Literal::Bool(true),
                 attrs: vec![],
-            },
-            "false" => TypeExpr::Literal {
+            }
+            .at(span),
+            "false" => TypeExprKind::Literal {
                 value: baml_base::Literal::Bool(false),
                 attrs: vec![],
-            },
+            }
+            .at(span),
             _ => lower_from_type_name_with_generic_args(
                 &name,
                 generic_args,
                 associated_type_bindings,
+                span,
             ),
         };
     }
 
-    TypeExpr::Unknown { attrs: vec![] }
+    TypeExprKind::Unknown { attrs: vec![] }.at(span)
 }
 
 /// Create a `TypeExpr` from a type name string with optional generic arguments.
@@ -428,7 +457,7 @@ pub(crate) fn lower_associated_type_binding(
     let ty = binding
         .default_or_binding()
         .map(|ty| lower_type_expr_inner(&ty, false))
-        .unwrap_or(TypeExpr::Unknown { attrs: vec![] });
+        .unwrap_or_else(|| TypeExprKind::Unknown { attrs: vec![] }.at(TextRange::default()));
     Some(AssociatedTypeBinding {
         name: Name::new(name.text()),
         ty: Box::new(ty),
@@ -439,61 +468,61 @@ fn lower_from_type_name_with_generic_args(
     name: &str,
     generic_args: Vec<TypeExpr>,
     associated_type_bindings: Vec<AssociatedTypeBinding>,
+    span: TextRange,
 ) -> TypeExpr {
-    match name {
-        "int" => TypeExpr::Int { attrs: vec![] },
-        "bigint" => TypeExpr::Bigint { attrs: vec![] },
-        "float" => TypeExpr::Float { attrs: vec![] },
-        "string" => TypeExpr::String { attrs: vec![] },
-        "bool" => TypeExpr::Bool { attrs: vec![] },
-        "null" => TypeExpr::Null { attrs: vec![] },
-        "never" => TypeExpr::Never { attrs: vec![] },
-        "void" => TypeExpr::Void { attrs: vec![] },
-        "unknown" => TypeExpr::BuiltinUnknown { attrs: vec![] },
-        "type" => TypeExpr::Type { attrs: vec![] },
-        "$rust_type" => TypeExpr::Rust { attrs: vec![] },
-        "image" => TypeExpr::Media {
+    let kind = match name {
+        "int" => TypeExprKind::Int { attrs: vec![] },
+        "bigint" => TypeExprKind::Bigint { attrs: vec![] },
+        "float" => TypeExprKind::Float { attrs: vec![] },
+        "string" => TypeExprKind::String { attrs: vec![] },
+        "bool" => TypeExprKind::Bool { attrs: vec![] },
+        "null" => TypeExprKind::Null { attrs: vec![] },
+        "never" => TypeExprKind::Never { attrs: vec![] },
+        "void" => TypeExprKind::Void { attrs: vec![] },
+        "unknown" => TypeExprKind::BuiltinUnknown { attrs: vec![] },
+        // The wildcard `_` is an inference hole, not a named type. Any stray
+        // generic args on it (`_<...>`, nonsensical) are dropped.
+        "_" => TypeExprKind::Infer { attrs: vec![] },
+        "type" => TypeExprKind::Type { attrs: vec![] },
+        "$rust_type" => TypeExprKind::Rust { attrs: vec![] },
+        "image" => TypeExprKind::Media {
             kind: baml_base::MediaKind::Image,
             attrs: vec![],
         },
-        "audio" => TypeExpr::Media {
+        "audio" => TypeExprKind::Media {
             kind: baml_base::MediaKind::Audio,
             attrs: vec![],
         },
-        "video" => TypeExpr::Media {
+        "video" => TypeExprKind::Media {
             kind: baml_base::MediaKind::Video,
             attrs: vec![],
         },
-        "pdf" => TypeExpr::Media {
+        "pdf" => TypeExprKind::Media {
             kind: baml_base::MediaKind::Pdf,
             attrs: vec![],
         },
-        "uint8array" => TypeExpr::Uint8Array { attrs: vec![] },
-        "json" => TypeExpr::Path {
+        "uint8array" => TypeExprKind::Uint8Array { attrs: vec![] },
+        "json" => TypeExprKind::Path {
             segments: vec![Name::new("baml"), Name::new("json"), Name::new("json")],
             generic_args: vec![],
             associated_type_bindings: vec![],
             attrs: vec![],
         },
         _ => {
-            if name.contains('.') {
-                let segments: Vec<Name> = name.split('.').map(Name::new).collect();
-                TypeExpr::Path {
-                    segments,
-                    generic_args,
-                    associated_type_bindings,
-                    attrs: vec![],
-                }
+            let segments: Vec<Name> = if name.contains('.') {
+                name.split('.').map(Name::new).collect()
             } else {
-                TypeExpr::Path {
-                    segments: vec![Name::new(name)],
-                    generic_args,
-                    associated_type_bindings,
-                    attrs: vec![],
-                }
+                vec![Name::new(name)]
+            };
+            TypeExprKind::Path {
+                segments,
+                generic_args,
+                associated_type_bindings,
+                attrs: vec![],
             }
         }
-    }
+    };
+    kind.at(span)
 }
 
 /// Recursively check that `void` does not appear in a non-return-type position.
@@ -501,7 +530,7 @@ fn lower_from_type_name_with_generic_args(
 /// `void` is only valid as the *bare* return type of a function. It must not
 /// appear in parameter types, field types, union members, list/optional
 /// wrappers, or function-type parameter positions. When `void` IS used as the
-/// return type of a `TypeExpr::Function`, it is exempt.
+/// return type of a `TypeExprKind::Function`, it is exempt.
 ///
 /// Set `allow_root_void = true` when calling on a function return-type annotation
 /// to permit a bare `-> void` while still rejecting `-> void?` or `-> void[]`.
@@ -514,12 +543,12 @@ pub(crate) fn check_void_type(
     allow_root_void: bool,
     diags: &mut Vec<LoweringDiagnostic>,
 ) {
-    match type_expr {
-        TypeExpr::Void { .. } if !allow_root_void => {
+    match &type_expr.kind {
+        TypeExprKind::Void { .. } if !allow_root_void => {
             diags.push(LoweringDiagnostic::VoidInNonReturnPosition { context, span });
         }
-        TypeExpr::Void { .. } => {}
-        TypeExpr::Optional { inner, .. } => {
+        TypeExprKind::Void { .. } => {}
+        TypeExprKind::Optional { inner, .. } => {
             // Once inside a wrapper, void is never allowed (even in return position).
             check_void_type(
                 inner,
@@ -529,7 +558,7 @@ pub(crate) fn check_void_type(
                 diags,
             );
         }
-        TypeExpr::List { inner, .. } => {
+        TypeExprKind::List { inner, .. } => {
             check_void_type(
                 inner,
                 "a list type (`void[]`)".to_string(),
@@ -538,16 +567,16 @@ pub(crate) fn check_void_type(
                 diags,
             );
         }
-        TypeExpr::Map { key, value, .. } => {
+        TypeExprKind::Map { key, value, .. } => {
             check_void_type(key, "a map key type".to_string(), span, false, diags);
             check_void_type(value, "a map value type".to_string(), span, false, diags);
         }
-        TypeExpr::Union { variants, .. } => {
+        TypeExprKind::Union { variants, .. } => {
             for v in variants {
                 check_void_type(v, "a union member".to_string(), span, false, diags);
             }
         }
-        TypeExpr::Function {
+        TypeExprKind::Function {
             params,
             ret: _,
             throws,
@@ -563,6 +592,114 @@ pub(crate) fn check_void_type(
             }
         }
         // All other variants (primitives, path, etc.) cannot contain void.
+        _ => {}
+    }
+}
+
+/// Validate `_` placement in a `throws` clause, neutralizing illegal holes.
+///
+/// `_` is the open-contract marker (`throws AppError | _` or bare `throws _`),
+/// so it is allowed as a top-level member of the clause and is left in place
+/// (the TIR firewall fills it from the inferred throw set). But a `_` *nested*
+/// inside a thrown type (`throws Err<_>`) has nothing to infer from; it is
+/// reported and rewritten to an error sentinel (see [`check_wildcard_type`]) so
+/// it never reaches type checking as a `Ty::Infer`.
+pub(crate) fn check_throws_wildcard(
+    type_expr: &mut TypeExpr,
+    span: TextRange,
+    diags: &mut Vec<LoweringDiagnostic>,
+) {
+    match &mut type_expr.kind {
+        // Bare `throws _` — the whole error set is inferred; keep the hole.
+        TypeExprKind::Infer { .. } => {}
+        TypeExprKind::Union { variants, .. } => {
+            for v in variants {
+                // A top-level `_` member is the open slot (kept); anything
+                // deeper is a non-inferable nested hole (rewritten to an error).
+                if !matches!(v.kind, TypeExprKind::Infer { .. }) {
+                    check_wildcard_type(v, "a `throws` clause", span, diags);
+                }
+            }
+        }
+        _ => check_wildcard_type(type_expr, "a `throws` clause", span, diags),
+    }
+}
+
+/// Reject — and neutralize — the `_` wildcard type where it cannot be inferred.
+///
+/// `_` is an inference hole: it is only meaningful in a `let` binding annotation
+/// (filled from the initializer) or as a top-level `throws`-clause member
+/// (filled from the body's inferred throw set). In a signature, field, alias, or
+/// bound type there is nothing to infer it from. Every such occurrence is
+/// reported AND rewritten to [`TypeExprKind::Error`], so it lowers to the
+/// error-recovery `Ty::Unknown` sentinel rather than a `Ty::Infer` — which would
+/// otherwise reach type normalization, where an inference hole has no sound
+/// form (see `baml_type::normalize`). This keeps the invariant that a
+/// `Ty::Infer` only ever originates from the two hole-handling contexts.
+///
+/// Emits `WildcardTypeNotAllowed` for every occurrence at any depth.
+pub(crate) fn check_wildcard_type(
+    type_expr: &mut TypeExpr,
+    context: &str,
+    span: TextRange,
+    diags: &mut Vec<LoweringDiagnostic>,
+) {
+    match &mut type_expr.kind {
+        TypeExprKind::Infer { .. } => {
+            diags.push(LoweringDiagnostic::WildcardTypeNotAllowed {
+                context: context.to_string(),
+                span,
+            });
+            // Neutralize: a hole must never survive into TIR type checking.
+            type_expr.kind = TypeExprKind::Error { attrs: vec![] };
+        }
+        TypeExprKind::Optional { inner, .. } | TypeExprKind::List { inner, .. } => {
+            check_wildcard_type(inner, context, span, diags);
+        }
+        TypeExprKind::Map { key, value, .. } => {
+            check_wildcard_type(key, context, span, diags);
+            check_wildcard_type(value, context, span, diags);
+        }
+        TypeExprKind::Union { variants, .. } => {
+            for v in variants {
+                check_wildcard_type(v, context, span, diags);
+            }
+        }
+        TypeExprKind::Path {
+            generic_args,
+            associated_type_bindings,
+            ..
+        } => {
+            for arg in generic_args {
+                check_wildcard_type(arg, context, span, diags);
+            }
+            for binding in associated_type_bindings {
+                check_wildcard_type(&mut binding.ty, context, span, diags);
+            }
+        }
+        TypeExprKind::Function {
+            params,
+            ret,
+            throws,
+            ..
+        } => {
+            for p in params {
+                check_wildcard_type(&mut p.ty, context, span, diags);
+            }
+            check_wildcard_type(ret, context, span, diags);
+            if let Some(throws) = throws {
+                check_wildcard_type(throws, context, span, diags);
+            }
+        }
+        TypeExprKind::AssociatedTypeProjection {
+            base, interface, ..
+        } => {
+            check_wildcard_type(base, context, span, diags);
+            if let Some(iface) = interface {
+                check_wildcard_type(iface, context, span, diags);
+            }
+        }
+        // Primitives and other leaves cannot contain a wildcard.
         _ => {}
     }
 }

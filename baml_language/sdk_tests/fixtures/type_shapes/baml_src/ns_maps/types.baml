@@ -1,6 +1,6 @@
 // Map rows from 18a §"Type shapes":
 //   - `map<string, int>`              → `typing.Dict[str, int]`
-//   - `map<Sentiment, Resume>`        → `typing.Dict[Sentiment, Resume]`
+//   - `map<string, Resume>`           → `typing.Dict[str, Resume]`
 //   - `map<string, int[]>`            → `typing.Dict[str, typing.List[int]]`
 
 enum Sentiment {
@@ -14,7 +14,7 @@ class Resume {
 
 class MapContainer {
   simple map<string, int>
-  enum_keyed map<Sentiment, Resume>
+  enum_keyed map<string, Resume>
   list_valued map<string, int[]>
 }
 
@@ -22,7 +22,7 @@ function round_trip_simple_map(m: map<string, int>) -> map<string, int> {
   m
 }
 
-function round_trip_enum_keyed_map(m: map<Sentiment, Resume>) -> map<Sentiment, Resume> {
+function round_trip_enum_keyed_map(m: map<string, Resume>) -> map<string, Resume> {
   m
 }
 

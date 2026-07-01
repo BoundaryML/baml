@@ -24,12 +24,15 @@ pub(crate) mod lsp;
 pub(crate) mod manifest;
 pub(crate) mod pack_command;
 pub(crate) mod pack_elf;
+pub(crate) mod paint;
 pub(crate) mod playground_command;
 pub(crate) mod project_load;
 pub mod reporter;
 pub(crate) mod run_command;
+pub(crate) mod telemetry;
 pub(crate) mod test_command;
 pub(crate) mod test_filter;
+pub(crate) mod util;
 
 // TODO: These modules are disabled for now as they depend on baml_runtime
 // pub(crate) mod api_client;

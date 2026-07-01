@@ -1434,6 +1434,7 @@ function iter_impl_generics_only.core.Iterator.chain(self: iter_impl_generics_on
 }
 
 function iter_impl_generics_only.core.Iterator.collect(self: iter_impl_generics_only.core.Iterator<T, E>) -> T[] {
+    load_type #0
     alloc_array 0
     store_var r
 

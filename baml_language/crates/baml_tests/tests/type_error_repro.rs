@@ -144,3 +144,100 @@ async fn negated_int_min_literal_is_valid() {
         output.result
     );
 }
+
+// ============================================================================
+// §N+1 — Non-string map keys are rejected at compile time (B-533)
+// ============================================================================
+
+/// Runtime maps are string-keyed, so `map<int, V>` must fail during type
+/// checking instead of compiling and crashing when `.set()` coerces the key.
+#[tokio::test]
+#[should_panic(expected = "map keys must be `string`; got `int`")]
+async fn map_with_int_key_is_rejected_at_compile_time() {
+    let _ = baml_test!(
+        r#"
+        function main(nums: int[]) -> int {
+            let counts: map<int, int> = {};
+            for (let n in nums) {
+                let _ = counts.set(n, (counts.get(n) ?? 0) + 1);
+            }
+            0
+        }
+    "#
+    );
+}
+
+#[tokio::test]
+async fn map_with_string_alias_key_is_accepted() {
+    let output = baml_test!(
+        r#"
+        type Key = string
+
+        function main() -> int {
+            let counts: map<Key, int> = {};
+            let _ = counts.set("x", 1);
+            counts.get("x") ?? 0
+        }
+    "#
+    );
+    assert!(
+        matches!(output.result, Ok(BexExternalValue::Int(1))),
+        "expected aliased string key map to work, got: {:?}",
+        output.result
+    );
+}
+
+#[tokio::test]
+async fn map_with_repeated_string_alias_union_key_is_accepted() {
+    let output = baml_test!(
+        r#"
+        type Key = string
+
+        function main() -> int {
+            let counts: map<Key | Key, int> = {};
+            let _ = counts.set("x", 1);
+            counts.get("x") ?? 0
+        }
+    "#
+    );
+    assert!(
+        matches!(output.result, Ok(BexExternalValue::Int(1))),
+        "expected repeated aliased string key union map to work, got: {:?}",
+        output.result
+    );
+}
+
+#[tokio::test]
+async fn generic_map_key_annotation_is_deferred() {
+    let output = baml_test!(
+        r#"
+        function passthrough<K, V>(items: map<K, V>) -> map<K, V> {
+            items
+        }
+
+        function main() -> int {
+            0
+        }
+    "#
+    );
+    assert!(
+        matches!(output.result, Ok(BexExternalValue::Int(0))),
+        "expected generic map key annotation to compile, got: {:?}",
+        output.result
+    );
+}
+
+#[tokio::test]
+#[should_panic(expected = "map keys must be `string`; got `IntKey`")]
+async fn map_with_int_alias_key_is_rejected_at_compile_time() {
+    let _ = baml_test!(
+        r#"
+        type IntKey = int
+
+        function main() -> int {
+            let counts: map<IntKey, int> = {};
+            0
+        }
+    "#
+    );
+}

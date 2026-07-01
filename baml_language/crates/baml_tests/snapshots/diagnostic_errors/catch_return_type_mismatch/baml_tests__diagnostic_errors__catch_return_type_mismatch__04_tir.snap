@@ -7,11 +7,11 @@ function user.callee() -> bool throws user.Errors {
   { : never
     return true : true
   }
-  ?? 218..225: extraneous throws declaration: Errors
+  ?? 219..225: extraneous throws declaration: Errors
 }
 function user.caller() -> bool throws never {
   { : bool
-    catch (callee() : bool) : unknown
+    catch (callee() : bool) : bool
       catch (e)
         Errors.AuthenticationError =>
           { : never

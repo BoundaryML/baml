@@ -14,7 +14,7 @@ use std::{
 };
 
 use bex_events::run::{
-    EnvResolutionStatus, HostCallId, InMemoryRunStore, RequestCommandOutcome, RunId,
+    BoundaryId, EnvResolutionStatus, HostCallId, InMemoryRunStore, RequestCommandOutcome,
 };
 use bex_heap::BexHeap;
 use parking_lot::Mutex;
@@ -76,11 +76,16 @@ impl PlaygroundEnvState {
     }
 
     /// Resolve a pending env request through the run-scoped command path.
-    pub fn resolve_for_run(&self, run_id: RunId, id: u64, value: Option<String>) -> &'static str {
+    pub fn resolve_for_run(
+        &self,
+        boundary_id: BoundaryId,
+        id: u64,
+        value: Option<String>,
+    ) -> &'static str {
         let host_call_id = match self.pending.lock().get(&id) {
             Some(pending) => pending.host_call_id.clone(),
             None => {
-                let outcome = self.run_store.env_request_outcome_for_run(run_id, id);
+                let outcome = self.run_store.env_request_outcome_for_run(boundary_id, id);
                 return if outcome == RequestCommandOutcome::Accepted {
                     RequestCommandOutcome::Missing.as_wire_str()
                 } else {
@@ -88,7 +93,7 @@ impl PlaygroundEnvState {
                 };
             }
         };
-        if self.run_store.run_id_for_host_call(&host_call_id) != Some(run_id) {
+        if self.run_store.boundary_id_for_host_call(&host_call_id) != Some(boundary_id) {
             return RequestCommandOutcome::RejectedStale.as_wire_str();
         }
 
@@ -99,7 +104,7 @@ impl PlaygroundEnvState {
         };
         let result = self
             .run_store
-            .resolve_env_request_for_run(run_id, id, status, None);
+            .resolve_env_request_for_run(boundary_id, id, status, None);
         if result.outcome != RequestCommandOutcome::Accepted {
             return result.outcome.as_wire_str();
         }
@@ -107,7 +112,7 @@ impl PlaygroundEnvState {
         let Some(pending) = self.pending.lock().remove(&id) else {
             return self
                 .run_store
-                .env_request_outcome_for_run(run_id, id)
+                .env_request_outcome_for_run(boundary_id, id)
                 .as_wire_str();
         };
         if let Some(patch) = result.patch {
@@ -254,7 +259,9 @@ impl sys_ops::io::IoNamespaceEnv for PlaygroundEnv {
 
 #[cfg(test)]
 mod tests {
-    use bex_events::run::{ExecutionRequest, ProjectGeneration, ProjectId, RequestId, RunTarget};
+    use bex_events::run::{
+        BoundaryId, ExecutionRequest, ProjectGeneration, ProjectId, RequestId, RunTarget,
+    };
 
     use super::*;
 
@@ -265,6 +272,7 @@ mod tests {
         let session_store = Arc::new(PlaygroundSessionStore::default());
         let state = PlaygroundEnvState::new(broadcast_tx, run_store.clone(), session_store);
         let start = run_store.create_run(
+            BoundaryId::new_random(),
             ExecutionRequest {
                 project_id: ProjectId("project".to_string()),
                 project_generation: ProjectGeneration(1),
@@ -277,13 +285,13 @@ mod tests {
             RequestId(1),
         );
         let host = HostCallId::Native(CallId(42));
-        run_store.attach_host_call(start.run_id, host.clone());
+        run_store.attach_host_call(start.boundary_id, host.clone());
         run_store
             .ingest_env_requested(&host, 1, "API_KEY".to_string())
             .unwrap();
 
         assert_eq!(
-            state.resolve_for_run(start.run_id, 1, Some("secret".to_string())),
+            state.resolve_for_run(start.boundary_id, 1, Some("secret".to_string())),
             RequestCommandOutcome::Missing.as_wire_str()
         );
     }

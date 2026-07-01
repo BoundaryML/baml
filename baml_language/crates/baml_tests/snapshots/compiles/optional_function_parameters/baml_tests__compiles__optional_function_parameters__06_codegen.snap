@@ -8,6 +8,15 @@ function $init() -> null {
     return
 }
 
+function boundary.LocalId.capture(self: boundary.LocalId, inputs: bool | null, output: bool | null, error: bool | null) -> boundary.LocalId {
+}
+
+function boundary.id() -> boundary.LocalId {
+}
+
+function boundary.id.current() -> string {
+}
+
 function user.AskDocs(query: string, max_results: int, filter: string, client: baml.llm.Client) -> string {
     load_var max_results
     load_const <omitted>
@@ -41,6 +50,8 @@ function user.AskDocs(query: string, max_results: int, filter: string, client: b
     load_const "query"
     load_const "max_results"
     load_const "filter"
+    load_type string
+    load_type unknown
     alloc_map 3
     load_const <omitted>
     call baml.llm.call_llm_function
@@ -79,6 +90,8 @@ function user.AskDocs$build_request(query: string, max_results: int, filter: str
     load_const "query"
     load_const "max_results"
     load_const "filter"
+    load_type string
+    load_type unknown
     alloc_map 3
     load_const <omitted>
     call baml.llm.build_request
@@ -117,6 +130,8 @@ function user.AskDocs$build_request_stream(query: string, max_results: int, filt
     load_const "query"
     load_const "max_results"
     load_const "filter"
+    load_type string
+    load_type unknown
     alloc_map 3
     load_const <omitted>
     call baml.llm.build_request_stream
@@ -187,6 +202,8 @@ function user.AskDocs$render_prompt(query: string, max_results: int, filter: str
     load_const "query"
     load_const "max_results"
     load_const "filter"
+    load_type string
+    load_type unknown
     alloc_map 3
     load_const <omitted>
     call baml.llm.render_prompt
@@ -227,6 +244,8 @@ function user.AskDocs$stream(query: string, max_results: int, filter: string, cl
     load_const "query"
     load_const "max_results"
     load_const "filter"
+    load_type string
+    load_type unknown
     alloc_map 3
     load_const <omitted>
     call baml.llm.stream_llm_function
@@ -322,6 +341,7 @@ function user.SearchDocs(query: string, max_results: int, filter: string | null,
 
   L2:
     load_var query
+    load_type string
     alloc_array 1
     return
 }
@@ -359,28 +379,6 @@ function user.SearchService.Run(self: SearchService, query: string, limit: int) 
     return
 }
 
-function user.SearchService.from_json(j: baml.json.json) -> SearchService {
-    load_var j
-    load_const "base"
-    call baml.json.field
-    store_var _3
-    load_type string
-    load_var _3
-    call baml.json.from_json
-    init_instance user.SearchService .base
-    return
-}
-
-function user.SearchService.to_json(self: SearchService) -> baml.json.json {
-    load_type string
-    load_var self
-    load_field .base
-    call baml.json.to_json
-    load_const "base"
-    alloc_map 1
-    return
-}
-
 function user.TestClient$new() -> null {
     load_const "TestClient"
     load_const "openai"
@@ -396,8 +394,14 @@ function user.TestClient$new() -> null {
     load_const null
     load_const null
     load_const null
+    load_type string
+    load_type string
     alloc_map 0
+    load_type string
+    load_type string
     alloc_map 0
+    load_type string
+    load_type unknown
     alloc_map 0
     init_instance baml.llm.PrimitiveClientOptions .model, .base_url, .allowed_role_metadata, .finish_reason_allow_list, .finish_reason_deny_list, .supports_streaming, .default_role, .allowed_roles, .remap_roles, .api_key, .provider_options, .media_url_handler, .headers, .query_params, .request_body
     init_instance baml.llm.PrimitiveClient .name, .provider, .options

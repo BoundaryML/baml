@@ -8,6 +8,15 @@ function $init() -> null {
     return
 }
 
+function boundary.LocalId.capture(self: boundary.LocalId, inputs: bool | null, output: bool | null, error: bool | null) -> boundary.LocalId {
+}
+
+function boundary.id() -> boundary.LocalId {
+}
+
+function boundary.id.current() -> string {
+}
+
 function user.CommentAfterArrow(client: baml.llm.Client) -> string {
     load_var client
     load_const <omitted>
@@ -20,6 +29,8 @@ function user.CommentAfterArrow(client: baml.llm.Client) -> string {
     load_type string
     load_var client
     load_const "CommentAfterArrow"
+    load_type string
+    load_type unknown
     alloc_map 0
     load_const <omitted>
     call baml.llm.call_llm_function
@@ -37,6 +48,8 @@ function user.CommentAfterArrow$build_request(client: baml.llm.Client) -> baml.h
   L0:
     load_var client
     load_const "CommentAfterArrow"
+    load_type string
+    load_type unknown
     alloc_map 0
     load_const <omitted>
     call baml.llm.build_request
@@ -54,6 +67,8 @@ function user.CommentAfterArrow$build_request_stream(client: baml.llm.Client) ->
   L0:
     load_var client
     load_const "CommentAfterArrow"
+    load_type string
+    load_type unknown
     alloc_map 0
     load_const <omitted>
     call baml.llm.build_request_stream
@@ -103,6 +118,8 @@ function user.CommentAfterArrow$render_prompt(client: baml.llm.Client) -> baml.l
   L0:
     load_var client
     load_const "CommentAfterArrow"
+    load_type string
+    load_type unknown
     alloc_map 0
     load_const <omitted>
     call baml.llm.render_prompt
@@ -122,6 +139,8 @@ function user.CommentAfterArrow$stream(client: baml.llm.Client) -> baml.llm.Stre
     load_type string
     load_var client
     load_const "CommentAfterArrow"
+    load_type string
+    load_type unknown
     alloc_map 0
     load_const <omitted>
     call baml.llm.stream_llm_function
@@ -143,6 +162,8 @@ function user.FunctionWithComments(a: string, b: int, client: baml.llm.Client) -
     load_var2 1 2
     load_const "a"
     load_const "b"
+    load_type string
+    load_type unknown
     alloc_map 2
     load_const <omitted>
     call baml.llm.call_llm_function
@@ -163,6 +184,8 @@ function user.FunctionWithComments$build_request(a: string, b: int, client: baml
     load_var2 1 2
     load_const "a"
     load_const "b"
+    load_type string
+    load_type unknown
     alloc_map 2
     load_const <omitted>
     call baml.llm.build_request
@@ -183,6 +206,8 @@ function user.FunctionWithComments$build_request_stream(a: string, b: int, clien
     load_var2 1 2
     load_const "a"
     load_const "b"
+    load_type string
+    load_type unknown
     alloc_map 2
     load_const <omitted>
     call baml.llm.build_request_stream
@@ -235,6 +260,8 @@ function user.FunctionWithComments$render_prompt(a: string, b: int, client: baml
     load_var2 1 2
     load_const "a"
     load_const "b"
+    load_type string
+    load_type unknown
     alloc_map 2
     load_const <omitted>
     call baml.llm.render_prompt
@@ -257,6 +284,8 @@ function user.FunctionWithComments$stream(a: string, b: int, client: baml.llm.Cl
     load_var2 1 2
     load_const "a"
     load_const "b"
+    load_type string
+    load_type unknown
     alloc_map 2
     load_const <omitted>
     call baml.llm.stream_llm_function
@@ -278,8 +307,14 @@ function user.TestClient$new() -> null {
     load_const null
     load_const null
     load_const null
+    load_type string
+    load_type string
     alloc_map 0
+    load_type string
+    load_type string
     alloc_map 0
+    load_type string
+    load_type unknown
     alloc_map 0
     init_instance baml.llm.PrimitiveClientOptions .model, .base_url, .allowed_role_metadata, .finish_reason_allow_list, .finish_reason_deny_list, .supports_streaming, .default_role, .allowed_roles, .remap_roles, .api_key, .provider_options, .media_url_handler, .headers, .query_params, .request_body
     init_instance baml.llm.PrimitiveClient .name, .provider, .options

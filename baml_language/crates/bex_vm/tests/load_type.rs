@@ -16,7 +16,7 @@ use baml_project::testing::compile_source;
 use baml_type::{RuntimeTy, TyTemplate};
 use bex_vm::{BexVm, VmExecState};
 use bex_vm_types::{
-    ConstValue, GlobalIndex, Instruction, Object, ObjectIndex, Value,
+    ConstValue, FunctionCaptureProps, GlobalIndex, Instruction, Object, ObjectIndex, Value,
     bytecode::Bytecode,
     types::{Function, FunctionKind, FunctionOrigin, Program},
 };
@@ -66,6 +66,7 @@ fn inject_function(
         throws_type: None,
         origin: FunctionOrigin::UserDefined,
         body_meta: None,
+        capture: FunctionCaptureProps::disabled(),
         function_id: 0,
     };
 

@@ -46,6 +46,13 @@ pub enum Expression {
     BacktickString(t::BacktickString),
     ByteString(t::ByteString),
     Lambda(Box<LambdaExpr>),
+    /// A braceless `return …` in expression position (a `RETURN_EXPR`, e.g. a
+    /// `catch`/`match` arm value like `_ => return 0`). Held as a raw text range
+    /// like [`Expression::Unknown`], but kept as a distinct variant so the arm
+    /// printers can recognize it: when they wrap a braceless arm body into a
+    /// block they append the `;` that a block-position `return` requires, so the
+    /// output round-trips through `RETURN_STMT` (i.e. is idempotent).
+    Return(TextRange),
     Unknown(TextRange),
 }
 
@@ -136,6 +143,7 @@ impl FromCST for Expression {
                 t::ByteString::from_cst(elem).map(Expression::ByteString)?
             }
             SyntaxKind::LAMBDA_EXPR => Expression::Lambda(Box::new(LambdaExpr::from_cst(elem)?)),
+            SyntaxKind::RETURN_EXPR => Expression::Return(elem.text_range()),
             _ => Expression::Unknown(elem.text_range()),
         };
         Ok(expr)
@@ -185,7 +193,21 @@ impl Expression {
             }
             Expression::ByteString(bs) => Some(usize::from(bs.span().len())),
             Expression::Lambda(_) => None,
-            Expression::Unknown(_) => None,
+            Expression::Return(_) => None,
+            Expression::Unknown(range) => {
+                // Unmodeled nodes (e.g. `await f`, `x.as<T>`, `spawn { … }`,
+                // `throw e`) print their source verbatim (see `print`). When that
+                // text is a single line it occupies a known width and can sit
+                // inline like any other fitting expression. Reporting `None` here
+                // used to force every *enclosing* expression to wrap even when the
+                // whole thing fit the width budget (B-231).
+                let text = &input.input[*range];
+                if text.contains('\n') {
+                    None
+                } else {
+                    Some(text.trim_start().len())
+                }
+            }
         }
     }
 }
@@ -223,9 +245,24 @@ impl Printable for Expression {
             Expression::BacktickString(bt) => bt.print(shape, printer),
             Expression::ByteString(bs) => bs.print(shape, printer),
             Expression::Lambda(lambda) => lambda.print(shape, printer),
-            Expression::Unknown(range) => {
+            // Print the raw `return …` text. The arm printers add the `;` when
+            // they wrap this into a block (see `CatchArm`/`MatchArm`). A braceless
+            // `return` only appears as a whole arm value, never nested inside
+            // another expression, so it always reports multi-lined.
+            Expression::Return(range) => {
                 printer.print_input_range_trimmed_start(*range);
                 PrintInfo::default_multi_lined()
+            }
+            // Unmodeled nodes print their source verbatim. Report `multi_lined`
+            // honestly from whether that text spans multiple lines: a single-line
+            // unknown node (`await f`, `x.as<T>`, …) must not claim to be
+            // multi-line, or it force-wraps its parents even when everything fits
+            // on one line (B-231).
+            Expression::Unknown(range) => {
+                printer.print_input_range_trimmed_start(*range);
+                PrintInfo {
+                    multi_lined: printer.input[*range].contains('\n'),
+                }
             }
         }
     }
@@ -257,7 +294,7 @@ impl Printable for Expression {
             Expression::BacktickString(bt) => bt.leftmost_token(),
             Expression::ByteString(bs) => bs.leftmost_token(),
             Expression::Lambda(lambda) => lambda.leftmost_token(),
-            Expression::Unknown(range) => *range,
+            Expression::Return(range) | Expression::Unknown(range) => *range,
         }
     }
     fn rightmost_token(&self) -> TextRange {
@@ -288,7 +325,7 @@ impl Printable for Expression {
             Expression::BacktickString(bt) => bt.rightmost_token(),
             Expression::ByteString(bs) => bs.rightmost_token(),
             Expression::Lambda(lambda) => lambda.rightmost_token(),
-            Expression::Unknown(range) => *range,
+            Expression::Return(range) | Expression::Unknown(range) => *range,
         }
     }
 }
@@ -368,10 +405,30 @@ pub struct PathExpr {
     pub generic_args: Option<GenericArgs>,
 }
 
+fn is_path_segment_kind(kind: SyntaxKind) -> bool {
+    matches!(
+        kind,
+        SyntaxKind::WORD | SyntaxKind::KW_CLIENT | SyntaxKind::KW_SPAWN | SyntaxKind::KW_AWAIT
+    )
+}
+
+fn path_segment_from_cst(elem: SyntaxElement) -> Result<t::Word, StrongAstError> {
+    let token = StrongAstError::assert_is_token(elem)?;
+    if is_path_segment_kind(token.kind()) {
+        Ok(t::Word::new_from_span(token.text_range()))
+    } else {
+        Err(StrongAstError::UnexpectedKindDesc {
+            expected_desc: "path segment".into(),
+            found: token.kind(),
+            at: token.text_range(),
+        })
+    }
+}
+
 impl FromCST for PathExpr {
     fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
-        if elem.kind() == SyntaxKind::WORD {
-            let first = t::Word::from_cst(elem)?;
+        if is_path_segment_kind(elem.kind()) {
+            let first = path_segment_from_cst(elem)?;
             return Ok(PathExpr {
                 first,
                 rest: Vec::new(),
@@ -390,7 +447,7 @@ impl FromCST for PathExpr {
             .ok_or_else(|| StrongAstError::missing(SyntaxKind::WORD, it.parent))?;
 
         let (first, mut rest) = match next.kind() {
-            SyntaxKind::WORD => (t::Word::from_cst(next)?, Vec::new()),
+            kind if is_path_segment_kind(kind) => (path_segment_from_cst(next)?, Vec::new()),
             SyntaxKind::PATH_EXPR => {
                 let nested = PathExpr::from_cst(next)?;
                 if nested.generic_args.is_some() {
@@ -419,7 +476,7 @@ impl FromCST for PathExpr {
             match elem.kind() {
                 SyntaxKind::DOT => {
                     let dot = t::Dot::from_cst(elem)?;
-                    let word = it.expect_parse()?;
+                    let word = path_segment_from_cst(it.expect_next("path segment after `.`")?)?;
                     rest.push((dot, word));
                 }
                 SyntaxKind::GENERIC_ARGS => {
@@ -1733,6 +1790,11 @@ impl Printable for MatchArm {
                     &self.body,
                     shape.indent + printer.config.indent_width,
                 );
+                // A braceless `return` wrapped into a block needs its statement
+                // `;` so the output round-trips through `RETURN_STMT`.
+                if matches!(&self.body, Expression::Return(_)) {
+                    printer.print_str(";");
+                }
                 printer.print_newline();
                 printer.print_spaces(shape.indent);
                 printer.print_str("},");
@@ -1793,6 +1855,11 @@ impl Printable for MatchArm {
                 &self.body,
                 shape.indent + printer.config.indent_width,
             );
+            // A braceless `return` wrapped into a block needs its statement `;`
+            // so the output round-trips through `RETURN_STMT`.
+            if matches!(&self.body, Expression::Return(_)) {
+                printer.print_str(";");
+            }
             printer.print_newline();
             printer.print_spaces(shape.indent);
             printer.print_str("},");
@@ -1929,11 +1996,12 @@ impl Printable for CatchExpr {
     }
 }
 
-/// The `catch` or `catch_all` keyword that starts a catch clause.
+/// The `catch`, `catch_all`, or `catch_all_panics` keyword that starts a catch clause.
 #[derive(Debug)]
 pub enum CatchKeyword {
     Catch(t::Catch),
     CatchAll(t::CatchAll),
+    CatchAllPanics(t::CatchAllPanics),
 }
 
 impl FromCST for CatchKeyword {
@@ -1941,8 +2009,11 @@ impl FromCST for CatchKeyword {
         match elem.kind() {
             SyntaxKind::KW_CATCH => t::Catch::from_cst(elem).map(Self::Catch),
             SyntaxKind::KW_CATCH_ALL => t::CatchAll::from_cst(elem).map(Self::CatchAll),
+            SyntaxKind::KW_CATCH_ALL_PANICS => {
+                t::CatchAllPanics::from_cst(elem).map(Self::CatchAllPanics)
+            }
             found => Err(StrongAstError::UnexpectedKindDesc {
-                expected_desc: "KW_CATCH or KW_CATCH_ALL".into(),
+                expected_desc: "KW_CATCH, KW_CATCH_ALL, or KW_CATCH_ALL_PANICS".into(),
                 found,
                 at: elem.text_range(),
             }),
@@ -1955,6 +2026,7 @@ impl Token for CatchKeyword {
         match self {
             CatchKeyword::Catch(keyword) => keyword.span(),
             CatchKeyword::CatchAll(keyword) => keyword.span(),
+            CatchKeyword::CatchAllPanics(keyword) => keyword.span(),
         }
     }
 }
@@ -2182,6 +2254,11 @@ impl Printable for CatchArm {
                 &self.body,
                 shape.indent + printer.config.indent_width,
             );
+            // A braceless `return` wrapped into a block needs its statement `;`
+            // so the output round-trips through `RETURN_STMT` (idempotent).
+            if matches!(&self.body, Expression::Return(_)) {
+                printer.print_str(";");
+            }
             printer.print_newline();
             printer.print_spaces(shape.indent);
             printer.print_str("}");

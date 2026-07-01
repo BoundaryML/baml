@@ -12,8 +12,8 @@
 use baml_base::SourceFile;
 
 use crate::ids::{
-    ClassMarker, ClientMarker, EnumMarker, FunctionMarker, InterfaceMarker, LetMarker, LocalItemId,
-    RetryPolicyMarker, TemplateStringMarker, TestMarker, TypeAliasMarker,
+    ClassMarker, ClientMarker, EnumMarker, FunctionMarker, ImplMarker, InterfaceMarker, LetMarker,
+    LocalItemId, RetryPolicyMarker, TemplateStringMarker, TestMarker, TypeAliasMarker,
 };
 
 #[salsa::interned]
@@ -74,6 +74,18 @@ pub struct RetryPolicyLoc<'db> {
 pub struct LetLoc<'db> {
     pub file: SourceFile,
     pub id: LocalItemId<LetMarker>,
+}
+
+/// Stable identity for an `implements` block (both kinds: in-body and
+/// out-of-body). Unlike the other `*Loc` types, an impl has no declared name,
+/// so its `LocalItemId` is seeded from the impl's structural identity (its
+/// interface-target and for-target heads) rather than a name hash — see
+/// `ItemTree` allocation. Impls are not name-addressable, so `ImplLoc` is
+/// intentionally absent from `Definition`/`ItemId`.
+#[salsa::interned]
+pub struct ImplLoc<'db> {
+    pub file: SourceFile,
+    pub id: LocalItemId<ImplMarker>,
 }
 
 // ── Manual Debug impls ───────────────────────────────────────────────────────
@@ -137,6 +149,12 @@ impl std::fmt::Debug for RetryPolicyLoc<'_> {
 impl std::fmt::Debug for LetLoc<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "LetLoc(..)")
+    }
+}
+
+impl std::fmt::Debug for ImplLoc<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "ImplLoc(..)")
     }
 }
 

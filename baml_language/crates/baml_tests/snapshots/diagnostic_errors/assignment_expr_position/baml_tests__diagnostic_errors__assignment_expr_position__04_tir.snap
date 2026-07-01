@@ -8,5 +8,5 @@ function user.assignment_in_expression_position() -> int throws never {
     let y = <missing> : never
     y : unknown
   }
-  ?? 349..370: unreachable code: 1 statement(s) after diverging statement
+  ?? 354..370: unreachable code: 1 statement(s) after diverging statement
 }

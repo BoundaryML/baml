@@ -8,7 +8,7 @@ function user.namespaced_generic_class_type_pattern_requires_type_args(boxed: us
       root.llm.openai.Box =>
         1 : 1
   }
-  !! 127..155: type mismatch: expected llm.openai.Box<int>, got llm.openai.Box
+  !! 136..155: type mismatch: expected llm.openai.Box<int>, got llm.openai.Box
 }
 function user.namespace_relative_generic_class_type_pattern_requires_type_args(boxed: user.llm.openai.Box<int>) -> int throws never {
   { : 1
@@ -16,7 +16,7 @@ function user.namespace_relative_generic_class_type_pattern_requires_type_args(b
       llm.openai.Box =>
         1 : 1
   }
-  !! 300..323: type mismatch: expected llm.openai.Box<int>, got llm.openai.Box
+  !! 309..323: type mismatch: expected llm.openai.Box<int>, got llm.openai.Box
 }
 function user.namespaced_generic_class_type_pattern_rejects_extra_type_args(boxed: user.llm.openai.Box<int>) -> int throws never {
   { : 1 | 0
@@ -26,8 +26,8 @@ function user.namespaced_generic_class_type_pattern_rejects_extra_type_args(boxe
       _ =>
         0 : 0
   }
-  !! 470..511: type mismatch: expected llm.openai.Box<int>, got llm.openai.Box<int, string>
-  !! 470..511: type `Box` expects 1 type argument(s), got 2
+  !! 479..511: type mismatch: expected llm.openai.Box<int>, got llm.openai.Box<int, string>
+  !! 479..511: type `Box` expects 1 type argument(s), got 2
   !! 531..532: unreachable arm
 }
 function user.namespaced_non_generic_class_type_pattern_rejects_type_args(response: user.llm.openai.Response) -> int throws never {
@@ -36,8 +36,8 @@ function user.namespaced_non_generic_class_type_pattern_rejects_type_args(respon
       root.llm.openai.Response<int> =>
         1 : 1
   }
-  !! 678..716: type mismatch: expected llm.openai.Response, got llm.openai.Response<int>
-  !! 678..716: type `Response` expects 0 type argument(s), got 1
+  !! 687..716: type mismatch: expected llm.openai.Response, got llm.openai.Response<int>
+  !! 687..716: type `Response` expects 0 type argument(s), got 1
 }
 function user.namespaced_class_destructure_unknown_field(response: user.llm.openai.Response) -> int throws never {
   { : 1 | 0
@@ -52,20 +52,8 @@ function user.namespaced_class_destructure_unknown_field(response: user.llm.open
 class user.llm.openai.Box {
   value: T
 }
-function user.llm.openai.Box.to_json(self: user.llm.openai.Box) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "value": baml.json.to_json(self.value) } : map<string, baml.json.json>
-}
-function user.llm.openai.Box.from_json(j: baml.json.json) -> user.llm.openai.Box<unknown> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  Box { value: baml.json.from_json<T>(baml.json.field(j, "value")) } : user.llm.openai.Box<T>
-}
 class user.llm.openai.Response {
   score: int
-}
-function user.llm.openai.Response.to_json(self: user.llm.openai.Response) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "score": baml.json.to_json(self.score) } : map<string, baml.json.json>
-}
-function user.llm.openai.Response.from_json(j: baml.json.json) -> user.llm.openai.Response throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  Response { score: baml.json.from_json<int>(baml.json.field(j, "score")) } : user.llm.openai.Response
 }
 class user.llm.openai.Box$stream {
   value: T | null
