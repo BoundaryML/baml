@@ -1370,6 +1370,13 @@ fn can_be_virtual(
         return !du.uses.is_empty();
     }
 
+    // `Rvalue::Len` must be materialized eagerly at the binding site.
+    // Re-evaluating a virtualized `len` after intervening mutations (e.g.
+    // `push`) changes observable semantics for `let` bindings.
+    if matches!(def.rvalue, Rvalue::Len(_)) {
+        return false;
+    }
+
     // For non-constant rvalues, require exactly one definition site.
     // Virtual emission inlines `du.def` directly; multiple defs would be ambiguous.
     if !has_single_def {
@@ -1912,7 +1919,10 @@ fn get_copy_source(
 
 #[cfg(test)]
 mod tests {
-    use baml_compiler2_mir::{BasicBlock, Constant, Operand, Place, Statement, Terminator};
+    use baml_compiler2_mir::{
+        BasicBlock, Constant, LocalDecl, MirFunctionBody, Operand, Place, Statement, Terminator,
+    };
+    use baml_type::{RuntimeTy, TyAttr};
 
     use super::*;
 
@@ -2004,5 +2014,71 @@ mod tests {
         assert!(!is_call_result_aggregate_operand(
             target, &du, &body, &def_use,
         ));
+    }
+
+    /// Builds a minimal integer local declaration for MIR analysis tests.
+    fn int_local_decl(name: Option<&str>) -> LocalDecl {
+        LocalDecl {
+            name: name.map(baml_base::Name::new),
+            ty: RuntimeTy::Int {
+                attr: TyAttr::default(),
+            },
+            span: None,
+            scope_span: None,
+            is_watched: false,
+            is_captured: false,
+        }
+    }
+
+    /// Verifies `Rvalue::Len` bindings are always classified as materialized locals.
+    #[test]
+    fn len_bindings_are_not_virtualized() {
+        let arr = Local(1);
+        let len = Local(2);
+        let body = MirFunctionBody {
+            blocks: vec![BasicBlock {
+                id: BlockId(0),
+                statements: vec![
+                    Statement {
+                        kind: StatementKind::Assign {
+                            destination: Place::Local(arr),
+                            value: Rvalue::Use(Operand::Constant(Constant::Null)),
+                        },
+                        span: None,
+                    },
+                    Statement {
+                        kind: StatementKind::Assign {
+                            destination: Place::Local(len),
+                            value: Rvalue::Len(Place::Local(arr)),
+                        },
+                        span: None,
+                    },
+                    Statement {
+                        kind: StatementKind::Assign {
+                            destination: Place::Local(Local(0)),
+                            value: Rvalue::Use(Operand::copy_local(len)),
+                        },
+                        span: None,
+                    },
+                ],
+                terminator: Some(Terminator::Return),
+                span: None,
+                terminator_span: None,
+            }],
+            entry: BlockId(0),
+            locals: vec![
+                int_local_decl(None),
+                int_local_decl(Some("arr")),
+                int_local_decl(Some("n")),
+            ],
+            catch_regions: vec![],
+            viz_nodes: vec![],
+        };
+
+        let analysis = AnalysisResult::analyze(&body, 0, OptLevel::One);
+        assert_eq!(
+            analysis.classifications.get(&len),
+            Some(&LocalClassification::Real)
+        );
     }
 }

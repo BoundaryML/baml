@@ -1362,12 +1362,16 @@ function testing.TestRegistry.run_all(self: testing.TestRegistry) -> testing.Tes
 function testing.TestRegistry.run_filtered(self: testing.TestRegistry, include: string[], exclude: string[]) -> testing.FlatTestReport {
     load_var include
     container_len
+    store_var _7
+    load_var _7
     load_const 0
     cmp_int_op ==
     jump_if_false L0
     pop 1
     load_var exclude
     container_len
+    store_var _8
+    load_var _8
     load_const 0
     cmp_int_op ==
 
@@ -1380,7 +1384,7 @@ function testing.TestRegistry.run_filtered(self: testing.TestRegistry, include: 
     load_var exclude
     call testing.select_names
     store_var _9
-    load_var2 1 4
+    load_var2 1 6
     call testing.TestRegistry.run_selected
     jump L3
 
@@ -2983,10 +2987,11 @@ function testing.aggregate_reports(named_results: testing.NamedChildReport[]) ->
 
   L25:
     load_var result
-    store_var report
-    load_var report
+    store_var_load_var report
     load_field .failed_names
     container_len
+    store_var _53
+    load_var _53
     load_const 0
     cmp_int_op >
     pop_jump_if_false L26
@@ -3156,7 +3161,7 @@ function testing.aggregate_reports(named_results: testing.NamedChildReport[]) ->
     jump L51
 
   L50:
-    load_var2 5 15
+    load_var2 5 16
     call baml.Array.push
     pop 1
     jump L30
@@ -3206,9 +3211,11 @@ function testing.aggregate_reports(named_results: testing.NamedChildReport[]) ->
     store_var _98
     load_var failed
     store_var _99
-    load_var2 16 17
-    load_var2 18 6
+    load_var results
     container_len
+    store_var _100
+    load_var2 17 18
+    load_var2 19 20
     load_var2 5 6
     init_instance testing.TestSetReport .outcome, .passed, .failed, .total, .failed_names, .results
     return
@@ -4399,6 +4406,8 @@ function testing.count_leaves(results: (testing.TestReport | testing.TestSetRepo
     load_var tsr
     load_field .results
     container_len
+    store_var _48
+    load_var _48
     load_const 0
     cmp_int_op >
     pop_jump_if_false L24
@@ -4553,6 +4562,8 @@ function testing.flatten_with_tolerated(report: testing.TestSetReport) -> testin
     load_var report
     load_field .results
     container_len
+    store_var _6
+    load_var _6
     load_const 0
     cmp_int_op >
     pop_jump_if_false L0
@@ -4767,6 +4778,8 @@ function testing.leaf_selected(name: string, include: testing.FilterPat[], exclu
   L0:
     load_var include
     container_len
+    store_var _9
+    load_var _9
     load_const 0
     cmp_int_op ==
     pop_jump_if_false L1

@@ -23,11 +23,13 @@ function baml.Array.filter_map(self: baml.Array<T>, fn: (T) -> U | null throws E
     load_type #1
     alloc_array 0
     store_var out
+    load_var self
+    container_len
+    store_var _5
     load_type #0
     load_var self
     load_const 0
-    load_var self
-    container_len
+    load_var _5
     call baml.Array.slice
     store_var _4
     load_type #0
@@ -186,7 +188,7 @@ function baml.Array.filter_map(self: baml.Array<T>, fn: (T) -> U | null throws E
     jump L24
 
   L22:
-    load_var2 6 2
+    load_var2 7 2
     call_indirect
     store_var _40
     load_var _40
@@ -196,7 +198,7 @@ function baml.Array.filter_map(self: baml.Array<T>, fn: (T) -> U | null throws E
     jump L0
 
   L23:
-    load_var2 3 7
+    load_var2 3 8
     call baml.Array.push
     pop 1
     jump L0
@@ -225,11 +227,13 @@ function baml.Array.flat_map(self: baml.Array<T>, f: (T) -> U[] throws E) -> U[]
 }
 
 function baml.Array.for_each(self: baml.Array<T>, fn: (T) -> void throws E) -> void {
+    load_var self
+    container_len
+    store_var _4
     load_type #0
     load_var self
     load_const 0
-    load_var self
-    container_len
+    load_var _4
     call baml.Array.slice
     store_var _3
     load_type #0
@@ -388,7 +392,7 @@ function baml.Array.for_each(self: baml.Array<T>, fn: (T) -> void throws E) -> v
     jump L23
 
   L22:
-    load_var2 5 2
+    load_var2 6 2
     call_indirect
     pop 1
     jump L0
@@ -1803,6 +1807,8 @@ function baml.csv.CsvReader._read_chunk(self: baml.csv.CsvReader) -> null {
   L5:
     load_var chunk
     container_len
+    store_var _17
+    load_var _17
     load_const 0
     cmp_int_op ==
     pop_jump_if_false L6
@@ -2712,6 +2718,8 @@ function baml.csv.decode_one(source: string | uint8array, options: baml.csv.Read
     store_var all
     load_var all
     container_len
+    store_var _7
+    load_var _7
     load_const 0
     cmp_int_op ==
     pop_jump_if_false L1
@@ -2720,6 +2728,8 @@ function baml.csv.decode_one(source: string | uint8array, options: baml.csv.Read
   L1:
     load_var all
     container_len
+    store_var _10
+    load_var _10
     load_const 1
     cmp_int_op >
     pop_jump_if_false L2
@@ -2751,6 +2761,8 @@ function baml.csv.decode_one(source: string | uint8array, options: baml.csv.Read
   L6:
     load_var all
     container_len
+    store_var _14
+    load_var _14
     call baml.json.stringify
     store_var _13
     load_const baml.csv.CsvErrorKind.TooManyRows
@@ -2784,6 +2796,8 @@ function baml.csv.decode_optional(source: string | uint8array, options: baml.csv
     store_var all
     load_var all
     container_len
+    store_var _7
+    load_var _7
     load_const 1
     cmp_int_op >
     pop_jump_if_false L1
@@ -2799,6 +2813,8 @@ function baml.csv.decode_optional(source: string | uint8array, options: baml.csv
   L2:
     load_var all
     container_len
+    store_var _11
+    load_var _11
     call baml.json.stringify
     store_var _10
     load_const baml.csv.CsvErrorKind.TooManyRows
@@ -3836,9 +3852,11 @@ function baml.iter.ArrayIterator$stream.Iterator.next(self: baml.iter.ArrayItera
     load_var self
     load_field .1
     store_var _3
-    load_var2 2 1
+    load_var self
     load_field .0
     container_len
+    store_var _4
+    load_var2 2 3
     cmp_int_op >=
     pop_jump_if_false L0
     jump L1
@@ -3874,9 +3892,11 @@ function baml.iter.ArrayIterator.Iterator.next(self: baml.iter.ArrayIterator<T>)
     load_var self
     load_field .1
     store_var _3
-    load_var2 2 1
+    load_var self
     load_field .0
     container_len
+    store_var _4
+    load_var2 2 3
     cmp_int_op >=
     pop_jump_if_false L0
     jump L1
@@ -7246,6 +7266,8 @@ function baml.llm.Client.build_attempt_with_state(self: baml.llm.Client, planner
     load_var self
     load_field .sub_clients
     container_len
+    store_var _78
+    load_var _78
     load_const 0
     cmp_int_op ==
     pop_jump_if_false L2
@@ -7258,10 +7280,12 @@ function baml.llm.Client.build_attempt_with_state(self: baml.llm.Client, planner
     load_var self
     load_field .counter
     store_var _82
-    load_var2 2 12
-    load_var2 13 1
+    load_var self
     load_field .sub_clients
     container_len
+    store_var _83
+    load_var2 2 13
+    load_var2 14 15
     call baml.llm.PlannerState.rr_pick_index
     store_var idx
     load_var self
@@ -7873,6 +7897,8 @@ function baml.llm.Client.execute_once_oneshot(self: baml.llm.Client, context: ba
     load_var self
     load_field .sub_clients
     container_len
+    store_var _75
+    load_var _75
     load_const 0
     cmp_int_op ==
     pop_jump_if_false L2
@@ -7883,6 +7909,10 @@ function baml.llm.Client.execute_once_oneshot(self: baml.llm.Client, context: ba
     load_field .counter
     store_var _79
     load_var self
+    load_field .sub_clients
+    container_len
+    store_var _80
+    load_var self
     copy 0
     load_field .counter
     load_const 1
@@ -7891,9 +7921,7 @@ function baml.llm.Client.execute_once_oneshot(self: baml.llm.Client, context: ba
     load_type #0
     load_var self
     load_field .sub_clients
-    load_var2 16 1
-    load_field .sub_clients
-    container_len
+    load_var2 17 18
     mod_int
     load_array_element
     load_var2 2 3
@@ -8178,6 +8206,8 @@ function baml.llm.Client.execute_once_stream(self: baml.llm.Client, context: bam
     load_var self
     load_field .sub_clients
     container_len
+    store_var _62
+    load_var _62
     load_const 0
     cmp_int_op ==
     pop_jump_if_false L2
@@ -8188,6 +8218,10 @@ function baml.llm.Client.execute_once_stream(self: baml.llm.Client, context: bam
     load_field .counter
     store_var _66
     load_var self
+    load_field .sub_clients
+    container_len
+    store_var _67
+    load_var self
     copy 0
     load_field .counter
     load_const 1
@@ -8197,9 +8231,7 @@ function baml.llm.Client.execute_once_stream(self: baml.llm.Client, context: bam
     load_type #1
     load_var self
     load_field .sub_clients
-    load_var2 12 1
-    load_field .sub_clients
-    container_len
+    load_var2 13 14
     mod_int
     load_array_element
     load_var2 2 3

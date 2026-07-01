@@ -312,6 +312,9 @@ function glob.scan_default_prunes_dot_directories_checks() -> bool[] {
     load_var root
     sys_op baml.glob.Glob.scan
     store_var result
+    load_var result
+    container_len
+    store_var _27
     load_type string
     load_var result
     load_const "visible.txt"
@@ -323,8 +326,7 @@ function glob.scan_default_prunes_dot_directories_checks() -> bool[] {
     load_const null
     sys_op baml.sys.shell
     pop 1
-    load_var result
-    container_len
+    load_var _27
     load_const 1
     cmp_int_op ==
     load_var _28
@@ -465,6 +467,9 @@ function glob.scan_follows_symlinked_directory_checks() -> bool[] {
     init_instance baml.glob.ScanOptions .cwd, .dot, .absolute, .follow_symlinks, .throw_error_on_broken_symlink, .only_files
     sys_op baml.glob.Glob.scan
     store_var result
+    load_var result
+    container_len
+    store_var _25
     load_type string
     load_var result
     load_const "link_dir/hidden_via_link.txt"
@@ -480,8 +485,7 @@ function glob.scan_follows_symlinked_directory_checks() -> bool[] {
     load_const null
     sys_op baml.sys.shell
     pop 1
-    load_var result
-    container_len
+    load_var _25
     load_const 1
     cmp_int_op ==
     load_var _26
@@ -519,6 +523,9 @@ function glob.scan_matches_absolute_pattern_checks() -> bool[] {
     init_instance baml.glob.ScanOptions .cwd, .dot, .absolute, .follow_symlinks, .throw_error_on_broken_symlink, .only_files
     sys_op baml.glob.Glob.scan
     store_var result
+    load_var result
+    container_len
+    store_var _17
     load_type string
     load_var2 3 1
     load_const "/file.txt"
@@ -531,8 +538,7 @@ function glob.scan_matches_absolute_pattern_checks() -> bool[] {
     load_const null
     sys_op baml.sys.shell
     pop 1
-    load_var result
-    container_len
+    load_var _17
     load_const 1
     cmp_int_op ==
     load_var _18
@@ -598,6 +604,9 @@ function glob.scan_only_files_by_default_checks() -> bool[] {
     load_var root
     sys_op baml.glob.Glob.scan
     store_var result
+    load_var result
+    container_len
+    store_var _17
     load_type string
     load_var result
     load_const "file.txt"
@@ -609,8 +618,7 @@ function glob.scan_only_files_by_default_checks() -> bool[] {
     load_const null
     sys_op baml.sys.shell
     pop 1
-    load_var result
-    container_len
+    load_var _17
     load_const 1
     cmp_int_op ==
     load_var _18
@@ -659,6 +667,9 @@ function glob.scan_opts_include_dot_absolute_and_dirs_checks() -> bool[] {
     init_instance baml.glob.ScanOptions .cwd, .dot, .absolute, .follow_symlinks, .throw_error_on_broken_symlink, .only_files
     sys_op baml.glob.Glob.scan
     store_var result
+    load_var result
+    container_len
+    store_var _21
     load_type string
     load_var2 3 1
     load_const "/.hidden.txt"
@@ -683,11 +694,10 @@ function glob.scan_opts_include_dot_absolute_and_dirs_checks() -> bool[] {
     load_const null
     sys_op baml.sys.shell
     pop 1
-    load_var result
-    container_len
+    load_var _21
     load_const 3
     cmp_int_op ==
-    load_var2 4 5
+    load_var2 5 6
     load_var _30
     load_type bool
     alloc_array 4
