@@ -708,6 +708,17 @@ impl<T> io::IoNamespaceLlm for T {
         SysOpOutput::ok(info.return_type.clone())
     }
 
+    fn prompt_to_text(
+        &self,
+        _heap: &std::sync::Arc<BexHeap>,
+        _call_id: CallId,
+        prompt: io::owned::llm::PromptAst,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<String> {
+        let ast = unwrap_prompt_ast(&prompt);
+        SysOpOutput::ok(prompt_ast_to_text(&ast))
+    }
+
     fn from_shorthand(
         &self,
         _heap: &std::sync::Arc<BexHeap>,
@@ -823,6 +834,41 @@ fn prompt_value_text(v: &BexExternalValue) -> String {
 /// content. With no `Role` values the whole template is a single
 /// `PromptAst::Simple`. Mirrors the message-folding of `parse_chat_prompt` but
 /// off the structured arrays instead of magic-delimiter string parsing.
+/// Flatten a `PromptAst` into a single plain-text string: every message's textual
+/// content, concatenated with a newline between messages. Media parts are skipped and
+/// role structure is dropped (v1 bridge for a string-taking BAML provider).
+fn prompt_ast_to_text(ast: &baml_builtins2::PromptAst) -> String {
+    use baml_builtins2::{PromptAst, PromptAstSimple};
+    fn simple_text(s: &PromptAstSimple, out: &mut String) {
+        match s {
+            PromptAstSimple::String(t) => out.push_str(t),
+            PromptAstSimple::Media(_) => {}
+            PromptAstSimple::Multiple(items) => {
+                for it in items {
+                    simple_text(it, out);
+                }
+            }
+        }
+    }
+    fn walk(a: &PromptAst, out: &mut String) {
+        match a {
+            PromptAst::Simple(s) => simple_text(s, out),
+            PromptAst::Message { content, .. } => {
+                simple_text(content, out);
+                out.push('\n');
+            }
+            PromptAst::Vec(items) => {
+                for it in items {
+                    walk(it, out);
+                }
+            }
+        }
+    }
+    let mut out = String::new();
+    walk(ast, &mut out);
+    out.trim_end().to_string()
+}
+
 fn assemble_prompt_ast_impl(
     parts: &[String],
     values: &[BexExternalValue],

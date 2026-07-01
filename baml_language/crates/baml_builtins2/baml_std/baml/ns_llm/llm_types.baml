@@ -370,6 +370,19 @@ class Client {
         // companion uses — so execution and preview never drift.
         let specialized = primitive.render_specialized_prompt(
           context.jinja_string, context.args, return_type, context.prompt_closure)
+
+        // NEW PROVIDER PATH: route OpenAI through the BAML-authored `baml.ai.OpenAi`
+        // provider (request/response logic in BAML). Other providers keep the legacy
+        // Rust path below until they are ported. See _plan/deviations.md.
+        if (primitive.provider == "openai") {
+          let oai = root.ai.OpenAi {
+            model: primitive.options.model ?? "gpt-4o",
+            api_key: primitive.options.api_key ?? "",
+            base_url: primitive.options.base_url,
+          };
+          return oai.call<T>(prompt_to_text(specialized));
+        }
+
         let http_request = primitive.build_request(specialized, return_type)
         let http_response = root.http.send(http_request)
 
@@ -789,6 +802,14 @@ function prompt(
 }
 
 function get_return_type(function_name: string) -> type throws root.errors.InvalidArgument {
+  $rust_io_function
+}
+
+/// Flatten a rendered `PromptAst` into a single plain-text string (message contents
+/// concatenated, one per line). Used to bridge the rendered prompt into a BAML-authored
+/// provider whose `call` takes a `string`. NOTE: role structure is flattened for now —
+/// message roles (system/user/…) collapse into the concatenated text.
+function prompt_to_text(prompt: PromptAst) -> string throws never {
   $rust_io_function
 }
 

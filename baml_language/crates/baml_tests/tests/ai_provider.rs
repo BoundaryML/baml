@@ -208,3 +208,75 @@ async fn openai_structured_live_call() {
         "live structured reply unexpected: {s:?}"
     );
 }
+
+/// END-TO-END WIRING: a real user-declared `client<llm>` + LLM `function` executes
+/// through the new `baml.ai.OpenAi` provider (orchestrator delegation), against a mock.
+#[tokio::test]
+async fn e2e_client_function_via_new_provider_mock() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/chat/completions"))
+        .respond_with(ResponseTemplate::new(200).set_body_string(
+            r#"{"choices":[{"message":{"content":"pong"},"finish_reason":"stop"}]}"#,
+        ))
+        .mount(&server)
+        .await;
+    let uri = server.uri();
+
+    let output = baml_test!(&format!(
+        r#"
+        client<llm> MockClient {{
+          provider openai
+          options {{ model "gpt-5.4-mini" api_key "test-key" base_url "{uri}" }}
+        }}
+
+        function Ask(question: string) -> string {{
+          client MockClient
+          prompt `Answer this: ${{question}}`
+        }}
+
+        function main() -> string {{
+          Ask("Reply with exactly the word: pong")
+        }}
+        "#
+    ));
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("pong".into())
+    );
+}
+
+/// END-TO-END WIRING, live: a real client + LLM function through the new provider,
+/// hitting the real API. Skipped unless `OPENAI_API_KEY` is set.
+#[tokio::test]
+async fn e2e_client_function_via_new_provider_live() {
+    if std::env::var("OPENAI_API_KEY").is_err() {
+        eprintln!("skipping e2e_client_function_via_new_provider_live: OPENAI_API_KEY not set");
+        return;
+    }
+    let output = baml_test!(
+        r#"
+        client<llm> LiveClient {
+          provider openai
+          options { model "gpt-5.4-mini" api_key env.OPENAI_API_KEY }
+        }
+
+        function Ask(question: string) -> string {
+          client LiveClient
+          prompt `${question}`
+        }
+
+        function main() -> string {
+          Ask("Reply with exactly the lowercase word: pong")
+        }
+        "#
+    );
+    let got = output.result.unwrap();
+    let BexExternalValue::String(s) = got else {
+        panic!("expected string, got {got:?}");
+    };
+    assert!(
+        s.to_lowercase().contains("pong"),
+        "live e2e reply did not contain 'pong': {s:?}"
+    );
+}
