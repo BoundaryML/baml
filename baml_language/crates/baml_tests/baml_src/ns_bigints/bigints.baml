@@ -720,3 +720,12 @@ test "test_bigint_to_json_returns_string" {
 test "test_bigint_to_json_large" {
     assert.equal((99999999999999999999n).to_json(), "99999999999999999999")
 }
+
+// ─── regression: bare-literal method receiver (B-614) ─────────────────────────
+//
+// `42n.to_string()` on a bare bigint literal used to lower its receiver to a
+// Missing expr and panic at runtime. Appended at the end so the test registry
+// stays append-only.
+test "bigint_to_string_bare_literal" {
+    assert.is_true(baml.deep_equals(42n.to_string(), "42"))
+}
