@@ -261,7 +261,6 @@ function user.NonExhaustiveTrueTypeWrongLiteral(t: user.AlwaysTrue) -> string th
   }
   !! 8604..8609: type mismatch: expected AlwaysTrue, got false
   !! 8584..8627: non-exhaustive match on `AlwaysTrue`; missing: true
-  !! 8613..8621: unreachable arm
 }
 function user.NonExhaustiveCustomBoolMissing(b: user.CustomBool) -> string throws never {
   { : "yes"
@@ -685,7 +684,6 @@ function user.WrongLiteralTypeBoolWithInt(b: bool) -> string throws never {
   }
   !! 21982..21984: type mismatch: expected bool, got 42
   !! 21962..22006: non-exhaustive match on `bool`; missing: true, false
-  !! 21988..22000: unreachable arm
 }
 function user.WrongLiteralTypeIntWithString(x: int) -> string throws never {
   { : "wrong type"

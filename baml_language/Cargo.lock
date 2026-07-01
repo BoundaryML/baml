@@ -869,6 +869,7 @@ dependencies = [
  "rustc-hash 2.1.2",
  "salsa",
  "smol_str 0.3.6",
+ "strsim",
  "text-size",
 ]
 

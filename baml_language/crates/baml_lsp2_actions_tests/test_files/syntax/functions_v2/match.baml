@@ -22,7 +22,7 @@ class Situation {
 }
 
 // Should throw two errors:
-//  rock not reachable, _ not reachable.
+//  rock has a type mismatch, _ not reachable.
 function Remand(s: Situation) -> string {
   if (s.pets.length() > 0) {
     match (s.pets[0]) {
@@ -45,15 +45,6 @@ function Remand(s: Situation) -> string {
 //     │              ╰──────── type mismatch: expected Pet, got Rock
 //     │
 //     │ Note: Error code: E0001
-// ────╯
-// error: unreachable arm
-//     ╭─[ functions_v2_match.baml:31:25 ]
-//     │
-//  31 │       let rock: Rock => "...",
-//     │                         ──┬──
-//     │                           ╰──── unreachable arm
-//     │
-//     │ Note: Error code: E0063
 // ────╯
 // error: unreachable arm
 //     ╭─[ functions_v2_match.baml:32:12 ]

@@ -60,6 +60,8 @@ function builtins.builtins_bind_method_call() -> int {
     load_type int
     alloc_array 3
     container_len
+    store_var v
+    load_var v
     return
 }
 
