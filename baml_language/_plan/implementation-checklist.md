@@ -17,15 +17,15 @@ real `gpt-5.4-mini` at milestones. Commit after each ✅.
 
 ## Next up (ordered)
 
-### 1. Streaming (Phase 2, scenario 04) — GOAL ITEM
-- [ ] `interface Streaming requires Provider` in `ns_ai` with `stream<TStream,TFinal>(prompt) -> baml.llm.Stream<TStream,TFinal>`.
-- [ ] `baml.errors.StreamError` classifier interface.
-- [ ] `OpenAi implements Streaming` — build the SSE request (`"stream": true`), `baml.http.fetch_sse`, produce a
+### 1. Streaming (Phase 2, scenario 04) — ✅ DONE
+- [x] `interface Streaming requires Provider` in `ns_ai` with `stream<TStream,TFinal>(prompt) -> baml.llm.Stream<TStream,TFinal>`.
+- [x] `baml.errors.StreamError` classifier interface.
+- [x] `OpenAi implements Streaming` — build the SSE request (`"stream": true`), `baml.http.fetch_sse`, produce a
       `baml.llm.Stream` (reuse the existing accumulator/SAP-partial infra — a leaf primitive; add a
       `new_stream_accumulator_for(provider)` host helper if needed).
-- [ ] `Fallback`/`Retry` forward `Streaming` (route `.stream` to a streaming member).
-- [ ] Wire `stream_llm_function` to delegate to the new provider for openai (mirror the oneshot delegation).
-- [ ] Tests: mock SSE stream → partial + final; live streaming of a short structured value.
+- [x] `Fallback`/`Retry` forward `Streaming` (route `.stream` to a streaming member).
+- [x] Wire `stream_llm_function` to delegate to the new provider for openai (mirror the oneshot delegation).
+- [x] Tests: mock SSE stream → partial + final; live streaming of a short structured value.
 
 ### 2. Value + sidecar completion (Phase 2, scenarios 32 observability, 34 cost/tokens)
 - [ ] Extend `ResponseMeta` with `usage() -> Usage` (`class Usage { input_tokens, output_tokens }`) + a `Supported<T>` type.

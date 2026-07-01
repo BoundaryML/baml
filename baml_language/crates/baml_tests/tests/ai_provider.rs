@@ -451,3 +451,50 @@ async fn openai_stream_via_mock() {
         BexExternalValue::String("pong".into())
     );
 }
+
+/// E2E streaming: a user LLM function's `.stream()` companion routes through the new
+/// provider's `Streaming` capability (orchestrator delegation), against a mocked SSE endpoint.
+#[tokio::test]
+async fn e2e_function_stream_via_new_provider_mock() {
+    let server = MockServer::start().await;
+    let sse_body = "data: {\"choices\":[{\"index\":0,\"delta\":{\"content\":\"po\"}}]}\n\n\
+                    data: {\"choices\":[{\"index\":0,\"delta\":{\"content\":\"ng\"}}]}\n\n\
+                    data: {\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}]}\n\n\
+                    data: [DONE]\n\n";
+    Mock::given(method("POST"))
+        .and(path("/chat/completions"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .insert_header("content-type", "text/event-stream")
+                .set_body_string(sse_body),
+        )
+        .mount(&server)
+        .await;
+    let uri = server.uri();
+
+    let output = baml_test!(&format!(
+        r#"
+        client<llm> MockClient {{
+          provider openai
+          options {{ model "gpt-5.4-mini" api_key "test-key" base_url "{uri}" }}
+        }}
+        function Ask(question: string) -> string {{
+          client MockClient
+          prompt `${{question}}`
+        }}
+        function main() -> string {{
+            let s = Ask$stream("hi");
+            let n = 0;
+            while (n < 100) {{
+                match (s.next()) {{
+                    baml.stream.StreamFinished => {{ break; }},
+                    let part: string => {{ n = n + 1; }},
+                    null => {{ n = n + 1; }},
+                }}
+            }}
+            s.final() catch (e) {{ _ => "FINAL_ERR" }}
+        }}
+        "#
+    ));
+    assert_eq!(output.result.unwrap(), BexExternalValue::String("pong".into()));
+}

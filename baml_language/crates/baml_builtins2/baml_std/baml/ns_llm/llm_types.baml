@@ -266,6 +266,17 @@ class Client {
         let specialized = primitive.render_specialized_prompt(
           context.jinja_string, context.args, return_type, context.prompt_closure);
 
+        // NEW PROVIDER PATH: route OpenAI streaming through `baml.ai.OpenAi` (mirrors the
+        // oneshot delegation). The rendered `specialized` prompt already carries the schema.
+        if (primitive.provider == "openai") {
+          let oai = root.ai.OpenAi {
+            model: primitive.options.model ?? "gpt-4o",
+            api_key: primitive.options.api_key ?? "",
+            base_url: primitive.options.base_url,
+          };
+          return oai.stream<TStream, TFinal>(prompt_to_text(specialized));
+        }
+
         let http_request = primitive.build_request_stream(specialized, return_type);
         let sse = root.http.fetch_sse(http_request);
         let stream: Stream<TStream, TFinal> = self.__make_stream<TStream, TFinal>(sse);
