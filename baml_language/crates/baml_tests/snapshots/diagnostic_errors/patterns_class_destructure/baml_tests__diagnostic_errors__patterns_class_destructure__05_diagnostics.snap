@@ -125,18 +125,6 @@ source: crates/baml_tests/src/generated_tests.rs
      │ Note: Error code: E0001
 ─────╯
 
-  [type] error: non-exhaustive match on type Box<int>; missing: Box { value: _ }
-     ╭─[ patterns_class_destructure.baml:134:5 ]
-     │
- 134 │ ╭─▶     match (boxed) {
-     ┆ ┆   
- 136 │ ├─▶     }
-     │ │           
-     │ ╰─────────── non-exhaustive match on type Box<int>; missing: Box { value: _ }
-     │     
-     │     Note: Error code: E0062
-─────╯
-
   [type] error: type mismatch: expected Box<int>, got Box
      ╭─[ patterns_class_destructure.baml:135:9 ]
      │
@@ -145,18 +133,6 @@ source: crates/baml_tests/src/generated_tests.rs
      │          ╰─── type mismatch: expected Box<int>, got Box
      │ 
      │ Note: Error code: E0001
-─────╯
-
-  [type] error: non-exhaustive match on type Box<int>; missing: Box { value: _ }
-     ╭─[ patterns_class_destructure.baml:140:5 ]
-     │
- 140 │ ╭─▶     match (boxed) {
-     ┆ ┆   
- 142 │ ├─▶     }
-     │ │           
-     │ ╰─────────── non-exhaustive match on type Box<int>; missing: Box { value: _ }
-     │     
-     │     Note: Error code: E0062
 ─────╯
 
   [type] error: type mismatch: expected Box<int>, got Box
@@ -281,18 +257,6 @@ source: crates/baml_tests/src/generated_tests.rs
      │ Note: Error code: E0094
 ─────╯
 
-  [type] error: non-exhaustive match on type Person | Admin; missing: Person, Admin
-     ╭─[ patterns_class_destructure.baml:242:5 ]
-     │
- 242 │ ╭─▶     match (v) {
-     ┆ ┆   
- 244 │ ├─▶     }
-     │ │           
-     │ ╰─────────── non-exhaustive match on type Person | Admin; missing: Person, Admin
-     │     
-     │     Note: Error code: E0062
-─────╯
-
   [type] error: or-pattern binding `age` has conflicting types: int and string
      ╭─[ patterns_class_destructure.baml:243:34 ]
      │
@@ -301,18 +265,6 @@ source: crates/baml_tests/src/generated_tests.rs
      │                                   ╰─── or-pattern binding `age` has conflicting types: int and string
      │ 
      │ Note: Error code: E0001
-─────╯
-
-  [type] error: non-exhaustive match on type Box<int> | Box<string>; missing: Box, Box
-     ╭─[ patterns_class_destructure.baml:248:5 ]
-     │
- 248 │ ╭─▶     match (v) {
-     ┆ ┆   
- 250 │ ├─▶     }
-     │ │           
-     │ ╰─────────── non-exhaustive match on type Box<int> | Box<string>; missing: Box, Box
-     │     
-     │     Note: Error code: E0062
 ─────╯
 
   [type] error: or-pattern binding `value` has conflicting types: int and string

@@ -9,7 +9,6 @@ function user.namespaced_generic_class_type_pattern_requires_type_args(boxed: us
         1 : 1
   }
   !! 136..155: type mismatch: expected llm.openai.Box<int>, got llm.openai.Box
-  !! 112..166: non-exhaustive match on `llm.openai.Box<int>`; missing: llm.openai.Box { value: _ }
 }
 function user.namespace_relative_generic_class_type_pattern_requires_type_args(boxed: user.llm.openai.Box<int>) -> int throws never {
   { : 1
@@ -18,7 +17,6 @@ function user.namespace_relative_generic_class_type_pattern_requires_type_args(b
         1 : 1
   }
   !! 309..323: type mismatch: expected llm.openai.Box<int>, got llm.openai.Box
-  !! 285..334: non-exhaustive match on `llm.openai.Box<int>`; missing: llm.openai.Box { value: _ }
 }
 function user.namespaced_generic_class_type_pattern_rejects_extra_type_args(boxed: user.llm.openai.Box<int>) -> int throws never {
   { : 1 | 0
@@ -39,7 +37,6 @@ function user.namespaced_non_generic_class_type_pattern_rejects_type_args(respon
   }
   !! 687..716: type mismatch: expected llm.openai.Response, got llm.openai.Response<int>
   !! 687..716: type `Response` expects 0 type argument(s), got 1
-  !! 660..727: non-exhaustive match on `llm.openai.Response`; missing: llm.openai.Response { score: _ }
 }
 function user.namespaced_class_destructure_unknown_field(response: user.llm.openai.Response) -> int throws never {
   { : 1 | 0

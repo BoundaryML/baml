@@ -37,7 +37,6 @@ function user.or_same_name_distinct_narrows(v: int | string) -> int throws never
         1 : 1
   }
   !! 1289..1302: Or-pattern alternatives bind `x` with conflicting types: `int` vs `string`
-  !! 1253..1314: non-exhaustive match on `int | string`; missing: int, string
 }
 function user.or_multiple_binds_diff_narrows(v: int | string) -> int throws never {
   { : 1
@@ -47,7 +46,6 @@ function user.or_multiple_binds_diff_narrows(v: int | string) -> int throws neve
   }
   !! 1874..1894: Or-pattern alternatives bind `a` with conflicting types: `int` vs `string`
   !! 1881..1894: Or-pattern alternatives bind `b` with conflicting types: `int` vs `string`
-  !! 1831..1906: non-exhaustive match on `int | string`; missing: int, string
 }
 class user.Team {
   scores: int[]
