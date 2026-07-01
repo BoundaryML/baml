@@ -300,7 +300,7 @@ mod tests {
 
     use crate::{
         ConcreteRealizedTy, ConcreteTy, FunctionParamTy, MediaKind, Name, NotRealizedTy,
-        RealizedTy, RuntimeTy, Ty, TyAttr, TypeName,
+        NotRuntimeTy, RealizedTy, RuntimeTy, Ty, TyAttr, TypeName,
     };
 
     fn a() -> TyAttr {
@@ -510,5 +510,65 @@ mod tests {
         // And it agrees with the owned `From` (also a transmute) on equal input.
         assert_eq!(rt.as_ty(), &Ty::from(rt.clone()));
         assert_eq!(rz.as_runtime_ty(), &RuntimeTy::from(rz.clone()));
+    }
+
+    /// Narrowing a representable value: the borrow-to-borrow `TryFrom<&Super>
+    /// for &Sub` validates in place and reinterprets the borrow without copying;
+    /// the owned `TryFrom` validates then moves the tree. Both agree with the
+    /// narrower value at every depth.
+    #[test]
+    fn downcast_validates_then_reinterprets() {
+        let t = deep_concrete();
+        let rt = RuntimeTy::try_from(&t).unwrap();
+        let rz = RealizedTy::try_from(&t).unwrap();
+
+        // Borrow-to-borrow narrowing yields `Ok(&narrower)` at every depth.
+        assert_eq!(<&RuntimeTy>::try_from(&t), Ok(&rt));
+        assert_eq!(<&RealizedTy>::try_from(&t), Ok(&rz));
+        assert_eq!(<&RealizedTy>::try_from(&rt), Ok(&rz));
+
+        // Owned `TryFrom` (validate + move-transmute, no rebuild) agrees.
+        assert_eq!(RuntimeTy::try_from(t.clone()).unwrap(), rt);
+        assert_eq!(RealizedTy::try_from(t.clone()).unwrap(), rz);
+        assert_eq!(RealizedTy::try_from(rt.clone()).unwrap(), rz);
+    }
+
+    /// The validation walk is complete: an unrepresentable variant nested at any
+    /// depth makes the narrowing fail — with the offending variant named, since
+    /// `TryFrom` carries an error — rather than transmute into an invalid
+    /// discriminant.
+    #[test]
+    fn downcast_rejects_unrepresentable_at_depth() {
+        // `TypeVar` under a `List`: a valid `RuntimeTy` (keeps `typevar`), not a
+        // valid `RealizedTy` (drops it) — the error names the culprit.
+        let tv = with_typevar();
+        let tv_rt = <&RuntimeTy>::try_from(&tv).unwrap();
+        assert_eq!(
+            <&RealizedTy>::try_from(&tv),
+            Err(NotRealizedTy { variant: "TypeVar" })
+        );
+        assert_eq!(
+            <&RealizedTy>::try_from(tv_rt),
+            Err(NotRealizedTy { variant: "TypeVar" })
+        );
+
+        // A `tir`-only `Unknown` buried in a map value: not even a `RuntimeTy`.
+        let bad = Ty::Map {
+            key: Box::new(Ty::String { attr: a() }),
+            value: Box::new(Ty::List(Box::new(Ty::Unknown { attr: a() }), a())),
+            attr: a(),
+        };
+        assert_eq!(
+            <&RuntimeTy>::try_from(&bad),
+            Err(NotRuntimeTy { variant: "Unknown" })
+        );
+        assert_eq!(
+            <&RealizedTy>::try_from(&bad),
+            Err(NotRealizedTy { variant: "Unknown" })
+        );
+        assert_eq!(
+            RuntimeTy::try_from(bad),
+            Err(NotRuntimeTy { variant: "Unknown" })
+        );
     }
 }
