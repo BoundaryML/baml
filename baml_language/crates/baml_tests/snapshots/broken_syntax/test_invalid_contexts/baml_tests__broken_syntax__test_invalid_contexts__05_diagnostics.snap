@@ -2,18 +2,6 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] error: missing return value of type null
-   ╭─[ main.baml:3:27 ]
-   │
- 3 │ ╭─▶ function helper() -> null {
-   ┆ ┆   
- 7 │ ├─▶ }
-   │ │       
-   │ ╰─────── missing return value of type null
-   │     
-   │     Note: Error code: E0029
-───╯
-
   [parse] error: test blocks are only allowed at the top level or inside a testset
    ╭─[ main.baml:4:3 ]
    │
@@ -23,18 +11,6 @@ source: crates/baml_tests/src/generated_tests.rs
    │ 
    │ Note: Error code: E0010
 ───╯
-
-  [type] error: missing return value of type null
-    ╭─[ main.baml:9:28 ]
-    │
-  9 │ ╭─▶ function another() -> null {
-    ┆ ┆   
- 15 │ ├─▶ }
-    │ │       
-    │ ╰─────── missing return value of type null
-    │     
-    │     Note: Error code: E0029
-────╯
 
   [parse] error: testset blocks are only allowed at the top level or inside a testset
     ╭─[ main.baml:10:3 ]

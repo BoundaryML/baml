@@ -64,6 +64,9 @@ export interface WorkflowNodeData {
   valuePreviews?: GraphNodeValuePreview[];
   errorMessage?: string | null;
   customRenderers?: Record<string, FC<ResultRendererProps>>;
+  syntheticKind?: 'group-value-preview';
+  sourceNodeId?: string;
+  groupValuePreviewsLifted?: boolean;
   [key: string]: unknown;
 }
 

@@ -223,6 +223,9 @@ pub enum DiagnosticId {
     // Void type position errors (E0110)
     VoidInNonReturnPosition,
 
+    // Wildcard `_` type in a non-inferable position (E0147)
+    WildcardTypeNotAllowed,
+
     // Interface diagnostics (BEP-044; E0112-E0120)
     /// `implements I {}` references an interface that does not exist.
     UnknownInterface,
@@ -472,6 +475,7 @@ impl DiagnosticId {
 
             // Void type position errors
             DiagnosticId::VoidInNonReturnPosition => "E0110",
+            DiagnosticId::WildcardTypeNotAllowed => "E0147",
 
             // Interface diagnostics
             DiagnosticId::UnknownInterface => "E0112",

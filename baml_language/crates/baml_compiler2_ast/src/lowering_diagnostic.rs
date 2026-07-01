@@ -115,6 +115,11 @@ pub enum LoweringDiagnostic {
     /// `void` was used outside of a function return type position.
     VoidInNonReturnPosition { context: String, span: TextRange },
 
+    /// The `_` wildcard type was used in a position where it cannot be inferred
+    /// (a signature, field, or alias type, as opposed to a `let` binding
+    /// annotation or a `throws`-clause member).
+    WildcardTypeNotAllowed { context: String, span: TextRange },
+
     /// A `:` type ascription was applied to a pattern that doesn't accept
     /// one. Only `let x: T` and `[…]: T` are supported. Things like
     /// `_: T`, `int: T`, `Class { … }: T`, `(a | b): T`, and progressive
@@ -403,6 +408,15 @@ impl LoweringDiagnostic {
                 format!("`void` can only be used as a function return type, not as {context}"),
                 *span,
                 "`void` not allowed here",
+            ),
+            LoweringDiagnostic::WildcardTypeNotAllowed { context, span } => (
+                DiagnosticId::WildcardTypeNotAllowed,
+                Severity::Error,
+                format!(
+                    "the `_` wildcard type can only be inferred in a `let` binding or a `throws` clause, not in {context}"
+                ),
+                *span,
+                "`_` cannot be inferred here",
             ),
             LoweringDiagnostic::InvalidPatternAscription { reason, span } => (
                 DiagnosticId::TypeMismatch,

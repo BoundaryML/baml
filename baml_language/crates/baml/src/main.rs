@@ -235,15 +235,7 @@ fn selector_annotation(selector: &ResolvedSelector) -> String {
 }
 
 fn baml_home() -> PathBuf {
-    env::var_os("BAML_HOME")
-        .map(PathBuf::from)
-        .or_else(|| {
-            env::var_os("HOME")
-                .map(PathBuf::from)
-                .or_else(|| env::var_os("USERPROFILE").map(PathBuf::from))
-                .map(|home| home.join(".baml"))
-        })
-        .unwrap_or_else(|| PathBuf::from(".baml"))
+    baml_release::baml_home()
 }
 
 fn config_path() -> PathBuf {

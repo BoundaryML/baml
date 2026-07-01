@@ -80,6 +80,7 @@ namespace baml.errors:
   class AccessError { methods: [] }
   class CompilationError { methods: [] }
   class DevOther { methods: [] }
+  class ErrorContext { methods: [root_cause, _to_string_impl, to_string] }
   class GenericSdkError { methods: [] }
   class HostCallable { methods: [] }
   class InvalidArgument { methods: [] }
@@ -104,6 +105,8 @@ namespace baml.fs:
   function read
   function read_dir
   function remove
+  function remove_dir
+  function remove_dir_all
   function size
   function write
   function write_bytes

@@ -764,7 +764,7 @@ function csv.csv_decode_all_cell_types() -> string {
     load_const null
     cmp_op ==
     pop_jump_if_false L0
-    jump L35
+    jump L39
 
   L0:
     load_var _2
@@ -832,206 +832,230 @@ function csv.csv_decode_all_cell_types() -> string {
     store_var_load_var _31
     is_type baml.Uint8Array
     pop_jump_if_false L4
-    jump L33
+    jump L37
 
   L4:
     load_var _31
     is_type baml.Uint8Array
     pop_jump_if_false L5
-    jump L32
+    jump L36
 
   L5:
     load_var _31
     is_type baml.TypeValue
     pop_jump_if_false L6
-    jump L31
+    jump L35
 
   L6:
     load_var _31
     is_type baml.TypeValue
     pop_jump_if_false L7
-    jump L30
+    jump L34
 
   L7:
     load_var _31
     is_type baml.errors.StackTrace
     pop_jump_if_false L8
-    jump L29
+    jump L33
 
   L8:
     load_var _31
     is_type baml.errors.StackTrace
     pop_jump_if_false L9
-    jump L28
+    jump L32
 
   L9:
     load_var _31
-    is_type baml.time.PlainDateTime
+    is_type baml.errors.ErrorContext
     pop_jump_if_false L10
-    jump L27
+    jump L31
 
   L10:
     load_var _31
-    is_type baml.time.PlainDateTime
+    is_type baml.errors.ErrorContext
     pop_jump_if_false L11
-    jump L26
+    jump L30
 
   L11:
     load_var _31
-    is_type baml.time.PlainTime
+    is_type baml.time.PlainDateTime
     pop_jump_if_false L12
-    jump L25
+    jump L29
 
   L12:
     load_var _31
-    is_type baml.time.PlainTime
+    is_type baml.time.PlainDateTime
     pop_jump_if_false L13
-    jump L24
+    jump L28
 
   L13:
     load_var _31
-    is_type baml.time.ZonedDateTime
+    is_type baml.time.PlainTime
     pop_jump_if_false L14
-    jump L23
+    jump L27
 
   L14:
     load_var _31
-    is_type baml.time.ZonedDateTime
+    is_type baml.time.PlainTime
     pop_jump_if_false L15
-    jump L22
+    jump L26
 
   L15:
     load_var _31
-    is_type baml.time.Instant
+    is_type baml.time.ZonedDateTime
     pop_jump_if_false L16
-    jump L21
+    jump L25
 
   L16:
     load_var _31
-    is_type baml.time.Instant
+    is_type baml.time.ZonedDateTime
     pop_jump_if_false L17
-    jump L20
+    jump L24
 
   L17:
     load_var _31
-    is_type baml.time.PlainDate
+    is_type baml.time.Instant
     pop_jump_if_false L18
-    jump L19
+    jump L23
 
   L18:
     load_var _31
-    is_type baml.time.PlainDate
-    pop_jump_if_false L37
-    load_var _31
-    call baml.ToString.to_string
-    store_var _30
-    jump L34
+    is_type baml.time.Instant
+    pop_jump_if_false L19
+    jump L22
 
   L19:
     load_var _31
-    call baml.time.PlainDate.baml.ToString.to_string
-    store_var _30
-    jump L34
+    is_type baml.time.PlainDate
+    pop_jump_if_false L20
+    jump L21
 
   L20:
     load_var _31
+    is_type baml.time.PlainDate
+    pop_jump_if_false L41
+    load_var _31
     call baml.ToString.to_string
     store_var _30
-    jump L34
+    jump L38
 
   L21:
     load_var _31
-    call baml.time.Instant.baml.ToString.to_string
+    call baml.time.PlainDate.baml.ToString.to_string
     store_var _30
-    jump L34
+    jump L38
 
   L22:
     load_var _31
     call baml.ToString.to_string
     store_var _30
-    jump L34
+    jump L38
 
   L23:
     load_var _31
-    call baml.time.ZonedDateTime.baml.ToString.to_string
+    call baml.time.Instant.baml.ToString.to_string
     store_var _30
-    jump L34
+    jump L38
 
   L24:
     load_var _31
     call baml.ToString.to_string
     store_var _30
-    jump L34
+    jump L38
 
   L25:
     load_var _31
-    call baml.time.PlainTime.baml.ToString.to_string
+    call baml.time.ZonedDateTime.baml.ToString.to_string
     store_var _30
-    jump L34
+    jump L38
 
   L26:
     load_var _31
     call baml.ToString.to_string
     store_var _30
-    jump L34
+    jump L38
 
   L27:
     load_var _31
-    call baml.time.PlainDateTime.baml.ToString.to_string
+    call baml.time.PlainTime.baml.ToString.to_string
     store_var _30
-    jump L34
+    jump L38
 
   L28:
     load_var _31
     call baml.ToString.to_string
     store_var _30
-    jump L34
+    jump L38
 
   L29:
     load_var _31
-    call baml.errors.StackTrace.baml.ToString.to_string
+    call baml.time.PlainDateTime.baml.ToString.to_string
     store_var _30
-    jump L34
+    jump L38
 
   L30:
     load_var _31
     call baml.ToString.to_string
     store_var _30
-    jump L34
+    jump L38
 
   L31:
     load_var _31
-    call baml.TypeValue.baml.ToString.to_string
+    call baml.errors.ErrorContext.baml.ToString.to_string
     store_var _30
-    jump L34
+    jump L38
 
   L32:
     load_var _31
     call baml.ToString.to_string
     store_var _30
-    jump L34
+    jump L38
 
   L33:
+    load_var _31
+    call baml.errors.StackTrace.baml.ToString.to_string
+    store_var _30
+    jump L38
+
+  L34:
+    load_var _31
+    call baml.ToString.to_string
+    store_var _30
+    jump L38
+
+  L35:
+    load_var _31
+    call baml.TypeValue.baml.ToString.to_string
+    store_var _30
+    jump L38
+
+  L36:
+    load_var _31
+    call baml.ToString.to_string
+    store_var _30
+    jump L38
+
+  L37:
     load_var _31
     call baml.Uint8Array.baml.ToString.to_string
     store_var _30
 
-  L34:
+  L38:
     load_var2 4 10
     call baml.Array.push
     pop 1
     load_var parts
     load_const " "
     call user.csv.join
-    jump L36
+    jump L40
 
-  L35:
+  L39:
     load_const "missing"
 
-  L36:
+  L40:
     return
 
-  L37:
+  L41:
     unreachable
 }
 
@@ -4760,7 +4784,7 @@ function csv.csv_plaindate_cells_roundtrip() -> string {
     load_const null
     cmp_op ==
     pop_jump_if_false L0
-    jump L63
+    jump L71
 
   L0:
     load_var _4
@@ -4770,378 +4794,424 @@ function csv.csv_plaindate_cells_roundtrip() -> string {
     store_var_load_var _10
     is_type baml.Uint8Array
     pop_jump_if_false L1
-    jump L30
+    jump L34
 
   L1:
     load_var _10
     is_type baml.Uint8Array
     pop_jump_if_false L2
-    jump L29
+    jump L33
 
   L2:
     load_var _10
     is_type baml.TypeValue
     pop_jump_if_false L3
-    jump L28
+    jump L32
 
   L3:
     load_var _10
     is_type baml.TypeValue
     pop_jump_if_false L4
-    jump L27
+    jump L31
 
   L4:
     load_var _10
     is_type baml.errors.StackTrace
     pop_jump_if_false L5
-    jump L26
+    jump L30
 
   L5:
     load_var _10
     is_type baml.errors.StackTrace
     pop_jump_if_false L6
-    jump L25
+    jump L29
 
   L6:
     load_var _10
-    is_type baml.time.PlainDateTime
+    is_type baml.errors.ErrorContext
     pop_jump_if_false L7
-    jump L24
+    jump L28
 
   L7:
     load_var _10
-    is_type baml.time.PlainDateTime
+    is_type baml.errors.ErrorContext
     pop_jump_if_false L8
-    jump L23
+    jump L27
 
   L8:
     load_var _10
-    is_type baml.time.PlainTime
+    is_type baml.time.PlainDateTime
     pop_jump_if_false L9
-    jump L22
+    jump L26
 
   L9:
     load_var _10
-    is_type baml.time.PlainTime
+    is_type baml.time.PlainDateTime
     pop_jump_if_false L10
-    jump L21
+    jump L25
 
   L10:
     load_var _10
-    is_type baml.time.ZonedDateTime
+    is_type baml.time.PlainTime
     pop_jump_if_false L11
-    jump L20
+    jump L24
 
   L11:
     load_var _10
-    is_type baml.time.ZonedDateTime
+    is_type baml.time.PlainTime
     pop_jump_if_false L12
-    jump L19
+    jump L23
 
   L12:
     load_var _10
-    is_type baml.time.Instant
+    is_type baml.time.ZonedDateTime
     pop_jump_if_false L13
-    jump L18
+    jump L22
 
   L13:
     load_var _10
-    is_type baml.time.Instant
+    is_type baml.time.ZonedDateTime
     pop_jump_if_false L14
-    jump L17
+    jump L21
 
   L14:
     load_var _10
-    is_type baml.time.PlainDate
+    is_type baml.time.Instant
     pop_jump_if_false L15
-    jump L16
+    jump L20
 
   L15:
     load_var _10
-    is_type baml.time.PlainDate
-    pop_jump_if_false L69
-    load_var _10
-    call baml.ToString.to_string
-    jump L31
+    is_type baml.time.Instant
+    pop_jump_if_false L16
+    jump L19
 
   L16:
     load_var _10
-    call baml.time.PlainDate.baml.ToString.to_string
-    jump L31
+    is_type baml.time.PlainDate
+    pop_jump_if_false L17
+    jump L18
 
   L17:
     load_var _10
+    is_type baml.time.PlainDate
+    pop_jump_if_false L77
+    load_var _10
     call baml.ToString.to_string
-    jump L31
+    jump L35
 
   L18:
     load_var _10
-    call baml.time.Instant.baml.ToString.to_string
-    jump L31
+    call baml.time.PlainDate.baml.ToString.to_string
+    jump L35
 
   L19:
     load_var _10
     call baml.ToString.to_string
-    jump L31
+    jump L35
 
   L20:
     load_var _10
-    call baml.time.ZonedDateTime.baml.ToString.to_string
-    jump L31
+    call baml.time.Instant.baml.ToString.to_string
+    jump L35
 
   L21:
     load_var _10
     call baml.ToString.to_string
-    jump L31
+    jump L35
 
   L22:
     load_var _10
-    call baml.time.PlainTime.baml.ToString.to_string
-    jump L31
+    call baml.time.ZonedDateTime.baml.ToString.to_string
+    jump L35
 
   L23:
     load_var _10
     call baml.ToString.to_string
-    jump L31
+    jump L35
 
   L24:
     load_var _10
-    call baml.time.PlainDateTime.baml.ToString.to_string
-    jump L31
+    call baml.time.PlainTime.baml.ToString.to_string
+    jump L35
 
   L25:
     load_var _10
     call baml.ToString.to_string
-    jump L31
+    jump L35
 
   L26:
     load_var _10
-    call baml.errors.StackTrace.baml.ToString.to_string
-    jump L31
+    call baml.time.PlainDateTime.baml.ToString.to_string
+    jump L35
 
   L27:
     load_var _10
     call baml.ToString.to_string
-    jump L31
+    jump L35
 
   L28:
     load_var _10
-    call baml.TypeValue.baml.ToString.to_string
-    jump L31
+    call baml.errors.ErrorContext.baml.ToString.to_string
+    jump L35
 
   L29:
     load_var _10
     call baml.ToString.to_string
-    jump L31
+    jump L35
 
   L30:
     load_var _10
-    call baml.Uint8Array.baml.ToString.to_string
+    call baml.errors.StackTrace.baml.ToString.to_string
+    jump L35
 
   L31:
+    load_var _10
+    call baml.ToString.to_string
+    jump L35
+
+  L32:
+    load_var _10
+    call baml.TypeValue.baml.ToString.to_string
+    jump L35
+
+  L33:
+    load_var _10
+    call baml.ToString.to_string
+    jump L35
+
+  L34:
+    load_var _10
+    call baml.Uint8Array.baml.ToString.to_string
+
+  L35:
     load_const " "
     bin_op +
     store_var _8
     load_var r
     load_field .at
-    store_var_load_var _28
+    store_var_load_var _30
     is_type baml.Uint8Array
-    pop_jump_if_false L32
-    jump L61
-
-  L32:
-    load_var _28
-    is_type baml.Uint8Array
-    pop_jump_if_false L33
-    jump L60
-
-  L33:
-    load_var _28
-    is_type baml.TypeValue
-    pop_jump_if_false L34
-    jump L59
-
-  L34:
-    load_var _28
-    is_type baml.TypeValue
-    pop_jump_if_false L35
-    jump L58
-
-  L35:
-    load_var _28
-    is_type baml.errors.StackTrace
     pop_jump_if_false L36
-    jump L57
+    jump L69
 
   L36:
-    load_var _28
-    is_type baml.errors.StackTrace
+    load_var _30
+    is_type baml.Uint8Array
     pop_jump_if_false L37
-    jump L56
+    jump L68
 
   L37:
-    load_var _28
-    is_type baml.time.PlainDateTime
+    load_var _30
+    is_type baml.TypeValue
     pop_jump_if_false L38
-    jump L55
+    jump L67
 
   L38:
-    load_var _28
-    is_type baml.time.PlainDateTime
+    load_var _30
+    is_type baml.TypeValue
     pop_jump_if_false L39
-    jump L54
+    jump L66
 
   L39:
-    load_var _28
-    is_type baml.time.PlainTime
+    load_var _30
+    is_type baml.errors.StackTrace
     pop_jump_if_false L40
-    jump L53
+    jump L65
 
   L40:
-    load_var _28
-    is_type baml.time.PlainTime
+    load_var _30
+    is_type baml.errors.StackTrace
     pop_jump_if_false L41
-    jump L52
+    jump L64
 
   L41:
-    load_var _28
-    is_type baml.time.ZonedDateTime
+    load_var _30
+    is_type baml.errors.ErrorContext
     pop_jump_if_false L42
-    jump L51
+    jump L63
 
   L42:
-    load_var _28
-    is_type baml.time.ZonedDateTime
+    load_var _30
+    is_type baml.errors.ErrorContext
     pop_jump_if_false L43
-    jump L50
+    jump L62
 
   L43:
-    load_var _28
-    is_type baml.time.Instant
+    load_var _30
+    is_type baml.time.PlainDateTime
     pop_jump_if_false L44
-    jump L49
+    jump L61
 
   L44:
-    load_var _28
-    is_type baml.time.Instant
+    load_var _30
+    is_type baml.time.PlainDateTime
     pop_jump_if_false L45
-    jump L48
+    jump L60
 
   L45:
-    load_var _28
-    is_type baml.time.PlainDate
+    load_var _30
+    is_type baml.time.PlainTime
     pop_jump_if_false L46
-    jump L47
+    jump L59
 
   L46:
-    load_var _28
-    is_type baml.time.PlainDate
-    pop_jump_if_false L69
-    load_var _28
-    call baml.ToString.to_string
-    store_var _27
-    jump L62
+    load_var _30
+    is_type baml.time.PlainTime
+    pop_jump_if_false L47
+    jump L58
 
   L47:
-    load_var _28
-    call baml.time.PlainDate.baml.ToString.to_string
-    store_var _27
-    jump L62
+    load_var _30
+    is_type baml.time.ZonedDateTime
+    pop_jump_if_false L48
+    jump L57
 
   L48:
-    load_var _28
-    call baml.ToString.to_string
-    store_var _27
-    jump L62
+    load_var _30
+    is_type baml.time.ZonedDateTime
+    pop_jump_if_false L49
+    jump L56
 
   L49:
-    load_var _28
-    call baml.time.Instant.baml.ToString.to_string
-    store_var _27
-    jump L62
+    load_var _30
+    is_type baml.time.Instant
+    pop_jump_if_false L50
+    jump L55
 
   L50:
-    load_var _28
-    call baml.ToString.to_string
-    store_var _27
-    jump L62
+    load_var _30
+    is_type baml.time.Instant
+    pop_jump_if_false L51
+    jump L54
 
   L51:
-    load_var _28
-    call baml.time.ZonedDateTime.baml.ToString.to_string
-    store_var _27
-    jump L62
+    load_var _30
+    is_type baml.time.PlainDate
+    pop_jump_if_false L52
+    jump L53
 
   L52:
-    load_var _28
+    load_var _30
+    is_type baml.time.PlainDate
+    pop_jump_if_false L77
+    load_var _30
     call baml.ToString.to_string
-    store_var _27
-    jump L62
+    store_var _29
+    jump L70
 
   L53:
-    load_var _28
-    call baml.time.PlainTime.baml.ToString.to_string
-    store_var _27
-    jump L62
+    load_var _30
+    call baml.time.PlainDate.baml.ToString.to_string
+    store_var _29
+    jump L70
 
   L54:
-    load_var _28
+    load_var _30
     call baml.ToString.to_string
-    store_var _27
-    jump L62
+    store_var _29
+    jump L70
 
   L55:
-    load_var _28
-    call baml.time.PlainDateTime.baml.ToString.to_string
-    store_var _27
-    jump L62
+    load_var _30
+    call baml.time.Instant.baml.ToString.to_string
+    store_var _29
+    jump L70
 
   L56:
-    load_var _28
+    load_var _30
     call baml.ToString.to_string
-    store_var _27
-    jump L62
+    store_var _29
+    jump L70
 
   L57:
-    load_var _28
-    call baml.errors.StackTrace.baml.ToString.to_string
-    store_var _27
-    jump L62
+    load_var _30
+    call baml.time.ZonedDateTime.baml.ToString.to_string
+    store_var _29
+    jump L70
 
   L58:
-    load_var _28
+    load_var _30
     call baml.ToString.to_string
-    store_var _27
-    jump L62
+    store_var _29
+    jump L70
 
   L59:
-    load_var _28
-    call baml.TypeValue.baml.ToString.to_string
-    store_var _27
-    jump L62
+    load_var _30
+    call baml.time.PlainTime.baml.ToString.to_string
+    store_var _29
+    jump L70
 
   L60:
-    load_var _28
+    load_var _30
     call baml.ToString.to_string
-    store_var _27
-    jump L62
+    store_var _29
+    jump L70
 
   L61:
-    load_var _28
-    call baml.Uint8Array.baml.ToString.to_string
-    store_var _27
+    load_var _30
+    call baml.time.PlainDateTime.baml.ToString.to_string
+    store_var _29
+    jump L70
 
   L62:
+    load_var _30
+    call baml.ToString.to_string
+    store_var _29
+    jump L70
+
+  L63:
+    load_var _30
+    call baml.errors.ErrorContext.baml.ToString.to_string
+    store_var _29
+    jump L70
+
+  L64:
+    load_var _30
+    call baml.ToString.to_string
+    store_var _29
+    jump L70
+
+  L65:
+    load_var _30
+    call baml.errors.StackTrace.baml.ToString.to_string
+    store_var _29
+    jump L70
+
+  L66:
+    load_var _30
+    call baml.ToString.to_string
+    store_var _29
+    jump L70
+
+  L67:
+    load_var _30
+    call baml.TypeValue.baml.ToString.to_string
+    store_var _29
+    jump L70
+
+  L68:
+    load_var _30
+    call baml.ToString.to_string
+    store_var _29
+    jump L70
+
+  L69:
+    load_var _30
+    call baml.Uint8Array.baml.ToString.to_string
+    store_var _29
+
+  L70:
     load_var2 5 7
     bin_op +
     store_var rendered
-    jump L64
+    jump L72
 
-  L63:
+  L71:
     load_const "missing"
     store_var rendered
 
-  L64:
+  L72:
     load_type csv.DatedRow
     load_var rows
     load_const <omitted>
@@ -5152,28 +5222,28 @@ function csv.csv_plaindate_cells_roundtrip() -> string {
     load_const <omitted>
     call baml.csv.decode
     pop 1
-    jump L67
+    jump L75
     load_var e
     is_type baml.csv.CsvError
-    pop_jump_if_false L65
-    jump L66
+    pop_jump_if_false L73
+    jump L74
 
-  L65:
+  L73:
     load_var e
     rethrow
 
-  L66:
+  L74:
     load_var e
     load_field .kind
     call user.csv.kind_name
     store_var bad
-    jump L68
+    jump L76
 
-  L67:
+  L75:
     load_const "no-throw"
     store_var bad
 
-  L68:
+  L76:
     load_var rendered
     load_const "#"
     bin_op +
@@ -5185,7 +5255,7 @@ function csv.csv_plaindate_cells_roundtrip() -> string {
     bin_op +
     return
 
-  L69:
+  L77:
     unreachable
 }
 

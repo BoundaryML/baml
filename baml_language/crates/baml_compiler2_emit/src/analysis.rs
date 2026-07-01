@@ -649,6 +649,22 @@ fn collect_def_use(body: &MirFunctionBody) -> HashMap<Local, LocalDefUse> {
         }
     }
 
+    // The VM also materializes the caught error's `ErrorContext` into the
+    // context (second-binding) slot, and the BEP-042 cause-chain pre-walk reads
+    // it from an *enclosing* handler — uses the static walk can't see. Mark it
+    // used so it isn't classified Dead and always gets a slot, even when the
+    // `ctx` binding looks statically dead.
+    for region in &body.catch_regions {
+        if let Some(ctx_local) = region.stack_trace_local
+            && let Some(du) = def_use.get_mut(&ctx_local)
+        {
+            du.uses.push(UseLocation {
+                block: region.handler,
+                statement_ref: StatementRef::Terminator,
+            });
+        }
+    }
+
     def_use
 }
 

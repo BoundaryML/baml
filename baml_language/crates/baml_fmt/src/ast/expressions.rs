@@ -46,6 +46,13 @@ pub enum Expression {
     BacktickString(t::BacktickString),
     ByteString(t::ByteString),
     Lambda(Box<LambdaExpr>),
+    /// A braceless `return …` in expression position (a `RETURN_EXPR`, e.g. a
+    /// `catch`/`match` arm value like `_ => return 0`). Held as a raw text range
+    /// like [`Expression::Unknown`], but kept as a distinct variant so the arm
+    /// printers can recognize it: when they wrap a braceless arm body into a
+    /// block they append the `;` that a block-position `return` requires, so the
+    /// output round-trips through `RETURN_STMT` (i.e. is idempotent).
+    Return(TextRange),
     Unknown(TextRange),
 }
 
@@ -136,6 +143,7 @@ impl FromCST for Expression {
                 t::ByteString::from_cst(elem).map(Expression::ByteString)?
             }
             SyntaxKind::LAMBDA_EXPR => Expression::Lambda(Box::new(LambdaExpr::from_cst(elem)?)),
+            SyntaxKind::RETURN_EXPR => Expression::Return(elem.text_range()),
             _ => Expression::Unknown(elem.text_range()),
         };
         Ok(expr)
@@ -185,7 +193,21 @@ impl Expression {
             }
             Expression::ByteString(bs) => Some(usize::from(bs.span().len())),
             Expression::Lambda(_) => None,
-            Expression::Unknown(_) => None,
+            Expression::Return(_) => None,
+            Expression::Unknown(range) => {
+                // Unmodeled nodes (e.g. `await f`, `x.as<T>`, `spawn { … }`,
+                // `throw e`) print their source verbatim (see `print`). When that
+                // text is a single line it occupies a known width and can sit
+                // inline like any other fitting expression. Reporting `None` here
+                // used to force every *enclosing* expression to wrap even when the
+                // whole thing fit the width budget (B-231).
+                let text = &input.input[*range];
+                if text.contains('\n') {
+                    None
+                } else {
+                    Some(text.trim_start().len())
+                }
+            }
         }
     }
 }
@@ -223,9 +245,24 @@ impl Printable for Expression {
             Expression::BacktickString(bt) => bt.print(shape, printer),
             Expression::ByteString(bs) => bs.print(shape, printer),
             Expression::Lambda(lambda) => lambda.print(shape, printer),
-            Expression::Unknown(range) => {
+            // Print the raw `return …` text. The arm printers add the `;` when
+            // they wrap this into a block (see `CatchArm`/`MatchArm`). A braceless
+            // `return` only appears as a whole arm value, never nested inside
+            // another expression, so it always reports multi-lined.
+            Expression::Return(range) => {
                 printer.print_input_range_trimmed_start(*range);
                 PrintInfo::default_multi_lined()
+            }
+            // Unmodeled nodes print their source verbatim. Report `multi_lined`
+            // honestly from whether that text spans multiple lines: a single-line
+            // unknown node (`await f`, `x.as<T>`, …) must not claim to be
+            // multi-line, or it force-wraps its parents even when everything fits
+            // on one line (B-231).
+            Expression::Unknown(range) => {
+                printer.print_input_range_trimmed_start(*range);
+                PrintInfo {
+                    multi_lined: printer.input[*range].contains('\n'),
+                }
             }
         }
     }
@@ -257,7 +294,7 @@ impl Printable for Expression {
             Expression::BacktickString(bt) => bt.leftmost_token(),
             Expression::ByteString(bs) => bs.leftmost_token(),
             Expression::Lambda(lambda) => lambda.leftmost_token(),
-            Expression::Unknown(range) => *range,
+            Expression::Return(range) | Expression::Unknown(range) => *range,
         }
     }
     fn rightmost_token(&self) -> TextRange {
@@ -288,7 +325,7 @@ impl Printable for Expression {
             Expression::BacktickString(bt) => bt.rightmost_token(),
             Expression::ByteString(bs) => bs.rightmost_token(),
             Expression::Lambda(lambda) => lambda.rightmost_token(),
-            Expression::Unknown(range) => *range,
+            Expression::Return(range) | Expression::Unknown(range) => *range,
         }
     }
 }
@@ -1753,6 +1790,11 @@ impl Printable for MatchArm {
                     &self.body,
                     shape.indent + printer.config.indent_width,
                 );
+                // A braceless `return` wrapped into a block needs its statement
+                // `;` so the output round-trips through `RETURN_STMT`.
+                if matches!(&self.body, Expression::Return(_)) {
+                    printer.print_str(";");
+                }
                 printer.print_newline();
                 printer.print_spaces(shape.indent);
                 printer.print_str("},");
@@ -1813,6 +1855,11 @@ impl Printable for MatchArm {
                 &self.body,
                 shape.indent + printer.config.indent_width,
             );
+            // A braceless `return` wrapped into a block needs its statement `;`
+            // so the output round-trips through `RETURN_STMT`.
+            if matches!(&self.body, Expression::Return(_)) {
+                printer.print_str(";");
+            }
             printer.print_newline();
             printer.print_spaces(shape.indent);
             printer.print_str("},");
@@ -2207,6 +2254,11 @@ impl Printable for CatchArm {
                 &self.body,
                 shape.indent + printer.config.indent_width,
             );
+            // A braceless `return` wrapped into a block needs its statement `;`
+            // so the output round-trips through `RETURN_STMT` (idempotent).
+            if matches!(&self.body, Expression::Return(_)) {
+                printer.print_str(";");
+            }
             printer.print_newline();
             printer.print_spaces(shape.indent);
             printer.print_str("}");

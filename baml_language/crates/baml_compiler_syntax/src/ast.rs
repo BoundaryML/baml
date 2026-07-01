@@ -1014,6 +1014,7 @@ ast_node!(CatchClause, CATCH_CLAUSE);
 ast_node!(CatchArm, CATCH_ARM);
 ast_node!(CatchPattern, CATCH_PATTERN);
 ast_node!(ThrowExpr, THROW_EXPR);
+ast_node!(ReturnExpr, RETURN_EXPR);
 ast_node!(ThrowsClause, THROWS_CLAUSE);
 
 // Implement accessor methods
@@ -3981,6 +3982,13 @@ impl MatchGuard {
 
 impl ThrowExpr {
     /// Get the thrown expression/value.
+    pub fn value(&self) -> Option<SyntaxNode> {
+        self.syntax.children().next()
+    }
+}
+
+impl ReturnExpr {
+    /// Get the returned value expression, if present (bare `return` has none).
     pub fn value(&self) -> Option<SyntaxNode> {
         self.syntax.children().next()
     }
