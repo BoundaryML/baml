@@ -1310,7 +1310,11 @@ enum Target {
     Bigint,
     Float,
     Bool,
-    Enum(String),
+    // Keep the enum's `TypeName` (not its rendered string) so it can be resolved
+    // through `vm.lookup_type`, which handles user-package enums; the rendered
+    // `class_key` elides the `user.` prefix and is not a valid `lookup_type_by_fqn`
+    // key.
+    Enum(baml_type::TypeName),
     Instant,
     PlainDate,
     PlainDateTime,
@@ -1339,7 +1343,7 @@ fn classify_cell_ty(ty: &baml_type::RuntimeTy) -> Result<CellTy, String> {
         RuntimeTy::Bigint { .. } => Target::Bigint,
         RuntimeTy::Float { .. } => Target::Float,
         RuntimeTy::Bool { .. } => Target::Bool,
-        RuntimeTy::Enum(qtn, _) => Target::Enum(class_key(qtn)),
+        RuntimeTy::Enum(qtn, _) => Target::Enum(qtn.clone()),
         RuntimeTy::Class(qtn, _, _) if class_key(qtn) == INSTANT_FQN => Target::Instant,
         RuntimeTy::Class(qtn, _, _) if class_key(qtn) == PLAINDATE_FQN => Target::PlainDate,
         RuntimeTy::Class(qtn, _, _) if class_key(qtn) == PLAINDATETIME_FQN => Target::PlainDateTime,
@@ -1402,9 +1406,9 @@ fn convert_cell(vm: &mut BexVm, text: &str, target: &Target) -> Result<Conv, VmR
                 Conv::Bad(format!("cannot convert {text:?} to bool"))
             }
         }
-        Target::Enum(key) => {
-            let Some(enm_ptr) = vm.lookup_type_by_fqn(key.as_str()) else {
-                return Ok(Conv::Bad(format!("enum `{key}` not found")));
+        Target::Enum(qtn) => {
+            let Some(enm_ptr) = vm.lookup_type(qtn) else {
+                return Ok(Conv::Bad(format!("enum `{}` not found", class_key(qtn))));
             };
             let idx = match vm.get_object(enm_ptr) {
                 Object::Enum(en) => en.variants.iter().position(|v| v.name == text),
@@ -1412,7 +1416,7 @@ fn convert_cell(vm: &mut BexVm, text: &str, target: &Target) -> Result<Conv, VmR
             };
             match idx {
                 Some(i) => Conv::Ok(Value::object(vm.alloc_variant(enm_ptr, i))),
-                None => Conv::Bad(format!("{text:?} is not a variant of `{key}`")),
+                None => Conv::Bad(format!("{text:?} is not a variant of `{}`", class_key(qtn))),
             }
         }
         Target::Instant => {

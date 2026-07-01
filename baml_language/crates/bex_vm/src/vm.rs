@@ -1590,7 +1590,7 @@ impl BexVm {
 
     /// Look up an interface object by its qualified type name. The returned
     /// pointer is the canonical `Object::Interface` for the interface — the same
-    /// pointer that keys every package's [`Package::impl_rules`], so it can be
+    /// pointer that keys every package's [`bex_vm_types::types::Package::impl_rules`], so it can be
     /// used to resolve an interface's impls in O(1).
     pub fn lookup_interface(&self, qtn: &baml_type::TypeName) -> Option<HeapPtr> {
         let local = bex_vm_types::types::LocalName {

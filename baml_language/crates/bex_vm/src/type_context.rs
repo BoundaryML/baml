@@ -5,9 +5,10 @@
 //!
 //! All but one method are wired to real runtime data, all reached from the VM:
 //! - `implements_interface` → the open-world resolver
-//!   (`package_baml::type_implements`) over the baked `interface_impls`.
-//! - `alias_def` → the VM's `recursive_type_alias_defs`.
-//! - `enum_variants` → the `Object::Enum` on the heap (via `resolved_class_names`).
+//!   (`package_baml::type_implements`) over the per-package `impl_rules`.
+//! - `alias_def` → the VM's recursive type aliases (via the `packages` index).
+//! - `enum_variants` → the `Object::Enum` on the heap (via `vm.lookup_type`, the
+//!   `packages` index).
 //!
 //! The one gap is `interface_requires`, which fails safe per the `TypeContext`
 //! contract (a `false`/`None` makes the algebra conservative, never over-claiming):
@@ -25,7 +26,7 @@ use bex_vm_types::types::Object;
 use crate::BexVm;
 
 /// The runtime side of the canonical type algebra: interface membership via the
-/// VM's baked `interface_impls` registry, recursive type aliases from the VM, and
+/// VM's per-package `impl_rules` registry, recursive type aliases from the VM, and
 /// enum variants off the heap.
 pub(crate) struct RuntimeTypeContext<'a> {
     vm: &'a BexVm,

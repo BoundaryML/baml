@@ -284,10 +284,17 @@ fn build_packages(
         Some((qtn.clone(), arg_templates, assoc_templates))
     }
 
-    // Resolve a function FQN to its emitted object index. A missing entry means
-    // the method's function object wasn't emitted (shouldn't happen for a valid
-    // impl), so drop just that method — losing a dispatch, never adding a wrong
-    // one (mirrors the `None`-skips below).
+    // Resolve a function FQN to its emitted object index. `function_indices` holds
+    // every function except `$compiler_intrinsic` / `$await_any` bodies, which
+    // Pass 4 does not emit as callable objects — so a `None` here means the impl/
+    // default method has such a body. The stdlib only ever uses those bodies on
+    // free functions, never interface methods, so this is currently unreachable;
+    // but that convention isn't enforced, so we drop just that method (losing a
+    // dispatch, never adding a wrong one) rather than panic, and the `debug_assert`
+    // catches any regression in the tested corpus.
+    // TODO: make this unrepresentable — reject `$compiler_intrinsic`/`$await_any`
+    // bodies on interface impl and default methods upstream (a check-time
+    // diagnostic), after which this can become a hard `expect`.
     let resolve_fqn = |fqn: &str| -> Option<ObjectIndex> {
         let idx = function_indices.get(fqn).copied();
         debug_assert!(
