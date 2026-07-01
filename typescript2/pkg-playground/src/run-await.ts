@@ -42,14 +42,24 @@ export async function awaitRunCompletion(
   const timeoutMs = opts.timeoutMs ?? 30_000;
   const handle = client.subscribe(boundaryId);
   const iterator = handle.events[Symbol.asyncIterator]();
-  const timeout = new Promise<'timeout'>((resolve) =>
-    setTimeout(() => resolve('timeout'), timeoutMs),
-  );
+  let timeoutId: ReturnType<typeof setTimeout>;
+  const timeout = new Promise<'timeout'>((resolve) => {
+    timeoutId = setTimeout(() => resolve('timeout'), timeoutMs);
+  });
 
   let run: Run | null = null;
   try {
     while (true) {
-      const next = await Promise.race([iterator.next(), timeout]);
+      // Attach a catch to `iterator.next()` so a transport error that settles
+      // after the timeout has already won the race doesn't become an unhandled
+      // rejection; treat it as end-of-stream.
+      const next = await Promise.race([
+        iterator.next().catch((err) => {
+          console.error('[awaitRunCompletion] subscription error:', err);
+          return { done: true, value: undefined } as const;
+        }),
+        timeout,
+      ]);
       if (next === 'timeout' || next.done) break;
       const event = next.value as RunSubscriptionEvent;
       if (event.type === 'snapshot') run = event.snapshot;
@@ -60,6 +70,7 @@ export async function awaitRunCompletion(
       if (run && TERMINAL_RUN_STATUS.has(run.status)) break;
     }
   } finally {
+    clearTimeout(timeoutId!);
     void handle.unsubscribe();
   }
 
