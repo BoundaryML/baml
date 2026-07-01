@@ -1,0 +1,112 @@
+[
+  {
+    "id": "01-hello-world",
+    "pages": [
+      {
+        "content": "# Hello. And メェー!\n\nWelcome to [BAML](https://boundaryml.com)! We're so glad you're here to learn with us!\n\nBAML is a simple but powerful language for building\n[high-performance](https://www.boundaryml.com/blog/sota-function-calling)\nAI prompts.\n\nIt's true that BAML is a new language, and who wants to learn\na new language? Well, our proposition to you is that LLMs are\nso different from the rest of application development, that if\nyou try to interface with them through existing tools, it will feel\nlike pushing square pegs through round holes.\n\nSo BAML was designed to wrap LLMs simply and easily, bridging the gap\nbetween this alien technology and the familiar tools use already use\nfor building web applications.\n\nSo invest a little time with this interactive guide. Bootstrap an app with our\nhelpful [chatbot](https://chat.boundaryml.com). Dive into the\n[official docs](https://docs.boundaryml.com). You'll find the language\nis small and simple, but that this really is the right way (and the fun way)\nto build an app around LLMs!\n\nClick the `>` button at the bottom of the page to get started!",
+        "defaultTab": "hello.baml",
+        "fileContents": {
+          "client.baml": "client<llm> GPT4 {\n  provider openai\n  options {\n    model gpt-4\n    api_key env.OPENAI_API_KEY\n  }\n} ",
+          "hello.baml": "function HelloWorld() -> string {\n    client GPT4\n    prompt #\"\n      Respond with the most customary message printed by\n      new users of a language.\n    \"#\n}",
+          "test_hidden.baml": "test HelloWorld {\n    functions [HelloWorld]\n    args {}\n}"
+        },
+        "id": "01-welcome",
+        "title": "Welcome"
+      },
+      {
+        "content": "# BAML Architecture\n\nHere's how BAML works.\n\nFirst, you define [Types] and [Functions]. The functions you define\nwill tell an LLM how to turn a set of inputs into an output value.\n\nWhile creating types and functions, you will be able to run them\nin a playground like the one on the right.\n\nAll the while, your editor is taking your BAML code and using it to\ngenerate client SDKs in the language of your choice. If you use Python\nto develop the rest of your app, we create Python types and Python\nfunctions mirroring the ones you defined in BAML.\n\nYour Python code can call these functions, letting you access the\nLLM in a way that is extremely natural from the rest of your app.\n\nUnder the hood, when you call the Python (for example) version of\nyour BAML function, BAML turns your Python values into BAML values,\nuses your own prompt to format them for the LLM, call the LLM,\nthen parse the result into your specified return type, so you\ncan access it from your Python code.\n\nIt's a mouthful, we know. But once you try it, you'll see how\nnatural it all is. Move on the the next page to see how Functions\nlook in BAML.",
+        "defaultTab": "hello.baml",
+        "fileContents": {
+          "client.baml": "client<llm> GPT4 {\n  provider openai\n  options {\n    model gpt-4\n    api_key env.OPENAI_API_KEY\n  }\n} ",
+          "hello.baml": "function HelloWorld() -> string {\n    client GPT4\n    prompt #\"\n      Respond with the most customary message printed by\n      new users of a language.\n    \"#\n}",
+          "test_hidden.baml": "test HelloWorld {\n    functions [HelloWorld]\n    args {}\n}"
+        },
+        "id": "02-architecture",
+        "title": "Architecture"
+      }
+    ],
+    "title": "Hello World"
+  },
+  {
+    "id": "02-functions",
+    "pages": [
+      {
+        "content": "# Functions\n\nThe key feature of BAML is that LLM prompts are functions.\n\nIn most programming languages, functions are defined by mapping\nparameters to a return value. In BAML, functions pass arguments\nto an LLM (like `GPT4` or `Claude`) through a prompt, then parse\na result from the LLM's response.\n\nHere is an example LLM functinon you could write called `Greet()`.\nGreet takes one argument for the user's name, and returns a greeting\nas a string.\n\nClick the `Greet > TestGreet` button to try out this function.\n\nYou can also experiment with the prompt on line 4 or the test arguments\non line 13.\n\nOn the next page, we'll learn more about the different parts of an LLM function.",
+        "defaultTab": "hello.baml",
+        "fileContents": {
+          "client.baml": "client<llm> GPT4 {\n  provider openai\n  options {\n    model gpt-4\n    api_key env.OPENAI_API_KEY\n  }\n} ",
+          "hello.baml": "function Greet(name: string) -> string {\n    client GPT4\n    prompt #\"\n      Generate a casual greeting for the user named {{ name }}.\n      The greeting should be friendly, informal, and less that\n      10 words long.\n    \"#\n}\n\ntest TestGreet {\n  functions [Greet]\n  args {\n    name \"Mindy\"\n  }\n}"
+        },
+        "id": "01-introduction",
+        "title": "Introduction"
+      },
+      {
+        "content": "# Parts of a Function\n\nLet's examine an LLM function in detail. Our BAML code is\non the right.\n\nAn \"LLM Function\" in BAML has these parts:\n  - Function Name (`Greet`)\n  - Argument List (`name: string`)\n  - Return Type (`string`)\n  - Client Name\n  - Prompt\n\n## Client Name\n\nThe client name is a reference to any of the LLM clients\nyou have defined. Click the `clients.baml` file to see\nhow clients are defined. We will cover the definition of\nClients in another section.\n\n## Prompt\n\nThis is the main implementation of the LLM function.\nThe prompt is the primary piece of data sent to the LLM,\nand it determines how your function arguments will\nbe presented to the LLM. We will have more practice with\nprompts soon. For now it's enough to note that you can\ninject function parameters into your prompts by putting\nthe parameter's name inside `{{ double_curlys }}`.\n\nWe will have a lot more to say about functions and prompting\nafter we learn a bit about Types!",
+        "defaultTab": "function.baml",
+        "fileContents": {
+          "client.baml": "client<llm> GPT4 {\n  provider openai\n  options {\n    model gpt-4\n    api_key env.OPENAI_API_KEY\n  }\n} ",
+          "function.baml": "function Greet(name: string) -> string {\n    client GPT4\n    prompt #\"\n      Generate a casual greeting for the user named {{ name }}.\n      The greeting should be friendly, informal, and less that\n      10 words long.\n    \"#\n}\n\ntest TestGreet {\n  functions [Greet]\n  args {\n    name \"Mindy\"\n  }\n}"
+        },
+        "id": "02-parts-of-a-function",
+        "title": "Parts Of A Function"
+      }
+    ],
+    "title": "Functions"
+  },
+  {
+    "id": "03-types",
+    "pages": [
+      {
+        "content": "# Types\n\nCreating types is a key part of integrating LLMs with apps.\n\nTypes give structure to your prompts, bring LLM responses in\nline with your UI and database, and allow you to specify\nthe behavior of agents.\n\nThe quality of the types in an app built around LLMs is the\nmost important factor in whether the app works as expected.\nSo BAML gives you a lot of features for crafting types and\nprovides strong guarantees that responses will conform to your\noutput types, no matter what model you use.\n\nSo let's get good at types.",
+        "defaultTab": "types.baml",
+        "fileContents": {
+          "client.baml": "client<llm> GPT4 {\n  provider openai\n  options {\n    model gpt-4\n    api_key env.OPENAI_API_KEY\n  }\n} ",
+          "types.baml": "function UseSomeTypes(\n    exact_age: float,\n    name: string,\n    role: \"user\" | \"admin\",\n    uncle_name: string?,\n    friend_birthdays: map<string, string>\n) -> int[] {\n  client GPT4\n  prompt #\"\n    Pick some winning lottery numbers for {{ name }}.\n    Their age is {{ exact_age }}, and they are a {{ role }}.\n\n    {% if uncle_name %}\n      They have an uncle named {{ uncle_name }}.\n    {% endif %}\n\n    Their friends' birthdays:\n    {{ friend_birthdays }}\n\n    The numbers should be between 1 and 100 inclusive.\n\n    {{ ctx.output_format }}\n  \"#\n}"
+        },
+        "id": "01-introduction",
+        "title": "Introduction"
+      },
+      {
+        "content": "# Builtin Types\n\nTypes are categories of values. BAML comes with a set of builtin\ntypes similar to those in Python or TypeScript.\n\n## Basic types\n\n - **int**\n - **float**\n - **bool**\n - **string**\n - **string literal** (e.g. `\"up\"`, `\"admin\"`, `\"search\"`)\n - **image**\n - **audio**\n\nString literals are types that look like string values. They\nare useful for talking about very specific strings, or for\ncollecting a small number of strings into a union.\n\n`image` and `audio` types are for image and audio data.\n\n## Compound types\n\n - **list**  (e.g. `int[]`, `string[]`)\n - **map** (e.g. `map<string, bool>`)\n - **optional** (e.g. `float?`)\n - **union** (e.g. `int[] | float`)\n\n**Note:** Some types are only allowed as function arguments, not\nreturn types. For example, `image` and `audio`. This is because\nwe currently only support text-generation models.",
+        "defaultTab": "types.baml",
+        "fileContents": {
+          "client.baml": "client<llm> GPT4 {\n  provider openai\n  options {\n    model gpt-4\n    api_key env.OPENAI_API_KEY\n  }\n} ",
+          "types.baml": "function SpeechToText(in: audio) -> string[] {\n  client GPT4\n  prompt #\"\n    What is said in this audio file?\n    {{ in }}\n    Use one string output per sentence.\n    {{ ctx.output_format }}\n  \"#\n}\n\nfunction ArithmeticPoemThemes(i: int, f: float, poem: string) -> map<string,string> {\n  client GPT4\n  prompt #\"\n    The following poem was written to explore the relationship\n    between {{ i }} and {{ f }}.\n\n    Extract the themes of the poem. For each theme, describe what the\n    poem has to say on this theme.\n\n    {{ ctx.output_format }}\n  \"#\n}\n\ntest Themes {\n  functions [ArithmeticPoemThemes]\n  args {\n    i 2\n    f 1000.0\n    poem #\"\n      We two, a thousand became.\n      Mirrored in one, the other.\n      Our love multiplied.\n      We, into the fog.\n      But the love diminished none.\n    \"#\n  }\n}"
+        },
+        "id": "02-builtin-types",
+        "title": "Builtin Types"
+      },
+      {
+        "content": "# Custom Types\n\nThe real power of LLMs in applications comes when you\nstart defining your own types. BAML allows you to create\nyour own classes and enums.\n\nLet's create an LLM function that describes characters from a stort story.\n\nThe `class` keyword on the right is used to introduce a new\nclass: `Character`, which collects the properties of a character.\n\nThe `enum` keyword introduces a new enum - a mutually exclusive\nenumeration. We use it to list the characteristics we are interested\nin.\n\nFinally, the `ExtractCharacters` function uses these custom types to\nextract characters from an unstructured input (a story).",
+        "defaultTab": "types.baml",
+        "fileContents": {
+          "client.baml": "client<llm> GPT4 {\n  provider openai\n  options {\n    model gpt-4\n    api_key env.OPENAI_API_KEY\n  }\n} ",
+          "types.baml": "enum Characteristic {\n  Kind\n  Mean\n  Daring\n  Cunning\n  Noble\n}\n\nclass Character {\n  name string\n  age int?\n  characteristics Characteristic[]\n  relationships map<string, string>\n}\n\nfunction ExtractCharacters(story: string) -> Character[] {\n  client GPT4\n  prompt #\"\n    Extract the Characters from the given story. Order them by importance:\n    {{ story }}\n    {{ ctx.output_format }}\n  \"#\n}\n\ntest Extract {\n  functions [ExtractCharacters]\n  args {\n    story #\"\n      Tyrion Lannister, the 30-year-old son of the noble Tywin,\n      devised a plan to see which of his friends was loyal. He told\n      Varys in confidence that Cerci's daughter would be wed to a\n      Dothraki warlord. He told Littlefinger (again in confidence)\n      that Cerci's daughter would be wed to a Dornish prince.\n\n      When Cerci complained to Tyrion about the apocryphal news that\n      her daughter would be forced to leave the capitol to marry,\n      her destination told him which friend had betrayed his trust.\n    \"#\n  }\n}"
+        },
+        "id": "03-custom-types",
+        "title": "Custom Types"
+      },
+      {
+        "content": "# Attributes\n\nBAML types can be marked with attributes to change the way\nthey are presented to the LLM or the way they are reflected\nin your generated SDK code.\n\nThe examples on the left show some of the more common attributes.\n\n- **description:** information about the type that will be\n  presented to the LLM within the prompt. Use these to add\n  context where the type itself doesn't tell the whole story.\n- **alias:** A different name for a field or an enum variant,\n  which will be provided to the LLM. Your generated types will\n  always use the same names you used in your BAML code. You can\n  use `alias` if a different name works better for the LLM.\n- **skip:** Skip a field or enum variant when presenting it to\n  the LLM. Use this for fields or variants that only your codebase\n  cares about.\n- **assert:** Enforce that some invariant property holds for\n  a type. A value that fails its type's assertion will never\n  reach your client code, so use these as LLM guardrails.\n- **check:** Similar to assert, verify that the value adheres\n  to some property. The check's result will be computed and\n  presented to the client as part of the return value, rather\n  than producing a hard failure. Use this attribute when you\n  want to respond to failures at runtime, for example by\n  rendering an error message next to a field with faulty data.",
+        "defaultTab": "types.baml",
+        "fileContents": {
+          "client.baml": "client<llm> GPT4 {\n  provider openai\n  options {\n    model gpt-4\n    api_key env.OPENAI_API_KEY\n  }\n} ",
+          "types.baml": "class Character {\n  name string @assert({{ this|length > 0 }}) @check(is_tyrion, {{ this == \"Tyrion\" }})\n  age int? @description(\"Approximate age. Use null if you have no good guess\")\n  characteristics Characteristic[] @description(\"Order by salience descending\")\n  relationships map<string,string> @description(\"map from other character to this character's rln to them\")\n}\n\nenum Characteristic {\n  Kind\n  Mean @skip() // Legacy - don't extract these.\n  Daring\n  Cunning\n  Noble @alias(\"Esteemed\") // \"Noble\" cofsuses small models.\n}\n\nclass CharacterList {\n  items Character[] @description(\"List characters \")\n}\n\nfunction ExtractCharacters(story: string) -> CharacterList {\n   client GPT4\n   prompt #\"\n    Extract the Characters from the given story. Order them by importance:\n    {{ story }}\n    {{ ctx.output_format }}\n   \"#\n}"
+        },
+        "id": "04-attributes",
+        "title": "Attributes"
+      },
+      {
+        "content": "# Type Aliases\n\nSometimes you may want to use the same complex type in\nmultiple places.\n\nThat might mean mulitple places in your BAML code, or\nmultiple places in your client SDK code.\n\nIn either case, you can improve life by giving that complex\ntype a \"type alias\" - a shorter name.\n\n## Recursive type aliases\n\nAn advanced use case of type aliases is to define data types\nthat you couldn't define with ordinary classes. For example,\nwe show you how you can define a custom `JSON` type! Use\nretursive type aliases when you want to build nested data\nstructures without having to name the intermediate parts.",
+        "defaultTab": "types.baml",
+        "fileContents": {
+          "client.baml": "client<llm> GPT4 {\n  provider openai\n  options {\n    model gpt-4\n    api_key env.OPENAI_API_KEY\n  }\n} ",
+          "types.baml": "class PhoneNumber {\n  digits int\n}\n\nclass Email {\n  address string\n}\n\nclass LinkedInHandle {\n  handle string\n}\n\ntype ContactInfo = PhoneNumber | Email | LinkedInHandle\n\n// Represent any JSON value.\ntype JSON = float | int | bool | string | JSON[] | map<string, JSON>\n\nfunction UnstructuredDoc(in: string) -> JSON {\n  client GPT4\n  prompt #\"\n    Extract the input string into whatever unstructured\n    JSON document makes the most sense for the content.\n\n    {{ ctx.output_format }}\n  \"#\n}\n\ntest UnstructuredDoc {\n  functions [UnstructuredDoc]\n  args {\n    in #\"\n      \n    \"#\n  }\n}"
+        },
+        "id": "05-type-aliases",
+        "title": "Type Aliases"
+      }
+    ],
+    "title": "Types"
+  }
+]

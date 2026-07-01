@@ -1,0 +1,125 @@
+import type { Metadata } from 'next';
+import { ogImagePath, TWITTER_HANDLE } from '@/app/_lib/metadata';
+import { SiteBanner } from '@/components/site-banner';
+import { ThemeProvider } from '@/components/theme-provider';
+import { cn } from '@/lib/utils';
+import './globals.css';
+
+import { GeistMono } from 'geist/font/mono';
+import { GeistSans } from 'geist/font/sans';
+import { Caveat, Instrument_Serif } from 'next/font/google';
+
+// Accent fonts: applied globally as CSS variables but only used on a handful of
+// pages (serif on blog/podcast/jobs/fundraiser, caveat nowhere yet). Preloading
+// them on every page emits unused `<link rel=preload>` tags — hence the browser
+// "preloaded but not used within a few seconds" warning on e.g. /learn2. Let
+// them load on demand (still swap-rendered) instead of preloading globally.
+const instrumentSerif = Instrument_Serif({
+  preload: false,
+  style: ['normal', 'italic'],
+  subsets: ['latin'],
+  variable: '--font-serif',
+  weight: '400',
+});
+
+const caveat = Caveat({
+  preload: false,
+  subsets: ['latin'],
+  variable: '--font-caveat',
+  weight: ['400', '500'],
+});
+
+import type { Viewport } from 'next';
+import { Suspense } from 'react';
+import { AnalyticsProvider } from '@/context/analytics';
+
+const baseUrl =
+  process.env.NEXT_PUBLIC_BASE_URL ??
+  (process.env.VERCEL_PROJECT_PRODUCTION_URL
+    ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+    : 'http://localhost:3000');
+const homeDescription =
+  'BAML is a statically-typed, expression-oriented language with first-class LLM functions.';
+const homeOgImage = ogImagePath({
+  description: homeDescription,
+  eyebrow: 'Boundary ML',
+  title: 'First-class LLM functions',
+});
+
+export const metadata: Metadata = {
+  alternates: {
+    canonical: `${baseUrl}/`,
+    types: {
+      'text/plain': '/llms.txt',
+    },
+  },
+  description: homeDescription,
+  icons: {
+    icon: '/favico.ico',
+  },
+  metadataBase: new URL(baseUrl),
+  openGraph: {
+    description: homeDescription,
+    images: [
+      {
+        alt: 'BAML — First-class LLM functions',
+        height: 630,
+        url: homeOgImage,
+        width: 1200,
+      },
+    ],
+    locale: 'en_US',
+    siteName: 'BAML',
+    title: 'BAML — First-class LLM functions',
+    type: 'website',
+    url: baseUrl,
+  },
+  title: {
+    default: 'BAML — First-class LLM functions',
+    template: '%s | BAML',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    creator: TWITTER_HANDLE,
+    description: homeDescription,
+    images: [homeOgImage],
+    site: TWITTER_HANDLE,
+    title: 'BAML — First-class LLM functions',
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: [
+    { color: 'white', media: '(prefers-color-scheme: light)' },
+    { color: 'black', media: '(prefers-color-scheme: dark)' },
+  ],
+};
+
+export default function RootLayout(props: { children: React.ReactNode }) {
+  return (
+    <html lang="en" suppressHydrationWarning>
+      <body
+        className={cn(
+          'bg-background text-foreground relative min-h-screen font-sans antialiased',
+          GeistSans.variable,
+          GeistMono.variable,
+          instrumentSerif.variable,
+          caveat.variable,
+        )}
+      >
+        <Suspense>
+          <AnalyticsProvider>
+            <ThemeProvider
+              attribute="class"
+              defaultTheme="light"
+              enableSystem={false}
+            >
+              <SiteBanner />
+              {props.children}
+            </ThemeProvider>
+          </AnalyticsProvider>
+        </Suspense>
+      </body>
+    </html>
+  );
+}
