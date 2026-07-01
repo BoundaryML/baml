@@ -12,7 +12,7 @@ BAML is the programming language for agents.
 
 [![BAML Version](https://img.shields.io/pypi/v/baml-py?color=006dad&label=BAML%20Version)](https://pypi.org/project/baml-py/)
 
-[Homepage](https://www.boundaryml.com/) | [Explore BAML](https://www.boundaryml.com/explore) | [Docs](https://docs.boundaryml.com) | [Discord](https://www.boundaryml.com/discord)
+[Homepage](https://www.boundaryml.com/) | [Explore BAML](https://www.boundaryml.com/explore) | [Discord](https://www.boundaryml.com/discord)
 
 </div>
 
@@ -35,7 +35,7 @@ baml init
 baml ide install --code
 ```
 
-Or read the [quickstart](https://docs.boundaryml.com/get-started/quickstart).
+Or read the [quickstart](https://boundaryml.com/quickstart).
 
 ## Contributing
 
