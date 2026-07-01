@@ -655,7 +655,7 @@ mod tests {
         #[expect(deprecated)]
         let subtype_template = TyTemplate::TypeArgRefOrWildcard(0);
         assert!(
-            guard_template_matches(&subtype_template, &[widened_t.clone()], &shape),
+            guard_template_matches(&subtype_template, std::slice::from_ref(&widened_t), &shape),
             "Shape must match a Shape|Sq frame T under subtype-or-wildcard"
         );
 
@@ -664,7 +664,7 @@ mod tests {
         // rather than broadening every `TypeArgRef` comparison in the VM).
         let exact_template = TyTemplate::TypeArgRef(0);
         assert!(
-            !guard_template_matches(&exact_template, &[widened_t.clone()], &shape),
+            !guard_template_matches(&exact_template, std::slice::from_ref(&widened_t), &shape),
             "exact TypeArgRef must still reject Shape != Shape|Sq"
         );
 
@@ -673,18 +673,18 @@ mod tests {
         // carries the wider `Shape | Sq`; `(Shape|Sq) <: Sq` is false, so the
         // arm is skipped (falls to the default). The fix does not over-match.
         assert!(
-            !guard_template_matches(&subtype_template, &[sq.clone()], &widened_t),
+            !guard_template_matches(&subtype_template, std::slice::from_ref(&sq), &widened_t),
             "a wider runtime arg (Shape|Sq) must not match a narrower frame T (Sq)"
         );
         // Same directionality with two unrelated classes.
         assert!(
-            !guard_template_matches(&subtype_template, &[sq.clone()], &shape),
+            !guard_template_matches(&subtype_template, std::slice::from_ref(&sq), &shape),
             "an unrelated runtime arg must not match the frame T"
         );
 
         // A proper subtype (union member) matches (covariant "belongs to").
         assert!(
-            guard_template_matches(&subtype_template, &[widened_t.clone()], &sq),
+            guard_template_matches(&subtype_template, std::slice::from_ref(&widened_t), &sq),
             "Sq must match a Shape|Sq frame T under subtype-or-wildcard"
         );
 
@@ -706,7 +706,7 @@ mod tests {
         let foo_int_template =
             TyTemplate::Class(foo.clone(), vec![TyTemplate::Concrete(RuntimeTy::int())]);
         let foo_int_value = RuntimeTy::class_with_args(foo.clone(), vec![RuntimeTy::int()]);
-        let foo_string_value = RuntimeTy::class_with_args(foo.clone(), vec![RuntimeTy::string()]);
+        let foo_string_value = RuntimeTy::class_with_args(foo, vec![RuntimeTy::string()]);
 
         assert!(
             guard_template_matches(&foo_int_template, &[], &foo_int_value),
