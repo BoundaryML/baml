@@ -42,12 +42,26 @@ pub(crate) fn emit_conversions(family: &Family) -> TokenStream {
     }
 
     for (sub, sup) in comparable_pairs(family) {
-        out.extend(gen_widen(family, sub, sup));
+        // A pair of *deep* members that this family builds equal-size (every
+        // deep member includes the largest-payload axis) can widen by a pure
+        // `transmute` — no walk, no allocation. Shallow-involved pairs differ in
+        // size (a shallow member omits the wider variants), so they keep the
+        // structural rebuild. The equal-size premise is enforced, not assumed:
+        // every emitted transmute carries a co-located `const` size+align assert
+        // that fails compilation if a future member breaks it.
+        if family.members[sub].deep && family.members[sup].deep {
+            out.extend(gen_widen_transmute(family, sub, sup));
+            out.extend(gen_as_upcast(family, sub, sup));
+        } else {
+            out.extend(gen_widen(family, sub, sup));
+        }
+        // Narrowing always walks to validate; it stays a structural rebuild.
         out.extend(gen_narrow(family, sub, sup));
     }
 
     // Satellite conversions, for the comparable pairs among deep members (the
-    // only members that own satellites).
+    // only members that own satellites). Deep satellites are equal-size too, so
+    // their widenings transmute as well.
     for (sub, sup) in comparable_pairs(family) {
         if family.members[sub].deep && family.members[sup].deep {
             for sat in &family.satellites {
@@ -61,6 +75,102 @@ pub(crate) fn emit_conversions(family: &Family) -> TokenStream {
     }
 
     out
+}
+
+/// A `const`-block guard, co-located with every unsafe upcast, that fails
+/// compilation unless `a` and `b` share size *and* alignment. Size equality is
+/// what `transmute` of owned values already checks, but the reference upcast
+/// (`&a -> &b`) is pointer-sized regardless, so without this a size mismatch
+/// there would be silent UB; alignment is never checked by `transmute` at all.
+fn layout_assert(a: &Ident, b: &Ident) -> TokenStream {
+    quote! {
+        const {
+            ::core::assert!(
+                ::core::mem::size_of::<#a>() == ::core::mem::size_of::<#b>()
+                    && ::core::mem::align_of::<#a>() == ::core::mem::align_of::<#b>(),
+                "ty_family: family members must share size and alignment for a \
+                 zero-cost transmute upcast",
+            );
+        };
+    }
+}
+
+/// `RuntimeTy` → `as_runtime_ty`, `Ty` → `as_ty`: the borrowed-upcast accessor
+/// name for widening *to* `sup`.
+fn as_method_name(sup: &Ident) -> Ident {
+    let s = sup.to_string();
+    let mut snake = String::with_capacity(s.len() + 4);
+    for (i, ch) in s.char_indices() {
+        if ch.is_ascii_uppercase() {
+            if i != 0 {
+                snake.push('_');
+            }
+            snake.push(ch.to_ascii_lowercase());
+        } else {
+            snake.push(ch);
+        }
+    }
+    format_ident!("as_{}", snake)
+}
+
+/// Widen `sub` → `sup` (both deep, equal-size) by `transmute`. The owned form is
+/// a genuine zero-cost move of the whole value; the by-reference form widens the
+/// borrow and clones through it (so it composes with the recursion but is not
+/// itself zero-cost — callers wanting that reach for [`as_method_name`]).
+fn gen_widen_transmute(family: &Family, sub: usize, sup: usize) -> TokenStream {
+    let sub_name = &family.members[sub].name;
+    let sup_name = &family.members[sup].name;
+    let assert = layout_assert(sub_name, sup_name);
+    quote! {
+        impl ::core::convert::From<#sub_name> for #sup_name {
+            fn from(value: #sub_name) -> Self {
+                #assert
+                // SAFETY: `#sub_name` ≤ `#sup_name` in the family order, so every
+                // variant of `#sub_name` exists in `#sup_name` at the same
+                // `#[repr(C, u8)]` discriminant. Both are equal size + align (the
+                // `const` assert above), and the recursion travels through
+                // `Box`/`Vec`, so nested `#sub_name` children are likewise valid
+                // `#sup_name` when read back. The move transfers ownership of the
+                // heap allocations unchanged; dealloc uses the identical layout.
+                unsafe { ::core::mem::transmute::<#sub_name, #sup_name>(value) }
+            }
+        }
+        impl ::core::convert::From<&#sub_name> for #sup_name {
+            fn from(value: &#sub_name) -> Self {
+                <#sup_name as ::core::convert::From<#sub_name>>::from(value.clone())
+            }
+        }
+    }
+}
+
+/// The zero-cost borrowed upcast `sub::as_<sup>(&self) -> &sup`, for a deep,
+/// equal-size pair. Used on hot paths that only need to *view* a narrower type
+/// through the wider type's algorithms (rendering, subtyping) without cloning.
+fn gen_as_upcast(family: &Family, sub: usize, sup: usize) -> TokenStream {
+    let sub_name = &family.members[sub].name;
+    let sup_name = &family.members[sup].name;
+    let method = as_method_name(sup_name);
+    let assert = layout_assert(sub_name, sup_name);
+    let doc = format!(
+        " Reinterpret this `{sub_name}` as a `{sup_name}` without copying.\n\n\
+          Every `{sub_name}` is a valid `{sup_name}` and the two share an\n\
+          identical layout, so this widening is a pure borrow — no allocation,\n\
+          no walk. Prefer it over `{sup_name}::from(&self)` when a shared\n\
+          reference suffices."
+    );
+    quote! {
+        impl #sub_name {
+            #[doc = #doc]
+            #[must_use]
+            pub fn #method(&self) -> &#sup_name {
+                #assert
+                // SAFETY: as in the owned `From` above, but at the reference
+                // level — a shared borrow reinterpreted in place. Sound only
+                // because the two types are equal size + align (asserted).
+                unsafe { ::core::mem::transmute::<&#sub_name, &#sup_name>(self) }
+            }
+        }
+    }
 }
 
 // ── Product order ────────────────────────────────────────────────────────────
@@ -432,16 +542,25 @@ fn gen_sat(family: &Family, sub: usize, sup: usize, sat: &SatFields) -> TokenStr
     let sub_sat = satellite_name_for(&family.members[sub].name, &sat.name);
     let sup_sat = satellite_name_for(&family.members[sup].name, &sat.name);
     let err = format_ident!("Not{}", &family.members[sub].name);
-    let widen_ref = sat_widen_body(family, sub, sup, sat, Own::Ref);
-    let widen_owned = sat_widen_body(family, sub, sup, sat, Own::Owned);
+    let assert = layout_assert(&sub_sat, &sup_sat);
     let narrow_ref = sat_narrow_body(family, sub, sup, sat, Own::Ref);
     let narrow_owned = sat_narrow_body(family, sub, sup, sat, Own::Owned);
     quote! {
         impl ::core::convert::From<&#sub_sat> for #sup_sat {
-            fn from(value: &#sub_sat) -> Self { #widen_ref }
+            fn from(value: &#sub_sat) -> Self {
+                <#sup_sat as ::core::convert::From<#sub_sat>>::from(value.clone())
+            }
         }
         impl ::core::convert::From<#sub_sat> for #sup_sat {
-            fn from(value: #sub_sat) -> Self { #widen_owned }
+            fn from(value: #sub_sat) -> Self {
+                #assert
+                // SAFETY: a satellite differs across the family only in its
+                // recursive field's member type (`ty: Ty` vs `ty: RuntimeTy`,
+                // …), which are equal-layout; `#[repr(C)]` pins the field order
+                // identically, and the pair is equal size + align (asserted). So
+                // the bytes of `#sub_sat` are a valid `#sup_sat`.
+                unsafe { ::core::mem::transmute::<#sub_sat, #sup_sat>(value) }
+            }
         }
         impl ::core::convert::TryFrom<&#sup_sat> for #sub_sat {
             type Error = #err;
@@ -455,28 +574,6 @@ fn gen_sat(family: &Family, sub: usize, sup: usize, sat: &SatFields) -> TokenStr
 }
 
 // Satellites live on deep members, so each side's child is the member itself.
-fn sat_widen_body(
-    family: &Family,
-    sub: usize,
-    sup: usize,
-    sat: &SatFields,
-    own: Own,
-) -> TokenStream {
-    let sup_sat = satellite_name_for(&family.members[sup].name, &sat.name);
-    let cx = Cx {
-        family,
-        sub_child: sub,
-        sup_child: sup,
-        own,
-    };
-    let fields = sat.fields.iter().map(|f| {
-        let fid = f.ident.as_ref().unwrap();
-        let e = field_widen(&cx, &f.ty, value_field(own, fid));
-        quote!( #fid: #e )
-    });
-    quote! { #sup_sat { #(#fields),* } }
-}
-
 fn sat_narrow_body(
     family: &Family,
     sub: usize,
