@@ -12,7 +12,7 @@ use std::collections::{HashMap, HashSet};
 
 pub use analysis::OptLevel;
 use baml_base::{Name, Span};
-use baml_compiler2_ast::TypeExpr;
+use baml_compiler2_ast::{TypeExpr, parse_string_attr_value};
 use baml_compiler2_hir::{
     compiler2_all_files,
     contributions::Definition,
@@ -557,42 +557,6 @@ impl std::fmt::Display for LoweringError {
 }
 
 impl std::error::Error for LoweringError {}
-
-/// Parse a string attribute value, handling both regular strings (`"text"`)
-/// and raw strings (`#"text"#`, `##"text"##`, etc.).
-///
-/// Returns `None` if the value is not a recognized string literal.
-fn parse_string_attr_value(raw: &str) -> Option<String> {
-    // Double-quoted string: "text"
-    if raw.starts_with('"') && raw.ends_with('"') && raw.len() >= 2 {
-        return Some(baml_compiler2_ast::unescape_string_literal(
-            &raw[1..raw.len() - 1],
-        ));
-    }
-    // Single-quoted string: 'text'
-    if raw.starts_with('\'') && raw.ends_with('\'') && raw.len() >= 2 {
-        return Some(baml_compiler2_ast::unescape_string_literal(
-            &raw[1..raw.len() - 1],
-        ));
-    }
-
-    // Raw string: #"text"#, ##"text"##, etc.
-    let hash_count = raw.bytes().take_while(|&b| b == b'#').count();
-    if hash_count == 0 {
-        return None;
-    }
-
-    let rest = &raw[hash_count..];
-    let closing = format!("\"{}", &raw[..hash_count]);
-
-    // Need at least `"` + `"` + closing hashes
-    if rest.len() < hash_count + 2 || !rest.starts_with('"') || !rest.ends_with(&closing) {
-        return None;
-    }
-
-    // Raw strings: no escape processing
-    Some(rest[1..rest.len() - 1 - hash_count].to_string())
-}
 
 /// Extract `@description`, `@alias`, `@skip` from span-free HIR attributes.
 ///

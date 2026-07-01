@@ -319,6 +319,14 @@ pub enum DiagnosticId {
     /// reference, so mutating one slot mutates all of them (Linear B-548). This
     /// is a lint (warning), not a type error.
     ArrayFilledAliasing,
+
+    // Serialized-key collision (E0149)
+    /// Two or more fields of a class serialize to the same JSON key — either two
+    /// fields share an `@alias`, or one field's name equals another field's
+    /// `@alias`. Such a schema is unsatisfiable: an aliased field's real name is
+    /// never matched, so `ctx.output_format` renders duplicate keys and a
+    /// required shadowed field can never be parsed (Linear B-615).
+    DuplicateFieldAlias,
 }
 
 impl DiagnosticId {
@@ -522,6 +530,9 @@ impl DiagnosticId {
 
             // Aliasing lints
             DiagnosticId::ArrayFilledAliasing => "E0148",
+
+            // Serialized-key collision
+            DiagnosticId::DuplicateFieldAlias => "E0149",
         }
     }
 }

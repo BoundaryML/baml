@@ -45,6 +45,44 @@ pub use text_size::TextRange;
 /// `is_default_receiver_root` helpers over comparing the literal string.
 pub const DEFAULT_RECEIVER_KEYWORD: &str = "default";
 
+/// Parse a string attribute value into its runtime string, handling both
+/// regular strings (`"text"`, `'text'`) and raw strings (`#"text"#`,
+/// `##"text"##`, …).
+///
+/// The input is the raw, still-quoted token text as it appears in
+/// [`RawAttributeArg::value`]. Returns `None` if the value is not a recognized
+/// string literal. This is the single source of truth for turning an
+/// `@alias`/`@description` argument into the value used both by the emitter
+/// (for the runtime alias) and by HIR validation (for effective-key collision
+/// detection), so the two agree on quote/escape/raw-string normalization.
+pub fn parse_string_attr_value(raw: &str) -> Option<String> {
+    // Double-quoted string: "text"
+    if raw.starts_with('"') && raw.ends_with('"') && raw.len() >= 2 {
+        return Some(unescape_string_literal(&raw[1..raw.len() - 1]));
+    }
+    // Single-quoted string: 'text'
+    if raw.starts_with('\'') && raw.ends_with('\'') && raw.len() >= 2 {
+        return Some(unescape_string_literal(&raw[1..raw.len() - 1]));
+    }
+
+    // Raw string: #"text"#, ##"text"##, etc.
+    let hash_count = raw.bytes().take_while(|&b| b == b'#').count();
+    if hash_count == 0 {
+        return None;
+    }
+
+    let rest = &raw[hash_count..];
+    let closing = format!("\"{}", &raw[..hash_count]);
+
+    // Need at least `"` + `"` + closing hashes
+    if rest.len() < hash_count + 2 || !rest.starts_with('"') || !rest.ends_with(&closing) {
+        return None;
+    }
+
+    // Raw strings: no escape processing
+    Some(rest[1..rest.len() - 1 - hash_count].to_string())
+}
+
 /// Parse the digit body of a `bigint` literal into a [`num_bigint::BigInt`].
 ///
 /// The lexer (`baml_compiler_lexer`) guarantees one-or-more ASCII decimal

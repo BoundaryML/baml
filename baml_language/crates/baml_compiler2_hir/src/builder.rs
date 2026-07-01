@@ -1639,6 +1639,7 @@ impl<'db> SemanticIndexBuilder<'db> {
                     );
                     self.validate_schema_attributes(&field.attributes);
                 }
+                self.validate_field_alias_collisions(class, is_builtin_file);
                 for method in &class.methods {
                     self.validate_function_phase1(method, is_builtin_file, "method");
                 }
@@ -1867,6 +1868,68 @@ impl<'db> SemanticIndexBuilder<'db> {
                 _ => {
                     // Unknown attributes passed through silently (e.g. @stream.*)
                 }
+            }
+        }
+    }
+
+    /// Reject a class whose fields don't all serialize to distinct JSON keys.
+    ///
+    /// A field's *effective serialized key* is its `@alias` value if it carries
+    /// one, otherwise its declared name. When an `@alias` is present the real
+    /// field name is never used for matching (see `bex_sap`'s
+    /// `AnnotatedField::key_matches`), so two fields with the same effective key
+    /// are indistinguishable in the serialized schema: `ctx.output_format`
+    /// renders duplicate keys and only the first can ever be populated at parse
+    /// time. This catches both `a @alias("x")` + `b @alias("x")` and a plain
+    /// field `x` colliding with another field's `@alias("x")`.
+    ///
+    /// Fields marked `@skip` are excluded from the schema entirely and so cannot
+    /// collide. A pure duplicate *field name* (no aliasing involved) is left to
+    /// the existing `DuplicateField` (E0012) check to avoid double-reporting;
+    /// this rule only fires when at least two *distinct* field names share a key.
+    fn validate_field_alias_collisions(&mut self, class: &ast::ClassDef, is_builtin_file: bool) {
+        // Builtin stdlib classes carry no `@alias`, and type-level validation
+        // already skips them — stay consistent and avoid surprising the stdlib.
+        if is_builtin_file {
+            return;
+        }
+
+        let mut buckets: FxHashMap<String, Vec<(Name, TextRange)>> = FxHashMap::default();
+        for field in &class.fields {
+            let mut alias: Option<String> = None;
+            let mut skip = false;
+            for attr in &field.attributes {
+                match attr.name.as_str() {
+                    "alias" if attr.args.len() == 1 => {
+                        // Last `@alias` wins, mirroring emit's `extract_schema_attrs`.
+                        if let Some(value) =
+                            ast::parse_string_attr_value(attr.args[0].value.as_str())
+                        {
+                            alias = Some(value);
+                        }
+                    }
+                    "skip" => skip = true,
+                    _ => {}
+                }
+            }
+            if skip {
+                continue;
+            }
+            let key = alias.unwrap_or_else(|| field.name.as_str().to_string());
+            buckets
+                .entry(key)
+                .or_default()
+                .push((field.name.clone(), field.name_span));
+        }
+
+        for (key, fields) in buckets {
+            // Only a collision between two *distinct* field names is a new error;
+            // repeated identical names are already reported as `DuplicateField`.
+            let distinct = fields.iter().any(|(name, _)| name != &fields[0].0);
+            if fields.len() >= 2 && distinct {
+                let sites = fields.into_iter().map(|(_, span)| span).collect();
+                self.diagnostics
+                    .push(Hir2Diagnostic::DuplicateFieldAlias { key, sites });
             }
         }
     }
