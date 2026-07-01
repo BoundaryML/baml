@@ -535,3 +535,47 @@ async fn call_with_projects_usage() {
         BexExternalValue::String("pong|12|5".into())
     );
 }
+
+/// Provider diversity (scenario 28): "routing is an ordinary function returning a
+/// Provider" and "a proxy is the same class with a different base_url". A router picks
+/// between two OpenAI-compatible endpoints by tier.
+#[tokio::test]
+async fn provider_diversity_routing() {
+    let premium = MockServer::start().await;
+    Mock::given(method("POST")).and(path("/chat/completions"))
+        .respond_with(ResponseTemplate::new(200).set_body_string(
+            r#"{"choices":[{"message":{"content":"premium"}}]}"#))
+        .mount(&premium).await;
+    let basic = MockServer::start().await;
+    Mock::given(method("POST")).and(path("/chat/completions"))
+        .respond_with(ResponseTemplate::new(200).set_body_string(
+            r#"{"choices":[{"message":{"content":"basic"}}]}"#))
+        .mount(&basic).await;
+    let (pu, bu) = (premium.uri(), basic.uri());
+
+    let output = baml_test!(&format!(
+        r#"
+        // routing = a function returning a Provider (client-as-a-function).
+        function route(tier: string, premium_url: string, basic_url: string) -> baml.ai.Provider {{
+            if (tier == "premium") {{
+                baml.ai.OpenAi {{ model: "gpt-5.4-mini", api_key: "k", base_url: premium_url }}
+            }} else {{
+                baml.ai.OpenAi {{ model: "gpt-4o-mini", api_key: "k", base_url: basic_url }}
+            }}
+        }}
+        function ask(tier: string) -> string {{
+            let p = route(tier, "{pu}", "{bu}");
+            match (p) {{
+                let h: baml.ai.HttpProvider => h.call<string>("hi"),
+                _ => "NO_HTTP",
+            }} catch (e) {{
+                let u: baml.errors.UnknownError => "ERR",
+            }}
+        }}
+        function main() -> string {{
+            ask("premium") + "|" + ask("basic")
+        }}
+        "#
+    ));
+    assert_eq!(output.result.unwrap(), BexExternalValue::String("premium|basic".into()));
+}

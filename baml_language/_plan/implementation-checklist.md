@@ -33,10 +33,10 @@ real `gpt-5.4-mini` at milestones. Commit after each ✅.
 - [ ] A `Traced` / `Budget` combinator that projects usage via `call_with` and aggregates over a chain (D4).
 - [x] Tests: mock returns a `usage` block; `call_with(prompt, m => m.usage())` returns tokens; budget sums across calls.
 
-### 3. Provider diversity (Phase 1 finish, scenario 28 — the one "Clean" scenario)
+### 3. Provider diversity (scenario 28) — ✅ done (routing test)
 - [ ] A second OpenAI-compatible provider (e.g. `OpenAiGeneric` / a proxy) = same class, different `base_url`; typed `Auth` field.
-- [ ] Prefix-routing `client`-as-a-function example (route by model prefix to different providers).
-- [ ] Tests: mock two endpoints; a routing function picks the right one.
+- [x] Prefix-routing (function-returning-Provider)  example (route by model prefix to different providers).
+- [x] Tests: mock two endpoints; a routing function picks the right one.
 
 ### 4. Cascades & routing (Phase 2, scenario 30)
 - [ ] Routing is a `client`-as-function; cascade is a `Fallback`-shaped combinator.
