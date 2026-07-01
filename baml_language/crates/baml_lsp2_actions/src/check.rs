@@ -6186,6 +6186,7 @@ fn tir_type_error_to_diagnostic_id(
         TirTypeError::OrderingDifferentTypes { .. }
         | TirTypeError::OrderingRequiresCompare { .. }
         | TirTypeError::ComparisonAlwaysDisjoint { .. } => DiagnosticId::InvalidOperator,
+        TirTypeError::ArrayFilledMutableLiteralAliasing => DiagnosticId::ArrayFilledAliasing,
         TirTypeError::InvalidUnaryOp { .. } => DiagnosticId::InvalidOperator,
         TirTypeError::UnresolvedType { .. } => DiagnosticId::UnknownType,
         TirTypeError::NonInterfaceProjectionQualifier => DiagnosticId::TypeMismatch,

@@ -6244,12 +6244,78 @@ impl<'db> TypeInferenceBuilder<'db> {
             rigid_self_var: self.self_pinned_rigid_var.get(&callee).cloned(),
         });
 
+        self.warn_on_array_filled_mutable_literal(expr_id, callee, args, body);
+
         if !checked.recovered_unresolved_generics {
             self.report_result_type_mismatch(expr_id, &checked.result, expected);
             self.record_function_coercion_if_needed(expr_id, &checked.result, expected);
         }
         self.record_expr_type(expr_id, checked.result.clone());
         checked.result
+    }
+
+    /// Emit a warning when `baml.Array.filled` receives a mutable literal value.
+    ///
+    /// `Array.filled` stores the same reference in every slot for reference
+    /// types, so literals like `[]`, `{}`, and object literals alias.
+    fn warn_on_array_filled_mutable_literal(
+        &mut self,
+        call_expr_id: ExprId,
+        callee_expr_id: ExprId,
+        args: &[ast::CallArg],
+        body: &ExprBody,
+    ) {
+        let is_array_filled = self
+            .call_target_name(callee_expr_id, body)
+            .is_some_and(|name| name.as_str() == "baml.Array.filled");
+        if !is_array_filled {
+            return;
+        }
+        let Some(value_expr_id) = Self::array_filled_value_arg(args) else {
+            return;
+        };
+        if !Self::is_mutable_literal_expr(&body.exprs[value_expr_id]) {
+            return;
+        }
+        self.context.report_warning_simple(
+            TirTypeError::ArrayFilledMutableLiteralAliasing,
+            call_expr_id,
+        );
+    }
+
+    /// Resolve the `value` argument expression in an `Array.filled` call.
+    ///
+    /// Supports both named (`value = ...`) and positional forms, where the
+    /// second positional argument is the fill value.
+    fn array_filled_value_arg(args: &[ast::CallArg]) -> Option<ExprId> {
+        for arg in args {
+            if arg
+                .label
+                .as_ref()
+                .is_some_and(|label| label.as_str() == "value")
+            {
+                return Some(arg.expr);
+            }
+        }
+        let mut positional_idx = 0usize;
+        for arg in args {
+            if arg.label.is_some() {
+                continue;
+            }
+            if positional_idx == 1 {
+                return Some(arg.expr);
+            }
+            positional_idx += 1;
+        }
+        None
+    }
+
+    /// Returns whether an expression is a mutable literal that aliases by reference.
+    fn is_mutable_literal_expr(expr: &Expr) -> bool {
+        matches!(
+            expr,
+            Expr::Array { .. } | Expr::Map { .. } | Expr::Object { .. }
+        )
     }
 
     #[inline(never)]

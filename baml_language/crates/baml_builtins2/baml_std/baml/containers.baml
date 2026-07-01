@@ -10,9 +10,22 @@ class Array<T> {
   /// # Parameters
   /// - `length`: the number of elements to create. A negative or zero `length`
   ///   produces an empty array.
-  /// - `value`: the value stored in every slot. The same value is shared by
-  ///   every slot, so for reference types each slot refers to the *same*
-  ///   object and mutating it is visible through all of them.
+  /// - `value`: the value stored in every slot.
+  ///
+  /// # Warning
+  /// `Array.filled` reuses the exact same `value` for every slot. For reference
+  /// types (arrays, maps, class instances), every slot aliases the same object.
+  /// Mutating one slot mutates all slots.
+  ///
+  /// Use a `while` loop to allocate independent mutable slots:
+  /// ```
+  /// let rows: int[][] = [];
+  /// let i = 0;
+  /// while (i < 3) {
+  ///   rows.push([]);
+  ///   i += 1;
+  /// }
+  /// ```
   ///
   /// # Returns
   /// A fresh `T[]` of length `max(length, 0)` with every element equal to
@@ -26,6 +39,7 @@ class Array<T> {
   /// Array.filled(0, 0)     // []
   /// Array.filled(-1, 0)    // []
   /// Array.filled(2, "x")   // ["x", "x"]
+  /// Array.filled(3, [])    // aliases the same inner array in all 3 slots
   /// ```
   function filled(length: int, value: T) -> T[] throws never {
     $rust_function

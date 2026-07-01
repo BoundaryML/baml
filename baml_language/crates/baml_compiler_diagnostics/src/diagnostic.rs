@@ -312,6 +312,13 @@ pub enum DiagnosticId {
     /// A class declares a `cleanup` method whose signature is not the reserved
     /// magic-finalizer shape `cleanup(self) -> void` (BEP-042).
     CleanupMagicMethodSignature,
+
+    // Aliasing lints (E0148)
+    /// `baml.Array.filled(n, value)` was called with a mutable literal (`[]`,
+    /// `{}`, or a class-instance literal). Every slot aliases the *same* object
+    /// reference, so mutating one slot mutates all of them (Linear B-548). This
+    /// is a lint (warning), not a type error.
+    ArrayFilledAliasing,
 }
 
 impl DiagnosticId {
@@ -512,6 +519,9 @@ impl DiagnosticId {
             DiagnosticId::FromJsonMustImplementInterface => "E0143",
             DiagnosticId::CleanupMagicMethodSignature => "E0144",
             DiagnosticId::GenericBoundNotInterface => "E0145",
+
+            // Aliasing lints
+            DiagnosticId::ArrayFilledAliasing => "E0148",
         }
     }
 }
