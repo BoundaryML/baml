@@ -97,7 +97,8 @@ pub enum TirTypeError {
     /// A type name in a type annotation could not be resolved.
     UnresolvedType {
         name: Name,
-        suggestions: Vec<String>,
+        /// "Did you mean" candidates, each a fully qualified `root.…` path.
+        suggestions: Box<[Name]>,
     },
     /// An associated-type projection's explicit `as X` qualifier resolved to a
     /// non-interface type (a class, alias, etc.). The qualifier must name an
@@ -552,10 +553,14 @@ impl fmt::Display for TirTypeError {
                         suggestions[0]
                     )
                 } else {
+                    let joined = suggestions
+                        .iter()
+                        .map(Name::as_str)
+                        .collect::<Vec<_>>()
+                        .join("`, `");
                     write!(
                         f,
-                        "unresolved type: {name}. Did you mean one of these: `{}`?",
-                        suggestions.join("`, `")
+                        "unresolved type: {name}. Did you mean one of these: `{joined}`?"
                     )
                 }
             }

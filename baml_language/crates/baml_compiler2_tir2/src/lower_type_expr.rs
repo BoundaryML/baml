@@ -12,28 +12,111 @@ use crate::{
     ty::{Freshness, FunctionParamMode, FunctionParamTy, MediaKind, QualifiedTypeName, Ty, TyAttr},
 };
 
-/// Resolve an AST `TypeExpr` to a `Ty` using package-level name resolution.
+/// The scope a `TypeExpr` is lowered in — everything that varies between a class
+/// signature, an instantiated callee, a type alias, or a method body. Lowering
+/// (`lower_type_expr`) is a pure recursion over the `TypeExpr`; the context supplies
+/// the scope-specific resolutions and nothing else.
 ///
-/// Names are resolved against `package_items`: classes, enums, and type aliases
-/// are looked up in the type namespace. Unresolved names become `Ty::Unknown`
-/// and push an `UnresolvedType` diagnostic to `diagnostics`.
-/// The package for each resolved type is derived from the **definition's** file,
-/// not the referencing file.
-pub fn lower_type_expr(
-    db: &dyn crate::Db,
-    type_expr: &TypeExpr,
+/// A type variable always lowers to `Ty::TypeVar(name)` — filling it with a concrete
+/// argument (e.g. instantiating `Array::at` at `int[]`) is a separate [`substitute_ty`]
+/// pass over the already-lowered `Ty`, never part of lowering. So the context never
+/// substitutes; it only reports whether a name *is* a type variable (and its bounds).
+///
+/// [`substitute_ty`]: crate::generics::substitute_ty
+pub trait TypeExprContext<'db> {
+    fn db(&self) -> &'db dyn crate::Db;
+
+    /// Resolve a type name/path to its definition in this scope (the implementor owns
+    /// namespace-awareness). `Err` carries the "did you mean" suggestions for the
+    /// [`TirTypeError::UnresolvedType`] diagnostic (each a fully qualified path).
+    fn resolve_type(
+        &self,
+        segments: &[baml_base::Name],
+    ) -> Result<Definition<'db>, Box<[baml_base::Name]>>;
+
+    /// What `Self` lowers to here, or `None` where `Self` is not in scope
+    /// (free functions, type aliases).
+    fn lower_self(&self) -> Option<Ty>;
+
+    /// If `name` is an in-scope type variable: its interface bounds (empty = unbounded,
+    /// used to resolve a `T.member` projection). It lowers to `Ty::TypeVar(name)`.
+    /// `None` = `name` is not a type variable here; resolve it as a type name instead.
+    fn type_var_bounds(&self, name: &baml_base::Name) -> Option<Box<[baml_type::Interface]>>;
+}
+
+/// "Did you mean" candidates for an unresolved single-segment name: every namespace in
+/// `package_items` that declares `item`, each as a `root.…` path. Empty for multi-segment paths.
+fn type_suggestions(
     package_items: &PackageItems<'_>,
-    generic_params: &[baml_base::Name],
-    diagnostics: &mut Vec<TirTypeError>,
-) -> Ty {
-    lower_type_expr_in_ns(
-        db,
-        type_expr,
-        package_items,
-        &[],
-        generic_params,
-        diagnostics,
-    )
+    segments: &[baml_base::Name],
+) -> Box<[baml_base::Name]> {
+    // Only single-segment bare names get suggestions — multi-segment paths already
+    // encode the intended namespace.
+    if segments.len() != 1 {
+        return Box::new([]);
+    }
+    let item = &segments[0];
+    let mut suggestions: Vec<String> = Vec::new();
+    for (ns_path, ns_items) in &package_items.namespaces {
+        if ns_items.types.contains_key(item) {
+            if ns_path.is_empty() {
+                suggestions.push(format!("root.{item}"));
+            } else {
+                let ns_str = ns_path
+                    .iter()
+                    .map(smol_str::SmolStr::as_str)
+                    .collect::<Vec<_>>()
+                    .join(".");
+                suggestions.push(format!("root.{ns_str}.{item}"));
+            }
+        }
+    }
+    suggestions.sort();
+    suggestions
+        .iter()
+        .map(String::as_str)
+        .map(baml_base::Name::new)
+        .collect()
+}
+
+/// The general lowering scope: a package's items, a namespace, the in-scope type-variable
+/// names, and their bounds. Used by every `lower_type_expr_in_ns[_bounded]` wrapper.
+pub(crate) struct ScopeCtx<'a, 'db> {
+    pub db: &'db dyn crate::Db,
+    pub package_items: &'a PackageItems<'db>,
+    pub ns_context: &'a [baml_base::Name],
+    pub generic_params: &'a [baml_base::Name],
+    pub bounds: &'a rustc_hash::FxHashMap<baml_base::Name, Ty>,
+    /// What `Self` lowers to in this scope, or `None` where `Self` isn't valid.
+    pub self_ty: Option<Ty>,
+}
+
+impl<'db> TypeExprContext<'db> for ScopeCtx<'_, 'db> {
+    fn db(&self) -> &'db dyn crate::Db {
+        self.db
+    }
+
+    fn resolve_type(
+        &self,
+        segments: &[baml_base::Name],
+    ) -> Result<Definition<'db>, Box<[baml_base::Name]>> {
+        resolve_type_in(self.db, self.package_items, self.ns_context, segments)
+            .ok_or_else(|| type_suggestions(self.package_items, segments))
+    }
+
+    fn lower_self(&self) -> Option<Ty> {
+        self.self_ty.clone()
+    }
+
+    fn type_var_bounds(&self, name: &baml_base::Name) -> Option<Box<[baml_type::Interface]>> {
+        self.generic_params.contains(name).then(|| {
+            self.bounds
+                .get(name)
+                .and_then(baml_type::Ty::as_interface)
+                .into_iter()
+                .collect()
+        })
+    }
 }
 
 /// Like [`lower_type_expr`], but resolves unqualified names relative to
@@ -440,6 +523,87 @@ pub fn lower_type_expr_in_ns(
     generic_params: &[baml_base::Name],
     diagnostics: &mut Vec<TirTypeError>,
 ) -> Ty {
+    lower_type_expr_in_ns_bounded(
+        db,
+        type_expr,
+        package_items,
+        ns_context,
+        generic_params,
+        &rustc_hash::FxHashMap::default(),
+        diagnostics,
+    )
+}
+
+/// Resolve a type name/path to its definition, with `ns_context` as the namespace
+/// prefix. Tries the namespace-qualified own-package lookup, then a cross-package lookup
+/// (`root.ns.Name` or `pkg.ns.Name`), then the `$stream` companion (whose base class/alias
+/// the caller re-qualifies under the `$stream` name). `None` when unresolved.
+pub(crate) fn resolve_type_in<'db>(
+    db: &'db dyn crate::Db,
+    package_items: &PackageItems<'db>,
+    ns_context: &[baml_base::Name],
+    segments: &[baml_base::Name],
+) -> Option<Definition<'db>> {
+    let item = segments.last().expect("non-empty path");
+    let seg_ns = &segments[..segments.len() - 1];
+    let resolved = if !ns_context.is_empty() {
+        let ns: Vec<baml_base::Name> = ns_context.iter().chain(seg_ns.iter()).cloned().collect();
+        package_items.lookup_type(&ns, item)
+    } else {
+        package_items.lookup_type(seg_ns, item)
+    };
+    let resolved = resolved.or_else(|| {
+        if segments.len() >= 2 {
+            if segments[0].as_str() == "root" {
+                package_items.lookup_type(&segments[1..segments.len() - 1], item)
+            } else {
+                let pkg_id = PackageId::new(db, segments[0].clone());
+                let pkg = baml_compiler2_ppir::package_items(db, pkg_id);
+                pkg.lookup_type(&segments[1..segments.len() - 1], item)
+            }
+        } else {
+            None
+        }
+    });
+    resolved.or_else(|| {
+        let base = item.as_str().strip_suffix("$stream")?;
+        let base_name = baml_base::Name::new(base);
+        let base_def = if !ns_context.is_empty() {
+            let ns: Vec<baml_base::Name> =
+                ns_context.iter().chain(seg_ns.iter()).cloned().collect();
+            package_items.lookup_type(&ns, &base_name)
+        } else {
+            package_items.lookup_type(seg_ns, &base_name)
+        }
+        .or_else(|| {
+            if segments.len() >= 2 {
+                if segments[0].as_str() == "root" {
+                    package_items.lookup_type(&segments[1..segments.len() - 1], &base_name)
+                } else {
+                    let pkg_id = PackageId::new(db, segments[0].clone());
+                    let pkg = baml_compiler2_ppir::package_items(db, pkg_id);
+                    pkg.lookup_type(&segments[1..segments.len() - 1], &base_name)
+                }
+            } else {
+                None
+            }
+        })?;
+        // Only classes and aliases get a `$stream` companion.
+        matches!(base_def, Definition::Class(_) | Definition::TypeAlias(_)).then_some(base_def)
+    })
+}
+
+/// Resolve an AST `TypeExpr` to a `Ty`, driven entirely by `ctx` (name
+/// resolution, `Self`, and type-variable bounds). Lowering is a pure recursion
+/// over the `TypeExpr`: the scope-specific decisions all funnel through
+/// [`TypeExprContext`]. Unresolved names become `Ty::Unknown` and push an
+/// `UnresolvedType` diagnostic to `diagnostics`.
+pub fn lower_type_expr(
+    type_expr: &TypeExpr,
+    ctx: &dyn TypeExprContext<'_>,
+    diagnostics: &mut Vec<TirTypeError>,
+) -> Ty {
+    let db = ctx.db();
     match type_expr {
         TypeExpr::Path {
             segments,
@@ -447,387 +611,261 @@ pub fn lower_type_expr_in_ns(
             associated_type_bindings,
             ..
         } => {
-            let item = segments.last().expect("non-empty path");
-            let seg_ns = &segments[..segments.len() - 1];
-            // When we have a namespace context, try the qualified path first.
-            // e.g. for ns_context=["fs"], segments=["File"], try namespace ["fs"] item "File".
-            let resolved = if !ns_context.is_empty() {
-                let ns: Vec<baml_base::Name> =
-                    ns_context.iter().chain(seg_ns.iter()).cloned().collect();
-                package_items.lookup_type(&ns, item)
-            } else {
-                package_items.lookup_type(seg_ns, item)
-            };
-            // Cross-package fallback: if not found in the current package and
-            // the first segment is a known package name, look in that package
-            // using the remaining segments. This supports synthetic type
-            // references like `baml.llm.PromptAst` in companion functions.
-            let resolved = resolved.or_else(|| {
-                if segments.len() >= 2 {
-                    if segments[0].as_str() == "root" {
-                        package_items.lookup_type(&segments[1..segments.len() - 1], item)
-                    } else {
-                        let pkg_id = PackageId::new(db, segments[0].clone());
-                        let pkg = baml_compiler2_ppir::package_items(db, pkg_id);
-                        pkg.lookup_type(&segments[1..segments.len() - 1], item)
-                    }
-                } else {
-                    None
-                }
-            });
-            // `$stream` companion fallback. PPIR synthesizes a `<T>$stream`
-            // class/alias for every class and alias, but those synthetics live
-            // only in the per-file item tree — not in the cross-file
-            // `package_items` resolution index — so a written `T$stream`
-            // reference (e.g. in a function signature) would otherwise erase to
-            // `Ty::Unknown`. Resolve the base type; the `Definition::Class` /
-            // `TypeAlias` arms below re-qualify it under the original `$stream`
-            // name (via `short`), producing the companion's `Class`/`TypeAlias`
-            // type. `$` is reserved for synthetics, so this never shadows a
-            // user-declared name.
-            let resolved = resolved.or_else(|| {
-                let base = item.as_str().strip_suffix("$stream")?;
-                let base_name = baml_base::Name::new(base);
-                let base_def = if !ns_context.is_empty() {
-                    let ns: Vec<baml_base::Name> =
-                        ns_context.iter().chain(seg_ns.iter()).cloned().collect();
-                    package_items.lookup_type(&ns, &base_name)
-                } else {
-                    package_items.lookup_type(seg_ns, &base_name)
-                }
-                .or_else(|| {
-                    if segments.len() >= 2 {
-                        if segments[0].as_str() == "root" {
-                            package_items.lookup_type(&segments[1..segments.len() - 1], &base_name)
-                        } else {
-                            let pkg_id = PackageId::new(db, segments[0].clone());
-                            let pkg = baml_compiler2_ppir::package_items(db, pkg_id);
-                            pkg.lookup_type(&segments[1..segments.len() - 1], &base_name)
-                        }
-                    } else {
-                        None
-                    }
-                })?;
-                // Only classes and aliases get a `$stream` companion.
-                matches!(base_def, Definition::Class(_) | Definition::TypeAlias(_))
-                    .then_some(base_def)
-            });
-
-            if let Some(def) = resolved {
-                let short = segments.last().expect("non-empty path");
-                match def {
-                    Definition::Class(class_loc) => {
-                        // Collect and lower generic args, storing them in Ty::Class.
-                        let lowered_args: Vec<Ty> = generic_args
-                            .iter()
-                            .map(|ga| {
-                                lower_type_expr_in_ns(
-                                    db,
-                                    ga,
-                                    package_items,
-                                    ns_context,
-                                    generic_params,
-                                    diagnostics,
-                                )
-                            })
-                            .collect();
-
-                        let class_tree =
-                            baml_compiler2_ppir::file_item_tree(db, class_loc.file(db));
-                        let expected_type_args = class_tree
-                            .classes
-                            .get(&class_loc.id(db))
-                            .map(|class| class.generic_params.len())
-                            .unwrap_or(0);
-                        // A bare generic name (`generic_args.is_empty()`) is left
-                        // unchecked here: it is a deliberate wildcard in several
-                        // positions (`reflect.type_of<Box>()`, construction
-                        // `Box { .. }` where args infer from fields, an interface's
-                        // own `Self` type). Object construction that cannot infer
-                        // its args is reported by `infer_object_expr`
-                        // (`CannotInferTypeParameter`) instead.
-                        if !generic_args.is_empty() && generic_args.len() != expected_type_args {
-                            diagnostics.push(TirTypeError::WrongNumberOfTypeArgs {
-                                type_name: short.clone(),
-                                expected: expected_type_args,
-                                got: generic_args.len(),
-                            });
-                        }
-
-                        // BEP-034: `baml.future.Future<T, E>` resolves to the
-                        // dedicated `Ty::Future` variant rather than the
-                        // generic `Ty::Class`. The class declaration exists
-                        // as a regular `.baml` file (for method dispatch via
-                        // the standard PackageBaml path), but `spawn` /
-                        // `await` keys off `Ty::Future` directly. Mirrors
-                        // how `int[]` resolves to `Ty::List` even though
-                        // `class Array<T>` is a regular class declaration.
-                        let qtn = qualify_def(db, def, short);
-                        if qtn.name().as_str() == "Future"
-                            && qtn.package().as_str() == "baml"
-                            && qtn.namespace().len() == 1
-                            && qtn.namespace()[0].as_str() == "future"
-                            && lowered_args.len() == 2
-                        {
-                            return Ty::Future(
-                                Box::new(lowered_args[0].clone()),
-                                Box::new(lowered_args[1].clone()),
-                                TyAttr::default(),
-                            );
-                        }
-
-                        Ty::Class(qtn, lowered_args, TyAttr::default())
-                    }
-                    Definition::Interface(iface_loc) => {
-                        // Same generic-arg handling as `Class` — interface
-                        // parameters are valid in the same positions.
-                        let lowered_args: Vec<Ty> = generic_args
-                            .iter()
-                            .map(|ga| {
-                                lower_type_expr_in_ns(
-                                    db,
-                                    ga,
-                                    package_items,
-                                    ns_context,
-                                    generic_params,
-                                    diagnostics,
-                                )
-                            })
-                            .collect();
-                        let iface_tree =
-                            baml_compiler2_ppir::file_item_tree(db, iface_loc.file(db));
-                        let expected_type_args = iface_tree
-                            .interfaces
-                            .get(&iface_loc.id(db))
-                            .map(|iface| iface.generic_params.len())
-                            .unwrap_or(0);
-                        if !generic_args.is_empty() && generic_args.len() != expected_type_args {
-                            diagnostics.push(TirTypeError::WrongNumberOfTypeArgs {
-                                type_name: short.clone(),
-                                expected: expected_type_args,
-                                got: generic_args.len(),
-                            });
-                        }
-                        let known_associated_types: FxHashSet<baml_base::Name> = iface_tree
-                            .interfaces
-                            .get(&iface_loc.id(db))
-                            .map(|iface| {
-                                iface
-                                    .associated_types
-                                    .iter()
-                                    .map(|assoc| assoc.name.clone())
-                                    .collect()
-                            })
-                            .unwrap_or_default();
-                        let mut seen_associated_bindings = FxHashSet::default();
-                        let lowered_associated_bindings: Vec<(baml_base::Name, Ty)> =
-                            associated_type_bindings
-                                .iter()
-                                .map(|binding| {
-                                    if !known_associated_types.contains(&binding.name) {
-                                        diagnostics.push(TirTypeError::UnresolvedType {
-                                            name: binding.name.clone(),
-                                            suggestions: known_associated_types
-                                                .iter()
-                                                .map(ToString::to_string)
-                                                .collect(),
-                                        });
-                                    }
-                                    if !seen_associated_bindings.insert(binding.name.clone()) {
-                                        diagnostics.push(TirTypeError::TypeMismatch {
-                                            expected: Ty::Unknown {
-                                                attr: TyAttr::default(),
-                                            },
-                                            got: Ty::Unknown {
-                                                attr: TyAttr::default(),
-                                            },
-                                        });
-                                    }
-                                    (
-                                        binding.name.clone(),
-                                        lower_type_expr_in_ns(
-                                            db,
-                                            &binding.ty,
-                                            package_items,
-                                            ns_context,
-                                            generic_params,
-                                            diagnostics,
-                                        ),
-                                    )
-                                })
-                                .collect();
-                        Ty::Interface(
-                            qualify_def(db, def, short),
-                            lowered_args,
-                            lowered_associated_bindings,
-                            TyAttr::default(),
-                        )
-                    }
-                    Definition::Enum(_) => {
-                        // Enums are not generic — validate args and emit a diagnostic if any were supplied.
-                        for ga in generic_args {
-                            let _ = lower_type_expr_in_ns(
-                                db,
-                                ga,
-                                package_items,
-                                ns_context,
-                                generic_params,
-                                diagnostics,
-                            );
-                        }
-                        if !generic_args.is_empty() {
-                            diagnostics.push(TirTypeError::TypeIsNotGeneric {
-                                type_name: short.clone(),
-                                kind: "enum",
-                            });
-                        }
-                        Ty::Enum(qualify_def(db, def, short), TyAttr::default())
-                    }
-                    Definition::TypeAlias(_) => {
-                        // Type aliases are not generic — validate args and emit a diagnostic if any were supplied.
-                        for ga in generic_args {
-                            let _ = lower_type_expr_in_ns(
-                                db,
-                                ga,
-                                package_items,
-                                ns_context,
-                                generic_params,
-                                diagnostics,
-                            );
-                        }
-                        if !generic_args.is_empty() {
-                            diagnostics.push(TirTypeError::TypeIsNotGeneric {
-                                type_name: short.clone(),
-                                kind: "type alias",
-                            });
-                        }
-                        Ty::TypeAlias(qualify_def(db, def, short), TyAttr::default())
-                    }
-                    // Let bindings are values, not types — produce Unknown in a type position.
-                    _ => Ty::Unknown {
-                        attr: TyAttr::default(),
-                    },
-                }
-            } else {
-                // Check if this is a generic type parameter (e.g. T, K, V).
+            // `Self` / `Self.Member…`: resolve the receiver through the context, but only
+            // when `Self` is in scope (`lower_self` is `Some`). A bare `Self` is the
+            // receiver type; `Self.Item` is an associated-type projection rooted at it.
+            // Falls through otherwise, so a stray `Self` still takes the unresolved path.
+            if segments[0].as_str() == "Self"
+                && generic_args.is_empty()
+                && associated_type_bindings.is_empty()
+                && let Some(self_ty) = ctx.lower_self()
+            {
                 if segments.len() == 1 {
-                    if generic_params.iter().any(|p| *p == segments[0]) {
+                    return self_ty;
+                }
+                let mut ty = self_ty;
+                for member in &segments[1..] {
+                    let lowered = crate::builder::associated_projection::lower_projection(
+                        ctx,
+                        ty,
+                        None,
+                        member.clone(),
+                    );
+                    diagnostics.extend(lowered.diagnostics);
+                    ty = lowered.ty;
+                }
+                return ty;
+            }
+            match ctx.resolve_type(segments) {
+                Ok(def) => {
+                    let short = segments.last().expect("non-empty path");
+                    match def {
+                        Definition::Class(class_loc) => {
+                            // Collect and lower generic args, storing them in Ty::Class.
+                            let lowered_args: Vec<Ty> = generic_args
+                                .iter()
+                                .map(|ga| lower_type_expr(ga, ctx, diagnostics))
+                                .collect();
+
+                            let class_tree =
+                                baml_compiler2_ppir::file_item_tree(db, class_loc.file(db));
+                            let expected_type_args = class_tree
+                                .classes
+                                .get(&class_loc.id(db))
+                                .map(|class| class.generic_params.len())
+                                .unwrap_or(0);
+                            // A bare generic name (`generic_args.is_empty()`) is left
+                            // unchecked here: it is a deliberate wildcard in several
+                            // positions (`reflect.type_of<Box>()`, construction
+                            // `Box { .. }` where args infer from fields, an interface's
+                            // own `Self` type). Object construction that cannot infer
+                            // its args is reported by `infer_object_expr`
+                            // (`CannotInferTypeParameter`) instead.
+                            if !generic_args.is_empty() && generic_args.len() != expected_type_args
+                            {
+                                diagnostics.push(TirTypeError::WrongNumberOfTypeArgs {
+                                    type_name: short.clone(),
+                                    expected: expected_type_args,
+                                    got: generic_args.len(),
+                                });
+                            }
+
+                            // BEP-034: `baml.future.Future<T, E>` resolves to the
+                            // dedicated `Ty::Future` variant rather than the
+                            // generic `Ty::Class`. The class declaration exists
+                            // as a regular `.baml` file (for method dispatch via
+                            // the standard PackageBaml path), but `spawn` /
+                            // `await` keys off `Ty::Future` directly. Mirrors
+                            // how `int[]` resolves to `Ty::List` even though
+                            // `class Array<T>` is a regular class declaration.
+                            let qtn = qualify_def(db, def, short);
+                            if qtn.name().as_str() == "Future"
+                                && qtn.package().as_str() == "baml"
+                                && qtn.namespace().len() == 1
+                                && qtn.namespace()[0].as_str() == "future"
+                                && lowered_args.len() == 2
+                            {
+                                return Ty::Future(
+                                    Box::new(lowered_args[0].clone()),
+                                    Box::new(lowered_args[1].clone()),
+                                    TyAttr::default(),
+                                );
+                            }
+
+                            Ty::Class(qtn, lowered_args, TyAttr::default())
+                        }
+                        Definition::Interface(iface_loc) => {
+                            // Same generic-arg handling as `Class` — interface
+                            // parameters are valid in the same positions.
+                            let lowered_args: Vec<Ty> = generic_args
+                                .iter()
+                                .map(|ga| lower_type_expr(ga, ctx, diagnostics))
+                                .collect();
+                            let iface_tree =
+                                baml_compiler2_ppir::file_item_tree(db, iface_loc.file(db));
+                            let expected_type_args = iface_tree
+                                .interfaces
+                                .get(&iface_loc.id(db))
+                                .map(|iface| iface.generic_params.len())
+                                .unwrap_or(0);
+                            if !generic_args.is_empty() && generic_args.len() != expected_type_args
+                            {
+                                diagnostics.push(TirTypeError::WrongNumberOfTypeArgs {
+                                    type_name: short.clone(),
+                                    expected: expected_type_args,
+                                    got: generic_args.len(),
+                                });
+                            }
+                            let known_associated_types: FxHashSet<baml_base::Name> = iface_tree
+                                .interfaces
+                                .get(&iface_loc.id(db))
+                                .map(|iface| {
+                                    iface
+                                        .associated_types
+                                        .iter()
+                                        .map(|assoc| assoc.name.clone())
+                                        .collect()
+                                })
+                                .unwrap_or_default();
+                            let mut seen_associated_bindings = FxHashSet::default();
+                            let lowered_associated_bindings: Vec<(baml_base::Name, Ty)> =
+                                associated_type_bindings
+                                    .iter()
+                                    .map(|binding| {
+                                        if !known_associated_types.contains(&binding.name) {
+                                            diagnostics.push(TirTypeError::UnresolvedType {
+                                                name: binding.name.clone(),
+                                                suggestions: known_associated_types
+                                                    .iter()
+                                                    .cloned()
+                                                    .collect(),
+                                            });
+                                        }
+                                        if !seen_associated_bindings.insert(binding.name.clone()) {
+                                            diagnostics.push(TirTypeError::TypeMismatch {
+                                                expected: Ty::Unknown {
+                                                    attr: TyAttr::default(),
+                                                },
+                                                got: Ty::Unknown {
+                                                    attr: TyAttr::default(),
+                                                },
+                                            });
+                                        }
+                                        (
+                                            binding.name.clone(),
+                                            lower_type_expr(&binding.ty, ctx, diagnostics),
+                                        )
+                                    })
+                                    .collect();
+                            Ty::Interface(
+                                qualify_def(db, def, short),
+                                lowered_args,
+                                lowered_associated_bindings,
+                                TyAttr::default(),
+                            )
+                        }
+                        Definition::Enum(_) => {
+                            // Enums are not generic — validate args and emit a diagnostic if any were supplied.
+                            for ga in generic_args {
+                                let _ = lower_type_expr(ga, ctx, diagnostics);
+                            }
+                            if !generic_args.is_empty() {
+                                diagnostics.push(TirTypeError::TypeIsNotGeneric {
+                                    type_name: short.clone(),
+                                    kind: "enum",
+                                });
+                            }
+                            Ty::Enum(qualify_def(db, def, short), TyAttr::default())
+                        }
+                        Definition::TypeAlias(_) => {
+                            // Type aliases are not generic — validate args and emit a diagnostic if any were supplied.
+                            for ga in generic_args {
+                                let _ = lower_type_expr(ga, ctx, diagnostics);
+                            }
+                            if !generic_args.is_empty() {
+                                diagnostics.push(TirTypeError::TypeIsNotGeneric {
+                                    type_name: short.clone(),
+                                    kind: "type alias",
+                                });
+                            }
+                            Ty::TypeAlias(qualify_def(db, def, short), TyAttr::default())
+                        }
+                        // Let bindings are values, not types — produce Unknown in a type position.
+                        _ => Ty::Unknown {
+                            attr: TyAttr::default(),
+                        },
+                    }
+                }
+                Err(suggestions) => {
+                    // A single-segment name that is an in-scope type variable
+                    // (e.g. T, K, V) lowers to `Ty::TypeVar`, not an error.
+                    if segments.len() == 1 && ctx.type_var_bounds(&segments[0]).is_some() {
                         return Ty::TypeVar(segments[0].clone(), TyAttr::default());
                     }
-                }
-                // Enum-variant fallback: a path like `Status.Active` (or
-                // `pkg.ns.Status.Active`) won't resolve as a type — `Active`
-                // isn't a type, it's a variant. Try interpreting the last
-                // segment as the variant and the rest as the enum's path.
-                if segments.len() >= 2 {
-                    let (variant, enum_path) = segments.split_last().unwrap();
-                    let enum_short = enum_path.last().unwrap();
-                    let enum_seg_ns = &enum_path[..enum_path.len() - 1];
-                    let enum_resolved = if !ns_context.is_empty() {
-                        let ns: Vec<baml_base::Name> = ns_context
-                            .iter()
-                            .chain(enum_seg_ns.iter())
-                            .cloned()
-                            .collect();
-                        package_items.lookup_type(&ns, enum_short)
-                    } else {
-                        package_items.lookup_type(enum_seg_ns, enum_short)
-                    };
-                    let enum_resolved = enum_resolved.or_else(|| {
-                        if enum_path.len() >= 2 {
-                            if enum_path[0].as_str() == "root" {
-                                package_items
-                                    .lookup_type(&enum_path[1..enum_path.len() - 1], enum_short)
-                            } else {
-                                let pkg_id = PackageId::new(db, enum_path[0].clone());
-                                let pkg = baml_compiler2_ppir::package_items(db, pkg_id);
-                                pkg.lookup_type(&enum_path[1..enum_path.len() - 1], enum_short)
+                    // Enum-variant fallback: a path like `Status.Active` (or
+                    // `pkg.ns.Status.Active`) won't resolve as a type — `Active`
+                    // isn't a type, it's a variant. Try interpreting the last
+                    // segment as the variant and the rest as the enum's path.
+                    if segments.len() >= 2 {
+                        let (variant, enum_path) = segments.split_last().unwrap();
+                        let enum_short = enum_path.last().unwrap();
+                        if let Ok(def @ Definition::Enum(enum_loc)) = ctx.resolve_type(enum_path) {
+                            // Verify the variant actually exists on the enum;
+                            // otherwise `Status.Typo` would silently produce a
+                            // bogus `Ty::EnumVariant` and downstream code would
+                            // never see `UnresolvedType`.
+                            let item_tree =
+                                baml_compiler2_ppir::file_item_tree(db, enum_loc.file(db));
+                            let enum_data = &item_tree[enum_loc.id(db)];
+                            if enum_data.variants.iter().any(|v| v.name == *variant) {
+                                return Ty::EnumVariant(
+                                    qualify_def(db, def, enum_short),
+                                    variant.clone(),
+                                    TyAttr::default(),
+                                );
                             }
-                        } else {
-                            None
-                        }
-                    });
-                    if let Some(def @ Definition::Enum(enum_loc)) = enum_resolved {
-                        // Verify the variant actually exists on the enum;
-                        // otherwise `Status.Typo` would silently produce a
-                        // bogus `Ty::EnumVariant` and downstream code would
-                        // never see `UnresolvedType`.
-                        let item_tree = baml_compiler2_ppir::file_item_tree(db, enum_loc.file(db));
-                        let enum_data = &item_tree[enum_loc.id(db)];
-                        if enum_data.variants.iter().any(|v| v.name == *variant) {
-                            return Ty::EnumVariant(
-                                qualify_def(db, def, enum_short),
-                                variant.clone(),
-                                TyAttr::default(),
-                            );
                         }
                     }
-                }
-                // Associated type projection fallback: after ordinary type
-                // paths and enum variants have had first refusal, treat
-                // `Base.Member` as shorthand for an associated type projection.
-                // This preserves enum disambiguation (`Status.Active`) and
-                // still accepts aliases, type variables, concrete classes,
-                // interfaces, and nested projections as projection bases.
-                if segments.len() >= 2
-                    && generic_args.is_empty()
-                    && associated_type_bindings.is_empty()
-                {
-                    let base_expr = TypeExpr::Path {
-                        segments: segments[..segments.len() - 1].to_vec(),
-                        generic_args: Vec::new(),
-                        associated_type_bindings: Vec::new(),
-                        attrs: Vec::new(),
-                    };
-                    let mut base_diags = Vec::new();
-                    let base_ty = lower_type_expr_in_ns(
-                        db,
-                        &base_expr,
-                        package_items,
-                        ns_context,
-                        generic_params,
-                        &mut base_diags,
-                    );
-                    if base_diags.is_empty() && can_be_associated_type_projection_base(&base_ty) {
-                        // Associated-type projection resolution is being rebuilt; for now a
-                        // projection-shaped path lowers to `Ty::Error`.
-                        return Ty::Error {
-                            attr: TyAttr::default(),
+                    // Associated type projection fallback: after ordinary type
+                    // paths and enum variants have had first refusal, treat
+                    // `Base.Member` as shorthand for an associated type projection.
+                    // This preserves enum disambiguation (`Status.Active`) and
+                    // still accepts aliases, type variables, concrete classes,
+                    // interfaces, and nested projections as projection bases.
+                    if segments.len() >= 2
+                        && generic_args.is_empty()
+                        && associated_type_bindings.is_empty()
+                    {
+                        let base_expr = TypeExpr::Path {
+                            segments: segments[..segments.len() - 1].to_vec(),
+                            generic_args: Vec::new(),
+                            associated_type_bindings: Vec::new(),
+                            attrs: Vec::new(),
                         };
-                    }
-                }
-                let name_str = segments
-                    .iter()
-                    .map(smol_str::SmolStr::as_str)
-                    .collect::<Vec<_>>()
-                    .join(".");
-                // Scan all namespaces for the item name to build "did you mean" suggestions.
-                // Only do this for single-segment bare names — multi-segment paths already
-                // encode the intended namespace.
-                let mut suggestions = Vec::new();
-                if segments.len() == 1 {
-                    for (ns_path, ns_items) in &package_items.namespaces {
-                        if ns_items.types.contains_key(item) {
-                            if ns_path.is_empty() {
-                                suggestions.push(format!("root.{item}"));
-                            } else {
-                                let ns_str = ns_path
-                                    .iter()
-                                    .map(smol_str::SmolStr::as_str)
-                                    .collect::<Vec<_>>()
-                                    .join(".");
-                                suggestions.push(format!("root.{ns_str}.{item}"));
-                            }
+                        let mut base_diags = Vec::new();
+                        let base_ty = lower_type_expr(&base_expr, ctx, &mut base_diags);
+                        if base_diags.is_empty() && can_be_associated_type_projection_base(&base_ty)
+                        {
+                            let member = segments.last().expect("non-empty path").clone();
+                            let lowered = crate::builder::associated_projection::lower_projection(
+                                ctx, base_ty, None, member,
+                            );
+                            diagnostics.extend(lowered.diagnostics);
+                            return lowered.ty;
                         }
                     }
-                    suggestions.sort();
-                }
-                diagnostics.push(TirTypeError::UnresolvedType {
-                    name: baml_base::Name::new(&name_str),
-                    suggestions,
-                });
-                Ty::Unknown {
-                    attr: TyAttr::default(),
+                    let name_str = segments
+                        .iter()
+                        .map(smol_str::SmolStr::as_str)
+                        .collect::<Vec<_>>()
+                        .join(".");
+                    diagnostics.push(TirTypeError::UnresolvedType {
+                        name: baml_base::Name::new(&name_str),
+                        suggestions,
+                    });
+                    Ty::Unknown {
+                        attr: TyAttr::default(),
+                    }
                 }
             }
         }
@@ -869,42 +907,14 @@ pub fn lower_type_expr_in_ns(
             },
         },
         // `T?` is sugar for `T | null` — lower it directly to a nullable union.
-        TypeExpr::Optional { inner, .. } => Ty::optional(lower_type_expr_in_ns(
-            db,
-            inner,
-            package_items,
-            ns_context,
-            generic_params,
-            diagnostics,
-        )),
+        TypeExpr::Optional { inner, .. } => Ty::optional(lower_type_expr(inner, ctx, diagnostics)),
         TypeExpr::List { inner, .. } => Ty::List(
-            Box::new(lower_type_expr_in_ns(
-                db,
-                inner,
-                package_items,
-                ns_context,
-                generic_params,
-                diagnostics,
-            )),
+            Box::new(lower_type_expr(inner, ctx, diagnostics)),
             TyAttr::default(),
         ),
         TypeExpr::Map { key, value, .. } => Ty::Map {
-            key: Box::new(lower_type_expr_in_ns(
-                db,
-                key,
-                package_items,
-                ns_context,
-                generic_params,
-                diagnostics,
-            )),
-            value: Box::new(lower_type_expr_in_ns(
-                db,
-                value,
-                package_items,
-                ns_context,
-                generic_params,
-                diagnostics,
-            )),
+            key: Box::new(lower_type_expr(key, ctx, diagnostics)),
+            value: Box::new(lower_type_expr(value, ctx, diagnostics)),
             attr: TyAttr::default(),
         },
         TypeExpr::Union {
@@ -912,16 +922,7 @@ pub fn lower_type_expr_in_ns(
         } => Ty::Union(
             members
                 .iter()
-                .map(|m| {
-                    lower_type_expr_in_ns(
-                        db,
-                        m,
-                        package_items,
-                        ns_context,
-                        generic_params,
-                        diagnostics,
-                    )
-                })
+                .map(|m| lower_type_expr(m, ctx, diagnostics))
                 .collect(),
             TyAttr::default(),
         ),
@@ -932,20 +933,13 @@ pub fn lower_type_expr_in_ns(
             ..
         } => {
             // A function type carries no generics of its own; its type variables
-            // come from the enclosing context (`generic_params`).
+            // come from the enclosing context.
             Ty::Function {
                 params: params
                     .iter()
                     .map(|p| FunctionParamTy {
                         name: p.name.clone(),
-                        ty: lower_type_expr_in_ns(
-                            db,
-                            &p.ty,
-                            package_items,
-                            ns_context,
-                            generic_params,
-                            diagnostics,
-                        ),
+                        ty: lower_type_expr(&p.ty, ctx, diagnostics),
                         mode: if p.optional {
                             FunctionParamMode::Optional
                         } else {
@@ -953,27 +947,11 @@ pub fn lower_type_expr_in_ns(
                         },
                     })
                     .collect(),
-                ret: Box::new(lower_type_expr_in_ns(
-                    db,
-                    ret,
-                    package_items,
-                    ns_context,
-                    generic_params,
-                    diagnostics,
-                )),
+                ret: Box::new(lower_type_expr(ret, ctx, diagnostics)),
                 throws: Box::new(
                     throws
                         .as_deref()
-                        .map(|throws| {
-                            lower_type_expr_in_ns(
-                                db,
-                                throws,
-                                package_items,
-                                ns_context,
-                                generic_params,
-                                diagnostics,
-                            )
-                        })
+                        .map(|throws| lower_type_expr(throws, ctx, diagnostics))
                         .unwrap_or(Ty::Never {
                             attr: TyAttr::default(),
                         }),
@@ -982,31 +960,23 @@ pub fn lower_type_expr_in_ns(
             }
         }
         TypeExpr::AssociatedTypeProjection {
-            base, interface, ..
+            base,
+            interface,
+            member,
+            ..
         } => {
-            // Lower the sub-expressions so their diagnostics still surface, then erase the
-            // projection to `Ty::Error` — projection resolution is being rebuilt.
-            let _ = lower_type_expr_in_ns(
-                db,
-                base,
-                package_items,
-                ns_context,
-                generic_params,
-                diagnostics,
+            let base_ty = lower_type_expr(base, ctx, diagnostics);
+            let explicit_interface = interface
+                .as_ref()
+                .map(|interface| lower_type_expr(interface, ctx, diagnostics));
+            let lowered = crate::builder::associated_projection::lower_projection(
+                ctx,
+                base_ty,
+                explicit_interface,
+                member.clone(),
             );
-            if let Some(interface) = interface {
-                let _ = lower_type_expr_in_ns(
-                    db,
-                    interface,
-                    package_items,
-                    ns_context,
-                    generic_params,
-                    diagnostics,
-                );
-            }
-            Ty::Error {
-                attr: TyAttr::default(),
-            }
+            diagnostics.extend(lowered.diagnostics);
+            lowered.ty
         }
         TypeExpr::Literal { value: lit, .. } => {
             Ty::Literal(lit.clone(), Freshness::Regular, TyAttr::default())
@@ -1026,6 +996,31 @@ pub fn lower_type_expr_in_ns(
             attr: TyAttr::default(),
         },
     }
+}
+
+/// Like [`lower_type_expr_in_ns`], but threads the in-scope type-variable
+/// `bounds` (`T extends Named`) through to associated-type-projection
+/// resolution, so a projection `T.member` on a bounded type variable can find
+/// `T`'s bound interface. A thin wrapper that packages its scope into a
+/// [`ScopeCtx`] and delegates to [`lower_type_expr`].
+pub fn lower_type_expr_in_ns_bounded(
+    db: &dyn crate::Db,
+    type_expr: &TypeExpr,
+    package_items: &PackageItems<'_>,
+    ns_context: &[baml_base::Name],
+    generic_params: &[baml_base::Name],
+    bounds: &rustc_hash::FxHashMap<baml_base::Name, Ty>,
+    diagnostics: &mut Vec<TirTypeError>,
+) -> Ty {
+    let ctx = ScopeCtx {
+        db,
+        package_items,
+        ns_context,
+        generic_params,
+        bounds,
+        self_ty: None,
+    };
+    lower_type_expr(type_expr, &ctx, diagnostics)
 }
 
 /// Derive the qualified name for a type from its Definition's file location.

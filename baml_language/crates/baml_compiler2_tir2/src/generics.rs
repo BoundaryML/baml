@@ -22,7 +22,7 @@ use rustc_hash::FxHashMap;
 
 use crate::{
     infer_context::TirTypeError,
-    lower_type_expr::lower_type_expr_in_ns,
+    lower_type_expr::lower_type_expr_in_ns_bounded,
     ty::{FunctionParamMode, FunctionParamTy, Ty, TyAttr},
 };
 
@@ -208,9 +208,40 @@ pub fn lower_type_expr_with_generics(
     bindings: &FxHashMap<Name, Ty>,
     diagnostics: &mut Vec<TirTypeError>,
 ) -> Ty {
+    lower_type_expr_with_generics_bounded(
+        db,
+        expr,
+        package_items,
+        ns_context,
+        bindings,
+        &FxHashMap::default(),
+        diagnostics,
+    )
+}
+
+/// Like [`lower_type_expr_with_generics`], but threads the in-scope type-variable
+/// `bounds` (`T extends Named`) through to associated-type-projection resolution,
+/// so a projection on a bounded type variable can find its bound interface.
+pub fn lower_type_expr_with_generics_bounded(
+    db: &dyn crate::Db,
+    expr: &TypeExpr,
+    package_items: &baml_compiler2_hir::package::PackageItems<'_>,
+    ns_context: &[Name],
+    bindings: &FxHashMap<Name, Ty>,
+    bounds: &FxHashMap<Name, Ty>,
+    diagnostics: &mut Vec<TirTypeError>,
+) -> Ty {
     // Fast path: empty bindings — no substitution needed.
     if bindings.is_empty() {
-        return lower_type_expr_in_ns(db, expr, package_items, ns_context, &[], diagnostics);
+        return lower_type_expr_in_ns_bounded(
+            db,
+            expr,
+            package_items,
+            ns_context,
+            &[],
+            bounds,
+            diagnostics,
+        );
     }
 
     // Intercept single-segment paths that are type variables.
@@ -223,40 +254,44 @@ pub fn lower_type_expr_with_generics(
     // in nested positions are also intercepted before triggering "unresolved type".
     match expr {
         // `T?` is sugar for `T | null` — lower it directly to a nullable union.
-        TypeExpr::Optional { inner, .. } => Ty::optional(lower_type_expr_with_generics(
+        TypeExpr::Optional { inner, .. } => Ty::optional(lower_type_expr_with_generics_bounded(
             db,
             inner,
             package_items,
             ns_context,
             bindings,
+            bounds,
             diagnostics,
         )),
         TypeExpr::List { inner, .. } => Ty::List(
-            Box::new(lower_type_expr_with_generics(
+            Box::new(lower_type_expr_with_generics_bounded(
                 db,
                 inner,
                 package_items,
                 ns_context,
                 bindings,
+                bounds,
                 diagnostics,
             )),
             TyAttr::default(),
         ),
         TypeExpr::Map { key, value, .. } => Ty::Map {
-            key: Box::new(lower_type_expr_with_generics(
+            key: Box::new(lower_type_expr_with_generics_bounded(
                 db,
                 key,
                 package_items,
                 ns_context,
                 bindings,
+                bounds,
                 diagnostics,
             )),
-            value: Box::new(lower_type_expr_with_generics(
+            value: Box::new(lower_type_expr_with_generics_bounded(
                 db,
                 value,
                 package_items,
                 ns_context,
                 bindings,
+                bounds,
                 diagnostics,
             )),
             attr: TyAttr::default(),
@@ -267,12 +302,13 @@ pub fn lower_type_expr_with_generics(
             members
                 .iter()
                 .map(|m| {
-                    lower_type_expr_with_generics(
+                    lower_type_expr_with_generics_bounded(
                         db,
                         m,
                         package_items,
                         ns_context,
                         bindings,
+                        bounds,
                         diagnostics,
                     )
                 })
@@ -292,12 +328,13 @@ pub fn lower_type_expr_with_generics(
                     .iter()
                     .map(|p| FunctionParamTy {
                         name: p.name.clone(),
-                        ty: lower_type_expr_with_generics(
+                        ty: lower_type_expr_with_generics_bounded(
                             db,
                             &p.ty,
                             package_items,
                             ns_context,
                             bindings,
+                            bounds,
                             diagnostics,
                         ),
                         mode: if p.optional {
@@ -307,24 +344,26 @@ pub fn lower_type_expr_with_generics(
                         },
                     })
                     .collect(),
-                ret: Box::new(lower_type_expr_with_generics(
+                ret: Box::new(lower_type_expr_with_generics_bounded(
                     db,
                     ret,
                     package_items,
                     ns_context,
                     bindings,
+                    bounds,
                     diagnostics,
                 )),
                 throws: Box::new(
                     throws
                         .as_deref()
                         .map(|throws| {
-                            lower_type_expr_with_generics(
+                            lower_type_expr_with_generics_bounded(
                                 db,
                                 throws,
                                 package_items,
                                 ns_context,
                                 bindings,
+                                bounds,
                                 diagnostics,
                             )
                         })
@@ -336,29 +375,52 @@ pub fn lower_type_expr_with_generics(
             }
         }
         TypeExpr::AssociatedTypeProjection {
-            base, interface, ..
+            base,
+            interface,
+            member,
+            ..
         } => {
-            let _ = lower_type_expr_with_generics(
+            let base_ty = lower_type_expr_with_generics_bounded(
                 db,
                 base,
                 package_items,
                 ns_context,
                 bindings,
+                bounds,
                 diagnostics,
             );
-            if let Some(interface) = interface {
-                let _ = lower_type_expr_with_generics(
+            let explicit_interface = interface.as_ref().map(|interface| {
+                lower_type_expr_with_generics_bounded(
                     db,
                     interface,
                     package_items,
                     ns_context,
                     bindings,
+                    bounds,
                     diagnostics,
-                );
-            }
-            Ty::Error {
-                attr: TyAttr::default(),
-            }
+                )
+            });
+            // The base/interface are already generic-substituted; the projection
+            // resolver only needs `db` and the type-variable `bounds`. Treat every
+            // bounded name as an in-scope type variable so `type_var_bounds`
+            // reproduces the previous direct `bounds` lookup.
+            let generic_params: Vec<Name> = bounds.keys().cloned().collect();
+            let ctx = crate::lower_type_expr::ScopeCtx {
+                db,
+                package_items,
+                ns_context,
+                generic_params: &generic_params,
+                bounds,
+                self_ty: None,
+            };
+            let lowered = crate::builder::associated_projection::lower_projection(
+                &ctx,
+                base_ty,
+                explicit_interface,
+                member.clone(),
+            );
+            diagnostics.extend(lowered.diagnostics);
+            lowered.ty
         }
         // For all other type expressions (primitives, multi-segment paths, etc.),
         // lower normally and then substitute in the result.
@@ -370,12 +432,13 @@ pub fn lower_type_expr_with_generics(
         // concrete bound types.
         other => {
             let binding_keys: Vec<Name> = bindings.keys().cloned().collect();
-            let ty = lower_type_expr_in_ns(
+            let ty = lower_type_expr_in_ns_bounded(
                 db,
                 other,
                 package_items,
                 ns_context,
                 &binding_keys,
+                bounds,
                 diagnostics,
             );
             substitute_ty(&ty, bindings)

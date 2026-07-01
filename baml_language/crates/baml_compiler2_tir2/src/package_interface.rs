@@ -234,19 +234,32 @@ fn lower_class_method_signature<'db>(
     all_generic_params.extend(sig.user_generic_params.iter().cloned());
     all_generic_params.extend(sig.synthetic_effect_params.iter().cloned());
 
-    // BEP-044: pre-resolve `Self` to the enclosing class name so it
-    // surfaces as `Ty::Class(<enclosing>)` after regular lowering.
-    let self_replacement = crate::lower_type_expr::type_expr_for_name(class_data.name.clone());
+    // `Self` is the enclosing class's full receiver type (`Foo<T>`, or `Array<T>`→`List<T>`
+    // for the builtin containers) — resolved through the lowering context, not erased to a
+    // bare `Ty::Class` by a name-substitution pre-pass.
+    let self_ty = build_self_type_for_class(
+        class_data,
+        ns_path,
+        file_package::file_package(db, method_loc.file(db)).package,
+    );
+    // The method's in-scope type-variable bounds (its own params plus the enclosing
+    // class's) so an associated-type projection `T.member` in the signature can resolve
+    // `T`'s declaring interface.
+    let method_bounds: rustc_hash::FxHashMap<Name, Ty> =
+        crate::lower_type_expr::function_in_scope_generic_param_bounds(db, method_loc)
+            .iter()
+            .cloned()
+            .collect();
+    let ctx = crate::lower_type_expr::ScopeCtx {
+        db,
+        package_items: pkg_items,
+        ns_context: ns_path,
+        generic_params: &all_generic_params,
+        bounds: &method_bounds,
+        self_ty: Some(self_ty.clone()),
+    };
     let lower_with_self = |te: &baml_compiler2_ast::TypeExpr, diags: &mut Vec<TirTypeError>| {
-        let resolved = crate::lower_type_expr::substitute_self_in(te, &self_replacement);
-        lower_type_expr_in_ns(
-            db,
-            &resolved,
-            pkg_items,
-            ns_path,
-            &all_generic_params,
-            diags,
-        )
+        crate::lower_type_expr::lower_type_expr(te, &ctx, diags)
     };
 
     let mut params = Vec::new();
@@ -254,11 +267,7 @@ fn lower_class_method_signature<'db>(
         let param_ty = if param.name.as_str() == "self"
             && matches!(param.ty, baml_compiler2_ast::TypeExpr::Unknown { .. })
         {
-            build_self_type_for_class(
-                class_data,
-                ns_path,
-                file_package::file_package(db, method_loc.file(db)).package,
-            )
+            self_ty.clone()
         } else {
             lower_with_self(&param.ty, diags)
         };
@@ -319,17 +328,24 @@ pub fn package_interface<'db>(db: &'db dyn crate::Db, pkg_id: PackageId<'db>) ->
                     let class_ns =
                         file_package::file_package(db, class_loc.file(db)).namespace_path;
 
-                    // Lower fields
+                    // Lower fields. The class's type-variable bounds let an associated-type
+                    // projection `T.member` in a field type resolve `T`'s declaring interface.
+                    let class_bounds: rustc_hash::FxHashMap<Name, Ty> =
+                        crate::lower_type_expr::class_generic_param_bounds(db, *class_loc)
+                            .iter()
+                            .cloned()
+                            .collect();
                     let mut fields = Vec::new();
                     let mut diags = Vec::new();
                     for field in &class_data.fields {
                         if let Some(te) = &field.type_expr {
-                            let field_ty = lower_type_expr_in_ns(
+                            let field_ty = crate::lower_type_expr::lower_type_expr_in_ns_bounded(
                                 db,
                                 &te.expr,
                                 pkg_items,
                                 &class_ns,
                                 &class_data.generic_params,
+                                &class_bounds,
                                 &mut diags,
                             );
                             fields.push((field.name.clone(), field_ty));
@@ -424,15 +440,23 @@ pub fn package_interface<'db>(db: &'db dyn crate::Db, pkg_id: PackageId<'db>) ->
                 .chain(sig.synthetic_effect_params.iter())
                 .cloned()
                 .collect();
+            // The function's in-scope type-variable bounds, so an associated-type
+            // projection `T.member` in the signature can resolve `T`'s declaring interface.
+            let function_bounds: rustc_hash::FxHashMap<Name, Ty> =
+                crate::lower_type_expr::function_in_scope_generic_param_bounds(db, *func_loc)
+                    .iter()
+                    .cloned()
+                    .collect();
 
             let mut params = Vec::new();
             for param in &sig.params {
-                let param_ty = lower_type_expr_in_ns(
+                let param_ty = crate::lower_type_expr::lower_type_expr_in_ns_bounded(
                     db,
                     &param.ty,
                     pkg_items,
                     &func_ns,
                     &function_generic_params,
+                    &function_bounds,
                     &mut diags,
                 );
                 params.push(exported_function_param(
@@ -447,24 +471,26 @@ pub fn package_interface<'db>(db: &'db dyn crate::Db, pkg_id: PackageId<'db>) ->
                     attr: TyAttr::default(),
                 },
                 |te| {
-                    lower_type_expr_in_ns(
+                    crate::lower_type_expr::lower_type_expr_in_ns_bounded(
                         db,
                         te,
                         pkg_items,
                         &func_ns,
                         &function_generic_params,
+                        &function_bounds,
                         &mut diags,
                     )
                 },
             );
 
             let declared_throws = sig.throws.as_ref().map(|te| {
-                lower_type_expr_in_ns(
+                crate::lower_type_expr::lower_type_expr_in_ns_bounded(
                     db,
                     te,
                     pkg_items,
                     &func_ns,
                     &function_generic_params,
+                    &function_bounds,
                     &mut diags,
                 )
             });
@@ -801,16 +827,22 @@ impl<'db> PackageResolutionContext<'db> {
         let item_tree = baml_compiler2_ppir::file_item_tree(db, class_loc.file(db));
         let class_data = &item_tree[class_loc.id(db)];
         let ns = file_package::file_package(db, class_loc.file(db)).namespace_path;
+        let class_bounds: rustc_hash::FxHashMap<Name, Ty> =
+            crate::lower_type_expr::class_generic_param_bounds(db, class_loc)
+                .iter()
+                .cloned()
+                .collect();
         let mut diags = Vec::new();
         let mut fields = Vec::new();
         for field in &class_data.fields {
             if let Some(te) = &field.type_expr {
-                let field_ty = lower_type_expr_in_ns(
+                let field_ty = crate::lower_type_expr::lower_type_expr_in_ns_bounded(
                     db,
                     &te.expr,
                     &self.own_items,
                     &ns,
                     &class_data.generic_params,
+                    &class_bounds,
                     &mut diags,
                 );
                 fields.push((field.name.clone(), field_ty));
