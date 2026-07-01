@@ -626,6 +626,97 @@ mod tests {
             "unrooted trampoline function must not be forwarded after return"
         );
     }
+
+    // ── B-634: reified type-arg comparison in generic class match arms ──────
+    //
+    // A generic `match` arm `let s: Opt<T>` lowers its runtime type-test to a
+    // template whose frame type-arg is checked against the scrutinee instance's
+    // `class_type_args`. When inference pins `T` to a supertype union of the
+    // value's actual arg (a `default: T` arg subtypes, so `T` reifies to the
+    // un-subsumed join `Shape | Sq`), an EXACT (`==`) comparison wrongly misses.
+    // The fix lowers the arm through the dispatch-guard template so the frame
+    // arg becomes `TypeArgRefOrWildcard` (subtype-or-wildcard), matching the
+    // interface class-dispatch guard path. These tests lock the directional
+    // semantics of `guard_template_matches` — the property that is awkward to
+    // observe from surface BAML because static typing + covariance guarantee a
+    // well-typed scrutinee's runtime arg is always `<:` the frame `T`.
+    #[test]
+    fn guard_template_type_arg_ref_or_wildcard_honors_subtyping() {
+        use super::guard_template_matches;
+
+        let shape = RuntimeTy::class("Shape");
+        let sq = RuntimeTy::class("Sq");
+        // The reified frame `T` from the B-634 repro: the un-subsumed join.
+        let widened_t = RuntimeTy::union([shape.clone(), sq.clone()]);
+
+        // Under-match fix: the value's actual arg (`Shape`) is a member of the
+        // widened frame `T` (`Shape | Sq`), so the subtype-or-wildcard template
+        // now matches. This is the exact B-634 scenario (was `false`).
+        #[expect(deprecated)]
+        let subtype_template = TyTemplate::TypeArgRefOrWildcard(0);
+        assert!(
+            guard_template_matches(&subtype_template, &[widened_t.clone()], &shape),
+            "Shape must match a Shape|Sq frame T under subtype-or-wildcard"
+        );
+
+        // The exact `TypeArgRef` template (kept exact on purpose — this is why
+        // the fix is at the MIR layer, swapping which template the arm emits,
+        // rather than broadening every `TypeArgRef` comparison in the VM).
+        let exact_template = TyTemplate::TypeArgRef(0);
+        assert!(
+            !guard_template_matches(&exact_template, &[widened_t.clone()], &shape),
+            "exact TypeArgRef must still reject Shape != Shape|Sq"
+        );
+
+        // Directionality / soundness: a strictly WIDER runtime arg must NOT
+        // match a narrower frame `T`. Here `T` is pinned to `Sq` and the value
+        // carries the wider `Shape | Sq`; `(Shape|Sq) <: Sq` is false, so the
+        // arm is skipped (falls to the default). The fix does not over-match.
+        assert!(
+            !guard_template_matches(&subtype_template, &[sq.clone()], &widened_t),
+            "a wider runtime arg (Shape|Sq) must not match a narrower frame T (Sq)"
+        );
+        // Same directionality with two unrelated classes.
+        assert!(
+            !guard_template_matches(&subtype_template, &[sq.clone()], &shape),
+            "an unrelated runtime arg must not match the frame T"
+        );
+
+        // A proper subtype (union member) matches (covariant "belongs to").
+        assert!(
+            guard_template_matches(&subtype_template, &[widened_t.clone()], &sq),
+            "Sq must match a Shape|Sq frame T under subtype-or-wildcard"
+        );
+
+        // An unconcretized (all-`unknown`) frame slot matches any instance.
+        assert!(
+            guard_template_matches(&subtype_template, &[RuntimeTy::unknown()], &shape),
+            "an unknown frame slot must match any runtime arg"
+        );
+    }
+
+    #[test]
+    fn guard_template_concrete_type_args_still_discriminate() {
+        use super::guard_template_matches;
+
+        // Concrete parametric arms (`Foo<int>` vs `Foo<string>`) take the
+        // concrete path (`contains_typevar == false`) and must keep exact
+        // discrimination — unaffected by the B-634 subtype fix.
+        let foo = TypeName::local(Name::new("Foo"));
+        let foo_int_template =
+            TyTemplate::Class(foo.clone(), vec![TyTemplate::Concrete(RuntimeTy::int())]);
+        let foo_int_value = RuntimeTy::class_with_args(foo.clone(), vec![RuntimeTy::int()]);
+        let foo_string_value = RuntimeTy::class_with_args(foo.clone(), vec![RuntimeTy::string()]);
+
+        assert!(
+            guard_template_matches(&foo_int_template, &[], &foo_int_value),
+            "Foo<int> template must match a Foo<int> value"
+        );
+        assert!(
+            !guard_template_matches(&foo_int_template, &[], &foo_string_value),
+            "Foo<int> template must not match a Foo<string> value"
+        );
+    }
 }
 
 impl RootHaver for Frame {
