@@ -39,3 +39,8 @@ interface CallError {
 interface StreamError {
   function is_network_error(self) -> bool
 }
+
+/// Failures on the multi-turn tool-calling path.
+interface ToolError {
+  function is_network_error(self) -> bool
+}

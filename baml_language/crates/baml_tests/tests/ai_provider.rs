@@ -542,15 +542,23 @@ async fn call_with_projects_usage() {
 #[tokio::test]
 async fn provider_diversity_routing() {
     let premium = MockServer::start().await;
-    Mock::given(method("POST")).and(path("/chat/completions"))
-        .respond_with(ResponseTemplate::new(200).set_body_string(
-            r#"{"choices":[{"message":{"content":"premium"}}]}"#))
-        .mount(&premium).await;
+    Mock::given(method("POST"))
+        .and(path("/chat/completions"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_string(r#"{"choices":[{"message":{"content":"premium"}}]}"#),
+        )
+        .mount(&premium)
+        .await;
     let basic = MockServer::start().await;
-    Mock::given(method("POST")).and(path("/chat/completions"))
-        .respond_with(ResponseTemplate::new(200).set_body_string(
-            r#"{"choices":[{"message":{"content":"basic"}}]}"#))
-        .mount(&basic).await;
+    Mock::given(method("POST"))
+        .and(path("/chat/completions"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_string(r#"{"choices":[{"message":{"content":"basic"}}]}"#),
+        )
+        .mount(&basic)
+        .await;
     let (pu, bu) = (premium.uri(), basic.uri());
 
     let output = baml_test!(&format!(
@@ -577,5 +585,113 @@ async fn provider_diversity_routing() {
         }}
         "#
     ));
-    assert_eq!(output.result.unwrap(), BexExternalValue::String("premium|basic".into()));
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("premium|basic".into())
+    );
+}
+
+/// Tool loop (scenario 09) via a mocked 2-turn exchange: turn 1 returns a tool_call,
+/// the dispatcher answers, turn 2 returns the final text.
+#[tokio::test]
+async fn tools_loop_via_mock() {
+    let server = MockServer::start().await;
+    // Turn 1: the model asks to call get_weather.
+    Mock::given(method("POST")).and(path("/chat/completions"))
+        .respond_with(ResponseTemplate::new(200).set_body_string(
+            r#"{"choices":[{"message":{"content":null,"tool_calls":[{"id":"call_1","type":"function","function":{"name":"get_weather","arguments":"{\"location\":\"Paris\"}"}}]}}]}"#))
+        .up_to_n_times(1)
+        .mount(&server).await;
+    // Turn 2: the final answer.
+    Mock::given(method("POST"))
+        .and(path("/chat/completions"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_string(r#"{"choices":[{"message":{"content":"Paris is sunny, 22C."}}]}"#),
+        )
+        .mount(&server)
+        .await;
+    let uri = server.uri();
+
+    let output = baml_test!(&format!(
+        r#"
+        function main() -> string {{
+            let p = baml.ai.OpenAi {{ model: "m", api_key: "k", base_url: "{uri}" }};
+            let tools = [
+                baml.ai.Tool {{
+                    name: "get_weather",
+                    description: "Get the current weather for a location",
+                    parameters: "{{\"type\":\"object\",\"properties\":{{\"location\":{{\"type\":\"string\"}}}},\"required\":[\"location\"]}}",
+                }},
+            ];
+            p.run_tools<string>(
+                "What is the weather in Paris?",
+                tools,
+                (calls: baml.ai.ToolCall[]) -> baml.ai.ToolResult[] {{
+                    let results: baml.ai.ToolResult[] = [];
+                    for (let c in calls) {{
+                        let out = if (c.name == "get_weather") {{ "sunny, 22C" }} else {{ "unknown" }};
+                        results.push(baml.ai.ToolResult {{ id: c.id, output: out }});
+                    }}
+                    results
+                }},
+            ) catch (e) {{
+                let u: baml.errors.UnknownError => "ERR:" + u.message.join(","),
+            }}
+        }}
+        "#
+    ));
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("Paris is sunny, 22C.".into())
+    );
+}
+
+/// Live agentic tool loop against the real API. Skipped unless `OPENAI_API_KEY` is set.
+#[tokio::test]
+async fn tools_loop_live() {
+    if std::env::var("OPENAI_API_KEY").is_err() {
+        eprintln!("skipping tools_loop_live: OPENAI_API_KEY not set");
+        return;
+    }
+    let output = baml_test!(
+        r#"
+        function main() -> string {
+            let p = baml.ai.OpenAi {
+                model: "gpt-5.4-mini",
+                api_key: baml.env.get_or_panic("OPENAI_API_KEY"),
+                base_url: null,
+            };
+            let tools = [
+                baml.ai.Tool {
+                    name: "get_weather",
+                    description: "Get the current weather for a location",
+                    parameters: "{\"type\":\"object\",\"properties\":{\"location\":{\"type\":\"string\"}},\"required\":[\"location\"]}",
+                },
+            ];
+            p.run_tools<string>(
+                "What is the weather in Paris? Use the get_weather tool, then answer in one short sentence.",
+                tools,
+                (calls: baml.ai.ToolCall[]) -> baml.ai.ToolResult[] {
+                    let results: baml.ai.ToolResult[] = [];
+                    for (let c in calls) {
+                        let out = if (c.name == "get_weather") { "sunny and 22 degrees C" } else { "unknown" };
+                        results.push(baml.ai.ToolResult { id: c.id, output: out });
+                    }
+                    results
+                },
+            ) catch (e) {
+                let u: baml.errors.UnknownError => "ERR:" + u.message.join(","),
+            }
+        }
+        "#
+    );
+    let got = output.result.unwrap();
+    let BexExternalValue::String(s) = got else {
+        panic!("expected string, got {got:?}")
+    };
+    assert!(
+        s.contains("22") || s.to_lowercase().contains("sunny"),
+        "live tool loop answer did not reflect the tool result: {s:?}"
+    );
 }

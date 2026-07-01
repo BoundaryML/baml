@@ -104,6 +104,25 @@ Legend: **[lang]** forced by a missing/limited language feature · **[scope]** d
   default on malformed wire rather than throwing, so a `call_with` projection is infallible (`E2 = never`).
   Scenarios 32/34: metering rides `call_with(prompt, m => m.usage())` returning `(value, Usage)`.
 
+## Tools / agentic loop (scenario 09)
+
+- **`Tool.parameters` is a JSON-Schema *string*, not `type`.** **[scope]** The design uses
+  `Tool { parameters: type }` + `baml.reflect.type_to_json_schema(...)`. No `type -> JSON Schema` host fn
+  exists (only `reflect.type_of`), and writing a correct one is a large Rust task — so `Tool.parameters` is an
+  app-provided JSON-Schema string for now (how OpenAI tools are normally written). Generating it from a `type`
+  is the clear follow-up (plan P7 / D6).
+
+- **`run_tools` takes a `dispatch: (ToolCall[]) -> ToolResult[]` closure**, not `ExecutionContext.dispatch`.
+  **[design]** Simpler and self-contained; the closure is the app's tool executor.
+
+- **`step` mutates the transcript.** **[design]** OpenAI needs the assistant tool-call turn preserved before
+  the tool-result messages; `step` appends the assistant message to the transcript's messages when it returns
+  `ToolCalls`, and `submit` appends the tool results. The transcript is a mutable `messages: json[]`.
+
+- **`function` is a reserved keyword.** **[lang]** OpenAI tool-calls have a `function` JSON key, but a BAML
+  class field can't be named `function`. Tool-calls are parsed via `baml.json.field` navigation instead of a
+  typed wire class.
+
 ## Language findings surfaced during wiring (worth a compiler look)
 
 - **Matching `unknown` / `unknown?` with a typed binding is an irrefutable catch-all.** `match (v) { let x: string => …, _ => … }`

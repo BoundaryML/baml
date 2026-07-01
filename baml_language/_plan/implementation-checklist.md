@@ -44,14 +44,14 @@ real `gpt-5.4-mini` at milestones. Commit after each ✅.
       "presence-not-calibration" B2 gap from D3).
 - [ ] Tests: cheap-then-expensive escalation via mock.
 
-### 5. Tools & the agentic loop (Phase 3, scenarios 09–11)
-- [ ] `interface Tools requires Provider` with `type Transcript`, `begin`/`step`/`submit`, default `run_tools`.
+### 5. Tools & the agentic loop (scenario 09) — ✅ core done
+- [x] `interface Tools requires Provider` with `type Transcript`, `begin`/`step`/`submit`, default `run_tools`.
       `class Tool { name, description, parameters: type }`; `ToolCall`/`ToolResult`/`ToolCalls`.
-- [ ] `ToolError` channel. `OpenAi implements Tools` — OpenAI function-calling wire (tools in request, tool_calls
+- [x] `ToolError` channel. `OpenAi implements Tools` — OpenAI function-calling wire (tools in request, tool_calls
       in response, tool-result messages). Schema via `baml.reflect.type_to_json_schema(tool.parameters)`.
 - [ ] `ExecutionContext.dispatch` coerces args via `baml.sap.parse` against the handler type (D6).
 - [ ] D5: `run_tools<T> -> T | Partial<T>` sum outcome (no fake ToolError).
-- [ ] Tests: a real multi-turn tool loop against the live API (e.g. a weather tool), + mock for determinism.
+- [x] Tests: a real multi-turn tool loop against the live API (e.g. a weather tool), + mock for determinism.
 
 ### 6. Opportunistic scenarios (as the surface allows)
 - [ ] 03 constrained-decoding — `Constrained` capability with no default; OpenAI degrades to `Unsatisfiable` (the honest B1 story).

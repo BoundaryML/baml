@@ -199,4 +199,144 @@ class OpenAi {
             }
         }
     }
+
+    implements root.ai.Tools {
+        type Transcript = OpenAiToolTranscript
+
+        function begin<T>(
+            self,
+            prompt: string,
+            tools: root.ai.Tool[],
+        ) -> OpenAiToolTranscript throws root.errors.ToolError | root.errors.UnknownError {
+            let tools_arr: json[] = [];
+            for (let t in tools) {
+                let schema: json = root.json.parse(t.parameters) catch (e) {
+                    _ => {
+                        throw root.errors.UnknownError { data: e, message: ["tool schema not valid JSON: " + t.name] }
+                    },
+                };
+                tools_arr
+                    .push(
+                        {
+                            "type": "function",
+                            "function": { "name": t.name, "description": t.description, "parameters": schema },
+                        },
+                    );
+            }
+            OpenAiToolTranscript {
+                model: self.model,
+                api_key: self.api_key,
+                base_url: self.base_url,
+                tools_json: root.json.stringify(tools_arr),
+                messages: [{ "role": "user", "content": prompt }],
+            }
+        }
+
+        function step<T>(
+            self,
+            t: OpenAiToolTranscript,
+        ) -> T | root.ai.ToolCalls throws root.errors.ToolError | root.errors.UnknownError {
+            let tools_val: json = root.json.parse(t.tools_json) catch (e) {
+                _ => {
+                    throw root.errors.UnknownError { data: e, message: ["tools_json invalid"] };
+                },
+            };
+            let body: json = { "model": t.model, "messages": t.messages, "tools": tools_val, "tool_choice": "auto" };
+            let req = root.http.Request {
+                method: "POST",
+                url: (t.base_url ?? "https://api.openai.com/v1") + "/chat/completions",
+                headers: { "Authorization": "Bearer " + t.api_key, "Content-Type": "application/json" },
+                body: root.json.stringify(body),
+            };
+            let resp = root.http.send(req) catch (e) {
+                _ => {
+                    throw root.errors.UnknownError { data: e, message: ["tools send failed"] };
+                },
+            };
+            let text = resp.text() catch (e) {
+                _ => {
+                    throw root.errors.UnknownError { data: e, message: ["tools body read failed"] };
+                },
+            };
+            let parsed: OpenAiToolRespWire = root.json.from_json<OpenAiToolRespWire>(root.json.parse(text)) catch (e) {
+                _ => {
+                    throw root.errors.UnknownError { data: text, message: ["tools parse failed"] };
+                },
+            };
+            let msg = match (parsed.choices.at(0)) {
+                let c: OpenAiToolChoiceWire => c.message,
+                _ => {
+                    throw root.errors.UnknownError { data: text, message: ["tools: no choices"] };
+                },
+            };
+            match (msg.tool_calls) {
+                let tcs: json[] => {
+                    // Preserve the assistant tool-call turn in the transcript.
+                    t.messages.push({ "role": "assistant", "tool_calls": tcs });
+                    let calls: root.ai.ToolCall[] = [];
+                    for (let tc in tcs) {
+                        let fn = root.json.field(tc, "function");
+                        calls
+                            .push(
+                                root.ai.ToolCall {
+                                    id: _openai_json_str(root.json.field(tc, "id")),
+                                    name: _openai_json_str(root.json.field(fn, "name")),
+                                    args: _openai_json_str(root.json.field(fn, "arguments")),
+                                },
+                            );
+                    }
+                    root.ai.ToolCalls { calls: calls }
+                },
+                _ => {
+                    // No tool calls: the content is the final value, coerced via SAP.
+                    root.sap.parse<T>(msg.content ?? "") catch (e) {
+                        _ => {
+                            throw root.errors.UnknownError { data: msg.content, message: ["tools final parse failed"] };
+                        },
+                    }
+                },
+            }
+        }
+
+        function submit(
+            self,
+            t: OpenAiToolTranscript,
+            results: root.ai.ToolResult[],
+        ) -> OpenAiToolTranscript throws root.errors.ToolError | root.errors.UnknownError {
+            for (let r in results) {
+                t.messages.push({ "role": "tool", "tool_call_id": r.id, "content": r.output });
+            }
+            t
+        }
+    }
+}
+
+// --- OpenAI tool-calling wire + transcript ---
+class OpenAiToolMsgWire {
+    content: string?,
+    tool_calls: json[]?,
+}
+
+class OpenAiToolChoiceWire {
+    message: OpenAiToolMsgWire,
+}
+
+class OpenAiToolRespWire {
+    choices: OpenAiToolChoiceWire[],
+}
+
+/// Provider-owned transcript: the running OpenAI messages array + the encoded tools.
+class OpenAiToolTranscript {
+    model: string,
+    api_key: string,
+    base_url: string?,
+    tools_json: string,
+    messages: json[],
+}
+
+function _openai_json_str(j: json) -> string throws never {
+    match (j) {
+        let s: string => s,
+        _ => "",
+    }
 }
