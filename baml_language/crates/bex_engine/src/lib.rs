@@ -3548,10 +3548,22 @@ impl BexEngine {
             let _ = trace;
             return Ok(ThreadOutcome::SettledChild(ChildSettleKind::Errored));
         }
-        let external = if let Some(ty) = throws_type {
-            self.convert_vm_value_to_external_with_type(value, ty, thread.proof())?
-        } else {
-            self.vm_value_to_owned(thread.proof(), value)
+        // A panic escaping all in-BAML catches to the host is an
+        // engine-level failure mode, not a value the function opted into
+        // via `throws` — so it must bypass the declared-throws re-typing and
+        // route through `vm_value_to_owned` (the same branch used when there
+        // is no `throws` clause). Re-typing it against a 2+-member throws
+        // union would call `find_matching_member`, which never matches a
+        // `baml.panics.*` instance and would surface an internal
+        // `TypeMismatch` leak instead of the clean panic. This mirrors the
+        // panic bypass in [`enforce_host_throw_contract`].
+        let value_is_panic = value_runtime_baml_ty(value, thread.proof())
+            .is_some_and(|rt| matches!(&rt, RuntimeTy::Class(name, _, _) if name.is_panic_type()));
+        let external = match throws_type {
+            Some(ty) if !value_is_panic => {
+                self.convert_vm_value_to_external_with_type(value, ty, thread.proof())?
+            }
+            _ => self.vm_value_to_owned(thread.proof(), value),
         };
         // `baml.panics.Exit { code }` escaping all handlers is the clean-
         // termination path — surface as Exit so the host maps it to a
