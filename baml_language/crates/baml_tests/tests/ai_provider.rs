@@ -794,3 +794,33 @@ async fn round_robin_alternates_members() {
         BexExternalValue::String("A,B,A".into())
     );
 }
+
+/// Constrained decoding (scenario 03): `OpenAi` does NOT implement `Constrained`, so a
+/// function demanding a by-construction guarantee falls to the `_` arm and throws
+/// `Unsupported` — the capability is a runtime promise (design gap B1), no fake guarantee.
+#[tokio::test]
+async fn constrained_capability_absent_is_runtime_promise() {
+    let output = baml_test!(
+        r#"
+        function classify(p: baml.ai.Provider, text: string, pattern: string) -> string
+            throws baml.errors.CallError | baml.errors.UnknownError {
+            match (p) {
+                let c: baml.ai.Constrained => c.decode<string>(text, pattern),
+                _ => throw baml.errors.Unsupported { message: "client cannot guarantee constrained decoding" },
+            }
+        }
+        function main() -> string {
+            let p: baml.ai.Provider = baml.ai.OpenAi { model: "m", api_key: "k", base_url: null };
+            classify(p, "hi", "(yes|no)") catch (e) {
+                let un: baml.errors.Unsupported => "unsupported",
+                let u: baml.errors.UnknownError => "err",
+                let c: baml.errors.CallError => "callerr",
+            }
+        }
+        "#
+    );
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("unsupported".into())
+    );
+}

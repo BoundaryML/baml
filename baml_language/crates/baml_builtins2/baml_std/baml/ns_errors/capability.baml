@@ -44,3 +44,20 @@ interface StreamError {
 interface ToolError {
   function is_network_error(self) -> bool
 }
+
+// The capability-negotiation error `Unsupported` (thrown by a companion's `_` arm when
+// the client's provider lacks the requested capability) must be legal on *every*
+// capability channel — so it implements all of them (all classifiers false).
+implements CallError for Unsupported {
+  function is_network_error(self) -> bool { false }
+  function is_rate_limit(self) -> bool { false }
+  function is_parse_error(self) -> bool { false }
+}
+
+implements StreamError for Unsupported {
+  function is_network_error(self) -> bool { false }
+}
+
+implements ToolError for Unsupported {
+  function is_network_error(self) -> bool { false }
+}

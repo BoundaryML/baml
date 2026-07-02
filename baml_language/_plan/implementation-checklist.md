@@ -54,7 +54,7 @@ real `gpt-5.4-mini` at milestones. Commit after each ✅.
 - [x] Tests: a real multi-turn tool loop against the live API (e.g. a weather tool), + mock for determinism.
 
 ### 6. Opportunistic scenarios (as the surface allows)
-- [ ] 03 constrained-decoding — `Constrained` capability with no default; OpenAI degrades to `Unsatisfiable` (the honest B1 story).
+- [x] 03 constrained-decoding — `Constrained` capability with no default; OpenAI degrades to `Unsatisfiable` (the honest B1 story).
 - [ ] 05 multimodal input — image parts in the request (needs PromptAst media threading / a media host helper).
 - [ ] 07 reasoning — `ResponseMeta.reasoning()` projection.
 - [ ] 08 enriched outputs — logprobs/citations as `ResponseMeta` dimensions.
