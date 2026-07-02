@@ -883,3 +883,30 @@ async fn realtime_capability_negotiation() {
         BexExternalValue::String("realtime|no|live".into())
     );
 }
+
+/// Stateful capabilities (17/27/44 …): an HTTP-only provider does not implement the
+/// stateful capabilities, so their negotiated examples fall to the runtime-promise path.
+#[tokio::test]
+async fn stateful_capabilities_negotiation() {
+    let output = baml_test!(
+        r#"
+        function main() -> string {
+            let p: baml.ai.Provider = baml.ai.OpenAi { model: "m", api_key: "k", base_url: null };
+            let a = baml.ai.example_chat(p, "hi", baml.ai.Session { _id: "s1" }) catch (e) {
+                let u: baml.errors.UnknownError => "no_conv"
+            };
+            let b = baml.ai.example_background(p, "job", "key1") catch (e) {
+                let u: baml.errors.UnknownError => "no_bg"
+            };
+            let c = baml.ai.example_suspend(p, "task") catch (e) {
+                let u: baml.errors.UnknownError => "no_suspend"
+            };
+            a + "|" + b + "|" + c
+        }
+        "#
+    );
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("no_conv|no_bg|no_suspend".into())
+    );
+}

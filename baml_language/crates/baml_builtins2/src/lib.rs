@@ -125,6 +125,7 @@ pub const ALL: &[BuiltinFile] = &[
     builtin!("baml", "ns_ai/combinators.baml"),
     builtin!("baml", "ns_ai/tools.baml"),
     builtin!("baml", "ns_ai/realtime.baml"),
+    builtin!("baml", "ns_ai/stateful.baml"),
     builtin!("baml", "ns_stream/stream.baml"),
     builtin!("baml", "ns_iter/iter.baml"),
     builtin!("baml", "ns_future/future.baml"),
