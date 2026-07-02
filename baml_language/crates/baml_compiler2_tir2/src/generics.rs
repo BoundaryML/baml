@@ -10,19 +10,16 @@
 //!    package and extracts its `generic_params` (e.g. `["T"]`).
 //! 2. It provides the concrete type arguments (e.g. `[Ty::Int { attr: TyAttr::default() }]`).
 //! 3. `bind_type_vars` zips them together: `{T → int}`.
-//! 4. For each method parameter/return type, `lower_type_expr_with_generics`
-//!    lowers the `TypeExpr` (with the binding keys in scope as type variables)
-//!    and then applies `substitute_ty` to replace those type-variable references
-//!    with their bound concrete types.
+//! 4. For each method parameter/return type, the caller lowers the `TypeExpr`
+//!    through a [`ScopeCtx`](crate::lower_type_expr::ScopeCtx) whose in-scope
+//!    type variables are the binding keys (so `T` stays `Ty::TypeVar` instead
+//!    of erroring as "unresolved type"), then applies [`substitute_ty`] to
+//!    replace those type-variable references with their bound concrete types.
 
 use baml_base::Name;
-use baml_compiler2_ast::TypeExpr;
 use rustc_hash::FxHashMap;
 
-use crate::{
-    infer_context::TirTypeError,
-    ty::{FunctionParamTy, Ty},
-};
+use crate::ty::{FunctionParamTy, Ty};
 
 // ── Type variable binding ─────────────────────────────────────────────────────
 
@@ -143,43 +140,6 @@ pub fn substitute_ty(ty: &Ty, bindings: &FxHashMap<Name, Ty>) -> Ty {
         // All other types are leaves (primitives, enums, etc.) — pass through.
         _ => ty.clone(),
     }
-}
-
-// ── Combined lowering with generic substitution ───────────────────────────────
-
-/// Lower a `TypeExpr` to `Ty`, then specialize it by substituting the generic `bindings`.
-///
-/// The `TypeExpr` is lowered through a [`ScopeCtx`](crate::lower_type_expr::ScopeCtx) whose
-/// in-scope type variables are the binding keys — so `T`, `T[]`, or `map<K, V>` stay
-/// `Ty::TypeVar` instead of erroring as "unresolved type" — and then [`substitute_ty`] replaces
-/// those variables with their bound concrete types. `ns_context` is the defining file's
-/// namespace; unqualified paths resolve there first. Lowering diagnostics go into `diagnostics`.
-pub fn lower_type_expr_with_generics(
-    db: &dyn crate::Db,
-    expr: &TypeExpr,
-    package_items: &baml_compiler2_hir::package::PackageItems<'_>,
-    ns_context: &[Name],
-    bindings: &FxHashMap<Name, Ty>,
-    diagnostics: &mut Vec<TirTypeError>,
-) -> Ty {
-    // Lower `expr` with the binding keys as the in-scope type variables — so a `T` or `T[]`
-    // reference stays a `Ty::TypeVar` rather than becoming an "unresolved type" — then
-    // substitute the bound concrete types into the result. `Self` is not in scope here: a
-    // signature that resolves `Self` builds its own `ScopeCtx` and calls `lower_type_expr`.
-    let generic_params: Vec<Name> = bindings.keys().cloned().collect();
-    let bounds: FxHashMap<Name, baml_type::Interface> = FxHashMap::default();
-    let ctx = crate::lower_type_expr::ScopeCtx {
-        db,
-        package_items,
-        ns_context,
-        generic_params: &generic_params,
-        bounds: &bounds,
-        self_ty: None,
-    };
-    substitute_ty(
-        &crate::lower_type_expr::lower_type_expr(expr, &ctx, diagnostics),
-        bindings,
-    )
 }
 
 // ── Method parameter adjustment ───────────────────────────────────────────────

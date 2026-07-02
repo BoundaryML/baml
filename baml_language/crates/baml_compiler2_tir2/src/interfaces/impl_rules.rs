@@ -165,12 +165,16 @@ fn lower_generic_param_interface_bounds(
 ) -> Vec<baml_type::Interface> {
     let mut ifaces = Vec::new();
     for bound in bounds {
-        let ty = crate::lower_type_expr::lower_type_expr_in_ns(
-            db,
+        let ty = crate::lower_type_expr::lower_type_expr(
             bound,
-            pkg_items,
-            ns,
-            generic_param_names,
+            &crate::lower_type_expr::ScopeCtx {
+                db,
+                package_items: pkg_items,
+                ns_context: ns,
+                generic_params: generic_param_names,
+                bounds: &crate::lower_type_expr::TypeVarBoundsMap::default(),
+                self_ty: None,
+            },
             diags,
         );
         match ty {
@@ -303,12 +307,20 @@ pub fn impl_data<'db>(
         } => {
             let names: Vec<Name> = generics.iter().map(|g| g.name.clone()).collect();
             let mut for_target_diags = Vec::new();
-            let for_ty = crate::lower_type_expr::lower_type_expr_in_ns(
-                db,
+            // Bounds stay empty here (and for the interface target below): `impl_data`
+            // is what `impls_for_type` enumerates, so a bounds-aware lowering that
+            // resolved a concrete projection in an impl header would re-enter
+            // `impl_data` through `resolve_concrete_projection` — a salsa cycle.
+            let for_ty = crate::lower_type_expr::lower_type_expr(
                 &for_target.expr,
-                pkg_items,
-                ns,
-                &names,
+                &crate::lower_type_expr::ScopeCtx {
+                    db,
+                    package_items: pkg_items,
+                    ns_context: ns,
+                    generic_params: &names,
+                    bounds: &crate::lower_type_expr::TypeVarBoundsMap::default(),
+                    self_ty: None,
+                },
                 &mut for_target_diags,
             );
             let mut bound_diags = Vec::new();
@@ -339,12 +351,16 @@ pub fn impl_data<'db>(
     };
 
     let mut interface_target_diags = Vec::new();
-    let lowered_interface = crate::lower_type_expr::lower_type_expr_in_ns(
-        db,
+    let lowered_interface = crate::lower_type_expr::lower_type_expr(
         &block.interface_target.expr,
-        pkg_items,
-        ns,
-        &generic_param_names,
+        &crate::lower_type_expr::ScopeCtx {
+            db,
+            package_items: pkg_items,
+            ns_context: ns,
+            generic_params: &generic_param_names,
+            bounds: &crate::lower_type_expr::TypeVarBoundsMap::default(),
+            self_ty: None,
+        },
         &mut interface_target_diags,
     );
     let interface_args = if let Ty::Interface(_, args, _, _) = lowered_interface {

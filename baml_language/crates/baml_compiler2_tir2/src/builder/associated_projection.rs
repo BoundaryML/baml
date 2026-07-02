@@ -29,7 +29,6 @@
 
 use baml_base::{Name, attr::TyAttr};
 use baml_compiler2_hir::{contributions::Definition, loc::InterfaceLoc, package::PackageId};
-use rustc_hash::FxHashMap;
 
 use crate::{
     infer_context::{AssocContainer, TirTypeError},
@@ -332,25 +331,18 @@ fn closure_declarers(
 pub(crate) fn resolve_concrete_projection(
     db: &dyn crate::Db,
     pkg: &Name,
-    bounds: &FxHashMap<Name, baml_type::Interface>,
+    bounds: &crate::lower_type_expr::TypeVarBoundsMap,
     base: &Ty,
     member: &Name,
 ) -> ConcreteProjection {
     let pkg_id = PackageId::new(db, pkg.clone());
     let res_ctx = crate::package_interface::package_resolution_context(db, pkg_id);
     let aliases = crate::inference::package_alias_map(db, res_ctx);
-    // The scope's type-variable bounds as one-element conjunctions, so the
-    // subtype oracle can discharge an impl bound on a bounded type variable in
-    // `base`. Single-bound today (intersection bounds not yet surfaced).
-    let bound_conjunctions: FxHashMap<Name, Vec<baml_type::Interface>> = bounds
-        .iter()
-        .map(|(name, bound)| (name.clone(), vec![bound.clone()]))
-        .collect();
     let gctx = GlobalTypeContext {
         db,
         res_ctx,
         aliases: &aliases,
-        bounds: TypeVarBounds::Interfaces(&bound_conjunctions),
+        bounds: TypeVarBounds::Interfaces(bounds),
     };
 
     let mut declarers: Vec<baml_type::Interface> = Vec::new();

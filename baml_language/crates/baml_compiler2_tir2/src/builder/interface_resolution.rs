@@ -745,14 +745,26 @@ impl<'db> TypeInferenceBuilder<'db> {
                             });
                         bindings.insert(assoc.name.clone(), value);
                     }
-                    let ty = crate::generics::lower_type_expr_with_generics(
-                        db,
-                        &te.expr,
-                        view.pkg_items(db),
-                        &view.namespace(db),
-                        &bindings,
-                        &mut diags,
-                    );
+                    let ty = {
+                        let generic_params: Vec<_> = bindings.keys().cloned().collect();
+                        crate::generics::substitute_ty(
+                            &crate::lower_type_expr::lower_type_expr(
+                                &te.expr,
+                                &crate::lower_type_expr::ScopeCtx {
+                                    db,
+                                    package_items: view.pkg_items(db),
+                                    ns_context: &view.namespace(db),
+                                    generic_params: &generic_params,
+                                    bounds: crate::lower_type_expr::interface_generic_param_bounds(
+                                        db, view.loc,
+                                    ),
+                                    self_ty: None,
+                                },
+                                &mut diags,
+                            ),
+                            &bindings,
+                        )
+                    };
                     for diag in diags {
                         self.context.report_at_span(diag, te.span);
                     }
@@ -817,14 +829,26 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
         if !prefer_symbolic && let Some(default) = &assoc.default {
             let db = self.context.db();
-            return Some(crate::generics::lower_type_expr_with_generics(
-                db,
-                &default.expr,
-                view.pkg_items(db),
-                &view.namespace(db),
-                prior,
-                diags,
-            ));
+            return Some({
+                let generic_params: Vec<_> = (prior).keys().cloned().collect();
+                crate::generics::substitute_ty(
+                    &crate::lower_type_expr::lower_type_expr(
+                        &default.expr,
+                        &crate::lower_type_expr::ScopeCtx {
+                            db,
+                            package_items: view.pkg_items(db),
+                            ns_context: &view.namespace(db),
+                            generic_params: &generic_params,
+                            bounds: crate::lower_type_expr::interface_generic_param_bounds(
+                                db, view.loc,
+                            ),
+                            self_ty: None,
+                        },
+                        diags,
+                    ),
+                    prior,
+                )
+            });
         }
         None
     }
@@ -946,11 +970,11 @@ impl<'db> TypeInferenceBuilder<'db> {
 
         // Only `Self`'s bound feeds `Self.Assoc` projection resolution; the method's own
         // generic bounds are recorded separately on the builder (below).
-        let mut bounds: rustc_hash::FxHashMap<Name, baml_type::Interface> =
-            rustc_hash::FxHashMap::default();
-        if let Some(name) = &self_bound_name {
-            bounds.insert(name.clone(), iface_bound);
-        }
+        let bounds: crate::lower_type_expr::TypeVarBoundsMap = self_bound_name
+            .as_ref()
+            .map(|name| (name.clone(), vec![iface_bound]))
+            .into_iter()
+            .collect();
 
         let ctx = crate::lower_type_expr::ScopeCtx {
             db,

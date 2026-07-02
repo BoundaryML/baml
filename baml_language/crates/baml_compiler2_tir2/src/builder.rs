@@ -32,6 +32,7 @@ use crate::{
         InferContext, RelatedLocation, RelatedNote, TirTypeError, TypeCheckDiagnostics,
     },
     inference::MemberResolution,
+    lower_type_expr::TypeVarBoundsMap,
     package_interface::PackageResolutionContext,
     throws_analysis::ThrowsAnalysisContext,
     ty::{Freshness, FunctionParamMode, FunctionParamTy, MediaKind, PrimitiveType, Ty, TyAttr},
@@ -169,21 +170,33 @@ pub(crate) fn lower_generic_param_bounds(
         .map(|bound| {
             bound.as_ref().map(|bound| {
                 if let Some(bindings) = bindings {
-                    crate::generics::lower_type_expr_with_generics(
-                        db,
-                        bound,
-                        pkg_items,
-                        ns_context,
+                    let generic_params: Vec<_> = (bindings).keys().cloned().collect();
+                    crate::generics::substitute_ty(
+                        &crate::lower_type_expr::lower_type_expr(
+                            bound,
+                            &crate::lower_type_expr::ScopeCtx {
+                                db,
+                                package_items: pkg_items,
+                                ns_context,
+                                generic_params: &generic_params,
+                                bounds: &TypeVarBoundsMap::default(),
+                                self_ty: None,
+                            },
+                            diagnostics,
+                        ),
                         bindings,
-                        diagnostics,
                     )
                 } else {
-                    crate::lower_type_expr::lower_type_expr_in_ns(
-                        db,
+                    crate::lower_type_expr::lower_type_expr(
                         bound,
-                        pkg_items,
-                        ns_context,
-                        generic_params,
+                        &crate::lower_type_expr::ScopeCtx {
+                            db,
+                            package_items: pkg_items,
+                            ns_context,
+                            generic_params,
+                            bounds: &crate::lower_type_expr::TypeVarBoundsMap::default(),
+                            self_ty: None,
+                        },
                         diagnostics,
                     )
                 }
@@ -994,28 +1007,55 @@ impl<'db> TypeInferenceBuilder<'db> {
         self.type_bindings = bindings;
     }
 
+    /// The scope's installed generic-parameter bounds as interface constraints,
+    /// for type-expression lowering (`T.member` projection resolution). Bridges
+    /// the `Ty`-typed enforcement table ([`Self::set_generic_param_bounds`]) the
+    /// same way as [`TypeVarBounds::Tys`]; a non-interface bound has no
+    /// interface view and is omitted (it constrains by substitution, never by
+    /// projection). Collapses into the table itself once it is retyped to
+    /// constraints.
+    fn scope_type_var_bounds(&self) -> TypeVarBoundsMap {
+        self.generic_param_bounds
+            .iter()
+            .filter_map(|(name, bound)| Some((name.clone(), vec![bound.as_interface()?])))
+            .collect()
+    }
+
     fn lower_type_expr_in_current_body(
         &self,
         ty_expr: &TypeExpr,
         diags: &mut Vec<TirTypeError>,
     ) -> Ty {
+        let bounds = self.scope_type_var_bounds();
         if self.type_bindings.is_empty() {
-            crate::lower_type_expr::lower_type_expr_in_ns(
-                self.context.db(),
+            crate::lower_type_expr::lower_type_expr(
                 ty_expr,
-                self.package_items,
-                &self.ns_context,
-                &self.generic_params,
+                &crate::lower_type_expr::ScopeCtx {
+                    db: self.context.db(),
+                    package_items: self.package_items,
+                    ns_context: &self.ns_context,
+                    generic_params: &self.generic_params,
+                    bounds: &bounds,
+                    self_ty: None,
+                },
                 diags,
             )
         } else {
-            crate::generics::lower_type_expr_with_generics(
-                self.context.db(),
-                ty_expr,
-                self.package_items,
-                &self.ns_context,
+            let generic_params: Vec<_> = self.type_bindings.keys().cloned().collect();
+            crate::generics::substitute_ty(
+                &crate::lower_type_expr::lower_type_expr(
+                    ty_expr,
+                    &crate::lower_type_expr::ScopeCtx {
+                        db: self.context.db(),
+                        package_items: self.package_items,
+                        ns_context: &self.ns_context,
+                        generic_params: &generic_params,
+                        bounds: &bounds,
+                        self_ty: None,
+                    },
+                    diags,
+                ),
                 &self.type_bindings,
-                diags,
             )
         }
     }
@@ -1331,12 +1371,16 @@ impl<'db> TypeInferenceBuilder<'db> {
         span: TextRange,
     ) -> Ty {
         let mut diags = Vec::new();
-        let ty = crate::lower_type_expr::lower_type_expr_in_ns(
-            self.context.db(),
+        let ty = crate::lower_type_expr::lower_type_expr(
             type_expr,
-            self.package_items,
-            &self.ns_context,
-            generic_params,
+            &crate::lower_type_expr::ScopeCtx {
+                db: self.context.db(),
+                package_items: self.package_items,
+                ns_context: &self.ns_context,
+                generic_params,
+                bounds: &self.scope_type_var_bounds(),
+                self_ty: None,
+            },
             &mut diags,
         );
         for diag in diags {
@@ -2067,26 +2111,39 @@ impl<'db> TypeInferenceBuilder<'db> {
         let db = self.context.db();
         let ns = self.ns_context.clone();
         let caller_generic_params = self.generic_params.clone();
+        let scope_bounds = self.scope_type_var_bounds();
         let mut resolved: Vec<Ty> = Vec::with_capacity(type_args.len());
         for type_arg_expr in type_args {
             let mut diags = Vec::new();
             let ty = if self.type_bindings.is_empty() {
-                crate::lower_type_expr::lower_type_expr_in_ns(
-                    db,
+                crate::lower_type_expr::lower_type_expr(
                     type_arg_expr,
-                    self.package_items,
-                    &ns,
-                    &caller_generic_params,
+                    &crate::lower_type_expr::ScopeCtx {
+                        db,
+                        package_items: self.package_items,
+                        ns_context: &ns,
+                        generic_params: &caller_generic_params,
+                        bounds: &scope_bounds,
+                        self_ty: None,
+                    },
                     &mut diags,
                 )
             } else {
-                crate::generics::lower_type_expr_with_generics(
-                    db,
-                    type_arg_expr,
-                    self.package_items,
-                    &ns,
+                let generic_params: Vec<_> = self.type_bindings.keys().cloned().collect();
+                crate::generics::substitute_ty(
+                    &crate::lower_type_expr::lower_type_expr(
+                        type_arg_expr,
+                        &crate::lower_type_expr::ScopeCtx {
+                            db,
+                            package_items: self.package_items,
+                            ns_context: &ns,
+                            generic_params: &generic_params,
+                            bounds: &scope_bounds,
+                            self_ty: None,
+                        },
+                        &mut diags,
+                    ),
                     &self.type_bindings,
-                    &mut diags,
                 )
             };
             for d in diags {
@@ -2168,15 +2225,20 @@ impl<'db> TypeInferenceBuilder<'db> {
         let mut bindings = FxHashMap::default();
         let ns = self.ns_context.clone();
         let caller_generic_params = self.generic_params.clone();
+        let scope_bounds = self.scope_type_var_bounds();
         let suppress_diags = self.is_auto_derived_body;
         for (param_name, type_arg_expr) in declared_params.iter().zip(type_args.iter()) {
             let mut diags = Vec::new();
-            let ty = crate::lower_type_expr::lower_type_expr_in_ns(
-                db,
+            let ty = crate::lower_type_expr::lower_type_expr(
                 type_arg_expr,
-                self.package_items,
-                &ns,
-                &caller_generic_params,
+                &crate::lower_type_expr::ScopeCtx {
+                    db,
+                    package_items: self.package_items,
+                    ns_context: &ns,
+                    generic_params: &caller_generic_params,
+                    bounds: &scope_bounds,
+                    self_ty: None,
+                },
                 &mut diags,
             );
             // Auto-derived bodies (`to_json` / `from_json` synthesized by
@@ -4763,12 +4825,16 @@ impl<'db> TypeInferenceBuilder<'db> {
     ) -> Ty {
         let base_ty = self.infer_expr(base, body);
         let mut diags = Vec::new();
-        let target_ty = crate::lower_type_expr::lower_type_expr_in_ns(
-            self.context.db(),
+        let target_ty = crate::lower_type_expr::lower_type_expr(
             target,
-            self.package_items,
-            &self.ns_context,
-            &self.generic_params,
+            &crate::lower_type_expr::ScopeCtx {
+                db: self.context.db(),
+                package_items: self.package_items,
+                ns_context: &self.ns_context,
+                generic_params: &self.generic_params,
+                bounds: &self.scope_type_var_bounds(),
+                self_ty: None,
+            },
             &mut diags,
         );
         for diag in diags {
@@ -7972,12 +8038,16 @@ impl<'db> TypeInferenceBuilder<'db> {
         };
 
         let mut diags = Vec::new();
-        let declared_ty = crate::lower_type_expr::lower_type_expr_in_ns(
-            self.context.db(),
+        let declared_ty = crate::lower_type_expr::lower_type_expr(
             declared_expr,
-            self.package_items,
-            &self.ns_context,
-            &self.generic_params,
+            &crate::lower_type_expr::ScopeCtx {
+                db: self.context.db(),
+                package_items: self.package_items,
+                ns_context: &self.ns_context,
+                generic_params: &self.generic_params,
+                bounds: &self.scope_type_var_bounds(),
+                self_ty: None,
+            },
             &mut diags,
         );
         let span = throws_span.unwrap_or(fallback_span);
@@ -8406,12 +8476,16 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
         }
         let mut diags = Vec::new();
-        let resolved = crate::lower_type_expr::lower_type_expr_in_ns(
-            self.context.db(),
+        let resolved = crate::lower_type_expr::lower_type_expr(
             ty,
-            self.package_items,
-            &self.ns_context,
-            &self.generic_params,
+            &crate::lower_type_expr::ScopeCtx {
+                db: self.context.db(),
+                package_items: self.package_items,
+                ns_context: &self.ns_context,
+                generic_params: &self.generic_params,
+                bounds: &self.scope_type_var_bounds(),
+                self_ty: None,
+            },
             &mut diags,
         );
         for diag in diags {
@@ -9584,19 +9658,24 @@ impl<'db> TypeInferenceBuilder<'db> {
                 .cloned()
                 .collect();
             let mut diags = Vec::new();
+            let sig_scope = crate::lower_type_expr::ScopeCtx {
+                db,
+                package_items: pkg_items,
+                ns_context: &ns_context,
+                generic_params: &function_generic_params,
+                bounds: crate::lower_type_expr::function_in_scope_generic_param_bounds(
+                    db, func_loc,
+                ),
+                self_ty: None,
+            };
             let ty = Ty::Function {
                 params: sig
                     .params
                     .iter()
                     .map(|param| FunctionParamTy {
                         name: Some(param.name.clone()),
-                        ty: crate::lower_type_expr::lower_type_expr_in_ns(
-                            db,
-                            &param.ty,
-                            pkg_items,
-                            &ns_context,
-                            &function_generic_params,
-                            &mut diags,
+                        ty: crate::lower_type_expr::lower_type_expr(
+                            &param.ty, &sig_scope, &mut diags,
                         ),
                         mode: if param.has_default {
                             FunctionParamMode::Optional
@@ -9609,14 +9688,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     sig.return_type
                         .as_ref()
                         .map(|te| {
-                            crate::lower_type_expr::lower_type_expr_in_ns(
-                                db,
-                                te,
-                                pkg_items,
-                                &ns_context,
-                                &function_generic_params,
-                                &mut diags,
-                            )
+                            crate::lower_type_expr::lower_type_expr(te, &sig_scope, &mut diags)
                         })
                         .unwrap_or(Ty::Unknown {
                             attr: TyAttr::default(),
@@ -9748,6 +9820,16 @@ impl<'db> TypeInferenceBuilder<'db> {
                         baml_compiler2_hir::file_package::file_package(db, func_loc.file(db))
                             .namespace_path;
                     let mut diags = Vec::new();
+                    let sig_scope = crate::lower_type_expr::ScopeCtx {
+                        db,
+                        package_items: self.package_items,
+                        ns_context: &sig_ns,
+                        generic_params: &function_generic_params,
+                        bounds: crate::lower_type_expr::function_in_scope_generic_param_bounds(
+                            db, func_loc,
+                        ),
+                        self_ty: None,
+                    };
 
                     // Note: diags from referenced function signatures are not
                     // reported here — they'll be reported at the definition site.
@@ -9757,13 +9839,8 @@ impl<'db> TypeInferenceBuilder<'db> {
                             .iter()
                             .map(|param| FunctionParamTy {
                                 name: Some(param.name.clone()),
-                                ty: crate::lower_type_expr::lower_type_expr_in_ns(
-                                    db,
-                                    &param.ty,
-                                    self.package_items,
-                                    &sig_ns,
-                                    &function_generic_params,
-                                    &mut diags,
+                                ty: crate::lower_type_expr::lower_type_expr(
+                                    &param.ty, &sig_scope, &mut diags,
                                 ),
                                 mode: if param.has_default {
                                     FunctionParamMode::Optional
@@ -9776,13 +9853,8 @@ impl<'db> TypeInferenceBuilder<'db> {
                             sig.return_type
                                 .as_ref()
                                 .map(|te| {
-                                    crate::lower_type_expr::lower_type_expr_in_ns(
-                                        db,
-                                        te,
-                                        self.package_items,
-                                        &sig_ns,
-                                        &function_generic_params,
-                                        &mut diags,
+                                    crate::lower_type_expr::lower_type_expr(
+                                        te, &sig_scope, &mut diags,
                                     )
                                 })
                                 .unwrap_or(Ty::Unknown {
@@ -11238,6 +11310,15 @@ impl<'db> TypeInferenceBuilder<'db> {
         bindings: &mut FxHashMap<Name, Ty>,
         diagnostics: &mut Vec<TirTypeError>,
     ) {
+        // The interface's declared parameter bounds, so a `T.member` projection
+        // in an associated-type default resolves `T`'s declaring interface.
+        let iface_bounds = crate::lower_type_expr::lower_decl_generic_param_bounds(
+            self.context.db(),
+            inputs.pkg_items,
+            inputs.iface_ns,
+            &inputs.iface_data.generic_params,
+            &inputs.iface_data.generic_param_bounds,
+        );
         for assoc in &inputs.iface_data.associated_types {
             if let Some((_, ty)) = inputs
                 .associated_bindings
@@ -11252,14 +11333,24 @@ impl<'db> TypeInferenceBuilder<'db> {
             if !inputs.prefer_symbolic_projections
                 && let Some(default) = &assoc.default
             {
-                let ty = crate::generics::lower_type_expr_with_generics(
-                    self.context.db(),
-                    &default.expr,
-                    inputs.pkg_items,
-                    inputs.iface_ns,
-                    bindings,
-                    diagnostics,
-                );
+                let ty = {
+                    let generic_params: Vec<_> = (bindings).keys().cloned().collect();
+                    crate::generics::substitute_ty(
+                        &crate::lower_type_expr::lower_type_expr(
+                            &default.expr,
+                            &crate::lower_type_expr::ScopeCtx {
+                                db: self.context.db(),
+                                package_items: inputs.pkg_items,
+                                ns_context: inputs.iface_ns,
+                                generic_params: &generic_params,
+                                bounds: &iface_bounds,
+                                self_ty: None,
+                            },
+                            diagnostics,
+                        ),
+                        bindings,
+                    )
+                };
                 bindings.insert(assoc.name.clone(), ty);
                 continue;
             }
@@ -11349,7 +11440,7 @@ impl<'db> TypeInferenceBuilder<'db> {
     ///
     /// `class_type_args` are the concrete type arguments for the class (e.g.
     /// `[Sentiment$stream, Sentiment]` for `Stream<Sentiment$stream, Sentiment>`).
-    /// When non-empty, field types are resolved with `lower_type_expr_with_generics`
+    /// When non-empty, field types are resolved with the binding keys in scope and then substituted
     /// so that type variables like `TStream` and `TFinal` are substituted with concrete types.
     ///
     /// Returns a map of field name → resolved field type.
@@ -11501,6 +11592,10 @@ impl<'db> TypeInferenceBuilder<'db> {
                 &mut diags,
             );
 
+            // The declaring interface's parameter bounds, so a `T.member`
+            // projection in a field type resolves `T`'s declaring interface.
+            let iface_bounds =
+                crate::lower_type_expr::interface_generic_param_bounds(db, iface_loc);
             for field in &iface_data.fields {
                 if !seen.insert(field.name.clone()) {
                     continue;
@@ -11509,8 +11604,21 @@ impl<'db> TypeInferenceBuilder<'db> {
                     .type_expr
                     .as_ref()
                     .map(|te| {
-                        crate::generics::lower_type_expr_with_generics(
-                            db, &te.expr, pkg_items, &iface_ns, &bindings, &mut diags,
+                        let generic_params: Vec<_> = bindings.keys().cloned().collect();
+                        crate::generics::substitute_ty(
+                            &crate::lower_type_expr::lower_type_expr(
+                                &te.expr,
+                                &crate::lower_type_expr::ScopeCtx {
+                                    db,
+                                    package_items: pkg_items,
+                                    ns_context: &iface_ns,
+                                    generic_params: &generic_params,
+                                    bounds: iface_bounds,
+                                    self_ty: None,
+                                },
+                                &mut diags,
+                            ),
+                            &bindings,
                         )
                     })
                     .unwrap_or(Ty::Unknown {
@@ -11596,28 +11704,44 @@ impl<'db> TypeInferenceBuilder<'db> {
                 .namespace_path;
         let bindings =
             crate::generics::bind_type_vars(&iface_data.generic_params, &source.interface.generics);
+        // The declaring interface's parameter bounds, so a `T.member` projection
+        // in the field type resolves `T`'s declaring interface.
+        let iface_bounds =
+            crate::lower_type_expr::interface_generic_param_bounds(db, source.iface_loc);
         let declared_ty = field
             .type_expr
             .as_ref()
             .map(|te| {
                 let mut diags = Vec::new();
                 let ty = if bindings.is_empty() {
-                    crate::lower_type_expr::lower_type_expr_in_ns(
-                        db,
+                    crate::lower_type_expr::lower_type_expr(
                         &te.expr,
-                        iface_pkg_items,
-                        &iface_ns,
-                        &iface_data.generic_params,
+                        &crate::lower_type_expr::ScopeCtx {
+                            db,
+                            package_items: iface_pkg_items,
+                            ns_context: &iface_ns,
+                            generic_params: &iface_data.generic_params,
+                            bounds: iface_bounds,
+                            self_ty: None,
+                        },
                         &mut diags,
                     )
                 } else {
-                    crate::generics::lower_type_expr_with_generics(
-                        db,
-                        &te.expr,
-                        iface_pkg_items,
-                        &iface_ns,
+                    let generic_params: Vec<_> = bindings.keys().cloned().collect();
+                    crate::generics::substitute_ty(
+                        &crate::lower_type_expr::lower_type_expr(
+                            &te.expr,
+                            &crate::lower_type_expr::ScopeCtx {
+                                db,
+                                package_items: iface_pkg_items,
+                                ns_context: &iface_ns,
+                                generic_params: &generic_params,
+                                bounds: iface_bounds,
+                                self_ty: None,
+                            },
+                            &mut diags,
+                        ),
                         &bindings,
-                        &mut diags,
                     )
                 };
                 for diag in diags {
@@ -11705,7 +11829,7 @@ impl<'db> TypeInferenceBuilder<'db> {
     ///
     /// `class_type_args` are the concrete type arguments for the class (e.g.
     /// `[Sentiment$stream, Sentiment]` for `Stream<Sentiment$stream, Sentiment>`).
-    /// When non-empty, return types are resolved with `lower_type_expr_with_generics`
+    /// When non-empty, return types are resolved with the binding keys in scope and then substituted
     /// so that type variables like `TStream` and `TFinal` are substituted with concrete types.
     fn lookup_class_method(
         &self,
@@ -11773,11 +11897,8 @@ impl<'db> TypeInferenceBuilder<'db> {
 
                 // The method's in-scope type-variable bounds (class + method params), so a
                 // `T.member` projection in the signature can resolve `T`'s declaring interface.
-                let method_bounds: rustc_hash::FxHashMap<Name, baml_type::Interface> =
-                    crate::lower_type_expr::function_in_scope_generic_param_bounds(db, func_loc)
-                        .iter()
-                        .cloned()
-                        .collect();
+                let method_bounds =
+                    crate::lower_type_expr::function_in_scope_generic_param_bounds(db, func_loc);
                 // `Self` is the enclosing class's full receiver type (`Foo<T>`, carrying its
                 // generics as `TypeVar` args) — resolved through the lowering context, not erased
                 // to a bare `Ty::Class` by a name-substitution pre-pass. Each signature type then
@@ -11787,7 +11908,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     package_items: pkg_items_for_class,
                     ns_context: &ns_context,
                     generic_params: &all_generic_params,
-                    bounds: &method_bounds,
+                    bounds: method_bounds,
                     self_ty: Some(class_ty.clone()),
                 };
 
@@ -11809,14 +11930,26 @@ impl<'db> TypeInferenceBuilder<'db> {
                             &target.expr
                         {
                             for (param, arg) in iface_data.generic_params.iter().zip(generic_args) {
-                                let ty = crate::generics::lower_type_expr_with_generics(
-                                    db,
-                                    arg,
-                                    pkg_items_for_class,
-                                    &ns_context,
-                                    &bindings,
-                                    &mut diags,
-                                );
+                                let ty = {
+                                    let generic_params: Vec<_> = bindings.keys().cloned().collect();
+                                    crate::generics::substitute_ty(
+                                        &crate::lower_type_expr::lower_type_expr(
+                                            arg,
+                                            &crate::lower_type_expr::ScopeCtx {
+                                                db,
+                                                package_items: pkg_items_for_class,
+                                                ns_context: &ns_context,
+                                                generic_params: &generic_params,
+                                                // The args are written in the method's scope; its
+                                                // in-scope bounds resolve any `T.member` in them.
+                                                bounds: method_bounds,
+                                                self_ty: None,
+                                            },
+                                            &mut diags,
+                                        ),
+                                        &bindings,
+                                    )
+                                };
                                 bindings.insert(param.clone(), ty);
                             }
                         }
@@ -11826,19 +11959,33 @@ impl<'db> TypeInferenceBuilder<'db> {
                             .get(&method_id)
                             .cloned()
                             .unwrap_or_default();
+                        // Defaults are written in the interface's own scope; its
+                        // declared parameter bounds resolve any `T.member` in them.
+                        let iface_bounds =
+                            crate::lower_type_expr::interface_generic_param_bounds(db, iface_loc);
                         for assoc in &iface_data.associated_types {
                             if explicit_bindings.iter().any(|b| b.name == assoc.name) {
                                 continue;
                             }
                             if let Some(default) = &assoc.default {
-                                let ty = crate::generics::lower_type_expr_with_generics(
-                                    db,
-                                    &default.expr,
-                                    pkg_items_for_class,
-                                    &iface_ns,
-                                    &bindings,
-                                    &mut diags,
-                                );
+                                let ty = {
+                                    let generic_params: Vec<_> = bindings.keys().cloned().collect();
+                                    crate::generics::substitute_ty(
+                                        &crate::lower_type_expr::lower_type_expr(
+                                            &default.expr,
+                                            &crate::lower_type_expr::ScopeCtx {
+                                                db,
+                                                package_items: pkg_items_for_class,
+                                                ns_context: &iface_ns,
+                                                generic_params: &generic_params,
+                                                bounds: iface_bounds,
+                                                self_ty: None,
+                                            },
+                                            &mut diags,
+                                        ),
+                                        &bindings,
+                                    )
+                                };
                                 bindings.insert(assoc.name.clone(), ty);
                             }
                         }
@@ -12024,6 +12171,9 @@ impl<'db> TypeInferenceBuilder<'db> {
         let stub_ns: &[Name] = &stub_pkg.namespace_path;
         let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
         let class_data = &item_tree[class_loc.id(db)];
+        // The stub class's declared parameter bounds, so a `T.member` projection
+        // in a member signature resolves `T`'s declaring interface.
+        let class_bounds = crate::lower_type_expr::class_generic_param_bounds(db, class_loc);
 
         // Bind generic type variables: e.g. {T → int} for Array<int>.
         let mut bindings = crate::generics::bind_type_vars(&class_data.generic_params, type_args);
@@ -12120,13 +12270,21 @@ impl<'db> TypeInferenceBuilder<'db> {
                         {
                             builtin_class_ty.clone()
                         } else {
-                            crate::generics::lower_type_expr_with_generics(
-                                db,
-                                &param.ty,
-                                self.package_items,
-                                stub_ns,
+                            let generic_params: Vec<_> = bindings.keys().cloned().collect();
+                            crate::generics::substitute_ty(
+                                &crate::lower_type_expr::lower_type_expr(
+                                    &param.ty,
+                                    &crate::lower_type_expr::ScopeCtx {
+                                        db,
+                                        package_items: self.package_items,
+                                        ns_context: stub_ns,
+                                        generic_params: &generic_params,
+                                        bounds: class_bounds,
+                                        self_ty: None,
+                                    },
+                                    &mut diags,
+                                ),
                                 &bindings,
-                                &mut diags,
                             )
                         };
                         FunctionParamTy {
@@ -12144,13 +12302,21 @@ impl<'db> TypeInferenceBuilder<'db> {
                     .return_type
                     .as_ref()
                     .map(|te| {
-                        crate::generics::lower_type_expr_with_generics(
-                            db,
-                            te,
-                            self.package_items,
-                            stub_ns,
+                        let generic_params: Vec<_> = bindings.keys().cloned().collect();
+                        crate::generics::substitute_ty(
+                            &crate::lower_type_expr::lower_type_expr(
+                                te,
+                                &crate::lower_type_expr::ScopeCtx {
+                                    db,
+                                    package_items: self.package_items,
+                                    ns_context: stub_ns,
+                                    generic_params: &generic_params,
+                                    bounds: class_bounds,
+                                    self_ty: None,
+                                },
+                                &mut diags,
+                            ),
                             &bindings,
-                            &mut diags,
                         )
                     })
                     .unwrap_or(Ty::Void {
@@ -12187,13 +12353,21 @@ impl<'db> TypeInferenceBuilder<'db> {
                     .type_expr
                     .as_ref()
                     .map(|te| {
-                        crate::generics::lower_type_expr_with_generics(
-                            db,
-                            &te.expr,
-                            self.package_items,
-                            stub_ns,
+                        let generic_params: Vec<_> = bindings.keys().cloned().collect();
+                        crate::generics::substitute_ty(
+                            &crate::lower_type_expr::lower_type_expr(
+                                &te.expr,
+                                &crate::lower_type_expr::ScopeCtx {
+                                    db,
+                                    package_items: self.package_items,
+                                    ns_context: stub_ns,
+                                    generic_params: &generic_params,
+                                    bounds: class_bounds,
+                                    self_ty: None,
+                                },
+                                &mut diags,
+                            ),
                             &bindings,
-                            &mut diags,
                         )
                     })
                     .unwrap_or(Ty::Unknown {

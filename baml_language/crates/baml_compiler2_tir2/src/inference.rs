@@ -33,6 +33,7 @@ use text_size::TextRange;
 use crate::{
     builder::TypeInferenceBuilder,
     infer_context::{InferContext, TypeCheckDiagnostics},
+    lower_type_expr::TypeVarBoundsMap,
     ty::{FunctionParamTy, Ty, TyAttr},
 };
 
@@ -296,14 +297,24 @@ fn install_generic_param_bounds(
             continue;
         };
         let mut diags = Vec::new();
-        let bound_ty = crate::generics::lower_type_expr_with_generics(
-            db,
-            bound_te,
-            pkg_items,
-            ns_context,
-            &type_bindings,
-            &mut diags,
-        );
+        let bound_ty = {
+            let generic_params: Vec<_> = type_bindings.keys().cloned().collect();
+            crate::generics::substitute_ty(
+                &crate::lower_type_expr::lower_type_expr(
+                    bound_te,
+                    &crate::lower_type_expr::ScopeCtx {
+                        db,
+                        package_items: pkg_items,
+                        ns_context,
+                        generic_params: &generic_params,
+                        bounds: &TypeVarBoundsMap::default(),
+                        self_ty: None,
+                    },
+                    &mut diags,
+                ),
+                &type_bindings,
+            )
+        };
         for diag in diags {
             builder.report_at_span(diag, span);
         }
@@ -445,13 +456,12 @@ fn lower_type_expr_at_span_in_env(
     // The env's params are the in-scope type variables; `Self` resolves through `self_ty`.
     // Bounds aren't threaded here — this only validates generic-argument bounds, and a bare
     // type variable carries none to check.
-    let bounds: FxHashMap<Name, baml_type::Interface> = FxHashMap::default();
     let ctx = crate::lower_type_expr::ScopeCtx {
         db,
         package_items: pkg_items,
         ns_context,
         generic_params: &env.params,
-        bounds: &bounds,
+        bounds: &TypeVarBoundsMap::default(),
         self_ty: options.self_ty,
     };
     let mut diags = Vec::new();
@@ -511,13 +521,21 @@ fn add_lambda_params_to_builder(
             // child lambda scope.
             .map(|ste| {
                 let mut diags = Vec::new();
-                crate::generics::lower_type_expr_with_generics(
-                    db,
-                    &ste.expr,
-                    pkg_items,
-                    ns_context,
+                let generic_params: Vec<_> = type_bindings.keys().cloned().collect();
+                crate::generics::substitute_ty(
+                    &crate::lower_type_expr::lower_type_expr(
+                        &ste.expr,
+                        &crate::lower_type_expr::ScopeCtx {
+                            db,
+                            package_items: pkg_items,
+                            ns_context,
+                            generic_params: &generic_params,
+                            bounds: &TypeVarBoundsMap::default(),
+                            self_ty: None,
+                        },
+                        &mut diags,
+                    ),
                     &type_bindings,
-                    &mut diags,
                 )
             })
             .or_else(|| {
@@ -1301,14 +1319,27 @@ pub fn infer_scope_types<'db>(
                             Some(crate::self_type::self_type_for_interface_default())
                         } else if let Some(imp) = enclosing_impl {
                             let mut diags = Vec::new();
-                            Some(crate::generics::lower_type_expr_with_generics(
-                                db,
-                                &imp.for_target.expr,
-                                pkg_items,
-                                &pkg_info.namespace_path,
-                                &type_bindings_for_params(&env.params),
-                                &mut diags,
-                            ))
+                            Some({
+                                let generic_params: Vec<_> = type_bindings_for_params(&env.params)
+                                    .keys()
+                                    .cloned()
+                                    .collect();
+                                crate::generics::substitute_ty(
+                                    &crate::lower_type_expr::lower_type_expr(
+                                        &imp.for_target.expr,
+                                        &crate::lower_type_expr::ScopeCtx {
+                                            db,
+                                            package_items: pkg_items,
+                                            ns_context: &pkg_info.namespace_path,
+                                            generic_params: &generic_params,
+                                            bounds: &TypeVarBoundsMap::default(),
+                                            self_ty: None,
+                                        },
+                                        &mut diags,
+                                    ),
+                                    &type_bindings_for_params(&env.params),
+                                )
+                            })
                         } else {
                             enclosing_class_name.as_ref().and_then(|cn| {
                                 let baml_compiler2_hir::contributions::Definition::Class(class_loc) =
@@ -1364,14 +1395,25 @@ pub fn infer_scope_types<'db>(
                                         iface_data.generic_params.iter().zip(generic_args)
                                     {
                                         let mut arg_diags = Vec::new();
-                                        let ty = crate::generics::lower_type_expr_with_generics(
-                                            db,
-                                            arg,
-                                            pkg_items,
-                                            &pkg_info.namespace_path,
-                                            &type_bindings,
-                                            &mut arg_diags,
-                                        );
+                                        let ty = {
+                                            let generic_params: Vec<_> =
+                                                type_bindings.keys().cloned().collect();
+                                            crate::generics::substitute_ty(
+                                                &crate::lower_type_expr::lower_type_expr(
+                                                    arg,
+                                                    &crate::lower_type_expr::ScopeCtx {
+                                                        db,
+                                                        package_items: pkg_items,
+                                                        ns_context: &pkg_info.namespace_path,
+                                                        generic_params: &generic_params,
+                                                        bounds: &TypeVarBoundsMap::default(),
+                                                        self_ty: None,
+                                                    },
+                                                    &mut arg_diags,
+                                                ),
+                                                &type_bindings,
+                                            )
+                                        };
                                         for diag in arg_diags {
                                             builder.report_at_span(diag, target.span);
                                         }
@@ -1394,14 +1436,12 @@ pub fn infer_scope_types<'db>(
                                         // associated types accumulated so far.
                                         let binding_generic_params: Vec<Name> =
                                             type_bindings.keys().cloned().collect();
-                                        let binding_bounds: FxHashMap<Name, baml_type::Interface> =
-                                            FxHashMap::default();
                                         let binding_ctx = crate::lower_type_expr::ScopeCtx {
                                             db,
                                             package_items: pkg_items,
                                             ns_context: &pkg_info.namespace_path,
                                             generic_params: &binding_generic_params,
-                                            bounds: &binding_bounds,
+                                            bounds: &TypeVarBoundsMap::default(),
                                             self_ty: self_ty.clone(),
                                         };
                                         let mut binding_diags = Vec::new();
@@ -1422,14 +1462,25 @@ pub fn infer_scope_types<'db>(
                                     }
                                     if let Some(default) = &assoc.default {
                                         let mut default_diags = Vec::new();
-                                        let ty = crate::generics::lower_type_expr_with_generics(
-                                            db,
-                                            &default.expr,
-                                            pkg_items,
-                                            &iface_ns,
-                                            &iface_type_bindings,
-                                            &mut default_diags,
-                                        );
+                                        let ty = {
+                                            let generic_params: Vec<_> =
+                                                iface_type_bindings.keys().cloned().collect();
+                                            crate::generics::substitute_ty(
+                                                &crate::lower_type_expr::lower_type_expr(
+                                                    &default.expr,
+                                                    &crate::lower_type_expr::ScopeCtx {
+                                                        db,
+                                                        package_items: pkg_items,
+                                                        ns_context: &iface_ns,
+                                                        generic_params: &generic_params,
+                                                        bounds: &TypeVarBoundsMap::default(),
+                                                        self_ty: None,
+                                                    },
+                                                    &mut default_diags,
+                                                ),
+                                                &iface_type_bindings,
+                                            )
+                                        };
                                         for diag in default_diags {
                                             builder.report_at_span(diag, default.span);
                                         }
@@ -1477,14 +1528,25 @@ pub fn infer_scope_types<'db>(
                                 for assoc in &iface_data.associated_types {
                                     if let Some(default) = &assoc.default {
                                         let mut default_diags = Vec::new();
-                                        let _ = crate::generics::lower_type_expr_with_generics(
-                                            db,
-                                            &default.expr,
-                                            pkg_items,
-                                            &iface_ns,
-                                            &type_bindings,
-                                            &mut default_diags,
-                                        );
+                                        let _ = {
+                                            let generic_params: Vec<_> =
+                                                type_bindings.keys().cloned().collect();
+                                            crate::generics::substitute_ty(
+                                                &crate::lower_type_expr::lower_type_expr(
+                                                    &default.expr,
+                                                    &crate::lower_type_expr::ScopeCtx {
+                                                        db,
+                                                        package_items: pkg_items,
+                                                        ns_context: &iface_ns,
+                                                        generic_params: &generic_params,
+                                                        bounds: &TypeVarBoundsMap::default(),
+                                                        self_ty: None,
+                                                    },
+                                                    &mut default_diags,
+                                                ),
+                                                &type_bindings,
+                                            )
+                                        };
                                         for diag in default_diags {
                                             builder.report_at_span(diag, default.span);
                                         }
@@ -1539,15 +1601,13 @@ pub fn infer_scope_types<'db>(
                         // key) substituted to its symbolic projection, matching `Self.Assoc`.
                         let body_generic_params: Vec<Name> =
                             type_bindings.keys().cloned().collect();
-                        let mut body_bounds: FxHashMap<Name, baml_type::Interface> =
+                        let mut body_bounds =
                             crate::lower_type_expr::function_in_scope_generic_param_bounds(
                                 db, func_loc,
                             )
-                            .iter()
-                            .cloned()
-                            .collect();
+                            .clone();
                         if let Some(bound) = &self_bound {
-                            body_bounds.insert(Name::new("Self"), bound.clone());
+                            body_bounds.insert(Name::new("Self"), vec![bound.clone()]);
                         }
                         let ctx = crate::lower_type_expr::ScopeCtx {
                             db,
@@ -2370,6 +2430,14 @@ pub fn resolve_class_fields<'db>(
     let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
 
     let class_data = &item_tree[class_loc.id(db)];
+    let field_scope = crate::lower_type_expr::ScopeCtx {
+        db,
+        package_items: pkg_items,
+        ns_context: &pkg_info.namespace_path,
+        generic_params: &class_data.generic_params,
+        bounds: crate::lower_type_expr::class_generic_param_bounds(db, class_loc),
+        self_ty: None,
+    };
     let mut all_diags = Vec::new();
     let fields = class_data
         .fields
@@ -2380,14 +2448,8 @@ pub fn resolve_class_fields<'db>(
                 .as_ref()
                 .map(|te| {
                     let mut diags = Vec::new();
-                    let ty = crate::lower_type_expr::lower_type_expr_in_ns(
-                        db,
-                        &te.expr,
-                        pkg_items,
-                        &pkg_info.namespace_path,
-                        &class_data.generic_params,
-                        &mut diags,
-                    );
+                    let ty =
+                        crate::lower_type_expr::lower_type_expr(&te.expr, &field_scope, &mut diags);
                     for d in diags {
                         all_diags.push((d, te.span));
                     }
@@ -2427,12 +2489,16 @@ pub fn resolve_type_alias<'db>(
         .as_ref()
         .map(|te| {
             let mut diags = Vec::new();
-            let ty = crate::lower_type_expr::lower_type_expr_in_ns(
-                db,
+            let ty = crate::lower_type_expr::lower_type_expr(
                 &te.expr,
-                pkg_items,
-                &pkg_info.namespace_path,
-                &[],
+                &crate::lower_type_expr::ScopeCtx {
+                    db,
+                    package_items: pkg_items,
+                    ns_context: &pkg_info.namespace_path,
+                    generic_params: &[],
+                    bounds: &crate::lower_type_expr::TypeVarBoundsMap::default(),
+                    self_ty: None,
+                },
                 &mut diags,
             );
             for d in diags {

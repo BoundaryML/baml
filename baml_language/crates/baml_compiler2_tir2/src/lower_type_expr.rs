@@ -103,17 +103,24 @@ fn type_suggestions(
         .collect()
 }
 
+/// A scope's type-variable bounds: each in-scope variable name mapped to the
+/// *conjunction* of interface constraints bounding it (`T extends A & B` yields
+/// two entries in `T`'s `Vec`). The bounds helpers
+/// ([`class_generic_param_bounds`] and friends) produce this shape natively.
+pub type TypeVarBoundsMap = rustc_hash::FxHashMap<baml_base::Name, Vec<baml_type::Interface>>;
+
 /// The general lowering scope: a package's items, a namespace, the in-scope type-variable
-/// names, and their bounds. Used by every `lower_type_expr_in_ns[_bounded]` wrapper.
+/// names, and their bounds. Constructed directly at each lowering site and passed to
+/// [`lower_type_expr`].
 pub(crate) struct ScopeCtx<'a, 'db> {
     pub db: &'db dyn crate::Db,
     pub package_items: &'a PackageItems<'db>,
     pub ns_context: &'a [baml_base::Name],
     pub generic_params: &'a [baml_base::Name],
-    /// Each in-scope type variable's interface bound, as a *constraint*
-    /// ([`baml_type::Interface`], which may pin only some associated types) — never a
-    /// [`Ty::Interface`] existential, which would have to specify them all.
-    pub bounds: &'a rustc_hash::FxHashMap<baml_base::Name, baml_type::Interface>,
+    /// The in-scope type variables' interface bounds, as *constraints*
+    /// ([`baml_type::Interface`], which may pin only some associated types) — never
+    /// [`Ty::Interface`] existentials, which would have to specify them all.
+    pub bounds: &'a TypeVarBoundsMap,
     /// What `Self` lowers to in this scope, or `None` where `Self` isn't valid.
     pub self_ty: Option<Ty>,
 }
@@ -138,7 +145,7 @@ impl<'db> TypeExprContext<'db> for ScopeCtx<'_, 'db> {
     fn type_var_bounds(&self, name: &baml_base::Name) -> Option<Box<[baml_type::Interface]>> {
         self.generic_params
             .contains(name)
-            .then(|| self.bounds.get(name).cloned().into_iter().collect())
+            .then(|| self.bounds.get(name).cloned().unwrap_or_default().into())
     }
 
     fn concrete_projection(&self, base: &Ty, member: &baml_base::Name) -> ConcreteProjection {
@@ -307,25 +314,6 @@ fn can_be_associated_type_projection_base(ty: &Ty) -> bool {
             | Ty::TypeAlias(..)
             | Ty::TypeVar(..)
             | Ty::AssociatedTypeProjection { .. }
-    )
-}
-
-pub fn lower_type_expr_in_ns(
-    db: &dyn crate::Db,
-    type_expr: &TypeExpr,
-    package_items: &PackageItems<'_>,
-    ns_context: &[baml_base::Name],
-    generic_params: &[baml_base::Name],
-    diagnostics: &mut Vec<TirTypeError>,
-) -> Ty {
-    lower_type_expr_in_ns_bounded(
-        db,
-        type_expr,
-        package_items,
-        ns_context,
-        generic_params,
-        &rustc_hash::FxHashMap::default(),
-        diagnostics,
     )
 }
 
@@ -793,31 +781,6 @@ pub fn lower_type_expr(
     }
 }
 
-/// Like [`lower_type_expr_in_ns`], but threads the in-scope type-variable
-/// `bounds` (`T extends Named`) through to associated-type-projection
-/// resolution, so a projection `T.member` on a bounded type variable can find
-/// `T`'s bound interface. A thin wrapper that packages its scope into a
-/// [`ScopeCtx`] and delegates to [`lower_type_expr`].
-pub fn lower_type_expr_in_ns_bounded(
-    db: &dyn crate::Db,
-    type_expr: &TypeExpr,
-    package_items: &PackageItems<'_>,
-    ns_context: &[baml_base::Name],
-    generic_params: &[baml_base::Name],
-    bounds: &rustc_hash::FxHashMap<baml_base::Name, baml_type::Interface>,
-    diagnostics: &mut Vec<TirTypeError>,
-) -> Ty {
-    let ctx = ScopeCtx {
-        db,
-        package_items,
-        ns_context,
-        generic_params,
-        bounds,
-        self_ty: None,
-    };
-    lower_type_expr(type_expr, &ctx, diagnostics)
-}
-
 /// Derive the qualified name for a type from its Definition's file location.
 pub fn qualify_def(
     db: &dyn crate::Db,
@@ -829,22 +792,22 @@ pub fn qualify_def(
     QualifiedTypeName::new(pkg_info.package, pkg_info.namespace_path, name.clone())
 }
 
-/// Lower a declaration's generic-parameter interface bounds to `(name, constraint)` pairs,
-/// keyed by parameter name with unbounded parameters omitted. Delegates the per-bound
-/// lowering to [`crate::builder::lower_generic_param_bounds`] (every sibling parameter in
-/// scope, so a bound naming another parameter resolves); bound-lowering diagnostics are
-/// discarded — the declaration's bounds are checked where the declaration is, not here.
+/// Lower a declaration's generic-parameter interface bounds to a [`TypeVarBoundsMap`],
+/// with unbounded parameters omitted. Delegates the per-bound lowering to
+/// [`crate::builder::lower_generic_param_bounds`] (every sibling parameter in scope, so a
+/// bound naming another parameter resolves); bound-lowering diagnostics are discarded — the
+/// declaration's bounds are checked where the declaration is, not here.
 ///
 /// Each bound is kept as a [`baml_type::Interface`] *constraint* (a bare `T extends Iterator`
 /// pins no associated types), never a [`Ty::Interface`] existential; a bound that does not
 /// lower to an interface is dropped.
-fn lower_decl_generic_param_bounds(
+pub(crate) fn lower_decl_generic_param_bounds(
     db: &dyn crate::Db,
     package_items: &PackageItems<'_>,
     ns_context: &[baml_base::Name],
     generic_params: &[baml_base::Name],
     generic_param_bounds: &[Option<TypeExpr>],
-) -> Vec<(baml_base::Name, baml_type::Interface)> {
+) -> TypeVarBoundsMap {
     let mut diagnostics = Vec::new();
     crate::builder::lower_generic_param_bounds(
         db,
@@ -860,7 +823,7 @@ fn lower_decl_generic_param_bounds(
     .filter_map(|(bound_ty, name)| {
         bound_ty
             .and_then(|bound_ty| bound_ty.as_interface())
-            .map(|constraint| (name.clone(), constraint))
+            .map(|constraint| (name.clone(), vec![constraint]))
     })
     .collect()
 }
@@ -871,11 +834,11 @@ fn lower_decl_generic_param_bounds(
 pub fn class_generic_param_bounds<'db>(
     db: &'db dyn crate::Db,
     class_loc: baml_compiler2_hir::loc::ClassLoc<'db>,
-) -> Vec<(baml_base::Name, baml_type::Interface)> {
+) -> TypeVarBoundsMap {
     let file = class_loc.file(db);
     let item_tree = baml_compiler2_hir::file_item_tree(db, file);
     let Some(class) = item_tree.classes.get(&class_loc.id(db)) else {
-        return Vec::new();
+        return TypeVarBoundsMap::default();
     };
     let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
     let package_items =
@@ -894,11 +857,11 @@ pub fn class_generic_param_bounds<'db>(
 pub fn interface_generic_param_bounds<'db>(
     db: &'db dyn crate::Db,
     interface_loc: baml_compiler2_hir::loc::InterfaceLoc<'db>,
-) -> Vec<(baml_base::Name, baml_type::Interface)> {
+) -> TypeVarBoundsMap {
     let file = interface_loc.file(db);
     let item_tree = baml_compiler2_hir::file_item_tree(db, file);
     let Some(interface) = item_tree.interfaces.get(&interface_loc.id(db)) else {
-        return Vec::new();
+        return TypeVarBoundsMap::default();
     };
     let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
     let package_items =
@@ -913,18 +876,19 @@ pub fn interface_generic_param_bounds<'db>(
 }
 
 /// Every generic-parameter interface bound in scope for a function's signature or body: the
-/// enclosing class or interface's parameters (when the function is a method), followed by
-/// the function's own parameters. Keyed by parameter name; own parameters are appended last
-/// so a map built by insertion lets them shadow an enclosing parameter of the same name.
+/// enclosing class or interface's parameters (when the function is a method), plus the
+/// function's own parameters. Keyed by parameter name; own parameters are inserted last so
+/// they replace an enclosing parameter of the same name (which is itself a diagnosed
+/// shadowing error).
 #[salsa::tracked(returns(ref))]
 pub fn function_in_scope_generic_param_bounds<'db>(
     db: &'db dyn crate::Db,
     function_loc: baml_compiler2_hir::loc::FunctionLoc<'db>,
-) -> Vec<(baml_base::Name, baml_type::Interface)> {
+) -> TypeVarBoundsMap {
     let file = function_loc.file(db);
     let item_tree = baml_compiler2_hir::file_item_tree(db, file);
     let function_id = function_loc.id(db);
-    let mut bounds = Vec::new();
+    let mut bounds = TypeVarBoundsMap::default();
     for (class_id, class) in &item_tree.classes {
         if class.methods.contains(&function_id) {
             bounds.extend(
@@ -933,7 +897,7 @@ pub fn function_in_scope_generic_param_bounds<'db>(
                     baml_compiler2_hir::loc::ClassLoc::new(db, file, *class_id),
                 )
                 .iter()
-                .cloned(),
+                .map(|(name, conjunction)| (name.clone(), conjunction.clone())),
             );
         }
     }
@@ -945,7 +909,7 @@ pub fn function_in_scope_generic_param_bounds<'db>(
                     baml_compiler2_hir::loc::InterfaceLoc::new(db, file, *interface_id),
                 )
                 .iter()
-                .cloned(),
+                .map(|(name, conjunction)| (name.clone(), conjunction.clone())),
             );
         }
     }
@@ -1057,11 +1021,15 @@ mod tests {
         let iterator = QualifiedTypeName::new(Name::new("user"), vec![], Name::new("Iterator"));
 
         let lower_self_item = |bound_assoc: Vec<(Name, Ty)>| -> Ty {
-            let mut bounds = FxHashMap::default();
-            bounds.insert(
+            let bounds: TypeVarBoundsMap = std::iter::once((
                 Name::new("Self"),
-                baml_type::Interface::new(iterator.clone(), vec![], bound_assoc),
-            );
+                vec![baml_type::Interface::new(
+                    iterator.clone(),
+                    vec![],
+                    bound_assoc,
+                )],
+            ))
+            .collect();
             let self_param = [Name::new("Self")];
             let ctx = ScopeCtx {
                 db: &db,
@@ -1122,13 +1090,12 @@ mod tests {
     /// bounds, or `Self` (the scope an ordinary type alias / free signature lowers in).
     fn lower_in_user_scope(db: &TestDb, expr: &TypeExpr) -> (Ty, Vec<TirTypeError>) {
         let items = baml_compiler2_ppir::package_items(db, PackageId::new(db, Name::new("user")));
-        let bounds = FxHashMap::default();
         let ctx = ScopeCtx {
             db,
             package_items: items,
             ns_context: &[],
             generic_params: &[],
-            bounds: &bounds,
+            bounds: &TypeVarBoundsMap::default(),
             self_ty: None,
         };
         let mut diags = Vec::new();
@@ -1401,6 +1368,144 @@ mod tests {
         );
     }
 
+    // An associated-type default projecting through a *bounded generic parameter*
+    // (`type Elem = T.Item` with `T extends HasItem<Item = int>`) resolves through the
+    // declared bound — the bound's pin collapses the projection at lowering.
+    #[test]
+    fn interface_assoc_default_collapses_through_pinned_param_bound() {
+        let db = compile(concat!(
+            "interface HasItem {\n  type Item\n}\n",
+            "interface Wrapper<T extends HasItem<Item = int>> {\n  type Elem = T.Item\n}\n",
+        ));
+        let user = PackageId::new(&db, Name::new("user"));
+        let items = baml_compiler2_ppir::package_items(&db, user);
+        let Some(baml_compiler2_hir::contributions::Definition::Interface(wrapper)) =
+            items.lookup_type(&[], &Name::new("Wrapper"))
+        else {
+            panic!("Wrapper interface should resolve");
+        };
+
+        let closure = crate::interfaces::interface_closure_locs_with_args_and_assoc(
+            &db,
+            wrapper,
+            &[Ty::String {
+                attr: TyAttr::default(),
+            }],
+            &[],
+            items,
+            &[],
+        );
+        let wrapper_entry = closure
+            .iter()
+            .find(|entry| entry.0 == wrapper)
+            .expect("Wrapper itself heads its closure");
+        assert_eq!(
+            wrapper_entry.2,
+            vec![(
+                Name::new("Elem"),
+                Ty::Int {
+                    attr: TyAttr::default(),
+                },
+            )],
+            "`T.Item` must collapse to the bound's `Item = int` pin",
+        );
+    }
+
+    // With an unpinned bound (`T extends HasItem`), the same default stays a *symbolic*
+    // projection through the bound's interface, with the realized argument as its base.
+    #[test]
+    fn interface_assoc_default_projects_symbolically_through_param_bound() {
+        let db = compile(concat!(
+            "interface HasItem {\n  type Item\n}\n",
+            "interface Wrapper<T extends HasItem> {\n  type Elem = T.Item\n}\n",
+        ));
+        let user = PackageId::new(&db, Name::new("user"));
+        let items = baml_compiler2_ppir::package_items(&db, user);
+        let Some(baml_compiler2_hir::contributions::Definition::Interface(wrapper)) =
+            items.lookup_type(&[], &Name::new("Wrapper"))
+        else {
+            panic!("Wrapper interface should resolve");
+        };
+
+        let string_ty = Ty::String {
+            attr: TyAttr::default(),
+        };
+        let closure = crate::interfaces::interface_closure_locs_with_args_and_assoc(
+            &db,
+            wrapper,
+            std::slice::from_ref(&string_ty),
+            &[],
+            items,
+            &[],
+        );
+        let wrapper_entry = closure
+            .iter()
+            .find(|entry| entry.0 == wrapper)
+            .expect("Wrapper itself heads its closure");
+        let [(name, ty)] = wrapper_entry.2.as_slice() else {
+            panic!(
+                "expected exactly one associated binding, got {:?}",
+                wrapper_entry.2
+            );
+        };
+        assert_eq!(name.as_str(), "Elem");
+        match ty {
+            Ty::AssociatedTypeProjection {
+                base,
+                interface,
+                member,
+                ..
+            } => {
+                assert_eq!(**base, string_ty, "base must be the realized argument");
+                assert_eq!(
+                    interface
+                        .as_ref()
+                        .expect("interface determined")
+                        .name
+                        .name()
+                        .as_str(),
+                    "HasItem"
+                );
+                assert_eq!(member.as_str(), "Item");
+            }
+            other => panic!("expected a symbolic T.Item projection, got {other:?}"),
+        }
+    }
+
+    // An in-package class field projecting through a bounded class parameter
+    // (`x: T.Item` with `T extends HasItem<Item = int>`) resolves through the
+    // declared bound — `resolve_class_fields` threads the class's bounds.
+    #[test]
+    fn class_field_projection_resolves_through_param_bound() {
+        let db = compile(concat!(
+            "interface HasItem {\n  type Item\n}\n",
+            "class Holder<T extends HasItem<Item = int>> {\n  x: T.Item\n}\n",
+        ));
+        let user = PackageId::new(&db, Name::new("user"));
+        let items = baml_compiler2_ppir::package_items(&db, user);
+        let Some(baml_compiler2_hir::contributions::Definition::Class(holder)) =
+            items.lookup_type(&[], &Name::new("Holder"))
+        else {
+            panic!("Holder class should resolve");
+        };
+
+        let resolved = crate::inference::resolve_class_fields(&db, holder);
+        let (_, ty, _) = resolved
+            .fields
+            .iter()
+            .find(|(name, _, _)| name.as_str() == "x")
+            .expect("field x resolved");
+        assert!(
+            matches!(ty, Ty::Int { .. }),
+            "expected T.Item to collapse to the bound's pin, got {ty:?}"
+        );
+        assert!(
+            resolved.diagnostics.is_empty(),
+            "unexpected diagnostics: {:?}",
+            resolved.diagnostics
+        );
+    }
+
     #[test]
     fn substitute_paths_recurses_into_function_type() {
         let type_expr = TypeExpr::Function {
@@ -1482,7 +1587,18 @@ mod tests {
         };
         let mut diagnostics = Vec::new();
 
-        let ty = lower_type_expr_in_ns(&db, &type_expr, &package_items, &[], &[], &mut diagnostics);
+        let ty = crate::lower_type_expr::lower_type_expr(
+            &type_expr,
+            &crate::lower_type_expr::ScopeCtx {
+                db: &db,
+                package_items: &package_items,
+                ns_context: &[],
+                generic_params: &[],
+                bounds: &crate::lower_type_expr::TypeVarBoundsMap::default(),
+                self_ty: None,
+            },
+            &mut diagnostics,
+        );
 
         assert!(
             diagnostics.is_empty(),

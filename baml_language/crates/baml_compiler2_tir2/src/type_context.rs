@@ -45,7 +45,7 @@ pub(crate) enum TypeVarBounds<'a> {
     /// Bounds lowered to interface constraints — the representation held by
     /// type-expression lowering, which resolves projections without a builder.
     /// The `Vec` is the conjunction of an intersection bound (`T: A & B`).
-    Interfaces(&'a FxHashMap<Name, Vec<baml_type::Interface>>),
+    Interfaces(&'a crate::lower_type_expr::TypeVarBoundsMap),
 }
 
 impl TypeVarBounds<'_> {

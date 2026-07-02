@@ -716,33 +716,60 @@ fn lower_interface_associated_bindings(
             .entry(param.clone())
             .or_insert_with(|| Ty::TypeVar(param.clone(), TyAttr::default()));
     }
+    // The interface's declared parameter bounds, so a `T.member` projection in a
+    // binding value or default resolves `T`'s declaring interface. The caller's
+    // own `generic_params` (e.g. impl-block generics) carry no bounds here.
+    let iface_bounds = crate::lower_type_expr::lower_decl_generic_param_bounds(
+        db,
+        iface_pkg_items,
+        iface_namespace_path,
+        &iface.generic_params,
+        &iface.generic_param_bounds,
+    );
 
     iface
         .associated_types
         .iter()
         .filter_map(|assoc| {
+            // Snapshot per iteration: each resolved associated type joins the
+            // in-scope variables for the next one's expression.
+            let generic_params: Vec<_> = bindings.keys().cloned().collect();
             let ty = if let Some(binding) = block_associated_bindings
                 .iter()
                 .find(|binding| binding.name == assoc.name)
                 && let Some(type_expr) = &binding.type_expr
             {
-                generics::lower_type_expr_with_generics(
-                    db,
-                    &type_expr.expr,
-                    binding_pkg_items,
-                    binding_namespace_path,
+                crate::generics::substitute_ty(
+                    &crate::lower_type_expr::lower_type_expr(
+                        &type_expr.expr,
+                        &crate::lower_type_expr::ScopeCtx {
+                            db,
+                            package_items: binding_pkg_items,
+                            ns_context: binding_namespace_path,
+                            generic_params: &generic_params,
+                            bounds: &iface_bounds,
+                            self_ty: None,
+                        },
+                        diagnostics,
+                    ),
                     &bindings,
-                    diagnostics,
                 )
             } else {
                 let default = assoc.default.as_ref()?;
-                generics::lower_type_expr_with_generics(
-                    db,
-                    &default.expr,
-                    iface_pkg_items,
-                    iface_namespace_path,
+                crate::generics::substitute_ty(
+                    &crate::lower_type_expr::lower_type_expr(
+                        &default.expr,
+                        &crate::lower_type_expr::ScopeCtx {
+                            db,
+                            package_items: iface_pkg_items,
+                            ns_context: iface_namespace_path,
+                            generic_params: &generic_params,
+                            bounds: &iface_bounds,
+                            self_ty: None,
+                        },
+                        diagnostics,
+                    ),
                     &bindings,
-                    diagnostics,
                 )
             };
             bindings.insert(assoc.name.clone(), ty.clone());
@@ -764,6 +791,15 @@ fn complete_interface_associated_bindings_from_tys(
     for (name, ty) in associated_bindings {
         bindings.insert(name.clone(), ty.clone());
     }
+    // The interface's declared parameter bounds, so a `T.member` projection in
+    // an associated-type default resolves `T`'s declaring interface.
+    let iface_bounds = crate::lower_type_expr::lower_decl_generic_param_bounds(
+        db,
+        pkg_items,
+        iface_namespace_path,
+        &iface.generic_params,
+        &iface.generic_param_bounds,
+    );
 
     iface
         .associated_types
@@ -778,14 +814,24 @@ fn complete_interface_associated_bindings_from_tys(
                 return Some((assoc.name.clone(), ty));
             }
             assoc.default.as_ref().map(|default| {
-                let ty = generics::lower_type_expr_with_generics(
-                    db,
-                    &default.expr,
-                    pkg_items,
-                    iface_namespace_path,
-                    &bindings,
-                    diagnostics,
-                );
+                let ty = {
+                    let generic_params: Vec<_> = bindings.keys().cloned().collect();
+                    crate::generics::substitute_ty(
+                        &crate::lower_type_expr::lower_type_expr(
+                            &default.expr,
+                            &crate::lower_type_expr::ScopeCtx {
+                                db,
+                                package_items: pkg_items,
+                                ns_context: iface_namespace_path,
+                                generic_params: &generic_params,
+                                bounds: &iface_bounds,
+                                self_ty: None,
+                            },
+                            diagnostics,
+                        ),
+                        &bindings,
+                    )
+                };
                 bindings.insert(assoc.name.clone(), ty.clone());
                 (assoc.name.clone(), ty)
             })
@@ -801,6 +847,15 @@ fn lower_interface_type_associated_bindings(
     for (name, ty) in ctx.outer_bindings {
         bindings.entry(name.clone()).or_insert_with(|| ty.clone());
     }
+    // The interface's declared parameter bounds, so a `T.member` projection in a
+    // binding value or default resolves `T`'s declaring interface.
+    let iface_bounds = crate::lower_type_expr::lower_decl_generic_param_bounds(
+        ctx.db,
+        ctx.iface_pkg_items,
+        ctx.iface_namespace_path,
+        &ctx.iface.generic_params,
+        &ctx.iface.generic_param_bounds,
+    );
 
     ctx.iface
         .associated_types
@@ -815,8 +870,8 @@ fn lower_interface_type_associated_bindings(
                 // `requires I<Item = Self.Item>` clause), so lower it through a context that
                 // resolves `Self`, then substitute the realized generics / associated types.
                 let ty = if let Some(self_bound) = &ctx.self_bound {
-                    let bounds: FxHashMap<Name, baml_type::Interface> =
-                        std::iter::once((Name::new("Self"), self_bound.clone())).collect();
+                    let mut bounds = iface_bounds.clone();
+                    bounds.insert(Name::new("Self"), vec![self_bound.clone()]);
                     let generic_params: Vec<Name> = bindings
                         .keys()
                         .cloned()
@@ -835,27 +890,45 @@ fn lower_interface_type_associated_bindings(
                         &bindings,
                     )
                 } else {
-                    generics::lower_type_expr_with_generics(
-                        ctx.db,
-                        &binding.ty,
-                        ctx.binding_pkg_items,
-                        ctx.binding_namespace_path,
+                    let generic_params: Vec<_> = bindings.keys().cloned().collect();
+                    crate::generics::substitute_ty(
+                        &crate::lower_type_expr::lower_type_expr(
+                            &binding.ty,
+                            &crate::lower_type_expr::ScopeCtx {
+                                db: ctx.db,
+                                package_items: ctx.binding_pkg_items,
+                                ns_context: ctx.binding_namespace_path,
+                                generic_params: &generic_params,
+                                bounds: &iface_bounds,
+                                self_ty: None,
+                            },
+                            diagnostics,
+                        ),
                         &bindings,
-                        diagnostics,
                     )
                 };
                 bindings.insert(assoc.name.clone(), ty.clone());
                 return Some((assoc.name.clone(), ty));
             }
             assoc.default.as_ref().map(|default| {
-                let ty = generics::lower_type_expr_with_generics(
-                    ctx.db,
-                    &default.expr,
-                    ctx.iface_pkg_items,
-                    ctx.iface_namespace_path,
-                    &bindings,
-                    diagnostics,
-                );
+                let ty = {
+                    let generic_params: Vec<_> = bindings.keys().cloned().collect();
+                    crate::generics::substitute_ty(
+                        &crate::lower_type_expr::lower_type_expr(
+                            &default.expr,
+                            &crate::lower_type_expr::ScopeCtx {
+                                db: ctx.db,
+                                package_items: ctx.iface_pkg_items,
+                                ns_context: ctx.iface_namespace_path,
+                                generic_params: &generic_params,
+                                bounds: &iface_bounds,
+                                self_ty: None,
+                            },
+                            diagnostics,
+                        ),
+                        &bindings,
+                    )
+                };
                 bindings.insert(assoc.name.clone(), ty.clone());
                 (assoc.name.clone(), ty)
             })
@@ -1425,12 +1498,16 @@ pub fn package_implements_registry<'db>(
                 .iter()
                 .map(|g| {
                     g.bounds.first().map(|te| {
-                        crate::lower_type_expr::lower_type_expr_in_ns(
-                            db,
+                        crate::lower_type_expr::lower_type_expr(
                             te,
-                            pkg_items,
-                            &pkg_info.namespace_path,
-                            &names,
+                            &crate::lower_type_expr::ScopeCtx {
+                                db,
+                                package_items: pkg_items,
+                                ns_context: &pkg_info.namespace_path,
+                                generic_params: &names,
+                                bounds: &crate::lower_type_expr::TypeVarBoundsMap::default(),
+                                self_ty: None,
+                            },
                             &mut diags,
                         )
                     })
@@ -1497,12 +1574,16 @@ pub fn resolve_path_to_interface_identity<'db>(
     current_ns: &[Name],
 ) -> Option<ResolvedInterface<'db>> {
     let mut diagnostics = Vec::new();
-    let Ty::Interface(qtn, _, _, _) = crate::lower_type_expr::lower_type_expr_in_ns(
-        db,
+    let Ty::Interface(qtn, _, _, _) = crate::lower_type_expr::lower_type_expr(
         target,
-        pkg_items,
-        current_ns,
-        &[],
+        &crate::lower_type_expr::ScopeCtx {
+            db,
+            package_items: pkg_items,
+            ns_context: current_ns,
+            generic_params: &[],
+            bounds: &crate::lower_type_expr::TypeVarBoundsMap::default(),
+            self_ty: None,
+        },
         &mut diagnostics,
     ) else {
         return None;
@@ -1670,6 +1751,10 @@ pub fn interface_closure_locs_with_args_and_assoc<'db>(
         // bindings) — so a required interface's `Item = Self.Item` resolves `Self.Item` here.
         let self_bound = interface_loc_qtn(db, loc)
             .map(|qtn| baml_type::Interface::new(qtn, args.clone(), associated_bindings.clone()));
+        // The requiring interface's declared parameter bounds, so a `T.member`
+        // projection in a parent's generic arguments resolves `T`'s declaring
+        // interface.
+        let iface_bounds = crate::lower_type_expr::interface_generic_param_bounds(db, loc);
 
         for parent in &iface.requires {
             let Some(parent_loc) = resolve_path_to_interface(
@@ -1686,13 +1771,21 @@ pub fn interface_closure_locs_with_args_and_assoc<'db>(
                     generic_args
                         .iter()
                         .map(|arg| {
-                            generics::lower_type_expr_with_generics(
-                                db,
-                                arg,
-                                parent_pkg_items,
-                                &pkg_info.namespace_path,
+                            let generic_params: Vec<_> = bindings.keys().cloned().collect();
+                            crate::generics::substitute_ty(
+                                &crate::lower_type_expr::lower_type_expr(
+                                    arg,
+                                    &crate::lower_type_expr::ScopeCtx {
+                                        db,
+                                        package_items: parent_pkg_items,
+                                        ns_context: &pkg_info.namespace_path,
+                                        generic_params: &generic_params,
+                                        bounds: iface_bounds,
+                                        self_ty: None,
+                                    },
+                                    &mut diags,
+                                ),
                                 &bindings,
-                                &mut diags,
                             )
                         })
                         .collect()
