@@ -11,10 +11,9 @@
 //! 2. It provides the concrete type arguments (e.g. `[Ty::Int { attr: TyAttr::default() }]`).
 //! 3. `bind_type_vars` zips them together: `{T → int}`.
 //! 4. For each method parameter/return type, `lower_type_expr_with_generics`
-//!    is called: if the `TypeExpr` is a `Path(["T"])` that matches a bound
-//!    variable, it returns the bound concrete type directly; otherwise it
-//!    falls through to normal `lower_type_expr` and then applies
-//!    `substitute_ty` to replace any residual type-variable references.
+//!    lowers the `TypeExpr` (with the binding keys in scope as type variables)
+//!    and then applies `substitute_ty` to replace those type-variable references
+//!    with their bound concrete types.
 
 use baml_base::Name;
 use baml_compiler2_ast::TypeExpr;
@@ -22,8 +21,7 @@ use rustc_hash::FxHashMap;
 
 use crate::{
     infer_context::TirTypeError,
-    lower_type_expr::lower_type_expr_in_ns_bounded,
-    ty::{FunctionParamMode, FunctionParamTy, Ty, TyAttr},
+    ty::{FunctionParamTy, Ty},
 };
 
 // ── Type variable binding ─────────────────────────────────────────────────────
@@ -147,59 +145,15 @@ pub fn substitute_ty(ty: &Ty, bindings: &FxHashMap<Name, Ty>) -> Ty {
     }
 }
 
-// ── TypeExpr-level substitution ───────────────────────────────────────────────
-
-/// Check if a `TypeExpr` is a single-segment path that matches a bound type variable.
-///
-/// Returns `Some(bound_ty)` if the expression is `Path(["T"])` and `"T"` is in
-/// `bindings`. Returns `None` if it's not a type variable reference.
-///
-/// This is called at the `TypeExpr` level, before `lower_type_expr`, so we can
-/// intercept `T` references that would otherwise produce `Ty::Unknown`.
-fn substitute_type_expr(expr: &TypeExpr, bindings: &FxHashMap<Name, Ty>) -> Option<Ty> {
-    match expr {
-        TypeExpr::Path {
-            segments,
-            generic_args,
-            associated_type_bindings,
-            ..
-        } if segments.len() == 2
-            && segments[0].as_str() == "Self"
-            && generic_args.is_empty()
-            && associated_type_bindings.is_empty() =>
-        {
-            bindings.get(&segments[1]).cloned()
-        }
-        TypeExpr::Path {
-            segments,
-            generic_args,
-            associated_type_bindings,
-            ..
-        } if segments.len() == 1
-            && generic_args.is_empty()
-            && associated_type_bindings.is_empty() =>
-        {
-            bindings.get(&segments[0]).cloned()
-        }
-        _ => None,
-    }
-}
-
 // ── Combined lowering with generic substitution ───────────────────────────────
 
-/// Lower a `TypeExpr` to `Ty` with type variable substitution applied.
+/// Lower a `TypeExpr` to `Ty`, then specialize it by substituting the generic `bindings`.
 ///
-/// For complex type expressions (e.g. `T[]`, `map<K, V>`, `V?`), first lowers
-/// normally then substitutes type variables in the result. For single-segment
-/// paths that directly name a type variable (e.g. `T`, `K`, `V`), intercepts
-/// before lowering to avoid the "unresolved type" diagnostic that `lower_type_expr`
-/// would otherwise emit.
-///
-/// Diagnostics from the lowering step (for non-variable paths that genuinely
-/// don't exist) are collected into `diagnostics`.
-///
-/// `ns_context` is the defining file's namespace within its package (e.g. `["llm"]`
-/// for `<builtin>/baml/llm/llm.baml`); unqualified type paths resolve there first.
+/// The `TypeExpr` is lowered through a [`ScopeCtx`](crate::lower_type_expr::ScopeCtx) whose
+/// in-scope type variables are the binding keys — so `T`, `T[]`, or `map<K, V>` stay
+/// `Ty::TypeVar` instead of erroring as "unresolved type" — and then [`substitute_ty`] replaces
+/// those variables with their bound concrete types. `ns_context` is the defining file's
+/// namespace; unqualified paths resolve there first. Lowering diagnostics go into `diagnostics`.
 pub fn lower_type_expr_with_generics(
     db: &dyn crate::Db,
     expr: &TypeExpr,
@@ -208,242 +162,24 @@ pub fn lower_type_expr_with_generics(
     bindings: &FxHashMap<Name, Ty>,
     diagnostics: &mut Vec<TirTypeError>,
 ) -> Ty {
-    lower_type_expr_with_generics_bounded(
+    // Lower `expr` with the binding keys as the in-scope type variables — so a `T` or `T[]`
+    // reference stays a `Ty::TypeVar` rather than becoming an "unresolved type" — then
+    // substitute the bound concrete types into the result. `Self` is not in scope here: a
+    // signature that resolves `Self` builds its own `ScopeCtx` and calls `lower_type_expr`.
+    let generic_params: Vec<Name> = bindings.keys().cloned().collect();
+    let bounds: FxHashMap<Name, baml_type::Interface> = FxHashMap::default();
+    let ctx = crate::lower_type_expr::ScopeCtx {
         db,
-        expr,
         package_items,
         ns_context,
+        generic_params: &generic_params,
+        bounds: &bounds,
+        self_ty: None,
+    };
+    substitute_ty(
+        &crate::lower_type_expr::lower_type_expr(expr, &ctx, diagnostics),
         bindings,
-        &FxHashMap::default(),
-        diagnostics,
     )
-}
-
-/// Like [`lower_type_expr_with_generics`], but threads the in-scope type-variable
-/// `bounds` (`T extends Named`) through to associated-type-projection resolution,
-/// so a projection on a bounded type variable can find its bound interface.
-pub fn lower_type_expr_with_generics_bounded(
-    db: &dyn crate::Db,
-    expr: &TypeExpr,
-    package_items: &baml_compiler2_hir::package::PackageItems<'_>,
-    ns_context: &[Name],
-    bindings: &FxHashMap<Name, Ty>,
-    bounds: &FxHashMap<Name, baml_type::Interface>,
-    diagnostics: &mut Vec<TirTypeError>,
-) -> Ty {
-    // Fast path: empty bindings — no substitution needed.
-    if bindings.is_empty() {
-        return lower_type_expr_in_ns_bounded(
-            db,
-            expr,
-            package_items,
-            ns_context,
-            &[],
-            bounds,
-            diagnostics,
-        );
-    }
-
-    // Intercept single-segment paths that are type variables.
-    if let Some(ty) = substitute_type_expr(expr, bindings) {
-        return ty;
-    }
-
-    // For composite types (List, Map, Optional, Union), recurse with substitution
-    // rather than lowering first then substituting, so that type-variable references
-    // in nested positions are also intercepted before triggering "unresolved type".
-    match expr {
-        // `T?` is sugar for `T | null` — lower it directly to a nullable union.
-        TypeExpr::Optional { inner, .. } => Ty::optional(lower_type_expr_with_generics_bounded(
-            db,
-            inner,
-            package_items,
-            ns_context,
-            bindings,
-            bounds,
-            diagnostics,
-        )),
-        TypeExpr::List { inner, .. } => Ty::List(
-            Box::new(lower_type_expr_with_generics_bounded(
-                db,
-                inner,
-                package_items,
-                ns_context,
-                bindings,
-                bounds,
-                diagnostics,
-            )),
-            TyAttr::default(),
-        ),
-        TypeExpr::Map { key, value, .. } => Ty::Map {
-            key: Box::new(lower_type_expr_with_generics_bounded(
-                db,
-                key,
-                package_items,
-                ns_context,
-                bindings,
-                bounds,
-                diagnostics,
-            )),
-            value: Box::new(lower_type_expr_with_generics_bounded(
-                db,
-                value,
-                package_items,
-                ns_context,
-                bindings,
-                bounds,
-                diagnostics,
-            )),
-            attr: TyAttr::default(),
-        },
-        TypeExpr::Union {
-            variants: members, ..
-        } => Ty::Union(
-            members
-                .iter()
-                .map(|m| {
-                    lower_type_expr_with_generics_bounded(
-                        db,
-                        m,
-                        package_items,
-                        ns_context,
-                        bindings,
-                        bounds,
-                        diagnostics,
-                    )
-                })
-                .collect(),
-            TyAttr::default(),
-        ),
-        TypeExpr::Function {
-            params,
-            ret,
-            throws,
-            ..
-        } => {
-            // A function type carries no generics of its own; its type variables
-            // come from the enclosing context (already in `bindings`).
-            Ty::Function {
-                params: params
-                    .iter()
-                    .map(|p| FunctionParamTy {
-                        name: p.name.clone(),
-                        ty: lower_type_expr_with_generics_bounded(
-                            db,
-                            &p.ty,
-                            package_items,
-                            ns_context,
-                            bindings,
-                            bounds,
-                            diagnostics,
-                        ),
-                        mode: if p.optional {
-                            FunctionParamMode::Optional
-                        } else {
-                            FunctionParamMode::Required
-                        },
-                    })
-                    .collect(),
-                ret: Box::new(lower_type_expr_with_generics_bounded(
-                    db,
-                    ret,
-                    package_items,
-                    ns_context,
-                    bindings,
-                    bounds,
-                    diagnostics,
-                )),
-                throws: Box::new(
-                    throws
-                        .as_deref()
-                        .map(|throws| {
-                            lower_type_expr_with_generics_bounded(
-                                db,
-                                throws,
-                                package_items,
-                                ns_context,
-                                bindings,
-                                bounds,
-                                diagnostics,
-                            )
-                        })
-                        .unwrap_or(Ty::Never {
-                            attr: TyAttr::default(),
-                        }),
-                ),
-                attr: TyAttr::default(),
-            }
-        }
-        TypeExpr::AssociatedTypeProjection {
-            base,
-            interface,
-            member,
-            ..
-        } => {
-            let base_ty = lower_type_expr_with_generics_bounded(
-                db,
-                base,
-                package_items,
-                ns_context,
-                bindings,
-                bounds,
-                diagnostics,
-            );
-            let explicit_interface = interface.as_ref().map(|interface| {
-                lower_type_expr_with_generics_bounded(
-                    db,
-                    interface,
-                    package_items,
-                    ns_context,
-                    bindings,
-                    bounds,
-                    diagnostics,
-                )
-            });
-            // The base/interface are already generic-substituted; the projection
-            // resolver only needs `db` and the type-variable `bounds`. Treat every
-            // bounded name as an in-scope type variable so `type_var_bounds`
-            // reproduces the previous direct `bounds` lookup.
-            let generic_params: Vec<Name> = bounds.keys().cloned().collect();
-            let ctx = crate::lower_type_expr::ScopeCtx {
-                db,
-                package_items,
-                ns_context,
-                generic_params: &generic_params,
-                bounds,
-                self_ty: None,
-            };
-            let lowered = crate::builder::associated_projection::lower_projection(
-                &ctx,
-                base_ty,
-                explicit_interface,
-                member.clone(),
-            );
-            diagnostics.extend(lowered.diagnostics);
-            lowered.ty
-        }
-        // For all other type expressions (primitives, multi-segment paths, etc.),
-        // lower normally and then substitute in the result.
-        //
-        // We pass the binding keys as `generic_params` so that nested type variable
-        // references inside path generic args (e.g. `StreamCache<T, S>`) are preserved
-        // as `Ty::TypeVar` by `lower_type_expr_in_ns` rather than triggering "unresolved
-        // type" diagnostics. `substitute_ty` then replaces those TypeVars with the
-        // concrete bound types.
-        other => {
-            let binding_keys: Vec<Name> = bindings.keys().cloned().collect();
-            let ty = lower_type_expr_in_ns_bounded(
-                db,
-                other,
-                package_items,
-                ns_context,
-                &binding_keys,
-                bounds,
-                diagnostics,
-            );
-            substitute_ty(&ty, bindings)
-        }
-    }
 }
 
 // ── Method parameter adjustment ───────────────────────────────────────────────

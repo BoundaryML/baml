@@ -47,7 +47,6 @@ type InterfaceClosureQueueEntry<'db> = (
     FxHashSet<baml_compiler2_hir::loc::InterfaceLoc<'db>>,
 );
 
-#[derive(Clone, Copy)]
 struct InterfaceTypeAssocLowering<'a, 'db> {
     db: &'db dyn crate::Db,
     iface: &'a baml_compiler2_hir::item_tree::Interface,
@@ -58,6 +57,11 @@ struct InterfaceTypeAssocLowering<'a, 'db> {
     iface_namespace_path: &'a [Name],
     binding_namespace_path: &'a [Name],
     outer_bindings: &'a TypeBindings,
+    /// The requiring interface as a constraint (its associated types pinned to the realized
+    /// bindings), so an explicit binding `Item = Self.Item` resolves `Self.Item` onto it —
+    /// collapsing to the realized value (or a symbolic projection when unpinned). `None` only if
+    /// that interface's qtn can't be resolved.
+    self_bound: Option<baml_type::Interface>,
 }
 
 /// Where an interface implementation rule came from.
@@ -790,7 +794,7 @@ fn complete_interface_associated_bindings_from_tys(
 }
 
 fn lower_interface_type_associated_bindings(
-    ctx: InterfaceTypeAssocLowering<'_, '_>,
+    ctx: &InterfaceTypeAssocLowering<'_, '_>,
     diagnostics: &mut Vec<crate::infer_context::TirTypeError>,
 ) -> Vec<(Name, Ty)> {
     let mut bindings = generics::bind_type_vars(&ctx.iface.generic_params, ctx.interface_args);
@@ -807,14 +811,39 @@ fn lower_interface_type_associated_bindings(
                 .iter()
                 .find(|binding| binding.name == assoc.name)
             {
-                let ty = generics::lower_type_expr_with_generics(
-                    ctx.db,
-                    &binding.ty,
-                    ctx.binding_pkg_items,
-                    ctx.binding_namespace_path,
-                    &bindings,
-                    diagnostics,
-                );
+                // The binding value may project `Self.Assoc` onto the requiring interface (a
+                // `requires I<Item = Self.Item>` clause), so lower it through a context that
+                // resolves `Self`, then substitute the realized generics / associated types.
+                let ty = if let Some(self_bound) = &ctx.self_bound {
+                    let bounds: FxHashMap<Name, baml_type::Interface> =
+                        std::iter::once((Name::new("Self"), self_bound.clone())).collect();
+                    let generic_params: Vec<Name> = bindings
+                        .keys()
+                        .cloned()
+                        .chain(std::iter::once(Name::new("Self")))
+                        .collect();
+                    let scope = crate::lower_type_expr::ScopeCtx {
+                        db: ctx.db,
+                        package_items: ctx.binding_pkg_items,
+                        ns_context: ctx.binding_namespace_path,
+                        generic_params: &generic_params,
+                        bounds: &bounds,
+                        self_ty: Some(Ty::TypeVar(Name::new("Self"), TyAttr::default())),
+                    };
+                    generics::substitute_ty(
+                        &crate::lower_type_expr::lower_type_expr(&binding.ty, &scope, diagnostics),
+                        &bindings,
+                    )
+                } else {
+                    generics::lower_type_expr_with_generics(
+                        ctx.db,
+                        &binding.ty,
+                        ctx.binding_pkg_items,
+                        ctx.binding_namespace_path,
+                        &bindings,
+                        diagnostics,
+                    )
+                };
                 bindings.insert(assoc.name.clone(), ty.clone());
                 return Some((assoc.name.clone(), ty));
             }
@@ -1637,6 +1666,11 @@ pub fn interface_closure_locs_with_args_and_assoc<'db>(
             bindings.insert(name.clone(), ty.clone());
         }
 
+        // This interface as a constraint (its associated types pinned to the realized
+        // bindings) — so a required interface's `Item = Self.Item` resolves `Self.Item` here.
+        let self_bound = interface_loc_qtn(db, loc)
+            .map(|qtn| baml_type::Interface::new(qtn, args.clone(), associated_bindings.clone()));
+
         for parent in &iface.requires {
             let Some(parent_loc) = resolve_path_to_interface(
                 db,
@@ -1688,7 +1722,7 @@ pub fn interface_closure_locs_with_args_and_assoc<'db>(
                 _ => (&[][..], &pkg_info.namespace_path),
             };
             let parent_assoc = lower_interface_type_associated_bindings(
-                InterfaceTypeAssocLowering {
+                &InterfaceTypeAssocLowering {
                     db,
                     iface: parent_iface,
                     interface_args: &parent_args,
@@ -1698,6 +1732,7 @@ pub fn interface_closure_locs_with_args_and_assoc<'db>(
                     iface_namespace_path: &parent_pkg.namespace_path,
                     binding_namespace_path: parent_binding_ns,
                     outer_bindings: &bindings,
+                    self_bound: self_bound.clone(),
                 },
                 &mut diags,
             );

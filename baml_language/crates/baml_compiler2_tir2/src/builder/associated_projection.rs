@@ -228,6 +228,16 @@ fn determine_interface(
         | Ty::EvolvingMap(..) => return Determination::InvalidBase,
     };
 
+    // An associated type lives on the interface that declares it directly — `requires` is a
+    // bound, not inheritance. So if `root` declares `member` itself, that *is* the projection's
+    // interface; resolve to it without walking the `requires` closure. This avoids re-entering
+    // that closure when it is itself lowering a `requires I<Assoc = Self.Assoc>` binding, and
+    // avoids spuriously flagging the requirer and a required interface that re-declares the
+    // same-named associated type as ambiguous.
+    if interface_declares_member(ctx.db(), &root.name, member) {
+        return Determination::Determined(root);
+    }
+
     let declarers = closure_declarers(ctx.db(), &root, member);
     match declarers.len() {
         0 => Determination::Undeclared {

@@ -1139,6 +1139,90 @@ mod tests {
         );
     }
 
+    // A `requires I<Assoc = Self.Assoc>` clause must realize the required interface's associated
+    // binding to the enclosing interface's own associated type: `Iterator<Item = int> requires
+    // Iterable<Item = Self.Item>` puts `Iterable<Item = int>` in the closure. Characterizes the
+    // `Self.member` handling that the `_with_generics` collapse (S4) must preserve.
+    #[test]
+    fn requires_clause_self_associated_binding_realizes_through_closure() {
+        let db = compile(concat!(
+            "interface Iterable {\n  type Item\n}\n",
+            "interface Iterator requires Iterable<Item = Self.Item> {\n  type Item\n}\n",
+        ));
+        let user = PackageId::new(&db, Name::new("user"));
+        let items = baml_compiler2_ppir::package_items(&db, user);
+        let iface_loc = |name: &str| match items.lookup_type(&[], &Name::new(name)) {
+            Some(baml_compiler2_hir::contributions::Definition::Interface(loc)) => loc,
+            _ => panic!("{name} interface should resolve"),
+        };
+        let iterator = iface_loc("Iterator");
+        let iterable = iface_loc("Iterable");
+
+        let int_ty = Ty::Int {
+            attr: TyAttr::default(),
+        };
+        let closure = crate::interfaces::interface_closure_locs_with_args_and_assoc(
+            &db,
+            iterator,
+            &[],
+            &[(Name::new("Item"), int_ty.clone())],
+            items,
+            &[],
+        );
+        let iterable_entry = closure
+            .iter()
+            .find(|entry| entry.0 == iterable)
+            .expect("Iterable in the requires closure");
+        assert_eq!(
+            iterable_entry.2,
+            vec![(Name::new("Item"), int_ty)],
+            "Iterable's `Item` must realize to `int` through `Self.Item`",
+        );
+    }
+
+    // A `Self.Assoc` nested inside a larger type (`Item = Self.Item[]`) must realize too — this
+    // is the case handled by `_with_generics`' structural recursion, which the S4 collapse
+    // replaces with `lower_type_expr`.
+    #[test]
+    fn requires_clause_nested_self_associated_binding_realizes_through_closure() {
+        let db = compile(concat!(
+            "interface Iterable {\n  type Item\n}\n",
+            "interface Iterator requires Iterable<Item = Self.Item[]> {\n  type Item\n}\n",
+        ));
+        let user = PackageId::new(&db, Name::new("user"));
+        let items = baml_compiler2_ppir::package_items(&db, user);
+        let iface_loc = |name: &str| match items.lookup_type(&[], &Name::new(name)) {
+            Some(baml_compiler2_hir::contributions::Definition::Interface(loc)) => loc,
+            _ => panic!("{name} interface should resolve"),
+        };
+        let iterator = iface_loc("Iterator");
+        let iterable = iface_loc("Iterable");
+
+        let int_ty = Ty::Int {
+            attr: TyAttr::default(),
+        };
+        let closure = crate::interfaces::interface_closure_locs_with_args_and_assoc(
+            &db,
+            iterator,
+            &[],
+            &[(Name::new("Item"), int_ty.clone())],
+            items,
+            &[],
+        );
+        let iterable_entry = closure
+            .iter()
+            .find(|entry| entry.0 == iterable)
+            .expect("Iterable in the requires closure");
+        assert_eq!(
+            iterable_entry.2,
+            vec![(
+                Name::new("Item"),
+                Ty::List(Box::new(int_ty), TyAttr::default()),
+            )],
+            "Iterable's `Item` must realize to `int[]` through `Self.Item[]`",
+        );
+    }
+
     #[test]
     fn substitute_paths_recurses_into_function_type() {
         let type_expr = TypeExpr::Function {
