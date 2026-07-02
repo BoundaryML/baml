@@ -44,6 +44,7 @@ pub mod signature;
 pub mod throw_inference;
 pub mod throws_analysis;
 pub mod ty;
+pub mod type_context;
 pub mod user_facing;
 
 // ── Db trait ──────────────────────────────────────────────────────────────────

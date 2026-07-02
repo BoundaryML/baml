@@ -35,6 +35,7 @@ use crate::{
     package_interface::PackageResolutionContext,
     throws_analysis::ThrowsAnalysisContext,
     ty::{Freshness, FunctionParamMode, FunctionParamTy, MediaKind, PrimitiveType, Ty, TyAttr},
+    type_context::{GlobalTypeContext, TypeVarBounds},
 };
 
 pub(crate) mod associated_projection;
@@ -506,66 +507,56 @@ struct OptionalCallContext<'a> {
     is_method_call: bool,
 }
 
-/// Adapter exposing a [`TypeInferenceBuilder`]'s registries to the canonical
-/// type algebra in [`baml_type::normalize`].
+/// Adapter feeding the canonical type algebra in [`baml_type::normalize`] from a
+/// per-scope [`TypeInferenceBuilder`].
 ///
-/// The algebra owns the structural reasoning (union absorption, recursion,
-/// variance); this supplies the nominal facts it cannot derive on its own. Each
-/// method delegates to the builder's existing resolution paths so the canonical
-/// checker agrees with the builder's own `is_subtype`/`types_equivalent` on the
-/// facts they share. Bound obligations inside `implements_interface` are proven
-/// by the builder's `is_subtype` (the oracle boundary), not re-derived here.
+/// The nominal facts the algebra needs are entirely global (see
+/// [`GlobalTypeContext`]); this wrapper only supplies the builder's scope — its
+/// resolution context, alias map, and type-variable bounds — so every method
+/// delegates to a [`GlobalTypeContext`] via [`Self::as_global`]. It exists so
+/// call sites holding a builder keep a zero-cost `NormalizeCtx(self)` handle;
+/// the two are one implementation and never disagree.
 struct NormalizeCtx<'a, 'db>(&'a TypeInferenceBuilder<'db>);
+
+impl<'a, 'db> NormalizeCtx<'a, 'db> {
+    /// The builder-free view of this scope, borrowing the builder's global
+    /// inputs. The bounds are the builder's `Ty`-typed side table, read through
+    /// the legacy [`TypeVarBounds::Tys`] bridge so no `Ty`/`Interface`
+    /// round-trip is needed until that side table is retyped to constraints.
+    #[expect(
+        deprecated,
+        reason = "NormalizeCtx bridges the builder's legacy `Ty`-typed generic_param_bounds"
+    )]
+    fn as_global(&self) -> GlobalTypeContext<'a, 'db> {
+        let b = self.0;
+        GlobalTypeContext {
+            db: b.context.db(),
+            res_ctx: b.res_ctx,
+            aliases: &b.aliases,
+            bounds: TypeVarBounds::Tys(&b.generic_param_bounds),
+        }
+    }
+}
 
 impl baml_type::normalize::TypeContext for NormalizeCtx<'_, '_> {
     fn alias_def(&self, name: &crate::ty::QualifiedTypeName) -> Option<Ty> {
-        crate::inference::alias_def(self.0.context.db(), name)
+        self.as_global().alias_def(name)
     }
 
     fn implements_interface(&self, concrete: &Ty, interface: &baml_type::Interface) -> bool {
-        let b = self.0;
-        // The canonical membership seam: realized inputs resolve through L1's
-        // `get_implements_block` (unique by coherence); non-realized inputs fall to
-        // the symbolic backend. Bound obligations on the realized path are
-        // discharged inside L1, so the `is_subtype` closure is consulted only by
-        // the symbolic fallback.
-        crate::interfaces::implements_interface(
-            b.context.db(),
-            concrete,
-            interface,
-            &b.aliases,
-            |actual, bound| b.is_subtype(actual, bound),
-        )
+        self.as_global().implements_interface(concrete, interface)
     }
 
     fn type_var_bound(&self, name: &Name) -> Vec<baml_type::Interface> {
-        // A type variable's bound is a conjunction of interfaces. The bound side
-        // table currently holds a single lowered bound `Ty` per var (the AST
-        // surfaces only the first interface of an `A & B` bound today); widen it
-        // to the constraint list, dropping any non-interface bound. Dropping is
-        // sound because this is consulted only by the interface-subtype rule: a
-        // non-interface bound (e.g. `T extends int`) constrains `T` by
-        // substitution earlier and never reaches that rule. If multi-interface
-        // bounds ever start being stored, this `.and_then` must collect *all*
-        // interface members so the conjunction isn't silently weakened.
-        self.0
-            .generic_param_bounds
-            .get(name)
-            .and_then(Ty::as_interface)
-            .into_iter()
-            .collect()
+        self.as_global().type_var_bound(name)
     }
 
     fn interface_requires(&self, sub: &baml_type::Interface, sup: &baml_type::Interface) -> bool {
-        let b = self.0;
-        crate::interfaces::interface_requires(b.context.db(), b.res_ctx, sub, sup, |a, c| {
-            b.types_equivalent(a, c)
-        })
+        self.as_global().interface_requires(sub, sup)
     }
 
     fn enum_variants(&self, name: &crate::ty::QualifiedTypeName) -> Option<Vec<Name>> {
-        let variants = self.0.lookup_enum_variants(name);
-        (!variants.is_empty()).then_some(variants)
+        self.as_global().enum_variants(name)
     }
 }
 
