@@ -67,17 +67,23 @@ pub enum Hir2Diagnostic {
     DuplicatePatternBinding { name: Name, sites: Vec<TextRange> },
     /// A class destructure names the same field more than once.
     DuplicatePatternField { name: Name, sites: Vec<TextRange> },
-    /// Two or more fields of a class serialize to the same JSON key — either
-    /// two fields share an `@alias("k")`, or one field's name equals another
-    /// field's `@alias`. Because an aliased field's real name is never used for
-    /// matching (see `bex_sap`'s `AnnotatedField::key_matches`), such fields are
-    /// indistinguishable in the serialized schema: `ctx.output_format` renders
-    /// duplicate keys and only one field can ever be populated at parse time.
+    /// Two or more members of a class or enum serialize to the same JSON key —
+    /// either two members share an `@alias("k")`, or one member's name equals
+    /// another member's `@alias`. Because an aliased member's real name is never
+    /// used for matching (see `bex_sap`'s `AnnotatedField::key_matches`), such
+    /// members are indistinguishable in the serialized schema: `ctx.output_format`
+    /// renders duplicate keys and only one member can ever be populated at parse
+    /// time (for classes) or produced during parsing (for enum variants).
     ///
     /// `key` is the shared serialized key. `sites` lists the name span of every
-    /// contributing field in source order; the first is treated as the original
-    /// and the rest as duplicates.
-    DuplicateFieldAlias { key: String, sites: Vec<TextRange> },
+    /// contributing member in source order; the first is treated as the original
+    /// and the rest as duplicates. `container` is the kind of declaration the
+    /// collision occurs in (`"class"` or `"enum"`), used only for the message.
+    DuplicateFieldAlias {
+        key: String,
+        sites: Vec<TextRange>,
+        container: &'static str,
+    },
     /// An `Or` pattern's alternatives don't all bind the same name set.
     /// A name introduced in some alternatives but not others would only
     /// sometimes be in scope in the arm body — semantically incoherent.
@@ -432,12 +438,16 @@ impl Hir2Diagnostic {
                 }
                 diag.with_phase(DiagnosticPhase::Hir)
             }
-            Hir2Diagnostic::DuplicateFieldAlias { key, sites } => {
+            Hir2Diagnostic::DuplicateFieldAlias {
+                key,
+                sites,
+                container,
+            } => {
                 let first = sites.first().copied().unwrap_or_default();
                 let rest = sites.get(1..).unwrap_or(&[]);
                 let mut diag = Diagnostic::error(
                     DiagnosticId::DuplicateFieldAlias,
-                    format!("Duplicate serialized key `{key}` in class"),
+                    format!("Duplicate serialized key `{key}` in {container}"),
                 )
                 .with_secondary(
                     Span {
