@@ -1536,6 +1536,132 @@ mod tests {
         );
     }
 
+    /// Lower `T.member` where `T` is an in-scope type variable bounded by the named
+    /// interfaces (`&[]` = declared but unbounded), each a bare constraint.
+    fn lower_tvar_projection(
+        db: &TestDb,
+        tvar: &str,
+        bound_names: &[&str],
+        member: &str,
+    ) -> (Ty, Vec<TirTypeError>) {
+        let items = baml_compiler2_ppir::package_items(db, PackageId::new(db, Name::new("user")));
+        let generic_params = [Name::new(tvar)];
+        let conjunction: Vec<baml_type::Interface> = bound_names
+            .iter()
+            .map(|name| {
+                baml_type::Interface::new(
+                    QualifiedTypeName::new(Name::new("user"), vec![], Name::new(*name)),
+                    vec![],
+                    vec![],
+                )
+            })
+            .collect();
+        let mut bounds = TypeVarBoundsMap::default();
+        if !conjunction.is_empty() {
+            bounds.insert(Name::new(tvar), conjunction);
+        }
+        let ctx = ScopeCtx {
+            db,
+            package_items: items,
+            ns_context: &[],
+            generic_params: &generic_params,
+            bounds: &bounds,
+            self_ty: None,
+        };
+        let expr = TypeExpr::AssociatedTypeProjection {
+            base: Box::new(path(tvar)),
+            interface: None,
+            member: Name::new(member),
+            attrs: vec![],
+        };
+        let mut diags = Vec::new();
+        let ty = lower_type_expr(&expr, &ctx, &mut diags);
+        (ty, diags)
+    }
+
+    // A declared-but-unbounded type variable cannot be proven to implement any
+    // interface, so its projection is unknown — reported against the variable itself.
+    #[test]
+    fn unbounded_type_var_projection_is_unknown_naming_the_var() {
+        let db = compile("interface HasItem {\n  type Item\n}\n");
+        let (ty, diags) = lower_tvar_projection(&db, "T", &[], "Item");
+        assert!(matches!(ty, Ty::Error { .. }), "got {ty:?}");
+        let diag = diags
+            .iter()
+            .find(|d| matches!(d, TirTypeError::UnknownAssociatedType { .. }))
+            .unwrap_or_else(|| panic!("expected an unknown-member diagnostic, got {diags:?}"));
+        assert_eq!(
+            diag.to_string(),
+            "unknown associated type `Item` for type variable `T` (no interface bound)"
+        );
+    }
+
+    // A bounded type variable whose bound does not declare the member is unknown,
+    // reported against the bound (the interface to fix).
+    #[test]
+    fn bounded_type_var_projection_without_member_is_unknown_against_bound() {
+        let db = compile("interface HasItem {\n  type Item\n}\n");
+        let (ty, diags) = lower_tvar_projection(&db, "T", &["HasItem"], "Missing");
+        assert!(matches!(ty, Ty::Error { .. }), "got {ty:?}");
+        let diag = diags
+            .iter()
+            .find(|d| matches!(d, TirTypeError::UnknownAssociatedType { .. }))
+            .unwrap_or_else(|| panic!("expected an unknown-member diagnostic, got {diags:?}"));
+        assert_eq!(
+            diag.to_string(),
+            "unknown associated type `Missing` for interface `HasItem`"
+        );
+    }
+
+    // Both arms of an intersection bound (`T: A & B`) declaring the same member make
+    // the projection ambiguous — it must be qualified `(T as A).member`.
+    #[test]
+    fn type_var_projection_ambiguous_across_conjunction_bounds() {
+        let db = compile(concat!(
+            "interface A {\n  type Item\n}\n",
+            "interface B {\n  type Item\n}\n",
+        ));
+        let (ty, diags) = lower_tvar_projection(&db, "T", &["A", "B"], "Item");
+        assert!(matches!(ty, Ty::Error { .. }), "got {ty:?}");
+        assert!(
+            diags.iter().any(|d| matches!(
+                d,
+                TirTypeError::AmbiguousAssociatedTypeProjection { member, .. }
+                    if member.as_str() == "Item"
+            )),
+            "expected an ambiguity diagnostic, got {diags:?}"
+        );
+    }
+
+    // A bounded type variable whose bound declares the member (unpinned) resolves to
+    // a symbolic projection through that bound — not an error.
+    #[test]
+    fn bounded_type_var_projection_resolves_symbolically() {
+        let db = compile("interface HasItem {\n  type Item\n}\n");
+        let (ty, diags) = lower_tvar_projection(&db, "T", &["HasItem"], "Item");
+        assert!(diags.is_empty(), "unexpected diagnostics: {diags:?}");
+        match ty {
+            Ty::AssociatedTypeProjection {
+                base,
+                interface,
+                member,
+                ..
+            } => {
+                assert!(matches!(*base, Ty::TypeVar(ref n, _) if n.as_str() == "T"));
+                assert_eq!(
+                    interface
+                        .expect("interface determined")
+                        .name
+                        .name()
+                        .as_str(),
+                    "HasItem"
+                );
+                assert_eq!(member.as_str(), "Item");
+            }
+            other => panic!("expected a symbolic T.Item projection, got {other:?}"),
+        }
+    }
+
     #[test]
     fn substitute_paths_recurses_into_function_type() {
         let type_expr = TypeExpr::Function {

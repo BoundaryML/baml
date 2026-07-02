@@ -93,9 +93,9 @@ pub(crate) fn lower_projection(
             });
             error_ty()
         }
-        // Undeterminable here but not ill-formed: a type variable whose bound is
-        // out of scope, a concrete or chained base awaiting impl-based resolution,
-        // or a base/qualifier that already errored upstream. Lower to `Ty::Error`
+        // Undeterminable here but not ill-formed: a chained base awaiting its inner
+        // resolution, a base that cannot carry a projection, or a base/qualifier (or
+        // out-of-scope type variable) that resolves elsewhere. Lower to `Ty::Error`
         // without a fresh diagnostic.
         Determination::Deferred | Determination::InvalidBase | Determination::Poisoned => {
             error_ty()
@@ -122,13 +122,10 @@ enum Determination {
     /// More than one distinct interface in scope declares `member`; the projection
     /// must be disambiguated with an explicit `(base as I).member`.
     Ambiguous(Vec<baml_type::Interface>),
-    /// The interface cannot be determined in this scope, but the projection is not
-    /// ill-formed: a type variable with no bound in scope, or a concrete/chained
-    /// base whose resolution is impl-based.
-    #[deprecated = "placeholder scaffolding: a bounded type variable must resolve through its \
-        bound's closure or be an error (projections are nominal, not structural). Remove once \
-        every typevar-projection lowering site threads its bounds and the concrete/chained \
-        impl-based path lands."]
+    /// The interface cannot be determined yet, but the projection is not ill-formed:
+    /// a chained base (`T.A.B`) whose inner projection must resolve first.
+    #[deprecated = "placeholder scaffolding: a chained projection must resolve through the inner \
+        associated type's declared bound (or be an error). Remove once the chained path lands."]
     Deferred,
     /// `base` is a kind that cannot carry an associated-type projection.
     InvalidBase,
@@ -163,24 +160,39 @@ fn determine_interface(
         };
     }
 
-    // Unqualified `base.member`: pick the interface(s) to search by the base's
-    // kind. Exhaustive — every kind is classified, never silently dropped.
-    let root = match &base {
-        // An interface existential is its own search root.
+    // Unqualified `base.member`: pick the interface root(s) to search by the base's
+    // kind, then resolve through their `requires`-closures. Exhaustive — every kind
+    // is classified, never silently dropped.
+    match &base {
+        // An interface existential is its own (single) search root.
         Ty::Interface(qtn, args, assoc, _) => {
-            baml_type::Interface::new(qtn.clone(), args.clone(), assoc.clone())
+            let root = baml_type::Interface::new(qtn.clone(), args.clone(), assoc.clone());
+            let container = AssocContainer::Interface(root.name.clone());
+            resolve_through_roots(ctx.db(), vec![root], member, container)
         }
-        // A bounded type variable searches its bound interface's closure. No bound
-        // in scope ⇒ unbounded *as far as this scope knows* ⇒ deferred.
-        Ty::TypeVar(name, _) => {
-            match ctx
-                .type_var_bounds(name)
-                .and_then(|bounds| bounds.first().cloned())
-            {
-                Some(interface) => interface,
-                None => return Determination::Deferred,
+        // A type variable searches the closure of *every* interface in its bound
+        // conjunction (`T extends A & B`). No bound at all means it cannot be proven
+        // to implement any interface, so no interface can declare `member`.
+        Ty::TypeVar(name, _) => match ctx.type_var_bounds(name) {
+            // A `Ty::TypeVar` projection base is always an in-scope generic parameter — a
+            // bare path lowers to a type variable only when it *is* one, and a rigid `Self`
+            // receiver is registered in `generic_params` wherever its `self_ty` is set. So
+            // this is unreachable; if a lowering site ever sets a type variable / `Self`
+            // receiver without threading it into `generic_params`, that bug surfaces here.
+            None => unreachable!(
+                "type variable `{name}` projected but not in this scope's generic_params — \
+                 a lowering site failed to thread it"
+            ),
+            // Declared but genuinely unbounded.
+            Some(bounds) if bounds.is_empty() => Determination::Undeclared {
+                container: AssocContainer::TypeVar(name.clone()),
+            },
+            Some(bounds) => {
+                // Report against the first bound if none declares `member`.
+                let container = AssocContainer::Interface(bounds[0].name.clone());
+                resolve_through_roots(ctx.db(), bounds.into_vec(), member, container)
             }
-        }
+        },
         // Concrete receivers resolve through their own impls: an associated type
         // lives on a *separate* `impl I for C` (interfaces are bounds, not
         // inheritance), found via the visible impl set rather than any closure.
@@ -196,15 +208,15 @@ fn determine_interface(
         | Ty::Uint8Array { .. }
         | Ty::Media(..)
         | Ty::Literal(..)
-        | Ty::EnumVariant(..) => return determine_concrete(ctx, &base, member),
+        | Ty::EnumVariant(..) => determine_concrete(ctx, &base, member),
         // A chained projection base (`T.A.B`) needs its inner projection resolved first.
-        Ty::AssociatedTypeProjection { .. } => return Determination::Deferred,
+        Ty::AssociatedTypeProjection { .. } => Determination::Deferred,
         // Already-errored bases: propagate without a fresh diagnostic.
         Ty::Error { .. } | Ty::Unknown { .. } | Ty::BuiltinUnknown { .. } => {
-            return Determination::Poisoned;
+            Determination::Poisoned
         }
         // A surviving alias means the alias map was incomplete; degrade conservatively.
-        Ty::TypeAlias(..) => return Determination::Poisoned,
+        Ty::TypeAlias(..) => Determination::Poisoned,
         // Kinds that cannot carry an associated-type projection.
         Ty::Union(..)
         | Ty::Future(..)
@@ -218,23 +230,45 @@ fn determine_interface(
         | Ty::Void { .. }
         | Ty::Null { .. }
         | Ty::EvolvingList(..)
-        | Ty::EvolvingMap(..) => return Determination::InvalidBase,
-    };
-
-    // An associated type lives on the interface that declares it directly — `requires` is a
-    // bound, not inheritance. So if `root` declares `member` itself, that *is* the projection's
-    // interface; resolve to it without walking the `requires` closure. This avoids re-entering
-    // that closure when it is itself lowering a `requires I<Assoc = Self.Assoc>` binding, and
-    // avoids spuriously flagging the requirer and a required interface that re-declares the
-    // same-named associated type as ambiguous.
-    if interface_declares_member(ctx.db(), &root.name, member) {
-        return Determination::Determined(root);
+        | Ty::EvolvingMap(..) => Determination::InvalidBase,
     }
+}
 
-    let declarers = closure_declarers(ctx.db(), &root, member);
+/// Resolve `member` through a set of interface roots — a type variable's bound
+/// conjunction, or a single interface existential.
+///
+/// Each root that declares `member` *directly* is itself a declarer, resolved
+/// without walking its `requires`-closure (`requires` is a bound, not inheritance;
+/// this also avoids re-entering the closure while it lowers a
+/// `requires I<Assoc = Self.Assoc>` binding). Otherwise the root's closure is
+/// searched. Declarers across all roots are deduplicated by realized identity: one
+/// declarer is [`Determination::Determined`], several distinct ones (e.g. both
+/// arms of a `T: A & B` bound declaring `member`) are [`Determination::Ambiguous`],
+/// none is [`Determination::Undeclared`] against `undeclared`.
+fn resolve_through_roots(
+    db: &dyn crate::Db,
+    roots: Vec<baml_type::Interface>,
+    member: &Name,
+    undeclared: AssocContainer,
+) -> Determination {
+    let mut declarers: Vec<baml_type::Interface> = Vec::new();
+    let mut push = |interface: baml_type::Interface| {
+        if !declarers.contains(&interface) {
+            declarers.push(interface);
+        }
+    };
+    for root in roots {
+        if interface_declares_member(db, &root.name, member) {
+            push(root);
+        } else {
+            for declarer in closure_declarers(db, &root, member) {
+                push(declarer);
+            }
+        }
+    }
     match declarers.len() {
         0 => Determination::Undeclared {
-            container: AssocContainer::Interface(root.name),
+            container: undeclared,
         },
         1 => Determination::Determined(
             declarers
