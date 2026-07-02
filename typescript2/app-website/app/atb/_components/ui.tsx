@@ -129,6 +129,17 @@ const PILL: Record<string, string> = {
   approved: "bg-atb-slate-soft text-atb-slate",
   fixing: "bg-atb-slate-soft text-atb-slate",
   cursor: "bg-atb-slate-soft text-atb-slate",
+  dispatching: "bg-atb-slate-soft text-atb-slate",
+  tocursor: "bg-atb-slate-soft text-atb-slate",
+  prprep: "bg-atb-accent-soft text-atb-accent-deep",
+  "pr open": "bg-atb-accent-soft text-atb-accent-deep",
+  pr_ready: "bg-atb-olive-soft text-atb-olive",
+  "pr ready": "bg-atb-olive-soft text-atb-olive",
+  needs_human: "bg-atb-amber-soft text-atb-amber",
+  "needs human": "bg-atb-amber-soft text-atb-amber",
+  redraft: "bg-atb-amber-soft text-atb-amber",
+  redrafting: "bg-atb-amber-soft text-atb-amber",
+  verifying: "bg-atb-accent-soft text-atb-accent-deep",
   closed: "bg-atb-olive-soft text-atb-olive",
   rejected: "bg-atb-oat text-atb-ink-3",
   // workers
@@ -145,6 +156,9 @@ const LIVE_STATES = new Set([
   "generating",
   "syncing",
   "busy",
+  "dispatching",
+  "redrafting",
+  "verifying",
 ]);
 
 export function StatusPill({ status }: { status: string }) {

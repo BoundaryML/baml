@@ -45,9 +45,17 @@ export function feedStatus(issue: {
   switch (issue.status) {
     case "open":
     case "confirmed":
+    case "redraft":
+    case "redrafting":
+    case "verifying":
       return issue.fixSlackTs ? "fixing" : "reported";
     case "approved":
+    case "dispatching":
     case "fixing":
+    case "tocursor":
+    case "prprep":
+    case "pr_ready":
+    case "needs_human":
       return "fixing";
     case "closed":
       return "fixed";

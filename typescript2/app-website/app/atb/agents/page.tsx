@@ -10,16 +10,28 @@ import { timeAgo } from "@/app/atb/_lib/format";
 import { EASE, Skeleton, Stagger, StaggerItem } from "@/app/atb/_components/ui";
 import { useNow } from "@/app/atb/_components/use-now";
 
+// v1 roles are hyphenated, the v2 (pure-BAML) processors register with
+// underscores — both spellings resolve so the roster stays labeled across
+// deployments.
 const ROLE_BLURB: Record<string, string> = {
   "baml-worker": "runs benchmark tasks with the canary baml on PATH",
+  baml_worker: "runs benchmark tasks with the canary baml on PATH",
   "baml-builder": "builds each nightly baml CLI from source",
+  baml_builder: "builds each nightly baml CLI from source",
   "baml-dedup": "merges run findings into deduplicated issues",
+  baml_dedup: "merges run findings into deduplicated issues",
   "baml-redraft": "redrafts issues sent back from review",
+  baml_redraft: "redrafts issues sent back from review",
   "notion-push": "syncs confirmed issues to the Notion boards",
+  linear_push: "mirrors issues onto the Linear board",
   "fix-dispatch": "hands approved issues to Cursor cloud agents",
+  fix_dispatch: "hands approved issues to Cursor cloud agents",
   "cohort-compare": "judges skill arena cohorts and writes the report",
+  cohort_compare: "judges skill arena cohorts and writes the report",
   "changelog-worker": "drafts and critiques release changelogs",
+  changelog_worker: "drafts and critiques release changelogs",
   "bug-verify": "re-checks reported bugs on the latest nightly and closes fixed ones",
+  bug_verify: "re-checks reported bugs on the latest nightly and closes fixed ones",
 };
 
 export default function AgentsPage() {

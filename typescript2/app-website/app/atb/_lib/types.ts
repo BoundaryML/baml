@@ -112,6 +112,14 @@ export type Issue = QueueFields & {
   }>;
   notionPageId?: string | null;
   notionSyncStatus?: string;
+  linearIssueId?: string | null;
+  linearSyncStatus?: string;
+  // fix pipeline (Cursor -> PR -> CI/CodeRabbit)
+  prUrl?: string | null;
+  prNumber?: number | null;
+  checkState?: string | null; // pending | passing | failing
+  coderabbitState?: string | null; // none | blocking | clear
+  fixAttempts?: number | null;
   fixSlackTs?: string | null;
   firstSeenAt: number;
   lastSeenAt: number;
@@ -196,6 +204,7 @@ export type SlimIssue = {
   status: string;
   fixSlackTs?: string | null;
   notionSyncStatus?: string;
+  linearSyncStatus?: string;
   evidenceCount: number;
   // Slim evidence refs (trophy + cited call) so list/run views can link an issue
   // back to the runs that produced it without fetching the full issue doc.

@@ -71,9 +71,27 @@ export default function IssuePage({
             <span className="text-xs text-atb-ink-3">{issue.category}</span>
           )}
           <StatusPill status={issueStatusLabel(issue)} />
-          {issue.notionSyncStatus && (
+          {(issue.linearSyncStatus ?? issue.notionSyncStatus) && (
             <span className="text-xs text-atb-ink-3">
-              notion: {issue.notionSyncStatus}
+              board: {issue.linearSyncStatus ?? issue.notionSyncStatus}
+            </span>
+          )}
+          {issue.prUrl && (
+            <a
+              href={issue.prUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="text-xs text-atb-accent-deep underline underline-offset-2"
+            >
+              PR{issue.prNumber ? ` #${issue.prNumber}` : ""}
+            </a>
+          )}
+          {issue.checkState && (
+            <span className="text-xs text-atb-ink-3">ci: {issue.checkState}</span>
+          )}
+          {issue.coderabbitState && issue.coderabbitState !== "none" && (
+            <span className="text-xs text-atb-ink-3">
+              coderabbit: {issue.coderabbitState}
             </span>
           )}
           <span className="text-xs text-atb-ink-3">

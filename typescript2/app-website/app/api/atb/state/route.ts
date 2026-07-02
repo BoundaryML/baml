@@ -81,6 +81,7 @@ function slimIssue(i: Issue): SlimIssue {
     status: i.status,
     fixSlackTs: i.fixSlackTs ?? null,
     notionSyncStatus: i.notionSyncStatus,
+    linearSyncStatus: i.linearSyncStatus,
     evidenceCount: i.evidence?.length ?? 0,
     evidence: (i.evidence ?? []).map((e) => ({
       trophyId: e.trophyId,
