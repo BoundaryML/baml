@@ -14,11 +14,21 @@ primary_region = 'sjc'
   LLM_BASE_URL = 'http://bammy-2-proxy.internal:9090'
   # LLM_API_KEY (proxy token) + ATB_SERVICE_TOKEN come from secrets.
   # Status-group label ids for /linear/webhook (label change -> issue lifecycle).
-  # Only the labels the handler routes on are needed (no token, no STATE ids).
-  LINEAR_STATUS_APPROVED = 'd85aa831-7a1e-42d0-839c-1f5e69df24b0'
-  LINEAR_STATUS_REDRAFT  = 'f23b1672-4871-4fc4-b005-3ba735086595'
-  LINEAR_STATUS_PR_PREP  = '434a1075-568a-4cc6-b3a5-c7ec055479f0'
-  LINEAR_STATUS_REJECTED = '5bacdd11-2388-40f2-a3d9-cb809fc7d479'
+  # The FULL set: route_linear_status also strips/compares against the group, and
+  # a missing id silently kills its branch (MERGED->closed was dead for exactly
+  # this reason). No token, no STATE ids needed here.
+  LINEAR_STATUS_NOT_STARTED    = '700b8d57-8a43-4186-b472-cb0339138d09'
+  LINEAR_STATUS_APPROVED       = 'd85aa831-7a1e-42d0-839c-1f5e69df24b0'
+  LINEAR_STATUS_TO_CURSOR      = '3f97173c-f313-4252-a22f-0162086cb6b9'
+  LINEAR_STATUS_PR_PREP        = '434a1075-568a-4cc6-b3a5-c7ec055479f0'
+  LINEAR_STATUS_READY_TO_MERGE = 'fd0bc873-0a3e-4e1f-8657-d9288bcd4fab'
+  LINEAR_STATUS_NEEDS_HUMAN    = '8678b003-ae70-4e19-ab30-ab3a12805178'
+  LINEAR_STATUS_REDRAFT        = 'f23b1672-4871-4fc4-b005-3ba735086595'
+  LINEAR_STATUS_MERGED         = '3e52a59e-30c0-4cc8-b9d1-12fd658f00c0'
+  LINEAR_STATUS_REJECTED       = '5bacdd11-2388-40f2-a3d9-cb809fc7d479'
+  # ATB_LINEAR_WEBHOOK_SECRET + ATB_SLACK_SIGNING_SECRET come from secrets:
+  # /linear/webhook verifies Linear-Signature when the secret is set, and
+  # /slack/events REQUIRES the Slack signing secret (fails closed without it).
 
 [http_service]
   internal_port        = 8080
