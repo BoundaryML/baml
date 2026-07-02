@@ -56,8 +56,8 @@ real `gpt-5.4-mini` at milestones. Commit after each ✅.
 ### 6. Opportunistic scenarios (as the surface allows)
 - [x] 03 constrained-decoding — `Constrained` capability with no default; OpenAI degrades to `Unsatisfiable` (the honest B1 story).
 - [ ] 05 multimodal input — image parts in the request (needs PromptAst media threading / a media host helper).
-- [ ] 07 reasoning — `ResponseMeta.reasoning()` projection.
-- [ ] 08 enriched outputs — logprobs/citations as `ResponseMeta` dimensions.
+- [x] 07 reasoning — `ResponseMeta.reasoning()` projection.
+- [x] 08 enriched outputs — logprobs/citations as `ResponseMeta` dimensions.
 
 ## Deferred (need host surface not yet built)
 - Realtime/harness (Phase 4): duplex transport (`baml.ws`/subprocess), `Channel`, lifecycle. Scenarios 22–26, 37–42.

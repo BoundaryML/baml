@@ -824,3 +824,40 @@ async fn constrained_capability_absent_is_runtime_promise() {
         BexExternalValue::String("unsupported".into())
     );
 }
+
+/// Enriched outputs (scenarios 07/08): reasoning + logprobs as `ResponseMeta` dimensions
+/// projected via `call_with`. Reasoning is `Unavailable` on chat; logprobs parse when present.
+#[tokio::test]
+async fn response_meta_reasoning_and_logprobs() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST")).and(path("/chat/completions"))
+        .respond_with(ResponseTemplate::new(200).set_body_string(
+            r#"{"choices":[{"message":{"content":"pong"},"logprobs":{"content":[{"token":"po","logprob":-0.1},{"token":"ng","logprob":-0.2}]}}]}"#))
+        .mount(&server).await;
+    let uri = server.uri();
+
+    let output = baml_test!(&format!(
+        r#"
+        function main() -> string {{
+            let p = baml.ai.OpenAi {{ model: "m", api_key: "k", base_url: "{uri}" }};
+            let r1 = p.call_with<string, string, never>("hi", (m: baml.ai.ResponseMeta) -> string {{
+                match (m.logprobs()) {{
+                    let lps: baml.ai.Logprob[] => "logprobs:" + lps.length().to_string(),
+                    let un: baml.ai.Unavailable => "logprobs_unavailable",
+                }}
+            }}) catch (e) {{ let u: baml.errors.UnknownError => return "ERR1" }};
+            let r2 = p.call_with<string, string, never>("hi", (m: baml.ai.ResponseMeta) -> string {{
+                match (m.reasoning()) {{
+                    let s: string => "reasoning:" + s,
+                    let un: baml.ai.Unavailable => "reasoning_unavailable",
+                }}
+            }}) catch (e) {{ let u: baml.errors.UnknownError => return "ERR2" }};
+            r1.meta + "|" + r2.meta
+        }}
+        "#
+    ));
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("logprobs:2|reasoning_unavailable".into())
+    );
+}

@@ -8,9 +8,19 @@ class OpenAiMessageWire {
     content: string,
 }
 
+class OpenAiLogprobTokenWire {
+    token: string,
+    logprob: float,
+}
+
+class OpenAiLogprobsWire {
+    content: OpenAiLogprobTokenWire[]?,
+}
+
 class OpenAiChoiceWire {
     message: OpenAiMessageWire,
     finish_reason: string?,
+    logprobs: OpenAiLogprobsWire?,
 }
 
 class OpenAiUsageWire {
@@ -58,6 +68,46 @@ class OpenAiResponseMeta {
                     _ => root.ai.Usage { input_tokens: 0, output_tokens: 0 },
                 },
                 _ => root.ai.Usage { input_tokens: 0, output_tokens: 0 },
+            }
+        }
+
+        // Chat Completions does not expose reasoning-token text or citations.
+        function reasoning(self) -> string | root.ai.Unavailable throws never {
+            root.ai.Unavailable { reason: "openai chat completions has no reasoning text" }
+        }
+        function citations(self) -> root.ai.Citation[] | root.ai.Unavailable throws never {
+            root.ai.Unavailable { reason: "openai chat completions has no citations" }
+        }
+
+        // Logprobs are present only if the request set `logprobs: true`.
+        function logprobs(self) -> root.ai.Logprob[] | root.ai.Unavailable throws never {
+            let w = match (self._wire()) {
+                let x: OpenAiResponseWire => x,
+                _ => {
+                    return root.ai.Unavailable { reason: "unparseable response" };
+                },
+            };
+            let c = match (w.choices.at(0)) {
+                let ch: OpenAiChoiceWire => ch,
+                _ => {
+                    return root.ai.Unavailable { reason: "no choices" };
+                },
+            };
+            let lp = match (c.logprobs) {
+                let l: OpenAiLogprobsWire => l,
+                _ => {
+                    return root.ai.Unavailable { reason: "logprobs not requested" };
+                },
+            };
+            match (lp.content) {
+                let toks: OpenAiLogprobTokenWire[] => {
+                    let out: root.ai.Logprob[] = [];
+                    for (let t in toks) {
+                        out.push(root.ai.Logprob { token: t.token, logprob: t.logprob });
+                    }
+                    out
+                },
+                _ => root.ai.Unavailable { reason: "logprobs not requested" },
             }
         }
     }

@@ -19,13 +19,35 @@ class Usage {
     output_tokens: int,
 }
 
-/// Out-of-band response metadata (finish reason, usage, …), normalized lazily by
-/// each provider. Projected via `HttpProvider.call_with`. Metadata accessors are
-/// best-effort (`throws never`): they return a sensible default if the wire shape
-/// is missing, so a projection over them is infallible.
+/// Marks a `ResponseMeta` dimension the provider genuinely cannot supply (vs empty this
+/// call) — the design's `Supported<T> = T | Unsupported`. (Generic type aliases aren't a
+/// language feature yet, so dimensions spell the union inline, e.g. `Logprob[] | Unavailable`.)
+class Unavailable {
+    reason: string,
+}
+
+/// A per-token logprob (scenario 08 enriched output).
+class Logprob {
+    token: string,
+    logprob: float,
+}
+
+/// A grounding/citation reference (scenario 08).
+class Citation {
+    url: string,
+    title: string,
+}
+
+/// Out-of-band response metadata (finish reason, usage, reasoning, logprobs, citations, …),
+/// normalized lazily by each provider. Projected via `HttpProvider.call_with`. Accessors are
+/// best-effort (`throws never`): a missing wire shape yields a default / `Unavailable`, so a
+/// projection over them is infallible.
 interface ResponseMeta {
   function finish_reason(self) -> string throws never
   function usage(self) -> Usage throws never
+  function reasoning(self) -> string | Unavailable throws never
+  function logprobs(self) -> Logprob[] | Unavailable throws never
+  function citations(self) -> Citation[] | Unavailable throws never
 }
 
 /// The bare capability marker. Carries no interaction method — `call`/`call_with`
