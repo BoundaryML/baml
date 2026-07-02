@@ -1848,6 +1848,35 @@ impl<'db> SemanticIndexBuilder<'db> {
     ///
     /// Unknown attributes are silently passed through (e.g. `@stream.*` for PPIR).
     fn validate_schema_attributes(&mut self, attributes: &[ast::RawAttribute]) {
+        // E0014: reject the same single-valued schema attribute appearing more
+        // than once on one declaration. `@alias`, `@description`, and `@skip`
+        // each take effect at most once — for valued attrs the last write
+        // silently wins and the earlier ones are dropped (Linear B-648) — so a
+        // repeat is always a mistake. Only these known single-valued attributes
+        // are checked; repeatable / pass-through attributes (`@stream.*`, etc.)
+        // are intentionally left alone. Occurrences are gathered in first-seen
+        // order so the emitted diagnostics are deterministic.
+        let mut occurrences: Vec<(&str, Vec<TextRange>)> = Vec::new();
+        for attr in attributes {
+            let name = attr.name.as_str();
+            if !matches!(name, "description" | "alias" | "skip") {
+                continue;
+            }
+            if let Some(entry) = occurrences.iter_mut().find(|(n, _)| *n == name) {
+                entry.1.push(attr.span);
+            } else {
+                occurrences.push((name, vec![attr.span]));
+            }
+        }
+        for (name, sites) in occurrences {
+            if sites.len() >= 2 {
+                self.diagnostics.push(Hir2Diagnostic::DuplicateAttribute {
+                    attr_name: name.to_string(),
+                    sites,
+                });
+            }
+        }
+
         for attr in attributes {
             match attr.name.as_str() {
                 "description" | "alias" => {
