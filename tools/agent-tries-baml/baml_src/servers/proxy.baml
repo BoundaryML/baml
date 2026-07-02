@@ -171,7 +171,7 @@ function run_check(cr: CheckBamlRequest) -> baml.http.Response {
         };
     }
 
-    let res = run_capture("sh", ["-c", cr.command], staging, null, cr.timeout_secs * 1000, null, false);
+    let res = run_capture("sh", ["-c", cr.command], staging, null, cr.timeout_secs * 1000, null, false, null);
     let result = CheckBamlResult {
         check_id: cr.check_id,
         exit_code: res.exit_code,
@@ -232,9 +232,22 @@ function run_agent(rr: RunAgentRequest) -> baml.http.Response {
         null => invocation_timeout_secs() * 1000,
     };
 
+    // Install + resolve the baml toolchain the AGENT-UNDER-TEST should use (the
+    // latest nightly for a channel spec, or a pinned concrete version), so BAML
+    // fixes are picked up per-run with no image rebuild. The service's OWN baml
+    // (the image PATH) is never touched — only the agent's BAML_VERSION is set.
+    let agent_baml = ensure_agent_baml(
+        match (rr.baml_version) {
+            let v: string => v,
+            null => "",
+        },
+    );
+
     // OAuth mode: scrub ANTHROPIC_API_KEY so the CLI uses its persisted login.
     let scrub = anthropic_api_key() == "";
-    let res = run_capture(claude_bin(), args, staging, null, timeout_ms, rr.prompt, scrub);
+    let t0 = baml.sys.now_ms();
+    let res = run_capture(claude_bin(), args, staging, null, timeout_ms, rr.prompt, scrub, agent_baml);
+    let wall_ms = baml.sys.now_ms() - t0;
 
     let session = parse_claude_session(res.stdout);
     // The real transcript: read claude's session jsonl and render it terminal-style
@@ -256,17 +269,20 @@ function run_agent(rr: RunAgentRequest) -> baml.http.Response {
         stderr_tail: tail(res.stderr, 4000),
         turns: session.turns,
         tool_calls: session.tool_calls,
-        api_calls: null,
+        // Each assistant turn is one Messages API round-trip; turns is the best
+        // available proxy for api_calls (the CLI summary has no separate counter).
+        api_calls: session.turns,
         input_tokens: session.input_tokens,
         output_tokens: session.output_tokens,
         total_tokens: session.total_tokens,
         cache_read_tokens: session.cache_read_tokens,
         cache_write_tokens: session.cache_write_tokens,
-        wall_clock_ms: null,
+        wall_clock_ms: wall_ms,
         estimated_cost_usd: cost_of(rr, session),
-        turn_log: null,
+        turn_log: session_turn_log(staging, session.session_id),
         post_files: collect_post_files(staging),
         skill_installed: null,
+        baml_version: nz(agent_baml),
     };
     let body = baml.json.to_string(result) catch (_) {
         _ => "{\"cell_id\":\"" + rr.cell_id + "\",\"status\":\"error\"}"
@@ -294,6 +310,61 @@ function or_zero(v: int?) -> int {
         let n: int => n,
         null => 0,
     };
+}
+
+// ---- agent-under-test baml toolchain (install latest per run) --------------
+// Install (download, do NOT select) the baml the AGENT-UNDER-TEST should use and
+// return the concrete resolved version. `spec` is a channel ("nightly"/"canary")
+// or a pinned concrete version. The service's own baml — the default toolchain on
+// the image PATH that runs `baml run Proxy`/`Supervisor` — is intentionally left
+// untouched: `install` never changes the selected default. The resolved version is
+// handed to run_capture as BAML_VERSION so ONLY the agent subprocess picks it up.
+//
+// `install` is install-if-stale (a no-op when the build is already cached), so
+// calling it every run is cheap. Returns "" if resolution fails -> the agent
+// falls back to the image's default baml.
+function ensure_agent_baml(spec: string) -> string {
+    let s = spec.trim();
+    if (s == "") {
+        return "";
+    }
+    let cache = baml_cache_dir();
+    let _ = baml.fs.mkdir(cache, baml.fs.MkdirOptions { recursive: true }) catch (_) {
+        _ => null
+    };
+    let res = run_capture("baml", ["toolchain", "install", s], cache, null, 300000, null, false, null);
+    let out = res.stdout + "\n" + res.stderr;
+    // A pinned concrete version resolves to itself; a channel resolves to whatever
+    // `install` reported it downloaded.
+    if (s == "nightly" || s == "canary") {
+        return parse_channel_version(out, s);
+    }
+    return s;
+}
+
+// Pull the concrete version out of `baml toolchain install` output. The install
+// line is `installed BAML toolchain <version>`; we also tolerate a status-style
+// `latest <channel>: <version>` line as a fallback.
+function parse_channel_version(out: string, channel: string) -> string {
+    for (let line in out.split("\n")) {
+        let t = line.trim();
+        if (t.starts_with("installed BAML toolchain ")) {
+            return t.substring(25, t.length()) catch (_) {
+                _ => ""
+            };
+        }
+    }
+    let marker = "latest " + channel + ":";
+    for (let line in out.split("\n")) {
+        let t = line.trim();
+        if (t.starts_with(marker)) {
+            return match (t.split(":").at(1)) {
+                let v: string => v.trim(),
+                null => "",
+            };
+        }
+    }
+    return "";
 }
 
 function tail(s: string, n: int) -> string {
@@ -391,7 +462,7 @@ function claude_messages(req: baml.http.Request) -> baml.http.Response {
             // error_max_turns -> garbage). OAuth (scrub key), schema-bearing prompt
             // on stdin. No --permission-mode (bypassPermissions is rejected as root).
             let args = ["-p", "-", "--output-format", "json", "--model", mr.model, "--max-turns", "1", "--tools", ""];
-            let res = run_capture(claude_bin(), args, staging, null, 300000, prompt, anthropic_api_key() == "");
+            let res = run_capture(claude_bin(), args, staging, null, 300000, prompt, anthropic_api_key() == "", null);
             let line = find_last_json_line(res.stdout);
             let out = baml.json.from_string<ClaudeOut>(line) catch (_) {
                 _ => ClaudeOut { result: null }

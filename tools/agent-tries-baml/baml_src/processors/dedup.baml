@@ -9,6 +9,7 @@
 class IssueEvidence {
     trophyId: string,
     call_index: int?,
+    turn_index: int?, // anchors the dashboard run link (/runs/<id>#turn-N)
 }
 
 class IssueCreate {
@@ -23,6 +24,41 @@ class IssueCreate {
     linearSyncStatus: string,
     firstSeenAt: int,
     lastSeenAt: int,
+}
+
+// One currently-open issue, as handed to the Dedup LLM ({id, kind, title}) so it
+// can match a re-found finding to an existing issue and emit it with that `id`.
+class OpenIssueRef {
+    _id: string?,
+    kind: string?,
+    title: string?,
+}
+
+class OpenIssueOut {
+    id: string,
+    kind: string,
+    title: string,
+}
+
+// Minimal read of an existing issue's evidence (to append to, not replace). Read
+// as raw json[] — Convex serializes every number as a float, so a typed read with
+// `call_index: int?` would fail to parse the stored 0.0 and silently drop ALL the
+// existing evidence. json[] round-trips it verbatim.
+class IssueEvidenceRead {
+    evidence: json[]?,
+}
+
+// Patch applied when extending a matched issue: append evidence, refresh the
+// write-up, bump lastSeenAt, and mark the Linear mirror dirty so the card
+// re-renders (ports _upsert's merge path — without the dirty flip an extended
+// issue never re-syncs to the board).
+class ExtendPatch {
+    evidence: json[],
+    lastSeenAt: int,
+    linearSyncStatus: string,
+    description: string?,
+    suggestion: string?,
+    repro: string?,
 }
 
 class DedupProcessor {
@@ -84,8 +120,10 @@ class DedupProcessor {
             }
 
             let reports = render_reports(batch);
-            // TODO: fetch real open issues for cross-run dedup; for now treat all as new.
-            let open_json = "[]";
+            // Real cross-run dedup: hand the LLM the currently-open issues so a
+            // re-found finding extends the existing issue (emitted with its `id`)
+            // instead of spawning a near-duplicate (cf. the 5 backtick-bug dupes).
+            let open_json = fetch_open_issues(self.svc, 200);
 
             let result = Dedup(reports, open_json) catch (e) {
                 _ => {
@@ -111,21 +149,46 @@ class DedupProcessor {
         }
     }
 
-    // Class method (outside the implements block): create/merge one issue.
+    // Class method (outside the implements block): create OR extend one issue. When
+    // the Dedup LLM matched the finding to an open issue it carries that issue's
+    // `id` -> extend it; otherwise it's genuinely new -> create.
     function upsert(self, iss: DedupIssue, now: int) -> int {
+        let existing = match (iss.id) {
+            let v: string => v,
+            null => "",
+        };
+        if (existing != "") {
+            return self.extend(existing, iss, now);
+        }
+        return self.create_doc(iss, now);
+    }
+
+    // Evidence entries from a finding (skips entries with no report id).
+    function evidence_of(self, iss: DedupIssue) -> IssueEvidence[] {
         let evidence: IssueEvidence[] = [];
         for (let e in iss.evidence) {
             if (e.report_id != "") {
-                evidence.push(IssueEvidence { trophyId: e.report_id, call_index: e.call_index });
+                evidence
+                    .push(
+                        IssueEvidence {
+                            trophyId: e.report_id,
+                            call_index: e.call_index,
+                            turn_index: e.turn_index,
+                        },
+                    );
             }
         }
+        return evidence;
+    }
+
+    function create_doc(self, iss: DedupIssue, now: int) -> int {
         let doc = IssueCreate {
             kind: iss.kind,
             title: iss.title,
             description: iss.description,
             suggestion: iss.suggestion,
             category: iss.category,
-            evidence: evidence,
+            evidence: self.evidence_of(iss),
             repro: iss.repro,
             status: "open",
             linearSyncStatus: "dirty",
@@ -142,6 +205,115 @@ class DedupProcessor {
         }
         return 0;
     }
+
+    // Extend a matched open issue: append this batch's evidence and bump lastSeenAt.
+    // If the issue vanished (e.g. rejected mid-batch) fall back to a fresh create so
+    // the finding isn't silently dropped.
+    function extend(self, id: string, iss: DedupIssue, now: int) -> int {
+        let raw = self.svc.get("issues", id) catch (_) {
+            _ => null
+        };
+        let cur_raw = match (raw) {
+            let r: string => r,
+            null => "",
+        };
+        if (cur_raw == "") {
+            return self.create_doc(iss, now);
+        }
+        let cur = baml.json.from_string<IssueEvidenceRead>(cur_raw) catch (_) {
+            _ => IssueEvidenceRead { evidence: null }
+        };
+        // Keep the existing evidence verbatim (json[]) and append this batch's new
+        // entries (each typed entry round-tripped through json so the array stays
+        // homogeneous and Convex-float-safe).
+        let merged: json[] = match (cur.evidence) {
+            let ev: json[] => ev,
+            null => [],
+        };
+        for (let e in self.evidence_of(iss)) {
+            let j = baml.json.parse(baml.json.to_string(e) catch (_) { _ => "null" }) catch (_) {
+                _ => 0
+            };
+            merged.push(j);
+        }
+        let patch = baml
+            .json
+            .to_string(
+                ExtendPatch {
+                    evidence: merged,
+                    lastSeenAt: now,
+                    linearSyncStatus: "dirty",
+                    description: nz_str(iss.description),
+                    suggestion: nz_str(iss.suggestion),
+                    repro: iss.repro,
+                },
+            ) catch (_) {
+            _ => ""
+        };
+        if (patch != "") {
+            let _ = self.svc.update("issues", id, patch) catch (_) {
+                _ => ""
+            };
+        }
+        return 0;
+    }
+}
+
+// Statuses an issue counts as open/in-flight for cross-run dedup matching (every
+// non-terminal state; closed/rejected are terminal and excluded).
+function dedup_open_statuses() -> string[] {
+    return [
+        "open",
+        "confirmed",
+        "approved",
+        "dispatching",
+        "tocursor",
+        "prprep",
+        "pr_ready",
+        "verifying",
+        "redraft",
+        "redrafting",
+        "needs_human",
+    ];
+}
+
+// Fetch the currently-open issues as the {id, kind, title} JSON the Dedup prompt
+// expects (per status, capped at `limit`). "[]" when nothing is open.
+function fetch_open_issues(svc: ServiceClient, limit: int) -> string {
+    let outs: OpenIssueOut[] = [];
+    for (let status in dedup_open_statuses()) {
+        let raw = svc.list("issues", "status", status, "by_status_created", limit) catch (_) {
+            _ => "[]"
+        };
+        let issues: OpenIssueRef[] = baml.json.from_string<OpenIssueRef[]>(raw) catch (_) {
+            _ => []
+        };
+        for (let iss in issues) {
+            let id = match (iss._id) {
+                let v: string => v,
+                null => "",
+            };
+            if (id != "") {
+                outs
+                    .push(
+                        OpenIssueOut {
+                            id: id,
+                            kind: match (iss.kind) {
+                                let k: string => k,
+                                null => "",
+                            },
+                            title: match (iss.title) {
+                                let t: string => t,
+                                null => "",
+                            },
+                        },
+                    );
+            }
+        }
+    }
+    return baml.json.to_string(outs) catch (_) {
+        _ => "[]"
+    };
 }
 
 // Render a batch of trophy JSONs into the reports.md the Dedup prompt expects.

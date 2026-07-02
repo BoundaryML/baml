@@ -51,15 +51,38 @@ function parse_claude_session(stdout: string) -> ClaudeSession {
             }
         },
     };
+    // Claude's summary never emits a pre-summed total — synthesize it from the
+    // components so downstream cost/stats aren't stranded on a null.
+    let total = match (usage.total_tokens) {
+        let t: int => t,
+        null => {
+            let sum = t_or_zero(usage.input_tokens)
+                + t_or_zero(usage.output_tokens)
+                + t_or_zero(usage.cache_read_input_tokens)
+                + t_or_zero(usage.cache_creation_input_tokens);
+            if (sum == 0) {
+                null
+            } else {
+                sum
+            }
+        },
+    };
     return ClaudeSession {
         turns: summary.num_turns,
         tool_calls: summary.num_tool_calls,
         session_id: summary.session_id,
         input_tokens: usage.input_tokens,
         output_tokens: usage.output_tokens,
-        total_tokens: usage.total_tokens,
+        total_tokens: total,
         cache_read_tokens: usage.cache_read_input_tokens,
         cache_write_tokens: usage.cache_creation_input_tokens,
+    };
+}
+
+function t_or_zero(v: int?) -> int {
+    return match (v) {
+        let n: int => n,
+        null => 0,
     };
 }
 
@@ -103,6 +126,40 @@ function render_session(staging: string, session_id: string?, fallback: string) 
         return fallback;
     }
     return render_terminal_transcript(jsonl);
+}
+
+// The structured per-turn log for a run's session jsonl, as raw json rows (the
+// wire/type shape the dashboard's "Turns" tab reads; typed TurnRow[]? fields
+// serialize elements to null, so the round-trip through json is deliberate).
+// Null when the session file is missing or yields no turns.
+function session_turn_log(staging: string, session_id: string?) -> json[]? {
+    let sid = match (session_id) {
+        let s: string => s,
+        null => "",
+    };
+    if (sid == "") {
+        return null;
+    }
+    let jsonl = baml.fs.read(session_log_path(staging, sid)) catch (_) {
+        _ => ""
+    };
+    if (jsonl == "") {
+        return null;
+    }
+    let rows = parse_turn_log(jsonl);
+    if (rows.length() == 0) {
+        return null;
+    }
+    let raw = baml.json.to_string(rows) catch (_) {
+        _ => "[]"
+    };
+    let out: json[] = baml.json.from_string<json[]>(raw) catch (_) {
+        _ => []
+    };
+    if (out.length() == 0) {
+        return null;
+    }
+    return out;
 }
 
 // ---- terminal transcript renderer ------------------------------------------

@@ -97,10 +97,18 @@ class WorkerProcessor {
             } else {
                 worker_system_prompt()
             };
+            // Warm intent: a per-task pin wins; otherwise install the LATEST of the
+            // configured channel (baml_channel(), default "nightly") so the agent
+            // picks up BAML fixes with no image rebuild. The proxy resolves this to a
+            // concrete version and returns it on the result (recorded on the trophy).
+            // Cold runs onboard a frozen baml (the onboarding flow is under test).
             let baml_version = if (cold) {
                 null
             } else {
-                task.bamlVersion
+                match (task.bamlVersion) {
+                    let v: string => v,
+                    null => baml_channel(),
+                }
             };
 
             // Warm runs onboard from the LATEST baml-skill (pulled from GitHub),
@@ -170,8 +178,13 @@ class WorkerProcessor {
             let doc = TrophyDoc {
                 taskId: task_id,
                 outcome: outcome,
-                bamlVersion: baml_version,
-                metrics: metrics_of(result),
+                // Prefer the CONCRETE version the proxy resolved + ran the agent on;
+                // fall back to the requested intent (channel/pin) if absent.
+                bamlVersion: match (result.baml_version) {
+                    let v: string => v,
+                    null => baml_version,
+                },
+                metrics: metrics_of(result, self.model),
                 summary: report.summary,
                 whatWentWell: report.what_went_well,
                 whatFailed: report.what_failed,
@@ -182,14 +195,20 @@ class WorkerProcessor {
                 skillUsed: nz_str(skill_src),
                 skillVersion: nz_str(skill_ver),
                 transcriptStorageId: nz_str(transcript_sid),
-                // The dashboard only renders the transcript section when turnLog is
-                // non-empty, then defaults to the Terminal tab (the rendered blob).
-                // Stamp a single placeholder turn so a stored transcript always shows;
-                // the structured per-turn log (parse_turn_log) is a follow-up.
-                turnLog: if (transcript_sid == "") {
-                    null
-                } else {
-                    terminal_only_turnlog()
+                // The structured per-turn log the dashboard's "Turns" tab renders,
+                // parsed by the proxy from the session jsonl. When the proxy couldn't
+                // produce one but a transcript blob exists, stamp the single
+                // placeholder turn so the transcript section still shows (defaulting
+                // to the Terminal tab).
+                turnLog: match (result.turn_log) {
+                    let tl: json[] => tl,
+                    null => {
+                        if (transcript_sid == "") {
+                            null
+                        } else {
+                            terminal_only_turnlog()
+                        }
+                    },
                 },
                 cohortId: task.cohortId,
                 status: match (task.cohortId) {
@@ -331,7 +350,12 @@ function terminal_only_turnlog() -> json[] {
     return [turn];
 }
 
-function metrics_of(result: AgentResult) -> Metrics {
+// Build the trophy metric bag from the agent result. Derived stats the proxy
+// can't reliably supply are computed HERE, where the model (hence the rate card)
+// is known: total_tokens (sum of components when the session has no pre-summed
+// value), estimated_cost_usd (worker-side, robust to the rr.prices round-trip),
+// and files_touched / loc_changed (from the collected post_files).
+function metrics_of(result: AgentResult, model: string) -> Metrics {
     return Metrics {
         turns: result.turns,
         tool_calls: result.tool_calls,
@@ -339,17 +363,95 @@ function metrics_of(result: AgentResult) -> Metrics {
         invocations: null,
         input_tokens: result.input_tokens,
         output_tokens: result.output_tokens,
-        total_tokens: result.total_tokens,
+        total_tokens: total_tokens_of(result),
         cache_read_tokens: result.cache_read_tokens,
         cache_write_tokens: result.cache_write_tokens,
         wall_clock_ms: result.wall_clock_ms,
         setup_build_ms: null,
         agent_thinking_ms: null,
         debug_retries: null,
-        estimated_cost_usd: result.estimated_cost_usd,
-        files_touched: null,
-        loc_changed: null,
+        estimated_cost_usd: cost_for(result, model),
+        files_touched: files_touched_of(result),
+        loc_changed: loc_of(result),
     };
+}
+
+function m_or_zero(v: int?) -> int {
+    return match (v) {
+        let n: int => n,
+        null => 0,
+    };
+}
+
+// Claude sessions don't emit a pre-summed total; sum the components when absent.
+function total_tokens_of(result: AgentResult) -> int? {
+    return match (result.total_tokens) {
+        let t: int => t,
+        null => {
+            let sum = m_or_zero(result.input_tokens)
+                + m_or_zero(result.output_tokens)
+                + m_or_zero(result.cache_read_tokens)
+                + m_or_zero(result.cache_write_tokens);
+            if (sum == 0) {
+                null
+            } else {
+                sum
+            }
+        },
+    };
+}
+
+// Prefer the proxy's estimate; else compute it worker-side from the components and
+// the model's rate card (null only when the model has no known prices).
+function cost_for(result: AgentResult, model: string) -> float? {
+    return match (result.estimated_cost_usd) {
+        let c: float => c,
+        null => match (prices_for(model)) {
+            let p: Prices => {
+                compute_cost(
+                    m_or_zero(result.input_tokens),
+                    m_or_zero(result.output_tokens),
+                    m_or_zero(result.cache_read_tokens),
+                    m_or_zero(result.cache_write_tokens),
+                    p,
+                )
+            },
+            null => null,
+        },
+    };
+}
+
+// Count of agent-authored artifacts (the self-report trophy.json doesn't count).
+function files_touched_of(result: AgentResult) -> int? {
+    let n = 0;
+    for (let k in result.post_files.keys()) {
+        if (k != "trophy.json") {
+            n = n + 1;
+        }
+    }
+    if (n == 0) {
+        return null;
+    }
+    return n;
+}
+
+// Lines across the collected artifacts (a post_files-based proxy for loc_changed;
+// we keep full content, not a diff, so this is total authored lines).
+function loc_of(result: AgentResult) -> int? {
+    let total = 0;
+    for (let k in result.post_files.keys()) {
+        if (k != "trophy.json") {
+            let content = match (result.post_files.get(k)) {
+                let c: string => c,
+                null => "",
+            };
+            total = total + content.split("\n").length();
+        }
+    }
+    if (total == 0) {
+        return null;
+    }
+    return total;
 }
 
 function findings_of(report: TrophyReport) -> TrophyFinding[] {

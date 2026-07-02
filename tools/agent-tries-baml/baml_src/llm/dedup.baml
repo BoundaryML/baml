@@ -10,6 +10,9 @@
 class DedupEvidence {
     report_id: string,
     call_index: int?,
+    // The finding's `anchor.turn_index` from the report's Findings json, when
+    // present — it anchors the dashboard's run link to the exact turn.
+    turn_index: int?,
 }
 
 class DedupIssue {
@@ -61,6 +64,7 @@ function Dedup(reports: string, open_issues: string) -> DedupResult {
         - `repro` is how almost every bug-category issue gets its reproduction. When a finding you cite has a `## Minimal artifacts (verified)` block, COPY that block into the issue's `repro` field VERBATIM -- character for character, exactly as it appears in reports (the `$ <command>` line, the `--- file ---` sections, and the `--- output ---` tail). Do NOT reformat it, summarize it, or invent one. Pick the single most relevant verified block when several apply. Omit `repro` only when none of the cited findings has a verified block. The system validates your paste against the real verified repros and drops anything that doesn't match exactly, so copying precisely is what makes it stick. Do NOT put the repro in the `description` -- it renders in its own Reproduction section.
         - Each evidence entry's `report_id` must be a real id from reports.
         - Set `call_index` to the exact `(call N)` number shown for the finding in reports (it links the issue to the finding and is the fallback path for attaching the repro). Use `null` only for a standalone `suggestion` with no specific failing call. Never guess a number you don't see.
+        - Set `turn_index` to the finding's `anchor.turn_index` from the report's Findings json when it is present; `null` otherwise. Never guess.
         - If a report has NO actionable skill/language issue, do not invent one.
 
         # reports
