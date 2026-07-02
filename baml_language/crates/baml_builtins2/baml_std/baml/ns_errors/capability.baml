@@ -45,6 +45,11 @@ interface ToolError {
   function is_network_error(self) -> bool
 }
 
+/// Failures on a live/duplex (realtime) session.
+interface RealtimeError {
+  function is_network_error(self) -> bool
+}
+
 // The capability-negotiation error `Unsupported` (thrown by a companion's `_` arm when
 // the client's provider lacks the requested capability) must be legal on *every*
 // capability channel — so it implements all of them (all classifiers false).
@@ -59,5 +64,9 @@ implements StreamError for Unsupported {
 }
 
 implements ToolError for Unsupported {
+  function is_network_error(self) -> bool { false }
+}
+
+implements RealtimeError for Unsupported {
   function is_network_error(self) -> bool { false }
 }

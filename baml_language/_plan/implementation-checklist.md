@@ -59,6 +59,9 @@ real `gpt-5.4-mini` at milestones. Commit after each ✅.
 - [x] 07 reasoning — `ResponseMeta.reasoning()` projection.
 - [x] 08 enriched outputs — logprobs/citations as `ResponseMeta` dimensions.
 
+### Realtime family (22–26) — ✅ capability + examples (transport stubbed, P8)
+- [x] `Realtime`/`Channel`/`LiveControl` interfaces + `OpenAiRealtime` + negotiation tests.
+
 ## Deferred (need host surface not yet built)
 - Realtime/harness (Phase 4): duplex transport (`baml.ws`/subprocess), `Channel`, lifecycle. Scenarios 22–26, 37–42.
 - Stateful/workflows (Phase 5): sessions/chains/jobs/durable + inbound control-inversion. Scenarios 17–21, 27, 43–47.

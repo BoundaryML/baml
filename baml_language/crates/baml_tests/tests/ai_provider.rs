@@ -861,3 +861,25 @@ async fn response_meta_reasoning_and_logprobs() {
         BexExternalValue::String("logprobs:2|reasoning_unavailable".into())
     );
 }
+
+/// Realtime capability negotiation (scenarios 22–26): a realtime provider matches
+/// `Realtime`/`LiveControl`; an HTTP-only provider does not (no fake `call`, OQ1).
+#[tokio::test]
+async fn realtime_capability_negotiation() {
+    let output = baml_test!(
+        r#"
+        function main() -> string {
+            let rt: baml.ai.Provider = baml.ai.OpenAiRealtime { voice: "alloy", api_key: "k" };
+            let chat: baml.ai.Provider = baml.ai.OpenAi { model: "m", api_key: "k", base_url: null };
+            let a = match (rt) { let r: baml.ai.Realtime => "realtime", _ => "no" };
+            let b = match (chat) { let r: baml.ai.Realtime => "realtime", _ => "no" };
+            let c = match (rt) { let lc: baml.ai.LiveControl => "live", _ => "no" };
+            a + "|" + b + "|" + c
+        }
+        "#
+    );
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("realtime|no|live".into())
+    );
+}
