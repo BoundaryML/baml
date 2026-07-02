@@ -282,6 +282,77 @@ fn type_bindings_for_params(params: &[Name]) -> FxHashMap<Name, Ty> {
         .collect()
 }
 
+/// Lower one generic parameter's `extends` bound expression to its `Ty`, in the
+/// declaration's own scope with the sibling parameters (`type_bindings`) in scope.
+/// A projection *inside* a bound is not itself resolved (no bounds threaded — that
+/// would be circular); shared by the enforcement table and [`env_interface_bounds`].
+fn lower_env_generic_bound(
+    db: &dyn crate::Db,
+    pkg_items: &PackageItems<'_>,
+    ns_context: &[Name],
+    type_bindings: &FxHashMap<Name, Ty>,
+    bound_te: &ast::TypeExpr,
+    diags: &mut Vec<crate::infer_context::TirTypeError>,
+) -> Ty {
+    let generic_params: Vec<_> = type_bindings.keys().cloned().collect();
+    crate::generics::substitute_ty(
+        &crate::lower_type_expr::lower_type_expr(
+            bound_te,
+            &crate::lower_type_expr::ScopeCtx {
+                db,
+                package_items: pkg_items,
+                ns_context,
+                generic_params: &generic_params,
+                bounds: &TypeVarBoundsMap::default(),
+                self_ty: None,
+            },
+            diags,
+        ),
+        type_bindings,
+    )
+}
+
+/// A [`GenericEnv`]'s interface-constraint bounds, for resolving a `T.member`
+/// projection in a type expression lowered against it — the env's lowered
+/// `extends` bounds (interface ones only) plus its `concrete_bounds` (e.g. the
+/// `Self` constraint inside an interface default). The projection view of the
+/// same env that [`install_generic_param_bounds`] installs as the `Ty`-typed
+/// enforcement table; bound-lowering diagnostics are the enforcement path's to
+/// report, so they are discarded here.
+fn env_interface_bounds(
+    db: &dyn crate::Db,
+    pkg_items: &PackageItems<'_>,
+    ns_context: &[Name],
+    env: &GenericEnv,
+) -> TypeVarBoundsMap {
+    let mut bounds = TypeVarBoundsMap::default();
+    let type_bindings = type_bindings_for_params(&env.params);
+    for (name, bound) in env.bound_param_names.iter().zip(env.bound_exprs.iter()) {
+        let Some(bound_te) = bound else {
+            continue;
+        };
+        let mut diags = Vec::new();
+        let bound_ty = lower_env_generic_bound(
+            db,
+            pkg_items,
+            ns_context,
+            &type_bindings,
+            bound_te,
+            &mut diags,
+        );
+        if let Some(constraint) = bound_ty.as_interface() {
+            bounds.entry(name.clone()).or_default().push(constraint);
+        }
+    }
+    for (name, constraint) in &env.concrete_bounds {
+        bounds
+            .entry(name.clone())
+            .or_default()
+            .push(constraint.clone());
+    }
+    bounds
+}
+
 fn install_generic_param_bounds(
     db: &dyn crate::Db,
     builder: &mut TypeInferenceBuilder<'_>,
@@ -297,24 +368,14 @@ fn install_generic_param_bounds(
             continue;
         };
         let mut diags = Vec::new();
-        let bound_ty = {
-            let generic_params: Vec<_> = type_bindings.keys().cloned().collect();
-            crate::generics::substitute_ty(
-                &crate::lower_type_expr::lower_type_expr(
-                    bound_te,
-                    &crate::lower_type_expr::ScopeCtx {
-                        db,
-                        package_items: pkg_items,
-                        ns_context,
-                        generic_params: &generic_params,
-                        bounds: &TypeVarBoundsMap::default(),
-                        self_ty: None,
-                    },
-                    &mut diags,
-                ),
-                &type_bindings,
-            )
-        };
+        let bound_ty = lower_env_generic_bound(
+            db,
+            pkg_items,
+            ns_context,
+            &type_bindings,
+            bound_te,
+            &mut diags,
+        );
         for diag in diags {
             builder.report_at_span(diag, span);
         }
@@ -453,15 +514,15 @@ fn lower_type_expr_at_span_in_env(
     type_expr: &ast::TypeExpr,
     options: TypeExprLoweringOptions,
 ) -> Ty {
-    // The env's params are the in-scope type variables; `Self` resolves through `self_ty`.
-    // Bounds aren't threaded here — this only validates generic-argument bounds, and a bare
-    // type variable carries none to check.
+    // The env's params are the in-scope type variables; `Self` resolves through `self_ty`,
+    // and the env's interface bounds let a `T.member` / `Self.member` projection resolve.
+    let bounds = env_interface_bounds(db, pkg_items, ns_context, env);
     let ctx = crate::lower_type_expr::ScopeCtx {
         db,
         package_items: pkg_items,
         ns_context,
         generic_params: &env.params,
-        bounds: &TypeVarBoundsMap::default(),
+        bounds: &bounds,
         self_ty: options.self_ty,
     };
     let mut diags = Vec::new();
@@ -511,6 +572,9 @@ fn add_lambda_params_to_builder(
     contextual_param_tys: Option<&[FunctionParamTy]>,
 ) {
     let type_bindings = type_bindings_for_params(&env.params);
+    // The lambda's own generic bounds (its env extends the enclosing scope's) let a
+    // `T.member` projection in a parameter type resolve `T`'s declaring interface.
+    let bounds = env_interface_bounds(db, pkg_items, ns_context, env);
     for (i, param) in func_def.params.iter().enumerate() {
         let param_ty = param
             .type_expr
@@ -530,7 +594,7 @@ fn add_lambda_params_to_builder(
                             package_items: pkg_items,
                             ns_context,
                             generic_params: &generic_params,
-                            bounds: &TypeVarBoundsMap::default(),
+                            bounds: &bounds,
                             self_ty: None,
                         },
                         &mut diags,
@@ -1300,6 +1364,12 @@ pub fn infer_scope_types<'db>(
                     }
 
                     if let FunctionBody::Expr(expr_body) = body.as_ref() {
+                        // The method's in-scope interface bounds (its own params, the
+                        // enclosing class/interface's, and `Self`'s constraint) so a
+                        // `T.member` / `Self.member` projection in the receiver pattern,
+                        // interface arguments, or a binding value resolves nominally.
+                        let env_bounds =
+                            env_interface_bounds(db, pkg_items, &pkg_info.namespace_path, &env);
                         // Determine enclosing class name for `self` parameter
                         // resolution and BEP-044 `Self`-type substitution.
                         let enclosing_class_name: Option<Name> =
@@ -1332,7 +1402,7 @@ pub fn infer_scope_types<'db>(
                                             package_items: pkg_items,
                                             ns_context: &pkg_info.namespace_path,
                                             generic_params: &generic_params,
-                                            bounds: &TypeVarBoundsMap::default(),
+                                            bounds: &env_bounds,
                                             self_ty: None,
                                         },
                                         &mut diags,
@@ -1406,7 +1476,7 @@ pub fn infer_scope_types<'db>(
                                                         package_items: pkg_items,
                                                         ns_context: &pkg_info.namespace_path,
                                                         generic_params: &generic_params,
-                                                        bounds: &TypeVarBoundsMap::default(),
+                                                        bounds: &env_bounds,
                                                         self_ty: None,
                                                     },
                                                     &mut arg_diags,
@@ -1441,7 +1511,7 @@ pub fn infer_scope_types<'db>(
                                             package_items: pkg_items,
                                             ns_context: &pkg_info.namespace_path,
                                             generic_params: &binding_generic_params,
-                                            bounds: &TypeVarBoundsMap::default(),
+                                            bounds: &env_bounds,
                                             self_ty: self_ty.clone(),
                                         };
                                         let mut binding_diags = Vec::new();
@@ -1473,7 +1543,12 @@ pub fn infer_scope_types<'db>(
                                                         package_items: pkg_items,
                                                         ns_context: &iface_ns,
                                                         generic_params: &generic_params,
-                                                        bounds: &TypeVarBoundsMap::default(),
+                                                        // Defaults are the interface's own
+                                                        // exprs — its declared param bounds apply.
+                                                        bounds:
+                                                            crate::lower_type_expr::interface_generic_param_bounds(
+                                                                db, iface_loc,
+                                                            ),
                                                         self_ty: None,
                                                     },
                                                     &mut default_diags,
@@ -1539,7 +1614,12 @@ pub fn infer_scope_types<'db>(
                                                         package_items: pkg_items,
                                                         ns_context: &iface_ns,
                                                         generic_params: &generic_params,
-                                                        bounds: &TypeVarBoundsMap::default(),
+                                                        // Defaults are the interface's own
+                                                        // exprs — its declared param bounds apply.
+                                                        bounds:
+                                                            crate::lower_type_expr::interface_generic_param_bounds(
+                                                                db, iface_loc,
+                                                            ),
                                                         self_ty: None,
                                                     },
                                                     &mut default_diags,
@@ -2044,7 +2124,30 @@ pub fn infer_scope_types<'db>(
                 );
                 let mut iface_env = GenericEnv::from_params(iface_params.clone());
                 iface_env.add_bounds_for_declared_params(&iface_params, &iface_bounds);
-                // `Self` in an interface's own signatures is its rigid `Self` type variable.
+                // `Self` in an interface's own signatures is its rigid `Self` type variable,
+                // bounded by the interface itself (as a constraint, no associated pins) — so a
+                // `Self.member` projection in a field or method signature resolves through it,
+                // mirroring the interface-default-body path.
+                let self_param = Name::new("Self");
+                if !iface_env.params.iter().any(|p| p == &self_param) {
+                    iface_env.params.push(self_param.clone());
+                }
+                iface_env.add_concrete_bound(
+                    self_param,
+                    baml_type::Interface::new(
+                        crate::lower_type_expr::qualify_def(
+                            db,
+                            baml_compiler2_hir::contributions::Definition::Interface(iface_loc),
+                            &iface_data.name,
+                        ),
+                        iface_data
+                            .generic_params
+                            .iter()
+                            .map(|p| Ty::TypeVar(p.clone(), TyAttr::default()))
+                            .collect(),
+                        Vec::new(),
+                    ),
+                );
                 let self_ty = crate::self_type::self_type_for_interface_default();
                 apply_generic_env(
                     db,
