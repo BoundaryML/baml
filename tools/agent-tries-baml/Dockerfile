@@ -12,7 +12,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Install the baml wrapper + bootstrap the nightly toolchain (we pin nightly for
 # server-side SSE streaming; see baml.toml).
 ENV BAML_HOME=/opt/baml
-RUN curl -fsSL https://pkg.boundaryml.com/install.sh | sh -s -- --channel nightly --no-modify-path --yes
+# Pin the SERVICE toolchain to the version the code is tested on — a floating
+# `--channel nightly` broke the build when the stdlib moved under us
+# (baml.unstable.string removed on 20260702). The agent-under-test still gets
+# the latest nightly per-run via the proxy's ensure_agent_baml.
+RUN curl -fsSL https://pkg.boundaryml.com/install.sh | sh -s -- --version 0.12.2-nightly.20260624.a --no-modify-path --yes
 ENV PATH="/opt/baml/bin:${PATH}"
 
 WORKDIR /app
