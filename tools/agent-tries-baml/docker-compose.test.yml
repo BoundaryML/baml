@@ -1,0 +1,37 @@
+# TEST-ONLY override for local container validation (not committed config for prod).
+# Run: docker compose -f docker-compose.yml -f docker-compose.test.yml up -d
+# Wires the api supervisor to run web+ingress+baml_dedup, points the LLM clients at
+# the proxy, and swaps the proxy's `claude` for the fake stand-in (docker/fake-claude)
+# so the stack runs without a real Claude subscription.
+services:
+  api:
+    environment:
+      SUPERVISE: "web,ingress,baml_worker,baml_dedup"
+      INGRESS_PORT: "8081"
+      CONVEX_URL: "http://convex:3210"
+      CONVEX_ADMIN_KEY: "bammy-local|016e2326881a97bc30897fc2307640fed69f26eb10479edf294500213b67fbba8191e8ef62"
+      SERVICE_URL: "http://localhost:8080"
+      SERVICE_TOKEN: "devservicetoken"
+      CLAUDE_PROXY_URLS: "http://claude-proxy:9090"
+      CLAUDE_PROXY_TOKEN: "devproxytoken"
+      LLM_BASE_URL: "http://claude-proxy:9090"
+      LLM_API_KEY: "devproxytoken"
+      BAML_DEDUP_MODEL: "claude-sonnet-4-6"
+      BATCH_SIZE: "20"
+      # Linear status-group label ids (Symptom 2: MERGED -> closed).
+      LINEAR_STATUS_MERGED: "lbl-merged"
+      LINEAR_STATUS_APPROVED: "lbl-approved"
+      LINEAR_STATUS_REDRAFT: "lbl-redraft"
+      LINEAR_STATUS_PR_PREP: "lbl-pr-prep"
+      LINEAR_STATUS_REJECTED: "lbl-rejected"
+    ports:
+      - "8081:8081"
+
+  claude-proxy:
+    environment:
+      CLAUDE_BIN: "/usr/local/bin/fake-claude"
+      CLAUDE_PROXY_TOKEN: "devproxytoken"
+      ANTHROPIC_API_KEY: ""
+      BAML_CACHE_DIR: "/var/baml-cache"
+    volumes:
+      - ./docker/fake-claude:/usr/local/bin/fake-claude:ro

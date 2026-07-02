@@ -58,4 +58,19 @@ testset "linear_webhook" {
         let issue = WebhookIssue { _id: "i1", status: "open" };
         assert.equal(route_linear_status(issue, ["some-random-label-id"]), "");
     }
+
+    // ---- closeable_from: a human Done/Merged move closes from any live state ----
+    test "closeable_from honors every non-terminal state" {
+        assert.is_true(closeable_from("open"));
+        assert.is_true(closeable_from("confirmed"));
+        assert.is_true(closeable_from("prprep"));
+        assert.is_true(closeable_from("pr_ready"));
+        assert.is_true(closeable_from("needs_human"));
+        assert.is_true(closeable_from("verifying"));
+    }
+
+    test "closeable_from rejects terminal states (no-op re-close)" {
+        assert.is_true(closeable_from("closed") == false);
+        assert.is_true(closeable_from("rejected") == false);
+    }
 }

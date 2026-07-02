@@ -73,6 +73,7 @@ class AgentResult {
     turn_log: json[]?, // raw turn objects (typed TurnRow[]? serializes elements to null)
     post_files: map<string, string>,
     skill_installed: bool?,
+    baml_version: string?, // concrete baml the agent-under-test resolved to (recorded on the trophy)
 }
 
 // ======================================================================

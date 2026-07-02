@@ -29,6 +29,7 @@ function fetch_latest_skill() -> string {
             60000,
             null,
             false,
+            null,
         );
     } else {
         let _ = run_capture(
@@ -39,6 +40,7 @@ function fetch_latest_skill() -> string {
             120000,
             null,
             false,
+            null,
         );
     }
     return concat_skills(cache);
@@ -85,6 +87,6 @@ function last_path_seg(path: string) -> string {
 // Current baml-skill commit sha (so a run records exactly which skill it read).
 function skill_version() -> string {
     let cache = skill_cache_dir();
-    let res = run_capture("git", ["-C", cache, "rev-parse", "--short", "HEAD"], "/tmp", null, 15000, null, false);
+    let res = run_capture("git", ["-C", cache, "rev-parse", "--short", "HEAD"], "/tmp", null, 15000, null, false, null);
     return res.stdout.trim();
 }

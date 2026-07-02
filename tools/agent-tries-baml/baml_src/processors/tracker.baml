@@ -170,18 +170,42 @@ function tracker_notify(ctx: TrackCtx, issue: TrackIssue, text: string) -> int {
     return 0;
 }
 
-// Swap the issue's Linear status label (no-op without Linear / a linear issue id).
+// Swap the issue's Linear status label. The three ways this silently no-op'd —
+// a missing linearIssueId, an unconfigured LINEAR_STATUS_* env, and a swallowed
+// Linear API error — are now logged to stderr so a broken ATB->Linear sync is
+// diagnosable instead of invisible.
 function tracker_set_linear(ctx: TrackCtx, issue: TrackIssue, status_name: string) -> int {
-    match (issue.linearIssueId) {
-        let lid: string => {
-            let label = linear_status_id(status_name);
-            if (label != "") {
-                let _ = ctx.linear.set_status(lid, label) catch (_) {
-                    _ => 0
-                };
-            }
-        },
-        null => null,
+    let iid = issue_id_or_empty(issue);
+    let lid = match (issue.linearIssueId) {
+        let v: string => v,
+        null => "",
+    };
+    if (lid == "") {
+        baml.io
+            .eprintln(
+                "tracker_set_linear: issue " + iid + " has no linearIssueId; Linear NOT updated ("
+                    + status_name + ")",
+            );
+        return 0;
+    }
+    let label = linear_status_id(status_name);
+    if (label == "") {
+        baml.io
+            .eprintln(
+                "tracker_set_linear: issue " + iid + " -> no LINEAR_STATUS_" + status_name
+                    + " configured; Linear NOT updated",
+            );
+        return 0;
+    }
+    let _ = ctx.linear.set_status(lid, label) catch (e) {
+        _ => {
+            baml.io
+                .eprintln(
+                    "tracker_set_linear: issue " + iid + " linear=" + lid + " set_status("
+                        + status_name + ") failed: " + baml.unstable.string(e),
+                );
+            0
+        }
     };
     return 0;
 }

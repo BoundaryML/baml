@@ -1,0 +1,87 @@
+#!/usr/bin/env node
+// TEST-ONLY stand-in for the `claude` CLI, so the local container stack can be
+// validated without a real Claude subscription. Branches on the proxy's two call
+// shapes:
+//   * run-agent  (has --permission-mode): writes a trophy.json capturing the
+//     BAML_VERSION the agent subprocess actually received + the resolved
+//     `baml --version`, then prints a session-summary JSON (usage WITHOUT a summed
+//     total, to exercise the transcript total_tokens fallback).
+//   * messages   (has --tools): the LLM gateway path. For a Dedup prompt it returns
+//     an issue carrying an EXISTING open-issue id (extracted from the prompt) so the
+//     dedup processor exercises the extend path.
+const fs = require("fs");
+const { execSync } = require("child_process");
+
+const args = process.argv.slice(2);
+const has = (f) => args.includes(f);
+
+let stdin = "";
+try { stdin = fs.readFileSync(0, "utf8"); } catch (_) {}
+
+function emit(obj) { process.stdout.write(JSON.stringify(obj) + "\n"); }
+
+if (has("--permission-mode")) {
+  // ---- run-agent (worker agent) ----
+  const seen = process.env.BAML_VERSION || "";
+  let cliVer = "";
+  try { cliVer = execSync("baml --version 2>&1", { encoding: "utf8" }).trim(); } catch (e) { cliVer = "ERR:" + e.message; }
+  const trophy = {
+    task_completed: "true",
+    summary: "fake agent run",
+    report_md: "fake",
+    what_went_well: ["ran"],
+    what_failed: [],
+    issues: [],
+    suggestions: [],
+    // probes the test asserts on:
+    baml_version_seen: seen,
+    baml_cli_version: cliVer,
+  };
+  try { fs.writeFileSync(process.cwd() + "/trophy.json", JSON.stringify(trophy)); } catch (_) {}
+  // Author a real artifact so files_touched / loc_changed have something to count.
+  try { fs.writeFileSync(process.cwd() + "/solution.baml", "function Foo() -> int {\n  return 1;\n}\n"); } catch (_) {}
+  emit({
+    type: "result",
+    subtype: "success",
+    is_error: false,
+    num_turns: 3,
+    num_tool_calls: 2,
+    session_id: "fake-session",
+    result: "done",
+    usage: {
+      input_tokens: 1000,
+      output_tokens: 200,
+      // NO total_tokens on purpose -> transcript.baml must sum the components.
+      cache_read_input_tokens: 50,
+      cache_creation_input_tokens: 10,
+    },
+  });
+  process.exit(0);
+}
+
+// ---- messages (LLM gateway) ----
+if (/deduplicat/i.test(stdin)) {
+  // Pull the first open-issue id and the first report_id out of the prompt so the
+  // returned issue EXTENDS the existing one (carries its id) and cites a real run.
+  const openSeg = stdin.split("# open_issues")[1] || "";
+  const idM = openSeg.match(/"id"\s*:\s*"([^"]+)"/);
+  // Pull a real report id from the rendered reports SECTION (after the `# reports`
+  // heading) — the prompt's instructions above it also contain a literal
+  // `--- report_id: <id> ---` placeholder we must not match.
+  const reportSeg = (stdin.split("# reports")[1] || stdin).split("# open_issues")[0];
+  const repM = reportSeg.match(/---\s*report_id:\s*([^\s-]+)/);
+  const issue = {
+    kind: "skill",
+    category: "bug",
+    title: "baml fmt rejects backtick string",
+    description: "Re-found across runs.",
+    suggestion: "Document the backtick-string limitation.",
+    evidence: [{ report_id: repM ? repM[1] : "r1", call_index: 1 }],
+  };
+  if (idM) issue.id = idM[1]; // extend the matched open issue
+  emit({ result: JSON.stringify({ issues: [issue] }) });
+  process.exit(0);
+}
+
+emit({ result: "ok" });
+process.exit(0);

@@ -46,3 +46,25 @@ testset "dedup" {
     // of a PromptAst gives a structural repr, not the rendered text. The $parse
     // tests above are the LLM-fidelity gate that matters.
 }
+
+// The cross-run-dedup open-issue scope: which statuses are matched against (so a
+// re-found finding extends an existing issue) vs. excluded as terminal.
+testset "dedup_scope" {
+    test "open statuses include every in-flight state" {
+        let s = dedup_open_statuses();
+        assert.is_true(in_list(s, "open"));
+        assert.is_true(in_list(s, "confirmed"));
+        assert.is_true(in_list(s, "approved"));
+        assert.is_true(in_list(s, "tocursor"));
+        assert.is_true(in_list(s, "prprep"));
+        assert.is_true(in_list(s, "pr_ready"));
+        assert.is_true(in_list(s, "verifying"));
+        assert.is_true(in_list(s, "needs_human"));
+    }
+
+    test "terminal statuses are excluded from dedup matching" {
+        let s = dedup_open_statuses();
+        assert.is_true(in_list(s, "closed") == false);
+        assert.is_true(in_list(s, "rejected") == false);
+    }
+}

@@ -28,6 +28,11 @@ class ExecResult {
 // args=["-c", command]) in `cwd`, with `baml_bin_dir` prepended to PATH and the
 // API key optionally scrubbed (OAuth mode). stdout/stderr are captured via files
 // under cwd so leaked grandchildren can't wedge the pipe.
+//
+// `baml_version` (when non-empty) is exported as BAML_VERSION inside the wrapper:
+// the `baml` wrapper honors it to select the toolchain version the subprocess
+// uses, so ONLY the spawned agent picks up a freshly-installed nightly while the
+// service's own baml (the image PATH) is untouched.
 function run_capture(
     program: string,
     args: string[],
@@ -36,6 +41,7 @@ function run_capture(
     timeout_ms: int,
     stdin: string?,
     scrub_api_key: bool,
+    baml_version: string?,
 ) -> ExecResult {
     let out_file = cwd + "/.atb_stdout";
     let err_file = cwd + "/.atb_stderr";
@@ -46,12 +52,23 @@ function run_capture(
         let d: string => "export PATH=\"" + d + ":$PATH\"; ",
         null => "",
     };
+    // Pin the agent's baml toolchain via BAML_VERSION (the wrapper resolves it).
+    let version_line = match (baml_version) {
+        let v: string => {
+            if (v.trim() == "") {
+                ""
+            } else {
+                "export BAML_VERSION=\"" + v + "\"; "
+            }
+        },
+        null => "",
+    };
     let scrub_line = if (scrub_api_key) {
         "unset ANTHROPIC_API_KEY; "
     } else {
         ""
     };
-    let script = scrub_line + path_line + "exec \"$@\" >\"" + out_file + "\" 2>\"" + err_file + "\"";
+    let script = scrub_line + version_line + path_line + "exec \"$@\" >\"" + out_file + "\" 2>\"" + err_file + "\"";
 
     // sh -c '<script>' atb <program> <args...>  ($0=atb, "$@"=program+args)
     let argv = ["-c", script, "atb", program].concat(args);

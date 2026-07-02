@@ -1,0 +1,74 @@
+# Local stack for agent-tries-baml v2 (bammy-2) — Convex + fleet (api/ingress/
+# processors) + the LLM/agent proxy, for local validation WITHOUT touching Fly or
+# prod Convex. Models the four Fly apps (bammy-2-service/-ingress/-cron/-proxy) as
+# the two images they build from (Dockerfile = Supervisor, Dockerfile.proxy = Proxy).
+#
+# Infisical is bypassed locally: each service overrides the with-infisical
+# ENTRYPOINT and reads a plain ./.env (unprefixed vars; the env resolver in
+# core/env.baml tries ATB_<NAME> then <NAME>, so unprefixed works). Build context is
+# the tool root (where baml.toml / baml_src / docker/ live), matching the Dockerfiles.
+#
+# First run, push the shared Convex functions into the local backend (defines
+# issues:list, trophies:list, etc.) — the v2 tree has no convex dir of its own:
+#   cd ../agent-tries-baml/convex && npx convex dev --once   # against http://127.0.0.1:3210
+#
+# Then seed issues/trophies across all statuses to exercise the UI + dedup paths.
+
+services:
+  convex:
+    image: ghcr.io/get-convex/convex-backend:latest
+    ports:
+      - "3210:3210" # HTTP API (CONVEX_URL)
+      - "3211:3211" # admin/site
+    environment:
+      - "INSTANCE_NAME=bammy-local"
+      - "DISABLE_BEACON=true"
+    volumes:
+      - convex_data:/convex/data
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    # Bypass with-infisical: run the supervisor directly off ./.env.
+    entrypoint: ["baml"]
+    command: ["run", "Supervisor"]
+    env_file: .env
+    environment:
+      - "PORT=8080"
+      - "HOST=::"
+      - "CONVEX_URL=http://convex:3210"
+      - "SERVICE_URL=http://localhost:8080"
+      - "CLAUDE_PROXY_URLS=http://claude-proxy:9090"
+      - "LLM_BASE_URL=http://claude-proxy:9090"
+    ports:
+      - "8080:8080"
+    depends_on:
+      - convex
+      - claude-proxy
+
+  claude-proxy:
+    build:
+      context: .
+      dockerfile: Dockerfile.proxy
+    entrypoint: ["baml"]
+    command: ["run", "Proxy"]
+    env_file: .env
+    environment:
+      - "PROXY_LISTEN_PORT=9090"
+      - "STAGING_ROOT=/tmp/staging"
+      - "BAML_CACHE_DIR=/var/baml-cache"
+      - "HOME=/root"
+      # OAuth (subscription) mode: leave ANTHROPIC_API_KEY empty and log in once via
+      # the mounted volume (`docker compose run --rm claude-proxy claude login`).
+      - "IS_SANDBOX=1"
+    ports:
+      - "9090:9090"
+    volumes:
+      - proxy_claude:/root/.claude # persists the Claude OAuth login
+      - proxy_baml_cache:/var/baml-cache # caches per-run installed baml toolchains
+
+volumes:
+  convex_data:
+  proxy_claude:
+  proxy_baml_cache:
