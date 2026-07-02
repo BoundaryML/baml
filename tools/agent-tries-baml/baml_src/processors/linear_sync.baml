@@ -13,8 +13,10 @@
 class SyncIssue {
     _id: string?,
     title: string?,
+    status: string?, // lifecycle state; picks the mirrored Linear status label
     kind: string?,
     category: string?,
+    evidence: json[]?, // {trophyId, turn_index?, call_index?} entries -> run links
     description: string?,
     suggestion: string?,
     repro: string?,
@@ -102,7 +104,7 @@ class LinearPushProcessor {
                     let v: string => v,
                     null => "",
                 },
-                [],
+                evidence_links_of(issue.evidence),
                 match (issue.suggestion) {
                     let v: string => v,
                     null => "",
@@ -115,36 +117,60 @@ class LinearPushProcessor {
                     let v: string => v,
                     null => "",
                 },
-                "",
+                ui_base_url() + "/issues/" + id,
                 match (issue.prUrl) {
                     let v: string => v,
                     null => "",
                 },
             );
-            let approved_label = linear_status_id("NOT_STARTED");
-
-            // Create on first sync; otherwise update in place — title + body + status,
-            // so a redrafted write-up actually lands on the existing card.
-            match (issue.linearIssueId) {
-                let lid: string => {
-                    let _ = self.linear.update_card(lid, title, body, approved_label) catch (_) {
-                        _ => 0
-                    };
+            // Mirror the label matching the issue's CURRENT lifecycle state — NOT a
+            // hardcoded not-started, which dragged every re-synced card (post-dispatch,
+            // redraft, etc.) back to the start.
+            let status_label = label_for_issue_status(
+                match (issue.status) {
+                    let s: string => s,
+                    null => "open",
                 },
+            );
+
+            // Resolve the target card: recorded linearIssueId -> adopt an existing
+            // same-title card (the hand-imported board / a create whose id-recording
+            // failed) -> create fresh. Linear API failures are NOT swallowed: they
+            // throw ProcessError, fail_item marks linearSyncStatus failed, and the
+            // reaper requeues to dirty — the old retry semantics. Marking synced on
+            // a failed write would lose the card forever.
+            let target = match (issue.linearIssueId) {
+                let lid: string => lid,
                 null => {
-                    let new_id = self.linear.create_issue(title, approved_label, body) catch (_) {
-                        _ => ""
-                    };
-                    if (new_id != "") {
-                        let patch = baml.json.to_string(LinearIdPatch { linearIssueId: new_id }) catch (_) {
-                            _ => "{}"
-                        };
-                        let _ = self.svc.update("issues", id, patch) catch (_) {
-                            _ => ""
-                        };
+                    self.linear.find_issue_by_title(title) catch (e) {
+                        _ => {
+                            throw ProcessError { message: "linear find_issue_by_title failed: " + baml.unstable.string(e) }
+                        }
                     }
                 },
             };
+
+            if (target != "") {
+                let _ = self.linear.update_card(target, title, body, status_label) catch (e) {
+                    _ => {
+                        throw ProcessError { message: "linear update_card failed: " + baml.unstable.string(e) }
+                    }
+                };
+                let has_lid = match (issue.linearIssueId) {
+                    let _v: string => true,
+                    null => false,
+                };
+                if (has_lid == false) {
+                    self.record_linear_id(id, target);
+                }
+            } else {
+                let new_id = self.linear.create_issue(title, status_label, body) catch (e) {
+                    _ => {
+                        throw ProcessError { message: "linear create_issue failed: " + baml.unstable.string(e) }
+                    }
+                };
+                self.record_linear_id(id, new_id);
+            }
 
             // Mark synced on the SAME field we claimed.
             let _ = self.svc.transition("issues", id, "synced", "linearSyncStatus", "{}", true) catch (e) {
@@ -152,9 +178,76 @@ class LinearPushProcessor {
                     throw ProcessError { message: "mark synced failed: " + baml.unstable.string(e) }
                 }
             };
+
+            // Boarding confirmation (ports _confirm): a freshly-opened issue that
+            // just landed on the board advances open -> confirmed. Claim is on
+            // linearSyncStatus, so don't release on this status transition.
+            let was_open = match (issue.status) {
+                let s: string => s == "open",
+                null => false,
+            };
+            if (was_open) {
+                let _ = self.svc.transition("issues", id, "confirmed", "status", "{}", false) catch (e) {
+                    _ => {
+                        throw ProcessError { message: "confirm open->confirmed failed: " + baml.unstable.string(e) }
+                    }
+                };
+            }
             return 0;
         }
     }
+
+    // Persist the resolved Linear card id; a failure here throws so the reaper
+    // retries — adopt-by-title makes the retry idempotent (no duplicate card).
+    function record_linear_id(self, id: string, linear_id: string) -> int throws ProcessError {
+        let patch = baml.json.to_string(LinearIdPatch { linearIssueId: linear_id }) catch (_) {
+            _ => "{}"
+        };
+        let _ = self.svc.update("issues", id, patch) catch (e) {
+            _ => {
+                throw ProcessError { message: "recording linearIssueId failed: " + baml.unstable.string(e) }
+            }
+        };
+        return 0;
+    }
+}
+
+// Evidence entries ({trophyId, turn_index?, ...} as raw json — Convex floats) ->
+// dashboard run links. Shape matches the v2 website: /runs/<trophyId>#turn-<N>
+// (hash anchor; the site has no ?call= route). Entries without a trophyId are
+// skipped; without a turn_index the link just has no anchor.
+class EvidenceRef {
+    trophyId: string?,
+    turn_index: float?,
+}
+
+function evidence_links_of(evidence: json[]?) -> string[] {
+    let out: string[] = [];
+    let entries: json[] = match (evidence) {
+        let e: json[] => e,
+        null => [],
+    };
+    for (let e in entries) {
+        let raw = baml.json.stringify(e) catch (_) {
+            _ => "{}"
+        };
+        let ref = baml.json.from_string<EvidenceRef>(raw) catch (_) {
+            _ => EvidenceRef { trophyId: null, turn_index: null }
+        };
+        match (ref.trophyId) {
+            let tid: string => {
+                if (tid != "") {
+                    let anchor = match (ref.turn_index) {
+                        let t: float => "#turn-" + baml.unstable.string(f2i(t)),
+                        null => "",
+                    };
+                    out.push(ui_base_url() + "/runs/" + tid + anchor);
+                }
+            },
+            null => null,
+        };
+    }
+    return out;
 }
 
 // ---- FixDispatch -----------------------------------------------------------
@@ -335,7 +428,7 @@ class FixDispatchProcessor {
 // no uuid stdlib + Math.random is unavailable, so we read /proc/sys/kernel/random/uuid.
 // Returns "" if unavailable (caller then lets Cursor assign the id).
 function mint_agent_id() -> string {
-    let res = run_capture("cat", ["/proc/sys/kernel/random/uuid"], "/tmp", null, 5000, null, false);
+    let res = run_capture("cat", ["/proc/sys/kernel/random/uuid"], "/tmp", null, 5000, null, false, null);
     let u = res.stdout.trim();
     if (u == "") {
         return "";
