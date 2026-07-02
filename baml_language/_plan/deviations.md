@@ -123,6 +123,19 @@ Legend: **[lang]** forced by a missing/limited language feature · **[scope]** d
   class field can't be named `function`. Tool-calls are parsed via `baml.json.field` navigation instead of a
   typed wire class.
 
+## ⚠️ MAJOR: user-package classes cannot implement a stdlib capability interface (`requires` across packages)
+
+- **A class in a user package cannot satisfy a stdlib interface's `requires`.** `class MyProvider {
+  implements baml.ai.Provider {} implements baml.ai.HttpProvider { … } }` fails with **E0125**: *"MyProvider
+  implements HttpProvider, which requires Provider, but MyProvider does not implement them"* — even though the
+  in-body `implements baml.ai.Provider {}` is right there. Characterized: a user class implementing a stdlib
+  interface **without** `requires` works fine (e.g. `implements baml.ai.ResponseMeta`); only the `requires`
+  satisfaction fails, and only across the package boundary (stdlib classes like `OpenAi` implementing
+  `HttpProvider` in-body work). **This blocks the core thesis — a user defining their own provider.** Until
+  fixed, provider/harness classes must live in the stdlib (`ns_ai`); user code can construct + negotiate them
+  (that works). **This is the top item to fix for the model to be real.** *(Worth a focused compiler look:
+  cross-package `requires`-satisfaction / how a foreign class's base-interface impl is resolved.)*
+
 ## Language findings surfaced during wiring (worth a compiler look)
 
 - **Matching `unknown` / `unknown?` with a typed binding is an irrefutable catch-all.** `match (v) { let x: string => …, _ => … }`

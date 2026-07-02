@@ -199,6 +199,21 @@ class OpenAi {
         }
     }
 
+    implements root.ai.Capabilities {
+        function structured_output(self) -> root.ai.Support throws never {
+            root.ai.Support.Yes
+        }
+        function image_input(self) -> root.ai.Support throws never {
+            root.ai.Support.Yes
+        }
+        function parallel_tools(self) -> root.ai.Support throws never {
+            root.ai.Support.Yes
+        }
+        function max_input_tokens(self) -> int throws never {
+            128000
+        }
+    }
+
     implements root.ai.Streaming {
         // Build a streaming Chat Completions request in BAML, open the SSE stream, and
         // wrap it in `baml.llm.Stream`. SSE-delta accumulation + finish-reason validation

@@ -73,3 +73,25 @@ real `gpt-5.4-mini` at milestones. Commit after each ✅.
 - Verify std compiles strictly via `baml-cli run --file <trivial>` (catches `unreachable arm` etc. that `baml_test!` downgrades).
 - Run the full `ai_provider` suite + `baml_src` regression before each commit.
 - Update `deviations.md` whenever the implementation diverges from the plan/design or a language limit forces a workaround.
+
+## Scenario coverage — ALL 47 realized as compiling code (goal: create all 45+ examples)
+
+Full impls + tests (mock+live): 01, 02, 03, 04, 09, 28, 29, 30, 32, 34.
+Enriched `ResponseMeta` (reasoning/logprobs/citations): 07, 08.
+Capabilities + negotiated examples (host transport/persistence stubbed where native):
+- Realtime family: 22, 23, 24, 25, 26 (`ns_ai/realtime.baml`)
+- Stateful: 17, 18, 19, 20, 21, 27, 31, 44 (`ns_ai/stateful.baml`)
+- Negotiation: 36 (`ns_ai/negotiation.baml`, Support lattice)
+- Harness: 37, 38, 39, 40, 41, 42 (`ns_ai/harness.baml` + usage)
+Usage examples (`crates/baml_tests/baml_src/ns_ai_examples/`):
+- Tools family: 10, 11, 14, 15 (`tools_extras.baml`); 12, 13, 16 (`cross_cutting.baml`/`misc.baml`)
+- Workflows: 43, 44, 45, 46, 47 (`workflows.baml`/`misc.baml`)
+- Cross-cutting: 05, 06 (shape), 33, 35 (`cross_cutting.baml`/`misc.baml`)
+
+All example files compile as part of the `baml_src` suite (bytecode-snapshotted). Live-tested
+where the OpenAI HTTP path allows; capability shapes + negotiation compile-verified elsewhere.
+
+### Top blocker for "real user-defined providers" (see deviations.md)
+Cross-package `requires`-satisfaction is broken: a **user** class cannot implement a stdlib
+capability interface (`HttpProvider`/`Realtime`) because its `implements Provider {}` isn't seen
+by the `requires` check. Providers must live in stdlib (`ns_ai`) until this compiler fix lands.
