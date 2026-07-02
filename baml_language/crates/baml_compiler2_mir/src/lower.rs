@@ -15190,12 +15190,32 @@ impl LoweringContext<'_> {
                     // `any<T, E>`) must NOT go through `convert_tir_ty_for_runtime` —
                     // that erases TypeVar → Void and the test becomes
                     // constant-false. Build a template instead so the args
-                    // lower to `TypeArgRef` resolved against the frame.
+                    // resolve against the frame.
+                    //
+                    // Use the dispatch-guard template (frame TypeVar →
+                    // `TypeArgRefOrWildcard`, subtype-or-wildcard) rather than the
+                    // exact `TypeArgRef` one. A pattern type-test is covariant —
+                    // it asks "does this value belong to type `Opt<T>`" — so the
+                    // reified frame arg must be compared with `is_subtype_of`, not
+                    // `==`. Otherwise, when inference pins `T` to a supertype union
+                    // of the value's actual type arg (e.g. a `default: T` arg
+                    // subtypes, so `T` reifies to the un-subsumed join `Shape | Sq`
+                    // while the value is `Opt<Shape>`), the exact check
+                    // `Shape | Sq == Shape` fails and the arm silently misses. This
+                    // matches the interface class-dispatch guard path
+                    // (`emit_interface_class_guard_branch`), which already builds
+                    // its typevar args with `tir2_to_dispatch_guard_template`.
+                    // Directionality is preserved: a strictly wider runtime arg
+                    // still fails to match a narrower pinned `T`.
                     if matches!(&pat_tir_ty, Tir2Ty::Class(..))
                         && baml_compiler2_tir::generics::contains_typevar(&pat_tir_ty)
                     {
                         let generic_params = self.enclosing_generic_params();
-                        let template = self.ty_to_template(&pat_tir_ty, &generic_params);
+                        let template = tir2_to_dispatch_guard_template(
+                            &pat_tir_ty,
+                            self.resolved_aliases,
+                            &generic_params,
+                        );
                         self.emit_is_type_template_branch(scrutinee, template, success, failure);
                         return;
                     }
