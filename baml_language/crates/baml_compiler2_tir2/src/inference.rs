@@ -2179,6 +2179,32 @@ pub fn alias_def(db: &dyn crate::Db, qtn: &crate::ty::QualifiedTypeName) -> Opti
     }
 }
 
+/// Look up an enum's variant names by qualified name, resolving the owning
+/// package through `res_ctx`.
+///
+/// The global counterpart to per-scope enum lookup: a pure function of the
+/// program's declarations plus the resolution context that bounds which packages
+/// are visible from the current one. Returns an empty vec when `enum_name` does
+/// not resolve to an enum in an accessible package.
+pub fn enum_variants<'db>(
+    db: &'db dyn crate::Db,
+    res_ctx: &'db crate::package_interface::PackageResolutionContext<'db>,
+    enum_name: &crate::ty::QualifiedTypeName,
+) -> Vec<Name> {
+    let Some(items) = res_ctx.items_for_package(db, enum_name.package()) else {
+        return Vec::new();
+    };
+    if let Some(Definition::Enum(enum_loc)) =
+        items.lookup_type(enum_name.namespace(), enum_name.name())
+    {
+        let file = enum_loc.file(db);
+        let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
+        let enum_data = &item_tree[enum_loc.id(db)];
+        return enum_data.variants.iter().map(|v| v.name.clone()).collect();
+    }
+    Vec::new()
+}
+
 /// Build the type-alias map visible from a package: its own aliases plus those
 /// re-exported by its dependencies. Shared by per-scope inference and throws
 /// analysis so both expand the same aliases (e.g. `testing.TestSetBody`).

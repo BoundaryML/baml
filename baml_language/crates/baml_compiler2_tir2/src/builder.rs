@@ -557,27 +557,10 @@ impl baml_type::normalize::TypeContext for NormalizeCtx<'_, '_> {
     }
 
     fn interface_requires(&self, sub: &baml_type::Interface, sup: &baml_type::Interface) -> bool {
-        // Interface *equality* is the normalizer's job (structural reflexivity);
-        // this method answers only the proper-requirement case.
-        if sub.name == sup.name {
-            return false;
-        }
         let b = self.0;
-        let registry = crate::interfaces::package_implements_registry(b.context.db(), b.package_id);
-        if registry.interface_requires(&sub.name, &sup.name)
-            && sup.generics.is_empty()
-            && sup.associated_types.is_empty()
-        {
-            return true;
-        }
-        b.interface_requires_instantiation(
-            &sub.name,
-            &sub.generics,
-            &sub.associated_types,
-            &sup.name,
-            &sup.generics,
-            &sup.associated_types,
-        )
+        crate::interfaces::interface_requires(b.context.db(), b.res_ctx, sub, sup, |a, c| {
+            b.types_equivalent(a, c)
+        })
     }
 
     fn enum_variants(&self, name: &crate::ty::QualifiedTypeName) -> Option<Vec<Name>> {
@@ -12238,27 +12221,7 @@ impl<'db> TypeInferenceBuilder<'db> {
     /// Uses the enum's qualified package to find it in the correct package,
     /// not just the current file's package.
     fn lookup_enum_variants(&self, enum_name: &crate::ty::QualifiedTypeName) -> Vec<Name> {
-        let db = self.context.db();
-
-        // Resolve the package that owns the enum via res_ctx.
-        let items = if *enum_name.package() == self.package_id.name(db) {
-            self.package_items
-        } else {
-            match self.res_ctx.items_for_package(db, enum_name.package()) {
-                Some(items) => items,
-                None => return Vec::new(),
-            }
-        };
-
-        if let Some(Definition::Enum(enum_loc)) =
-            items.lookup_type(enum_name.namespace(), enum_name.name())
-        {
-            let file = enum_loc.file(db);
-            let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
-            let enum_data = &item_tree[enum_loc.id(db)];
-            return enum_data.variants.iter().map(|v| v.name.clone()).collect();
-        }
-        Vec::new()
+        crate::inference::enum_variants(self.context.db(), self.res_ctx, enum_name)
     }
 
     // ── Evolving Container Mutations ─────────────────────────────────────────

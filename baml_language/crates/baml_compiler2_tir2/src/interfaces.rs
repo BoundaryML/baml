@@ -1748,6 +1748,72 @@ pub fn interface_closure_locs_with_args_and_assoc<'db>(
     out
 }
 
+/// Does interface constraint `sub` transitively (and *properly*) require `sup`?
+///
+/// Walks `sub`'s `requires` closure instantiated at `sub`'s generic arguments and
+/// associated-type pins, and looks for an entry matching `sup` by qualified name,
+/// argument list, and every associated-type pin `sup` specifies. Argument and pin
+/// equality is delegated to `equivalent` (the caller's type-equality oracle) so
+/// the walk stays independent of the normalization backend.
+///
+/// *Proper* requirement: an interface requiring itself is not a requirement, so
+/// an identical qualified name short-circuits to `false` — structural reflexivity
+/// is the normalizer's job, and the closure walk includes `sub` itself. Returns
+/// `false` when `sub` does not resolve to an interface in an accessible package.
+///
+/// The global counterpart to the per-scope requirement check: a pure function of
+/// the program's declarations, the resolution context that bounds package
+/// visibility, and the supplied equality oracle.
+pub fn interface_requires<'db>(
+    db: &'db dyn crate::Db,
+    res_ctx: &'db crate::package_interface::PackageResolutionContext<'db>,
+    sub: &baml_type::Interface,
+    sup: &baml_type::Interface,
+    mut equivalent: impl FnMut(&Ty, &Ty) -> bool,
+) -> bool {
+    if sub.name == sup.name {
+        return false;
+    }
+    let Some(pkg_items) = res_ctx.items_for_package(db, sub.name.package()) else {
+        return false;
+    };
+    let Some(Definition::Interface(sub_loc)) =
+        pkg_items.lookup_type(sub.name.namespace(), sub.name.name())
+    else {
+        return false;
+    };
+    for (iface_loc, iface_args, iface_assoc) in interface_closure_locs_with_args_and_assoc(
+        db,
+        sub_loc,
+        &sub.generics,
+        &sub.associated_types,
+        pkg_items,
+        sub.name.namespace(),
+    ) {
+        let iface_tree = baml_compiler2_hir::file_item_tree(db, iface_loc.file(db));
+        let Some(iface_data) = iface_tree.interfaces.get(&iface_loc.id(db)) else {
+            continue;
+        };
+        let iface_qtn = qualify_def(db, Definition::Interface(iface_loc), &iface_data.name);
+        if iface_qtn == sup.name
+            && iface_args.len() == sup.generics.len()
+            && iface_args
+                .iter()
+                .zip(sup.generics.iter())
+                .all(|(a, b)| equivalent(a, b))
+            && sup.associated_types.iter().all(|(sup_name, sup_ty)| {
+                iface_assoc
+                    .iter()
+                    .find(|(iface_name, _)| iface_name == sup_name)
+                    .is_some_and(|(_, iface_ty)| equivalent(iface_ty, sup_ty))
+            })
+        {
+            return true;
+        }
+    }
+    false
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
