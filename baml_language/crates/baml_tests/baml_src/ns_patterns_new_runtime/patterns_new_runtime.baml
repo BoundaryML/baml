@@ -1627,3 +1627,76 @@ test "rustc_port_optional_literal_or_arm_null" {
 test "rustc_port_optional_literal_or_arm_other" {
     assert.equal(score_int_optional(99), 0)
 }
+
+// ─── B-633: generic match over `T | null` requires + routes the null arm ──────
+//
+// A bare `let x: T` arm claims only the open `T` member, so an explicit `null`
+// arm is required (E0062 without it). At runtime the `let x: T` test resolves
+// `T` against the frame's realized type args, so dispatch is faithful in BOTH
+// arm orders: with `T = int`, `null` routes to the `null` arm (never binding
+// into a non-nullable `int`); with `T = int?`, a `null` value is a valid `T`
+// and binds to `let x: T`. `.pop()`/`.at()` on an empty array yield `null`.
+
+// `let x: T` first — the arm gets a real reified type test.
+function b633_unwrap_let_first<T>(v: T?, fallback: T) -> T throws never {
+    match (v) {
+        let x: T => x,
+        null => fallback,
+    }
+}
+
+// `null` first — the trailing `let x: T` is the catch-all.
+function b633_unwrap_null_first<T>(v: T?, fallback: T) -> T throws never {
+    match (v) {
+        null => fallback,
+        let x: T => x,
+    }
+}
+
+function b633_pop_or<T>(items: T[], fallback: T) -> T throws never {
+    match (items.pop()) {
+        let x: T => x,
+        null => fallback,
+    }
+}
+
+function b633_at_or<T>(items: T[], index: int, fallback: T) -> T throws never {
+    match (items.at(index)) {
+        let x: T => x,
+        null => fallback,
+    }
+}
+
+// Concrete `int` callers so `T` unifies to `int` unambiguously (a bare `-1`
+// literal argument would otherwise infer `T` as the literal type `-1`).
+function b633_lf_present() -> int throws never { let v: int? = 7; let fb: int = -1; b633_unwrap_let_first(v, fb) }
+function b633_lf_null() -> int throws never { let v: int? = null; let fb: int = -1; b633_unwrap_let_first(v, fb) }
+function b633_nf_present() -> int throws never { let v: int? = 7; let fb: int = -1; b633_unwrap_null_first(v, fb) }
+function b633_nf_null() -> int throws never { let v: int? = null; let fb: int = -1; b633_unwrap_null_first(v, fb) }
+function b633_pop_present() -> int throws never { let xs: int[] = [1, 2, 3]; let fb: int = -1; b633_pop_or(xs, fb) }
+function b633_pop_empty() -> int throws never { let xs: int[] = []; let fb: int = -1; b633_pop_or(xs, fb) }
+function b633_at_in_bounds() -> int throws never { let xs: int[] = [10, 20, 30]; let fb: int = -1; b633_at_or(xs, 1, fb) }
+function b633_at_out_of_bounds() -> int throws never { let xs: int[] = [10, 20, 30]; let fb: int = -1; b633_at_or(xs, 9, fb) }
+
+// `T = int?`: a `null` value is a valid `T`, so it binds to `let x: T` (not the
+// `null` arm) — verifying the reified `is_type(null, int?)` is true. The outer
+// match then observes the yielded `null`.
+function b633_nullable_binds_null() -> int throws never {
+    let v: int? = null;
+    let fb: int = 99;
+    let r = b633_unwrap_let_first<int?>(v, fb);
+    match (r) {
+        null => -5,
+        let n: int => n,
+    }
+}
+
+test "b633_let_first_present" { assert.equal(b633_lf_present(), 7) }
+test "b633_let_first_null_routes_to_fallback" { assert.equal(b633_lf_null(), -1) }
+test "b633_null_first_present" { assert.equal(b633_nf_present(), 7) }
+test "b633_null_first_null_routes_to_fallback" { assert.equal(b633_nf_null(), -1) }
+test "b633_pop_present_returns_last" { assert.equal(b633_pop_present(), 3) }
+test "b633_pop_empty_routes_null_to_fallback" { assert.equal(b633_pop_empty(), -1) }
+test "b633_at_in_bounds_returns_value" { assert.equal(b633_at_in_bounds(), 20) }
+test "b633_at_out_of_bounds_routes_null_to_fallback" { assert.equal(b633_at_out_of_bounds(), -1) }
+test "b633_nullable_binds_null" { assert.equal(b633_nullable_binds_null(), -5) }

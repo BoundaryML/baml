@@ -852,6 +852,58 @@ function user.risky_error(mode: int) -> int {
     throw
 }
 
+function user.typevar_done_first(v: T | IterDone, fallback: T) -> T {
+    load_var v
+    is_type IterDone
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var v
+    jump L2
+
+  L1:
+    load_var fallback
+
+  L2:
+    return
+}
+
+function user.typevar_null_let_first(v: T | null, fallback: T) -> T {
+    load_var v
+    is_type #0?
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var fallback
+    jump L2
+
+  L1:
+    load_var v
+
+  L2:
+    return
+}
+
+function user.typevar_null_null_first(v: T | null, fallback: T) -> T {
+    load_var v
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var v
+    jump L2
+
+  L1:
+    load_var fallback
+
+  L2:
+    return
+}
+
 function user.unwrap_curried(f: ((int) -> ((int) -> ((int) -> int throws never) throws never) throws never) | ((string) -> ((string) -> string throws never) throws never)) -> int {
     load_var f
     is_type (int) -> ((int) -> ((int) -> int throws never) throws never) throws never

@@ -800,7 +800,7 @@ function baml.iter.next(self: ?) -> T | baml.iter.Done  [expr] {
   { if (Not self.first_done) {  } match (self.first.next()) { baml.iter.Done => { self.first_done = true }, x: T => { return x } } } self.other.next()
 }
 function baml.iter.next(self: ?) -> T | baml.iter.Done  [expr] {
-  { if (self.idx Ge self.arr.length()) { return baml.iter.Done {  } }; let item = self.arr.at(self.idx); self.idx Add= 1 } match (item) { value: T => value }
+  { if (self.idx Ge self.arr.length()) { return baml.iter.Done {  } }; let item = self.arr.at(self.idx); self.idx Add= 1 } match (item) { value: T => value, null => baml.iter.Done {  } }
 }
 function baml.iter.next(self: ?) -> R | baml.iter.Done  [expr] {
   {  } match (self.source.next()) { baml.iter.Done => baml.iter.Done {  }, x: T => self.func(x) }

@@ -1,0 +1,51 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] error: non-exhaustive match on type T | null; missing: null
+    ╭─[ generic_typevar_match.baml:17:5 ]
+    │
+ 17 │ ╭─▶     match (b.items.pop()) {
+    ┆ ┆   
+ 19 │ ├─▶     }
+    │ │           
+    │ ╰─────────── non-exhaustive match on type T | null; missing: null
+    │     
+    │     Note: Error code: E0062
+────╯
+
+  [type] error: non-exhaustive match on type T | null; missing: null
+    ╭─[ generic_typevar_match.baml:24:5 ]
+    │
+ 24 │ ╭─▶     match (b.items.at(0)) {
+    ┆ ┆   
+ 26 │ ├─▶     }
+    │ │           
+    │ ╰─────────── non-exhaustive match on type T | null; missing: null
+    │     
+    │     Note: Error code: E0062
+────╯
+
+  [type] error: non-exhaustive match on type T | null; missing: null
+    ╭─[ generic_typevar_match.baml:31:5 ]
+    │
+ 31 │ ╭─▶     match (v) {
+    ┆ ┆   
+ 33 │ ├─▶     }
+    │ │           
+    │ ╰─────────── non-exhaustive match on type T | null; missing: null
+    │     
+    │     Note: Error code: E0062
+────╯
+
+  [type] error: non-exhaustive match on type T | string; missing: string
+    ╭─[ generic_typevar_match.baml:38:5 ]
+    │
+ 38 │ ╭─▶     match (v) {
+    ┆ ┆   
+ 40 │ ├─▶     }
+    │ │           
+    │ ╰─────────── non-exhaustive match on type T | string; missing: string
+    │     
+    │     Note: Error code: E0062
+────╯

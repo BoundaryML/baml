@@ -158,8 +158,15 @@ class ArrayIterator<T> {
       }
       let item = self.arr.at(self.idx);
       self.idx += 1;
+      // `at()` is typed `T | null`, so the match must cover `null`. The `null`
+      // arm is unreachable at runtime: past the bounds check `at()` returns a
+      // real stored element, and when `T` is nullable a stored `null` is a
+      // valid `T` and matches the `let value: T` arm (the pattern test resolves
+      // `T` against the frame's realized type args, so `is_type(null, T)` is
+      // true for a nullable `T`). It exists only to keep the match exhaustive.
       match (item) {
         let value: T => value,
+        null => Done {},
       }
     }
   }

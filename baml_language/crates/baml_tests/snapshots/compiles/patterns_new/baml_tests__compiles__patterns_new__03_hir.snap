@@ -5,6 +5,8 @@ source: crates/baml_tests/src/generated_tests.rs
 class user.AppError {
   code: int
 }
+class user.IterDone {
+}
 class user.PatternBucket {
   values: int[]
 }
@@ -89,6 +91,15 @@ function user.paren_chains_in_or(v: int) -> int  [expr] {
 }
 function user.risky_error(mode: int) -> int  [expr] {
   { if (mode Eq 0) { throw user.AppError { code: 1 } }; throw "boom" }
+}
+function user.typevar_done_first(v: T | user.IterDone, fallback: T) -> T  [expr] {
+  {  } match (v) { user.IterDone => fallback, x: T => x }
+}
+function user.typevar_null_let_first(v: T?, fallback: T) -> T  [expr] {
+  {  } match (v) { x: T => x, null => fallback }
+}
+function user.typevar_null_null_first(v: T?, fallback: T) -> T  [expr] {
+  {  } match (v) { null => fallback, x: T => x }
 }
 function user.unwrap_curried(f: (int) -> (int) -> (int) -> int | (string) -> (string) -> string) -> int  [expr] {
   {  } match (f) { triple: (int) -> (int) -> (int) -> int => triple(1)(2)(3), pair: (string) -> (string) -> string => 0 }

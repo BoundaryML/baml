@@ -2000,6 +2000,27 @@ impl BexVm {
         }
     }
 
+    /// Does `value` belong to the (already frame-resolved) `target` type?
+    ///
+    /// Used by the reified `is_type` test for a bare generic `let x: T` pattern.
+    /// Mirrors `is_subtype_of` for concrete/union targets, but for an interface
+    /// target it asks the impl registry whether the value's class implements the
+    /// interface — which a purely structural `is_subtype_of` cannot know (e.g. a
+    /// concrete `ArrayIterator` value against a reified `T = Iterable`).
+    fn value_matches_reified_ty(&self, value: Value, target: &baml_type::RuntimeTy) -> bool {
+        use baml_type::RuntimeTy;
+        match target {
+            RuntimeTy::Union(members, _) => members
+                .iter()
+                .any(|m| self.value_matches_reified_ty(value, m)),
+            RuntimeTy::Interface(name, args, assoc, _) => {
+                let value_ty = self.value_concrete_runtime_ty(value);
+                crate::package_baml::type_implements(self, &value_ty, name, args, assoc)
+            }
+            _ => self.value_concrete_runtime_ty(value).is_subtype_of(target),
+        }
+    }
+
     /// Get mutable string from a Value.
     ///
     /// Strings are immutable at the current BAML language surface. Do not use
@@ -7095,6 +7116,24 @@ impl BexVm {
                     // to the pre-resolved Object/Int path.
                     let raw_const = &function.bytecode.constants[const_idx];
                     let result = match raw_const {
+                        // A rigid generic type variable pattern (`let x: T`):
+                        // substitute `T` from the frame's realized type args and
+                        // test the value against the resolved type. This is how a
+                        // reified `T` pattern matches at runtime — e.g.
+                        // `is_type(null, int?)` is true, `is_type(null, int)` is
+                        // false (B-633), and a class value matches an interface
+                        // `T` it implements (e.g. `ArrayIterator` vs `Iterable`).
+                        ConstValue::Type(template) => {
+                            let template = template.clone();
+                            let frame_type_args =
+                                if let Frame::Bytecode(bf) = &self.frames[*frame_idx] {
+                                    bf.type_args.clone()
+                                } else {
+                                    vec![]
+                                };
+                            let resolved = template.substitute(&frame_type_args);
+                            self.value_matches_reified_ty(value, &resolved)
+                        }
                         ConstValue::ClassWithTypeArgs {
                             class_obj,
                             type_args_templates,

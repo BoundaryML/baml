@@ -273,3 +273,40 @@ class PatternBucket {
 class PatternMatrix {
     rows: int[][],
 }
+
+// ============================================================================
+// Generic `match` over a `T | <concrete>` scrutinee (B-633)
+//
+// A bare `let x: T` arm claims ONLY the union's open `T` member — never the
+// concrete `null`/`Done` member. So the concrete arm is required for
+// exhaustiveness (no E0062) AND reachable regardless of arm order (no false
+// E0063). Both orders must compile cleanly; the `let x: T`-first order is the
+// one that previously regressed into a false "unreachable arm".
+// ============================================================================
+
+// let-first: the trailing `null` arm is reachable, not shadowed by `let x: T`.
+function typevar_null_let_first<T>(v: T?, fallback: T) -> T {
+    match (v) {
+        let x: T => x,
+        null => fallback,
+    }
+}
+
+// null-first: the trailing `let x: T` arm is reachable.
+function typevar_null_null_first<T>(v: T?, fallback: T) -> T {
+    match (v) {
+        null => fallback,
+        let x: T => x,
+    }
+}
+
+class IterDone {
+}
+
+// Iterator-style: a concrete `Done` sentinel beside the open `T` member.
+function typevar_done_first<T>(v: T | IterDone, fallback: T) -> T {
+    match (v) {
+        IterDone => fallback,
+        let x: T => x,
+    }
+}

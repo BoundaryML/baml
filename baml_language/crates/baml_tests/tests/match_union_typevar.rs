@@ -65,12 +65,15 @@ fn tag_or_value_without_typevar_arm_is_non_exhaustive() {
     );
 }
 
-/// Adding the `let v: T` arm BEFORE the concrete arms makes those concrete arms
-/// unreachable (the open-`T` catch-all already covers every value). This is the
-/// *symmetric* check: the introspection fix is directional, not a blanket
-/// disabling of unreachable-arm detection for `TypeVar` unions.
+/// A bare `let v: T` arm claims ONLY the union's open `T` member — never a
+/// concrete sibling like `string`/`null`. So placing `let v: T` first does
+/// NOT shadow the concrete arms: when `T` is instantiated to e.g. `int`, that
+/// arm cannot match a `string` or `null` value, so those arms stay reachable.
+/// This is the pattern-side of the directional overlap (B-633): the mirror of
+/// the member-side rule, and the fix for the symmetric false "unreachable arm"
+/// (E0063) — reporting these concrete arms unreachable was the bug.
 #[test]
-fn typevar_arm_first_shadows_concrete_arms() {
+fn typevar_arm_first_does_not_shadow_concrete_arms() {
     let src = r#"
         function tag_or_value<T>(x: T | string | null) -> T? {
           match (x) {
@@ -83,8 +86,8 @@ fn typevar_arm_first_shadows_concrete_arms() {
     "#;
     let errors = error_ids(src);
     assert!(
-        errors.contains(&DiagnosticId::UnreachableArm),
-        "expected concrete arms after a bare `let v: T` to be unreachable, got: {errors:?}"
+        errors.is_empty(),
+        "expected concrete arms after a bare `let v: T` to stay reachable (T claims only its own member), got errors: {errors:?}"
     );
 }
 

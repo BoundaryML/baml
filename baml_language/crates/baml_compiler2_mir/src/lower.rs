@@ -15222,6 +15222,33 @@ impl LoweringContext<'_> {
                         self.emit_is_type_template_branch(scrutinee, template, success, failure);
                         return;
                     }
+                    // A bare generic `let x: T` pattern (T a rigid type variable
+                    // of the enclosing function/class) must likewise resolve `T`
+                    // against the frame's realized type args at runtime rather
+                    // than erase to `Void` — a constant-false test that would
+                    // make the arm never match. Before B-633 this never fired: a
+                    // bare `let x: T` always over-claimed its union scrutinee and
+                    // so was the exhaustive last arm (its test skipped). Now that
+                    // it claims only the `T` member, a non-last `let x: T` arm
+                    // emits a real test, so route it through the same
+                    // `tir2_to_dispatch_guard_template` path as the `Class<T>`
+                    // arm above (covariant `TypeArgRefOrWildcard`, resolved
+                    // against the frame). Guarded on the var being in scope so an
+                    // exotic residual `TypeVar` still takes the erased path below.
+                    if let Tir2Ty::TypeVar(name, _) = &pat_tir_ty {
+                        let generic_params = self.enclosing_generic_params();
+                        if generic_params.iter().any(|p| p == name) {
+                            let template = tir2_to_dispatch_guard_template(
+                                &pat_tir_ty,
+                                self.resolved_aliases,
+                                &generic_params,
+                            );
+                            self.emit_is_type_template_branch(
+                                scrutinee, template, success, failure,
+                            );
+                            return;
+                        }
+                    }
                     // Other patterns keep the erased fast path (unchanged codegen).
                     let annotation_ty = self.resolved_aliases.convert(&pat_tir_ty);
                     self.emit_is_type_branch(scrutinee, annotation_ty, success, failure);

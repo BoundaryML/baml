@@ -1,0 +1,19 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== HIR2 ===
+class user.Box {
+  items: T[]
+}
+function user.bad_at(b: user.Box<T>) -> T  [expr] {
+  {  } match (b.items.at(0)) { x: T => x }
+}
+function user.bad_pop(b: user.Box<T>) -> T  [expr] {
+  {  } match (b.items.pop()) { x: T => x }
+}
+function user.opt(v: T?) -> T  [expr] {
+  {  } match (v) { x: T => x }
+}
+function user.uni(v: T | string) -> T  [expr] {
+  {  } match (v) { x: T => x }
+}

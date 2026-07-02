@@ -1828,6 +1828,186 @@ SOURCE_FILE
         L_BRACKET "["
         R_BRACKET "]"
     R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "typevar_null_let_first"
+    GENERIC_PARAM_LIST
+      LESS "<"
+      GENERIC_PARAM "T"
+        WORD "T"
+      GREATER ">"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "v"
+        COLON ":"
+        TYPE_EXPR "T?"
+          WORD "T"
+          QUESTION "?"
+      COMMA ","
+      PARAMETER
+        WORD "fallback"
+        COLON ":"
+        TYPE_EXPR "T"
+          WORD "T"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "T"
+      WORD "T"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        MATCH_EXPR
+          KW_MATCH "match"
+          L_PAREN "("
+          WORD "v"
+          R_PAREN ")"
+          L_BRACE "{"
+          MATCH_ARM
+            PATTERN
+              BINDING_PATTERN
+                KW_LET "let"
+                WORD "x"
+                COLON ":"
+                PATTERN
+                  TYPE_PATTERN
+                    TYPE_EXPR "T"
+                      WORD "T"
+            FAT_ARROW "=>"
+            WORD "x"
+            COMMA ","
+          MATCH_ARM
+            PATTERN
+              TYPE_PATTERN
+                TYPE_EXPR "null"
+                  WORD "null"
+            FAT_ARROW "=>"
+            WORD "fallback"
+            COMMA ","
+          R_BRACE "}"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "typevar_null_null_first"
+    GENERIC_PARAM_LIST
+      LESS "<"
+      GENERIC_PARAM "T"
+        WORD "T"
+      GREATER ">"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "v"
+        COLON ":"
+        TYPE_EXPR "T?"
+          WORD "T"
+          QUESTION "?"
+      COMMA ","
+      PARAMETER
+        WORD "fallback"
+        COLON ":"
+        TYPE_EXPR "T"
+          WORD "T"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "T"
+      WORD "T"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        MATCH_EXPR
+          KW_MATCH "match"
+          L_PAREN "("
+          WORD "v"
+          R_PAREN ")"
+          L_BRACE "{"
+          MATCH_ARM
+            PATTERN
+              TYPE_PATTERN
+                TYPE_EXPR "null"
+                  WORD "null"
+            FAT_ARROW "=>"
+            WORD "fallback"
+            COMMA ","
+          MATCH_ARM
+            PATTERN
+              BINDING_PATTERN
+                KW_LET "let"
+                WORD "x"
+                COLON ":"
+                PATTERN
+                  TYPE_PATTERN
+                    TYPE_EXPR "T"
+                      WORD "T"
+            FAT_ARROW "=>"
+            WORD "x"
+            COMMA ","
+          R_BRACE "}"
+        R_BRACE "}"
+  CLASS_DEF "class IterDone {}"
+    KW_CLASS "class"
+    WORD "IterDone"
+    L_BRACE "{"
+    R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "typevar_done_first"
+    GENERIC_PARAM_LIST
+      LESS "<"
+      GENERIC_PARAM "T"
+        WORD "T"
+      GREATER ">"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "v"
+        COLON ":"
+        TYPE_EXPR "T | IterDone"
+          WORD "T"
+          PIPE "|"
+          WORD "IterDone"
+      COMMA ","
+      PARAMETER
+        WORD "fallback"
+        COLON ":"
+        TYPE_EXPR "T"
+          WORD "T"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "T"
+      WORD "T"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        MATCH_EXPR
+          KW_MATCH "match"
+          L_PAREN "("
+          WORD "v"
+          R_PAREN ")"
+          L_BRACE "{"
+          MATCH_ARM
+            PATTERN
+              TYPE_PATTERN
+                TYPE_EXPR "IterDone"
+                  WORD "IterDone"
+            FAT_ARROW "=>"
+            WORD "fallback"
+            COMMA ","
+          MATCH_ARM
+            PATTERN
+              BINDING_PATTERN
+                KW_LET "let"
+                WORD "x"
+                COLON ":"
+                PATTERN
+                  TYPE_PATTERN
+                    TYPE_EXPR "T"
+                      WORD "T"
+            FAT_ARROW "=>"
+            WORD "x"
+            COMMA ","
+          R_BRACE "}"
+        R_BRACE "}"
 
 === ERRORS ===
 None

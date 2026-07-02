@@ -248,6 +248,35 @@ class user.PatternBucket {
 class user.PatternMatrix {
   rows: int[][]
 }
+function user.typevar_null_let_first<T>(v: T | null, fallback: T) -> T throws never {
+  { : T
+    match (v : T | null) : T
+      x: T =>
+        x : T
+      null =>
+        fallback : T
+  }
+}
+function user.typevar_null_null_first<T>(v: T | null, fallback: T) -> T throws never {
+  { : T
+    match (v : T | null) : T
+      null =>
+        fallback : T
+      x: T =>
+        x : T
+  }
+}
+class user.IterDone {
+}
+function user.typevar_done_first<T>(v: T | user.IterDone, fallback: T) -> T throws never {
+  { : T
+    match (v : T | user.IterDone) : T
+      IterDone =>
+        fallback : T
+      x: T =>
+        x : T
+  }
+}
 type user.Number$stream = int | float
 class user.AppError$stream {
   code: int | null
@@ -257,4 +286,6 @@ class user.PatternBucket$stream {
 }
 class user.PatternMatrix$stream {
   rows: int[][]
+}
+class user.IterDone$stream {
 }

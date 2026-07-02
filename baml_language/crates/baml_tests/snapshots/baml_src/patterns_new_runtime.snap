@@ -578,7 +578,249 @@ function patterns_new_runtime.$init_test_ns_patterns_new_runtime_patterns_new_ru
     load_const null
     call testing.TestCollector.register_test
     pop 1
+    load_var registry
+    load_const "b633_let_first_present"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 98)>, 0
     load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "b633_let_first_null_routes_to_fallback"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 99)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "b633_null_first_present"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 100)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "b633_null_first_null_routes_to_fallback"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 101)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "b633_pop_present_returns_last"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 102)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "b633_pop_empty_routes_null_to_fallback"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 103)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "b633_at_in_bounds_returns_value"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 104)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "b633_at_out_of_bounds_routes_null_to_fallback"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 105)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "b633_nullable_binds_null"
+    make_closure .<lambda($init_test_ns_patterns_new_runtime_patterns_new_runtime, 106)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_const null
+    return
+}
+
+function patterns_new_runtime.b633_at_in_bounds() -> int {
+    load_type int
+    load_const 10
+    load_const 20
+    load_const 30
+    load_type int
+    alloc_array 3
+    load_const 1
+    load_const 1
+    unary_op -
+    call user.patterns_new_runtime.b633_at_or
+    return
+}
+
+function patterns_new_runtime.b633_at_or(items: T[], index: int, fallback: T) -> T {
+    load_type #0
+    load_var2 1 2
+    call baml.Array.at
+    store_var _4
+    load_var _4
+    is_type #0?
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var fallback
+    jump L2
+
+  L1:
+    load_var _4
+
+  L2:
+    return
+}
+
+function patterns_new_runtime.b633_at_out_of_bounds() -> int {
+    load_type int
+    load_const 10
+    load_const 20
+    load_const 30
+    load_type int
+    alloc_array 3
+    load_const 9
+    load_const 1
+    unary_op -
+    call user.patterns_new_runtime.b633_at_or
+    return
+}
+
+function patterns_new_runtime.b633_lf_null() -> int {
+    load_type int
+    load_const null
+    load_const 1
+    unary_op -
+    call user.patterns_new_runtime.b633_unwrap_let_first
+    return
+}
+
+function patterns_new_runtime.b633_lf_present() -> int {
+    load_type int
+    load_const 7
+    load_const 1
+    unary_op -
+    call user.patterns_new_runtime.b633_unwrap_let_first
+    return
+}
+
+function patterns_new_runtime.b633_nf_null() -> int {
+    load_type int
+    load_const null
+    load_const 1
+    unary_op -
+    call user.patterns_new_runtime.b633_unwrap_null_first
+    return
+}
+
+function patterns_new_runtime.b633_nf_present() -> int {
+    load_type int
+    load_const 7
+    load_const 1
+    unary_op -
+    call user.patterns_new_runtime.b633_unwrap_null_first
+    return
+}
+
+function patterns_new_runtime.b633_nullable_binds_null() -> int {
+    load_type int | null
+    load_const null
+    load_const 99
+    call user.patterns_new_runtime.b633_unwrap_let_first
+    store_var r
+    load_var r
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var r
+    jump L2
+
+  L1:
+    load_const 5
+    unary_op -
+
+  L2:
+    return
+}
+
+function patterns_new_runtime.b633_pop_empty() -> int {
+    load_type int
+    load_type int
+    alloc_array 0
+    load_const 1
+    unary_op -
+    call user.patterns_new_runtime.b633_pop_or
+    return
+}
+
+function patterns_new_runtime.b633_pop_or(items: T[], fallback: T) -> T {
+    load_type #0
+    load_var items
+    call baml.Array.pop
+    store_var _3
+    load_var _3
+    is_type #0?
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var fallback
+    jump L2
+
+  L1:
+    load_var _3
+
+  L2:
+    return
+}
+
+function patterns_new_runtime.b633_pop_present() -> int {
+    load_type int
+    load_const 1
+    load_const 2
+    load_const 3
+    load_type int
+    alloc_array 3
+    load_const 1
+    unary_op -
+    call user.patterns_new_runtime.b633_pop_or
+    return
+}
+
+function patterns_new_runtime.b633_unwrap_let_first(v: T | null, fallback: T) -> T {
+    load_var v
+    is_type #0?
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var fallback
+    jump L2
+
+  L1:
+    load_var v
+
+  L2:
+    return
+}
+
+function patterns_new_runtime.b633_unwrap_null_first(v: T | null, fallback: T) -> T {
+    load_var v
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var v
+    jump L2
+
+  L1:
+    load_var fallback
+
+  L2:
     return
 }
 

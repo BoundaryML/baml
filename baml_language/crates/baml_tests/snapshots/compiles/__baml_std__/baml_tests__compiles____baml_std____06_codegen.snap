@@ -3859,7 +3859,7 @@ function baml.iter.ArrayIterator$stream.Iterator.next(self: baml.iter.ArrayItera
     load_var2 2 3
     cmp_int_op >=
     pop_jump_if_false L0
-    jump L1
+    jump L3
 
   L0:
     load_type #0
@@ -3868,18 +3868,30 @@ function baml.iter.ArrayIterator$stream.Iterator.next(self: baml.iter.ArrayItera
     load_var self
     load_field .1
     call baml.Array.at
+    store_var item
     load_var self
     copy 0
     load_field .1
     load_const 1
     bin_op +
     store_field .1
+    load_var item
+    is_type #0?
+    pop_jump_if_false L1
     jump L2
 
   L1:
     alloc_instance baml.iter.Done
+    jump L4
 
   L2:
+    load_var item
+    jump L4
+
+  L3:
+    alloc_instance baml.iter.Done
+
+  L4:
     return
 }
 
@@ -3899,7 +3911,7 @@ function baml.iter.ArrayIterator.Iterator.next(self: baml.iter.ArrayIterator<T>)
     load_var2 2 3
     cmp_int_op >=
     pop_jump_if_false L0
-    jump L1
+    jump L3
 
   L0:
     load_type #0
@@ -3908,18 +3920,30 @@ function baml.iter.ArrayIterator.Iterator.next(self: baml.iter.ArrayIterator<T>)
     load_var self
     load_field .1
     call baml.Array.at
+    store_var item
     load_var self
     copy 0
     load_field .1
     load_const 1
     bin_op +
     store_field .1
+    load_var item
+    is_type #0?
+    pop_jump_if_false L1
     jump L2
 
   L1:
     alloc_instance baml.iter.Done
+    jump L4
 
   L2:
+    load_var item
+    jump L4
+
+  L3:
+    alloc_instance baml.iter.Done
+
+  L4:
     return
 }
 

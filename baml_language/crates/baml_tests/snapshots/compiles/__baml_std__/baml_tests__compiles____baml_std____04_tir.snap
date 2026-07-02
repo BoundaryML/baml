@@ -1364,16 +1364,18 @@ function baml.iter.ArrayIterator.iter(self: baml.iter.ArrayIterator<T>) -> baml.
   }
 }
 function baml.iter.ArrayIterator.next(self: baml.iter.ArrayIterator<T>) -> T | baml.iter.Done throws never {
-  { : T
+  { : T | baml.iter.Done
     if (self.idx >= self.arr.length() : bool) : void
       { : never
         return Done {  } : baml.iter.Done
       }
     let item = self.arr.at<T>(self.idx) : T | null
     self.idx Add= 1 : int
-    match (item : T | null) : T
+    match (item : T | null) : T | baml.iter.Done
       value: T =>
         value : T
+      null =>
+        Done {  } : baml.iter.Done
   }
 }
 class baml.iter.Range {
@@ -1722,16 +1724,18 @@ function baml.iter.ArrayIterator$stream.iter(self: baml.iter.ArrayIterator$strea
   !! 3930..3934: type mismatch: expected baml.iter.Iterator<Item = T, Error = never>, got baml.iter.ArrayIterator$stream<T>
 }
 function baml.iter.ArrayIterator$stream.next(self: baml.iter.ArrayIterator$stream<T>) -> T | baml.iter.Done throws never {
-  { : T
+  { : T | baml.iter.Done
     if (self.idx >= self.arr.length() : bool) : void
       { : never
         return Done {  } : baml.iter.Done
       }
     let item = self.arr.at<T>(self.idx) : T | null
     self.idx Add= 1 : unknown
-    match (item : T | null) : T
+    match (item : T | null) : T | baml.iter.Done
       value: T =>
         value : T
+      null =>
+        Done {  } : baml.iter.Done
   }
   !! 4259..4288: cannot order `int | null` and `int` with `>=`: ordering requires both operands to have the same type
   !! 4259..4288: cannot order `int | null` and `int` with `>=`: ordering requires both operands to have the same type
@@ -1747,7 +1751,7 @@ function baml.iter.Range$stream.iter(self: baml.iter.Range$stream) -> baml.iter.
   { : baml.iter.Range$stream
     self : baml.iter.Range$stream
   }
-  !! 4773..4777: type mismatch: expected baml.iter.Iterator<Item = int, Error = never>, got baml.iter.Range$stream
+  !! 5272..5276: type mismatch: expected baml.iter.Iterator<Item = int, Error = never>, got baml.iter.Range$stream
 }
 function baml.iter.Range$stream.next(self: baml.iter.Range$stream) -> int | baml.iter.Done throws never {
   { : int | null | baml.iter.Done
@@ -1762,9 +1766,9 @@ function baml.iter.Range$stream.next(self: baml.iter.Range$stream) -> int | baml
         Done {  } : baml.iter.Done
       }
   }
-  !! 4916..4933: `int | null` does not implement `Compare`, so it cannot be ordered with `<`
-  !! 4971..4977: operator `+` cannot be applied to `int | null` and `int | null`
-  !! 5000..5003: type mismatch: expected int | baml.iter.Done, got int | null
+  !! 5415..5432: `int | null` does not implement `Compare`, so it cannot be ordered with `<`
+  !! 5470..5476: operator `+` cannot be applied to `int | null` and `int | null`
+  !! 5499..5502: type mismatch: expected int | baml.iter.Done, got int | null
 }
 class baml.iter.Repeat$stream {
   value: T | null
@@ -1774,7 +1778,7 @@ function baml.iter.Repeat$stream.iter(self: baml.iter.Repeat$stream<T>) -> baml.
   { : baml.iter.Repeat$stream<T>
     self : baml.iter.Repeat$stream<T>
   }
-  !! 5361..5365: type mismatch: expected baml.iter.Iterator<Item = T, Error = never>, got baml.iter.Repeat$stream<T>
+  !! 5860..5864: type mismatch: expected baml.iter.Iterator<Item = T, Error = never>, got baml.iter.Repeat$stream<T>
 }
 function baml.iter.Repeat$stream.next(self: baml.iter.Repeat$stream<T>) -> T | baml.iter.Done throws never {
   { : T | null | baml.iter.Done
@@ -1793,11 +1797,11 @@ function baml.iter.Repeat$stream.next(self: baml.iter.Repeat$stream<T>) -> T | b
           Done {  } : baml.iter.Done
         }
   }
-  !! 5500..5514: cannot order `int | null` and `0` with `<`: ordering requires both operands to have the same type
-  !! 5526..5536: type mismatch: expected T | baml.iter.Done, got T | null
-  !! 5554..5568: cannot order `int | null` and `0` with `>`: ordering requires both operands to have the same type
-  !! 5580..5590: operator `-` cannot be applied to `int | null` and `1`
-  !! 5605..5615: type mismatch: expected T | baml.iter.Done, got T | null
+  !! 5999..6013: cannot order `int | null` and `0` with `<`: ordering requires both operands to have the same type
+  !! 6025..6035: type mismatch: expected T | baml.iter.Done, got T | null
+  !! 6053..6067: cannot order `int | null` and `0` with `>`: ordering requires both operands to have the same type
+  !! 6079..6089: operator `-` cannot be applied to `int | null` and `1`
+  !! 6104..6114: type mismatch: expected T | baml.iter.Done, got T | null
 }
 class baml.iter.Map$stream {
   source: baml.iter.Iterator | null
@@ -1807,7 +1811,7 @@ function baml.iter.Map$stream.iter(self: baml.iter.Map$stream<T, R, E, E2>) -> b
   { : baml.iter.Map$stream<T, R, E, E2>
     self : baml.iter.Map$stream<T, R, E, E2>
   }
-  !! 5905..5909: type mismatch: expected baml.iter.Iterator<Item = R, Error = E | E2>, got baml.iter.Map$stream<T, R, E, E2>
+  !! 6404..6408: type mismatch: expected baml.iter.Iterator<Item = R, Error = E | E2>, got baml.iter.Map$stream<T, R, E, E2>
 }
 function baml.iter.Map$stream.next(self: baml.iter.Map$stream<T, R, E, E2>) -> R | baml.iter.Done throws E | E2 {
   { : baml.iter.Done | unknown
@@ -1817,9 +1821,9 @@ function baml.iter.Map$stream.next(self: baml.iter.Map$stream<T, R, E, E2>) -> R
       x: T =>
         self.func(x) : unknown
   }
-  !! 6049..6065: did you mean `self.source?.next`? `self.source.next` does not handle the case when `self.source` is null
-  !! 6049..6067: `(() -> unknown | baml.iter.Done throws never) | null` is not a function — it cannot be called
-  !! 6116..6128: `unknown` is not a function — it cannot be called
+  !! 6548..6564: did you mean `self.source?.next`? `self.source.next` does not handle the case when `self.source` is null
+  !! 6548..6566: `(() -> unknown | baml.iter.Done throws never) | null` is not a function — it cannot be called
+  !! 6615..6627: `unknown` is not a function — it cannot be called
 }
 class baml.iter.Filter$stream {
   source: baml.iter.Iterator | null
@@ -1829,7 +1833,7 @@ function baml.iter.Filter$stream.iter(self: baml.iter.Filter$stream<T, E, E2>) -
   { : baml.iter.Filter$stream<T, E, E2>
     self : baml.iter.Filter$stream<T, E, E2>
   }
-  !! 6396..6400: type mismatch: expected baml.iter.Iterator<Item = T, Error = E | E2>, got baml.iter.Filter$stream<T, E, E2>
+  !! 6895..6899: type mismatch: expected baml.iter.Iterator<Item = T, Error = E | E2>, got baml.iter.Filter$stream<T, E, E2>
 }
 function baml.iter.Filter$stream.next(self: baml.iter.Filter$stream<T, E, E2>) -> T | baml.iter.Done throws E | E2 {
   { : baml.iter.Done
@@ -1850,9 +1854,9 @@ function baml.iter.Filter$stream.next(self: baml.iter.Filter$stream<T, E, E2>) -
       }
     Done {  } : baml.iter.Done
   }
-  !! 6563..6579: did you mean `self.source?.next`? `self.source.next` does not handle the case when `self.source` is null
-  !! 6563..6581: `(() -> unknown | baml.iter.Done throws never) | null` is not a function — it cannot be called
-  !! 6664..6681: `unknown` is not a function — it cannot be called
+  !! 7062..7078: did you mean `self.source?.next`? `self.source.next` does not handle the case when `self.source` is null
+  !! 7062..7080: `(() -> unknown | baml.iter.Done throws never) | null` is not a function — it cannot be called
+  !! 7163..7180: `unknown` is not a function — it cannot be called
 }
 class baml.iter.FilterMap$stream {
   source: baml.iter.Iterator | null
@@ -1862,7 +1866,7 @@ function baml.iter.FilterMap$stream.iter(self: baml.iter.FilterMap$stream<T, R, 
   { : baml.iter.FilterMap$stream<T, R, E, E2>
     self : baml.iter.FilterMap$stream<T, R, E, E2>
   }
-  !! 7025..7029: type mismatch: expected baml.iter.Iterator<Item = R, Error = E | E2>, got baml.iter.FilterMap$stream<T, R, E, E2>
+  !! 7524..7528: type mismatch: expected baml.iter.Iterator<Item = R, Error = E | E2>, got baml.iter.FilterMap$stream<T, R, E, E2>
 }
 function baml.iter.FilterMap$stream.next(self: baml.iter.FilterMap$stream<T, R, E, E2>) -> R | baml.iter.Done throws E | E2 {
   { : baml.iter.Done
@@ -1887,9 +1891,9 @@ function baml.iter.FilterMap$stream.next(self: baml.iter.FilterMap$stream<T, R, 
       }
     Done {  } : baml.iter.Done
   }
-  !! 7192..7208: did you mean `self.source?.next`? `self.source.next` does not handle the case when `self.source` is null
-  !! 7192..7210: `(() -> unknown | baml.iter.Done throws never) | null` is not a function — it cannot be called
-  !! 7296..7308: `unknown` is not a function — it cannot be called
+  !! 7691..7707: did you mean `self.source?.next`? `self.source.next` does not handle the case when `self.source` is null
+  !! 7691..7709: `(() -> unknown | baml.iter.Done throws never) | null` is not a function — it cannot be called
+  !! 7795..7807: `unknown` is not a function — it cannot be called
 }
 class baml.iter.FlatMap$stream {
   source: baml.iter.Iterator | null
@@ -1900,7 +1904,7 @@ function baml.iter.FlatMap$stream.iter(self: baml.iter.FlatMap$stream<T, R, E, E
   { : baml.iter.FlatMap$stream<T, R, E, E2, E3>
     self : baml.iter.FlatMap$stream<T, R, E, E2, E3>
   }
-  !! 7782..7786: type mismatch: expected baml.iter.Iterator<Item = R, Error = E | E2 | E3>, got baml.iter.FlatMap$stream<T, R, E, E2, E3>
+  !! 8281..8285: type mismatch: expected baml.iter.Iterator<Item = R, Error = E | E2 | E3>, got baml.iter.FlatMap$stream<T, R, E, E2, E3>
 }
 function baml.iter.FlatMap$stream.next(self: baml.iter.FlatMap$stream<T, R, E, E2, E3>) -> R | baml.iter.Done throws E | E2 | E3 {
   { : baml.iter.Done
@@ -1935,13 +1939,13 @@ function baml.iter.FlatMap$stream.next(self: baml.iter.FlatMap$stream<T, R, E, E
       }
     Done {  } : baml.iter.Done
   }
-  !! 8047..8055: type `never` has no member `next`
-  !! 8188..8192: type mismatch: expected baml.iter.Iterator | baml.iter.Done$stream | null, got baml.iter.Done
-  !! 8217..8233: did you mean `self.source?.next`? `self.source.next` does not handle the case when `self.source` is null
-  !! 8217..8235: `(() -> unknown | baml.iter.Done throws never) | null` is not a function — it cannot be called
-  !! 8335..8347: `unknown` is not a function — it cannot be called
-  !! 7952..8442: non-exhaustive match on `baml.iter.Iterator | baml.iter.Done$stream | null`; missing: baml.iter.Iterator, baml.iter.Done$stream {}, null
-  !! 8026..8176: unreachable arm
+  !! 8546..8554: type `never` has no member `next`
+  !! 8687..8691: type mismatch: expected baml.iter.Iterator | baml.iter.Done$stream | null, got baml.iter.Done
+  !! 8716..8732: did you mean `self.source?.next`? `self.source.next` does not handle the case when `self.source` is null
+  !! 8716..8734: `(() -> unknown | baml.iter.Done throws never) | null` is not a function — it cannot be called
+  !! 8834..8846: `unknown` is not a function — it cannot be called
+  !! 8451..8941: non-exhaustive match on `baml.iter.Iterator | baml.iter.Done$stream | null`; missing: baml.iter.Iterator, baml.iter.Done$stream {}, null
+  !! 8525..8675: unreachable arm
 }
 class baml.iter.Flatten$stream {
   source: baml.iter.Iterator | null
@@ -1951,7 +1955,7 @@ function baml.iter.Flatten$stream.iter(self: baml.iter.Flatten$stream<I, R, E, E
   { : baml.iter.Flatten$stream<I, R, E, E3>
     self : baml.iter.Flatten$stream<I, R, E, E3>
   }
-  !! 8778..8782: type mismatch: expected baml.iter.Iterator<Item = R, Error = E | E3>, got baml.iter.Flatten$stream<I, R, E, E3>
+  !! 9277..9281: type mismatch: expected baml.iter.Iterator<Item = R, Error = E | E3>, got baml.iter.Flatten$stream<I, R, E, E3>
 }
 function baml.iter.Flatten$stream.next(self: baml.iter.Flatten$stream<I, R, E, E3>) -> R | baml.iter.Done throws E | E3 {
   { : baml.iter.Done
@@ -1986,12 +1990,12 @@ function baml.iter.Flatten$stream.next(self: baml.iter.Flatten$stream<I, R, E, E
       }
     Done {  } : baml.iter.Done
   }
-  !! 9033..9041: type `never` has no member `next`
-  !! 9174..9178: type mismatch: expected baml.iter.Iterator | baml.iter.Done$stream | null, got baml.iter.Done
-  !! 9203..9219: did you mean `self.source?.next`? `self.source.next` does not handle the case when `self.source` is null
-  !! 9203..9221: `(() -> unknown | baml.iter.Done throws never) | null` is not a function — it cannot be called
-  !! 8938..9417: non-exhaustive match on `baml.iter.Iterator | baml.iter.Done$stream | null`; missing: baml.iter.Iterator, baml.iter.Done$stream {}, null
-  !! 9012..9162: unreachable arm
+  !! 9532..9540: type `never` has no member `next`
+  !! 9673..9677: type mismatch: expected baml.iter.Iterator | baml.iter.Done$stream | null, got baml.iter.Done
+  !! 9702..9718: did you mean `self.source?.next`? `self.source.next` does not handle the case when `self.source` is null
+  !! 9702..9720: `(() -> unknown | baml.iter.Done throws never) | null` is not a function — it cannot be called
+  !! 9437..9916: non-exhaustive match on `baml.iter.Iterator | baml.iter.Done$stream | null`; missing: baml.iter.Iterator, baml.iter.Done$stream {}, null
+  !! 9511..9661: unreachable arm
 }
 class baml.iter.Peekable$stream {
   source: baml.iter.Iterator | null
@@ -2002,7 +2006,7 @@ function baml.iter.Peekable$stream.iter(self: baml.iter.Peekable$stream<T, E>) -
   { : baml.iter.Peekable$stream<T, E>
     self : baml.iter.Peekable$stream<T, E>
   }
-  !! 9885..9889: type mismatch: expected baml.iter.Iterator<Item = T, Error = E>, got baml.iter.Peekable$stream<T, E>
+  !! 10384..10388: type mismatch: expected baml.iter.Iterator<Item = T, Error = E>, got baml.iter.Peekable$stream<T, E>
 }
 function baml.iter.Peekable$stream.next(self: baml.iter.Peekable$stream<T, E>) -> T | baml.iter.Done throws E {
   { : unknown
@@ -2015,9 +2019,9 @@ function baml.iter.Peekable$stream.next(self: baml.iter.Peekable$stream<T, E>) -
       }
     self.source.next() : unknown
   }
-  !! 10143..10144: type mismatch: expected T | baml.iter.Done, got T | baml.iter.Done$stream | null
-  !! 10160..10176: did you mean `self.source?.next`? `self.source.next` does not handle the case when `self.source` is null
-  !! 10160..10178: `(() -> unknown | baml.iter.Done throws never) | null` is not a function — it cannot be called
+  !! 10642..10643: type mismatch: expected T | baml.iter.Done, got T | baml.iter.Done$stream | null
+  !! 10659..10675: did you mean `self.source?.next`? `self.source.next` does not handle the case when `self.source` is null
+  !! 10659..10677: `(() -> unknown | baml.iter.Done throws never) | null` is not a function — it cannot be called
 }
 class baml.iter.StepBy$stream {
   source: baml.iter.Iterator | null
@@ -2028,7 +2032,7 @@ function baml.iter.StepBy$stream.iter(self: baml.iter.StepBy$stream<T, E>) -> ba
   { : baml.iter.StepBy$stream<T, E>
     self : baml.iter.StepBy$stream<T, E>
   }
-  !! 10411..10415: type mismatch: expected baml.iter.Iterator<Item = T, Error = E>, got baml.iter.StepBy$stream<T, E>
+  !! 10910..10914: type mismatch: expected baml.iter.Iterator<Item = T, Error = E>, got baml.iter.StepBy$stream<T, E>
 }
 function baml.iter.StepBy$stream.next(self: baml.iter.StepBy$stream<T, E>) -> T | baml.iter.Done throws E {
   { : unknown
@@ -2053,13 +2057,13 @@ function baml.iter.StepBy$stream.next(self: baml.iter.StepBy$stream<T, E>) -> T 
     }
     self.source.next() : unknown
   }
-  !! 10599..10615: did you mean `self.source?.next`? `self.source.next` does not handle the case when `self.source` is null
-  !! 10599..10617: `(() -> unknown | baml.iter.Done throws never) | null` is not a function — it cannot be called
-  !! 10653..10663: operator `-` cannot be applied to `int | null` and `1`
-  !! 10690..10706: did you mean `self.source?.next`? `self.source.next` does not handle the case when `self.source` is null
-  !! 10690..10708: `(() -> unknown | baml.iter.Done throws never) | null` is not a function — it cannot be called
-  !! 10801..10817: did you mean `self.source?.next`? `self.source.next` does not handle the case when `self.source` is null
-  !! 10801..10819: `(() -> unknown | baml.iter.Done throws never) | null` is not a function — it cannot be called
+  !! 11098..11114: did you mean `self.source?.next`? `self.source.next` does not handle the case when `self.source` is null
+  !! 11098..11116: `(() -> unknown | baml.iter.Done throws never) | null` is not a function — it cannot be called
+  !! 11152..11162: operator `-` cannot be applied to `int | null` and `1`
+  !! 11189..11205: did you mean `self.source?.next`? `self.source.next` does not handle the case when `self.source` is null
+  !! 11189..11207: `(() -> unknown | baml.iter.Done throws never) | null` is not a function — it cannot be called
+  !! 11300..11316: did you mean `self.source?.next`? `self.source.next` does not handle the case when `self.source` is null
+  !! 11300..11318: `(() -> unknown | baml.iter.Done throws never) | null` is not a function — it cannot be called
 }
 class baml.iter.Chain$stream {
   first: baml.iter.Iterator | null
@@ -2070,7 +2074,7 @@ function baml.iter.Chain$stream.iter(self: baml.iter.Chain$stream<T, E, E2>) -> 
   { : baml.iter.Chain$stream<T, E, E2>
     self : baml.iter.Chain$stream<T, E, E2>
   }
-  !! 11100..11104: type mismatch: expected baml.iter.Iterator<Item = T, Error = E | E2>, got baml.iter.Chain$stream<T, E, E2>
+  !! 11599..11603: type mismatch: expected baml.iter.Iterator<Item = T, Error = E | E2>, got baml.iter.Chain$stream<T, E, E2>
 }
 function baml.iter.Chain$stream.next(self: baml.iter.Chain$stream<T, E, E2>) -> T | baml.iter.Done throws E | E2 {
   { : unknown
@@ -2088,10 +2092,10 @@ function baml.iter.Chain$stream.next(self: baml.iter.Chain$stream<T, E, E2>) -> 
       }
     self.other.next() : unknown
   }
-  !! 11276..11291: did you mean `self.first?.next`? `self.first.next` does not handle the case when `self.first` is null
-  !! 11276..11293: `(() -> unknown | baml.iter.Done throws never) | null` is not a function — it cannot be called
-  !! 11405..11420: did you mean `self.other?.next`? `self.other.next` does not handle the case when `self.other` is null
-  !! 11405..11422: `(() -> unknown | baml.iter.Done throws never) | null` is not a function — it cannot be called
+  !! 11775..11790: did you mean `self.first?.next`? `self.first.next` does not handle the case when `self.first` is null
+  !! 11775..11792: `(() -> unknown | baml.iter.Done throws never) | null` is not a function — it cannot be called
+  !! 11904..11919: did you mean `self.other?.next`? `self.other.next` does not handle the case when `self.other` is null
+  !! 11904..11921: `(() -> unknown | baml.iter.Done throws never) | null` is not a function — it cannot be called
 }
 
 --- <builtin>/baml/ns_json/json.baml ---

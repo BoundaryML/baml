@@ -6142,7 +6142,8 @@ fn baml.iter.ArrayIterator.Iterator.next(self: null) -> T | baml.iter.Done {
     let _7: (T[], int) -> T | null throws never
     let _8: int
     let _9: type
-    let _10: T // value
+    let _10: bool
+    let _11: T // value
 
     bb0: {
         _3 = copy _1.1;
@@ -6153,7 +6154,7 @@ fn baml.iter.ArrayIterator.Iterator.next(self: null) -> T | baml.iter.Done {
 
     bb1: {
         _2 = copy _3 >= copy _4;
-        branch copy _2 -> [bb4, bb2];
+        branch copy _2 -> [bb6, bb2];
     }
 
     bb2: {
@@ -6165,17 +6166,27 @@ fn baml.iter.ArrayIterator.Iterator.next(self: null) -> T | baml.iter.Done {
 
     bb3: {
         _1.1 = copy _1.1 + const 1_i64;
-        _10 = copy _6;
-        _0 = copy _10;
-        goto -> bb5;
+        _10 = is_type(copy _6, #0?);
+        branch copy _10 -> [bb5, bb4];
     }
 
     bb4: {
         _0 = baml.iter.Done {  };
-        goto -> bb5;
+        goto -> bb7;
     }
 
     bb5: {
+        _11 = copy _6;
+        _0 = copy _11;
+        goto -> bb7;
+    }
+
+    bb6: {
+        _0 = baml.iter.Done {  };
+        goto -> bb7;
+    }
+
+    bb7: {
         return;
     }
 }

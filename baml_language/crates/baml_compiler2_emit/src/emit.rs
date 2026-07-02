@@ -3297,6 +3297,20 @@ impl PullSink for StackifyCodegen<'_, '_> {
                     self.set_operand(inst, OperandMeta::Const("false".to_string()));
                 }
             }
+            // ── Rigid generic type variable (`let x: T`) ─────────────────────
+            // A bare `T` in a pattern resolves against the frame's realized type
+            // args at runtime. Carry the `TypeArgRef` in a `Type` constant so the
+            // `IsType` opcode substitutes `T` from `frame.type_args` and tests the
+            // value's runtime type against the resolved type (with union/null
+            // expansion via `is_subtype_of`). Before this, a bare `TypeArgRef`
+            // fell through to the constant-`false` arm below, so a non-catch-all
+            // `let x: T` arm never matched at runtime (B-633).
+            #[expect(deprecated, reason = "TypeArgRefOrWildcard shares the de Bruijn index")]
+            TyTemplate::TypeArgRef(_) | TyTemplate::TypeArgRefOrWildcard(_) => {
+                let c = self.add_constant(ConstValue::Type(ty_template.clone()));
+                let inst = self.emit(Instruction::IsType(c));
+                self.set_operand(inst, OperandMeta::Const(ty_template.to_string()));
+            }
             // ── Other templates (Array, Optional, Union, Map) ─────────────────
             // These don't arise from pattern matching today — fall back to false.
             _ => {

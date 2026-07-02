@@ -1181,6 +1181,93 @@ fn user.risky_error(mode: int) -> int {
     }
 }
 
+fn user.typevar_done_first(v: T | IterDone, fallback: T) -> T {
+    // Locals:
+    let _0: T // _0 // return
+    let _1: T | IterDone // v // param
+    let _2: T // fallback // param
+    let _3: bool
+    let _4: T // x
+
+    bb0: {
+        _3 = is_type(copy _1, IterDone);
+        branch copy _3 -> [bb2, bb1];
+    }
+
+    bb1: {
+        _4 = copy _1;
+        _0 = copy _4;
+        goto -> bb3;
+    }
+
+    bb2: {
+        _0 = copy _2;
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+}
+
+fn user.typevar_null_let_first(v: T | null, fallback: T) -> T {
+    // Locals:
+    let _0: T // _0 // return
+    let _1: T | null // v // param
+    let _2: T // fallback // param
+    let _3: bool
+    let _4: T // x
+
+    bb0: {
+        _3 = is_type(copy _1, #0?);
+        branch copy _3 -> [bb2, bb1];
+    }
+
+    bb1: {
+        _0 = copy _2;
+        goto -> bb3;
+    }
+
+    bb2: {
+        _4 = copy _1;
+        _0 = copy _4;
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+}
+
+fn user.typevar_null_null_first(v: T | null, fallback: T) -> T {
+    // Locals:
+    let _0: T // _0 // return
+    let _1: T | null // v // param
+    let _2: T // fallback // param
+    let _3: bool
+    let _4: T // x
+
+    bb0: {
+        _3 = copy _1 == const null;
+        branch copy _3 -> [bb2, bb1];
+    }
+
+    bb1: {
+        _4 = copy _1;
+        _0 = copy _4;
+        goto -> bb3;
+    }
+
+    bb2: {
+        _0 = copy _2;
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+}
+
 fn user.unwrap_curried(f: ((int) -> ((int) -> ((int) -> int throws never) throws never) throws never) | ((string) -> ((string) -> string throws never) throws never)) -> int {
     // Locals:
     let _0: int // _0 // return

@@ -104,16 +104,6 @@ source: crates/baml_tests/src/generated_tests.rs
      │ Note: Error code: E0001
 ─────╯
 
-  [type] error: unreachable arm
-     ╭─[ classes.baml:197:21 ]
-     │
- 197 │             null => default,
-     │                     ───┬───  
-     │                        ╰───── unreachable arm
-     │ 
-     │ Note: Error code: E0063
-─────╯
-
   [type] error: unresolved name: fetch_as
    ╭─[ fetch_as.baml:9:5 ]
    │
