@@ -216,35 +216,35 @@ impl RuntimeTy {
 
     // --- Rendering / subtyping ---
     //
-    // These reuse `Ty`'s implementation via the infallible upcast so the
-    // structural logic lives in exactly one place. The value remains a
-    // statically runtime-safe `RuntimeTy`; the upcast is purely to share the
-    // algorithm. None of these are on a VM-hot path.
+    // These reuse `Ty`'s implementation so the structural logic lives in exactly
+    // one place. The upcast is [`RuntimeTy::as_ty`] — a zero-cost borrow, not a
+    // clone — so sharing the algorithm costs nothing; the value remains a
+    // statically runtime-safe `RuntimeTy`.
 
     /// User-facing rendering — see [`Ty::render_user_facing`].
     pub fn render_user_facing(&self) -> String {
-        Ty::from(self).render_user_facing()
+        self.as_ty().render_user_facing()
     }
 
     /// Canonical structural rendering — see [`Ty::render_canonical`].
     pub fn render_canonical(&self) -> String {
-        Ty::from(self).render_canonical()
+        self.as_ty().render_canonical()
     }
 
     /// Render with a custom strategy — see [`Ty::render_with`].
     pub fn render_with(&self, s: &dyn crate::TyRenderStrategy) -> String {
-        Ty::from(self).render_with(s)
+        self.as_ty().render_with(s)
     }
 
     /// Structural subtyping — see [`Ty::is_subtype_of`].
     pub fn is_subtype_of(&self, other: &RuntimeTy) -> bool {
-        Ty::from(self).is_subtype_of(&Ty::from(other))
+        self.as_ty().is_subtype_of(other.as_ty())
     }
 }
 
 impl std::fmt::Display for RuntimeTy {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        std::fmt::Display::fmt(&Ty::from(self), f)
+        std::fmt::Display::fmt(self.as_ty(), f)
     }
 }
 

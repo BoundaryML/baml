@@ -10,7 +10,7 @@
 
 use std::collections::HashMap;
 
-use proc_macro2::{Group, Ident, TokenStream, TokenTree};
+use proc_macro2::{Group, Ident, Literal, TokenStream, TokenTree};
 use quote::{ToTokens, format_ident, quote};
 use syn::{Attribute, Fields};
 
@@ -39,12 +39,25 @@ fn gen_member_enum(family: &Family, member: &Member) -> TokenStream {
     let child = &family.members[member.child];
     let map = replacements(family, &child.name);
 
-    let variants = member_variants(family, member).map(|v| {
-        let attrs = &v.attrs;
-        let ident = &v.ident;
-        let fields = replace_idents(v.fields.to_token_stream(), &map);
-        quote! { #(#attrs)* #ident #fields }
-    });
+    // Each variant carries an explicit discriminant equal to its index in the
+    // *master* declaration order — not its position within this member. Members
+    // that omit variants therefore leave gaps in their discriminant sequence
+    // rather than renumbering the tail, so a given logical variant has the same
+    // `#[repr(C, u8)]` tag in every member that includes it. That cross-member
+    // tag identity is exactly what lets an upcast reinterpret one member's bytes
+    // as another's without a walk (see `convert::gen_widen_transmute`).
+    let variants = family
+        .variants
+        .iter()
+        .enumerate()
+        .filter(|(_, v)| member.includes.contains(&v.axis))
+        .map(|(idx, v)| {
+            let attrs = &v.attrs;
+            let ident = &v.ident;
+            let fields = replace_idents(v.fields.to_token_stream(), &map);
+            let disc = Literal::u8_unsuffixed(idx as u8);
+            quote! { #(#attrs)* #ident #fields = #disc }
+        });
 
     let docs = member_docs(family, member);
     let derives = nondoc_attrs(&family.master_attrs);
@@ -52,6 +65,14 @@ fn gen_member_enum(family: &Family, member: &Member) -> TokenStream {
     quote! {
         #(#docs)*
         #(#derives)*
+        // `repr(C, u8)`: a layout-stable `{ u8 tag, C-union payload }` shared
+        // identically across the family, so members with matching size/align are
+        // mutually transmutable. `use_discriminant = false`: Borsh keeps tagging
+        // by declaration index (compact, gap-free), decoupled from the in-memory
+        // discriminant — so the explicit tags above leave the wire format
+        // unchanged.
+        #[repr(C, u8)]
+        #[borsh(use_discriminant = false)]
         pub enum #name {
             #(#variants),*
         }
@@ -155,6 +176,11 @@ fn gen_satellite(family: &Family, member: &Member, sat: &Satellite) -> TokenStre
     quote! {
         #[doc = #doc]
         #(#derives)*
+        // `repr(C)`: a fixed field order shared across the family so a satellite
+        // is layout-identical to its siblings (they differ only in the recursive
+        // field's member type), letting the enum-level transmute reinterpret a
+        // `Vec<FunctionParamTy>` field as `Vec<RuntimeFunctionParamTy>` soundly.
+        #[repr(C)]
         pub struct #sat_name {
             #fields
         }
