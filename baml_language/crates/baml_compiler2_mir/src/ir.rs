@@ -730,9 +730,9 @@ pub enum Rvalue {
     ///
     /// The type is stored as a `TyTemplate` so that generic class checks like
     /// `value is Foo<T>` (where `T` is a type parameter in scope) resolve
-    /// correctly at runtime via `TypeArgRef` substitution.  For fully-concrete
-    /// types the template is `TyTemplate::Concrete(ty)`, which the emitter
-    /// handles on the same fast path as before.
+    /// correctly at runtime via `TypeArgRef` substitution.  A fully-realized
+    /// template narrows to a `RealizedTy`, which the emitter handles on the
+    /// same tag / class-identity fast path as before.
     IsType {
         operand: Operand,
         ty_template: TyTemplate,
@@ -793,9 +793,9 @@ pub enum Rvalue {
 
     /// Materialize a `Ty` from a `TyTemplate`.
     ///
-    /// For concrete templates (`TyTemplate::Concrete`), the `Ty` is baked in
-    /// at compile time. For templates containing `TypeArgRef(N)`, the VM
-    /// substitutes `frame.type_args[N]` at execution time.
+    /// For a fully-realized template, the `Ty` is baked in at compile time.
+    /// For templates containing `TypeArgRef(N)`, the VM substitutes
+    /// `frame.type_args[N]` at execution time.
     ///
     /// Emitted by the `reflect.type_of<T>()` intrinsic.
     /// Lowers to `Instruction::LoadType(const_idx)` in bytecode.

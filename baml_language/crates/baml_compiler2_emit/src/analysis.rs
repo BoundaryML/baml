@@ -1978,7 +1978,7 @@ mod tests {
                         kind: StatementKind::Assign {
                             destination: Place::Local(Local(0)),
                             value: Rvalue::Array(
-                                baml_type::TyTemplate::Concrete(baml_type::RuntimeTy::unknown()),
+                                baml_type::TyTemplate::from(baml_type::RealizedTy::unknown()),
                                 vec![
                                     Operand::copy_local(target),
                                     Operand::Constant(Constant::Int(1)),

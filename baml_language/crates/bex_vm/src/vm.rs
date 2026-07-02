@@ -43,32 +43,41 @@ fn guard_template_matches(
     frame_type_args: &[baml_type::RuntimeTy],
     actual: &baml_type::RuntimeTy,
 ) -> bool {
+    use baml_type::{RealizedTy, RuntimeTy, TyTemplate};
+
+    // A fully-realized template carries no frame refs or holes: compare it to
+    // the actual arg by exact structural equality (the invariant-position rule
+    // for reified type args). This is the flattened successor to the old
+    // `Concrete(expected) => expected == actual` arm.
+    if let Ok(realized) = <&RealizedTy>::try_from(template) {
+        return realized.as_runtime_ty() == actual;
+    }
+
     match template {
-        baml_type::TyTemplate::Wildcard => true,
+        TyTemplate::Wildcard => true,
         #[expect(deprecated)]
-        baml_type::TyTemplate::TypeArgRefOrWildcard(n) => match frame_type_args.get(*n as usize) {
-            Some(baml_type::RuntimeTy::BuiltinUnknown { .. }) | None => true,
+        TyTemplate::TypeArgRefOrWildcard(n) => match frame_type_args.get(*n as usize) {
+            Some(RuntimeTy::BuiltinUnknown { .. }) | None => true,
             Some(expected) => actual.is_subtype_of(expected),
         },
-        baml_type::TyTemplate::TypeArgRef(n) => {
+        TyTemplate::TypeArgRef(n) => {
             frame_type_args
                 .get(*n as usize)
                 .cloned()
-                .unwrap_or_else(baml_type::RuntimeTy::unknown)
+                .unwrap_or_else(RuntimeTy::unknown)
                 == *actual
         }
-        baml_type::TyTemplate::Concrete(expected) => expected == actual,
-        baml_type::TyTemplate::Array(inner) => {
-            matches!(actual, baml_type::RuntimeTy::List(actual_inner, _) if guard_template_matches(inner, frame_type_args, actual_inner))
+        TyTemplate::List(inner, _) => {
+            matches!(actual, RuntimeTy::List(actual_inner, _) if guard_template_matches(inner, frame_type_args, actual_inner))
         }
-        baml_type::TyTemplate::Map(k, v) => {
-            matches!(actual, baml_type::RuntimeTy::Map { key, value, .. } if guard_template_matches(k, frame_type_args, key) && guard_template_matches(v, frame_type_args, value))
+        TyTemplate::Map { key, value, .. } => {
+            matches!(actual, RuntimeTy::Map { key: actual_key, value: actual_value, .. } if guard_template_matches(key, frame_type_args, actual_key) && guard_template_matches(value, frame_type_args, actual_value))
         }
-        baml_type::TyTemplate::Class(name, args) => {
-            matches!(actual, baml_type::RuntimeTy::Class(actual_name, actual_args, _) if name == actual_name && args.len() == actual_args.len() && args.iter().zip(actual_args).all(|(template, actual)| guard_template_matches(template, frame_type_args, actual)))
+        TyTemplate::Class(name, args, _) => {
+            matches!(actual, RuntimeTy::Class(actual_name, actual_args, _) if name == actual_name && args.len() == actual_args.len() && args.iter().zip(actual_args).all(|(template, actual)| guard_template_matches(template, frame_type_args, actual)))
         }
-        baml_type::TyTemplate::Interface(name, args, assoc) => {
-            matches!(actual, baml_type::RuntimeTy::Interface(actual_name, actual_args, actual_assoc, _) if name == actual_name
+        TyTemplate::Interface(name, args, assoc, _) => {
+            matches!(actual, RuntimeTy::Interface(actual_name, actual_args, actual_assoc, _) if name == actual_name
             && args.len() == actual_args.len()
             && args.iter().zip(actual_args).all(|(template, actual)| guard_template_matches(template, frame_type_args, actual))
             && assoc.iter().all(|(name, template)| {
@@ -78,18 +87,46 @@ fn guard_template_matches(
                     .is_some_and(|(_, actual)| guard_template_matches(template, frame_type_args, actual))
             }))
         }
-        baml_type::TyTemplate::Union(parts) => match actual {
-            baml_type::RuntimeTy::Union(actual_parts, _) => {
-                actual_parts.iter().all(|actual_part| {
-                    parts
-                        .iter()
-                        .any(|part| guard_template_matches(part, frame_type_args, actual_part))
-                })
-            }
+        TyTemplate::Union(parts, _) => match actual {
+            RuntimeTy::Union(actual_parts, _) => actual_parts.iter().all(|actual_part| {
+                parts
+                    .iter()
+                    .any(|part| guard_template_matches(part, frame_type_args, actual_part))
+            }),
             _ => parts
                 .iter()
                 .any(|part| guard_template_matches(part, frame_type_args, actual)),
         },
+        TyTemplate::Function {
+            params,
+            ret,
+            throws,
+            ..
+        } => {
+            matches!(actual, RuntimeTy::Function { params: actual_params, ret: actual_ret, throws: actual_throws, .. }
+                if params.len() == actual_params.len()
+                && params.iter().zip(actual_params).all(|(param, actual_param)| {
+                    param.mode == actual_param.mode
+                        && guard_template_matches(&param.ty, frame_type_args, &actual_param.ty)
+                })
+                && guard_template_matches(ret, frame_type_args, actual_ret)
+                && guard_template_matches(throws, frame_type_args, actual_throws))
+        }
+        TyTemplate::Future(value, error, _) => {
+            matches!(actual, RuntimeTy::Future(actual_value, actual_error, _)
+                if guard_template_matches(value, frame_type_args, actual_value)
+                && guard_template_matches(error, frame_type_args, actual_error))
+        }
+        TyTemplate::WatchAccessor(inner, _) => {
+            matches!(actual, RuntimeTy::WatchAccessor(actual_inner, _)
+                if guard_template_matches(inner, frame_type_args, actual_inner))
+        }
+        // A symbolic projection whose witness type was not resolved at compile
+        // time — never a match: a runtime value's concrete type carries no
+        // unresolved projection for it to equal.
+        TyTemplate::AssociatedTypeProjection { .. } => false,
+        // Realized leaves are handled by the fast path above.
+        _ => false,
     }
 }
 
@@ -366,7 +403,7 @@ mod tests {
         ClassField {
             name: name.to_string(),
             field_type: int_ty(),
-            field_template: TyTemplate::Concrete(int_ty()),
+            field_template: TyTemplate::from(baml_type::RealizedTy::int()),
             description: None,
             alias: None,
             skip: false,
@@ -704,8 +741,10 @@ mod tests {
         // concrete path (`contains_typevar == false`) and must keep exact
         // discrimination — unaffected by the B-634 subtype fix.
         let foo = TypeName::local(Name::new("Foo"));
-        let foo_int_template =
-            TyTemplate::Class(foo.clone(), vec![TyTemplate::Concrete(RuntimeTy::int())]);
+        let foo_int_template = TyTemplate::class(
+            foo.clone(),
+            vec![TyTemplate::from(baml_type::RealizedTy::int())],
+        );
         let foo_int_value = RuntimeTy::class_with_args(foo.clone(), vec![RuntimeTy::int()]);
         let foo_string_value = RuntimeTy::class_with_args(foo, vec![RuntimeTy::string()]);
 
@@ -7280,19 +7319,19 @@ impl BexVm {
                     };
 
                     let ty = {
-                        let frame_type_args = if let Frame::Bytecode(bf) = &self.frames[*frame_idx]
-                        {
-                            bf.type_args.clone()
+                        // A fully-realized template narrows to `RealizedTy` (a
+                        // single validation walk) and widens to `RuntimeTy` by
+                        // transmute — no substitution environment needed.
+                        // Otherwise resolve its frame refs.
+                        if let Ok(realized) = <&baml_type::RealizedTy>::try_from(&template) {
+                            baml_type::RuntimeTy::from(realized)
                         } else {
-                            vec![]
-                        };
-                        if template.is_fully_concrete() {
-                            if let baml_type::TyTemplate::Concrete(t) = &template {
-                                t.clone()
-                            } else {
-                                template.substitute(&frame_type_args)
-                            }
-                        } else {
+                            let frame_type_args =
+                                if let Frame::Bytecode(bf) = &self.frames[*frame_idx] {
+                                    bf.type_args.clone()
+                                } else {
+                                    vec![]
+                                };
                             template.substitute(&frame_type_args)
                         }
                     };

@@ -100,7 +100,7 @@ function iter_impl_generics_only.core.Chain$stream.Iterator<T, E>.next(self: ite
     pop_jump_if_false L2
     load_var self
     load_field .0
-    load_type iter_impl_generics_only.core.Iterator<T, E>
+    load_type iter_impl_generics_only.core.Iterator<#0, #1>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _4
@@ -122,7 +122,7 @@ function iter_impl_generics_only.core.Chain$stream.Iterator<T, E>.next(self: ite
   L2:
     load_var self
     load_field .1
-    load_type iter_impl_generics_only.core.Iterator<T, E>
+    load_type iter_impl_generics_only.core.Iterator<#0, #1>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _0
@@ -144,7 +144,7 @@ function iter_impl_generics_only.core.Chain.Iterator<T, E>.next(self: iter_impl_
     pop_jump_if_false L2
     load_var self
     load_field .0
-    load_type iter_impl_generics_only.core.Iterator<T, E>
+    load_type iter_impl_generics_only.core.Iterator<#0, #1>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _4
@@ -166,7 +166,7 @@ function iter_impl_generics_only.core.Chain.Iterator<T, E>.next(self: iter_impl_
   L2:
     load_var self
     load_field .1
-    load_type iter_impl_generics_only.core.Iterator<T, E>
+    load_type iter_impl_generics_only.core.Iterator<#0, #1>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _0
@@ -194,7 +194,7 @@ function iter_impl_generics_only.core.Filter$stream.Iterator<T, E | E2>.next(sel
   L2:
     load_var self
     load_field .0
-    load_type iter_impl_generics_only.core.Iterator<T, E>
+    load_type iter_impl_generics_only.core.Iterator<#0, #1>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _2
@@ -238,7 +238,7 @@ function iter_impl_generics_only.core.Filter.Iterator<T, E | E2>.next(self: iter
   L2:
     load_var self
     load_field .0
-    load_type iter_impl_generics_only.core.Iterator<T, E>
+    load_type iter_impl_generics_only.core.Iterator<#0, #1>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _2
@@ -282,7 +282,7 @@ function iter_impl_generics_only.core.FilterMap$stream.Iterator<R, E | E2>.next(
   L2:
     load_var self
     load_field .0
-    load_type iter_impl_generics_only.core.Iterator<T, E>
+    load_type iter_impl_generics_only.core.Iterator<#0, #2>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _2
@@ -331,7 +331,7 @@ function iter_impl_generics_only.core.FilterMap.Iterator<R, E | E2>.next(self: i
   L2:
     load_var self
     load_field .0
-    load_type iter_impl_generics_only.core.Iterator<T, E>
+    load_type iter_impl_generics_only.core.Iterator<#0, #2>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _2
@@ -580,7 +580,7 @@ function iter_impl_generics_only.core.FlatMap$stream.Iterator<R, E | E2 | E3>.ne
   L35:
     load_var self
     load_field .0
-    load_type iter_impl_generics_only.core.Iterator<T, E>
+    load_type iter_impl_generics_only.core.Iterator<#0, #2>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _40
@@ -593,7 +593,7 @@ function iter_impl_generics_only.core.FlatMap$stream.Iterator<R, E | E2 | E3>.ne
     load_var2 4 1
     load_field .1
     call_indirect
-    load_type iter_impl_generics_only.core.Iterable<R, E3>
+    load_type iter_impl_generics_only.core.Iterable<#1, #4>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var it
@@ -607,7 +607,7 @@ function iter_impl_generics_only.core.FlatMap$stream.Iterator<R, E | E2 | E3>.ne
 
   L38:
     load_var _2
-    load_type iter_impl_generics_only.core.Iterator<R, E3>
+    load_type iter_impl_generics_only.core.Iterator<#1, #4>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _37
@@ -847,7 +847,7 @@ function iter_impl_generics_only.core.FlatMap.Iterator<R, E | E2 | E3>.next(self
   L35:
     load_var self
     load_field .0
-    load_type iter_impl_generics_only.core.Iterator<T, E>
+    load_type iter_impl_generics_only.core.Iterator<#0, #2>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _40
@@ -860,7 +860,7 @@ function iter_impl_generics_only.core.FlatMap.Iterator<R, E | E2 | E3>.next(self
     load_var2 4 1
     load_field .1
     call_indirect
-    load_type iter_impl_generics_only.core.Iterable<R, E3>
+    load_type iter_impl_generics_only.core.Iterable<#1, #4>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var it
@@ -874,7 +874,7 @@ function iter_impl_generics_only.core.FlatMap.Iterator<R, E | E2 | E3>.next(self
 
   L38:
     load_var _2
-    load_type iter_impl_generics_only.core.Iterator<R, E3>
+    load_type iter_impl_generics_only.core.Iterator<#1, #4>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _37
@@ -1114,7 +1114,7 @@ function iter_impl_generics_only.core.Flatten$stream.Iterator<R, E | E3>.next(se
   L35:
     load_var self
     load_field .0
-    load_type iter_impl_generics_only.core.Iterator<iter_impl_generics_only.core.Iterable<R, E3>, E>
+    load_type iter_impl_generics_only.core.Iterator<iter_impl_generics_only.core.Iterable<#0, #2>, #1>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _40
@@ -1125,7 +1125,7 @@ function iter_impl_generics_only.core.Flatten$stream.Iterator<R, E | E3>.next(se
 
   L36:
     load_var _40
-    load_type iter_impl_generics_only.core.Iterable<R, E3>
+    load_type iter_impl_generics_only.core.Iterable<#0, #2>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var it
@@ -1139,7 +1139,7 @@ function iter_impl_generics_only.core.Flatten$stream.Iterator<R, E | E3>.next(se
 
   L38:
     load_var _2
-    load_type iter_impl_generics_only.core.Iterator<R, E3>
+    load_type iter_impl_generics_only.core.Iterator<#0, #2>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _37
@@ -1379,7 +1379,7 @@ function iter_impl_generics_only.core.Flatten.Iterator<R, E | E3>.next(self: ite
   L35:
     load_var self
     load_field .0
-    load_type iter_impl_generics_only.core.Iterator<iter_impl_generics_only.core.Iterable<R, E3>, E>
+    load_type iter_impl_generics_only.core.Iterator<iter_impl_generics_only.core.Iterable<#0, #2>, #1>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _40
@@ -1390,7 +1390,7 @@ function iter_impl_generics_only.core.Flatten.Iterator<R, E | E3>.next(self: ite
 
   L36:
     load_var _40
-    load_type iter_impl_generics_only.core.Iterable<R, E3>
+    load_type iter_impl_generics_only.core.Iterable<#0, #2>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var it
@@ -1404,7 +1404,7 @@ function iter_impl_generics_only.core.Flatten.Iterator<R, E | E3>.next(self: ite
 
   L38:
     load_var _2
-    load_type iter_impl_generics_only.core.Iterator<R, E3>
+    load_type iter_impl_generics_only.core.Iterator<#0, #2>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _37
@@ -1444,7 +1444,7 @@ function iter_impl_generics_only.core.Iterator.collect(self: iter_impl_generics_
     load_const true
     pop_jump_if_false L2
     load_var self
-    load_type iter_impl_generics_only.core.Iterator<T, E>
+    load_type iter_impl_generics_only.core.Iterator<#0, #1>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _4
@@ -1472,7 +1472,7 @@ function iter_impl_generics_only.core.Iterator.count(self: iter_impl_generics_on
     load_const true
     pop_jump_if_false L2
     load_var self
-    load_type iter_impl_generics_only.core.Iterator<T, E>
+    load_type iter_impl_generics_only.core.Iterator<#0, #1>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _3
@@ -1498,7 +1498,7 @@ function iter_impl_generics_only.core.Iterator.every(self: iter_impl_generics_on
     load_const true
     pop_jump_if_false L2
     load_var self
-    load_type iter_impl_generics_only.core.Iterator<T, E>
+    load_type iter_impl_generics_only.core.Iterator<#0, #1>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _3
@@ -1546,7 +1546,7 @@ function iter_impl_generics_only.core.Iterator.find(self: iter_impl_generics_onl
     load_const true
     pop_jump_if_false L2
     load_var self
-    load_type iter_impl_generics_only.core.Iterator<T, E>
+    load_type iter_impl_generics_only.core.Iterator<#0, #1>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _3
@@ -1611,7 +1611,7 @@ function iter_impl_generics_only.core.Iterator.reduce(self: iter_impl_generics_o
     load_const true
     pop_jump_if_false L2
     load_var self
-    load_type iter_impl_generics_only.core.Iterator<T, E>
+    load_type iter_impl_generics_only.core.Iterator<#0, #1>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _5
@@ -1637,7 +1637,7 @@ function iter_impl_generics_only.core.Iterator.some(self: iter_impl_generics_onl
     load_const true
     pop_jump_if_false L2
     load_var self
-    load_type iter_impl_generics_only.core.Iterator<T, E>
+    load_type iter_impl_generics_only.core.Iterator<#0, #1>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _3
@@ -1677,7 +1677,7 @@ function iter_impl_generics_only.core.Map$stream.Iterable<R, E | E2>.iter(self: 
 function iter_impl_generics_only.core.Map$stream.Iterator<R, E | E2>.next(self: iter_impl_generics_only.core.Map$stream<T, R, E, E2>) -> R | iter_impl_generics_only.core.Done {
     load_var self
     load_field .0
-    load_type iter_impl_generics_only.core.Iterator<T, E>
+    load_type iter_impl_generics_only.core.Iterator<#0, #2>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _2
@@ -1707,7 +1707,7 @@ function iter_impl_generics_only.core.Map.Iterable<R, E | E2>.iter(self: iter_im
 function iter_impl_generics_only.core.Map.Iterator<R, E | E2>.next(self: iter_impl_generics_only.core.Map<T, R, E, E2>) -> R | iter_impl_generics_only.core.Done {
     load_var self
     load_field .0
-    load_type iter_impl_generics_only.core.Iterator<T, E>
+    load_type iter_impl_generics_only.core.Iterator<#0, #2>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _2
@@ -1756,7 +1756,7 @@ function iter_impl_generics_only.core.Peekable$stream.Iterator<T, E>.next(self: 
   L0:
     load_var self
     load_field .0
-    load_type iter_impl_generics_only.core.Iterator<T, E>
+    load_type iter_impl_generics_only.core.Iterator<#0, #1>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _0
@@ -1794,7 +1794,7 @@ function iter_impl_generics_only.core.Peekable.Iterator<T, E>.next(self: iter_im
   L0:
     load_var self
     load_field .0
-    load_type iter_impl_generics_only.core.Iterator<T, E>
+    load_type iter_impl_generics_only.core.Iterator<#0, #1>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _0
@@ -1827,7 +1827,7 @@ function iter_impl_generics_only.core.Peekable.peek(self: iter_impl_generics_onl
   L0:
     load_var self
     load_field .iter
-    load_type iter_impl_generics_only.core.Iterator<T, E>
+    load_type iter_impl_generics_only.core.Iterator<#0, #1>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var v
@@ -2063,7 +2063,7 @@ function iter_impl_generics_only.core.StepBy$stream.Iterator<T, E>.next(self: it
   L2:
     load_var self
     load_field .0
-    load_type iter_impl_generics_only.core.Iterator<T, E>
+    load_type iter_impl_generics_only.core.Iterator<#0, #1>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _0
@@ -2072,7 +2072,7 @@ function iter_impl_generics_only.core.StepBy$stream.Iterator<T, E>.next(self: it
   L3:
     load_var self
     load_field .0
-    load_type iter_impl_generics_only.core.Iterator<T, E>
+    load_type iter_impl_generics_only.core.Iterator<#0, #1>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _9
@@ -2099,7 +2099,7 @@ function iter_impl_generics_only.core.StepBy$stream.Iterator<T, E>.next(self: it
     store_field .2
     load_var self
     load_field .0
-    load_type iter_impl_generics_only.core.Iterator<T, E>
+    load_type iter_impl_generics_only.core.Iterator<#0, #1>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _0
@@ -2136,7 +2136,7 @@ function iter_impl_generics_only.core.StepBy.Iterator<T, E>.next(self: iter_impl
   L2:
     load_var self
     load_field .0
-    load_type iter_impl_generics_only.core.Iterator<T, E>
+    load_type iter_impl_generics_only.core.Iterator<#0, #1>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _0
@@ -2145,7 +2145,7 @@ function iter_impl_generics_only.core.StepBy.Iterator<T, E>.next(self: iter_impl
   L3:
     load_var self
     load_field .0
-    load_type iter_impl_generics_only.core.Iterator<T, E>
+    load_type iter_impl_generics_only.core.Iterator<#0, #1>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _9
@@ -2172,7 +2172,7 @@ function iter_impl_generics_only.core.StepBy.Iterator<T, E>.next(self: iter_impl
     store_field .2
     load_var self
     load_field .0
-    load_type iter_impl_generics_only.core.Iterator<T, E>
+    load_type iter_impl_generics_only.core.Iterator<#0, #1>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _0

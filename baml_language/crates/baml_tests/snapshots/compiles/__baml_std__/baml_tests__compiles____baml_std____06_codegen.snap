@@ -656,7 +656,7 @@ function baml.Array.sort_by_key(self: baml.Array<T>, key: (T) -> U throws E) -> 
 
   L26:
     load_type int
-    load_type U.CompareError
+    load_type #1.CompareError
     load_var order
     load_type #0
     load_type #1
@@ -1393,7 +1393,7 @@ function baml.Sortable$for$T[].sort(self: T[]) -> T[] {
 
   L0:
     load_type #0
-    load_type T.CompareError
+    load_type #0.CompareError
     load_var self
     load_type #0
     make_closure .<lambda(sort, 0)>, captures=0, ntypeargs=1
@@ -2691,7 +2691,7 @@ function baml.csv.decode(source: string | uint8array, options: baml.csv.ReaderOp
     load_type #0
     load_var _6
     call baml.csv.CsvReader.rows
-    load_type baml.iter.Iterator<Item = T, Error = baml.csv.CsvError | baml.errors.Io>
+    load_type baml.iter.Iterator<Item = #0, Error = baml.csv.CsvError | baml.errors.Io>
     load_const "collect"
     virtual_call nargs=1 ntypeargs=0
     jump L3
@@ -3074,7 +3074,7 @@ function baml.csv.read(path: string, options: baml.csv.ReaderOptions | null) -> 
     load_type #0
     load_var r
     call baml.csv.CsvReader.rows
-    load_type baml.iter.Iterator<Item = T, Error = baml.csv.CsvError | baml.errors.Io>
+    load_type baml.iter.Iterator<Item = #0, Error = baml.csv.CsvError | baml.errors.Io>
     load_const "collect"
     virtual_call nargs=1 ntypeargs=0
     store_var result
@@ -3151,7 +3151,7 @@ function baml.csv.stringify_records(records: (null | bool | int | bigint | float
     load_var options
     call baml.csv.buffer
     store_var w
-    load_type null | bool | int | bigint | float | string[]
+    load_type (null | bool | int | bigint | float | string)[]
     load_var records
     call baml.iter.Iterable$for$T[].iter
     store_var _6
@@ -3214,7 +3214,7 @@ function baml.csv.stringify_records(records: (null | bool | int | bigint | float
     load_var _6
     is_type baml.iter.Peekable<...>
     pop_jump_if_false L26
-    load_type null | bool | int | bigint | float | string[]
+    load_type (null | bool | int | bigint | float | string)[]
     load_type never
     load_var _6
     call baml.iter.Peekable.Iterator.next
@@ -3236,7 +3236,7 @@ function baml.csv.stringify_records(records: (null | bool | int | bigint | float
     jump L20
 
   L13:
-    load_type null | bool | int | bigint | float | string[]
+    load_type (null | bool | int | bigint | float | string)[]
     load_type never
     load_type never
     load_var _6
@@ -3252,14 +3252,14 @@ function baml.csv.stringify_records(records: (null | bool | int | bigint | float
     jump L20
 
   L15:
-    load_type null | bool | int | bigint | float | string[]
+    load_type (null | bool | int | bigint | float | string)[]
     load_var _6
     call baml.iter.Repeat.Iterator.next
     store_var _8
     jump L20
 
   L16:
-    load_type null | bool | int | bigint | float | string[]
+    load_type (null | bool | int | bigint | float | string)[]
     load_type never
     load_type never
     load_var _6
@@ -3268,7 +3268,7 @@ function baml.csv.stringify_records(records: (null | bool | int | bigint | float
     jump L20
 
   L17:
-    load_type null | bool | int | bigint | float | string[]
+    load_type (null | bool | int | bigint | float | string)[]
     load_type never
     load_var _6
     call baml.iter.StepBy.Iterator.next
@@ -3276,7 +3276,7 @@ function baml.csv.stringify_records(records: (null | bool | int | bigint | float
     jump L20
 
   L18:
-    load_type null | bool | int | bigint | float | string[]
+    load_type (null | bool | int | bigint | float | string)[]
     load_var _6
     call baml.iter.ArrayIterator.Iterator.next
     store_var _8
@@ -3955,7 +3955,7 @@ function baml.iter.Chain$stream.Iterator.next(self: baml.iter.Chain$stream<T, E,
     pop_jump_if_false L2
     load_var self
     load_field .0
-    load_type baml.iter.Iterator<Item = T, Error = E>
+    load_type baml.iter.Iterator<Item = #0, Error = #1>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _4
@@ -3977,7 +3977,7 @@ function baml.iter.Chain$stream.Iterator.next(self: baml.iter.Chain$stream<T, E,
   L2:
     load_var self
     load_field .1
-    load_type baml.iter.Iterator<Item = T, Error = E2>
+    load_type baml.iter.Iterator<Item = #0, Error = #2>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _0
@@ -3999,7 +3999,7 @@ function baml.iter.Chain.Iterator.next(self: baml.iter.Chain<T, E, E2>) -> T | b
     pop_jump_if_false L2
     load_var self
     load_field .0
-    load_type baml.iter.Iterator<Item = T, Error = E>
+    load_type baml.iter.Iterator<Item = #0, Error = #1>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _4
@@ -4021,7 +4021,7 @@ function baml.iter.Chain.Iterator.next(self: baml.iter.Chain<T, E, E2>) -> T | b
   L2:
     load_var self
     load_field .1
-    load_type baml.iter.Iterator<Item = T, Error = E2>
+    load_type baml.iter.Iterator<Item = #0, Error = #2>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _0
@@ -4049,7 +4049,7 @@ function baml.iter.Filter$stream.Iterator.next(self: baml.iter.Filter$stream<T, 
   L2:
     load_var self
     load_field .0
-    load_type baml.iter.Iterator<Item = T, Error = E>
+    load_type baml.iter.Iterator<Item = #0, Error = #1>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _2
@@ -4093,7 +4093,7 @@ function baml.iter.Filter.Iterator.next(self: baml.iter.Filter<T, E, E2>) -> T |
   L2:
     load_var self
     load_field .0
-    load_type baml.iter.Iterator<Item = T, Error = E>
+    load_type baml.iter.Iterator<Item = #0, Error = #1>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _2
@@ -4137,7 +4137,7 @@ function baml.iter.FilterMap$stream.Iterator.next(self: baml.iter.FilterMap$stre
   L2:
     load_var self
     load_field .0
-    load_type baml.iter.Iterator<Item = T, Error = E>
+    load_type baml.iter.Iterator<Item = #0, Error = #2>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _2
@@ -4186,7 +4186,7 @@ function baml.iter.FilterMap.Iterator.next(self: baml.iter.FilterMap<T, R, E, E2
   L2:
     load_var self
     load_field .0
-    load_type baml.iter.Iterator<Item = T, Error = E>
+    load_type baml.iter.Iterator<Item = #0, Error = #2>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _2
@@ -4471,7 +4471,7 @@ function baml.iter.FlatMap$stream.Iterator.next(self: baml.iter.FlatMap$stream<T
   L41:
     load_var self
     load_field .0
-    load_type baml.iter.Iterator<Item = T, Error = E>
+    load_type baml.iter.Iterator<Item = #0, Error = #2>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _46
@@ -4564,7 +4564,7 @@ function baml.iter.FlatMap$stream.Iterator.next(self: baml.iter.FlatMap$stream<T
 
   L55:
     load_var _51
-    is_type T[]
+    is_type _[]
     pop_jump_if_false L56
     jump L57
 
@@ -4685,7 +4685,7 @@ function baml.iter.FlatMap$stream.Iterator.next(self: baml.iter.FlatMap$stream<T
 
   L73:
     load_var _2
-    load_type baml.iter.Iterator<Item = R, Error = E3>
+    load_type baml.iter.Iterator<Item = #1, Error = #4>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _43
@@ -4964,7 +4964,7 @@ function baml.iter.FlatMap.Iterator.next(self: baml.iter.FlatMap<T, R, E, E2, E3
   L41:
     load_var self
     load_field .0
-    load_type baml.iter.Iterator<Item = T, Error = E>
+    load_type baml.iter.Iterator<Item = #0, Error = #2>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _46
@@ -5057,7 +5057,7 @@ function baml.iter.FlatMap.Iterator.next(self: baml.iter.FlatMap<T, R, E, E2, E3
 
   L55:
     load_var _51
-    is_type T[]
+    is_type _[]
     pop_jump_if_false L56
     jump L57
 
@@ -5178,7 +5178,7 @@ function baml.iter.FlatMap.Iterator.next(self: baml.iter.FlatMap<T, R, E, E2, E3
 
   L73:
     load_var _2
-    load_type baml.iter.Iterator<Item = R, Error = E3>
+    load_type baml.iter.Iterator<Item = #1, Error = #4>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _43
@@ -5457,7 +5457,7 @@ function baml.iter.Flatten$stream.Iterator.next(self: baml.iter.Flatten$stream<I
   L41:
     load_var self
     load_field .0
-    load_type baml.iter.Iterator<Item = I, Error = E>
+    load_type baml.iter.Iterator<Item = #0, Error = #2>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _46
@@ -5547,7 +5547,7 @@ function baml.iter.Flatten$stream.Iterator.next(self: baml.iter.Flatten$stream<I
 
   L55:
     load_var x
-    is_type T[]
+    is_type _[]
     pop_jump_if_false L56
     jump L57
 
@@ -5668,7 +5668,7 @@ function baml.iter.Flatten$stream.Iterator.next(self: baml.iter.Flatten$stream<I
 
   L73:
     load_var _2
-    load_type baml.iter.Iterator<Item = R, Error = E3>
+    load_type baml.iter.Iterator<Item = #1, Error = #3>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _43
@@ -5947,7 +5947,7 @@ function baml.iter.Flatten.Iterator.next(self: baml.iter.Flatten<I, R, E, E3>) -
   L41:
     load_var self
     load_field .0
-    load_type baml.iter.Iterator<Item = I, Error = E>
+    load_type baml.iter.Iterator<Item = #0, Error = #2>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _46
@@ -6037,7 +6037,7 @@ function baml.iter.Flatten.Iterator.next(self: baml.iter.Flatten<I, R, E, E3>) -
 
   L55:
     load_var x
-    is_type T[]
+    is_type _[]
     pop_jump_if_false L56
     jump L57
 
@@ -6158,7 +6158,7 @@ function baml.iter.Flatten.Iterator.next(self: baml.iter.Flatten<I, R, E, E3>) -
 
   L73:
     load_var _2
-    load_type baml.iter.Iterator<Item = R, Error = E3>
+    load_type baml.iter.Iterator<Item = #1, Error = #3>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _43
@@ -6280,7 +6280,7 @@ function baml.iter.Iterator.chain(self: baml.iter.Iterator, other: baml.iter.Ite
 
   L12:
     load_var other
-    is_type T[]
+    is_type _[]
     pop_jump_if_false L13
     jump L14
 
@@ -6412,7 +6412,7 @@ function baml.iter.Iterator.collect(self: baml.iter.Iterator) -> Self.Item[] {
     load_const true
     pop_jump_if_false L2
     load_var self
-    load_type baml.iter.Iterator<Item = Item, Error = Error>
+    load_type baml.iter.Iterator<Item = #0, Error = #1>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _4
@@ -6440,7 +6440,7 @@ function baml.iter.Iterator.count(self: baml.iter.Iterator) -> int {
     load_const true
     pop_jump_if_false L2
     load_var self
-    load_type baml.iter.Iterator<Item = Item, Error = Error>
+    load_type baml.iter.Iterator<Item = #0, Error = #1>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _3
@@ -6466,7 +6466,7 @@ function baml.iter.Iterator.every(self: baml.iter.Iterator, predicate: (Self.Ite
     load_const true
     pop_jump_if_false L2
     load_var self
-    load_type baml.iter.Iterator<Item = Item, Error = Error>
+    load_type baml.iter.Iterator<Item = #0, Error = #1>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _3
@@ -6514,7 +6514,7 @@ function baml.iter.Iterator.find(self: baml.iter.Iterator, predicate: (Self.Item
     load_const true
     pop_jump_if_false L2
     load_var self
-    load_type baml.iter.Iterator<Item = Item, Error = Error>
+    load_type baml.iter.Iterator<Item = #0, Error = #1>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _3
@@ -6556,7 +6556,7 @@ function baml.iter.Iterator.for_each(self: baml.iter.Iterator, fn: (Self.Item) -
     load_const true
     pop_jump_if_false L2
     load_var self
-    load_type baml.iter.Iterator<Item = Item, Error = Error>
+    load_type baml.iter.Iterator<Item = #0, Error = #1>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _3
@@ -6604,7 +6604,7 @@ function baml.iter.Iterator.reduce(self: baml.iter.Iterator, fn: (A, Self.Item) 
     load_const true
     pop_jump_if_false L2
     load_var self
-    load_type baml.iter.Iterator<Item = Item, Error = Error>
+    load_type baml.iter.Iterator<Item = #0, Error = #1>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _5
@@ -6630,7 +6630,7 @@ function baml.iter.Iterator.some(self: baml.iter.Iterator, predicate: (Self.Item
     load_const true
     pop_jump_if_false L2
     load_var self
-    load_type baml.iter.Iterator<Item = Item, Error = Error>
+    load_type baml.iter.Iterator<Item = #0, Error = #1>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _3
@@ -6670,7 +6670,7 @@ function baml.iter.Map$stream.Iterable.iter(self: baml.iter.Map$stream<T, R, E, 
 function baml.iter.Map$stream.Iterator.next(self: baml.iter.Map$stream<T, R, E, E2>) -> R | baml.iter.Done {
     load_var self
     load_field .0
-    load_type baml.iter.Iterator<Item = T, Error = E>
+    load_type baml.iter.Iterator<Item = #0, Error = #2>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _2
@@ -6700,7 +6700,7 @@ function baml.iter.Map.Iterable.iter(self: baml.iter.Map<T, R, E, E2>) -> baml.i
 function baml.iter.Map.Iterator.next(self: baml.iter.Map<T, R, E, E2>) -> R | baml.iter.Done {
     load_var self
     load_field .0
-    load_type baml.iter.Iterator<Item = T, Error = E>
+    load_type baml.iter.Iterator<Item = #0, Error = #2>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _2
@@ -6736,7 +6736,7 @@ function baml.iter.Peekable$stream.Iterator.next(self: baml.iter.Peekable$stream
   L0:
     load_var self
     load_field .0
-    load_type baml.iter.Iterator<Item = T, Error = E>
+    load_type baml.iter.Iterator<Item = #0, Error = #1>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _0
@@ -6774,7 +6774,7 @@ function baml.iter.Peekable.Iterator.next(self: baml.iter.Peekable<T, E>) -> T |
   L0:
     load_var self
     load_field .0
-    load_type baml.iter.Iterator<Item = T, Error = E>
+    load_type baml.iter.Iterator<Item = #0, Error = #1>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _0
@@ -6807,7 +6807,7 @@ function baml.iter.Peekable.peek(self: baml.iter.Peekable<T, E>) -> T | baml.ite
   L0:
     load_var self
     load_field .source
-    load_type baml.iter.Iterator<Item = T, Error = E>
+    load_type baml.iter.Iterator<Item = #0, Error = #1>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var v
@@ -7042,7 +7042,7 @@ function baml.iter.StepBy$stream.Iterator.next(self: baml.iter.StepBy$stream<T, 
   L2:
     load_var self
     load_field .0
-    load_type baml.iter.Iterator<Item = T, Error = E>
+    load_type baml.iter.Iterator<Item = #0, Error = #1>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _0
@@ -7051,7 +7051,7 @@ function baml.iter.StepBy$stream.Iterator.next(self: baml.iter.StepBy$stream<T, 
   L3:
     load_var self
     load_field .0
-    load_type baml.iter.Iterator<Item = T, Error = E>
+    load_type baml.iter.Iterator<Item = #0, Error = #1>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _9
@@ -7078,7 +7078,7 @@ function baml.iter.StepBy$stream.Iterator.next(self: baml.iter.StepBy$stream<T, 
     store_field .2
     load_var self
     load_field .0
-    load_type baml.iter.Iterator<Item = T, Error = E>
+    load_type baml.iter.Iterator<Item = #0, Error = #1>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _0
@@ -7115,7 +7115,7 @@ function baml.iter.StepBy.Iterator.next(self: baml.iter.StepBy<T, E>) -> T | bam
   L2:
     load_var self
     load_field .0
-    load_type baml.iter.Iterator<Item = T, Error = E>
+    load_type baml.iter.Iterator<Item = #0, Error = #1>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _0
@@ -7124,7 +7124,7 @@ function baml.iter.StepBy.Iterator.next(self: baml.iter.StepBy<T, E>) -> T | bam
   L3:
     load_var self
     load_field .0
-    load_type baml.iter.Iterator<Item = T, Error = E>
+    load_type baml.iter.Iterator<Item = #0, Error = #1>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _9
@@ -7151,7 +7151,7 @@ function baml.iter.StepBy.Iterator.next(self: baml.iter.StepBy<T, E>) -> T | bam
     store_field .2
     load_var self
     load_field .0
-    load_type baml.iter.Iterator<Item = T, Error = E>
+    load_type baml.iter.Iterator<Item = #0, Error = #1>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _0
@@ -9769,13 +9769,13 @@ function baml.ops.Equals.neq(self: baml.ops.Equals, other: Self) -> bool {
 
   L6:
     load_var self
-    is_type T[]
+    is_type _[]
     pop_jump_if_false L7
     jump L8
 
   L7:
     load_var self
-    is_type map<string, V>
+    is_type map<string, _>
     pop_jump_if_false L17
     load_type unknown
     load_var2 1 2

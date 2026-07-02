@@ -14,7 +14,7 @@ use baml_compiler2_mir::{
     BasicBlock, BinOp, BlockId, Constant, IndexKind, IntrinsicOp, Local, LogLevel, MirFunctionBody,
     Operand, Place, Rvalue, StatementKind, Terminator, UnaryOp,
 };
-use baml_type::{RuntimeTy, TyTemplate, TypeName};
+use baml_type::{RealizedTy, RuntimeTy, TyTemplate, TypeName};
 use bex_vm_types::{
     BinOp as VmBinOp, Bytecode, CmpOp, ConstValue, Function, FunctionCaptureProps, FunctionKind,
     FunctionOrigin, GlobalIndex, Instruction, Object, ObjectIndex, ObjectPool,
@@ -1476,12 +1476,8 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                         //    before draining the entries, so push key first, value
                         //    second — mirroring the `alloc_map` helper. Omitting
                         //    these tags makes the VM read the entry keys as types.
-                        unwrap_infallible(
-                            self.load_type(&TyTemplate::Concrete(RuntimeTy::string())),
-                        );
-                        unwrap_infallible(
-                            self.load_type(&TyTemplate::Concrete(RuntimeTy::unknown())),
-                        );
+                        unwrap_infallible(self.load_type(&TyTemplate::from(RealizedTy::string())));
+                        unwrap_infallible(self.load_type(&TyTemplate::from(RealizedTy::unknown())));
                         self.emit(Instruction::AllocMap(2));
 
                         // 7. Restore call-site span and emit SendEvent
@@ -3191,119 +3187,86 @@ impl PullSink for StackifyCodegen<'_, '_> {
     }
 
     fn is_type(&mut self, ty_template: &TyTemplate) -> Result<(), Self::Error> {
-        // Helper: emit IsType for a concrete RuntimeTy leaf.
+        let emit_false = |this: &mut Self| {
+            this.emit(Instruction::Pop(1));
+            let idx = this.add_constant(ConstValue::Bool(false));
+            let inst = this.emit(Instruction::LoadConst(idx));
+            this.set_operand(inst, OperandMeta::Const("false".to_string()));
+        };
+
         match ty_template {
             // ── Class check ──────────────────────────────────────────────────
-            TyTemplate::Class(tn, type_args_templates) => {
-                // Generic class instantiation with TypeArgRef leaves or
-                // concrete-but-parametric (e.g. Foo<int>).  Use the
-                // ClassWithTypeArgs constant so the VM can compare args.
+            // Every class (monomorphic `Foo`, concrete `Foo<int>`, or generic
+            // `Foo<T>`) is a `Class` template. Non-empty args → `ClassWithTypeArgs`
+            // so the VM compares each arg; empty args → class-pointer identity.
+            TyTemplate::Class(tn, type_args_templates, _) => {
                 let class_name_str = tn.display_name();
-                if let Some(class_obj_idx) = self.class_object_index_for_type_name(tn) {
+                let Some(class_obj_idx) = self.class_object_index_for_type_name(tn) else {
+                    emit_false(self);
+                    return Ok(());
+                };
+                if type_args_templates.is_empty() {
+                    let c =
+                        self.add_constant(ConstValue::Object(ObjectIndex::from_raw(class_obj_idx)));
+                    let inst = self.emit(Instruction::IsType(c));
+                    self.set_operand(inst, OperandMeta::Const(class_name_str.to_string()));
+                } else {
                     let c = self.add_constant(ConstValue::ClassWithTypeArgs {
                         class_obj: ObjectIndex::from_raw(class_obj_idx),
                         type_args_templates: type_args_templates.clone(),
                     });
                     let inst = self.emit(Instruction::IsType(c));
                     self.set_operand(inst, OperandMeta::Const(format!("{class_name_str}<...>")));
-                } else {
-                    self.emit(Instruction::Pop(1));
-                    let idx = self.add_constant(ConstValue::Bool(false));
-                    let inst = self.emit(Instruction::LoadConst(idx));
-                    self.set_operand(inst, OperandMeta::Const("false".to_string()));
                 }
-                return Ok(());
             }
-            TyTemplate::Concrete(ty) => {
-                // ── Class (concrete) ─────────────────────────────────────────
-                let maybe_class = match ty {
-                    RuntimeTy::Class(tn, ty_args, _) => Some((tn, Some(ty_args.as_slice()))),
-                    RuntimeTy::TypeAlias(tn, _) => Some((tn, None)),
-                    _ => None,
-                };
-                if let Some((tn, ty_args_opt)) = maybe_class {
-                    let class_name_str = tn.display_name();
-                    if let Some(class_obj_idx) = self.class_object_index_for_type_name(tn) {
-                        match ty_args_opt {
-                            Some(ty_args) if !ty_args.is_empty() => {
-                                // Concrete generic class, e.g. Foo<int>: emit
-                                // ClassWithTypeArgs with Concrete templates.
-                                let type_args_templates: Vec<TyTemplate> = ty_args
-                                    .iter()
-                                    .map(|t| TyTemplate::Concrete(t.clone()))
-                                    .collect();
-                                let c = self.add_constant(ConstValue::ClassWithTypeArgs {
-                                    class_obj: ObjectIndex::from_raw(class_obj_idx),
-                                    type_args_templates,
-                                });
-                                let inst = self.emit(Instruction::IsType(c));
-                                self.set_operand(
-                                    inst,
-                                    OperandMeta::Const(format!("{class_name_str}<...>")),
-                                );
-                            }
-                            _ => {
-                                // Monomorphic class or TypeAlias: fast pointer-identity path.
-                                let c = self.add_constant(ConstValue::Object(
-                                    ObjectIndex::from_raw(class_obj_idx),
-                                ));
-                                let inst = self.emit(Instruction::IsType(c));
-                                self.set_operand(
-                                    inst,
-                                    OperandMeta::Const(class_name_str.to_string()),
-                                );
-                            }
+            other => {
+                // A fully-realized leaf (primitive, enum, alias, literal, …):
+                // class-pointer identity for a `TypeAlias`, otherwise its type
+                // tag. This is the flattened successor to the old `Concrete` arm.
+                if let Ok(realized) = <&RealizedTy>::try_from(other) {
+                    if let RealizedTy::TypeAlias(tn, _) = realized {
+                        if let Some(class_obj_idx) = self.class_object_index_for_type_name(tn) {
+                            let c = self.add_constant(ConstValue::Object(ObjectIndex::from_raw(
+                                class_obj_idx,
+                            )));
+                            let inst = self.emit(Instruction::IsType(c));
+                            self.set_operand(
+                                inst,
+                                OperandMeta::Const(tn.display_name().to_string()),
+                            );
+                        } else {
+                            emit_false(self);
                         }
+                    } else if let Some(tag) = realized_type_tag(realized) {
+                        let c = self.add_constant(ConstValue::Int(tag));
+                        let inst = self.emit(Instruction::IsType(c));
+                        self.set_operand(inst, OperandMeta::Const(realized.to_string()));
                     } else {
-                        self.emit(Instruction::Pop(1));
-                        let idx = self.add_constant(ConstValue::Bool(false));
-                        let inst = self.emit(Instruction::LoadConst(idx));
-                        self.set_operand(inst, OperandMeta::Const("false".to_string()));
+                        emit_false(self);
                     }
-                    return Ok(());
-                }
-
-                // ── Primitive type tags ───────────────────────────────────────
-                let type_tag = match ty {
-                    RuntimeTy::Int { .. } => Some(baml_type::typetag::INT),
-                    RuntimeTy::Bigint { .. } => Some(baml_type::typetag::BIGINT),
-                    RuntimeTy::String { .. } => Some(baml_type::typetag::STRING),
-                    RuntimeTy::Bool { .. } => Some(baml_type::typetag::BOOL),
-                    RuntimeTy::Null { .. } => Some(baml_type::typetag::NULL),
-                    RuntimeTy::Float { .. } => Some(baml_type::typetag::FLOAT),
-                    RuntimeTy::Enum(..) => Some(baml_type::typetag::ENUM),
-                    RuntimeTy::List(..) => Some(baml_type::typetag::LIST),
-                    RuntimeTy::Map { .. } => Some(baml_type::typetag::MAP),
-                    RuntimeTy::Function { .. } => Some(baml_type::typetag::FUNCTION),
-                    RuntimeTy::Uint8Array { .. } => Some(baml_type::typetag::UINT8ARRAY),
-                    RuntimeTy::Literal(lit, _, _) => Some(match lit {
-                        baml_base::Literal::Int(_) => baml_type::typetag::INT,
-                        baml_base::Literal::Bigint(_) => baml_type::typetag::BIGINT,
-                        baml_base::Literal::Float(_) => baml_type::typetag::FLOAT,
-                        baml_base::Literal::String(_) => baml_type::typetag::STRING,
-                        baml_base::Literal::Bool(_) => baml_type::typetag::BOOL,
-                    }),
-                    _ => None,
-                };
-
-                if let Some(tag) = type_tag {
-                    let c = self.add_constant(ConstValue::Int(tag));
-                    let inst = self.emit(Instruction::IsType(c));
-                    self.set_operand(inst, OperandMeta::Const(ty.to_string()));
                 } else {
-                    self.emit(Instruction::Pop(1));
-                    let idx = self.add_constant(ConstValue::Bool(false));
-                    let inst = self.emit(Instruction::LoadConst(idx));
-                    self.set_operand(inst, OperandMeta::Const("false".to_string()));
+                    // A structural shape with template holes. Its runtime check
+                    // is still the coarse erased-shape tag today (element/arg-
+                    // aware checks are upcoming work), so a typevar-carrying
+                    // `T[]` / `map<_, T>` / `(int) -> T` pattern keeps exactly the
+                    // semantics its erased form had: any list / map / function.
+                    let tag = match other {
+                        TyTemplate::List(..) => Some(baml_type::typetag::LIST),
+                        TyTemplate::Map { .. } => Some(baml_type::typetag::MAP),
+                        TyTemplate::Function { .. } => Some(baml_type::typetag::FUNCTION),
+                        // Bare frame refs, wildcards, unions, interfaces,
+                        // projections, futures, watch accessors: no representable
+                        // check today — `false`.
+                        _ => None,
+                    };
+                    if let Some(tag) = tag {
+                        let c = self.add_constant(ConstValue::Int(tag));
+                        let inst = self.emit(Instruction::IsType(c));
+                        self.set_operand(inst, OperandMeta::Const(ty_template.to_string()));
+                    } else {
+                        emit_false(self);
+                    }
                 }
-            }
-            // ── Other templates (Array, Optional, Union, Map) ─────────────────
-            // These don't arise from pattern matching today — fall back to false.
-            _ => {
-                self.emit(Instruction::Pop(1));
-                let idx = self.add_constant(ConstValue::Bool(false));
-                let inst = self.emit(Instruction::LoadConst(idx));
-                self.set_operand(inst, OperandMeta::Const("false".to_string()));
             }
         }
         Ok(())
@@ -3437,6 +3400,32 @@ impl StackEffectSink for StackifyCodegen<'_, '_> {
         let inst = self.emit(Instruction::Watch(slot));
         self.set_var_operand(inst, slot);
         Ok(())
+    }
+}
+
+/// The coarse `IsType` type tag for a realized leaf type, or `None` for a type
+/// with no representable tag (classes take the pointer-identity path instead).
+fn realized_type_tag(ty: &RealizedTy) -> Option<i64> {
+    match ty {
+        RealizedTy::Int { .. } => Some(baml_type::typetag::INT),
+        RealizedTy::Bigint { .. } => Some(baml_type::typetag::BIGINT),
+        RealizedTy::String { .. } => Some(baml_type::typetag::STRING),
+        RealizedTy::Bool { .. } => Some(baml_type::typetag::BOOL),
+        RealizedTy::Null { .. } => Some(baml_type::typetag::NULL),
+        RealizedTy::Float { .. } => Some(baml_type::typetag::FLOAT),
+        RealizedTy::Enum(..) => Some(baml_type::typetag::ENUM),
+        RealizedTy::List(..) => Some(baml_type::typetag::LIST),
+        RealizedTy::Map { .. } => Some(baml_type::typetag::MAP),
+        RealizedTy::Function { .. } => Some(baml_type::typetag::FUNCTION),
+        RealizedTy::Uint8Array { .. } => Some(baml_type::typetag::UINT8ARRAY),
+        RealizedTy::Literal(lit, _, _) => Some(match lit {
+            baml_base::Literal::Int(_) => baml_type::typetag::INT,
+            baml_base::Literal::Bigint(_) => baml_type::typetag::BIGINT,
+            baml_base::Literal::Float(_) => baml_type::typetag::FLOAT,
+            baml_base::Literal::String(_) => baml_type::typetag::STRING,
+            baml_base::Literal::Bool(_) => baml_type::typetag::BOOL,
+        }),
+        _ => None,
     }
 }
 

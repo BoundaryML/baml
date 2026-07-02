@@ -14,7 +14,7 @@
 use std::borrow::Cow;
 
 use baml_type::{
-    Literal, MediaKind, Name, RuntimeInterface, RuntimeTy, TyAttr, TyTemplate, TypeName,
+    Literal, MediaKind, Name, RealizedTy, RuntimeInterface, RuntimeTy, TyAttr, TyTemplate, TypeName,
 };
 use bex_vm_types::{
     HeapPtr,
@@ -357,6 +357,14 @@ fn match_template(
     concrete: &RuntimeTy,
     bindings: &mut [Option<RuntimeTy>],
 ) -> bool {
+    // A fully-realized pattern carries no frame refs or holes: compare it to
+    // the concrete type semantically (union-order-insensitive, matching the
+    // type checker). The flattened successor to the old `Concrete(t)` arm —
+    // `ty_equivalent` falls back to structural `==` for non-union leaves.
+    if let Ok(realized) = <&RealizedTy>::try_from(pattern) {
+        return ty_equivalent(realized.as_runtime_ty(), concrete);
+    }
+
     match pattern {
         TyTemplate::Wildcard => true,
         // `TypeArgRefOrWildcard` is a de Bruijn ref like `TypeArgRef` (substitution
@@ -374,28 +382,23 @@ fn match_template(
                 None => false,
             }
         }
-        // Compare semantically rather than via derived `==`: union members are
-        // order-insensitive (`int | string` ≡ `string | int`), matching the type
-        // checker. `ty_equivalent` falls back to structural `==` (incl. `TyAttr`)
-        // for non-union leaves; for-type patterns and the runtime types we match
-        // carry default attrs (stream artifacts are keyed under separate `$stream`
-        // names).
-        TyTemplate::Concrete(t) => ty_equivalent(t, concrete),
-        TyTemplate::Array(inner) => match concrete {
+        TyTemplate::List(inner, _) => match concrete {
             RuntimeTy::List(elem, _) => match_template(inner, elem, bindings),
             _ => false,
         },
-        TyTemplate::Map(k, v) => match concrete {
-            RuntimeTy::Map { key, value, .. } => {
-                match_template(k, key, bindings) && match_template(v, value, bindings)
-            }
+        TyTemplate::Map { key, value, .. } => match concrete {
+            RuntimeTy::Map {
+                key: ckey,
+                value: cvalue,
+                ..
+            } => match_template(key, ckey, bindings) && match_template(value, cvalue, bindings),
             _ => false,
         },
-        TyTemplate::Class(name, args) => match concrete {
+        TyTemplate::Class(name, args, _) => match concrete {
             RuntimeTy::Class(cname, cargs, _) => name == cname && all_match(args, cargs, bindings),
             _ => false,
         },
-        TyTemplate::Interface(name, args, assoc) => match concrete {
+        TyTemplate::Interface(name, args, assoc, _) => match concrete {
             RuntimeTy::Interface(cname, cargs, cassoc, _) => {
                 // Each *concrete* binding must match a same-named pattern binding, found
                 // order-insensitively; extra pattern bindings don't constrain. This
@@ -418,13 +421,51 @@ fn match_template(
             }
             _ => false,
         },
+        // A symbolic projection whose witness type was not resolved at compile
+        // time — never a match: a runtime value's concrete type carries no
+        // unresolved projection to unify with.
+        TyTemplate::AssociatedTypeProjection { .. } => false,
+        TyTemplate::Function {
+            params,
+            ret,
+            throws,
+            ..
+        } => match concrete {
+            RuntimeTy::Function {
+                params: cparams,
+                ret: cret,
+                throws: cthrows,
+                ..
+            } => {
+                params.len() == cparams.len()
+                    && params
+                        .iter()
+                        .zip(cparams)
+                        .all(|(p, cp)| p.mode == cp.mode && match_template(&p.ty, &cp.ty, bindings))
+                    && match_template(ret, cret, bindings)
+                    && match_template(throws, cthrows, bindings)
+            }
+            _ => false,
+        },
+        TyTemplate::Future(value, error, _) => match concrete {
+            RuntimeTy::Future(cvalue, cerror, _) => {
+                match_template(value, cvalue, bindings) && match_template(error, cerror, bindings)
+            }
+            _ => false,
+        },
+        TyTemplate::WatchAccessor(inner, _) => match concrete {
+            RuntimeTy::WatchAccessor(cinner, _) => match_template(inner, cinner, bindings),
+            _ => false,
+        },
         // Order-insensitive union match: each pattern member must pair with a
         // distinct concrete member, with type-var bindings consistent across the
         // chosen pairing (so `Box<T | int>` matches a value `Box<int | string>`).
-        TyTemplate::Union(parts) => match concrete {
+        TyTemplate::Union(parts, _) => match concrete {
             RuntimeTy::Union(cparts, _) => match_union(parts, cparts, bindings),
             _ => false,
         },
+        // Realized leaves are handled by the fast path above.
+        _ => false,
     }
 }
 
@@ -699,11 +740,16 @@ pub(super) fn implementor_entries(vm: &BexVm, iface: &TypeName) -> Vec<Implement
                         }
                     }
                 }
-                TyTemplate::Concrete(ty) => {
+                // A concrete for-type (`int`, a monomorphic class, `int[]`, …)
+                // narrows to a realized type — the implementor is that type.
+                other if <&RealizedTy>::try_from(other).is_ok() => {
+                    let realized = <&RealizedTy>::try_from(other)
+                        .unwrap_or_else(|_| unreachable!("guarded by the `is_ok` above"));
                     let (args, assoc) = pinned_interface_instantiation(rule);
-                    push_unique(&mut out, (ty.clone(), args, assoc));
+                    push_unique(&mut out, (realized.as_runtime_ty().clone(), args, assoc));
                 }
-                TyTemplate::Class(name, _) => {
+                // A generic class for-type (`Foo<T>`) is reported by its base.
+                TyTemplate::Class(name, _, _) => {
                     let (args, assoc) = pinned_interface_instantiation(rule);
                     let base = RuntimeTy::Class(name.clone(), Vec::new(), TyAttr::default());
                     push_unique(&mut out, (base, args, assoc));
@@ -767,16 +813,43 @@ fn max_type_arg_ref(t: &TyTemplate) -> Option<u32> {
     match t {
         #[expect(deprecated)]
         TyTemplate::TypeArgRef(n) | TyTemplate::TypeArgRefOrWildcard(n) => Some(*n),
-        TyTemplate::Concrete(_) | TyTemplate::Wildcard => None,
-        TyTemplate::Array(inner) => max_type_arg_ref(inner),
-        TyTemplate::Map(k, v) => max_type_arg_ref(k).max(max_type_arg_ref(v)),
-        TyTemplate::Union(parts) => parts.iter().filter_map(max_type_arg_ref).max(),
-        TyTemplate::Class(_, args) => args.iter().filter_map(max_type_arg_ref).max(),
-        TyTemplate::Interface(_, args, assoc) => args
+        TyTemplate::List(inner, _) | TyTemplate::WatchAccessor(inner, _) => max_type_arg_ref(inner),
+        TyTemplate::Map { key, value, .. } | TyTemplate::Future(key, value, _) => {
+            max_type_arg_ref(key).max(max_type_arg_ref(value))
+        }
+        TyTemplate::Union(parts, _) => parts.iter().filter_map(max_type_arg_ref).max(),
+        TyTemplate::Class(_, args, _) => args.iter().filter_map(max_type_arg_ref).max(),
+        TyTemplate::Interface(_, args, assoc, _) => args
             .iter()
             .filter_map(max_type_arg_ref)
             .chain(assoc.iter().filter_map(|(_, t)| max_type_arg_ref(t)))
             .max(),
+        TyTemplate::Function {
+            params,
+            ret,
+            throws,
+            ..
+        } => params
+            .iter()
+            .filter_map(|p| max_type_arg_ref(&p.ty))
+            .chain(max_type_arg_ref(ret))
+            .chain(max_type_arg_ref(throws))
+            .max(),
+        TyTemplate::AssociatedTypeProjection {
+            base, interface, ..
+        } => max_type_arg_ref(base)
+            .into_iter()
+            .chain(interface.iter().flat_map(|iface| {
+                iface.generics.iter().filter_map(max_type_arg_ref).chain(
+                    iface
+                        .associated_types
+                        .iter()
+                        .filter_map(|(_, t)| max_type_arg_ref(t)),
+                )
+            }))
+            .max(),
+        // Realized leaves and `Wildcard` carry no frame ref.
+        _ => None,
     }
 }
 
@@ -785,15 +858,42 @@ fn template_has_type_arg_ref(t: &TyTemplate) -> bool {
     match t {
         #[expect(deprecated)]
         TyTemplate::TypeArgRef(_) | TyTemplate::TypeArgRefOrWildcard(_) => true,
-        TyTemplate::Concrete(_) | TyTemplate::Wildcard => false,
-        TyTemplate::Array(inner) => template_has_type_arg_ref(inner),
-        TyTemplate::Map(k, v) => template_has_type_arg_ref(k) || template_has_type_arg_ref(v),
-        TyTemplate::Union(parts) => parts.iter().any(template_has_type_arg_ref),
-        TyTemplate::Class(_, args) => args.iter().any(template_has_type_arg_ref),
-        TyTemplate::Interface(_, args, assoc) => {
+        TyTemplate::List(inner, _) | TyTemplate::WatchAccessor(inner, _) => {
+            template_has_type_arg_ref(inner)
+        }
+        TyTemplate::Map { key, value, .. } | TyTemplate::Future(key, value, _) => {
+            template_has_type_arg_ref(key) || template_has_type_arg_ref(value)
+        }
+        TyTemplate::Union(parts, _) => parts.iter().any(template_has_type_arg_ref),
+        TyTemplate::Class(_, args, _) => args.iter().any(template_has_type_arg_ref),
+        TyTemplate::Interface(_, args, assoc, _) => {
             args.iter().any(template_has_type_arg_ref)
                 || assoc.iter().any(|(_, t)| template_has_type_arg_ref(t))
         }
+        TyTemplate::Function {
+            params,
+            ret,
+            throws,
+            ..
+        } => {
+            params.iter().any(|p| template_has_type_arg_ref(&p.ty))
+                || template_has_type_arg_ref(ret)
+                || template_has_type_arg_ref(throws)
+        }
+        TyTemplate::AssociatedTypeProjection {
+            base, interface, ..
+        } => {
+            template_has_type_arg_ref(base)
+                || interface.as_ref().is_some_and(|iface| {
+                    iface.generics.iter().any(template_has_type_arg_ref)
+                        || iface
+                            .associated_types
+                            .iter()
+                            .any(|(_, t)| template_has_type_arg_ref(t))
+                })
+        }
+        // Realized leaves and `Wildcard` carry no frame ref.
+        _ => false,
     }
 }
 
@@ -905,7 +1005,11 @@ mod tests {
     #[test]
     fn concrete_literal_pattern_matches_only_the_literal() {
         let one = RuntimeTy::Literal(Literal::Int(1), Freshness::Regular, TyAttr::default());
-        let pattern = TyTemplate::Concrete(one.clone());
+        let pattern = TyTemplate::from(RealizedTy::Literal(
+            Literal::Int(1),
+            Freshness::Regular,
+            TyAttr::default(),
+        ));
         let mut binds: Vec<Option<RuntimeTy>> = Vec::new();
         assert!(match_template(&pattern, &one, &mut binds));
         assert!(!match_template(&pattern, &RuntimeTy::int(), &mut binds));

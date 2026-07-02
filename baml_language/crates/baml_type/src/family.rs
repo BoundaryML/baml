@@ -13,19 +13,33 @@
 //! `validate_runtime`, the conversions, and the `lower_to_runtime` boundary)
 //! stay hand-written in `lib.rs`, `runtime_ty.rs`, and `realized_ty.rs`.
 
+// The macro-generated accessors, conversions, and borsh impls reference every
+// variant — including the deprecated `TyTemplate::TypeArgRefOrWildcard` — which
+// is generated infrastructure, not misuse. Consumers importing from the crate
+// root still receive the deprecation warning.
+#![allow(deprecated)]
+
 use baml_type_macros::ty_family;
 use borsh::{BorshDeserialize, BorshSerialize};
 
 use crate::{Freshness, FunctionParamMode, Literal, MediaKind, Name, TyAttr, TypeName};
 
 ty_family! {
-    axes { concrete, abstract, literal, never, typevar, tir, special }
+    axes { concrete, abstract, literal, never, typevar, projection, tir, special, template }
 
-    type Ty                 { includes: [concrete, abstract, literal, never, typevar, tir, special], child: Self }
-    type RuntimeTy          { includes: [concrete, abstract, literal, never, typevar, special],      child: Self }
-    type RealizedTy         { includes: [concrete, abstract, literal, never, special],               child: Self }
-    type ConcreteTy         { includes: [concrete, never],                                           child: RuntimeTy }
-    type ConcreteRealizedTy { includes: [concrete, never],                                           child: RealizedTy }
+    type Ty                 { includes: [concrete, abstract, literal, never, typevar, projection, tir, special], child: Self }
+    type RuntimeTy          { includes: [concrete, abstract, literal, never, typevar, projection, special],      child: Self }
+    type RealizedTy         { includes: [concrete, abstract, literal, never, special],                           child: Self }
+    type ConcreteTy         { includes: [concrete, never],                                                       child: RuntimeTy }
+    type ConcreteRealizedTy { includes: [concrete, never],                                                       child: RealizedTy }
+    // A `Ty`-shaped template that may contain unresolved generic references. It
+    // swaps the `typevar` axis's name-based `TypeVar` for the positional
+    // `template`-axis leaves (`TypeArgRef`/`Wildcard`), while keeping the
+    // `projection` axis so a symbolic associated projection can still be carried
+    // structurally. `RealizedTy` is its fully-resolved subset (every
+    // `RealizedTy` is a valid `TyTemplate`; narrowing back proves no template
+    // leaf survives), giving the "is fully realized" check for free.
+    type TyTemplate         { includes: [concrete, abstract, literal, never, projection, special, template],     child: Self }
 
     satellite FunctionParamTy {
         pub name: Option<Name>,
@@ -231,8 +245,10 @@ ty_family! {
         TypeVar(Name, TyAttr),
         /// Associated type projection, e.g. `P.Output` or `(T as Iterator).Item`. Bound
         /// during inference; can survive at runtime only inside reflective generic
-        /// metadata.
-        #[axis(typevar)]
+        /// metadata. Split into its own `projection` axis (distinct from `typevar`)
+        /// so a template can carry an unresolved projection without also admitting
+        /// a name-based `TypeVar`.
+        #[axis(projection)]
         AssociatedTypeProjection {
             base: Box<Ty>,
             /// TODO: Should not be an `Option`; fix once the TIR is able to determine correctly.
@@ -291,6 +307,29 @@ ty_family! {
         Infer {
             attr: TyAttr,
         },
+
+        // --- Template-only: positional references into an enclosing frame's
+        // type arguments, present only in `TyTemplate` (the `template` axis).
+        // These carry no `TyAttr` — they are pure structure — so the generated
+        // `attr()`/`with_attr()` accessors fall back to `TyAttr::EMPTY`.
+        /// A De Bruijn reference to the n-th type argument of the enclosing
+        /// call frame. Materialized to a concrete type by `TyTemplate::substitute`
+        /// against the frame's `type_args`; the template-space replacement for a
+        /// name-based `TypeVar`.
+        #[axis(template)]
+        TypeArgRef(u32),
+        /// De Bruijn reference like [`Ty::TypeArgRef`], but a dispatch-guard hole:
+        /// an unconcretized runtime slot matches any actual type argument instead
+        /// of materializing `unknown` as a constraint. A type-erasure bandaid to be
+        /// removed once associated-type resolution is complete.
+        #[axis(template)]
+        #[deprecated = "Once type erasure is eliminated and associated type resolution are fixed this bandaid will be removed."]
+        TypeArgRefOrWildcard(u32),
+        /// Matches any type at this position — a guard hole (BEP-044) that pins
+        /// some type-args while leaving others unconstrained (e.g. `Pair<string, _>`).
+        /// Never materialized to a concrete type.
+        #[axis(template)]
+        Wildcard,
     }
 }
 
