@@ -149,6 +149,15 @@ pub enum ImplDataError {
     /// The impl block, its class, or the interface declaration was missing from
     /// the item tree (internal invariant).
     Malformed,
+    /// The impl header references its own resolution: lowering it resolves a
+    /// concrete associated-type projection (`… for C.Item`, or an interface
+    /// argument `I<X = C.Item>`), which enumerates the package's impls via
+    /// [`impls_for_type`] — including this one, mid-computation. Rather than
+    /// panic on the salsa cycle, [`impl_data`]'s `cycle_result` converges here:
+    /// **concrete projections in an impl header are illegal.** (An explicit
+    /// `(C as I).Item` qualifier or a type-variable projection does not
+    /// enumerate impls and is unaffected.)
+    CyclicHeader,
 }
 
 /// Lower one generic param's bounds to its interface constraints, pushing both
@@ -204,6 +213,19 @@ fn lower_generic_param_interface_bounds(
     ifaces
 }
 
+/// The fallback for a self-referential [`impl_data`] computation: an impl header
+/// whose lowering re-enters `impl_data` (via a concrete projection →
+/// [`impls_for_type`]) is [`ImplDataError::CyclicHeader`]. Salsa uses this
+/// `cycle_result` to converge the cycle immediately instead of panicking, so
+/// such headers are a deterministic error rather than a crash.
+fn impl_data_cycle_result<'db>(
+    _db: &'db dyn crate::Db,
+    _id: salsa::Id,
+    _impl_loc: baml_compiler2_hir::loc::ImplLoc<'db>,
+) -> Result<ImplData<'db>, ImplDataError> {
+    Err(ImplDataError::CyclicHeader)
+}
+
 /// Resolve one `implements` block to its [`ImplData`].
 ///
 /// `Err(ImplDataError::InterfaceUnresolved { diagnostics })` when the interface
@@ -211,13 +233,14 @@ fn lower_generic_param_interface_bounds(
 /// (the bad interface target, the for-target, the bounds) ride along so they're
 /// still surfaced (callers needing the resolved data skip such impls).
 /// `Err(Malformed)` is an internal invariant violation (a loc pointing at a
-/// missing item-tree entry).
+/// missing item-tree entry). `Err(CyclicHeader)` is a header that projects
+/// through its own resolution (see [`impl_data_cycle_result`]).
 ///
 /// All of this impl's diagnostics are owned here — in [`ImplData::diagnostics`]
 /// on success, or the `InterfaceUnresolved` payload on failure — and surfaced at
 /// the impl's span by check.rs. `impl_data` is the single owner; check.rs never
 /// re-derives them.
-#[salsa::tracked(returns(ref))]
+#[salsa::tracked(returns(ref), cycle_result = impl_data_cycle_result)]
 pub fn impl_data<'db>(
     db: &'db dyn crate::Db,
     impl_loc: baml_compiler2_hir::loc::ImplLoc<'db>,
@@ -307,10 +330,12 @@ pub fn impl_data<'db>(
         } => {
             let names: Vec<Name> = generics.iter().map(|g| g.name.clone()).collect();
             let mut for_target_diags = Vec::new();
-            // Bounds stay empty here (and for the interface target below): `impl_data`
-            // is what `impls_for_type` enumerates, so a bounds-aware lowering that
-            // resolved a concrete projection in an impl header would re-enter
-            // `impl_data` through `resolve_concrete_projection` — a salsa cycle.
+            // The impl generics' bounds are not threaded into this header lowering
+            // (a `T.member` type-variable projection in an impl header is a separate
+            // gap). A *concrete* projection here (`… for C.Item`) re-enters
+            // `impl_data` via `impls_for_type` regardless of bounds; that cycle is
+            // caught by `impl_data`'s `cycle_result` (→ `CyclicHeader`), so such
+            // headers are illegal rather than a panic.
             let for_ty = crate::lower_type_expr::lower_type_expr(
                 &for_target.expr,
                 &crate::lower_type_expr::ScopeCtx {

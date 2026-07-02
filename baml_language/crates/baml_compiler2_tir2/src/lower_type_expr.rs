@@ -1506,6 +1506,36 @@ mod tests {
         );
     }
 
+    // A concrete associated-type projection in an impl header re-enters `impl_data`
+    // through `impls_for_type` — a salsa cycle. `impl_data`'s `cycle_result` converges
+    // it to `CyclicHeader` (illegal) rather than panicking.
+    #[test]
+    fn concrete_projection_in_impl_header_is_cyclic_not_panic() {
+        let db = compile(concat!(
+            "interface HasItem {\n  type Item\n}\n",
+            "class Numbers {\n  n: int\n  implements HasItem {\n    type Item = int\n  }\n}\n",
+            "interface Marker {}\n",
+            "implement Marker for Numbers.Item {}\n",
+        ));
+        let user = PackageId::new(&db, Name::new("user"));
+        let impls = crate::interfaces::package_impl_locs(&db, user);
+        // The projection-header impl converges to CyclicHeader; every other impl still
+        // resolves (the in-body `implements HasItem` is a leaf, not in the cycle).
+        assert!(
+            impls.iter().any(|&loc| matches!(
+                crate::interfaces::impl_data(&db, loc),
+                Err(crate::interfaces::ImplDataError::CyclicHeader)
+            )),
+            "a concrete projection in an impl header must resolve to CyclicHeader, not panic",
+        );
+        assert!(
+            impls
+                .iter()
+                .any(|&loc| crate::interfaces::impl_data(&db, loc).is_ok()),
+            "the non-cyclic in-body impl must still resolve",
+        );
+    }
+
     #[test]
     fn substitute_paths_recurses_into_function_type() {
         let type_expr = TypeExpr::Function {
