@@ -1662,6 +1662,141 @@ mod tests {
         }
     }
 
+    /// Lower a chained projection `T.members[0].members[1]…` where `T` is bounded by
+    /// the single named interface.
+    fn lower_chain(
+        db: &TestDb,
+        tvar: &str,
+        bound: &str,
+        members: &[&str],
+    ) -> (Ty, Vec<TirTypeError>) {
+        let items = baml_compiler2_ppir::package_items(db, PackageId::new(db, Name::new("user")));
+        let generic_params = [Name::new(tvar)];
+        let mut bounds = TypeVarBoundsMap::default();
+        bounds.insert(
+            Name::new(tvar),
+            vec![baml_type::Interface::new(
+                QualifiedTypeName::new(Name::new("user"), vec![], Name::new(bound)),
+                vec![],
+                vec![],
+            )],
+        );
+        let ctx = ScopeCtx {
+            db,
+            package_items: items,
+            ns_context: &[],
+            generic_params: &generic_params,
+            bounds: &bounds,
+            self_ty: None,
+        };
+        let expr = members.iter().fold(path(tvar), |base, member| {
+            TypeExpr::AssociatedTypeProjection {
+                base: Box::new(base),
+                interface: None,
+                member: Name::new(member),
+                attrs: vec![],
+            }
+        });
+        let mut diags = Vec::new();
+        let ty = lower_type_expr(&expr, &ctx, &mut diags);
+        (ty, diags)
+    }
+
+    // `T.A.B` where `T: Outer`, `type A extends Inner`, and `Inner` declares `B`:
+    // the outer `.B` resolves nominally through `A`'s declared bound.
+    #[test]
+    fn chained_projection_resolves_through_associated_type_bound() {
+        let db = compile(concat!(
+            "interface Inner {\n  type B\n}\n",
+            "interface Outer {\n  type A extends Inner\n}\n",
+        ));
+        let (ty, diags) = lower_chain(&db, "T", "Outer", &["A", "B"]);
+        assert!(diags.is_empty(), "unexpected diagnostics: {diags:?}");
+        match ty {
+            Ty::AssociatedTypeProjection {
+                base,
+                interface,
+                member,
+                ..
+            } => {
+                assert!(
+                    matches!(*base, Ty::AssociatedTypeProjection { ref member, .. } if member.as_str() == "A"),
+                    "outer projection's base is the inner `T.A` projection",
+                );
+                assert_eq!(
+                    interface
+                        .expect("interface determined")
+                        .name
+                        .name()
+                        .as_str(),
+                    "Inner"
+                );
+                assert_eq!(member.as_str(), "B");
+            }
+            other => panic!("expected a symbolic T.A.B projection, got {other:?}"),
+        }
+    }
+
+    // When `A`'s bound pins the member (`type A extends Inner<B = int>`), the chain
+    // collapses to the pinned type.
+    #[test]
+    fn chained_projection_collapses_through_pinning_bound() {
+        let db = compile(concat!(
+            "interface Inner {\n  type B\n}\n",
+            "interface Outer {\n  type A extends Inner<B = int>\n}\n",
+        ));
+        let (ty, diags) = lower_chain(&db, "T", "Outer", &["A", "B"]);
+        assert!(diags.is_empty(), "unexpected diagnostics: {diags:?}");
+        assert!(
+            matches!(ty, Ty::Int { .. }),
+            "expected T.A.B to collapse to the bound's pin, got {ty:?}"
+        );
+    }
+
+    // An associated type with no declared bound cannot be proven to implement any
+    // interface, so projecting off it (`T.A.B`) is unknown.
+    #[test]
+    fn chained_projection_without_bound_is_unknown() {
+        let db = compile("interface Outer {\n  type A\n}\n");
+        let (ty, diags) = lower_chain(&db, "T", "Outer", &["A", "B"]);
+        assert!(matches!(ty, Ty::Error { .. }), "got {ty:?}");
+        assert!(
+            diags.iter().any(|d| matches!(
+                d,
+                TirTypeError::UnknownAssociatedType { member, .. } if member.as_str() == "B"
+            )),
+            "expected an unknown-member diagnostic for `B`, got {diags:?}"
+        );
+    }
+
+    // A three-deep chain `T.A.B.C` resolves through each associated type's bound.
+    #[test]
+    fn chained_projection_three_deep_resolves() {
+        let db = compile(concat!(
+            "interface L3 {\n  type C\n}\n",
+            "interface L2 {\n  type B extends L3\n}\n",
+            "interface L1 {\n  type A extends L2\n}\n",
+        ));
+        let (ty, diags) = lower_chain(&db, "T", "L1", &["A", "B", "C"]);
+        assert!(diags.is_empty(), "unexpected diagnostics: {diags:?}");
+        match ty {
+            Ty::AssociatedTypeProjection {
+                interface, member, ..
+            } => {
+                assert_eq!(
+                    interface
+                        .expect("interface determined")
+                        .name
+                        .name()
+                        .as_str(),
+                    "L3"
+                );
+                assert_eq!(member.as_str(), "C");
+            }
+            other => panic!("expected a symbolic T.A.B.C projection, got {other:?}"),
+        }
+    }
+
     #[test]
     fn substitute_paths_recurses_into_function_type() {
         let type_expr = TypeExpr::Function {

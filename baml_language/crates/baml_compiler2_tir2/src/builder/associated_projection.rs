@@ -29,6 +29,7 @@
 
 use baml_base::{Name, attr::TyAttr};
 use baml_compiler2_hir::{contributions::Definition, loc::InterfaceLoc, package::PackageId};
+use rustc_hash::FxHashMap;
 
 use crate::{
     infer_context::{AssocContainer, TirTypeError},
@@ -93,13 +94,10 @@ pub(crate) fn lower_projection(
             });
             error_ty()
         }
-        // Undeterminable here but not ill-formed: a chained base awaiting its inner
-        // resolution, a base that cannot carry a projection, or a base/qualifier (or
-        // out-of-scope type variable) that resolves elsewhere. Lower to `Ty::Error`
-        // without a fresh diagnostic.
-        Determination::Deferred | Determination::InvalidBase | Determination::Poisoned => {
-            error_ty()
-        }
+        // Undeterminable here but not ill-formed: a base that cannot carry a projection,
+        // or a base/qualifier that already errored (or resolves elsewhere). Lower to
+        // `Ty::Error` without a fresh diagnostic.
+        Determination::InvalidBase | Determination::Poisoned => error_ty(),
     };
     ProjectionLowering { ty, diagnostics }
 }
@@ -122,11 +120,6 @@ enum Determination {
     /// More than one distinct interface in scope declares `member`; the projection
     /// must be disambiguated with an explicit `(base as I).member`.
     Ambiguous(Vec<baml_type::Interface>),
-    /// The interface cannot be determined yet, but the projection is not ill-formed:
-    /// a chained base (`T.A.B`) whose inner projection must resolve first.
-    #[deprecated = "placeholder scaffolding: a chained projection must resolve through the inner \
-        associated type's declared bound (or be an error). Remove once the chained path lands."]
-    Deferred,
     /// `base` is a kind that cannot carry an associated-type projection.
     InvalidBase,
     /// `base` or the explicit qualifier already errored upstream.
@@ -209,8 +202,27 @@ fn determine_interface(
         | Ty::Media(..)
         | Ty::Literal(..)
         | Ty::EnumVariant(..) => determine_concrete(ctx, &base, member),
-        // A chained projection base (`T.A.B`) needs its inner projection resolved first.
-        Ty::AssociatedTypeProjection { .. } => Determination::Deferred,
+        // A chained projection base (`T.A.B`): the inner `T.A` already resolved to a
+        // symbolic projection through the interface that declares `A`; `B` resolves
+        // through the interface bound declared on `A` (`type A extends J`).
+        Ty::AssociatedTypeProjection {
+            base: inner_base,
+            interface: inner_interface,
+            member: inner_member,
+            ..
+        } => {
+            let inner_interface = inner_interface.as_ref().unwrap_or_else(|| {
+                unreachable!("a symbolic projection base always carries its determined interface")
+            });
+            determine_chained(
+                ctx.db(),
+                &base,
+                inner_base,
+                inner_interface,
+                inner_member,
+                member,
+            )
+        }
         // Already-errored bases: propagate without a fresh diagnostic.
         Ty::Error { .. } | Ty::Unknown { .. } | Ty::BuiltinUnknown { .. } => {
             Determination::Poisoned
@@ -278,6 +290,101 @@ fn resolve_through_roots(
         ),
         _ => Determination::Ambiguous(declarers),
     }
+}
+
+/// Resolve `member` on a chained base `inner_base.inner_member` (`= T.A`, whose
+/// realized interface is `inner_interface`) — i.e. the outer `.member` of `T.A.B`.
+///
+/// `T.A`'s type is whatever an implementor pins it to, so it is searched
+/// *nominally* through the interface bound declared on `A` (`type A extends J`),
+/// realized at this projection: `Self → T`, the interface's generics → the inner
+/// interface's, and each sibling associated type → its inner pin. `member` then
+/// resolves through that bound (which may itself pin it, collapsing the chain).
+/// An associated type with no declared bound cannot be proven to implement any
+/// interface, so `member` is unknown on it.
+fn determine_chained(
+    db: &dyn crate::Db,
+    projection: &Ty,
+    inner_base: &Ty,
+    inner_interface: &baml_type::Interface,
+    inner_member: &Name,
+    member: &Name,
+) -> Determination {
+    let Some(iface_loc) = resolve_interface_loc(db, &inner_interface.name) else {
+        // The inner interface does not resolve — already errored upstream.
+        return Determination::Poisoned;
+    };
+    let Some(root) =
+        associated_type_bound_interface(db, iface_loc, inner_interface, inner_base, inner_member)
+    else {
+        return Determination::Undeclared {
+            container: AssocContainer::Ty(projection.clone()),
+        };
+    };
+    let container = AssocContainer::Interface(root.name.clone());
+    resolve_through_roots(db, vec![root], member, container)
+}
+
+/// The interface bound declared on associated type `member` of the interface at
+/// `iface_loc` (`type member extends J`), realized at `realized` (the inner
+/// interface as reached) with `self_ty` as the projection's own base. `None` when
+/// `member` is not declared there, has no `extends` bound, or the bound does not
+/// lower to an interface.
+fn associated_type_bound_interface(
+    db: &dyn crate::Db,
+    iface_loc: InterfaceLoc<'_>,
+    realized: &baml_type::Interface,
+    self_ty: &Ty,
+    member: &Name,
+) -> Option<baml_type::Interface> {
+    let tree = baml_compiler2_hir::file_item_tree(db, iface_loc.file(db));
+    let iface = tree.interfaces.get(&iface_loc.id(db))?;
+    let assoc = iface.associated_types.iter().find(|a| &a.name == member)?;
+    let bound_te = assoc.bound.as_ref()?;
+
+    let pkg = baml_compiler2_hir::file_package::file_package(db, iface_loc.file(db));
+    let pkg_items = baml_compiler2_ppir::package_items(db, PackageId::new(db, pkg.package.clone()));
+
+    // The bound is realized at the projection: `Self` is the projection's base, the
+    // interface's generics are the realized ones, and each sibling associated type is
+    // its inner pin.
+    let mut bindings: FxHashMap<Name, Ty> = FxHashMap::default();
+    bindings.insert(Name::new("Self"), self_ty.clone());
+    for (param, arg) in iface.generic_params.iter().zip(&realized.generics) {
+        bindings.insert(param.clone(), arg.clone());
+    }
+    for (name, ty) in &realized.associated_types {
+        bindings.insert(name.clone(), ty.clone());
+    }
+
+    // The bound is written in the interface's own scope: `Self` is bounded by the
+    // interface itself (so `Self.member` in the bound resolves), plus the interface's
+    // declared parameter bounds; its generics and associated names are in scope.
+    let mut bounds = crate::lower_type_expr::interface_generic_param_bounds(db, iface_loc).clone();
+    bounds.insert(Name::new("Self"), vec![realized.clone()]);
+    let generic_params: Vec<Name> = iface
+        .generic_params
+        .iter()
+        .cloned()
+        .chain(iface.associated_types.iter().map(|a| a.name.clone()))
+        .chain(std::iter::once(Name::new("Self")))
+        .collect();
+
+    let scope = crate::lower_type_expr::ScopeCtx {
+        db,
+        package_items: pkg_items,
+        ns_context: &pkg.namespace_path,
+        generic_params: &generic_params,
+        bounds: &bounds,
+        self_ty: Some(Ty::TypeVar(Name::new("Self"), TyAttr::default())),
+    };
+    // The bound is checked at the interface's declaration; diagnostics are discarded here.
+    let mut diags = Vec::new();
+    let lowered = crate::generics::substitute_ty(
+        &crate::lower_type_expr::lower_type_expr(&bound_te.expr, &scope, &mut diags),
+        &bindings,
+    );
+    lowered.as_interface()
 }
 
 /// Resolve a concrete base's projection through the impls visible in `ctx`'s
