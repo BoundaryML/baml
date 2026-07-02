@@ -79,6 +79,28 @@ class LinearPushProcessor {
                 },
             };
 
+            // No Linear token -> no-op sync (ports the v1 token-less client): mark
+            // synced and still run the open->confirmed boarding so the pipeline
+            // flows in dev. Without this guard the fail-loud path below would
+            // retry-loop every dirty issue against an unauthenticated API forever.
+            if (self.linear.token == "") {
+                let _ = self.svc.transition("issues", id, "synced", "linearSyncStatus", "{}", true) catch (e) {
+                    _ => {
+                        throw ProcessError { message: "tokenless mark synced failed: " + baml.unstable.string(e) }
+                    }
+                };
+                let was_open_nl = match (issue.status) {
+                    let s: string => s == "open",
+                    null => false,
+                };
+                if (was_open_nl) {
+                    let _ = self.svc.transition("issues", id, "confirmed", "status", "{}", false) catch (_) {
+                        _ => ""
+                    };
+                }
+                return 0;
+            }
+
             // Containment: with an allowlist set, mirror ONLY listed issues; drain
             // every other dirty issue (mark synced) without writing to the board.
             let allow = linear_push_allowlist();
