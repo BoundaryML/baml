@@ -172,3 +172,60 @@ class Retry {
         }
     }
 }
+
+/// Round-robin load balancing across members. Holds a mutable cursor (the one bit of
+/// cross-call state a combinator legitimately owns).
+class RoundRobin {
+    members: root.ai.Provider[],
+    counter: int,
+
+    implements root.ai.Provider {}
+
+    implements root.ai.HttpProvider {
+        type Body = unknown
+
+        function build_request<T>(
+            self,
+            prompt: string,
+        ) -> root.http.Request throws root.errors.CallError | root.errors.UnknownError {
+            throw root.errors.UnknownError { data: null, message: ["round_robin has no single request"] }
+        }
+        function send(
+            self,
+            request: root.http.Request,
+        ) -> unknown throws root.errors.CallError | root.errors.UnknownError {
+            throw root.errors.UnknownError { data: null, message: ["round_robin does not send directly"] }
+        }
+        function parse<T>(
+            self,
+            from: unknown,
+        ) -> T throws root.errors.CallError | root.errors.UnknownError {
+            throw root.errors.UnknownError { data: null, message: ["round_robin does not parse directly"] }
+        }
+        function meta_of(
+            self,
+            from: unknown,
+        ) -> root.ai.ResponseMeta throws root.errors.CallError | root.errors.UnknownError {
+            throw root.errors.UnknownError { data: null, message: ["round_robin has no meta"] }
+        }
+
+        function call_with<T, V, E2>(
+            self,
+            prompt: string,
+            project: (root.ai.ResponseMeta) -> V throws E2,
+        ) -> root.ai.CallResult<T, V> throws root.errors.CallError | root.errors.UnknownError | E2 {
+            let n = self.members.length();
+            if (n == 0) {
+                throw root.errors.UnknownError { data: null, message: ["round_robin: no members"] };
+            }
+            let idx = self.counter % n;
+            self.counter = self.counter + 1;
+            match (self.members.at(idx)) {
+                let h: root.ai.HttpProvider => h.call_with<T, V, E2>(prompt, project),
+                _ => {
+                    throw root.errors.UnknownError { data: null, message: ["round_robin: member not callable"] }
+                },
+            }
+        }
+    }
+}

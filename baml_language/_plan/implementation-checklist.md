@@ -38,11 +38,11 @@ real `gpt-5.4-mini` at milestones. Commit after each ✅.
 - [x] Prefix-routing (function-returning-Provider)  example (route by model prefix to different providers).
 - [x] Tests: mock two endpoints; a routing function picks the right one.
 
-### 4. Cascades & routing (Phase 2, scenario 30)
-- [ ] Routing is a `client`-as-function; cascade is a `Fallback`-shaped combinator.
-- [ ] A `ConfidenceProvider`-style capability + a `Cascade` that escalates on low confidence (documents the
+### 4. Cascades & routing (scenario 30) — ✅ done (+ RoundRobin combinator)
+- [x] Routing is a `client`-as-function; cascade is a `Fallback`-shaped combinator.
+- [x] A `ConfidenceProvider`-style capability + a `Cascade` that escalates on low confidence (documents the
       "presence-not-calibration" B2 gap from D3).
-- [ ] Tests: cheap-then-expensive escalation via mock.
+- [x] Tests: cheap-then-expensive escalation via mock.
 
 ### 5. Tools & the agentic loop (scenario 09) — ✅ core done
 - [x] `interface Tools requires Provider` with `type Transcript`, `begin`/`step`/`submit`, default `run_tools`.

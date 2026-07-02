@@ -695,3 +695,102 @@ async fn tools_loop_live() {
         "live tool loop answer did not reflect the tool result: {s:?}"
     );
 }
+
+/// Cascade & routing (scenario 30): a cheap provider answers, but escalates to an
+/// expensive one when it signals low confidence (here, the sentinel "ESCALATE"). Cascade
+/// is a Fallback-shaped pattern; routing is an ordinary function returning a Provider.
+#[tokio::test]
+async fn cascade_escalates_on_low_confidence() {
+    // cheap model: returns ESCALATE for the hard question, a direct answer otherwise.
+    let cheap = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/chat/completions"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_string(r#"{"choices":[{"message":{"content":"ESCALATE"}}]}"#),
+        )
+        .mount(&cheap)
+        .await;
+    let expensive = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/chat/completions"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_string(r#"{"choices":[{"message":{"content":"expert answer"}}]}"#),
+        )
+        .mount(&expensive)
+        .await;
+    let (cu, eu) = (cheap.uri(), expensive.uri());
+
+    let output = baml_test!(&format!(
+        r#"
+        // A cascade: try the cheap provider; if it signals ESCALATE, fall up to the expensive one.
+        function cascade(prompt: string, cheap_url: string, expensive_url: string) -> string
+            throws baml.errors.CallError | baml.errors.UnknownError {{
+            let cheap = baml.ai.OpenAi {{ model: "gpt-4o-mini", api_key: "k", base_url: cheap_url }};
+            let expensive = baml.ai.OpenAi {{ model: "gpt-5.4-mini", api_key: "k", base_url: expensive_url }};
+            let first = cheap.call<string>(prompt);
+            if (first == "ESCALATE") {{
+                expensive.call<string>(prompt)
+            }} else {{
+                first
+            }}
+        }}
+        function main() -> string {{
+            cascade("a hard question", "{cu}", "{eu}") catch (e) {{
+                let u: baml.errors.UnknownError => "ERR",
+            }}
+        }}
+        "#
+    ));
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("expert answer".into())
+    );
+}
+
+/// RoundRobin combinator load-balances across members via a mutable cursor.
+#[tokio::test]
+async fn round_robin_alternates_members() {
+    let a = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/chat/completions"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_string(r#"{"choices":[{"message":{"content":"A"}}]}"#),
+        )
+        .mount(&a)
+        .await;
+    let b = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/chat/completions"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_string(r#"{"choices":[{"message":{"content":"B"}}]}"#),
+        )
+        .mount(&b)
+        .await;
+    let (au, bu) = (a.uri(), b.uri());
+
+    let output = baml_test!(&format!(
+        r#"
+        function main() -> string {{
+            let rr = baml.ai.RoundRobin {{
+                members: [
+                    baml.ai.OpenAi {{ model: "m", api_key: "k", base_url: "{au}" }},
+                    baml.ai.OpenAi {{ model: "m", api_key: "k", base_url: "{bu}" }},
+                ],
+                counter: 0,
+            }};
+            let r1 = rr.call<string>("hi") catch (e) {{ let u: baml.errors.UnknownError => "E" }};
+            let r2 = rr.call<string>("hi") catch (e) {{ let u: baml.errors.UnknownError => "E" }};
+            let r3 = rr.call<string>("hi") catch (e) {{ let u: baml.errors.UnknownError => "E" }};
+            r1 + "," + r2 + "," + r3
+        }}
+        "#
+    ));
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("A,B,A".into())
+    );
+}
