@@ -840,6 +840,129 @@ mod tests {
         );
     }
 
+    /// Two enum variants sharing the same `@alias` value serialize to the same
+    /// label — an unsatisfiable schema (B-649). Fires `DuplicateFieldAlias` with
+    /// an `"enum"` container.
+    #[test]
+    fn duplicate_variant_alias_value_produces_field_alias_diagnostic() {
+        use baml_compiler2_hir::diagnostic::Hir2Diagnostic;
+
+        let mut db = make_db();
+        let file = db.add_file(
+            "dup_variant_alias.baml",
+            "enum E {\n  A @alias(\"x\")\n  B @alias(\"x\")\n}",
+        );
+
+        let index = file_semantic_index(&db, file);
+        let diags = index.diagnostics();
+
+        let dups: Vec<_> = diags
+            .iter()
+            .filter(|d| matches!(d, Hir2Diagnostic::DuplicateFieldAlias { key, .. } if key == "x"))
+            .collect();
+        assert_eq!(dups.len(), 1);
+
+        let Hir2Diagnostic::DuplicateFieldAlias {
+            sites, container, ..
+        } = dups[0]
+        else {
+            panic!("expected DuplicateFieldAlias diagnostic");
+        };
+        assert_eq!(sites.len(), 2);
+        assert_eq!(*container, "enum");
+    }
+
+    /// A plain variant name colliding with another variant's `@alias` also fires
+    /// `DuplicateFieldAlias`.
+    #[test]
+    fn variant_name_vs_alias_produces_field_alias_diagnostic() {
+        use baml_compiler2_hir::diagnostic::Hir2Diagnostic;
+
+        let mut db = make_db();
+        let file = db.add_file(
+            "variant_name_vs_alias.baml",
+            "enum E {\n  Shared\n  B @alias(\"Shared\")\n}",
+        );
+
+        let index = file_semantic_index(&db, file);
+        let diags = index.diagnostics();
+
+        let dups: Vec<_> = diags
+            .iter()
+            .filter(
+                |d| matches!(d, Hir2Diagnostic::DuplicateFieldAlias { key, .. } if key == "Shared"),
+            )
+            .collect();
+        assert_eq!(dups.len(), 1);
+    }
+
+    /// A variant whose `@alias` equals its OWN name is the sole occupant of that
+    /// key — no collision.
+    #[test]
+    fn variant_alias_equals_own_name_has_no_field_alias_diagnostic() {
+        use baml_compiler2_hir::diagnostic::Hir2Diagnostic;
+
+        let mut db = make_db();
+        let file = db.add_file(
+            "variant_alias_own_name.baml",
+            "enum E {\n  A @alias(\"A\")\n  B\n}",
+        );
+
+        let index = file_semantic_index(&db, file);
+        let diags = index.diagnostics();
+
+        assert!(
+            !diags
+                .iter()
+                .any(|d| matches!(d, Hir2Diagnostic::DuplicateFieldAlias { .. })),
+            "a variant aliased to its own name must not be flagged"
+        );
+    }
+
+    /// A `@skip`'d variant is excluded from the serialized schema, so it cannot
+    /// collide with another variant's key.
+    #[test]
+    fn skipped_variant_has_no_field_alias_diagnostic() {
+        use baml_compiler2_hir::diagnostic::Hir2Diagnostic;
+
+        let mut db = make_db();
+        let file = db.add_file(
+            "skip_variant_no_collide.baml",
+            "enum E {\n  A @alias(\"x\")\n  B @alias(\"x\") @skip\n}",
+        );
+
+        let index = file_semantic_index(&db, file);
+        let diags = index.diagnostics();
+
+        assert!(
+            !diags
+                .iter()
+                .any(|d| matches!(d, Hir2Diagnostic::DuplicateFieldAlias { .. })),
+            "a @skip'd variant must not participate in serialized-key collisions"
+        );
+    }
+
+    /// A plain duplicate variant *name* (no aliasing) is left to the duplicate
+    /// variant check; the new rule must not double-report it.
+    #[test]
+    fn duplicate_variant_name_does_not_also_emit_field_alias_diagnostic() {
+        use baml_compiler2_hir::diagnostic::Hir2Diagnostic;
+
+        let mut db = make_db();
+        let file = db.add_file("dup_variant_name_only.baml", "enum E {\n  A\n  A\n}");
+
+        let index = file_semantic_index(&db, file);
+        let diags = index.diagnostics();
+
+        assert!(
+            !diags
+                .iter()
+                .any(|d| matches!(d, Hir2Diagnostic::DuplicateFieldAlias { .. })),
+            "pure duplicate variant names are covered by the duplicate-variant check, \
+             not DuplicateFieldAlias"
+        );
+    }
+
     /// Duplicate variants within an enum produce a DuplicateDefinition diagnostic.
     #[test]
     fn duplicate_variant_in_enum_produces_diagnostic() {

@@ -1639,7 +1639,14 @@ impl<'db> SemanticIndexBuilder<'db> {
                     );
                     self.validate_schema_attributes(&field.attributes);
                 }
-                self.validate_field_alias_collisions(class, is_builtin_file);
+                self.validate_alias_collisions(
+                    class
+                        .fields
+                        .iter()
+                        .map(|f| (&f.name, f.name_span, f.attributes.as_slice())),
+                    "class",
+                    is_builtin_file,
+                );
                 for method in &class.methods {
                     self.validate_function_phase1(method, is_builtin_file, "method");
                 }
@@ -1649,6 +1656,13 @@ impl<'db> SemanticIndexBuilder<'db> {
                 for variant in &enm.variants {
                     self.validate_schema_attributes(&variant.attributes);
                 }
+                self.validate_alias_collisions(
+                    enm.variants
+                        .iter()
+                        .map(|v| (&v.name, v.name_span, v.attributes.as_slice())),
+                    "enum",
+                    is_builtin_file,
+                );
             }
             ast::Item::TypeAlias(alias) => {
                 if let Some(type_expr) = &alias.type_expr {
@@ -1872,33 +1886,47 @@ impl<'db> SemanticIndexBuilder<'db> {
         }
     }
 
-    /// Reject a class whose fields don't all serialize to distinct JSON keys.
+    /// Reject a class or enum whose members don't all serialize to distinct
+    /// JSON keys.
     ///
-    /// A field's *effective serialized key* is its `@alias` value if it carries
+    /// A member's *effective serialized key* is its `@alias` value if it carries
     /// one, otherwise its declared name. When an `@alias` is present the real
-    /// field name is never used for matching (see `bex_sap`'s
-    /// `AnnotatedField::key_matches`), so two fields with the same effective key
+    /// member name is never used for matching (see `bex_sap`'s
+    /// `AnnotatedField::key_matches`), so two members with the same effective key
     /// are indistinguishable in the serialized schema: `ctx.output_format`
-    /// renders duplicate keys and only the first can ever be populated at parse
-    /// time. This catches both `a @alias("x")` + `b @alias("x")` and a plain
-    /// field `x` colliding with another field's `@alias("x")`.
+    /// renders duplicate keys and only the first can ever be satisfied. This
+    /// catches both `a @alias("x")` + `b @alias("x")` and a plain member `x`
+    /// colliding with another member's `@alias("x")`.
     ///
-    /// Fields marked `@skip` are excluded from the schema entirely and so cannot
-    /// collide. A pure duplicate *field name* (no aliasing involved) is left to
-    /// the existing `DuplicateField` (E0012) check to avoid double-reporting;
-    /// this rule only fires when at least two *distinct* field names share a key.
-    fn validate_field_alias_collisions(&mut self, class: &ast::ClassDef, is_builtin_file: bool) {
-        // Builtin stdlib classes carry no `@alias`, and type-level validation
-        // already skips them — stay consistent and avoid surprising the stdlib.
+    /// Applies uniformly to class fields (an unsatisfiable output schema — a
+    /// required shadowed field can never be parsed) and enum variants (two
+    /// variants rendered under one label — the model's choice can't be resolved
+    /// back to a unique variant).
+    ///
+    /// Members marked `@skip` are excluded from the schema entirely and so
+    /// cannot collide. A pure duplicate *member name* (no aliasing involved) is
+    /// left to the existing `DuplicateField` / duplicate-variant (E0012) checks
+    /// to avoid double-reporting; this rule only fires when at least two
+    /// *distinct* member names share a key. `container` is `"class"` or `"enum"`
+    /// and is used only for the diagnostic message.
+    fn validate_alias_collisions<'a>(
+        &mut self,
+        members: impl Iterator<Item = (&'a Name, TextRange, &'a [ast::RawAttribute])>,
+        container: &'static str,
+        is_builtin_file: bool,
+    ) {
+        // Builtin stdlib declarations carry no `@alias`, and type-level
+        // validation already skips them — stay consistent and avoid surprising
+        // the stdlib.
         if is_builtin_file {
             return;
         }
 
         let mut buckets: FxHashMap<String, Vec<(Name, TextRange)>> = FxHashMap::default();
-        for field in &class.fields {
+        for (name, name_span, attributes) in members {
             let mut alias: Option<String> = None;
             let mut skip = false;
-            for attr in &field.attributes {
+            for attr in attributes {
                 match attr.name.as_str() {
                     "alias" if attr.args.len() == 1 => {
                         // Last `@alias` wins, mirroring emit's `extract_schema_attrs`.
@@ -1915,21 +1943,25 @@ impl<'db> SemanticIndexBuilder<'db> {
             if skip {
                 continue;
             }
-            let key = alias.unwrap_or_else(|| field.name.as_str().to_string());
+            let key = alias.unwrap_or_else(|| name.as_str().to_string());
             buckets
                 .entry(key)
                 .or_default()
-                .push((field.name.clone(), field.name_span));
+                .push((name.clone(), name_span));
         }
 
-        for (key, fields) in buckets {
-            // Only a collision between two *distinct* field names is a new error;
-            // repeated identical names are already reported as `DuplicateField`.
-            let distinct = fields.iter().any(|(name, _)| name != &fields[0].0);
-            if fields.len() >= 2 && distinct {
-                let sites = fields.into_iter().map(|(_, span)| span).collect();
-                self.diagnostics
-                    .push(Hir2Diagnostic::DuplicateFieldAlias { key, sites });
+        for (key, members) in buckets {
+            // Only a collision between two *distinct* member names is a new
+            // error; repeated identical names are already reported by the
+            // duplicate-definition checks.
+            let distinct = members.iter().any(|(name, _)| name != &members[0].0);
+            if members.len() >= 2 && distinct {
+                let sites = members.into_iter().map(|(_, span)| span).collect();
+                self.diagnostics.push(Hir2Diagnostic::DuplicateFieldAlias {
+                    key,
+                    sites,
+                    container,
+                });
             }
         }
     }
