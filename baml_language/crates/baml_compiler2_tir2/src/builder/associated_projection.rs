@@ -29,11 +29,13 @@
 
 use baml_base::{Name, attr::TyAttr};
 use baml_compiler2_hir::{contributions::Definition, loc::InterfaceLoc, package::PackageId};
+use rustc_hash::FxHashMap;
 
 use crate::{
-    infer_context::TirTypeError,
-    lower_type_expr::TypeExprContext,
+    infer_context::{AssocContainer, TirTypeError},
+    lower_type_expr::{ConcreteProjection, TypeExprContext},
     ty::{QualifiedTypeName, Ty},
+    type_context::{GlobalTypeContext, TypeVarBounds},
 };
 
 /// The result of lowering a projection: the resolved [`Ty`] — the canonical
@@ -81,15 +83,8 @@ pub(crate) fn lower_projection(
                 }
             }
         }
-        Determination::Undeclared {
-            container,
-            container_is_interface,
-        } => {
-            diagnostics.push(TirTypeError::UnknownAssociatedType {
-                member,
-                container,
-                container_is_interface,
-            });
+        Determination::Undeclared { container } => {
+            diagnostics.push(TirTypeError::UnknownAssociatedType { member, container });
             error_ty()
         }
         Determination::Ambiguous(candidates) => {
@@ -121,12 +116,10 @@ enum Determination {
     /// The declaring interface, at its realized instantiation — the canonical
     /// triple's interface component.
     Determined(baml_type::Interface),
-    /// The interface is known but does not declare `member` directly (interfaces
-    /// do not inherit associated types through `requires`).
-    Undeclared {
-        container: QualifiedTypeName,
-        container_is_interface: bool,
-    },
+    /// The subject cannot resolve `member`: an interface subject does not
+    /// declare it directly (interfaces do not inherit associated types through
+    /// `requires`), or no impl of a concrete subject provides it.
+    Undeclared { container: AssocContainer },
     /// More than one distinct interface in scope declares `member`; the projection
     /// must be disambiguated with an explicit `(base as I).member`.
     Ambiguous(Vec<baml_type::Interface>),
@@ -166,8 +159,7 @@ fn determine_interface(
             Determination::Determined(interface)
         } else {
             Determination::Undeclared {
-                container: interface.name,
-                container_is_interface: true,
+                container: AssocContainer::Interface(interface.name),
             }
         };
     }
@@ -190,7 +182,9 @@ fn determine_interface(
                 None => return Determination::Deferred,
             }
         }
-        // Concrete receivers resolve through their own impls (impl-based path).
+        // Concrete receivers resolve through their own impls: an associated type
+        // lives on a *separate* `impl I for C` (interfaces are bounds, not
+        // inheritance), found via the visible impl set rather than any closure.
         Ty::Class(..)
         | Ty::Enum(..)
         | Ty::List(..)
@@ -203,7 +197,7 @@ fn determine_interface(
         | Ty::Uint8Array { .. }
         | Ty::Media(..)
         | Ty::Literal(..)
-        | Ty::EnumVariant(..) => return Determination::Deferred,
+        | Ty::EnumVariant(..) => return determine_concrete(ctx, &base, member),
         // A chained projection base (`T.A.B`) needs its inner projection resolved first.
         Ty::AssociatedTypeProjection { .. } => return Determination::Deferred,
         // Already-errored bases: propagate without a fresh diagnostic.
@@ -241,8 +235,7 @@ fn determine_interface(
     let declarers = closure_declarers(ctx.db(), &root, member);
     match declarers.len() {
         0 => Determination::Undeclared {
-            container: root.name,
-            container_is_interface: true,
+            container: AssocContainer::Interface(root.name),
         },
         1 => Determination::Determined(
             declarers
@@ -251,6 +244,22 @@ fn determine_interface(
                 .unwrap_or_else(|| unreachable!("length checked == 1")),
         ),
         _ => Determination::Ambiguous(declarers),
+    }
+}
+
+/// Resolve a concrete base's projection through the impls visible in `ctx`'s
+/// scope, mapping the impl-set result to a [`Determination`].
+fn determine_concrete(ctx: &dyn TypeExprContext<'_>, base: &Ty, member: &Name) -> Determination {
+    match ctx.concrete_projection(base, member) {
+        ConcreteProjection::Determined(interface) => Determination::Determined(interface),
+        ConcreteProjection::Ambiguous(candidates) => Determination::Ambiguous(candidates),
+        ConcreteProjection::Undeclared => Determination::Undeclared {
+            container: match base {
+                Ty::Class(qtn, ..) => AssocContainer::Class(qtn.clone()),
+                Ty::Enum(qtn, ..) => AssocContainer::Enum(qtn.clone()),
+                _ => AssocContainer::Ty(base.clone()),
+            },
+        },
     }
 }
 
@@ -307,6 +316,64 @@ fn closure_declarers(
         }
     }
     declarers
+}
+
+/// Resolve `base.member` for a concrete `base` through the impls visible in
+/// `pkg` (its own package plus its dependency closure).
+///
+/// Each impl for `base` contributes its realized interface
+/// ([`ResolvedImpl::implemented_interface`]); those that declare `member`
+/// *directly* are the candidates, deduplicated by realized identity. The impl
+/// bounds are discharged through the canonical algebra driven by a
+/// [`GlobalTypeContext`], so a bound on a type variable inside `base`
+/// (`List<U>.Item` with `U: Ord`) resolves against the scope's bounds.
+///
+/// [`ResolvedImpl::implemented_interface`]: crate::interfaces::ResolvedImpl::implemented_interface
+pub(crate) fn resolve_concrete_projection(
+    db: &dyn crate::Db,
+    pkg: &Name,
+    bounds: &FxHashMap<Name, baml_type::Interface>,
+    base: &Ty,
+    member: &Name,
+) -> ConcreteProjection {
+    let pkg_id = PackageId::new(db, pkg.clone());
+    let res_ctx = crate::package_interface::package_resolution_context(db, pkg_id);
+    let aliases = crate::inference::package_alias_map(db, res_ctx);
+    // The scope's type-variable bounds as one-element conjunctions, so the
+    // subtype oracle can discharge an impl bound on a bounded type variable in
+    // `base`. Single-bound today (intersection bounds not yet surfaced).
+    let bound_conjunctions: FxHashMap<Name, Vec<baml_type::Interface>> = bounds
+        .iter()
+        .map(|(name, bound)| (name.clone(), vec![bound.clone()]))
+        .collect();
+    let gctx = GlobalTypeContext {
+        db,
+        res_ctx,
+        aliases: &aliases,
+        bounds: TypeVarBounds::Interfaces(&bound_conjunctions),
+    };
+
+    let mut declarers: Vec<baml_type::Interface> = Vec::new();
+    for resolved in crate::interfaces::impls_for_type(db, pkg_id, base, &aliases, |a, b| {
+        baml_type::normalize::is_subtype(a, b, &gctx)
+    }) {
+        let interface = resolved.implemented_interface(db);
+        if interface_declares_member(db, &interface.name, member) && !declarers.contains(&interface)
+        {
+            declarers.push(interface);
+        }
+    }
+
+    match declarers.len() {
+        0 => ConcreteProjection::Undeclared,
+        1 => ConcreteProjection::Determined(
+            declarers
+                .into_iter()
+                .next()
+                .unwrap_or_else(|| unreachable!("length checked == 1")),
+        ),
+        _ => ConcreteProjection::Ambiguous(declarers),
+    }
 }
 
 /// Whether interface `qtn` declares associated type `member` directly.

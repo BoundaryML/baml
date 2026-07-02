@@ -941,5 +941,9 @@ pub fn package_items<'db>(db: &'db dyn Db, package_id: PackageId<'db>) -> Packag
         }))
     };
 
-    PackageItems { namespaces, extra }
+    PackageItems {
+        package: package_name,
+        namespaces,
+        extra,
+    }
 }

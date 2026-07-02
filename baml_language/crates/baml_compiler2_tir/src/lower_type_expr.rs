@@ -1295,6 +1295,7 @@ mod tests {
         let mut db = TestDb::default();
         db.init();
         let package_items = PackageItems {
+            package: Name::new("test"),
             namespaces: FxHashMap::default(),
             extra: None,
         };

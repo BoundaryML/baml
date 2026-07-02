@@ -8,9 +8,27 @@ use baml_compiler2_hir::{
 use rustc_hash::FxHashSet;
 
 use crate::{
+    builder::associated_projection::resolve_concrete_projection,
     infer_context::TirTypeError,
     ty::{Freshness, FunctionParamMode, FunctionParamTy, MediaKind, QualifiedTypeName, Ty, TyAttr},
 };
+
+/// The outcome of resolving a concrete base's associated-type projection
+/// (`C.member`) against the impls visible in a scope — the return of
+/// [`TypeExprContext::concrete_projection`].
+pub enum ConcreteProjection {
+    /// Exactly one impl's interface declares `member`, at its realized
+    /// instantiation (associated types the impl pins are carried, so an
+    /// unambiguous pin lets the projection collapse to a concrete type).
+    Determined(baml_type::Interface),
+    /// Two or more *distinct* interfaces among the base's impls declare `member`;
+    /// the projection must be disambiguated with an explicit `(base as I).member`.
+    /// (Two impls resolving to the *same* realized interface can only arise in a
+    /// coherence-violating program, which coherence reports separately.)
+    Ambiguous(Vec<baml_type::Interface>),
+    /// No impl for the base provides an interface that declares `member`.
+    Undeclared,
+}
 
 /// The scope a `TypeExpr` is lowered in — everything that varies between a class
 /// signature, an instantiated callee, a type alias, or a method body. Lowering
@@ -42,6 +60,12 @@ pub trait TypeExprContext<'db> {
     /// used to resolve a `T.member` projection). It lowers to `Ty::TypeVar(name)`.
     /// `None` = `name` is not a type variable here; resolve it as a type name instead.
     fn type_var_bounds(&self, name: &baml_base::Name) -> Option<Box<[baml_type::Interface]>>;
+
+    /// Resolve a concrete base's associated-type projection (`C.member`) through
+    /// the impls visible in this scope. Only consulted for concrete bases — an
+    /// interface or type-variable base resolves through its `requires`-closure,
+    /// not its impls.
+    fn concrete_projection(&self, base: &Ty, member: &baml_base::Name) -> ConcreteProjection;
 }
 
 /// "Did you mean" candidates for an unresolved single-segment name: every namespace in
@@ -115,6 +139,16 @@ impl<'db> TypeExprContext<'db> for ScopeCtx<'_, 'db> {
         self.generic_params
             .contains(name)
             .then(|| self.bounds.get(name).cloned().into_iter().collect())
+    }
+
+    fn concrete_projection(&self, base: &Ty, member: &baml_base::Name) -> ConcreteProjection {
+        resolve_concrete_projection(
+            self.db,
+            &self.package_items.package,
+            self.bounds,
+            base,
+            member,
+        )
     }
 }
 
@@ -1072,6 +1106,150 @@ mod tests {
         );
     }
 
+    /// An unqualified associated-type projection on a concrete base (`Base.member`),
+    /// built directly so the test drives `lower_projection` without depending on how
+    /// the parser splits a dotted path.
+    fn concrete_projection(base: &str, member: &str) -> TypeExpr {
+        TypeExpr::AssociatedTypeProjection {
+            base: Box::new(path(base)),
+            interface: None,
+            member: Name::new(member),
+            attrs: vec![],
+        }
+    }
+
+    /// Lower `expr` in a root-namespace scope over `db`'s `user` package — no generics,
+    /// bounds, or `Self` (the scope an ordinary type alias / free signature lowers in).
+    fn lower_in_user_scope(db: &TestDb, expr: &TypeExpr) -> (Ty, Vec<TirTypeError>) {
+        let items = baml_compiler2_ppir::package_items(db, PackageId::new(db, Name::new("user")));
+        let bounds = FxHashMap::default();
+        let ctx = ScopeCtx {
+            db,
+            package_items: items,
+            ns_context: &[],
+            generic_params: &[],
+            bounds: &bounds,
+            self_ty: None,
+        };
+        let mut diags = Vec::new();
+        let ty = lower_type_expr(expr, &ctx, &mut diags);
+        (ty, diags)
+    }
+
+    // A concrete class's associated-type projection resolves through the class's own
+    // `implements` block (not any closure), and a pinned binding collapses to the type.
+    #[test]
+    fn concrete_class_projection_resolves_and_collapses() {
+        let db = compile(concat!(
+            "interface HasItem {\n  type Item\n}\n",
+            "class Numbers {\n",
+            "  n: int\n",
+            "  implements HasItem {\n    type Item = int\n  }\n",
+            "}\n",
+        ));
+        let (ty, diags) = lower_in_user_scope(&db, &concrete_projection("Numbers", "Item"));
+        assert!(
+            matches!(ty, Ty::Int { .. }),
+            "expected Numbers.Item to collapse to int, got {ty:?}"
+        );
+        assert!(diags.is_empty(), "unexpected diagnostics: {diags:?}");
+    }
+
+    // Two distinct interfaces declaring the same associated type make an unqualified
+    // concrete projection ambiguous — it must be disambiguated with `(Base as I).member`.
+    #[test]
+    fn concrete_projection_ambiguous_across_interfaces() {
+        let db = compile(concat!(
+            "interface A {\n  type Item\n}\n",
+            "interface B {\n  type Item\n}\n",
+            "class C {\n",
+            "  n: int\n",
+            "  implements A {\n    type Item = int\n  }\n",
+            "  implements B {\n    type Item = string\n  }\n",
+            "}\n",
+        ));
+        let (ty, diags) = lower_in_user_scope(&db, &concrete_projection("C", "Item"));
+        assert!(
+            matches!(ty, Ty::Error { .. }),
+            "an ambiguous projection lowers to Error, got {ty:?}"
+        );
+        assert!(
+            diags.iter().any(|d| matches!(
+                d,
+                TirTypeError::AmbiguousAssociatedTypeProjection { member, .. } if member.as_str() == "Item"
+            )),
+            "expected an ambiguity diagnostic, got {diags:?}"
+        );
+    }
+
+    // A member no `implements` block on the class declares is an unknown associated type,
+    // reported against the class (concrete, so `container_is_interface` is false).
+    #[test]
+    fn concrete_projection_unknown_member_reports_against_class() {
+        let db = compile(concat!(
+            "interface HasItem {\n  type Item\n}\n",
+            "class Numbers {\n",
+            "  n: int\n",
+            "  implements HasItem {\n    type Item = int\n  }\n",
+            "}\n",
+        ));
+        let (ty, diags) = lower_in_user_scope(&db, &concrete_projection("Numbers", "Missing"));
+        assert!(matches!(ty, Ty::Error { .. }), "got {ty:?}");
+        assert!(
+            diags.iter().any(|d| matches!(
+                d,
+                TirTypeError::UnknownAssociatedType {
+                    member,
+                    container: crate::infer_context::AssocContainer::Class(_),
+                } if member.as_str() == "Missing"
+            )),
+            "expected an unknown-associated-type diagnostic against the class, got {diags:?}"
+        );
+    }
+
+    // A non-nominal concrete base (a primitive) with no impl declaring the member
+    // is an unknown associated type naming the rendered type — not a silent error.
+    #[test]
+    fn concrete_projection_unknown_member_on_primitive_names_the_type() {
+        let db = compile("interface HasItem {\n  type Item\n}\n");
+        let projection = TypeExpr::AssociatedTypeProjection {
+            base: Box::new(TypeExpr::Int { attrs: vec![] }),
+            interface: None,
+            member: Name::new("Missing"),
+            attrs: vec![],
+        };
+        let (ty, diags) = lower_in_user_scope(&db, &projection);
+        assert!(matches!(ty, Ty::Error { .. }), "got {ty:?}");
+        let diag = diags
+            .iter()
+            .find(|d| matches!(d, TirTypeError::UnknownAssociatedType { .. }))
+            .unwrap_or_else(|| {
+                panic!("expected an unknown-associated-type diagnostic, got {diags:?}")
+            });
+        assert_eq!(
+            diag.to_string(),
+            "unknown associated type `Missing` for type `int`"
+        );
+    }
+
+    // An enum base renders as "enum", not "class", in the unknown-member diagnostic.
+    #[test]
+    fn concrete_projection_unknown_member_on_enum_renders_enum() {
+        let db = compile("enum Color {\n  Red\n  Blue\n}\n");
+        let (ty, diags) = lower_in_user_scope(&db, &concrete_projection("Color", "Missing"));
+        assert!(matches!(ty, Ty::Error { .. }), "got {ty:?}");
+        let diag = diags
+            .iter()
+            .find(|d| matches!(d, TirTypeError::UnknownAssociatedType { .. }))
+            .unwrap_or_else(|| {
+                panic!("expected an unknown-associated-type diagnostic, got {diags:?}")
+            });
+        assert_eq!(
+            diag.to_string(),
+            "unknown associated type `Missing` for enum `Color`"
+        );
+    }
+
     // End-to-end: inside an interface's own default-method body, an associated type resolves to
     // a symbolic `Self.Item` projection (through the interface bound), never the `Ty::Error`
     // placeholder — for both `self.next()` (member resolution) and the block's value.
@@ -1281,6 +1459,7 @@ mod tests {
         let mut db = TestDb::default();
         db.init();
         let package_items = PackageItems {
+            package: Name::new("test"),
             namespaces: FxHashMap::default(),
             extra: None,
         };

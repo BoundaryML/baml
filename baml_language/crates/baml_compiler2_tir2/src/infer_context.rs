@@ -22,6 +22,43 @@ use crate::ty::{QualifiedTypeName, Ty};
 
 // ── Error kinds ──────────────────────────────────────────────────────────────
 
+/// The subject an associated-type projection failed to resolve `member` on —
+/// the "container" named by [`TirTypeError::UnknownAssociatedType`].
+///
+/// A projection is nominal: `member` must be declared by an interface reachable
+/// from the subject. Each variant is a subject kind with its own reason the
+/// member can be unknown — an interface that doesn't declare it, a concrete
+/// type none of whose impls provide it, or a type variable / projected type
+/// with no interface bound to search (an unbounded subject cannot be proven to
+/// implement any interface, so no interface can declare the member).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AssocContainer {
+    /// An interface subject (an existential base, a type variable's bound, or
+    /// an explicit `(base as I)` qualifier) that does not declare the member.
+    Interface(QualifiedTypeName),
+    /// A concrete class none of whose impls' interfaces declare the member.
+    Class(QualifiedTypeName),
+    /// A concrete enum none of whose impls' interfaces declare the member.
+    Enum(QualifiedTypeName),
+    /// A type variable with no interface bound in scope.
+    TypeVar(Name),
+    /// Any other subject type (a primitive, list, map, or a projected type with
+    /// no declared bound), rendered user-facing.
+    Ty(Ty),
+}
+
+impl std::fmt::Display for AssocContainer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Interface(qtn) => write!(f, "interface `{}`", qtn.render_user_facing()),
+            Self::Class(qtn) => write!(f, "class `{}`", qtn.render_user_facing()),
+            Self::Enum(qtn) => write!(f, "enum `{}`", qtn.render_user_facing()),
+            Self::TypeVar(name) => write!(f, "type variable `{name}` (no interface bound)"),
+            Self::Ty(ty) => write!(f, "type `{}`", ty.render_user_facing()),
+        }
+    }
+}
+
 /// What went wrong — no location info, just the semantic error.
 ///
 /// `TirTypeError` is intentionally span-free for Salsa cacheability.
@@ -105,8 +142,9 @@ pub enum TirTypeError {
     /// interface; without one the projection cannot be resolved, so it must not
     /// silently fall back to an unqualified projection.
     NonInterfaceProjectionQualifier,
-    /// An associated-type projection references `member`, but the interface or
-    /// class it projects through does not declare it as an associated type.
+    /// An associated-type projection references `member`, but the subject it
+    /// projects through does not declare (or cannot declare) it as an
+    /// associated type.
     ///
     /// Interfaces do not inherit associated types through `requires` (it is a
     /// bound, not inheritance), so a member declared on a *required* interface
@@ -114,8 +152,7 @@ pub enum TirTypeError {
     /// not `(Foo as RequiresIterator).Item`.
     UnknownAssociatedType {
         member: Name,
-        container: QualifiedTypeName,
-        container_is_interface: bool,
+        container: AssocContainer,
     },
     /// An unqualified associated-type projection `Base.member` matches more than
     /// one interface that declares `member`; it must be disambiguated with an
@@ -515,21 +552,8 @@ impl fmt::Display for TirTypeError {
                     "qualified associated type projection must use an interface"
                 )
             }
-            TirTypeError::UnknownAssociatedType {
-                member,
-                container,
-                container_is_interface,
-            } => {
-                let kind = if *container_is_interface {
-                    "interface"
-                } else {
-                    "class"
-                };
-                write!(
-                    f,
-                    "unknown associated type `{member}` for {kind} `{}`",
-                    container.render_user_facing()
-                )
+            TirTypeError::UnknownAssociatedType { member, container } => {
+                write!(f, "unknown associated type `{member}` for {container}")
             }
             TirTypeError::AmbiguousAssociatedTypeProjection { member, candidates } => {
                 let names = candidates
