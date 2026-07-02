@@ -5782,15 +5782,18 @@ impl LoweringContext<'_> {
 
             AstExpr::Throw { value } => {
                 let val_op = self.lower_throw_operand(value);
-                if let Some(catch_ctx) = &self.catch_context {
-                    // Inside a catch block: store the value into the error
-                    // local and jump to the handler instead of unwinding.
-                    let error_local = catch_ctx.error_local;
-                    let unwind_target = catch_ctx.unwind_target;
-                    self.builder
-                        .assign(Place::Local(error_local), Rvalue::Use(val_op));
-                    self.builder.goto(unwind_target);
-                } else if self.operand_is_marked_rethrow(&val_op) {
+                // Route every throw through the exception funnel (like
+                // `AstStmt::Throw`) rather than a static jump to
+                // `catch_context.unwind_target`. The funnel computes the
+                // BEP-042 cause chain (`find_cause_context`) and materializes
+                // the destination handler's `ErrorContext`; a static goto
+                // bypasses both, so a `throw` in expression position inside a
+                // `defer` region (or a `catch` arm/base) would drop its cause
+                // and leave a bound `ctx` unmaterialized (B-611). The exception
+                // table routes the throw to the same innermost handler the
+                // static jump targeted — its region covers this PC — so control
+                // flow is unchanged.
+                if self.operand_is_marked_rethrow(&val_op) {
                     self.builder.rethrow(val_op);
                 } else {
                     self.builder.throw(val_op);

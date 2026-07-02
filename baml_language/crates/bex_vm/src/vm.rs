@@ -426,6 +426,7 @@ mod tests {
             pending_call_captures: Vec::new(),
             call_input_capture_hook: None,
             seen_throw_values: Vec::new(),
+            thrown_value_causes: Vec::new(),
             bex_ref_seed: None,
             id_overrides: Vec::new(),
             argv: Arc::from([]),
@@ -955,6 +956,17 @@ pub struct BexVm {
     /// instead of raw bits so GC forwarding can preserve rethrow identity.
     seen_throw_values: Vec<Value>,
 
+    /// BEP-042 cause chain across a transparent re-raise: the `cause` context
+    /// computed at each error value's original (fresh) throw site, keyed by the
+    /// thrown value. A later *rethrow* of the same value (a non-throwing
+    /// `defer` pad re-raising the in-flight error, the no-match fall-through,
+    /// or `throw <binding>`) reuses this instead of re-running the cause walk —
+    /// which from inside a handler body would self-link — so the chain survives
+    /// the re-raise. Stored as values (not raw bits) so GC forwarding preserves
+    /// both key and cause identity; deduplicated by value and cleared each
+    /// `finalize`, like `seen_throw_values`.
+    thrown_value_causes: Vec<(Value, Value)>,
+
     /// Constants for building BEX `CallRef`s on demand (the `$id` surface):
     /// `(process_euid, engine_id)`, set once by the engine when it attaches
     /// identity to this VM. Unconditional — `$id` works with profiling off.
@@ -1390,6 +1402,7 @@ impl BexVm {
             pending_call_captures: Vec::new(),
             call_input_capture_hook: None,
             seen_throw_values: Vec::new(),
+            thrown_value_causes: Vec::new(),
             bex_ref_seed: None,
             id_overrides: Vec::new(),
             argv,
@@ -1480,6 +1493,39 @@ impl BexVm {
             self.seen_throw_values.push(value);
         }
         true
+    }
+
+    /// Remember the `cause` context computed at `value`'s original (fresh)
+    /// throw site so a later rethrow of the same value can recover it. The
+    /// stored cause is the error `value` superseded (the enclosing handler's
+    /// context), NEVER `value`'s own materialized context, so it can never form
+    /// a self-link. Keyed by value identity (like `seen_throw_values`).
+    fn record_throw_cause(&mut self, value: Value, cause: Value) {
+        // A fresh throw with no enclosing handler carries no chain; skip it so
+        // the map only holds values that actually supersede an error (a missing
+        // entry looks up as `Value::NULL` anyway, preserving the deliberate
+        // null cause for genuine user/no-match rethrows).
+        if cause == Value::NULL {
+            return;
+        }
+        if let Some((_, existing)) = self
+            .thrown_value_causes
+            .iter_mut()
+            .find(|(v, _)| *v == value)
+        {
+            *existing = cause;
+        } else {
+            self.thrown_value_causes.push((value, cause));
+        }
+    }
+
+    /// The `cause` context recorded for `value` at its fresh throw site, or
+    /// `Value::NULL` if it never superseded an error (a genuine rethrow).
+    fn recorded_throw_cause(&self, value: Value) -> Value {
+        self.thrown_value_causes
+            .iter()
+            .find(|(v, _)| *v == value)
+            .map_or(Value::NULL, |(_, cause)| *cause)
     }
 
     fn maybe_queue_call_error_origin(
@@ -2401,6 +2447,7 @@ impl BexVm {
         self.frames.clear();
         self.pending_call_captures.clear();
         self.seen_throw_values.clear();
+        self.thrown_value_causes.clear();
         self.pending_sysop_call_id = None;
         self.pending_sysop_capture_mask = VmCaptureMask::disabled();
     }
@@ -3505,23 +3552,30 @@ impl BexVm {
         // error becomes the new error's `cause`.
         //
         // A *rethrow* re-raises an already-thrown value: a bare re-raise inside
-        // a handler, the no-match fall-through that re-enters this funnel, or
-        // `ThrowIfPanic` (all pass `is_rethrow`). None is a *new* failure
-        // "during handling of" the caught error, so none may graft another link
-        // onto the chain — in particular the no-match fall-through re-raises
-        // from inside the catch's own handler body, which the cause walk would
-        // otherwise mis-read as a self-link. So we skip the walk and give the
-        // re-raised value a fresh context with `cause = null`.
+        // a handler, the no-match fall-through that re-enters this funnel, a
+        // non-throwing `defer` pad's transparent re-raise of the in-flight
+        // error, or `ThrowIfPanic` (all pass `is_rethrow`). None is a *new*
+        // failure "during handling of" the caught error, so none may graft
+        // another link onto the chain by re-running the cause walk here — in
+        // particular the no-match fall-through and the defer pad both re-raise
+        // from inside a handler body, which the walk would mis-read as a
+        // self-link.
         //
-        // Caveat: a prior chain carried by the rethrown value is NOT preserved
-        // across the re-raise (its next catch sees `cause = null`). Recovering
-        // it would need a value->context association we don't track; reusing the
-        // walk result instead is unsafe — rethrowing an *outer* binding from an
-        // inner handler would bind the inner handler's mismatched error.
+        // Instead we reuse the cause the value's *original* (fresh) throw site
+        // computed, keyed by the value in `thrown_value_causes`. This preserves
+        // a pre-existing chain across a transparent re-raise (the defer-pad
+        // case: `mid` throws B while handling A, so B's recorded cause is
+        // ErrorContext(A); the pad's re-raise of B recovers A instead of
+        // nulling it) while keeping the deliberate null cause for a genuine
+        // rethrow that never superseded an error (no recorded entry -> NULL).
+        // The recorded value is the superseded error, never the re-raised
+        // value's own context, so this can never form a self-link.
         let cause_context = if is_rethrow {
-            Value::NULL
+            self.recorded_throw_cause(exception_value)
         } else {
-            self.find_cause_context()
+            let cause = self.find_cause_context();
+            self.record_throw_cause(exception_value, cause);
+            cause
         };
 
         // Frames popped by this unwind close with a status derived from the
@@ -8131,6 +8185,11 @@ impl ::bex_vm_types::RootHaver for BexVm {
                 .iter()
                 .filter_map(Value::as_object_ptr),
         );
+        // Both key (thrown value) and cause context are heap pointers.
+        for (value, cause) in &self.thrown_value_causes {
+            roots.extend(value.as_object_ptr());
+            roots.extend(cause.as_object_ptr());
+        }
 
         // Frame function pointers (needed once closures are heap-allocated)
         roots.extend(self.collect_frame_roots());
@@ -8171,6 +8230,18 @@ impl ::bex_vm_types::RootHaver for BexVm {
                 && let Some(&new_ptr) = roots.get(&ptr)
             {
                 *value = Value::object(new_ptr);
+            }
+        }
+        for (value, cause) in &mut self.thrown_value_causes {
+            if let Some(ptr) = value.as_object_ptr()
+                && let Some(&new_ptr) = roots.get(&ptr)
+            {
+                *value = Value::object(new_ptr);
+            }
+            if let Some(ptr) = cause.as_object_ptr()
+                && let Some(&new_ptr) = roots.get(&ptr)
+            {
+                *cause = Value::object(new_ptr);
             }
         }
 
