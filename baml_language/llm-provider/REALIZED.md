@@ -6,6 +6,7 @@ The HTTP request/response path is **live-tested** against `gpt-5.4-mini`; capabi
 transport/persistence is genuinely native (realtime duplex, durable stores) have their **shape +
 negotiation** compiled and their host body stubbed pending that surface (plan P6/P8).
 
+The complete verified test surface is indexed in [`E2E_TESTS.md`](./E2E_TESTS.md).
 See [`../_plan/implementation-checklist.md`](../_plan/implementation-checklist.md) and
 [`../_plan/deviations.md`](../_plan/deviations.md) for status and every divergence.
 
@@ -28,7 +29,7 @@ See [`../_plan/implementation-checklist.md`](../_plan/implementation-checklist.m
 | 06 | non-text output | `ns_ai_examples/misc.baml` (shape) | compiled |
 | 07 | reasoning | `ResponseMeta.reasoning()`; `response_meta_*` test | tested |
 | 08 | enriched (logprobs/citations) | `ResponseMeta.logprobs/citations`; test | tested |
-| 09 | tool calling | `ns_ai/tools.baml`; `tools_loop_*` | live |
+| 09 | tool calling | `ns_ai/tools.baml` (+`Tool.from_type` typed params); `tools_loop_*`, `typed_tool_agent_live` | live |
 | 10 | agentic loop + stop | `ns_ai_examples/tools_extras.baml` (`bounded_agent`) | compiled |
 | 11 | parallel tools | `tools_extras.baml` + `multi_tool_agent_live` (3 tools, multi-call turns) | live |
 | 12 | tool taxonomy | `cross_cutting.baml` (`ToolKind`) | compiled |
@@ -41,11 +42,11 @@ See [`../_plan/implementation-checklist.md`](../_plan/implementation-checklist.m
 | 19 | fork/branch | `stateful.baml` `Branching` | compiled |
 | 20 | server-stored chains | `ns_ai/openai_responses.baml` (`Chain` via previous_response_id); `responses_live_chain` | live |
 | 21 | memory | `stateful.baml` `MemoryStore` | compiled |
-| 22 | realtime voice | `ns_ai/realtime.baml` `Realtime`; `realtime_*` test | tested |
+| 22 | realtime voice | `OpenAiRealtime` over `baml.ws` (GA protocol); `realtime_text_exchange_live` | live |
 | 23 | barge-in | `realtime.baml` `LiveControl` | compiled |
 | 24 | realtime tools | `realtime.baml` (+ Tools) | compiled |
 | 25 | voice pipelines | `misc.baml` (`cascaded_voice`) | compiled |
-| 26 | transports | `realtime.baml` (transport orthogonal to capability) | compiled |
+| 26 | transports | HTTP + SSE + WebSocket (`baml.ws`) all real; same capability model over each | live |
 | 27 | background jobs | `OpenAiResponses implements Background` (`background:true` + poll); `responses_background_live` | live |
 | 28 | provider diversity | `provider_diversity_routing` test | tested |
 | 29 | reliability | `ns_ai/combinators.baml`; `fallback_*`/`retry_*` | tested |

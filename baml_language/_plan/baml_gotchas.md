@@ -109,3 +109,12 @@ Each entry: the symptom, the rule, the workaround. Compiler-bug candidates are m
 - **A `match` on a CONCRETE provider type makes interface arms irrefutable** — `match (p /* OpenAi */)
   { let h: HttpProvider => …, _ => … }` flags the `_` unreachable (E0063). Type the binding as the
   existential (`let p: baml.ai.Provider = …`) when you want runtime negotiation.
+
+## Realtime / WebSocket round
+
+- **The `OpenAI-Beta: realtime=v1` header now selects the RETIRED beta shape** and gets
+  rejected (`beta_api_shape_disabled`). GA realtime: `wss://api.openai.com/v1/realtime?model=…`
+  with `Authorization` only; `response.create` takes `output_modalities` (not `modalities`);
+  text arrives as `response.output_text.delta`; terminal event `response.done`.
+- **`baml.ws` ops are gated under sys_native's `bundle-http` feature** (reuse the rustls
+  provider); non-bundle / wasm builds fall back to Unsupported.
