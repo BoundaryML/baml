@@ -63,7 +63,7 @@ See [`../_plan/implementation-checklist.md`](../_plan/implementation-checklist.m
 | 40 | harness sessions | `harness.baml` + `stateful` Session | compiled |
 | 41 | harness deployment | `harness.baml` (config variance) | compiled |
 | 42 | harness abstraction | `ns_ai_examples/harness.baml` (`drive_any`) | compiled |
-| 43 | workflow graph | `ns_ai_examples/workflows.baml` (`doc_pipeline`) | compiled |
+| 43 | workflow graph | parallel spawn/await fan-in over real calls; `workflow_graph_live` | live |
 | 44 | suspend/resume | `stateful.baml` `Suspendable`; `workflows.baml` | compiled |
 | 45 | durable execution | `workflows.baml` (`durable_step`) | compiled |
 | 46 | workflow observability | `misc.baml` (`observe_pipeline`) | compiled |

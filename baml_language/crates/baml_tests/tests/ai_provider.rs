@@ -1635,7 +1635,61 @@ async fn typed_tool_agent_live() {
         "#
     );
     let got = output.result.unwrap();
-    let BexExternalValue::String(s) = got else { panic!("expected string, got {got:?}") };
-    assert!(s.to_lowercase().contains("cities=tokyo"), "typed args not parsed: {s:?}");
+    let BexExternalValue::String(s) = got else {
+        panic!("expected string, got {got:?}")
+    };
+    assert!(
+        s.to_lowercase().contains("cities=tokyo"),
+        "typed args not parsed: {s:?}"
+    );
     assert!(s.contains("18"), "tool result missing from answer: {s:?}");
+}
+
+/// LIVE workflow graph (scenario 43): fetch → summarize + label in PARALLEL (spawn/await
+/// fan-in, BEP-034 structured concurrency) → combine. Two concurrent real model calls.
+#[tokio::test]
+async fn workflow_graph_live() {
+    if std::env::var("OPENAI_API_KEY").is_err() {
+        eprintln!("skipping workflow_graph_live: OPENAI_API_KEY not set");
+        return;
+    }
+    let output = baml_test!(
+        r#"
+        function model_text(p: baml.ai.Provider, prompt: string) -> string
+            throws baml.errors.CallError | baml.errors.UnknownError {
+            match (p) {
+                let h: baml.ai.HttpProvider => h.call<string>(prompt),
+                _ => throw baml.errors.Unsupported { message: "not callable" },
+            }
+        }
+        function main() -> string {
+            let p: baml.ai.Provider = baml.ai.OpenAi {
+                model: "gpt-5.4-mini",
+                api_key: baml.env.get_or_panic("OPENAI_API_KEY"),
+                base_url: null,
+            };
+            let doc = "The Eiffel Tower, completed in 1889 for the World's Fair, is a wrought-iron lattice tower in Paris and one of the most recognizable structures on Earth.";
+            // fan-out: two model calls run CONCURRENTLY
+            let f_summary = spawn { model_text(p, "Summarize in <= 8 words: " + doc) };
+            let f_label = spawn { model_text(p, "One-word topic label (just the word): " + doc) };
+            let summary = await f_summary catch (e) { _ => return "SUMMARY_ERR" };
+            let label = await f_label catch (e) { _ => return "LABEL_ERR" };
+            "[" + label + "] " + summary
+        }
+        "#
+    );
+    let got = output.result.unwrap();
+    let BexExternalValue::String(s) = got else {
+        panic!("expected string, got {got:?}")
+    };
+    assert!(
+        s.starts_with("[") && s.contains("] "),
+        "pipeline shape wrong: {s:?}"
+    );
+    assert!(
+        s.to_lowercase().contains("eiffel")
+            || s.to_lowercase().contains("tower")
+            || s.to_lowercase().contains("paris"),
+        "content missing: {s:?}"
+    );
 }

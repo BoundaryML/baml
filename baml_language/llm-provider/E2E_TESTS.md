@@ -11,9 +11,9 @@ cargo test -p baml_tests --test ai_provider --test ai_responses --test ai_strict
 ```
 
 Suites: `crates/baml_tests/tests/{ai_provider,ai_responses,ai_strict,ai_realtime}.rs` —
-49 tests, all green as of this writing.
+50 tests, all green as of this writing.
 
-## Live (17) — real API, end to end
+## Live (18) — real API, end to end
 
 | Test | Proves | Scenario |
 |---|---|---|
@@ -33,6 +33,7 @@ Suites: `crates/baml_tests/tests/{ai_provider,ai_responses,ai_strict,ai_realtime
 | `responses_background_live` | background jobs: submit `background:true`, poll to typed value | 27 |
 | `eval_judge_live` | eval: task call scored by an LLM judge returning a typed `Verdict` | 33 |
 | `usage_metering_live` | real token counts via `call_with(…, m => m.usage())` | 34 |
+| `workflow_graph_live` | workflow step graph: two model calls fan out via `spawn`/`await`, results combined | 43 |
 | `e2e_client_function_via_new_provider_live` | a user-declared `client<llm>` + LLM `function` executing through `baml.ai.OpenAi` | wiring |
 
 ## Mock / deterministic (32) — wiremock, request-capture, VM
