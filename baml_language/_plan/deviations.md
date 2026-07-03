@@ -243,3 +243,18 @@ response parse — is BAML. What changed:
   \`type\``). Same family as the `function` reserved-word issue, but failing later and more
   obscurely. Workaround: navigate `type`-tagged JSON with `root.json.field(...)` instead of typed
   wire classes.
+
+## Ergonomics round: @alias wire classes + baml.json.path<T>
+
+- **The Responses json-navigation rewritten with typed wire classes.** The original nested
+  `json.field` walk (the ugliest code in the tree) is replaced by wire classes using
+  `kind string @alias("type")` decoded via `baml.sap.parse<Wire>` — which **honors `@alias`**
+  (`baml.json.from_json` does **not** — a finding). Verified live (chain still works in prod).
+- **`baml.json.path<T>(j, selector)` added (user proposal):** jq-style typed accessor —
+  `.usage.input_tokens`, `.choices[0].message.content`, `["quoted.key"]` map access, `[0]` on a
+  root array, `.` identity. **Throws `JsonPathError`** (missing field / shape mismatch / OOB /
+  malformed selector / uncoercible leaf) rather than returning null. Pure BAML on `json.field` +
+  `json.to<T>`. 17 unit tests in `crates/baml_tests/baml_src/ns_json_path/`.
+- Gotchas from this round (also in [`baml_gotchas.md`](./baml_gotchas.md), the new consolidated
+  reference): `env` as a param name is shadowed by env-var magic; `?? []` needs a typed binding;
+  `from_json` ignores `@alias`.

@@ -5,56 +5,63 @@
 // path) and `root.ai.Chain` (the server-stored-chain capability).
 //
 // The Responses envelope carries `type`-tagged items (`"type":"message"`,
-// `"type":"output_text"`). Since `type` is a reserved word (a class field can't be named
-// `type`), the response is navigated with `root.json.field` rather than decoded into typed
-// wire classes.
+// `"type":"output_text"`). `type` is a reserved word (a class field named `type` breaks the
+// builtins codegen), so the wire classes name the tag `kind` with `@alias("type")` and are
+// decoded via SAP (`root.sap.parse`), which honors `@alias` — `baml.json.from_json` does not.
 
-/// Narrow a `json` value to its string arm (or "").
-function _openai_responses_str(j: json) -> string throws never {
-    match (j) {
-        let s: string => s,
-        _ => "",
-    }
+// --- wire shapes (Responses envelope) ---
+class OpenAiRespContentWire {
+    kind: string @alias("type"),
+    text: string?,
 }
 
-/// Narrow a `json` value to its int arm (or 0).
-function _openai_responses_int(j: json) -> int throws never {
-    match (j) {
-        let i: int => i,
-        _ => 0,
-    }
+class OpenAiRespItemWire {
+    kind: string @alias("type"),
+    content: OpenAiRespContentWire[]?,
 }
 
-/// Pull the first `output_text` string out of a decoded Responses envelope: the `output`
-/// array's `"type":"message"` item, its `content` array's `"type":"output_text"` entry.
-function _openai_responses_output_text(root_json: json) -> string? throws never {
-    match (root.json.field(root_json, "output")) {
-        let output: json[] => {
-            for (let item in output) {
-                if (_openai_responses_str(root.json.field(item, "type")) == "message") {
-                    match (root.json.field(item, "content")) {
-                        let cs: json[] => {
-                            for (let c in cs) {
-                                if (_openai_responses_str(root.json.field(c, "type")) == "output_text") {
-                                    match (root.json.field(c, "text")) {
-                                        let t: string => {
-                                            return t;
-                                        },
-                                        _ => {
-                                        },
-                                    }
-                                }
-                            }
-                        },
-                        _ => {
-                        },
-                    }
-                }
-            }
-            null
-        },
+class OpenAiRespUsageWire {
+    input_tokens: int?,
+    output_tokens: int?,
+}
+
+class OpenAiRespEnvelopeWire {
+    id: string?,
+    status: string?,
+    output: OpenAiRespItemWire[]?,
+    usage: OpenAiRespUsageWire?,
+}
+
+/// Decode a raw Responses body into the typed envelope (null if undecodable).
+function _openai_responses_envelope(raw_text: string) -> OpenAiRespEnvelopeWire? throws never {
+    root.sap.parse<OpenAiRespEnvelopeWire>(raw_text) catch (e) {
         _ => null,
     }
+}
+
+/// First `output_text` string in the envelope: the `"type":"message"` output item's
+/// `"type":"output_text"` content entry.
+function _openai_responses_output_text(envelope: OpenAiRespEnvelopeWire) -> string? throws never {
+    let items: OpenAiRespItemWire[] = envelope.output ?? [];
+    for (let item in items) {
+        if (item.kind != "message") {
+            continue;
+        }
+        let contents: OpenAiRespContentWire[] = item.content ?? [];
+        for (let c in contents) {
+            if (c.kind != "output_text") {
+                continue;
+            }
+            match (c.text) {
+                null => {
+                },
+                let t: string => {
+                    return t;
+                },
+            }
+        }
+    }
+    null
 }
 
 /// Lazy `ResponseMeta` over the raw Responses body text. Accessors are best-effort
@@ -62,24 +69,29 @@ function _openai_responses_output_text(root_json: json) -> string? throws never 
 class OpenAiResponsesMeta {
     raw_text: string,
 
-    function _root(self) -> json throws never {
-        root.json.parse(self.raw_text) catch (e) {
-            _ => null,
-        }
-    }
-
     implements root.ai.ResponseMeta {
         // The Responses API has a top-level `status` (e.g. "completed"); there is no
         // per-choice finish_reason, so surface the status (or "").
         function finish_reason(self) -> string throws never {
-            _openai_responses_str(root.json.field(self._root(), "status"))
+            match (_openai_responses_envelope(self.raw_text)) {
+                null => "",
+                let envelope: OpenAiRespEnvelopeWire => envelope.status ?? "",
+            }
         }
 
         function usage(self) -> root.ai.Usage throws never {
-            let u = root.json.field(self._root(), "usage");
-            root.ai.Usage {
-                input_tokens: _openai_responses_int(root.json.field(u, "input_tokens")),
-                output_tokens: _openai_responses_int(root.json.field(u, "output_tokens")),
+            let none = root.ai.Usage { input_tokens: 0, output_tokens: 0 };
+            match (_openai_responses_envelope(self.raw_text)) {
+                null => none,
+                let envelope: OpenAiRespEnvelopeWire => match (envelope.usage) {
+                    null => none,
+                    let u: OpenAiRespUsageWire => {
+                        root.ai.Usage {
+                            input_tokens: u.input_tokens ?? 0,
+                            output_tokens: u.output_tokens ?? 0,
+                        }
+                    },
+                },
             }
         }
 
@@ -337,12 +349,13 @@ class OpenAiResponses {
             self,
             from: string,
         ) -> T throws root.errors.CallError | root.errors.UnknownError {
-            let parsed: json = root.json.parse(from) catch (e) {
-                _ => {
+            let envelope = match (_openai_responses_envelope(from)) {
+                null => {
                     throw root.errors.UnknownError { data: from, message: ["openai-responses parse failed"] }
                 },
+                let e2: OpenAiRespEnvelopeWire => e2,
             };
-            match (_openai_responses_output_text(parsed)) {
+            match (_openai_responses_output_text(envelope)) {
                 null => {
                     throw root.errors.UnknownError { data: from, message: ["openai-responses: no output_text in response"] }
                 },
@@ -376,12 +389,13 @@ class OpenAiResponses {
             let messages = [root.ai.ChatMessage.user(prompt)];
             let body = self._request_body(self._messages_for(messages, schema), handle.id, true);
             let text = self._post(body);
-            let parsed: json = root.json.parse(text) catch (e) {
-                _ => {
+            let envelope = match (_openai_responses_envelope(text)) {
+                null => {
                     throw root.errors.UnknownError { data: text, message: ["openai-responses parse failed"] }
                 },
+                let e2: OpenAiRespEnvelopeWire => e2,
             };
-            match (_openai_responses_output_text(parsed)) {
+            match (_openai_responses_output_text(envelope)) {
                 null => {
                     throw root.errors.UnknownError { data: text, message: ["openai-responses: no output_text in response"] };
                 },
@@ -405,15 +419,13 @@ class OpenAiResponses {
         let messages = [root.ai.ChatMessage.user(prompt)];
         let body = self._request_body(messages, null, true);
         let text = self._post(body);
-        let parsed: json = root.json.parse(text) catch (e) {
-            _ => {
+        let envelope = match (_openai_responses_envelope(text)) {
+            null => {
                 throw root.errors.UnknownError { data: text, message: ["openai-responses parse failed"] }
             },
+            let e2: OpenAiRespEnvelopeWire => e2,
         };
-        root.ai.ChainHandle {
-            id: _openai_responses_str(root.json.field(parsed, "id")),
-            owner: "openai-responses",
-        }
+        root.ai.ChainHandle { id: envelope.id ?? "", owner: "openai-responses" }
     }
 
     // Convenience: extend a chain expecting a plain-string reply.

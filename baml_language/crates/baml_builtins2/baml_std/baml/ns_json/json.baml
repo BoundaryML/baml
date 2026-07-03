@@ -1,38 +1,40 @@
 /// The BAML JSON value type — a union of all JSON-representable values.
-type json = null | bool | int | float | string | json[] | map<string, json>
+type json = null | bool | int | float | string | json[] | map<string, json>;
 
 /// Thrown when a JSON string cannot be parsed (syntax error).
 class JsonParseError {
-  message string
+    message: string,
 }
+
 /// Thrown when a parsed JSON value does not match the expected BAML type.
 class JsonDecodeError {
-  message string
-  path string
+    message: string,
+    path: string,
 }
+
 /// Thrown when a BAML value cannot be serialized to JSON.
 class JsonSerializationError {
-  message string
-  path string
-  reason string
+    message: string,
+    path: string,
+    reason: string,
 }
 
 //baml:mut_vm
 /// Parses a JSON string `s` and returns a `json` value. Throws `JsonParseError` on invalid JSON.
-function parse(s string) -> json throws JsonParseError {
-  $rust_function
+function parse(s: string) -> json throws JsonParseError {
+    $rust_function
 }
 
 //baml:mut_vm
 /// Serializes a `json` value `j` to a compact JSON string.
-function stringify(j json) -> string throws never {
-  $rust_function
+function stringify(j: json) -> string throws never {
+    $rust_function
 }
 
 //baml:mut_vm
 /// Serializes a `json` value `j` to a pretty-printed (indented) JSON string.
-function stringify_pretty(j json) -> string throws never {
-  $rust_function
+function stringify_pretty(j: json) -> string throws never {
+    $rust_function
 }
 
 /// Serialize any BAML value `v` of type `T` to its canonical JSON string.
@@ -46,7 +48,7 @@ function stringify_pretty(j json) -> string throws never {
 /// (`uint8array` without explicit encoding, function values, etc.).
 //baml:mut_vm
 function to_string<T>(v: T) -> string throws JsonSerializationError {
-  $rust_function
+    $rust_function
 }
 
 /// Serialize any BAML value to its `json` representation by dispatching on
@@ -66,7 +68,7 @@ function to_string<T>(v: T) -> string throws JsonSerializationError {
 //baml:mut_vm
 //baml:may_yield
 function to_json<T>(v: T) -> json throws JsonSerializationError {
-  $rust_function
+    $rust_function
 }
 
 /// Serialize any BAML value `value` of type `T` to its `json` representation,
@@ -84,7 +86,7 @@ function to_json<T>(v: T) -> json throws JsonSerializationError {
 /// Throws `JsonSerializationError` for non-representable values (`uint8array`
 /// without explicit encoding, function values, etc.).
 function from<T>(value: T) -> json throws JsonSerializationError {
-  root._to_json_shim(value)
+    root._to_json_shim(value)
 }
 
 /// Parse a JSON string and coerce it to a BAML value of type `T`.
@@ -98,7 +100,7 @@ function from<T>(value: T) -> json throws JsonSerializationError {
 /// `JsonDecodeError` if the parsed JSON does not match `T`.
 //baml:mut_vm
 function from_string<T>(s: string) -> T throws JsonParseError | JsonDecodeError {
-  $rust_function
+    $rust_function
 }
 
 /// Decode a `json` value to a BAML value of type `T`, honoring user
@@ -125,7 +127,7 @@ function from_string<T>(s: string) -> T throws JsonParseError | JsonDecodeError 
 //baml:mut_vm
 //baml:may_yield
 function from_json<T>(j: json) -> T throws JsonDecodeError {
-  $rust_function
+    $rust_function
 }
 
 /// Decode a `json` value `j` into a BAML value of type `T`, honoring user
@@ -144,7 +146,7 @@ function from_json<T>(j: json) -> T throws JsonDecodeError {
 //baml:mut_vm
 //baml:may_yield
 function to<T>(j: json) -> T throws JsonDecodeError {
-  root._from_json_shim<T>(j)
+    root._from_json_shim<T>(j)
 }
 
 /// Look up `key` in a `json` value when it is a `map<string, json>`; returns
@@ -155,7 +157,113 @@ function to<T>(j: json) -> T throws JsonDecodeError {
 /// `json` union to its map arm.
 //baml:mut_vm
 function field(j: json, key: string) -> json throws never {
-  $rust_function
+    $rust_function
+}
+
+/// Error thrown by [`path<T>`]: a missing field, a shape mismatch (field access on a
+/// non-object, index on a non-array), an out-of-bounds index, a malformed selector, or
+/// a leaf that does not coerce to the requested type.
+class JsonPathError {
+    message: string,
+    selector: string,
+}
+
+/// Object-field step for [`path<T>`]. Distinguishes a missing key from a present-but-null
+/// value (only the former throws).
+function _path_field(current: json, key: string, selector: string) -> json throws JsonPathError {
+    match (current) {
+        let m: map<string, json> => {
+            if (!m.has(key)) {
+                throw JsonPathError { message: "missing field '" + key + "'", selector: selector };
+            }
+            m.get(key)
+        },
+        _ => {
+            throw JsonPathError { message: "field access '." + key + "' on a non-object", selector: selector }
+        },
+    }
+}
+
+/// Array-index step for [`path<T>`].
+function _path_index(current: json, idx: int, selector: string) -> json throws JsonPathError {
+    match (current) {
+        let arr: json[] => {
+            if (idx < 0 || idx >= arr.length()) {
+                throw JsonPathError {
+          message: "index [" + idx.to_string() + "] out of bounds (length " + arr.length().to_string() + ")",
+          selector: selector,
+        };
+            }
+            arr.at(idx)
+        },
+        _ => {
+            throw JsonPathError { message: "index [" + idx.to_string() + "] on a non-array", selector: selector }
+        },
+    }
+}
+
+/// Navigate a jq-style selector into a `json` value and coerce the leaf to `T`:
+///
+///   baml.json.path<int>(j, ".usage.input_tokens")
+///   baml.json.path<string>(j, ".choices[0].message.content")
+///   baml.json.path<string>(j, ".by_name[\"anna.k\"].id")   // quoted key = object access (dots ok)
+///   baml.json.path<float>(j, "[0]")                         // root array index
+///   baml.json.path<MyClass>(j, ".")                         // identity: coerce the whole value
+///
+/// Selectors follow the jq shape: they start with `.` (or `[` on a root array); `.name`
+/// is object-field access, `["key"]`/`['key']` is object access with a quoted key (which
+/// may contain dots), `[0]` is array indexing. Keys containing `[` or `]` are not
+/// supported. Throws [`JsonPathError`] on a missing field, shape mismatch, out-of-bounds
+/// index, malformed selector, or a leaf that does not coerce to `T`. For whole envelopes
+/// (or `type`-tagged arrays that need filtering) prefer typed wire classes decoded via
+/// `baml.sap.parse<Wire>` with `@alias` fields.
+function path<T>(j: json, selector: string) -> T throws JsonPathError {
+    if (!(selector.starts_with(".") || selector.starts_with("["))) {
+        throw JsonPathError {
+      message: "selector must start with '.' or '[' (jq style), got '" + selector + "'",
+      selector: selector,
+    };
+    }
+    let current: json = j;
+    // Split on '[' so quoted keys (which may contain dots) stay intact: every piece after
+    // the first starts with one bracket token terminated by ']'.
+    let pieces = selector.split("[");
+    let i = 0;
+    for (let piece in pieces) {
+        let rest = piece;
+        if (i > 0) {
+            let closing = rest.split("]");
+            if (closing.length() < 2) {
+                throw JsonPathError { message: "unterminated '[' segment", selector: selector };
+            }
+            let token = closing.at(0) ?? "";
+            rest = closing.at(1) ?? "";
+            let quoted = (token.starts_with("\"") && token.ends_with("\"") && token.length() >= 2)
+                || (token.starts_with("'") && token.ends_with("'") && token.length() >= 2);
+            if (quoted) {
+                current = _path_field(current, token.substring(1, token.length() - 1), selector);
+            } else {
+                let idx = int.parse(token) catch (e) {
+                    _ => {
+                        throw JsonPathError { message: "bad bracket token '[" + token + "]'", selector: selector };
+                    }
+                };
+                current = _path_index(current, idx, selector);
+            }
+        }
+        for (let name in rest.split(".")) {
+            if (name == "") {
+                continue;
+            }
+            current = _path_field(current, name, selector);
+        }
+        i = i + 1;
+    }
+    to<T>(current) catch (e) {
+        _ => {
+            throw JsonPathError { message: "leaf does not coerce to the requested type", selector: selector }
+        },
+    }
 }
 
 /// Serialize `v` to JSON text, honoring user-defined `to_json` overrides on
@@ -175,7 +283,7 @@ function field(j: json, key: string) -> json throws never {
 /// drift. Remove this if the host gains a direct way to invoke generic
 /// compositions without a named landing pad.
 function serialize<T>(v: T) -> string throws JsonSerializationError {
-  stringify(to_json<T>(v))
+    stringify(to_json<T>(v))
 }
 
 /// Parse JSON text into a value of type `T`, honoring user-defined
@@ -194,5 +302,5 @@ function serialize<T>(v: T) -> string throws JsonSerializationError {
 /// Rust caller would mean threading two generic engine calls + their
 /// throws-types instead of one, so the wrapper pays for itself.
 function deserialize<T>(s: string) -> T throws JsonParseError | JsonDecodeError {
-  from_json<T>(parse(s))
+    from_json<T>(parse(s))
 }
