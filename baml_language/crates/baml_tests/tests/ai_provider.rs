@@ -1585,3 +1585,57 @@ async fn multi_agent_handoff_live() {
         "translation missing from final answer: {s:?}"
     );
 }
+
+/// LIVE typed tool loop (design D6/P7): the tool's parameter schema is LOWERED FROM A
+/// BAML TYPE (`Tool.from_type` + `baml.schema.json_schema`), and the dispatcher
+/// SAP-parses `ToolCall.args` back into that typed class — schema out, typed args in.
+#[tokio::test]
+async fn typed_tool_agent_live() {
+    if std::env::var("OPENAI_API_KEY").is_err() {
+        eprintln!("skipping typed_tool_agent_live: OPENAI_API_KEY not set");
+        return;
+    }
+    let output = baml_test!(
+        r#"
+        class WeatherArgs { city string, unit string? }
+        function main() -> string {
+            let p = baml.ai.OpenAi {
+                model: "gpt-5.4-mini",
+                api_key: baml.env.get_or_panic("OPENAI_API_KEY"),
+                base_url: null,
+            };
+            let weather_tool = baml.ai.Tool.from_type(
+                "get_weather",
+                "Get the current weather for a city",
+                reflect.type_of<WeatherArgs>(),
+            ) catch (e) {
+                let un: baml.errors.Unsupported => return "SCHEMA_ERR:" + un.message,
+            };
+            let parsed_cities: string[] = [];
+            let answer = p.run_tools<string>(
+                "What's the weather in Tokyo? Use the tool, then answer in one short sentence.",
+                [weather_tool],
+                (calls: baml.ai.ToolCall[]) -> baml.ai.ToolResult[] {
+                    let results: baml.ai.ToolResult[] = [];
+                    for (let c in calls) {
+                        // D6: coerce the wire args into the DECLARED type via SAP.
+                        let args: WeatherArgs = baml.sap.parse<WeatherArgs>(c.args) catch (e) {
+                            _ => WeatherArgs { city: "unknown" },
+                        };
+                        parsed_cities.push(args.city);
+                        results.push(baml.ai.ToolResult { id: c.id, output: "cloudy, 18C in " + args.city });
+                    }
+                    results
+                },
+            ) catch (e) {
+                let u: baml.errors.UnknownError => return "ERR:" + u.message.join(","),
+            };
+            "cities=" + parsed_cities.join(";") + " || " + answer
+        }
+        "#
+    );
+    let got = output.result.unwrap();
+    let BexExternalValue::String(s) = got else { panic!("expected string, got {got:?}") };
+    assert!(s.to_lowercase().contains("cities=tokyo"), "typed args not parsed: {s:?}");
+    assert!(s.contains("18"), "tool result missing from answer: {s:?}");
+}

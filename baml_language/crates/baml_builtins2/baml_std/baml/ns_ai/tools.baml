@@ -2,15 +2,26 @@
 // function-calling loop. The provider-owned `Transcript` hides the wire threading (call
 // ids, assistant-turn preservation, tool-result ordering); the loop speaks a tiny
 // vocabulary (`ToolCall`/`ToolResult`/`ToolCalls`).
-//
-// NOTE (deviation, see _plan/deviations.md): `Tool.parameters` is a JSON-Schema *string*
-// (app-provided), because a generic `type -> JSON Schema` lowering host fn does not exist
-// yet. The design's `parameters: type` + `type_to_json_schema` is a follow-up.
 
 class Tool {
     name: string,
     description: string,
-    parameters: string, // JSON Schema for the tool's arguments
+    parameters: string, // JSON Schema for the tool's arguments (the wire form)
+
+    /// Build a tool whose parameter schema is lowered from a BAML `type` — the
+    /// design-true typed entry (plan P7/D6): declare an args class, hand its `type`
+    /// here, and SAP-parse `ToolCall.args` back into it in your dispatcher.
+    ///
+    ///   class WeatherArgs { city: string }
+    ///   Tool.from_type("get_weather", "…", reflect.type_of<WeatherArgs>())
+    function from_type(name: string, description: string, params: type) -> Tool
+        throws root.errors.Unsupported {
+        Tool {
+            name: name,
+            description: description,
+            parameters: root.schema.json_schema(params, false),
+        }
+    }
 }
 
 /// One tool invocation the model requested. `id` is opaque to the loop; `args` is the

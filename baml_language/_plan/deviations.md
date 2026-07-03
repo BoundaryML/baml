@@ -270,3 +270,18 @@ non-rawable set. The Responses wire classes now use `type: string` directly (the
 workaround removed); verified live. Languages precedent: TS/JS/Python/Java/C#/Kotlin allow
 `type` fields outright; Rust needs `r#type`; Go simply forbids it — BAML now sits with the
 JSON-native group, which is where an LLM wire-format language must be.
+
+## Strict mode + typed tools (P7 landed)
+
+- **`baml.schema.json_schema(t: type, strict: bool)`** (host fn, plan P7) — JSON-Schema lowering
+  with OpenAI strict-mode rules. Enables:
+  - **`OpenAiStrict`** — a separate provider using `response_format: json_schema` with
+    `strict: true` (live-tested). Kept separate from `OpenAi` per the "different provider
+    implementations" direction — SAP-prompt-schema and strict-response-format are different
+    wire strategies, each a plain class.
+  - **`Tool.from_type(name, desc, params: type)`** — the design-true typed tool entry (D6):
+    args class type lowered to the schema, dispatcher SAP-parses `ToolCall.args` back into
+    the class. `Tool.parameters` stays the wire-form string (constructor-based typing rather
+    than changing the field type — keeps app-provided schemas possible).
+- Host ops CAN throw typed BAML errors (`throws root.errors.Unsupported` +
+  `VmBamlError::Unsupported`) — the plan's hedge about `throws never` fallback was unnecessary.
