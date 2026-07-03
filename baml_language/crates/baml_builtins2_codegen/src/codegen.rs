@@ -220,12 +220,13 @@ fn emit_view_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
 
     for field in &def.fields {
         let field_name = &field.name;
+        let field_fn = rust_field_name(&field.name);
         match &field.field_type {
             BamlType::RustType => {
                 // Generic downcast accessor: fn _data<T: 'static>(&self, vm: &BexVm) -> &T
                 writeln!(
                     out,
-                    "{inner}pub fn {field_name}<'v, T: 'static>(&self, vm: &'v BexVm) -> &'v T {{"
+                    "{inner}pub fn {field_fn}<'v, T: 'static>(&self, vm: &'v BexVm) -> &'v T {{"
                 )
                 .unwrap();
                 writeln!(
@@ -242,7 +243,7 @@ fn emit_view_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
                 writeln!(out, "{inner}}}\n").unwrap();
             }
             BamlType::Int => {
-                writeln!(out, "{inner}pub fn {field_name}(&self) -> i64 {{").unwrap();
+                writeln!(out, "{inner}pub fn {field_fn}(&self) -> i64 {{").unwrap();
                 writeln!(
                     out,
                     "{inner2}self.instance.load_field({}).as_int()",
@@ -257,7 +258,7 @@ fn emit_view_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
                 writeln!(out, "{inner}}}\n").unwrap();
             }
             BamlType::Float => {
-                writeln!(out, "{inner}pub fn {field_name}(&self) -> f64 {{").unwrap();
+                writeln!(out, "{inner}pub fn {field_fn}(&self) -> f64 {{").unwrap();
                 writeln!(
                     out,
                     "{inner2}match self.instance.load_field({}).as_object_ptr() {{",
@@ -285,7 +286,7 @@ fn emit_view_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
                 writeln!(out, "{inner}}}\n").unwrap();
             }
             BamlType::Bool => {
-                writeln!(out, "{inner}pub fn {field_name}(&self) -> bool {{").unwrap();
+                writeln!(out, "{inner}pub fn {field_fn}(&self) -> bool {{").unwrap();
                 writeln!(
                     out,
                     "{inner2}self.instance.load_field({}).as_bool()",
@@ -303,7 +304,7 @@ fn emit_view_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
                 // Heap type — vm parameter needed
                 writeln!(
                     out,
-                    "{inner}pub fn {field_name}<'v>(&self, vm: &'v BexVm) -> &'v str {{"
+                    "{inner}pub fn {field_fn}<'v>(&self, vm: &'v BexVm) -> &'v str {{"
                 )
                 .unwrap();
                 writeln!(
@@ -322,7 +323,7 @@ fn emit_view_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
             BamlType::List(_) => {
                 writeln!(
                     out,
-                    "{inner}pub fn {field_name}<'v>(&self, vm: &'v BexVm) -> ArrayReadGuard<'v> {{"
+                    "{inner}pub fn {field_fn}<'v>(&self, vm: &'v BexVm) -> ArrayReadGuard<'v> {{"
                 )
                 .unwrap();
                 writeln!(
@@ -341,7 +342,7 @@ fn emit_view_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
             BamlType::Map(_, _) => {
                 writeln!(
                     out,
-                    "{inner}pub fn {field_name}<'v>(&self, vm: &'v BexVm) -> MapReadGuard<'v> {{"
+                    "{inner}pub fn {field_fn}<'v>(&self, vm: &'v BexVm) -> MapReadGuard<'v> {{"
                 )
                 .unwrap();
                 writeln!(
@@ -363,7 +364,7 @@ fn emit_view_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
                     view_optional_type_and_expr(class_name, field_name, inner_ty, field.index);
                 writeln!(
                     out,
-                    "{inner}pub fn {field_name}<'v>(&self, vm: &'v BexVm) -> {ret_type} {{"
+                    "{inner}pub fn {field_fn}<'v>(&self, vm: &'v BexVm) -> {ret_type} {{"
                 )
                 .unwrap();
                 writeln!(
@@ -383,7 +384,7 @@ fn emit_view_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
                 // the shared `Arc` out (cheap) so the caller gets an owned handle.
                 writeln!(
                     out,
-                    "{inner}pub fn {field_name}(&self) -> std::sync::Arc<num_bigint::BigInt> {{"
+                    "{inner}pub fn {field_fn}(&self) -> std::sync::Arc<num_bigint::BigInt> {{"
                 )
                 .unwrap();
                 writeln!(
@@ -418,7 +419,7 @@ fn emit_view_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
             }
             // Generic, Named, Media, Null — fallback to a copied Value.
             _ => {
-                writeln!(out, "{inner}pub fn {field_name}(&self) -> Value {{").unwrap();
+                writeln!(out, "{inner}pub fn {field_fn}(&self) -> Value {{").unwrap();
                 writeln!(out, "{inner2}self.instance.load_field({})", field.index).unwrap();
                 writeln!(out, "{inner}}}\n").unwrap();
             }
@@ -514,7 +515,12 @@ fn emit_copy_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
     writeln!(out, "{indent}pub struct {class_name} {{").unwrap();
     for field in &def.fields {
         let rust_type = copy_field_type(&field.field_type);
-        writeln!(out, "{inner}pub {}: {rust_type},", field.name).unwrap();
+        writeln!(
+            out,
+            "{inner}pub {}: {rust_type},",
+            rust_field_name(&field.name)
+        )
+        .unwrap();
     }
     writeln!(out, "{indent}}}\n").unwrap();
 
@@ -574,17 +580,18 @@ fn copy_field_type(ty: &BamlType) -> String {
 
 /// Generate the expression to convert a copy struct field to a Value.
 fn copy_field_to_value(field_name: &str, ty: &BamlType) -> String {
+    let field_ident = rust_field_name(field_name);
     match ty {
-        BamlType::RustType => format!("Value::object(vm.alloc_rust_data(self.{field_name}))"),
+        BamlType::RustType => format!("Value::object(vm.alloc_rust_data(self.{field_ident}))"),
         // `to_value` has no error channel (`fn to_value(self, vm) -> Value`),
         // so an out-of-i63 native i64 reaches this path only when caller-side
         // Rust constructed a struct field that violates the i63 BAML
         // contract. Fail loudly in *both* debug and release rather than
         // truncating silently via `Value::int`'s `debug_assert`.
         BamlType::Int => format!(
-            "Value::try_int(self.{field_name}).unwrap_or_else(|| panic!(\
+            "Value::try_int(self.{field_ident}).unwrap_or_else(|| panic!(\
                 \"`{field_name}: int` is outside BAML int range [{{}}, {{}}], got {{}}\", \
-                Value::INT_MIN, Value::INT_MAX, self.{field_name}))"
+                Value::INT_MIN, Value::INT_MAX, self.{field_ident}))"
         ),
         // Bigints are always heap-allocated, and allocation is fallible (the
         // value may exceed `MAX_BIGINT_BITS`). `to_value` has no error channel,
@@ -593,14 +600,14 @@ fn copy_field_to_value(field_name: &str, ty: &BamlType) -> String {
         // `VmPanic::AllocFailure` (`{p}`), never the bigint itself, which could
         // be millions of digits long.
         BamlType::Bigint => format!(
-            "vm.try_alloc_bigint(self.{field_name}).unwrap_or_else(|p| panic!(\
+            "vm.try_alloc_bigint(self.{field_ident}).unwrap_or_else(|p| panic!(\
                 \"failed to allocate bigint field `{field_name}`: {{p}}\"))"
         ),
-        BamlType::Float => format!("Value::object(vm.alloc_float(self.{field_name}))"),
-        BamlType::Bool => format!("Value::bool(self.{field_name})"),
+        BamlType::Float => format!("Value::object(vm.alloc_float(self.{field_ident}))"),
+        BamlType::Bool => format!("Value::bool(self.{field_ident})"),
         BamlType::Null => "Value::NULL".to_string(),
         // String, List, Map, Optional, Generic, Named, Media — already a Value
-        _ => format!("self.{field_name}"),
+        _ => format!("self.{field_ident}"),
     }
 }
 
@@ -617,6 +624,18 @@ fn to_pascal_case(s: &str) -> String {
             result.push_str(chars.as_str());
             result
         }
+    }
+}
+
+/// Escape a BAML field name for use as a Rust identifier in generated code. Rust
+/// keywords (`type`, `match`, …) become raw identifiers (`r#type`); the few that cannot
+/// be raw (`self`/`Self`/`super`/`crate`/`_`) get a trailing underscore. String-literal
+/// positions (panic messages, field-name lookups) keep the original name.
+fn rust_field_name(name: &str) -> String {
+    match name {
+        "self" | "Self" | "super" | "crate" | "_" => format!("{name}_"),
+        _ if syn::parse_str::<syn::Ident>(name).is_err() => format!("r#{name}"),
+        _ => name.to_string(),
     }
 }
 

@@ -258,3 +258,15 @@ response parse — is BAML. What changed:
 - Gotchas from this round (also in [`baml_gotchas.md`](./baml_gotchas.md), the new consolidated
   reference): `env` as a param name is shadowed by env-var magic; `?? []` needs a typed binding;
   `from_json` ignores `@alias`.
+
+## `type`-named fields: fixed at the codegen
+
+Follow-up on the earlier finding: **user code always supported `type` as a field name**
+(decl, construction, `.type` access all parse and run) — only the *builtins* codegen crashed
+generating Rust identifiers from stdlib field names. Fixed in `baml_builtins2_codegen`: both
+generators (quote-based `codegen_io.rs`, string-based `codegen.rs`) now escape Rust-keyword
+field names as raw identifiers (`r#type`), with a trailing-underscore fallback for the
+non-rawable set. The Responses wire classes now use `type: string` directly (the `@alias`
+workaround removed); verified live. Languages precedent: TS/JS/Python/Java/C#/Kotlin allow
+`type` fields outright; Rust needs `r#type`; Go simply forbids it — BAML now sits with the
+JSON-native group, which is where an LLM wire-format language must be.

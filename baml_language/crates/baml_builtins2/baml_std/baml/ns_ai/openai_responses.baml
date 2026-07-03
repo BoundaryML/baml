@@ -5,18 +5,18 @@
 // path) and `root.ai.Chain` (the server-stored-chain capability).
 //
 // The Responses envelope carries `type`-tagged items (`"type":"message"`,
-// `"type":"output_text"`). `type` is a reserved word (a class field named `type` breaks the
-// builtins codegen), so the wire classes name the tag `kind` with `@alias("type")` and are
-// decoded via SAP (`root.sap.parse`), which honors `@alias` — `baml.json.from_json` does not.
+// `"type":"output_text"`). The wire classes use the field name `type` directly — BAML
+// allows keyword-named fields, and the builtins codegen escapes them as Rust raw
+// identifiers (`r#type`). Decoded via SAP (`root.sap.parse`).
 
 // --- wire shapes (Responses envelope) ---
 class OpenAiRespContentWire {
-    kind: string @alias("type"),
+    type: string,
     text: string?,
 }
 
 class OpenAiRespItemWire {
-    kind: string @alias("type"),
+    type: string,
     content: OpenAiRespContentWire[]?,
 }
 
@@ -44,12 +44,12 @@ function _openai_responses_envelope(raw_text: string) -> OpenAiRespEnvelopeWire?
 function _openai_responses_output_text(envelope: OpenAiRespEnvelopeWire) -> string? throws never {
     let items: OpenAiRespItemWire[] = envelope.output ?? [];
     for (let item in items) {
-        if (item.kind != "message") {
+        if (item.type != "message") {
             continue;
         }
         let contents: OpenAiRespContentWire[] = item.content ?? [];
         for (let c in contents) {
-            if (c.kind != "output_text") {
+            if (c.type != "output_text") {
                 continue;
             }
             match (c.text) {

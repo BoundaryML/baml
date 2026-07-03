@@ -413,6 +413,21 @@ fn external_to_typed_expr(
     }
 }
 
+/// Turn a BAML field name into a Rust identifier for generated structs/accessors.
+///
+/// Rust keywords (`type`, `match`, `move`, …) cannot be plain identifiers, but BAML
+/// allows them as field names (JSON wire formats are full of `"type"` keys), so escape
+/// keywords as raw identifiers (`r#type`). The handful that cannot be raw
+/// (`self`/`Self`/`super`/`crate`/`_`) get a trailing underscore instead. The string
+/// keys used for VM field lookup carry the original name and are unaffected.
+fn field_ident(name: &str) -> proc_macro2::Ident {
+    match name {
+        "self" | "Self" | "super" | "crate" | "_" => format_ident!("{}_", name),
+        _ if syn::parse_str::<syn::Ident>(name).is_err() => format_ident!("r#{}", name),
+        _ => format_ident!("{}", name),
+    }
+}
+
 /// Generate the `into_owned` conversion expression for a view field.
 fn into_owned_expr(
     field_name: &str,
@@ -420,7 +435,7 @@ fn into_owned_expr(
     class_ns_map: &BTreeMap<String, String>,
     paths: &CodegenPaths,
 ) -> TokenStream {
-    let field_ident = format_ident!("{}", field_name);
+    let field_ident = field_ident(field_name);
     match ty {
         BamlType::Int | BamlType::Bool => {
             quote! { self.#field_ident()? }
@@ -951,7 +966,7 @@ fn emit_view_struct(
             let mut needs_heap = false;
             let ret_type = view_return_type(&field.field_type, &mut needs_heap);
             let body = view_accessor_body(&field.name, &field.field_type);
-            let field_ident = format_ident!("{}", field.name);
+            let field_ident = field_ident(&field.name);
 
             if needs_heap {
                 quote! {
@@ -982,7 +997,7 @@ fn emit_view_struct(
         .fields
         .iter()
         .map(|field| {
-            let field_ident = format_ident!("{}", field.name);
+            let field_ident = field_ident(&field.name);
             let expr = into_owned_expr(&field.name, &field.field_type, class_ns_map, paths);
             quote! { #field_ident: #expr }
         })
@@ -1158,7 +1173,7 @@ fn emit_owned_struct(
         .fields
         .iter()
         .map(|field| {
-            let field_ident = format_ident!("{}", field.name);
+            let field_ident = field_ident(&field.name);
             let rust_ty = owned_rust_type(&field.field_type, class_ns_map, paths);
             quote! { pub #field_ident: #rust_ty }
         })
@@ -1170,7 +1185,7 @@ fn emit_owned_struct(
         .iter()
         .map(|field| {
             let field_name_str = &field.name;
-            let field_ident = format_ident!("{}", field.name);
+            let field_ident = field_ident(&field.name);
             let conv = owned_to_external_expr(
                 &quote! { self.#field_ident },
                 &field.field_type,
@@ -1185,7 +1200,7 @@ fn emit_owned_struct(
         .fields
         .iter()
         .map(|field| {
-            let field_ident = format_ident!("{}", field.name);
+            let field_ident = field_ident(&field.name);
             let field_name_str = &field.name;
             let field_val = quote! {
                 fields.swap_remove(#field_name_str).unwrap_or(BexExternalValue::Null)
@@ -2129,7 +2144,7 @@ fn emit_runtime_io_handles(
                     if field.field_type == BamlType::RustType {
                         continue;
                     }
-                    let field_ident = format_ident!("{}", field.name);
+                    let field_ident = field_ident(&field.name);
                     let field_ty = owned_rust_type(&field.field_type, class_ns_map, paths);
                     pub_fields.push(quote! { pub #field_ident: #field_ty });
 

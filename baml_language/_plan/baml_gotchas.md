@@ -27,9 +27,11 @@ Each entry: the symptom, the rule, the workaround. Compiler-bug candidates are m
 - **`client` is a keyword** — can't name a function `client`.
 - **`function` is a keyword** — a class field can't be named `function`; navigate JSON keys named
   `"function"` with `baml.json.field(j, "function")`.
-- ⚠ **A class field named `type` crashes the builtins codegen** (`expected identifier, found
-  keyword \`type\``) — at Rust-generation time, not BAML-check time. Workaround for `type`-tagged
-  wire envelopes: name the field `kind` with `@alias("type")` and decode via SAP (see below).
+- **A class field named `type` is fully supported** (decl, construction, `.type` access — user
+  code always worked; the *stdlib* builtins codegen used to crash generating Rust for it). FIXED:
+  both generators now escape Rust-keyword field names as raw identifiers (`r#type`); the
+  non-rawable set (`self`/`Self`/`super`/`crate`/`_`) gets a trailing underscore. Wire classes can
+  use `type: string` directly — no `@alias` workaround needed.
 - ⚠ **A parameter/local named `env` is shadowed by the env-var magic** — `env.output` resolves as
   an environment-variable access (E0004 suggesting `baml.env.get_or_panic("output")`), not your
   binding. Pick another name.
