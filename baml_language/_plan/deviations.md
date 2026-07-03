@@ -193,3 +193,38 @@ a native `baml.ai.ChatMessage` (role + text/media parts) becomes the provider ex
 `prompt_to_messages(PromptAst) -> ChatMessage[]` is the one leaf converter (replacing the flattening
 `prompt_to_text`); `OpenAi.build_request` encodes text/image parts itself in BAML; the media
 fallback-to-legacy is then removed.
+
+## Native wire representation (user directive) — IMPLEMENTED
+
+The provider exchange type is now the native `baml.ai.ChatMessage[]` (role + interleaved
+text/media `MessagePart`s); the whole chat-completions wire — messages, parts, request body,
+response parse — is BAML. What changed:
+
+- `HttpProvider`: `call_messages_with`/`call_messages` are THE primitives (messages in);
+  `call_with`/`call` are string sugar (one user message). `build_request<T>(messages)`.
+  `Streaming.stream_messages` + `stream` sugar. Combinators route the message primitives.
+- **One leaf bridge**: `baml.ai.prompt_to_messages(PromptAst) -> ChatMessage[]` (host fn) —
+  roles preserved, media interleaved. `prompt_to_text` is retained only as a utility;
+  the delegation no longer flattens.
+- **Roles are no longer flattened** on the e2e path (`e2e_roles_preserved_on_wire`), and
+  **media rides natively**: BAML `_encode_part` emits `image_url` (url or data-URI),
+  `input_audio`, and `file` (pdf) parts. The media fallback-to-legacy is gone; only
+  `query_params` + finish-reason lists still fall back. **Live-proven**: `e2e_multimodal_live`
+  (gpt-5.4-mini describes an inline base64 image through the native pipeline).
+- `MessagePart` is a product type (`text`/`image`/`audio`/`pdf`/`video` nullable fields), not a
+  union — unions don't cross the host-construction boundary; constructors `from_text`/`from_image`/….
+
+### New language findings from this work
+- **A `_` arm after a media-typed binding breaks the media runtime type-test.**
+  `match (p.image /* image? */) { let i: image => …, _ => … }` takes `_` even for a genuine
+  image (the runtime test fails), while `match { null => …, let i: image => … }` binds fine
+  (null-elimination leaves the binding irrefutable — no runtime test). Method calls on the
+  bound value work either way. Same family as the generic-`T`/`unknown`/json-alias findings:
+  runtime type-tests in match arms are unreliable off the nominal class/interface path.
+- **Cross-namespace `$rust_io_function` signature resolution**: a decl in `ns_llm` returning
+  `root.ai.ChatMessage[]` fell back to `Vec<BexExternalValue>` in codegen (and the generated
+  adapter didn't compile); declaring the fn in the classes' own namespace (`ns_ai`) generates
+  proper owned structs. Params are still untyped (`BexExternalValue`) cross-namespace.
+- **Media values at the host boundary**: an `image`-typed value is a `baml.media.Image`
+  *instance* carrying `_data` (mirror of bex_vm's `copy::media`), not a bare media ADT —
+  host-constructed media fields must use the instance form.

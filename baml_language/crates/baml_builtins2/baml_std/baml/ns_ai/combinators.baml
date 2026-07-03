@@ -18,7 +18,7 @@ class Fallback {
 
         function build_request<T>(
             self,
-            prompt: string,
+            messages: root.ai.ChatMessage[],
         ) -> root.http.Request throws root.errors.CallError | root.errors.UnknownError {
             throw root.errors.UnknownError { data: null, message: ["fallback has no single request"] }
         }
@@ -42,15 +42,15 @@ class Fallback {
         }
 
         // Route: try each HTTP-capable member; return the first that succeeds.
-        function call_with<T, V, E2>(
+        function call_messages_with<T, V, E2>(
             self,
-            prompt: string,
+            messages: root.ai.ChatMessage[],
             project: (root.ai.ResponseMeta) -> V throws E2,
         ) -> root.ai.CallResult<T, V> throws root.errors.CallError | root.errors.UnknownError | E2 {
             for (let m in self.members) {
                 match (m) {
                     let h: root.ai.HttpProvider => {
-                        let r: root.ai.CallResult<T, V> = h.call_with<T, V, E2>(prompt, project) catch (e) {
+                        let r: root.ai.CallResult<T, V> = h.call_messages_with<T, V, E2>(messages, project) catch (e) {
                             _ => {
                                 continue;
                             }
@@ -68,14 +68,14 @@ class Fallback {
 
     implements root.ai.Streaming {
         // Route .stream to the first streaming member whose stream opens successfully.
-        function stream<TStream, TFinal>(
+        function stream_messages<TStream, TFinal>(
             self,
-            prompt: string,
+            messages: root.ai.ChatMessage[],
         ) -> root.llm.Stream<TStream, TFinal> throws root.errors.StreamError | root.errors.UnknownError {
             for (let m in self.members) {
                 match (m) {
                     let s: root.ai.Streaming => {
-                        let st: root.llm.Stream<TStream, TFinal> = s.stream<TStream, TFinal>(prompt) catch (e) {
+                        let st: root.llm.Stream<TStream, TFinal> = s.stream_messages<TStream, TFinal>(messages) catch (e) {
                             _ => {
                                 continue;
                             }
@@ -104,7 +104,7 @@ class Retry {
 
         function build_request<T>(
             self,
-            prompt: string,
+            messages: root.ai.ChatMessage[],
         ) -> root.http.Request throws root.errors.CallError | root.errors.UnknownError {
             throw root.errors.UnknownError { data: null, message: ["retry has no single request"] }
         }
@@ -127,16 +127,16 @@ class Retry {
             throw root.errors.UnknownError { data: null, message: ["retry has no meta"] }
         }
 
-        function call_with<T, V, E2>(
+        function call_messages_with<T, V, E2>(
             self,
-            prompt: string,
+            messages: root.ai.ChatMessage[],
             project: (root.ai.ResponseMeta) -> V throws E2,
         ) -> root.ai.CallResult<T, V> throws root.errors.CallError | root.errors.UnknownError | E2 {
             let attempt: int = 0;
             while (true) {
                 match (self.inner) {
                     let h: root.ai.HttpProvider => {
-                        let r: root.ai.CallResult<T, V> = h.call_with<T, V, E2>(prompt, project) catch (e) {
+                        let r: root.ai.CallResult<T, V> = h.call_messages_with<T, V, E2>(messages, project) catch (e) {
                             _ => {
                                 if (attempt < self.max) {
                                     attempt = attempt + 1;
@@ -159,12 +159,12 @@ class Retry {
     implements root.ai.Streaming {
         // A broken stream can't be transparently retried (partial output already
         // emitted), so `Retry` forwards `.stream` once to a streaming inner member.
-        function stream<TStream, TFinal>(
+        function stream_messages<TStream, TFinal>(
             self,
-            prompt: string,
+            messages: root.ai.ChatMessage[],
         ) -> root.llm.Stream<TStream, TFinal> throws root.errors.StreamError | root.errors.UnknownError {
             match (self.inner) {
-                let s: root.ai.Streaming => s.stream<TStream, TFinal>(prompt),
+                let s: root.ai.Streaming => s.stream_messages<TStream, TFinal>(messages),
                 _ => {
                     throw root.errors.UnknownError { data: null, message: ["retry: inner is not streaming"] }
                 },
@@ -186,7 +186,7 @@ class RoundRobin {
 
         function build_request<T>(
             self,
-            prompt: string,
+            messages: root.ai.ChatMessage[],
         ) -> root.http.Request throws root.errors.CallError | root.errors.UnknownError {
             throw root.errors.UnknownError { data: null, message: ["round_robin has no single request"] }
         }
@@ -209,9 +209,9 @@ class RoundRobin {
             throw root.errors.UnknownError { data: null, message: ["round_robin has no meta"] }
         }
 
-        function call_with<T, V, E2>(
+        function call_messages_with<T, V, E2>(
             self,
-            prompt: string,
+            messages: root.ai.ChatMessage[],
             project: (root.ai.ResponseMeta) -> V throws E2,
         ) -> root.ai.CallResult<T, V> throws root.errors.CallError | root.errors.UnknownError | E2 {
             let n = self.members.length();
@@ -221,7 +221,7 @@ class RoundRobin {
             let idx = self.counter % n;
             self.counter = self.counter + 1;
             match (self.members.at(idx)) {
-                let h: root.ai.HttpProvider => h.call_with<T, V, E2>(prompt, project),
+                let h: root.ai.HttpProvider => h.call_messages_with<T, V, E2>(messages, project),
                 _ => {
                     throw root.errors.UnknownError { data: null, message: ["round_robin: member not callable"] }
                 },

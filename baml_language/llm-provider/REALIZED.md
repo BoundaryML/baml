@@ -24,7 +24,7 @@ See [`../_plan/implementation-checklist.md`](../_plan/implementation-checklist.m
 | 02 | structured output | `openai.baml` (SAP); `openai_structured_*` | live |
 | 03 | constrained decoding | `provider.baml` `Constrained`; `constrained_*` test | tested |
 | 04 | streaming | `openai.baml` `Streaming`; `openai_stream_*` | live |
-| 05 | multimodal input | `ns_ai_examples/cross_cutting.baml` (`image_prompt`) | compiled |
+| 05 | multimodal input | native `ChatMessage`/`MessagePart` pipeline; `e2e_multimodal_live` | live |
 | 06 | non-text output | `ns_ai_examples/misc.baml` (shape) | compiled |
 | 07 | reasoning | `ResponseMeta.reasoning()`; `response_meta_*` test | tested |
 | 08 | enriched (logprobs/citations) | `ResponseMeta.logprobs/citations`; test | tested |

@@ -1065,3 +1065,78 @@ async fn e2e_media_prompt_reaches_wire() {
         bodies[0]
     );
 }
+
+/// Native messages: `${role(...)}` structure is preserved on the wire (system + user
+/// messages arrive as separate entries, not flattened into one).
+#[tokio::test]
+async fn e2e_roles_preserved_on_wire() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/chat/completions"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_string(r#"{"choices":[{"message":{"content":"pong"}}]}"#),
+        )
+        .mount(&server)
+        .await;
+    let uri = server.uri();
+
+    let output = baml_test!(&format!(
+        r#"
+        client<llm> RoleClient {{
+          provider openai
+          options {{ model "gpt-5.4-mini" api_key "test-key" base_url "{uri}" }}
+        }}
+        function Ask(q: string) -> string {{
+          client RoleClient
+          prompt `${{role("system")}}You are terse.${{role("user")}}${{q}}`
+        }}
+        function main() -> string {{ Ask("hi") }}
+        "#
+    ));
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("pong".into())
+    );
+
+    let bodies = recorded_bodies(&server).await;
+    assert!(
+        bodies[0].contains(r#""role":"system""#) && bodies[0].contains(r#""role":"user""#),
+        "roles were flattened; body: {}",
+        bodies[0]
+    );
+}
+
+/// LIVE multimodal (scenario 05 for real): a user function with an image arg, described
+/// by the real model through the native message pipeline. Gated on `OPENAI_API_KEY`.
+#[tokio::test]
+async fn e2e_multimodal_live() {
+    if std::env::var("OPENAI_API_KEY").is_err() {
+        eprintln!("skipping e2e_multimodal_live: OPENAI_API_KEY not set");
+        return;
+    }
+    let output = baml_test!(
+        r#"
+        client<llm> VisionClient {
+          provider openai
+          options { model "gpt-5.4-mini" api_key env.OPENAI_API_KEY }
+        }
+        function Describe(img: image) -> string {
+          client VisionClient
+          prompt `In one word, what is the dominant color of this image? ${img}`
+        }
+        function main() -> string {
+          // A 64x64 solid-red PNG, inline — no external fetch for OpenAI to reject.
+          Describe(baml.media.Image.from_base64("iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAIAAAAlC+aJAAAAb0lEQVR4nO3PAQkAAAyEwO9feoshgnABdLep8QUNyPEFDcjxBQ3I8QUNyPEFDcjxBQ3I8QUNyPEFDcjxBQ3I8QUNyPEFDcjxBQ3I8QUNyPEFDcjxBQ3I8QUNyPEFDcjxBQ3I8QUNyPEFDcjxBQ3IPanc8OLDQitxAAAAAElFTkSuQmCC", "image/png"))
+        }
+        "#
+    );
+    let got = output.result.unwrap();
+    let BexExternalValue::String(s) = got else {
+        panic!("expected string, got {got:?}")
+    };
+    assert!(
+        s.to_lowercase().contains("red"),
+        "vision answer did not say red: {s:?}"
+    );
+}

@@ -630,6 +630,149 @@ impl<T> io::IoClassLlmContext for T {
     }
 }
 
+impl<T> io::IoNamespaceAi for T {
+    fn prompt_to_messages(
+        &self,
+        _heap: &std::sync::Arc<BexHeap>,
+        _call_id: CallId,
+        prompt: BexExternalValue,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Vec<io::owned::ai::ChatMessage>> {
+        // The cross-namespace param arrives untyped. Depending on the boundary it is
+        // either the PromptAst ADT itself, or a `baml.llm.PromptAst` instance whose
+        // `_data` field carries the handle (as an ADT or a raw RustData).
+        fn extract_ast(v: &BexExternalValue) -> Option<bex_vm_types::PromptAst> {
+            match v {
+                BexExternalValue::Adt(::bex_external_types::BexExternalAdt::PromptAst(a)) => {
+                    Some(a.clone())
+                }
+                BexExternalValue::RustData(data) => {
+                    data.clone().downcast::<baml_builtins2::PromptAst>().ok()
+                }
+                BexExternalValue::Instance { fields, .. } => {
+                    fields.get("_data").and_then(extract_ast)
+                }
+                BexExternalValue::Union { value, .. } => extract_ast(value),
+                _ => None,
+            }
+        }
+        let Some(ast) = extract_ast(&prompt) else {
+            return SysOpOutput::err(VmBamlError::InvalidArgument {
+                message: "prompt_to_messages: expected a baml.llm.PromptAst".to_string(),
+            });
+        };
+        SysOpOutput::ok(prompt_ast_to_chat_messages(&ast))
+    }
+}
+
+/// Convert a `PromptAst` into native `baml.ai.ChatMessage` values: roles preserved,
+/// text and media parts interleaved. Role-less content becomes a `"user"` message
+/// (the specialize pass has normally wrapped simples with the client default role
+/// already, so this is a fallback).
+fn prompt_ast_to_chat_messages(ast: &baml_builtins2::PromptAst) -> Vec<io::owned::ai::ChatMessage> {
+    use baml_builtins2::{PromptAst, PromptAstSimple};
+
+    fn empty_part() -> io::owned::ai::MessagePart {
+        io::owned::ai::MessagePart {
+            text: None,
+            image: None,
+            audio: None,
+            pdf: None,
+            video: None,
+        }
+    }
+
+    fn text_part(t: String) -> io::owned::ai::MessagePart {
+        let mut p = empty_part();
+        p.text = Some(t);
+        p
+    }
+
+    fn media_part(m: &std::sync::Arc<baml_builtins2::MediaValue>) -> io::owned::ai::MessagePart {
+        // Runtime media values are `baml.media.*` instances carrying the MediaValue in
+        // `_data` (mirrors bex_vm's `copy::media` constructors) — not a bare media ADT.
+        fn media_instance(
+            class_name: &str,
+            m: &std::sync::Arc<baml_builtins2::MediaValue>,
+        ) -> BexExternalValue {
+            let mut fields = ::indexmap::IndexMap::new();
+            fields.insert(
+                "_data".to_string(),
+                BexExternalValue::RustData(
+                    m.clone() as std::sync::Arc<dyn std::any::Any + Send + Sync>
+                ),
+            );
+            BexExternalValue::Instance {
+                class_name: class_name.to_string(),
+                type_args: vec![],
+                fields,
+            }
+        }
+        let mut p = empty_part();
+        match m.kind {
+            ::bex_external_types::MediaKind::Audio => {
+                p.audio = Some(media_instance("baml.media.Audio", m));
+            }
+            ::bex_external_types::MediaKind::Pdf => {
+                p.pdf = Some(media_instance("baml.media.Pdf", m));
+            }
+            ::bex_external_types::MediaKind::Video => {
+                p.video = Some(media_instance("baml.media.Video", m));
+            }
+            // `Generic` ("could be any") defaults to the image slot — the dominant case.
+            ::bex_external_types::MediaKind::Image | ::bex_external_types::MediaKind::Generic => {
+                p.image = Some(media_instance("baml.media.Image", m));
+            }
+        }
+        p
+    }
+
+    fn simple_to_parts(s: &PromptAstSimple, out: &mut Vec<io::owned::ai::MessagePart>) {
+        match s {
+            PromptAstSimple::String(t) => {
+                if !t.is_empty() {
+                    out.push(text_part(t.clone()));
+                }
+            }
+            PromptAstSimple::Media(m) => out.push(media_part(m)),
+            PromptAstSimple::Multiple(items) => {
+                for it in items {
+                    simple_to_parts(it, out);
+                }
+            }
+        }
+    }
+
+    fn mk_message(role: &str, content: &PromptAstSimple) -> io::owned::ai::ChatMessage {
+        let mut parts = Vec::new();
+        simple_to_parts(content, &mut parts);
+        if parts.is_empty() {
+            // Preserve an empty message rather than dropping it.
+            parts.push(text_part(String::new()));
+        }
+        io::owned::ai::ChatMessage {
+            role: role.to_string(),
+            parts,
+        }
+    }
+
+    fn walk(ast: &PromptAst, out: &mut Vec<io::owned::ai::ChatMessage>) {
+        match ast {
+            PromptAst::Simple(s) => out.push(mk_message("user", s)),
+            PromptAst::Message { role, content, .. } => out.push(mk_message(role, content)),
+            PromptAst::Vec(items) => {
+                for it in items {
+                    walk(it, out);
+                }
+            }
+        }
+    }
+
+    let mut out = Vec::new();
+    walk(ast, &mut out);
+    out
+}
+
 impl<T> io::IoNamespaceLlm for T {
     fn get_jinja_template(
         &self,

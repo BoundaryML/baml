@@ -128,13 +128,100 @@ class OpenAi {
     /// omits) `${ctx.output_format}`, and appending again would double-inject.
     append_output_schema: bool?,
 
-    // Assemble the request body: model + messages + extra_body entries (legacy
+    // Encode one message part into the Chat Completions content-part shape.
+    // Video has no chat-completions representation — the caller errors before this.
+    function _encode_part(self, p: root.ai.MessagePart) -> json throws root.errors.UnknownError {
+        // NOTE the match shape: `null => {}` + binding-as-last-arm. A `_` arm after a
+        // media binding makes the media runtime type-test fail even for genuine media
+        // values (see _plan/deviations.md, language findings), so each field is
+        // null-eliminated instead.
+        match (p.text) {
+            null => {
+            },
+            let t: string => {
+                return { "type": "text", "text": t };
+            },
+        }
+        match (p.image) {
+            null => {
+            },
+            let img: image => {
+                let url = match (img.url()) {
+                    null => "data:" + (img.mime_type() ?? "image/png") + ";base64," + img.base64(),
+                    let u: string => u,
+                };
+                return { "type": "image_url", "image_url": { "url": url } };
+            },
+        }
+        match (p.audio) {
+            null => {
+            },
+            let a: audio => {
+                let mime = a.mime_type() ?? "audio/wav";
+                let fmt = if (mime.includes("mp3") || mime.includes("mpeg")) {
+                    "mp3"
+                } else {
+                    "wav"
+                };
+                return { "type": "input_audio", "input_audio": { "data": a.base64(), "format": fmt } };
+            },
+        }
+        match (p.pdf) {
+            null => {
+            },
+            let d: pdf => {
+                return {
+                    "type": "file",
+                    "file": {
+                        "filename": "document.pdf",
+                        "file_data": "data:application/pdf;base64," + d.base64(),
+                    },
+                };
+            },
+        }
+        throw root.errors.UnknownError {
+            data: null,
+            message: ["openai: unsupported message part (video has no chat-completions form)"],
+        }
+    }
+
+    // Encode one chat message. A single text part stays a plain-string `content`
+    // (byte-compatible with text-only requests); anything else becomes a parts array.
+    function _encode_message(self, m: root.ai.ChatMessage) -> json throws root.errors.UnknownError {
+        if (m.parts.length() == 1) {
+            match (m.parts.at(0)) {
+                let only: root.ai.MessagePart => match (only.text) {
+                    let t: string => {
+                        return { "role": m.role, "content": t };
+                    },
+                    _ => {
+                    },
+                },
+                _ => {
+                },
+            }
+        }
+        let parts: json[] = [];
+        for (let p in m.parts) {
+            parts.push(self._encode_part(p));
+        }
+        { "role": m.role, "content": parts }
+    }
+
+    // Assemble the request body: model + native messages + extra_body entries (legacy
     // request_body semantics: user entries are merged at the top level).
-    function _request_body(self, content: string, stream: bool) -> string throws never {
+    function _request_body(
+        self,
+        messages: root.ai.ChatMessage[],
+        stream: bool,
+    ) -> string throws root.errors.UnknownError {
         let body: map<string, json> = {};
         body.set("model", self.model);
-        let messages: json = [{ "role": "user", "content": content }];
-        body.set("messages", messages);
+        let encoded: json[] = [];
+        for (let m in messages) {
+            encoded.push(self._encode_message(m));
+        }
+        body.set("messages", encoded);
         if (stream) {
             body.set("stream", true);
         }
@@ -172,12 +259,74 @@ class OpenAi {
         headers
     }
 
-    // Prompt + optional schema suffix (skipped when append_output_schema is false).
-    function _content_for(self, prompt: string, schema: string) -> string throws never {
+    // Append the output schema to the conversation: merged into the last message's
+    // trailing text part when possible (keeping the classic "prompt\n\nschema" shape),
+    // otherwise as a fresh text part / user message.
+    function _append_schema(
+        self,
+        messages: root.ai.ChatMessage[],
+        schema: string,
+    ) -> root.ai.ChatMessage[] throws never {
+        let n = messages.length();
+        if (n == 0) {
+            return [root.ai.ChatMessage.user(schema)];
+        }
+        let out: root.ai.ChatMessage[] = [];
+        let i = 0;
+        while (i < n - 1) {
+            match (messages.at(i)) {
+                let m: root.ai.ChatMessage => out.push(m),
+                _ => {
+                },
+            }
+            i = i + 1;
+        }
+        match (messages.at(n - 1)) {
+            let last: root.ai.ChatMessage => {
+                let parts: root.ai.MessagePart[] = [];
+                let np = last.parts.length();
+                let j = 0;
+                while (j < np - 1) {
+                    match (last.parts.at(j)) {
+                        let p: root.ai.MessagePart => parts.push(p),
+                        _ => {
+                        },
+                    }
+                    j = j + 1;
+                }
+                let appended = false;
+                match (last.parts.at(np - 1)) {
+                    let lastp: root.ai.MessagePart => match (lastp.text) {
+                        let t: string => {
+                            parts.push(root.ai.MessagePart.from_text(t + "\n\n" + schema));
+                            appended = true;
+                        },
+                        _ => parts.push(lastp),
+                    },
+                    _ => {
+                    },
+                }
+                if (!appended) {
+                    parts.push(root.ai.MessagePart.from_text(schema));
+                }
+                out.push(root.ai.ChatMessage { role: last.role, parts: parts });
+            },
+            _ => {
+            },
+        }
+        out
+    }
+
+    // Messages + optional schema (skipped when append_output_schema is false).
+    function _messages_for(
+        self,
+        messages: root.ai.ChatMessage[],
+        schema: string,
+    ) -> root.ai.ChatMessage[] throws never {
         if (!(self.append_output_schema ?? true) || schema == "") {
-            prompt
+            messages
         } else {
-            prompt + "\n\n" + schema
+            self._append_schema(messages, schema)
         }
     }
 
@@ -190,17 +339,16 @@ class OpenAi {
 
         function build_request<T>(
             self,
-            prompt: string,
+            messages: root.ai.ChatMessage[],
         ) -> root.http.Request throws root.errors.CallError | root.errors.UnknownError {
             // Inject the output schema so the model knows the shape to return.
             // Empty for `T = string` (free-form text), non-empty for a structured `T`.
             let schema: string = root.llm.render_output_format(reflect.type_of<T>());
-            let content: string = self._content_for(prompt, schema);
             root.http.Request {
                 method: "POST",
                 url: (self.base_url ?? "https://api.openai.com/v1") + "/chat/completions",
                 headers: self._request_headers(),
-                body: self._request_body(content, false),
+                body: self._request_body(self._messages_for(messages, schema), false),
             }
         }
 
@@ -276,17 +424,16 @@ class OpenAi {
         // wrap it in `baml.llm.Stream`. SSE-delta accumulation + finish-reason validation
         // reuse the existing (leaf) accumulator via a shorthand-built PrimitiveClient; the
         // request itself (endpoint/headers/body, incl. `api_key`/`base_url`) is BAML.
-        function stream<TStream, TFinal>(
+        function stream_messages<TStream, TFinal>(
             self,
-            prompt: string,
+            messages: root.ai.ChatMessage[],
         ) -> root.llm.Stream<TStream, TFinal> throws root.errors.StreamError | root.errors.UnknownError {
             let schema: string = root.llm.render_output_format(reflect.type_of<TFinal>());
-            let content: string = self._content_for(prompt, schema);
             let req = root.http.Request {
                 method: "POST",
                 url: (self.base_url ?? "https://api.openai.com/v1") + "/chat/completions",
                 headers: self._request_headers(),
-                body: self._request_body(content, true),
+                body: self._request_body(self._messages_for(messages, schema), true),
             };
             let sse = root.http.fetch_sse(req) catch (e) {
                 _ => {

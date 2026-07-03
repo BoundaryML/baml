@@ -270,7 +270,7 @@ class Client {
         // oneshot delegation), forwarding headers/request_body. Media / query_params /
         // finish-reason lists fall back to the legacy builder (see _openai_delegation_ok).
         if (_openai_delegation_ok(primitive, specialized)) {
-          return _openai_from(primitive).stream<TStream, TFinal>(prompt_to_text(specialized));
+          return _openai_from(primitive).stream_messages<TStream, TFinal>(root.ai.prompt_to_messages(specialized));
         }
 
         let http_request = primitive.build_request_stream(specialized, return_type);
@@ -384,7 +384,7 @@ class Client {
         // (see _openai_delegation_ok); other providers keep the legacy Rust path until
         // they are ported. See _plan/deviations.md.
         if (_openai_delegation_ok(primitive, specialized)) {
-          return _openai_from(primitive).call<T>(prompt_to_text(specialized));
+          return _openai_from(primitive).call_messages<T>(root.ai.prompt_to_messages(specialized));
         }
 
         let http_request = primitive.build_request(specialized, return_type)
@@ -824,12 +824,12 @@ function prompt_has_media(prompt: PromptAst) -> bool throws never {
   $rust_io_function
 }
 
+
 /// True iff an openai call can be served by the BAML-authored `baml.ai.OpenAi` provider.
-/// Falls back to the legacy request builder for surfaces the string-prompt bridge cannot
-/// carry yet: media parts, query_params, and finish-reason validation lists.
+/// Media rides natively (`prompt_to_messages`); only query_params and finish-reason
+/// validation lists still fall back to the legacy request builder.
 function _openai_delegation_ok(primitive: PrimitiveClient, specialized: PromptAst) -> bool throws never {
   if (primitive.provider != "openai") { return false; }
-  if (prompt_has_media(specialized)) { return false; }
   if (primitive.options.query_params.keys().length() != 0) { return false; }
   match (primitive.options.finish_reason_allow_list) {
     null => {},

@@ -3,8 +3,56 @@
 // own interaction method. Built-in providers (OpenAI, …) are ordinary classes that
 // `implements` these — the same way a user's custom provider would.
 //
-// NOTE: `prompt` is a plain `string` for now. The design threads a `baml.llm.PromptAst`
-// (the provider-agnostic rendered prompt); wiring that render pipeline in is a later step.
+// The provider exchange type is the NATIVE `ChatMessage[]` (roles + text/media parts) —
+// the whole wire surface is BAML. The `string` prompt entry points are sugar for a single
+// user message. `baml.llm.prompt_to_messages` bridges a rendered `PromptAst` (a host
+// type) into `ChatMessage[]`; everything downstream of that is BAML.
+
+/// One part of a chat message: text or one media item. A product type (exactly one field
+/// set) rather than a union so it crosses the host boundary simply; use the
+/// `MessagePart.from_*` constructors.
+class MessagePart {
+    text: string?,
+    image: image?,
+    audio: audio?,
+    pdf: pdf?,
+    video: video?,
+
+    function from_text(text: string) -> MessagePart throws never {
+        MessagePart { text: text }
+    }
+    function from_image(img: image) -> MessagePart throws never {
+        MessagePart { image: img }
+    }
+    function from_audio(a: audio) -> MessagePart throws never {
+        MessagePart { audio: a }
+    }
+}
+
+/// One chat message: a role plus interleaved text/media parts. The native BAML
+/// representation of what goes on the wire.
+class ChatMessage {
+    role: string,
+    parts: MessagePart[],
+
+    function user(text: string) -> ChatMessage throws never {
+        ChatMessage { role: "user", parts: [MessagePart.from_text(text)] }
+    }
+    function system(text: string) -> ChatMessage throws never {
+        ChatMessage { role: "system", parts: [MessagePart.from_text(text)] }
+    }
+    function assistant(text: string) -> ChatMessage throws never {
+        ChatMessage { role: "assistant", parts: [MessagePart.from_text(text)] }
+    }
+}
+
+/// Convert a rendered `root.llm.PromptAst` (a host type) into the native `ChatMessage[]`
+/// representation — roles preserved, text and media parts interleaved. This is the ONE
+/// leaf bridge between the render pipeline and a BAML-authored provider; everything
+/// downstream (request building, wire encoding) is BAML.
+function prompt_to_messages(prompt: root.llm.PromptAst) -> ChatMessage[] throws never {
+    $rust_io_function
+}
 
 /// The value + out-of-band-metadata carrier returned by `call_with`. Replaces the
 /// `(T, V)` tuple from the design (tuples are not yet a language feature).
@@ -63,13 +111,15 @@ interface Provider {
   }
 }
 
-/// The HTTP request/response capability. Owns `call` and `call_with`. `Body` is the
-/// provider's raw response type (associated), lifting the hardcoded `string` of the
-/// old `parse<T>(body: string)` so non-text responses fit one interface.
+/// The HTTP request/response capability. Owns `call`/`call_with` (and their
+/// message-level primitives). `Body` is the provider's raw response type (associated),
+/// lifting the hardcoded `string` of the old `parse<T>(body: string)` so non-text
+/// responses fit one interface. The exchange type is the native `ChatMessage[]`; the
+/// `prompt: string` entry points are sugar for a single user message.
 interface HttpProvider requires Provider {
   type Body
 
-  function build_request<T>(self, prompt: string) -> root.http.Request
+  function build_request<T>(self, messages: ChatMessage[]) -> root.http.Request
       throws root.errors.CallError | root.errors.UnknownError
   function send(self, request: root.http.Request) -> Body
       throws root.errors.CallError | root.errors.UnknownError
@@ -78,19 +128,38 @@ interface HttpProvider requires Provider {
   function meta_of(self, from: Body) -> ResponseMeta
       throws root.errors.CallError | root.errors.UnknownError
 
-  // Primitive: value + projected sidecar. `E2` threads the projection's error
-  // channel (the `Iterator.map` pattern).
+  // THE primitive: native messages in, value + projected sidecar out. `E2` threads the
+  // projection's error channel (the `Iterator.map` pattern).
+  function call_messages_with<T, V, E2>(
+    self,
+    messages: ChatMessage[],
+    project: (ResponseMeta) -> V throws E2,
+  ) -> CallResult<T, V>
+      throws root.errors.CallError | root.errors.UnknownError | E2 {
+    let body = self.send(self.build_request<T>(messages));
+    CallResult<T, V> { value: self.parse<T>(body), meta: project(self.meta_of(body)) }
+  }
+
+  // Derived: native messages, value only.
+  function call_messages<T>(self, messages: ChatMessage[]) -> T
+      throws root.errors.CallError | root.errors.UnknownError {
+    let r = self.call_messages_with<T, null, never>(messages, (m: ResponseMeta) -> null { null });
+    r.value
+  }
+
+  // Sugar: a plain string prompt is a single user message. (The leading `let` keeps the
+  // parser from mis-reading a `prompt`-param function as an LLM declarative body.)
   function call_with<T, V, E2>(
     self,
     prompt: string,
     project: (ResponseMeta) -> V throws E2,
   ) -> CallResult<T, V>
       throws root.errors.CallError | root.errors.UnknownError | E2 {
-    let body = self.send(self.build_request<T>(prompt));
-    CallResult<T, V> { value: self.parse<T>(body), meta: project(self.meta_of(body)) }
+    let messages = [ChatMessage.user(prompt)];
+    self.call_messages_with<T, V, E2>(messages, project)
   }
 
-  // Derived: value only (project nothing, drop the sidecar).
+  // Sugar: value only from a plain string prompt.
   function call<T>(self, prompt: string) -> T
       throws root.errors.CallError | root.errors.UnknownError {
     let r = self.call_with<T, null, never>(prompt, (m: ResponseMeta) -> null { null });
@@ -98,13 +167,20 @@ interface HttpProvider requires Provider {
   }
 }
 
-/// The incremental-output capability. Owns `stream`, returning the existing
-/// `baml.llm.Stream<TStream, TFinal>` (pull-based: `.next()` for partials, `.final()`
-/// for the completed value). `TStream` is the partial (streaming) shape; `TFinal` the
-/// completed shape.
+/// The incremental-output capability. Owns `stream_messages` (native) with a `stream`
+/// string sugar, returning the existing `baml.llm.Stream<TStream, TFinal>` (pull-based:
+/// `.next()` for partials, `.final()` for the completed value). `TStream` is the partial
+/// (streaming) shape; `TFinal` the completed shape.
 interface Streaming requires Provider {
-  function stream<TStream, TFinal>(self, prompt: string) -> root.llm.Stream<TStream, TFinal>
+  function stream_messages<TStream, TFinal>(self, messages: ChatMessage[])
+      -> root.llm.Stream<TStream, TFinal>
       throws root.errors.StreamError | root.errors.UnknownError
+
+  function stream<TStream, TFinal>(self, prompt: string) -> root.llm.Stream<TStream, TFinal>
+      throws root.errors.StreamError | root.errors.UnknownError {
+    let messages = [ChatMessage.user(prompt)];
+    self.stream_messages<TStream, TFinal>(messages)
+  }
 }
 
 /// Constrained (grammar/regex/choice) decoding with a by-construction guarantee
