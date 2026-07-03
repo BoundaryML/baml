@@ -7158,6 +7158,7 @@ dependencies = [
 name = "sys_ops"
 version = "0.0.0-beta"
 dependencies = [
+ "baml_base",
  "baml_builtins2",
  "baml_builtins2_codegen",
  "baml_type",
@@ -7168,6 +7169,7 @@ dependencies = [
  "bex_vm_types",
  "indexmap",
  "num-bigint",
+ "serde_json",
  "sys_llm",
  "sys_types",
  "tokio",

@@ -773,6 +773,239 @@ fn prompt_ast_to_chat_messages(ast: &baml_builtins2::PromptAst) -> Vec<io::owned
     out
 }
 
+// ============================================================================
+// `baml.schema` — JSON Schema lowering (P7)
+// ============================================================================
+
+impl<T> io::IoNamespaceSchema for T {
+    fn json_schema(
+        &self,
+        _heap: &std::sync::Arc<BexHeap>,
+        _call_id: CallId,
+        t: baml_type::RuntimeTy,
+        strict: bool,
+        ctx: &SysOpContext,
+    ) -> SysOpOutput<String> {
+        let mut ancestry: Vec<baml_type::Name> = Vec::new();
+        match schema::ty_to_json_schema(&t, strict, ctx, &mut ancestry) {
+            Ok(value) => {
+                SysOpOutput::ok(serde_json::to_string(&value).unwrap_or_else(|_| "{}".to_string()))
+            }
+            Err(message) => SysOpOutput::err(VmBamlError::Unsupported { message }),
+        }
+    }
+}
+
+/// JSON Schema lowering of a `baml_type::RuntimeTy`. In `strict` mode the emitted
+/// schema follows OpenAI structured-output rules: every object closes with
+/// `"additionalProperties": false` and lists ALL fields in `required` (optional
+/// BAML fields keep their `null`-inclusive union schema rather than being dropped
+/// from `required`).
+mod schema {
+    use baml_type::RuntimeTy;
+    use serde_json::{Value, json};
+    use sys_types::SysOpContext;
+
+    /// Lower `ty` to a JSON Schema value. Returns `Err(message)` for constructs
+    /// with no JSON Schema representation (functions, opaque rust types,
+    /// unresolved generic params) — the caller surfaces it as
+    /// `baml.errors.Unsupported`.
+    pub(super) fn ty_to_json_schema(
+        ty: &RuntimeTy,
+        strict: bool,
+        ctx: &SysOpContext,
+        ancestry: &mut Vec<baml_type::Name>,
+    ) -> Result<Value, String> {
+        match ty {
+            RuntimeTy::Int { .. } | RuntimeTy::Bigint { .. } => Ok(json!({ "type": "integer" })),
+            RuntimeTy::Float { .. } => Ok(json!({ "type": "number" })),
+            RuntimeTy::String { .. } => Ok(json!({ "type": "string" })),
+            RuntimeTy::Bool { .. } => Ok(json!({ "type": "boolean" })),
+            RuntimeTy::Null { .. } => Ok(json!({ "type": "null" })),
+            // Binary payloads travel as base64 strings on the JSON wire.
+            RuntimeTy::Uint8Array { .. } => Ok(json!({ "type": "string" })),
+            RuntimeTy::Literal(lit, _, _) => Ok(literal_schema(lit)),
+            RuntimeTy::List(inner, _) => Ok(json!({
+                "type": "array",
+                "items": ty_to_json_schema(inner, strict, ctx, ancestry)?,
+            })),
+            RuntimeTy::Map { value, .. } => Ok(json!({
+                "type": "object",
+                "additionalProperties": ty_to_json_schema(value, strict, ctx, ancestry)?,
+            })),
+            RuntimeTy::Union(members, _) => union_schema(members, strict, ctx, ancestry),
+            RuntimeTy::Enum(name, _) => enum_schema(name, ctx),
+            RuntimeTy::Class(name, _, _) => class_schema(name, strict, ctx, ancestry),
+            RuntimeTy::TypeAlias(name, _) => {
+                if let Some(target) = find_type_alias_definition(ctx, name) {
+                    ty_to_json_schema(&target.clone(), strict, ctx, ancestry)
+                } else {
+                    // Opaque / recursive alias (e.g. `baml.json.json`): accept any JSON.
+                    Ok(json!({}))
+                }
+            }
+            // `unknown` accepts any JSON value.
+            RuntimeTy::BuiltinUnknown { .. } => Ok(json!({})),
+            other => Err(format!(
+                "json_schema: no JSON Schema representation for `{}`",
+                other.render_user_facing()
+            )),
+        }
+    }
+
+    fn literal_schema(lit: &baml_base::Literal) -> Value {
+        use baml_base::Literal;
+        match lit {
+            Literal::Int(i) => json!({ "type": "integer", "const": i }),
+            Literal::Bigint(n) => json!({ "type": "integer", "const": n.to_string() }),
+            Literal::Float(s) => {
+                json!({ "type": "number", "const": s.parse::<f64>().unwrap_or(0.0) })
+            }
+            Literal::String(s) => json!({ "type": "string", "const": s }),
+            Literal::Bool(b) => json!({ "type": "boolean", "const": b }),
+        }
+    }
+
+    fn union_schema(
+        members: &[RuntimeTy],
+        strict: bool,
+        ctx: &SysOpContext,
+        ancestry: &mut Vec<baml_type::Name>,
+    ) -> Result<Value, String> {
+        let has_null = members.iter().any(RuntimeTy::is_null);
+        let non_null: Vec<&RuntimeTy> = members.iter().filter(|m| !m.is_null()).collect();
+        if non_null.is_empty() {
+            return Ok(json!({ "type": "null" }));
+        }
+        let mut schemas: Vec<Value> = non_null
+            .iter()
+            .map(|m| ty_to_json_schema(m, strict, ctx, ancestry))
+            .collect::<Result<Vec<_>, _>>()?;
+        if schemas.len() == 1 {
+            let base = schemas.pop().unwrap_or_else(|| json!({}));
+            return Ok(if has_null { with_null(base) } else { base });
+        }
+        if has_null {
+            schemas.push(json!({ "type": "null" }));
+        }
+        Ok(json!({ "anyOf": schemas }))
+    }
+
+    /// Widen a single-typed schema to also admit `null`. A schema whose `"type"`
+    /// is a plain string becomes a `["<type>", "null"]` array (OpenAI strict's
+    /// preferred nullable form); anything richer falls back to `anyOf`.
+    fn with_null(base: Value) -> Value {
+        if let Value::Object(obj) = &base {
+            if let Some(Value::String(t)) = obj.get("type") {
+                let mut widened = obj.clone();
+                widened.insert("type".to_string(), json!([t, "null"]));
+                return Value::Object(widened);
+            }
+        }
+        json!({ "anyOf": [base, { "type": "null" }] })
+    }
+
+    fn enum_schema(name: &baml_type::TypeName, ctx: &SysOpContext) -> Result<Value, String> {
+        let enum_def = find_enum_definition(ctx, name)
+            .ok_or_else(|| format!("json_schema: unknown enum `{}`", name.display_name()))?;
+        let variants: Vec<Value> = enum_def
+            .variants
+            .iter()
+            .map(|v| json!(v.alias.clone().unwrap_or_else(|| v.name.clone())))
+            .collect();
+        Ok(json!({ "type": "string", "enum": variants }))
+    }
+
+    fn class_schema(
+        name: &baml_type::TypeName,
+        strict: bool,
+        ctx: &SysOpContext,
+        ancestry: &mut Vec<baml_type::Name>,
+    ) -> Result<Value, String> {
+        let key = name.display_name();
+        // Recursive class: OpenAI strict mode has no `$defs`/`$ref` support here,
+        // so a cycle degrades to a permissive object rather than diverging.
+        if ancestry.contains(&key) {
+            return Ok(json!({ "type": "object" }));
+        }
+        let class_def = find_class_definition(ctx, name)
+            .ok_or_else(|| format!("json_schema: unknown class `{}`", name.display_name()))?;
+
+        ancestry.push(key);
+        let mut properties = serde_json::Map::new();
+        let mut required: Vec<Value> = Vec::new();
+        for field in &class_def.fields {
+            if field.skip {
+                continue;
+            }
+            let prop_name = field.alias.clone().unwrap_or_else(|| field.name.clone());
+            let field_schema = ty_to_json_schema(&field.field_type, strict, ctx, ancestry)?;
+            properties.insert(prop_name.clone(), field_schema);
+            let is_optional = field.field_type.is_nullable_union() || field.field_type.is_null();
+            // Strict mode: EVERY field is required (optionals keep their nullable
+            // union schema). Otherwise only non-optional fields are required.
+            if strict || !is_optional {
+                required.push(json!(prop_name));
+            }
+        }
+        ancestry.pop();
+
+        let mut obj = serde_json::Map::new();
+        obj.insert("type".to_string(), json!("object"));
+        obj.insert("properties".to_string(), Value::Object(properties));
+        obj.insert("required".to_string(), Value::Array(required));
+        if strict {
+            obj.insert("additionalProperties".to_string(), json!(false));
+        }
+        Ok(Value::Object(obj))
+    }
+
+    fn find_class_definition<'a>(
+        ctx: &'a SysOpContext,
+        type_name: &baml_type::TypeName,
+    ) -> Option<&'a sys_types::ClassDefinition> {
+        ctx.class_definitions.get(type_name).or_else(|| {
+            let mut matches = ctx
+                .class_definitions
+                .iter()
+                .filter(|(name, _)| name.display_name() == type_name.display_name())
+                .map(|(_, def)| def);
+            let first = matches.next()?;
+            matches.next().is_none().then_some(first)
+        })
+    }
+
+    fn find_enum_definition<'a>(
+        ctx: &'a SysOpContext,
+        type_name: &baml_type::TypeName,
+    ) -> Option<&'a sys_types::EnumDefinition> {
+        ctx.enum_definitions.get(type_name).or_else(|| {
+            let mut matches = ctx
+                .enum_definitions
+                .iter()
+                .filter(|(name, _)| name.display_name() == type_name.display_name())
+                .map(|(_, def)| def);
+            let first = matches.next()?;
+            matches.next().is_none().then_some(first)
+        })
+    }
+
+    fn find_type_alias_definition<'a>(
+        ctx: &'a SysOpContext,
+        type_name: &baml_type::TypeName,
+    ) -> Option<&'a RuntimeTy> {
+        ctx.type_alias_definitions.get(type_name).or_else(|| {
+            let mut matches = ctx
+                .type_alias_definitions
+                .iter()
+                .filter(|(name, _)| name.display_name() == type_name.display_name())
+                .map(|(_, ty)| ty);
+            let first = matches.next()?;
+            matches.next().is_none().then_some(first)
+        })
+    }
+}
+
 impl<T> io::IoNamespaceLlm for T {
     fn get_jinja_template(
         &self,
