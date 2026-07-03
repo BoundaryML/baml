@@ -21,7 +21,7 @@ See [`../_plan/implementation-checklist.md`](../_plan/implementation-checklist.m
 | # | Scenario | Realized in | Level |
 |---|---|---|---|
 | 01 | single-turn text | `ns_ai/openai.baml`; test `openai_*` | live |
-| 02 | structured output | `openai.baml` (SAP); `openai_structured_*` | live |
+| 02 | structured output | SAP (`openai.baml`) + strict-mode (`OpenAiStrict`, `response_format` json_schema); `openai_structured_*`, `strict_live_extraction` | live |
 | 03 | constrained decoding | `provider.baml` `Constrained`; `constrained_*` test | tested |
 | 04 | streaming | `Streaming` capability; `openai_stream_*`, `structured_streaming_live` (partials + typed final) | live |
 | 05 | multimodal input | native `ChatMessage`/`MessagePart` pipeline; `e2e_multimodal_live` | live |
@@ -30,10 +30,10 @@ See [`../_plan/implementation-checklist.md`](../_plan/implementation-checklist.m
 | 08 | enriched (logprobs/citations) | `ResponseMeta.logprobs/citations`; test | tested |
 | 09 | tool calling | `ns_ai/tools.baml`; `tools_loop_*` | live |
 | 10 | agentic loop + stop | `ns_ai_examples/tools_extras.baml` (`bounded_agent`) | compiled |
-| 11 | parallel tools | `tools_extras.baml` (`parallel_dispatch`, spawn/all) | compiled |
+| 11 | parallel tools | `tools_extras.baml` + `multi_tool_agent_live` (3 tools, multi-call turns) | live |
 | 12 | tool taxonomy | `cross_cutting.baml` (`ToolKind`) | compiled |
 | 13 | searchable tools | `misc.baml` (`search_tools`) | compiled |
-| 14 | multi-agent / handoff | `tools_extras.baml` (`handoff_dispatch`) | compiled |
+| 14 | multi-agent / handoff | specialist-provider-in-dispatch; `multi_agent_handoff_live` | live |
 | 15 | guardrails | `tools_extras.baml` (`guarded_call`) | compiled |
 | 16 | agent security | `misc.baml` (`security_gated_dispatch`) | compiled |
 | 17 | history + sessions | native `ChatMessage[]` threading; `conversation_history_*` | live |
@@ -52,7 +52,7 @@ See [`../_plan/implementation-checklist.md`](../_plan/implementation-checklist.m
 | 30 | cascades/routing | `cascade_escalates_*` test | tested |
 | 31 | caching | `stateful.baml` `ManagedCache` | compiled |
 | 32 | observability | `ResponseMeta.usage()`; `call_with_projects_usage` | tested |
-| 33 | evaluation | `cross_cutting.baml` (`run_eval`, `Scorer`) | compiled |
+| 33 | evaluation | task + LLM-judge with typed Verdict; `eval_judge_live` | live |
 | 34 | cost/tokens | `call_with_projects_usage` (mock), `usage_metering_live` | live |
 | 35 | deployment shapes | `cross_cutting.baml` (server/edge/browser clients) | compiled |
 | 36 | capability negotiation | `ns_ai/negotiation.baml` (Support lattice) | tested |

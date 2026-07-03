@@ -97,3 +97,15 @@ Each entry: the symptom, the rule, the workaround. Compiler-bug candidates are m
   the embedded std; `touch` the file before `cargo build -p baml_cli`.
 - **The formatter can't process functions with a `client`-named param** (pre-existing, e.g. parts
   of `ns_llm/llm_types.baml`) — it errors rather than reformatting; harmless.
+
+## Tooling (added post-strict-mode round)
+
+- **`cargo fmt -p baml_tests` reformats the entire package** — including sibling test files
+  you didn't touch; a `git checkout` to undo it can nuke uncommitted work in those files.
+  Format single files with `rustfmt <file>`.
+- **Host ops CAN produce typed BAML throws**: declare `throws root.errors.Unsupported` on the
+  `$rust_io_function` and return `SysOpOutput::err(VmBamlError::Unsupported{..})` — the codegen's
+  error-category mapping round-trips it as a catchable typed error (no UnknownError box).
+- **A `match` on a CONCRETE provider type makes interface arms irrefutable** — `match (p /* OpenAi */)
+  { let h: HttpProvider => …, _ => … }` flags the `_` unreachable (E0063). Type the binding as the
+  existential (`let p: baml.ai.Provider = …`) when you want runtime negotiation.

@@ -1469,3 +1469,119 @@ async fn multi_tool_agent_live() {
         "final answer missing tool results: {s:?}"
     );
 }
+
+/// LIVE evaluation (scenario 33): the task is a provider call; the judge is just another
+/// provider scoring the output — typed verdict via structured output. Gated on key.
+#[tokio::test]
+async fn eval_judge_live() {
+    if std::env::var("OPENAI_API_KEY").is_err() {
+        eprintln!("skipping eval_judge_live: OPENAI_API_KEY not set");
+        return;
+    }
+    let output = baml_test!(
+        r#"
+        class Verdict { pass bool, reason string }
+        function main() -> string {
+            let task = baml.ai.OpenAi {
+                model: "gpt-5.4-mini",
+                api_key: baml.env.get_or_panic("OPENAI_API_KEY"),
+                base_url: null,
+            };
+            let judge = baml.ai.OpenAi {
+                model: "gpt-5.4-mini",
+                api_key: baml.env.get_or_panic("OPENAI_API_KEY"),
+                base_url: null,
+            };
+            let answer = task.call<string>("In one sentence: why is the sky blue?") catch (e) {
+                let u: baml.errors.UnknownError => return "TASK_ERR",
+                let c: baml.errors.CallError => return "TASK_CALLERR",
+            };
+            let v: Verdict = judge.call<Verdict>(
+                "You are a strict grader. Does this answer correctly attribute the blue sky to Rayleigh scattering (scattering of sunlight by air molecules)? Answer: " + answer
+            ) catch (e) {
+                let u: baml.errors.UnknownError => return "JUDGE_ERR",
+                let c: baml.errors.CallError => return "JUDGE_CALLERR",
+            };
+            "pass=" + v.pass.to_string() + " reason_len=" + (v.reason.length() > 0).to_string()
+        }
+        "#
+    );
+    let got = output.result.unwrap();
+    let BexExternalValue::String(s) = got else {
+        panic!("expected string, got {got:?}")
+    };
+    assert!(
+        s.contains("pass=true") && s.contains("reason_len=true"),
+        "judge verdict unexpected: {s:?}"
+    );
+}
+
+/// LIVE multi-agent handoff (scenario 14): a specialist sub-agent IS a provider — the
+/// orchestrator's tool dispatch delegates a translation tool call to a second model
+/// call, and the orchestrator composes the result. Gated on `OPENAI_API_KEY`.
+#[tokio::test]
+async fn multi_agent_handoff_live() {
+    if std::env::var("OPENAI_API_KEY").is_err() {
+        eprintln!("skipping multi_agent_handoff_live: OPENAI_API_KEY not set");
+        return;
+    }
+    let output = baml_test!(
+        r#"
+        function main() -> string {
+            let orchestrator = baml.ai.OpenAi {
+                model: "gpt-5.4-mini",
+                api_key: baml.env.get_or_panic("OPENAI_API_KEY"),
+                base_url: null,
+            };
+            let specialist: baml.ai.Provider = baml.ai.OpenAi {
+                model: "gpt-5.4-mini",
+                api_key: baml.env.get_or_panic("OPENAI_API_KEY"),
+                base_url: null,
+            };
+            let tools = [
+                baml.ai.Tool {
+                    name: "ask_french_translator",
+                    description: "Translate an English phrase to French (a specialist agent)",
+                    parameters: "{\"type\":\"object\",\"properties\":{\"phrase\":{\"type\":\"string\"}},\"required\":[\"phrase\"]}",
+                },
+            ];
+            let handoffs = 0;
+            let answer = orchestrator.run_tools<string>(
+                "Use the translator tool to translate 'good morning' to French, then reply with just the translation.",
+                tools,
+                (calls: baml.ai.ToolCall[]) -> baml.ai.ToolResult[] {
+                    let results: baml.ai.ToolResult[] = [];
+                    for (let c in calls) {
+                        handoffs = handoffs + 1;
+                        // The handoff: the specialist provider handles the delegated task.
+                        let out = match (specialist) {
+                            let h: baml.ai.HttpProvider => {
+                                h.call<string>("Translate to French, reply with ONLY the translation: " + c.args)
+                                    catch (e) { _ => "handoff failed" }
+                            },
+                            _ => "specialist not callable",
+                        };
+                        results.push(baml.ai.ToolResult { id: c.id, output: out });
+                    }
+                    results
+                },
+            ) catch (e) {
+                let u: baml.errors.UnknownError => return "ERR:" + u.message.join(","),
+            };
+            "handoffs=" + handoffs.to_string() + " || " + answer
+        }
+        "#
+    );
+    let got = output.result.unwrap();
+    let BexExternalValue::String(s) = got else {
+        panic!("expected string, got {got:?}")
+    };
+    assert!(
+        s.contains("handoffs=") && !s.starts_with("handoffs=0"),
+        "no handoff happened: {s:?}"
+    );
+    assert!(
+        s.to_lowercase().contains("bonjour"),
+        "translation missing from final answer: {s:?}"
+    );
+}
