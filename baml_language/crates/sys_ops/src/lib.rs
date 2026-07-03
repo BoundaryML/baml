@@ -1876,6 +1876,58 @@ impl io::IoNamespaceHttp for DefaultIoOps {
     }
 }
 
+impl io::IoClassWsWsStream for DefaultIoOps {
+    fn send(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _s: io::owned::ws::WsStream,
+        _text: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+    fn next(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _s: io::owned::ws::WsStream,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Option<String>> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+    fn close(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _s: io::owned::ws::WsStream,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+}
+
+impl io::IoNamespaceWs for DefaultIoOps {
+    fn connect(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _url: String,
+        _headers: indexmap::IndexMap<String, String>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<io::owned::ws::WsStream> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+}
+
 impl io::IoClassNetTcpStream for DefaultIoOps {
     fn _connect(
         &self,

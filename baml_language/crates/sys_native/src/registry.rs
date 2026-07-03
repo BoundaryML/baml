@@ -63,6 +63,27 @@ pub struct SseStreamResource {
 #[cfg(feature = "bundle-http")]
 type SseStreamParts = (Arc<TokioMutex<SseBuffer>>, Arc<Notify>, Arc<AtomicBool>);
 
+/// The concrete WebSocket transport: a tokio-tungstenite stream over a (possibly
+/// TLS-wrapped) TCP connection.
+#[cfg(feature = "bundle-http")]
+type WsTransport = tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<TcpStream>>;
+#[cfg(feature = "bundle-http")]
+type WsSink = futures::stream::SplitSink<WsTransport, tokio_tungstenite::tungstenite::Message>;
+#[cfg(feature = "bundle-http")]
+type WsSource = futures::stream::SplitStream<WsTransport>;
+
+/// A WebSocket connection resource: the split sink (for `send`) and source (for
+/// `next`) behind async-aware locks, so both directions can be driven concurrently.
+#[cfg(feature = "bundle-http")]
+pub struct WsStreamResource {
+    pub sink: Arc<TokioMutex<WsSink>>,
+    pub source: Arc<TokioMutex<WsSource>>,
+    pub url: String,
+}
+
+#[cfg(feature = "bundle-http")]
+type WsStreamParts = (Arc<TokioMutex<WsSink>>, Arc<TokioMutex<WsSource>>);
+
 /// Registry entry for a resource.
 pub enum RegistryEntry {
     File(FileResource),
@@ -70,6 +91,8 @@ pub enum RegistryEntry {
     Response(ResponseResource),
     #[cfg(feature = "bundle-http")]
     SseStream(SseStreamResource),
+    #[cfg(feature = "bundle-http")]
+    WsStream(WsStreamResource),
 }
 
 /// Global resource registry.
@@ -243,6 +266,47 @@ impl ResourceRegistry {
             url,
             Arc::clone(self) as Arc<dyn ResourceRegistryRef>,
         )
+    }
+
+    #[cfg(feature = "bundle-http")]
+    /// Register a WebSocket connection and return an opaque handle.
+    pub fn register_ws_stream(
+        self: &Arc<Self>,
+        sink: Arc<TokioMutex<WsSink>>,
+        source: Arc<TokioMutex<WsSource>>,
+        url: String,
+    ) -> ResourceHandle {
+        let key = self.next_key.fetch_add(1, Ordering::SeqCst);
+        let resource = WsStreamResource {
+            sink,
+            source,
+            url: url.clone(),
+        };
+
+        self.entries
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .insert(key, RegistryEntry::WsStream(resource));
+
+        ResourceHandle::new(
+            key,
+            ResourceType::WsStream,
+            url,
+            Arc::clone(self) as Arc<dyn ResourceRegistryRef>,
+        )
+    }
+
+    #[cfg(feature = "bundle-http")]
+    /// Get the WebSocket sink and source for a registered connection.
+    pub fn get_ws_stream(&self, key: usize) -> Option<WsStreamParts> {
+        let entries = self
+            .entries
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        match entries.get(&key) {
+            Some(RegistryEntry::WsStream(s)) => Some((s.sink.clone(), s.source.clone())),
+            _ => None,
+        }
     }
 
     #[cfg(feature = "bundle-http")]

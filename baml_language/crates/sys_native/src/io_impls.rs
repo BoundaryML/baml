@@ -2336,6 +2336,196 @@ impl io::IoNamespaceHttp for NativeSysOps {
     }
 }
 
+impl io::IoClassWsWsStream for NativeSysOps {
+    #[cfg(feature = "bundle-http")]
+    fn send(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        wsstream: owned::ws::WsStream,
+        text: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        use futures::SinkExt;
+        use tokio_tungstenite::tungstenite::Message;
+
+        SysOpOutput::async_op(async move {
+            let handle = wsstream
+                ._handle
+                .downcast::<bex_resource_types::ResourceHandle>()
+                .map_err(|_| VmBamlError::DevOther {
+                    message: "Invalid WebSocket stream handle type".into(),
+                })?;
+            let (sink, _source) = crate::registry::REGISTRY
+                .get_ws_stream(handle.key())
+                .ok_or_else(|| VmBamlError::DevOther {
+                    message: "WebSocket stream handle is invalid".into(),
+                })?;
+            let mut sink = sink.lock().await;
+            sink.send(Message::text(text))
+                .await
+                .map_err(|e| VmBamlError::Io {
+                    message: format!("WebSocket send failed: {e}"),
+                })?;
+            Ok(())
+        })
+    }
+
+    #[cfg(not(feature = "bundle-http"))]
+    fn send(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _wsstream: owned::ws::WsStream,
+        _text: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "ws".to_string(),
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+
+    #[cfg(feature = "bundle-http")]
+    fn next(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        wsstream: owned::ws::WsStream,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Option<String>> {
+        use futures::StreamExt;
+        use tokio_tungstenite::tungstenite::Message;
+
+        SysOpOutput::async_op(async move {
+            let handle = wsstream
+                ._handle
+                .downcast::<bex_resource_types::ResourceHandle>()
+                .map_err(|_| VmBamlError::DevOther {
+                    message: "Invalid WebSocket stream handle type".into(),
+                })?;
+            let (_sink, source) = crate::registry::REGISTRY
+                .get_ws_stream(handle.key())
+                .ok_or_else(|| VmBamlError::DevOther {
+                    message: "WebSocket stream handle is invalid".into(),
+                })?;
+            let mut source = source.lock().await;
+            loop {
+                match source.next().await {
+                    // Text frames pass through verbatim.
+                    Some(Ok(Message::Text(t))) => return Ok(Some(t.as_str().to_string())),
+                    // Binary frames are lossily UTF-8 decoded (this surface is text-only).
+                    Some(Ok(Message::Binary(b))) => {
+                        return Ok(Some(String::from_utf8_lossy(&b).into_owned()));
+                    }
+                    // A Close frame (or a clean EOF) ends the stream.
+                    Some(Ok(Message::Close(_))) | None => return Ok(None),
+                    // Ping/Pong are answered by tungstenite; raw frames aren't surfaced.
+                    Some(Ok(Message::Ping(_) | Message::Pong(_) | Message::Frame(_))) => continue,
+                    Some(Err(e)) => {
+                        return Err(VmBamlError::Io {
+                            message: format!("WebSocket receive failed: {e}"),
+                        }
+                        .into());
+                    }
+                }
+            }
+        })
+    }
+
+    #[cfg(not(feature = "bundle-http"))]
+    fn next(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _wsstream: owned::ws::WsStream,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Option<String>> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "ws".to_string(),
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+
+    fn close(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _wsstream: owned::ws::WsStream,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        // Dropping the owned WsStream drops its ResourceHandle, which triggers
+        // cleanup via ResourceRegistryRef::remove (closing the socket).
+        SysOpOutput::ok(())
+    }
+}
+
+impl io::IoNamespaceWs for NativeSysOps {
+    #[cfg(feature = "bundle-http")]
+    fn connect(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        url: String,
+        headers: indexmap::IndexMap<String, String>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<owned::ws::WsStream> {
+        use futures::StreamExt;
+        use tokio::sync::Mutex as TokioMutex;
+        use tokio_tungstenite::tungstenite::client::IntoClientRequest;
+        use tokio_tungstenite::tungstenite::http::{HeaderName, HeaderValue};
+
+        SysOpOutput::async_op(async move {
+            crate::ensure_rustls_crypto_provider();
+
+            let mut request = url
+                .as_str()
+                .into_client_request()
+                .map_err(|e| VmBamlError::Io {
+                    message: format!("invalid WebSocket URL '{url}': {e}"),
+                })?;
+            for (k, v) in &headers {
+                let name = HeaderName::from_bytes(k.as_bytes()).map_err(|e| VmBamlError::Io {
+                    message: format!("invalid WebSocket header name '{k}': {e}"),
+                })?;
+                let value = HeaderValue::from_str(v).map_err(|e| VmBamlError::Io {
+                    message: format!("invalid WebSocket header value for '{k}': {e}"),
+                })?;
+                request.headers_mut().insert(name, value);
+            }
+
+            let (ws_stream, _resp) =
+                tokio_tungstenite::connect_async(request)
+                    .await
+                    .map_err(|e| VmBamlError::Io {
+                        message: format!("WebSocket connect failed: {e}"),
+                    })?;
+
+            let (sink, source) = ws_stream.split();
+            let sink = Arc::new(TokioMutex::new(sink));
+            let source = Arc::new(TokioMutex::new(source));
+            let handle = crate::registry::REGISTRY.register_ws_stream(sink, source, url.clone());
+            let handle: Arc<dyn std::any::Any + Send + Sync> = Arc::new(handle);
+            Ok(owned::ws::WsStream { _handle: handle })
+        })
+    }
+
+    #[cfg(not(feature = "bundle-http"))]
+    fn connect(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _url: String,
+        _headers: indexmap::IndexMap<String, String>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<owned::ws::WsStream> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "ws".to_string(),
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+}
+
 // BEP-034 Future methods live on the heap `Object::Future` itself (atomic
 // state + SetOnce + cancel token) and are dispatched via the native-call
 // path (`$rust_function` in `ns_future/future.baml`), not through sys-ops.
