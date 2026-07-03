@@ -319,7 +319,13 @@ class OpenAiResponses {
         }
     }
 
-    implements root.ai.Provider {}
+    implements root.ai.Provider {
+        // Server-stateful: calls create stored responses and submit creates billed
+        // background jobs — a blind re-drive duplicates them (plan D2).
+        function is_effectful(self) -> bool throws never {
+            true
+        }
+    }
 
     implements root.ai.HttpProvider {
         // Body is the raw response TEXT (read once in `send`), shared by `parse`/`meta_of`.

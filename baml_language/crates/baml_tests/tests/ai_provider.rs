@@ -37,6 +37,13 @@ async fn capability_error_normalization() {
         r#"
         class RateLimit {
             retry_after int
+            implements baml.errors.Failure {
+                function is_retryable(self) -> bool { true }
+                function is_effectful(self) -> bool { false }
+                function is_policy_refusal(self) -> bool { false }
+                function is_resumable(self) -> bool { false }
+                function is_unsupported(self) -> bool { false }
+            }
             implements baml.errors.CallError {
                 function is_network_error(self) -> bool { false }
                 function is_rate_limit(self) -> bool { true }
@@ -1318,5 +1325,68 @@ ${ctx.output_format}`
     assert!(
         s.contains("Ada") && s.contains("36") && s.ends_with("true"),
         "structured stream unexpected: {s:?}"
+    );
+}
+
+/// D2/D8: a NON-retryable typed error (HTTP 400) stops Retry immediately — exactly one
+/// request hits the wire, and the typed OpenAiHttpError surfaces to the catch.
+#[tokio::test]
+async fn retry_skips_non_retryable_errors() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/chat/completions"))
+        .respond_with(
+            ResponseTemplate::new(400).set_body_string(r#"{"error":{"message":"bad request"}}"#),
+        )
+        .mount(&server)
+        .await;
+    let uri = server.uri();
+
+    let output = baml_test!(&format!(
+        r#"
+        function main() -> string {{
+            let p = baml.ai.OpenAi {{ model: "m", api_key: "k", base_url: "{uri}" }}.with_retry(3);
+            p.call<string>("hi") catch (e) {{
+                let he: baml.ai.OpenAiHttpError => "http:" + he.status.to_string() + " retryable=" + he.is_retryable().to_string(),
+                let u: baml.errors.UnknownError => "unknown",
+                let c: baml.errors.CallError => "callerr",
+            }}
+        }}
+        "#
+    ));
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("http:400 retryable=false".into())
+    );
+    let n = server.received_requests().await.unwrap().len();
+    assert_eq!(
+        n, 1,
+        "a non-retryable 400 must not be re-driven, saw {n} requests"
+    );
+}
+
+/// D2: Retry refuses to wrap an EFFECTFUL provider (OpenAiResponses stores server state /
+/// bills jobs) — typed CannotRetry instead of a silent double-drive.
+#[tokio::test]
+async fn retry_refuses_effectful_provider() {
+    let output = baml_test!(
+        r#"
+        function main() -> string {
+            let p = baml.ai.OpenAiResponses { model: "m", api_key: "k" }.with_retry(2);
+            p.call<string>("hi") catch (e) {
+                let cr: baml.errors.CannotRetry => "refused: " + cr.message,
+                let u: baml.errors.UnknownError => "unknown",
+                let c: baml.errors.CallError => "callerr",
+            }
+        }
+        "#
+    );
+    let got = output.result.unwrap();
+    let BexExternalValue::String(s) = got else {
+        panic!("expected string, got {got:?}")
+    };
+    assert!(
+        s.starts_with("refused: provider is effectful"),
+        "unexpected: {s:?}"
     );
 }

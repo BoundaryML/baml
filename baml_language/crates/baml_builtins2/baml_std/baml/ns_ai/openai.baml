@@ -3,6 +3,49 @@
 // `baml.http.send`, `baml.json.*`, `baml.env` — are host functions). This is the
 // reference every other provider (and a user's custom provider) follows.
 
+/// A non-2xx HTTP response from the OpenAI API — typed so `catch` arms and the
+/// `Failure` axis can triage it: 429 is a rate limit, 429/5xx are retryable, 4xx are not.
+class OpenAiHttpError {
+    status: int,
+    body: string,
+}
+
+implements root.errors.Failure for OpenAiHttpError {
+    function is_retryable(self) -> bool {
+        self.status == 429 || self.status >= 500
+    }
+    function is_effectful(self) -> bool {
+        false
+    }
+    function is_policy_refusal(self) -> bool {
+        false
+    }
+    function is_resumable(self) -> bool {
+        false
+    }
+    function is_unsupported(self) -> bool {
+        false
+    }
+}
+
+implements root.errors.CallError for OpenAiHttpError {
+    function is_network_error(self) -> bool {
+        false
+    }
+    function is_rate_limit(self) -> bool {
+        self.status == 429
+    }
+    function is_parse_error(self) -> bool {
+        false
+    }
+}
+
+implements root.errors.StreamError for OpenAiHttpError {
+    function is_network_error(self) -> bool {
+        false
+    }
+}
+
 // --- wire shapes (Chat Completions) ---
 class OpenAiMessageWire {
     content: string,
@@ -367,10 +410,7 @@ class OpenAi {
             if (resp.ok()) {
                 text
             } else {
-                throw root.errors.UnknownError {
-                    data: text,
-                    message: ["openai http " + resp.status_code.to_string()],
-                }
+                throw OpenAiHttpError { status: resp.status_code, body: text }
             }
         }
 

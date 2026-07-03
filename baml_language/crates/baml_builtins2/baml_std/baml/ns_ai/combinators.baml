@@ -132,14 +132,34 @@ class Retry {
             messages: root.ai.ChatMessage[],
             project: (root.ai.ResponseMeta) -> V throws E2,
         ) -> root.ai.CallResult<T, V> throws root.errors.CallError | root.errors.UnknownError | E2 {
+            // D2: an effectful provider (server-stored state, billed jobs, live sessions)
+            // must not be blindly re-driven — refuse-then-error, never silent.
+            if (self.inner.is_effectful()) {
+                throw root.errors.CannotRetry {
+                    message: "provider is effectful; wrap the idempotent part or use a bespoke combinator",
+                };
+            }
             let attempt: int = 0;
             while (true) {
                 match (self.inner) {
                     let h: root.ai.HttpProvider => {
                         let r: root.ai.CallResult<T, V> = h.call_messages_with<T, V, E2>(messages, project) catch (e) {
+                            let f: root.errors.Failure => {
+                                // Typed errors decide: a 400/policy-refusal is futile to retry.
+                                if (attempt < self.max && f.is_retryable()) {
+                                    attempt = attempt + 1;
+                                    root.sys
+                                        .sleep(root.time.Duration.from_milliseconds(100 * attempt));
+                                    continue;
+                                }
+                                throw e;
+                            },
                             _ => {
+                                // Unknown/foreign errors keep the legacy assume-transient behavior.
                                 if (attempt < self.max) {
                                     attempt = attempt + 1;
+                                    root.sys
+                                        .sleep(root.time.Duration.from_milliseconds(100 * attempt));
                                     continue;
                                 }
                                 throw e;

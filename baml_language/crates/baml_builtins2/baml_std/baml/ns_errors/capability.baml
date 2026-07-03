@@ -26,6 +26,24 @@ class UnknownError {
     message: string[],
 }
 
+/// The cross-capability decision axis (plan D2/D8): concrete errors implement it so a
+/// consumer can triage — and a combinator can decide whether re-driving is safe —
+/// WITHOUT knowing the concrete class. Answers are author assertions (D2's honest bar:
+/// failures move from silent to typed-and-refused, not to statically proven).
+///
+/// NOTE: the plan wanted `CallError requires Failure` (so the axis can't be dropped),
+/// but cross-package `requires`-satisfaction is broken (E0125 — a user class implementing
+/// both interfaces in-body still fails the check), which would block all user-defined
+/// capability errors. Until that compiler bug is fixed, `Failure` is OPT-IN and
+/// combinators consult it via a runtime `match` (unknown errors keep legacy behavior).
+interface Failure {
+  function is_retryable(self) -> bool
+  function is_effectful(self) -> bool
+  function is_policy_refusal(self) -> bool
+  function is_resumable(self) -> bool
+  function is_unsupported(self) -> bool
+}
+
 /// Request/response failures. Concrete provider errors (rate limit, refusal, …)
 /// implement this so callers triage without the concrete class.
 interface CallError {
@@ -53,6 +71,14 @@ interface RealtimeError {
 // The capability-negotiation error `Unsupported` (thrown by a companion's `_` arm when
 // the client's provider lacks the requested capability) must be legal on *every*
 // capability channel — so it implements all of them (all classifiers false).
+implements Failure for Unsupported {
+  function is_retryable(self) -> bool { false }
+  function is_effectful(self) -> bool { false }
+  function is_policy_refusal(self) -> bool { false }
+  function is_resumable(self) -> bool { false }
+  function is_unsupported(self) -> bool { true }
+}
+
 implements CallError for Unsupported {
   function is_network_error(self) -> bool { false }
   function is_rate_limit(self) -> bool { false }
@@ -68,5 +94,34 @@ implements ToolError for Unsupported {
 }
 
 implements RealtimeError for Unsupported {
+  function is_network_error(self) -> bool { false }
+}
+
+/// Thrown by `Retry` (and future combinators) instead of silently re-driving an
+/// EFFECTFUL provider — a retried submit double-bills, a re-driven realtime session
+/// replays external effects (plan D2: refuse-then-error, never silent).
+class CannotRetry {
+    message: string,
+}
+
+implements Failure for CannotRetry {
+  function is_retryable(self) -> bool { false }
+  function is_effectful(self) -> bool { true }
+  function is_policy_refusal(self) -> bool { false }
+  function is_resumable(self) -> bool { false }
+  function is_unsupported(self) -> bool { false }
+}
+
+implements CallError for CannotRetry {
+  function is_network_error(self) -> bool { false }
+  function is_rate_limit(self) -> bool { false }
+  function is_parse_error(self) -> bool { false }
+}
+
+implements StreamError for CannotRetry {
+  function is_network_error(self) -> bool { false }
+}
+
+implements ToolError for CannotRetry {
   function is_network_error(self) -> bool { false }
 }
