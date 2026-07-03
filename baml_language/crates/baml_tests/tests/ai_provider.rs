@@ -1390,3 +1390,82 @@ async fn retry_refuses_effectful_provider() {
         "unexpected: {s:?}"
     );
 }
+
+/// LIVE multi-tool agent (scenarios 09+11): three tools registered; the model must call
+/// at least two different ones (weather + local time) — possibly in parallel within one
+/// turn — and compose both results into the final answer. Gated on `OPENAI_API_KEY`.
+#[tokio::test]
+async fn multi_tool_agent_live() {
+    if std::env::var("OPENAI_API_KEY").is_err() {
+        eprintln!("skipping multi_tool_agent_live: OPENAI_API_KEY not set");
+        return;
+    }
+    let output = baml_test!(
+        r#"
+        function main() -> string {
+            let p = baml.ai.OpenAi {
+                model: "gpt-5.4-mini",
+                api_key: baml.env.get_or_panic("OPENAI_API_KEY"),
+                base_url: null,
+            };
+            let tools = [
+                baml.ai.Tool {
+                    name: "get_weather",
+                    description: "Get the current weather for a city",
+                    parameters: "{\"type\":\"object\",\"properties\":{\"city\":{\"type\":\"string\"}},\"required\":[\"city\"]}",
+                },
+                baml.ai.Tool {
+                    name: "get_local_time",
+                    description: "Get the current local time in a city",
+                    parameters: "{\"type\":\"object\",\"properties\":{\"city\":{\"type\":\"string\"}},\"required\":[\"city\"]}",
+                },
+                baml.ai.Tool {
+                    name: "convert_currency",
+                    description: "Convert an amount between currencies",
+                    parameters: "{\"type\":\"object\",\"properties\":{\"amount\":{\"type\":\"number\"},\"from\":{\"type\":\"string\"},\"to\":{\"type\":\"string\"}},\"required\":[\"amount\",\"from\",\"to\"]}",
+                },
+            ];
+            let called: string[] = [];
+            let answer = p.run_tools<string>(
+                "What is the weather AND the current local time in Paris? Use the tools, then answer in one sentence mentioning both.",
+                tools,
+                (calls: baml.ai.ToolCall[]) -> baml.ai.ToolResult[] {
+                    let results: baml.ai.ToolResult[] = [];
+                    for (let c in calls) {
+                        called.push(c.name);
+                        let out = if (c.name == "get_weather") {
+                            "sunny, 22C"
+                        } else if (c.name == "get_local_time") {
+                            "14:37"
+                        } else {
+                            "unknown tool"
+                        };
+                        results.push(baml.ai.ToolResult { id: c.id, output: out });
+                    }
+                    results
+                },
+            ) catch (e) {
+                let u: baml.errors.UnknownError => return "ERR:" + u.message.join(","),
+            };
+            let used_weather = called.includes("get_weather");
+            let used_time = called.includes("get_local_time");
+            "tools=" + called.length().to_string()
+                + " weather=" + used_weather.to_string()
+                + " time=" + used_time.to_string()
+                + " || " + answer
+        }
+        "#
+    );
+    let got = output.result.unwrap();
+    let BexExternalValue::String(s) = got else {
+        panic!("expected string, got {got:?}")
+    };
+    assert!(
+        s.contains("weather=true") && s.contains("time=true"),
+        "model did not use both tools: {s:?}"
+    );
+    assert!(
+        s.contains("22") && (s.contains("14:37") || s.to_lowercase().contains("2:37")),
+        "final answer missing tool results: {s:?}"
+    );
+}
