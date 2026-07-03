@@ -353,8 +353,25 @@ fn associated_type_bound_interface(
     for (param, arg) in iface.generic_params.iter().zip(&realized.generics) {
         bindings.insert(param.clone(), arg.clone());
     }
-    for (name, ty) in &realized.associated_types {
-        bindings.insert(name.clone(), ty.clone());
+    // Every associated type is an in-scope name in the bound expression (`type A extends
+    // Inner<C>` references sibling `C`), so each must be bound. Use its realized pin, or —
+    // when the inner interface leaves it unpinned — its own symbolic `<base>.Assoc`
+    // projection. Binding only the pins would leave an unpinned sibling reference as a bare
+    // `Ty::TypeVar`, escaping unsubstituted into the result (an interface-internal name
+    // leaking into the caller's type).
+    for assoc in &iface.associated_types {
+        let value = realized
+            .associated_types
+            .iter()
+            .find(|(name, _)| name == &assoc.name)
+            .map(|(_, pin)| pin.clone())
+            .unwrap_or_else(|| Ty::AssociatedTypeProjection {
+                base: Box::new(self_ty.clone()),
+                interface: Some(Box::new(realized.clone())),
+                member: assoc.name.clone(),
+                attr: TyAttr::default(),
+            });
+        bindings.insert(assoc.name.clone(), value);
     }
 
     // The bound is written in the interface's own scope: `Self` is bounded by the

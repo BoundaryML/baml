@@ -1797,6 +1797,78 @@ mod tests {
         }
     }
 
+    // `type A extends Inner<C>` — the bound references a *sibling* associated type `C`.
+    // When `A`'s inner interface leaves `C` unpinned, the realized bound must carry `C` as
+    // its own symbolic `T.C` projection; a bare `Ty::TypeVar("C")` (an interface-internal
+    // name) must never escape into the caller's `T.A.B`.
+    #[test]
+    fn chained_projection_bound_referencing_sibling_assoc_does_not_leak_typevar() {
+        let db = compile(concat!(
+            "interface Inner<E> {\n  type B\n}\n",
+            "interface Outer {\n  type C\n  type A extends Inner<C>\n}\n",
+        ));
+        let (ty, diags) = lower_chain(&db, "T", "Outer", &["A", "B"]);
+        assert!(diags.is_empty(), "unexpected diagnostics: {diags:?}");
+        let Ty::AssociatedTypeProjection {
+            interface, member, ..
+        } = &ty
+        else {
+            panic!("expected a symbolic T.A.B projection, got {ty:?}");
+        };
+        assert_eq!(member.as_str(), "B");
+        let interface = interface.as_ref().expect("interface determined");
+        assert_eq!(interface.name.name().as_str(), "Inner");
+        // `Inner`'s sole argument must be the symbolic `T.C` projection, not `TypeVar("C")`.
+        match interface.generics.as_slice() {
+            [
+                Ty::AssociatedTypeProjection {
+                    member: sibling, ..
+                },
+            ] => {
+                assert_eq!(sibling.as_str(), "C");
+            }
+            other => panic!("expected `Inner`'s arg to be the `T.C` projection, got {other:?}"),
+        }
+    }
+
+    // Mutually-recursive sibling bounds (`type A extends J<B>`, `type B extends K<A>`) must
+    // terminate: each sibling reference realizes to an inert symbolic projection, never
+    // recursively expanding the other's bound (and `substitute_ty` is single-pass, so the
+    // inserted projection is not re-expanded).
+    #[test]
+    fn chained_projection_mutually_recursive_sibling_bounds_terminate() {
+        let db = compile(concat!(
+            "interface J<E> {\n  type X\n}\n",
+            "interface K<E> {\n  type Y\n}\n",
+            "interface Outer {\n  type A extends J<B>\n  type B extends K<A>\n}\n",
+        ));
+        let (ty, diags) = lower_chain(&db, "T", "Outer", &["A", "X"]);
+        assert!(diags.is_empty(), "unexpected diagnostics: {diags:?}");
+        let Ty::AssociatedTypeProjection {
+            interface, member, ..
+        } = &ty
+        else {
+            panic!("expected a symbolic T.A.X projection, got {ty:?}");
+        };
+        assert_eq!(member.as_str(), "X");
+        let interface = interface.as_ref().expect("interface determined");
+        assert_eq!(interface.name.name().as_str(), "J");
+        // `J`'s arg is the finite symbolic `T.B` projection; B's own `K<A>` bound is not opened.
+        match interface.generics.as_slice() {
+            [
+                Ty::AssociatedTypeProjection {
+                    base,
+                    member: sibling,
+                    ..
+                },
+            ] => {
+                assert_eq!(sibling.as_str(), "B");
+                assert!(matches!(**base, Ty::TypeVar(ref n, _) if n.as_str() == "T"));
+            }
+            other => panic!("expected `J`'s arg to be the `T.B` projection, got {other:?}"),
+        }
+    }
+
     #[test]
     fn substitute_paths_recurses_into_function_type() {
         let type_expr = TypeExpr::Function {
