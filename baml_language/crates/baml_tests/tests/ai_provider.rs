@@ -1140,3 +1140,102 @@ async fn e2e_multimodal_live() {
         "vision answer did not say red: {s:?}"
     );
 }
+
+/// Within-run history (scenario 17) via the native message API: the app holds the
+/// transcript as `ChatMessage[]` and threads it through `call_messages`. Mocked:
+/// asserts the second request carries the full 4-message history.
+#[tokio::test]
+async fn conversation_history_via_mock() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/chat/completions"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_string(r#"{"choices":[{"message":{"content":"Hello Ada!"}}]}"#),
+        )
+        .up_to_n_times(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/chat/completions"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_string(r#"{"choices":[{"message":{"content":"Ada"}}]}"#),
+        )
+        .mount(&server)
+        .await;
+    let uri = server.uri();
+
+    let output = baml_test!(&format!(
+        r#"
+        function main() -> string {{
+            let p = baml.ai.OpenAi {{ model: "m", api_key: "k", base_url: "{uri}" }};
+            let history = [
+                baml.ai.ChatMessage.system("You are terse."),
+                baml.ai.ChatMessage.user("My name is Ada. Say hello."),
+            ];
+            let r1: string = p.call_messages<string>(history) catch (e) {{
+                let u: baml.errors.UnknownError => return "ERR1",
+            }};
+            history.push(baml.ai.ChatMessage.assistant(r1));
+            history.push(baml.ai.ChatMessage.user("What is my name?"));
+            p.call_messages<string>(history) catch (e) {{
+                let u: baml.errors.UnknownError => "ERR2",
+            }}
+        }}
+        "#
+    ));
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("Ada".into())
+    );
+
+    let bodies = recorded_bodies(&server).await;
+    assert_eq!(bodies.len(), 2);
+    // Second request must carry the whole conversation: system + user + assistant + user.
+    assert!(
+        bodies[1].contains(r#""role":"system""#)
+            && bodies[1].contains(r#""role":"assistant""#)
+            && bodies[1].contains("Hello Ada!"),
+        "history not threaded; body: {}",
+        bodies[1]
+    );
+}
+
+/// LIVE within-run history (scenario 17): the model remembers a fact stated earlier in
+/// the threaded conversation. Gated on `OPENAI_API_KEY`.
+#[tokio::test]
+async fn conversation_history_live() {
+    if std::env::var("OPENAI_API_KEY").is_err() {
+        eprintln!("skipping conversation_history_live: OPENAI_API_KEY not set");
+        return;
+    }
+    let output = baml_test!(
+        r#"
+        function main() -> string {
+            let p = baml.ai.OpenAi {
+                model: "gpt-5.4-mini",
+                api_key: baml.env.get_or_panic("OPENAI_API_KEY"),
+                base_url: null,
+            };
+            let history = [
+                baml.ai.ChatMessage.system("You are terse."),
+                baml.ai.ChatMessage.user("My name is Ada. Greet me briefly."),
+            ];
+            let r1: string = p.call_messages<string>(history) catch (e) {
+                let u: baml.errors.UnknownError => return "ERR1:" + u.message.join(","),
+            };
+            history.push(baml.ai.ChatMessage.assistant(r1));
+            history.push(baml.ai.ChatMessage.user("What is my name? Reply with just the name."));
+            p.call_messages<string>(history) catch (e) {
+                let u: baml.errors.UnknownError => "ERR2:" + u.message.join(","),
+            }
+        }
+        "#
+    );
+    let got = output.result.unwrap();
+    let BexExternalValue::String(s) = got else {
+        panic!("expected string, got {got:?}")
+    };
+    assert!(s.contains("Ada"), "model did not remember the name: {s:?}");
+}

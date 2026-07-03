@@ -36,7 +36,7 @@ See [`../_plan/implementation-checklist.md`](../_plan/implementation-checklist.m
 | 14 | multi-agent / handoff | `tools_extras.baml` (`handoff_dispatch`) | compiled |
 | 15 | guardrails | `tools_extras.baml` (`guarded_call`) | compiled |
 | 16 | agent security | `misc.baml` (`security_gated_dispatch`) | compiled |
-| 17 | history + sessions | `ns_ai/stateful.baml` `Conversational` | compiled |
+| 17 | history + sessions | native `ChatMessage[]` threading; `conversation_history_*` | live |
 | 18 | compaction | `stateful.baml` `Compaction` | compiled |
 | 19 | fork/branch | `stateful.baml` `Branching` | compiled |
 | 20 | server-stored chains | `stateful.baml` `Chain` | compiled |
