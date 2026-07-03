@@ -133,3 +133,104 @@ async fn responses_live_chain() {
         "live server-stored chain did not recall the number: {s:?}"
     );
 }
+
+/// Background jobs (scenario 27) via mock: submit returns a queued job id; the first
+/// poll is still running (null); the second poll yields the typed value.
+#[tokio::test]
+async fn responses_background_via_mock() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/responses"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_string(r#"{"id":"resp_bg1","status":"queued","output":[]}"#),
+        )
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/responses/resp_bg1"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_string(r#"{"id":"resp_bg1","status":"in_progress","output":[]}"#),
+        )
+        .up_to_n_times(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("GET")).and(path("/responses/resp_bg1"))
+        .respond_with(ResponseTemplate::new(200).set_body_string(
+            r#"{"id":"resp_bg1","status":"completed","output":[{"type":"message","content":[{"type":"output_text","text":"pong"}]}]}"#))
+        .mount(&server).await;
+    let uri = server.uri();
+
+    let output = baml_test!(&format!(
+        r#"
+        function main() -> string {{
+            let p = baml.ai.OpenAiResponses {{ model: "m", api_key: "k", base_url: "{uri}" }};
+            let job: baml.ai.Job<string> = p.submit<string>("long task", "key-1") catch (e) {{
+                let u: baml.errors.UnknownError => return "SUBMIT_ERR:" + u.message.join(","),
+            }};
+            let first = match (p.poll<string>(job) catch (e) {{
+                let u: baml.errors.UnknownError => return "POLL1_ERR:" + u.message.join(","),
+            }}) {{
+                null => "pending",
+                let v: string => v,
+            }};
+            let second = match (p.poll<string>(job) catch (e) {{
+                let u: baml.errors.UnknownError => return "POLL2_ERR:" + u.message.join(","),
+            }}) {{
+                null => "pending",
+                let v: string => v,
+            }};
+            job.id + "|" + first + "|" + second
+        }}
+        "#
+    ));
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("resp_bg1|pending|pong".into())
+    );
+}
+
+/// LIVE background job (scenario 27): submit with background:true, poll until the
+/// server finishes, get the typed value. Gated on `OPENAI_API_KEY`.
+#[tokio::test]
+async fn responses_background_live() {
+    if std::env::var("OPENAI_API_KEY").is_err() {
+        eprintln!("skipping responses_background_live: OPENAI_API_KEY not set");
+        return;
+    }
+    let output = baml_test!(
+        r#"
+        function main() -> string {
+            let p = baml.ai.OpenAiResponses {
+                model: "gpt-5.4-mini",
+                api_key: baml.env.get_or_panic("OPENAI_API_KEY"),
+            };
+            let job: baml.ai.Job<string> = p.submit<string>("Reply with exactly the lowercase word: pong", "bg-live-1") catch (e) {
+                let u: baml.errors.UnknownError => return "SUBMIT_ERR:" + u.message.join(","),
+            };
+            let tries = 0;
+            while (tries < 30) {
+                match (p.poll<string>(job) catch (e) {
+                    let u: baml.errors.UnknownError => return "POLL_ERR:" + u.message.join(","),
+                }) {
+                    null => {
+                        baml.sys.sleep(baml.time.Duration.from_seconds(2));
+                        tries = tries + 1;
+                    },
+                    let v: string => { return v; },
+                }
+            }
+            "TIMEOUT"
+        }
+        "#
+    );
+    let got = output.result.unwrap();
+    let BexExternalValue::String(s) = got else {
+        panic!("expected string, got {got:?}")
+    };
+    assert!(
+        s.to_lowercase().contains("pong"),
+        "background job result unexpected: {s:?}"
+    );
+}

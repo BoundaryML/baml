@@ -62,11 +62,18 @@ real `gpt-5.4-mini` at milestones. Commit after each ✅.
 ### Realtime family (22–26) — ✅ capability + examples (transport stubbed, P8)
 - [x] `Realtime`/`Channel`/`LiveControl` interfaces + `OpenAiRealtime` + negotiation tests.
 
-## Deferred (need host surface not yet built)
-- Realtime/harness (Phase 4): duplex transport (`baml.ws`/subprocess), `Channel`, lifecycle. Scenarios 22–26, 37–42.
-- Stateful/workflows (Phase 5): sessions/chains/jobs/durable + inbound control-inversion. Scenarios 17–21, 27, 43–47.
+## Now live beyond the original plan scope
+17 (history via native ChatMessage[]), 20 (server-stored chains via OpenAiResponses.Chain),
+27 (background jobs via OpenAiResponses.Background), 05 (multimodal), 34 (metering),
+04-structured (partial streaming). Roles/media thread natively (`prompt_to_messages`).
+
+## Deferred (need host surface or compiler work)
+- Realtime/harness (Phase 4): duplex transport (`baml.ws`/subprocess), `Channel`, lifecycle. Scenarios 22–26, 37–42 (shapes compiled).
+- Stateful persistence (Phase 5): local durable stores for sessions/compaction/memory/durable-workflows. Scenarios 18, 19, 21, 43–47 (shapes compiled).
+- D2/D8 Failure axis + typed provider errors; D4 aggregate ResponseMeta; P7 `type -> JSON Schema` for `Tool.parameters: type`.
+- Anthropic/Gemini providers in BAML (plan Phase 1; needs API keys for live).
+- ⚠ Compiler: cross-package `requires` (E0125) — blocks user-authored providers (top blocker).
 - Client-as-sugar rewrite (replacing orchestrator delegation) — a lower_cst.rs change; big blast radius.
-- Multi-message/role prompt threading (currently flattened) — a `prompt_to_messages` host helper.
 
 ## Working rules
 - TDD: write the failing test (or scratch-prototype via `baml-cli --file`) first; then implement.

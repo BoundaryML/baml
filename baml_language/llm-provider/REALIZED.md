@@ -46,7 +46,7 @@ See [`../_plan/implementation-checklist.md`](../_plan/implementation-checklist.m
 | 24 | realtime tools | `realtime.baml` (+ Tools) | compiled |
 | 25 | voice pipelines | `misc.baml` (`cascaded_voice`) | compiled |
 | 26 | transports | `realtime.baml` (transport orthogonal to capability) | compiled |
-| 27 | background jobs | `stateful.baml` `Background`/`Job` | compiled |
+| 27 | background jobs | `OpenAiResponses implements Background` (`background:true` + poll); `responses_background_live` | live |
 | 28 | provider diversity | `provider_diversity_routing` test | tested |
 | 29 | reliability | `ns_ai/combinators.baml`; `fallback_*`/`retry_*` | tested |
 | 30 | cascades/routing | `cascade_escalates_*` test | tested |

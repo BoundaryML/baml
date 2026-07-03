@@ -155,9 +155,13 @@ class OpenAiResponses {
         messages: root.ai.ChatMessage[],
         previous_response_id: string?,
         store: bool,
+        background: bool,
     ) -> string throws root.errors.UnknownError {
         let body: map<string, json> = {};
         body.set("model", self.model);
+        if (background) {
+            body.set("background", true);
+        }
         let encoded: json[] = [];
         for (let m in messages) {
             encoded.push(self._encode_message(m));
@@ -186,6 +190,19 @@ class OpenAiResponses {
             },
         }
         root.json.stringify(body)
+    }
+
+    // Base headers + the caller-owned idempotency key (design D2: a retried submit
+    // coalesces server-side where the API honors the header).
+    function _headers_with_idempotency(
+        self,
+        idempotency_key: string,
+    ) -> map<string, string> throws never {
+        let headers = self._request_headers();
+        if (idempotency_key != "") {
+            headers.set("Idempotency-Key", idempotency_key);
+        }
+        headers
     }
 
     // Base headers + any extra_headers.
@@ -317,7 +334,13 @@ class OpenAiResponses {
                 method: "POST",
                 url: (self.base_url ?? "https://api.openai.com/v1") + "/responses",
                 headers: self._request_headers(),
-                body: self._request_body(self._messages_for(messages, schema), null, self.store ?? true),
+                body: self
+                    ._request_body(
+                        self._messages_for(messages, schema),
+                        null,
+                        self.store ?? true,
+                        false,
+                    ),
             }
         }
 
@@ -387,7 +410,7 @@ class OpenAiResponses {
         ) -> T throws root.errors.UnknownError {
             let schema: string = root.llm.render_output_format(reflect.type_of<T>());
             let messages = [root.ai.ChatMessage.user(prompt)];
-            let body = self._request_body(self._messages_for(messages, schema), handle.id, true);
+            let body = self._request_body(self._messages_for(messages, schema), handle.id, true, false);
             let text = self._post(body);
             let envelope = match (_openai_responses_envelope(text)) {
                 null => {
@@ -410,6 +433,98 @@ class OpenAiResponses {
         }
     }
 
+    implements root.ai.Background {
+        // Scenario 27 (async background + poll), LIVE: `"background": true` submits a
+        // server-side job that runs after the HTTP call returns; `poll` GETs
+        // /responses/{id} and yields the typed value once status == "completed".
+        // The idempotency key is caller-owned (design D2): sent as a header so a
+        // retried submit can coalesce server-side where the API honors it.
+        function submit<T>(
+            self,
+            prompt: string,
+            idempotency_key: string,
+        ) -> root.ai.Job<T> throws root.errors.UnknownError {
+            let schema: string = root.llm.render_output_format(reflect.type_of<T>());
+            let messages = [root.ai.ChatMessage.user(prompt)];
+            let body = self._request_body(self._messages_for(messages, schema), null, true, true);
+            let req = root.http.Request {
+                method: "POST",
+                url: (self.base_url ?? "https://api.openai.com/v1") + "/responses",
+                headers: self._headers_with_idempotency(idempotency_key),
+                body: body,
+            };
+            let resp = root.http.send(req) catch (e) {
+                _ => {
+                    throw root.errors.UnknownError { data: e, message: ["openai-responses submit failed"] }
+                },
+            };
+            let text = resp.text() catch (e) {
+                _ => {
+                    throw root.errors.UnknownError { data: e, message: ["openai-responses submit body read failed"] }
+                },
+            };
+            if (!resp.ok()) {
+                throw root.errors.UnknownError {
+                    data: text,
+                    message: ["openai-responses submit http " + resp.status_code.to_string()],
+                };
+            }
+            let envelope = match (_openai_responses_envelope(text)) {
+                null => {
+                    throw root.errors.UnknownError { data: text, message: ["openai-responses submit parse failed"] }
+                },
+                let e2: OpenAiRespEnvelopeWire => e2,
+            };
+            root.ai.Job<T> { id: envelope.id ?? "", owner: "openai-responses" }
+        }
+
+        function poll<T>(self, job: root.ai.Job<T>) -> T? throws root.errors.UnknownError {
+            let req = root.http.Request {
+                method: "GET",
+                url: (self.base_url ?? "https://api.openai.com/v1") + "/responses/" + job.id,
+                headers: self._request_headers(),
+                body: "",
+            };
+            let resp = root.http.send(req) catch (e) {
+                _ => {
+                    throw root.errors.UnknownError { data: e, message: ["openai-responses poll failed"] }
+                },
+            };
+            let text = resp.text() catch (e) {
+                _ => {
+                    throw root.errors.UnknownError { data: e, message: ["openai-responses poll body read failed"] }
+                },
+            };
+            if (!resp.ok()) {
+                throw root.errors.UnknownError {
+                    data: text,
+                    message: ["openai-responses poll http " + resp.status_code.to_string()],
+                };
+            }
+            let envelope = match (_openai_responses_envelope(text)) {
+                null => {
+                    throw root.errors.UnknownError { data: text, message: ["openai-responses poll parse failed"] }
+                },
+                let e2: OpenAiRespEnvelopeWire => e2,
+            };
+            if ((envelope.status ?? "") != "completed") {
+                return null;
+            }
+            match (_openai_responses_output_text(envelope)) {
+                null => {
+                    throw root.errors.UnknownError { data: text, message: ["openai-responses: completed job has no output_text"] }
+                },
+                let t: string => {
+                    root.sap.parse<T>(t) catch (e) {
+                        _ => {
+                            throw root.errors.UnknownError { data: t, message: ["openai-responses job SAP parse failed"] }
+                        },
+                    }
+                },
+            }
+        }
+    }
+
     // Open a server-stored chain: make a stored call and return a handle carrying the
     // response id. NOT on any interface — an ordinary class method (scenario 20 entry).
     function start_chain(
@@ -417,7 +532,7 @@ class OpenAiResponses {
         prompt: string,
     ) -> root.ai.ChainHandle throws root.errors.UnknownError {
         let messages = [root.ai.ChatMessage.user(prompt)];
-        let body = self._request_body(messages, null, true);
+        let body = self._request_body(messages, null, true, false);
         let text = self._post(body);
         let envelope = match (_openai_responses_envelope(text)) {
             null => {
