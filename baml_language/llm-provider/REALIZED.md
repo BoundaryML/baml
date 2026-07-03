@@ -53,7 +53,7 @@ See [`../_plan/implementation-checklist.md`](../_plan/implementation-checklist.m
 | 31 | caching | `stateful.baml` `ManagedCache` | compiled |
 | 32 | observability | `ResponseMeta.usage()`; `call_with_projects_usage` | tested |
 | 33 | evaluation | `cross_cutting.baml` (`run_eval`, `Scorer`) | compiled |
-| 34 | cost/tokens | `call_with_projects_usage` test | tested |
+| 34 | cost/tokens | `call_with_projects_usage` (mock), `usage_metering_live` | live |
 | 35 | deployment shapes | `cross_cutting.baml` (server/edge/browser clients) | compiled |
 | 36 | capability negotiation | `ns_ai/negotiation.baml` (Support lattice) | tested |
 | 37 | harness basics | `ns_ai/harness.baml`; `ns_ai_examples/harness.baml` | compiled |

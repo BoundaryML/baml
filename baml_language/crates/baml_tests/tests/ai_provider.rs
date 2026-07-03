@@ -1239,3 +1239,39 @@ async fn conversation_history_live() {
     };
     assert!(s.contains("Ada"), "model did not remember the name: {s:?}");
 }
+
+/// LIVE usage metering (scenario 34): `call_with(prompt, m => m.usage())` returns real
+/// token counts from the API. Gated on `OPENAI_API_KEY`.
+#[tokio::test]
+async fn usage_metering_live() {
+    if std::env::var("OPENAI_API_KEY").is_err() {
+        eprintln!("skipping usage_metering_live: OPENAI_API_KEY not set");
+        return;
+    }
+    let output = baml_test!(
+        r#"
+        function main() -> string {
+            let p = baml.ai.OpenAi {
+                model: "gpt-5.4-mini",
+                api_key: baml.env.get_or_panic("OPENAI_API_KEY"),
+                base_url: null,
+            };
+            let r = p.call_with<string, baml.ai.Usage, never>(
+                "Reply with exactly: ok",
+                (m: baml.ai.ResponseMeta) -> baml.ai.Usage { m.usage() },
+            ) catch (e) {
+                let u: baml.errors.UnknownError => return "ERR:" + u.message.join(","),
+            };
+            if (r.meta.input_tokens > 0 && r.meta.output_tokens > 0) {
+                "metered"
+            } else {
+                "zero-usage in=" + r.meta.input_tokens.to_string() + " out=" + r.meta.output_tokens.to_string()
+            }
+        }
+        "#
+    );
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("metered".into())
+    );
+}
