@@ -228,3 +228,18 @@ response parse — is BAML. What changed:
 - **Media values at the host boundary**: an `image`-typed value is a `baml.media.Image`
   *instance* carrying `_data` (mirror of bex_vm's `copy::media`), not a bare media ADT —
   host-constructed media fields must use the instance form.
+
+## OpenAiResponses provider (scenario 20 LIVE — subagent-built)
+
+`baml.ai.OpenAiResponses` implements the /v1/responses API natively in BAML: `HttpProvider`
+(`input`-shaped body, `output[].content[].output_text` parse via json navigation + SAP) and
+`root.ai.Chain` (`extend<T>` threads `previous_response_id`); `start_chain` mints the
+`ChainHandle { id, owner: "openai-responses" }`. Live-proven: the model recalls a fact across
+`extend` with only the handle re-sent (true server-stored chain).
+
+- **New language finding: a class field named `type` breaks the builtins codegen.** A wire class
+  with `type: string` (the Responses envelope's tag key) passes BAML checking conceptually but
+  crashes `baml_builtins2_codegen` at Rust-generation time (`expected identifier, found keyword
+  \`type\``). Same family as the `function` reserved-word issue, but failing later and more
+  obscurely. Workaround: navigate `type`-tagged JSON with `root.json.field(...)` instead of typed
+  wire classes.

@@ -39,7 +39,7 @@ See [`../_plan/implementation-checklist.md`](../_plan/implementation-checklist.m
 | 17 | history + sessions | native `ChatMessage[]` threading; `conversation_history_*` | live |
 | 18 | compaction | `stateful.baml` `Compaction` | compiled |
 | 19 | fork/branch | `stateful.baml` `Branching` | compiled |
-| 20 | server-stored chains | `stateful.baml` `Chain` | compiled |
+| 20 | server-stored chains | `ns_ai/openai_responses.baml` (`Chain` via previous_response_id); `responses_live_chain` | live |
 | 21 | memory | `stateful.baml` `MemoryStore` | compiled |
 | 22 | realtime voice | `ns_ai/realtime.baml` `Realtime`; `realtime_*` test | tested |
 | 23 | barge-in | `realtime.baml` `LiveControl` | compiled |
