@@ -145,3 +145,51 @@ Legend: **[lang]** forced by a missing/limited language feature · **[scope]** d
   `unknown` cannot be runtime-type-tested by `match` — relevant to the design's `ToolCall.args: map<…, unknown>`
   coercion (D6) and any `data: unknown` handling. Workaround: avoid matching `unknown` for a type test.
 
+
+## Review pass (post-implementation audit of the 26 commits)
+
+Issues found by reviewing the commits/tests against the plan, with fixes:
+
+- **FIXED: double schema injection on the e2e path.** `OpenAi.build_request<T>` unconditionally appended
+  T's schema, but a rendered template referencing `${ctx.output_format}` already carries it → the schema
+  appeared **twice** on the wire (proven by request-capture test; all earlier e2e tests used `-> string`
+  where the schema is empty, hiding it). Fix: `OpenAi.append_output_schema: bool?` (default true for
+  standalone use); the orchestrator delegation sets `false` — legacy semantics (schema iff referenced)
+  restored. Test: `e2e_structured_schema_injected_once`.
+
+- **FIXED: client `options` dropped on the e2e path.** The delegation forwarded only model/api_key/base_url;
+  `request_body` params (temperature, max_tokens, …) and user `headers` were silently dropped (legacy merged
+  them). Fix: `OpenAi.extra_body: map<string, unknown>?` + `extra_headers: map<string, string>?`, forwarded by
+  `_openai_from`. `query_params` / finish-reason lists still fall back to the legacy builder
+  (`_openai_delegation_ok`). Test: `e2e_options_and_headers_forwarded`.
+
+- **FIXED (upstream bug): backtick prompts dropped media entirely.** `assemble_prompt_ast_impl`'s
+  `prompt_value_text` returned `""` for media values, so `${img}` in a backtick prompt never reached the
+  `PromptAst` — **on the legacy path too** (pre-existing BEP-049 M5d gap, not introduced by this work).
+  Fix: the assembler now emits `PromptAstSimple::Media` parts (interleaved via `Multiple`; text-only prompts
+  keep byte-identical shapes). With media in the ast, `prompt_has_media` routes the call to the media-aware
+  legacy builder. Test: `e2e_media_prompt_reaches_wire`. *(Interim: per the new direction below, the BAML
+  provider itself will carry media natively and the fallback goes away.)*
+
+- **Finding: quoted keys in nested client-option blocks are silently dropped.** `headers { "x-custom" "v" }`
+  compiles but the entry never reaches `options.headers`; the bare-key form `headers { x-custom "v" }` works.
+  Worth a diagnostic (silent config loss).
+
+- **Finding: `baml.json.to_string<T>` is type-driven and fails on `T = unknown`; `baml.json.to_json<T>`
+  dispatches on the value's runtime type and works.** The extra_body merge uses `to_json<unknown>`.
+  Related refinement of the match findings: `match (v /* unknown */) { let j: json => … }` does NOT bind
+  (alias-union arm falls through to `_`), unlike concrete-class arms which are irrefutable catch-alls.
+
+- **Known gaps (documented, not yet fixed):** `Retry`/`Fallback` `call_with` also retries/fails-over when only
+  the *projection* (E2) threw — re-issuing a billed call; `Retry` has no backoff (legacy had exponential);
+  `run_tools` has no step cap (scenario 10's `bounded_agent` is the capped variant); errors from `OpenAi` are
+  all `UnknownError` (no typed rate-limit/`is_retryable` yet — the D8 axis).
+
+## NEW DIRECTION (user): the whole wire surface natively in BAML
+
+Chat-completions messages, models, request/response shapes — all represented natively in BAML. Only
+genuinely hard auth (SigV4/OAuth crypto) stays as narrow Rust helpers in the stdlib. Concretely:
+a native `baml.ai.ChatMessage` (role + text/media parts) becomes the provider exchange type;
+`prompt_to_messages(PromptAst) -> ChatMessage[]` is the one leaf converter (replacing the flattening
+`prompt_to_text`); `OpenAi.build_request` encodes text/image parts itself in BAML; the media
+fallback-to-legacy is then removed.

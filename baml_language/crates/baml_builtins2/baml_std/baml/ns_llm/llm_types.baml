@@ -267,14 +267,10 @@ class Client {
           context.jinja_string, context.args, return_type, context.prompt_closure);
 
         // NEW PROVIDER PATH: route OpenAI streaming through `baml.ai.OpenAi` (mirrors the
-        // oneshot delegation). The rendered `specialized` prompt already carries the schema.
-        if (primitive.provider == "openai") {
-          let oai = root.ai.OpenAi {
-            model: primitive.options.model ?? "gpt-4o",
-            api_key: primitive.options.api_key ?? "",
-            base_url: primitive.options.base_url,
-          };
-          return oai.stream<TStream, TFinal>(prompt_to_text(specialized));
+        // oneshot delegation), forwarding headers/request_body. Media / query_params /
+        // finish-reason lists fall back to the legacy builder (see _openai_delegation_ok).
+        if (_openai_delegation_ok(primitive, specialized)) {
+          return _openai_from(primitive).stream<TStream, TFinal>(prompt_to_text(specialized));
         }
 
         let http_request = primitive.build_request_stream(specialized, return_type);
@@ -383,15 +379,12 @@ class Client {
           context.jinja_string, context.args, return_type, context.prompt_closure)
 
         // NEW PROVIDER PATH: route OpenAI through the BAML-authored `baml.ai.OpenAi`
-        // provider (request/response logic in BAML). Other providers keep the legacy
-        // Rust path below until they are ported. See _plan/deviations.md.
-        if (primitive.provider == "openai") {
-          let oai = root.ai.OpenAi {
-            model: primitive.options.model ?? "gpt-4o",
-            api_key: primitive.options.api_key ?? "",
-            base_url: primitive.options.base_url,
-          };
-          return oai.call<T>(prompt_to_text(specialized));
+        // provider (request/response logic in BAML), forwarding headers/request_body.
+        // Media / query_params / finish-reason lists fall back to the legacy builder
+        // (see _openai_delegation_ok); other providers keep the legacy Rust path until
+        // they are ported. See _plan/deviations.md.
+        if (_openai_delegation_ok(primitive, specialized)) {
+          return _openai_from(primitive).call<T>(prompt_to_text(specialized));
         }
 
         let http_request = primitive.build_request(specialized, return_type)
@@ -822,6 +815,46 @@ function get_return_type(function_name: string) -> type throws root.errors.Inval
 /// message roles (system/user/…) collapse into the concatenated text.
 function prompt_to_text(prompt: PromptAst) -> string throws never {
   $rust_io_function
+}
+
+/// True iff the rendered prompt contains any media part (image/audio/pdf/video).
+/// The string-taking BAML provider path cannot carry media, so callers route
+/// media-bearing prompts down the legacy (media-aware) request builder instead.
+function prompt_has_media(prompt: PromptAst) -> bool throws never {
+  $rust_io_function
+}
+
+/// True iff an openai call can be served by the BAML-authored `baml.ai.OpenAi` provider.
+/// Falls back to the legacy request builder for surfaces the string-prompt bridge cannot
+/// carry yet: media parts, query_params, and finish-reason validation lists.
+function _openai_delegation_ok(primitive: PrimitiveClient, specialized: PromptAst) -> bool throws never {
+  if (primitive.provider != "openai") { return false; }
+  if (prompt_has_media(specialized)) { return false; }
+  if (primitive.options.query_params.keys().length() != 0) { return false; }
+  match (primitive.options.finish_reason_allow_list) {
+    null => {},
+    _ => { return false; },
+  }
+  match (primitive.options.finish_reason_deny_list) {
+    null => {},
+    _ => { return false; },
+  }
+  true
+}
+
+/// Build a `baml.ai.OpenAi` from a legacy client's options, forwarding headers and
+/// request_body (temperature, max_tokens, …). Schema-append is disabled: the rendered
+/// template already carries (or deliberately omits) `${ctx.output_format}` — appending
+/// again would double-inject the schema.
+function _openai_from(primitive: PrimitiveClient) -> root.ai.OpenAi throws never {
+  root.ai.OpenAi {
+    model: primitive.options.model ?? "gpt-4o",
+    api_key: primitive.options.api_key ?? "",
+    base_url: primitive.options.base_url,
+    extra_headers: primitive.options.headers,
+    extra_body: primitive.options.request_body,
+    append_output_schema: false,
+  }
 }
 
 /// DO NOT CALL FROM USER CODE

@@ -719,6 +719,17 @@ impl<T> io::IoNamespaceLlm for T {
         SysOpOutput::ok(prompt_ast_to_text(&ast))
     }
 
+    fn prompt_has_media(
+        &self,
+        _heap: &std::sync::Arc<BexHeap>,
+        _call_id: CallId,
+        prompt: io::owned::llm::PromptAst,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<bool> {
+        let ast = unwrap_prompt_ast(&prompt);
+        SysOpOutput::ok(prompt_ast_has_media(&ast))
+    }
+
     fn from_shorthand(
         &self,
         _heap: &std::sync::Arc<BexHeap>,
@@ -869,52 +880,122 @@ fn prompt_ast_to_text(ast: &baml_builtins2::PromptAst) -> String {
     out.trim_end().to_string()
 }
 
+/// True iff the `PromptAst` contains any media part (image/audio/pdf/video).
+fn prompt_ast_has_media(ast: &baml_builtins2::PromptAst) -> bool {
+    use baml_builtins2::{PromptAst, PromptAstSimple};
+    fn simple_has(s: &PromptAstSimple) -> bool {
+        match s {
+            PromptAstSimple::String(_) => false,
+            PromptAstSimple::Media(_) => true,
+            PromptAstSimple::Multiple(items) => items.iter().any(|it| simple_has(it)),
+        }
+    }
+    match ast {
+        PromptAst::Simple(s) => simple_has(s),
+        PromptAst::Message { content, .. } => simple_has(content),
+        PromptAst::Vec(items) => items.iter().any(|it| prompt_ast_has_media(it)),
+    }
+}
+
+/// A media value interpolated into a tagged-template prompt: the bare media ADT, a
+/// `baml.media.*` wrapper instance (unwrapped via `_data`), or either inside a union.
+fn prompt_value_media(v: &BexExternalValue) -> Option<std::sync::Arc<baml_builtins2::MediaValue>> {
+    match v {
+        BexExternalValue::Adt(::bex_external_types::BexExternalAdt::Media(m)) => Some(m.clone()),
+        BexExternalValue::Union { value, .. } => prompt_value_media(value),
+        BexExternalValue::Instance {
+            class_name, fields, ..
+        } if class_name.starts_with("baml.media.") => {
+            fields.get("_data").and_then(prompt_value_media)
+        }
+        _ => None,
+    }
+}
+
 fn assemble_prompt_ast_impl(
     parts: &[String],
     values: &[BexExternalValue],
 ) -> baml_builtins2::PromptAst {
     use baml_builtins2::{PromptAst, PromptAstSimple};
-    let mk_msg = |role: String, content: String| -> std::sync::Arc<PromptAst> {
-        std::sync::Arc::new(PromptAst::Message {
-            role,
-            content: std::sync::Arc::new(PromptAstSimple::String(content)),
-            // `metadata` is `serde_json::Value`, not a direct dep here, so it
-            // can't be named for `Value::default()`; its `Default` is
-            // `Value::Null`. Role metadata threading lands later.
-            #[allow(clippy::default_trait_access)]
-            metadata: Default::default(),
-        })
-    };
+
+    // Flush accumulated text into the message's simple-part list.
+    fn flush_text(
+        text: &mut String,
+        simples: &mut Vec<std::sync::Arc<baml_builtins2::PromptAstSimple>>,
+    ) {
+        if !text.is_empty() {
+            simples.push(std::sync::Arc::new(PromptAstSimple::String(
+                std::mem::take(text),
+            )));
+        }
+    }
+
+    // Close the current message's content. Text-only messages collapse to the same
+    // single-`String` shape as the pre-media fold (BEP-049 M5d), so prompt
+    // byte-equivalence is unchanged; media interleaves as `Multiple` parts.
+    fn close_content(
+        text: &mut String,
+        simples: &mut Vec<std::sync::Arc<baml_builtins2::PromptAstSimple>>,
+    ) -> std::sync::Arc<baml_builtins2::PromptAstSimple> {
+        if simples.is_empty() {
+            return std::sync::Arc::new(PromptAstSimple::String(std::mem::take(text)));
+        }
+        flush_text(text, simples);
+        if simples.len() == 1 {
+            simples.pop().expect("non-empty")
+        } else {
+            std::sync::Arc::new(PromptAstSimple::Multiple(std::mem::take(simples)))
+        }
+    }
+
+    let mk_msg =
+        |role: String, content: std::sync::Arc<PromptAstSimple>| -> std::sync::Arc<PromptAst> {
+            std::sync::Arc::new(PromptAst::Message {
+                role,
+                content,
+                // `metadata` is `serde_json::Value`, not a direct dep here, so it
+                // can't be named for `Value::default()`; its `Default` is
+                // `Value::Null`. Role metadata threading lands later.
+                #[allow(clippy::default_trait_access)]
+                metadata: Default::default(),
+            })
+        };
     let mut messages: Vec<std::sync::Arc<PromptAst>> = Vec::new();
     let mut current_role: Option<String> = None;
-    let mut content = String::new();
+    let mut simples: Vec<std::sync::Arc<PromptAstSimple>> = Vec::new();
+    let mut text = String::new();
     for (i, value) in values.iter().enumerate() {
         if let Some(p) = parts.get(i) {
-            content.push_str(p);
+            text.push_str(p);
         }
         if let Some(role) = prompt_role_name(value) {
             if let Some(prev) = current_role.take() {
-                messages.push(mk_msg(prev, std::mem::take(&mut content)));
+                let content = close_content(&mut text, &mut simples);
+                messages.push(mk_msg(prev, content));
             }
             current_role = Some(role);
+        } else if let Some(media) = prompt_value_media(value) {
+            flush_text(&mut text, &mut simples);
+            simples.push(std::sync::Arc::new(PromptAstSimple::Media(media)));
         } else {
-            content.push_str(&prompt_value_text(value));
+            text.push_str(&prompt_value_text(value));
         }
     }
     if let Some(p) = parts.get(values.len()) {
-        content.push_str(p);
+        text.push_str(p);
     }
     match current_role {
         Some(role) => {
+            let content = close_content(&mut text, &mut simples);
             messages.push(mk_msg(role, content));
             if messages.len() == 1 {
-                std::sync::Arc::try_unwrap(messages.pop().unwrap())
+                std::sync::Arc::try_unwrap(messages.pop().expect("non-empty"))
                     .unwrap_or_else(|arc| (*arc).clone())
             } else {
                 PromptAst::Vec(messages)
             }
         }
-        None => PromptAst::Simple(std::sync::Arc::new(PromptAstSimple::String(content))),
+        None => PromptAst::Simple(close_content(&mut text, &mut simples)),
     }
 }
 

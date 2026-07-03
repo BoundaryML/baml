@@ -288,7 +288,10 @@ function ai_examples.browser_client(proxy_url: string) -> baml.ai.Provider {
     load_const "gpt-5.4-mini"
     load_const ""
     load_var proxy_url
-    init_instance baml.ai.OpenAi .model, .api_key, .base_url
+    load_const null
+    load_const null
+    load_const null
+    init_instance baml.ai.OpenAi .model, .api_key, .base_url, .extra_headers, .extra_body, .append_output_schema
     return
 }
 
@@ -472,7 +475,10 @@ function ai_examples.durable_step(ckpt: ai_examples.Checkpoint, coord: string, c
 function ai_examples.edge_client(gateway_url: string, token: string) -> baml.ai.Provider {
     load_const "gpt-5.4-mini"
     load_var2 2 1
-    init_instance baml.ai.OpenAi .model, .api_key, .base_url
+    load_const null
+    load_const null
+    load_const null
+    init_instance baml.ai.OpenAi .model, .api_key, .base_url, .extra_headers, .extra_body, .append_output_schema
     return
 }
 
@@ -1416,7 +1422,10 @@ function ai_examples.server_client() -> baml.ai.Provider {
     load_const "gpt-5.4-mini"
     load_var _1
     load_const null
-    init_instance baml.ai.OpenAi .model, .api_key, .base_url
+    load_const null
+    load_const null
+    load_const null
+    init_instance baml.ai.OpenAi .model, .api_key, .base_url, .extra_headers, .extra_body, .append_output_schema
     return
 }
 

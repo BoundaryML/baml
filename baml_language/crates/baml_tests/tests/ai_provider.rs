@@ -910,3 +910,158 @@ async fn stateful_capabilities_negotiation() {
         BexExternalValue::String("no_conv|no_bg|no_suspend".into())
     );
 }
+
+/// Helper: pull the recorded POST bodies from a wiremock server.
+async fn recorded_bodies(server: &MockServer) -> Vec<String> {
+    server
+        .received_requests()
+        .await
+        .unwrap_or_default()
+        .iter()
+        .map(|r| String::from_utf8_lossy(&r.body).to_string())
+        .collect()
+}
+
+/// REGRESSION: client `options` (request_body params like temperature, custom headers)
+/// must be forwarded by the new-provider delegation, as the legacy path did.
+#[tokio::test]
+async fn e2e_options_and_headers_forwarded() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/chat/completions"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_string(r#"{"choices":[{"message":{"content":"pong"}}]}"#),
+        )
+        .mount(&server)
+        .await;
+    let uri = server.uri();
+
+    let output = baml_test!(&format!(
+        r#"
+        client<llm> OptClient {{
+          provider openai
+          options {{
+            model "gpt-5.4-mini"
+            api_key "test-key"
+            base_url "{uri}"
+            temperature 0.7
+            headers {{ x-custom "abc123" }}
+          }}
+        }}
+        function Ask(q: string) -> string {{
+          client OptClient
+          prompt `${{q}}`
+        }}
+        function main() -> string {{ Ask("hi") }}
+        "#
+    ));
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("pong".into())
+    );
+
+    let reqs = server.received_requests().await.unwrap();
+    assert_eq!(reqs.len(), 1, "expected exactly one request");
+    let body = String::from_utf8_lossy(&reqs[0].body).to_string();
+    assert!(
+        body.contains("\"temperature\":0.7") || body.contains("\"temperature\": 0.7"),
+        "request_body option `temperature` was dropped; body: {body}"
+    );
+    let hdr = reqs[0]
+        .headers
+        .get("x-custom")
+        .map(|v| v.to_str().unwrap_or("").to_string());
+    assert_eq!(
+        hdr.as_deref(),
+        Some("abc123"),
+        "custom header was dropped; received headers: {:?}",
+        reqs[0].headers
+    );
+}
+
+/// REGRESSION: when the prompt references `${ctx.output_format}`, the schema must appear
+/// exactly ONCE in the outgoing request (the provider must not append it a second time).
+#[tokio::test]
+async fn e2e_structured_schema_injected_once() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/chat/completions"))
+        .respond_with(ResponseTemplate::new(200).set_body_string(
+            r#"{"choices":[{"message":{"content":"{\"name\": \"Ada\", \"age\": 36}"}}]}"#,
+        ))
+        .mount(&server)
+        .await;
+    let uri = server.uri();
+
+    let output = baml_test!(&format!(
+        r#"
+        class Person {{ name string, age int }}
+        client<llm> SchemaClient {{
+          provider openai
+          options {{ model "gpt-5.4-mini" api_key "test-key" base_url "{uri}" }}
+        }}
+        function Extract(text: string) -> Person {{
+          client SchemaClient
+          prompt `Extract from: ${{text}}
+${{ctx.output_format}}`
+        }}
+        function main() -> string {{
+          let p = Extract("Ada, 36");
+          p.name + "|" + p.age.to_string()
+        }}
+        "#
+    ));
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("Ada|36".into())
+    );
+
+    let bodies = recorded_bodies(&server).await;
+    let marker = "Answer in JSON using this schema";
+    let count = bodies[0].matches(marker).count();
+    assert_eq!(
+        count, 1,
+        "schema must appear exactly once, found {count}; body: {}",
+        bodies[0]
+    );
+}
+
+/// REGRESSION: a prompt carrying media (an image arg) must not silently drop the image —
+/// the delegation must preserve the media parts on the wire.
+#[tokio::test]
+async fn e2e_media_prompt_reaches_wire() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST")).and(path("/chat/completions"))
+        .respond_with(ResponseTemplate::new(200).set_body_string(
+            r#"{"id":"cmpl-1","object":"chat.completion","created":1,"model":"gpt-5.4-mini","choices":[{"index":0,"message":{"role":"assistant","content":"a cat"},"finish_reason":"stop"}]}"#))
+        .mount(&server).await;
+    let uri = server.uri();
+
+    let output = baml_test!(&format!(
+        r##"
+        client<llm> MediaClient {{
+          provider openai
+          options {{ model "gpt-5.4-mini" api_key "test-key" base_url "{uri}" }}
+        }}
+        function Describe(img: image) -> string {{
+          client MediaClient
+          prompt `What is in this image? ${{img}}`
+        }}
+        function main() -> string {{
+          Describe(baml.media.Image.from_url("https://example.com/cat.png", "image/png"))
+        }}
+        "##
+    ));
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("a cat".into())
+    );
+
+    let bodies = recorded_bodies(&server).await;
+    assert!(
+        bodies[0].contains("cat.png"),
+        "image was dropped from the request; body: {}",
+        bodies[0]
+    );
+}

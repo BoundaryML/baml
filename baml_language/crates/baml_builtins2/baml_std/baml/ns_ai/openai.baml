@@ -118,6 +118,68 @@ class OpenAi {
     model: string,
     api_key: string,
     base_url: string?,
+    /// Extra HTTP headers merged onto the request (proxies, tracing, org headers).
+    extra_headers: map<string, string>?,
+    /// Extra top-level body params merged into the request JSON (temperature,
+    /// max_tokens, …) — mirrors the legacy `options.request_body` behavior.
+    extra_body: map<string, unknown>?,
+    /// Append T's output schema to the prompt (default true). The orchestrator
+    /// delegation sets false: a rendered template already carries (or deliberately
+    /// omits) `${ctx.output_format}`, and appending again would double-inject.
+    append_output_schema: bool?,
+
+    // Assemble the request body: model + messages + extra_body entries (legacy
+    // request_body semantics: user entries are merged at the top level).
+    function _request_body(self, content: string, stream: bool) -> string throws never {
+        let body: map<string, json> = {};
+        body.set("model", self.model);
+        let messages: json = [{ "role": "user", "content": content }];
+        body.set("messages", messages);
+        if (stream) {
+            body.set("stream", true);
+        }
+        match (self.extra_body) {
+            let extra: map<string, unknown> => {
+                for (let k in extra.keys()) {
+                    // unknown -> json by runtime-type dispatch (to_string<T> is type-driven
+                    // and cannot serialize an `unknown`-typed value; to_json<T> can).
+                    let v: json = root.json.to_json<unknown>(extra.get(k)) catch (e) {
+                        _ => {
+                            continue;
+                        }
+                    };
+                    body.set(k, v);
+                }
+            },
+            _ => {
+            },
+        }
+        root.json.stringify(body)
+    }
+
+    // Base headers + any extra_headers.
+    function _request_headers(self) -> map<string, string> throws never {
+        let headers: map<string, string> = { "Authorization": "Bearer " + self.api_key, "Content-Type": "application/json" };
+        match (self.extra_headers) {
+            let extra: map<string, string> => {
+                for (let k in extra.keys()) {
+                    headers.set(k, extra.get(k) ?? "");
+                }
+            },
+            _ => {
+            },
+        }
+        headers
+    }
+
+    // Prompt + optional schema suffix (skipped when append_output_schema is false).
+    function _content_for(self, prompt: string, schema: string) -> string throws never {
+        if (!(self.append_output_schema ?? true) || schema == "") {
+            prompt
+        } else {
+            prompt + "\n\n" + schema
+        }
+    }
 
     implements root.ai.Provider {}
 
@@ -133,17 +195,12 @@ class OpenAi {
             // Inject the output schema so the model knows the shape to return.
             // Empty for `T = string` (free-form text), non-empty for a structured `T`.
             let schema: string = root.llm.render_output_format(reflect.type_of<T>());
-            let content: string = if (schema == "") {
-                prompt
-            } else {
-                prompt + "\n\n" + schema
-            };
-            let body: json = { "model": self.model, "messages": [{ "role": "user", "content": content }] };
+            let content: string = self._content_for(prompt, schema);
             root.http.Request {
                 method: "POST",
                 url: (self.base_url ?? "https://api.openai.com/v1") + "/chat/completions",
-                headers: { "Authorization": "Bearer " + self.api_key, "Content-Type": "application/json" },
-                body: root.json.stringify(body),
+                headers: self._request_headers(),
+                body: self._request_body(content, false),
             }
         }
 
@@ -224,21 +281,12 @@ class OpenAi {
             prompt: string,
         ) -> root.llm.Stream<TStream, TFinal> throws root.errors.StreamError | root.errors.UnknownError {
             let schema: string = root.llm.render_output_format(reflect.type_of<TFinal>());
-            let content: string = if (schema == "") {
-                prompt
-            } else {
-                prompt + "\n\n" + schema
-            };
-            let body: json = {
-                "model": self.model,
-                "messages": [{ "role": "user", "content": content }],
-                "stream": true,
-            };
+            let content: string = self._content_for(prompt, schema);
             let req = root.http.Request {
                 method: "POST",
                 url: (self.base_url ?? "https://api.openai.com/v1") + "/chat/completions",
-                headers: { "Authorization": "Bearer " + self.api_key, "Content-Type": "application/json" },
-                body: root.json.stringify(body),
+                headers: self._request_headers(),
+                body: self._request_body(content, true),
             };
             let sse = root.http.fetch_sse(req) catch (e) {
                 _ => {
