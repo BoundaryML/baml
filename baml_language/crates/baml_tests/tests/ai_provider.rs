@@ -1275,3 +1275,48 @@ async fn usage_metering_live() {
         BexExternalValue::String("metered".into())
     );
 }
+
+/// LIVE partial structured streaming (scenario 04's structured half + 02): a user
+/// function returning a class, streamed — partials arrive, final parses to the typed
+/// value. Gated on `OPENAI_API_KEY`.
+#[tokio::test]
+async fn structured_streaming_live() {
+    if std::env::var("OPENAI_API_KEY").is_err() {
+        eprintln!("skipping structured_streaming_live: OPENAI_API_KEY not set");
+        return;
+    }
+    let output = baml_test!(
+        r#"
+        class Person { name string, age int }
+        client<llm> LiveClient {
+          provider openai
+          options { model "gpt-5.4-mini" api_key env.OPENAI_API_KEY }
+        }
+        function Extract(text: string) -> Person {
+          client LiveClient
+          prompt `Extract the person: ${text}
+${ctx.output_format}`
+        }
+        function main() -> string {
+            let s = Extract$stream("Ada Lovelace is 36 years old.");
+            let partials = 0;
+            while (partials < 500) {
+                match (s.next()) {
+                    baml.stream.StreamFinished => { break; },
+                    _ => { partials = partials + 1; },
+                }
+            }
+            let p: Person = s.final() catch (e) { _ => return "FINAL_ERR" };
+            p.name + "|" + p.age.to_string() + "|partials>0=" + (partials > 0).to_string()
+        }
+        "#
+    );
+    let got = output.result.unwrap();
+    let BexExternalValue::String(s) = got else {
+        panic!("expected string, got {got:?}")
+    };
+    assert!(
+        s.contains("Ada") && s.contains("36") && s.ends_with("true"),
+        "structured stream unexpected: {s:?}"
+    );
+}
