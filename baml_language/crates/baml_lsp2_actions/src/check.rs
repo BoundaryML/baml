@@ -374,7 +374,7 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
                 res_ctx,
                 pkg_id,
                 scope_id,
-                aliases.clone(),
+                aliases.aliases.clone(),
             );
             builder.set_generic_params(generic_params);
             for (name, ty) in &param_types {
@@ -504,7 +504,7 @@ fn check_interfaces<'db>(
     items: &[baml_compiler2_ast::Item],
     pkg_items: &baml_compiler2_hir::package::PackageItems<'db>,
     namespace_path: &[Name],
-    aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
+    aliases: &baml_compiler2_tir::normalize::ResolvedAliases,
 ) -> Vec<Diagnostic> {
     use baml_compiler2_hir::diagnostic::Hir2Diagnostic;
 
@@ -927,7 +927,7 @@ struct SignatureMatchContext<'a, 'db> {
     expected_namespace_path: &'a [Name],
     actual_pkg_items: &'a baml_compiler2_hir::package::PackageItems<'db>,
     actual_namespace_path: &'a [Name],
-    aliases: &'a std::collections::HashMap<QualifiedTypeName, Ty>,
+    aliases: &'a baml_compiler2_tir::normalize::ResolvedAliases,
     ignore_param_names: bool,
     /// Generic params of the enclosing class / `implements` target. Method
     /// signatures in an impl may reference them (e.g. `type Item = T` on a
@@ -946,7 +946,7 @@ struct InterfaceRequiresQuery<'a> {
     sup_qtn: &'a QualifiedTypeName,
     sup_args: &'a [Ty],
     sup_assoc: &'a [(Name, Ty)],
-    aliases: &'a std::collections::HashMap<QualifiedTypeName, Ty>,
+    aliases: &'a baml_compiler2_tir::normalize::ResolvedAliases,
 }
 
 impl MethodSignature {
@@ -1379,7 +1379,7 @@ fn validate_associated_type_binding_defs(
     generic_bounds: &GenericBoundExprMap,
     generic_subst: &std::collections::HashMap<Name, baml_compiler2_ast::TypeExpr>,
     bindings: &[baml_compiler2_ast::AssociatedTypeBindingDef],
-    aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
+    aliases: &baml_compiler2_tir::normalize::ResolvedAliases,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     let associated: IndexMap<Name, &baml_compiler2_ast::AssociatedTypeDef> = iface
@@ -1549,7 +1549,7 @@ fn validate_associated_type_default_bounds(
     iface: &baml_compiler2_ast::InterfaceDef,
     pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
     namespace_path: &[Name],
-    aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
+    aliases: &baml_compiler2_tir::normalize::ResolvedAliases,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     let mut associated_subst: std::collections::HashMap<Name, baml_compiler2_ast::TypeExpr> =
@@ -1627,7 +1627,7 @@ fn ty_nominal_subtype_with_generic_bounds(
     namespace_path: &[Name],
     generic_params: &[Name],
     generic_bounds: &GenericBoundExprMap,
-    aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
+    aliases: &baml_compiler2_tir::normalize::ResolvedAliases,
 ) -> bool {
     match sub {
         Ty::Unknown { .. } | Ty::Error { .. } => true,
@@ -1670,7 +1670,7 @@ fn validate_associated_type_bindings_in_items(
     items: &[baml_compiler2_ast::Item],
     pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
     namespace_path: &[Name],
-    aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
+    aliases: &baml_compiler2_tir::normalize::ResolvedAliases,
 ) -> Vec<Diagnostic> {
     let mut diagnostics = Vec::new();
 
@@ -2041,7 +2041,7 @@ fn validate_associated_type_bindings_in_function(
     outer_generic_bounds: &GenericBoundExprMap,
     pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
     namespace_path: &[Name],
-    aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
+    aliases: &baml_compiler2_tir::normalize::ResolvedAliases,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     let mut generic_params = outer_generic_params.to_vec();
@@ -2150,7 +2150,7 @@ fn validate_associated_type_bindings_in_method_sig(
     outer_generic_bounds: &GenericBoundExprMap,
     pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
     namespace_path: &[Name],
-    aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
+    aliases: &baml_compiler2_tir::normalize::ResolvedAliases,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     let mut generic_params = outer_generic_params.to_vec();
@@ -2260,7 +2260,7 @@ fn validate_associated_type_bindings_in_type_expr(
     namespace_path: &[Name],
     generic_params: &[Name],
     generic_bounds: &GenericBoundExprMap,
-    aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
+    aliases: &baml_compiler2_tir::normalize::ResolvedAliases,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     use baml_compiler2_ast::TypeExprKind;
@@ -2495,7 +2495,7 @@ fn validate_unqualified_associated_type_projection(
     namespace_path: &[Name],
     generic_params: &[Name],
     _generic_bounds: &GenericBoundExprMap,
-    aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
+    aliases: &baml_compiler2_tir::normalize::ResolvedAliases,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     let Some(member) = segments.last() else {
@@ -2591,7 +2591,7 @@ fn validate_qualified_associated_type_projection(
     namespace_path: &[Name],
     generic_params: &[Name],
     generic_bounds: &GenericBoundExprMap,
-    aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
+    aliases: &baml_compiler2_tir::normalize::ResolvedAliases,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     let baml_compiler2_ast::TypeExprKind::AssociatedTypeProjection {
@@ -2699,7 +2699,7 @@ fn typevar_bound_nominal_subtype(
     namespace_path: &[Name],
     generic_params: &[Name],
     generic_bounds: &GenericBoundExprMap,
-    aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
+    aliases: &baml_compiler2_tir::normalize::ResolvedAliases,
     visited: &mut HashSet<Name>,
 ) -> bool {
     if !visited.insert(name.clone()) {
@@ -2743,7 +2743,7 @@ fn typevar_bound_nominal_subtype(
     }
 }
 
-fn expand_alias_chain(ty: Ty, aliases: &std::collections::HashMap<QualifiedTypeName, Ty>) -> Ty {
+fn expand_alias_chain(ty: Ty, aliases: &baml_compiler2_tir::normalize::ResolvedAliases) -> Ty {
     let mut current = ty;
     let mut seen = HashSet::new();
     loop {
@@ -2753,7 +2753,7 @@ fn expand_alias_chain(ty: Ty, aliases: &std::collections::HashMap<QualifiedTypeN
         if !seen.insert(qtn.clone()) {
             return current;
         }
-        let Some(next) = aliases.get(qtn).cloned() else {
+        let Some(next) = aliases.aliases.get(qtn).cloned() else {
             return current;
         };
         current = next;
@@ -3115,7 +3115,7 @@ fn validate_associated_type_bindings_on_interface_type(
     namespace_path: &[Name],
     generic_params: &[Name],
     generic_bounds: &GenericBoundExprMap,
-    aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
+    aliases: &baml_compiler2_tir::normalize::ResolvedAliases,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     let baml_compiler2_ast::TypeExprKind::Path {
@@ -3613,7 +3613,7 @@ fn interface_origin_matches_target_expr<'db>(
     pkg_items: &baml_compiler2_hir::package::PackageItems<'db>,
     namespace_path: &[Name],
     generic_params: &[Name],
-    aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
+    aliases: &baml_compiler2_tir::normalize::ResolvedAliases,
     origin: &InterfaceMemberOrigin,
 ) -> bool {
     let Some(resolved) = resolve_interface_path(db, target, pkg_items, namespace_path) else {
@@ -3653,7 +3653,7 @@ struct InterfaceValidationCtx<'db, 'a> {
     db: &'db dyn Db,
     pkg_items: &'a baml_compiler2_hir::package::PackageItems<'db>,
     namespace_path: &'a [Name],
-    aliases: &'a std::collections::HashMap<QualifiedTypeName, Ty>,
+    aliases: &'a baml_compiler2_tir::normalize::ResolvedAliases,
 }
 
 fn interface_target_matches_required_parent(
@@ -4105,7 +4105,7 @@ fn validate_interface_extends_fields(
 /// Recursive aliases (`type A = List<A>`) survive lowering unexpanded; the
 /// `seen` set guards against looping on those by leaving an already-visited
 /// alias in place once re-encountered along a single chain.
-fn expand_type_alias(ty: &Ty, aliases: &std::collections::HashMap<QualifiedTypeName, Ty>) -> Ty {
+fn expand_type_alias(ty: &Ty, aliases: &baml_compiler2_tir::normalize::ResolvedAliases) -> Ty {
     expand_type_alias_rec(ty, aliases, &mut HashSet::new())
 }
 
@@ -4114,7 +4114,7 @@ fn expand_type_alias(ty: &Ty, aliases: &std::collections::HashMap<QualifiedTypeN
 /// instead of recursing forever.
 fn expand_type_alias_rec(
     ty: &Ty,
-    aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
+    aliases: &baml_compiler2_tir::normalize::ResolvedAliases,
     seen: &mut HashSet<QualifiedTypeName>,
 ) -> Ty {
     let recurse =
@@ -4127,7 +4127,7 @@ fn expand_type_alias_rec(
             if !seen.insert(qtn.clone()) {
                 return ty.clone();
             }
-            let expanded = match aliases.get(qtn) {
+            let expanded = match aliases.aliases.get(qtn) {
                 Some(next) => recurse(next, seen),
                 None => ty.clone(),
             };
@@ -4290,7 +4290,7 @@ fn validate_implements_for<'db>(
     all_items: &[baml_compiler2_ast::Item],
     pkg_items: &baml_compiler2_hir::package::PackageItems<'db>,
     namespace_path: &[Name],
-    aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
+    aliases: &baml_compiler2_tir::normalize::ResolvedAliases,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     use baml_compiler2_hir::diagnostic::Hir2Diagnostic;
@@ -4683,7 +4683,7 @@ fn validate_class_implements<'db>(
     class: &baml_compiler2_ast::ClassDef,
     pkg_items: &baml_compiler2_hir::package::PackageItems<'db>,
     namespace_path: &[Name],
-    aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
+    aliases: &baml_compiler2_tir::normalize::ResolvedAliases,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     use baml_compiler2_hir::diagnostic::Hir2Diagnostic;
@@ -5202,7 +5202,7 @@ fn type_exprs_compatible(
     rhs_namespace_path: &[Name],
     rhs_generic_params: &[Name],
     rhs: &baml_compiler2_ast::TypeExpr,
-    aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
+    aliases: &baml_compiler2_tir::normalize::ResolvedAliases,
 ) -> bool {
     let mut diagnostics = Vec::new();
     let lhs_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
@@ -5240,7 +5240,7 @@ fn ty_nominal_subtype(
     db: &dyn Db,
     sub: &Ty,
     sup: &Ty,
-    aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
+    aliases: &baml_compiler2_tir::normalize::ResolvedAliases,
 ) -> bool {
     if baml_compiler2_tir::normalize::is_same_normalized_type(sub, sup, aliases) {
         return true;
@@ -5904,8 +5904,7 @@ fn jinja_diagnostic_id(message: &str) -> DiagnosticId {
 fn collect_type_aliases_for_resolution_context<'db>(
     db: &'db dyn Db,
     res_ctx: &'db baml_compiler2_tir::package_interface::PackageResolutionContext<'db>,
-) -> std::collections::HashMap<baml_compiler2_tir::ty::QualifiedTypeName, baml_compiler2_tir::ty::Ty>
-{
+) -> baml_compiler2_tir::normalize::ResolvedAliases {
     let mut aliases = baml_compiler2_tir::inference::collect_type_aliases(db, &res_ctx.own_items);
     for (_dep_name, dep_iface) in &res_ctx.dep_interfaces {
         for types_in_ns in dep_iface.types.values() {
@@ -5920,7 +5919,7 @@ fn collect_type_aliases_for_resolution_context<'db>(
             }
         }
     }
-    aliases
+    baml_compiler2_tir::normalize::resolved_aliases_from_map(aliases)
 }
 
 fn function_scope_id<'db>(

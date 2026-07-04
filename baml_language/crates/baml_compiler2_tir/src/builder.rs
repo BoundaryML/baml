@@ -516,7 +516,7 @@ struct NormalizeCtx<'a, 'db>(&'a TypeInferenceBuilder<'db>);
 
 impl baml_type::normalize::TypeContext for NormalizeCtx<'_, '_> {
     fn alias_def(&self, name: &crate::ty::QualifiedTypeName) -> Option<Ty> {
-        self.0.aliases.get(name).cloned()
+        self.0.aliases.aliases.get(name).cloned()
     }
 
     fn implements_interface(&self, concrete: &Ty, interface: &baml_type::Interface) -> bool {
@@ -649,9 +649,10 @@ pub struct TypeInferenceBuilder<'db> {
     scope: ScopeId<'db>,
     /// Declared return type for the function (used to check return statements).
     declared_return_ty: Option<Ty>,
-    /// Resolved type alias map: alias qualified name → expanded Ty.
-    /// Used by the normalizer for structural subtype checking.
-    aliases: HashMap<crate::ty::QualifiedTypeName, Ty>,
+    /// Resolved type-alias environment (alias map + precomputed recursive
+    /// set), built once per scope so per-comparison normalization never
+    /// re-derives the recursive-alias analysis.
+    aliases: crate::normalize::ResolvedAliases,
     /// Namespace path for the file being analyzed (e.g. `["env"]` for `baml/env.baml`).
     ns_context: Vec<Name>,
     /// BEP-044: when this body is the override of an interface method
@@ -972,7 +973,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             package_id,
             scope,
             declared_return_ty: None,
-            aliases,
+            aliases: crate::normalize::resolved_aliases_from_map(aliases),
             ns_context,
             implements_block_interface: None,
             generic_param_bounds: rustc_hash::FxHashMap::default(),
@@ -1283,7 +1284,7 @@ impl<'db> TypeInferenceBuilder<'db> {
     }
 
     fn expand_alias_chains(&self, ty: Ty) -> Ty {
-        crate::inference::expand_alias_chains(ty, &self.aliases)
+        crate::inference::expand_alias_chains(ty, &self.aliases.aliases)
     }
 
     /// Pattern-matrix-internal normalization of a scrutinee type.
@@ -8845,7 +8846,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         match ty {
             Ty::Class(qtn, _, _) => qtn.is_panic_type().then(|| ty.clone()),
             Ty::TypeAlias(qtn, _) => {
-                if let Some(expanded) = self.aliases.get(qtn) {
+                if let Some(expanded) = self.aliases.aliases.get(qtn) {
                     self.ty_panic_subset(expanded)
                 } else if qtn.is_panic_type() {
                     Some(ty.clone())
@@ -12365,7 +12366,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 attr: TyAttr::default(),
             }),
             Ty::TypeAlias(qtn, _) => {
-                if let Some(expanded) = self.aliases.get(qtn) {
+                if let Some(expanded) = self.aliases.aliases.get(qtn) {
                     let expanded = expanded.clone();
                     self.try_resolve_member_on_ty(&expanded, member)
                 } else {

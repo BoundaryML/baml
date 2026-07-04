@@ -223,7 +223,7 @@ impl ImplementsRegistry {
     }
 
     pub fn type_implements(&self, ty: &Ty, iface_qtn: &QualifiedTypeName) -> bool {
-        let aliases = std::collections::HashMap::default();
+        let aliases = crate::normalize::ResolvedAliases::default();
         self.type_implements_qtn_via_rule(ty, iface_qtn, &aliases, |actual, bound| {
             self.compatibility_subtype(actual, bound)
         })
@@ -241,7 +241,7 @@ impl ImplementsRegistry {
         &self,
         actual_ty: &Ty,
         iface_qtn: &QualifiedTypeName,
-        aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
+        aliases: &normalize::ResolvedAliases,
         mut is_subtype: impl FnMut(&Ty, &Ty) -> bool,
     ) -> bool {
         self.interface_impl_rule_index
@@ -282,7 +282,7 @@ impl ImplementsRegistry {
         if let Ty::Interface(iface_qtn, iface_args, associated_bindings, _) = bound
             && !matches!(actual, Ty::Interface(..))
         {
-            let aliases = std::collections::HashMap::default();
+            let aliases = crate::normalize::ResolvedAliases::default();
             let requested_iface_ty = Ty::Interface(
                 iface_qtn.clone(),
                 iface_args.clone(),
@@ -297,7 +297,7 @@ impl ImplementsRegistry {
             );
         }
 
-        normalize::is_subtype_of(actual, bound, &std::collections::HashMap::default())
+        normalize::is_subtype_of(actual, bound, &crate::normalize::ResolvedAliases::default())
     }
 
     /// True iff `class_qtn<class_type_args>` nominally implements `iface_qtn`
@@ -324,7 +324,7 @@ impl ImplementsRegistry {
         rule: &InterfaceImplRule,
         actual_ty: &Ty,
         requested_iface_ty: &Ty,
-        aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
+        aliases: &normalize::ResolvedAliases,
         mut is_subtype: impl FnMut(&Ty, &Ty) -> bool,
     ) -> Option<InterfaceImplInstantiation> {
         let mut bindings = TypeBindings::default();
@@ -377,7 +377,7 @@ impl ImplementsRegistry {
         &self,
         actual_ty: &Ty,
         requested_iface_ty: &Ty,
-        aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
+        aliases: &normalize::ResolvedAliases,
         mut is_subtype: impl FnMut(&Ty, &Ty) -> bool,
     ) -> Option<(Name, Ty, Ty)> {
         for rule in &self.interface_impl_rules {
@@ -441,7 +441,7 @@ impl ImplementsRegistry {
         &self,
         actual_ty: &Ty,
         requested_iface_ty: &Ty,
-        aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
+        aliases: &normalize::ResolvedAliases,
         mut is_subtype: impl FnMut(&Ty, &Ty) -> bool,
     ) -> bool {
         let Some(iface_qtn) = interface_qtn(requested_iface_ty) else {
@@ -539,7 +539,7 @@ impl ImplementsRegistry {
         indices: &[usize],
         actual_ty: &Ty,
         requested_iface_ty: &Ty,
-        aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
+        aliases: &normalize::ResolvedAliases,
         is_subtype: &mut impl FnMut(&Ty, &Ty) -> bool,
     ) -> bool {
         indices.iter().any(|idx| {
@@ -563,7 +563,7 @@ impl ImplementsRegistry {
         rule: &InterfaceImplRule,
         requested_iface_ty: &Ty,
         candidate_ty: Option<&Ty>,
-        aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
+        aliases: &normalize::ResolvedAliases,
         mut is_subtype: impl FnMut(&Ty, &Ty) -> bool,
     ) -> Option<InterfaceImplInstantiation> {
         let mut bindings = TypeBindings::default();
@@ -858,7 +858,7 @@ fn all_rule_generic_params_bound(rule: &InterfaceImplRule, bindings: &TypeBindin
 fn interface_ty_satisfies_request(
     actual: &Ty,
     requested: &Ty,
-    aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
+    aliases: &normalize::ResolvedAliases,
     is_subtype: &mut impl FnMut(&Ty, &Ty) -> bool,
 ) -> bool {
     let (
@@ -896,7 +896,7 @@ fn interface_ty_satisfies_request(
 fn types_equivalent_for_rule_match(
     actual: &Ty,
     requested: &Ty,
-    aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
+    aliases: &normalize::ResolvedAliases,
     is_subtype: &mut impl FnMut(&Ty, &Ty) -> bool,
 ) -> bool {
     if normalize::is_same_normalized_type(actual, requested, aliases) {
@@ -953,7 +953,7 @@ pub fn match_ty_pattern(
     pattern: &Ty,
     concrete: &Ty,
     generic_params: &[Name],
-    aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
+    aliases: &normalize::ResolvedAliases,
 ) -> Option<TypeBindings> {
     let mut bindings = TypeBindings::default();
     match_ty_pattern_into(pattern, concrete, generic_params, aliases, &mut bindings)?;
@@ -969,7 +969,7 @@ pub fn match_ty_pattern(
 pub fn match_ty_patterns(
     pairs: &[(&Ty, &Ty)],
     generic_params: &[Name],
-    aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
+    aliases: &normalize::ResolvedAliases,
 ) -> Option<TypeBindings> {
     let mut bindings = TypeBindings::default();
     for (pattern, concrete) in pairs {
@@ -982,7 +982,7 @@ fn match_ty_pattern_into(
     pattern: &Ty,
     concrete: &Ty,
     generic_params: &[Name],
-    aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
+    aliases: &normalize::ResolvedAliases,
     bindings: &mut TypeBindings,
 ) -> Option<()> {
     if let Ty::TypeVar(name, _) = pattern
@@ -1083,7 +1083,7 @@ fn match_union_members(
     pattern_members: &[Ty],
     concrete_members: &[Ty],
     generic_params: &[Name],
-    aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
+    aliases: &normalize::ResolvedAliases,
     bindings: &mut TypeBindings,
 ) -> Option<()> {
     let Some((pattern_head, pattern_tail)) = pattern_members.split_first() else {
@@ -1131,7 +1131,7 @@ fn bind_type_var(
     name: &Name,
     concrete: &Ty,
     bindings: &mut TypeBindings,
-    aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
+    aliases: &normalize::ResolvedAliases,
 ) -> Option<()> {
     match bindings.get(name) {
         Some(existing) if normalize::is_same_normalized_type(existing, concrete, aliases) => {
@@ -1815,7 +1815,7 @@ mod tests {
                 &pattern,
                 &good,
                 &params,
-                &std::collections::HashMap::default()
+                &crate::normalize::ResolvedAliases::default()
             )
             .is_some()
         );
@@ -1824,7 +1824,7 @@ mod tests {
                 &pattern,
                 &bad,
                 &params,
-                &std::collections::HashMap::default()
+                &crate::normalize::ResolvedAliases::default()
             )
             .is_none()
         );
@@ -1846,7 +1846,7 @@ mod tests {
             &pattern,
             &actual,
             &params,
-            &std::collections::HashMap::default(),
+            &crate::normalize::ResolvedAliases::default(),
         )
         .expect("nested list arg should bind T");
         assert_eq!(bindings.get(&Name::new("T")), Some(&int()));
@@ -1947,7 +1947,7 @@ mod tests {
                 &pattern,
                 &same_short_name,
                 &[],
-                &std::collections::HashMap::default()
+                &crate::normalize::ResolvedAliases::default()
             )
             .is_none(),
             "same short name in different namespaces must not match"
@@ -1964,7 +1964,7 @@ mod tests {
             &pattern,
             &actual,
             &params,
-            &std::collections::HashMap::default(),
+            &crate::normalize::ResolvedAliases::default(),
         )
         .expect("union members should be matched by type, not position");
         assert_eq!(bindings.get(&Name::new("T")), Some(&int()));
@@ -1999,7 +1999,7 @@ mod tests {
                     &rule,
                     &actual,
                     &requested,
-                    &std::collections::HashMap::default(),
+                    &crate::normalize::ResolvedAliases::default(),
                     |_, _| true,
                 )
                 .is_none()
@@ -2037,19 +2037,19 @@ mod tests {
                     &rule,
                     &actual,
                     &requested,
-                    &std::collections::HashMap::default(),
+                    &crate::normalize::ResolvedAliases::default(),
                     |lhs, rhs| {
                         matches!(lhs, Ty::AssociatedTypeProjection { member, .. } if member.as_str() == "Item")
                             && normalize::is_same_normalized_type(
                                 rhs,
                                 &string(),
-                                &std::collections::HashMap::default(),
+                                &crate::normalize::ResolvedAliases::default(),
                             )
                             || matches!(rhs, Ty::AssociatedTypeProjection { member, .. } if member.as_str() == "Item")
                                 && normalize::is_same_normalized_type(
                                     lhs,
                                     &string(),
-                                    &std::collections::HashMap::default(),
+                                    &crate::normalize::ResolvedAliases::default(),
                                 )
                     },
                 )
