@@ -1,6 +1,7 @@
 use std::{
     env,
     ffi::OsString,
+    fs,
     io::Write,
     path::{Path, PathBuf},
     process::Command,
@@ -31,6 +32,9 @@ pub(crate) struct IdeInstallArgs {
     /// Install the active toolchain's BAML VSIX into VS Code.
     #[arg(long, conflicts_with = "cursor")]
     pub code: bool,
+    /// Copy the active toolchain's BAML VSIX into a directory for manual install.
+    #[arg(long, value_name = "DIR", conflicts_with_all = ["cursor", "code"])]
+    pub extract: Option<PathBuf>,
 }
 
 impl IdeArgs {
@@ -44,6 +48,21 @@ impl IdeArgs {
 impl IdeInstallArgs {
     pub fn run(&self) -> Result<ExitCode> {
         let vsix = active_toolchain_vsix()?;
+        if let Some(dir) = &self.extract {
+            fs::create_dir_all(dir)
+                .with_context(|| format!("failed to create {}", dir.display()))?;
+            let dest = dir.join("baml-vscode.vsix");
+            fs::copy(&vsix, &dest).with_context(|| {
+                format!("failed to copy {} to {}", vsix.display(), dest.display())
+            })?;
+            writeln!(
+                std::io::stdout(),
+                "extracted BAML IDE extension to {}",
+                dest.display()
+            )?;
+            return Ok(ExitCode::Success);
+        }
+
         let editor = self.resolve_editor()?;
         let status = Command::new(&editor)
             .arg("--install-extension")
