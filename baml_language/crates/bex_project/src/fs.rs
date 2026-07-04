@@ -1,4 +1,4 @@
-use std::io::Read;
+use std::{borrow::Cow, io::Read};
 
 use crate::LspError;
 
@@ -145,6 +145,8 @@ impl BamlVFS {
         context: &'static str,
     ) -> Result<vfs::VfsPath, LspError> {
         let vfs_path = vfs::VfsPath::from(self.clone());
+        let raw = normalize_windows_drive_path(raw);
+        let raw = raw.as_ref();
         #[cfg(target_arch = "wasm32")]
         let is_absolute = raw.starts_with("/");
         #[cfg(not(target_arch = "wasm32"))]
@@ -156,17 +158,58 @@ impl BamlVFS {
             raw.to_path_buf()
         };
 
-        let path_as_str = raw.to_string_lossy();
-        #[cfg(windows)]
-        let path_as_str = path_as_str.replace('\\', "/");
-        let path_as_str: &str = path_as_str.as_ref();
+        let path_as_str = path_for_vfs_join(&raw);
         vfs_path
-            .join(path_as_str)
+            .join(path_as_str.as_ref())
             .map_err(|e| LspError::InvalidPath {
                 path: raw.clone(),
                 message: format!("{context}: {e}"),
             })
     }
+}
+
+#[cfg(windows)]
+fn normalize_windows_drive_path(path: &std::path::Path) -> Cow<'_, std::path::Path> {
+    let path_as_str = path.to_string_lossy();
+    let slash_path = path_as_str.replace('\\', "/");
+    let Some(stripped) = slash_path.strip_prefix('/') else {
+        return Cow::Borrowed(path);
+    };
+
+    if is_windows_drive_path(stripped) {
+        Cow::Owned(std::path::PathBuf::from(stripped))
+    } else {
+        Cow::Borrowed(path)
+    }
+}
+
+#[cfg(not(windows))]
+fn normalize_windows_drive_path(path: &std::path::Path) -> Cow<'_, std::path::Path> {
+    Cow::Borrowed(path)
+}
+
+#[cfg(windows)]
+fn is_windows_drive_path(path: &str) -> bool {
+    let bytes = path.as_bytes();
+    bytes.len() >= 3 && bytes[0].is_ascii_alphabetic() && bytes[1] == b':' && bytes[2] == b'/'
+}
+
+fn path_for_vfs_join(path: &std::path::Path) -> Cow<'_, str> {
+    normalize_path_separators_for_vfs(path.to_string_lossy())
+}
+
+#[cfg(windows)]
+fn normalize_path_separators_for_vfs(path: Cow<'_, str>) -> Cow<'_, str> {
+    if path.contains('\\') {
+        Cow::Owned(path.replace('\\', "/"))
+    } else {
+        path
+    }
+}
+
+#[cfg(not(windows))]
+fn normalize_path_separators_for_vfs(path: Cow<'_, str>) -> Cow<'_, str> {
+    path
 }
 
 impl vfs::FileSystem for BamlVFS {
@@ -234,5 +277,62 @@ impl vfs::FileSystem for BamlVFS {
 
     fn move_dir(&self, src: &str, dest: &str) -> vfs::VfsResult<()> {
         self.fs.move_dir(src, dest)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    #[cfg(windows)]
+    fn windows_paths_use_vfs_separators_for_parent_traversal() {
+        let raw = std::path::Path::new(r"d:\ReframeWeb\agent-host\baml_src\agent_flow.baml");
+        let path_as_str = super::path_for_vfs_join(raw);
+        let vfs_path = vfs::VfsPath::new(vfs::MemoryFS::new())
+            .join(path_as_str.as_ref())
+            .unwrap();
+
+        assert_eq!(
+            vfs_path.as_str(),
+            "/d:/ReframeWeb/agent-host/baml_src/agent_flow.baml"
+        );
+        assert_eq!(
+            vfs_path.parent().as_str(),
+            "/d:/ReframeWeb/agent-host/baml_src"
+        );
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn windows_uri_drive_paths_are_treated_as_absolute() {
+        let raw = std::path::Path::new(r"/d:/ReframeWeb/agent-host/baml_src/agent_flow.baml");
+        let path = super::normalize_windows_drive_path(raw);
+
+        assert!(path.is_absolute());
+        assert_eq!(
+            super::path_for_vfs_join(path.as_ref()).as_ref(),
+            "d:/ReframeWeb/agent-host/baml_src/agent_flow.baml"
+        );
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn windows_backslash_uri_drive_paths_are_treated_as_absolute() {
+        let raw = std::path::Path::new(r"\d:\ReframeWeb\agent-host\baml_src\agent_flow.baml");
+        let path = super::normalize_windows_drive_path(raw);
+
+        assert!(path.is_absolute());
+        assert_eq!(
+            super::path_for_vfs_join(path.as_ref()).as_ref(),
+            "d:/ReframeWeb/agent-host/baml_src/agent_flow.baml"
+        );
+    }
+
+    #[test]
+    #[cfg(not(windows))]
+    fn non_windows_paths_are_unchanged_for_vfs() {
+        let raw = std::path::Path::new("/tmp/project/baml_src/main.baml");
+        let path_as_str = super::path_for_vfs_join(raw);
+
+        assert_eq!(path_as_str.as_ref(), "/tmp/project/baml_src/main.baml");
     }
 }
