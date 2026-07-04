@@ -60,14 +60,24 @@ use baml_compiler2_tir::ty::{
     FunctionParamMode, FunctionParamTy as Tir2FunctionParamTy, QualifiedTypeName, Ty as Tir2Ty,
 };
 
-/// Build the [`ResolvedAliases`] type-alias environment for a package,
+/// Salsa query: the [`ResolvedAliases`] type-alias environment for a package,
 /// including dependency packages. The pure erasure that consumes it lives in
 /// `baml_type` ([`ResolvedAliases::convert`]), wrapped compiler-side by
 /// `convert_tir_ty_for_runtime`; only this db-querying constructor stays
 /// compiler-side.
-pub fn resolved_aliases_for_package(
-    db: &dyn crate::Db,
-    pkg_id: baml_compiler2_hir::package::PackageId,
+///
+/// Memoized per package: the emit driver and `package_lowering_data` both
+/// demand it, and each computation re-collects (and clones) every alias of
+/// the package *and all its dependencies* — so before tracking, dependency
+/// packages' aliases were re-collected once per dependent, per caller.
+///
+/// Intentionally distinct from TIR's `package_alias_env`, which sees only
+/// dependency *interface exports*; MIR/emit need every dependency alias for
+/// runtime type erasure.
+#[salsa::tracked(returns(ref))]
+pub fn resolved_aliases_for_package<'db>(
+    db: &'db dyn crate::Db,
+    pkg_id: baml_compiler2_hir::package::PackageId<'db>,
 ) -> ResolvedAliases {
     use baml_compiler2_hir::package::{package_dependencies, package_items};
 
@@ -1443,7 +1453,9 @@ fn package_lowering_data<'db>(
 ) -> PackageLoweringData {
     use baml_compiler2_hir::package::{package_dependencies, package_items};
 
-    let resolved_aliases = resolved_aliases_for_package(db, pkg_id);
+    // Cloned out of the tracked query's cached value once per package: this
+    // struct is itself a per-package Salsa value and owns its env.
+    let resolved_aliases = resolved_aliases_for_package(db, pkg_id).clone();
 
     let mut class_fields = ClassFieldIndices::default();
     let mut class_field_types = ClassFieldTypes::default();

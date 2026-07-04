@@ -153,7 +153,7 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
     let pkg_id = baml_compiler2_hir::package::PackageId::new(db, pkg_info.package.clone());
     let res_ctx = baml_compiler2_tir::package_interface::package_resolution_context(db, pkg_id);
     let pkg_items = &res_ctx.own_items;
-    let aliases = collect_type_aliases_for_resolution_context(db, res_ctx);
+    let aliases = baml_compiler2_tir::inference::package_alias_env(db, pkg_id);
     let ast_items = {
         let tree = baml_compiler_parser::syntax_tree(db, file);
         let (items, _, _) = baml_compiler2_ast::lower_file(&tree);
@@ -165,7 +165,7 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
         &ast_items,
         pkg_items,
         &pkg_info.namespace_path,
-        &aliases,
+        aliases,
     ));
 
     // ── 5. Jinja prompt/template diagnostics ────────────────────────────────
@@ -370,11 +370,7 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
         if let Some(scope_id) = function_scope_id(index, func_data) {
             let context = baml_compiler2_tir::infer_context::InferContext::new(db, scope_id);
             let mut builder = baml_compiler2_tir::builder::TypeInferenceBuilder::new(
-                context,
-                res_ctx,
-                pkg_id,
-                scope_id,
-                aliases.aliases.clone(),
+                context, res_ctx, pkg_id, scope_id, aliases,
             );
             builder.set_generic_params(generic_params);
             for (name, ty) in &param_types {
@@ -432,7 +428,7 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
         &ast_items,
         pkg_items,
         &pkg_info.namespace_path,
-        &aliases,
+        aliases,
     ));
 
     // Deduplicate: multiple steps can produce the same diagnostic (e.g. scope
@@ -5899,27 +5895,6 @@ fn jinja_diagnostic_id(message: &str) -> DiagnosticId {
     } else {
         DiagnosticId::JinjaInvalidType
     }
-}
-
-fn collect_type_aliases_for_resolution_context<'db>(
-    db: &'db dyn Db,
-    res_ctx: &'db baml_compiler2_tir::package_interface::PackageResolutionContext<'db>,
-) -> baml_compiler2_tir::normalize::ResolvedAliases {
-    let mut aliases = baml_compiler2_tir::inference::collect_type_aliases(db, &res_ctx.own_items);
-    for (_dep_name, dep_iface) in &res_ctx.dep_interfaces {
-        for types_in_ns in dep_iface.types.values() {
-            for exported in types_in_ns.values() {
-                if let baml_compiler2_tir::package_interface::ExportedType::TypeAlias {
-                    qtn,
-                    resolved,
-                } = exported
-                {
-                    aliases.insert(qtn.clone(), resolved.clone());
-                }
-            }
-        }
-    }
-    baml_compiler2_tir::normalize::resolved_aliases_from_map(aliases)
 }
 
 fn function_scope_id<'db>(

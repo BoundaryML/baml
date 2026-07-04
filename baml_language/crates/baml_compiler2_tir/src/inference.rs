@@ -1226,7 +1226,7 @@ pub fn infer_scope_types<'db>(
     let res_ctx = crate::package_interface::package_resolution_context(db, pkg_id);
     let pkg_items = &res_ctx.own_items;
 
-    let aliases = package_alias_map(db, res_ctx);
+    let aliases = package_alias_env(db, pkg_id);
     let context = InferContext::new(db, scope_id);
     let mut builder = TypeInferenceBuilder::new(context, res_ctx, pkg_id, scope_id, aliases);
 
@@ -2317,6 +2317,26 @@ pub fn collect_type_aliases<'db>(
         }
     }
     aliases
+}
+
+/// Salsa query: the full type-alias environment visible from a package — the
+/// alias map ([`package_alias_map`]) plus its precomputed recursive-alias set.
+///
+/// This is THE alias environment for per-scope inference and throws analysis:
+/// computed once per package instead of once per scope (the old scheme
+/// rebuilt the map — re-collecting every dependency's exports and cloning
+/// every alias `Ty` — for every `infer_scope_types` call).
+///
+/// Note this is intentionally distinct from the MIR-side
+/// `resolved_aliases_for_package`, which collects *all* dependency aliases
+/// from their items; this one sees only dependency *interface exports*.
+#[salsa::tracked(returns(ref))]
+pub fn package_alias_env<'db>(
+    db: &'db dyn crate::Db,
+    pkg_id: PackageId<'db>,
+) -> crate::normalize::ResolvedAliases {
+    let res_ctx = crate::package_interface::package_resolution_context(db, pkg_id);
+    crate::normalize::resolved_aliases_from_map(package_alias_map(db, res_ctx))
 }
 
 /// Build the type-alias map visible from a package: its own aliases plus those
