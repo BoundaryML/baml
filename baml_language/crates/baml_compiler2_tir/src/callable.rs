@@ -1,4 +1,4 @@
-use std::collections::{BTreeSet, HashMap};
+use std::collections::BTreeSet;
 
 use baml_base::Name;
 use baml_compiler2_ast::ExprBody;
@@ -205,7 +205,7 @@ struct CallableThrowsAnalysis<'a, 'db> {
     pkg_id: PackageId<'db>,
     ns_context: &'a [Name],
     inference: &'a ScopeInference<'db>,
-    aliases: &'a HashMap<crate::ty::QualifiedTypeName, Ty>,
+    aliases: &'a crate::normalize::ResolvedAliases,
 }
 
 impl ThrowsAnalysisContext for CallableThrowsAnalysis<'_, '_> {
@@ -287,7 +287,7 @@ fn callee_uses_method_call_convention(
 
 pub(crate) fn instantiated_callee_throws(
     inference: &ScopeInference<'_>,
-    aliases: &HashMap<crate::ty::QualifiedTypeName, Ty>,
+    aliases: &crate::normalize::ResolvedAliases,
     callee_expr_id: baml_compiler2_ast::ExprId,
     args: &[baml_compiler2_ast::ExprId],
     unwrap_optional_callee: bool,
@@ -303,7 +303,7 @@ pub(crate) fn instantiated_callee_throws(
     // parameter) must be resolved to its underlying `Ty::Function` before its
     // `throws` can be read; otherwise the match below falls through and the
     // caller fabricates an `Unknown` throw fact.
-    let typed_callee = crate::inference::expand_alias_chains(typed_callee, aliases);
+    let typed_callee = crate::inference::expand_alias_chains(typed_callee, &aliases.aliases);
 
     let uses_method_convention = callee_uses_method_call_convention(inference, callee_expr_id);
 
@@ -405,7 +405,9 @@ pub fn callable_throws<'db>(db: &'db dyn crate::Db, function: FunctionLoc<'db>) 
             };
             let inference = infer_scope_types(db, scope_id);
             let res_ctx = package_resolution_context(db, pkg_id);
-            let aliases = crate::inference::package_alias_map(db, res_ctx);
+            let aliases = crate::normalize::resolved_aliases_from_map(
+                crate::inference::package_alias_map(db, res_ctx),
+            );
             crate::throws_analysis::collect_escaping_throws(
                 &CallableThrowsAnalysis {
                     db,

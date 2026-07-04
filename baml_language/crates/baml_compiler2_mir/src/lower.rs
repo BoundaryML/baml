@@ -86,7 +86,7 @@ pub fn resolved_aliases_for_package(
 fn interface_tir_type_args_match_preserving_typevars(
     impl_iface_args: &[Tir2Ty],
     iface_type_args: &[Tir2Ty],
-    aliases: &HashMap<QualifiedTypeName, Tir2Ty>,
+    aliases: &ResolvedAliases,
 ) -> bool {
     impl_iface_args.len() == iface_type_args.len()
         && impl_iface_args
@@ -108,7 +108,7 @@ fn interface_tir_type_args_match_preserving_typevars(
 fn tir_type_satisfies_dispatch_request(
     actual: &Tir2Ty,
     requested: &Tir2Ty,
-    aliases: &HashMap<QualifiedTypeName, Tir2Ty>,
+    aliases: &ResolvedAliases,
 ) -> bool {
     if baml_compiler2_tir::normalize::is_same_normalized_type(actual, requested, aliases) {
         return true;
@@ -366,7 +366,7 @@ fn bind_interface_class_type_arg(
     name: &Name,
     actual: &Tir2Ty,
     bindings: &mut FxHashMap<Name, Tir2Ty>,
-    aliases: &HashMap<QualifiedTypeName, Tir2Ty>,
+    aliases: &ResolvedAliases,
 ) -> bool {
     match bindings.get(name) {
         Some(existing) => {
@@ -383,7 +383,7 @@ fn infer_interface_class_bindings(
     formal: &Tir2Ty,
     actual: &Tir2Ty,
     class_params: &[Name],
-    aliases: &HashMap<QualifiedTypeName, Tir2Ty>,
+    aliases: &ResolvedAliases,
     bindings: &mut FxHashMap<Name, Tir2Ty>,
     // Associated-type bindings tolerate an unpinnable typevar union
     // (`Error = E | E2` vs a normalized request) by leaving the params
@@ -614,7 +614,7 @@ fn interface_class_guard_for_args(
     requested_iface_args: &[Tir2Ty],
     requested_iface_assoc: &[(Name, Tir2Ty)],
     class_params: &[Name],
-    aliases: &HashMap<QualifiedTypeName, Tir2Ty>,
+    aliases: &ResolvedAliases,
 ) -> Option<InterfaceClassGuard> {
     // An *uninstantiated* request (no type args) matches any implementor
     // instantiation — e.g. `self: Container` inside a generic interface's
@@ -818,7 +818,7 @@ fn type_satisfies_bound(
     db: &dyn crate::Db,
     actual: &Tir2Ty,
     bound: &Tir2Ty,
-    aliases: &std::collections::HashMap<QualifiedTypeName, Tir2Ty>,
+    aliases: &ResolvedAliases,
     default_pkg: &baml_base::Name,
     depth: u32,
 ) -> bool {
@@ -1587,6 +1587,16 @@ type DispatchCacheKey = (
 #[derive(Default)]
 pub struct DispatchCandidateCache {
     map: std::cell::RefCell<FxHashMap<DispatchCacheKey, Vec<InterfaceMethodCandidate>>>,
+    /// Memo for [`LoweringContext::registry_dispatch_target_for_concrete`]:
+    /// `(receiver type, method name)` → the interface view that dispatches it,
+    /// if any. Resolution scans every impl rule of every package (running
+    /// `match_ty_pattern` per rule), and the *negative* answer — "no interface
+    /// dispatches this method" — is both the common case and the most
+    /// expensive (the scan never short-circuits), so misses are cached too.
+    /// The resolution reads only the Salsa db and package-level data (the
+    /// current file contributes nothing but its package, which is this
+    /// cache's own dimension), so no per-function state is in the key.
+    registry_targets: std::cell::RefCell<FxHashMap<(Tir2Ty, Name), Option<InterfaceTypeView>>>,
 }
 
 /// Strategy for seeding a dispatched method's `frame.type_args`.
@@ -1930,7 +1940,7 @@ impl<'db> LoweringContext<'db> {
                     &rule.for_ty_pattern,
                     actual_ty,
                     &rule.generic_params,
-                    &self.resolved_aliases.aliases,
+                    self.resolved_aliases,
                 ) else {
                     continue;
                 };
@@ -1939,13 +1949,13 @@ impl<'db> LoweringContext<'db> {
                 if !registry.type_implements_interface_via_rule(
                     actual_ty,
                     &iface_ty,
-                    &self.resolved_aliases.aliases,
+                    self.resolved_aliases,
                     |actual, bound| {
                         type_satisfies_bound(
                             self.db,
                             actual,
                             bound,
-                            &self.resolved_aliases.aliases,
+                            self.resolved_aliases,
                             &default_pkg,
                             BLANKET_BOUND_DEPTH,
                         )
@@ -2064,7 +2074,7 @@ impl<'db> LoweringContext<'db> {
                 let resolver =
                     baml_compiler2_tir::associated_projection::AssociatedProjectionResolver::new(
                         self.db,
-                        &self.resolved_aliases.aliases,
+                        self.resolved_aliases,
                         &self.generic_param_bounds,
                     );
                 let resolved = resolver.resolve_deep(ty);
@@ -2454,13 +2464,13 @@ impl<'db> LoweringContext<'db> {
                             if !registry.type_implements_interface_via_rule(
                                 &actual,
                                 &bound_ty,
-                                &resolved_aliases.aliases,
+                                resolved_aliases,
                                 |nested_actual, nested_bound| {
                                     type_satisfies_bound(
                                         db,
                                         nested_actual,
                                         nested_bound,
-                                        &resolved_aliases.aliases,
+                                        resolved_aliases,
                                         &pkg_info.package,
                                         BLANKET_BOUND_DEPTH,
                                     )
@@ -3289,7 +3299,7 @@ impl<'db> LoweringContext<'db> {
         let resolved =
             baml_compiler2_tir::associated_projection::AssociatedProjectionResolver::new(
                 self.db,
-                &self.resolved_aliases.aliases,
+                self.resolved_aliases,
                 &self.generic_param_bounds,
             )
             .resolve_deep(ty);
@@ -3437,7 +3447,7 @@ impl<'db> LoweringContext<'db> {
                 let resolver =
                     baml_compiler2_tir::associated_projection::AssociatedProjectionResolver::new(
                         self.db,
-                        &self.resolved_aliases.aliases,
+                        self.resolved_aliases,
                         &self.generic_param_bounds,
                     );
                 let resolved = resolver.resolve_deep(ty);
@@ -3652,7 +3662,7 @@ impl<'db> LoweringContext<'db> {
                 let resolver =
                     baml_compiler2_tir::associated_projection::AssociatedProjectionResolver::new(
                         self.db,
-                        &self.resolved_aliases.aliases,
+                        self.resolved_aliases,
                         &self.generic_param_bounds,
                     );
                 let resolved = resolver.resolve_deep(ty);
@@ -3674,7 +3684,28 @@ impl<'db> LoweringContext<'db> {
     /// switch. Returns the interface view. TIR has already rejected the
     /// ambiguous (>1 interface) case with E0121, so the first declaring match
     /// is unambiguous for a compiling program.
+    ///
+    /// Memoized in the package-shared [`DispatchCandidateCache`] — see the
+    /// `registry_targets` field for why (the rule scan is expensive and its
+    /// negative answer is the common case).
     fn registry_dispatch_target_for_concrete(
+        &self,
+        recv_ty: &Tir2Ty,
+        method: &Name,
+    ) -> Option<InterfaceTypeView> {
+        let key = (recv_ty.clone(), method.clone());
+        if let Some(hit) = self.dispatch_cache.registry_targets.borrow().get(&key) {
+            return hit.clone();
+        }
+        let resolved = self.registry_dispatch_target_for_concrete_uncached(recv_ty, method);
+        self.dispatch_cache
+            .registry_targets
+            .borrow_mut()
+            .insert(key, resolved.clone());
+        resolved
+    }
+
+    fn registry_dispatch_target_for_concrete_uncached(
         &self,
         recv_ty: &Tir2Ty,
         method: &Name,
@@ -3711,7 +3742,7 @@ impl<'db> LoweringContext<'db> {
                     &rule.for_ty_pattern,
                     recv_ty,
                     &rule.generic_params,
-                    &self.resolved_aliases.aliases,
+                    self.resolved_aliases,
                 ) else {
                     continue;
                 };
@@ -3789,7 +3820,7 @@ impl<'db> LoweringContext<'db> {
             pkg_id,
             ty,
             iface,
-            &self.resolved_aliases.aliases,
+            self.resolved_aliases,
         )?;
         Some(ResolvedImplBlock {
             ctx: self,
@@ -11604,7 +11635,7 @@ impl<'db> LoweringContext<'db> {
                         &rule.for_ty_pattern,
                         &candidate_class_ty,
                         &rule.generic_params,
-                        &self.resolved_aliases.aliases,
+                        self.resolved_aliases,
                     );
                     let candidate_ty =
                         if matches!(rule.for_ty_pattern, baml_compiler2_tir::ty::Ty::TypeVar(..))
@@ -11637,13 +11668,13 @@ impl<'db> LoweringContext<'db> {
                                 &rule,
                                 &requested_iface_ty,
                                 Some(candidate_ty),
-                                &self.resolved_aliases.aliases,
+                                self.resolved_aliases,
                                 |actual, bound| {
                                     type_satisfies_bound(
                                         self.db,
                                         actual,
                                         bound,
-                                        &self.resolved_aliases.aliases,
+                                        self.resolved_aliases,
                                         &file_pkg_info.package,
                                         BLANKET_BOUND_DEPTH,
                                     )
@@ -11655,13 +11686,13 @@ impl<'db> LoweringContext<'db> {
                                 &rule,
                                 &requested_iface_ty,
                                 None,
-                                &self.resolved_aliases.aliases,
+                                self.resolved_aliases,
                                 |actual, bound| {
                                     type_satisfies_bound(
                                         self.db,
                                         actual,
                                         bound,
-                                        &self.resolved_aliases.aliases,
+                                        self.resolved_aliases,
                                         &file_pkg_info.package,
                                         BLANKET_BOUND_DEPTH,
                                     )
@@ -11841,7 +11872,7 @@ impl<'db> LoweringContext<'db> {
         interface_tir_type_args_match_preserving_typevars(
             impl_iface_args,
             iface_type_args,
-            &self.resolved_aliases.aliases,
+            self.resolved_aliases,
         )
     }
 
@@ -11858,7 +11889,7 @@ impl<'db> LoweringContext<'db> {
                     tir_type_satisfies_dispatch_request(
                         impl_ty,
                         requested_ty,
-                        &self.resolved_aliases.aliases,
+                        self.resolved_aliases,
                     ) || self.tir_types_equivalent(impl_ty, requested_ty)
                 })
         })
@@ -11994,7 +12025,7 @@ impl<'db> LoweringContext<'db> {
     fn tir_types_equivalent(&self, a: &Tir2Ty, b: &Tir2Ty) -> bool {
         let resolver = baml_compiler2_tir::associated_projection::AssociatedProjectionResolver::new(
             self.db,
-            &self.resolved_aliases.aliases,
+            self.resolved_aliases,
             &(),
         );
         let resolved_a = resolver.resolve_deep(a);
@@ -12116,7 +12147,7 @@ impl<'db> LoweringContext<'db> {
                     if !baml_compiler2_tir::normalize::is_same_normalized_type(
                         &target_ty_tir,
                         impl_ty_tir,
-                        &self.resolved_aliases.aliases,
+                        self.resolved_aliases,
                     ) {
                         continue;
                     }
@@ -12126,7 +12157,7 @@ impl<'db> LoweringContext<'db> {
                         &target_ty_tir,
                         impl_ty_tir,
                         &imp.generic_params,
-                        &self.resolved_aliases.aliases,
+                        self.resolved_aliases,
                     ) else {
                         continue;
                     };
@@ -12186,13 +12217,13 @@ impl<'db> LoweringContext<'db> {
                             &rule,
                             &requested_iface_ty,
                             None,
-                            &self.resolved_aliases.aliases,
+                            self.resolved_aliases,
                             |actual, bound| {
                                 type_satisfies_bound(
                                     self.db,
                                     actual,
                                     bound,
-                                    &self.resolved_aliases.aliases,
+                                    self.resolved_aliases,
                                     &pkg_info.package,
                                     BLANKET_BOUND_DEPTH,
                                 )
@@ -12207,13 +12238,13 @@ impl<'db> LoweringContext<'db> {
                                 &rule,
                                 &dispatch_iface_ty,
                                 None,
-                                &self.resolved_aliases.aliases,
+                                self.resolved_aliases,
                                 |actual, bound| {
                                     type_satisfies_bound(
                                         self.db,
                                         actual,
                                         bound,
-                                        &self.resolved_aliases.aliases,
+                                        self.resolved_aliases,
                                         &pkg_info.package,
                                         BLANKET_BOUND_DEPTH,
                                     )
@@ -12370,7 +12401,7 @@ impl<'db> LoweringContext<'db> {
                     requested_args,
                     requested_assoc,
                     class_params,
-                    &self.resolved_aliases.aliases,
+                    self.resolved_aliases,
                 ) else {
                     continue;
                 };
@@ -12610,7 +12641,7 @@ impl<'db> LoweringContext<'db> {
                             requested_args,
                             requested_assoc,
                             &class_data.generic_params,
-                            &self.resolved_aliases.aliases,
+                            self.resolved_aliases,
                         ) else {
                             continue;
                         };
@@ -12689,7 +12720,7 @@ impl<'db> LoweringContext<'db> {
                         requested_args,
                         requested_assoc,
                         &class_data.generic_params,
-                        &self.resolved_aliases.aliases,
+                        self.resolved_aliases,
                     ) else {
                         continue;
                     };
@@ -16155,7 +16186,7 @@ mod tests {
 
     #[test]
     fn interface_tir_type_args_match_preserves_type_var_identity() {
-        let aliases = HashMap::new();
+        let aliases = ResolvedAliases::default();
 
         assert!(interface_tir_type_args_match_preserving_typevars(
             &[type_var("L"), type_var("R")],
@@ -16171,7 +16202,7 @@ mod tests {
 
     #[test]
     fn interface_class_guard_checks_assoc_when_request_omits_generic_args() {
-        let aliases = HashMap::new();
+        let aliases = ResolvedAliases::default();
         let impl_args = vec![primitive(&PrimitiveType::String)];
         let requested_args = Vec::new();
         let requested_assoc = vec![(Name::new("Value"), primitive(&PrimitiveType::Int))];

@@ -2036,7 +2036,7 @@ fn compute_function_metadata_from_item_tree(
     let raw_bound_resolver =
         baml_compiler2_tir::associated_projection::AssociatedProjectionResolver::new(
             db,
-            &cache.aliases,
+            cache,
             &raw_generic_param_bounds,
         );
     let generic_param_bounds: HashMap<Name, baml_compiler2_tir::ty::Ty> = raw_generic_param_bounds
@@ -2048,7 +2048,7 @@ fn compute_function_metadata_from_item_tree(
         let tir_ty = lower_tir_type(te);
         baml_compiler2_tir::associated_projection::AssociatedProjectionResolver::new(
             db,
-            &cache.aliases,
+            cache,
             &generic_param_bounds,
         )
         .resolve_deep(&tir_ty)

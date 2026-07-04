@@ -47,7 +47,7 @@ impl TypeVarBounds for () {
 pub struct AssociatedProjectionResolver<'a, 'db, B: TypeVarBounds + ?Sized> {
     db: &'db dyn crate::Db,
     res_ctx: Option<&'db PackageResolutionContext<'db>>,
-    aliases: &'a HashMap<QualifiedTypeName, Ty>,
+    aliases: &'a crate::normalize::ResolvedAliases,
     generic_param_bounds: &'a B,
 }
 
@@ -58,7 +58,7 @@ impl<'a, 'db, B: TypeVarBounds + ?Sized> AssociatedProjectionResolver<'a, 'db, B
     /// emission where the package access check has already happened upstream.
     pub fn new(
         db: &'db dyn crate::Db,
-        aliases: &'a HashMap<QualifiedTypeName, Ty>,
+        aliases: &'a crate::normalize::ResolvedAliases,
         generic_param_bounds: &'a B,
     ) -> Self {
         Self {
@@ -74,7 +74,7 @@ impl<'a, 'db, B: TypeVarBounds + ?Sized> AssociatedProjectionResolver<'a, 'db, B
     pub fn with_resolution_context(
         db: &'db dyn crate::Db,
         res_ctx: &'db PackageResolutionContext<'db>,
-        aliases: &'a HashMap<QualifiedTypeName, Ty>,
+        aliases: &'a crate::normalize::ResolvedAliases,
         generic_param_bounds: &'a B,
     ) -> Self {
         Self {
@@ -1094,7 +1094,7 @@ impl<'a, 'db, B: TypeVarBounds + ?Sized> AssociatedProjectionResolver<'a, 'db, B
         let mut ty = ty;
         for _ in 0..64 {
             match &ty {
-                Ty::TypeAlias(qtn, _) => match self.aliases.get(qtn) {
+                Ty::TypeAlias(qtn, _) => match self.aliases.aliases.get(qtn) {
                     Some(expanded) => ty = expanded.clone(),
                     None => break,
                 },
