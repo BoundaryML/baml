@@ -355,6 +355,23 @@ fn env_interface_bounds(
     bounds
 }
 
+/// The number of generic parameters the interface named `qtn` declares, or `None`
+/// if `qtn` does not resolve to an interface.
+fn interface_declared_generic_arity(
+    db: &dyn crate::Db,
+    qtn: &crate::ty::QualifiedTypeName,
+) -> Option<usize> {
+    let pkg_id = baml_compiler2_hir::package::PackageId::new(db, qtn.package().clone());
+    let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
+    let baml_compiler2_hir::contributions::Definition::Interface(loc) =
+        pkg_items.lookup_type(qtn.namespace(), qtn.name())?
+    else {
+        return None;
+    };
+    let tree = baml_compiler2_ppir::file_item_tree(db, loc.file(db));
+    Some(tree.interfaces.get(&loc.id(db))?.generic_params.len())
+}
+
 fn install_generic_param_bounds(
     db: &dyn crate::Db,
     builder: &mut TypeInferenceBuilder<'_>,
@@ -380,6 +397,25 @@ fn install_generic_param_bounds(
         );
         for diag in diags {
             builder.report_at_span(diag, span);
+        }
+        // A generic interface used as a bare bound (`T extends Outer` where `interface
+        // Outer<X>`) under-instantiates it: a bound, unlike a value position, has no way to
+        // infer the missing argument, so it is an arity error. The with-arguments mismatch
+        // (`Outer<int, int>`) is already reported by `lower_type_expr`, which deliberately
+        // skips the bare form (it is a valid wildcard in value positions).
+        if let Ty::Interface(qtn, generics, _, _) = &bound_ty
+            && generics.is_empty()
+            && let Some(arity) = interface_declared_generic_arity(db, qtn)
+            && arity > 0
+        {
+            builder.report_at_span(
+                crate::infer_context::TirTypeError::WrongNumberOfTypeArgs {
+                    type_name: qtn.name().clone(),
+                    expected: arity,
+                    got: 0,
+                },
+                span,
+            );
         }
         bounds.insert(name.clone(), bound_ty);
     }

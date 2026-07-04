@@ -1506,6 +1506,108 @@ mod tests {
         );
     }
 
+    /// Drive `infer_scope_types` on the declaration scope named `name` (a class,
+    /// interface, or function) and return the type errors it raised.
+    fn decl_scope_type_errors(db: &TestDb, name: &str) -> Vec<TirTypeError> {
+        let items = baml_compiler2_ppir::package_items(db, PackageId::new(db, Name::new("user")));
+        let def = items
+            .lookup_type(&[], &Name::new(name))
+            .or_else(|| items.lookup_value(&[], &Name::new(name)))
+            .unwrap_or_else(|| panic!("declaration `{name}` should resolve"));
+        let file = def.file(db);
+        let index = baml_compiler2_ppir::file_semantic_index(db, file);
+        let scope_id = index
+            .scope_ids
+            .iter()
+            .copied()
+            .find(|scope_id| {
+                let scope = &index.scopes[scope_id.file_scope_id(db).index() as usize];
+                scope.name.as_ref().is_some_and(|n| n.as_str() == name)
+            })
+            .unwrap_or_else(|| panic!("declaration scope for `{name}`"));
+        crate::inference::infer_scope_types(db, scope_id)
+            .diagnostics()
+            .diagnostics
+            .iter()
+            .map(|d| d.error.clone())
+            .collect()
+    }
+
+    fn has_bare_bound_arity_error(errs: &[TirTypeError], iface: &str, expected: usize) -> bool {
+        errs.iter().any(|e| {
+            matches!(
+                e,
+                TirTypeError::WrongNumberOfTypeArgs { type_name, expected: exp, got: 0 }
+                    if type_name.as_str() == iface && *exp == expected
+            )
+        })
+    }
+
+    // A generic interface used as a bare bound (`T extends Box` where `interface Box<E>`)
+    // under-instantiates it: a bound cannot infer the missing argument, so it is an arity
+    // error — on a class declaration's generic parameter here.
+    #[test]
+    fn bare_generic_interface_bound_on_class_is_arity_error() {
+        let db = compile(concat!(
+            "interface Box<E> {\n  value: E\n}\n",
+            "class Holder<T extends Box> {\n  item: T\n}\n",
+        ));
+        let errs = decl_scope_type_errors(&db, "Holder");
+        assert!(
+            has_bare_bound_arity_error(&errs, "Box", 1),
+            "expected a bare-bound arity error against `Box`, got {errs:?}"
+        );
+    }
+
+    // The same arity error on a function declaration's generic parameter.
+    #[test]
+    fn bare_generic_interface_bound_on_function_is_arity_error() {
+        let db = compile(concat!(
+            "interface Box<E> {\n  value: E\n}\n",
+            "function unwrap<T extends Box>(b: T) -> int {\n  return 0\n}\n",
+        ));
+        let errs = decl_scope_type_errors(&db, "unwrap");
+        assert!(
+            has_bare_bound_arity_error(&errs, "Box", 1),
+            "expected a bare-bound arity error against `Box`, got {errs:?}"
+        );
+    }
+
+    // The same arity error on an associated type's `extends` bound.
+    #[test]
+    fn bare_generic_interface_bound_on_associated_type_is_arity_error() {
+        let db = compile(concat!(
+            "interface Box<E> {\n  value: E\n}\n",
+            "interface Outer {\n  type A extends Box\n}\n",
+        ));
+        let errs = decl_scope_type_errors(&db, "Outer");
+        assert!(
+            has_bare_bound_arity_error(&errs, "Box", 1),
+            "expected a bare-bound arity error against `Box`, got {errs:?}"
+        );
+    }
+
+    // A fully-instantiated generic bound and a bound on a non-generic interface are
+    // both well-formed: no arity error.
+    #[test]
+    fn instantiated_and_non_generic_interface_bounds_are_not_arity_errors() {
+        let db = compile(concat!(
+            "interface Box<E> {\n  value: E\n}\n",
+            "interface Named {\n  name: string\n}\n",
+            "class Full<T extends Box<int>> {\n  item: T\n}\n",
+            "class Plain<T extends Named> {\n  item: T\n}\n",
+        ));
+        for decl in ["Full", "Plain"] {
+            let errs = decl_scope_type_errors(&db, decl);
+            assert!(
+                !errs
+                    .iter()
+                    .any(|e| matches!(e, TirTypeError::WrongNumberOfTypeArgs { .. })),
+                "`{decl}` should not raise an arity error, got {errs:?}"
+            );
+        }
+    }
+
     // A concrete associated-type projection in an impl header re-enters `impl_data`
     // through `impls_for_type` — a salsa cycle. `impl_data`'s `cycle_result` converges
     // it to `CyclicHeader` (illegal) rather than panicking.
