@@ -1574,7 +1574,8 @@ type DispatchCacheKey = (
     Vec<(Name, Tir2Ty)>,
 );
 
-/// Shared memo for [`LoweringContext::interface_method_candidates_for`].
+/// Shared memo for `LoweringContext::interface_method_candidates_for` (a
+/// private lowering helper).
 ///
 /// Candidate resolution rescans every implementor of the requested interface
 /// (running type-pattern matching and normalization per candidate) at every
