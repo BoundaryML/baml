@@ -72,7 +72,8 @@ impl IdeInstallArgs {
             return Ok(OsString::from("cursor"));
         }
         if self.code {
-            return Ok(OsString::from("code"));
+            return command_on_path("code")
+                .ok_or_else(|| anyhow!("VS Code CLI `code` was not found on PATH"));
         }
 
         let cursor = command_on_path("cursor");
@@ -111,16 +112,16 @@ fn active_toolchain_vsix() -> Result<PathBuf> {
 fn command_on_path(command: &str) -> Option<OsString> {
     let path = env::var_os("PATH")?;
     for dir in env::split_paths(&path) {
-        let candidate = dir.join(command);
-        if candidate.exists() {
-            return Some(OsString::from(command));
-        }
         #[cfg(windows)]
         {
             let candidate = dir.join(format!("{command}.cmd"));
             if candidate.exists() {
                 return Some(OsString::from(format!("{command}.cmd")));
             }
+        }
+        let candidate = dir.join(command);
+        if candidate.exists() {
+            return Some(OsString::from(command));
         }
     }
     None
