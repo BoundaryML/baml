@@ -62,7 +62,7 @@ function json_alias.json_array_len() -> int {
     load_type int
     alloc_array 3
     store_var_load_var arr
-    is_type baml.json.json[]
+    is_type _[]
     pop_jump_if_false L0
     jump L1
 
@@ -86,7 +86,7 @@ function json_alias.json_map_has_key() -> bool {
     load_type string
     alloc_map 1
     store_var_load_var m
-    is_type map<string, baml.json.json>
+    is_type map<_, _>
     pop_jump_if_false L0
     jump L1
 

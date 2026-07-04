@@ -1199,6 +1199,76 @@ pub(crate) fn ty_to_template_from_resolved_ty(ty: &RuntimeTy) -> TyTemplate {
     }
 }
 
+/// Flatten a `RuntimeTy` union into its leaf members (recursively), pushing each
+/// non-union leaf into `out`. A recursive alias is kept as a single `TypeAlias`
+/// leaf — it is not expanded — matching `ResolvedAliases::convert`.
+fn flatten_runtime_union(ty: &RuntimeTy, out: &mut Vec<RuntimeTy>) {
+    match ty {
+        RuntimeTy::Union(members, _) => {
+            for m in members {
+                flatten_runtime_union(m, out);
+            }
+        }
+        other => out.push(other.clone()),
+    }
+}
+
+/// Replace a container template's immediate element position(s) with `Wildcard`
+/// so the emitter lowers it to a coarse `LIST`/`MAP` type tag rather than a
+/// structural element check. A non-container template is returned unchanged.
+fn wildcard_container_elements(template: TyTemplate) -> TyTemplate {
+    match template {
+        TyTemplate::List(_, attr) => TyTemplate::List(Box::new(TyTemplate::Wildcard), attr),
+        TyTemplate::Map { attr, .. } => TyTemplate::Map {
+            key: Box::new(TyTemplate::Wildcard),
+            value: Box::new(TyTemplate::Wildcard),
+            attr,
+        },
+        other => other,
+    }
+}
+
+/// Whether a coarse `LIST`/`MAP` type-tag test for the container arm `arm` is
+/// equivalent to the element-discriminating structural test, for values of the
+/// scrutinee's resolved static type `scrutinee`.
+///
+/// True when every same-shape (list or map) member of the scrutinee's flattened
+/// static type shares `arm`'s constructor identity — so no differently-shaped
+/// container value can reach this arm for the coarse tag to conflate — or when
+/// `arm`'s element is the top type (`unknown`), which every container already
+/// satisfies. A recursive alias member (kept unexpanded by `convert`, e.g.
+/// `json`) is not list/map-shaped, so it contributes no same-shape member: a
+/// pure-`json` scrutinee is (correctly) tag-sufficient, since on it a coarse
+/// "any list" tag *is* the `json[]` test.
+///
+/// Returns `false` for a non-container `arm` (the caller only asks about one).
+fn container_arm_tag_sufficient(arm: &RuntimeTy, scrutinee: &RuntimeTy) -> bool {
+    use baml_compiler2_tir::exhaustiveness::ty_ctor_identity;
+    let arm_is_list = match arm {
+        // A top (`unknown`) element already means "any list" / "any map", so the
+        // coarse tag is exact regardless of the scrutinee.
+        RuntimeTy::List(elem, _) if matches!(**elem, RuntimeTy::BuiltinUnknown { .. }) => {
+            return true;
+        }
+        RuntimeTy::Map { value, .. } if matches!(**value, RuntimeTy::BuiltinUnknown { .. }) => {
+            return true;
+        }
+        RuntimeTy::List(..) => true,
+        RuntimeTy::Map { .. } => false,
+        _ => return false,
+    };
+    let arm_id = ty_ctor_identity(arm.as_ty());
+    let mut members = Vec::new();
+    flatten_runtime_union(scrutinee, &mut members);
+    members.iter().all(|m| match m {
+        RuntimeTy::List(..) if arm_is_list => ty_ctor_identity(m.as_ty()) == arm_id,
+        RuntimeTy::Map { .. } if !arm_is_list => ty_ctor_identity(m.as_ty()) == arm_id,
+        // A different-shape container, or an alias / opaque leaf, cannot be
+        // confused with this arm's tag, so it does not block tag-sufficiency.
+        _ => true,
+    })
+}
+
 // ─── def_to_item_ref helper ──────────────────────────────────────────────────
 
 use baml_compiler2_hir::{
@@ -1877,6 +1947,15 @@ struct LoweringContext<'db> {
     // names the dispatching interface (`a.compare(b)` where `T extends
     // Comparable`). Saved/restored across nested lambdas.
     lambda_param_tir_types: FxHashMap<Name, Tir2Ty>,
+
+    /// The `(local, resolved static type)` of the value the enclosing `match` is
+    /// scrutinizing, set for the duration of its arm lowering (save/restored
+    /// across nested matches). A container arm's runtime type test consults this
+    /// — guarded on the local matching — to decide whether a coarse `LIST`/`MAP`
+    /// tag suffices in place of a structural element check (see
+    /// [`container_arm_tag_sufficient`]). `None` outside a match, and the local
+    /// guard keeps `is` / standalone tests element-precise even inside one.
+    match_scrutinee: Option<(Local, RuntimeTy)>,
 
     // The FileScopeId of the expression body currently being lowered.
     // Updated when descending into lambda bodies (Phase 3+).
@@ -2947,6 +3026,7 @@ impl<'db> LoweringContext<'db> {
             generic_param_bounds,
             dispatch_cache,
             lambda_param_tir_types: FxHashMap::default(),
+            match_scrutinee: None,
             current_scope: func_scope_id,
             current_metadata_scope: MetadataScope::Body(func_scope_id),
             body: expr_body,
@@ -3040,6 +3120,7 @@ impl<'db> LoweringContext<'db> {
             generic_param_bounds: FxHashMap::default(),
             dispatch_cache,
             lambda_param_tir_types: FxHashMap::default(),
+            match_scrutinee: None,
             current_scope: let_scope_id,
             current_metadata_scope: MetadataScope::Body(let_scope_id),
             body: expr_body,
@@ -13907,20 +13988,27 @@ impl LoweringContext<'_> {
             .iter()
             .map(|arm| (arm.pattern, arm.body, arm.guard))
             .collect();
-        if self.try_lower_as_switch(
+
+        // Expose the scrutinee's static type to each arm's container type test so
+        // it can decide whether a coarse `LIST`/`MAP` tag suffices; restore the
+        // enclosing match's scrutinee (if any) once the arms are lowered.
+        let saved_scrutinee = self
+            .match_scrutinee
+            .replace((scrutinee_local, self.expr_ty(scrutinee)));
+
+        let switched = self.try_lower_as_switch(
             scrutinee_local,
             &switch_arms,
             dest.clone(),
             bb_join,
             SwitchOtherwise::Match { is_exhaustive },
             None,
-        ) {
-            self.builder.set_current_block(bb_join);
-            return;
+        );
+        if !switched {
+            self.lower_match_chain(scrutinee_local, &arms, dest, bb_join, is_exhaustive);
         }
 
-        self.lower_match_chain(scrutinee_local, &arms, dest, bb_join, is_exhaustive);
-
+        self.match_scrutinee = saved_scrutinee;
         self.builder.set_current_block(bb_join);
     }
 
@@ -14526,6 +14614,23 @@ impl LoweringContext<'_> {
             // types the template is a realized leaf — the emitter's tag /
             // class-identity fast path.
             let ty_template = ty_to_template_from_resolved_ty(&ty);
+            // If this is a container arm whose element the emitter would otherwise
+            // check structurally, but the enclosing match's scrutinee statically
+            // proves a coarse `LIST`/`MAP` tag suffices, wildcard the element so
+            // the emitter keeps the cheap tag. Guarded on the scrutinee local so
+            // an `is` / nested test against a different value stays element-precise.
+            let ty_template =
+                if self
+                    .match_scrutinee
+                    .as_ref()
+                    .is_some_and(|(local, scrutinee_ty)| {
+                        *local == scrutinee && container_arm_tag_sufficient(&ty, scrutinee_ty)
+                    })
+                {
+                    wildcard_container_elements(ty_template)
+                } else {
+                    ty_template
+                };
             self.emit_is_type_template_branch(scrutinee, ty_template, success, failure);
         }
     }

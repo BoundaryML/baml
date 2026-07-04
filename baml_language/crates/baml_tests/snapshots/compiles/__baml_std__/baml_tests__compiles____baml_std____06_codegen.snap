@@ -13212,7 +13212,7 @@ function baml.toml.item_to_json(item: baml.toml.Item) -> baml.json.json {
 
 function baml.toml.table_from_json(j: baml.json.json) -> baml.toml.Table {
     load_var j
-    is_type map<string, baml.json.json>
+    is_type map<_, _>
     pop_jump_if_false L0
     jump L1
 

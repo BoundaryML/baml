@@ -3193,6 +3193,20 @@ impl PullSink for StackifyCodegen<'_, '_> {
             let inst = this.emit(Instruction::LoadConst(idx));
             this.set_operand(inst, OperandMeta::Const("false".to_string()));
         };
+        // Hand the whole template to the VM's value matcher
+        // (`type_match::value_matches_template`) via a raw `ConstValue::Type`:
+        // it resolves the template's frame refs against `frame.type_args` and
+        // relates *invariantly* at generic-argument positions — the element- and
+        // arg-discriminating check a coarse type tag cannot express (`int[]` ≠
+        // `string[]`, `map<string,int>` ≠ `map<string,string>`, a realized `T[]`).
+        let emit_structural = |this: &mut Self, template: &TyTemplate| {
+            let c = this.add_constant(ConstValue::Type(template.clone()));
+            let inst = this.emit(Instruction::IsType(c));
+            this.set_operand(inst, OperandMeta::Const(template.to_string()));
+        };
+        // A template position is a match-any hole (`_`) when it is a bare
+        // `Wildcard` — the only leaf that matches any type at its slot.
+        let is_match_any = |t: &TyTemplate| matches!(t, TyTemplate::Wildcard);
 
         match ty_template {
             // ── Class check ──────────────────────────────────────────────────
@@ -3219,10 +3233,55 @@ impl PullSink for StackifyCodegen<'_, '_> {
                     self.set_operand(inst, OperandMeta::Const(format!("{class_name_str}<...>")));
                 }
             }
+
+            // ── Containers ───────────────────────────────────────────────────
+            // A list/map whose element positions are all match-any holes is
+            // exactly the coarse "any list" / "any map" check, so the cheap type
+            // tag suffices — and this preserves an erased `T[]` / `_[]` pattern's
+            // "any list" semantics. When an element carries a discriminating type
+            // the tag would conflate `int[]` with `string[]`, so route the whole
+            // template through the structural matcher instead.
+            TyTemplate::List(elem, _) if is_match_any(elem) => {
+                let c = self.add_constant(ConstValue::Int(baml_type::typetag::LIST));
+                let inst = self.emit(Instruction::IsType(c));
+                self.set_operand(inst, OperandMeta::Const(ty_template.to_string()));
+            }
+            TyTemplate::Map { key, value, .. } if is_match_any(key) && is_match_any(value) => {
+                let c = self.add_constant(ConstValue::Int(baml_type::typetag::MAP));
+                let inst = self.emit(Instruction::IsType(c));
+                self.set_operand(inst, OperandMeta::Const(ty_template.to_string()));
+            }
+
+            // ── Structural (value matcher) ───────────────────────────────────
+            // Element/key/value discriminates, a bare frame reference (`T`,
+            // `T[]`), or a union that may carry one: the VM value matcher. The
+            // deprecated `TypeArgRefOrWildcard` (B-634 dispatch-guard tolerance)
+            // routes here too — `substitute` resolves it to the same frame slot
+            // as `TypeArgRef`, and the matcher's covariant top-level relation
+            // gives it the subtype-or-wildcard semantics it needs.
+            #[expect(
+                deprecated,
+                reason = "TypeArgRefOrWildcard is a live dispatch-guard template variant until type erasure is removed"
+            )]
+            TyTemplate::List(..)
+            | TyTemplate::Map { .. }
+            | TyTemplate::TypeArgRef(_)
+            | TyTemplate::TypeArgRefOrWildcard(_)
+            | TyTemplate::Union(..) => emit_structural(self, ty_template),
+
+            // A bare wildcard is the erased/unrepresentable fallback — an
+            // unresolved `Self` or associated projection lowered to a hole. Keep
+            // it constant-false rather than over-matching every value; faithful
+            // `Self` and projection lowering land in later units.
+            TyTemplate::Wildcard => emit_false(self),
+
+            // Everything else keeps its existing coarse check.
             other => {
                 // A fully-realized leaf (primitive, enum, alias, literal, …):
                 // class-pointer identity for a `TypeAlias`, otherwise its type
-                // tag. This is the flattened successor to the old `Concrete` arm.
+                // tag (this is where `Function` → the coarse `FUNCTION` tag). The
+                // only non-realized template reaching here is an associated
+                // projection (Unit-5 work), which has no representable check yet.
                 if let Ok(realized) = <&RealizedTy>::try_from(other) {
                     if let RealizedTy::TypeAlias(tn, _) = realized {
                         if let Some(class_obj_idx) = self.class_object_index_for_type_name(tn) {
@@ -3245,27 +3304,7 @@ impl PullSink for StackifyCodegen<'_, '_> {
                         emit_false(self);
                     }
                 } else {
-                    // A structural shape with template holes. Its runtime check
-                    // is still the coarse erased-shape tag today (element/arg-
-                    // aware checks are upcoming work), so a typevar-carrying
-                    // `T[]` / `map<_, T>` / `(int) -> T` pattern keeps exactly the
-                    // semantics its erased form had: any list / map / function.
-                    let tag = match other {
-                        TyTemplate::List(..) => Some(baml_type::typetag::LIST),
-                        TyTemplate::Map { .. } => Some(baml_type::typetag::MAP),
-                        TyTemplate::Function { .. } => Some(baml_type::typetag::FUNCTION),
-                        // Bare frame refs, wildcards, unions, interfaces,
-                        // projections, futures, watch accessors: no representable
-                        // check today — `false`.
-                        _ => None,
-                    };
-                    if let Some(tag) = tag {
-                        let c = self.add_constant(ConstValue::Int(tag));
-                        let inst = self.emit(Instruction::IsType(c));
-                        self.set_operand(inst, OperandMeta::Const(ty_template.to_string()));
-                    } else {
-                        emit_false(self);
-                    }
+                    emit_false(self);
                 }
             }
         }

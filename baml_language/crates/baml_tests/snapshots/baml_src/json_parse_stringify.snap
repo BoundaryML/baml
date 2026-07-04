@@ -59,7 +59,7 @@ function json_parse_stringify.parse_array_len() -> int {
     call baml.json.parse
     store_var j
     load_var j
-    is_type baml.json.json[]
+    is_type _[]
     pop_jump_if_false L0
     jump L1
 
@@ -117,7 +117,7 @@ function json_parse_stringify.parse_then_match_array_len() -> int {
     call baml.json.parse
     store_var j
     load_var j
-    is_type baml.json.json[]
+    is_type _[]
     pop_jump_if_false L0
     jump L1
 

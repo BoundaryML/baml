@@ -14450,7 +14450,7 @@ fn baml.toml.table_from_json(j: baml.json.json) -> baml.toml.Table {
     let _48: baml.json.JsonDecodeError
 
     bb0: {
-        _2 = is_type(copy _1, map<string, baml.json.json>);
+        _2 = is_type(copy _1, map<_, _>);
         branch copy _2 -> [bb2, bb1];
     }
 
