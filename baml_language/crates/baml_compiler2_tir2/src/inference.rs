@@ -341,14 +341,16 @@ fn env_interface_bounds(
             &mut diags,
         );
         if let Some(constraint) = bound_ty.as_interface() {
-            bounds.entry(name.clone()).or_default().push(constraint);
+            // Last-wins, matching `install_generic_param_bounds`'s `insert`: a name repeated
+            // across `bound_param_names` is a shadowing artifact (an inner-scope parameter
+            // reusing an outer name), not an intersection conjunction, so the inner bound
+            // replaces the outer one. Keeping both would make this map disagree with the
+            // enforcement table it is meant to mirror.
+            bounds.insert(name.clone(), vec![constraint]);
         }
     }
     for (name, constraint) in &env.concrete_bounds {
-        bounds
-            .entry(name.clone())
-            .or_default()
-            .push(constraint.clone());
+        bounds.insert(name.clone(), vec![constraint.clone()]);
     }
     bounds
 }

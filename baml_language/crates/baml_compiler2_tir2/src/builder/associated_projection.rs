@@ -350,8 +350,21 @@ fn associated_type_bound_interface(
     // its inner pin.
     let mut bindings: FxHashMap<Name, Ty> = FxHashMap::default();
     bindings.insert(Name::new("Self"), self_ty.clone());
-    for (param, arg) in iface.generic_params.iter().zip(&realized.generics) {
-        bindings.insert(param.clone(), arg.clone());
+    // `realized` should carry exactly one argument per declared generic parameter; a mismatch
+    // is a malformed bound (an under-instantiated generic interface, reported as
+    // `WrongNumberOfTypeArgs` at its declaration). Bind any un-provided parameter to
+    // `Ty::Error` rather than leaving it a bare `Ty::TypeVar` that would escape the result.
+    debug_assert_eq!(
+        iface.generic_params.len(),
+        realized.generics.len(),
+        "bound `{}` realized with {} generic args for {} declared parameters",
+        realized.name.name(),
+        realized.generics.len(),
+        iface.generic_params.len(),
+    );
+    for (i, param) in iface.generic_params.iter().enumerate() {
+        let arg = realized.generics.get(i).cloned().unwrap_or_else(error_ty);
+        bindings.insert(param.clone(), arg);
     }
     // Every associated type is an in-scope name in the bound expression (`type A extends
     // Inner<C>` references sibling `C`), so each must be bound. Use its realized pin, or —
