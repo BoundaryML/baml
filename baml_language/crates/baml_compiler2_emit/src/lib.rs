@@ -21,8 +21,9 @@ use baml_compiler2_hir::{
     package::PackageId,
 };
 use baml_compiler2_mir::{
-    BuiltinKind, Local, MirFunctionBody, MirFunctionKind, Operand, Place, ResolvedAliases, Rvalue,
-    StatementKind, Terminator, def_to_item_ref, lower_function, lower_let_body,
+    BuiltinKind, DispatchCandidateCache, Local, MirFunctionBody, MirFunctionKind, Operand, Place,
+    ResolvedAliases, Rvalue, StatementKind, Terminator, def_to_item_ref, lower_function_cached,
+    lower_let_body_cached,
 };
 // Use the PPIR item tree (which includes synthetic *$stream items) rather than
 // the bare HIR item tree, to stay consistent with TIR's LocalItemId indices.
@@ -875,6 +876,13 @@ pub fn generate_project_bytecode_with_opt(
     let mut program = Program::new();
     let all_files = compiler2_all_files(db);
     let alias_caches = build_alias_caches(db, &all_files);
+    // One dispatch-candidate cache per package, shared across every function
+    // lowered below so repeated interface-dispatch requests (the same
+    // `Iterator.next` question at every `for` loop, say) resolve once.
+    let dispatch_caches: HashMap<Name, std::rc::Rc<DispatchCandidateCache>> = alias_caches
+        .keys()
+        .map(|pkg| (pkg.clone(), std::rc::Rc::default()))
+        .collect();
 
     // --- Pass 1: Build globals map (function name -> global index) ---
     // Functions are allocated first (slots 0..N-1), then let bindings (slots N..M-1).
@@ -890,22 +898,30 @@ pub fn generate_project_bytecode_with_opt(
     // actual program.globals array built in Pass 4 (which also skips intrinsics).
     for file in &all_files {
         let item_tree = file_item_tree(db, *file);
-        for local_id in item_tree.functions.keys() {
+        for (local_id, func_data) in &item_tree.functions {
             let func_loc = FunctionLoc::new(db, *file, *local_id);
-            let mir = lower_function(db, func_loc, opt);
             // Skip intrinsic and await-any functions — they are never called via
             // a Call instruction (intrinsics lower to StatementKind::Intrinsic;
             // `__await_any` lowers to a Terminator::AwaitAny). Pass 4 skips them
             // too, so they must be skipped here as well or the Pass-1 indices
             // desync from the program.globals array (off-by-one for everything
             // after the skipped function).
+            //
+            // The kind is read straight off the item tree rather than from
+            // `lower_function(..).kind`: `lower_function` copies the item
+            // tree's `FunctionBodyDef::Builtin(kind)` into
+            // `MirFunctionKind::Builtin(kind)` verbatim, and fully MIR-lowering
+            // every function here just to inspect that one field would double
+            // the total lowering work (Pass 4 lowers every function again).
             if matches!(
-                mir.kind,
-                MirFunctionKind::Builtin(BuiltinKind::Intrinsic | BuiltinKind::AwaitAny)
+                func_data.body,
+                Some(baml_compiler2_ast::FunctionBodyDef::Builtin(
+                    BuiltinKind::Intrinsic | BuiltinKind::AwaitAny
+                ))
             ) {
                 continue;
             }
-            let fq_name = mir.item_ref.to_string();
+            let fq_name = def_to_item_ref(db, Definition::Function(func_loc)).to_string();
             globals.entry(fq_name).or_insert_with(|| {
                 let idx = global_idx;
                 global_idx += 1;
@@ -1225,7 +1241,8 @@ pub fn generate_project_bytecode_with_opt(
         let cache_pass4 = &alias_caches[&pkg_info_pass4.package];
         for (local_id, func_data) in &item_tree.functions {
             let func_loc = FunctionLoc::new(db, *file, *local_id);
-            let mir = lower_function(db, func_loc, opt);
+            let mir =
+                lower_function_cached(db, func_loc, opt, &dispatch_caches[&pkg_info_pass4.package]);
             let fq_name = mir.item_ref.to_string();
 
             let mut compiled_fn = match &mir.kind {
@@ -1461,6 +1478,7 @@ pub fn generate_project_bytecode_with_opt(
                 &enum_variants,
                 &mut program,
                 opt,
+                &dispatch_caches[pkg_name.as_str()],
             )?;
 
             let init_fq_name = if pkg_name.as_str() == "user" {
@@ -2563,6 +2581,7 @@ fn compile_init_function<'db>(
     enum_variants: &HashMap<String, HashMap<String, usize>>,
     program: &mut Program,
     opt: OptLevel,
+    dispatch_cache: &std::rc::Rc<DispatchCandidateCache>,
 ) -> Result<Function, LoweringError> {
     // Build the $init bytecode: a sequence of Call + StoreGlobal pairs.
     let mut init_instructions: Vec<Instruction> = Vec::new();
@@ -2578,7 +2597,7 @@ fn compile_init_function<'db>(
         };
 
         // Lower the let initializer through MIR → MirFunctionBody (+ any lambda children).
-        let maybe_body = lower_let_body(db, *let_loc, opt);
+        let maybe_body = lower_let_body_cached(db, *let_loc, opt, dispatch_cache);
 
         let helper_fn = match maybe_body {
             Some((mir_body, lambdas)) => {
