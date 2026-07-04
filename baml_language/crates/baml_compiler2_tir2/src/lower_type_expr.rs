@@ -1619,6 +1619,72 @@ mod tests {
         }
     }
 
+    /// Lower `(base as qualifier).member` with both sides given as bare paths.
+    fn lower_qualified_projection(
+        db: &TestDb,
+        base: &str,
+        qualifier: &str,
+        member: &str,
+    ) -> (Ty, Vec<TirTypeError>) {
+        let items = baml_compiler2_ppir::package_items(db, PackageId::new(db, Name::new("user")));
+        let ctx = ScopeCtx {
+            db,
+            package_items: items,
+            ns_context: &[],
+            generic_params: &[],
+            bounds: &TypeVarBoundsMap::default(),
+            self_ty: None,
+        };
+        let expr = TypeExpr::AssociatedTypeProjection {
+            base: Box::new(path(base)),
+            interface: Some(Box::new(path(qualifier))),
+            member: Name::new(member),
+            attrs: vec![],
+        };
+        let mut diags = Vec::new();
+        let ty = lower_type_expr(&expr, &ctx, &mut diags);
+        (ty, diags)
+    }
+
+    // An explicit qualifier that resolves to a non-interface (`(x as SomeClass).Item`)
+    // is its own error — the qualifier lowered cleanly, so nothing upstream reported it.
+    #[test]
+    fn non_interface_explicit_qualifier_is_error() {
+        let db = compile(concat!(
+            "class Plain {\n  x: int\n}\n",
+            "class Data {\n  y: int\n}\n",
+        ));
+        let (ty, diags) = lower_qualified_projection(&db, "Data", "Plain", "Item");
+        assert!(matches!(ty, Ty::Error { .. }), "got {ty:?}");
+        assert!(
+            diags
+                .iter()
+                .any(|d| matches!(d, TirTypeError::NonInterfaceProjectionQualifier)),
+            "expected a non-interface-qualifier diagnostic, got {diags:?}"
+        );
+    }
+
+    // An *unresolvable* qualifier is already diagnosed by its own lowering — the
+    // projection must stay silent rather than pile on a second error.
+    #[test]
+    fn unresolved_explicit_qualifier_stays_poisoned() {
+        let db = compile("class Data {\n  y: int\n}\n");
+        let (ty, diags) = lower_qualified_projection(&db, "Data", "Nonexistent", "Item");
+        assert!(matches!(ty, Ty::Error { .. }), "got {ty:?}");
+        assert!(
+            !diags
+                .iter()
+                .any(|d| matches!(d, TirTypeError::NonInterfaceProjectionQualifier)),
+            "an unresolved qualifier must not double-report, got {diags:?}"
+        );
+        assert!(
+            diags
+                .iter()
+                .any(|d| matches!(d, TirTypeError::UnresolvedType { .. })),
+            "the qualifier's own lowering reports it, got {diags:?}"
+        );
+    }
+
     // A bound must be an interface: a class (or other concrete non-interface type)
     // in bound position is an error on class, function, and associated-type
     // declarations alike (impls already had this check).

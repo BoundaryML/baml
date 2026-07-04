@@ -94,6 +94,10 @@ pub(crate) fn lower_projection(
             });
             error_ty()
         }
+        Determination::NonInterfaceQualifier => {
+            diagnostics.push(TirTypeError::NonInterfaceProjectionQualifier);
+            error_ty()
+        }
         // Undeterminable here but not ill-formed: a base that cannot carry a projection,
         // or a base/qualifier that already errored (or resolves elsewhere). Lower to
         // `Ty::Error` without a fresh diagnostic.
@@ -120,6 +124,10 @@ enum Determination {
     /// More than one distinct interface in scope declares `member`; the projection
     /// must be disambiguated with an explicit `(base as I).member`.
     Ambiguous(Vec<baml_type::Interface>),
+    /// The explicit `(base as I)` qualifier resolved to something other than an
+    /// interface — a class, enum, primitive, or type variable cannot qualify a
+    /// projection.
+    NonInterfaceQualifier,
     /// `base` is a kind that cannot carry an associated-type projection.
     InvalidBase,
     /// `base` or the explicit qualifier already errored upstream.
@@ -141,8 +149,16 @@ fn determine_interface(
     if let Some(explicit_interface) = explicit_interface {
         let explicit_interface = expand_aliases(ctx, explicit_interface);
         let Some(interface) = explicit_interface.as_interface() else {
-            // Qualifier resolved to a non-interface; already lowered/diagnosed there.
-            return Determination::Poisoned;
+            return match explicit_interface {
+                // The qualifier itself failed to lower — already diagnosed there.
+                Ty::Error { .. } | Ty::Unknown { .. } | Ty::BuiltinUnknown { .. } => {
+                    Determination::Poisoned
+                }
+                // A *resolved* non-interface (`(x as SomeClass).Item`) lowered
+                // cleanly with no diagnostic, so silence here would swallow the
+                // error entirely — it is its own ill-formedness.
+                _ => Determination::NonInterfaceQualifier,
+            };
         };
         return if interface_declares_member(ctx.db(), &interface.name, member) {
             Determination::Determined(interface)
