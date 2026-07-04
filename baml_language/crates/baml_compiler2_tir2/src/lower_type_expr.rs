@@ -1506,14 +1506,16 @@ mod tests {
         );
     }
 
-    /// Drive `infer_scope_types` on the declaration scope named `name` (a class,
-    /// interface, or function) and return the type errors it raised.
-    fn decl_scope_type_errors(db: &TestDb, name: &str) -> Vec<TirTypeError> {
+    /// Drive `infer_scope_types` on the scope named `scope_name` in the file that
+    /// declares `anchor` (any package-level type or value), returning the type
+    /// errors it raised. `anchor` locates the file; `scope_name` may be a nested
+    /// scope such as an impl-block method.
+    fn scope_type_errors_at(db: &TestDb, anchor: &str, scope_name: &str) -> Vec<TirTypeError> {
         let items = baml_compiler2_ppir::package_items(db, PackageId::new(db, Name::new("user")));
         let def = items
-            .lookup_type(&[], &Name::new(name))
-            .or_else(|| items.lookup_value(&[], &Name::new(name)))
-            .unwrap_or_else(|| panic!("declaration `{name}` should resolve"));
+            .lookup_type(&[], &Name::new(anchor))
+            .or_else(|| items.lookup_value(&[], &Name::new(anchor)))
+            .unwrap_or_else(|| panic!("declaration `{anchor}` should resolve"));
         let file = def.file(db);
         let index = baml_compiler2_ppir::file_semantic_index(db, file);
         let scope_id = index
@@ -1522,15 +1524,24 @@ mod tests {
             .copied()
             .find(|scope_id| {
                 let scope = &index.scopes[scope_id.file_scope_id(db).index() as usize];
-                scope.name.as_ref().is_some_and(|n| n.as_str() == name)
+                scope
+                    .name
+                    .as_ref()
+                    .is_some_and(|n| n.as_str() == scope_name)
             })
-            .unwrap_or_else(|| panic!("declaration scope for `{name}`"));
+            .unwrap_or_else(|| panic!("scope named `{scope_name}`"));
         crate::inference::infer_scope_types(db, scope_id)
             .diagnostics()
             .diagnostics
             .iter()
             .map(|d| d.error.clone())
             .collect()
+    }
+
+    /// Drive `infer_scope_types` on the declaration scope named `name` (a class,
+    /// interface, or function) and return the type errors it raised.
+    fn decl_scope_type_errors(db: &TestDb, name: &str) -> Vec<TirTypeError> {
+        scope_type_errors_at(db, name, name)
     }
 
     fn has_bare_bound_arity_error(errs: &[TirTypeError], iface: &str, expected: usize) -> bool {
@@ -1604,6 +1615,187 @@ mod tests {
                     .iter()
                     .any(|e| matches!(e, TirTypeError::WrongNumberOfTypeArgs { .. })),
                 "`{decl}` should not raise an arity error, got {errs:?}"
+            );
+        }
+    }
+
+    // A bound must be an interface: a class (or other concrete non-interface type)
+    // in bound position is an error on class, function, and associated-type
+    // declarations alike (impls already had this check).
+    #[test]
+    fn non_interface_bound_is_error_on_decls() {
+        let db = compile(concat!(
+            "class Plain {\n  x: int\n}\n",
+            "class Holder<T extends Plain> {\n  item: T\n}\n",
+            "function get<T extends Plain>(x: T) -> int {\n  return 0\n}\n",
+            "interface Outer {\n  type A extends Plain\n}\n",
+        ));
+        for decl in ["Holder", "get", "Outer"] {
+            let errs = decl_scope_type_errors(&db, decl);
+            assert!(
+                errs.iter().any(|e| matches!(
+                    e,
+                    TirTypeError::GenericBoundNotInterface { bound: Ty::Class(qtn, ..) }
+                        if qtn.name().as_str() == "Plain"
+                )),
+                "`{decl}` should report a non-interface bound, got {errs:?}"
+            );
+        }
+    }
+
+    // A sibling type-variable bound (`<T, U extends T>`) is a special form, not a
+    // non-interface bound.
+    #[test]
+    fn sibling_type_var_bound_is_not_an_error() {
+        let db = compile("function pick<T, U extends T>(a: T, b: U) -> T {\n  return a\n}\n");
+        let errs = decl_scope_type_errors(&db, "pick");
+        assert!(
+            !errs
+                .iter()
+                .any(|e| matches!(e, TirTypeError::GenericBoundNotInterface { .. })),
+            "sibling type-var bound should not error, got {errs:?}"
+        );
+    }
+
+    // `<T, T>` in one declaration list is a duplicate — on classes, functions, and
+    // interfaces alike.
+    #[test]
+    fn duplicate_generic_param_is_error_on_class_function_and_interface() {
+        let db = compile(concat!(
+            "class Pair<T, T> {\n  a: T\n}\n",
+            "function twice<T, T>(x: T) -> T {\n  return x\n}\n",
+            "interface Both<T, T> {\n  value: T\n}\n",
+        ));
+        for decl in ["Pair", "twice", "Both"] {
+            let errs = decl_scope_type_errors(&db, decl);
+            assert!(
+                errs.iter().any(|e| matches!(
+                    e,
+                    TirTypeError::DuplicateGenericParam { name } if name.as_str() == "T"
+                )),
+                "`{decl}` should report duplicate parameter `T`, got {errs:?}"
+            );
+        }
+    }
+
+    // An associated type may not share its name with the interface's generic
+    // parameter: both occupy the interface's type-level namespace.
+    #[test]
+    fn associated_type_conflicting_with_generic_param_is_error() {
+        let db = compile("interface Conflict<A> {\n  type A\n}\n");
+        let errs = decl_scope_type_errors(&db, "Conflict");
+        assert!(
+            errs.iter().any(|e| matches!(
+                e,
+                TirTypeError::AssociatedTypeConflictsWithGenericParam { name } if name.as_str() == "A"
+            )),
+            "expected an associated-type/parameter conflict for `A`, got {errs:?}"
+        );
+    }
+
+    // The same associated type declared twice is a duplicate.
+    #[test]
+    fn duplicate_associated_type_is_error() {
+        let db = compile("interface Twice {\n  type A\n  type A\n}\n");
+        let errs = decl_scope_type_errors(&db, "Twice");
+        assert!(
+            errs.iter().any(|e| matches!(
+                e,
+                TirTypeError::DuplicateAssociatedType { name } if name.as_str() == "A"
+            )),
+            "expected a duplicate associated type `A`, got {errs:?}"
+        );
+    }
+
+    // A required (bodyless) interface method's generic may shadow neither the
+    // interface's generic parameter nor its associated types — required methods
+    // have no body scope, so this fires from the interface declaration's own
+    // validation.
+    #[test]
+    fn required_method_generic_shadowing_interface_type_level_names_is_error() {
+        let db = compile(concat!(
+            "interface ShadowParam<T> {\n  function get<T>(self) -> T\n}\n",
+            "interface ShadowAssoc {\n  type Item\n  function get<Item>(self) -> int\n}\n",
+        ));
+        for (decl, param) in [("ShadowParam", "T"), ("ShadowAssoc", "Item")] {
+            let errs = decl_scope_type_errors(&db, decl);
+            assert!(
+                errs.iter().any(|e| matches!(
+                    e,
+                    TirTypeError::TypeParamShadowed { param_name, class_name }
+                        if param_name.as_str() == param && class_name.as_str() == decl
+                )),
+                "`{decl}` should report method generic `{param}` shadowing, got {errs:?}"
+            );
+        }
+    }
+
+    // A method inside an `implements` block may not re-declare the block's own
+    // generic parameter (the gap the class/interface method path already covers).
+    #[test]
+    fn impl_method_generic_shadowing_impl_param_is_error() {
+        let db = compile(concat!(
+            "interface Wrap2 {\n  function noop(self) -> int\n}\n",
+            "implements<T> Wrap2 for T[] {\n",
+            "  function noop<T>(self) -> int {\n    return 0\n  }\n",
+            "}\n",
+        ));
+        let errs = scope_type_errors_at(&db, "Wrap2", "noop");
+        assert!(
+            errs.iter().any(|e| matches!(
+                e,
+                TirTypeError::TypeParamShadowedImplParam { param_name } if param_name.as_str() == "T"
+            )),
+            "expected impl-method generic `T` shadowing error, got {errs:?}"
+        );
+    }
+
+    // `implements<T, T> …` — duplicate generics on the impl block itself surface in
+    // `impl_data`'s own diagnostics (the block has no inference scope).
+    #[test]
+    fn duplicate_generic_param_on_free_impl_is_error() {
+        let db = compile(concat!(
+            "interface Marker {}\n",
+            "implements<T, T> Marker for T[] {}\n",
+        ));
+        let user = PackageId::new(&db, Name::new("user"));
+        let impls = crate::interfaces::package_impl_locs(&db, user);
+        assert!(
+            impls.iter().any(|&loc| {
+                crate::interfaces::impl_data(&db, loc)
+                    .as_ref()
+                    .is_ok_and(|data| {
+                        data.diagnostics.iter().any(|(e, _)| {
+                            matches!(
+                                e,
+                                TirTypeError::DuplicateGenericParam { name } if name.as_str() == "T"
+                            )
+                        })
+                    })
+            }),
+            "expected the impl block to report duplicate parameter `T`",
+        );
+    }
+
+    // Distinct names everywhere: none of the duplicate/shadow/conflict checks fire.
+    #[test]
+    fn distinct_generic_and_associated_names_raise_no_hygiene_errors() {
+        let db = compile(concat!(
+            "interface Clean<T> {\n  type Item\n  function get<U>(self) -> U\n}\n",
+            "class Fine<A, B> {\n  a: A\n  b: B\n}\n",
+        ));
+        for decl in ["Clean", "Fine"] {
+            let errs = decl_scope_type_errors(&db, decl);
+            assert!(
+                !errs.iter().any(|e| matches!(
+                    e,
+                    TirTypeError::DuplicateGenericParam { .. }
+                        | TirTypeError::DuplicateAssociatedType { .. }
+                        | TirTypeError::AssociatedTypeConflictsWithGenericParam { .. }
+                        | TirTypeError::TypeParamShadowed { .. }
+                        | TirTypeError::TypeParamShadowedImplParam { .. }
+                )),
+                "`{decl}` should raise no hygiene errors, got {errs:?}"
             );
         }
     }

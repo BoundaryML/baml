@@ -260,8 +260,19 @@ pub enum TirTypeError {
     ExtraneousThrowsDeclaration { extra_types: Vec<String> },
     /// A type parameter could not be inferred at a call site.
     CannotInferTypeParameter { name: Name },
-    /// A method's generic type parameter shadows a class-level type parameter.
+    /// A method's generic type parameter shadows a type-level parameter (generic
+    /// parameter or associated type) of the enclosing class or interface.
     TypeParamShadowed { param_name: Name, class_name: Name },
+    /// A method's generic type parameter shadows a generic parameter declared on
+    /// the enclosing `implements` block.
+    TypeParamShadowedImplParam { param_name: Name },
+    /// A generic type parameter declared more than once in the same parameter list.
+    DuplicateGenericParam { name: Name },
+    /// An associated type declared more than once on the same interface.
+    DuplicateAssociatedType { name: Name },
+    /// An associated type sharing its name with one of the interface's own
+    /// generic parameters.
+    AssociatedTypeConflictsWithGenericParam { name: Name },
     /// Wrong number of type arguments for a generic class or interface.
     WrongNumberOfTypeArgs {
         type_name: Name,
@@ -792,8 +803,34 @@ impl fmt::Display for TirTypeError {
             } => {
                 write!(
                     f,
-                    "type parameter `{param_name}` on method shadows the same parameter on class `{class_name}`. \
+                    "type parameter `{param_name}` on method shadows the same parameter on `{class_name}`. \
                     Please use a different name for the type parameter."
+                )
+            }
+            TirTypeError::TypeParamShadowedImplParam { param_name } => {
+                write!(
+                    f,
+                    "type parameter `{param_name}` on method shadows the same parameter on the enclosing `implements` block. \
+                    Please use a different name for the type parameter."
+                )
+            }
+            TirTypeError::DuplicateGenericParam { name } => {
+                write!(
+                    f,
+                    "generic type parameter `{name}` is declared more than once"
+                )
+            }
+            TirTypeError::DuplicateAssociatedType { name } => {
+                write!(
+                    f,
+                    "associated type `{name}` is declared more than once on this interface"
+                )
+            }
+            TirTypeError::AssociatedTypeConflictsWithGenericParam { name } => {
+                write!(
+                    f,
+                    "associated type `{name}` conflicts with the interface's generic parameter of the same name. \
+                    Please use a different name for one of them."
                 )
             }
             TirTypeError::CannotInferLambdaParamType { param_name } => {

@@ -349,6 +349,16 @@ pub fn impl_data<'db>(
                 &mut for_target_diags,
             );
             let mut bound_diags = Vec::new();
+            // `implements<T, T> …` — a duplicate impl generic is a declaration error
+            // (the in-body form's generics are the class's, whose declaration owns
+            // that check). Reported at the block via the `Bound` location.
+            for (idx, name) in names.iter().enumerate() {
+                if names[..idx].contains(name) {
+                    bound_diags.push(crate::infer_context::TirTypeError::DuplicateGenericParam {
+                        name: name.clone(),
+                    });
+                }
+            }
             let generic_params = generics
                 .iter()
                 .map(|g| {

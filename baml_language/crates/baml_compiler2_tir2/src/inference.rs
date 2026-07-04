@@ -355,6 +355,26 @@ fn env_interface_bounds(
     bounds
 }
 
+/// Report each generic parameter declared more than once in a single declaration
+/// list (`<T, T>`). A name reused across *nested* scopes is not a duplicate but a
+/// shadow, reported as `TypeParamShadowed` at the inner declaration instead.
+fn report_duplicate_generic_params(
+    builder: &TypeInferenceBuilder<'_>,
+    params: &[Name],
+    span: TextRange,
+) {
+    for (idx, param) in params.iter().enumerate() {
+        if params[..idx].contains(param) {
+            builder.report_at_span(
+                crate::infer_context::TirTypeError::DuplicateGenericParam {
+                    name: param.clone(),
+                },
+                span,
+            );
+        }
+    }
+}
+
 /// The number of generic parameters the interface named `qtn` declares, or `None`
 /// if `qtn` does not resolve to an interface.
 fn interface_declared_generic_arity(
@@ -398,24 +418,45 @@ fn install_generic_param_bounds(
         for diag in diags {
             builder.report_at_span(diag, span);
         }
-        // A generic interface used as a bare bound (`T extends Outer` where `interface
-        // Outer<X>`) under-instantiates it: a bound, unlike a value position, has no way to
-        // infer the missing argument, so it is an arity error. The with-arguments mismatch
-        // (`Outer<int, int>`) is already reported by `lower_type_expr`, which deliberately
-        // skips the bare form (it is a valid wildcard in value positions).
-        if let Ty::Interface(qtn, generics, _, _) = &bound_ty
-            && generics.is_empty()
-            && let Some(arity) = interface_declared_generic_arity(db, qtn)
-            && arity > 0
-        {
-            builder.report_at_span(
-                crate::infer_context::TirTypeError::WrongNumberOfTypeArgs {
-                    type_name: qtn.name().clone(),
-                    expected: arity,
-                    got: 0,
+        match &bound_ty {
+            // A generic interface used as a bare bound (`T extends Outer` where
+            // `interface Outer<X>`) under-instantiates it: a bound, unlike a value
+            // position, has no way to infer the missing argument, so it is an arity
+            // error. The with-arguments mismatch (`Outer<int, int>`) is already
+            // reported by `lower_type_expr`, which deliberately skips the bare form
+            // (it is a valid wildcard in value positions).
+            Ty::Interface(qtn, generics, _, _) => {
+                if generics.is_empty()
+                    && let Some(arity) = interface_declared_generic_arity(db, qtn)
+                    && arity > 0
+                {
+                    builder.report_at_span(
+                        crate::infer_context::TirTypeError::WrongNumberOfTypeArgs {
+                            type_name: qtn.name().clone(),
+                            expected: arity,
+                            got: 0,
+                        },
+                        span,
+                    );
+                }
+            }
+            // Sentinels that are NOT concrete non-interface types: error/unknown are
+            // already diagnosed by lowering; the top type, a sibling type-var bound
+            // (`<T, U extends T>`), and an associated-type projection are special
+            // forms for which "not an interface" would be wrong or redundant.
+            // Mirrors the impl-bound check in `lower_generic_param_interface_bounds`.
+            Ty::Unknown { .. }
+            | Ty::Error { .. }
+            | Ty::BuiltinUnknown { .. }
+            | Ty::TypeVar(..)
+            | Ty::AssociatedTypeProjection { .. } => {}
+            // BEP-044 requires bounds to be interfaces (E0142).
+            other => builder.report_at_span(
+                crate::infer_context::TirTypeError::GenericBoundNotInterface {
+                    bound: other.clone(),
                 },
                 span,
-            );
+            ),
         }
         bounds.insert(name.clone(), bound_ty);
     }
@@ -1286,7 +1327,22 @@ pub fn infer_scope_types<'db>(
                     let mut env = GenericEnv::from_params(sig.user_generic_params.clone());
                     env.params
                         .extend(sig.synthetic_effect_params.iter().cloned());
+                    report_duplicate_generic_params(
+                        &builder,
+                        &sig.user_generic_params,
+                        func_data.span,
+                    );
                     if let Some(imp) = enclosing_impl {
+                        for mp in &sig.user_generic_params {
+                            if imp.generic_params.iter().any(|cp| cp == mp) {
+                                builder.report_at_span(
+                                    crate::infer_context::TirTypeError::TypeParamShadowedImplParam {
+                                        param_name: mp.clone(),
+                                    },
+                                    func_data.span,
+                                );
+                            }
+                        }
                         env.prepend_declared(&imp.generic_params, &imp.generic_param_bounds);
                     } else if let Some((type_name, parent_generics, parent_bounds)) =
                         parent_type_generic_env(
@@ -2126,6 +2182,11 @@ pub fn infer_scope_types<'db>(
                 if class_data.span != scope.range || scope.name.as_ref() != Some(&class_data.name) {
                     continue;
                 }
+                report_duplicate_generic_params(
+                    &builder,
+                    &class_data.generic_params,
+                    class_data.span,
+                );
                 let mut env = GenericEnv::from_params(class_data.generic_params.clone());
                 env.add_bounds_for_declared_params(
                     &class_data.generic_params,
@@ -2153,6 +2214,36 @@ pub fn infer_scope_types<'db>(
                     continue;
                 }
                 let iface_loc = InterfaceLoc::new(db, file, *local_id);
+                report_duplicate_generic_params(
+                    &builder,
+                    &iface_data.generic_params,
+                    iface_data.span,
+                );
+                // Associated types share the interface's type-level namespace with its
+                // generic parameters (a bare `Assoc` reference lowers as a type variable),
+                // so a name collision — with a parameter or another associated type —
+                // would silently alias the two. Both are declaration errors.
+                for (idx, assoc) in iface_data.associated_types.iter().enumerate() {
+                    if iface_data.generic_params.contains(&assoc.name) {
+                        builder.report_at_span(
+                            crate::infer_context::TirTypeError::AssociatedTypeConflictsWithGenericParam {
+                                name: assoc.name.clone(),
+                            },
+                            assoc.name_span,
+                        );
+                    }
+                    if iface_data.associated_types[..idx]
+                        .iter()
+                        .any(|prior| prior.name == assoc.name)
+                    {
+                        builder.report_at_span(
+                            crate::infer_context::TirTypeError::DuplicateAssociatedType {
+                                name: assoc.name.clone(),
+                            },
+                            assoc.name_span,
+                        );
+                    }
+                }
                 let (iface_params, iface_bounds) = interface_type_level_params_and_bounds(
                     db,
                     iface_loc,
@@ -2209,6 +2300,22 @@ pub fn infer_scope_types<'db>(
                     }
                 }
                 for sig in &iface_data.required_methods {
+                    // Required methods have no body scope, so the method-generic
+                    // hygiene checks that the function arm runs for default methods
+                    // happen here: no `<T, T>`, and no shadowing of the interface's
+                    // type-level parameters (generics and associated types alike).
+                    report_duplicate_generic_params(&builder, &sig.generic_params, sig.span);
+                    for mp in &sig.generic_params {
+                        if iface_params.iter().any(|ip| ip == mp) {
+                            builder.report_at_span(
+                                crate::infer_context::TirTypeError::TypeParamShadowed {
+                                    param_name: mp.clone(),
+                                    class_name: iface_data.name.clone(),
+                                },
+                                sig.span,
+                            );
+                        }
+                    }
                     let mut sig_env = iface_env.clone();
                     sig_env.append_declared(&sig.generic_params, &sig.generic_param_bounds);
                     apply_generic_env(
