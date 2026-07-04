@@ -83,11 +83,14 @@ pub trait TypeContext {
     /// is — or transitively requires — `I`.
     fn type_var_bound(&self, name: &Name) -> Vec<Interface>;
 
-    /// Whether interface `sub` requires interface `sup` (reflexively and
-    /// transitively), accounting for generic arguments.
+    /// Whether interface `sub` *properly* (transitively, not reflexively)
+    /// requires interface `sup`, accounting for generic arguments.
     ///
     /// Powers `A <: B` subtyping and the `A | B == B` absorption for
-    /// existentials. `false` ⇒ no requirement is claimed.
+    /// existentials. `false` ⇒ no requirement is claimed. Implementations need
+    /// not report same-name reflexivity — the normalizer handles structural
+    /// equality before consulting this, so a same-name query only arises for
+    /// distinct instantiations, which are not requirements.
     fn interface_requires(&self, sub: &Interface, sup: &Interface) -> bool;
 
     /// The complete set of variant names of an enum, or `None` if the enum is

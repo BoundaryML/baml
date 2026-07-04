@@ -236,8 +236,6 @@ impl<'db> TypeInferenceBuilder<'db> {
             return None;
         };
         let db = self.context.db();
-        let root_pkg = baml_compiler2_hir::file_package::file_package(db, root_loc.file(db));
-        let pkg_ns = root_pkg.namespace_path;
 
         // Existential / type-var receiver: the concrete type is unknown, so a member may
         // come from `bound.name` OR any interface it transitively `requires`. Walk that
@@ -248,8 +246,6 @@ impl<'db> TypeInferenceBuilder<'db> {
                 root_loc,
                 bound.type_args,
                 bound.associated_bindings,
-                pkg_items,
-                &pkg_ns,
             )
         {
             let Some(qtn) = crate::interfaces::interface_loc_qtn(db, iface_loc) else {
@@ -586,10 +582,8 @@ impl<'db> TypeInferenceBuilder<'db> {
                 else {
                     return Vec::new();
                 };
-                let pkg_ns = baml_compiler2_hir::file_package::file_package(db, root_loc.file(db))
-                    .namespace_path;
                 crate::interfaces::interface_closure_locs_with_args_and_assoc(
-                    db, root_loc, args, assoc, pkg_items, &pkg_ns,
+                    db, root_loc, args, assoc,
                 )
                 .into_iter()
                 .filter_map(|(iface_loc, type_args, associated_bindings)| {

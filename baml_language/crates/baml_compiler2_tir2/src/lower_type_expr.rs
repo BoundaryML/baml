@@ -1311,8 +1311,6 @@ mod tests {
             iterator,
             &[],
             &[(Name::new("Item"), int_ty.clone())],
-            items,
-            &[],
         );
         let iterable_entry = closure
             .iter()
@@ -1351,8 +1349,6 @@ mod tests {
             iterator,
             &[],
             &[(Name::new("Item"), int_ty.clone())],
-            items,
-            &[],
         );
         let iterable_entry = closure
             .iter()
@@ -1391,8 +1387,6 @@ mod tests {
             &[Ty::String {
                 attr: TyAttr::default(),
             }],
-            &[],
-            items,
             &[],
         );
         let wrapper_entry = closure
@@ -1434,8 +1428,6 @@ mod tests {
             &db,
             wrapper,
             std::slice::from_ref(&string_ty),
-            &[],
-            items,
             &[],
         );
         let wrapper_entry = closure
@@ -1598,6 +1590,62 @@ mod tests {
         );
     }
 
+    // A declaration's bound diagnostics are reported exactly once, by the owning
+    // declaration's scope — a method env inherits its class's bounds for
+    // enforcement but must not re-report their errors.
+    #[test]
+    fn inherited_bound_errors_are_not_re_reported_by_method_scopes() {
+        let db = compile(concat!(
+            "interface Box<E> {\n  value: E\n}\n",
+            "class Holder<T extends Box> {\n",
+            "  item: T\n",
+            "  function get(self) -> int {\n    return 0\n  }\n",
+            "}\n",
+        ));
+        let class_errs = decl_scope_type_errors(&db, "Holder");
+        assert_eq!(
+            class_errs
+                .iter()
+                .filter(|e| matches!(e, TirTypeError::WrongNumberOfTypeArgs { .. }))
+                .count(),
+            1,
+            "the class scope owns the error exactly once, got {class_errs:?}"
+        );
+        let method_errs = scope_type_errors_at(&db, "Holder", "get");
+        assert!(
+            !method_errs
+                .iter()
+                .any(|e| matches!(e, TirTypeError::WrongNumberOfTypeArgs { .. })),
+            "the method scope must not re-report its class's bound error, got {method_errs:?}"
+        );
+    }
+
+    // Impl-block generic bounds get the same bare-generic arity error as decl bounds.
+    #[test]
+    fn bare_generic_interface_bound_on_free_impl_is_arity_error() {
+        let db = compile(concat!(
+            "interface Box<E> {\n  value: E\n}\n",
+            "interface Marker {}\n",
+            "implements<T extends Box> Marker for T[] {}\n",
+        ));
+        let user = PackageId::new(&db, Name::new("user"));
+        let impls = crate::interfaces::package_impl_locs(&db, user);
+        assert!(
+            impls.iter().any(|&loc| {
+                crate::interfaces::impl_data(&db, loc)
+                    .as_ref()
+                    .is_ok_and(|data| {
+                        data.diagnostics.iter().any(|(e, _)| matches!(
+                            e,
+                            TirTypeError::WrongNumberOfTypeArgs { type_name, expected: 1, got: 0 }
+                                if type_name.as_str() == "Box"
+                        ))
+                    })
+            }),
+            "expected the impl block to report the bare-bound arity error",
+        );
+    }
+
     // A fully-instantiated generic bound and a bound on a non-generic interface are
     // both well-formed: no arity error.
     #[test]
@@ -1709,17 +1757,38 @@ mod tests {
         }
     }
 
-    // A sibling type-variable bound (`<T, U extends T>`) is a special form, not a
-    // non-interface bound.
+    // Bounds constrain by interface contract only: a sibling type variable
+    // (`<T, U extends T>`) or an associated-type projection (`U extends T.Item`)
+    // is not an interface, so both are errors.
     #[test]
-    fn sibling_type_var_bound_is_not_an_error() {
-        let db = compile("function pick<T, U extends T>(a: T, b: U) -> T {\n  return a\n}\n");
-        let errs = decl_scope_type_errors(&db, "pick");
+    fn type_var_and_projection_bounds_are_errors() {
+        let db = compile(concat!(
+            "interface HasItem {\n  type Item\n}\n",
+            "function pick<T, U extends T>(a: T, b: U) -> T {\n  return a\n}\n",
+            "function proj<T extends HasItem, U extends T.Item>(a: T, b: U) -> T {\n  return a\n}\n",
+        ));
+        let pick_errs = decl_scope_type_errors(&db, "pick");
         assert!(
-            !errs
-                .iter()
-                .any(|e| matches!(e, TirTypeError::GenericBoundNotInterface { .. })),
-            "sibling type-var bound should not error, got {errs:?}"
+            pick_errs.iter().any(|e| matches!(
+                e,
+                TirTypeError::GenericBoundNotInterface { bound: Ty::TypeVar(name, _) }
+                    if name.as_str() == "T"
+            )),
+            "`U extends T` should report a non-interface bound, got {pick_errs:?}"
+        );
+        // A projection bound errors through its own resolution (projections inside
+        // bound expressions resolve with no bounds threaded — that would be
+        // circular); if one ever lowers symbolically it is caught as a
+        // non-interface bound instead. Either way `U extends T.Item` is an error.
+        let proj_errs = decl_scope_type_errors(&db, "proj");
+        assert!(
+            proj_errs.iter().any(|e| matches!(
+                e,
+                TirTypeError::GenericBoundNotInterface {
+                    bound: Ty::AssociatedTypeProjection { .. }
+                } | TirTypeError::UnknownAssociatedType { .. }
+            )),
+            "`U extends T.Item` should report an error, got {proj_errs:?}"
         );
     }
 
@@ -1840,6 +1909,68 @@ mod tests {
                     })
             }),
             "expected the impl block to report duplicate parameter `T`",
+        );
+    }
+
+    // An impl's binding values resolve names in the impl's own scope — its
+    // generics and already-resolved sibling associated types — never the
+    // interface's parameter names (those are the interface author's internal
+    // names; an impl references its instantiation through its own generics).
+    #[test]
+    fn impl_binding_value_cannot_name_interface_params() {
+        let db = compile(concat!(
+            "interface Wrapper<P> {\n  type Item\n}\n",
+            "class Thing {\n  x: int\n  implements Wrapper<int> {\n    type Item = P\n  }\n}\n",
+        ));
+        let user = PackageId::new(&db, Name::new("user"));
+        let impls = crate::interfaces::package_impl_locs(&db, user);
+        assert!(
+            impls.iter().any(|&loc| {
+                crate::interfaces::impl_data(&db, loc)
+                    .as_ref()
+                    .is_ok_and(|data| {
+                        data.diagnostics.iter().any(|(e, _)| {
+                            matches!(
+                                e,
+                                TirTypeError::UnresolvedType { name, .. } if name.as_str() == "P"
+                            )
+                        })
+                    })
+            }),
+            "the interface's `P` must be unresolvable inside the impl's binding value",
+        );
+    }
+
+    // The impl's own generics and earlier siblings are in scope for binding values.
+    #[test]
+    fn impl_binding_value_resolves_impl_generics_and_siblings() {
+        let db = compile(concat!(
+            "interface TwoAssoc {\n  type A\n  type B\n}\n",
+            "implements<T> TwoAssoc for T[] {\n  type A = T\n  type B = A[]\n}\n",
+        ));
+        let user = PackageId::new(&db, Name::new("user"));
+        let impls = crate::interfaces::package_impl_locs(&db, user);
+        let resolved = impls
+            .iter()
+            .find_map(|&loc| crate::interfaces::impl_data(&db, loc).as_ref().ok())
+            .expect("the impl should resolve");
+        let assoc = |name: &str| {
+            resolved
+                .associated_types
+                .iter()
+                .find(|(n, _)| n.as_str() == name)
+                .map(|(_, ty)| ty)
+                .unwrap_or_else(|| panic!("binding for `{name}`"))
+        };
+        assert!(
+            matches!(assoc("A"), Ty::TypeVar(n, _) if n.as_str() == "T"),
+            "`type A = T` binds the impl generic, got {:?}",
+            assoc("A")
+        );
+        assert!(
+            matches!(assoc("B"), Ty::List(inner, _) if matches!(&**inner, Ty::TypeVar(n, _) if n.as_str() == "T")),
+            "`type B = A[]` resolves the sibling, got {:?}",
+            assoc("B")
         );
     }
 
@@ -1991,6 +2122,36 @@ mod tests {
             )),
             "expected an ambiguity diagnostic, got {diags:?}"
         );
+    }
+
+    // The same member reached through two `requires` paths to the *same* interface
+    // is one associated type, not an ambiguity (dedup by realized identity).
+    #[test]
+    fn type_var_projection_through_diamond_requires_is_not_ambiguous() {
+        let db = compile(concat!(
+            "interface Base {\n  type X\n}\n",
+            "interface A requires Base {}\n",
+            "interface B requires Base {}\n",
+            "interface Sub requires A, B {}\n",
+        ));
+        let (ty, diags) = lower_tvar_projection(&db, "T", &["Sub"], "X");
+        assert!(diags.is_empty(), "unexpected diagnostics: {diags:?}");
+        match ty {
+            Ty::AssociatedTypeProjection {
+                interface, member, ..
+            } => {
+                assert_eq!(member.as_str(), "X");
+                assert_eq!(
+                    interface
+                        .expect("interface determined")
+                        .name
+                        .name()
+                        .as_str(),
+                    "Base"
+                );
+            }
+            other => panic!("expected a symbolic projection through Base, got {other:?}"),
+        }
     }
 
     // A bounded type variable whose bound declares the member (unpinned) resolves to

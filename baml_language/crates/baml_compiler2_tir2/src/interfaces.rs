@@ -708,17 +708,26 @@ fn lower_interface_associated_bindings(
     iface_namespace_path: &[Name],
     binding_namespace_path: &[Name],
     generic_params: &[Name],
+    caller_bounds: &crate::lower_type_expr::TypeVarBoundsMap,
     diagnostics: &mut Vec<crate::infer_context::TirTypeError>,
 ) -> Vec<(Name, Ty)> {
-    let mut bindings = generics::bind_type_vars(&iface.generic_params, interface_args);
-    for param in generic_params {
-        bindings
-            .entry(param.clone())
-            .or_insert_with(|| Ty::TypeVar(param.clone(), TyAttr::default()));
-    }
-    // The interface's declared parameter bounds, so a `T.member` projection in a
-    // binding value or default resolves `T`'s declaring interface. The caller's
-    // own `generic_params` (e.g. impl-block generics) carry no bounds here.
+    // Each expression resolves names in the scope it was *written* in — never the
+    // other declaration's. A binding value (impl-block source) sees the impl's own
+    // generics; an associated-type default (interface source) sees the interface's.
+    // Resolved associated types join both as they resolve (a later binding may
+    // reference an earlier sibling). Each scope carries its own substitution map,
+    // so a name collision between an impl generic and an interface parameter
+    // resolves each expression to its own scope's meaning.
+    let mut value_scope: Vec<Name> = generic_params.to_vec();
+    let mut value_bindings: rustc_hash::FxHashMap<Name, Ty> = generic_params
+        .iter()
+        .map(|param| (param.clone(), Ty::TypeVar(param.clone(), TyAttr::default())))
+        .collect();
+    let mut default_scope: Vec<Name> = iface.generic_params.clone();
+    let mut default_bindings = generics::bind_type_vars(&iface.generic_params, interface_args);
+    // The interface's declared parameter bounds, so a `T.member` projection in an
+    // associated-type *default* resolves `T`'s declaring interface; a binding
+    // *value*'s type variables project through the impl's own `caller_bounds`.
     let iface_bounds = crate::lower_type_expr::lower_decl_generic_param_bounds(
         db,
         iface_pkg_items,
@@ -731,9 +740,6 @@ fn lower_interface_associated_bindings(
         .associated_types
         .iter()
         .filter_map(|assoc| {
-            // Snapshot per iteration: each resolved associated type joins the
-            // in-scope variables for the next one's expression.
-            let generic_params: Vec<_> = bindings.keys().cloned().collect();
             let ty = if let Some(binding) = block_associated_bindings
                 .iter()
                 .find(|binding| binding.name == assoc.name)
@@ -746,13 +752,13 @@ fn lower_interface_associated_bindings(
                             db,
                             package_items: binding_pkg_items,
                             ns_context: binding_namespace_path,
-                            generic_params: &generic_params,
-                            bounds: &iface_bounds,
+                            generic_params: &value_scope,
+                            bounds: caller_bounds,
                             self_ty: None,
                         },
                         diagnostics,
                     ),
-                    &bindings,
+                    &value_bindings,
                 )
             } else {
                 let default = assoc.default.as_ref()?;
@@ -763,16 +769,19 @@ fn lower_interface_associated_bindings(
                             db,
                             package_items: iface_pkg_items,
                             ns_context: iface_namespace_path,
-                            generic_params: &generic_params,
+                            generic_params: &default_scope,
                             bounds: &iface_bounds,
                             self_ty: None,
                         },
                         diagnostics,
                     ),
-                    &bindings,
+                    &default_bindings,
                 )
             };
-            bindings.insert(assoc.name.clone(), ty.clone());
+            value_scope.push(assoc.name.clone());
+            value_bindings.insert(assoc.name.clone(), ty.clone());
+            default_scope.push(assoc.name.clone());
+            default_bindings.insert(assoc.name.clone(), ty.clone());
             Some((assoc.name.clone(), ty))
         })
         .collect()
@@ -1654,8 +1663,6 @@ fn interface_closure<'db>(
 pub fn interface_closure_locs<'db>(
     db: &'db dyn crate::Db,
     root_iface: baml_compiler2_hir::loc::InterfaceLoc<'db>,
-    _pkg_items: &baml_compiler2_hir::package::PackageItems<'db>,
-    _current_ns: &[Name],
 ) -> Vec<baml_compiler2_hir::loc::InterfaceLoc<'db>> {
     let mut out: Vec<baml_compiler2_hir::loc::InterfaceLoc<'db>> = Vec::new();
     let mut seen: FxHashSet<baml_compiler2_hir::loc::InterfaceLoc<'db>> = FxHashSet::default();
@@ -1700,8 +1707,6 @@ pub fn interface_closure_locs_with_args_and_assoc<'db>(
     root_iface: baml_compiler2_hir::loc::InterfaceLoc<'db>,
     root_args: &[Ty],
     root_associated_bindings: &[(Name, Ty)],
-    _pkg_items: &baml_compiler2_hir::package::PackageItems<'db>,
-    _current_ns: &[Name],
 ) -> Vec<InterfaceClosureEntry<'db>> {
     let mut out: Vec<InterfaceClosureEntry<'db>> = Vec::new();
     let mut seen: FxHashSet<InterfaceClosureEntry<'db>> = FxHashSet::default();
@@ -1880,8 +1885,6 @@ pub fn interface_requires<'db>(
         sub_loc,
         &sub.generics,
         &sub.associated_types,
-        pkg_items,
-        sub.name.namespace(),
     ) {
         let iface_tree = baml_compiler2_hir::file_item_tree(db, iface_loc.file(db));
         let Some(iface_data) = iface_tree.interfaces.get(&iface_loc.id(db)) else {

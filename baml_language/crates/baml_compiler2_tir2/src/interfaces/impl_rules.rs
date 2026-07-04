@@ -188,23 +188,33 @@ fn lower_generic_param_interface_bounds(
         );
         match ty {
             Ty::Interface(qtn, generics, assoc, _) => {
+                // A generic interface used as a bare bound under-instantiates it —
+                // a bound cannot infer the missing argument (mirrors the decl-env
+                // check in `install_generic_param_bounds`).
+                if generics.is_empty()
+                    && let Some(arity) =
+                        crate::inference::interface_declared_generic_arity(db, &qtn)
+                    && arity > 0
+                {
+                    diags.push(crate::infer_context::TirTypeError::WrongNumberOfTypeArgs {
+                        type_name: qtn.name().clone(),
+                        expected: arity,
+                        got: 0,
+                    });
+                }
                 ifaces.push(baml_type::Interface {
                     name: qtn,
                     generics,
                     associated_types: assoc,
                 });
             }
-            // Sentinels that are NOT concrete non-interface types: error/unknown
-            // are already diagnosed by lowering; the top type, a sibling type-var
-            // bound (`<T, U extends T>`), and an associated-type projection are
-            // special forms for which "not an interface" would be wrong or
-            // redundant. Skip them silently.
-            Ty::Unknown { .. }
-            | Ty::Error { .. }
-            | Ty::BuiltinUnknown { .. }
-            | Ty::TypeVar(..)
-            | Ty::AssociatedTypeProjection { .. } => {}
-            // BEP-044 requires bounds to be interfaces (E0142).
+            // Already diagnosed by lowering the bound expression itself — a second
+            // "not an interface" here would be redundant.
+            Ty::Unknown { .. } | Ty::Error { .. } | Ty::BuiltinUnknown { .. } => {}
+            // BEP-044 requires bounds to be interfaces (E0142). A sibling type
+            // variable (`<T, U extends T>`) or an associated-type projection is
+            // not an interface either — bounds constrain by interface contract,
+            // never by subtyping against another parameter.
             other => diags.push(
                 crate::infer_context::TirTypeError::GenericBoundNotInterface { bound: other },
             ),
@@ -296,7 +306,7 @@ pub fn impl_data<'db>(
             // to the class, and would otherwise misattribute and duplicate across
             // every in-body impl of that class.
             let mut class_bound_diags = Vec::new();
-            let generic_params = class_data
+            let generic_params: Vec<(Name, Vec<baml_type::Interface>)> = class_data
                 .generic_params
                 .iter()
                 .zip(class_data.generic_param_bounds.iter())
@@ -438,6 +448,10 @@ pub fn impl_data<'db>(
     let iface_pkg_id = PackageId::new(db, iface_pkg_info.package.clone());
     let iface_pkg_items = baml_compiler2_ppir::package_items(db, iface_pkg_id);
     let mut assoc_diags = Vec::new();
+    // The impl's own generic bounds, so a `T.member` projection in a binding value
+    // (`type Item = T.Elem`) resolves through the impl generic's declared bound.
+    let impl_bounds: crate::lower_type_expr::TypeVarBoundsMap =
+        generic_params.iter().cloned().collect();
     let associated_types = lower_interface_associated_bindings(
         db,
         iface_data,
@@ -448,6 +462,7 @@ pub fn impl_data<'db>(
         &iface_pkg_info.namespace_path,
         ns,
         &generic_param_names,
+        &impl_bounds,
         &mut assoc_diags,
     );
 

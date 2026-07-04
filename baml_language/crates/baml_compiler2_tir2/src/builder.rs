@@ -165,12 +165,15 @@ pub(crate) fn lower_generic_param_bounds(
     bindings: Option<&FxHashMap<Name, Ty>>,
     diagnostics: &mut Vec<TirTypeError>,
 ) -> Vec<Option<Ty>> {
+    // The in-scope names under `bindings` are the same for every bound — snapshot once.
+    let binding_params: Vec<Name> = bindings
+        .map(|bindings| bindings.keys().cloned().collect())
+        .unwrap_or_default();
     bounds
         .iter()
         .map(|bound| {
             bound.as_ref().map(|bound| {
                 if let Some(bindings) = bindings {
-                    let generic_params: Vec<_> = (bindings).keys().cloned().collect();
                     crate::generics::substitute_ty(
                         &crate::lower_type_expr::lower_type_expr(
                             bound,
@@ -178,7 +181,7 @@ pub(crate) fn lower_generic_param_bounds(
                                 db,
                                 package_items: pkg_items,
                                 ns_context,
-                                generic_params: &generic_params,
+                                generic_params: &binding_params,
                                 bounds: &TypeVarBoundsMap::default(),
                                 self_ty: None,
                             },
@@ -2112,6 +2115,8 @@ impl<'db> TypeInferenceBuilder<'db> {
         let ns = self.ns_context.clone();
         let caller_generic_params = self.generic_params.clone();
         let scope_bounds = self.scope_type_var_bounds();
+        // `type_bindings` is not mutated by this loop — snapshot its keys once.
+        let binding_params: Vec<Name> = self.type_bindings.keys().cloned().collect();
         let mut resolved: Vec<Ty> = Vec::with_capacity(type_args.len());
         for type_arg_expr in type_args {
             let mut diags = Vec::new();
@@ -2129,7 +2134,6 @@ impl<'db> TypeInferenceBuilder<'db> {
                     &mut diags,
                 )
             } else {
-                let generic_params: Vec<_> = self.type_bindings.keys().cloned().collect();
                 crate::generics::substitute_ty(
                     &crate::lower_type_expr::lower_type_expr(
                         type_arg_expr,
@@ -2137,7 +2141,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                             db,
                             package_items: self.package_items,
                             ns_context: &ns,
-                            generic_params: &generic_params,
+                            generic_params: &binding_params,
                             bounds: &scope_bounds,
                             self_ty: None,
                         },
@@ -10706,14 +10710,11 @@ impl<'db> TypeInferenceBuilder<'db> {
             return Ty::Interface(iface_qtn, iface_args, associated_bindings, attr);
         };
         let db = self.context.db();
-        let pkg = baml_compiler2_hir::file_package::file_package(db, iface_loc.file(db));
         let completed = crate::interfaces::interface_closure_locs_with_args_and_assoc(
             db,
             iface_loc,
             &iface_args,
             &associated_bindings,
-            pkg_items,
-            &pkg.namespace_path,
         )
         .into_iter()
         .next()
@@ -10746,8 +10747,6 @@ impl<'db> TypeInferenceBuilder<'db> {
                 sub_loc,
                 sub_args,
                 sub_associated_bindings,
-                pkg_items,
-                sub_qtn.namespace(),
             )
         {
             let iface_tree = baml_compiler2_hir::file_item_tree(db, iface_loc.file(db));
@@ -10794,15 +10793,12 @@ impl<'db> TypeInferenceBuilder<'db> {
             return None;
         };
         let db = self.context.db();
-        let pkg = baml_compiler2_hir::file_package::file_package(db, root_loc.file(db));
         for (iface_loc, iface_args, iface_associated_bindings) in
             crate::interfaces::interface_closure_locs_with_args_and_assoc(
                 db,
                 root_loc,
                 root_args,
                 root_associated_bindings,
-                pkg_items,
-                &pkg.namespace_path,
             )
         {
             let iface_tree = baml_compiler2_hir::file_item_tree(db, iface_loc.file(db));
@@ -11277,10 +11273,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             return false;
         };
         let db = self.context.db();
-        let root_pkg = baml_compiler2_hir::file_package::file_package(db, root_loc.file(db));
-        let pkg_ns = &root_pkg.namespace_path;
-        for iface_loc in crate::interfaces::interface_closure_locs(db, root_loc, pkg_items, pkg_ns)
-        {
+        for iface_loc in crate::interfaces::interface_closure_locs(db, root_loc) {
             let iface_tree = baml_compiler2_hir::file_item_tree(db, iface_loc.file(db));
             let Some(iface_data) = iface_tree.interfaces.get(&iface_loc.id(db)) else {
                 continue;
@@ -11553,15 +11546,12 @@ impl<'db> TypeInferenceBuilder<'db> {
         };
 
         let db = self.context.db();
-        let root_pkg = baml_compiler2_hir::file_package::file_package(db, root_loc.file(db));
         for (iface_loc, closure_args, closure_assoc) in
             crate::interfaces::interface_closure_locs_with_args_and_assoc(
                 db,
                 root_loc,
                 iface_type_args,
                 associated_bindings,
-                pkg_items,
-                &root_pkg.namespace_path,
             )
         {
             let file = iface_loc.file(db);
@@ -11596,6 +11586,8 @@ impl<'db> TypeInferenceBuilder<'db> {
             // projection in a field type resolves `T`'s declaring interface.
             let iface_bounds =
                 crate::lower_type_expr::interface_generic_param_bounds(db, iface_loc);
+            // `bindings` is complete before the field loop — snapshot its keys once.
+            let generic_params: Vec<_> = bindings.keys().cloned().collect();
             for field in &iface_data.fields {
                 if !seen.insert(field.name.clone()) {
                     continue;
@@ -11604,7 +11596,6 @@ impl<'db> TypeInferenceBuilder<'db> {
                     .type_expr
                     .as_ref()
                     .map(|te| {
-                        let generic_params: Vec<_> = bindings.keys().cloned().collect();
                         crate::generics::substitute_ty(
                             &crate::lower_type_expr::lower_type_expr(
                                 &te.expr,
@@ -12189,6 +12180,9 @@ impl<'db> TypeInferenceBuilder<'db> {
                         .entry(gp.clone())
                         .or_insert_with(|| Ty::TypeVar(gp.clone(), TyAttr::default()));
                 }
+                // `bindings` is complete for this method — one snapshot serves
+                // every param and the return type below.
+                let generic_params: Vec<_> = bindings.keys().cloned().collect();
                 let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(db, file, method_id);
                 let sig = baml_compiler2_ppir::elaborated_function_signature(db, func_loc);
                 let mut diags = Vec::new();
@@ -12270,7 +12264,6 @@ impl<'db> TypeInferenceBuilder<'db> {
                         {
                             builtin_class_ty.clone()
                         } else {
-                            let generic_params: Vec<_> = bindings.keys().cloned().collect();
                             crate::generics::substitute_ty(
                                 &crate::lower_type_expr::lower_type_expr(
                                     &param.ty,
@@ -12302,7 +12295,6 @@ impl<'db> TypeInferenceBuilder<'db> {
                     .return_type
                     .as_ref()
                     .map(|te| {
-                        let generic_params: Vec<_> = bindings.keys().cloned().collect();
                         crate::generics::substitute_ty(
                             &crate::lower_type_expr::lower_type_expr(
                                 te,
@@ -12386,7 +12378,10 @@ impl<'db> TypeInferenceBuilder<'db> {
     /// Uses the enum's qualified package to find it in the correct package,
     /// not just the current file's package.
     fn lookup_enum_variants(&self, enum_name: &crate::ty::QualifiedTypeName) -> Vec<Name> {
+        // Membership-flavored callers treat an unknown enum and an empty one the
+        // same; the resolved/unknown distinction lives in `inference::enum_variants`.
         crate::inference::enum_variants(self.context.db(), self.res_ctx, enum_name)
+            .unwrap_or_default()
     }
 
     // ── Evolving Container Mutations ─────────────────────────────────────────

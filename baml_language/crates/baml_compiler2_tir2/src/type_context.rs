@@ -106,7 +106,6 @@ impl baml_type::normalize::TypeContext for GlobalTypeContext<'_, '_> {
     }
 
     fn enum_variants(&self, name: &QualifiedTypeName) -> Option<Vec<Name>> {
-        let variants = crate::inference::enum_variants(self.db, self.res_ctx, name);
-        (!variants.is_empty()).then_some(variants)
+        crate::inference::enum_variants(self.db, self.res_ctx, name)
     }
 }

@@ -19,11 +19,12 @@
 //! # Boundary
 //!
 //! Inference depends only on the surrounding scope — the salsa database, the
-//! visible type-alias expansions, and each in-scope type variable's interface
-//! bound — supplied through the [`TypeExprContext`] trait. Nothing else about
-//! the builder or the wider inference state crosses into this module: the
-//! determination is a pure function of the base type, the optional explicit
-//! interface, the member name, and that context.
+//! visible type-alias expansions, each in-scope type variable's interface
+//! bound, and the scope's concrete-projection resolver (impl lookup for a
+//! concrete base) — supplied through the [`TypeExprContext`] trait. Nothing
+//! else about the builder or the wider inference state crosses into this
+//! module: the determination is a pure function of the base type, the optional
+//! explicit interface, the member name, and that context.
 //!
 //! [`TypeExprContext`]: crate::lower_type_expr::TypeExprContext
 
@@ -51,9 +52,11 @@ pub(crate) struct ProjectionLowering {
 ///
 /// The interface is determined here so the triple is self-describing: an
 /// explicit `as I` qualifier is validated to actually declare `member`; an
-/// unqualified base has its interface inferred (its bound for a type variable,
-/// its own `requires`-closure for an interface existential). When no interface
-/// can be determined the projection is ill-formed and lowers to [`Ty::Error`].
+/// unqualified base has its interface inferred by the base's kind — a type
+/// variable's bound conjunction, an interface existential's own
+/// `requires`-closure, a concrete type's visible impls, or (for a chained
+/// `T.A.B`) the inner associated type's declared bound. When no interface can
+/// be determined the projection is ill-formed and lowers to [`Ty::Error`].
 pub(crate) fn lower_projection(
     ctx: &dyn TypeExprContext<'_>,
     base: Ty,
@@ -140,12 +143,11 @@ fn determine_interface(
     explicit_interface: Option<Ty>,
     member: &Name,
 ) -> Determination {
-    let base = expand_aliases(ctx, base.clone());
-
     // Explicit `(base as I).member`: the interface is given. It must be an
     // interface and must declare `member` *directly* — `requires` is a bound,
     // not inheritance, so a required interface's member projects through that
-    // interface, not its requirer.
+    // interface, not its requirer. The base is not consulted on this path, so
+    // its alias expansion is deferred to the unqualified path below.
     if let Some(explicit_interface) = explicit_interface {
         let explicit_interface = expand_aliases(ctx, explicit_interface);
         let Some(interface) = explicit_interface.as_interface() else {
@@ -172,6 +174,7 @@ fn determine_interface(
     // Unqualified `base.member`: pick the interface root(s) to search by the base's
     // kind, then resolve through their `requires`-closures. Exhaustive — every kind
     // is classified, never silently dropped.
+    let base = expand_aliases(ctx, base.clone());
     match &base {
         // An interface existential is its own (single) search root.
         Ty::Interface(qtn, args, assoc, _) => {
@@ -266,13 +269,18 @@ fn determine_interface(
 /// conjunction, or a single interface existential.
 ///
 /// Each root that declares `member` *directly* is itself a declarer, resolved
-/// without walking its `requires`-closure (`requires` is a bound, not inheritance;
-/// this also avoids re-entering the closure while it lowers a
-/// `requires I<Assoc = Self.Assoc>` binding). Otherwise the root's closure is
-/// searched. Declarers across all roots are deduplicated by realized identity: one
-/// declarer is [`Determination::Determined`], several distinct ones (e.g. both
-/// arms of a `T: A & B` bound declaring `member`) are [`Determination::Ambiguous`],
-/// none is [`Determination::Undeclared`] against `undeclared`.
+/// without walking its `requires`-closure. NOTE: this deliberately deviates from
+/// Rust's E0221 — in Rust a root and a required interface both declaring the
+/// same name is *ambiguous* (they are distinct associated types; `requires` is a
+/// bound, not inheritance). Here the root shadows: the stdlib's
+/// `Iterator requires Iterable<Item = Self.Item>` pinning idiom relies on
+/// `Self.Item` resolving to the root's own declaration while that very clause is
+/// being lowered (the short-circuit is also what terminates that recursion).
+/// Otherwise the root's closure is searched. Declarers across all roots are
+/// deduplicated by realized identity: one declarer is
+/// [`Determination::Determined`], several distinct ones (e.g. both arms of a
+/// `T: A & B` bound declaring `member`) are [`Determination::Ambiguous`], none
+/// is [`Determination::Undeclared`] against `undeclared`.
 fn resolve_through_roots(
     db: &dyn crate::Db,
     roots: Vec<baml_type::Interface>,
@@ -477,15 +485,11 @@ fn closure_declarers(
     let Some(root_loc) = resolve_interface_loc(db, &root.name) else {
         return Vec::new();
     };
-    let pkg_id = PackageId::new(db, root.name.package().clone());
-    let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
     let closure = crate::interfaces::interface_closure_locs_with_args_and_assoc(
         db,
         root_loc,
         &root.generics,
         &root.associated_types,
-        pkg_items,
-        root.name.namespace(),
     );
 
     let mut declarers: Vec<baml_type::Interface> = Vec::new();

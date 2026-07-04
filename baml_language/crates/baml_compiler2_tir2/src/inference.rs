@@ -42,6 +42,14 @@ struct GenericEnv {
     params: Vec<Name>,
     bound_param_names: Vec<Name>,
     bound_exprs: Vec<Option<ast::TypeExpr>>,
+    /// Parallel to `bound_param_names`/`bound_exprs`: whether this env's scope
+    /// *owns* the bound's declaration. Bound-expr diagnostics (unresolved names,
+    /// arity, non-interface bounds) are reported only by the owning scope — an
+    /// env that merely inherits a parent declaration's bounds (a method env
+    /// carrying its class's, a lambda env carrying its function's) still lowers
+    /// them for enforcement/projection but stays silent, so each declaration
+    /// error is reported exactly once, at its declaration.
+    owned_bounds: Vec<bool>,
     /// A parameter pinned to an interface *constraint* (currently only `Self` inside an
     /// interface's own default method). A `baml_type::Interface`, never a `Ty::Interface`
     /// existential — a constraint pins only some associated types.
@@ -54,10 +62,14 @@ impl GenericEnv {
             params,
             bound_param_names: Vec::new(),
             bound_exprs: Vec::new(),
+            owned_bounds: Vec::new(),
             concrete_bounds: Vec::new(),
         }
     }
 
+    /// Prepend an *enclosing* declaration's parameters (a class's onto a method
+    /// env, an impl block's onto its method env). Their bounds are inherited —
+    /// diagnosed at the enclosing declaration, not re-reported by this env.
     fn prepend_declared(&mut self, params: &[Name], bounds: &[Option<ast::TypeExpr>]) {
         let mut merged_params = params.to_vec();
         merged_params.extend(std::mem::take(&mut self.params));
@@ -70,6 +82,10 @@ impl GenericEnv {
         let mut merged_bounds = bounds.to_vec();
         merged_bounds.extend(std::mem::take(&mut self.bound_exprs));
         self.bound_exprs = merged_bounds;
+
+        let mut merged_owned = vec![false; params.len()];
+        merged_owned.extend(std::mem::take(&mut self.owned_bounds));
+        self.owned_bounds = merged_owned;
     }
 
     fn add_bounds_for_declared_params(
@@ -84,6 +100,7 @@ impl GenericEnv {
                 .enumerate()
                 .map(|(idx, _)| bounds.get(idx).cloned().unwrap_or(None)),
         );
+        self.owned_bounds.extend(params.iter().map(|_| true));
     }
 
     fn append_declared(&mut self, params: &[Name], bounds: &[Option<ast::TypeExpr>]) {
@@ -100,7 +117,15 @@ impl GenericEnv {
             self.bound_param_names.push(param.clone());
             self.bound_exprs
                 .push(bounds.get(idx).cloned().unwrap_or(None));
+            self.owned_bounds.push(true);
         }
+    }
+
+    /// Demote every bound to inherited: the env is being extended for an inner
+    /// scope (a lambda, a required-method signature) that must not re-report the
+    /// enclosing declaration's bound diagnostics.
+    fn mark_all_bounds_inherited(&mut self) {
+        self.owned_bounds.fill(false);
     }
 
     fn add_concrete_bound(&mut self, param: Name, bound: baml_type::Interface) {
@@ -283,32 +308,29 @@ fn type_bindings_for_params(params: &[Name]) -> FxHashMap<Name, Ty> {
 }
 
 /// Lower one generic parameter's `extends` bound expression to its `Ty`, in the
-/// declaration's own scope with the sibling parameters (`type_bindings`) in scope.
-/// A projection *inside* a bound is not itself resolved (no bounds threaded — that
-/// would be circular); shared by the enforcement table and [`env_interface_bounds`].
+/// declaration's own scope with the sibling parameters (`params`) in scope as
+/// rigid type variables. A projection *inside* a bound is not itself resolved
+/// (no bounds threaded — that would be circular); shared by the enforcement
+/// table and [`env_interface_bounds`].
 fn lower_env_generic_bound(
     db: &dyn crate::Db,
     pkg_items: &PackageItems<'_>,
     ns_context: &[Name],
-    type_bindings: &FxHashMap<Name, Ty>,
+    params: &[Name],
     bound_te: &ast::TypeExpr,
     diags: &mut Vec<crate::infer_context::TirTypeError>,
 ) -> Ty {
-    let generic_params: Vec<_> = type_bindings.keys().cloned().collect();
-    crate::generics::substitute_ty(
-        &crate::lower_type_expr::lower_type_expr(
-            bound_te,
-            &crate::lower_type_expr::ScopeCtx {
-                db,
-                package_items: pkg_items,
-                ns_context,
-                generic_params: &generic_params,
-                bounds: &TypeVarBoundsMap::default(),
-                self_ty: None,
-            },
-            diags,
-        ),
-        type_bindings,
+    crate::lower_type_expr::lower_type_expr(
+        bound_te,
+        &crate::lower_type_expr::ScopeCtx {
+            db,
+            package_items: pkg_items,
+            ns_context,
+            generic_params: params,
+            bounds: &TypeVarBoundsMap::default(),
+            self_ty: None,
+        },
+        diags,
     )
 }
 
@@ -326,20 +348,13 @@ fn env_interface_bounds(
     env: &GenericEnv,
 ) -> TypeVarBoundsMap {
     let mut bounds = TypeVarBoundsMap::default();
-    let type_bindings = type_bindings_for_params(&env.params);
     for (name, bound) in env.bound_param_names.iter().zip(env.bound_exprs.iter()) {
         let Some(bound_te) = bound else {
             continue;
         };
         let mut diags = Vec::new();
-        let bound_ty = lower_env_generic_bound(
-            db,
-            pkg_items,
-            ns_context,
-            &type_bindings,
-            bound_te,
-            &mut diags,
-        );
+        let bound_ty =
+            lower_env_generic_bound(db, pkg_items, ns_context, &env.params, bound_te, &mut diags);
         if let Some(constraint) = bound_ty.as_interface() {
             // Last-wins, matching `install_generic_param_bounds`'s `insert`: a name repeated
             // across `bound_param_names` is a shadowing artifact (an inner-scope parameter
@@ -377,7 +392,7 @@ fn report_duplicate_generic_params(
 
 /// The number of generic parameters the interface named `qtn` declares, or `None`
 /// if `qtn` does not resolve to an interface.
-fn interface_declared_generic_arity(
+pub(crate) fn interface_declared_generic_arity(
     db: &dyn crate::Db,
     qtn: &crate::ty::QualifiedTypeName,
 ) -> Option<usize> {
@@ -401,20 +416,26 @@ fn install_generic_param_bounds(
     span: TextRange,
 ) {
     let mut bounds: FxHashMap<Name, Ty> = FxHashMap::default();
-    let type_bindings = type_bindings_for_params(&env.params);
-    for (name, bound) in env.bound_param_names.iter().zip(env.bound_exprs.iter()) {
+    debug_assert_eq!(env.bound_param_names.len(), env.owned_bounds.len());
+    for ((name, bound), owned) in env
+        .bound_param_names
+        .iter()
+        .zip(env.bound_exprs.iter())
+        .zip(env.owned_bounds.iter().copied())
+    {
         let Some(bound_te) = bound else {
             continue;
         };
         let mut diags = Vec::new();
-        let bound_ty = lower_env_generic_bound(
-            db,
-            pkg_items,
-            ns_context,
-            &type_bindings,
-            bound_te,
-            &mut diags,
-        );
+        let bound_ty =
+            lower_env_generic_bound(db, pkg_items, ns_context, &env.params, bound_te, &mut diags);
+        // Inherited bounds (an enclosing declaration's) are lowered for the
+        // enforcement table but their diagnostics belong to — and were already
+        // reported by — the owning declaration's scope.
+        if !owned {
+            bounds.insert(name.clone(), bound_ty);
+            continue;
+        }
         for diag in diags {
             builder.report_at_span(diag, span);
         }
@@ -440,17 +461,14 @@ fn install_generic_param_bounds(
                     );
                 }
             }
-            // Sentinels that are NOT concrete non-interface types: error/unknown are
-            // already diagnosed by lowering; the top type, a sibling type-var bound
-            // (`<T, U extends T>`), and an associated-type projection are special
-            // forms for which "not an interface" would be wrong or redundant.
-            // Mirrors the impl-bound check in `lower_generic_param_interface_bounds`.
-            Ty::Unknown { .. }
-            | Ty::Error { .. }
-            | Ty::BuiltinUnknown { .. }
-            | Ty::TypeVar(..)
-            | Ty::AssociatedTypeProjection { .. } => {}
-            // BEP-044 requires bounds to be interfaces (E0142).
+            // Already diagnosed by lowering the bound expression itself — a second
+            // "not an interface" here would be redundant.
+            Ty::Unknown { .. } | Ty::Error { .. } | Ty::BuiltinUnknown { .. } => {}
+            // BEP-044 requires bounds to be interfaces (E0142). A sibling type
+            // variable (`<T, U extends T>`) or an associated-type projection is not
+            // an interface either — bounds constrain by interface contract, never
+            // by subtyping against another parameter. Mirrors the impl-bound check
+            // in `lower_generic_param_interface_bounds`.
             other => builder.report_at_span(
                 crate::infer_context::TirTypeError::GenericBoundNotInterface {
                     bound: other.clone(),
@@ -584,24 +602,26 @@ struct TypeExprLoweringOptions {
     self_ty: Option<Ty>,
 }
 
+#[expect(clippy::too_many_arguments)]
 fn lower_type_expr_at_span_in_env(
     db: &dyn crate::Db,
     builder: &mut TypeInferenceBuilder<'_>,
     pkg_items: &PackageItems<'_>,
     ns_context: &[Name],
     env: &GenericEnv,
+    env_bounds: &crate::lower_type_expr::TypeVarBoundsMap,
     type_expr: &ast::TypeExpr,
     options: TypeExprLoweringOptions,
 ) -> Ty {
     // The env's params are the in-scope type variables; `Self` resolves through `self_ty`,
-    // and the env's interface bounds let a `T.member` / `Self.member` projection resolve.
-    let bounds = env_interface_bounds(db, pkg_items, ns_context, env);
+    // and the env's interface bounds (`env_bounds`, computed once per env via
+    // `env_interface_bounds`) let a `T.member` / `Self.member` projection resolve.
     let ctx = crate::lower_type_expr::ScopeCtx {
         db,
         package_items: pkg_items,
         ns_context,
         generic_params: &env.params,
-        bounds: &bounds,
+        bounds: env_bounds,
         self_ty: options.self_ty,
     };
     let mut diags = Vec::new();
@@ -613,12 +633,14 @@ fn lower_type_expr_at_span_in_env(
     ty
 }
 
+#[expect(clippy::too_many_arguments)]
 fn validate_spanned_type_expr_generic_bounds(
     db: &dyn crate::Db,
     builder: &mut TypeInferenceBuilder<'_>,
     pkg_items: &PackageItems<'_>,
     ns_context: &[Name],
     env: &GenericEnv,
+    env_bounds: &crate::lower_type_expr::TypeVarBoundsMap,
     type_expr: &ast::SpannedTypeExpr,
     self_ty: Option<Ty>,
 ) {
@@ -628,6 +650,7 @@ fn validate_spanned_type_expr_generic_bounds(
         pkg_items,
         ns_context,
         env,
+        env_bounds,
         &type_expr.expr,
         TypeExprLoweringOptions {
             span: type_expr.span,
@@ -637,6 +660,9 @@ fn validate_spanned_type_expr_generic_bounds(
 }
 
 fn extend_env_with_lambda_generics(mut env: GenericEnv, func_def: &FunctionDef) -> GenericEnv {
+    // The enclosing scope's bounds were already diagnosed there; the lambda's
+    // scope reports only its own.
+    env.mark_all_bounds_inherited();
     env.append_unique_declared(&func_def.generic_params, &func_def.generic_param_bounds);
     env
 }
@@ -650,7 +676,6 @@ fn add_lambda_params_to_builder(
     func_def: &FunctionDef,
     contextual_param_tys: Option<&[FunctionParamTy]>,
 ) {
-    let type_bindings = type_bindings_for_params(&env.params);
     // The lambda's own generic bounds (its env extends the enclosing scope's) let a
     // `T.member` projection in a parameter type resolve `T`'s declaring interface.
     let bounds = env_interface_bounds(db, pkg_items, ns_context, env);
@@ -664,21 +689,17 @@ fn add_lambda_params_to_builder(
             // child lambda scope.
             .map(|ste| {
                 let mut diags = Vec::new();
-                let generic_params: Vec<_> = type_bindings.keys().cloned().collect();
-                crate::generics::substitute_ty(
-                    &crate::lower_type_expr::lower_type_expr(
-                        &ste.expr,
-                        &crate::lower_type_expr::ScopeCtx {
-                            db,
-                            package_items: pkg_items,
-                            ns_context,
-                            generic_params: &generic_params,
-                            bounds: &bounds,
-                            self_ty: None,
-                        },
-                        &mut diags,
-                    ),
-                    &type_bindings,
+                crate::lower_type_expr::lower_type_expr(
+                    &ste.expr,
+                    &crate::lower_type_expr::ScopeCtx {
+                        db,
+                        package_items: pkg_items,
+                        ns_context,
+                        generic_params: &env.params,
+                        bounds: &bounds,
+                        self_ty: None,
+                    },
+                    &mut diags,
                 )
             })
             .or_else(|| {
@@ -1483,27 +1504,18 @@ pub fn infer_scope_types<'db>(
                             Some(crate::self_type::self_type_for_interface_default())
                         } else if let Some(imp) = enclosing_impl {
                             let mut diags = Vec::new();
-                            Some({
-                                let generic_params: Vec<_> = type_bindings_for_params(&env.params)
-                                    .keys()
-                                    .cloned()
-                                    .collect();
-                                crate::generics::substitute_ty(
-                                    &crate::lower_type_expr::lower_type_expr(
-                                        &imp.for_target.expr,
-                                        &crate::lower_type_expr::ScopeCtx {
-                                            db,
-                                            package_items: pkg_items,
-                                            ns_context: &pkg_info.namespace_path,
-                                            generic_params: &generic_params,
-                                            bounds: &env_bounds,
-                                            self_ty: None,
-                                        },
-                                        &mut diags,
-                                    ),
-                                    &type_bindings_for_params(&env.params),
-                                )
-                            })
+                            Some(crate::lower_type_expr::lower_type_expr(
+                                &imp.for_target.expr,
+                                &crate::lower_type_expr::ScopeCtx {
+                                    db,
+                                    package_items: pkg_items,
+                                    ns_context: &pkg_info.namespace_path,
+                                    generic_params: &env.params,
+                                    bounds: &env_bounds,
+                                    self_ty: None,
+                                },
+                                &mut diags,
+                            ))
                         } else {
                             enclosing_class_name.as_ref().and_then(|cn| {
                                 let baml_compiler2_hir::contributions::Definition::Class(class_loc) =
@@ -1530,13 +1542,8 @@ pub fn infer_scope_types<'db>(
                         let sig_sm = baml_compiler2_ppir::elaborated_function_signature_source_map(
                             db, func_loc,
                         );
-                        let mut type_bindings: FxHashMap<Name, Ty> = FxHashMap::default();
-                        for param in &env.params {
-                            type_bindings.insert(
-                                param.clone(),
-                                Ty::TypeVar(param.clone(), TyAttr::default()),
-                            );
-                        }
+                        let mut type_bindings: FxHashMap<Name, Ty> =
+                            type_bindings_for_params(&env.params);
                         if let Some(target) = item_tree.method_to_iface_target.get(local_id)
                             && let Some(iface_loc) = crate::interfaces::resolve_path_to_interface(
                                 db,
@@ -2286,6 +2293,9 @@ pub fn infer_scope_types<'db>(
                     &iface_env,
                     iface_data.span,
                 );
+                // Computed once per env — every signature type expr below shares it.
+                let iface_env_bounds =
+                    env_interface_bounds(db, pkg_items, &pkg_info.namespace_path, &iface_env);
                 for field in &iface_data.fields {
                     if let Some(type_expr) = &field.type_expr {
                         validate_spanned_type_expr_generic_bounds(
@@ -2294,6 +2304,7 @@ pub fn infer_scope_types<'db>(
                             pkg_items,
                             &pkg_info.namespace_path,
                             &iface_env,
+                            &iface_env_bounds,
                             type_expr,
                             Some(self_ty.clone()),
                         );
@@ -2317,6 +2328,10 @@ pub fn infer_scope_types<'db>(
                         }
                     }
                     let mut sig_env = iface_env.clone();
+                    // The interface's own bounds were diagnosed above at the
+                    // interface span; each signature env reports only its
+                    // method's own.
+                    sig_env.mark_all_bounds_inherited();
                     sig_env.append_declared(&sig.generic_params, &sig.generic_param_bounds);
                     apply_generic_env(
                         db,
@@ -2326,6 +2341,10 @@ pub fn infer_scope_types<'db>(
                         &sig_env,
                         sig.span,
                     );
+                    // Once per signature env (the interface's bounds plus this
+                    // method's own), shared by its params, return, and throws.
+                    let sig_env_bounds =
+                        env_interface_bounds(db, pkg_items, &pkg_info.namespace_path, &sig_env);
                     for param in &sig.params {
                         if let Some(type_expr) = &param.type_expr {
                             validate_spanned_type_expr_generic_bounds(
@@ -2334,6 +2353,7 @@ pub fn infer_scope_types<'db>(
                                 pkg_items,
                                 &pkg_info.namespace_path,
                                 &sig_env,
+                                &sig_env_bounds,
                                 type_expr,
                                 Some(self_ty.clone()),
                             );
@@ -2346,6 +2366,7 @@ pub fn infer_scope_types<'db>(
                             pkg_items,
                             &pkg_info.namespace_path,
                             &sig_env,
+                            &sig_env_bounds,
                             return_type,
                             Some(self_ty.clone()),
                         );
@@ -2357,6 +2378,7 @@ pub fn infer_scope_types<'db>(
                             pkg_items,
                             &pkg_info.namespace_path,
                             &sig_env,
+                            &sig_env_bounds,
                             throws,
                             Some(self_ty.clone()),
                         );
@@ -2492,25 +2514,24 @@ pub fn alias_def(db: &dyn crate::Db, qtn: &crate::ty::QualifiedTypeName) -> Opti
 ///
 /// The global counterpart to per-scope enum lookup: a pure function of the
 /// program's declarations plus the resolution context that bounds which packages
-/// are visible from the current one. Returns an empty vec when `enum_name` does
-/// not resolve to an enum in an accessible package.
+/// are visible from the current one. Returns `None` when `enum_name` does not
+/// resolve to an enum in an accessible package — distinct from `Some(vec![])`,
+/// a resolved enum that declares no variants.
 pub fn enum_variants<'db>(
     db: &'db dyn crate::Db,
     res_ctx: &'db crate::package_interface::PackageResolutionContext<'db>,
     enum_name: &crate::ty::QualifiedTypeName,
-) -> Vec<Name> {
-    let Some(items) = res_ctx.items_for_package(db, enum_name.package()) else {
-        return Vec::new();
-    };
-    if let Some(Definition::Enum(enum_loc)) =
+) -> Option<Vec<Name>> {
+    let items = res_ctx.items_for_package(db, enum_name.package())?;
+    let Some(Definition::Enum(enum_loc)) =
         items.lookup_type(enum_name.namespace(), enum_name.name())
-    {
-        let file = enum_loc.file(db);
-        let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
-        let enum_data = &item_tree[enum_loc.id(db)];
-        return enum_data.variants.iter().map(|v| v.name.clone()).collect();
-    }
-    Vec::new()
+    else {
+        return None;
+    };
+    let file = enum_loc.file(db);
+    let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
+    let enum_data = &item_tree[enum_loc.id(db)];
+    Some(enum_data.variants.iter().map(|v| v.name.clone()).collect())
 }
 
 /// Build the type-alias map visible from a package: its own aliases plus those
