@@ -13,7 +13,7 @@
 //! NOT recurse into it — lambda bodies are separate scopes with their own
 //! `infer_scope_types` Salsa query.
 
-use std::collections::{BTreeSet, HashMap};
+use std::collections::BTreeSet;
 
 use baml_base::{Name, SourceFile};
 use baml_compiler2_ast::{
@@ -529,7 +529,7 @@ impl baml_type::normalize::TypeContext for NormalizeCtx<'_, '_> {
             b.context.db(),
             concrete,
             interface,
-            &b.aliases,
+            b.aliases,
             |actual, bound| b.is_subtype(actual, bound),
         )
     }
@@ -650,9 +650,10 @@ pub struct TypeInferenceBuilder<'db> {
     /// Declared return type for the function (used to check return statements).
     declared_return_ty: Option<Ty>,
     /// Resolved type-alias environment (alias map + precomputed recursive
-    /// set), built once per scope so per-comparison normalization never
-    /// re-derives the recursive-alias analysis.
-    aliases: crate::normalize::ResolvedAliases,
+    /// set), borrowed from the per-package Salsa query
+    /// (`inference::package_alias_env`) — computed once per package, not per
+    /// scope, and never re-derived per comparison.
+    aliases: &'db crate::normalize::ResolvedAliases,
     /// Namespace path for the file being analyzed (e.g. `["env"]` for `baml/env.baml`).
     ns_context: Vec<Name>,
     /// BEP-044: when this body is the override of an interface method
@@ -952,7 +953,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         res_ctx: &'db PackageResolutionContext<'db>,
         package_id: PackageId<'db>,
         scope: ScopeId<'db>,
-        aliases: HashMap<crate::ty::QualifiedTypeName, Ty>,
+        aliases: &'db crate::normalize::ResolvedAliases,
     ) -> Self {
         let db = context.db();
         let package_items = &res_ctx.own_items;
@@ -973,7 +974,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             package_id,
             scope,
             declared_return_ty: None,
-            aliases: crate::normalize::resolved_aliases_from_map(aliases),
+            aliases,
             ns_context,
             implements_block_interface: None,
             generic_param_bounds: rustc_hash::FxHashMap::default(),
@@ -1790,7 +1791,7 @@ impl<'db> TypeInferenceBuilder<'db> {
     }
 
     fn container_arg_subtype_without_nominal(&self, actual: &Ty, expected: &Ty) -> bool {
-        crate::normalize::is_subtype_of(actual, expected, &self.aliases)
+        crate::normalize::is_subtype_of(actual, expected, self.aliases)
     }
 
     fn function_coercion_for(
@@ -4863,7 +4864,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 crate::associated_projection::AssociatedProjectionResolver::with_resolution_context(
                     self.context.db(),
                     self.res_ctx,
-                    &self.aliases,
+                    self.aliases,
                     &self.generic_param_bounds,
                 );
             let completed_bindings: Vec<(Name, Ty)> = self
@@ -5896,7 +5897,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     let db = self.context.db();
                     let registry =
                         crate::interfaces::package_implements_registry(db, self.package_id);
-                    registry.first_failing_bound(&inferred, expected, &self.aliases, |a, b| {
+                    registry.first_failing_bound(&inferred, expected, self.aliases, |a, b| {
                         self.is_subtype(a, b)
                     })
                 } else {
@@ -11163,7 +11164,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     crate::associated_projection::AssociatedProjectionResolver::with_resolution_context(
                         self.context.db(),
                         self.res_ctx,
-                        &self.aliases,
+                        self.aliases,
                         &self.generic_param_bounds,
                     );
                 if let Some(projection_bound) =
@@ -11244,7 +11245,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         crate::associated_projection::AssociatedProjectionResolver::with_resolution_context(
             self.context.db(),
             self.res_ctx,
-            &self.aliases,
+            self.aliases,
             &self.generic_param_bounds,
         )
         .types_equivalent(a, b)
@@ -11471,7 +11472,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     &rule.for_ty_pattern,
                     &actual_ty,
                     &rule.generic_params,
-                    &self.aliases,
+                    self.aliases,
                 ) else {
                     continue;
                 };
@@ -11485,7 +11486,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 if !registry.type_implements_interface_via_rule(
                     &actual_ty,
                     &implemented_iface,
-                    &self.aliases,
+                    self.aliases,
                     |actual, bound| self.is_subtype(actual, bound),
                 ) {
                     continue;
@@ -14359,9 +14360,10 @@ impl<'db> TypeInferenceBuilder<'db> {
                     .map(|a| crate::generics::substitute_ty(a, &bindings))
                     .collect();
                 if subst.len() == target_iface_args.len()
-                    && subst.iter().zip(target_iface_args).all(|(a, b)| {
-                        crate::normalize::is_same_normalized_type(a, b, &self.aliases)
-                    })
+                    && subst
+                        .iter()
+                        .zip(target_iface_args)
+                        .all(|(a, b)| crate::normalize::is_same_normalized_type(a, b, self.aliases))
                 {
                     count += 1;
                 }
@@ -14473,7 +14475,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     &rule.for_ty_pattern,
                     base_ty,
                     &rule.generic_params,
-                    &self.aliases,
+                    self.aliases,
                 ) else {
                     continue;
                 };
@@ -14495,7 +14497,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 if !registry.type_implements_interface_via_rule(
                     base_ty,
                     &requested,
-                    &self.aliases,
+                    self.aliases,
                     |a, c| self.is_subtype(a, c),
                 ) {
                     continue;
@@ -15611,7 +15613,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         crate::associated_projection::AssociatedProjectionResolver::with_resolution_context(
             self.context.db(),
             self.res_ctx,
-            &self.aliases,
+            self.aliases,
             &self.generic_param_bounds,
         )
         .resolve_deep(ty)
@@ -15663,7 +15665,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         crate::associated_projection::AssociatedProjectionResolver::with_resolution_context(
             self.context.db(),
             self.res_ctx,
-            &self.aliases,
+            self.aliases,
             &self.generic_param_bounds,
         )
         .projection_views_equivalent(a, b)
@@ -15812,7 +15814,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             return registry.type_implements_interface_via_rule(
                 sub,
                 &requested_iface_ty,
-                &self.aliases,
+                self.aliases,
                 |actual, bound| self.is_subtype(actual, bound),
             );
         }
@@ -15898,7 +15900,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         // and the `extends` chain is reflected in the per-class data already.
         // For a pure interface-to-interface check, fall through to structural
         // equality (matches today's behaviour for unrelated interfaces).
-        crate::normalize::is_subtype_of(sub, sup, &self.aliases)
+        crate::normalize::is_subtype_of(sub, sup, self.aliases)
     }
 
     fn structural_subtype_with_nominal_interfaces(&self, sub: &Ty, sup: &Ty) -> Option<bool> {
@@ -15910,10 +15912,10 @@ impl<'db> TypeInferenceBuilder<'db> {
 
         match (sub, sup) {
             (Ty::List(..) | Ty::EvolvingList(..), Ty::List(..) | Ty::EvolvingList(..)) => {
-                Some(crate::normalize::is_subtype_of(sub, sup, &self.aliases))
+                Some(crate::normalize::is_subtype_of(sub, sup, self.aliases))
             }
             (Ty::Map { .. } | Ty::EvolvingMap(..), Ty::Map { .. } | Ty::EvolvingMap(..)) => {
-                Some(crate::normalize::is_subtype_of(sub, sup, &self.aliases))
+                Some(crate::normalize::is_subtype_of(sub, sup, self.aliases))
             }
             (Ty::Future(sub_value, sub_error, _), Ty::Future(sup_value, sup_error, _)) => {
                 Some(self.is_subtype(sub_value, sup_value) && self.is_subtype(sub_error, sup_error))

@@ -404,17 +404,14 @@ pub fn callable_throws<'db>(db: &'db dyn crate::Db, function: FunctionLoc<'db>) 
                 };
             };
             let inference = infer_scope_types(db, scope_id);
-            let res_ctx = package_resolution_context(db, pkg_id);
-            let aliases = crate::normalize::resolved_aliases_from_map(
-                crate::inference::package_alias_map(db, res_ctx),
-            );
+            let aliases = crate::inference::package_alias_env(db, pkg_id);
             crate::throws_analysis::collect_escaping_throws(
                 &CallableThrowsAnalysis {
                     db,
                     pkg_id,
                     ns_context: &pkg_info.namespace_path,
                     inference,
-                    aliases: &aliases,
+                    aliases,
                 },
                 body,
             )
