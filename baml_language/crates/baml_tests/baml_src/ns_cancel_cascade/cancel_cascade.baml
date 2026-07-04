@@ -86,11 +86,18 @@ test "cancel_after_gc_relocation_still_settles" {
 
 // State observation: after `waiter` is cancelled mid-await, its Future state
 // must reflect Cancelled (not stay Pending).
+//
+// B-650: the root now WAITS for outstanding spawns at end of run. Cancelling
+// `waiter` does NOT cascade to its sibling `slow` (cancelling an awaiter does
+// not cancel the awaited future), so `slow`'s 60s sleep would keep the process
+// alive at shutdown. Tear it down explicitly after capturing `waiter`'s state.
 function cancelled_child_future_state_is_cancelled() -> baml.future.FutureState {
     let slow = spawn { baml.sys.sleep(baml.time.Duration.from_milliseconds(60000n)); 42 };
     let waiter = spawn { await slow };
     let _ = waiter.cancel();
-    waiter.state()
+    let observed = waiter.state();
+    let _ = slow.cancel();
+    observed
 }
 
 test "cancelled_child_future_state_is_cancelled" {
