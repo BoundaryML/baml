@@ -262,8 +262,10 @@ fn lower_class_method_signature<'db>(
     let mut params = Vec::new();
     for param in &sig.params {
         let param_ty = if param.name.as_str() == "self"
-            && matches!(param.ty, baml_compiler2_ast::TypeExpr::Unknown { .. })
-        {
+            && matches!(
+                param.ty.kind,
+                baml_compiler2_ast::TypeExprKind::Unknown { .. }
+            ) {
             self_ty.clone()
         } else {
             lower_with_self(&param.ty, diags)
@@ -340,7 +342,7 @@ pub fn package_interface<'db>(db: &'db dyn crate::Db, pkg_id: PackageId<'db>) ->
                     for field in &class_data.fields {
                         if let Some(te) = &field.type_expr {
                             let field_ty = crate::lower_type_expr::lower_type_expr(
-                                &te.expr,
+                                te,
                                 &field_scope,
                                 &mut diags,
                             );
@@ -406,7 +408,7 @@ pub fn package_interface<'db>(db: &'db dyn crate::Db, pkg_id: PackageId<'db>) ->
                         .as_ref()
                         .map(|te| {
                             crate::lower_type_expr::lower_type_expr(
-                                &te.expr,
+                                te,
                                 &crate::lower_type_expr::ScopeCtx {
                                     db,
                                     package_items: pkg_items,
@@ -789,7 +791,7 @@ impl<'db> PackageResolutionContext<'db> {
         for field in &class_data.fields {
             if let Some(te) = &field.type_expr {
                 let field_ty =
-                    crate::lower_type_expr::lower_type_expr(&te.expr, &field_scope, &mut diags);
+                    crate::lower_type_expr::lower_type_expr(te, &field_scope, &mut diags);
                 fields.push((field.name.clone(), field_ty));
             } else {
                 fields.push((

@@ -16,8 +16,9 @@ use baml_compiler2_mir::{
 };
 use baml_type::{RuntimeTy, TyTemplate, TypeName};
 use bex_vm_types::{
-    BinOp as VmBinOp, Bytecode, CmpOp, ConstValue, Function, FunctionKind, FunctionOrigin,
-    GlobalIndex, Instruction, Object, ObjectIndex, ObjectPool, UnaryOp as VmUnaryOp,
+    BinOp as VmBinOp, Bytecode, CmpOp, ConstValue, Function, FunctionCaptureProps, FunctionKind,
+    FunctionOrigin, GlobalIndex, Instruction, Object, ObjectIndex, ObjectPool,
+    UnaryOp as VmUnaryOp,
     bytecode::{
         ClassInitPlan, DebugLocalScope, FieldCopy, FieldCopySet, InstructionMeta, JumpTableData,
         LineTableEntry, MatchHashEntry, MatchHashTable, OperandMeta,
@@ -294,6 +295,11 @@ struct StackifyCodegen<'ctx, 'obj> {
     /// Maps `BlockId` -> bytecode instruction index (for jump patching).
     block_addresses: HashMap<BlockId, usize>,
 
+    /// Maps `BlockId` -> instruction index just past the block's last
+    /// instruction (its exclusive end). Used to compute catch handler-body PC
+    /// extents for the BEP-042 cause chain.
+    block_end_addresses: HashMap<BlockId, usize>,
+
     /// Pending jumps that need patching: (`instruction_index`, `target_block`).
     pending_jumps: Vec<(usize, PendingJumpTarget)>,
 
@@ -397,6 +403,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             local_slots: HashMap::new(),
             real_local_count: 0,
             block_addresses: HashMap::new(),
+            block_end_addresses: HashMap::new(),
             pending_jumps: Vec::new(),
             pending_jump_tables: Vec::new(),
             dead_unreachable_blocks: HashSet::new(),
@@ -936,6 +943,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             self.current_block_start = block_start;
             let block = mir.block(block_id);
             self.emit_block(block);
+            self.block_end_addresses.insert(block_id, self.current_pc());
         }
 
         // If any pending edges target dead-unreachable MIR blocks, patch them
@@ -976,6 +984,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             throws_type: None,
             origin: FunctionOrigin::Internal,
             body_meta: None,
+            capture: FunctionCaptureProps::disabled(),
             function_id: 0, // assigned at engine init (interim provider)
         }
     }
@@ -2068,6 +2077,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 callee,
                 args,
                 ntypeargs,
+                runtime_id,
                 destination,
                 target,
                 unwind: _,
@@ -2084,10 +2094,21 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
 
                 if let Some(global_callee) = global_callee {
                     unwrap_infallible(pull_semantics::walk_call_direct_args(self, args));
-                    let inst = self.emit(Instruction::Call {
-                        callee: global_callee,
-                        ntypeargs: u16::try_from(*ntypeargs).expect("ntypeargs fits in u16"),
-                    });
+                    if let Some(runtime_id) = runtime_id {
+                        unwrap_infallible(pull_semantics::walk_operand_pull(self, runtime_id));
+                    }
+                    let instruction = if runtime_id.is_some() {
+                        Instruction::CallWithRuntimeId {
+                            callee: global_callee,
+                            ntypeargs: u16::try_from(*ntypeargs).expect("ntypeargs fits in u16"),
+                        }
+                    } else {
+                        Instruction::Call {
+                            callee: global_callee,
+                            ntypeargs: u16::try_from(*ntypeargs).expect("ntypeargs fits in u16"),
+                        }
+                    };
+                    let inst = self.emit(instruction);
                     if let Some(name) = &func_name {
                         self.set_operand(inst, OperandMeta::Callable(name.clone()));
                     }
@@ -2097,7 +2118,12 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                     unwrap_infallible(pull_semantics::walk_call_indirect_operands(
                         self, callee, args,
                     ));
-                    self.emit(Instruction::CallIndirect);
+                    if let Some(runtime_id) = runtime_id {
+                        unwrap_infallible(pull_semantics::walk_operand_pull(self, runtime_id));
+                        self.emit(Instruction::CallIndirectWithRuntimeId);
+                    } else {
+                        self.emit(Instruction::CallIndirect);
+                    }
                     self.emit_store_place(destination);
                     self.emit_jump_unless_fallthrough(*target);
                 }
@@ -2108,6 +2134,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 method,
                 args,
                 ntypeargs,
+                runtime_id,
                 destination,
                 target,
                 unwind: _,
@@ -2122,11 +2149,22 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 let inst = self.emit(Instruction::LoadType(iface_const));
                 self.set_operand(inst, OperandMeta::Const(iface.to_string()));
                 self.emit_constant(&Constant::String(method.clone()));
+                if let Some(runtime_id) = runtime_id {
+                    unwrap_infallible(pull_semantics::walk_operand_pull(self, runtime_id));
+                }
                 let nargs = args.len() - ntypeargs;
-                let inst = self.emit(Instruction::VirtualCall {
-                    nargs: u16::try_from(nargs).expect("nargs fits in u16"),
-                    ntypeargs: u16::try_from(*ntypeargs).expect("ntypeargs fits in u16"),
-                });
+                let instruction = if runtime_id.is_some() {
+                    Instruction::VirtualCallWithRuntimeId {
+                        nargs: u16::try_from(nargs).expect("nargs fits in u16"),
+                        ntypeargs: u16::try_from(*ntypeargs).expect("ntypeargs fits in u16"),
+                    }
+                } else {
+                    Instruction::VirtualCall {
+                        nargs: u16::try_from(nargs).expect("nargs fits in u16"),
+                        ntypeargs: u16::try_from(*ntypeargs).expect("ntypeargs fits in u16"),
+                    }
+                };
+                let inst = self.emit(instruction);
                 self.set_operand(inst, OperandMeta::Callable(method.clone()));
                 self.emit_store_place(destination);
                 self.emit_jump_unless_fallthrough(*target);
@@ -2143,6 +2181,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             Terminator::SysOp {
                 callee,
                 args,
+                runtime_id,
                 destination,
                 target,
                 unwind: _,
@@ -2163,7 +2202,14 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                     });
 
                 unwrap_infallible(pull_semantics::walk_call_direct_args(self, args));
-                let inst = self.emit(Instruction::SysOp(global_callee));
+                if let Some(runtime_id) = runtime_id {
+                    unwrap_infallible(pull_semantics::walk_operand_pull(self, runtime_id));
+                }
+                let inst = if runtime_id.is_some() {
+                    self.emit(Instruction::SysOpWithRuntimeId(global_callee))
+                } else {
+                    self.emit(Instruction::SysOp(global_callee))
+                };
                 if let Some(name) = &func_name {
                     self.set_operand(inst, OperandMeta::Callable(name.clone()));
                 }
@@ -2222,6 +2268,10 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             Terminator::Throw { value } => {
                 self.emit_operand_pull(value);
                 self.emit(Instruction::Throw);
+            }
+            Terminator::Rethrow { value } => {
+                self.emit_operand_pull(value);
+                self.emit(Instruction::Rethrow);
             }
 
             Terminator::ThrowIfPanic { value, otherwise } => {
@@ -2377,7 +2427,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
     /// ranges. The try body spans from the entry block's first instruction up
     /// to (but not including) the handler block's first instruction.
     fn build_exception_table(&mut self, mir: &MirFunctionBody) {
-        use bex_vm_types::bytecode::ExceptionTableEntry;
+        use bex_vm_types::bytecode::{ExceptionTableEntry, HandlerContextEntry};
 
         for region in &mir.catch_regions {
             let body_entry = self.analysis.resolve_jump_target(region.body_entry);
@@ -2419,6 +2469,34 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 .stack_trace_local
                 .and_then(|local| self.local_slots.get(&local).copied())
                 .unwrap_or(ExceptionTableEntry::NO_STACK_TRACE);
+
+            // BEP-042 cause chain: a throw inside the handler body is "during
+            // handling of" this catch's error. The handler body is the union of
+            // the arm blocks (or defer-pad body blocks) captured at lowering;
+            // the layout can fragment them across non-contiguous PCs. Emit one
+            // `HandlerContextEntry` per block so the coverage is exact — a
+            // single `[handler_pc, max_end)` span would over-cover the gaps
+            // between fragments and mis-chain a throw laid out there. An empty
+            // or fully-dropped body contributes no entries and never chains.
+            for &block in &region.handler_body {
+                let (Some(&block_start), Some(&block_end)) = (
+                    self.block_addresses.get(&block),
+                    self.block_end_addresses.get(&block),
+                ) else {
+                    continue; // block dropped by layout / DCE
+                };
+                if block_start >= block_end {
+                    continue; // empty block — nothing to cover
+                }
+                self.bytecode
+                    .handler_context_table
+                    .push(HandlerContextEntry {
+                        start_pc: block_start,
+                        end_pc: block_end,
+                        handler_pc,
+                        stack_trace_slot,
+                    });
+            }
 
             self.bytecode.exception_table.push(ExceptionTableEntry {
                 start_pc,

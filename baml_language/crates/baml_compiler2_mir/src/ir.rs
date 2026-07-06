@@ -44,6 +44,14 @@ pub struct CatchRegion {
     pub body_entry: BlockId,
     /// Handler block that receives the exception.
     pub handler: BlockId,
+    /// All blocks making up the handler body (the arms). BEP-042 cause-chain: a
+    /// throw whose PC lies in any of these blocks is "during handling of"
+    /// `error_local`, so that error's `ErrorContext` becomes the new error's
+    /// cause. Captured as the blocks created while lowering the arms (plus the
+    /// handler block itself); empty means "never chains" (e.g. a defer pad).
+    /// Layout can fragment these across non-contiguous PCs, so the emitter must
+    /// take their union rather than a single `[handler, join)` span.
+    pub handler_body: Vec<BlockId>,
     /// Frame-local slot for the caught error value.
     pub error_local: Local,
     /// Frame-local slot for the stack trace value, if the catch clause
@@ -362,6 +370,11 @@ pub enum Terminator {
         /// calls to generic functions where at least one type argument is
         /// threaded at the call site (explicit `<T>` or type-arg forwarding).
         ntypeargs: usize,
+        /// Hidden `boundary.LocalId` operand from call-site `$id = ...`.
+        ///
+        /// This is not part of ordinary call arity. Emitters push it above the
+        /// normal call payload and use an ID-aware bytecode call form.
+        runtime_id: Option<Operand>,
         /// Where to store the result.
         destination: Place,
         /// Block to jump to after call returns normally.
@@ -397,6 +410,8 @@ pub enum Terminator {
         /// Number of leading `args` entries that are method-level type arguments.
         /// Zero for a non-generic method.
         ntypeargs: usize,
+        /// Hidden `boundary.LocalId` operand from call-site `$id = ...`.
+        runtime_id: Option<Operand>,
         /// Where to store the result.
         destination: Place,
         /// Block to jump to after the call returns normally.
@@ -422,6 +437,8 @@ pub enum Terminator {
         callee: Operand,
         /// Arguments to the sys-op.
         args: Vec<Operand>,
+        /// Hidden `boundary.LocalId` operand from call-site `$id = ...`.
+        runtime_id: Option<Operand>,
         /// Where to store the sys-op's return value.
         destination: Place,
         /// Block to resume at after the sys-op returns.
@@ -496,6 +513,12 @@ pub enum Terminator {
         value: Operand,
     },
 
+    /// Re-throw a caught error value, preserving its original trace origin.
+    Rethrow {
+        /// The caught error value to rethrow.
+        value: Operand,
+    },
+
     /// If the value is a panic instance (`baml.panics.*`), throw it.
     /// Otherwise continue to `otherwise` block.
     ///
@@ -553,7 +576,7 @@ impl Terminator {
                 }
                 succs
             }
-            Terminator::Throw { .. } => vec![],
+            Terminator::Throw { .. } | Terminator::Rethrow { .. } => vec![],
             Terminator::ThrowIfPanic { otherwise, .. } => vec![*otherwise],
             Terminator::ShortCircuit { eval_rhs, join, .. } => vec![*eval_rhs, *join],
         }

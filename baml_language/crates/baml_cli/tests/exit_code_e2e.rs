@@ -25,6 +25,7 @@ fn run_baml_cli(built: &BuiltPaths, dir: &Path, args: &[&str]) -> Output {
         cmd.arg(arg);
     }
     cmd.current_dir(dir);
+    cmd.env("BAML_CLI_ALLOW_DIRECT", "1");
     cmd.output().expect("spawn baml-cli")
 }
 
@@ -238,6 +239,10 @@ fn generate_valid_project_returns_zero_exit_code() {
         )),
         "Expected generate output to include CLI version, got: {stderr}",
     );
+    assert!(
+        stderr.contains("Compiling 1 file(s)"),
+        "`baml generate` should keep compile progress, got: {stderr}",
+    );
 }
 
 // ============================================================================
@@ -266,6 +271,60 @@ fn run_list_compilation_error_returns_nonzero_exit_code() {
         Some(4),
         "Expected exit code 4 for compilation error",
     );
+}
+
+/// `baml run` should only emit the program output for a formatted project.
+/// Compile progress remains reserved for `baml check` and `baml generate`.
+#[test]
+fn run_valid_project_outputs_only_program_output() {
+    let built = common::ensure_built();
+    let tmp = tempfile::tempdir().unwrap();
+
+    create_project(tmp.path(), "function answer() -> int {\n    42\n}\n");
+
+    let output = run_baml_cli(built, tmp.path(), &["run", "answer", "--from", "."]);
+
+    assert!(
+        output.status.success(),
+        "Expected exit code 0 for valid run, got: {:?}\nstdout: {}\nstderr: {}",
+        output.status.code(),
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("42"), "Expected run result, got:\n{stdout}");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.trim().is_empty(),
+        "Expected empty stderr, got:\n{stderr}"
+    );
+}
+
+/// The formatter advisory is the allowed `baml run` stderr exception.
+#[test]
+fn run_unformatted_project_keeps_format_warning() {
+    let built = common::ensure_built();
+    let tmp = tempfile::tempdir().unwrap();
+
+    create_project(tmp.path(), "function answer()->int {\n42\n}\n");
+
+    let output = run_baml_cli(built, tmp.path(), &["run", "answer", "--from", "."]);
+
+    assert!(
+        output.status.success(),
+        "Expected exit code 0 for valid run, got: {:?}\nstdout: {}\nstderr: {}",
+        output.status.code(),
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("42"), "Expected run result, got:\n{stdout}");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("Code is unformatted"),
+        "Expected format warning, got:\n{stderr}"
+    );
+    common::assert_no_compile_file_status(&stderr);
 }
 
 // ============================================================================
@@ -320,6 +379,88 @@ fn test_no_tests_returns_specific_exit_code() {
     );
 }
 
+/// A selector that matches no test must NOT print a green `PASS testing::*`
+/// line: the aggregate of zero tests is a vacuous pass, but stdout that says
+/// PASS while the command exits 5 (`NoTestsRun`) misleads anything parsing it.
+/// Regression for B-628.
+#[test]
+fn test_no_match_selector_does_not_print_pass() {
+    let built = common::ensure_built();
+    let tmp = tempfile::tempdir().unwrap();
+
+    // A project that DOES have tests, so discovery yields a registry — the
+    // empty selection has to come from the filter, not an empty project.
+    create_project(
+        tmp.path(),
+        r#"
+testset "suite" {
+  test "one" { assert.is_true(true) }
+  test "two" { assert.is_true(true) }
+}
+"#,
+    );
+
+    let output = run_baml_cli(
+        built,
+        tmp.path(),
+        &["test", "--from", ".", "-i", "totally-bogus-selector-xyz"],
+    );
+
+    // Exit-code semantics are preserved: no tests selected is exit 5.
+    assert_eq!(
+        output.status.code(),
+        Some(5),
+        "Expected NoTestsRun (5) for a no-match selector, got: {:?}\nstdout: {}\nstderr: {}",
+        output.status.code(),
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let combined = format!("{stdout}{stderr}");
+    assert!(
+        !combined.contains("PASS"),
+        "A no-match selector must not print a PASS line, got:\nstdout: {stdout}\nstderr: {stderr}",
+    );
+    assert!(
+        combined.contains("no tests selected"),
+        "Expected a `no tests selected` message, got:\nstdout: {stdout}\nstderr: {stderr}",
+    );
+}
+
+/// `baml test` should not emit the compile file-count status pair.
+#[test]
+fn test_valid_project_omits_compile_file_status() {
+    let built = common::ensure_built();
+    let tmp = tempfile::tempdir().unwrap();
+
+    create_project(
+        tmp.path(),
+        r#"
+test "passes" {
+  assert.equal(1, 1)
+}
+"#,
+    );
+
+    let output = run_baml_cli(built, tmp.path(), &["test", "--from", "."]);
+
+    assert!(
+        output.status.success(),
+        "Expected exit code 0 for valid test, got: {:?}\nstdout: {}\nstderr: {}",
+        output.status.code(),
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("PASS"),
+        "Expected passing test output, got:\n{stdout}"
+    );
+    common::assert_no_compile_file_status(&String::from_utf8_lossy(&output.stderr));
+}
+
 /// Failing `assert.equal` should surface both operand values and keep stack
 /// traces user-facing (no internal `Span`/`FileId` debug structs).
 #[test]
@@ -359,6 +500,47 @@ test "assert-equal-failure" {
     assert!(
         !stderr.contains("FileId("),
         "User-facing test output should not include internal FileId debug data: {stderr}",
+    );
+}
+
+/// `assert.approx_equal` lets float assertions pass with a tolerance so normal
+/// floating-point rounding artifacts do not fail tests.
+///
+/// Returns:
+/// - Nothing; this test passes when `baml test` exits successfully.
+///
+/// Panics:
+/// - Panics if `baml test` fails or does not report the passing test case.
+#[test]
+fn test_assert_approx_equal_accepts_float_tolerance() {
+    let built = common::ensure_built();
+    let tmp = tempfile::tempdir().unwrap();
+
+    create_project(
+        tmp.path(),
+        r#"
+test "assert-approx-equal-passes" {
+  let total = 9.99 + 5.50 + 2.00
+  assert.approx_equal(total, 17.49, 0.000001)
+}
+"#,
+    );
+
+    let output = run_baml_cli(built, tmp.path(), &["test", "--from", "."]);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let combined = format!("{stdout}{stderr}");
+
+    assert!(
+        output.status.success(),
+        "Expected assert.approx_equal to tolerate float rounding, got: {:?}\nstdout: {}\nstderr: {}",
+        output.status.code(),
+        stdout,
+        stderr,
+    );
+    assert!(
+        combined.contains("1 passed, 0 failed, 1 total"),
+        "Expected a passing aggregate summary, got:\n{combined}",
     );
 }
 

@@ -216,7 +216,7 @@ fn unknown_type_in_param() {
       { : never
         return 0 : 0
       }
-      !! 13..25: unresolved type: Nonexistent
+      !! 14..25: unresolved type: Nonexistent
     }
     ");
 }
@@ -230,7 +230,7 @@ fn unknown_type_in_return() {
       { : never
         return 0 : 0
       }
-      !! 15..28: unresolved type: DoesNotExist
+      !! 16..28: unresolved type: DoesNotExist
     }
     ");
 }
@@ -686,7 +686,7 @@ fn missing_return() {
       { : int
         let x = 1 : 1 -> int
       }
-      !! 19..34: missing return: expected `int`
+      !! 20..34: missing return: expected `int`
     }
     ");
 }
@@ -700,7 +700,7 @@ fn block_ending_in_stmt() {
       { : string
         let x = "hello" : "hello" -> string
       }
-      !! 22..43: missing return: expected `string`
+      !! 23..43: missing return: expected `string`
     }
     "#);
 }
@@ -716,7 +716,7 @@ fn invalid_binary_op_string_minus_int() {
       { : never
         return "hello" - 5 : unknown
       }
-      !! 28..40: operator `-` cannot be applied to `"hello"` and `5`
+      !! 29..40: operator `-` cannot be applied to `"hello"` and `5`
     }
     "#);
 }
@@ -860,6 +860,138 @@ fn equality_disjoint_types_warns_always_false() {
 }
 
 #[test]
+fn array_filled_with_mutable_literal_warns_aliasing() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"function f() -> int {
+  let rows = baml.Array.filled(3, [0])
+  return rows.length()
+}"#,
+    );
+    let tir = render_tir(&db, file);
+    assert!(
+        tir.contains("reuses the same mutable value in every slot"),
+        "expected Array.filled aliasing warning, got:\n{tir}"
+    );
+    assert!(
+        tir.contains("??"),
+        "expected warning marker for mutable literal aliasing, got:\n{tir}"
+    );
+}
+
+#[test]
+fn array_filled_with_primitive_value_has_no_aliasing_warning() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"function f() -> int {
+  let xs = baml.Array.filled(3, 0)
+  return xs.length()
+}"#,
+    );
+    let tir = render_tir(&db, file);
+    assert!(
+        !tir.contains("reuses the same mutable value"),
+        "did not expect mutable-value aliasing warning, got:\n{tir}"
+    );
+}
+
+#[test]
+fn array_filled_with_map_literal_warns_aliasing() {
+    // A map literal (`Expr::Map`) is a reference type: every slot would alias
+    // the same map, so it warns like the array-literal case.
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"function f() -> int {
+  let rows = baml.Array.filled(3, {})
+  return rows.length()
+}"#,
+    );
+    let tir = render_tir(&db, file);
+    assert!(
+        tir.contains("reuses the same mutable value in every slot"),
+        "expected Array.filled map-literal aliasing warning, got:\n{tir}"
+    );
+    assert!(
+        tir.contains("??"),
+        "expected warning marker for map-literal aliasing, got:\n{tir}"
+    );
+}
+
+#[test]
+fn array_filled_with_class_instance_literal_warns_aliasing() {
+    // A class-instance literal (`Expr::Object`) is a reference type too, so the
+    // same object is shared across every slot: warn.
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"class Cell { n int }
+function f() -> int {
+  let rows = baml.Array.filled(3, Cell { n: 0 })
+  return rows.length()
+}"#,
+    );
+    let tir = render_tir(&db, file);
+    assert!(
+        tir.contains("reuses the same mutable value in every slot"),
+        "expected Array.filled class-instance aliasing warning, got:\n{tir}"
+    );
+    assert!(
+        tir.contains("??"),
+        "expected warning marker for class-instance aliasing, got:\n{tir}"
+    );
+}
+
+#[test]
+fn array_filled_named_value_arg_warns_aliasing() {
+    // The fill value can be passed by name (`value = ...`) rather than
+    // positionally; the mutable-literal detection must handle that path too.
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"function f() -> int {
+  let rows = baml.Array.filled(3, value = [0])
+  return rows.length()
+}"#,
+    );
+    let tir = render_tir(&db, file);
+    assert!(
+        tir.contains("reuses the same mutable value in every slot"),
+        "expected Array.filled named-`value` aliasing warning, got:\n{tir}"
+    );
+    assert!(
+        tir.contains("??"),
+        "expected warning marker for named-`value` aliasing, got:\n{tir}"
+    );
+}
+
+#[test]
+fn array_filled_with_variable_bound_mutable_value_does_not_warn() {
+    // KNOWN LIMITATION (Linear B-548): detection is purely *syntactic* — it only
+    // fires when the fill value is written inline as a literal. Binding the same
+    // mutable value to a variable first (`let x = [0]; Array.filled(3, x)`) still
+    // aliases every slot at runtime, but produces NO warning because the arg is a
+    // `Path`, not a literal. This characterizes (does not endorse) that gap; the
+    // real fix is a future `Array.generate(n, || ...)` factory.
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"function f() -> int {
+  let x = [0]
+  let rows = baml.Array.filled(3, x)
+  return rows.length()
+}"#,
+    );
+    let tir = render_tir(&db, file);
+    assert!(
+        !tir.contains("reuses the same mutable value"),
+        "variable-bound mutable value is a known false-negative (must not warn), got:\n{tir}"
+    );
+}
+
+#[test]
 fn aliased_float_plus_bigint_is_rejected() {
     // Aliases on either side must still trip the float×bigint reject —
     // `infer_binary_op` peels them at entry before classifying.
@@ -905,7 +1037,7 @@ fn invalid_unary_op_neg_string() {
       { : never
         return Neg "hello" : unknown
       }
-      !! 28..37: operator `-` cannot be applied to `"hello"`
+      !! 29..37: operator `-` cannot be applied to `"hello"`
     }
     "#);
 }
@@ -976,7 +1108,7 @@ fn if_without_else_optional() {
               5 : 5
             }
       }
-      !! 36..49: `if` without `else` cannot be used as a value; add an `else` branch
+      !! 37..49: `if` without `else` cannot be used as a value; add an `else` branch
     }
     ");
 }
@@ -998,7 +1130,7 @@ fn if_without_else_let_binding() {
             }
         return y ?? 0 : void
       }
-      !! 36..49: `if` without `else` cannot be used as a value; add an `else` branch
+      !! 37..49: `if` without `else` cannot be used as a value; add an `else` branch
       !! 58..64: did you mean `y`? `y ?? 0` is unnecessary, because `y` cannot be null
       !! 58..64: `if` without `else` cannot be used as a value; add an `else` branch
     }
@@ -1238,7 +1370,7 @@ function f(x: A | B) -> string { return x.value; }"#,
       { : never
         return x.value : int | string
       }
-      !! 86..94: type mismatch: expected string, got int | string
+      !! 87..94: type mismatch: expected string, got int | string
     }
     class user.A$stream {
       value: int | null
@@ -1270,8 +1402,8 @@ function f(x: A | B | null) -> string { return x.name; }"#,
       { : never
         return x.name : string | string | null
       }
-      !! 94..101: did you mean `x?.name`? `x.name` does not handle the case when `x` is null
-      !! 94..101: type mismatch: expected string, got string | string | null
+      !! 95..101: did you mean `x?.name`? `x.name` does not handle the case when `x` is null
+      !! 95..101: type mismatch: expected string, got string | string | null
     }
     class user.A$stream {
       name: string | null

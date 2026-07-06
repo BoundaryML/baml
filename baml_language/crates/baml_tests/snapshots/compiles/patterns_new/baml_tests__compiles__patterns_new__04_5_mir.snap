@@ -163,7 +163,7 @@ fn user.catch_chain_union(mode: int) -> int {
     }
 
     bb3: {
-        throw copy _2;
+        rethrow copy _2;
     }
 
     bb4: {
@@ -199,7 +199,7 @@ fn user.catch_paren_or_chain(mode: int) -> int {
     }
 
     bb3: {
-        throw copy _2;
+        rethrow copy _2;
     }
 
     bb4: {
@@ -235,7 +235,7 @@ fn user.catch_widening_chain(mode: int) -> int {
     }
 
     bb3: {
-        throw copy _2;
+        rethrow copy _2;
     }
 
     bb4: {

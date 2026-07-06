@@ -9,6 +9,7 @@
 
 use crate::ast::{
     ClassDef, Expr, ExprBody, FunctionBodyDef, FunctionDef, Item, LetDef, TypeAliasDef, TypeExpr,
+    TypeExprKind,
 };
 
 /// The canonical set of field attribute names.
@@ -46,7 +47,7 @@ fn validate_class(class: &ClassDef, diagnostics: &mut Vec<(String, text_size::Te
         if let Some(ref spanned_type) = field.type_expr {
             // After hoisting, the outermost TypeExpr should have no field attrs left.
             // Any remaining field attrs are in invalid positions.
-            validate_type_expr_tree(&spanned_type.expr, diagnostics);
+            validate_type_expr_tree(spanned_type, diagnostics);
         }
     }
     // Also validate method signatures
@@ -58,14 +59,14 @@ fn validate_class(class: &ClassDef, diagnostics: &mut Vec<(String, text_size::Te
 fn validate_function(func: &FunctionDef, diagnostics: &mut Vec<(String, text_size::TextRange)>) {
     for param in &func.params {
         if let Some(ref spanned) = param.type_expr {
-            validate_type_expr_tree(&spanned.expr, diagnostics);
+            validate_type_expr_tree(spanned, diagnostics);
         }
     }
     if let Some(ref spanned) = func.return_type {
-        validate_type_expr_tree(&spanned.expr, diagnostics);
+        validate_type_expr_tree(spanned, diagnostics);
     }
     if let Some(ref spanned) = func.throws {
-        validate_type_expr_tree(&spanned.expr, diagnostics);
+        validate_type_expr_tree(spanned, diagnostics);
     }
     // Walk expression body for let/watch-let/pattern type annotations.
     if let Some(FunctionBodyDef::Expr(ref body, _)) = func.body {
@@ -111,7 +112,7 @@ fn validate_type_alias(
     diagnostics: &mut Vec<(String, text_size::TextRange)>,
 ) {
     if let Some(ref spanned) = alias.type_expr {
-        validate_type_expr_tree(&spanned.expr, diagnostics);
+        validate_type_expr_tree(spanned, diagnostics);
     }
 }
 
@@ -126,20 +127,20 @@ fn validate_type_expr_tree(expr: &TypeExpr, diagnostics: &mut Vec<(String, text_
     }
 
     // Recurse into children
-    match expr {
-        TypeExpr::Optional { inner, .. } | TypeExpr::List { inner, .. } => {
+    match &expr.kind {
+        TypeExprKind::Optional { inner, .. } | TypeExprKind::List { inner, .. } => {
             validate_type_expr_tree(inner, diagnostics);
         }
-        TypeExpr::Map { key, value, .. } => {
+        TypeExprKind::Map { key, value, .. } => {
             validate_type_expr_tree(key, diagnostics);
             validate_type_expr_tree(value, diagnostics);
         }
-        TypeExpr::Union { variants, .. } => {
+        TypeExprKind::Union { variants, .. } => {
             for v in variants {
                 validate_type_expr_tree(v, diagnostics);
             }
         }
-        TypeExpr::Function {
+        TypeExprKind::Function {
             params,
             ret,
             throws,

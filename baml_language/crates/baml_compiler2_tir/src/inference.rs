@@ -180,7 +180,7 @@ fn interface_type_level_params_and_bounds(
         iface_data
             .associated_types
             .iter()
-            .map(|assoc| assoc.bound.as_ref().map(|bound| bound.expr.clone())),
+            .map(|assoc| assoc.bound.clone()),
     );
 
     let own_associated: FxHashSet<Name> = iface_data
@@ -233,12 +233,9 @@ fn inherited_interface_associated_type_names(
             return;
         };
         for required in &iface_data.requires {
-            let Some(required_loc) = crate::interfaces::resolve_path_to_interface(
-                db,
-                &required.expr,
-                pkg_items,
-                ns_context,
-            ) else {
+            let Some(required_loc) =
+                crate::interfaces::resolve_path_to_interface(db, required, pkg_items, ns_context)
+            else {
                 continue;
             };
             let required_tree = baml_compiler2_hir::file_item_tree(db, required_loc.file(db));
@@ -520,7 +517,7 @@ fn validate_spanned_type_expr_generic_bounds(
     pkg_items: &PackageItems<'_>,
     ns_context: &[Name],
     env: &GenericEnv,
-    type_expr: &ast::SpannedTypeExpr,
+    type_expr: &ast::TypeExpr,
     self_replacement: Option<&ast::TypeExpr>,
 ) {
     lower_type_expr_at_span_in_env(
@@ -529,7 +526,7 @@ fn validate_spanned_type_expr_generic_bounds(
         pkg_items,
         ns_context,
         env,
-        &type_expr.expr,
+        type_expr,
         TypeExprLoweringOptions {
             span: type_expr.span,
             self_replacement,
@@ -564,7 +561,7 @@ fn add_lambda_params_to_builder(
                 let mut diags = Vec::new();
                 crate::generics::lower_type_expr_with_generics(
                     db,
-                    &ste.expr,
+                    ste,
                     pkg_items,
                     ns_context,
                     &type_bindings,
@@ -746,6 +743,59 @@ impl DefaultParameterInference<'_> {
     }
 }
 
+/// Point lookups into the default-parameter tables, mirroring the
+/// [`ScopeInference`] accessors of the same names. Consumed by MIR lowering,
+/// which reads inference facts through per-scope views rather than
+/// materializing merged copies.
+impl<'db> DefaultParameterInference<'db> {
+    /// Look up the type of a default-parameter expression.
+    pub fn expression_type(&self, expr_id: ExprId) -> Option<&Ty> {
+        self.expressions.get(&expr_id)
+    }
+
+    /// Look up the binding type for a default-parameter pattern.
+    pub fn binding_type(&self, pat_id: PatId) -> Option<&Ty> {
+        self.pattern_types.get(&pat_id)
+    }
+
+    /// Look up the member resolution for a default-parameter expression.
+    pub fn resolution(&self, expr_id: ExprId) -> Option<&MemberResolution<'db>> {
+        self.resolutions.get(&expr_id)
+    }
+
+    /// Check whether a default-parameter match expression is exhaustive.
+    pub fn is_exhaustive_match(&self, expr_id: ExprId) -> bool {
+        self.exhaustive_matches.contains(&expr_id)
+    }
+
+    /// Look up the root segment type for a default-parameter path expression.
+    pub fn path_root_type(&self, expr_id: ExprId) -> Option<&Ty> {
+        self.path_root_types.get(&expr_id)
+    }
+
+    /// Look up the type of `segments[..=seg_idx]` for a default-parameter path.
+    pub fn path_segment_type(&self, expr_id: ExprId, seg_idx: usize) -> Option<&Ty> {
+        self.path_segment_types.get(&(expr_id, seg_idx))
+    }
+
+    /// Look up per-segment member resolutions for a default-parameter path.
+    pub fn path_member_resolution(&self, expr_id: ExprId) -> Option<&[MemberResolution<'db>]> {
+        self.path_member_resolutions
+            .get(&expr_id)
+            .map(Vec::as_slice)
+    }
+
+    /// Look up the argument binding plan for a default-parameter call.
+    pub fn call_plan(&self, expr_id: ExprId) -> Option<&CallPlan> {
+        self.call_plans.get(&expr_id)
+    }
+
+    /// Look up the function adapter for a default-parameter checked coercion.
+    pub fn function_coercion(&self, expr_id: ExprId) -> Option<&FunctionCoercion> {
+        self.function_coercions.get(&expr_id)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CallPlan {
     pub bindings: Vec<ParamBinding>,
@@ -890,9 +940,20 @@ impl<'db> ScopeInference<'db> {
         self.call_type_instantiations.iter()
     }
 
+    /// Look up the function adapter required by a checked coercion.
+    pub fn function_coercion(&self, expr_id: ExprId) -> Option<&FunctionCoercion> {
+        self.function_coercions.get(&expr_id)
+    }
+
     /// Iterate over all function adapters required by checked coercions.
     pub fn iter_function_coercions(&self) -> impl Iterator<Item = (&ExprId, &FunctionCoercion)> {
         self.function_coercions.iter()
+    }
+
+    /// The default-parameter inference tables for this scope, for point
+    /// lookups via [`DefaultParameterInference`]'s accessors.
+    pub fn parameter_defaults(&self) -> &DefaultParameterInference<'db> {
+        &self.parameter_defaults
     }
 
     /// Iterate over all default-parameter expression types for this scope.
@@ -1304,7 +1365,8 @@ pub fn infer_scope_types<'db>(
                     // `default.<method>(...)` resolves against I's
                     // contract.
                     if let Some(target) = item_tree.method_to_iface_target.get(local_id)
-                        && let baml_compiler2_ast::TypeExpr::Path { segments, .. } = &target.expr
+                        && let baml_compiler2_ast::TypeExprKind::Path { segments, .. } =
+                            &target.kind
                         && let Some((head, name)) = segments
                             .split_last()
                             .map(|(last, head)| (head, last.clone()))
@@ -1346,7 +1408,7 @@ pub fn infer_scope_types<'db>(
                             )))
                         } else {
                             enclosing_impl
-                                .map(|imp| imp.for_target.expr.clone())
+                                .map(|imp| imp.for_target.clone())
                                 .or_else(|| {
                                     enclosing_class_name.as_ref().map(|cn| {
                                         crate::lower_type_expr::type_expr_for_name(cn.clone())
@@ -1366,7 +1428,7 @@ pub fn infer_scope_types<'db>(
                         if let Some(target) = item_tree.method_to_iface_target.get(local_id)
                             && let Some(iface_loc) = crate::interfaces::resolve_path_to_interface(
                                 db,
-                                &target.expr,
+                                target,
                                 pkg_items,
                                 &pkg_info.namespace_path,
                             )
@@ -1378,8 +1440,9 @@ pub fn infer_scope_types<'db>(
                                     baml_compiler2_hir::file_package::file_package(db, iface_file)
                                         .namespace_path;
                                 let mut iface_type_bindings = type_bindings.clone();
-                                if let baml_compiler2_ast::TypeExpr::Path { generic_args, .. } =
-                                    &target.expr
+                                if let baml_compiler2_ast::TypeExprKind::Path {
+                                    generic_args, ..
+                                } = &target.kind
                                 {
                                     for (param, arg) in
                                         iface_data.generic_params.iter().zip(generic_args)
@@ -1413,11 +1476,11 @@ pub fn infer_scope_types<'db>(
                                         let resolved = if let Some(replacement) = &self_replacement
                                         {
                                             crate::lower_type_expr::substitute_self_in(
-                                                &te.expr,
+                                                te,
                                                 replacement,
                                             )
                                         } else {
-                                            te.expr.clone()
+                                            te.clone()
                                         };
                                         let mut binding_diags = Vec::new();
                                         let ty = crate::generics::lower_type_expr_with_generics(
@@ -1439,7 +1502,7 @@ pub fn infer_scope_types<'db>(
                                         let mut default_diags = Vec::new();
                                         let ty = crate::generics::lower_type_expr_with_generics(
                                             db,
-                                            &default.expr,
+                                            default,
                                             pkg_items,
                                             &iface_ns,
                                             &iface_type_bindings,
@@ -1481,7 +1544,7 @@ pub fn infer_scope_types<'db>(
                                         let mut default_diags = Vec::new();
                                         let _ = crate::generics::lower_type_expr_with_generics(
                                             db,
-                                            &default.expr,
+                                            default,
                                             pkg_items,
                                             &iface_ns,
                                             &type_bindings,
@@ -1585,8 +1648,10 @@ pub fn infer_scope_types<'db>(
                                 .unwrap_or_default();
                             let mut param_ty_validated = false;
                             let param_ty = if param.name.as_str() == "self"
-                                && matches!(param.ty, baml_compiler2_ast::TypeExpr::Unknown { .. })
-                            {
+                                && matches!(
+                                    param.ty.kind,
+                                    baml_compiler2_ast::TypeExprKind::Unknown { .. }
+                                ) {
                                 if let Some(imp) = enclosing_impl {
                                     param_ty_validated = true;
                                     lower_type_expr_at_span_in_env(
@@ -1595,7 +1660,7 @@ pub fn infer_scope_types<'db>(
                                         pkg_items,
                                         &pkg_info.namespace_path,
                                         &env,
-                                        &imp.for_target.expr,
+                                        &imp.for_target,
                                         TypeExprLoweringOptions {
                                             span: param_type_span,
                                             self_replacement: None,
@@ -2431,14 +2496,15 @@ pub fn resolve_class_fields<'db>(
                     let mut diags = Vec::new();
                     let ty = crate::lower_type_expr::lower_type_expr_in_ns(
                         db,
-                        &te.expr,
+                        te,
                         pkg_items,
                         &pkg_info.namespace_path,
                         &class_data.generic_params,
                         &mut diags,
                     );
                     for d in diags {
-                        all_diags.push((d, te.span));
+                        let span = d.precise_span().unwrap_or(te.span);
+                        all_diags.push((d, span));
                     }
                     ty
                 })
@@ -2478,14 +2544,15 @@ pub fn resolve_type_alias<'db>(
             let mut diags = Vec::new();
             let ty = crate::lower_type_expr::lower_type_expr_in_ns(
                 db,
-                &te.expr,
+                te,
                 pkg_items,
                 &pkg_info.namespace_path,
                 &[],
                 &mut diags,
             );
             for d in diags {
-                all_diags.push((d, te.span));
+                let span = d.precise_span().unwrap_or(te.span);
+                all_diags.push((d, span));
             }
             ty
         })

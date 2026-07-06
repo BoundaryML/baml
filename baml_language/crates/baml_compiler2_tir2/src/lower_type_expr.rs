@@ -1,6 +1,6 @@
 //! `TypeExpr → Ty` lowering using package-level name resolution.
 
-use baml_compiler2_ast::TypeExpr;
+use baml_compiler2_ast::{TypeExpr, TypeExprKind};
 use baml_compiler2_hir::{
     contributions::Definition,
     package::{PackageId, PackageItems},
@@ -174,7 +174,8 @@ fn projection_chain_from_root(
         .iter()
         .enumerate()
         .fold(root, |base, (idx, member)| {
-            TypeExpr::AssociatedTypeProjection {
+            let span = base.span;
+            TypeExprKind::AssociatedTypeProjection {
                 base: Box::new(base),
                 interface: None,
                 member: member.clone(),
@@ -184,6 +185,7 @@ fn projection_chain_from_root(
                     Vec::new()
                 },
             }
+            .at(span)
         })
 }
 
@@ -206,8 +208,8 @@ fn substitute_paths_walk(
     ty: &TypeExpr,
     subst: &std::collections::HashMap<baml_base::Name, TypeExpr>,
 ) -> TypeExpr {
-    match ty {
-        TypeExpr::Path {
+    match &ty.kind {
+        TypeExprKind::Path {
             segments,
             generic_args,
             associated_type_bindings,
@@ -222,7 +224,7 @@ fn substitute_paths_walk(
                 }
                 return projection_chain_from_root(replacement.clone(), &segments[1..], attrs);
             }
-            TypeExpr::Path {
+            TypeExprKind::Path {
                 segments: segments.clone(),
                 generic_args: generic_args
                     .iter()
@@ -237,46 +239,52 @@ fn substitute_paths_walk(
                     .collect(),
                 attrs: attrs.clone(),
             }
+            .at(ty.span)
         }
-        TypeExpr::AssociatedTypeProjection {
+        TypeExprKind::AssociatedTypeProjection {
             base,
             interface,
             member,
             attrs,
-        } => TypeExpr::AssociatedTypeProjection {
+        } => TypeExprKind::AssociatedTypeProjection {
             base: Box::new(substitute_paths_walk(base, subst)),
             interface: interface
                 .as_ref()
                 .map(|interface| Box::new(substitute_paths_walk(interface, subst))),
             member: member.clone(),
             attrs: attrs.clone(),
-        },
-        TypeExpr::List { inner, attrs } => TypeExpr::List {
+        }
+        .at(ty.span),
+        TypeExprKind::List { inner, attrs } => TypeExprKind::List {
             inner: Box::new(substitute_paths_walk(inner, subst)),
             attrs: attrs.clone(),
-        },
-        TypeExpr::Optional { inner, attrs } => TypeExpr::Optional {
+        }
+        .at(ty.span),
+        TypeExprKind::Optional { inner, attrs } => TypeExprKind::Optional {
             inner: Box::new(substitute_paths_walk(inner, subst)),
             attrs: attrs.clone(),
-        },
-        TypeExpr::Map { key, value, attrs } => TypeExpr::Map {
+        }
+        .at(ty.span),
+        TypeExprKind::Map { key, value, attrs } => TypeExprKind::Map {
             key: Box::new(substitute_paths_walk(key, subst)),
             value: Box::new(substitute_paths_walk(value, subst)),
             attrs: attrs.clone(),
-        },
-        TypeExpr::Union { variants, attrs } => TypeExpr::Union {
+        }
+        .at(ty.span),
+        TypeExprKind::Union { variants, attrs } => TypeExprKind::Union {
             variants: variants
                 .iter()
                 .map(|v| substitute_paths_walk(v, subst))
                 .collect(),
             attrs: attrs.clone(),
-        },
-        TypeExpr::Function {
+        }
+        .at(ty.span),
+        TypeExprKind::Function {
             params,
             ret,
             throws,
             attrs,
-        } => TypeExpr::Function {
+        } => TypeExprKind::Function {
             params: params
                 .iter()
                 .map(|param| {
@@ -290,20 +298,22 @@ fn substitute_paths_walk(
                 .as_ref()
                 .map(|ty| Box::new(substitute_paths_walk(ty, subst))),
             attrs: attrs.clone(),
-        },
+        }
+        .at(ty.span),
         _ => ty.clone(),
     }
 }
 
-/// Build a `TypeExpr::Path` referring to a single named type — used to desugar the bare
+/// Build a `TypeExprKind::Path` referring to a single named type — used to desugar the bare
 /// `self` receiver to a `Self` path so it flows through normal parameter lowering.
 pub fn type_expr_for_name(name: baml_base::Name) -> TypeExpr {
-    TypeExpr::Path {
+    TypeExprKind::Path {
         segments: vec![name],
         generic_args: Vec::new(),
         associated_type_bindings: Vec::new(),
         attrs: Vec::new(),
     }
+    .at(text_size::TextRange::default())
 }
 
 fn can_be_associated_type_projection_base(ty: &Ty) -> bool {
@@ -387,8 +397,8 @@ pub fn lower_type_expr(
     diagnostics: &mut Vec<TirTypeError>,
 ) -> Ty {
     let db = ctx.db();
-    match type_expr {
-        TypeExpr::Path {
+    match &type_expr.kind {
+        TypeExprKind::Path {
             segments,
             generic_args,
             associated_type_bindings,
@@ -619,12 +629,13 @@ pub fn lower_type_expr(
                         && generic_args.is_empty()
                         && associated_type_bindings.is_empty()
                     {
-                        let base_expr = TypeExpr::Path {
+                        let base_expr = TypeExprKind::Path {
                             segments: segments[..segments.len() - 1].to_vec(),
                             generic_args: Vec::new(),
                             associated_type_bindings: Vec::new(),
                             attrs: Vec::new(),
-                        };
+                        }
+                        .at(type_expr.span);
                         let mut base_diags = Vec::new();
                         let base_ty = lower_type_expr(&base_expr, ctx, &mut base_diags);
                         if base_diags.is_empty() && can_be_associated_type_projection_base(&base_ty)
@@ -652,34 +663,34 @@ pub fn lower_type_expr(
                 }
             }
         }
-        TypeExpr::Int { .. } => Ty::Int {
+        TypeExprKind::Int { .. } => Ty::Int {
             attr: TyAttr::default(),
         },
-        TypeExpr::Bigint { .. } => Ty::Bigint {
+        TypeExprKind::Bigint { .. } => Ty::Bigint {
             attr: TyAttr::default(),
         },
-        TypeExpr::Float { .. } => Ty::Float {
+        TypeExprKind::Float { .. } => Ty::Float {
             attr: TyAttr::default(),
         },
-        TypeExpr::String { .. } => Ty::String {
+        TypeExprKind::String { .. } => Ty::String {
             attr: TyAttr::default(),
         },
-        TypeExpr::Bool { .. } => Ty::Bool {
+        TypeExprKind::Bool { .. } => Ty::Bool {
             attr: TyAttr::default(),
         },
-        TypeExpr::Null { .. } => Ty::Null {
+        TypeExprKind::Null { .. } => Ty::Null {
             attr: TyAttr::default(),
         },
-        TypeExpr::Never { .. } => Ty::Never {
+        TypeExprKind::Never { .. } => Ty::Never {
             attr: TyAttr::default(),
         },
-        TypeExpr::Void { .. } => Ty::Void {
+        TypeExprKind::Void { .. } => Ty::Void {
             attr: TyAttr::default(),
         },
-        TypeExpr::Uint8Array { .. } => Ty::Uint8Array {
+        TypeExprKind::Uint8Array { .. } => Ty::Uint8Array {
             attr: TyAttr::default(),
         },
-        TypeExpr::Media { kind, .. } => match kind {
+        TypeExprKind::Media { kind, .. } => match kind {
             baml_base::MediaKind::Image => Ty::Media(MediaKind::Image, TyAttr::default()),
             baml_base::MediaKind::Audio => Ty::Media(MediaKind::Audio, TyAttr::default()),
             baml_base::MediaKind::Video => Ty::Media(MediaKind::Video, TyAttr::default()),
@@ -690,17 +701,19 @@ pub fn lower_type_expr(
             },
         },
         // `T?` is sugar for `T | null` — lower it directly to a nullable union.
-        TypeExpr::Optional { inner, .. } => Ty::optional(lower_type_expr(inner, ctx, diagnostics)),
-        TypeExpr::List { inner, .. } => Ty::List(
+        TypeExprKind::Optional { inner, .. } => {
+            Ty::optional(lower_type_expr(inner, ctx, diagnostics))
+        }
+        TypeExprKind::List { inner, .. } => Ty::List(
             Box::new(lower_type_expr(inner, ctx, diagnostics)),
             TyAttr::default(),
         ),
-        TypeExpr::Map { key, value, .. } => Ty::Map {
+        TypeExprKind::Map { key, value, .. } => Ty::Map {
             key: Box::new(lower_type_expr(key, ctx, diagnostics)),
             value: Box::new(lower_type_expr(value, ctx, diagnostics)),
             attr: TyAttr::default(),
         },
-        TypeExpr::Union {
+        TypeExprKind::Union {
             variants: members, ..
         } => Ty::Union(
             members
@@ -709,7 +722,7 @@ pub fn lower_type_expr(
                 .collect(),
             TyAttr::default(),
         ),
-        TypeExpr::Function {
+        TypeExprKind::Function {
             params,
             ret,
             throws,
@@ -742,7 +755,7 @@ pub fn lower_type_expr(
                 attr: TyAttr::default(),
             }
         }
-        TypeExpr::AssociatedTypeProjection {
+        TypeExprKind::AssociatedTypeProjection {
             base,
             interface,
             member,
@@ -761,21 +774,27 @@ pub fn lower_type_expr(
             diagnostics.extend(lowered.diagnostics);
             lowered.ty
         }
-        TypeExpr::Literal { value: lit, .. } => {
+        TypeExprKind::Literal { value: lit, .. } => {
             Ty::Literal(lit.clone(), Freshness::Regular, TyAttr::default())
         }
-        TypeExpr::BuiltinUnknown { .. } => Ty::BuiltinUnknown {
+        TypeExprKind::BuiltinUnknown { .. } => Ty::BuiltinUnknown {
             attr: TyAttr::default(),
         },
-        TypeExpr::Error { .. } | TypeExpr::Unknown { .. } => Ty::Unknown {
+        TypeExprKind::Error { .. } | TypeExprKind::Unknown { .. } => Ty::Unknown {
             attr: TyAttr::default(),
         },
         // Dedicated Ty::Type variant — see ty.rs doc comment for design rationale.
-        TypeExpr::Type { .. } => Ty::Type {
+        TypeExprKind::Type { .. } => Ty::Type {
             attr: TyAttr::default(),
         },
         // `$rust_type` — opaque Rust-managed state field type.
-        TypeExpr::Rust { .. } => Ty::RustType {
+        TypeExprKind::Rust { .. } => Ty::RustType {
+            attr: TyAttr::default(),
+        },
+        // The wildcard `_` lowers to the inference hole, to be filled during
+        // checking (a generic-arg slot from its initializer, a `throws` member
+        // from the inferred effective throw set).
+        TypeExprKind::Infer { .. } => Ty::Infer {
             attr: TyAttr::default(),
         },
     }
@@ -933,7 +952,7 @@ mod tests {
     use std::path::PathBuf;
 
     use baml_base::Name;
-    use baml_compiler2_ast::{FunctionTypeParam, TypeExpr};
+    use baml_compiler2_ast::{FunctionTypeParam, TypeExpr, TypeExprKind};
     use baml_compiler2_hir::package::PackageItems;
     use baml_workspace::Project;
     use rustc_hash::FxHashMap;
@@ -977,12 +996,13 @@ mod tests {
     }
 
     fn path_segments(names: &[&str]) -> TypeExpr {
-        TypeExpr::Path {
+        TypeExprKind::Path {
             segments: names.iter().map(|name| Name::new(*name)).collect(),
             generic_args: vec![],
             associated_type_bindings: vec![],
             attrs: vec![],
         }
+        .at(text_size::TextRange::default())
     }
 
     /// Compile a single-file `.baml` source into a `TestDb`. It's a *user* file (builtin
@@ -1078,12 +1098,13 @@ mod tests {
     /// built directly so the test drives `lower_projection` without depending on how
     /// the parser splits a dotted path.
     fn concrete_projection(base: &str, member: &str) -> TypeExpr {
-        TypeExpr::AssociatedTypeProjection {
+        TypeExprKind::AssociatedTypeProjection {
             base: Box::new(path(base)),
             interface: None,
             member: Name::new(member),
             attrs: vec![],
         }
+        .at(text_size::TextRange::default())
     }
 
     /// Lower `expr` in a root-namespace scope over `db`'s `user` package — no generics,
@@ -1179,12 +1200,13 @@ mod tests {
     #[test]
     fn concrete_projection_unknown_member_on_primitive_names_the_type() {
         let db = compile("interface HasItem {\n  type Item\n}\n");
-        let projection = TypeExpr::AssociatedTypeProjection {
-            base: Box::new(TypeExpr::Int { attrs: vec![] }),
+        let projection = TypeExprKind::AssociatedTypeProjection {
+            base: Box::new(TypeExprKind::Int { attrs: vec![] }.at(text_size::TextRange::default())),
             interface: None,
             member: Name::new("Missing"),
             attrs: vec![],
-        };
+        }
+        .at(text_size::TextRange::default());
         let (ty, diags) = lower_in_user_scope(&db, &projection);
         assert!(matches!(ty, Ty::Error { .. }), "got {ty:?}");
         let diag = diags
@@ -1683,12 +1705,13 @@ mod tests {
             bounds: &TypeVarBoundsMap::default(),
             self_ty: None,
         };
-        let expr = TypeExpr::AssociatedTypeProjection {
+        let expr = TypeExprKind::AssociatedTypeProjection {
             base: Box::new(path(base)),
             interface: Some(Box::new(path(qualifier))),
             member: Name::new(member),
             attrs: vec![],
-        };
+        }
+        .at(text_size::TextRange::default());
         let mut diags = Vec::new();
         let ty = lower_type_expr(&expr, &ctx, &mut diags);
         (ty, diags)
@@ -2059,12 +2082,13 @@ mod tests {
             bounds: &bounds,
             self_ty: None,
         };
-        let expr = TypeExpr::AssociatedTypeProjection {
+        let expr = TypeExprKind::AssociatedTypeProjection {
             base: Box::new(path(tvar)),
             interface: None,
             member: Name::new(member),
             attrs: vec![],
-        };
+        }
+        .at(text_size::TextRange::default());
         let mut diags = Vec::new();
         let ty = lower_type_expr(&expr, &ctx, &mut diags);
         (ty, diags)
@@ -2211,12 +2235,13 @@ mod tests {
             self_ty: None,
         };
         let expr = members.iter().fold(path(tvar), |base, member| {
-            TypeExpr::AssociatedTypeProjection {
+            TypeExprKind::AssociatedTypeProjection {
                 base: Box::new(base),
                 interface: None,
                 member: Name::new(member),
                 attrs: vec![],
             }
+            .at(text_size::TextRange::default())
         });
         let mut diags = Vec::new();
         let ty = lower_type_expr(&expr, &ctx, &mut diags);
@@ -2392,7 +2417,7 @@ mod tests {
 
     #[test]
     fn substitute_paths_recurses_into_function_type() {
-        let type_expr = TypeExpr::Function {
+        let type_expr = TypeExprKind::Function {
             params: vec![FunctionTypeParam {
                 name: Some(Name::new("value")),
                 optional: false,
@@ -2401,24 +2426,34 @@ mod tests {
             ret: Box::new(path("T")),
             throws: Some(Box::new(path("E"))),
             attrs: vec![],
-        };
+        }
+        .at(text_size::TextRange::default());
         let mut subst = std::collections::HashMap::new();
-        subst.insert(Name::new("T"), TypeExpr::String { attrs: vec![] });
-        subst.insert(Name::new("E"), TypeExpr::Bool { attrs: vec![] });
+        subst.insert(
+            Name::new("T"),
+            TypeExprKind::String { attrs: vec![] }.at(text_size::TextRange::default()),
+        );
+        subst.insert(
+            Name::new("E"),
+            TypeExprKind::Bool { attrs: vec![] }.at(text_size::TextRange::default()),
+        );
 
-        let TypeExpr::Function {
+        let TypeExprKind::Function {
             params,
             ret,
             throws,
             ..
-        } = substitute_paths_in(&type_expr, &subst)
+        } = substitute_paths_in(&type_expr, &subst).kind
         else {
             panic!("expected function type");
         };
 
-        assert!(matches!(params[0].ty, TypeExpr::String { .. }));
-        assert!(matches!(*ret, TypeExpr::String { .. }));
-        assert!(matches!(throws.as_deref(), Some(TypeExpr::Bool { .. })));
+        assert!(matches!(params[0].ty.kind, TypeExprKind::String { .. }));
+        assert!(matches!(ret.kind, TypeExprKind::String { .. }));
+        assert!(matches!(
+            throws.as_deref().map(|t| &t.kind),
+            Some(TypeExprKind::Bool { .. })
+        ));
     }
 
     #[test]
@@ -2428,12 +2463,12 @@ mod tests {
         let mut subst = std::collections::HashMap::new();
         subst.insert(Name::new("T"), replacement.clone());
 
-        let TypeExpr::AssociatedTypeProjection {
+        let TypeExprKind::AssociatedTypeProjection {
             base,
             interface,
             member,
             ..
-        } = substitute_paths_in(&type_expr, &subst)
+        } = substitute_paths_in(&type_expr, &subst).kind
         else {
             panic!("expected associated type projection");
         };
@@ -2452,23 +2487,24 @@ mod tests {
             namespaces: FxHashMap::default(),
             extra: None,
         };
-        let type_expr = TypeExpr::Function {
+        let type_expr = TypeExprKind::Function {
             params: vec![
                 FunctionTypeParam {
                     name: Some(Name::new("query")),
                     optional: false,
-                    ty: TypeExpr::String { attrs: vec![] },
+                    ty: TypeExprKind::String { attrs: vec![] }.at(text_size::TextRange::default()),
                 },
                 FunctionTypeParam {
                     name: Some(Name::new("limit")),
                     optional: true,
-                    ty: TypeExpr::Int { attrs: vec![] },
+                    ty: TypeExprKind::Int { attrs: vec![] }.at(text_size::TextRange::default()),
                 },
             ],
-            ret: Box::new(TypeExpr::Bool { attrs: vec![] }),
+            ret: Box::new(TypeExprKind::Bool { attrs: vec![] }.at(text_size::TextRange::default())),
             throws: None,
             attrs: vec![],
-        };
+        }
+        .at(text_size::TextRange::default());
         let mut diagnostics = Vec::new();
 
         let ty = crate::lower_type_expr::lower_type_expr(

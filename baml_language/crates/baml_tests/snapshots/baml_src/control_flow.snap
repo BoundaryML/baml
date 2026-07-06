@@ -476,7 +476,7 @@ function control_flow.main_caught() -> string {
 
   L0:
     load_var e
-    throw
+    rethrow
 
   L1:
     load_const "caught"

@@ -125,6 +125,9 @@ pub enum DiagnosticId {
     WatchOnNonVariable,
     WatchOnUnwatchedVariable,
 
+    // Control-flow diagnostics (E0146)
+    UnreachableCode,
+
     // Syntax errors (E0028-E0031)
     MissingSemicolon,
     MissingConditionParens,
@@ -220,6 +223,9 @@ pub enum DiagnosticId {
     // Void type position errors (E0110)
     VoidInNonReturnPosition,
 
+    // Wildcard `_` type in a non-inferable position (E0147)
+    WildcardTypeNotAllowed,
+
     // Interface diagnostics (BEP-044; E0112-E0120)
     /// `implements I {}` references an interface that does not exist.
     UnknownInterface,
@@ -306,6 +312,21 @@ pub enum DiagnosticId {
     /// A class declares a `cleanup` method whose signature is not the reserved
     /// magic-finalizer shape `cleanup(self) -> void` (BEP-042).
     CleanupMagicMethodSignature,
+
+    // Aliasing lints (E0148)
+    /// `baml.Array.filled(n, value)` was called with a mutable literal (`[]`,
+    /// `{}`, or a class-instance literal). Every slot aliases the *same* object
+    /// reference, so mutating one slot mutates all of them (Linear B-548). This
+    /// is a lint (warning), not a type error.
+    ArrayFilledAliasing,
+
+    // Serialized-key collision (E0149)
+    /// Two or more fields of a class serialize to the same JSON key — either two
+    /// fields share an `@alias`, or one field's name equals another field's
+    /// `@alias`. Such a schema is unsatisfiable: an aliased field's real name is
+    /// never matched, so `ctx.output_format` renders duplicate keys and a
+    /// required shadowed field can never be parsed (Linear B-615).
+    DuplicateFieldAlias,
 }
 
 impl DiagnosticId {
@@ -374,6 +395,9 @@ impl DiagnosticId {
             DiagnosticId::UnknownEnumVariant => "E0064",
             DiagnosticId::WatchOnNonVariable => "E0065",
             DiagnosticId::WatchOnUnwatchedVariable => "E0066",
+
+            // Control-flow diagnostics
+            DiagnosticId::UnreachableCode => "E0146",
 
             // Syntax errors
             DiagnosticId::MissingSemicolon => "E0028",
@@ -466,6 +490,7 @@ impl DiagnosticId {
 
             // Void type position errors
             DiagnosticId::VoidInNonReturnPosition => "E0110",
+            DiagnosticId::WildcardTypeNotAllowed => "E0147",
 
             // Interface diagnostics
             DiagnosticId::UnknownInterface => "E0112",
@@ -502,6 +527,12 @@ impl DiagnosticId {
             DiagnosticId::FromJsonMustImplementInterface => "E0143",
             DiagnosticId::CleanupMagicMethodSignature => "E0144",
             DiagnosticId::GenericBoundNotInterface => "E0145",
+
+            // Aliasing lints
+            DiagnosticId::ArrayFilledAliasing => "E0148",
+
+            // Serialized-key collision
+            DiagnosticId::DuplicateFieldAlias => "E0149",
         }
     }
 }

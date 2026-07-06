@@ -1,0 +1,36 @@
+1:1-6        "class"            source.baml meta.class.baml keyword.declaration.class.baml
+1:7-10       "Foo"              source.baml meta.class.baml meta.class.header.baml entity.name.type.class.baml
+1:11-12      "{"                source.baml meta.class.baml meta.class.body.baml punctuation.definition.block.begin.baml
+2:5-8        "bar"              source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
+2:9-12       "int"              source.baml meta.class.baml meta.class.body.baml meta.field.baml support.type.primitive.baml
+2:13-14      "@"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.attribute.baml punctuation.definition.annotation.baml storage.type.annotation.baml
+2:14-20      "stream"           source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.attribute.baml storage.type.annotation.baml
+2:20-21      "."                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.attribute.baml punctuation.accessor.baml
+2:21-29      "not_null"         source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.attribute.baml storage.type.annotation.baml
+3:5-8        "baz"              source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
+3:9-15       "string"           source.baml meta.class.baml meta.class.body.baml meta.field.baml support.type.primitive.baml
+3:16-17      "|"                source.baml meta.class.baml meta.class.body.baml meta.field.baml keyword.operator.type.baml
+3:18-21      "int"              source.baml meta.class.baml meta.class.body.baml meta.field.baml support.type.primitive.baml
+3:22-23      "@"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.attribute.baml punctuation.definition.annotation.baml storage.type.annotation.baml
+3:23-29      "stream"           source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.attribute.baml storage.type.annotation.baml
+3:29-30      "."                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.attribute.baml punctuation.accessor.baml
+3:30-34      "done"             source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.attribute.baml storage.type.annotation.baml
+4:5-9        "quux"             source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
+4:10-14      "bool"             source.baml meta.class.baml meta.class.body.baml meta.field.baml support.type.primitive.baml
+4:15-16      "@"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.attribute.baml punctuation.definition.annotation.baml storage.type.annotation.baml
+4:16-22      "stream"           source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.attribute.baml storage.type.annotation.baml
+4:22-23      "."                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.attribute.baml punctuation.accessor.baml
+4:23-33      "with_state"       source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.attribute.baml storage.type.annotation.baml
+5:1-2        "}"                source.baml meta.class.baml meta.class.body.baml punctuation.definition.block.end.baml
+7:1-6        "class"            source.baml meta.class.baml keyword.declaration.class.baml
+7:7-11       "Foo2"             source.baml meta.class.baml meta.class.header.baml entity.name.type.class.baml
+7:12-13      "{"                source.baml meta.class.baml meta.class.body.baml punctuation.definition.block.begin.baml
+8:5-14       "something"        source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
+8:15-18      "int"              source.baml meta.class.baml meta.class.body.baml meta.field.baml support.type.primitive.baml
+9:5-19       "tomething_else"   source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
+9:20-24      "bool"             source.baml meta.class.baml meta.class.body.baml meta.field.baml support.type.primitive.baml
+10:5-7       "@@"               source.baml meta.class.baml meta.class.body.baml meta.attribute.block.baml punctuation.definition.annotation.baml storage.type.annotation.baml
+10:7-13      "stream"           source.baml meta.class.baml meta.class.body.baml meta.attribute.block.baml storage.type.annotation.baml
+10:13-14     "."                source.baml meta.class.baml meta.class.body.baml meta.attribute.block.baml punctuation.accessor.baml
+10:14-18     "done"             source.baml meta.class.baml meta.class.body.baml meta.attribute.block.baml storage.type.annotation.baml
+11:1-2       "}"                source.baml meta.class.baml meta.class.body.baml punctuation.definition.block.end.baml

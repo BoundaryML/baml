@@ -527,20 +527,20 @@ fn render_implements_block(block: &baml_compiler2_hir::item_tree::ImplementsBloc
         let ty = binding
             .type_expr
             .as_ref()
-            .map(|type_expr| type_expr.expr.to_string())
+            .map(std::string::ToString::to_string)
             .unwrap_or_else(|| "unknown".to_string());
         format!("type {} = {}", binding.name.as_str(), ty)
     }));
 
     if members.is_empty() {
-        format!("implements {} {{}}", block.target.expr)
+        format!("implements {} {{}}", block.target)
     } else {
         let members = members
             .into_iter()
             .map(|member| format!("    {member}"))
             .collect::<Vec<_>>()
             .join("\n");
-        format!("implements {} {{\n{members}\n}}", block.target.expr)
+        format!("implements {} {{\n{members}\n}}", block.target)
     }
 }
 
@@ -724,6 +724,15 @@ fn body_stmt_to_pat_id(
         return None;
     };
 
+    // `stmt_id` is arena-local to the body it was created in. When the use-site's
+    // definition resolves into a *different* ExprBody than `body` (e.g. a binding
+    // declared inside a nested testset / lambda), this body's `stmts` arena may
+    // not contain that index — indexing it would panic, and a panic aborts the
+    // whole wasm runtime. Bounds-check and bail instead.
+    let raw = stmt_id.into_raw().into_u32() as usize;
+    if raw >= expr_body.stmts.len() {
+        return None;
+    }
     let stmt = &expr_body.stmts[stmt_id];
     match stmt {
         baml_compiler2_ast::Stmt::Let { pattern, .. }

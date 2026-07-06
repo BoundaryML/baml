@@ -5,6 +5,7 @@
 use std::collections::HashMap;
 
 use baml_types::{BamlMap, BamlMedia, BamlMediaContent, BamlMediaType};
+use ryu_js::Buffer;
 
 use crate::{
     errors::{InternalError, RuntimeError, VmError},
@@ -14,6 +15,18 @@ use crate::{
 };
 
 type NativeFunctionResult = Result<Value, VmError>;
+
+/// Formats a number using JavaScript's `Number.prototype.toFixed()` semantics.
+pub fn number_to_fixed(value: f64, digits: i64) -> Result<String, String> {
+    if !(0..=100).contains(&digits) {
+        return Err(format!(
+            "to_fixed: digits must be in [0, 100], got {digits}"
+        ));
+    }
+
+    let mut buffer = Buffer::new();
+    Ok(buffer.format_to_fixed(value, digits as u8).to_string())
+}
 
 /// String length.
 pub fn string_len(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
@@ -341,6 +354,32 @@ pub fn string_replace(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
     Ok(vm.alloc_string(result))
 }
 
+/// Number.prototype.toFixed compatibility for float/int values.
+pub fn float_to_fixed(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
+    let value = match args[0] {
+        Value::Float(float) => float,
+        Value::Int(int) => int as f64,
+        _ => {
+            return Err(VmError::RuntimeError(RuntimeError::Other(
+                "to_fixed() method only available on numbers".to_string(),
+            )));
+        }
+    };
+
+    let digits = match args[1] {
+        Value::Int(int) => int,
+        _ => {
+            return Err(VmError::RuntimeError(RuntimeError::Other(
+                "to_fixed() digits argument must be an int".to_string(),
+            )));
+        }
+    };
+
+    let formatted = number_to_fixed(value, digits)
+        .map_err(|msg| VmError::RuntimeError(RuntimeError::Other(msg)))?;
+    Ok(vm.alloc_string(formatted))
+}
+
 pub fn deep_copy_object(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
     // Arity is already checked by the VM.
     let mut copied_objects = HashMap::new();
@@ -584,116 +623,6 @@ fn deep_equals_recursive(
     }
 }
 
-pub fn any_value_to_string(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
-    // Arity is already checked by the VM.
-    let formatted = format_value_recursive(vm, &args[0], 0)?;
-
-    Ok(vm.alloc_string(formatted))
-}
-
-fn format_value_recursive(vm: &mut Vm, value: &Value, depth: usize) -> Result<String, VmError> {
-    // Check available stack space (MAX_FRAMES - current_frames)
-    let available_frames = crate::vm::MAX_FRAMES.saturating_sub(vm.frames.len());
-
-    if depth >= available_frames {
-        return Err(VmError::RuntimeError(RuntimeError::StackOverflow));
-    }
-
-    match value {
-        Value::Null => Ok("null".to_string()),
-        Value::Int(i) => Ok(i.to_string()),
-        Value::Float(f) => Ok(f.to_string()),
-        Value::Bool(b) => Ok(b.to_string()),
-
-        Value::Object(obj_idx) => match &vm.objects[*obj_idx] {
-            Object::Instance(instance) => {
-                let Object::Class(class) = &vm.objects[instance.class] else {
-                    return Err(VmError::RuntimeError(RuntimeError::Other(
-                        "Invalid class reference".to_string(),
-                    )));
-                };
-
-                let class_name = class.name.clone();
-                let field_names = class.field_names.clone();
-                let fields = instance.fields.clone();
-
-                let mut result = format!("{class_name} {{\n");
-                let field_indent = "    ".repeat(depth + 1);
-
-                for (i, field_value) in fields.iter().enumerate() {
-                    let field_name = match field_names.get(i) {
-                        Some(name) => name.as_str(),
-                        None => {
-                            let fallback = format!("field_{i}");
-                            let formatted_value =
-                                format_value_recursive(vm, field_value, depth + 1)?;
-                            result.push_str(&format!(
-                                "{field_indent}{fallback}: {formatted_value}\n"
-                            ));
-                            continue;
-                        }
-                    };
-                    let formatted_value = format_value_recursive(vm, field_value, depth + 1)?;
-                    result.push_str(&format!("{field_indent}{field_name}: {formatted_value}\n"));
-                }
-
-                let indent = "    ".repeat(depth);
-                result.push_str(&format!("{indent}}}"));
-                Ok(result)
-            }
-
-            Object::Array(values) => {
-                let values = values.clone();
-                let mut result = String::from("[");
-                for (i, value) in values.iter().enumerate() {
-                    if i > 0 {
-                        result.push_str(", ");
-                    }
-                    result.push_str(&format_value_recursive(vm, value, depth)?);
-                }
-                result.push(']');
-                Ok(result)
-            }
-
-            Object::Map(map) => {
-                let map = map.clone();
-                let mut result = String::from("{\n");
-                let field_indent = "    ".repeat(depth + 1);
-
-                for (key, value) in map.iter() {
-                    let formatted_value = format_value_recursive(vm, value, depth + 1)?;
-                    result.push_str(&format!("{field_indent}\"{key}\": {formatted_value}\n"));
-                }
-
-                let indent = "    ".repeat(depth);
-                result.push_str(&format!("{indent}}}"));
-                Ok(result)
-            }
-
-            Object::String(s) => Ok(format!("\"{s}\"")),
-            Object::Enum(e) => Ok(e.name.clone()),
-            Object::Variant(variant) => {
-                let Object::Enum(enm) = &vm.objects[variant.enm] else {
-                    return Err(VmError::RuntimeError(RuntimeError::Other(
-                        "Invalid enum reference".to_string(),
-                    )));
-                };
-
-                let variant_name = match enm.variant_names.get(variant.index) {
-                    Some(name) => name.clone(),
-                    None => format!("variant_{}", variant.index),
-                };
-                Ok(variant_name)
-            }
-            Object::Function(f) => Ok(format!("<function {}>", f.name)),
-            Object::Class(c) => Ok(format!("<class {}>", c.name)),
-            Object::Media(_) => Ok("<media>".to_string()),
-            Object::Future(_) => Ok("<future>".to_string()),
-            Object::BamlType(_) => Ok("<baml type>".to_string()),
-        },
-    }
-}
-
 pub type NativeFunction = fn(&mut Vm, &[Value]) -> NativeFunctionResult;
 
 pub fn functions() -> BamlMap<String, (NativeFunction, usize)> {
@@ -717,6 +646,7 @@ pub fn functions() -> BamlMap<String, (NativeFunction, usize)> {
         ("baml.String.split", (string_split, 2)),
         ("baml.String.substring", (string_substring, 3)),
         ("baml.String.replace", (string_replace, 3)),
+        ("baml.Float.to_fixed", (float_to_fixed, 2)),
         // Media
         ("baml.media.image.from_url", (image_from_url, 1)),
         ("baml.media.audio.from_url", (audio_from_url, 1)),
@@ -751,11 +681,90 @@ pub fn functions() -> BamlMap<String, (NativeFunction, usize)> {
         // Utility functions.
         ("baml.deep_copy", (deep_copy_object, 1)),
         ("baml.deep_equals", (deep_equals, 2)),
-        ("baml.unstable.string", (any_value_to_string, 1)),
     ];
 
     BamlMap::from_iter(
         fns.iter()
             .map(|(name, (func, arity))| (name.to_string(), (*func, *arity))),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::number_to_fixed;
+
+    #[test]
+    fn number_to_fixed_matches_js_reference_cases() {
+        let cases = [
+            (3.14159, 2, "3.14"),
+            (3.14159, 5, "3.14159"),
+            (3.14159, 0, "3"),
+            (3.7, 0, "4"),
+            (3.2, 0, "3"),
+            (0.9, 0, "1"),
+            (0.5, 0, "1"),
+            (0.4, 0, "0"),
+            (1.5, 3, "1.500"),
+            (5.0, 4, "5.0000"),
+            (42.1, 5, "42.10000"),
+            (0.000123, 6, "0.000123"),
+            (1234.5678, 2, "1234.57"),
+            (-3.14, 1, "-3.1"),
+            (-1.5, 0, "-2"),
+            (-0.4, 0, "-0"),
+            (-100.5, 0, "-101"),
+            (-0.0, 2, "0.00"),
+            (-999.999, 2, "-1000.00"),
+            (1.005, 2, "1.00"),
+            (1.255, 2, "1.25"),
+            (1.355, 2, "1.35"),
+            (1.045, 2, "1.04"),
+            (1.105, 2, "1.10"),
+            (1e21, 2, "1e+21"),
+            (1.5e21, 0, "1.5e+21"),
+            (-2e25, 3, "-2e+25"),
+            (1e100, 0, "1e+100"),
+            (9.99e20, 2, "999000000000000000000.00"),
+        ];
+
+        for (value, digits, expected) in cases {
+            assert_eq!(
+                number_to_fixed(value, digits).unwrap(),
+                expected,
+                "value={value}, digits={digits}"
+            );
+        }
+    }
+
+    #[test]
+    fn number_to_fixed_handles_special_values() {
+        assert_eq!(number_to_fixed(f64::NAN, 2).unwrap(), "NaN");
+        assert_eq!(number_to_fixed(f64::INFINITY, 2).unwrap(), "Infinity");
+        assert_eq!(number_to_fixed(f64::NEG_INFINITY, 2).unwrap(), "-Infinity");
+    }
+
+    #[test]
+    fn number_to_fixed_validates_digit_range() {
+        assert_eq!(
+            number_to_fixed(3.14, -1).unwrap_err(),
+            "to_fixed: digits must be in [0, 100], got -1"
+        );
+        assert_eq!(
+            number_to_fixed(3.14, 101).unwrap_err(),
+            "to_fixed: digits must be in [0, 100], got 101"
+        );
+        assert_eq!(
+            number_to_fixed(3.14, 200).unwrap_err(),
+            "to_fixed: digits must be in [0, 100], got 200"
+        );
+    }
+
+    #[test]
+    fn number_to_fixed_accepts_boundary_digit_values() {
+        assert_eq!(number_to_fixed(3.14, 0).unwrap(), "3");
+
+        let output = number_to_fixed(3.14, 100).unwrap();
+        let (_, fractional) = output.split_once('.').expect("should contain decimal part");
+        assert_eq!(fractional.len(), 100);
+    }
 }

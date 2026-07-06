@@ -93,6 +93,12 @@ function baml.sort_by_key(self: ?, key: (T) -> U throws E) -> T[]  [expr] {
   { let n = self.length(); if (n Le 1) { return self }; let items = self.slice(0, n); let keys: U[] = []; for x in items { keys.push(key(x)) }; let order: int[] = []; let p = 0; while p Lt n { order.push(p); p Add= 1 }; order.sort_by((i: int, j: int) -> int throws U.CompareError { {  } match (keys.at(i)) { null => 0, ki: U => match (keys.at(j)) { null => 0, kj: U => ki.compare(kj) } } }); let sorted: T[] = []; for i in order {  } match (items.at(i)) { null => {  }, item: T => { sorted.push(item) } }; self.clear(); for s in sorted { self.push(s) }; return self }
 }
 function baml.splice(self: ?, start: int, count: int, replace: T[]) -> null  [builtin]
+function baml.sum(self: ?) -> float  [expr] {
+  {  } root.math.sum(self)
+}
+function baml.sum(self: ?) -> int  [expr] {
+  {  } root.math._sum_int(self)
+}
 function baml.unshift(self: ?, item: T) -> int  [builtin]
 function baml.values(self: ?) -> V[]  [builtin]
 
@@ -413,6 +419,20 @@ function baml.env.get_or_panic(key: string) -> string  [expr] {
   {  } get(key) NullCoalesce root.sys.panic("env var not found: " Add key)
 }
 
+--- <builtin>/baml/ns_errors/error_context.baml ---
+class baml.errors.ErrorContext {
+  error: unknown
+  stack_trace: StackTrace
+  cause: baml.errors.ErrorContext?
+}
+function baml.errors._to_string_impl(self: ?) -> string  [builtin]
+function baml.errors.root_cause(self: ?) -> baml.errors.ErrorContext  [expr] {
+  {  } match (self.cause) { null => self, c: baml.errors.ErrorContext => c.root_cause() }
+}
+function baml.errors.to_string(self: ?) -> string  [expr] {
+  {  } self._to_string_impl()
+}
+
 --- <builtin>/baml/ns_errors/errors.baml ---
 class baml.errors.AccessError {
   message: string
@@ -501,6 +521,8 @@ function baml.fs.read(self: ?, n: int) -> string  [builtin]
 function baml.fs.read_bytes(self: ?, n: int) -> uint8array  [builtin]
 function baml.fs.read_dir(path: string) -> baml.fs.DirEntry[]  [builtin]
 function baml.fs.remove(path: string) -> null  [builtin]
+function baml.fs.remove_dir(path: string) -> null  [builtin]
+function baml.fs.remove_dir_all(path: string) -> null  [builtin]
 function baml.fs.seek_from(self: ?, whence: "start" | "current" | "end", offset: int) -> int  [builtin]
 function baml.fs.size(path: string) -> int  [builtin]
 function baml.fs.text(self: ?) -> string  [builtin]
@@ -734,6 +756,9 @@ function baml.iter.iter(self: ?) -> Iterator<Item = R, Error = E | E2 | E3>  [ex
 }
 function baml.iter.iter(self: ?) -> Iterator<Item = T, Error = E>  [expr] {
   {  } self
+}
+function baml.iter.iter(self: ?) -> Iterator<Item = string, Error = never>  [expr] {
+  {  } self.chars().iter()
 }
 function baml.iter.iter(self: ?) -> Iterator<Item = T, Error = never>  [expr] {
   {  } self
@@ -1076,6 +1101,10 @@ function baml.llm.validate_finish_reason(self: ?, finish_reason: string) -> null
 lambda (ctx) in prompt: captures [body]
 
 --- <builtin>/baml/ns_math/math.baml ---
+function baml.math._sum_int(values: int[]) -> int  [builtin]
+function baml.math.mean(values: float[]) -> float  [builtin]
+function baml.math.median(values: float[]) -> float  [builtin]
+function baml.math.sum(values: float[]) -> float  [builtin]
 function baml.math.trunc(value: float) -> int  [builtin]
 
 --- <builtin>/baml/ns_media/media.baml ---
@@ -1664,9 +1693,6 @@ function baml.toml.to_json(self: ?) -> baml.json.json  [expr] {
   {  } baml.json.from(self.items)
 }
 
---- <builtin>/baml/ns_unstable/unstable.baml ---
-function baml.unstable.string(value: T) -> string  [builtin]
-
 --- <builtin>/baml/ns_yaml/yaml.baml ---
 class baml.yaml.YamlParseError {
   message: string
@@ -1686,6 +1712,8 @@ class baml.String {
 function baml.byte_length(self: ?) -> int  [builtin]
 function baml.char_at(self: ?, index: int) -> string  [builtin]
 function baml.char_count(self: ?) -> int  [builtin]
+function baml.chars(self: ?) -> string[]  [builtin]
+function baml.code_point_at(self: ?, index: int) -> int  [builtin]
 function baml.ends_with(self: ?, suffix: string) -> bool  [builtin]
 function baml.from(value: T) -> string  [expr] {
   {  } root._to_string_shim(value)
@@ -1693,7 +1721,7 @@ function baml.from(value: T) -> string  [expr] {
 function baml.from_code_points(unicode: int[]) -> string  [builtin]
 function baml.from_utf8(utf8: uint8array) -> string  [builtin]
 function baml.includes(self: ?, search: string) -> bool  [builtin]
-function baml.index_of(self: ?, search: string) -> int  [builtin]
+function baml.index_of(self: ?, search: string) -> int?  [builtin]
 function baml.is_alphabetic(self: ?) -> bool  [builtin]
 function baml.is_alphanumeric(self: ?) -> bool  [builtin]
 function baml.is_ascii(self: ?) -> bool  [builtin]
@@ -1721,6 +1749,7 @@ function baml.replace_all(self: ?, search: string, replacement: string) -> strin
 function baml.split(self: ?, delimiter: string) -> string[]  [builtin]
 function baml.starts_with(self: ?, prefix: string) -> bool  [builtin]
 function baml.substring(self: ?, start: int, end: int) -> string  [builtin]
+function baml.to_code_points(self: ?) -> int[]  [builtin]
 function baml.to_lower_case(self: ?) -> string  [builtin]
 function baml.to_upper_case(self: ?) -> string  [builtin]
 function baml.to_utf8(self: ?) -> uint8array  [builtin]

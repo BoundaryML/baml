@@ -25,7 +25,7 @@ function user.$init_test_main(registry: testing.TestCollector) -> ? throws never
         }
     null : null
   }
-  !! 80..88: operator `+` cannot be applied to `"a"` and `1`
+  !! 81..88: operator `+` cannot be applied to `"a"` and `1`
   !! 106..108: type mismatch: expected string, got 42
   !! 181..186: type mismatch: expected string, got int
 }

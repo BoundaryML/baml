@@ -1097,10 +1097,7 @@ pub fn def_to_item_ref<'db>(db: &'db dyn crate::Db, def: Definition<'db>) -> Ite
                 return ItemRef::Method {
                     package: pkg_info.package.clone(),
                     namespace: pkg_info.namespace_path,
-                    class: Name::new(format!(
-                        "{}$for${}",
-                        imp.interface_target.expr, imp.for_target.expr
-                    )),
+                    class: Name::new(format!("{}$for${}", imp.interface_target, imp.for_target)),
                     name,
                 };
             }
@@ -1122,7 +1119,7 @@ fn scoped_implements_method_name(
     item_tree
         .method_to_iface_target
         .get(&func_id)
-        .map(|target| Name::new(format!("{}.{}", target.expr, method_name)))
+        .map(|target| Name::new(format!("{target}.{method_name}")))
         .unwrap_or_else(|| method_name.clone())
 }
 
@@ -1195,10 +1192,10 @@ fn resolution_to_item_ref(
 
 // Re-use ExprId from baml_compiler2_ast (already imported above via ExprId)
 use baml_compiler2_ast::{
-    AssignOp as AstAssignOp, AstSourceMap, BinaryOp as AstBinaryOp, Expr as AstExpr,
+    AssignOp as AstAssignOp, AstSourceMap, BinaryOp as AstBinaryOp, CallArg, Expr as AstExpr,
     ExprBody as AstExprBody, ExprId as AstExprId, Literal as AstLiteral, PatId as AstPatId,
     Pattern as AstPattern, Stmt as AstStmt, StmtId as AstStmtId, TypeExpr as AstTypeExpr,
-    UnaryOp as AstUnaryOp,
+    TypeExprKind as AstTypeExprKind, UnaryOp as AstUnaryOp,
 };
 use baml_compiler2_hir::{
     body::{FunctionBody, LetBody, let_body, let_body_source_map},
@@ -1236,8 +1233,8 @@ fn lower_interface_target_args<'db>(
     generic_params: &[Name],
     diags: &mut Vec<baml_compiler2_tir::infer_context::TirTypeError>,
 ) -> Vec<Tir2Ty> {
-    match target {
-        baml_compiler2_ast::TypeExpr::Path { generic_args, .. } => generic_args
+    match &target.kind {
+        baml_compiler2_ast::TypeExprKind::Path { generic_args, .. } => generic_args
             .iter()
             .map(|arg| {
                 baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
@@ -1296,7 +1293,7 @@ fn lower_interface_target_associated_bindings<'db>(
             {
                 let ty = baml_compiler2_tir::generics::lower_type_expr_with_generics(
                     db,
-                    &type_expr.expr,
+                    type_expr,
                     pkg_items,
                     namespace_path,
                     &bindings,
@@ -1308,7 +1305,7 @@ fn lower_interface_target_associated_bindings<'db>(
             assoc.default.as_ref().map(|default| {
                 let ty = baml_compiler2_tir::generics::lower_type_expr_with_generics(
                     db,
-                    &default.expr,
+                    default,
                     pkg_items,
                     &target_iface_pkg.namespace_path,
                     &bindings,
@@ -1507,6 +1504,15 @@ struct InterfaceDispatchCall<'a> {
     iface_assoc: &'a [(Name, Tir2Ty)],
     method: &'a Name,
     args: &'a [AstExprId],
+    runtime_id: Option<AstExprId>,
+}
+
+#[derive(Clone, Copy)]
+struct DispatchCallLowering<'a> {
+    expr_id: AstExprId,
+    args: &'a [AstExprId],
+    runtime_id: Option<AstExprId>,
+    dest: &'a Place,
 }
 
 #[derive(Clone, Copy)]
@@ -1550,6 +1556,37 @@ struct InterfaceMethodCandidate {
     /// How to seed the callee frame's `type_args` so a dispatched method that
     /// reads its enclosing `T` at runtime resolves it correctly.
     frame_seed: CalleeFrameSeed,
+}
+
+/// Key identifying one interface-dispatch candidate resolution: the requested
+/// interface, its type args and associated bindings, the method, the receiver
+/// type, and the enclosing function's generic bounds (sorted by name for a
+/// canonical order). The bounds are the *only* per-function input the
+/// resolution consults — everything else it reads is the Salsa db or
+/// package-level `PackageLoweringData` — so two functions issuing the same
+/// request with the same bounds always resolve identical candidates.
+type DispatchCacheKey = (
+    TypeName,
+    Vec<Tir2Ty>,
+    Vec<(Name, Tir2Ty)>,
+    Name,
+    Option<Tir2Ty>,
+    Vec<(Name, Tir2Ty)>,
+);
+
+/// Shared memo for `LoweringContext::interface_method_candidates_for` (a
+/// private lowering helper).
+///
+/// Candidate resolution rescans every implementor of the requested interface
+/// (running type-pattern matching and normalization per candidate) at every
+/// dispatch site. The same requests recur constantly across call sites *and*
+/// functions — every `for` loop in a package asks the same `Iterator.next`
+/// question — so the emit driver shares one cache per package across all the
+/// functions it lowers ([`lower_function_cached`]); one-off callers get a
+/// fresh cache via [`lower_function`].
+#[derive(Default)]
+pub struct DispatchCandidateCache {
+    map: std::cell::RefCell<FxHashMap<DispatchCacheKey, Vec<InterfaceMethodCandidate>>>,
 }
 
 /// Strategy for seeding a dispatched method's `frame.type_args`.
@@ -1651,45 +1688,28 @@ struct LoweringContext<'db> {
     binding_locals: HashMap<BindingId, Local>,
     loop_context: Option<LoopContext>,
     catch_context: Option<CatchContext>,
+    catch_rethrow_locals: Vec<Local>,
     exit_block: BlockId,
 
-    // Eagerly aggregated type maps from all scopes in the function.
-    // Keyed by metadata namespace plus arena ID to avoid collisions between
-    // function bodies, lambda bodies, and parameter-default arenas.
-    expr_types: FxHashMap<ExprMetadataKey, Tir2Ty>,
-    pat_types: FxHashMap<PatMetadataKey, Tir2Ty>,
-    // Member resolutions from TIR.
-    resolutions: FxHashMap<ExprMetadataKey, baml_compiler2_tir::inference::MemberResolution<'db>>,
-    // Match expressions that TIR determined are exhaustive
-    exhaustive_matches: rustc_hash::FxHashSet<ExprMetadataKey>,
-    // TIR-inferred root segment type for each multi-segment Path expression.
-    // Used by lower_multi_segment_path_as_field_chain to get the correct root
-    // type even when the MIR local was declared with a coarser type (e.g.
-    // catch variables declared as BuiltinUnknown).
-    path_root_types: FxHashMap<ExprMetadataKey, Tir2Ty>,
-    // TIR-inferred type of every prefix `segments[..=seg_idx]` for multi-segment
-    // local-rooted Path expressions. Used by the Phase-8 method-call prepend to
-    // read the receiver-prefix type (`segments[..segments.len() - 1]`) so that
-    // class-level type args are threaded correctly through depth ≥ 3 paths
-    // like `holder.box.describe()`.
-    path_segment_types: FxHashMap<(MetadataScope, AstExprId, usize), Tir2Ty>,
-    // Per-segment member resolutions for multi-segment local-rooted Path expressions.
-    // Set by TIR's infer_local_rooted_path; indexed by (scope, Path ExprId).
-    // path_member_resolutions[(scope, expr_id)][i] is the resolution for segments[i+1].
-    path_member_resolutions:
-        FxHashMap<ExprMetadataKey, Vec<baml_compiler2_tir::inference::MemberResolution<'db>>>,
-    // Full-arity argument binding plans from TIR.
-    call_plans: FxHashMap<ExprMetadataKey, baml_compiler2_tir::inference::CallPlan>,
-    /// TIR-recorded generic instantiation per call whose callee declares type
-    /// params (declared De Bruijn order). Lowered to `LoadType` operands when
-    /// the call site writes no explicit `<...>`, so inferred-generic calls
-    /// populate the callee's `frame.type_args` just like explicit ones.
-    // Function-value adapters from TIR checked coercions.
-    function_coercions: FxHashMap<ExprMetadataKey, baml_compiler2_tir::inference::FunctionCoercion>,
+    // Per-scope TIR inference results for the function's own scope and every
+    // descendant scope (blocks, lambdas, parameter defaults), borrowed
+    // straight from the Salsa-cached `infer_scope_types` values. Lookups go
+    // through the `tir_*` accessors below, which dispatch on `MetadataScope`
+    // (Body → body tables, ParameterDefault → default tables of the same
+    // scope). The map covers *exactly* the scopes the old merged copies
+    // covered — scopes outside it answer `None`, and at least one caller
+    // (`try_lower_to_string_fallback`) keys behavior on that absence.
+    scope_inference:
+        FxHashMap<FileScopeId, &'db baml_compiler2_tir::inference::ScopeInference<'db>>,
     // Function generic bounds, lowered in TIR space. MIR uses these to keep
     // bounded type variables ABI-erased while still lowering bound-member
     // access through the interface dispatch machinery.
     generic_param_bounds: FxHashMap<Name, Tir2Ty>,
+
+    // Package-shared memo for interface-dispatch candidate resolution. Shared
+    // across every function the emit driver lowers in one package (fresh and
+    // private when constructed via the uncached entry points).
+    dispatch_cache: std::rc::Rc<DispatchCandidateCache>,
 
     // TIR types of the in-scope lambda parameters, by name. TIR does not record
     // `path_segment_types` for a lambda-parameter receiver (`(a: T) -> a.m()`),
@@ -2074,8 +2094,7 @@ impl<'db> LoweringContext<'db> {
         let saved_locals = self.locals.clone();
         let watched_depth = self.watched_locals_stack.len();
         let coll_tir_ty = self
-            .expr_types
-            .get(&self.expr_metadata_key(collection))
+            .tir_expr_type(self.expr_metadata_key(collection))
             .cloned();
 
         let coll_ty = self.expr_ty(collection);
@@ -2112,6 +2131,7 @@ impl<'db> LoweringContext<'db> {
                 iface_assoc: &iterable_assoc,
                 method: &iter_method,
                 args: &[],
+                runtime_id: None,
             },
             &Place::local(iter_local),
         );
@@ -2152,6 +2172,7 @@ impl<'db> LoweringContext<'db> {
                 iface_assoc: &iterable_assoc,
                 method: &next_method,
                 args: &[],
+                runtime_id: None,
             },
             &Place::local(next_local),
         );
@@ -2231,7 +2252,7 @@ impl<'db> LoweringContext<'db> {
                         let mut idx_counter = 0usize;
                         let mut insert_field =
                             |name: &str,
-                             type_expr: Option<&baml_compiler2_ast::SpannedTypeExpr>,
+                             type_expr: Option<&baml_compiler2_ast::TypeExpr>,
                              generic_params: &[Name],
                              ns: &[Name],
                              fields: &mut IndexMap<String, usize>,
@@ -2249,7 +2270,7 @@ impl<'db> LoweringContext<'db> {
                                         let tir_ty =
                                         baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
                                             db,
-                                            &te.expr,
+                                            te,
                                             pkg_items,
                                             ns,
                                             generic_params,
@@ -2285,7 +2306,7 @@ impl<'db> LoweringContext<'db> {
                             let Some(iface_loc) =
                                 baml_compiler2_tir::interfaces::resolve_path_to_interface(
                                     db,
-                                    &impl_target.target.expr,
+                                    &impl_target.target,
                                     pkg_items,
                                     &pkg_ns,
                                 )
@@ -2337,7 +2358,7 @@ impl<'db> LoweringContext<'db> {
                 let Some(root_iface_loc) =
                     baml_compiler2_tir::interfaces::resolve_path_to_interface(
                         db,
-                        &imp.interface_target.expr,
+                        &imp.interface_target,
                         pkg_items,
                         &pkg_info.namespace_path,
                     )
@@ -2348,7 +2369,7 @@ impl<'db> LoweringContext<'db> {
                 let mut diags = Vec::new();
                 let target_ty_tir = baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
                     db,
-                    &imp.for_target.expr,
+                    &imp.for_target,
                     pkg_items,
                     &pkg_info.namespace_path,
                     &imp.generic_params,
@@ -2366,7 +2387,7 @@ impl<'db> LoweringContext<'db> {
                         {
                             let root_iface_args_tir = lower_interface_target_args(
                                 db,
-                                &imp.interface_target.expr,
+                                &imp.interface_target,
                                 pkg_items,
                                 &pkg_info.namespace_path,
                                 &imp.generic_params,
@@ -2411,7 +2432,7 @@ impl<'db> LoweringContext<'db> {
                         }
                         let root_iface_args_tir = lower_interface_target_args(
                             db,
-                            &imp.interface_target.expr,
+                            &imp.interface_target,
                             pkg_items,
                             &pkg_info.namespace_path,
                             &imp.generic_params,
@@ -2469,7 +2490,7 @@ impl<'db> LoweringContext<'db> {
 
                 let root_iface_args_tir = lower_interface_target_args(
                     db,
-                    &imp.interface_target.expr,
+                    &imp.interface_target,
                     pkg_items,
                     &pkg_info.namespace_path,
                     &imp.generic_params,
@@ -2477,7 +2498,7 @@ impl<'db> LoweringContext<'db> {
                 );
                 let root_iface_assoc_tir = lower_interface_target_associated_bindings(
                     db,
-                    &imp.interface_target.expr,
+                    &imp.interface_target,
                     &imp.associated_type_bindings,
                     pkg_items,
                     &pkg_info.namespace_path,
@@ -2557,6 +2578,7 @@ impl<'db> LoweringContext<'db> {
         expr_body: AstExprBody,
         source_map: Option<AstSourceMap>,
         opt: crate::OptLevel,
+        dispatch_cache: std::rc::Rc<DispatchCandidateCache>,
     ) -> Self {
         let file = func_loc.file(db);
 
@@ -2589,147 +2611,23 @@ impl<'db> LoweringContext<'db> {
             })
             .unwrap_or_else(|| index.scope_at_offset(func_span.start(), Some(&func_data.name)));
 
-        // --- Eagerly aggregate expr_types, pat_types, resolutions, exhaustive_matches, path_root_types, and path_member_resolutions from all scopes ---
-        let mut expr_types: FxHashMap<ExprMetadataKey, Tir2Ty> = FxHashMap::default();
-        let mut pat_types: FxHashMap<PatMetadataKey, Tir2Ty> = FxHashMap::default();
-        let mut resolutions: FxHashMap<
-            ExprMetadataKey,
-            baml_compiler2_tir::inference::MemberResolution<'db>,
-        > = FxHashMap::default();
-        let mut exhaustive_matches: rustc_hash::FxHashSet<ExprMetadataKey> =
-            rustc_hash::FxHashSet::default();
-        let mut path_root_types: FxHashMap<ExprMetadataKey, Tir2Ty> = FxHashMap::default();
-        let mut path_segment_types: FxHashMap<(MetadataScope, AstExprId, usize), Tir2Ty> =
-            FxHashMap::default();
-        let mut path_member_resolutions: FxHashMap<
-            ExprMetadataKey,
-            Vec<baml_compiler2_tir::inference::MemberResolution<'db>>,
-        > = FxHashMap::default();
-        let mut call_plans: FxHashMap<ExprMetadataKey, baml_compiler2_tir::inference::CallPlan> =
-            FxHashMap::default();
-        let mut function_coercions: FxHashMap<
-            ExprMetadataKey,
-            baml_compiler2_tir::inference::FunctionCoercion,
-        > = FxHashMap::default();
-
-        let merge_scope = |fsi: FileScopeId,
-                           expr_types: &mut FxHashMap<ExprMetadataKey, Tir2Ty>,
-                           pat_types: &mut FxHashMap<PatMetadataKey, Tir2Ty>,
-                           resolutions: &mut FxHashMap<
-            ExprMetadataKey,
-            baml_compiler2_tir::inference::MemberResolution<'db>,
-        >,
-                           exhaustive_matches: &mut rustc_hash::FxHashSet<ExprMetadataKey>,
-                           path_root_types: &mut FxHashMap<ExprMetadataKey, Tir2Ty>,
-                           path_segment_types: &mut FxHashMap<
-            (MetadataScope, AstExprId, usize),
-            Tir2Ty,
-        >,
-                           path_member_resolutions: &mut FxHashMap<
-            ExprMetadataKey,
-            Vec<baml_compiler2_tir::inference::MemberResolution<'db>>,
-        >,
-                           call_plans: &mut FxHashMap<
-            ExprMetadataKey,
-            baml_compiler2_tir::inference::CallPlan,
-        >,
-                           function_coercions: &mut FxHashMap<
-            ExprMetadataKey,
-            baml_compiler2_tir::inference::FunctionCoercion,
-        >| {
-            let scope_id = index.scope_ids[fsi.index() as usize];
-            let inference = infer_scope_types(db, scope_id);
-            let body_scope = MetadataScope::Body(fsi);
-            for (&expr_id, ty) in inference.iter_expressions() {
-                expr_types.insert((body_scope, expr_id), ty.clone());
-            }
-            for (&pat_id, ty) in inference.iter_bindings() {
-                pat_types.insert((body_scope, pat_id), ty.clone());
-            }
-            for (&expr_id, res) in inference.iter_resolutions() {
-                resolutions.insert((body_scope, expr_id), res.clone());
-            }
-            for &expr_id in inference.iter_exhaustive_matches() {
-                exhaustive_matches.insert((body_scope, expr_id));
-            }
-            for (&expr_id, ty) in inference.iter_path_root_types() {
-                path_root_types.insert((body_scope, expr_id), ty.clone());
-            }
-            for (&(expr_id, seg_idx), ty) in inference.iter_path_segment_types() {
-                path_segment_types.insert((body_scope, expr_id, seg_idx), ty.clone());
-            }
-            for (&expr_id, member_resolutions) in inference.iter_path_member_resolutions() {
-                path_member_resolutions.insert((body_scope, expr_id), member_resolutions.clone());
-            }
-            for (&expr_id, plan) in inference.iter_call_plans() {
-                call_plans.insert((body_scope, expr_id), plan.clone());
-            }
-            for (&expr_id, coercion) in inference.iter_function_coercions() {
-                function_coercions.insert((body_scope, expr_id), coercion.clone());
-            }
-
-            let default_scope = MetadataScope::ParameterDefault(fsi);
-            for (&expr_id, ty) in inference.iter_default_expressions() {
-                expr_types.insert((default_scope, expr_id), ty.clone());
-            }
-            for (&pat_id, ty) in inference.iter_default_bindings() {
-                pat_types.insert((default_scope, pat_id), ty.clone());
-            }
-            for (&expr_id, res) in inference.iter_default_resolutions() {
-                resolutions.insert((default_scope, expr_id), res.clone());
-            }
-            for &expr_id in inference.iter_default_exhaustive_matches() {
-                exhaustive_matches.insert((default_scope, expr_id));
-            }
-            for (&expr_id, ty) in inference.iter_default_path_root_types() {
-                path_root_types.insert((default_scope, expr_id), ty.clone());
-            }
-            for (&(expr_id, seg_idx), ty) in inference.iter_default_path_segment_types() {
-                path_segment_types.insert((default_scope, expr_id, seg_idx), ty.clone());
-            }
-            for (&expr_id, member_resolutions) in inference.iter_default_path_member_resolutions() {
-                path_member_resolutions
-                    .insert((default_scope, expr_id), member_resolutions.clone());
-            }
-            for (&expr_id, plan) in inference.iter_default_call_plans() {
-                call_plans.insert((default_scope, expr_id), plan.clone());
-            }
-            for (&expr_id, coercion) in inference.iter_default_function_coercions() {
-                function_coercions.insert((default_scope, expr_id), coercion.clone());
-            }
-        };
-
-        // Include the function scope itself
-        merge_scope(
-            func_scope_id,
-            &mut expr_types,
-            &mut pat_types,
-            &mut resolutions,
-            &mut exhaustive_matches,
-            &mut path_root_types,
-            &mut path_segment_types,
-            &mut path_member_resolutions,
-            &mut call_plans,
-            &mut function_coercions,
-        );
-
-        // Include all descendant scopes (blocks, lambdas, etc.)
+        // --- Collect per-scope TIR inference views (func + all descendants) ---
+        // Borrows the Salsa-cached `infer_scope_types` results instead of
+        // deep-copying every table into merged per-function maps (the old
+        // scheme cloned the whole inference output of every function on each
+        // construction). Lookups dispatch through the `tir_*` accessors.
         let func_scope = &index.scopes[func_scope_id.index() as usize];
         let desc_start = func_scope.descendants.start.index();
         let desc_end = func_scope.descendants.end.index();
-        for raw_idx in desc_start..desc_end {
-            merge_scope(
-                FileScopeId::new(raw_idx),
-                &mut expr_types,
-                &mut pat_types,
-                &mut resolutions,
-                &mut exhaustive_matches,
-                &mut path_root_types,
-                &mut path_segment_types,
-                &mut path_member_resolutions,
-                &mut call_plans,
-                &mut function_coercions,
-            );
+        let mut scope_inference: FxHashMap<
+            FileScopeId,
+            &'db baml_compiler2_tir::inference::ScopeInference<'db>,
+        > = FxHashMap::default();
+        for fsi in
+            std::iter::once(func_scope_id).chain((desc_start..desc_end).map(FileScopeId::new))
+        {
+            let scope_id = index.scope_ids[fsi.index() as usize];
+            scope_inference.insert(fsi, infer_scope_types(db, scope_id));
         }
 
         // --- Build class_fields / enum_variants from PackageItems ---
@@ -2774,7 +2672,7 @@ impl<'db> LoweringContext<'db> {
                         iface_data
                             .associated_types
                             .iter()
-                            .map(|assoc| assoc.bound.as_ref().map(|bound| bound.expr.clone())),
+                            .map(|assoc| assoc.bound.clone()),
                     );
                 }
             }
@@ -2884,17 +2782,11 @@ impl<'db> LoweringContext<'db> {
             binding_locals: HashMap::new(),
             loop_context: None,
             catch_context: None,
+            catch_rethrow_locals: Vec::new(),
             exit_block: BlockId(0), // placeholder; overwritten in lower_function_body
-            expr_types,
-            pat_types,
-            resolutions,
-            exhaustive_matches,
-            path_root_types,
-            path_segment_types,
-            path_member_resolutions,
-            call_plans,
-            function_coercions,
+            scope_inference,
             generic_param_bounds,
+            dispatch_cache,
             lambda_param_tir_types: FxHashMap::default(),
             current_scope: func_scope_id,
             current_metadata_scope: MetadataScope::Body(func_scope_id),
@@ -2934,6 +2826,7 @@ impl<'db> LoweringContext<'db> {
         expr_body: AstExprBody,
         source_map: Option<AstSourceMap>,
         opt: crate::OptLevel,
+        dispatch_cache: std::rc::Rc<DispatchCandidateCache>,
     ) -> Self {
         let file = let_loc.file(db);
 
@@ -2946,147 +2839,22 @@ impl<'db> LoweringContext<'db> {
         let index = file_semantic_index(db, file);
         let let_scope_id: FileScopeId = index.scope_at_offset(let_span.start(), Some(&let_name));
 
-        // --- Eagerly aggregate expr_types, pat_types, resolutions, path_root_types, path_member_resolutions from let scope ---
-        let mut expr_types: FxHashMap<ExprMetadataKey, Tir2Ty> = FxHashMap::default();
-        let mut pat_types: FxHashMap<PatMetadataKey, Tir2Ty> = FxHashMap::default();
-        let mut resolutions: FxHashMap<
-            ExprMetadataKey,
-            baml_compiler2_tir::inference::MemberResolution<'db>,
+        // --- Collect per-scope TIR inference views (let + all descendants) ---
+        // Borrows the Salsa-cached `infer_scope_types` results instead of
+        // deep-copying every table into merged per-function maps (the old
+        // scheme cloned the whole inference output of every let initializer on each
+        // construction). Lookups dispatch through the `tir_*` accessors.
+        let let_owner_scope = &index.scopes[let_scope_id.index() as usize];
+        let desc_start = let_owner_scope.descendants.start.index();
+        let desc_end = let_owner_scope.descendants.end.index();
+        let mut scope_inference: FxHashMap<
+            FileScopeId,
+            &'db baml_compiler2_tir::inference::ScopeInference<'db>,
         > = FxHashMap::default();
-        let mut exhaustive_matches: rustc_hash::FxHashSet<ExprMetadataKey> =
-            rustc_hash::FxHashSet::default();
-        let mut path_root_types: FxHashMap<ExprMetadataKey, Tir2Ty> = FxHashMap::default();
-        let mut path_segment_types: FxHashMap<(MetadataScope, AstExprId, usize), Tir2Ty> =
-            FxHashMap::default();
-        let mut path_member_resolutions: FxHashMap<
-            ExprMetadataKey,
-            Vec<baml_compiler2_tir::inference::MemberResolution<'db>>,
-        > = FxHashMap::default();
-        let mut call_plans: FxHashMap<ExprMetadataKey, baml_compiler2_tir::inference::CallPlan> =
-            FxHashMap::default();
-        let mut function_coercions: FxHashMap<
-            ExprMetadataKey,
-            baml_compiler2_tir::inference::FunctionCoercion,
-        > = FxHashMap::default();
-
-        let merge_scope = |fsi: FileScopeId,
-                           expr_types: &mut FxHashMap<ExprMetadataKey, Tir2Ty>,
-                           pat_types: &mut FxHashMap<PatMetadataKey, Tir2Ty>,
-                           resolutions: &mut FxHashMap<
-            ExprMetadataKey,
-            baml_compiler2_tir::inference::MemberResolution<'db>,
-        >,
-                           exhaustive_matches: &mut rustc_hash::FxHashSet<ExprMetadataKey>,
-                           path_root_types: &mut FxHashMap<ExprMetadataKey, Tir2Ty>,
-                           path_segment_types: &mut FxHashMap<
-            (MetadataScope, AstExprId, usize),
-            Tir2Ty,
-        >,
-                           path_member_resolutions: &mut FxHashMap<
-            ExprMetadataKey,
-            Vec<baml_compiler2_tir::inference::MemberResolution<'db>>,
-        >,
-                           call_plans: &mut FxHashMap<
-            ExprMetadataKey,
-            baml_compiler2_tir::inference::CallPlan,
-        >,
-                           function_coercions: &mut FxHashMap<
-            ExprMetadataKey,
-            baml_compiler2_tir::inference::FunctionCoercion,
-        >| {
+        for fsi in std::iter::once(let_scope_id).chain((desc_start..desc_end).map(FileScopeId::new))
+        {
             let scope_id = index.scope_ids[fsi.index() as usize];
-            let inference = infer_scope_types(db, scope_id);
-            let body_scope = MetadataScope::Body(fsi);
-            for (&expr_id, ty) in inference.iter_expressions() {
-                expr_types.insert((body_scope, expr_id), ty.clone());
-            }
-            for (&pat_id, ty) in inference.iter_bindings() {
-                pat_types.insert((body_scope, pat_id), ty.clone());
-            }
-            for (&expr_id, res) in inference.iter_resolutions() {
-                resolutions.insert((body_scope, expr_id), res.clone());
-            }
-            for &expr_id in inference.iter_exhaustive_matches() {
-                exhaustive_matches.insert((body_scope, expr_id));
-            }
-            for (&expr_id, ty) in inference.iter_path_root_types() {
-                path_root_types.insert((body_scope, expr_id), ty.clone());
-            }
-            for (&(expr_id, seg_idx), ty) in inference.iter_path_segment_types() {
-                path_segment_types.insert((body_scope, expr_id, seg_idx), ty.clone());
-            }
-            for (&expr_id, member_resolutions) in inference.iter_path_member_resolutions() {
-                path_member_resolutions.insert((body_scope, expr_id), member_resolutions.clone());
-            }
-            for (&expr_id, plan) in inference.iter_call_plans() {
-                call_plans.insert((body_scope, expr_id), plan.clone());
-            }
-            for (&expr_id, coercion) in inference.iter_function_coercions() {
-                function_coercions.insert((body_scope, expr_id), coercion.clone());
-            }
-
-            let default_scope = MetadataScope::ParameterDefault(fsi);
-            for (&expr_id, ty) in inference.iter_default_expressions() {
-                expr_types.insert((default_scope, expr_id), ty.clone());
-            }
-            for (&pat_id, ty) in inference.iter_default_bindings() {
-                pat_types.insert((default_scope, pat_id), ty.clone());
-            }
-            for (&expr_id, res) in inference.iter_default_resolutions() {
-                resolutions.insert((default_scope, expr_id), res.clone());
-            }
-            for &expr_id in inference.iter_default_exhaustive_matches() {
-                exhaustive_matches.insert((default_scope, expr_id));
-            }
-            for (&expr_id, ty) in inference.iter_default_path_root_types() {
-                path_root_types.insert((default_scope, expr_id), ty.clone());
-            }
-            for (&(expr_id, seg_idx), ty) in inference.iter_default_path_segment_types() {
-                path_segment_types.insert((default_scope, expr_id, seg_idx), ty.clone());
-            }
-            for (&expr_id, member_resolutions) in inference.iter_default_path_member_resolutions() {
-                path_member_resolutions
-                    .insert((default_scope, expr_id), member_resolutions.clone());
-            }
-            for (&expr_id, plan) in inference.iter_default_call_plans() {
-                call_plans.insert((default_scope, expr_id), plan.clone());
-            }
-            for (&expr_id, coercion) in inference.iter_default_function_coercions() {
-                function_coercions.insert((default_scope, expr_id), coercion.clone());
-            }
-        };
-
-        // Include the let scope itself
-        merge_scope(
-            let_scope_id,
-            &mut expr_types,
-            &mut pat_types,
-            &mut resolutions,
-            &mut exhaustive_matches,
-            &mut path_root_types,
-            &mut path_segment_types,
-            &mut path_member_resolutions,
-            &mut call_plans,
-            &mut function_coercions,
-        );
-
-        // Include all descendant scopes (blocks, closures within the initializer)
-        let let_scope = &index.scopes[let_scope_id.index() as usize];
-        let desc_start = let_scope.descendants.start.index();
-        let desc_end = let_scope.descendants.end.index();
-        for raw_idx in desc_start..desc_end {
-            merge_scope(
-                FileScopeId::new(raw_idx),
-                &mut expr_types,
-                &mut pat_types,
-                &mut resolutions,
-                &mut exhaustive_matches,
-                &mut path_root_types,
-                &mut path_segment_types,
-                &mut path_member_resolutions,
-                &mut call_plans,
-                &mut function_coercions,
-            );
+            scope_inference.insert(fsi, infer_scope_types(db, scope_id));
         }
 
         // --- Build class_fields / enum_variants from PackageItems ---
@@ -3107,17 +2875,11 @@ impl<'db> LoweringContext<'db> {
             binding_locals: HashMap::new(),
             loop_context: None,
             catch_context: None,
+            catch_rethrow_locals: Vec::new(),
             exit_block: BlockId(0), // placeholder; overwritten in lower_let_body_inner
-            expr_types,
-            pat_types,
-            resolutions,
-            exhaustive_matches,
-            path_root_types,
-            path_segment_types,
-            path_member_resolutions,
-            call_plans,
-            function_coercions,
+            scope_inference,
             generic_param_bounds: FxHashMap::default(),
+            dispatch_cache,
             lambda_param_tir_types: FxHashMap::default(),
             current_scope: let_scope_id,
             current_metadata_scope: MetadataScope::Body(let_scope_id),
@@ -3396,6 +3158,127 @@ impl<'db> LoweringContext<'db> {
         (self.current_metadata_scope, pat_id)
     }
 
+    // --- TIR inference views ---
+    //
+    // Point lookups into the Salsa-cached per-scope `ScopeInference` values
+    // collected at construction, replacing the merged per-function copies the
+    // context used to materialize. `MetadataScope::Body` reads the scope's
+    // body tables; `MetadataScope::ParameterDefault` reads the same scope's
+    // default-parameter tables — exactly the pairing the old merge encoded in
+    // its composite keys. Scopes outside this function answer `None`, matching
+    // the old maps' coverage (some callers key behavior on that absence).
+
+    /// The inference view for `fsi`, when it belongs to this function.
+    fn inference_for(
+        &self,
+        fsi: FileScopeId,
+    ) -> Option<&'db baml_compiler2_tir::inference::ScopeInference<'db>> {
+        self.scope_inference.get(&fsi).copied()
+    }
+
+    fn tir_expr_type(&self, key: ExprMetadataKey) -> Option<&'db Tir2Ty> {
+        match key.0 {
+            MetadataScope::Body(fsi) => self.inference_for(fsi)?.expression_type(key.1),
+            MetadataScope::ParameterDefault(fsi) => self
+                .inference_for(fsi)?
+                .parameter_defaults()
+                .expression_type(key.1),
+        }
+    }
+
+    fn tir_pat_type(&self, key: PatMetadataKey) -> Option<&'db Tir2Ty> {
+        match key.0 {
+            MetadataScope::Body(fsi) => self.inference_for(fsi)?.binding_type(key.1),
+            MetadataScope::ParameterDefault(fsi) => self
+                .inference_for(fsi)?
+                .parameter_defaults()
+                .binding_type(key.1),
+        }
+    }
+
+    fn tir_resolution(
+        &self,
+        key: ExprMetadataKey,
+    ) -> Option<&'db baml_compiler2_tir::inference::MemberResolution<'db>> {
+        match key.0 {
+            MetadataScope::Body(fsi) => self.inference_for(fsi)?.resolution(key.1),
+            MetadataScope::ParameterDefault(fsi) => self
+                .inference_for(fsi)?
+                .parameter_defaults()
+                .resolution(key.1),
+        }
+    }
+
+    fn tir_is_exhaustive_match(&self, key: ExprMetadataKey) -> bool {
+        match key.0 {
+            MetadataScope::Body(fsi) => self
+                .inference_for(fsi)
+                .is_some_and(|inf| inf.is_exhaustive_match(key.1)),
+            MetadataScope::ParameterDefault(fsi) => self
+                .inference_for(fsi)
+                .is_some_and(|inf| inf.parameter_defaults().is_exhaustive_match(key.1)),
+        }
+    }
+
+    fn tir_path_root_type(&self, key: ExprMetadataKey) -> Option<&'db Tir2Ty> {
+        match key.0 {
+            MetadataScope::Body(fsi) => self.inference_for(fsi)?.path_root_type(key.1),
+            MetadataScope::ParameterDefault(fsi) => self
+                .inference_for(fsi)?
+                .parameter_defaults()
+                .path_root_type(key.1),
+        }
+    }
+
+    fn tir_path_segment_type(&self, key: (MetadataScope, AstExprId, usize)) -> Option<&'db Tir2Ty> {
+        match key.0 {
+            MetadataScope::Body(fsi) => self.inference_for(fsi)?.path_segment_type(key.1, key.2),
+            MetadataScope::ParameterDefault(fsi) => self
+                .inference_for(fsi)?
+                .parameter_defaults()
+                .path_segment_type(key.1, key.2),
+        }
+    }
+
+    fn tir_path_member_resolutions(
+        &self,
+        key: ExprMetadataKey,
+    ) -> Option<&'db [baml_compiler2_tir::inference::MemberResolution<'db>]> {
+        match key.0 {
+            MetadataScope::Body(fsi) => self.inference_for(fsi)?.path_member_resolution(key.1),
+            MetadataScope::ParameterDefault(fsi) => self
+                .inference_for(fsi)?
+                .parameter_defaults()
+                .path_member_resolution(key.1),
+        }
+    }
+
+    fn tir_call_plan(
+        &self,
+        key: ExprMetadataKey,
+    ) -> Option<&'db baml_compiler2_tir::inference::CallPlan> {
+        match key.0 {
+            MetadataScope::Body(fsi) => self.inference_for(fsi)?.call_plan(key.1),
+            MetadataScope::ParameterDefault(fsi) => self
+                .inference_for(fsi)?
+                .parameter_defaults()
+                .call_plan(key.1),
+        }
+    }
+
+    fn tir_function_coercion(
+        &self,
+        key: ExprMetadataKey,
+    ) -> Option<&'db baml_compiler2_tir::inference::FunctionCoercion> {
+        match key.0 {
+            MetadataScope::Body(fsi) => self.inference_for(fsi)?.function_coercion(key.1),
+            MetadataScope::ParameterDefault(fsi) => self
+                .inference_for(fsi)?
+                .parameter_defaults()
+                .function_coercion(key.1),
+        }
+    }
+
     fn convert_tir_ty_for_runtime(&self, ty: &Tir2Ty) -> RuntimeTy {
         // Resolve associated-type projections against the bounds the compiler
         // knows statically; anything still symbolic — a `TypeVar` or a
@@ -3572,8 +3455,7 @@ impl<'db> LoweringContext<'db> {
     fn interface_dispatch_target_for_expr(&self, expr_id: AstExprId) -> Option<InterfaceTypeView> {
         self.source_param_interface_view_for_expr(expr_id)
             .or_else(|| {
-                self.expr_types
-                    .get(&self.expr_metadata_key(expr_id))
+                self.tir_expr_type(self.expr_metadata_key(expr_id))
                     .and_then(|ty| self.interface_dispatch_target_for_tir_ty(ty))
             })
             .or_else(|| {
@@ -3707,13 +3589,11 @@ impl<'db> LoweringContext<'db> {
     fn dispatch_receiver_static_tir_ty(&self, expr_id: AstExprId) -> Option<Tir2Ty> {
         if let AstExpr::Upcast { base, .. } = &self.body.exprs[expr_id] {
             return self
-                .expr_types
-                .get(&self.expr_metadata_key(*base))
+                .tir_expr_type(self.expr_metadata_key(*base))
                 .cloned()
                 .or_else(|| self.dispatch_receiver_static_tir_ty(*base));
         }
-        self.expr_types
-            .get(&self.expr_metadata_key(expr_id))
+        self.tir_expr_type(self.expr_metadata_key(expr_id))
             .cloned()
             .or_else(|| self.self_typevar_for_expr(expr_id))
     }
@@ -4017,8 +3897,7 @@ impl<'db> LoweringContext<'db> {
     }
 
     fn expr_ty(&self, expr_id: AstExprId) -> RuntimeTy {
-        self.expr_types
-            .get(&self.expr_metadata_key(expr_id))
+        self.tir_expr_type(self.expr_metadata_key(expr_id))
             .map(|ty| self.convert_tir_ty_for_runtime(ty))
             .unwrap_or(RuntimeTy::Void {
                 attr: TyAttr::default(),
@@ -4031,7 +3910,7 @@ impl<'db> LoweringContext<'db> {
     /// Returns `vec![]` for non-generic (or unresolved) classes.
     fn class_type_arg_templates(&self, expr_id: AstExprId) -> Vec<TyTemplate> {
         let generic_params = self.enclosing_generic_params();
-        match self.expr_types.get(&self.expr_metadata_key(expr_id)) {
+        match self.tir_expr_type(self.expr_metadata_key(expr_id)) {
             Some(Tir2Ty::Class(_, type_args, _)) if !type_args.is_empty() => type_args
                 .iter()
                 .map(|t| self.ty_to_template(t, &generic_params))
@@ -4047,7 +3926,7 @@ impl<'db> LoweringContext<'db> {
     /// recovery).
     fn array_element_template(&self, expr_id: AstExprId) -> TyTemplate {
         let generic_params = self.enclosing_generic_params();
-        match self.expr_types.get(&self.expr_metadata_key(expr_id)) {
+        match self.tir_expr_type(self.expr_metadata_key(expr_id)) {
             Some(Tir2Ty::List(elem, _) | Tir2Ty::EvolvingList(elem, _)) => {
                 self.ty_to_template(elem, &generic_params)
             }
@@ -4061,7 +3940,7 @@ impl<'db> LoweringContext<'db> {
     /// recovery); map keys are always strings.
     fn map_kv_templates(&self, expr_id: AstExprId) -> (TyTemplate, TyTemplate) {
         let generic_params = self.enclosing_generic_params();
-        match self.expr_types.get(&self.expr_metadata_key(expr_id)) {
+        match self.tir_expr_type(self.expr_metadata_key(expr_id)) {
             Some(Tir2Ty::Map { key, value, .. } | Tir2Ty::EvolvingMap(key, value, _)) => (
                 self.ty_to_template(key, &generic_params),
                 self.ty_to_template(value, &generic_params),
@@ -4087,8 +3966,7 @@ impl<'db> LoweringContext<'db> {
 
     /// Get the `baml_type::RuntimeTy` for a pattern binding
     fn pat_ty(&self, pat_id: AstPatId) -> RuntimeTy {
-        self.pat_types
-            .get(&self.pat_metadata_key(pat_id))
+        self.tir_pat_type(self.pat_metadata_key(pat_id))
             .map(|ty| self.convert_tir_ty_for_runtime(ty))
             .unwrap_or(RuntimeTy::Void {
                 attr: TyAttr::default(),
@@ -4105,8 +3983,7 @@ impl<'db> LoweringContext<'db> {
     /// Get the TIR-inferred root segment type for a multi-segment Path expression.
     /// Returns `None` if no root type was recorded (e.g. single-segment paths).
     fn path_root_ty(&self, expr_id: AstExprId) -> Option<RuntimeTy> {
-        self.path_root_types
-            .get(&self.expr_metadata_key(expr_id))
+        self.tir_path_root_type(self.expr_metadata_key(expr_id))
             .map(|ty| self.convert_tir_ty_for_runtime(ty))
     }
 
@@ -4114,8 +3991,7 @@ impl<'db> LoweringContext<'db> {
     /// local-rooted Path expression. Returns `None` if not recorded.
     #[allow(dead_code)]
     fn path_segment_ty(&self, expr_id: AstExprId, seg_idx: usize) -> Option<RuntimeTy> {
-        self.path_segment_types
-            .get(&(self.current_metadata_scope, expr_id, seg_idx))
+        self.tir_path_segment_type((self.current_metadata_scope, expr_id, seg_idx))
             .map(|ty| self.convert_tir_ty_for_runtime(ty))
     }
 
@@ -4227,14 +4103,16 @@ impl<'db> LoweringContext<'db> {
         // for out-of-body implementations, otherwise the enclosing class type.
         for (param_idx, param) in sig.params.iter().enumerate() {
             let param_ty = if param.name.as_str() == "self"
-                && matches!(param.ty, baml_compiler2_ast::TypeExpr::Unknown { .. })
-            {
+                && matches!(
+                    param.ty.kind,
+                    baml_compiler2_ast::TypeExprKind::Unknown { .. }
+                ) {
                 if let Some(imp) = enclosing_impl {
                     let mut diags = Vec::new();
                     let generic_params = self.enclosing_generic_params();
                     let tir_ty = lower_type_expr_in_ns(
                         self.db,
-                        &imp.for_target.expr,
+                        &imp.for_target,
                         pkg_items,
                         &pkg_info.namespace_path,
                         &generic_params,
@@ -4689,7 +4567,7 @@ impl<'db> LoweringContext<'db> {
                     let mut diags = Vec::new();
                     let tir_ty = lower_type_expr_in_ns(
                         self.db,
-                        &spanned_te.expr,
+                        spanned_te,
                         pkg_items,
                         &pkg_info.namespace_path,
                         &lambda_param_generics,
@@ -4907,8 +4785,7 @@ impl LoweringContext<'_> {
         // the bare last segment (`prompt`) in the user's scope would miss it.
         // Fall back to bare-name resolution for unqualified, in-file tags.
         let tag_func_loc = self
-            .resolutions
-            .get(&self.expr_metadata_key(tag))
+            .tir_resolution(self.expr_metadata_key(tag))
             .and_then(|r| match r {
                 MemberResolution::Free { func_loc }
                 | MemberResolution::UnboundMethod { func_loc, .. }
@@ -4951,7 +4828,12 @@ impl LoweringContext<'_> {
         let tag_pkg_items = package_items(self.db, tag_pkg_id);
         let mut body_params: Vec<(Name, RuntimeTy)> = Vec::new();
         let closure_ty = match tag_sig.params.first().map(|p| &p.ty) {
-            Some(body_te @ baml_compiler2_ast::TypeExpr::Function { params, .. }) => {
+            Some(
+                body_te @ baml_compiler2_ast::TypeExpr {
+                    kind: baml_compiler2_ast::TypeExprKind::Function { params, .. },
+                    ..
+                },
+            ) => {
                 for (i, p) in params.iter().enumerate() {
                     let name = p
                         .name
@@ -5403,9 +5285,18 @@ impl LoweringContext<'_> {
         // break/continue — run defers via the inline `replay_defers_to_depth`
         // path instead.)
         let block_incoming_catch = self.catch_context;
-        // (landing-pad block, defer body, context to cascade to after replay)
-        let mut defer_pads: Vec<(BlockId, AstExprId, Option<CatchContext>)> = Vec::new();
+        // (landing-pad block, defer body, context to cascade to after replay,
+        // catch-region index — to fill in the pad's handler_body once its body
+        // is lowered below)
+        let mut defer_pads: Vec<(BlockId, AstExprId, Option<CatchContext>, usize)> = Vec::new();
         let mut shared_error: Option<Local> = None;
+        // BEP-042 cause chain: a throw inside a defer pad — a sibling defer that
+        // throws while the scope is already unwinding — is "during handling of"
+        // the in-flight error. All pads in this block share one ErrorContext
+        // slot; the throw funnel materializes the in-flight error into it when
+        // an error reaches a pad, and the next sibling defer's throw chains onto
+        // it. Lazily declared alongside `shared_error`.
+        let mut shared_ctx: Option<Local> = None;
 
         for &stmt_id in stmts {
             let defer_body = match &self.body.stmts[stmt_id] {
@@ -5427,6 +5318,16 @@ impl LoweringContext<'_> {
                             false,
                         )
                     });
+                    let ctx_local = *shared_ctx.get_or_insert_with(|| {
+                        self.builder.declare_local(
+                            None,
+                            RuntimeTy::BuiltinUnknown {
+                                attr: TyAttr::default(),
+                            },
+                            None,
+                            false,
+                        )
+                    });
                     let pad = self.builder.create_block();
                     // Split into a fresh block so the region covers only the
                     // code AFTER this defer (a throw before it must not run it).
@@ -5435,14 +5336,20 @@ impl LoweringContext<'_> {
                         self.builder.goto(region_start);
                     }
                     self.builder.set_current_block(region_start);
+                    let region_idx = self.builder.catch_regions.len();
                     self.builder.catch_regions.push(CatchRegion {
                         body_entry: region_start,
                         handler: pad,
+                        // handler_body is filled in once the pad body is lowered
+                        // (below). `stack_trace_local` holds the in-flight
+                        // error's ErrorContext so a sibling defer that throws
+                        // while unwinding chains onto it (BEP-042 cause chain).
+                        handler_body: Vec::new(),
                         error_local,
-                        stack_trace_local: None,
+                        stack_trace_local: Some(ctx_local),
                     });
                     let route_ctx = self.catch_context;
-                    defer_pads.push((pad, body, route_ctx));
+                    defer_pads.push((pad, body, route_ctx, region_idx));
                     self.catch_context = Some(CatchContext {
                         unwind_target: pad,
                         error_local,
@@ -5480,7 +5387,7 @@ impl LoweringContext<'_> {
         // Reverse order so the innermost (last-declared) pad is laid out first.
         if !defer_pads.is_empty() {
             let continuation = self.builder.current_block();
-            for &(pad, body, route_ctx) in defer_pads.iter().rev() {
+            for &(pad, body, route_ctx, region_idx) in defer_pads.iter().rev() {
                 self.builder.set_current_block(pad);
                 // Lower the defer body under the ENCLOSING context, not this
                 // pad's `route_ctx`. A throw/call inside the body is routed to
@@ -5495,6 +5402,11 @@ impl LoweringContext<'_> {
                 let tmp = self.builder.temp(RuntimeTy::Void {
                     attr: TyAttr::default(),
                 });
+                // The pad body IS this defer's handler body: a throw inside it
+                // is "during handling of" the in-flight error. Capture every
+                // block the body lowers into (the pad plus any it creates) so
+                // the cause pre-walk covers them all.
+                let pad_body_lo = self.builder.num_blocks();
                 self.lower_expr(body, Place::local(tmp));
                 if !self.builder.is_current_terminated() {
                     let error =
@@ -5510,10 +5422,16 @@ impl LoweringContext<'_> {
                             self.builder.goto(outer.unwind_target);
                         }
                         None => {
-                            self.builder.throw(Operand::Copy(Place::Local(error)));
+                            // Re-raise the in-flight error unchanged: a rethrow,
+                            // not a fresh throw, so the cause pre-walk does not
+                            // chain it onto its own context (a self-link).
+                            self.builder.rethrow(Operand::Copy(Place::Local(error)));
                         }
                     }
                 }
+                self.builder.catch_regions[region_idx].handler_body = std::iter::once(pad)
+                    .chain((pad_body_lo..self.builder.num_blocks()).map(BlockId))
+                    .collect();
             }
             self.builder.set_current_block(continuation);
         }
@@ -5525,14 +5443,38 @@ impl LoweringContext<'_> {
 
     fn lower_expr(&mut self, expr_id: AstExprId, dest: Place) {
         if let Some(coercion) = self
-            .function_coercions
-            .get(&self.expr_metadata_key(expr_id))
+            .tir_function_coercion(self.expr_metadata_key(expr_id))
             .cloned()
         {
             self.lower_optional_function_adapter(expr_id, &coercion, dest);
         } else {
             self.lower_expr_without_function_coercion(expr_id, dest);
         }
+    }
+
+    fn split_runtime_id_call_args(args: &[CallArg]) -> (Vec<AstExprId>, Option<AstExprId>) {
+        let mut ordinary_args = Vec::with_capacity(args.len());
+        let mut runtime_id = None;
+        for arg in args {
+            if arg
+                .label
+                .as_ref()
+                .is_some_and(|label| label.as_str() == "$id")
+            {
+                runtime_id.get_or_insert(arg.expr);
+            } else {
+                ordinary_args.push(arg.expr);
+            }
+        }
+        (ordinary_args, runtime_id)
+    }
+
+    fn lower_runtime_id_operand(&mut self, runtime_id: Option<AstExprId>) -> Option<Operand> {
+        runtime_id.map(|expr_id| {
+            let operand = self.lower_to_operand(expr_id);
+            let ty = self.expr_ty(expr_id);
+            Operand::Copy(Place::Local(self.operand_to_local(operand, ty)))
+        })
     }
 
     fn lower_expr_without_function_coercion(&mut self, expr_id: AstExprId, dest: Place) {
@@ -5589,8 +5531,8 @@ impl LoweringContext<'_> {
             }
 
             AstExpr::Call { callee, args, .. } => {
-                let arg_exprs: Vec<_> = args.iter().map(|arg| arg.expr).collect();
-                self.lower_call(expr_id, callee, &arg_exprs, dest);
+                let (arg_exprs, runtime_id) = Self::split_runtime_id_call_args(&args);
+                self.lower_call(expr_id, callee, &arg_exprs, runtime_id, dest);
             }
 
             AstExpr::Array { elements } => {
@@ -5644,8 +5586,8 @@ impl LoweringContext<'_> {
             }
 
             AstExpr::OptionalCall { callee, args } => {
-                let arg_exprs: Vec<_> = args.iter().map(|arg| arg.expr).collect();
-                self.lower_optional_call(expr_id, callee, &arg_exprs, dest);
+                let (arg_exprs, runtime_id) = Self::split_runtime_id_call_args(&args);
+                self.lower_optional_call(expr_id, callee, &arg_exprs, runtime_id, dest);
             }
 
             AstExpr::Index { base, index } => {
@@ -5702,19 +5644,46 @@ impl LoweringContext<'_> {
             }
 
             AstExpr::Throw { value } => {
-                let val_op = self.lower_to_operand(value);
-                if let Some(catch_ctx) = &self.catch_context {
-                    // Inside a catch block: store the value into the error
-                    // local and jump to the handler instead of unwinding.
-                    let error_local = catch_ctx.error_local;
-                    let unwind_target = catch_ctx.unwind_target;
-                    self.builder
-                        .assign(Place::Local(error_local), Rvalue::Use(val_op));
-                    self.builder.goto(unwind_target);
+                let val_op = self.lower_throw_operand(value);
+                // Route every throw through the exception funnel (like
+                // `AstStmt::Throw`) rather than a static jump to
+                // `catch_context.unwind_target`. The funnel computes the
+                // BEP-042 cause chain (`find_cause_context`) and materializes
+                // the destination handler's `ErrorContext`; a static goto
+                // bypasses both, so a `throw` in expression position inside a
+                // `defer` region (or a `catch` arm/base) would drop its cause
+                // and leave a bound `ctx` unmaterialized (B-611). The exception
+                // table routes the throw to the same innermost handler the
+                // static jump targeted — its region covers this PC — so control
+                // flow is unchanged.
+                if self.operand_is_marked_rethrow(&val_op) {
+                    self.builder.rethrow(val_op);
                 } else {
                     self.builder.throw(val_op);
                 }
                 // Start a dead block for any code after this (unreachable)
+                let dead = self.builder.create_block();
+                self.builder.set_current_block(dead);
+            }
+
+            AstExpr::Return { value } => {
+                // A `return` expression (e.g. a braceless `catch`/`match` arm
+                // value, `_ => return 0`) transfers control to the enclosing
+                // function's exit. Unlike `throw`, it is NOT routed through
+                // `catch_context` — it returns from the function rather than
+                // being handled by the surrounding `catch`. This mirrors
+                // `AstStmt::Return`; `dest` is never written because we diverge.
+                let ret = Local(0); // _0 is always the return place
+                if let Some(e) = value {
+                    self.lower_expr(e, Place::local(ret));
+                }
+                // Run pending defers (LIFO) then unwatch all watched locals in
+                // this function before jumping to the exit (depth=0 covers the
+                // current function; stacks are swapped at lambda boundaries).
+                self.replay_defers_to_depth(0);
+                self.emit_unwatch_to_depth(0);
+                self.builder.goto(self.exit_block);
+                // Subsequent code is unreachable; lower it into a dead block.
                 let dead = self.builder.create_block();
                 self.builder.set_current_block(dead);
             }
@@ -5757,6 +5726,15 @@ impl LoweringContext<'_> {
         }
 
         self.builder.current_source_span = prev_span;
+    }
+
+    fn operand_is_marked_rethrow(&self, operand: &Operand) -> bool {
+        match operand {
+            Operand::Copy(Place::Local(local)) | Operand::Move(Place::Local(local)) => {
+                self.catch_rethrow_locals.contains(local)
+            }
+            Operand::Copy(_) | Operand::Move(_) | Operand::Constant(_) => false,
+        }
     }
 
     /// Lower `spawn name? with? { body }` into:
@@ -5940,9 +5918,8 @@ impl<'db> LoweringContext<'db> {
             // This takes priority over the flat resolutions map since infer_local_rooted_path
             // moves resolutions from the flat map into path_member_resolutions.
             if let Some(member_resolutions) = self
-                .path_member_resolutions
-                .get(&self.expr_metadata_key(expr_id))
-                .cloned()
+                .tir_path_member_resolutions(self.expr_metadata_key(expr_id))
+                .map(<[_]>::to_vec)
             {
                 use baml_compiler2_tir::inference::MemberResolution;
                 // The last resolution corresponds to the final segment of the path.
@@ -6020,8 +5997,7 @@ impl<'db> LoweringContext<'db> {
             // Check flat resolutions (set by infer_multi_segment_path for package-rooted paths
             // like baml.fs.open, baml.env.get, etc.).
             if let Some(resolution) = self
-                .resolutions
-                .get(&self.expr_metadata_key(expr_id))
+                .tir_resolution(self.expr_metadata_key(expr_id))
                 .cloned()
             {
                 use baml_compiler2_tir::inference::MemberResolution;
@@ -6106,8 +6082,7 @@ impl<'db> LoweringContext<'db> {
                     segments.len() - 2
                 };
                 let recv_tir_ty = self
-                    .path_segment_types
-                    .get(&(self.current_metadata_scope, expr_id, recv_seg_idx))
+                    .tir_path_segment_type((self.current_metadata_scope, expr_id, recv_seg_idx))
                     .cloned();
                 if let Some((iface_tn, iface_type_args, iface_assoc)) = recv_tir_ty
                     .as_ref()
@@ -6147,8 +6122,7 @@ impl<'db> LoweringContext<'db> {
             }
             // Check for enum variant (e.g. Status.Active lowered to Path(["Status","Active"]))
             if let Some(Tir2Ty::EnumVariant(qtn, variant, _)) = self
-                .expr_types
-                .get(&self.expr_metadata_key(expr_id))
+                .tir_expr_type(self.expr_metadata_key(expr_id))
                 .cloned()
                 .as_ref()
             {
@@ -6240,8 +6214,8 @@ impl<'db> LoweringContext<'db> {
             }
             ResolvedName::Unknown => {
                 if self
-                    .expr_types
-                    .contains_key(&self.expr_metadata_key(expr_id))
+                    .tir_expr_type(self.expr_metadata_key(expr_id))
+                    .is_some()
                 {
                     // If TIR recorded a type for this expr, it was handled as a
                     // package path intermediate (e.g. `baml` in
@@ -6417,8 +6391,7 @@ impl<'db> LoweringContext<'db> {
             // (`(Dog | Named).name`): dispatch the field read on the runtime
             // class across all members' implementors.
             if let Some(members) = self
-                .path_segment_types
-                .get(&(self.current_metadata_scope, expr_id, seg_idx - 1))
+                .tir_path_segment_type((self.current_metadata_scope, expr_id, seg_idx - 1))
                 .and_then(Self::tir_union_members)
                 && self.lower_union_iface_field_access(base_local, &members, seg, &target_place)
             {
@@ -6506,7 +6479,7 @@ impl<'db> LoweringContext<'db> {
         let mut diags = Vec::new();
         let tir_ty = lower_type_expr_in_ns(
             db,
-            &te.expr,
+            te,
             pkg_items_ref,
             &pkg_ns,
             &class_data.generic_params,
@@ -6523,8 +6496,7 @@ impl<'db> LoweringContext<'db> {
         let item = def_to_item_ref(self.db, def);
         // Check if this expression's type is EnumVariant
         if let Some(Tir2Ty::EnumVariant(_qtn, variant, _)) = self
-            .expr_types
-            .get(&self.expr_metadata_key(expr_id))
+            .tir_expr_type(self.expr_metadata_key(expr_id))
             .cloned()
             .as_ref()
         {
@@ -7062,6 +7034,7 @@ impl LoweringContext<'_> {
         expr_id: AstExprId,
         callee: AstExprId,
         args: &[AstExprId],
+        runtime_id: Option<AstExprId>,
         dest: Place,
     ) {
         let callee_op = self.lower_to_operand(callee);
@@ -7083,7 +7056,7 @@ impl LoweringContext<'_> {
                 .branch(Operand::Copy(Place::Local(test_local)), bb_null, bb_call);
 
             self.builder.set_current_block(bb_call);
-            self.lower_call(expr_id, callee, args, dest);
+            self.lower_call(expr_id, callee, args, runtime_id, dest);
         } else {
             let bb_null = self.builder.create_block();
             let bb_join = self.builder.create_block();
@@ -7092,7 +7065,7 @@ impl LoweringContext<'_> {
                 .branch(Operand::Copy(Place::Local(test_local)), bb_null, bb_call);
 
             self.builder.set_current_block(bb_call);
-            self.lower_call(expr_id, callee, args, dest.clone());
+            self.lower_call(expr_id, callee, args, runtime_id, dest.clone());
             if !self.builder.is_current_terminated() {
                 self.builder.goto(bb_join);
             }
@@ -7135,11 +7108,7 @@ impl LoweringContext<'_> {
 
 impl<'db> LoweringContext<'db> {
     fn lower_call_arg_operands(&mut self, expr_id: AstExprId, args: &[AstExprId]) -> Vec<Operand> {
-        let Some(plan) = self
-            .call_plans
-            .get(&self.expr_metadata_key(expr_id))
-            .cloned()
-        else {
+        let Some(plan) = self.tir_call_plan(self.expr_metadata_key(expr_id)).cloned() else {
             // No call plan: lower each arg in order (the type checker would
             // have already flagged any mismatch).
             return args.iter().map(|&a| self.lower_to_operand(a)).collect();
@@ -7249,8 +7218,7 @@ impl<'db> LoweringContext<'db> {
         // A nullable receiver types the missing member as `Unknown | null`, so test
         // the non-null part (matches the TIR fallback gate).
         let callee_untyped = self
-            .expr_types
-            .get(&self.expr_metadata_key(callee))
+            .tir_expr_type(self.expr_metadata_key(callee))
             .is_none_or(|t| {
                 matches!(
                     baml_compiler2_tir::narrowing::remove_null(t),
@@ -7263,10 +7231,7 @@ impl<'db> LoweringContext<'db> {
         let (recv_op, recv_tir_ty): (Operand, Option<Tir2Ty>) = match &callee_expr {
             AstExpr::MemberAccess { base, .. } => {
                 let base_id = *base;
-                let ty = self
-                    .expr_types
-                    .get(&self.expr_metadata_key(base_id))
-                    .cloned();
+                let ty = self.tir_expr_type(self.expr_metadata_key(base_id)).cloned();
                 (self.lower_to_operand(base_id), ty)
             }
             AstExpr::Path(segments) => {
@@ -7288,8 +7253,7 @@ impl<'db> LoweringContext<'db> {
                     }
                 } else {
                     let recv_ty = self
-                        .path_segment_types
-                        .get(&(
+                        .tir_path_segment_type((
                             self.current_metadata_scope,
                             callee,
                             receiver_segments.len() - 1,
@@ -7309,8 +7273,7 @@ impl<'db> LoweringContext<'db> {
                 };
                 let prefix_idx = segments.len() - 2;
                 let ty = self
-                    .path_segment_types
-                    .get(&(self.current_metadata_scope, callee, prefix_idx))
+                    .tir_path_segment_type((self.current_metadata_scope, callee, prefix_idx))
                     .cloned();
                 (recv_op, ty)
             }
@@ -7402,8 +7365,7 @@ impl<'db> LoweringContext<'db> {
         }
         // Fires only when TIR left the callee untyped (no real `to_json` method).
         let callee_untyped = self
-            .expr_types
-            .get(&self.expr_metadata_key(callee))
+            .tir_expr_type(self.expr_metadata_key(callee))
             .is_none_or(|t| {
                 matches!(
                     baml_compiler2_tir::narrowing::remove_null(t),
@@ -7416,10 +7378,7 @@ impl<'db> LoweringContext<'db> {
         let (recv_op, recv_tir_ty): (Operand, Option<Tir2Ty>) = match &callee_expr {
             AstExpr::MemberAccess { base, .. } => {
                 let base_id = *base;
-                let ty = self
-                    .expr_types
-                    .get(&self.expr_metadata_key(base_id))
-                    .cloned();
+                let ty = self.tir_expr_type(self.expr_metadata_key(base_id)).cloned();
                 (self.lower_to_operand(base_id), ty)
             }
             AstExpr::Path(segments) => {
@@ -7436,8 +7395,7 @@ impl<'db> LoweringContext<'db> {
                     }
                 } else {
                     let recv_ty = self
-                        .path_segment_types
-                        .get(&(
+                        .tir_path_segment_type((
                             self.current_metadata_scope,
                             callee,
                             receiver_segments.len() - 1,
@@ -7457,8 +7415,7 @@ impl<'db> LoweringContext<'db> {
                 };
                 let prefix_idx = segments.len() - 2;
                 let ty = self
-                    .path_segment_types
-                    .get(&(self.current_metadata_scope, callee, prefix_idx))
+                    .tir_path_segment_type((self.current_metadata_scope, callee, prefix_idx))
                     .cloned();
                 (recv_op, ty)
             }
@@ -7560,8 +7517,7 @@ impl<'db> LoweringContext<'db> {
             return false;
         }
         let callee_untyped = self
-            .expr_types
-            .get(&self.expr_metadata_key(callee))
+            .tir_expr_type(self.expr_metadata_key(callee))
             .is_none_or(|t| {
                 matches!(
                     baml_compiler2_tir::narrowing::remove_null(t),
@@ -7576,10 +7532,8 @@ impl<'db> LoweringContext<'db> {
         // type arg so `baml.json.to<T>` binds `T` under monomorphization; an
         // out-of-scope typevar / unknown safely drops to ntypeargs=0 (the shim
         // resolves on the runtime value when no static type is supplied).
-        let recv_tir_ty: Option<Tir2Ty> = self
-            .expr_types
-            .get(&self.expr_metadata_key(expr_id))
-            .cloned();
+        let recv_tir_ty: Option<Tir2Ty> =
+            self.tir_expr_type(self.expr_metadata_key(expr_id)).cloned();
         let caller_generic_params = self.enclosing_generic_params();
         let type_arg_ops: Vec<Operand> = match &recv_tir_ty {
             Some(t)
@@ -7637,6 +7591,7 @@ impl<'db> LoweringContext<'db> {
         expr_id: AstExprId,
         callee: AstExprId,
         args: &[AstExprId],
+        runtime_id: Option<AstExprId>,
         dest: Place,
     ) {
         // Check if callee is a member access (potential watch method call)
@@ -7652,18 +7607,39 @@ impl<'db> LoweringContext<'db> {
             // BEP-044: interface-typed receiver — dispatch by type tag over
             // the registered implementor set. Each arm emits a static call
             // to that implementor's method.
-            if self.try_lower_interface_dispatch(expr_id, base_id, &member_name, args, &dest) {
+            if self.try_lower_interface_dispatch(
+                expr_id,
+                base_id,
+                &member_name,
+                args,
+                runtime_id,
+                &dest,
+            ) {
                 return;
             }
             // Receiver may be a union of concrete classes sharing the method
             // (e.g. `(if c { Dog {} } else { Cat {} }).speak()`).
-            if self.try_lower_union_dispatch(expr_id, base_id, &member_name, args, &dest) {
+            if self.try_lower_union_dispatch(
+                expr_id,
+                base_id,
+                &member_name,
+                args,
+                runtime_id,
+                &dest,
+            ) {
                 return;
             }
             // Receiver may be a union containing an interface member
             // (e.g. `Animal | Vehicle`), where every member declares the
             // method — dispatch on the runtime class across all implementors.
-            if self.try_lower_union_iface_dispatch(expr_id, base_id, &member_name, args, &dest) {
+            if self.try_lower_union_iface_dispatch(
+                expr_id,
+                base_id,
+                &member_name,
+                args,
+                runtime_id,
+                &dest,
+            ) {
                 return;
             }
         }
@@ -7675,14 +7651,14 @@ impl<'db> LoweringContext<'db> {
             && segments.len() == 2
             && self.is_default_receiver_root(segments)
             && let Some(target_te) = self.implements_block_iface_target()
-            && let baml_compiler2_ast::TypeExpr::Path { .. } = &target_te.expr
+            && let baml_compiler2_ast::TypeExprKind::Path { .. } = &target_te.kind
         {
             let current_pkg = baml_compiler2_hir::file_package::file_package(self.db, self.file);
             let pkg_id = PackageId::new(self.db, current_pkg.package.clone());
             let pkg_items = package_items(self.db, pkg_id);
             if let Some(iface_loc) = baml_compiler2_tir::interfaces::resolve_path_to_interface(
                 self.db,
-                &target_te.expr,
+                &target_te,
                 pkg_items,
                 &current_pkg.namespace_path,
             ) {
@@ -7710,38 +7686,45 @@ impl<'db> LoweringContext<'db> {
                 // `enclosing_generic_params`), so without this an explicit
                 // `default.<method>()` that reads `T` would resolve it to
                 // `unknown` at runtime. Mirrors the interface-dispatch switch.
-                let iface_type_arg_tys: Vec<Tir2Ty> = if let baml_compiler2_ast::TypeExpr::Path {
-                    generic_args,
-                    ..
-                } = &target_te.expr
-                {
-                    let generic_params = self.enclosing_generic_params();
-                    let mut diags = Vec::new();
-                    generic_args
-                        .iter()
-                        .map(|arg| {
-                            baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
-                                self.db,
-                                arg,
-                                pkg_items,
-                                &current_pkg.namespace_path,
-                                &generic_params,
-                                &mut diags,
-                            )
-                        })
-                        .collect()
-                } else {
-                    vec![]
-                };
+                let iface_type_arg_tys: Vec<Tir2Ty> =
+                    if let baml_compiler2_ast::TypeExprKind::Path { generic_args, .. } =
+                        &target_te.kind
+                    {
+                        let generic_params = self.enclosing_generic_params();
+                        let mut diags = Vec::new();
+                        generic_args
+                            .iter()
+                            .map(|arg| {
+                                baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
+                                    self.db,
+                                    arg,
+                                    pkg_items,
+                                    &current_pkg.namespace_path,
+                                    &generic_params,
+                                    &mut diags,
+                                )
+                            })
+                            .collect()
+                    } else {
+                        vec![]
+                    };
                 let frame_type_arg_ops = self.emit_frame_type_arg_ops(&iface_type_arg_tys);
                 let ntypeargs = frame_type_arg_ops.len();
                 let mut all_args = frame_type_arg_ops;
                 all_args.push(Operand::Copy(Place::Local(self_local)));
                 all_args.extend(self.lower_call_arg_operands(expr_id, args));
+                let runtime_id_operand = self.lower_runtime_id_operand(runtime_id);
                 let target = self.builder.create_block();
                 let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
-                self.builder
-                    .call_with_type_args(callee_op, all_args, ntypeargs, dest, target, unwind);
+                self.builder.call_with_type_args_and_runtime_id(
+                    callee_op,
+                    all_args,
+                    ntypeargs,
+                    runtime_id_operand,
+                    dest,
+                    target,
+                    unwind,
+                );
                 self.builder.set_current_block(target);
                 return;
             }
@@ -7767,8 +7750,7 @@ impl<'db> LoweringContext<'db> {
                 let prefix_idx = segments.len() - 2;
                 let recv_seg_idx = if segments.len() == 2 { 0 } else { prefix_idx };
                 let recv_tir_ty = self
-                    .path_segment_types
-                    .get(&(self.current_metadata_scope, callee, recv_seg_idx))
+                    .tir_path_segment_type((self.current_metadata_scope, callee, recv_seg_idx))
                     .cloned()
                     .or_else(|| {
                         if segments.len() == 2
@@ -7893,6 +7875,7 @@ impl<'db> LoweringContext<'db> {
                             &method_name,
                             expr_id,
                             args,
+                            runtime_id,
                             &dest,
                         ) {
                             return;
@@ -7907,6 +7890,7 @@ impl<'db> LoweringContext<'db> {
                             iface_assoc: &iface_assoc,
                             method: &method_name,
                             args,
+                            runtime_id,
                         },
                         &dest,
                     ) {
@@ -7918,8 +7902,7 @@ impl<'db> LoweringContext<'db> {
                 // `match`/`if` whose arms are different classes). Same receiver
                 // type slot, same field-chain lowering.
                 else if let Some(members) = self
-                    .path_segment_types
-                    .get(&(self.current_metadata_scope, callee, prefix_idx))
+                    .tir_path_segment_type((self.current_metadata_scope, callee, prefix_idx))
                     .and_then(Self::tir_union_members)
                 {
                     let receiver_segments = &segments[..segments.len() - 1];
@@ -7932,9 +7915,12 @@ impl<'db> LoweringContext<'db> {
                         recv_local,
                         &members,
                         &method_name,
-                        expr_id,
-                        args,
-                        &dest,
+                        DispatchCallLowering {
+                            expr_id,
+                            args,
+                            runtime_id,
+                            dest: &dest,
+                        },
                     ) {
                         return;
                     }
@@ -7946,9 +7932,12 @@ impl<'db> LoweringContext<'db> {
                         && self.emit_method_candidate_switch(
                             recv_local,
                             &candidates,
-                            expr_id,
-                            args,
-                            &dest,
+                            DispatchCallLowering {
+                                expr_id,
+                                args,
+                                runtime_id,
+                                dest: &dest,
+                            },
                             None,
                         )
                     {
@@ -7983,8 +7972,7 @@ impl<'db> LoweringContext<'db> {
             &callee_expr
         {
             if self
-                .resolutions
-                .get(&self.expr_metadata_key(callee))
+                .tir_resolution(self.expr_metadata_key(callee))
                 .is_some_and(|r| {
                     use baml_compiler2_tir::inference::MemberResolution;
                     matches!(
@@ -8007,8 +7995,7 @@ impl<'db> LoweringContext<'db> {
                                 .is_some()
                     }
                     _ => self
-                        .expr_types
-                        .get(&self.expr_metadata_key(*base))
+                        .tir_expr_type(self.expr_metadata_key(*base))
                         .map(|ty| !matches!(ty, Tir2Ty::Unknown { .. }))
                         .unwrap_or(false),
                 };
@@ -8017,8 +8004,7 @@ impl<'db> LoweringContext<'db> {
                 // and must not get the class reference prepended as an argument.
                 let method_takes_self = {
                     use baml_compiler2_tir::inference::MemberResolution;
-                    self.resolutions
-                        .get(&self.expr_metadata_key(callee))
+                    self.tir_resolution(self.expr_metadata_key(callee))
                         .is_some_and(|r| match r {
                             MemberResolution::BoundMethod { func_loc, .. }
                             | MemberResolution::UnboundMethod { func_loc, .. }
@@ -8040,10 +8026,8 @@ impl<'db> LoweringContext<'db> {
                     let receiver_op = self.lower_to_operand(*base);
                     receiver_base_for_class_type_args = Some(*base);
                     let callee_op = {
-                        let resolution = self
-                            .resolutions
-                            .get(&self.expr_metadata_key(callee))
-                            .cloned();
+                        let resolution =
+                            self.tir_resolution(self.expr_metadata_key(callee)).cloned();
                         match resolution
                             .as_ref()
                             .and_then(|r| resolution_to_item_ref(self.db, r))
@@ -8063,10 +8047,8 @@ impl<'db> LoweringContext<'db> {
                     // MakeBoundMethod (which would try to load the base type as a
                     // runtime value).
                     let callee_op = {
-                        let resolution = self
-                            .resolutions
-                            .get(&self.expr_metadata_key(callee))
-                            .cloned();
+                        let resolution =
+                            self.tir_resolution(self.expr_metadata_key(callee)).cloned();
                         match resolution
                             .as_ref()
                             .and_then(|r| resolution_to_item_ref(self.db, r))
@@ -8088,8 +8070,7 @@ impl<'db> LoweringContext<'db> {
             // [Field{profile}, Field{items}, Method{slice}] — last() is Method).
             let is_local_method = segments.len() >= 2
                 && self
-                    .path_member_resolutions
-                    .get(&self.expr_metadata_key(callee))
+                    .tir_path_member_resolutions(self.expr_metadata_key(callee))
                     .and_then(|resolutions| resolutions.last())
                     .is_some_and(|r| {
                         use baml_compiler2_tir::inference::MemberResolution;
@@ -8104,8 +8085,7 @@ impl<'db> LoweringContext<'db> {
             let is_pkg_method = !is_local_method
                 && segments.len() >= 2
                 && self
-                    .resolutions
-                    .get(&self.expr_metadata_key(callee))
+                    .tir_resolution(self.expr_metadata_key(callee))
                     .is_some_and(|r| {
                         use baml_compiler2_tir::inference::MemberResolution;
                         matches!(
@@ -8125,8 +8105,7 @@ impl<'db> LoweringContext<'db> {
                 // (not MakeBoundMethod) since the receiver is passed explicitly as self.
                 let receiver_segments = &segments[..segments.len() - 1];
                 let method_resolution = self
-                    .path_member_resolutions
-                    .get(&self.expr_metadata_key(callee))
+                    .tir_path_member_resolutions(self.expr_metadata_key(callee))
                     .and_then(|resolutions| resolutions.last())
                     .cloned();
                 let callee_op = match method_resolution
@@ -8177,8 +8156,7 @@ impl<'db> LoweringContext<'db> {
                     };
                     let prefix_idx = segments.len() - 2;
                     receiver_path_tir_ty = self
-                        .path_segment_types
-                        .get(&(self.current_metadata_scope, callee, prefix_idx))
+                        .tir_path_segment_type((self.current_metadata_scope, callee, prefix_idx))
                         .cloned();
                     let mut all_args = vec![receiver_op];
                     all_args.extend(self.lower_call_arg_operands(expr_id, args));
@@ -8188,10 +8166,7 @@ impl<'db> LoweringContext<'db> {
                 // Package-path method call (via flat resolutions): same treatment.
                 // For immediate calls, emit the callee as a plain function constant
                 // (not MakeBoundMethod) since the receiver is passed explicitly as self.
-                let flat_resolution = self
-                    .resolutions
-                    .get(&self.expr_metadata_key(callee))
-                    .cloned();
+                let flat_resolution = self.tir_resolution(self.expr_metadata_key(callee)).cloned();
                 let callee_op = match flat_resolution
                     .as_ref()
                     .and_then(|r| resolution_to_item_ref(self.db, r))
@@ -8209,8 +8184,7 @@ impl<'db> LoweringContext<'db> {
                 if let Some(receiver_op) = receiver_op {
                     let prefix_idx = segments.len() - 2;
                     receiver_path_tir_ty = self
-                        .path_segment_types
-                        .get(&(self.current_metadata_scope, callee, prefix_idx))
+                        .tir_path_segment_type((self.current_metadata_scope, callee, prefix_idx))
                         .cloned();
                     let mut all_args = vec![receiver_op];
                     all_args.extend(self.lower_call_arg_operands(expr_id, args));
@@ -8231,7 +8205,7 @@ impl<'db> LoweringContext<'db> {
         let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
 
         // Check if callee is `reflect.type_of<T>()` — a value-producing intrinsic.
-        // Unlike void intrinsics (log.*, baml.events.send), this emits an assignment
+        // Unlike void intrinsics (log.*), this emits an assignment
         // of `Rvalue::LoadType(template)` to `dest` rather than a StatementKind::Intrinsic.
         if let Some(template) = self.check_type_of_intrinsic(callee, expr_id) {
             self.builder.assign(dest, Rvalue::LoadType(template));
@@ -8266,7 +8240,7 @@ impl<'db> LoweringContext<'db> {
             }
         }
 
-        // Check if callee is a compiler intrinsic (log.*, baml.events.send).
+        // Check if callee is a compiler intrinsic (log.*).
         // Intrinsics are void side effects — emit as a statement, not a call.
         if let Some(op) = self.check_intrinsic(callee) {
             self.builder.push_statement(
@@ -8312,8 +8286,7 @@ impl<'db> LoweringContext<'db> {
         //      from `path_root_types[callee_expr_id]` (TIR records root segment type there).
         let receiver_tir_ty: Option<Tir2Ty> =
             if let Some(recv_base_id) = receiver_base_for_class_type_args {
-                self.expr_types
-                    .get(&self.expr_metadata_key(recv_base_id))
+                self.tir_expr_type(self.expr_metadata_key(recv_base_id))
                     .cloned()
             } else {
                 receiver_path_tir_ty
@@ -8452,9 +8425,11 @@ impl<'db> LoweringContext<'db> {
             } else {
                 arg_operands
             };
-            self.builder.sys_op(
+            let runtime_id_operand = self.lower_runtime_id_operand(runtime_id);
+            self.builder.sys_op_with_runtime_id(
                 callee_operand,
                 sys_op_arg_operands,
+                runtime_id_operand,
                 Place::Local(dest_local),
                 target,
                 unwind,
@@ -8465,10 +8440,12 @@ impl<'db> LoweringContext<'db> {
             // first, then assign from the temp to the real destination.
             match &dest {
                 Place::Local(_) => {
-                    self.builder.call_with_type_args(
+                    let runtime_id_operand = self.lower_runtime_id_operand(runtime_id);
+                    self.builder.call_with_type_args_and_runtime_id(
                         callee_operand,
                         all_arg_operands_for_call,
                         ntypeargs,
+                        runtime_id_operand,
                         dest,
                         target,
                         unwind,
@@ -8477,10 +8454,12 @@ impl<'db> LoweringContext<'db> {
                 _ => {
                     let call_ty = self.expr_ty(expr_id);
                     let tmp = self.builder.temp(call_ty);
-                    self.builder.call_with_type_args(
+                    let runtime_id_operand = self.lower_runtime_id_operand(runtime_id);
+                    self.builder.call_with_type_args_and_runtime_id(
                         callee_operand,
                         all_arg_operands_for_call,
                         ntypeargs,
+                        runtime_id_operand,
                         Place::local(tmp),
                         target,
                         unwind,
@@ -8507,11 +8486,10 @@ impl<'db> LoweringContext<'db> {
         use baml_compiler2_tir::inference::MemberResolution;
         let key = self.expr_metadata_key(callee);
         matches!(
-            self.resolutions.get(&key),
+            self.tir_resolution(key),
             Some(MemberResolution::BoundMethod { .. })
         ) || matches!(
-            self.path_member_resolutions
-                .get(&key)
+            self.tir_path_member_resolutions(key)
                 .and_then(|resolutions| resolutions.last()),
             Some(MemberResolution::BoundMethod { .. })
         )
@@ -8546,8 +8524,7 @@ impl<'db> LoweringContext<'db> {
                 // The last resolution in path_member_resolutions is the final-segment resolution.
                 use baml_compiler2_tir::inference::MemberResolution;
                 let from_pmr = self
-                    .path_member_resolutions
-                    .get(&self.expr_metadata_key(callee))
+                    .tir_path_member_resolutions(self.expr_metadata_key(callee))
                     .and_then(|resolutions| resolutions.last())
                     .and_then(|res| match res {
                         MemberResolution::Free { func_loc } => Some(*func_loc),
@@ -8561,8 +8538,7 @@ impl<'db> LoweringContext<'db> {
                 if from_pmr.is_some() {
                     from_pmr
                 } else {
-                    self.resolutions
-                        .get(&self.expr_metadata_key(callee))
+                    self.tir_resolution(self.expr_metadata_key(callee))
                         .and_then(|res| match res {
                             MemberResolution::Free { func_loc } => Some(*func_loc),
                             MemberResolution::BoundMethod { func_loc, .. }
@@ -8587,7 +8563,7 @@ impl<'db> LoweringContext<'db> {
         // ── NEW: MemberAccess callee (e.g. f.read, sock.recv) ──────────────────
         if let AstExpr::MemberAccess { .. } = &self.body.exprs[callee] {
             use baml_compiler2_tir::inference::MemberResolution;
-            if let Some(resolution) = self.resolutions.get(&self.expr_metadata_key(callee)) {
+            if let Some(resolution) = self.tir_resolution(self.expr_metadata_key(callee)) {
                 let func_loc = match resolution {
                     MemberResolution::BoundMethod { func_loc, .. }
                     | MemberResolution::UnboundMethod { func_loc, .. }
@@ -8641,8 +8617,7 @@ impl<'db> LoweringContext<'db> {
                 // The last resolution in path_member_resolutions is the final-segment resolution.
                 use baml_compiler2_tir::inference::MemberResolution;
                 let from_pmr = self
-                    .path_member_resolutions
-                    .get(&self.expr_metadata_key(callee))
+                    .tir_path_member_resolutions(self.expr_metadata_key(callee))
                     .and_then(|resolutions| resolutions.last())
                     .and_then(|res| match res {
                         MemberResolution::Free { func_loc } => Some(*func_loc),
@@ -8656,8 +8631,7 @@ impl<'db> LoweringContext<'db> {
                 if from_pmr.is_some() {
                     from_pmr
                 } else {
-                    self.resolutions
-                        .get(&self.expr_metadata_key(callee))
+                    self.tir_resolution(self.expr_metadata_key(callee))
                         .and_then(|res| match res {
                             MemberResolution::Free { func_loc } => Some(*func_loc),
                             MemberResolution::BoundMethod { func_loc, .. }
@@ -8682,7 +8656,7 @@ impl<'db> LoweringContext<'db> {
         // ── NEW: MemberAccess callee (e.g. f.read, sock.recv) ──────────────────
         if let AstExpr::MemberAccess { .. } = &self.body.exprs[callee] {
             use baml_compiler2_tir::inference::MemberResolution;
-            if let Some(resolution) = self.resolutions.get(&self.expr_metadata_key(callee)) {
+            if let Some(resolution) = self.tir_resolution(self.expr_metadata_key(callee)) {
                 let func_loc = match resolution {
                     MemberResolution::BoundMethod { func_loc, .. }
                     | MemberResolution::UnboundMethod { func_loc, .. }
@@ -8731,8 +8705,7 @@ impl<'db> LoweringContext<'db> {
                 // The last resolution in path_member_resolutions is the final-segment resolution.
                 use baml_compiler2_tir::inference::MemberResolution;
                 let from_pmr = self
-                    .path_member_resolutions
-                    .get(&self.expr_metadata_key(callee))
+                    .tir_path_member_resolutions(self.expr_metadata_key(callee))
                     .and_then(|resolutions| resolutions.last())
                     .and_then(|res| match res {
                         MemberResolution::Free { func_loc } => Some(*func_loc),
@@ -8746,8 +8719,7 @@ impl<'db> LoweringContext<'db> {
                 if from_pmr.is_some() {
                     from_pmr
                 } else {
-                    self.resolutions
-                        .get(&self.expr_metadata_key(callee))
+                    self.tir_resolution(self.expr_metadata_key(callee))
                         .and_then(|res| match res {
                             MemberResolution::Free { func_loc } => Some(*func_loc),
                             MemberResolution::BoundMethod { func_loc, .. }
@@ -8772,7 +8744,7 @@ impl<'db> LoweringContext<'db> {
         // ── NEW: MemberAccess callee (e.g. f.read, sock.recv) ──────────────────
         if let AstExpr::MemberAccess { .. } = &self.body.exprs[callee] {
             use baml_compiler2_tir::inference::MemberResolution;
-            if let Some(resolution) = self.resolutions.get(&self.expr_metadata_key(callee)) {
+            if let Some(resolution) = self.tir_resolution(self.expr_metadata_key(callee)) {
                 let func_loc = match resolution {
                     MemberResolution::BoundMethod { func_loc, .. }
                     | MemberResolution::UnboundMethod { func_loc, .. }
@@ -8803,8 +8775,8 @@ impl<'db> LoweringContext<'db> {
             .iter()
             .filter(|param| {
                 matches!(
-                    param.type_expr.as_ref().map(|ty| &ty.expr),
-                    Some(baml_compiler2_ast::TypeExpr::Type { .. })
+                    param.type_expr.as_ref().map(|ty| &ty.kind),
+                    Some(baml_compiler2_ast::TypeExprKind::Type { .. })
                 )
             })
             .count();
@@ -8842,8 +8814,7 @@ impl<'db> LoweringContext<'db> {
             } else {
                 use baml_compiler2_tir::inference::MemberResolution;
                 let from_pmr = self
-                    .path_member_resolutions
-                    .get(&self.expr_metadata_key(callee))
+                    .tir_path_member_resolutions(self.expr_metadata_key(callee))
                     .and_then(|resolutions| resolutions.last())
                     .and_then(|res| match res {
                         MemberResolution::Free { func_loc } => Some(*func_loc),
@@ -8857,8 +8828,7 @@ impl<'db> LoweringContext<'db> {
                 if from_pmr.is_some() {
                     from_pmr
                 } else {
-                    self.resolutions
-                        .get(&self.expr_metadata_key(callee))
+                    self.tir_resolution(self.expr_metadata_key(callee))
                         .and_then(|res| match res {
                             MemberResolution::Free { func_loc } => Some(*func_loc),
                             MemberResolution::BoundMethod { func_loc, .. }
@@ -8941,8 +8911,7 @@ impl LoweringContext<'_> {
             } else {
                 use baml_compiler2_tir::inference::MemberResolution;
                 let from_pmr = self
-                    .path_member_resolutions
-                    .get(&self.expr_metadata_key(callee))
+                    .tir_path_member_resolutions(self.expr_metadata_key(callee))
                     .and_then(|resolutions| resolutions.last())
                     .and_then(|res| match res {
                         MemberResolution::Free { func_loc } => Some(*func_loc),
@@ -8956,8 +8925,7 @@ impl LoweringContext<'_> {
                 if from_pmr.is_some() {
                     from_pmr
                 } else {
-                    self.resolutions
-                        .get(&self.expr_metadata_key(callee))
+                    self.tir_resolution(self.expr_metadata_key(callee))
                         .and_then(|res| match res {
                             MemberResolution::Free { func_loc } => Some(*func_loc),
                             MemberResolution::BoundMethod { func_loc, .. }
@@ -9045,12 +9013,12 @@ impl LoweringContext<'_> {
         type_arg: &AstTypeExpr,
         generic_params: &[baml_base::Name],
     ) -> Option<TyTemplate> {
-        let AstTypeExpr::Path {
+        let AstTypeExprKind::Path {
             segments,
             generic_args,
             associated_type_bindings,
             ..
-        } = type_arg
+        } = &type_arg.kind
         else {
             return None;
         };
@@ -9188,8 +9156,7 @@ impl LoweringContext<'_> {
         }
 
         let mut inferred_type_args = self
-            .call_plans
-            .get(&self.expr_metadata_key(call_expr_id))
+            .tir_call_plan(self.expr_metadata_key(call_expr_id))
             .map(|plan| plan.type_args.clone())
             .unwrap_or_default();
         let caller_generic_params = self.enclosing_generic_params();
@@ -9317,8 +9284,7 @@ impl LoweringContext<'_> {
         let key = self.expr_metadata_key(base);
         // Multi-segment paths: static methods, qualified free fns (e.g. baml.json.from_string).
         if let Some(item) = self
-            .path_member_resolutions
-            .get(&key)
+            .tir_path_member_resolutions(key)
             .and_then(|rs| rs.last())
             .filter(|r| is_fn(r))
             .and_then(|r| resolution_to_item_ref(self.db, r))
@@ -9327,8 +9293,7 @@ impl LoweringContext<'_> {
         }
         // Flat / package resolutions.
         if let Some(item) = self
-            .resolutions
-            .get(&key)
+            .tir_resolution(key)
             .filter(|r| is_fn(r))
             .and_then(|r| resolution_to_item_ref(self.db, r))
         {
@@ -9380,6 +9345,11 @@ impl<'db> LoweringContext<'db> {
         let temp = self.builder.temp(ty);
         self.lower_expr(expr_id, Place::local(temp));
         Operand::Copy(Place::Local(temp))
+    }
+
+    fn lower_throw_operand(&mut self, expr_id: AstExprId) -> Operand {
+        self.try_resolve_to_local(expr_id)
+            .map_or_else(|| self.lower_to_operand(expr_id), Operand::copy_local)
     }
 
     fn emit_panic_call(&mut self, message: &str, _expr_id: AstExprId) {
@@ -9756,8 +9726,7 @@ impl<'db> LoweringContext<'db> {
         // (unbound) or MakeBoundMethod (bound). Field and Variant resolutions fall through to the
         // existing lowering paths below.
         if let Some(resolution) = self
-            .resolutions
-            .get(&self.expr_metadata_key(expr_id))
+            .tir_resolution(self.expr_metadata_key(expr_id))
             .cloned()
         {
             use baml_compiler2_tir::inference::MemberResolution;
@@ -9805,8 +9774,7 @@ impl<'db> LoweringContext<'db> {
         // without evaluating the receiver expression twice.
         if let Some((iface_tn, iface_type_args, iface_assoc)) =
             self.interface_dispatch_target_for_expr(base).or_else(|| {
-                self.expr_types
-                    .get(&self.expr_metadata_key(base))
+                self.tir_expr_type(self.expr_metadata_key(base))
                     .and_then(|ty| self.registry_dispatch_target_for_concrete(ty, field))
             })
         {
@@ -9830,8 +9798,7 @@ impl<'db> LoweringContext<'db> {
 
         // Check if TIR resolved this to an enum variant (e.g. baml.HttpMethod.Get via package path)
         if let Some(Tir2Ty::EnumVariant(qtn, variant, _)) = self
-            .expr_types
-            .get(&self.expr_metadata_key(expr_id))
+            .tir_expr_type(self.expr_metadata_key(expr_id))
             .cloned()
             .as_ref()
         {
@@ -9857,11 +9824,9 @@ impl<'db> LoweringContext<'db> {
         // concrete type, this is a real field access whose field type happens to be
         // Unknown (unresolved type annotation). In that case, fall through to emit
         // the field projection.
-        if let Some(Tir2Ty::Unknown { .. }) = self.expr_types.get(&self.expr_metadata_key(expr_id))
-        {
+        if let Some(Tir2Ty::Unknown { .. }) = self.tir_expr_type(self.expr_metadata_key(expr_id)) {
             let base_is_also_unknown = self
-                .expr_types
-                .get(&self.expr_metadata_key(base))
+                .tir_expr_type(self.expr_metadata_key(base))
                 .map(|ty| matches!(ty, Tir2Ty::Unknown { .. }))
                 .unwrap_or(true);
             if base_is_also_unknown {
@@ -9923,8 +9888,7 @@ impl<'db> LoweringContext<'db> {
                     &dest,
                 )
                 || self
-                    .expr_types
-                    .get(&self.expr_metadata_key(base))
+                    .tir_expr_type(self.expr_metadata_key(base))
                     .and_then(Self::tir_union_members)
                     .is_some_and(|members| {
                         self.lower_union_iface_field_access(base_local, &members, field, &dest)
@@ -9992,16 +9956,14 @@ impl<'db> LoweringContext<'db> {
         current_ty: &RuntimeTy,
     ) -> Option<InterfaceTypeView> {
         if let Some(target) = self
-            .path_segment_types
-            .get(&(self.current_metadata_scope, expr_id, prefix_idx))
+            .tir_path_segment_type((self.current_metadata_scope, expr_id, prefix_idx))
             .and_then(|ty| self.interface_dispatch_target_for_tir_ty(ty))
         {
             return Some(target);
         }
         if prefix_idx == 0
             && let Some(target) = self
-                .path_root_types
-                .get(&self.expr_metadata_key(expr_id))
+                .tir_path_root_type(self.expr_metadata_key(expr_id))
                 .and_then(|ty| self.interface_dispatch_target_for_tir_ty(ty))
         {
             return Some(target);
@@ -10025,10 +9987,9 @@ impl<'db> LoweringContext<'db> {
         current_ty: &RuntimeTy,
     ) -> Option<(TypeName, Vec<RuntimeTy>)> {
         let tir_prefix_ty = if prefix_idx == 0 {
-            self.path_root_types.get(&self.expr_metadata_key(expr_id))
+            self.tir_path_root_type(self.expr_metadata_key(expr_id))
         } else {
-            self.path_segment_types
-                .get(&(self.current_metadata_scope, expr_id, prefix_idx))
+            self.tir_path_segment_type((self.current_metadata_scope, expr_id, prefix_idx))
         };
         if let Some(target) = tir_prefix_ty.and_then(|ty| self.class_dispatch_target_for_tir_ty(ty))
         {
@@ -10228,11 +10189,11 @@ impl<'db> LoweringContext<'db> {
         base: AstExprId,
         method: &Name,
         args: &[AstExprId],
+        runtime_id: Option<AstExprId>,
         dest: &Place,
     ) -> bool {
         let dispatch_target = self.interface_dispatch_target_for_expr(base).or_else(|| {
-            self.expr_types
-                .get(&self.expr_metadata_key(base))
+            self.tir_expr_type(self.expr_metadata_key(base))
                 .and_then(|ty| self.registry_dispatch_target_for_concrete(ty, method))
         });
         let Some((iface_tn, iface_type_args, iface_assoc)) = dispatch_target else {
@@ -10274,6 +10235,7 @@ impl<'db> LoweringContext<'db> {
                 method,
                 expr_id,
                 args,
+                runtime_id,
                 dest,
             );
         }
@@ -10288,6 +10250,7 @@ impl<'db> LoweringContext<'db> {
                 iface_assoc: &iface_assoc,
                 method,
                 args,
+                runtime_id,
             },
             dest,
         )
@@ -10337,6 +10300,7 @@ impl<'db> LoweringContext<'db> {
         method: &Name,
         expr_id: AstExprId,
         args: &[AstExprId],
+        runtime_id: Option<AstExprId>,
         dest: &Place,
     ) -> bool {
         // `args = [method_type_args… ++ receiver ++ value_args…]` (type args lead,
@@ -10379,6 +10343,7 @@ impl<'db> LoweringContext<'db> {
             TyAttr::default(),
         ));
         let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
+        let runtime_id_operand = self.lower_runtime_id_operand(runtime_id);
         let resume = self.builder.create_block();
         // `VirtualCall`'s destination must be a `Place::Local`. If the caller
         // handed us a projection (field/index) or capture, dispatch into a temp
@@ -10392,11 +10357,12 @@ impl<'db> LoweringContext<'db> {
                 (Place::local(tmp), Some(projection.clone()))
             }
         };
-        self.builder.virtual_call(
+        self.builder.virtual_call_with_runtime_id(
             iface_template,
             method.to_string(),
             all_args,
             ntypeargs,
+            runtime_id_operand,
             call_dest.clone(),
             resume,
             unwind,
@@ -10424,8 +10390,7 @@ impl<'db> LoweringContext<'db> {
         }
         let recv_ty_idx = receiver_segments.len() - 1;
         let recv_ty = self
-            .path_segment_types
-            .get(&(self.current_metadata_scope, callee, recv_ty_idx))
+            .tir_path_segment_type((self.current_metadata_scope, callee, recv_ty_idx))
             .cloned()
             .map(|t| self.convert_tir_ty_for_runtime(&t))
             .unwrap_or_else(|| RuntimeTy::BuiltinUnknown {
@@ -10465,11 +10430,11 @@ impl<'db> LoweringContext<'db> {
         base: AstExprId,
         method: &Name,
         args: &[AstExprId],
+        runtime_id: Option<AstExprId>,
         dest: &Place,
     ) -> bool {
         let Some(members) = self
-            .expr_types
-            .get(&self.expr_metadata_key(base))
+            .tir_expr_type(self.expr_metadata_key(base))
             .and_then(Self::tir_union_members)
         else {
             return false;
@@ -10478,7 +10443,17 @@ impl<'db> LoweringContext<'db> {
         let receiver_op = self.lower_to_operand(base);
         let receiver_ty = self.expr_ty(base);
         let recv_local = self.operand_to_local(receiver_op, receiver_ty);
-        self.emit_union_class_dispatch(recv_local, &members, method, expr_id, args, dest)
+        self.emit_union_class_dispatch(
+            recv_local,
+            &members,
+            method,
+            DispatchCallLowering {
+                expr_id,
+                args,
+                runtime_id,
+                dest,
+            },
+        )
     }
 
     /// A method call whose receiver is a union that contains at least one
@@ -10494,11 +10469,11 @@ impl<'db> LoweringContext<'db> {
         base: AstExprId,
         method: &Name,
         args: &[AstExprId],
+        runtime_id: Option<AstExprId>,
         dest: &Place,
     ) -> bool {
         let Some(members) = self
-            .expr_types
-            .get(&self.expr_metadata_key(base))
+            .tir_expr_type(self.expr_metadata_key(base))
             .and_then(Self::tir_union_members)
         else {
             return false;
@@ -10510,7 +10485,17 @@ impl<'db> LoweringContext<'db> {
         let receiver_ty = self.expr_ty(base);
         let recv_local = self.operand_to_local(receiver_op, receiver_ty);
         #[expect(deprecated)]
-        self.emit_method_candidate_switch(recv_local, &candidates, expr_id, args, dest, None)
+        self.emit_method_candidate_switch(
+            recv_local,
+            &candidates,
+            DispatchCallLowering {
+                expr_id,
+                args,
+                runtime_id,
+                dest,
+            },
+            None,
+        )
     }
 
     /// Build the runtime-class dispatch candidates for calling `method` on a
@@ -10653,9 +10638,7 @@ impl<'db> LoweringContext<'db> {
         recv_local: Local,
         members: &[Tir2Ty],
         method: &Name,
-        expr_id: AstExprId,
-        args: &[AstExprId],
-        dest: &Place,
+        call: DispatchCallLowering<'_>,
     ) -> bool {
         let mut arms: Vec<(TypeName, ItemRef)> = Vec::new();
         for member in members {
@@ -10672,7 +10655,8 @@ impl<'db> LoweringContext<'db> {
             return false;
         }
 
-        let arg_ops = self.lower_call_arg_operands(expr_id, args);
+        let arg_ops = self.lower_call_arg_operands(call.expr_id, call.args);
+        let runtime_id_operand = self.lower_runtime_id_operand(call.runtime_id);
         let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
 
         let bb_join = self.builder.create_block();
@@ -10696,8 +10680,15 @@ impl<'db> LoweringContext<'db> {
             let callee_op = Operand::Constant(Constant::Function(item_ref.clone()));
             let mut all_args = vec![Operand::Copy(Place::Local(recv_local))];
             all_args.extend(arg_ops.iter().cloned());
-            self.builder
-                .call(callee_op, all_args, dest.clone(), bb_join, unwind);
+            self.builder.call_with_type_args_and_runtime_id(
+                callee_op,
+                all_args,
+                0,
+                runtime_id_operand.clone(),
+                call.dest.clone(),
+                bb_join,
+                unwind,
+            );
             next_check = bb_next;
         }
         self.builder.set_current_block(bb_otherwise);
@@ -10721,6 +10712,7 @@ impl<'db> LoweringContext<'db> {
             iface_assoc,
             method,
             args,
+            runtime_id,
         } = call;
         let resolved = self.interface_method_candidates_for(
             iface_tn,
@@ -10736,9 +10728,12 @@ impl<'db> LoweringContext<'db> {
         self.emit_method_candidate_switch(
             recv_local,
             &resolved,
-            expr_id,
-            args,
-            dest,
+            DispatchCallLowering {
+                expr_id,
+                args,
+                runtime_id,
+                dest,
+            },
             Some(InterfaceDefaultCallContext {
                 iface_tn,
                 iface_type_args,
@@ -10753,7 +10748,52 @@ impl<'db> LoweringContext<'db> {
     /// implementor's method (or the interface default it inherits) plus every
     /// out-of-body / primitive type implementor. Shared by the single-interface
     /// receiver path and the union-receiver path.
+    ///
+    /// Memoized in the package-shared [`DispatchCandidateCache`]: resolution
+    /// only reads the Salsa db, package-level `PackageLoweringData`, and
+    /// `self.generic_param_bounds` (all captured by the cache key), so a
+    /// repeated request — the same dispatch appearing at another call site or
+    /// in another function — returns the previously resolved candidates.
     fn interface_method_candidates_for(
+        &self,
+        iface_tn: &TypeName,
+        iface_type_args: &[Tir2Ty],
+        iface_assoc: &[(Name, Tir2Ty)],
+        method: &Name,
+        recv_tir_ty: Option<&Tir2Ty>,
+    ) -> Vec<InterfaceMethodCandidate> {
+        let mut bounds: Vec<(Name, Tir2Ty)> = self
+            .generic_param_bounds
+            .iter()
+            .map(|(name, ty)| (name.clone(), ty.clone()))
+            .collect();
+        bounds.sort_by(|(a, _), (b, _)| a.cmp(b));
+        let key: DispatchCacheKey = (
+            iface_tn.clone(),
+            iface_type_args.to_vec(),
+            iface_assoc.to_vec(),
+            method.clone(),
+            recv_tir_ty.cloned(),
+            bounds,
+        );
+        if let Some(hit) = self.dispatch_cache.map.borrow().get(&key) {
+            return hit.clone();
+        }
+        let resolved = self.interface_method_candidates_uncached(
+            iface_tn,
+            iface_type_args,
+            iface_assoc,
+            method,
+            recv_tir_ty,
+        );
+        self.dispatch_cache
+            .map
+            .borrow_mut()
+            .insert(key, resolved.clone());
+        resolved
+    }
+
+    fn interface_method_candidates_uncached(
         &self,
         iface_tn: &TypeName,
         iface_type_args: &[Tir2Ty],
@@ -10847,9 +10887,7 @@ impl<'db> LoweringContext<'db> {
         &mut self,
         recv_local: Local,
         resolved: &[InterfaceMethodCandidate],
-        expr_id: AstExprId,
-        args: &[AstExprId],
-        dest: &Place,
+        call: DispatchCallLowering<'_>,
         interface_default_context: Option<InterfaceDefaultCallContext<'_>>,
     ) -> bool {
         if resolved.is_empty() {
@@ -10857,9 +10895,10 @@ impl<'db> LoweringContext<'db> {
         }
 
         // Lower args once; same operands used in every arm.
-        let arg_ops = self.lower_call_arg_operands(expr_id, args);
-        let type_arg_ops = self.lower_call_type_args(expr_id, true, None);
-        let has_explicit_type_args = self.call_has_explicit_type_args(expr_id);
+        let arg_ops = self.lower_call_arg_operands(call.expr_id, call.args);
+        let type_arg_ops = self.lower_call_type_args(call.expr_id, true, None);
+        let runtime_id_operand = self.lower_runtime_id_operand(call.runtime_id);
+        let has_explicit_type_args = self.call_has_explicit_type_args(call.expr_id);
         let ntypeargs = type_arg_ops.len();
         let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
 
@@ -10919,11 +10958,12 @@ impl<'db> LoweringContext<'db> {
                     // the operands carry only the call type args + values.
                     let mut all_args = type_arg_ops.clone();
                     all_args.extend(arg_ops.iter().cloned());
-                    self.builder.call_with_type_args(
+                    self.builder.call_with_type_args_and_runtime_id(
                         Operand::Copy(Place::local(bm)),
                         all_args,
                         ntypeargs,
-                        dest.clone(),
+                        runtime_id_operand.clone(),
+                        call.dest.clone(),
                         bb_join,
                         unwind,
                     );
@@ -10970,11 +11010,12 @@ impl<'db> LoweringContext<'db> {
                     all_args.extend(call_type_arg_ops);
                     all_args.push(Operand::Copy(Place::Local(recv_local)));
                     all_args.extend(arg_ops.iter().cloned());
-                    self.builder.call_with_type_args(
+                    self.builder.call_with_type_args_and_runtime_id(
                         callee_op,
                         all_args,
                         arm_ntypeargs,
-                        dest.clone(),
+                        runtime_id_operand.clone(),
+                        call.dest.clone(),
                         bb_join,
                         unwind,
                     );
@@ -12299,7 +12340,7 @@ impl<'db> LoweringContext<'db> {
 
     fn implements_target_matches_requested_views(
         &self,
-        target: &baml_compiler2_ast::SpannedTypeExpr,
+        target: &baml_compiler2_ast::TypeExpr,
         associated_type_bindings: &[baml_compiler2_ast::AssociatedTypeBindingDef],
         class_loc: baml_compiler2_hir::loc::ClassLoc<'db>,
         requested_views: &[InterfaceTypeView],
@@ -12373,7 +12414,7 @@ impl<'db> LoweringContext<'db> {
 
     fn resolve_implements_target_view(
         &self,
-        target: &baml_compiler2_ast::SpannedTypeExpr,
+        target: &baml_compiler2_ast::TypeExpr,
         associated_type_bindings: &[baml_compiler2_ast::AssociatedTypeBindingDef],
         class_loc: baml_compiler2_hir::loc::ClassLoc<'db>,
     ) -> Option<InterfaceTypeView> {
@@ -12383,7 +12424,7 @@ impl<'db> LoweringContext<'db> {
         let class_pkg_items = package_items(self.db, class_pkg_id);
         let target_loc = baml_compiler2_tir::interfaces::resolve_path_to_interface(
             self.db,
-            &target.expr,
+            target,
             class_pkg_items,
             &class_pkg.namespace_path,
         )?;
@@ -12397,8 +12438,8 @@ impl<'db> LoweringContext<'db> {
         let item_tree = file_item_tree(self.db, class_file);
         let class_data = &item_tree[class_loc.id(self.db)];
         let mut diags = Vec::new();
-        let target_args = match &target.expr {
-            baml_compiler2_ast::TypeExpr::Path { generic_args, .. } => generic_args
+        let target_args = match &target.kind {
+            baml_compiler2_ast::TypeExprKind::Path { generic_args, .. } => generic_args
                 .iter()
                 .map(|arg| {
                     baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
@@ -12433,7 +12474,7 @@ impl<'db> LoweringContext<'db> {
                 {
                     let ty = baml_compiler2_tir::generics::lower_type_expr_with_generics(
                         self.db,
-                        &type_expr.expr,
+                        type_expr,
                         class_pkg_items,
                         &class_pkg.namespace_path,
                         &bindings,
@@ -12445,7 +12486,7 @@ impl<'db> LoweringContext<'db> {
                 assoc.default.as_ref().map(|default| {
                     let ty = baml_compiler2_tir::generics::lower_type_expr_with_generics(
                         self.db,
-                        &default.expr,
+                        default,
                         class_pkg_items,
                         &target_iface_pkg.namespace_path,
                         &bindings,
@@ -12501,7 +12542,7 @@ impl<'db> LoweringContext<'db> {
     /// `A::foo`, even though `A` is reachable through `B`'s closure.
     fn method_provider_view(
         &self,
-        target: &baml_compiler2_ast::SpannedTypeExpr,
+        target: &baml_compiler2_ast::TypeExpr,
         associated_type_bindings: &[baml_compiler2_ast::AssociatedTypeBindingDef],
         class_loc: baml_compiler2_hir::loc::ClassLoc<'db>,
         method: &Name,
@@ -12745,7 +12786,7 @@ impl<'db> LoweringContext<'db> {
     /// inside an `implements I { ... }` block, return `I`'s target type
     /// expression. `None` for free functions, top-level class methods,
     /// and interface default-method bodies.
-    fn implements_block_iface_target(&self) -> Option<baml_compiler2_ast::SpannedTypeExpr> {
+    fn implements_block_iface_target(&self) -> Option<baml_compiler2_ast::TypeExpr> {
         let func_loc = self.func_loc?;
         let item_tree = file_item_tree(self.db, func_loc.file(self.db));
         item_tree
@@ -13156,8 +13197,7 @@ impl LoweringContext<'_> {
                 body,
             } => {
                 let coll_tir_ty = self
-                    .expr_types
-                    .get(&self.expr_metadata_key(collection))
+                    .tir_expr_type(self.expr_metadata_key(collection))
                     .cloned();
                 let iterable_view = coll_tir_ty
                     .as_ref()
@@ -13191,14 +13231,18 @@ impl LoweringContext<'_> {
             }
 
             AstStmt::Throw { value } => {
-                let val_op = self.lower_to_operand(value);
+                let val_op = self.lower_throw_operand(value);
                 // Unwatch all watched locals before throwing. Defers run via the
                 // block's unwind landing pads: the throw's PC is inside the
                 // enclosing defer region(s), so the exception table routes it to
                 // the innermost defer pad (BEP-042 Stage 2). We do NOT inline-
                 // replay here — that would double-run the defers.
                 self.emit_unwatch_to_depth(0);
-                self.builder.throw(val_op);
+                if self.operand_is_marked_rethrow(&val_op) {
+                    self.builder.rethrow(val_op);
+                } else {
+                    self.builder.throw(val_op);
+                }
                 let dead = self.builder.create_block();
                 self.builder.set_current_block(dead);
             }
@@ -13621,9 +13665,7 @@ impl LoweringContext<'_> {
         arm_ids: &[baml_compiler2_ast::MatchArmId],
         dest: Place,
     ) {
-        let is_exhaustive = self
-            .exhaustive_matches
-            .contains(&self.expr_metadata_key(expr_id));
+        let is_exhaustive = self.tir_is_exhaustive_match(self.expr_metadata_key(expr_id));
 
         // If scrutinee is a simple variable reference, reuse the local directly
         // instead of copying into a temp (matches MIR1 behavior).
@@ -13741,8 +13783,12 @@ impl LoweringContext<'_> {
              -> bool {
                 match atom {
                     // OLD `Literal(Int(val))`: integer switch
-                    AstPattern::Type(AstTypeExpr::Literal {
-                        value: AstLiteral::Int(val),
+                    AstPattern::Type(AstTypeExpr {
+                        kind:
+                            AstTypeExprKind::Literal {
+                                value: AstLiteral::Int(val),
+                                ..
+                            },
                         ..
                     }) => {
                         match switch_kind.as_ref() {
@@ -13758,14 +13804,16 @@ impl LoweringContext<'_> {
                     // OLD `EnumVariant { ... }`: integer switch with discriminant.
                     // The new repr puts enum variants inside `Pattern::Type`;
                     // detect via TIR.
-                    AstPattern::Type(AstTypeExpr::Path { .. })
-                        if matches!(
-                            this.pat_types.get(&this.pat_metadata_key(atom_id)),
-                            Some(Tir2Ty::EnumVariant(_, _, _))
-                        ) =>
+                    AstPattern::Type(AstTypeExpr {
+                        kind: AstTypeExprKind::Path { .. },
+                        ..
+                    }) if matches!(
+                        this.tir_pat_type(this.pat_metadata_key(atom_id)),
+                        Some(Tir2Ty::EnumVariant(_, _, _))
+                    ) =>
                     {
                         let Some(Tir2Ty::EnumVariant(qtn, variant, _)) =
-                            this.pat_types.get(&this.pat_metadata_key(atom_id))
+                            this.tir_pat_type(this.pat_metadata_key(atom_id))
                         else {
                             unreachable!("guarded by matches! above");
                         };
@@ -14046,14 +14094,14 @@ impl LoweringContext<'_> {
                         // Even if exhaustive, catch otherwise should rethrow
                         // (the error might not match any arm at runtime).
                         self.builder
-                            .throw(Operand::Copy(Place::Local(*error_local)));
+                            .rethrow(Operand::Copy(Place::Local(*error_local)));
                     }
                 }
             } else {
                 match &otherwise {
                     SwitchOtherwise::Catch { error_local, .. } => {
                         self.builder
-                            .throw(Operand::Copy(Place::Local(*error_local)));
+                            .rethrow(Operand::Copy(Place::Local(*error_local)));
                     }
                     SwitchOtherwise::Match { .. } => {
                         self.builder.goto(join);
@@ -14522,7 +14570,7 @@ impl LoweringContext<'_> {
                     if bindings.is_empty() {
                         baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
                             self.db,
-                            &te.expr,
+                            te,
                             pkg_items_for_class,
                             &ns_context,
                             &class_data.generic_params,
@@ -14531,7 +14579,7 @@ impl LoweringContext<'_> {
                     } else {
                         baml_compiler2_tir::generics::lower_type_expr_with_generics(
                             self.db,
-                            &te.expr,
+                            te,
                             pkg_items_for_class,
                             &ns_context,
                             &bindings,
@@ -14586,7 +14634,7 @@ impl LoweringContext<'_> {
     }
 
     fn class_pattern_type_name(&self, pat_id: AstPatId) -> Option<TypeName> {
-        let tir_ty = self.pat_types.get(&self.pat_metadata_key(pat_id))?;
+        let tir_ty = self.tir_pat_type(self.pat_metadata_key(pat_id))?;
         match self.resolved_aliases.convert(tir_ty) {
             RuntimeTy::Class(tn, _, _) => Some(tn),
             _ => None,
@@ -14594,7 +14642,7 @@ impl LoweringContext<'_> {
     }
 
     fn class_pattern_field_ty(&self, pat_id: AstPatId, field: &Name) -> Option<RuntimeTy> {
-        let tir_ty = self.pat_types.get(&self.pat_metadata_key(pat_id))?;
+        let tir_ty = self.tir_pat_type(self.pat_metadata_key(pat_id))?;
         let Tir2Ty::Class(qtn, type_args, _) = tir_ty else {
             return None;
         };
@@ -14615,7 +14663,7 @@ impl LoweringContext<'_> {
         // positional field layout. Branch on the raw TIR type so interface
         // patterns project through field-view dispatch instead of class slots.
         if matches!(
-            self.pat_types.get(&self.pat_metadata_key(class_pat_id)),
+            self.tir_pat_type(self.pat_metadata_key(class_pat_id)),
             Some(Tir2Ty::Interface(..))
         ) {
             return self.project_interface_pattern_field(
@@ -14666,8 +14714,7 @@ impl LoweringContext<'_> {
         field: &Name,
     ) -> Option<Local> {
         let tir_ty = self
-            .pat_types
-            .get(&self.pat_metadata_key(class_pat_id))?
+            .tir_pat_type(self.pat_metadata_key(class_pat_id))?
             .clone();
         let (iface_tn, iface_args, iface_assoc) =
             self.interface_dispatch_target_for_tir_ty(&tir_ty)?;
@@ -14862,8 +14909,7 @@ impl LoweringContext<'_> {
         {
             let after_ascription = self.builder.create_block();
             if let Some(tir_ty) = self
-                .pat_types
-                .get(&self.pat_metadata_key(pat_id))
+                .tir_pat_type(self.pat_metadata_key(pat_id))
                 .filter(|ty| !matches!(ty, Tir2Ty::Never { .. }))
                 .cloned()
             {
@@ -14899,8 +14945,8 @@ impl LoweringContext<'_> {
             // separate variants. The new flat enum collapses all of those
             // into `Pattern::Type(TypeExpr)`, so we dispatch on the inner
             // TypeExpr to recover OLD's per-kind codegen.
-            AstPattern::Type(ty_expr) => match ty_expr {
-                AstTypeExpr::Literal { value: lit, .. } => {
+            AstPattern::Type(ty_expr) => match &ty_expr.kind {
+                AstTypeExprKind::Literal { value: lit, .. } => {
                     let constant = Self::lower_literal(lit);
                     let test = Rvalue::BinaryOp {
                         op: BinOp::Eq,
@@ -14914,7 +14960,7 @@ impl LoweringContext<'_> {
                     self.builder
                         .branch(Operand::Copy(Place::Local(test_local)), success, failure);
                 }
-                AstTypeExpr::Null { .. } => {
+                AstTypeExprKind::Null { .. } => {
                     let test = Rvalue::BinaryOp {
                         op: BinOp::Eq,
                         left: Operand::Copy(Place::Local(scrutinee)),
@@ -14927,14 +14973,14 @@ impl LoweringContext<'_> {
                     self.builder
                         .branch(Operand::Copy(Place::Local(test_local)), success, failure);
                 }
-                AstTypeExpr::Path { .. }
+                AstTypeExprKind::Path { .. }
                     if matches!(
-                        self.pat_types.get(&self.pat_metadata_key(pat_id)),
+                        self.tir_pat_type(self.pat_metadata_key(pat_id)),
                         Some(Tir2Ty::EnumVariant(_, _, _))
                     ) =>
                 {
                     let Some(Tir2Ty::EnumVariant(qtn, variant, _)) =
-                        self.pat_types.get(&self.pat_metadata_key(pat_id))
+                        self.tir_pat_type(self.pat_metadata_key(pat_id))
                     else {
                         unreachable!("guarded by matches! above");
                     };
@@ -14962,8 +15008,7 @@ impl LoweringContext<'_> {
                     // the subpattern, so fall back to lowering the annotation
                     // itself with the enclosing generic params in scope.
                     let pat_tir_ty = self
-                        .pat_types
-                        .get(&self.pat_metadata_key(pat_id))
+                        .tir_pat_type(self.pat_metadata_key(pat_id))
                         .cloned()
                         .unwrap_or_else(|| self.lower_type_annotation_tir(ty_expr));
                     // A generic-interface pattern (`Slot<int>`) needs the
@@ -14980,12 +15025,32 @@ impl LoweringContext<'_> {
                     // `any<T, E>`) must NOT go through `convert_tir_ty_for_runtime` —
                     // that erases TypeVar → Void and the test becomes
                     // constant-false. Build a template instead so the args
-                    // lower to `TypeArgRef` resolved against the frame.
+                    // resolve against the frame.
+                    //
+                    // Use the dispatch-guard template (frame TypeVar →
+                    // `TypeArgRefOrWildcard`, subtype-or-wildcard) rather than the
+                    // exact `TypeArgRef` one. A pattern type-test is covariant —
+                    // it asks "does this value belong to type `Opt<T>`" — so the
+                    // reified frame arg must be compared with `is_subtype_of`, not
+                    // `==`. Otherwise, when inference pins `T` to a supertype union
+                    // of the value's actual type arg (e.g. a `default: T` arg
+                    // subtypes, so `T` reifies to the un-subsumed join `Shape | Sq`
+                    // while the value is `Opt<Shape>`), the exact check
+                    // `Shape | Sq == Shape` fails and the arm silently misses. This
+                    // matches the interface class-dispatch guard path
+                    // (`emit_interface_class_guard_branch`), which already builds
+                    // its typevar args with `tir2_to_dispatch_guard_template`.
+                    // Directionality is preserved: a strictly wider runtime arg
+                    // still fails to match a narrower pinned `T`.
                     if matches!(&pat_tir_ty, Tir2Ty::Class(..))
                         && baml_compiler2_tir::generics::contains_typevar(&pat_tir_ty)
                     {
                         let generic_params = self.enclosing_generic_params();
-                        let template = self.ty_to_template(&pat_tir_ty, &generic_params);
+                        let template = tir2_to_dispatch_guard_template(
+                            &pat_tir_ty,
+                            self.resolved_aliases,
+                            &generic_params,
+                        );
                         self.emit_is_type_template_branch(scrutinee, template, success, failure);
                         return;
                     }
@@ -15019,7 +15084,7 @@ impl LoweringContext<'_> {
                     self.builder.create_block()
                 };
 
-                if let Some(tir_ty) = self.pat_types.get(&self.pat_metadata_key(pat_id)).cloned() {
+                if let Some(tir_ty) = self.tir_pat_type(self.pat_metadata_key(pat_id)).cloned() {
                     self.emit_is_tir_type_branch(scrutinee, &tir_ty, class_success, failure);
                 } else if class_success == success {
                     self.builder.goto(success);
@@ -15060,7 +15125,7 @@ impl LoweringContext<'_> {
             } => {
                 let array_success = self.builder.create_block();
 
-                if let Some(tir_ty) = self.pat_types.get(&self.pat_metadata_key(pat_id)).cloned() {
+                if let Some(tir_ty) = self.tir_pat_type(self.pat_metadata_key(pat_id)).cloned() {
                     self.emit_is_tir_type_branch(scrutinee, &tir_ty, array_success, failure);
                 } else {
                     self.builder.goto(array_success);
@@ -15215,8 +15280,7 @@ impl LoweringContext<'_> {
                 let ty = if let Some(narrow) = &narrow {
                     self.resolve_type_annotation(narrow)
                 } else {
-                    self.pat_types
-                        .get(&self.pat_metadata_key(pat_id))
+                    self.tir_pat_type(self.pat_metadata_key(pat_id))
                         .map(|ty| self.resolved_aliases.convert(ty))
                         .unwrap_or_else(|| self.builder.local_ty(scrutinee))
                 };
@@ -15499,8 +15563,7 @@ impl LoweringContext<'_> {
         // match-chain runtime test — which filters implementors by the specific
         // instantiation — is used instead.
         if self
-            .pat_types
-            .get(&self.pat_metadata_key(pat_id))
+            .tir_pat_type(self.pat_metadata_key(pat_id))
             .is_some_and(Self::tir_ty_needs_interface_shape_test)
         {
             return None;
@@ -15522,7 +15585,7 @@ impl LoweringContext<'_> {
             _ => None,
         };
         if let Some(ty_expr) = ascription_ty {
-            if let Some(tir_ty) = self.pat_types.get(&self.pat_metadata_key(pat_id)) {
+            if let Some(tir_ty) = self.tir_pat_type(self.pat_metadata_key(pat_id)) {
                 let resolved = self.resolved_aliases.convert(tir_ty);
                 if let Some(tags) = self.ty_to_type_tags(&resolved) {
                     return Some(tags);
@@ -15534,12 +15597,12 @@ impl LoweringContext<'_> {
         match pat {
             AstPattern::Wildcard => None,
             AstPattern::Bind { .. } => {
-                let tir_ty = self.pat_types.get(&self.pat_metadata_key(pat_id))?;
+                let tir_ty = self.tir_pat_type(self.pat_metadata_key(pat_id))?;
                 let resolved = self.resolved_aliases.convert(tir_ty);
                 self.ty_to_type_tags(&resolved)
             }
             AstPattern::Type(_) => {
-                if let Some(tir_ty) = self.pat_types.get(&self.pat_metadata_key(pat_id)) {
+                if let Some(tir_ty) = self.tir_pat_type(self.pat_metadata_key(pat_id)) {
                     let resolved = self.resolved_aliases.convert(tir_ty);
                     if let Some(tags) = self.ty_to_type_tags(&resolved) {
                         return Some(tags);
@@ -15773,10 +15836,15 @@ impl LoweringContext<'_> {
             .any(|clause| matches!(clause.kind, CatchClauseKind::CatchAllPanics));
 
         // Record the catch region (always one handler, one exception table entry).
+        // `handler_body` is filled in after the arms are lowered (below): the
+        // blocks created while lowering the arms ARE the handler body, and they
+        // can be laid out non-contiguously, so `[handler, join)` is not enough.
         let body_entry = self.builder.current_block();
+        let catch_region_idx = self.builder.catch_regions.len();
         self.builder.catch_regions.push(CatchRegion {
             body_entry,
             handler: bb_handler,
+            handler_body: vec![bb_handler],
             error_local,
             stack_trace_local,
         });
@@ -15807,11 +15875,21 @@ impl LoweringContext<'_> {
             .iter()
             .map(|(arm, _, _)| (arm.pattern, arm.body, None))
             .collect();
+        // Everything created from here until the join belongs to the handler
+        // body (the arms), captured into the catch region for the cause chain.
+        let arm_blocks_lo = self.builder.num_blocks();
         self.builder.set_current_block(bb_handler);
         if clauses.len() == 1 {
             install_clause_locals(self, error_local, &clause_locals[0]);
         }
-        if clauses.len() == 1
+        let switch_rethrow_mark = self.catch_rethrow_locals.len();
+        if clauses.len() == 1 {
+            self.catch_rethrow_locals.push(error_local);
+            if let Some(local) = clause_locals[0].binding_copy_local {
+                self.catch_rethrow_locals.push(local);
+            }
+        }
+        let lowered_as_switch = clauses.len() == 1
             && self.try_lower_as_switch(
                 error_local,
                 &switch_arms,
@@ -15822,8 +15900,12 @@ impl LoweringContext<'_> {
                     needs_throw_if_panic,
                 },
                 None,
-            )
-        {
+            );
+        self.catch_rethrow_locals.truncate(switch_rethrow_mark);
+        if lowered_as_switch {
+            self.builder.catch_regions[catch_region_idx].handler_body = std::iter::once(bb_handler)
+                .chain((arm_blocks_lo..self.builder.num_blocks()).map(BlockId))
+                .collect();
             self.builder.set_current_block(bb_join);
             self.restore_active_locals(saved_catch_outer_locals);
             return;
@@ -15859,7 +15941,8 @@ impl LoweringContext<'_> {
 
         // Rethrow if nothing matched.
         if !self.builder.is_current_terminated() {
-            self.builder.throw(Operand::Copy(Place::Local(error_local)));
+            self.builder
+                .rethrow(Operand::Copy(Place::Local(error_local)));
         }
 
         // Lower each arm body.
@@ -15870,7 +15953,13 @@ impl LoweringContext<'_> {
             let clause = clause_locals[clause_idx].clone();
             install_clause_locals(self, error_local, &clause);
             self.bind_pattern(error_local, arm.pattern);
+            let rethrow_mark = self.catch_rethrow_locals.len();
+            self.catch_rethrow_locals.push(error_local);
+            if let Some(local) = clause.binding_copy_local {
+                self.catch_rethrow_locals.push(local);
+            }
             self.lower_expr(arm.body, dest.clone());
+            self.catch_rethrow_locals.truncate(rethrow_mark);
             if !self.builder.is_current_terminated() {
                 // A `watch let` declared inside a catch-arm body must be
                 // torn down on fallthrough.
@@ -15882,6 +15971,9 @@ impl LoweringContext<'_> {
             self.restore_locals_after_scope(saved_locals, watched_depth);
         }
 
+        self.builder.catch_regions[catch_region_idx].handler_body = std::iter::once(bb_handler)
+            .chain((arm_blocks_lo..self.builder.num_blocks()).map(BlockId))
+            .collect();
         self.builder.set_current_block(bb_join);
         self.restore_active_locals(saved_catch_outer_locals);
     }
@@ -15899,13 +15991,31 @@ pub fn lower_let_body<'db>(
     let_loc: LetLoc<'db>,
     opt: crate::OptLevel,
 ) -> Option<(MirFunctionBody, Vec<MirFunction>)> {
+    lower_let_body_cached(db, let_loc, opt, &std::rc::Rc::default())
+}
+
+/// [`lower_let_body`] with a caller-supplied [`DispatchCandidateCache`], so a
+/// driver lowering many items in one package (the emit crate) shares dispatch
+/// resolutions across all of them.
+pub fn lower_let_body_cached<'db>(
+    db: &'db dyn crate::Db,
+    let_loc: LetLoc<'db>,
+    opt: crate::OptLevel,
+    dispatch_cache: &std::rc::Rc<DispatchCandidateCache>,
+) -> Option<(MirFunctionBody, Vec<MirFunction>)> {
     let body = let_body(db, let_loc);
     let source_map = let_body_source_map(db, let_loc);
 
     match body.as_ref() {
         LetBody::Expr(expr_body) => {
-            let mut ctx =
-                LoweringContext::new_for_let(db, let_loc, expr_body.clone(), source_map, opt);
+            let mut ctx = LoweringContext::new_for_let(
+                db,
+                let_loc,
+                expr_body.clone(),
+                source_map,
+                opt,
+                std::rc::Rc::clone(dispatch_cache),
+            );
             let mir_body = ctx.lower_let_body_inner();
             let lambdas = std::mem::take(&mut ctx.pending_lambdas);
             Some((mir_body, lambdas))
@@ -15919,6 +16029,18 @@ pub fn lower_function<'db>(
     func_loc: FunctionLoc<'db>,
     opt: crate::OptLevel,
 ) -> MirFunction {
+    lower_function_cached(db, func_loc, opt, &std::rc::Rc::default())
+}
+
+/// [`lower_function`] with a caller-supplied [`DispatchCandidateCache`], so a
+/// driver lowering many functions in one package (the emit crate) shares
+/// dispatch resolutions across all of them.
+pub fn lower_function_cached<'db>(
+    db: &'db dyn crate::Db,
+    func_loc: FunctionLoc<'db>,
+    opt: crate::OptLevel,
+    dispatch_cache: &std::rc::Rc<DispatchCandidateCache>,
+) -> MirFunction {
     let body = baml_compiler2_ppir::function_body(db, func_loc);
     let source_map = baml_compiler2_ppir::function_body_source_map(db, func_loc);
     let item_ref = def_to_item_ref(
@@ -15930,7 +16052,14 @@ pub fn lower_function<'db>(
 
     match body.as_ref() {
         FunctionBody::Expr(expr_body) => {
-            let mut ctx = LoweringContext::new(db, func_loc, expr_body.clone(), source_map, opt);
+            let mut ctx = LoweringContext::new(
+                db,
+                func_loc,
+                expr_body.clone(),
+                source_map,
+                opt,
+                std::rc::Rc::clone(dispatch_cache),
+            );
             let mut mir = ctx.lower_function_body();
             mir.item_ref = item_ref;
             mir

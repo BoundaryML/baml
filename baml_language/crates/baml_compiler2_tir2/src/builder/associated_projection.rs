@@ -242,8 +242,9 @@ fn determine_interface(
                 member,
             )
         }
-        // Already-errored bases: propagate without a fresh diagnostic.
-        Ty::Error { .. } | Ty::Unknown { .. } | Ty::BuiltinUnknown { .. } => {
+        // Already-errored bases — and the unfilled `_` inference hole, which the
+        // fill machinery resolves or diagnoses — propagate without a fresh diagnostic.
+        Ty::Error { .. } | Ty::Unknown { .. } | Ty::BuiltinUnknown { .. } | Ty::Infer { .. } => {
             Determination::Poisoned
         }
         // A surviving alias means the alias map was incomplete; degrade conservatively.
@@ -435,7 +436,7 @@ fn associated_type_bound_interface(
     // The bound is checked at the interface's declaration; diagnostics are discarded here.
     let mut diags = Vec::new();
     let lowered = crate::generics::substitute_ty(
-        &crate::lower_type_expr::lower_type_expr(&bound_te.expr, &scope, &mut diags),
+        &crate::lower_type_expr::lower_type_expr(bound_te, &scope, &mut diags),
         &bindings,
     );
     lowered.as_interface()

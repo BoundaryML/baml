@@ -376,7 +376,7 @@ fn lower_param_types<'db>(
             let type_expr = param.type_expr.as_ref()?;
             let mut diags = Vec::new();
             let ty = crate::lower_type_expr::lower_type_expr(
-                &type_expr.expr,
+                type_expr,
                 &crate::lower_type_expr::ScopeCtx {
                     db,
                     package_items: pkg_items,

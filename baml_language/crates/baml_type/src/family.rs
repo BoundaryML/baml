@@ -281,6 +281,16 @@ ty_family! {
         /// Evolving map — the map analogue of [`Ty::EvolvingList`].
         #[axis(tir)]
         EvolvingMap(Box<Ty>, Box<Ty>, TyAttr),
+        /// Inference hole — the wildcard `_` written in a type-argument or
+        /// `throws`-clause position. A leaf placeholder that asks the checker to
+        /// infer the type at this slot from surrounding context (the initializer
+        /// of a `let`, or the inferred effective throw set). Filled during TIR
+        /// checking; like the other `tir`-axis sentinels it must never survive to
+        /// the runtime boundary (`lower_to_runtime` rejects it).
+        #[axis(tir)]
+        Infer {
+            attr: TyAttr,
+        },
     }
 }
 
@@ -290,7 +300,7 @@ mod tests {
 
     use crate::{
         ConcreteRealizedTy, ConcreteTy, FunctionParamTy, MediaKind, Name, NotRealizedTy,
-        RealizedTy, RuntimeTy, Ty, TyAttr, TypeName,
+        NotRuntimeTy, RealizedTy, RuntimeTy, Ty, TyAttr, TypeName,
     };
 
     fn a() -> TyAttr {
@@ -429,7 +439,6 @@ mod tests {
             tag(borsh::to_vec(&Ty::List(Box::new(Ty::Bool { attr: a() }), a())).unwrap()),
             13
         );
-        // `EvolvingMap` is the last (33rd) `Ty` variant.
         assert_eq!(
             tag(borsh::to_vec(&Ty::EvolvingMap(
                 Box::new(Ty::Never { attr: a() }),
@@ -439,6 +448,8 @@ mod tests {
             .unwrap()),
             32
         );
+        // `Infer` is the last (34th) `Ty` variant.
+        assert_eq!(tag(borsh::to_vec(&Ty::Infer { attr: a() }).unwrap()), 33);
         // `RuntimeTy` keeps `Ty`'s order through the non-`tir` variants.
         assert_eq!(
             tag(borsh::to_vec(&RuntimeTy::Int { attr: a() }).unwrap()),
@@ -449,6 +460,115 @@ mod tests {
         assert_eq!(
             tag(borsh::to_vec(&RealizedTy::BuiltinUnknown { attr: a() }).unwrap()),
             25
+        );
+    }
+
+    /// The leading byte of a `#[repr(C, u8)]` value is its discriminant. Reading
+    /// it directly lets us assert a logical variant carries the same *in-memory*
+    /// tag in every member — the premise the zero-cost `transmute` upcasts rest
+    /// on. (Distinct from the Borsh *wire* tag above, which is by declaration
+    /// index and so shifts when a member drops earlier variants.)
+    fn in_memory_tag<T>(v: &T) -> u8 {
+        // SAFETY: every family member is `#[repr(C, u8)]`, so its first byte is
+        // the `u8` discriminant.
+        unsafe { *(v as *const T as *const u8) }
+    }
+
+    #[test]
+    fn in_memory_discriminants_are_consistent_across_members() {
+        // `BuiltinUnknown` is master variant #27; `RealizedTy` drops the two
+        // `typevar` variants before it, yet its in-memory tag stays 27 (its
+        // Borsh index, checked above, is 25 — the two numbers are deliberately
+        // decoupled).
+        assert_eq!(in_memory_tag(&Ty::BuiltinUnknown { attr: a() }), 27);
+        assert_eq!(in_memory_tag(&RuntimeTy::BuiltinUnknown { attr: a() }), 27);
+        assert_eq!(in_memory_tag(&RealizedTy::BuiltinUnknown { attr: a() }), 27);
+        // `Never` (#28) is shared and tag-stable across the deep members.
+        assert_eq!(in_memory_tag(&Ty::Never { attr: a() }), 28);
+        assert_eq!(in_memory_tag(&RealizedTy::Never { attr: a() }), 28);
+        // A leaf concrete variant present in every member, shallow ones included.
+        assert_eq!(in_memory_tag(&Ty::Int { attr: a() }), 0);
+        assert_eq!(in_memory_tag(&ConcreteTy::Int { attr: a() }), 0);
+        assert_eq!(in_memory_tag(&ConcreteRealizedTy::Int { attr: a() }), 0);
+    }
+
+    /// The borrowed upcast (`RuntimeTy::as_ty`, `RealizedTy::as_runtime_ty`, …)
+    /// reinterprets in place and yields a `&Super` structurally equal to the
+    /// owned widening — proving the `transmute` produces the right *value*, not
+    /// merely a same-sized one, at every nesting depth of `deep_concrete()`.
+    #[test]
+    fn borrowed_upcast_matches_owned_widening() {
+        let t = deep_concrete();
+        let rt = RuntimeTy::try_from(&t).unwrap();
+        let rz = RealizedTy::try_from(&t).unwrap();
+
+        // Reinterpreting the narrower value yields the wider value by reference.
+        assert_eq!(rt.as_ty(), &t);
+        assert_eq!(rz.as_ty(), &t);
+        assert_eq!(rz.as_runtime_ty(), &rt);
+
+        // And it agrees with the owned `From` (also a transmute) on equal input.
+        assert_eq!(rt.as_ty(), &Ty::from(rt.clone()));
+        assert_eq!(rz.as_runtime_ty(), &RuntimeTy::from(rz.clone()));
+    }
+
+    /// Narrowing a representable value: the borrow-to-borrow `TryFrom<&Super>
+    /// for &Sub` validates in place and reinterprets the borrow without copying;
+    /// the owned `TryFrom` validates then moves the tree. Both agree with the
+    /// narrower value at every depth.
+    #[test]
+    fn downcast_validates_then_reinterprets() {
+        let t = deep_concrete();
+        let rt = RuntimeTy::try_from(&t).unwrap();
+        let rz = RealizedTy::try_from(&t).unwrap();
+
+        // Borrow-to-borrow narrowing yields `Ok(&narrower)` at every depth.
+        assert_eq!(<&RuntimeTy>::try_from(&t), Ok(&rt));
+        assert_eq!(<&RealizedTy>::try_from(&t), Ok(&rz));
+        assert_eq!(<&RealizedTy>::try_from(&rt), Ok(&rz));
+
+        // Owned `TryFrom` (validate + move-transmute, no rebuild) agrees.
+        assert_eq!(RuntimeTy::try_from(t.clone()).unwrap(), rt);
+        assert_eq!(RealizedTy::try_from(t.clone()).unwrap(), rz);
+        assert_eq!(RealizedTy::try_from(rt.clone()).unwrap(), rz);
+    }
+
+    /// The validation walk is complete: an unrepresentable variant nested at any
+    /// depth makes the narrowing fail — with the offending variant named, since
+    /// `TryFrom` carries an error — rather than transmute into an invalid
+    /// discriminant.
+    #[test]
+    fn downcast_rejects_unrepresentable_at_depth() {
+        // `TypeVar` under a `List`: a valid `RuntimeTy` (keeps `typevar`), not a
+        // valid `RealizedTy` (drops it) — the error names the culprit.
+        let tv = with_typevar();
+        let tv_rt = <&RuntimeTy>::try_from(&tv).unwrap();
+        assert_eq!(
+            <&RealizedTy>::try_from(&tv),
+            Err(NotRealizedTy { variant: "TypeVar" })
+        );
+        assert_eq!(
+            <&RealizedTy>::try_from(tv_rt),
+            Err(NotRealizedTy { variant: "TypeVar" })
+        );
+
+        // A `tir`-only `Unknown` buried in a map value: not even a `RuntimeTy`.
+        let bad = Ty::Map {
+            key: Box::new(Ty::String { attr: a() }),
+            value: Box::new(Ty::List(Box::new(Ty::Unknown { attr: a() }), a())),
+            attr: a(),
+        };
+        assert_eq!(
+            <&RuntimeTy>::try_from(&bad),
+            Err(NotRuntimeTy { variant: "Unknown" })
+        );
+        assert_eq!(
+            <&RealizedTy>::try_from(&bad),
+            Err(NotRealizedTy { variant: "Unknown" })
+        );
+        assert_eq!(
+            RuntimeTy::try_from(bad),
+            Err(NotRuntimeTy { variant: "Unknown" })
         );
     }
 }

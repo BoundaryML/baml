@@ -16,6 +16,13 @@ use crate::ty::{FunctionParamMode, LiteralValue, MediaKind, QualifiedTypeName, T
 
 /// Check if `sub` is a subtype of `sup`, resolving type aliases.
 pub(crate) fn is_subtype_of(sub: &Ty, sup: &Ty, aliases: &HashMap<QualifiedTypeName, Ty>) -> bool {
+    // Fast path: `normalize` is a pure function of `(ty, aliases)`, so
+    // structurally identical types always normalize identically, and
+    // `StructuralTy::is_subtype_of` is reflexive. Skips the alias-graph
+    // walk + double normalization for the common `T <: T` query.
+    if sub == sup {
+        return true;
+    }
     let recursive = find_recursive_aliases(aliases);
     let sub_norm = normalize(sub, aliases, &recursive);
     let sup_norm = normalize(sup, aliases, &recursive);
@@ -33,20 +40,33 @@ pub fn is_same_normalized_type(
     rhs: &Ty,
     aliases: &HashMap<QualifiedTypeName, Ty>,
 ) -> bool {
+    // Fast path: `normalize` is a pure function of `(ty, aliases)`, so
+    // structurally identical types always normalize (and canonicalize)
+    // identically. Skips the alias-graph walk + double normalization for
+    // the very common identical-spelling case.
+    if lhs == rhs {
+        return true;
+    }
     let recursive = find_recursive_aliases(aliases);
     normalize(lhs, aliases, &recursive).canonicalize()
         == normalize(rhs, aliases, &recursive).canonicalize()
 }
 
 /// Find all recursive type aliases via DFS.
+///
+/// A single memoized DFS over the whole alias graph: `state` maps each alias
+/// to `None` while it is on the DFS stack and to `Some(reaches_cycle)` once
+/// fully explored, so every alias body is walked at most once — O(nodes +
+/// edges) total rather than a fresh DFS per alias. ("Reaches a cycle" is a
+/// property of the alias alone, independent of which root the DFS entered
+/// from, so memoizing it across roots is sound.)
 pub fn find_recursive_aliases(
     aliases: &HashMap<QualifiedTypeName, Ty>,
 ) -> HashSet<QualifiedTypeName> {
+    let mut state = HashMap::new();
     let mut recursive = HashSet::new();
     for name in aliases.keys() {
-        let mut visited = HashSet::new();
-        let mut stack = HashSet::new();
-        if has_cycle(name, aliases, &mut visited, &mut stack) {
+        if has_cycle(name, aliases, &mut state) {
             recursive.insert(name.clone());
         }
     }
@@ -557,6 +577,17 @@ fn normalize_impl(
         Ty::Void { .. } => StructuralTy::Void,
         Ty::BuiltinUnknown { .. } => StructuralTy::BuiltinUnknown,
         Ty::Unknown { .. } => StructuralTy::Unknown,
+        // INVARIANT: a `_` inference hole is filled (or replaced with `Ty::Error`)
+        // during inference, before any structural equivalence/subtype check. A
+        // hole has no sound normal form — treating it as "matches anything" would
+        // make `Box<int>` and `Box<string>` both equal to `Box<_>` and break
+        // transitivity — so reaching here is a compiler bug. (See `builder`'s
+        // `let`-binding hole path, which infers, fills, then checks.)
+        Ty::Infer { .. } => unreachable!(
+            "inference hole `_` reached structural normalization; it must be \
+             filled (or replaced with `Ty::Error`) during inference before any \
+             equivalence/subtype check"
+        ),
         Ty::Error { .. } => StructuralTy::Error,
         Ty::Literal(lit, _freshness, _) => StructuralTy::Literal(lit.clone()),
         Ty::Class(qn, type_args, _) => {
@@ -679,64 +710,56 @@ fn normalize_impl(
 // CYCLE DETECTION
 // ═══════════════════════════════════════════════════════════════════════════
 
+/// Does expanding `name` ever reach a cycle in the alias graph?
+///
+/// `state` is the shared memo for [`find_recursive_aliases`]: `None` marks an
+/// alias currently on the DFS stack (so hitting it again is a back-edge, i.e.
+/// a real cycle), `Some(result)` a fully explored alias.
 fn has_cycle(
     name: &QualifiedTypeName,
     aliases: &HashMap<QualifiedTypeName, Ty>,
-    visited: &mut HashSet<QualifiedTypeName>,
-    stack: &mut HashSet<QualifiedTypeName>,
+    state: &mut HashMap<QualifiedTypeName, Option<bool>>,
 ) -> bool {
-    if stack.contains(name) {
-        return true;
+    match state.get(name) {
+        // On the current DFS stack — a back-edge, i.e. a real cycle.
+        Some(None) => return true,
+        // Fully explored on an earlier visit.
+        Some(&Some(result)) => return result,
+        None => {}
     }
-    if visited.contains(name) {
-        return false;
-    }
-    visited.insert(name.clone());
-    stack.insert(name.clone());
+    state.insert(name.clone(), None);
     let result = aliases
         .get(name)
-        .is_some_and(|ty| ty_has_cycle(ty, aliases, visited, stack));
-    stack.remove(name);
+        .is_some_and(|ty| ty_has_cycle(ty, aliases, state));
+    state.insert(name.clone(), Some(result));
     result
 }
 
 fn ty_has_cycle(
     ty: &Ty,
     aliases: &HashMap<QualifiedTypeName, Ty>,
-    visited: &mut HashSet<QualifiedTypeName>,
-    stack: &mut HashSet<QualifiedTypeName>,
+    state: &mut HashMap<QualifiedTypeName, Option<bool>>,
 ) -> bool {
     match ty {
-        Ty::TypeAlias(qn, _) if aliases.contains_key(qn) => has_cycle(qn, aliases, visited, stack),
-        Ty::List(inner, _) | Ty::EvolvingList(inner, _) => {
-            ty_has_cycle(inner, aliases, visited, stack)
-        }
+        Ty::TypeAlias(qn, _) if aliases.contains_key(qn) => has_cycle(qn, aliases, state),
+        Ty::List(inner, _) | Ty::EvolvingList(inner, _) => ty_has_cycle(inner, aliases, state),
         Ty::Map { key, value, .. } | Ty::EvolvingMap(key, value, _) => {
-            ty_has_cycle(key, aliases, visited, stack)
-                || ty_has_cycle(value, aliases, visited, stack)
+            ty_has_cycle(key, aliases, state) || ty_has_cycle(value, aliases, state)
         }
-        Ty::Union(types, _) => types
-            .iter()
-            .any(|t| ty_has_cycle(t, aliases, visited, stack)),
-        Ty::Class(_, type_args, _) => type_args
-            .iter()
-            .any(|t| ty_has_cycle(t, aliases, visited, stack)),
+        Ty::Union(types, _) => types.iter().any(|t| ty_has_cycle(t, aliases, state)),
+        Ty::Class(_, type_args, _) => type_args.iter().any(|t| ty_has_cycle(t, aliases, state)),
         Ty::Interface(_, type_args, associated_bindings, _) => {
-            type_args
-                .iter()
-                .any(|t| ty_has_cycle(t, aliases, visited, stack))
+            type_args.iter().any(|t| ty_has_cycle(t, aliases, state))
                 || associated_bindings
                     .iter()
-                    .any(|(_, ty)| ty_has_cycle(ty, aliases, visited, stack))
+                    .any(|(_, ty)| ty_has_cycle(ty, aliases, state))
         }
         Ty::AssociatedTypeProjection {
             base, interface, ..
         } => {
-            ty_has_cycle(base, aliases, visited, stack)
+            ty_has_cycle(base, aliases, state)
                 || interface.as_ref().is_some_and(|interface| {
-                    interface
-                        .tys()
-                        .any(|t| ty_has_cycle(t, aliases, visited, stack))
+                    interface.tys().any(|t| ty_has_cycle(t, aliases, state))
                 })
         }
         Ty::Function {
@@ -747,9 +770,9 @@ fn ty_has_cycle(
         } => {
             params
                 .iter()
-                .any(|param| ty_has_cycle(&param.ty, aliases, visited, stack))
-                || ty_has_cycle(ret, aliases, visited, stack)
-                || ty_has_cycle(throws, aliases, visited, stack)
+                .any(|param| ty_has_cycle(&param.ty, aliases, state))
+                || ty_has_cycle(ret, aliases, state)
+                || ty_has_cycle(throws, aliases, state)
         }
         _ => false,
     }

@@ -299,7 +299,7 @@ pub fn impl_data<'db>(
             let mut for_target_diags = Vec::new();
             let for_ty = crate::lower_type_expr::lower_type_expr_in_ns(
                 db,
-                &for_target.expr,
+                for_target,
                 pkg_items,
                 ns,
                 &names,
@@ -335,7 +335,7 @@ pub fn impl_data<'db>(
     let mut interface_target_diags = Vec::new();
     let lowered_interface = crate::lower_type_expr::lower_type_expr_in_ns(
         db,
-        &block.interface_target.expr,
+        &block.interface_target,
         pkg_items,
         ns,
         &generic_param_names,
@@ -351,8 +351,7 @@ pub fn impl_data<'db>(
     // target still surfaces its diagnostics (and the for-target / bound ones).
     // Associated bindings are skipped here — they can't be checked without the
     // interface declaration.
-    let Some(iface_loc) =
-        resolve_path_to_interface(db, &block.interface_target.expr, pkg_items, ns)
+    let Some(iface_loc) = resolve_path_to_interface(db, &block.interface_target, pkg_items, ns)
     else {
         // The head didn't name an interface. The *head* diagnostic (unknown /
         // not-an-interface) belongs to the dedicated implements-target validator,
@@ -748,6 +747,70 @@ fn get_implements_block_within_depth<'db>(
         }
     }
     None
+}
+
+/// Universal (∀) interface membership — the single seam every membership consumer
+/// calls (`TYPE_SYSTEM.md` §Interfaces).
+///
+/// True iff **every** realized instantiation of `concrete` (substituting its rigid
+/// type variables per their declared bounds) implements `interface`. The
+/// realized-vs-symbolic dispatch is an implementation detail owned here and never
+/// leaked to callers: a realized `(type, interface)` has a unique impl by coherence
+/// (resolved via [`get_implements_block`]); a type-variable-bearing one is proven by
+/// universal rule membership ([`type_implements_interface`]).
+///
+/// `concrete` must be a non-interface type — interface-to-interface relationships are
+/// `interface_requires`, not membership. `is_subtype` is the boundary back into the
+/// type algebra, used to discharge interface-argument equivalence and generic bounds.
+///
+/// This is the frozen contract between the type algebra and interface resolution:
+/// callers depend only on this signature, so the body (and the symbolic backend
+/// below) can be re-based onto the `impl_data` substrate without touching them.
+pub fn implements_interface(
+    db: &dyn crate::Db,
+    concrete: &Ty,
+    interface: &baml_type::Interface,
+    aliases: &HashMap<QualifiedTypeName, Ty>,
+    is_subtype: impl FnMut(&Ty, &Ty) -> bool,
+) -> bool {
+    // Orphan rule: the impl lives in the implementor type's package (for a class) or
+    // the interface's package; either, plus its dependency closure (which both
+    // backends search), is the complete space.
+    let pkg = match concrete {
+        Ty::Class(class_qtn, ..) => class_qtn.package().clone(),
+        _ => interface.name.package().clone(),
+    };
+    let pkg_id = PackageId::new(db, pkg);
+
+    if baml_type::RealizedTy::try_from(concrete).is_ok()
+        && baml_type::RealizedTy::try_from(&interface.to_ty()).is_ok()
+    {
+        return get_implements_block(db, pkg_id, concrete, interface, aliases).is_some();
+    }
+    type_implements_interface(db, pkg_id, concrete, interface, aliases, is_subtype)
+}
+
+/// Symbolic universal interface membership — the type-variable-bearing backend of
+/// [`implements_interface`]: does the impl-rule set prove that *every* instantiation
+/// of a (possibly symbolic) `concrete` implements `interface`?
+///
+/// MIGRATION SEAM: this currently answers via the derived `InterfaceImplRule`
+/// registry. It is the single point to re-base onto an `impl_data`-driven symbolic
+/// resolver; callers depend only on its signature, not the registry.
+pub fn type_implements_interface<'db>(
+    db: &'db dyn crate::Db,
+    pkg_id: PackageId<'db>,
+    concrete: &Ty,
+    interface: &baml_type::Interface,
+    aliases: &HashMap<QualifiedTypeName, Ty>,
+    is_subtype: impl FnMut(&Ty, &Ty) -> bool,
+) -> bool {
+    crate::interfaces::package_implements_registry(db, pkg_id).type_implements_interface_via_rule(
+        concrete,
+        &interface.to_ty(),
+        aliases,
+        is_subtype,
+    )
 }
 
 /// An interface method resolved on a [`ResolvedImpl`] — the function backing it

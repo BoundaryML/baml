@@ -706,7 +706,7 @@ fn lower_interface_associated_bindings(
             {
                 generics::lower_type_expr_with_generics(
                     db,
-                    &type_expr.expr,
+                    type_expr,
                     binding_pkg_items,
                     binding_namespace_path,
                     &bindings,
@@ -716,7 +716,7 @@ fn lower_interface_associated_bindings(
                 let default = assoc.default.as_ref()?;
                 generics::lower_type_expr_with_generics(
                     db,
-                    &default.expr,
+                    default,
                     iface_pkg_items,
                     iface_namespace_path,
                     &bindings,
@@ -758,7 +758,7 @@ fn complete_interface_associated_bindings_from_tys(
             assoc.default.as_ref().map(|default| {
                 let ty = generics::lower_type_expr_with_generics(
                     db,
-                    &default.expr,
+                    default,
                     pkg_items,
                     iface_namespace_path,
                     &bindings,
@@ -803,7 +803,7 @@ fn lower_interface_type_associated_bindings(
             assoc.default.as_ref().map(|default| {
                 let ty = generics::lower_type_expr_with_generics(
                     ctx.db,
-                    &default.expr,
+                    default,
                     ctx.iface_pkg_items,
                     ctx.iface_namespace_path,
                     &bindings,
@@ -1465,7 +1465,7 @@ fn same_in_body_origin(a: &InterfaceImplRule, b: &InterfaceImplRule) -> bool {
     )
 }
 
-/// Resolve a `TypeExpr::Path` to an interface declaration and its fully
+/// Resolve a `TypeExprKind::Path` to an interface declaration and its fully
 /// qualified identity. Returns `None` when the path doesn't resolve to an
 /// interface.
 pub fn resolve_path_to_interface_identity<'db>(
@@ -1494,7 +1494,7 @@ pub fn resolve_path_to_interface_identity<'db>(
     Some(ResolvedInterface { loc, qtn })
 }
 
-/// Resolve a `TypeExpr::Path` to an interface declaration. Returns `None`
+/// Resolve a `TypeExprKind::Path` to an interface declaration. Returns `None`
 /// when the path doesn't resolve to an interface.
 pub fn resolve_path_to_interface<'db>(
     db: &'db dyn crate::Db,
@@ -1534,7 +1534,7 @@ fn interface_closure<'db>(
         let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
         for parent in &iface.requires {
             if let Some(parent_loc) =
-                resolve_path_to_interface(db, &parent.expr, pkg_items, &pkg_info.namespace_path)
+                resolve_path_to_interface(db, parent, pkg_items, &pkg_info.namespace_path)
             {
                 stack.push(parent_loc);
             }
@@ -1572,12 +1572,9 @@ pub fn interface_closure_locs<'db>(
         let pkg_id = PackageId::new(db, pkg_info.package.clone());
         let parent_pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
         for parent in &iface.requires {
-            if let Some(parent_loc) = resolve_path_to_interface(
-                db,
-                &parent.expr,
-                parent_pkg_items,
-                &pkg_info.namespace_path,
-            ) {
+            if let Some(parent_loc) =
+                resolve_path_to_interface(db, parent, parent_pkg_items, &pkg_info.namespace_path)
+            {
                 queue.push_back(parent_loc);
             }
         }
@@ -1645,16 +1642,13 @@ pub fn interface_closure_locs_with_args_and_assoc<'db>(
         }
 
         for parent in &iface.requires {
-            let Some(parent_loc) = resolve_path_to_interface(
-                db,
-                &parent.expr,
-                parent_pkg_items,
-                &pkg_info.namespace_path,
-            ) else {
+            let Some(parent_loc) =
+                resolve_path_to_interface(db, parent, parent_pkg_items, &pkg_info.namespace_path)
+            else {
                 continue;
             };
-            let parent_args = match &parent.expr {
-                baml_compiler2_ast::TypeExpr::Path { generic_args, .. } => {
+            let parent_args = match &parent.kind {
+                baml_compiler2_ast::TypeExprKind::Path { generic_args, .. } => {
                     let mut diags = Vec::new();
                     generic_args
                         .iter()
@@ -1684,8 +1678,8 @@ pub fn interface_closure_locs_with_args_and_assoc<'db>(
             let (parent_explicit_assoc, parent_binding_ns): (
                 &[baml_compiler2_ast::AssociatedTypeBinding],
                 &[Name],
-            ) = match &parent.expr {
-                baml_compiler2_ast::TypeExpr::Path {
+            ) = match &parent.kind {
+                baml_compiler2_ast::TypeExprKind::Path {
                     associated_type_bindings,
                     ..
                 } => (

@@ -1677,9 +1677,11 @@ function iter.iter_array_iter_lazy_over_source_details() -> int[] {
     load_const "collect"
     virtual_call nargs=1 ntypeargs=0
     store_var out
-    load_deref ?2
     load_var out
     container_len
+    store_var _12
+    load_deref ?2
+    load_var _12
     load_type int
     alloc_array 2
     store_var details
@@ -1839,7 +1841,7 @@ function iter.iter_array_iter_lazy_over_source_details() -> int[] {
     jump L23
 
   L22:
-    load_var2 6 8
+    load_var2 6 9
     call baml.Array.push
     pop 1
     jump L0

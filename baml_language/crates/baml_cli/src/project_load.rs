@@ -109,10 +109,11 @@ pub(crate) fn load_project_from(
 
 /// Variant of [`load_project_from`] that announces each discovered
 /// file through the [`Reporter`] as it's loaded — cargo's
-/// `   Compiling foo v0.1.0` shape but for source files. Used by
-/// `run`/`pack`/`test`/`generate` so the user sees per-file progress
-/// instead of a single `Loading <project>` line. `grep`/`describe`
-/// stay on the lenient [`load_project_or_default`].
+/// `   Compiling foo v0.1.0` shape but for source files. The per-file
+/// `Loading <path>` flood is verbose-only detail; prefer
+/// [`load_project_for_build`] in command code, which gates this behind the
+/// command's verbosity. `grep`/`describe` stay on the lenient
+/// [`load_project_or_default`].
 pub(crate) fn load_project_from_reporting(
     from: Option<&Path>,
     reporter: &Reporter,
@@ -120,6 +121,27 @@ pub(crate) fn load_project_from_reporting(
     load_project_from_inner(from, |path| {
         reporter.spin("Loading", path.display().to_string());
     })
+}
+
+/// Single front-end every build-style command (`run`/`test`/`generate`/
+/// `check`/`pack`) uses to load its project.
+///
+/// Centralizes the one decision they all share: the per-file `Loading <path>`
+/// flood is *verbose-only* detail. By default the load is silent and the
+/// caller's single aggregate `Compiling N file(s)` line is the only progress
+/// shown for the whole load → check → compile span; a redundant `Checking`
+/// line and ~one `Loading` line per source file are exactly the noise this
+/// removes. Pass the command's own `--verbose` (or `false` when it has none).
+pub(crate) fn load_project_for_build(
+    from: Option<&Path>,
+    reporter: &Reporter,
+    verbose: bool,
+) -> Result<(ProjectDatabase, PathBuf, Vec<PathBuf>)> {
+    if verbose {
+        load_project_from_reporting(from, reporter)
+    } else {
+        load_project_from(from)
+    }
 }
 
 /// Read-only/introspection loader: like [`load_project_from`] but **never

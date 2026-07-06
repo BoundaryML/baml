@@ -2,16 +2,6 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] error: unresolved type: Foo
-   ╭─[ type_malformed.baml:7:5 ]
-   │
- 7 │ type Foo
-   │     ──┬─  
-   │       ╰─── unresolved type: Foo
-   │ 
-   │ Note: Error code: E0002
-───╯
-
   [parse] error: Expected '=', found identifier
    ╭─[ type_malformed.baml:7:6 ]
    │
@@ -22,12 +12,22 @@ source: crates/baml_tests/src/generated_tests.rs
    │ Note: Error code: E0010
 ───╯
 
+  [type] error: unresolved type: Foo
+   ╭─[ type_malformed.baml:7:6 ]
+   │
+ 7 │ type Foo
+   │      ─┬─  
+   │       ╰─── unresolved type: Foo
+   │ 
+   │ Note: Error code: E0002
+───╯
+
   [parse] error: Expected type, found EOF
     ╭─[ type_malformed.baml:10:11 ]
     │
  10 │ type Bar =
-    │           ┬  
-    │           ╰── Expected type, found EOF
+    │           │ 
+    │           ╰─ Expected type, found EOF
     │ 
     │ Note: Error code: E0010
 ────╯

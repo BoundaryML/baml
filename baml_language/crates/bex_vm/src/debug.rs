@@ -138,14 +138,18 @@ pub(crate) fn display_instruction(
         Instruction::LoadGlobal(index) | Instruction::StoreGlobal(index) => {
             display_global_ref(*index, globals, objects, compile_time_globals)
         }
-        Instruction::Call { callee, .. } | Instruction::SysOp(callee) => {
+        Instruction::Call { callee, .. }
+        | Instruction::CallWithRuntimeId { callee, .. }
+        | Instruction::SysOp(callee)
+        | Instruction::SysOpWithRuntimeId(callee) => {
             display_global_ref(*callee, globals, objects, compile_time_globals)
         }
         Instruction::MakeGenericFunction { function, .. } => {
             display_global_ref(*function, globals, objects, compile_time_globals)
         }
         Instruction::MakeGenericFunctionFromValue { .. } => String::new(),
-        Instruction::VirtualCall { nargs, ntypeargs } => {
+        Instruction::VirtualCall { nargs, ntypeargs }
+        | Instruction::VirtualCallWithRuntimeId { nargs, ntypeargs } => {
             format!("nargs={nargs} ntypeargs={ntypeargs}")
         }
         Instruction::LoadVar(index)
@@ -229,7 +233,9 @@ pub(crate) fn display_instruction(
         | Instruction::Await
         | Instruction::AwaitAny
         | Instruction::CallIndirect
+        | Instruction::CallIndirectWithRuntimeId
         | Instruction::Throw
+        | Instruction::Rethrow
         | Instruction::Discriminant
         | Instruction::TypeTag
         | Instruction::IsType(_)
@@ -395,20 +401,27 @@ fn instruction_style(instruction: &Instruction) -> Style {
         | Instruction::JumpIfFalse(_)
         | Instruction::JumpTable { .. }
         | Instruction::DenseTag(_) => Style::new().yellow(),
-        Instruction::Call { .. } | Instruction::CallIndirect | Instruction::VirtualCall { .. } => {
-            Style::new().magenta()
-        }
-        Instruction::Return | Instruction::Pop(_) | Instruction::Copy(_) | Instruction::Throw => {
-            Style::new().red()
-        }
+        Instruction::Call { .. }
+        | Instruction::CallWithRuntimeId { .. }
+        | Instruction::CallIndirect
+        | Instruction::CallIndirectWithRuntimeId
+        | Instruction::VirtualCall { .. }
+        | Instruction::VirtualCallWithRuntimeId { .. } => Style::new().magenta(),
+        Instruction::Return
+        | Instruction::Pop(_)
+        | Instruction::Copy(_)
+        | Instruction::Throw
+        | Instruction::Rethrow => Style::new().red(),
         Instruction::AllocMap(_)
         | Instruction::AllocInstance { .. }
         | Instruction::InitInstance(_)
         | Instruction::AllocVariant(_)
         | Instruction::AllocArray(_) => Style::new().cyan(),
-        Instruction::SysOp(_) | Instruction::Spawn | Instruction::Await | Instruction::AwaitAny => {
-            Style::new().green().bright()
-        }
+        Instruction::SysOp(_)
+        | Instruction::SysOpWithRuntimeId(_)
+        | Instruction::Spawn
+        | Instruction::Await
+        | Instruction::AwaitAny => Style::new().green().bright(),
         Instruction::Watch(_) | Instruction::Unwatch(_) | Instruction::Notify(_) => {
             Style::new().red().bright()
         }
@@ -806,6 +819,7 @@ fn display_instruction_textual(
         }
 
         Instruction::Throw => "throw".to_string(),
+        Instruction::Rethrow => "rethrow".to_string(),
 
         // --- Operators ---
         Instruction::BinOp(op) => format!("bin_op {op}"),
@@ -871,11 +885,17 @@ fn display_instruction_textual(
 
         // --- Calls ---
         Instruction::Call { .. } => format!("call {}", meta_str(&"")),
+        Instruction::CallWithRuntimeId { .. } => format!("call_with_runtime_id {}", meta_str(&"")),
         Instruction::CallIndirect => "call_indirect".to_string(),
+        Instruction::CallIndirectWithRuntimeId => "call_indirect_with_runtime_id".to_string(),
         Instruction::VirtualCall { nargs, ntypeargs } => {
             format!("virtual_call nargs={nargs} ntypeargs={ntypeargs}")
         }
+        Instruction::VirtualCallWithRuntimeId { nargs, ntypeargs } => {
+            format!("virtual_call_with_runtime_id nargs={nargs} ntypeargs={ntypeargs}")
+        }
         Instruction::SysOp(_) => format!("sys_op {}", meta_str(&"")),
+        Instruction::SysOpWithRuntimeId(_) => format!("sys_op_with_runtime_id {}", meta_str(&"")),
         Instruction::Spawn => "spawn".to_string(),
         Instruction::Await => "await".to_string(),
         Instruction::AwaitAny => "await_any".to_string(),
@@ -1109,7 +1129,9 @@ fn display_expanded_metadata(ip: usize, instruction: &Instruction, function: &Fu
         | Instruction::InitField(_)
         | Instruction::InitSpread(_)
         | Instruction::Call { .. }
+        | Instruction::CallWithRuntimeId { .. }
         | Instruction::SysOp(_)
+        | Instruction::SysOpWithRuntimeId(_)
         | Instruction::AllocInstance { .. }
         | Instruction::InitInstance(_)
         | Instruction::AllocVariant(_)
@@ -1194,11 +1216,13 @@ pub fn display_compact_bytecode(
             | OpCode::Await
             | OpCode::AwaitAny
             | OpCode::Throw
+            | OpCode::Rethrow
             | OpCode::LoadArrayElement
             | OpCode::LoadMapElement
             | OpCode::StoreArrayElement
             | OpCode::StoreMapElement
             | OpCode::CallIndirect
+            | OpCode::CallIndirectWithRuntimeId
             | OpCode::Discriminant
             | OpCode::TypeTag
             | OpCode::ThrowIfPanic
@@ -1300,6 +1324,7 @@ pub fn display_compact_bytecode(
             | OpCode::InitInstance
             | OpCode::AllocVariant
             | OpCode::SysOp
+            | OpCode::SysOpWithRuntimeId
             | OpCode::Watch
             | OpCode::Unwatch
             | OpCode::Notify
@@ -1333,7 +1358,7 @@ pub fn display_compact_bytecode(
                 )?;
             }
 
-            OpCode::Call => {
+            OpCode::Call | OpCode::CallWithRuntimeId => {
                 let callee = read_u32(code, &mut pc);
                 let ntypeargs = read_u16(code, &mut pc);
                 writeln!(f, "callee={callee}  ntypeargs={ntypeargs}")?;
@@ -1356,7 +1381,7 @@ pub fn display_compact_bytecode(
                 writeln!(f, "ntypeargs={ntypeargs}")?;
             }
 
-            OpCode::VirtualCall => {
+            OpCode::VirtualCall | OpCode::VirtualCallWithRuntimeId => {
                 let nargs = read_u16(code, &mut pc);
                 let ntypeargs = read_u16(code, &mut pc);
                 writeln!(f, "nargs={nargs} ntypeargs={ntypeargs}")?;

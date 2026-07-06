@@ -74,7 +74,7 @@ impl InterfaceMethodSpec {
         let (args, kwargs) = split_params(sig.params.iter().map(|p| {
             // The implicit `self` receiver: name "self" with no declared type.
             let is_self = p.name.as_str() == "self"
-                && matches!(p.ty, baml_compiler2_ast::TypeExpr::Unknown { .. });
+                && matches!(p.ty.kind, baml_compiler2_ast::TypeExprKind::Unknown { .. });
             (is_self, p.has_default, p.name.clone(), p.ty.clone())
         }));
         let generics = sig
@@ -95,11 +95,7 @@ impl InterfaceMethodSpec {
     fn from_required(sig: &baml_compiler2_hir::item_tree::InterfaceMethodSig) -> Self {
         let (args, kwargs) = split_params(sig.params.iter().map(|p| {
             let is_self = p.name.as_str() == "self" && p.type_expr.is_none();
-            let ty = p
-                .type_expr
-                .as_ref()
-                .map(|te| te.expr.clone())
-                .unwrap_or_else(unknown_type_expr);
+            let ty = p.type_expr.clone().unwrap_or_else(unknown_type_expr);
             (is_self, p.default.is_some(), p.name.clone(), ty)
         }));
         let generics = sig
@@ -111,23 +107,15 @@ impl InterfaceMethodSpec {
         Self {
             args,
             kwargs,
-            return_type: sig
-                .return_type
-                .as_ref()
-                .map(|te| te.expr.clone())
-                .unwrap_or_else(unknown_type_expr),
-            throws: sig
-                .throws
-                .as_ref()
-                .map(|te| te.expr.clone())
-                .unwrap_or_else(unknown_type_expr),
+            return_type: sig.return_type.clone().unwrap_or_else(unknown_type_expr),
+            throws: sig.throws.clone().unwrap_or_else(unknown_type_expr),
             generics,
         }
     }
 }
 
 fn unknown_type_expr() -> baml_compiler2_ast::TypeExpr {
-    baml_compiler2_ast::TypeExpr::Unknown { attrs: vec![] }
+    baml_compiler2_ast::TypeExprKind::Unknown { attrs: vec![] }.at(text_size::TextRange::default())
 }
 
 /// Split `(is_self, has_default, name, ty)` tuples into positional args (no default) and
@@ -139,7 +127,7 @@ fn split_params(
     let mut args = Vec::new();
     let mut kwargs = Vec::new();
     for (is_self, has_default, name, ty) in params {
-        // `self` is syntax sugar for `self: Self` — until `TypeExpr::Self` exists, desugar
+        // `self` is syntax sugar for `self: Self` — until `TypeExprKind::Self` exists, desugar
         // to the `Self` path so the receiver flows through normal param lowering.
         let ty = if is_self {
             crate::lower_type_expr::type_expr_for_name(Name::new("Self"))
@@ -743,7 +731,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                         let generic_params: Vec<_> = bindings.keys().cloned().collect();
                         crate::generics::substitute_ty(
                             &crate::lower_type_expr::lower_type_expr(
-                                &te.expr,
+                                te,
                                 &crate::lower_type_expr::ScopeCtx {
                                     db,
                                     package_items: view.pkg_items(db),
@@ -827,7 +815,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 let generic_params: Vec<_> = (prior).keys().cloned().collect();
                 crate::generics::substitute_ty(
                     &crate::lower_type_expr::lower_type_expr(
-                        &default.expr,
+                        default,
                         &crate::lower_type_expr::ScopeCtx {
                             db,
                             package_items: view.pkg_items(db),

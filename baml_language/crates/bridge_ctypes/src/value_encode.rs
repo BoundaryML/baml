@@ -1,10 +1,7 @@
 //! `BexExternalValue` -> `BamlOutboundValue` conversion.
 
-use base64::Engine as _;
-use bex_events::run::{RunError, RunErrorClass, RunOutcome, RunResult};
 use bex_project::{BexExternalAdt, BexExternalValue};
 use indexmap::IndexMap;
-use prost::Message;
 
 use crate::{
     baml_core::cffi::{
@@ -201,26 +198,157 @@ pub fn external_to_outbound(
     Ok(BamlOutboundValue { value: variant })
 }
 
-pub fn encoded_success_outcome(
-    result: &BexExternalValue,
-    renderer_hint: &'static str,
-) -> RunOutcome {
-    let handle_options = CffiHandleTableOptions::for_wire();
-    match external_to_outbound(result, &handle_options) {
-        Ok(baml_val) => {
-            let b64 = base64::engine::general_purpose::STANDARD.encode(baml_val.encode_to_vec());
-            RunOutcome::Succeeded(RunResult {
-                value: Some(b64),
-                renderer_hint: Some(renderer_hint.to_string()),
-                supporting_payload_ids: Vec::new(),
-            })
+/// Convert `BexExternalValue` to a durable artifact-safe `BamlOutboundValue`.
+///
+/// Unlike [`external_to_outbound`], this entry point never inserts into the CFFI
+/// handle table and never serializes host/process-local handle keys. Opaque or
+/// callable values become renderable omission descriptors.
+#[allow(
+    dead_code,
+    reason = "Phase 7 guardrail seam; production host trace serializer API is not designed yet"
+)]
+pub(crate) fn artifact_safe_external_to_outbound(
+    value: &BexExternalValue,
+) -> Result<BamlOutboundValue, CtypesError> {
+    let variant = match value {
+        BexExternalValue::Null => None,
+        BexExternalValue::Int(i) => Some(BamlValueVariant::IntValue(*i)),
+        BexExternalValue::Bigint(bi) => Some(BamlValueVariant::BigintValue(format!("{bi:x}"))),
+        BexExternalValue::Float(f) => Some(BamlValueVariant::FloatValue(*f)),
+        BexExternalValue::Bool(b) => Some(BamlValueVariant::BoolValue(*b)),
+        BexExternalValue::String(s) => Some(BamlValueVariant::StringValue(s.to_string())),
+        BexExternalValue::Array {
+            items,
+            element_type,
+        } => Some(BamlValueVariant::ListValue(BamlValueList {
+            item_type: Some(crate::ty_encode::runtime_ty_to_proto_ty(element_type)),
+            items: items
+                .iter()
+                .map(artifact_safe_external_to_outbound)
+                .collect::<Result<_, _>>()?,
+        })),
+        BexExternalValue::Map {
+            entries,
+            key_type,
+            value_type,
+        } => Some(BamlValueVariant::MapValue(BamlValueMap {
+            key_type: Some(crate::ty_encode::runtime_ty_to_proto_ty(key_type)),
+            value_type: Some(crate::ty_encode::runtime_ty_to_proto_ty(value_type)),
+            entries: entries
+                .iter()
+                .map(|(key, val)| {
+                    Ok(BamlOutboundMapEntry {
+                        key: key.clone(),
+                        value: Some(artifact_safe_external_to_outbound(val)?),
+                    })
+                })
+                .collect::<Result<_, CtypesError>>()?,
+        })),
+        BexExternalValue::Instance {
+            class_name,
+            fields,
+            type_args,
+        } => Some(BamlValueVariant::ClassValue(BamlValueClass {
+            name: class_name.clone(),
+            fields: fields
+                .iter()
+                .map(|(key, val)| {
+                    Ok(BamlOutboundMapEntry {
+                        key: key.clone(),
+                        value: Some(artifact_safe_external_to_outbound(val)?),
+                    })
+                })
+                .collect::<Result<_, CtypesError>>()?,
+            type_args: type_args
+                .iter()
+                .map(crate::ty_encode::runtime_ty_to_proto_ty)
+                .collect(),
+        })),
+        BexExternalValue::Variant {
+            enum_name,
+            variant_name,
+        } => Some(BamlValueVariant::EnumValue(BamlValueEnum {
+            name: enum_name.clone(),
+            value: variant_name.clone(),
+            is_dynamic: false,
+        })),
+        BexExternalValue::Union { value, metadata } => {
+            let inner = artifact_safe_external_to_outbound(value)?;
+            Some(BamlValueVariant::UnionVariantValue(Box::new(
+                BamlValueUnionVariant {
+                    name: metadata.name.clone().unwrap_or_default(),
+                    is_optional: metadata.is_optional,
+                    is_single_pattern: metadata.is_single_pattern,
+                    self_type: Some(crate::ty_encode::runtime_ty_to_proto_ty(
+                        &metadata.union_type,
+                    )),
+                    value_option_name: format!("{}", metadata.selected_option),
+                    value: Some(Box::new(inner)),
+                },
+            )))
         }
-        Err(e) => RunOutcome::Failed(RunError {
-            class: RunErrorClass::Host,
-            message: format!("Failed to encode result: {e}"),
-            details: None,
-        }),
-    }
+        BexExternalValue::Adt(BexExternalAdt::Media(media)) => Some(BamlValueVariant::MediaValue(
+            bex_media_to_proto_media(media),
+        )),
+        BexExternalValue::Adt(BexExternalAdt::PromptAst(prompt_ast)) => Some(
+            BamlValueVariant::PromptAstValue(bex_prompt_ast_to_proto_prompt_ast(prompt_ast)),
+        ),
+        BexExternalValue::Uint8Array(bytes) => {
+            Some(BamlValueVariant::Uint8arrayValue(bytes.clone()))
+        }
+        BexExternalValue::RustData(arc) => {
+            if let Some(converted) = bex_project::try_convert_rust_data(arc) {
+                return artifact_safe_external_to_outbound(&converted);
+            }
+            Some(artifact_safe_omission(
+                "hostOwnedValue",
+                "host-owned rust data",
+            ))
+        }
+        BexExternalValue::Adt(BexExternalAdt::Type(rt)) => Some(BamlValueVariant::TyValue(
+            crate::ty_encode::runtime_ty_to_proto_ty(rt),
+        )),
+        BexExternalValue::HostValue(arc) => Some(artifact_safe_omission(
+            "hostOwnedValue",
+            match arc.kind {
+                bex_project::HostValueKind::Callable => "host-owned callable",
+                bex_project::HostValueKind::Opaque => "host-owned opaque value",
+            },
+        )),
+        BexExternalValue::Handle(_)
+        | BexExternalValue::FunctionRef { .. }
+        | BexExternalValue::Adt(_) => Some(artifact_safe_omission(
+            "unsupportedValue",
+            "process-local handle",
+        )),
+    };
+
+    Ok(BamlOutboundValue { value: variant })
+}
+
+#[allow(
+    dead_code,
+    reason = "Only used by the currently crate-private artifact-safe encoder seam"
+)]
+fn artifact_safe_omission(reason: &str, message: &str) -> BamlValueVariant {
+    BamlValueVariant::ClassValue(BamlValueClass {
+        name: "baml.trace.OmittedValue".to_string(),
+        fields: vec![
+            BamlOutboundMapEntry {
+                key: "reason".to_string(),
+                value: Some(BamlOutboundValue {
+                    value: Some(BamlValueVariant::StringValue(reason.to_string())),
+                }),
+            },
+            BamlOutboundMapEntry {
+                key: "message".to_string(),
+                value: Some(BamlOutboundValue {
+                    value: Some(BamlValueVariant::StringValue(message.to_string())),
+                }),
+            },
+        ],
+        type_args: Vec::new(),
+    })
 }
 
 fn media_kind_to_proto_enum(kind: bex_project::MediaKind) -> crate::baml_core::cffi::MediaTypeEnum {
@@ -362,8 +490,8 @@ mod tests {
     use std::sync::Arc;
 
     use bex_project::{
-        BexExternalValue, HostValueArc, HostValueKind, MediaContent, MediaValue, PromptAst,
-        PromptAstSimple,
+        BexExternalAdt, BexExternalValue, HostValueArc, HostValueKind, MediaContent, MediaValue,
+        PromptAst, PromptAstSimple,
     };
 
     use super::*;
@@ -373,6 +501,17 @@ mod tests {
         match out.value {
             Some(BamlValueVariant::HandleValue(h)) => h,
             other => panic!("expected HandleValue, got {other:?}"),
+        }
+    }
+
+    fn extract_omission(out: BamlOutboundValue) -> BamlValueClass {
+        match out.value {
+            Some(BamlValueVariant::ClassValue(class))
+                if class.name == "baml.trace.OmittedValue" =>
+            {
+                class
+            }
+            other => panic!("expected baml.trace.OmittedValue, got {other:?}"),
         }
     }
 
@@ -448,5 +587,66 @@ mod tests {
             options.table.resolve(42).is_none(),
             "HOST_VALUE_OPAQUE must not be inserted into HANDLE_TABLE"
         );
+    }
+
+    #[test]
+    fn artifact_safe_host_value_callable_omits_key_instead_of_serializing_handle() {
+        let arc = HostValueArc::new(42, HostValueKind::Callable);
+        let value = BexExternalValue::HostValue(arc);
+        let encoded =
+            artifact_safe_external_to_outbound(&value).expect("artifact-safe encode succeeds");
+
+        let omission = extract_omission(encoded);
+        assert_eq!(omission.fields[0].key, "reason");
+        assert_eq!(omission.fields[1].key, "message");
+        let Some(BamlValueVariant::StringValue(message)) = omission.fields[1]
+            .value
+            .as_ref()
+            .and_then(|value| value.value.as_ref())
+        else {
+            panic!("omission message should be a string");
+        };
+        assert_eq!(message, "host-owned callable");
+    }
+
+    #[test]
+    fn artifact_safe_unknown_rust_data_omits_without_inserting_handle() {
+        let unknown: Arc<dyn std::any::Any + Send + Sync> = Arc::new(42u32);
+        let value = BexExternalValue::RustData(unknown);
+        let encoded =
+            artifact_safe_external_to_outbound(&value).expect("artifact-safe encode succeeds");
+
+        let omission = extract_omission(encoded);
+        assert_eq!(omission.name, "baml.trace.OmittedValue");
+    }
+
+    #[test]
+    fn artifact_safe_function_ref_omits_without_handle_value() {
+        let value = BexExternalValue::FunctionRef { global_index: 7 };
+        let encoded =
+            artifact_safe_external_to_outbound(&value).expect("artifact-safe encode succeeds");
+
+        let omission = extract_omission(encoded);
+        assert_eq!(omission.name, "baml.trace.OmittedValue");
+    }
+
+    #[test]
+    fn artifact_safe_media_stays_durable_data() {
+        let media = MediaValue::new(
+            bex_project::MediaKind::Image,
+            MediaContent::Url {
+                url: "https://example.com/img.png".to_string(),
+                base64_data: None,
+            },
+            Some("image/png".to_string()),
+        );
+        let value = BexExternalValue::Adt(BexExternalAdt::Media(Arc::new(media)));
+        let encoded =
+            artifact_safe_external_to_outbound(&value).expect("artifact-safe encode succeeds");
+
+        assert!(matches!(
+            encoded.value,
+            Some(BamlValueVariant::MediaValue(_))
+        ));
     }
 }

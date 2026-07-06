@@ -45,8 +45,8 @@ struct PathRootReference {
 /// to be position-independent and reasonably collision-distributed — the
 /// `LocalItemId` collision index disambiguates anything that shares a head.
 fn impl_head_name(te: &ast::TypeExpr) -> Name {
-    match te {
-        ast::TypeExpr::Path { segments, .. } => segments
+    match &te.kind {
+        ast::TypeExprKind::Path { segments, .. } => segments
             .last()
             .cloned()
             .unwrap_or_else(|| Name::new("#path")),
@@ -562,6 +562,11 @@ impl<'db> SemanticIndexBuilder<'db> {
             }
             ast::Expr::Throw { value } => {
                 self.walk_expr(*value, body, source_map, true);
+            }
+            ast::Expr::Return { value } => {
+                if let Some(value) = value {
+                    self.walk_expr(*value, body, source_map, true);
+                }
             }
             ast::Expr::Spawn {
                 name,
@@ -1316,7 +1321,7 @@ impl<'db> SemanticIndexBuilder<'db> {
             // Dual-write: also record this in-body impl under a stable `ImplId`.
             // An in-body `implements I {}` (and a simple `implement I for C`
             // merged onto the class) is `InClass`; its for-type is the class.
-            let iface_head = impl_head_name(&impl_block.target.expr);
+            let iface_head = impl_head_name(&impl_block.target);
             let block = ImplBlock {
                 subject: ImplSubject::InClass {
                     class: local_id,
@@ -1349,8 +1354,10 @@ impl<'db> SemanticIndexBuilder<'db> {
         if has_generic_params {
             // Derive a synthetic scope name from the for_target for `self` resolution.
             // Use the for_target's root name (e.g. "Container" from "Container<T>").
-            let scope_name = match &imp.for_target.expr {
-                baml_compiler2_ast::TypeExpr::Path { segments, .. } => segments.first().cloned(),
+            let scope_name = match &imp.for_target.kind {
+                baml_compiler2_ast::TypeExprKind::Path { segments, .. } => {
+                    segments.first().cloned()
+                }
                 _ => None,
             };
             self.push_scope(ScopeKind::Class, scope_name, imp.span);
@@ -1372,8 +1379,8 @@ impl<'db> SemanticIndexBuilder<'db> {
         self.class_depth -= 1;
         self.item_tree.add_implements_for(imp, method_ids.clone());
         // Dual-write: also record this out-of-body impl under a stable `ImplId`.
-        let iface_head = impl_head_name(&imp.interface_target.expr);
-        let for_head = impl_head_name(&imp.for_target.expr);
+        let iface_head = impl_head_name(&imp.interface_target);
+        let for_head = impl_head_name(&imp.for_target);
         let generics = imp
             .generic_params
             .iter()
@@ -1622,11 +1629,7 @@ impl<'db> SemanticIndexBuilder<'db> {
                 self.validate_schema_attributes(&class.attributes);
                 for field in &class.fields {
                     if let Some(type_expr) = &field.type_expr {
-                        self.validate_type_expr_phase1(
-                            &type_expr.expr,
-                            type_expr.span,
-                            is_builtin_file,
-                        );
+                        self.validate_type_expr_phase1(type_expr, type_expr.span, is_builtin_file);
                     }
                     self.validate_internal_attributes(
                         &field.attributes,
@@ -1636,6 +1639,14 @@ impl<'db> SemanticIndexBuilder<'db> {
                     );
                     self.validate_schema_attributes(&field.attributes);
                 }
+                self.validate_alias_collisions(
+                    class
+                        .fields
+                        .iter()
+                        .map(|f| (&f.name, f.name_span, f.attributes.as_slice())),
+                    "class",
+                    is_builtin_file,
+                );
                 for method in &class.methods {
                     self.validate_function_phase1(method, is_builtin_file, "method");
                 }
@@ -1645,14 +1656,17 @@ impl<'db> SemanticIndexBuilder<'db> {
                 for variant in &enm.variants {
                     self.validate_schema_attributes(&variant.attributes);
                 }
+                self.validate_alias_collisions(
+                    enm.variants
+                        .iter()
+                        .map(|v| (&v.name, v.name_span, v.attributes.as_slice())),
+                    "enum",
+                    is_builtin_file,
+                );
             }
             ast::Item::TypeAlias(alias) => {
                 if let Some(type_expr) = &alias.type_expr {
-                    self.validate_type_expr_phase1(
-                        &type_expr.expr,
-                        type_expr.span,
-                        is_builtin_file,
-                    );
+                    self.validate_type_expr_phase1(type_expr, type_expr.span, is_builtin_file);
                 }
             }
             _ => {}
@@ -1675,14 +1689,14 @@ impl<'db> SemanticIndexBuilder<'db> {
 
         for param in &function.params {
             if let Some(type_expr) = &param.type_expr {
-                self.validate_type_expr_phase1(&type_expr.expr, type_expr.span, is_builtin_file);
+                self.validate_type_expr_phase1(type_expr, type_expr.span, is_builtin_file);
             }
         }
         if let Some(type_expr) = &function.return_type {
-            self.validate_type_expr_phase1(&type_expr.expr, type_expr.span, is_builtin_file);
+            self.validate_type_expr_phase1(type_expr, type_expr.span, is_builtin_file);
         }
         if let Some(type_expr) = &function.throws {
-            self.validate_type_expr_phase1(&type_expr.expr, type_expr.span, is_builtin_file);
+            self.validate_type_expr_phase1(type_expr, type_expr.span, is_builtin_file);
         }
 
         if let Some(ast::FunctionBodyDef::Builtin(kind)) = function.body {
@@ -1703,7 +1717,7 @@ impl<'db> SemanticIndexBuilder<'db> {
             if let Some(throws) = &function.throws {
                 let mut invalid = Vec::new();
                 Self::collect_invalid_builtin_throw_types(
-                    &throws.expr,
+                    throws,
                     &function.generic_params,
                     &mut invalid,
                 );
@@ -1834,6 +1848,35 @@ impl<'db> SemanticIndexBuilder<'db> {
     ///
     /// Unknown attributes are silently passed through (e.g. `@stream.*` for PPIR).
     fn validate_schema_attributes(&mut self, attributes: &[ast::RawAttribute]) {
+        // E0014: reject the same single-valued schema attribute appearing more
+        // than once on one declaration. `@alias`, `@description`, and `@skip`
+        // each take effect at most once — for valued attrs the last write
+        // silently wins and the earlier ones are dropped (Linear B-648) — so a
+        // repeat is always a mistake. Only these known single-valued attributes
+        // are checked; repeatable / pass-through attributes (`@stream.*`, etc.)
+        // are intentionally left alone. Occurrences are gathered in first-seen
+        // order so the emitted diagnostics are deterministic.
+        let mut occurrences: Vec<(&str, Vec<TextRange>)> = Vec::new();
+        for attr in attributes {
+            let name = attr.name.as_str();
+            if !matches!(name, "description" | "alias" | "skip") {
+                continue;
+            }
+            if let Some(entry) = occurrences.iter_mut().find(|(n, _)| *n == name) {
+                entry.1.push(attr.span);
+            } else {
+                occurrences.push((name, vec![attr.span]));
+            }
+        }
+        for (name, sites) in occurrences {
+            if sites.len() >= 2 {
+                self.diagnostics.push(Hir2Diagnostic::DuplicateAttribute {
+                    attr_name: name.to_string(),
+                    sites,
+                });
+            }
+        }
+
         for attr in attributes {
             match attr.name.as_str() {
                 "description" | "alias" => {
@@ -1868,6 +1911,86 @@ impl<'db> SemanticIndexBuilder<'db> {
                 _ => {
                     // Unknown attributes passed through silently (e.g. @stream.*)
                 }
+            }
+        }
+    }
+
+    /// Reject a class or enum whose members don't all serialize to distinct
+    /// JSON keys.
+    ///
+    /// A member's *effective serialized key* is its `@alias` value if it carries
+    /// one, otherwise its declared name. When an `@alias` is present the real
+    /// member name is never used for matching (see `bex_sap`'s
+    /// `AnnotatedField::key_matches`), so two members with the same effective key
+    /// are indistinguishable in the serialized schema: `ctx.output_format`
+    /// renders duplicate keys and only the first can ever be satisfied. This
+    /// catches both `a @alias("x")` + `b @alias("x")` and a plain member `x`
+    /// colliding with another member's `@alias("x")`.
+    ///
+    /// Applies uniformly to class fields (an unsatisfiable output schema — a
+    /// required shadowed field can never be parsed) and enum variants (two
+    /// variants rendered under one label — the model's choice can't be resolved
+    /// back to a unique variant).
+    ///
+    /// Members marked `@skip` are excluded from the schema entirely and so
+    /// cannot collide. A pure duplicate *member name* (no aliasing involved) is
+    /// left to the existing `DuplicateField` / duplicate-variant (E0012) checks
+    /// to avoid double-reporting; this rule only fires when at least two
+    /// *distinct* member names share a key. `container` is `"class"` or `"enum"`
+    /// and is used only for the diagnostic message.
+    fn validate_alias_collisions<'a>(
+        &mut self,
+        members: impl Iterator<Item = (&'a Name, TextRange, &'a [ast::RawAttribute])>,
+        container: &'static str,
+        is_builtin_file: bool,
+    ) {
+        // Builtin stdlib declarations carry no `@alias`, and type-level
+        // validation already skips them — stay consistent and avoid surprising
+        // the stdlib.
+        if is_builtin_file {
+            return;
+        }
+
+        let mut buckets: FxHashMap<String, Vec<(Name, TextRange)>> = FxHashMap::default();
+        for (name, name_span, attributes) in members {
+            let mut alias: Option<String> = None;
+            let mut skip = false;
+            for attr in attributes {
+                match attr.name.as_str() {
+                    "alias" if attr.args.len() == 1 => {
+                        // Last `@alias` wins, mirroring emit's `extract_schema_attrs`.
+                        if let Some(value) =
+                            ast::parse_string_attr_value(attr.args[0].value.as_str())
+                        {
+                            alias = Some(value);
+                        }
+                    }
+                    "skip" => skip = true,
+                    _ => {}
+                }
+            }
+            if skip {
+                continue;
+            }
+            let key = alias.unwrap_or_else(|| name.as_str().to_string());
+            buckets
+                .entry(key)
+                .or_default()
+                .push((name.clone(), name_span));
+        }
+
+        for (key, members) in buckets {
+            // Only a collision between two *distinct* member names is a new
+            // error; repeated identical names are already reported by the
+            // duplicate-definition checks.
+            let distinct = members.iter().any(|(name, _)| name != &members[0].0);
+            if members.len() >= 2 && distinct {
+                let sites = members.into_iter().map(|(_, span)| span).collect();
+                self.diagnostics.push(Hir2Diagnostic::DuplicateFieldAlias {
+                    key,
+                    sites,
+                    container,
+                });
             }
         }
     }
@@ -1911,20 +2034,20 @@ impl<'db> SemanticIndexBuilder<'db> {
             }
         }
 
-        match type_expr {
-            ast::TypeExpr::Optional { inner, .. } | ast::TypeExpr::List { inner, .. } => {
+        match &type_expr.kind {
+            ast::TypeExprKind::Optional { inner, .. } | ast::TypeExprKind::List { inner, .. } => {
                 Self::collect_unknown_type_attrs(inner, diagnostics);
             }
-            ast::TypeExpr::Map { key, value, .. } => {
+            ast::TypeExprKind::Map { key, value, .. } => {
                 Self::collect_unknown_type_attrs(key, diagnostics);
                 Self::collect_unknown_type_attrs(value, diagnostics);
             }
-            ast::TypeExpr::Union { variants, .. } => {
+            ast::TypeExprKind::Union { variants, .. } => {
                 for v in variants {
                     Self::collect_unknown_type_attrs(v, diagnostics);
                 }
             }
-            ast::TypeExpr::Function {
+            ast::TypeExprKind::Function {
                 params,
                 ret,
                 throws,
@@ -1938,23 +2061,43 @@ impl<'db> SemanticIndexBuilder<'db> {
                     Self::collect_unknown_type_attrs(throws, diagnostics);
                 }
             }
+            ast::TypeExprKind::Path {
+                generic_args,
+                associated_type_bindings,
+                ..
+            } => {
+                for arg in generic_args {
+                    Self::collect_unknown_type_attrs(arg, diagnostics);
+                }
+                for binding in associated_type_bindings {
+                    Self::collect_unknown_type_attrs(&binding.ty, diagnostics);
+                }
+            }
+            ast::TypeExprKind::AssociatedTypeProjection {
+                base, interface, ..
+            } => {
+                Self::collect_unknown_type_attrs(base, diagnostics);
+                if let Some(interface) = interface {
+                    Self::collect_unknown_type_attrs(interface, diagnostics);
+                }
+            }
             _ => {}
         }
     }
 
     fn type_expr_contains_rust(type_expr: &ast::TypeExpr) -> bool {
-        match type_expr {
-            ast::TypeExpr::Rust { .. } => true,
-            ast::TypeExpr::Optional { inner, .. } | ast::TypeExpr::List { inner, .. } => {
+        match &type_expr.kind {
+            ast::TypeExprKind::Rust { .. } => true,
+            ast::TypeExprKind::Optional { inner, .. } | ast::TypeExprKind::List { inner, .. } => {
                 Self::type_expr_contains_rust(inner)
             }
-            ast::TypeExpr::Map { key, value, .. } => {
+            ast::TypeExprKind::Map { key, value, .. } => {
                 Self::type_expr_contains_rust(key) || Self::type_expr_contains_rust(value)
             }
-            ast::TypeExpr::Union { variants, .. } => {
+            ast::TypeExprKind::Union { variants, .. } => {
                 variants.iter().any(Self::type_expr_contains_rust)
             }
-            ast::TypeExpr::Function {
+            ast::TypeExprKind::Function {
                 params,
                 ret,
                 throws,
@@ -1968,13 +2111,23 @@ impl<'db> SemanticIndexBuilder<'db> {
                         .as_ref()
                         .is_some_and(|throws| Self::type_expr_contains_rust(throws))
             }
-            ast::TypeExpr::AssociatedTypeProjection {
+            ast::TypeExprKind::AssociatedTypeProjection {
                 base, interface, ..
             } => {
                 Self::type_expr_contains_rust(base)
                     || interface
                         .as_ref()
                         .is_some_and(|interface| Self::type_expr_contains_rust(interface))
+            }
+            ast::TypeExprKind::Path {
+                generic_args,
+                associated_type_bindings,
+                ..
+            } => {
+                generic_args.iter().any(Self::type_expr_contains_rust)
+                    || associated_type_bindings
+                        .iter()
+                        .any(|binding| Self::type_expr_contains_rust(&binding.ty))
             }
             _ => false,
         }
@@ -1985,8 +2138,8 @@ impl<'db> SemanticIndexBuilder<'db> {
         allowed_generic_params: &[Name],
         invalid: &mut Vec<String>,
     ) {
-        match type_expr {
-            ast::TypeExpr::Path {
+        match &type_expr.kind {
+            ast::TypeExprKind::Path {
                 segments,
                 generic_args,
                 ..
@@ -2037,7 +2190,7 @@ impl<'db> SemanticIndexBuilder<'db> {
                     invalid.push(Self::render_type_expr(type_expr));
                 }
             }
-            ast::TypeExpr::Union { variants, .. } => {
+            ast::TypeExprKind::Union { variants, .. } => {
                 for ty in variants {
                     Self::collect_invalid_builtin_throw_types(ty, allowed_generic_params, invalid);
                 }
@@ -2049,52 +2202,54 @@ impl<'db> SemanticIndexBuilder<'db> {
             // declared `throws` is erased for builtins), so this is sound. Lets
             // `_compare_shim` declare `throws T.CompareError` rather than an
             // unconstrained error param that call sites cannot pin.
-            ast::TypeExpr::AssociatedTypeProjection { base, .. }
+            ast::TypeExprKind::AssociatedTypeProjection { base, .. }
                 if matches!(
-                    base.as_ref(),
-                    ast::TypeExpr::Path { segments, generic_args, .. }
+                    &base.kind,
+                    ast::TypeExprKind::Path { segments, generic_args, .. }
                         if generic_args.is_empty()
                             && segments.len() == 1
                             && allowed_generic_params.iter().any(|name| name == &segments[0])
                 ) => {}
             // `throws never` is the explicit "infallible" marker — always valid.
-            ast::TypeExpr::Never { .. } => {}
+            ast::TypeExprKind::Never { .. } => {}
             _ => invalid.push(Self::render_type_expr(type_expr)),
         }
     }
 
     fn render_type_expr(type_expr: &ast::TypeExpr) -> String {
-        match type_expr {
-            ast::TypeExpr::Path { segments, .. } => segments
+        match &type_expr.kind {
+            ast::TypeExprKind::Path { segments, .. } => segments
                 .iter()
                 .map(Name::as_str)
                 .collect::<Vec<_>>()
                 .join("."),
-            ast::TypeExpr::AssociatedTypeProjection { .. } => type_expr.to_string(),
-            ast::TypeExpr::Int { .. } => "int".to_string(),
-            ast::TypeExpr::Bigint { .. } => "bigint".to_string(),
-            ast::TypeExpr::Float { .. } => "float".to_string(),
-            ast::TypeExpr::String { .. } => "string".to_string(),
-            ast::TypeExpr::Bool { .. } => "bool".to_string(),
-            ast::TypeExpr::Null { .. } => "null".to_string(),
-            ast::TypeExpr::Never { .. } => "never".to_string(),
-            ast::TypeExpr::Void { .. } => "void".to_string(),
-            ast::TypeExpr::Uint8Array { .. } => "uint8array".to_string(),
-            ast::TypeExpr::Media { kind, .. } => kind.to_string(),
-            ast::TypeExpr::Optional { inner, .. } => format!("{}?", Self::render_type_expr(inner)),
-            ast::TypeExpr::List { inner, .. } => format!("{}[]", Self::render_type_expr(inner)),
-            ast::TypeExpr::Map { key, value, .. } => format!(
+            ast::TypeExprKind::AssociatedTypeProjection { .. } => type_expr.to_string(),
+            ast::TypeExprKind::Int { .. } => "int".to_string(),
+            ast::TypeExprKind::Bigint { .. } => "bigint".to_string(),
+            ast::TypeExprKind::Float { .. } => "float".to_string(),
+            ast::TypeExprKind::String { .. } => "string".to_string(),
+            ast::TypeExprKind::Bool { .. } => "bool".to_string(),
+            ast::TypeExprKind::Null { .. } => "null".to_string(),
+            ast::TypeExprKind::Never { .. } => "never".to_string(),
+            ast::TypeExprKind::Void { .. } => "void".to_string(),
+            ast::TypeExprKind::Uint8Array { .. } => "uint8array".to_string(),
+            ast::TypeExprKind::Media { kind, .. } => kind.to_string(),
+            ast::TypeExprKind::Optional { inner, .. } => {
+                format!("{}?", Self::render_type_expr(inner))
+            }
+            ast::TypeExprKind::List { inner, .. } => format!("{}[]", Self::render_type_expr(inner)),
+            ast::TypeExprKind::Map { key, value, .. } => format!(
                 "map<{}, {}>",
                 Self::render_type_expr(key),
                 Self::render_type_expr(value)
             ),
-            ast::TypeExpr::Union { variants, .. } => variants
+            ast::TypeExprKind::Union { variants, .. } => variants
                 .iter()
                 .map(Self::render_type_expr)
                 .collect::<Vec<_>>()
                 .join(" | "),
-            ast::TypeExpr::Literal { value, .. } => value.to_string(),
-            ast::TypeExpr::Function {
+            ast::TypeExprKind::Literal { value, .. } => value.to_string(),
+            ast::TypeExprKind::Function {
                 params,
                 ret,
                 throws,
@@ -2121,11 +2276,12 @@ impl<'db> SemanticIndexBuilder<'db> {
                     throws
                 )
             }
-            ast::TypeExpr::BuiltinUnknown { .. } => "unknown".to_string(),
-            ast::TypeExpr::Type { .. } => "type".to_string(),
-            ast::TypeExpr::Rust { .. } => "$rust_type".to_string(),
-            ast::TypeExpr::Error { .. } => "<error>".to_string(),
-            ast::TypeExpr::Unknown { .. } => "<unknown>".to_string(),
+            ast::TypeExprKind::BuiltinUnknown { .. } => "unknown".to_string(),
+            ast::TypeExprKind::Type { .. } => "type".to_string(),
+            ast::TypeExprKind::Rust { .. } => "$rust_type".to_string(),
+            ast::TypeExprKind::Error { .. } => "<error>".to_string(),
+            ast::TypeExprKind::Unknown { .. } => "<unknown>".to_string(),
+            ast::TypeExprKind::Infer { .. } => "_".to_string(),
         }
     }
 }

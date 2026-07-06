@@ -649,6 +649,22 @@ fn collect_def_use(body: &MirFunctionBody) -> HashMap<Local, LocalDefUse> {
         }
     }
 
+    // The VM also materializes the caught error's `ErrorContext` into the
+    // context (second-binding) slot, and the BEP-042 cause-chain pre-walk reads
+    // it from an *enclosing* handler — uses the static walk can't see. Mark it
+    // used so it isn't classified Dead and always gets a slot, even when the
+    // `ctx` binding looks statically dead.
+    for region in &body.catch_regions {
+        if let Some(ctx_local) = region.stack_trace_local
+            && let Some(du) = def_use.get_mut(&ctx_local)
+        {
+            du.uses.push(UseLocation {
+                block: region.handler,
+                statement_ref: StatementRef::Terminator,
+            });
+        }
+    }
+
     def_use
 }
 
@@ -806,12 +822,16 @@ fn collect_uses_in_terminator(
         Terminator::Call {
             callee,
             args,
+            runtime_id,
             destination,
             ..
         } => {
             collect_uses_in_operand(callee, block, StatementRef::Terminator, def_use);
             for arg in args {
                 collect_uses_in_operand(arg, block, StatementRef::Terminator, def_use);
+            }
+            if let Some(runtime_id) = runtime_id {
+                collect_uses_in_operand(runtime_id, block, StatementRef::Terminator, def_use);
             }
             // Record the def for the destination (where call result is stored)
             if let Place::Local(local) = destination {
@@ -829,11 +849,17 @@ fn collect_uses_in_terminator(
             }
         }
         Terminator::VirtualCall {
-            args, destination, ..
+            args,
+            runtime_id,
+            destination,
+            ..
         } => {
             // No callee operand — the method is resolved at runtime from `iface`.
             for arg in args {
                 collect_uses_in_operand(arg, block, StatementRef::Terminator, def_use);
+            }
+            if let Some(runtime_id) = runtime_id {
+                collect_uses_in_operand(runtime_id, block, StatementRef::Terminator, def_use);
             }
             // Record the def for the destination (where the call result is stored).
             if let Place::Local(local) = destination {
@@ -850,12 +876,16 @@ fn collect_uses_in_terminator(
         Terminator::SysOp {
             callee,
             args,
+            runtime_id,
             destination,
             ..
         } => {
             collect_uses_in_operand(callee, block, StatementRef::Terminator, def_use);
             for arg in args {
                 collect_uses_in_operand(arg, block, StatementRef::Terminator, def_use);
+            }
+            if let Some(runtime_id) = runtime_id {
+                collect_uses_in_operand(runtime_id, block, StatementRef::Terminator, def_use);
             }
             // Record the def for the destination place
             if let Place::Local(local) = destination {
@@ -928,7 +958,9 @@ fn collect_uses_in_terminator(
                 }
             }
         }
-        Terminator::Throw { value } | Terminator::ThrowIfPanic { value, .. } => {
+        Terminator::Throw { value }
+        | Terminator::Rethrow { value }
+        | Terminator::ThrowIfPanic { value, .. } => {
             collect_uses_in_operand(value, block, StatementRef::Terminator, def_use);
         }
         Terminator::ShortCircuit {
@@ -1336,6 +1368,13 @@ fn can_be_virtual(
     if has_single_def && is_pure_constant(&def.rvalue) {
         // Just need at least one use to not be dead
         return !du.uses.is_empty();
+    }
+
+    // `Rvalue::Len` must be materialized eagerly at the binding site.
+    // Re-evaluating a virtualized `len` after intervening mutations (e.g.
+    // `push`) changes observable semantics for `let` bindings.
+    if matches!(def.rvalue, Rvalue::Len(_)) {
+        return false;
     }
 
     // For non-constant rvalues, require exactly one definition site.
@@ -1880,7 +1919,10 @@ fn get_copy_source(
 
 #[cfg(test)]
 mod tests {
-    use baml_compiler2_mir::{BasicBlock, Constant, Operand, Place, Statement, Terminator};
+    use baml_compiler2_mir::{
+        BasicBlock, Constant, LocalDecl, MirFunctionBody, Operand, Place, Statement, Terminator,
+    };
+    use baml_type::{RuntimeTy, TyAttr};
 
     use super::*;
 
@@ -1922,6 +1964,7 @@ mod tests {
                         callee: Operand::Constant(Constant::Null),
                         args: vec![],
                         ntypeargs: 0,
+                        runtime_id: None,
                         destination: Place::Local(target),
                         target: BlockId(1),
                         unwind: None,
@@ -1971,5 +2014,71 @@ mod tests {
         assert!(!is_call_result_aggregate_operand(
             target, &du, &body, &def_use,
         ));
+    }
+
+    /// Builds a minimal integer local declaration for MIR analysis tests.
+    fn int_local_decl(name: Option<&str>) -> LocalDecl {
+        LocalDecl {
+            name: name.map(baml_base::Name::new),
+            ty: RuntimeTy::Int {
+                attr: TyAttr::default(),
+            },
+            span: None,
+            scope_span: None,
+            is_watched: false,
+            is_captured: false,
+        }
+    }
+
+    /// Verifies `Rvalue::Len` bindings are always classified as materialized locals.
+    #[test]
+    fn len_bindings_are_not_virtualized() {
+        let arr = Local(1);
+        let len = Local(2);
+        let body = MirFunctionBody {
+            blocks: vec![BasicBlock {
+                id: BlockId(0),
+                statements: vec![
+                    Statement {
+                        kind: StatementKind::Assign {
+                            destination: Place::Local(arr),
+                            value: Rvalue::Use(Operand::Constant(Constant::Null)),
+                        },
+                        span: None,
+                    },
+                    Statement {
+                        kind: StatementKind::Assign {
+                            destination: Place::Local(len),
+                            value: Rvalue::Len(Place::Local(arr)),
+                        },
+                        span: None,
+                    },
+                    Statement {
+                        kind: StatementKind::Assign {
+                            destination: Place::Local(Local(0)),
+                            value: Rvalue::Use(Operand::copy_local(len)),
+                        },
+                        span: None,
+                    },
+                ],
+                terminator: Some(Terminator::Return),
+                span: None,
+                terminator_span: None,
+            }],
+            entry: BlockId(0),
+            locals: vec![
+                int_local_decl(None),
+                int_local_decl(Some("arr")),
+                int_local_decl(Some("n")),
+            ],
+            catch_regions: vec![],
+            viz_nodes: vec![],
+        };
+
+        let analysis = AnalysisResult::analyze(&body, 0, OptLevel::One);
+        assert_eq!(
+            analysis.classifications.get(&len),
+            Some(&LocalClassification::Real)
+        );
     }
 }

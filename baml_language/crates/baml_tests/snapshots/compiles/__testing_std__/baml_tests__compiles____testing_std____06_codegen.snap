@@ -671,7 +671,7 @@ function testing.TestCollector.register_test(self: testing.TestCollector, name: 
     load_var count
     load_const 1
     add_int
-    call baml.unstable.string
+    call baml.String.from
     store_var _57
     load_var2 13 14
     bin_op +
@@ -913,7 +913,7 @@ function testing.TestCollector.register_test_set(self: testing.TestCollector, na
     load_var count
     load_const 1
     add_int
-    call baml.unstable.string
+    call baml.String.from
     store_var _57
     load_var2 13 14
     bin_op +
@@ -1362,12 +1362,16 @@ function testing.TestRegistry.run_all(self: testing.TestRegistry) -> testing.Tes
 function testing.TestRegistry.run_filtered(self: testing.TestRegistry, include: string[], exclude: string[]) -> testing.FlatTestReport {
     load_var include
     container_len
+    store_var _7
+    load_var _7
     load_const 0
     cmp_int_op ==
     jump_if_false L0
     pop 1
     load_var exclude
     container_len
+    store_var _8
+    load_var _8
     load_const 0
     cmp_int_op ==
 
@@ -1380,7 +1384,7 @@ function testing.TestRegistry.run_filtered(self: testing.TestRegistry, include: 
     load_var exclude
     call testing.select_names
     store_var _9
-    load_var2 1 4
+    load_var2 1 6
     call testing.TestRegistry.run_selected
     jump L3
 
@@ -2610,7 +2614,7 @@ function testing._has_selected_descendant(prefix: string, names: string[]) -> bo
 function testing._int_to_float(value: int) -> float {
     load_type int
     load_var value
-    call baml.unstable.string
+    call baml.String.from
     call baml.Float.parse
     jump L0
     load_var e
@@ -2983,10 +2987,11 @@ function testing.aggregate_reports(named_results: testing.NamedChildReport[]) ->
 
   L25:
     load_var result
-    store_var report
-    load_var report
+    store_var_load_var report
     load_field .failed_names
     container_len
+    store_var _53
+    load_var _53
     load_const 0
     cmp_int_op >
     pop_jump_if_false L26
@@ -3156,7 +3161,7 @@ function testing.aggregate_reports(named_results: testing.NamedChildReport[]) ->
     jump L51
 
   L50:
-    load_var2 5 15
+    load_var2 5 16
     call baml.Array.push
     pop 1
     jump L30
@@ -3206,9 +3211,11 @@ function testing.aggregate_reports(named_results: testing.NamedChildReport[]) ->
     store_var _98
     load_var failed
     store_var _99
-    load_var2 16 17
-    load_var2 18 6
+    load_var results
     container_len
+    store_var _100
+    load_var2 17 18
+    load_var2 19 20
     load_var2 5 6
     init_instance testing.TestSetReport .outcome, .passed, .failed, .total, .failed_names, .results
     return
@@ -4399,6 +4406,8 @@ function testing.count_leaves(results: (testing.TestReport | testing.TestSetRepo
     load_var tsr
     load_field .results
     container_len
+    store_var _48
+    load_var _48
     load_const 0
     cmp_int_op >
     pop_jump_if_false L24
@@ -4553,6 +4562,8 @@ function testing.flatten_with_tolerated(report: testing.TestSetReport) -> testin
     load_var report
     load_field .results
     container_len
+    store_var _6
+    load_var _6
     load_const 0
     cmp_int_op >
     pop_jump_if_false L0
@@ -4699,20 +4710,23 @@ function testing.glob_match(subject: string, pattern: string) -> bool {
     store_var_load_var part
     load_const ""
     cmp_op !=
-    pop_jump_if_false L8
+    pop_jump_if_false L9
     load_var2 1 11
     load_var end_limit
     call baml.String.substring
     load_var part
     call baml.String.index_of
-    store_var idx
-    load_var idx
-    load_const 0
-    cmp_int_op <
+    store_var _38
+    load_var _38
+    is_type int
     pop_jump_if_false L7
-    jump L9
+    jump L8
 
   L7:
+    load_const false
+    jump L14
+
+  L8:
     load_var2 11 14
     add_int
     store_var _45
@@ -4722,16 +4736,12 @@ function testing.glob_match(subject: string, pattern: string) -> bool {
     add_int
     store_var pos
 
-  L8:
+  L9:
     load_var i
     load_const 1
     add_int
     store_var i
     jump L4
-
-  L9:
-    load_const false
-    jump L14
 
   L10:
     load_const false
@@ -4768,6 +4778,8 @@ function testing.leaf_selected(name: string, include: testing.FilterPat[], exclu
   L0:
     load_var include
     container_len
+    store_var _9
+    load_var _9
     load_const 0
     cmp_int_op ==
     pop_jump_if_false L1
@@ -4945,36 +4957,13 @@ function testing.parse_filter_patterns(raw: string[]) -> testing.FilterPat[] {
     load_var s
     load_const "::"
     call baml.String.index_of
-    store_var idx
-    load_var idx
-    load_const 0
-    cmp_int_op <
+    store_var _36
+    load_var _36
+    is_type int
     pop_jump_if_false L21
     jump L22
 
   L21:
-    load_var s
-    load_const 0
-    load_var idx
-    call baml.String.substring
-    store_var _45
-    load_var s
-    call baml.String.length
-    store_var _50
-    load_var2 5 6
-    load_const 2
-    add_int
-    load_var _50
-    call baml.String.substring
-    store_var _47
-    load_var2 2 7
-    load_var _47
-    init_instance testing.FilterPat .func_pat, .test_pat
-    call baml.Array.push
-    pop 1
-    jump L0
-
-  L22:
     load_var2 2 5
     load_const ""
     init_instance testing.FilterPat .func_pat, .test_pat
@@ -4983,6 +4972,30 @@ function testing.parse_filter_patterns(raw: string[]) -> testing.FilterPat[] {
     load_var out
     load_const ""
     load_var s
+    init_instance testing.FilterPat .func_pat, .test_pat
+    call baml.Array.push
+    pop 1
+    jump L0
+
+  L22:
+    load_var _36
+    store_var idx
+    load_var s
+    load_const 0
+    load_var idx
+    call baml.String.substring
+    store_var _40
+    load_var s
+    call baml.String.length
+    store_var _45
+    load_var2 5 7
+    load_const 2
+    add_int
+    load_var _45
+    call baml.String.substring
+    store_var _42
+    load_var2 2 8
+    load_var _42
     init_instance testing.FilterPat .func_pat, .test_pat
     call baml.Array.push
     pop 1
@@ -5610,14 +5623,21 @@ function testing.split_top(path: string) -> testing.NameSplit {
     load_var path
     load_const "/"
     call baml.String.index_of
-    store_var idx
-    load_var idx
-    load_const 0
-    cmp_int_op <
+    store_var _2
+    load_var _2
+    is_type int
     pop_jump_if_false L0
     jump L1
 
   L0:
+    load_const ""
+    load_var path
+    init_instance testing.NameSplit .head, .tail
+    jump L2
+
+  L1:
+    load_var _2
+    store_var idx
     load_var path
     load_const 0
     load_var idx
@@ -5625,17 +5645,11 @@ function testing.split_top(path: string) -> testing.NameSplit {
     load_var path
     call baml.String.length
     store_var _10
-    load_var2 1 2
+    load_var2 1 3
     load_const 1
     add_int
     load_var _10
     call baml.String.substring
-    init_instance testing.NameSplit .head, .tail
-    jump L2
-
-  L1:
-    load_const ""
-    load_var path
     init_instance testing.NameSplit .head, .tail
 
   L2:

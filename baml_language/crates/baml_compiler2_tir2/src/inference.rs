@@ -209,7 +209,7 @@ fn interface_type_level_params_and_bounds(
         iface_data
             .associated_types
             .iter()
-            .map(|assoc| assoc.bound.as_ref().map(|bound| bound.expr.clone())),
+            .map(|assoc| assoc.bound.clone()),
     );
 
     let own_associated: FxHashSet<Name> = iface_data
@@ -262,12 +262,9 @@ fn inherited_interface_associated_type_names(
             return;
         };
         for required in &iface_data.requires {
-            let Some(required_loc) = crate::interfaces::resolve_path_to_interface(
-                db,
-                &required.expr,
-                pkg_items,
-                ns_context,
-            ) else {
+            let Some(required_loc) =
+                crate::interfaces::resolve_path_to_interface(db, required, pkg_items, ns_context)
+            else {
                 continue;
             };
             let required_tree = baml_compiler2_hir::file_item_tree(db, required_loc.file(db));
@@ -641,7 +638,7 @@ fn validate_spanned_type_expr_generic_bounds(
     ns_context: &[Name],
     env: &GenericEnv,
     env_bounds: &crate::lower_type_expr::TypeVarBoundsMap,
-    type_expr: &ast::SpannedTypeExpr,
+    type_expr: &ast::TypeExpr,
     self_ty: Option<Ty>,
 ) {
     lower_type_expr_at_span_in_env(
@@ -651,7 +648,7 @@ fn validate_spanned_type_expr_generic_bounds(
         ns_context,
         env,
         env_bounds,
-        &type_expr.expr,
+        type_expr,
         TypeExprLoweringOptions {
             span: type_expr.span,
             self_ty,
@@ -690,7 +687,7 @@ fn add_lambda_params_to_builder(
             .map(|ste| {
                 let mut diags = Vec::new();
                 crate::lower_type_expr::lower_type_expr(
-                    &ste.expr,
+                    ste,
                     &crate::lower_type_expr::ScopeCtx {
                         db,
                         package_items: pkg_items,
@@ -1460,7 +1457,8 @@ pub fn infer_scope_types<'db>(
                     // `default.<method>(...)` resolves against I's
                     // contract.
                     if let Some(target) = item_tree.method_to_iface_target.get(local_id)
-                        && let baml_compiler2_ast::TypeExpr::Path { segments, .. } = &target.expr
+                        && let baml_compiler2_ast::TypeExprKind::Path { segments, .. } =
+                            &target.kind
                         && let Some((head, name)) = segments
                             .split_last()
                             .map(|(last, head)| (head, last.clone()))
@@ -1505,7 +1503,7 @@ pub fn infer_scope_types<'db>(
                         } else if let Some(imp) = enclosing_impl {
                             let mut diags = Vec::new();
                             Some(crate::lower_type_expr::lower_type_expr(
-                                &imp.for_target.expr,
+                                &imp.for_target,
                                 &crate::lower_type_expr::ScopeCtx {
                                     db,
                                     package_items: pkg_items,
@@ -1547,7 +1545,7 @@ pub fn infer_scope_types<'db>(
                         if let Some(target) = item_tree.method_to_iface_target.get(local_id)
                             && let Some(iface_loc) = crate::interfaces::resolve_path_to_interface(
                                 db,
-                                &target.expr,
+                                target,
                                 pkg_items,
                                 &pkg_info.namespace_path,
                             )
@@ -1559,8 +1557,9 @@ pub fn infer_scope_types<'db>(
                                     baml_compiler2_hir::file_package::file_package(db, iface_file)
                                         .namespace_path;
                                 let mut iface_type_bindings = type_bindings.clone();
-                                if let baml_compiler2_ast::TypeExpr::Path { generic_args, .. } =
-                                    &target.expr
+                                if let baml_compiler2_ast::TypeExprKind::Path {
+                                    generic_args, ..
+                                } = &target.kind
                                 {
                                     for (param, arg) in
                                         iface_data.generic_params.iter().zip(generic_args)
@@ -1618,7 +1617,7 @@ pub fn infer_scope_types<'db>(
                                         let mut binding_diags = Vec::new();
                                         let ty = crate::generics::substitute_ty(
                                             &crate::lower_type_expr::lower_type_expr(
-                                                &te.expr,
+                                                te,
                                                 &binding_ctx,
                                                 &mut binding_diags,
                                             ),
@@ -1638,7 +1637,7 @@ pub fn infer_scope_types<'db>(
                                                 iface_type_bindings.keys().cloned().collect();
                                             crate::generics::substitute_ty(
                                                 &crate::lower_type_expr::lower_type_expr(
-                                                    &default.expr,
+                                                    default,
                                                     &crate::lower_type_expr::ScopeCtx {
                                                         db,
                                                         package_items: pkg_items,
@@ -1709,7 +1708,7 @@ pub fn infer_scope_types<'db>(
                                                 type_bindings.keys().cloned().collect();
                                             crate::generics::substitute_ty(
                                                 &crate::lower_type_expr::lower_type_expr(
-                                                    &default.expr,
+                                                    default,
                                                     &crate::lower_type_expr::ScopeCtx {
                                                         db,
                                                         package_items: pkg_items,
@@ -1840,8 +1839,10 @@ pub fn infer_scope_types<'db>(
                                 .unwrap_or_default();
                             let mut param_ty_validated = false;
                             let param_ty = if param.name.as_str() == "self"
-                                && matches!(param.ty, baml_compiler2_ast::TypeExpr::Unknown { .. })
-                            {
+                                && matches!(
+                                    param.ty.kind,
+                                    baml_compiler2_ast::TypeExprKind::Unknown { .. }
+                                ) {
                                 // `self`'s type is the method's `Self` receiver, resolved once
                                 // above (rigid `Self` var for an interface's own default method,
                                 // the impl's receiver pattern, or the enclosing class's `Foo<T>`).
@@ -2717,8 +2718,7 @@ pub fn resolve_class_fields<'db>(
                 .as_ref()
                 .map(|te| {
                     let mut diags = Vec::new();
-                    let ty =
-                        crate::lower_type_expr::lower_type_expr(&te.expr, &field_scope, &mut diags);
+                    let ty = crate::lower_type_expr::lower_type_expr(te, &field_scope, &mut diags);
                     for d in diags {
                         all_diags.push((d, te.span));
                     }
@@ -2759,7 +2759,7 @@ pub fn resolve_type_alias<'db>(
         .map(|te| {
             let mut diags = Vec::new();
             let ty = crate::lower_type_expr::lower_type_expr(
-                &te.expr,
+                te,
                 &crate::lower_type_expr::ScopeCtx {
                     db,
                     package_items: pkg_items,

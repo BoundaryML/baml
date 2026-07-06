@@ -493,7 +493,8 @@ fn var_under_union(name: &Name, ty: &Ty) -> bool {
             | Ty::BuiltinUnknown { .. }
             | Ty::Never { .. }
             | Ty::Unknown { .. }
-            | Ty::Error { .. } => false,
+            | Ty::Error { .. }
+            | Ty::Infer { .. } => false,
         }
     }
     occurs(name, ty, false)
@@ -930,7 +931,8 @@ fn unify_into_at(
             | Ty::BuiltinUnknown { .. }
             | Ty::Never { .. }
             | Ty::Unknown { .. }
-            | Ty::Error { .. },
+            | Ty::Error { .. }
+            | Ty::Infer { .. },
             _,
         ) => Overlap::No,
     }
@@ -1391,7 +1393,8 @@ fn occurs_in(n: &Name, t: &Ty, vars: &[Name], bindings: &TypeBindings) -> bool {
         | Ty::BuiltinUnknown { .. }
         | Ty::Never { .. }
         | Ty::Unknown { .. }
-        | Ty::Error { .. } => false,
+        | Ty::Error { .. }
+        | Ty::Infer { .. } => false,
     }
 }
 

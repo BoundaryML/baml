@@ -153,6 +153,18 @@ class String {
     $rust_function
   }
 
+  /// Returns the string's Unicode code points as one-character strings.
+  ///
+  /// # Examples
+  /// ```
+  /// "hello".chars()  // ["h", "e", "l", "l", "o"]
+  /// "é😀".chars()    // ["é", "😀"]
+  /// "".chars()       // []
+  /// ```
+  function chars(self) -> string[] throws never {
+    $rust_function
+  }
+
   /// Splits the string into lines, recognizing both `\n` and `\r\n` as line
   /// terminators. The terminator is **not** included in the returned strings.
   /// A final terminator does not produce a trailing empty string.
@@ -194,16 +206,16 @@ class String {
   }
 
   /// Returns the **character index** of the first occurrence of `search`, or
-  /// `-1` if not found.
+  /// `null` if not found.
   ///
   /// # Examples
   /// ```
   /// "hello world".index_of("world")  // 6
   /// "héllo".index_of("l")            // 2
   /// "😀hello".index_of("h")          // 1
-  /// "abc".index_of("z")              // -1
+  /// "abc".index_of("z")              // null
   /// ```
-  function index_of(self, search: string) -> int throws never {
+  function index_of(self, search: string) -> int? throws never {
     $rust_function
   }
 
@@ -224,6 +236,31 @@ class String {
   /// ```
   //baml:fallible
   function char_at(self, index: int) -> string throws never {
+    $rust_function
+  }
+
+  /// Returns the **Unicode code point** of the character at the given codepoint
+  /// index, as an `int`.
+  ///
+  /// This is the numeric counterpart of `char_at`, which returns the character
+  /// as a one-character string. Negative indices count from the end: `-1` is the last
+  /// character. Raises `IndexOutOfBounds` when the index is out of range after
+  /// counting from the end, mirroring `char_at` and array subscripting.
+  ///
+  /// The returned value is always in `[0, 0x10FFFF]`, so it round-trips through
+  /// `string.from_code_points([cp])`.
+  ///
+  /// # Examples
+  /// ```
+  /// "A".code_point_at(0)        // 65
+  /// "é".code_point_at(0)        // 233
+  /// "🐑".code_point_at(0)       // 128017
+  /// "hello".code_point_at(-1)   // 111 ("o")
+  /// "😀hello".code_point_at(1)  // 104 ("h", not a UTF-16 unit)
+  /// "hi".code_point_at(99)      // raises IndexOutOfBounds
+  /// ```
+  //baml:fallible
+  function code_point_at(self, index: int) -> int throws never {
     $rust_function
   }
 
@@ -485,6 +522,28 @@ class String {
   /// string.from_utf8(b"\xFF")              // throws — 0xFF is invalid UTF-8
   /// ```
   function from_utf8(utf8: uint8array) -> string throws root.errors.InvalidArgument {
+    $rust_function
+  }
+
+  /// Returns the string's Unicode code points as an array of `int`s.
+  ///
+  /// This is the exact inverse of `string.from_code_points`: for any string
+  /// `s`, `string.from_code_points(s.to_code_points())` equals `s`. The result
+  /// has one element per character (`self.length()` elements), each in
+  /// `[0, 0x10FFFF]`. Never throws.
+  ///
+  /// Use this for char → integer mappings (checksums, base-N encoding, hashing,
+  /// character classification) instead of indexing into a literal alphabet
+  /// string.
+  ///
+  /// # Examples
+  /// ```
+  /// "hi".to_code_points()    // [104, 105]
+  /// "é".to_code_points()     // [233]
+  /// "🐑".to_code_points()    // [128017]
+  /// "".to_code_points()      // []
+  /// ```
+  function to_code_points(self) -> int[] throws never {
     $rust_function
   }
 

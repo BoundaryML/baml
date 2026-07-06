@@ -9,6 +9,10 @@ export { WebSocketRuntimePort } from './ports/WebSocketRuntimePort';
 export { createRunStoreClient } from './run-store-client';
 export { applyRunPatch, createExecutionStore } from './execution-store';
 export { decodeRunResultValue } from './run-store-projections';
+export { createValueBodyCache } from './value-body-cache';
+export type { ValueBodyCache } from './value-body-cache';
+export { awaitRunCompletion } from './run-await';
+export type { AwaitedRun } from './run-await';
 export type {
   RunStoreClient,
   RunSubscriptionEvent,
@@ -32,6 +36,13 @@ export type {
   SessionStoreSnapshot,
   SessionStoreStorage,
 } from './session-store';
+export {
+  BOUNDARY_PROXY_URL_KEY,
+  configureProxyEnvVar,
+  getProxyEnvVarConfig,
+} from './proxy-config';
+export type { ProxyEnvVarConfig } from './proxy-config';
+export { initPlaygroundEnv, setGatewayEnabled } from './gateway';
 export {
   normalizeSerializedTestTree,
   parseSerializedTestTreeJson,
@@ -77,7 +88,7 @@ export type {
   Run,
   RunCursor,
   RunCursorExpiredReason,
-  RunId,
+  BoundaryId,
   RunPatch,
   RunPatchChange,
   RunStatus,

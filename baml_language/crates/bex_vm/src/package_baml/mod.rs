@@ -7,10 +7,9 @@
 //! - `int` — `BamlClassInt` (abs, min, max, clamp, bit ops, ...)
 //! - `string` — `BamlClassString` (length, trim, split, ...)
 //! - `map` — `BamlClassMap` (length, has, keys, values, ...)
-//! - `math` — `BamlNamespaceMath` (trunc)
+//! - `math` — `BamlNamespaceMath` (trunc, sum, mean, median)
 //! - `media` — `BamlClassMedia{Pdf,Audio,Video,Image}` + `BamlNamespaceMedia`
 //! - `ops` — `BamlClassOps*` (`Equals`/`Compare` for primitives + containers)
-//! - `unstable` — `BamlNamespaceUnstable` (string)
 //! - `root` — `BamlPackageBaml` (`deep_copy`, `deep_equals`, and the
 //!   `Sortable.sort` shims `_compare_shim` / `_is_primitive_array` /
 //!   `_rust_sort` / `_float_total_cmp`)
@@ -23,9 +22,10 @@
 mod array;
 pub(crate) mod bigint;
 mod csv;
+mod error_context;
 mod float;
 mod future;
-mod id;
+pub(crate) mod id;
 mod int;
 pub mod json;
 mod map;
@@ -33,7 +33,7 @@ mod math;
 mod media;
 mod ops;
 mod resolve;
-pub(crate) use resolve::{realize_frame, resolve_implements_rule};
+pub(crate) use resolve::{realize_frame, resolve_implements_rule, type_implements};
 mod root;
 mod spawn;
 mod stack_trace;
@@ -43,7 +43,6 @@ mod time;
 mod toml;
 mod type_class;
 mod uint8array;
-mod unstable;
 mod yaml;
 
 use std::collections::HashMap;
@@ -368,10 +367,10 @@ pub(super) fn to_json_override_fn_name(vm: &BexVm, v: Value) -> Option<String> {
 
 /// Resolves native function pointers for unresolved native functions in objects.
 ///
-/// Only functions in the `baml.*` namespace are resolved here. Functions from
-/// other packages (e.g. `assert.*`, `testing.*`) are left as `NativeUnresolved`
-/// so they can be wired up by future package implementations. They will only
-/// fail at runtime if actually called.
+/// Only functions in VM-owned native namespaces are resolved here. Functions
+/// from other packages (e.g. `assert.*`, `testing.*`) are left as
+/// `NativeUnresolved` so they can be wired up by future package implementations.
+/// They will only fail at runtime if actually called.
 pub fn attach_builtins(object: Object) -> Result<Object, VmInternalError> {
     Ok(match object {
         Object::Function(function) => {
@@ -379,19 +378,27 @@ pub fn attach_builtins(object: Object) -> Result<Object, VmInternalError> {
                 bex_vm_types::FunctionKind::Bytecode => bex_vm_types::FunctionKind::Bytecode,
                 bex_vm_types::FunctionKind::SysOp(op) => bex_vm_types::FunctionKind::SysOp(op),
                 bex_vm_types::FunctionKind::NativeUnresolved => {
-                    // Only attempt resolution for the `baml.*` package. Functions
+                    // Only attempt resolution for VM-owned native packages. Functions
                     // from other stdlib packages (assert, testing, …) are deferred.
-                    if !function.name.starts_with("baml.") {
-                        bex_vm_types::FunctionKind::NativeUnresolved
+                    let native_function = if function.name.starts_with("baml.") {
+                        PackageBamlImpl::get_native_fn(function.name.as_str())
+                    } else if function.name.starts_with("boundary.") {
+                        crate::package_boundary::get_native_fn(function.name.as_str())
                     } else {
-                        let Some(native_function) =
-                            PackageBamlImpl::get_native_fn(function.name.as_str())
-                        else {
+                        None
+                    };
+                    match native_function {
+                        Some(native_function) => {
+                            bex_vm_types::FunctionKind::Native(native_function as *const ())
+                        }
+                        None if function.name.starts_with("baml.")
+                            || function.name.starts_with("boundary.") =>
+                        {
                             return Err(VmInternalError::MissingNativeFunction {
                                 name: function.name.clone(),
                             });
-                        };
-                        bex_vm_types::FunctionKind::Native(native_function as *const ())
+                        }
+                        None => bex_vm_types::FunctionKind::NativeUnresolved,
                     }
                 }
                 bex_vm_types::FunctionKind::Native(ptr) => bex_vm_types::FunctionKind::Native(ptr),
@@ -416,6 +423,7 @@ pub fn attach_builtins(object: Object) -> Result<Object, VmInternalError> {
                 throws_type: function.throws_type,
                 origin: function.origin,
                 body_meta: function.body_meta,
+                capture: function.capture,
                 function_id: 0, // synthetic; not in the profiling function table
             }))
         }

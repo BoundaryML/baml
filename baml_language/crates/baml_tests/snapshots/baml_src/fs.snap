@@ -200,6 +200,24 @@ function fs.$init_test_ns_fs_fs(registry: testing.TestCollector) -> null {
     load_const null
     call testing.TestCollector.register_test
     pop 1
+    load_var registry
+    load_const "fs_remove_dir_removes_empty"
+    make_closure .<lambda($init_test_ns_fs_fs, 33)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "fs_remove_dir_all_removes_tree"
+    make_closure .<lambda($init_test_ns_fs_fs, 34)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "fs_remove_dir_all_idempotent"
+    make_closure .<lambda($init_test_ns_fs_fs, 35)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
     load_const null
     return
 }
@@ -298,9 +316,11 @@ function fs.fs_file_read_bytes_n_fn() -> bool {
     load_var path
     sys_op baml.fs.remove
     pop 1
-    load_type int
     load_var data
     container_len
+    store_var _9
+    load_type int
+    load_var _9
     load_const 3
     call baml.deep_equals
     return
@@ -520,9 +540,11 @@ function fs.fs_open_and_read_bytes_fn() -> bool {
     load_var path
     sys_op baml.fs.remove
     pop 1
-    load_type int
     load_var data
     container_len
+    store_var _9
+    load_type int
+    load_var _9
     load_const 16
     call baml.deep_equals
     return
@@ -791,10 +813,10 @@ function fs.fs_read_dir_empty_dir_fn() -> bool {
     pop 1
     load_var dir
     sys_op baml.fs.read_dir
-    store_var entries
-    load_type int
-    load_var entries
     container_len
+    store_var _7
+    load_type int
+    load_var _7
     load_const 0
     call baml.deep_equals
     return
@@ -841,9 +863,11 @@ function fs.fs_read_dir_returns_entries_fn() -> bool {
     bin_op +
     sys_op baml.fs.remove
     pop 1
-    load_type int
     load_var entries
     container_len
+    store_var _24
+    load_type int
+    load_var _24
     load_const 3
     call baml.deep_equals
     store_var count_ok
@@ -974,6 +998,81 @@ function fs.fs_remove_deletes_file_fn() -> bool {
     return
 }
 
+function fs.fs_remove_dir_all_idempotent_fn() -> bool {
+    load_const "remove_dir_all_missing"
+    call user.fs.fs_tmp
+    store_var dir
+    load_var dir
+    sys_op baml.fs.remove_dir_all
+    pop 1
+    load_var dir
+    sys_op baml.fs.exists
+    store_var _4
+    load_type bool
+    load_var _4
+    load_const false
+    call baml.deep_equals
+    return
+}
+
+function fs.fs_remove_dir_all_removes_tree_fn() -> bool {
+    load_const "remove_dir_all_tree"
+    call user.fs.fs_tmp
+    store_var dir
+    load_var dir
+    load_const "/sub"
+    bin_op +
+    load_const true
+    init_instance baml.fs.MkdirOptions .recursive
+    sys_op baml.fs.mkdir
+    pop 1
+    load_var dir
+    load_const "/a.txt"
+    bin_op +
+    load_const "a"
+    sys_op baml.fs.write
+    pop 1
+    load_var dir
+    load_const "/sub/b.txt"
+    bin_op +
+    load_const "b"
+    sys_op baml.fs.write
+    pop 1
+    load_var dir
+    sys_op baml.fs.remove_dir_all
+    pop 1
+    load_var dir
+    sys_op baml.fs.exists
+    store_var _14
+    load_type bool
+    load_var _14
+    load_const false
+    call baml.deep_equals
+    return
+}
+
+function fs.fs_remove_dir_removes_empty_fn() -> bool {
+    load_const "remove_dir_empty"
+    call user.fs.fs_tmp
+    store_var dir
+    load_var dir
+    load_const true
+    init_instance baml.fs.MkdirOptions .recursive
+    sys_op baml.fs.mkdir
+    pop 1
+    load_var dir
+    sys_op baml.fs.remove_dir
+    pop 1
+    load_var dir
+    sys_op baml.fs.exists
+    store_var _7
+    load_type bool
+    load_var _7
+    load_const false
+    call baml.deep_equals
+    return
+}
+
 function fs.fs_roundtrip_write_and_read_fn() -> string {
     load_const "roundtrip.txt"
     call user.fs.fs_tmp
@@ -1071,9 +1170,11 @@ function fs.fs_write_bytes_fn() -> bool {
     call baml.deep_equals
     jump_if_false L0
     pop 1
-    load_type int
     load_var readback
     container_len
+    store_var _21
+    load_type int
+    load_var _21
     load_const 11
     call baml.deep_equals
 

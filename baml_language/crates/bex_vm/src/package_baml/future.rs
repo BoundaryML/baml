@@ -92,11 +92,7 @@ impl BamlClassFutureFuture for PackageBamlImpl {
             }
             FutureRead::Cancelled => "Cancelled",
         };
-        let Some(enm_ptr) = vm
-            .resolved_class_names
-            .get("baml.future.FutureState")
-            .copied()
-        else {
+        let Some(enm_ptr) = vm.lookup_type_by_fqn("baml.future.FutureState") else {
             return Value::NULL;
         };
         // SAFETY: enm_ptr came from resolved_class_names which holds

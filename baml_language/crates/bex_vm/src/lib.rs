@@ -16,6 +16,9 @@ pub mod errors;
 pub mod indexable;
 pub mod kperf;
 pub mod package_baml;
+pub mod package_boundary;
+pub mod package_load;
+mod type_context;
 pub mod types;
 pub mod vm;
 pub mod watch;
@@ -23,4 +26,8 @@ pub mod watch;
 pub use errors::{StackFrame, VmPanic, format_traceback};
 pub use indexable::EvalStack;
 pub use package_baml::NativeFunction;
-pub use vm::{BexVm, BytecodeFrame, BytecodeProgram, Frame, VmExecState, convert_program};
+pub use vm::{
+    BexVm, BytecodeFrame, BytecodeProgram, Frame, VmCallCaptureEvent, VmCallCaptureKind,
+    VmCallInputCapture, VmCallInputCaptureHook, VmCaptureMask, VmEventSourceLocation, VmExecState,
+    convert_program,
+};

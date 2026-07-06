@@ -638,6 +638,36 @@ impl<'a> Parser<'a> {
             .is_some_and(|t| t.kind == TokenKind::Word)
     }
 
+    /// True when a postfix `(` must NOT be glued onto the expression parsed so
+    /// far as a call, because that expression is *block-terminated* (its last
+    /// real token is `}` — an `if`/`match`/block/loop body) and the `(` opens a
+    /// fresh line.
+    ///
+    /// This is the guard-`if` early-return case (B-622):
+    ///   if (x < 0) { throw ... }
+    ///   (x * 2)
+    /// Without it the parser glues `{ ... }(x * 2)` into a call on the void
+    /// `if` result. Keying on a block-terminating `}` (rather than any callee)
+    /// keeps ordinary multi-line calls — a method chain whose `(` lands on a
+    /// later line than an identifier/`)` callee — parsing as calls, matching
+    /// the deliberately-tested `foo()`-then-`(1)` chained-call behavior. The
+    /// newline requirement keeps same-line `<block>(…)` forms (e.g. an
+    /// immediately-invoked block) untouched.
+    fn newline_separates_block_expr_from_paren(&self) -> bool {
+        self.has_newline_ahead() && self.last_significant_emitted_token_is_block_close()
+    }
+
+    /// Kind-check on the most recently *emitted* significant token: is it a
+    /// closing `}`? Trailing trivia after the current expression has not been
+    /// emitted yet at postfix-decision time, so the last non-trivia token event
+    /// is the final real token of the expression parsed so far.
+    fn last_significant_emitted_token_is_block_close(&self) -> bool {
+        self.events.iter().rev().find_map(|event| match event {
+            Event::Token { kind, .. } if !kind.is_trivia() => Some(*kind),
+            _ => None,
+        }) == Some(SyntaxKind::R_BRACE)
+    }
+
     /// Check if there's a newline before the next non-trivia token.
     /// Comments are treated as trivia for this purpose.
     fn has_newline_ahead(&self) -> bool {
@@ -1550,6 +1580,53 @@ impl<'a> Parser<'a> {
         true
     }
 
+    /// The span to attach to an "expected …, found …" / point-at-here error.
+    ///
+    /// Points at the current token — `current()` already skips trivia, so its
+    /// span is tight. At end of input there is no token to point at (the error
+    /// is the *absence* of a token), so we emit a zero-width caret just past the
+    /// last real token, matching rustc's `prev_token.span.shrink_to_hi()`. This
+    /// never points at trailing trivia: the old fallback reached into the raw
+    /// `self.tokens.last()`, which could be a trailing newline and produced a
+    /// span covering `"\n"`.
+    fn error_span(&self) -> baml_base::Span {
+        if let Some(token) = self.current() {
+            return token.span;
+        }
+        match self.last_non_trivia_token() {
+            Some(token) => {
+                let end = token.span.range.end();
+                baml_base::Span::new(token.span.file_id, TextRange::new(end, end))
+            }
+            None => baml_base::Span::new(baml_base::FileId::new(0), TextRange::default()),
+        }
+    }
+
+    /// The last non-trivia token in the stream, used to anchor end-of-input
+    /// error spans so they never land on trailing whitespace or comments.
+    ///
+    /// Comments are token sequences (e.g. `// …`), not single trivia tokens, so
+    /// a reverse scan can't recognize them; mirror `current_impl` and walk
+    /// forward, skipping comment runs with `skip_comment_at`, tracking the last
+    /// real (non-basic-trivia) token.
+    fn last_non_trivia_token(&self) -> Option<&Token> {
+        let mut last = None;
+        let mut i = 0;
+        while i < self.tokens.len() {
+            let new_i = self.skip_comment_at(i);
+            if new_i != i {
+                i = new_i;
+                continue;
+            }
+            let token = &self.tokens[i];
+            if !self.is_basic_trivia(token.kind) {
+                last = Some(token);
+            }
+            i += 1;
+        }
+        last
+    }
+
     /// Expect a token, emit error if not found
     fn expect(&mut self, kind: TokenKind) -> bool {
         if self.eat(kind) {
@@ -1560,12 +1637,7 @@ impl<'a> Parser<'a> {
                 .map(|t| format!("{}", t.kind))
                 .unwrap_or_else(|| "EOF".to_string());
 
-            let span = self.current().map(|t| t.span).unwrap_or_else(|| {
-                // Use the span of the last token if available, or a default empty span
-                self.tokens.last().map(|t| t.span).unwrap_or_else(|| {
-                    baml_base::Span::new(baml_base::FileId::new(0), TextRange::default())
-                })
-            });
+            let span = self.error_span();
 
             self.events.push(Event::UnexpectedToken {
                 expected: format!("{kind}"),
@@ -1592,12 +1664,7 @@ impl<'a> Parser<'a> {
             .map(|t| format!("{}", t.kind))
             .unwrap_or_else(|| "EOF".to_string());
 
-        let span = self.current().map(|t| t.span).unwrap_or_else(|| {
-            // Use the span of the last token if available, or a default empty span
-            self.tokens.last().map(|t| t.span).unwrap_or_else(|| {
-                baml_base::Span::new(baml_base::FileId::new(0), TextRange::default())
-            })
-        });
+        let span = self.error_span();
 
         self.events.push(Event::UnexpectedToken {
             expected,
@@ -1613,11 +1680,7 @@ impl<'a> Parser<'a> {
 
     /// Emit a hard syntax error (custom message) at the current token's span.
     fn error_here(&mut self, message: String) {
-        let span = self.current().map(|t| t.span).unwrap_or_else(|| {
-            self.tokens.last().map(|t| t.span).unwrap_or_else(|| {
-                baml_base::Span::new(baml_base::FileId::new(0), TextRange::default())
-            })
-        });
+        let span = self.error_span();
         self.error(message, span);
     }
 
@@ -4393,12 +4456,8 @@ impl<'a> Parser<'a> {
             if self.testset_body_depth > 0 {
                 self.parse_test_expr();
             } else {
-                let span = self.current().map(|t| t.span).unwrap_or_else(|| {
-                    baml_base::Span::new(baml_base::FileId::new(0), TextRange::default())
-                });
-                self.error(
+                self.error_here(
                     "test blocks are only allowed at the top level or inside a testset".to_string(),
-                    span,
                 );
                 self.parse_test_expr(); // still parse to recover
             }
@@ -4406,13 +4465,9 @@ impl<'a> Parser<'a> {
             if self.testset_body_depth > 0 {
                 self.parse_testset();
             } else {
-                let span = self.current().map(|t| t.span).unwrap_or_else(|| {
-                    baml_base::Span::new(baml_base::FileId::new(0), TextRange::default())
-                });
-                self.error(
+                self.error_here(
                     "testset blocks are only allowed at the top level or inside a testset"
                         .to_string(),
-                    span,
                 );
                 self.parse_testset(); // still parse to recover
             }
@@ -4554,6 +4609,31 @@ impl<'a> Parser<'a> {
             }
 
             p.parse_expr_bp_no_catch(0);
+        });
+    }
+
+    /// Parse `return expr?` in expression position as a `RETURN_EXPR` — a
+    /// diverging expression of type `never`. This is what lets a braceless
+    /// `return` be a `catch`/`match` arm value (`_ => return 0`). Statement
+    /// position is still handled by `parse_return_stmt` (see `parse_stmt`),
+    /// so this only fires when `return` is reached through expression parsing.
+    ///
+    /// Like `parse_return_stmt`, the value is optional: a bare `return` (e.g.
+    /// in a void function) is valid, so we stop before a token that cannot
+    /// begin an expression. We don't eat a trailing `;` here — that belongs to
+    /// the enclosing statement, not the expression.
+    fn parse_return_expr(&mut self) {
+        self.with_node(SyntaxKind::RETURN_EXPR, |p| {
+            p.expect(TokenKind::Return);
+
+            // Optional return value — bare `return` yields unit before diverging.
+            if !p.at(TokenKind::Semicolon)
+                && !p.at(TokenKind::Comma)
+                && !p.at(TokenKind::RBrace)
+                && !p.at_end()
+            {
+                p.parse_expr_bp_no_catch(0);
+            }
         });
     }
 
@@ -5291,7 +5371,12 @@ impl<'a> Parser<'a> {
     }
 
     fn at_catch_clause_start(&self) -> bool {
-        self.at(TokenKind::Catch) || self.at(TokenKind::CatchAll)
+        self.at(TokenKind::Catch)
+            || self.at(TokenKind::CatchAll)
+            // `catch_all_panics` is a contextual keyword: the lexer treats it as
+            // a plain identifier so it stays usable as one elsewhere, but in
+            // catch-clause position it introduces a clause like `catch_all`.
+            || self.at_contextual_kw("catch_all_panics")
     }
 
     fn parse_catch_expr(&mut self, expr_start: usize) {
@@ -5305,8 +5390,12 @@ impl<'a> Parser<'a> {
 
     fn parse_catch_clause(&mut self) {
         self.with_node(SyntaxKind::CATCH_CLAUSE, |p| {
-            if p.at_catch_clause_start() {
+            if p.at(TokenKind::Catch) || p.at(TokenKind::CatchAll) {
                 p.bump();
+            } else if p.at_contextual_kw("catch_all_panics") {
+                // Re-label the contextual `Word` as a dedicated keyword so the
+                // AST lowering and tooling can recognize the clause kind.
+                p.bump_contextual_kw_as("catch_all_panics", SyntaxKind::KW_CATCH_ALL_PANICS);
             } else {
                 p.error_unexpected_token("catch clause keyword".to_string());
                 return;
@@ -5752,8 +5841,22 @@ impl<'a> Parser<'a> {
                 self.parse_expr_bp(5); // right_bp = 5 (left associative)
                 self.wrap_events_in_node(lhs_start, SyntaxKind::BINARY_EXPR);
                 self.finish_node();
-            } else if op == TokenKind::LParen {
-                // Function call
+            } else if op == TokenKind::LParen && !self.newline_separates_block_expr_from_paren() {
+                // Function call.
+                //
+                // The `newline_separates_block_expr_from_paren()` guard fixes a
+                // guard-style early return (B-622): a block-terminated
+                // statement whose value is discarded, followed on the *next
+                // line* by a parenthesized expression, must not glue into a
+                // call on that value. For example
+                //   if (x < 0) { throw ... }
+                //   (x * 2)
+                // would otherwise parse as `{ ... }(x * 2)`, invoking the void
+                // `if` result (E0006 "`void` is not a function"). Only the
+                // block-terminated + newline shape is separated (mirroring
+                // Rust's expression-statement rule); ordinary calls whose `(`
+                // sits on a later line than a non-`}` callee — e.g. a method
+                // chain broken across lines by comments — still parse as calls.
                 let lhs_start = self.find_previous_expr_start_after(expr_start);
                 self.wrap_events_in_node(lhs_start, SyntaxKind::CALL_EXPR);
                 self.parse_call_args();
@@ -6175,6 +6278,11 @@ impl<'a> Parser<'a> {
         } else if self.at(TokenKind::Throw) {
             // Throw expression
             self.parse_throw_expr();
+        } else if self.at(TokenKind::Return) {
+            // Return expression (diverging, type `never`) — lets `return` be a
+            // `catch`/`match` arm value. Statement-position `return` is taken by
+            // `parse_stmt` before reaching here.
+            self.parse_return_expr();
         } else if self.at(TokenKind::Word) {
             // Collect text as owned String so the borrow is released before any &mut calls.
             let text: String = self.current().map(|t| t.text.clone()).unwrap_or_default();
@@ -9066,6 +9174,58 @@ function Demo() -> int {
         assert_eq!(child_kinds[1], SyntaxKind::CATCH_CLAUSE);
     }
 
+    /// `catch_all_panics` is a contextual keyword: the lexer emits a plain
+    /// `Word`, and the parser must still recognize it in catch-clause position
+    /// (B-504 — it previously only handled `catch`/`catch_all`).
+    #[test]
+    fn parses_catch_all_panics_clause() {
+        let source = r#"
+function Demo() -> int {
+  throw 1 catch_all_panics (e) {
+    _ => 1
+  }
+}
+"#;
+
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let catch_expr = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::CATCH_EXPR)
+            .expect("expected CATCH_EXPR node");
+        let child_kinds: Vec<_> = catch_expr.children().map(|n| n.kind()).collect();
+        assert_eq!(child_kinds[0], SyntaxKind::THROW_EXPR);
+        assert_eq!(child_kinds[1], SyntaxKind::CATCH_CLAUSE);
+
+        // The `Word` is re-labelled as a dedicated keyword token inside the clause.
+        let has_kw = catch_expr.descendants_with_tokens().any(|elem| {
+            matches!(
+                elem,
+                rowan::NodeOrToken::Token(t)
+                    if t.kind() == SyntaxKind::KW_CATCH_ALL_PANICS && t.text() == "catch_all_panics"
+            )
+        });
+        assert!(has_kw, "expected a KW_CATCH_ALL_PANICS token in the clause");
+    }
+
+    /// `catch_all_panics` is contextual, not reserved: outside catch-clause
+    /// position it is still a perfectly good identifier (e.g. a function name).
+    #[test]
+    fn catch_all_panics_is_a_normal_identifier_outside_catch() {
+        let source = r#"
+function catch_all_panics() -> int { 1 }
+
+function Demo() -> int {
+  let x = catch_all_panics()
+  x
+}
+"#;
+
+        let (_root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+    }
+
     #[test]
     fn parses_return_throw_catch_expression() {
         let source = r#"
@@ -11507,5 +11667,87 @@ function f() -> int {
 "#;
         let (_root, errors) = parse_source(source);
         assert_no_errors(&errors);
+    }
+
+    #[test]
+    fn guard_if_then_parenthesized_return_on_next_line_is_two_statements() {
+        // Regression (B-622): a guard `if (cond) { throw ... }` with no else,
+        // followed on the next line by a parenthesized return expression, must
+        // parse as TWO statements. Without the newline guard on the postfix
+        // call branch the parser glued `{ ... }(x * 2)` into a call on the void
+        // `if` result, producing a misleading E0006 downstream.
+        let source = r#"function f(x: int) -> int {
+    if (x < 0) { throw baml.errors.InvalidArgument { message: "neg" } }
+    (x * 2)
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        // The `if` and the `(x * 2)` are separate statements: the parenthesized
+        // return must NOT be wrapped in a CALL_EXPR on the if-result.
+        let call_exprs = root
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::CALL_EXPR)
+            .count();
+        assert_eq!(
+            call_exprs, 0,
+            "the parenthesized return must not be parsed as a call on the void `if` result"
+        );
+    }
+
+    #[test]
+    fn call_with_paren_on_same_line_still_parses_as_call() {
+        // The block-close guard must not disturb ordinary calls whose `(`
+        // follows the callee on the same line — including multi-line argument
+        // lists, where the `(` still sits on the callee's line.
+        let source = r#"function f() -> int {
+    let a = g(1, 2)
+    let b = g(
+        3,
+        4,
+    )
+    a + b
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let call_exprs = root
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::CALL_EXPR)
+            .count();
+        assert_eq!(
+            call_exprs, 2,
+            "both same-line and multi-line-argument calls must still parse as calls"
+        );
+    }
+
+    #[test]
+    fn non_block_callee_then_paren_on_next_line_still_chains() {
+        // The B-622 fix keys strictly on a block-terminating `}` callee: a
+        // *non*-block callee (here a call `g()`, ending in `)`) followed by `(`
+        // on the next line must STILL glue into a chained call `g()(1)`. This
+        // preserves the deliberately-tested `foo()`-then-`(1)` behavior and
+        // guards against a future over-broad "newline separates" change.
+        let source = r#"function f(g: () -> (int) -> int) -> int {
+    g()
+    (1)
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        // `g()(1)` is one CALL_EXPR wrapping another (the outer call applies the
+        // returned lambda), so two CALL_EXPR nodes total — the newline did NOT
+        // split them into separate statements.
+        let call_exprs = root
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::CALL_EXPR)
+            .count();
+        assert_eq!(
+            call_exprs, 2,
+            "a non-block callee followed by `(` on the next line must still chain as a call"
+        );
     }
 }

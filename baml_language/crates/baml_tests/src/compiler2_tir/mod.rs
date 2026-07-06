@@ -233,6 +233,10 @@ pub(crate) mod support {
                 format!("{base_desc} {}", clause_descs.join(" "))
             }
             Expr::Throw { value } => format!("throw {}", expr_desc(*value, body)),
+            Expr::Return { value } => match value {
+                Some(value) => format!("return {}", expr_desc(*value, body)),
+                None => "return".into(),
+            },
             Expr::Binary { op, lhs, rhs } => {
                 format!("{} {op} {}", expr_desc(*lhs, body), expr_desc(*rhs, body))
             }
@@ -336,7 +340,7 @@ pub(crate) mod support {
             .map(|p| {
                 let default_suffix = default_expr_suffix(p.default, &func_def.defaults);
                 if let Some(ref te) = p.type_expr {
-                    format!("{}: {}{}", p.name, te.expr, default_suffix)
+                    format!("{}: {}{}", p.name, te, default_suffix)
                 } else {
                     format!("{}{}", p.name, default_suffix)
                 }
@@ -345,12 +349,12 @@ pub(crate) mod support {
         let ret = func_def
             .return_type
             .as_ref()
-            .map(|te| format!(" {}", te.expr))
+            .map(|te| format!(" {}", te))
             .unwrap_or_default();
         let throws = func_def
             .throws
             .as_ref()
-            .map(|te| format!(" throws {}", te.expr))
+            .map(|te| format!(" throws {}", te))
             .unwrap_or_default();
         let generics = if func_def.generic_params.is_empty() {
             String::new()
@@ -391,7 +395,7 @@ pub(crate) mod support {
             .map(|p| {
                 let default_suffix = default_expr_suffix(p.default, &func_def.defaults);
                 if let Some(ref te) = p.type_expr {
-                    format!("{}: {}{}", p.name, qualify(&te.expr), default_suffix)
+                    format!("{}: {}{}", p.name, qualify(te), default_suffix)
                 } else {
                     format!("{}{}", p.name, default_suffix)
                 }
@@ -400,12 +404,12 @@ pub(crate) mod support {
         let ret = func_def
             .return_type
             .as_ref()
-            .map(|te| format!(" {}", qualify(&te.expr)))
+            .map(|te| format!(" {}", qualify(te)))
             .unwrap_or_default();
         let throws = func_def
             .throws
             .as_ref()
-            .map(|te| format!(" throws {}", qualify(&te.expr)))
+            .map(|te| format!(" throws {}", qualify(te)))
             .unwrap_or_default();
         let generics = if func_def.generic_params.is_empty() {
             String::new()
@@ -1197,8 +1201,8 @@ pub(crate) mod support {
                             .map(|(index, param)| {
                                 let ty = if param.name.as_str() == "self"
                                     && matches!(
-                                        param.ty,
-                                        baml_compiler2_ast::TypeExpr::Unknown { .. }
+                                        param.ty.kind,
+                                        baml_compiler2_ast::TypeExprKind::Unknown { .. }
                                     ) {
                                     enclosing_class_ty.clone().unwrap_or(
                                         baml_compiler2_tir::ty::Ty::Unknown {
@@ -1366,8 +1370,8 @@ pub(crate) mod support {
                         .is_some_and(|base| local_type_names.contains(base))
             }
 
-            match ty {
-                baml_compiler2_ast::TypeExpr::Path {
+            match &ty.kind {
+                baml_compiler2_ast::TypeExprKind::Path {
                     segments,
                     generic_args,
                     associated_type_bindings,
@@ -1402,44 +1406,44 @@ pub(crate) mod support {
                     }
                     rendered
                 }
-                baml_compiler2_ast::TypeExpr::Int { .. } => "int".into(),
-                baml_compiler2_ast::TypeExpr::Bigint { .. } => "bigint".into(),
-                baml_compiler2_ast::TypeExpr::Float { .. } => "float".into(),
-                baml_compiler2_ast::TypeExpr::String { .. } => "string".into(),
-                baml_compiler2_ast::TypeExpr::Bool { .. } => "bool".into(),
-                baml_compiler2_ast::TypeExpr::Null { .. } => "null".into(),
-                baml_compiler2_ast::TypeExpr::Never { .. } => "never".into(),
-                baml_compiler2_ast::TypeExpr::Void { .. } => "void".into(),
-                baml_compiler2_ast::TypeExpr::Uint8Array { .. } => "uint8array".into(),
-                baml_compiler2_ast::TypeExpr::Media { kind: k, .. } => {
+                baml_compiler2_ast::TypeExprKind::Int { .. } => "int".into(),
+                baml_compiler2_ast::TypeExprKind::Bigint { .. } => "bigint".into(),
+                baml_compiler2_ast::TypeExprKind::Float { .. } => "float".into(),
+                baml_compiler2_ast::TypeExprKind::String { .. } => "string".into(),
+                baml_compiler2_ast::TypeExprKind::Bool { .. } => "bool".into(),
+                baml_compiler2_ast::TypeExprKind::Null { .. } => "null".into(),
+                baml_compiler2_ast::TypeExprKind::Never { .. } => "never".into(),
+                baml_compiler2_ast::TypeExprKind::Void { .. } => "void".into(),
+                baml_compiler2_ast::TypeExprKind::Uint8Array { .. } => "uint8array".into(),
+                baml_compiler2_ast::TypeExprKind::Media { kind: k, .. } => {
                     format!("{:?}", k).to_lowercase()
                 }
-                baml_compiler2_ast::TypeExpr::Optional { inner, .. } => {
+                baml_compiler2_ast::TypeExprKind::Optional { inner, .. } => {
                     format!(
                         "{}?",
                         type_expr_to_string_hir(inner, pkg_prefix, local_type_names)
                     )
                 }
-                baml_compiler2_ast::TypeExpr::List { inner, .. } => {
+                baml_compiler2_ast::TypeExprKind::List { inner, .. } => {
                     format!(
                         "{}[]",
                         type_expr_to_string_hir(inner, pkg_prefix, local_type_names)
                     )
                 }
-                baml_compiler2_ast::TypeExpr::Map { key, value, .. } => format!(
+                baml_compiler2_ast::TypeExprKind::Map { key, value, .. } => format!(
                     "map<{}, {}>",
                     type_expr_to_string_hir(key, pkg_prefix, local_type_names),
                     type_expr_to_string_hir(value, pkg_prefix, local_type_names)
                 ),
-                baml_compiler2_ast::TypeExpr::Union {
+                baml_compiler2_ast::TypeExprKind::Union {
                     variants: members, ..
                 } => members
                     .iter()
                     .map(|m| type_expr_to_string_hir(m, pkg_prefix, local_type_names))
                     .collect::<Vec<_>>()
                     .join(" | "),
-                baml_compiler2_ast::TypeExpr::Literal { value: lit, .. } => lit.to_string(),
-                baml_compiler2_ast::TypeExpr::Function {
+                baml_compiler2_ast::TypeExprKind::Literal { value: lit, .. } => lit.to_string(),
+                baml_compiler2_ast::TypeExprKind::Function {
                     params,
                     ret,
                     throws,
@@ -1480,8 +1484,8 @@ pub(crate) mod support {
                         throws
                     )
                 }
-                baml_compiler2_ast::TypeExpr::BuiltinUnknown { .. } => "unknown".into(),
-                baml_compiler2_ast::TypeExpr::AssociatedTypeProjection {
+                baml_compiler2_ast::TypeExprKind::BuiltinUnknown { .. } => "unknown".into(),
+                baml_compiler2_ast::TypeExprKind::AssociatedTypeProjection {
                     base,
                     interface,
                     member,
@@ -1496,10 +1500,11 @@ pub(crate) mod support {
                         format!("{base}.{member}")
                     }
                 }
-                baml_compiler2_ast::TypeExpr::Type { .. } => "type".into(),
-                baml_compiler2_ast::TypeExpr::Rust { .. } => "$rust_type".into(),
-                baml_compiler2_ast::TypeExpr::Error { .. } => "error".into(),
-                baml_compiler2_ast::TypeExpr::Unknown { .. } => "?".into(),
+                baml_compiler2_ast::TypeExprKind::Type { .. } => "type".into(),
+                baml_compiler2_ast::TypeExprKind::Rust { .. } => "$rust_type".into(),
+                baml_compiler2_ast::TypeExprKind::Error { .. } => "error".into(),
+                baml_compiler2_ast::TypeExprKind::Unknown { .. } => "?".into(),
+                baml_compiler2_ast::TypeExprKind::Infer { .. } => "_".into(),
             }
         }
 
@@ -1713,6 +1718,13 @@ pub(crate) mod support {
                         expr_desc_hir(*value, body, prefix, local_type_names)
                     )
                 }
+                Expr::Return { value } => match value {
+                    Some(value) => format!(
+                        "return {}",
+                        expr_desc_hir(*value, body, prefix, local_type_names)
+                    ),
+                    None => "return".into(),
+                },
                 Expr::Binary { op, lhs, rhs } => format!(
                     "{} {op:?} {}",
                     expr_desc_hir(*lhs, body, prefix, local_type_names),
@@ -2006,7 +2018,7 @@ pub(crate) mod support {
                 let ty = field
                     .type_expr
                     .as_ref()
-                    .map(|te| type_expr_to_string_hir(&te.expr, &prefix, &local_type_names))
+                    .map(|te| type_expr_to_string_hir(te, &prefix, &local_type_names))
                     .unwrap_or_else(|| "?".into());
                 writeln!(output, "  {}: {}", field.name, ty).ok();
             }
@@ -2034,7 +2046,7 @@ pub(crate) mod support {
             let ty = ta
                 .type_expr
                 .as_ref()
-                .map(|te| type_expr_to_string_hir(&te.expr, &prefix, &local_type_names))
+                .map(|te| type_expr_to_string_hir(te, &prefix, &local_type_names))
                 .unwrap_or_else(|| "?".into());
             writeln!(output, "type {prefix}{} = {}", ta.name, ty).ok();
         }
@@ -2050,7 +2062,7 @@ pub(crate) mod support {
                     let ty = p
                         .type_expr
                         .as_ref()
-                        .map(|te| type_expr_to_string_hir(&te.expr, &prefix, &local_type_names))
+                        .map(|te| type_expr_to_string_hir(te, &prefix, &local_type_names))
                         .unwrap_or_else(|| "?".into());
                     format!("{}: {}{}", p.name, ty, default_suffix)
                 })
@@ -2058,7 +2070,7 @@ pub(crate) mod support {
             let ret = func
                 .return_type
                 .as_ref()
-                .map(|te| type_expr_to_string_hir(&te.expr, &prefix, &local_type_names))
+                .map(|te| type_expr_to_string_hir(te, &prefix, &local_type_names))
                 .unwrap_or_else(|| "?".into());
             let body_kind = if func.declarative_meta.is_some() {
                 "llm"

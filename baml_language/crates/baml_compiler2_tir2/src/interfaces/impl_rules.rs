@@ -347,7 +347,7 @@ pub fn impl_data<'db>(
             // caught by `impl_data`'s `cycle_result` (→ `CyclicHeader`), so such
             // headers are illegal rather than a panic.
             let for_ty = crate::lower_type_expr::lower_type_expr(
-                &for_target.expr,
+                for_target,
                 &crate::lower_type_expr::ScopeCtx {
                     db,
                     package_items: pkg_items,
@@ -397,7 +397,7 @@ pub fn impl_data<'db>(
 
     let mut interface_target_diags = Vec::new();
     let lowered_interface = crate::lower_type_expr::lower_type_expr(
-        &block.interface_target.expr,
+        &block.interface_target,
         &crate::lower_type_expr::ScopeCtx {
             db,
             package_items: pkg_items,
@@ -418,8 +418,7 @@ pub fn impl_data<'db>(
     // target still surfaces its diagnostics (and the for-target / bound ones).
     // Associated bindings are skipped here — they can't be checked without the
     // interface declaration.
-    let Some(iface_loc) =
-        resolve_path_to_interface(db, &block.interface_target.expr, pkg_items, ns)
+    let Some(iface_loc) = resolve_path_to_interface(db, &block.interface_target, pkg_items, ns)
     else {
         // The head didn't name an interface. The *head* diagnostic (unknown /
         // not-an-interface) belongs to the dedicated implements-target validator,

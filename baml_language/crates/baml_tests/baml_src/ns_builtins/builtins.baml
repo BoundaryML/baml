@@ -30,11 +30,11 @@ function builtins_bind_method_call() -> int {
 // Helper: string concatenation via locals — locals are boxed in test blocks,
 // causing `CannotApplyBinOp { left: Object(Any), right: Object(String) }`.
 function builtins_float_to_string_concat() -> string {
-    let a = baml.unstable.string(1.0);
-    let b = baml.unstable.string(0.0);
-    let c = baml.unstable.string(-1.0);
-    let d = baml.unstable.string(3.14);
-    let e = baml.unstable.string(2);
+    let a = string.from(1.0);
+    let b = string.from(0.0);
+    let c = string.from(-1.0);
+    let d = string.from(3.14);
+    let e = string.from(2);
     a + " " + b + " " + c + " " + d + " " + e
 }
 
@@ -48,7 +48,7 @@ test "bind_method_call" {
 
 // Helper: constructs and stringifies a person — moved out of the test block
 // because both `p` and `person` are locals in a test block (VM bug: boxed as
-// Any), so `baml.unstable.string(person)` would receive Object(Any).
+// Any), so `string.from(person)` would receive Object(Any).
 function builtins_any_value_to_string() -> string {
     let p = BuiltinsPoint { x: 10, y: 20 };
     let person = BuiltinsPerson {
@@ -58,15 +58,15 @@ function builtins_any_value_to_string() -> string {
         hobbies: ["reading", "coding"],
         scores: {"math": 95, "english": 88}
     };
-    baml.unstable.string(person)
+    string.from(person)
 }
 
 test "any_value_to_string" {
-    // `baml.unstable.string` qualifies class names with package + namespace path,
-    // i.e. `user.builtins.` since this file lives in the `builtins` namespace.
+    // `string.from` renders instances inline (`Class { field: value, ... }`) with
+    // unqualified class names; nested strings and map keys are quoted.
     assert.equal(
         builtins_any_value_to_string(),
-        "user.builtins.BuiltinsPerson {\n    name: \"Alice\"\n    age: 25\n    location: user.builtins.BuiltinsPoint {\n        x: 10\n        y: 20\n    }\n    hobbies: [\"reading\", \"coding\"]\n    scores: {\n        \"math\": 95\n        \"english\": 88\n    }\n}"
+        "BuiltinsPerson { name: \"Alice\", age: 25, location: BuiltinsPoint { x: 10, y: 20 }, hobbies: [\"reading\", \"coding\"], scores: {\"math\": 95, \"english\": 88} }"
     )
 }
 

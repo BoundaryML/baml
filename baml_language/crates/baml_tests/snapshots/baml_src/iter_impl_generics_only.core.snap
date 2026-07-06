@@ -74,11 +74,13 @@ function iter_impl_generics_only.core.ArrayIterator.Iterator<T, never>.next(self
 }
 
 function iter_impl_generics_only.core.ArrayIterator.new(arr: T[]) -> iter_impl_generics_only.core.ArrayIterator<T> {
+    load_var arr
+    container_len
+    store_var _3
     load_type #0
     load_var arr
     load_const 0
-    load_var arr
-    container_len
+    load_var _3
     call baml.Array.slice
     load_const 0
     load_type #0

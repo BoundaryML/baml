@@ -1021,3 +1021,12 @@ test "float_nan_lt_method_is_false" {
 test "float_nan_ge_method_is_false" {
     assert.is_true(!float.nan().ge(float.nan()))
 }
+
+// ─── regression: bare-literal method receiver (B-614) ─────────────────────────
+//
+// `2.5.floor()` on a bare float literal used to lower its receiver to a Missing
+// expr and fail to type-check. Appended at the end so the test registry stays
+// append-only.
+test "float_floor_bare_literal" {
+    assert.is_true(baml.deep_equals(2.5.floor(), 2.0))
+}

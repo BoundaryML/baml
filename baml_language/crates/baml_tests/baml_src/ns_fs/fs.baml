@@ -4,11 +4,12 @@
 // top-level `function` (to avoid the test-block local-boxing VM bug) + a
 // `test` block that calls it.
 //
-// HERMETICITY: every test uses a unique path under /tmp and removes any FILES
-// it creates before returning. Directories cannot be removed via
-// baml.fs.remove (it only handles files), so directory-creating tests use
-// unique paths and idempotent mkdir(recursive:true) so the suite is safe to
-// re-run and safe under the parallel .baml runner.
+// HERMETICITY: every test uses a unique path under /tmp. File-creating tests
+// remove their files via baml.fs.remove, and the remove_dir/remove_dir_all
+// tests clean up the directories they make. The older directory-creating tests
+// (mkdir/read_dir) do NOT delete their dirs; they rely on unique paths +
+// idempotent mkdir(recursive:true) so the suite stays safe to re-run and safe
+// under the parallel .baml runner.
 //
 // Tests left in Rust (not converted):
 //
@@ -639,4 +640,51 @@ function fs_mkdir_recursive_is_idempotent_fn() -> bool {
 
 test "fs_mkdir_recursive_is_idempotent" {
     assert.is_true(fs_mkdir_recursive_is_idempotent_fn())
+}
+
+// ============================================================================
+// remove_dir removes an empty directory
+// ============================================================================
+
+function fs_remove_dir_removes_empty_fn() -> bool {
+    let dir = fs_tmp("remove_dir_empty");
+    baml.fs.mkdir(dir, baml.fs.MkdirOptions { recursive: true });
+    baml.fs.remove_dir(dir);
+    baml.deep_equals(baml.fs.exists(dir), false)
+}
+
+test "fs_remove_dir_removes_empty" {
+    assert.is_true(fs_remove_dir_removes_empty_fn())
+}
+
+// ============================================================================
+// remove_dir_all removes a populated directory tree
+// ============================================================================
+
+function fs_remove_dir_all_removes_tree_fn() -> bool {
+    let dir = fs_tmp("remove_dir_all_tree");
+    baml.fs.mkdir(dir + "/sub", baml.fs.MkdirOptions { recursive: true });
+    baml.fs.write(dir + "/a.txt", "a");
+    baml.fs.write(dir + "/sub/b.txt", "b");
+    baml.fs.remove_dir_all(dir);
+    baml.deep_equals(baml.fs.exists(dir), false)
+}
+
+test "fs_remove_dir_all_removes_tree" {
+    assert.is_true(fs_remove_dir_all_removes_tree_fn())
+}
+
+// ============================================================================
+// remove_dir_all is idempotent on a missing path (force: true semantics)
+// ============================================================================
+
+function fs_remove_dir_all_idempotent_fn() -> bool {
+    let dir = fs_tmp("remove_dir_all_missing");
+    // dir was never created; removing it must not throw
+    baml.fs.remove_dir_all(dir);
+    baml.deep_equals(baml.fs.exists(dir), false)
+}
+
+test "fs_remove_dir_all_idempotent" {
+    assert.is_true(fs_remove_dir_all_idempotent_fn())
 }

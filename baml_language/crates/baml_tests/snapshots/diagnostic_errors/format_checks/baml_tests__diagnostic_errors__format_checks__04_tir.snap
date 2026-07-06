@@ -148,28 +148,28 @@ function user.ChainExprs(user: user.ChainUser, items: user.ChainItem[], m: map<s
     baml.env.get_or_panic("DATABASE_URL") : string
     user.name : string
   }
-  !! 1809..1862: type `string` has no member `len`
-  !! 1865..1879: type `ChainItem[]` has no member `len`
-  !! 1882..1949: type `ChainItem[]` has no member `get`
-  !! 1953..2143: type `ChainItem[]` has no member `get`
-  !! 2309..2508: type `ChainItem[]` has no member `get`
-  !! 3397..3449: type `string` has no member `len`
-  !! 3464..3580: type `string` has no member `len`
+  !! 1849..1862: type `string` has no member `len`
+  !! 1870..1879: type `ChainItem[]` has no member `len`
+  !! 1927..1949: type `ChainItem[]` has no member `get`
+  !! 2033..2143: type `ChainItem[]` has no member `get`
+  !! 2393..2508: type `ChainItem[]` has no member `get`
+  !! 3436..3449: type `string` has no member `len`
+  !! 3537..3580: type `string` has no member `len`
   !! 3766..3769: type `string` has no member `len`
-  !! 3820..3898: type `ChainItem[]` has no member `get`
+  !! 3876..3898: type `ChainItem[]` has no member `get`
   !! 3899..3921: type `ChainItem[]` has no member `len`
-  !! 3929..3952: type `ChainItem[]` has no member `len`
-  !! 3960..3983: type `ChainItem[]` has no member `len`
-  !! 3997..4155: expected 2 argument(s), got 3
-  !! 4085..4108: type `ChainItem[]` has no member `len`
-  !! 4156..4569: type `string` has no member `len`
-  !! 4846..5308: type `string` has no member `len`
-  !! 5624..5900: type `ChainItem[]` has no member `get`
-  !! 5921..5981: type `ChainItem[]` has no member `len`
-  !! 5989..6012: type `ChainItem[]` has no member `len`
+  !! 3930..3952: type `ChainItem[]` has no member `len`
+  !! 3961..3983: type `ChainItem[]` has no member `len`
+  !! 4058..4155: expected 2 argument(s), got 3
+  !! 4086..4108: type `ChainItem[]` has no member `len`
+  !! 4244..4569: type `string` has no member `len`
+  !! 4938..5308: type `string` has no member `len`
+  !! 5712..5900: type `ChainItem[]` has no member `get`
+  !! 5959..5981: type `ChainItem[]` has no member `len`
+  !! 5990..6012: type `ChainItem[]` has no member `len`
   !! 6234..6249: type `int[][]` has no member `len`
   !! 6272..6275: type `int[]` has no member `len`
-  !! 6364..6382: type `ChainItem[]` has no member `get`
+  !! 6369..6382: type `ChainItem[]` has no member `get`
   !! 6464..6467: type `string` has no member `len`
   !! 6513..6516: type `string` has no member `len`
 }
@@ -620,7 +620,7 @@ function user.ThisIsAnExtremelyLongClientNameThatDefinitelyExceedsTheDefaultLine
 }
 function user.DeeplyNestedClient$new() -> ? throws never {
   baml.llm.PrimitiveClient { name: "DeeplyNestedClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map { "custom_config": map { "retry_on_failure": true, "timeout_ms": 30000, "metadata": map { "team": "platform", "environment": "production" } } }, query_params: map {  }, request_body: map {  } } } : baml.llm.PrimitiveClient
-  !! 5194..5694: type mismatch: expected string, got map<string, bool | int | map<string, string>>
+  !! 5255..5694: type mismatch: expected string, got map<string, bool | int | map<string, string>>
 }
 function user.LongNestedValuesClient$new() -> ? throws never {
   baml.llm.PrimitiveClient { name: "LongNestedValuesC...", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "anthropic/claude-...", base_url: "https://some-extr...", allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } } : baml.llm.PrimitiveClient
@@ -963,35 +963,35 @@ function user.DeepNestLongExpr(a: int, b: int, c: int, d: int) -> int throws nev
 }
 function user.LlmBasic(name: string, client: baml.llm.Client = GPT4) -> string throws never {
   baml.llm.call_llm_function<T>(client, "LlmBasic", map { "name": name }) : string
-  !! 11146..11203: unresolved name: GPT4
+  !! 11147..11203: unresolved name: GPT4
 }
 function user.LlmBasic$render_prompt(name: string, client: baml.llm.Client = GPT4) -> baml.llm.PromptAst throws never {
   baml.llm.render_prompt(client, "LlmBasic", map { "name": name }) : baml.llm.PromptAst
-  !! 11146..11203: unresolved name: GPT4
+  !! 11147..11203: unresolved name: GPT4
 }
 function user.LlmBasic$build_request(name: string, client: baml.llm.Client = GPT4) -> baml.http.Request throws never {
   baml.llm.build_request(client, "LlmBasic", map { "name": name }) : baml.http.Request
-  !! 11146..11203: unresolved name: GPT4
+  !! 11147..11203: unresolved name: GPT4
 }
 function user.LlmBasic$build_request_stream(name: string, client: baml.llm.Client = GPT4) -> baml.http.Request throws never {
   baml.llm.build_request_stream(client, "LlmBasic", map { "name": name }) : baml.http.Request
-  !! 11146..11203: unresolved name: GPT4
+  !! 11147..11203: unresolved name: GPT4
 }
 function user.LlmMultiLine(text: string, client: baml.llm.Client = GPT4) -> string throws never {
   baml.llm.call_llm_function<T>(client, "LlmMultiLine", map { "text": text }) : string
-  !! 11306..11428: unresolved name: GPT4
+  !! 11307..11428: unresolved name: GPT4
 }
 function user.LlmMultiLine$render_prompt(text: string, client: baml.llm.Client = GPT4) -> baml.llm.PromptAst throws never {
   baml.llm.render_prompt(client, "LlmMultiLine", map { "text": text }) : baml.llm.PromptAst
-  !! 11306..11428: unresolved name: GPT4
+  !! 11307..11428: unresolved name: GPT4
 }
 function user.LlmMultiLine$build_request(text: string, client: baml.llm.Client = GPT4) -> baml.http.Request throws never {
   baml.llm.build_request(client, "LlmMultiLine", map { "text": text }) : baml.http.Request
-  !! 11306..11428: unresolved name: GPT4
+  !! 11307..11428: unresolved name: GPT4
 }
 function user.LlmMultiLine$build_request_stream(text: string, client: baml.llm.Client = GPT4) -> baml.http.Request throws never {
   baml.llm.build_request_stream(client, "LlmMultiLine", map { "text": text }) : baml.http.Request
-  !! 11306..11428: unresolved name: GPT4
+  !! 11307..11428: unresolved name: GPT4
 }
 function user.LlmStringClient(text: string, client: baml.llm.Client = ...) -> string throws never {
   baml.llm.call_llm_function<T>(client, "LlmStringClient", map { "text": text }) : string
@@ -1007,35 +1007,35 @@ function user.LlmStringClient$build_request_stream(text: string, client: baml.ll
 }
 function user.LlmReversedOrder(text: string, client: baml.llm.Client = GPT4) -> string throws never {
   baml.llm.call_llm_function<T>(client, "LlmReversedOrder", map { "text": text }) : string
-  !! 11706..11763: unresolved name: GPT4
+  !! 11707..11763: unresolved name: GPT4
 }
 function user.LlmReversedOrder$render_prompt(text: string, client: baml.llm.Client = GPT4) -> baml.llm.PromptAst throws never {
   baml.llm.render_prompt(client, "LlmReversedOrder", map { "text": text }) : baml.llm.PromptAst
-  !! 11706..11763: unresolved name: GPT4
+  !! 11707..11763: unresolved name: GPT4
 }
 function user.LlmReversedOrder$build_request(text: string, client: baml.llm.Client = GPT4) -> baml.http.Request throws never {
   baml.llm.build_request(client, "LlmReversedOrder", map { "text": text }) : baml.http.Request
-  !! 11706..11763: unresolved name: GPT4
+  !! 11707..11763: unresolved name: GPT4
 }
 function user.LlmReversedOrder$build_request_stream(text: string, client: baml.llm.Client = GPT4) -> baml.http.Request throws never {
   baml.llm.build_request_stream(client, "LlmReversedOrder", map { "text": text }) : baml.http.Request
-  !! 11706..11763: unresolved name: GPT4
+  !! 11707..11763: unresolved name: GPT4
 }
 function user.LlmWithLongSignature(first_context: string, second_context: string, third_context: string, user_query: string, client: baml.llm.Client = GPT4) -> string throws never {
   baml.llm.call_llm_function<T>(client, "LlmWithLongSignature", map { "first_context": first_context, "second_context": second_context, "third_context": third_context, "user_query": user_query }) : string
-  !! 11948..12099: unresolved name: GPT4
+  !! 11949..12099: unresolved name: GPT4
 }
 function user.LlmWithLongSignature$render_prompt(first_context: string, second_context: string, third_context: string, user_query: string, client: baml.llm.Client = GPT4) -> baml.llm.PromptAst throws never {
   baml.llm.render_prompt(client, "LlmWithLongSignature", map { "first_context": first_context, "second_context": second_context, "third_context": third_context, "user_query": user_query }) : baml.llm.PromptAst
-  !! 11948..12099: unresolved name: GPT4
+  !! 11949..12099: unresolved name: GPT4
 }
 function user.LlmWithLongSignature$build_request(first_context: string, second_context: string, third_context: string, user_query: string, client: baml.llm.Client = GPT4) -> baml.http.Request throws never {
   baml.llm.build_request(client, "LlmWithLongSignature", map { "first_context": first_context, "second_context": second_context, "third_context": third_context, "user_query": user_query }) : baml.http.Request
-  !! 11948..12099: unresolved name: GPT4
+  !! 11949..12099: unresolved name: GPT4
 }
 function user.LlmWithLongSignature$build_request_stream(first_context: string, second_context: string, third_context: string, user_query: string, client: baml.llm.Client = GPT4) -> baml.http.Request throws never {
   baml.llm.build_request_stream(client, "LlmWithLongSignature", map { "first_context": first_context, "second_context": second_context, "third_context": third_context, "user_query": user_query }) : baml.http.Request
-  !! 11948..12099: unresolved name: GPT4
+  !! 11949..12099: unresolved name: GPT4
 }
 function user.ExtraWhitespace(a: int, b: int) -> int throws never {
   { : int
@@ -1069,27 +1069,27 @@ function user.NoColonComplexTypes(items: int[], mapping: map<string, int>) -> st
 }
 function user.LlmBasic$stream(name: string, client: baml.llm.Client = GPT4) -> baml.llm.Stream<string | null, string> throws never {
   baml.llm.stream_llm_function(client, "LlmBasic", map { "name": name }) : baml.llm.Stream<string | null, string>
-  !! 11146..11203: unresolved name: GPT4
+  !! 11147..11203: unresolved name: GPT4
 }
 function user.LlmBasic$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client = GPT4) -> baml.llm.Stream<string | null, string> throws never {
   client.__make_stream(sse) : baml.llm.Stream<string | null, string>
-  !! 11146..11203: unresolved name: GPT4
+  !! 11147..11203: unresolved name: GPT4
 }
 function user.LlmBasic$parse(json: string, client: baml.llm.Client = GPT4) -> string throws never {
   baml.llm.parse<TFinal>(json) : string
-  !! 11146..11203: unresolved name: GPT4
+  !! 11147..11203: unresolved name: GPT4
 }
 function user.LlmMultiLine$stream(text: string, client: baml.llm.Client = GPT4) -> baml.llm.Stream<string | null, string> throws never {
   baml.llm.stream_llm_function(client, "LlmMultiLine", map { "text": text }) : baml.llm.Stream<string | null, string>
-  !! 11306..11428: unresolved name: GPT4
+  !! 11307..11428: unresolved name: GPT4
 }
 function user.LlmMultiLine$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client = GPT4) -> baml.llm.Stream<string | null, string> throws never {
   client.__make_stream(sse) : baml.llm.Stream<string | null, string>
-  !! 11306..11428: unresolved name: GPT4
+  !! 11307..11428: unresolved name: GPT4
 }
 function user.LlmMultiLine$parse(json: string, client: baml.llm.Client = GPT4) -> string throws never {
   baml.llm.parse<TFinal>(json) : string
-  !! 11306..11428: unresolved name: GPT4
+  !! 11307..11428: unresolved name: GPT4
 }
 function user.LlmStringClient$stream(text: string, client: baml.llm.Client = ...) -> baml.llm.Stream<string | null, string> throws never {
   baml.llm.stream_llm_function(client, "LlmStringClient", map { "text": text }) : baml.llm.Stream<string | null, string>
@@ -1102,27 +1102,27 @@ function user.LlmStringClient$parse(json: string, client: baml.llm.Client = ...)
 }
 function user.LlmReversedOrder$stream(text: string, client: baml.llm.Client = GPT4) -> baml.llm.Stream<string | null, string> throws never {
   baml.llm.stream_llm_function(client, "LlmReversedOrder", map { "text": text }) : baml.llm.Stream<string | null, string>
-  !! 11706..11763: unresolved name: GPT4
+  !! 11707..11763: unresolved name: GPT4
 }
 function user.LlmReversedOrder$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client = GPT4) -> baml.llm.Stream<string | null, string> throws never {
   client.__make_stream(sse) : baml.llm.Stream<string | null, string>
-  !! 11706..11763: unresolved name: GPT4
+  !! 11707..11763: unresolved name: GPT4
 }
 function user.LlmReversedOrder$parse(json: string, client: baml.llm.Client = GPT4) -> string throws never {
   baml.llm.parse<TFinal>(json) : string
-  !! 11706..11763: unresolved name: GPT4
+  !! 11707..11763: unresolved name: GPT4
 }
 function user.LlmWithLongSignature$stream(first_context: string, second_context: string, third_context: string, user_query: string, client: baml.llm.Client = GPT4) -> baml.llm.Stream<string | null, string> throws never {
   baml.llm.stream_llm_function(client, "LlmWithLongSignature", map { "first_context": first_context, "second_context": second_context, "third_context": third_context, "user_query": user_query }) : baml.llm.Stream<string | null, string>
-  !! 11948..12099: unresolved name: GPT4
+  !! 11949..12099: unresolved name: GPT4
 }
 function user.LlmWithLongSignature$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client = GPT4) -> baml.llm.Stream<string | null, string> throws never {
   client.__make_stream(sse) : baml.llm.Stream<string | null, string>
-  !! 11948..12099: unresolved name: GPT4
+  !! 11949..12099: unresolved name: GPT4
 }
 function user.LlmWithLongSignature$parse(json: string, client: baml.llm.Client = GPT4) -> string throws never {
   baml.llm.parse<TFinal>(json) : string
-  !! 11948..12099: unresolved name: GPT4
+  !! 11949..12099: unresolved name: GPT4
 }
 function user.MyFunction(a: int, b: int) -> int throws never {
   { : 1
@@ -1432,8 +1432,8 @@ function user.LoopStmts(items: int[], flag: bool) -> int throws never {
     let another_extremely_long_variable_name = a * a + result * result + a * result + a + result + a * a * a + result * result * result + a * result * a + result * a * result : int
     return result : int
   }
-  ?? 12080..12107: unreachable code: 1 statement(s) after diverging statement
-  ?? 12191..12221: unreachable code: 1 statement(s) after diverging statement
+  ?? 12101..12107: unreachable code: 1 statement(s) after diverging statement
+  ?? 12212..12221: unreachable code: 1 statement(s) after diverging statement
 }
 function user.AssertStmts(x: int, y: int) -> int throws never {
   { : int
@@ -1743,20 +1743,19 @@ function user.MatchExprs(x: int, s: user.MatchStatus, r: user.MatchResult, b: bo
       1 | 2 | 3 =>
         0 : 0
   }
-  !! 3915..3929: type mismatch: expected "hello", got "bye"
-  !! 3933..3943: unreachable arm
+  !! 3924..3929: type mismatch: expected "hello", got "bye"
   !! 3958..3965: unreachable arm
   !! 8438..8443: operator `*` cannot be applied to `bool` and `bool`
   !! 8446..8451: operator `*` cannot be applied to `int` and `bool`
   !! 8474..8479: operator `*` cannot be applied to `bool` and `bool`
   !! 8486..8491: operator `*` cannot be applied to `int` and `bool`
   !! 8498..8503: operator `*` cannot be applied to `bool` and `int`
-  !! 10691..10814: non-exhaustive match on `int`; missing: _
-  !! 10814..10938: non-exhaustive match on `int`; missing: _
-  !! 10938..11058: non-exhaustive match on `int`; missing: _
-  !! 11058..11179: non-exhaustive match on `int`; missing: _
+  !! 10766..10814: non-exhaustive match on `int`; missing: _
+  !! 10891..10938: non-exhaustive match on `int`; missing: _
+  !! 11006..11058: non-exhaustive match on `int`; missing: _
+  !! 11129..11179: non-exhaustive match on `int`; missing: _
   !! 11732..11733: type mismatch: expected string, got 0
-  !! 11575..11739: non-exhaustive match on `int`; missing: _
+  !! 11653..11739: non-exhaustive match on `int`; missing: _
 }
 class user.MatchSuccess$stream {
   data: string | null

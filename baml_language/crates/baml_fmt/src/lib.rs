@@ -206,9 +206,13 @@ implements<T extends Named> Printable for Box<T> {
 mod backtick_format_tests {
     use super::*;
 
-    /// BEP-049: backtick string literals must round-trip through the formatter
-    /// verbatim — no re-indenting, no escape re-emission, no delimiter rewrite.
-    /// Richer formatting can land later when there's real corpus.
+    /// BEP-049: backtick string literals round-trip through the formatter. A
+    /// multi-line interior is re-indented to sit one level past the surrounding
+    /// block, but ONLY when that is provably value-preserving: a backtick string
+    /// is auto-dedented at lower time (BEP-049 §12), so the formatter strips the
+    /// same common prefix, re-emits at the block indent, and verifies the runtime
+    /// value is unchanged before applying. Single-line literals, tick ladders,
+    /// `${for}`/`${if}` block tags, and multi-line interpolations stay verbatim.
     #[test]
     fn backtick_one_liner_round_trips() {
         let source = "function Demo() -> string {\n    `hello ${name} world`\n}\n";
@@ -243,6 +247,135 @@ mod backtick_format_tests {
         let formatted = format(source, &options).expect("formatter should succeed");
         assert!(formatted.contains("line one"));
         assert!(formatted.contains("line two"));
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second);
+    }
+
+    /// The reported bug: a backtick string as a `prompt:` value used to make
+    /// `baml fmt` bail on the whole file. It is now accepted, and its
+    /// over-indented interior is re-indented to one level past the field (8
+    /// spaces), dedented by the common leading indent.
+    #[test]
+    fn backtick_prompt_multiline_dedents() {
+        let source = "function Demo(name: string) -> string {\n    client \"openai/gpt-4o\"\n    prompt `\n            Hello ${name}\n            Goodbye\n    `\n}\n";
+        let expected = "function Demo(name: string) -> string {\n    client: \"openai/gpt-4o\"\n    prompt: `\n        Hello ${name}\n        Goodbye\n    `\n}\n";
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).expect("formatter should succeed");
+        assert_eq!(formatted, expected, "got:\n{formatted}");
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second);
+    }
+
+    /// A single-line backtick prompt is accepted and printed verbatim.
+    #[test]
+    fn backtick_prompt_one_liner_accepted() {
+        let source = "function Demo() -> string {\n    client \"openai/gpt-4o\"\n    prompt `Just one line`\n}\n";
+        let expected = "function Demo() -> string {\n    client: \"openai/gpt-4o\"\n    prompt: `Just one line`\n}\n";
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).expect("formatter should succeed");
+        assert_eq!(formatted, expected, "got:\n{formatted}");
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second);
+    }
+
+    /// A backtick string is accepted as an attribute argument and re-indented
+    /// relative to the wrapped attribute layout.
+    #[test]
+    fn backtick_attribute_arg_dedents() {
+        let source = "class Foo {\n    bar string @description(`\n        some desc\n        more\n    `)\n}\n";
+        let expected = "class Foo {\n    bar: string @description(\n        `\n            some desc\n            more\n        `,\n    ),\n}\n";
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).expect("formatter should succeed");
+        assert_eq!(formatted, expected, "got:\n{formatted}");
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second);
+    }
+
+    /// A backtick `template_string` body is accepted and its interior re-indented
+    /// (closing backtick at column 0, like a raw-string body).
+    #[test]
+    fn backtick_template_string_dedents() {
+        let source = "template_string Foo(name: string) `\n        Hello ${name}\n        Bye\n`\n";
+        let expected = "template_string Foo(name: string) `\n    Hello ${name}\n    Bye\n`\n";
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).expect("formatter should succeed");
+        assert_eq!(formatted, expected, "got:\n{formatted}");
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second);
+    }
+
+    /// Backtick string in expression position re-indents its over-indented
+    /// interior to the surrounding block.
+    #[test]
+    fn backtick_expr_multiline_dedents() {
+        let source = "function Demo() -> string {\n    let x = `\n            line one\n            line two\n    `;\n    x\n}\n";
+        let expected = "function Demo() -> string {\n    let x = `\n        line one\n        line two\n    `;\n    x\n}\n";
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).expect("formatter should succeed");
+        assert_eq!(formatted, expected, "got:\n{formatted}");
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second);
+    }
+
+    /// Value preservation: the first content line is less-indented than the
+    /// second, so under §12 dedent the second line's extra indent is part of the
+    /// string's value. The re-indent moves the block to the canonical position
+    /// but preserves that relative indent (second line stays 6 spaces deeper).
+    #[test]
+    fn backtick_relative_indent_preserved() {
+        let source =
+            "function D() -> string {\n    let x = `first line\n      second line`;\n    x\n}\n";
+        let expected = "function D() -> string {\n    let x = `\n        first line\n              second line\n    `;\n    x\n}\n";
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).expect("formatter should succeed");
+        assert_eq!(formatted, expected, "got:\n{formatted}");
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second);
+    }
+
+    /// A `${for}`/`${if}` block tag triggers §13 whitespace control, so the
+    /// interior is left verbatim (re-indenting could change the value).
+    #[test]
+    fn backtick_block_tag_stays_verbatim() {
+        let source = "function F(xs: string[]) -> string {\n    `${for (let x in xs)}- ${x}\n${endfor}`\n}\n";
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).expect("formatter should succeed");
+        assert!(
+            formatted.contains("`${for (let x in xs)}- ${x}\n${endfor}`"),
+            "block-tag template must stay verbatim, got:\n{formatted}"
+        );
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second);
+    }
+
+    /// A multi-line `${...}` interpolation is placeholdered before the runtime
+    /// §12 min-indent (its inner lines are not re-indented), so the formatter
+    /// leaves the whole literal verbatim rather than risk changing the value.
+    #[test]
+    fn backtick_multiline_interp_stays_verbatim() {
+        let source = "function D() -> string {\n    let x = `\n        a ${\n            foo()\n        } b\n    `;\n    x\n}\n";
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).expect("formatter should succeed");
+        assert!(
+            formatted.contains("`\n        a ${\n            foo()\n        } b\n    `"),
+            "multi-line interp must stay verbatim, got:\n{formatted}"
+        );
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second);
+    }
+
+    /// A single-line backtick is never split, even when it is longer than the
+    /// line width: wrapping it would insert a newline and change its value.
+    #[test]
+    fn backtick_single_line_over_width_not_wrapped() {
+        let long = "x".repeat(160);
+        let source = format!("function D(name: string) -> string {{\n    `{long} ${{name}}`\n}}\n");
+        let options = FormatOptions::default();
+        let formatted = format(&source, &options).expect("formatter should succeed");
+        assert!(
+            formatted.contains(&format!("    `{long} ${{name}}`\n")),
+            "single-line backtick must stay on one line, got:\n{formatted}"
+        );
         let second = format(&formatted, &options).expect("formatter should be idempotent");
         assert_eq!(formatted, second);
     }
@@ -773,6 +906,74 @@ mod map_literal_format_tests {
     fn test_empty_map_with_block_comment_keeps_padding() {
         // An interior comment is real content, so the padding stays.
         let source = "function f() -> int {\n    { /* keep */ };\n    0\n}\n";
+        assert_formats_to(source, source);
+    }
+}
+
+#[cfg(test)]
+mod over_split_regression_tests {
+    //! Regression tests for B-231: `baml fmt` used to force-wrap expressions
+    //! that fit the line-width budget whenever they contained a node the
+    //! strong AST doesn't model (`await`, `spawn`, the `.as<T>` projection,
+    //! `throw`, bigint literals, …). Those nodes are held as
+    //! [`crate::ast::Expression::Unknown`] and printed verbatim, but they used
+    //! to report `single_line_width = None` and `multi_lined = true`
+    //! unconditionally — which poisoned every *enclosing* expression's
+    //! single-line attempt, exploding concise one-liners into deeply-indented
+    //! blocks. The fix makes `Unknown` report its shape honestly from the raw
+    //! source text, so a single-line unknown node stays inline like any other
+    //! expression that fits.
+
+    use super::*;
+
+    fn assert_formats_to(source: &str, expected: &str) {
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).expect("formatter should succeed");
+        assert_eq!(
+            formatted, expected,
+            "formatter output didn't match expected\n--- got ---\n{formatted}\n--- want ---\n{expected}"
+        );
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second, "formatter should be idempotent");
+    }
+
+    #[test]
+    fn test_await_in_paren_and_binary_stays_inline() {
+        // The headline case from the ticket: `"got " + (await f)` was blown up
+        // into a 5-line block with `await f` alone inside triple-indented parens.
+        let source = "function main() -> string {\n    let f = spawn { compute() };\n    \"got \" + (await f)\n}\n\nfunction compute() -> string {\n    \"x\"\n}\n";
+        assert_formats_to(source, source);
+    }
+
+    #[test]
+    fn test_await_in_binary_no_string_stays_inline() {
+        let source = "function main() -> int {\n    let f = spawn { 1 };\n    1 + (await f)\n}\n";
+        assert_formats_to(source, source);
+    }
+
+    #[test]
+    fn test_as_projection_field_access_stays_inline() {
+        // `self.as<Dog>.name` (a `.as<T>` projection followed by a field access)
+        // used to split across two lines because the projection is an unmodeled
+        // node sitting at the head of the access chain.
+        let source = "class Animal {\n    function name(self) -> string throws never {\n        self.as<Dog>.name\n    }\n}\n";
+        assert_formats_to(source, source);
+    }
+
+    #[test]
+    fn test_nested_call_chain_with_bigint_stays_inline() {
+        // A bigint literal (`100n`) is also an unmodeled node. Nested inside a
+        // call chain it used to force the whole chain to fan out across ~9 lines.
+        let source = "function f() -> int throws never {\n    baml.sys.sleep(baml.time.Duration.from_milliseconds(100n))\n}\n";
+        assert_formats_to(source, source);
+    }
+
+    #[test]
+    fn test_braceless_throw_arm_stays_braceless() {
+        // A braceless `=> throw …,` catch arm that fits the budget must not be
+        // wrapped into a `=> { throw … }` block. `throw` is an unmodeled node, so
+        // it used to report itself as multi-line and force the block wrap.
+        let source = "function f(s: string) -> int throws Boom {\n    baml.json.from_string<int>(s) catch (e) {\n        baml.json.JsonParseError => throw Boom {},\n        baml.json.JsonDecodeError => 0,\n    }\n}\n\nclass Boom {\n}\n";
         assert_formats_to(source, source);
     }
 }

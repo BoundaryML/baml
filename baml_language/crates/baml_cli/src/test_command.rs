@@ -13,37 +13,42 @@ use bex_engine::{
 use clap::Args;
 use sys_native::{CallId, SysOpsExt};
 
-use crate::{
-    project_load::load_project_from_reporting, reporter::Reporter, test_filter::TestFilter,
-};
+use crate::{project_load::load_project_for_build, reporter::Reporter, test_filter::TestFilter};
 
 #[derive(Args, Clone, Debug)]
 pub struct TestArgs {
     #[arg(long, help = "Project search starting point", value_name = "PATH")]
     pub from: Option<PathBuf>,
 
-    /// Only list selected tests
+    /// List the selected tests instead of running them. The
+    /// "Testset::TestName" shown on each line is a valid -i / -x selector.
     #[arg(long, default_value_t = false)]
     list: bool,
 
     #[arg(long, short = 'i')]
-    /// Specific functions or tests to include. If none provided, runs all tests.
+    /// Tests (or whole testsets) to include. If none provided, runs all tests.
+    ///
+    /// A selector is "Testset::TestName": the part before `::` is the enclosing
+    /// testset, the part after is the test. Either side may be empty or use `*`
+    /// wildcards. (For a legacy function-attached `test`, the part before `::`
+    /// is the function name instead.)
     ///
     /// Examples:
     ///
-    /// -i "FunctionName::TestName" will match the specific test
+    /// -i "MySet::my test"  one test inside testset "MySet"
     ///
-    /// -i "FunctionName::" will run all tests in the function
+    /// -i "MySet::"  every test in testset "MySet"
     ///
-    /// -i "::TestName" will run the test in any function
+    /// -i "::my test"  a test in any testset — also the form for a top-level
+    /// `test` with no enclosing testset (its testset name is empty)
     ///
-    /// -i "Get*::*Bar" will match with wildcards
+    /// -i "Get*::*Bar"  wildcards on either side
     pub include: Vec<String>,
 
     #[arg(long, short = 'x')]
-    /// Specific functions or tests to exclude. Takes precedence over --include.
+    /// Tests (or whole testsets) to exclude. Takes precedence over --include.
     ///
-    /// Uses the same syntax as --include.
+    /// Uses the same "Testset::TestName" syntax as --include.
     pub exclude: Vec<String>,
 }
 
@@ -71,7 +76,8 @@ impl TestArgs {
     pub fn run(&self) -> Result<crate::ExitCode> {
         let reporter = Reporter::new();
         // ── 1. Load project ────────────────────────────────────────────────
-        let (db, from, baml_files) = load_project_from_reporting(self.from.as_deref(), &reporter)?;
+        let (db, from, baml_files) =
+            load_project_for_build(self.from.as_deref(), &reporter, false)?;
         if baml_files.is_empty() {
             reporter.abandon();
             crate::reporter::print_error(format_args!(
@@ -85,7 +91,8 @@ impl TestArgs {
             .ok_or_else(|| anyhow!("No project context"))?;
 
         // ── 2. Diagnostics ─────────────────────────────────────────────────
-        reporter.spin("Checking", format!("{} file(s)", baml_files.len()));
+        // Keep `baml test` quiet during the compile phase. `baml check` and
+        // `baml generate` own the compile/count progress lines.
         let source_files = db.get_source_files();
         let diagnostics = baml_project::collect_diagnostics(&db, project, &source_files);
         let errors: Vec<_> = diagnostics
@@ -118,7 +125,6 @@ impl TestArgs {
         let legacy = discover_legacy_tests(&db, project);
 
         // ── 4. Compile + engine + runtime ──────────────────────────────────
-        reporter.spin("Compiling", format!("{} file(s)", baml_files.len()));
         let compile_options = baml_compiler2_emit::CompileOptions {
             emit_test_cases: true,
         };
@@ -489,6 +495,20 @@ fn consume_flat_report(
     *tolerated += flat.tolerated;
     *total += flat.total;
 
+    // An empty selection (a filter that matched no testset tests) aggregates
+    // to a vacuous `pass` over zero tests. Printing a green `PASS testing::*`
+    // for that contradicts the `NoTestsRun` exit the caller then returns and
+    // reads as success to anything parsing stdout, so skip the aggregate line
+    // entirely and let the caller's "no tests selected" guard speak.
+    //
+    // Guard *only* the vacuous-pass case: a zero-test report with a non-pass
+    // outcome must still fall through to the FAIL branch so it prints, sets
+    // `command_failed`, and synthesizes a displayed failure — a real failure
+    // is never silently dropped just because it carried no leaves.
+    if flat.total == 0 && flat.outcome == "pass" {
+        return;
+    }
+
     if flat.outcome == "pass" {
         if flat.tolerated > 0 {
             println!(
@@ -759,6 +779,29 @@ mod tests {
             &mut command_failed,
         );
         (passed, failed, tolerated, total, command_failed)
+    }
+
+    #[test]
+    fn consume_empty_report_folds_zero_counts_without_printing_pass() {
+        // A no-match selector aggregates to a vacuous `pass` over zero tests.
+        // Folding it must leave every counter at zero (so the caller's
+        // `total == 0` guard fires "no tests selected") and must NOT print a
+        // green `PASS testing::*` line contradicting the non-zero exit (B-628).
+        let parsed =
+            parse_flat_report(&flat_report("pass", 0, 0, 0, 0, Vec::new(), Vec::new())).unwrap();
+        assert_eq!(consume(&parsed), (0, 0, 0, 0, false));
+    }
+
+    #[test]
+    fn consume_empty_report_with_fail_outcome_still_propagates_failure() {
+        // The vacuous-pass skip must NOT swallow a zero-test report that
+        // reports a failure. A `total == 0 && outcome == "fail"` report has to
+        // fall through to the FAIL branch: it sets `command_failed` and
+        // synthesizes one displayed failure (so the summary isn't "0 failed"
+        // while the aggregate failed). Regression guard for the narrowed guard.
+        let parsed =
+            parse_flat_report(&flat_report("fail", 0, 0, 0, 0, Vec::new(), Vec::new())).unwrap();
+        assert_eq!(consume(&parsed), (0, 1, 0, 1, true));
     }
 
     #[test]

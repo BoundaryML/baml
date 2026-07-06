@@ -99,7 +99,7 @@ function testing.flatten_with_tolerated(report: TestSetReport) -> FlatTestReport
   { let top_tolerated = report.outcome Eq "pass"; let counts = if (report.results.length() Gt 0) {  } root.count_leaves(report.results, top_tolerated) else if (top_tolerated) {  } testing.LeafCounts { passed: report.passed, failed: 0, tolerated: report.failed, total: report.total } else {  } testing.LeafCounts { passed: report.passed, failed: report.failed, tolerated: 0, total: report.total }; let messages: string[] = []; root.collect_leaf_messages(report.results, messages) } FlatTestReport { outcome: report.outcome, passed: counts.passed, failed: counts.failed, tolerated: counts.tolerated, total: counts.total, failed_names: report.failed_names, messages: messages }
 }
 function testing.glob_match(subject: string, pattern: string) -> bool  [expr] {
-  { let parts = pattern.split("*"); let n = parts.length(); if (n Eq 1) { return subject Eq pattern }; let first = parts[0]; let last = parts[n Sub 1]; if (Not subject.starts_with(first)) { return false }; if (Not subject.ends_with(last)) { return false }; let start = first.length(); let end_limit = subject.length() Sub last.length(); if (start Gt end_limit) { return false }; let pos = start; { let i = 1; while i Lt n Sub 1 { let part = parts[i] } if (part Ne "") { let idx = subject.substring(pos, end_limit).index_of(part); if (idx Lt 0) { return false }; pos = pos Add idx Add part.length() } } } true
+  { let parts = pattern.split("*"); let n = parts.length(); if (n Eq 1) { return subject Eq pattern }; let first = parts[0]; let last = parts[n Sub 1]; if (Not subject.starts_with(first)) { return false }; if (Not subject.ends_with(last)) { return false }; let start = first.length(); let end_limit = subject.length() Sub last.length(); if (start Gt end_limit) { return false }; let pos = start; { let i = 1; while i Lt n Sub 1 { let part = parts[i] } if (part Ne "") {  } if let idx: int = subject.substring(pos, end_limit).index_of(part) { pos = pos Add idx Add part.length() } else { return false } } } true
 }
 function testing.leaf_selected(name: string, include: testing.FilterPat[], exclude: testing.FilterPat[]) -> bool  [expr] {
   { let split = root.split_top(name); if (root.any_pattern_matches(exclude, split.head, split.tail)) { return false }; if (include.length() Eq 0) { return true } } root.any_pattern_matches(include, split.head, split.tail)
@@ -114,13 +114,13 @@ function testing.new(prefix: string) -> testing.TestCollector  [expr] {
   {  } testing.TestCollector { prefix: prefix, tests: [], testsets: [] }
 }
 function testing.parse_filter_patterns(raw: string[]) -> testing.FilterPat[]  [expr] {
-  { let out: testing.FilterPat[] = []; for s in raw { let idx = s.index_of("::") } if (idx Lt 0) { out.push(testing.FilterPat { func_pat: s, test_pat: "" }) } out.push(testing.FilterPat { func_pat: "", test_pat: s }) else {  } out.push(testing.FilterPat { func_pat: s.substring(0, idx), test_pat: s.substring(idx Add 2, s.length()) }) } out
+  { let out: testing.FilterPat[] = []; for s in raw {  } if let idx: int = s.index_of("::") {  } out.push(testing.FilterPat { func_pat: s.substring(0, idx), test_pat: s.substring(idx Add 2, s.length()) }) else { out.push(testing.FilterPat { func_pat: s, test_pat: "" }) } out.push(testing.FilterPat { func_pat: "", test_pat: s }) } out
 }
 function testing.register_test(self: ?, name: string, body: TestBody, runner: TestRunner?) -> void  [expr] {
-  { let full_name = if (self.prefix Eq "") {  } name else {  } self.prefix Add "/" Add name; let count = 0; let hash_prefix = full_name Add "#"; for t in self.tests {  } if (t.name Eq full_name Or t.name.starts_with(hash_prefix)) { count Add= 1 } else {  } null; let final_name = if (count Gt 0) {  } full_name Add "#" Add baml.unstable.string(count Add 1) else {  } full_name; let _ = self.tests.push(testing.TestRegistration { name: final_name, body: body, runner: runner }) }
+  { let full_name = if (self.prefix Eq "") {  } name else {  } self.prefix Add "/" Add name; let count = 0; let hash_prefix = full_name Add "#"; for t in self.tests {  } if (t.name Eq full_name Or t.name.starts_with(hash_prefix)) { count Add= 1 } else {  } null; let final_name = if (count Gt 0) {  } full_name Add "#" Add string.from(count Add 1) else {  } full_name; let _ = self.tests.push(testing.TestRegistration { name: final_name, body: body, runner: runner }) }
 }
 function testing.register_test_set(self: ?, name: string, collector: TestSetBody, runner: TestSetRunner?) -> void  [expr] {
-  { let full_name = if (self.prefix Eq "") {  } name else {  } self.prefix Add "/" Add name; let count = 0; let hash_prefix = full_name Add "#"; for ts in self.testsets {  } if (ts.name Eq full_name Or ts.name.starts_with(hash_prefix)) { count Add= 1 } else {  } null; let final_name = if (count Gt 0) {  } full_name Add "#" Add baml.unstable.string(count Add 1) else {  } full_name; let _ = self.testsets.push(testing.TestSetRegistration { name: final_name, collector: collector, runner: runner }) }
+  { let full_name = if (self.prefix Eq "") {  } name else {  } self.prefix Add "/" Add name; let count = 0; let hash_prefix = full_name Add "#"; for ts in self.testsets {  } if (ts.name Eq full_name Or ts.name.starts_with(hash_prefix)) { count Add= 1 } else {  } null; let final_name = if (count Gt 0) {  } full_name Add "#" Add string.from(count Add 1) else {  } full_name; let _ = self.testsets.push(testing.TestSetRegistration { name: final_name, collector: collector, runner: runner }) }
 }
 function testing.run_all(self: ?) -> TestSetReport  [expr] {
   {  } root.run_testset(root.testset_children(self), null)
@@ -153,7 +153,7 @@ function testing.serialize(self: ?) -> testing.SerializedTestDef[]  [expr] {
   { let items: testing.SerializedTestDef[] = []; for t in self.collector.tests {  } items.push(testing.SerializedTest { type: "test", name: t.name }); for ts in self.collector.testsets { let expanded = self.expansions.get(ts.name) } match (expanded) { sub: testing.TestRegistry => {  } items.push(testing.SerializedTestSet { name: ts.name, items: sub.serialize(), loadingTimeMs: sub.loading_time_ms }), null => {  } items.push(testing.SerializedTest { type: "lazyTestSet", name: ts.name }) }; return items }
 }
 function testing.split_top(path: string) -> testing.NameSplit  [expr] {
-  { let idx = path.index_of("/") } if (idx Lt 0) {  } testing.NameSplit { head: "", tail: path } else {  } testing.NameSplit { head: path.substring(0, idx), tail: path.substring(idx Add 1, path.length()) }
+  {  } if let idx: int = path.index_of("/") {  } testing.NameSplit { head: path.substring(0, idx), tail: path.substring(idx Add 1, path.length()) } else {  } testing.NameSplit { head: "", tail: path }
 }
 function testing.test_child(name: string, body: TestBody, runner: TestRunner?) -> TestSetChild  [expr] {
   {  } TestSetChild { name: name, run: () -> ChildReport { {  } root.run_test(body, runner) } }
@@ -195,7 +195,7 @@ function testing.Sequential() -> TestSetRunner  [expr] {
   { return (children) -> TestSetReport { {  } root.run_children_sequential(children, false) } }
 }
 function testing._int_to_float(value: int) -> float  [expr] {
-  {  } float.parse(baml.unstable.string(value)) catch_all (e) { _ => baml.sys.panic("failed to convert...") }
+  {  } float.parse(string.from(value)) catch_all (e) { _ => baml.sys.panic("failed to convert...") }
 }
 function testing.run_children_sequential(children: TestSetChild[], fail_fast: bool) -> TestSetReport  [expr] {
   { let named_results: NamedChildReport[] = []; for child in children { let report = child.run(); named_results.push(NamedChildReport { name: child.name, report: report }); let outcome = match (report) { r: TestReport => r.outcome, r: TestSetReport => r.outcome } } if (fail_fast And outcome Ne "pass") { return root.aggregate_reports(named_results) } else {  } null } root.aggregate_reports(named_results)
