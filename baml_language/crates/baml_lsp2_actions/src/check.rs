@@ -3656,12 +3656,53 @@ struct InterfaceValidationCtx<'db, 'a> {
     aliases: &'a std::collections::HashMap<QualifiedTypeName, Ty>,
 }
 
+/// Lower a type expression that appears on the *required* side of a `requires`
+/// check. Such an expression normally lives in the required interface's source
+/// file and must resolve in that interface's package/namespace — but generic
+/// substitution can splice in type expressions written on the implementing
+/// side (the `implements` target's arguments), which only resolve in the
+/// candidate's context. Try the owning context first; fall back to the
+/// candidate context when the owning one can't resolve it. Returns the lowered
+/// type plus whether lowering succeeded without diagnostics.
+fn lower_required_side_type_expr(
+    ctx: &InterfaceValidationCtx<'_, '_>,
+    expr: &baml_compiler2_ast::TypeExpr,
+    required_pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
+    required_namespace_path: &[Name],
+    candidate_namespace_path: &[Name],
+    generic_params: &[Name],
+) -> (Ty, bool) {
+    let mut diags = Vec::new();
+    let ty = baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
+        ctx.db,
+        expr,
+        required_pkg_items,
+        required_namespace_path,
+        generic_params,
+        &mut diags,
+    );
+    if diags.is_empty() {
+        return (ty, true);
+    }
+    let mut fallback_diags = Vec::new();
+    let fallback_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
+        ctx.db,
+        expr,
+        ctx.pkg_items,
+        candidate_namespace_path,
+        generic_params,
+        &mut fallback_diags,
+    );
+    (fallback_ty, fallback_diags.is_empty())
+}
+
 fn interface_target_matches_required_parent(
     ctx: &InterfaceValidationCtx<'_, '_>,
     candidate_target: &baml_compiler2_ast::TypeExpr,
     candidate_namespace_path: &[Name],
     candidate_bindings: &[baml_compiler2_ast::AssociatedTypeBindingDef],
     required_parent: &baml_compiler2_ast::TypeExpr,
+    required_parent_pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
     required_parent_namespace_path: &[Name],
     generic_params: &[Name],
 ) -> bool {
@@ -3673,12 +3714,24 @@ fn interface_target_matches_required_parent(
     ) else {
         return false;
     };
+    // The `requires` clause is written in the required interface's source file, so
+    // it resolves in THAT package (e.g. unqualified `Provider` inside the stdlib's
+    // `baml.ai`). Fall back to the implementing side's context for the pieces a
+    // generic substitution spliced in from the `implements` target.
     let Some(required) = resolve_interface_path(
         ctx.db,
         required_parent,
-        ctx.pkg_items,
+        required_parent_pkg_items,
         required_parent_namespace_path,
-    ) else {
+    )
+    .or_else(|| {
+        resolve_interface_path(
+            ctx.db,
+            required_parent,
+            ctx.pkg_items,
+            required_parent_namespace_path,
+        )
+    }) else {
         return false;
     };
     if candidate.qtn != required.qtn {
@@ -3692,13 +3745,23 @@ fn interface_target_matches_required_parent(
         candidate_namespace_path,
         generic_params,
     );
-    let required_args = lower_path_generic_args(
-        ctx.db,
-        required_parent,
-        ctx.pkg_items,
-        required_parent_namespace_path,
-        generic_params,
-    );
+    let required_args = match &required_parent.kind {
+        baml_compiler2_ast::TypeExprKind::Path { generic_args, .. } => generic_args
+            .iter()
+            .map(|arg| {
+                lower_required_side_type_expr(
+                    ctx,
+                    arg,
+                    required_parent_pkg_items,
+                    required_parent_namespace_path,
+                    candidate_namespace_path,
+                    generic_params,
+                )
+                .0
+            })
+            .collect(),
+        _ => Vec::new(),
+    };
     if candidate_args.len() != required_args.len()
         || !candidate_args
             .iter()
@@ -3773,17 +3836,16 @@ fn interface_target_matches_required_parent(
                 generic_params,
                 &mut candidate_diags,
             );
-            let mut required_diags = Vec::new();
-            let required_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
-                ctx.db,
+            let (required_ty, required_ok) = lower_required_side_type_expr(
+                ctx,
                 required_ty_expr,
-                ctx.pkg_items,
+                required_parent_pkg_items,
                 required_parent_namespace_path,
+                candidate_namespace_path,
                 generic_params,
-                &mut required_diags,
             );
             candidate_diags.is_empty()
-                && required_diags.is_empty()
+                && required_ok
                 && baml_compiler2_tir::normalize::is_same_normalized_type(
                     &candidate_ty,
                     &required_ty,
@@ -3899,6 +3961,7 @@ fn item_implements_required_parent_for_target(
     current: &baml_compiler2_ast::ImplementsForDef,
     current_generic_params: &[Name],
     required_parent: &baml_compiler2_ast::TypeExpr,
+    required_parent_pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
     required_parent_namespace_path: &[Name],
 ) -> bool {
     match item {
@@ -3923,6 +3986,7 @@ fn item_implements_required_parent_for_target(
                 ctx.namespace_path,
                 &candidate.associated_type_bindings,
                 required_parent,
+                required_parent_pkg_items,
                 required_parent_namespace_path,
                 &candidate_generic_params,
             )
@@ -3940,6 +4004,7 @@ fn item_implements_required_parent_for_target(
                     ctx.namespace_path,
                     &candidate.associated_type_bindings,
                     required_parent,
+                    required_parent_pkg_items,
                     required_parent_namespace_path,
                     &class.generic_params,
                 )
@@ -4642,10 +4707,17 @@ fn validate_implements_for<'db>(
                 else {
                     return None;
                 };
-                let parent_name =
+                let parent_name = resolve_interface_path(
+                    db,
+                    &required_parent,
+                    iface_pkg_items,
+                    &iface_namespace_path,
+                )
+                .or_else(|| {
                     resolve_interface_path(db, &required_parent, pkg_items, &iface_namespace_path)
-                        .map(|_| Name::new(required_parent.to_string()))
-                        .or_else(|| segments.last().cloned())?;
+                })
+                .map(|_| Name::new(required_parent.to_string()))
+                .or_else(|| segments.last().cloned())?;
                 let target_implements_it = all_items.iter().any(|item| {
                     item_implements_required_parent_for_target(
                         &ctx,
@@ -4653,6 +4725,7 @@ fn validate_implements_for<'db>(
                         imp,
                         &generic_param_names,
                         &required_parent,
+                        iface_pkg_items,
                         &iface_namespace_path,
                     )
                 });
@@ -5142,9 +5215,17 @@ fn validate_class_implements<'db>(
                     let parent_name = resolve_interface_path(
                         db,
                         &required_parent,
-                        pkg_items,
+                        iface_pkg_items,
                         &iface_namespace_path,
                     )
+                    .or_else(|| {
+                        resolve_interface_path(
+                            db,
+                            &required_parent,
+                            pkg_items,
+                            &iface_namespace_path,
+                        )
+                    })
                     .map(|_| Name::new(required_parent.to_string()))
                     .or_else(|| segments.last().cloned())?;
                     let class_implements_it = class.implements.iter().any(|candidate| {
@@ -5154,6 +5235,7 @@ fn validate_class_implements<'db>(
                             namespace_path,
                             &candidate.associated_type_bindings,
                             &required_parent,
+                            iface_pkg_items,
                             &iface_namespace_path,
                             &class.generic_params,
                         )

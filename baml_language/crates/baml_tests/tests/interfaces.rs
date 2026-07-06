@@ -5268,6 +5268,32 @@ fn all_required_parents_satisfied_is_ok() {
 }
 
 #[test]
+fn cross_package_requires_satisfied_by_sibling_implements_is_ok() {
+    // E0125 across a package boundary: a USER-package class implements a STDLIB
+    // interface (`baml.ai.Constrained requires Provider`) and satisfies the
+    // requirement with a sibling `implements baml.ai.Provider {}`. The `requires`
+    // clause is written as unqualified `Provider` in the stdlib source, so the
+    // checker must resolve it in the *interface's* package, not the user's
+    // (regression: the satisfaction probe resolved it against the user package,
+    // found nothing, and flagged E0125 on every user-authored provider).
+    assert_zero_compile_errors(
+        r#"
+        class MyDecoder {
+            model: string,
+            implements baml.ai.Provider {}
+            implements baml.ai.Constrained {
+                function decode<T>(self, prompt: string, pattern: string) -> T
+                    throws baml.errors.CallError | baml.errors.UnknownError {
+                    let p = prompt;
+                    throw baml.errors.UnknownError { data: pattern, message: ["no engine"] }
+                }
+            }
+        }
+        "#,
+    );
+}
+
+#[test]
 fn in_body_inherent_method_does_not_implicitly_satisfy_interface() {
     // `Thing.label` is an inherent method (outside the `implements Label` block),
     // so it does NOT satisfy the abstract `Label.label` — even though the signatures
