@@ -23,6 +23,18 @@ function sum(values: float[]) -> float throws never {
   $rust_function
 }
 
+/// Sums an `int[]` left-to-right starting from `0`, returning an `int`.
+///
+/// Internal helper backing `int[].sum()` (the `Summable` method); prefer the
+/// method form `ints.sum()` at call sites. Like repeated `+`, every running
+/// total must stay within the `int` range, so a sum that leaves it raises
+/// `baml.panics.IntegerOverflow`. The empty array sums to `0`. Internal (the
+/// leading underscore is the convention for non-public stdlib helpers).
+//baml:fallible
+function _sum_int(values: int[]) -> int throws never {
+  $rust_function
+}
+
 /// Returns the arithmetic mean (average) of `values`.
 ///
 /// Computed as `sum(values) / values.length()`. Throws

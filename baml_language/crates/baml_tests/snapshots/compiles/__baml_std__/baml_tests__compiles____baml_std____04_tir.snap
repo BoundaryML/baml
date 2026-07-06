@@ -170,6 +170,16 @@ lambda baml.Array.sort_by_key {
 }
 class baml.Map {
 }
+function baml.sum(self: unknown) -> int throws never {
+  { : int
+    root.math._sum_int(self) : int
+  }
+}
+function baml.sum(self: unknown) -> float throws never {
+  { : float
+    root.math.sum(self) : float
+  }
+}
 class baml.Array$stream {
 }
 class baml.Map$stream {

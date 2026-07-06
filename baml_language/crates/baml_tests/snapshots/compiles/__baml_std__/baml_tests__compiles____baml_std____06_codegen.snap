@@ -1548,6 +1548,18 @@ function baml.String.trim_end(self: baml.String) -> string {
 function baml.String.trim_start(self: baml.String) -> string {
 }
 
+function baml.Summable$for$float[].sum(self: float[]) -> float {
+    load_var self
+    call baml.math.sum
+    return
+}
+
+function baml.Summable$for$int[].sum(self: int[]) -> int {
+    load_var self
+    call baml.math._sum_int
+    return
+}
+
 function baml.ToJson.to_json(self: baml.ToJson) -> baml.json.json {
     load_var self
     call baml._to_json_default
@@ -9338,6 +9350,9 @@ function baml.llm.stream_llm_function(client: baml.llm.Client, function_name: st
     load_const 0
     call baml.llm.Client.execute_stream
     return
+}
+
+function baml.math._sum_int(values: int[]) -> int {
 }
 
 function baml.math.mean(values: float[]) -> float {
