@@ -495,6 +495,15 @@ fn consume_flat_report(
     *tolerated += flat.tolerated;
     *total += flat.total;
 
+    // An empty selection (a filter that matched no testset tests) aggregates
+    // to a vacuous `pass` over zero tests. Printing a green `PASS testing::*`
+    // for that contradicts the `NoTestsRun` exit the caller then returns and
+    // reads as success to anything parsing stdout, so skip the aggregate line
+    // entirely and let the caller's "no tests selected" guard speak.
+    if flat.total == 0 {
+        return;
+    }
+
     if flat.outcome == "pass" {
         if flat.tolerated > 0 {
             println!(
@@ -765,6 +774,17 @@ mod tests {
             &mut command_failed,
         );
         (passed, failed, tolerated, total, command_failed)
+    }
+
+    #[test]
+    fn consume_empty_report_folds_zero_counts_without_printing_pass() {
+        // A no-match selector aggregates to a vacuous `pass` over zero tests.
+        // Folding it must leave every counter at zero (so the caller's
+        // `total == 0` guard fires "no tests selected") and must NOT print a
+        // green `PASS testing::*` line contradicting the non-zero exit (B-628).
+        let parsed =
+            parse_flat_report(&flat_report("pass", 0, 0, 0, 0, Vec::new(), Vec::new())).unwrap();
+        assert_eq!(consume(&parsed), (0, 0, 0, 0, false));
     }
 
     #[test]

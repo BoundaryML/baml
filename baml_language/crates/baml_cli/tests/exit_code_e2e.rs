@@ -379,6 +379,56 @@ fn test_no_tests_returns_specific_exit_code() {
     );
 }
 
+/// A selector that matches no test must NOT print a green `PASS testing::*`
+/// line: the aggregate of zero tests is a vacuous pass, but stdout that says
+/// PASS while the command exits 5 (`NoTestsRun`) misleads anything parsing it.
+/// Regression for B-628.
+#[test]
+fn test_no_match_selector_does_not_print_pass() {
+    let built = common::ensure_built();
+    let tmp = tempfile::tempdir().unwrap();
+
+    // A project that DOES have tests, so discovery yields a registry — the
+    // empty selection has to come from the filter, not an empty project.
+    create_project(
+        tmp.path(),
+        r#"
+testset "suite" {
+  test "one" { assert.is_true(true) }
+  test "two" { assert.is_true(true) }
+}
+"#,
+    );
+
+    let output = run_baml_cli(
+        built,
+        tmp.path(),
+        &["test", "--from", ".", "-i", "totally-bogus-selector-xyz"],
+    );
+
+    // Exit-code semantics are preserved: no tests selected is exit 5.
+    assert_eq!(
+        output.status.code(),
+        Some(5),
+        "Expected NoTestsRun (5) for a no-match selector, got: {:?}\nstdout: {}\nstderr: {}",
+        output.status.code(),
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let combined = format!("{stdout}{stderr}");
+    assert!(
+        !combined.contains("PASS"),
+        "A no-match selector must not print a PASS line, got:\nstdout: {stdout}\nstderr: {stderr}",
+    );
+    assert!(
+        combined.contains("no tests selected"),
+        "Expected a `no tests selected` message, got:\nstdout: {stdout}\nstderr: {stderr}",
+    );
+}
+
 /// `baml test` should not emit the compile file-count status pair.
 #[test]
 fn test_valid_project_omits_compile_file_status() {
