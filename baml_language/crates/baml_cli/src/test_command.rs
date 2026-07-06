@@ -115,11 +115,22 @@ impl TestArgs {
                 .get_project()
                 .ok_or_else(|| anyhow!("No project context"))?;
 
+            // Per-file reuse: decide from the manifest which files' compiled
+            // bytecode can be spliced from the previous program.
+            let reuse_plan = cache.as_ref().and_then(|ctx| ctx.plan_reuse(&db));
+
             // ── 2. Diagnostics ─────────────────────────────────────────────
             // Keep `baml test` quiet during the compile phase. `baml check`
             // and `baml generate` own the compile/count progress lines.
+            // With a reuse plan, only dirty files re-check: a clean file
+            // references nothing whose signature changed, so its diagnostics
+            // match the previous (error-free) compile.
             let source_files = db.get_source_files();
-            let diagnostics = baml_project::collect_diagnostics(&db, project, &source_files);
+            let checked_files = match &reuse_plan {
+                Some(plan) => plan.dirty_files.clone(),
+                None => source_files.clone(),
+            };
+            let diagnostics = baml_project::collect_diagnostics(&db, project, &checked_files);
             let errors: Vec<_> = diagnostics
                 .iter()
                 .filter(|d| d.severity == Severity::Error)
@@ -127,7 +138,8 @@ impl TestArgs {
             if !errors.is_empty() {
                 // Render the full ariadne block so test errors look like
                 // run/pack errors instead of the previous "bullet list of
-                // messages" shape.
+                // messages" shape. Sources/paths cover ALL files — an error
+                // in a checked file may carry related spans elsewhere.
                 let mut sources = std::collections::HashMap::new();
                 let mut file_paths = std::collections::HashMap::new();
                 for sf in &source_files {
@@ -153,12 +165,18 @@ impl TestArgs {
             let compile_options = baml_compiler2_emit::CompileOptions {
                 emit_test_cases: true,
             };
-            let bytecode =
-                crate::bytecode_cache::compile_program(&db, &compile_options, cache.as_ref())
-                    .map_err(|e| anyhow!("Compilation failed: {e:?}"))?;
+            let bytecode = crate::bytecode_cache::compile_program(
+                &db,
+                &compile_options,
+                cache.as_ref(),
+                reuse_plan.as_ref(),
+            )
+            .map_err(|e| anyhow!("Compilation failed: {e:?}"))?;
             if let Some(ctx) = &cache {
                 ctx.verify_against(&bytecode)?;
-                let _ = ctx.store(&bytecode);
+                if let Err(e) = ctx.store_with_manifest(&db, &bytecode) {
+                    crate::bytecode_cache::cache_debug(format_args!("store failed: {e}"));
+                }
             }
 
             let engine = Arc::new(

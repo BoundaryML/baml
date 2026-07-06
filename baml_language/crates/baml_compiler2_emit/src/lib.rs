@@ -998,10 +998,7 @@ fn generate_impl(
         Some(base) => (base.clone(), EmitTables::from_stdlib_program(base)),
         None => (Program::new(), EmitTables::default()),
     };
-    let reuse_ctx = match reuse {
-        Some((prev, clean_files)) => Some(ReuseContext::new(prev, clean_files)?),
-        None => None,
-    };
+    let reuse_ctx = reuse.map(|(prev, clean_files)| ReuseContext::new(prev, clean_files));
     if base.is_none() {
         emit_file_group(
             db,
@@ -1236,12 +1233,16 @@ struct ReuseContext<'a> {
     prev_obj_globals: HashMap<usize, usize>,
     /// Previous global slot → fq name (functions ∪ lets).
     prev_slot_names: HashMap<usize, String>,
-    /// Relative source paths whose compiled bytecode may be reused.
-    clean_files: &'a HashSet<String>,
+    /// Relative source paths whose compiled bytecode may be reused. May be a
+    /// subset of what the caller requested: files whose previous range is
+    /// non-contiguous (e.g. `$init` let-helpers carry their let's source
+    /// file but are emitted in a later pass) are demoted to a normal
+    /// recompile rather than failing the whole relink.
+    clean_files: HashSet<String>,
 }
 
 impl<'a> ReuseContext<'a> {
-    fn new(prev: &'a Program, clean_files: &'a HashSet<String>) -> Result<Self, LoweringError> {
+    fn new(prev: &'a Program, clean_files: &HashSet<String>) -> Self {
         let mut prev_slot_names: HashMap<usize, String> = HashMap::new();
         for (name, &slot) in &prev.function_global_indices {
             prev_slot_names.insert(slot, name.clone());
@@ -1256,15 +1257,15 @@ impl<'a> ReuseContext<'a> {
             }
         }
 
+        let mut clean_files = clean_files.clone();
         let mut file_ranges: HashMap<String, (usize, usize)> = HashMap::new();
+        let mut demoted: HashSet<String> = HashSet::new();
         for (idx, obj) in prev.objects.iter().enumerate() {
             let Object::Function(function) = obj else {
                 continue;
             };
             // Only clean files are ever spliced, so only they need ranges —
-            // and only they must satisfy the contiguity requirement. (Stdlib
-            // files legitimately violate it: $init helper functions carry
-            // their let's source file but are emitted in a later pass.)
+            // and only they must satisfy the contiguity requirement.
             if !clean_files.contains(&function.source_file) {
                 continue;
             }
@@ -1274,25 +1275,28 @@ impl<'a> ReuseContext<'a> {
                 }
                 std::collections::hash_map::Entry::Occupied(mut entry) => {
                     if entry.get().1 != idx {
-                        // A file's functions must be one contiguous pool range
-                        // for rebase-by-delta to be meaningful.
-                        return Err(LoweringError::ReuseUnsupported(format!(
-                            "non-contiguous object range for {}",
-                            function.source_file
-                        )));
+                        // Rebase-by-delta needs one contiguous range. Demote
+                        // this file to a normal recompile; everything else
+                        // still splices.
+                        demoted.insert(function.source_file.clone());
+                    } else {
+                        entry.get_mut().1 = idx + 1;
                     }
-                    entry.get_mut().1 = idx + 1;
                 }
             }
         }
+        for file in &demoted {
+            clean_files.remove(file);
+            file_ranges.remove(file);
+        }
 
-        Ok(ReuseContext {
+        ReuseContext {
             prev,
             file_ranges,
             prev_obj_globals,
             prev_slot_names,
             clean_files,
-        })
+        }
     }
 }
 

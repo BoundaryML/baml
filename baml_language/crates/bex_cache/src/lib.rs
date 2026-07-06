@@ -41,6 +41,14 @@ const HEADER_LEN: usize = 4 + 4 + 32 + 8 + 32;
 pub struct CacheKey([u8; 32]);
 
 impl CacheKey {
+    pub fn from_bytes(bytes: [u8; 32]) -> Self {
+        CacheKey(bytes)
+    }
+
+    pub fn as_bytes(&self) -> &[u8; 32] {
+        &self.0
+    }
+
     pub fn hex(&self) -> String {
         let mut s = String::with_capacity(64);
         for b in self.0 {
@@ -98,6 +106,61 @@ pub fn compute_key(inputs: &KeyInputs<'_>) -> CacheKey {
         h.update((content.len() as u64).to_le_bytes());
         h.update(content.as_bytes());
     }
+    CacheKey(h.finalize().into())
+}
+
+/// Per-project compile manifest: the invalidation state for per-file
+/// bytecode reuse, describing the *latest* successful compile.
+///
+/// Unlike Program blobs (content-addressed, immutable), the manifest lives
+/// under a fixed per-project key ([`manifest_key`]) and is overwritten on
+/// every successful compile. It records, per file, everything the next
+/// compile needs to decide which files are dirty: content hash (did it
+/// change at all), signature hash (can the change be observed by other
+/// files), defined symbol names, and referenced symbol names (extracted from
+/// the compiled bytecode, so desugared references — a `for` loop's
+/// `next()` — are included).
+#[derive(Debug, borsh::BorshSerialize, borsh::BorshDeserialize)]
+pub struct ProjectManifest {
+    /// Cache key of the Program blob this manifest describes.
+    pub program_key: [u8; 32],
+    /// One entry per user file, sorted by `rel_path`.
+    pub files: Vec<ManifestFile>,
+}
+
+#[derive(Debug, borsh::BorshSerialize, borsh::BorshDeserialize)]
+pub struct ManifestFile {
+    /// Project-root-relative path (the `Function::source_file` form).
+    pub rel_path: String,
+    /// Hash of the file's full content.
+    pub content_hash: [u8; 32],
+    /// Hash of the file's signature (body regions excluded).
+    pub signature_hash: [u8; 32],
+    /// Last-segment names of symbols this file defines.
+    pub defined_names: Vec<String>,
+    /// Last-segment names this file's compiled bytecode references.
+    pub referenced_names: Vec<String>,
+}
+
+/// Fixed per-project key for the [`ProjectManifest`].
+///
+/// Keyed by compiler fingerprint + opt + options + the project root path:
+/// a different compiler build gets a fresh manifest (its previous Program
+/// would not be relink-compatible), and two checkouts of the same project
+/// don't fight over one entry.
+pub fn manifest_key(
+    compiler_fingerprint: &[u8; 32],
+    opt_level: u8,
+    emit_test_cases: bool,
+    project_root: &Path,
+) -> CacheKey {
+    let mut h = Sha256::new();
+    h.update(MAGIC);
+    h.update(FORMAT_VERSION.to_le_bytes());
+    h.update(b"project-manifest");
+    h.update(compiler_fingerprint);
+    h.update([opt_level, u8::from(emit_test_cases)]);
+    h.update(project_root.as_os_str().as_encoded_bytes());
     CacheKey(h.finalize().into())
 }
 
@@ -237,27 +300,18 @@ impl BytecodeCache {
     }
 
     /// Like [`Self::load`], but returns the raw borsh payload without
-    /// deserializing. For byte-level verification against a fresh compile.
+    /// deserializing. For byte-level verification against a fresh compile,
+    /// and for non-Program entries (the project manifest).
     pub fn load_raw(&self, key: &CacheKey) -> Option<Vec<u8>> {
         let data = fs::read(self.entry_path(key)).ok()?;
         let payload = check_entry(&data, key)?;
         Some(payload.to_vec())
     }
 
-    /// Serialize and store `program` under `key`. Best-effort: errors are
-    /// returned for optional logging but callers should not fail on them.
-    pub fn store(&self, key: &CacheKey, program: &Program) -> io::Result<()> {
-        let payload =
-            borsh::to_vec(program).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-        let mut entry = Vec::with_capacity(HEADER_LEN + payload.len());
-        entry.extend_from_slice(&MAGIC);
-        entry.extend_from_slice(&FORMAT_VERSION.to_le_bytes());
-        entry.extend_from_slice(&key.0);
-        entry.extend_from_slice(&(payload.len() as u64).to_le_bytes());
-        let payload_digest: [u8; 32] = Sha256::digest(&payload).into();
-        entry.extend_from_slice(&payload_digest);
-        entry.extend_from_slice(&payload);
-
+    /// Store an arbitrary payload under `key` with the standard entry header
+    /// (same integrity checks as Program entries). Used for the project
+    /// manifest, which is overwritten in place on every successful compile.
+    pub fn store_raw(&self, key: &CacheKey, payload: &[u8]) -> io::Result<()> {
         // Cargo-style: the cache directory ignores itself, so a project-local
         // cache never shows up as untracked noise or gets committed.
         let gitignore = self.dir.join(".gitignore");
@@ -266,9 +320,26 @@ impl BytecodeCache {
             let _ = fs::write(&gitignore, "*\n");
         }
 
+        let mut entry = Vec::with_capacity(HEADER_LEN + payload.len());
+        entry.extend_from_slice(&MAGIC);
+        entry.extend_from_slice(&FORMAT_VERSION.to_le_bytes());
+        entry.extend_from_slice(&key.0);
+        entry.extend_from_slice(&(payload.len() as u64).to_le_bytes());
+        let payload_digest: [u8; 32] = Sha256::digest(payload).into();
+        entry.extend_from_slice(&payload_digest);
+        entry.extend_from_slice(payload);
+
         let path = self.entry_path(key);
         fs::create_dir_all(path.parent().expect("entry path has parent"))?;
         write_atomic(&path, &entry)
+    }
+
+    /// Serialize and store `program` under `key`. Best-effort: errors are
+    /// returned for optional logging but callers should not fail on them.
+    pub fn store(&self, key: &CacheKey, program: &Program) -> io::Result<()> {
+        let payload =
+            borsh::to_vec(program).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+        self.store_raw(key, &payload)
     }
 
     /// Run [`Self::trim`] with the default policy (drop entries unused for

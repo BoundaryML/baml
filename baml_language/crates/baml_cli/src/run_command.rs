@@ -203,14 +203,22 @@ impl RunArgs {
     fn check_project_diagnostics(
         &self,
         db: &ProjectDatabase,
+        gate_files: Option<&[baml_db::SourceFile]>,
         bail_context: &str,
         reporter: &Reporter,
     ) -> Result<()> {
         let project = db
             .get_project()
             .ok_or_else(|| anyhow!("No project context"))?;
+        // With a per-file reuse plan, only dirty files are re-checked: a
+        // clean file references nothing whose signature changed, so its
+        // diagnostics are identical to the previous (error-free) compile.
+        let checked_files = match gate_files {
+            Some(files) => files.to_vec(),
+            None => db.get_source_files(),
+        };
         let source_files = db.get_source_files();
-        let diagnostics = baml_project::collect_diagnostics(db, project, &source_files);
+        let diagnostics = baml_project::collect_diagnostics(db, project, &checked_files);
 
         let errors: Vec<_> = diagnostics
             .iter()
@@ -722,9 +730,25 @@ impl RunArgs {
             return Ok((db, engine, needs_format_hint));
         }
 
+        // Per-file reuse: decide from the manifest which files' compiled
+        // bytecode can be spliced from the previous program.
+        let reuse_plan = cache.as_ref().and_then(|ctx| ctx.plan_reuse(&db));
+        if let Some(plan) = &reuse_plan {
+            self.vlog(format_args!(
+                "Per-file reuse: {} clean, {} dirty",
+                plan.clean_files.len(),
+                plan.dirty_files.len()
+            ));
+        }
+
         // `baml run` keeps the compile phase silent; the program's output is
         // the point. Compile/count progress belongs to `check` and `generate`.
-        self.check_project_diagnostics(&db, "Cannot run: compilation errors found", reporter)?;
+        self.check_project_diagnostics(
+            &db,
+            reuse_plan.as_ref().map(|p| p.dirty_files.as_slice()),
+            "Cannot run: compilation errors found",
+            reporter,
+        )?;
         self.vlog(format_args!("Compiling..."));
         let program = crate::bytecode_cache::compile_program(
             &db,
@@ -732,11 +756,12 @@ impl RunArgs {
                 emit_test_cases: false,
             },
             cache.as_ref(),
+            reuse_plan.as_ref(),
         )
         .map_err(|e| anyhow!("Compilation failed: {e:?}"))?;
         if let Some(ctx) = &cache {
             ctx.verify_against(&program)?;
-            if let Err(e) = ctx.store(&program) {
+            if let Err(e) = ctx.store_with_manifest(&db, &program) {
                 self.vlog(format_args!("Bytecode cache write failed: {e}"));
             }
         }
@@ -781,6 +806,7 @@ impl RunArgs {
         // render through the reporter when needed.
         self.check_project_diagnostics(
             &db,
+            None,
             &format!("Cannot run: compilation errors in {display}"),
             reporter,
         )?;
@@ -836,6 +862,7 @@ impl RunArgs {
 
         self.check_project_diagnostics(
             &db,
+            None,
             "Cannot evaluate expression: compilation errors",
             reporter,
         )?;
