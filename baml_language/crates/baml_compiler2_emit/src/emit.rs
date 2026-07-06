@@ -3269,6 +3269,26 @@ impl PullSink for StackifyCodegen<'_, '_> {
             | TyTemplate::TypeArgRefOrWildcard(_)
             | TyTemplate::Union(..) => emit_structural(self, ty_template),
 
+            // ── Function signatures ──────────────────────────────────────────
+            // Every function template — realized, frame-referencing, or holey —
+            // keeps the legacy coarse FUNCTION-tag check ("is it a callable").
+            //
+            // FIXME(function-type-matching): signature-precise matching through
+            // the value matcher is blocked on the empty-`throws` convention
+            // mismatch: a function *type* writes "never throws" as `never`,
+            // while a function *value*'s reconstructed signature writes it as
+            // `void` (see `bex_vm`'s `function_object_ty`), and the canonical
+            // covariant throws relation has no bridge (`void <: never` is
+            // false) — so a structural test would constant-false every
+            // never-throwing closure. Unify the convention first, then route
+            // hole-free signatures through the matcher (which already applies
+            // contravariant params / covariant return correctly).
+            TyTemplate::Function { .. } => {
+                let c = self.add_constant(ConstValue::Int(baml_type::typetag::FUNCTION));
+                let inst = self.emit(Instruction::IsType(c));
+                self.set_operand(inst, OperandMeta::Const(ty_template.to_string()));
+            }
+
             // A bare wildcard is the erased/unrepresentable fallback — an
             // unresolved `Self` or associated projection lowered to a hole. Keep
             // it constant-false rather than over-matching every value; faithful
@@ -3279,9 +3299,9 @@ impl PullSink for StackifyCodegen<'_, '_> {
             other => {
                 // A fully-realized leaf (primitive, enum, alias, literal, …):
                 // class-pointer identity for a `TypeAlias`, otherwise its type
-                // tag (this is where `Function` → the coarse `FUNCTION` tag). The
-                // only non-realized template reaching here is an associated
-                // projection (Unit-5 work), which has no representable check yet.
+                // tag. The only non-realized template reaching here is an
+                // associated projection (Unit-5 work), which has no
+                // representable check yet.
                 if let Ok(realized) = <&RealizedTy>::try_from(other) {
                     if let RealizedTy::TypeAlias(tn, _) = realized {
                         if let Some(class_obj_idx) = self.class_object_index_for_type_name(tn) {

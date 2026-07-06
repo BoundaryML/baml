@@ -1233,26 +1233,24 @@ fn wildcard_container_elements(template: TyTemplate) -> TyTemplate {
 /// scrutinee's resolved static type `scrutinee`.
 ///
 /// True when every same-shape (list or map) member of the scrutinee's flattened
-/// static type shares `arm`'s constructor identity — so no differently-shaped
-/// container value can reach this arm for the coarse tag to conflate — or when
-/// `arm`'s element is the top type (`unknown`), which every container already
-/// satisfies. A recursive alias member (kept unexpanded by `convert`, e.g.
-/// `json`) is not list/map-shaped, so it contributes no same-shape member: a
-/// pure-`json` scrutinee is (correctly) tag-sufficient, since on it a coarse
-/// "any list" tag *is* the `json[]` test.
+/// static type shares `arm`'s constructor identity — so no differently-typed
+/// container value can reach this arm for the coarse tag to conflate.
+///
+/// Invariance applies all the way to the top type: `unknown[]` is NOT "any
+/// list" — it denotes lists whose element type is `unknown` — so a top-typed
+/// element earns no shortcut and must be proven by scrutinee identity like any
+/// other. (The match-anything container position is the template `Wildcard`
+/// hole, produced by compiler erasure — never the `unknown` *type*.)
+///
+/// A recursive alias member (kept unexpanded by `convert`, e.g. `json`) is not
+/// list/map-shaped, so it contributes no same-shape member: a pure-`json`
+/// scrutinee is (correctly) tag-sufficient, since on it a coarse "any list"
+/// tag *is* the `json[]` test.
 ///
 /// Returns `false` for a non-container `arm` (the caller only asks about one).
 fn container_arm_tag_sufficient(arm: &RuntimeTy, scrutinee: &RuntimeTy) -> bool {
     use baml_compiler2_tir::exhaustiveness::ty_ctor_identity;
     let arm_is_list = match arm {
-        // A top (`unknown`) element already means "any list" / "any map", so the
-        // coarse tag is exact regardless of the scrutinee.
-        RuntimeTy::List(elem, _) if matches!(**elem, RuntimeTy::BuiltinUnknown { .. }) => {
-            return true;
-        }
-        RuntimeTy::Map { value, .. } if matches!(**value, RuntimeTy::BuiltinUnknown { .. }) => {
-            return true;
-        }
         RuntimeTy::List(..) => true,
         RuntimeTy::Map { .. } => false,
         _ => return false,
@@ -1267,6 +1265,64 @@ fn container_arm_tag_sufficient(arm: &RuntimeTy, scrutinee: &RuntimeTy) -> bool 
         // confused with this arm's tag, so it does not block tag-sufficiency.
         _ => true,
     })
+}
+
+/// Whether the coarse type tag fully discriminates values reaching a switch arm
+/// whose (already union-flattened) member type is `member`, given the enclosing
+/// match scrutinee's resolved static type when known.
+///
+/// Type tags conflate every list, every map, and every instantiation of a
+/// generic class, so a tag-keyed jump table sends *any* same-tag value to the
+/// first arm carrying that tag. A member is tag-sufficient only when no value
+/// the scrutinee admits could be conflated onto it:
+///
+/// - a list/map member defers to [`container_arm_tag_sufficient`] (which
+///   deliberately treats opaque scrutinee members as non-blockers, preserving
+///   the pre-structural erased semantics the chain path keeps for them); with
+///   no scrutinee the equivalence is unprovable, so it fails closed to the
+///   precise chain;
+/// - a parametric class member requires every same-class member of the
+///   scrutinee to share its constructor identity (`Foo<int>` is sufficient only
+///   if the scrutinee cannot hold a `Foo<string>`), and — being a gate for the
+///   arg-precise `ClassWithTypeArgs` chain test rather than a legacy-semantics
+///   bridge — fails closed on opaque scrutinee members that could dynamically
+///   hold another instantiation;
+/// - every other member (primitive, monomorphic class, enum, …) keeps its
+///   existing tag behavior.
+fn switch_member_tag_sufficient(member: &RuntimeTy, scrutinee: Option<&RuntimeTy>) -> bool {
+    use baml_compiler2_tir::exhaustiveness::ty_ctor_identity;
+    match member {
+        RuntimeTy::List(..) | RuntimeTy::Map { .. } => {
+            scrutinee.is_some_and(|scrutinee| container_arm_tag_sufficient(member, scrutinee))
+        }
+        RuntimeTy::Class(name, args, _) => {
+            if args.is_empty() {
+                return true;
+            }
+            let Some(scrutinee) = scrutinee else {
+                return false;
+            };
+            let member_id = ty_ctor_identity(member.as_ty());
+            let mut flat = Vec::new();
+            flatten_runtime_union(scrutinee, &mut flat);
+            flat.iter().all(|m| match m {
+                RuntimeTy::Class(m_name, _, _) if m_name == name => {
+                    ty_ctor_identity(m.as_ty()) == member_id
+                }
+                // A different class dispatches on a different tag.
+                RuntimeTy::Class(..) => true,
+                // An opaque member may admit another instantiation of this
+                // class at runtime; the proof fails closed.
+                RuntimeTy::TypeAlias(..)
+                | RuntimeTy::BuiltinUnknown { .. }
+                | RuntimeTy::TypeVar(..)
+                | RuntimeTy::Interface(..)
+                | RuntimeTy::AssociatedTypeProjection { .. } => false,
+                _ => true,
+            })
+        }
+        _ => true,
+    }
 }
 
 // ─── def_to_item_ref helper ──────────────────────────────────────────────────
@@ -14005,7 +14061,24 @@ impl LoweringContext<'_> {
             None,
         );
         if !switched {
-            self.lower_match_chain(scrutinee_local, &arms, dest, bb_join, is_exhaustive);
+            // Whether any non-final arm emits an invariance-sensitive test
+            // (typevar guard or element-discriminating container test). Such
+            // tests are stricter than the lax container relation the static
+            // exhaustiveness proof used, so the final arm's test must be
+            // emitted (with a trap on fall-through) instead of skipped.
+            let backstop_last_arm = arms.len().checked_sub(1).is_some_and(|last| {
+                arms[..last]
+                    .iter()
+                    .any(|arm| self.pattern_test_invariance_sensitive(arm.pattern))
+            });
+            self.lower_match_chain(
+                scrutinee_local,
+                &arms,
+                dest,
+                bb_join,
+                is_exhaustive,
+                backstop_last_arm,
+            );
         }
 
         self.match_scrutinee = saved_scrutinee;
@@ -14042,6 +14115,16 @@ impl LoweringContext<'_> {
             }
         );
 
+        // The enclosing match scrutinee's static type, for the tag-sufficiency
+        // gate in `classify_pattern_type_tag`. Guarded on the local so the
+        // catch path — whose error local is never the registered match
+        // scrutinee — stays conservative (`None`).
+        let scrutinee_static_ty: Option<RuntimeTy> = self
+            .match_scrutinee
+            .as_ref()
+            .filter(|(local, _)| *local == scrutinee)
+            .map(|(_, ty)| ty.clone());
+
         // Classify arms: collect (i64_value, arm_index) for int literal or enum variant
         // patterns, and check for a trailing wildcard/binding.
         let mut switch_kind: Option<SwitchKind> = None;
@@ -14063,7 +14146,7 @@ impl LoweringContext<'_> {
                     Some(SwitchKind::TypeTag) => {}
                     Some(_) => return false,
                 }
-                match self.classify_pattern_type_tag(pattern) {
+                match self.classify_pattern_type_tag(pattern, scrutinee_static_ty.as_ref()) {
                     Some(tags) => {
                         for tag in tags {
                             if seen_values.insert(tag) {
@@ -14152,7 +14235,8 @@ impl LoweringContext<'_> {
                             Some(SwitchKind::TypeTag) => {}
                             Some(_) => return false,
                         }
-                        match this.classify_pattern_type_tag(atom_id) {
+                        match this.classify_pattern_type_tag(atom_id, scrutinee_static_ty.as_ref())
+                        {
                             Some(tags) => {
                                 for tag in tags {
                                     if seen_values.insert(tag) {
@@ -14454,6 +14538,7 @@ impl LoweringContext<'_> {
         dest: Place,
         join: BlockId,
         exhaustive: bool,
+        backstop_last_arm: bool,
     ) {
         if arms.is_empty() {
             // No more arms to test. Either a preceding wildcard/binding arm
@@ -14475,6 +14560,28 @@ impl LoweringContext<'_> {
             && arm.guard.is_none()
             && !matches!(self.body.patterns[arm.pattern], AstPattern::Or(_))
         {
+            // When a preceding arm's test is invariance-sensitive
+            // (`backstop_last_arm`), "it must match" no longer follows from the
+            // static exhaustiveness proof: that proof used TIR's lax
+            // (element-covariant) container relation, so a laxly-admitted value
+            // (e.g. an `int[]` flowing into a `(int | string)[]` slot) can fail
+            // every arm at runtime under the invariant tests. Emit the final
+            // refutable arm's test anyway and trap on fall-through — a loud
+            // panic instead of silently binding the value to a pattern it does
+            // not match. Irrefutable last arms (wildcard, bare bind) match
+            // everything, so they keep the plain skip.
+            let last_is_refutable = !matches!(
+                self.body.patterns[arm.pattern],
+                AstPattern::Wildcard | AstPattern::Bind { subpat: None, .. }
+            );
+            if backstop_last_arm && last_is_refutable {
+                let bb_body = self.builder.create_block();
+                let bb_trap = self.builder.create_block();
+                self.lower_pattern_test(scrutinee, arm.pattern, bb_body, bb_trap);
+                self.builder.set_current_block(bb_trap);
+                self.builder.unreachable();
+                self.builder.set_current_block(bb_body);
+            }
             let saved_locals = self.locals.clone();
             let watched_depth = self.watched_locals_stack.len();
             self.bind_pattern(scrutinee, arm.pattern);
@@ -14527,7 +14634,7 @@ impl LoweringContext<'_> {
             }
 
             self.builder.set_current_block(bb_next);
-            self.lower_match_chain(scrutinee, rest, dest, join, exhaustive);
+            self.lower_match_chain(scrutinee, rest, dest, join, exhaustive, backstop_last_arm);
             return;
         }
 
@@ -14555,7 +14662,53 @@ impl LoweringContext<'_> {
         self.restore_locals_after_scope(saved_locals, watched_depth);
 
         self.builder.set_current_block(bb_next);
-        self.lower_match_chain(scrutinee, rest, dest, join, exhaustive);
+        self.lower_match_chain(scrutinee, rest, dest, join, exhaustive, backstop_last_arm);
+    }
+
+    /// Whether lowering `pat`'s runtime test emits an *invariance-sensitive*
+    /// check — a typevar-carrying dispatch-guard template or an
+    /// element-discriminating (not tag-sufficient) container test. Such tests
+    /// are stricter than the lax (element-covariant) container relation TIR's
+    /// exhaustiveness proof uses, so an exhaustive match containing one cannot
+    /// safely skip its final arm's test (see `lower_match_chain`'s backstop).
+    ///
+    /// Over-approximation is safe — it costs one extra final test plus a dead
+    /// trap block; under-approximation would silently bind a value to a pattern
+    /// it does not match.
+    fn pattern_test_invariance_sensitive(&self, pat_id: AstPatId) -> bool {
+        match &self.body.patterns[pat_id] {
+            AstPattern::Or(parts) => parts
+                .iter()
+                .any(|p| self.pattern_test_invariance_sensitive(*p)),
+            AstPattern::Bind {
+                subpat: Some(sp), ..
+            } => self.pattern_test_invariance_sensitive(*sp),
+            // Irrefutable patterns emit no test.
+            AstPattern::Wildcard | AstPattern::Bind { subpat: None, .. } => false,
+            AstPattern::Type(_) | AstPattern::Class { .. } | AstPattern::Array { .. } => {
+                let Some(tir_ty) = self.tir_pat_type(self.pat_metadata_key(pat_id)) else {
+                    return false;
+                };
+                // Typevar-carrying patterns route through the dispatch-guard
+                // template (see `lower_pattern_test`), whose realized-binding
+                // comparison is invariant at argument positions.
+                if baml_compiler2_tir::generics::contains_typevar(tir_ty) {
+                    return true;
+                }
+                // Container arms are sensitive exactly when the emitter checks
+                // their elements structurally — i.e. when the coarse tag is not
+                // provably sufficient for this match's scrutinee.
+                let resolved = self.resolved_aliases.convert(tir_ty);
+                let scrutinee_ty = self.match_scrutinee.as_ref().map(|(_, ty)| ty);
+                let mut members = Vec::new();
+                flatten_runtime_union(&resolved, &mut members);
+                members.iter().any(|m| match m {
+                    RuntimeTy::List(..) | RuntimeTy::Map { .. } => !scrutinee_ty
+                        .is_some_and(|scrutinee| container_arm_tag_sufficient(m, scrutinee)),
+                    _ => false,
+                })
+            }
+        }
     }
 
     /// Emit an `IsType` check that handles union types by expanding them
@@ -14930,6 +15083,15 @@ impl LoweringContext<'_> {
             RuntimeTy::Null { .. } => Some(baml_type::typetag::NULL),
             RuntimeTy::Float { .. } => Some(baml_type::typetag::FLOAT),
             RuntimeTy::Uint8Array { .. } => Some(baml_type::typetag::UINT8ARRAY),
+            // BUG: the single shared ENUM tag conflates *all* enum types (and
+            // all variants of one enum), so a TypeTag switch over e.g.
+            // `Color | Status | int | string` with `let c: Color` / `let s:
+            // Status` bind arms dedups the second enum arm away and every enum
+            // value jumps to the first — the same silent wrong-arm mechanism
+            // the container/class tag-sufficiency gate now catches. Enum arms
+            // need their own sufficiency criterion (same enum name for a bare
+            // enum arm; exact variant identity for a variant-typed bind arm)
+            // before they can be trusted on the switch path.
             RuntimeTy::Enum(..) | RuntimeTy::EnumVariant(..) => Some(baml_type::typetag::ENUM),
             RuntimeTy::List(..) => Some(baml_type::typetag::LIST),
             RuntimeTy::Map { .. } => Some(baml_type::typetag::MAP),
@@ -15343,12 +15505,17 @@ impl LoweringContext<'_> {
                         self.emit_is_tir_type_branch(scrutinee, &pat_tir_ty, success, failure);
                         return;
                     }
-                    // A class pattern type still carrying the enclosing
-                    // function's TypeVars (e.g. `let e: AllFailed<E>` inside
-                    // `any<T, E>`) must NOT go through `convert_tir_ty_for_runtime` —
-                    // that erases TypeVar → Void and the test becomes
-                    // constant-false. Build a template instead so the args
-                    // resolve against the frame.
+                    // A pattern type still carrying the enclosing function's
+                    // TypeVars — a bare `T`, `T[]`, `map<_, T>`, a class like
+                    // `AllFailed<E>` inside `any<T, E>`, or a union thereof —
+                    // must NOT go through `convert_tir_ty_for_runtime`: that
+                    // erases TypeVar → Void and the test becomes constant-false
+                    // (a silent arm miss). Build a template instead so each
+                    // typevar resolves against `frame.type_args` at runtime and
+                    // the value is compared against the *realized* binding
+                    // (TYPE_SYSTEM.md "Type Variables": at any run-time usage
+                    // site a type variable corresponds to exactly one realized
+                    // type).
                     //
                     // Use the dispatch-guard template (frame TypeVar →
                     // `TypeArgRefOrWildcard`, subtype-or-wildcard) rather than the
@@ -15365,8 +15532,18 @@ impl LoweringContext<'_> {
                     // its typevar args with `tir2_to_dispatch_guard_template`.
                     // Directionality is preserved: a strictly wider runtime arg
                     // still fails to match a narrower pinned `T`.
-                    if matches!(&pat_tir_ty, Tir2Ty::Class(..))
-                        && baml_compiler2_tir::generics::contains_typevar(&pat_tir_ty)
+                    //
+                    // `Self`-carrying patterns are excluded: `Self` has no frame
+                    // slot yet, so the guard builder would lower it to a
+                    // match-anything `Wildcard` — over-matching is strictly worse
+                    // than today's constant-false. The `Self` units replace this
+                    // (class bodies substitute the enclosing class; interface
+                    // default methods gain a frame slot).
+                    if baml_compiler2_tir::generics::contains_typevar(&pat_tir_ty)
+                        && !baml_compiler2_tir::generics::contains_typevar_where(
+                            &pat_tir_ty,
+                            &|name| name.as_str() == "Self",
+                        )
                     {
                         let generic_params = self.enclosing_generic_params();
                         let template = tir2_to_dispatch_guard_template(
@@ -15868,12 +16045,21 @@ impl LoweringContext<'_> {
     /// Classify a pattern into type tag value(s) for switch dispatch.
     /// Classify a pattern as type-tag-eligible and return its tag(s).
     ///
-    /// Shared by match and catch lowering.
+    /// Shared by match and catch lowering. `scrutinee_static_ty` is the
+    /// enclosing match scrutinee's resolved static type when known (`None` on
+    /// the catch path, whose error value has no useful static type); the
+    /// tag-sufficiency gate uses it to disqualify arms whose coarse tag would
+    /// conflate values the scrutinee admits (see
+    /// [`Self::ty_to_type_tags_for_switch`]).
     ///
     /// Returns `Some(tags)` for `TypedBinding` and Binding-with-TIR-type patterns
     /// that resolve to primitive or class types. Returns `None` for literals,
     /// wildcards, enum variants, and types without tag mappings.
-    fn classify_pattern_type_tag(&self, pat_id: AstPatId) -> Option<Vec<i64>> {
+    fn classify_pattern_type_tag(
+        &self,
+        pat_id: AstPatId,
+        scrutinee_static_ty: Option<&RuntimeTy>,
+    ) -> Option<Vec<i64>> {
         let pat = &self.body.patterns[pat_id];
         if self.pattern_contains_structural(pat_id) {
             return None;
@@ -15910,35 +16096,61 @@ impl LoweringContext<'_> {
         if let Some(ty_expr) = ascription_ty {
             if let Some(tir_ty) = self.tir_pat_type(self.pat_metadata_key(pat_id)) {
                 let resolved = self.resolved_aliases.convert(tir_ty);
-                if let Some(tags) = self.ty_to_type_tags(&resolved) {
+                if let Some(tags) = self.ty_to_type_tags_for_switch(&resolved, scrutinee_static_ty)
+                {
                     return Some(tags);
                 }
             }
             let resolved = self.resolve_type_annotation(&ty_expr);
-            return self.ty_to_type_tags(&resolved);
+            return self.ty_to_type_tags_for_switch(&resolved, scrutinee_static_ty);
         }
         match pat {
             AstPattern::Wildcard => None,
             AstPattern::Bind { .. } => {
                 let tir_ty = self.tir_pat_type(self.pat_metadata_key(pat_id))?;
                 let resolved = self.resolved_aliases.convert(tir_ty);
-                self.ty_to_type_tags(&resolved)
+                self.ty_to_type_tags_for_switch(&resolved, scrutinee_static_ty)
             }
             AstPattern::Type(_) => {
                 if let Some(tir_ty) = self.tir_pat_type(self.pat_metadata_key(pat_id)) {
                     let resolved = self.resolved_aliases.convert(tir_ty);
-                    if let Some(tags) = self.ty_to_type_tags(&resolved) {
+                    if let Some(tags) =
+                        self.ty_to_type_tags_for_switch(&resolved, scrutinee_static_ty)
+                    {
                         return Some(tags);
                     }
                 }
                 if let AstPattern::Type(ty_expr) = pat {
                     let resolved = self.resolve_type_annotation(ty_expr);
-                    return self.ty_to_type_tags(&resolved);
+                    return self.ty_to_type_tags_for_switch(&resolved, scrutinee_static_ty);
                 }
                 None
             }
             _ => None,
         }
+    }
+
+    /// [`Self::ty_to_type_tags`], additionally requiring every flattened member
+    /// of `ty` to be *tag-sufficient* for a switch keyed on those tags (see
+    /// [`switch_member_tag_sufficient`]): a coarse tag may only key a jump-table
+    /// arm when it cannot conflate values the scrutinee admits onto the wrong
+    /// arm — `int[]` and `string[]` share the LIST tag, `Foo<int>` and
+    /// `Foo<string>` share `Foo`'s tag, and the tag dedup would silently drop
+    /// the second arm. An insufficient member disqualifies the pattern
+    /// (→ `None`), which makes `try_lower_as_switch` fall back to the precise
+    /// sequential chain.
+    fn ty_to_type_tags_for_switch(
+        &self,
+        ty: &RuntimeTy,
+        scrutinee_static_ty: Option<&RuntimeTy>,
+    ) -> Option<Vec<i64>> {
+        let tags = self.ty_to_type_tags(ty)?;
+        let mut members = Vec::new();
+        flatten_runtime_union(ty, &mut members);
+        members
+            .iter()
+            .all(|m| switch_member_tag_sufficient(m, scrutinee_static_ty))
+            .then_some(tags)
     }
 
     /// Convert a `RuntimeTy` to the list of type tag integers it corresponds to.

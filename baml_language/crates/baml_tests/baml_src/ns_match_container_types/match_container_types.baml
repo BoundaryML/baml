@@ -55,7 +55,7 @@ function string_list_is_int_array_fn() -> bool {
 }
 
 test "is_string_list_is_not_int_array" {
-    assert.is_true(baml.deep_equals(string_list_is_int_array_fn(), false))
+    assert.is_true(!string_list_is_int_array_fn())
 }
 
 // ─── 3. map value-type discrimination via `match` ─────────────────────────────
@@ -83,4 +83,147 @@ function classify_string_map_fn() -> string {
 
 test "match_container_string_map" {
     assert.equal(classify_string_map_fn(), "string values")
+}
+
+// ─── 4. list element discrimination on the TypeTag switch path ────────────────
+// With enough tag-eligible arms the lowering prefers the TypeTag jump-table
+// switch (4+ *distinct* tags — colliding tags dedup before the count, so this
+// needs five arms). Before the switch tag-sufficiency gate, `int[]` and
+// `string[]` collapsed to one coarse LIST tag: the jump table kept only the
+// first list arm and every list value jumped there, so a `string[]` value
+// silently took the `int[]` arm. The gate detects the collision and falls back
+// to the (element-precise) chain.
+
+function classify_switch(x: int[] | string[] | int | string | bool) -> string {
+    match (x) {
+        let a: int[] => "ints",
+        let b: string[] => "strings",
+        let n: int => "int",
+        let s: string => "string",
+        let f: bool => "bool",
+    }
+}
+
+function classify_switch_int_list_fn() -> string {
+    classify_switch([1, 2, 3])
+}
+
+test "match_switch_int_list" {
+    assert.equal(classify_switch_int_list_fn(), "ints")
+}
+
+function classify_switch_string_list_fn() -> string {
+    classify_switch(["a", "b"])
+}
+
+test "match_switch_string_list" {
+    assert.equal(classify_switch_string_list_fn(), "strings")
+}
+
+function classify_switch_prims_fn() -> string {
+    classify_switch(42)
+}
+
+test "match_switch_prims_still_dispatch" {
+    assert.equal(classify_switch_prims_fn(), "int")
+}
+
+// ─── 5. invariance pins ───────────────────────────────────────────────────────
+// Generic-argument positions are invariant (TYPE_SYSTEM.md "Variance"): a list
+// whose runtime element type is `int` is NOT a member of `(int | string)[]`,
+// while a list constructed *at* element type `int | string` (the literal adopts
+// the ascribed element type at construction) is.
+//
+// BUG(static-coverage): the unreachable-arm analysis uses a lax
+// (element-covariant) container relation, so *either* ordering of these two
+// arms flags the second as unreachable — even though the runtime relation is
+// invariant and each arm captures exactly one of the two list types. The
+// `if true` guard exists solely to keep the second arm statically reachable;
+// remove it when container coverage goes invariant.
+
+function classify_union_element(u: (int | string)[] | int[]) -> string {
+    match (u) {
+        let i: int[] if true => "ints",
+        let m: (int | string)[] => "mixed",
+    }
+}
+
+function int_list_vs_union_element_arm_fn() -> string {
+    let a: int[] = [1, 2];
+    classify_union_element(a)
+}
+
+test "match_invariance_int_list_not_member_of_union_element_arm" {
+    assert.equal(int_list_vs_union_element_arm_fn(), "ints")
+}
+
+function union_element_constructed_matches_fn() -> string {
+    let v: (int | string)[] = [1, 2];
+    classify_union_element(v)
+}
+
+test "match_invariance_union_element_constructed_list_matches" {
+    assert.equal(union_element_constructed_matches_fn(), "mixed")
+}
+
+// ─── 6. `unknown[]` is invariant, not "any list" ──────────────────────────────
+// Invariance applies to the top type like any other element type: `unknown[]`
+// denotes lists whose element type is `unknown`, so an `int[]` value is NOT a
+// member (the match-anything container position is the wildcard hole `_`, not
+// the `unknown` type). A list constructed *at* element type `unknown` (the
+// literal adopts the ascribed element type) IS a member.
+
+function int_list_is_not_unknown_list_fn() -> bool {
+    let a: int[] = [1, 2];
+    // Widen to `unknown` (the top type — sound under any variance) before
+    // testing. Tested directly on the `int[]`-typed local, TIR's covariant
+    // container narrowing — a defect under removal; containers are never
+    // covariant — rewrites the pattern to `int[]`, turning the very test we
+    // want to pin into a tautology. `unknown ∩ unknown[]` keeps the written
+    // pattern, and stays correct once narrowing is invariant (at which point
+    // the direct form works too).
+    let u: unknown = a;
+    u is unknown[]
+}
+
+test "is_int_list_is_not_unknown_list" {
+    assert.is_true(!int_list_is_not_unknown_list_fn())
+}
+
+function unknown_list_is_unknown_list_fn() -> bool {
+    let v: unknown[] = [1, 2];
+    v is unknown[]
+}
+
+test "is_unknown_constructed_list_is_unknown_list" {
+    assert.is_true(unknown_list_is_unknown_list_fn())
+}
+
+// The same invariance through a match arm: an `unknown[]` arm does not capture
+// an `int[]` value. (The `if true` guard keeps the second arm statically
+// reachable — the lax coverage analysis treats `unknown[]` as covering it.)
+function classify_unknown_vs_int(u: unknown[] | int[]) -> string {
+    match (u) {
+        let a: unknown[] if true => "unknowns",
+        let i: int[] => "ints",
+        _ => "other",
+    }
+}
+
+function unknown_arm_rejects_int_list_fn() -> string {
+    let a: int[] = [1, 2];
+    classify_unknown_vs_int(a)
+}
+
+test "match_unknown_list_arm_rejects_int_list" {
+    assert.equal(unknown_arm_rejects_int_list_fn(), "ints")
+}
+
+function unknown_arm_captures_unknown_list_fn() -> string {
+    let v: unknown[] = [1, 2];
+    classify_unknown_vs_int(v)
+}
+
+test "match_unknown_list_arm_captures_unknown_list" {
+    assert.equal(unknown_arm_captures_unknown_list_fn(), "unknowns")
 }

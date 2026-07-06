@@ -177,6 +177,73 @@ impl TyTemplate {
     pub fn is_fully_concrete(&self) -> bool {
         <&RealizedTy>::try_from(self).is_ok()
     }
+
+    /// Whether a `Wildcard` hole appears anywhere in the template.
+    ///
+    /// Distinct from (not) [`Self::is_fully_concrete`]: a template can be
+    /// non-concrete without holes (frame references materialize to exactly one
+    /// type under `substitute`), while a hole never materializes — it matches
+    /// any type at its own position, so a holey template only constrains the
+    /// positions around its holes.
+    pub fn contains_wildcard(&self) -> bool {
+        match self {
+            Self::Wildcard => true,
+            Self::TypeArgRef(_) | Self::TypeArgRefOrWildcard(_) => false,
+            Self::List(inner, _) | Self::WatchAccessor(inner, _) => inner.contains_wildcard(),
+            Self::Map { key, value, .. } => key.contains_wildcard() || value.contains_wildcard(),
+            Self::Future(value, error, _) => value.contains_wildcard() || error.contains_wildcard(),
+            Self::Union(parts, _) => parts.iter().any(Self::contains_wildcard),
+            Self::Class(_, args, _) => args.iter().any(Self::contains_wildcard),
+            Self::Interface(_, args, associated_bindings, _) => {
+                args.iter().any(Self::contains_wildcard)
+                    || associated_bindings
+                        .iter()
+                        .any(|(_, ty)| ty.contains_wildcard())
+            }
+            Self::Function {
+                params,
+                ret,
+                throws,
+                ..
+            } => {
+                params.iter().any(|p| p.ty.contains_wildcard())
+                    || ret.contains_wildcard()
+                    || throws.contains_wildcard()
+            }
+            Self::AssociatedTypeProjection {
+                base, interface, ..
+            } => {
+                base.contains_wildcard()
+                    || interface.as_ref().is_some_and(|iface| {
+                        iface.generics.iter().any(Self::contains_wildcard)
+                            || iface
+                                .associated_types
+                                .iter()
+                                .any(|(_, ty)| ty.contains_wildcard())
+                    })
+            }
+            // Realized leaves carry no nested type positions.
+            Self::Int { .. }
+            | Self::Bigint { .. }
+            | Self::Float { .. }
+            | Self::String { .. }
+            | Self::Bool { .. }
+            | Self::Null { .. }
+            | Self::Uint8Array { .. }
+            | Self::Media(..)
+            | Self::Literal(..)
+            | Self::Enum(..)
+            | Self::EnumVariant(..)
+            | Self::RustType { .. }
+            | Self::Type { .. }
+            | Self::Resource { .. }
+            | Self::PromptAst { .. }
+            | Self::Void { .. }
+            | Self::TypeAlias(..)
+            | Self::BuiltinUnknown { .. }
+            | Self::Never { .. } => false,
+        }
+    }
 }
 
 impl TyTemplateInterface {

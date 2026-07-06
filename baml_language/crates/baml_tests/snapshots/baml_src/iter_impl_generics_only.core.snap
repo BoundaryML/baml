@@ -578,13 +578,16 @@ function iter_impl_generics_only.core.FlatMap$stream.Iterator<R, E | E2 | E3>.ne
     jump L38
 
   L35:
+    load_var _2
+    is_type iter_impl_generics_only.core.Done
+    pop_jump_if_false L42
     load_var self
     load_field .0
     load_type iter_impl_generics_only.core.Iterator<#0, #2>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
-    store_var _40
-    load_var _40
+    store_var _41
+    load_var _41
     is_type iter_impl_generics_only.core.Done
     pop_jump_if_false L36
     jump L37
@@ -627,6 +630,9 @@ function iter_impl_generics_only.core.FlatMap$stream.Iterator<R, E | E2 | E3>.ne
     alloc_instance user.iter_impl_generics_only.core.Done
     store_field .2
     jump L0
+
+  L42:
+    unreachable
 }
 
 function iter_impl_generics_only.core.FlatMap.Iterable<R, E | E2 | E3>.iter(self: iter_impl_generics_only.core.FlatMap<T, R, E, E2, E3>) -> iter_impl_generics_only.core.Iterator<R, E | E2 | E3> {
@@ -845,13 +851,16 @@ function iter_impl_generics_only.core.FlatMap.Iterator<R, E | E2 | E3>.next(self
     jump L38
 
   L35:
+    load_var _2
+    is_type iter_impl_generics_only.core.Done
+    pop_jump_if_false L42
     load_var self
     load_field .0
     load_type iter_impl_generics_only.core.Iterator<#0, #2>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
-    store_var _40
-    load_var _40
+    store_var _41
+    load_var _41
     is_type iter_impl_generics_only.core.Done
     pop_jump_if_false L36
     jump L37
@@ -894,6 +903,9 @@ function iter_impl_generics_only.core.FlatMap.Iterator<R, E | E2 | E3>.next(self
     alloc_instance user.iter_impl_generics_only.core.Done
     store_field .2
     jump L0
+
+  L42:
+    unreachable
 }
 
 function iter_impl_generics_only.core.Flatten$stream.Iterable<R, E | E3>.iter(self: iter_impl_generics_only.core.Flatten$stream<R, E, E3>) -> iter_impl_generics_only.core.Iterator<R, E | E3> {
@@ -1112,19 +1124,22 @@ function iter_impl_generics_only.core.Flatten$stream.Iterator<R, E | E3>.next(se
     jump L38
 
   L35:
+    load_var _2
+    is_type iter_impl_generics_only.core.Done
+    pop_jump_if_false L42
     load_var self
     load_field .0
     load_type iter_impl_generics_only.core.Iterator<iter_impl_generics_only.core.Iterable<#0, #2>, #1>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
-    store_var _40
-    load_var _40
+    store_var _41
+    load_var _41
     is_type iter_impl_generics_only.core.Done
     pop_jump_if_false L36
     jump L37
 
   L36:
-    load_var _40
+    load_var _41
     load_type iter_impl_generics_only.core.Iterable<#0, #2>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
@@ -1159,6 +1174,9 @@ function iter_impl_generics_only.core.Flatten$stream.Iterator<R, E | E3>.next(se
     alloc_instance user.iter_impl_generics_only.core.Done
     store_field .1
     jump L0
+
+  L42:
+    unreachable
 }
 
 function iter_impl_generics_only.core.Flatten.Iterable<R, E | E3>.iter(self: iter_impl_generics_only.core.Flatten<R, E, E3>) -> iter_impl_generics_only.core.Iterator<R, E | E3> {
@@ -1377,19 +1395,22 @@ function iter_impl_generics_only.core.Flatten.Iterator<R, E | E3>.next(self: ite
     jump L38
 
   L35:
+    load_var _2
+    is_type iter_impl_generics_only.core.Done
+    pop_jump_if_false L42
     load_var self
     load_field .0
     load_type iter_impl_generics_only.core.Iterator<iter_impl_generics_only.core.Iterable<#0, #2>, #1>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
-    store_var _40
-    load_var _40
+    store_var _41
+    load_var _41
     is_type iter_impl_generics_only.core.Done
     pop_jump_if_false L36
     jump L37
 
   L36:
-    load_var _40
+    load_var _41
     load_type iter_impl_generics_only.core.Iterable<#0, #2>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
@@ -1424,6 +1445,9 @@ function iter_impl_generics_only.core.Flatten.Iterator<R, E | E3>.next(self: ite
     alloc_instance user.iter_impl_generics_only.core.Done
     store_field .1
     jump L0
+
+  L42:
+    unreachable
 }
 
 function iter_impl_generics_only.core.Iterator.chain(self: iter_impl_generics_only.core.Iterator<T, E>, other: iter_impl_generics_only.core.Iterator<T, E>) -> iter_impl_generics_only.core.Iterator<T, E> {

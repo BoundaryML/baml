@@ -104,7 +104,7 @@ fn template_relates<C: normalize::TypeContext>(
     actual: &Ty,
     variance: Variance,
 ) -> bool {
-    if !contains_wildcard(template) {
+    if !template.contains_wildcard() {
         // Resolve frame references and let the canonical algebra do the work.
         let expected = template.substitute(frame_type_args);
         return relate(ctx, actual, expected.as_ty(), variance);
@@ -218,50 +218,6 @@ fn relate<C: normalize::TypeContext>(
     match variance {
         Variance::Covariant => normalize::is_subtype(actual, expected, ctx),
         Variance::Invariant => normalize::equivalent(actual, expected, ctx),
-    }
-}
-
-/// Whether a `Wildcard` hole appears anywhere in the template. A hole-free
-/// template resolves to a concrete type by `substitute` and can be compared as
-/// a whole; a holey one must be walked structurally.
-fn contains_wildcard(template: &TyTemplate) -> bool {
-    match template {
-        TyTemplate::Wildcard => true,
-        TyTemplate::List(inner, _) | TyTemplate::WatchAccessor(inner, _) => {
-            contains_wildcard(inner)
-        }
-        TyTemplate::Map { key, value, .. } | TyTemplate::Future(key, value, _) => {
-            contains_wildcard(key) || contains_wildcard(value)
-        }
-        TyTemplate::Union(parts, _) => parts.iter().any(contains_wildcard),
-        TyTemplate::Class(_, args, _) => args.iter().any(contains_wildcard),
-        TyTemplate::Interface(_, args, assoc, _) => {
-            args.iter().any(contains_wildcard) || assoc.iter().any(|(_, t)| contains_wildcard(t))
-        }
-        TyTemplate::Function {
-            params,
-            ret,
-            throws,
-            ..
-        } => {
-            params.iter().any(|p| contains_wildcard(&p.ty))
-                || contains_wildcard(ret)
-                || contains_wildcard(throws)
-        }
-        TyTemplate::AssociatedTypeProjection {
-            base, interface, ..
-        } => {
-            contains_wildcard(base)
-                || interface.as_ref().is_some_and(|iface| {
-                    iface.generics.iter().any(contains_wildcard)
-                        || iface
-                            .associated_types
-                            .iter()
-                            .any(|(_, t)| contains_wildcard(t))
-                })
-        }
-        // Frame references and realized leaves carry no `Wildcard`.
-        _ => false,
     }
 }
 

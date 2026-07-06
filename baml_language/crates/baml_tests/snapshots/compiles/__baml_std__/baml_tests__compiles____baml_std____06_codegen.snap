@@ -4469,13 +4469,16 @@ function baml.iter.FlatMap$stream.Iterator.next(self: baml.iter.FlatMap$stream<T
     jump L73
 
   L41:
+    load_var _2
+    is_type baml.iter.Done
+    pop_jump_if_false L77
     load_var self
     load_field .0
     load_type baml.iter.Iterator<Item = #0, Error = #2>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
-    store_var _46
-    load_var _46
+    store_var _47
+    load_var _47
     is_type baml.iter.Done
     pop_jump_if_false L42
     jump L72
@@ -4484,115 +4487,115 @@ function baml.iter.FlatMap$stream.Iterator.next(self: baml.iter.FlatMap$stream<T
     load_var2 4 1
     load_field .1
     call_indirect
-    store_var _51
-    load_var _51
+    store_var _52
+    load_var _52
     is_type baml.iter.Flatten<...>
     pop_jump_if_false L43
     jump L70
 
   L43:
-    load_var _51
+    load_var _52
     is_type baml.iter.Range
     pop_jump_if_false L44
     jump L69
 
   L44:
-    load_var _51
+    load_var _52
     is_type baml.iter.ArrayIterator<...>
     pop_jump_if_false L45
     jump L68
 
   L45:
-    load_var _51
+    load_var _52
     is_type baml.iter.StepBy<...>
     pop_jump_if_false L46
     jump L67
 
   L46:
-    load_var _51
+    load_var _52
     is_type baml.iter.Chain<...>
     pop_jump_if_false L47
     jump L66
 
   L47:
-    load_var _51
+    load_var _52
     is_type baml.iter.Repeat<...>
     pop_jump_if_false L48
     jump L65
 
   L48:
-    load_var _51
+    load_var _52
     is_type baml.iter.Map<...>
     pop_jump_if_false L49
     jump L64
 
   L49:
-    load_var _51
+    load_var _52
     is_type baml.iter.Filter<...>
     pop_jump_if_false L50
     jump L63
 
   L50:
-    load_var _51
+    load_var _52
     is_type baml.iter.FilterMap<...>
     pop_jump_if_false L51
     jump L62
 
   L51:
-    load_var _51
+    load_var _52
     is_type baml.iter.FlatMap<...>
     pop_jump_if_false L52
     jump L61
 
   L52:
-    load_var _51
+    load_var _52
     is_type baml.iter.Peekable<...>
     pop_jump_if_false L53
     jump L60
 
   L53:
-    load_var _51
+    load_var _52
     is_type baml.csv.CsvRows<...>
     pop_jump_if_false L54
     jump L59
 
   L54:
-    load_var _51
+    load_var _52
     is_type baml.csv.CsvReader
     pop_jump_if_false L55
     jump L58
 
   L55:
-    load_var _51
+    load_var _52
     is_type _[]
     pop_jump_if_false L56
     jump L57
 
   L56:
-    load_var _51
+    load_var _52
     is_type string
     pop_jump_if_false L77
-    load_var _51
+    load_var _52
     call baml.iter.Iterable$for$string.iter
     store_var it
     jump L71
 
   L57:
     load_type #1
-    load_var _51
+    load_var _52
     call baml.iter.Iterable$for$T[].iter
     store_var it
     jump L71
 
   L58:
-    load_var _51
+    load_var _52
     call baml.csv.CsvReader.root.iter.Iterable.iter
     store_var it
     jump L71
 
   L59:
     load_type #1
-    load_var _51
+    load_var _52
     call baml.csv.CsvRows.root.iter.Iterable.iter
     store_var it
     jump L71
@@ -4600,34 +4603,34 @@ function baml.iter.FlatMap$stream.Iterator.next(self: baml.iter.FlatMap$stream<T
   L60:
     load_type #1
     load_type #4
-    load_var _51
+    load_var _52
     call baml.iter.Peekable.Iterable.iter
     store_var it
     jump L71
 
   L61:
-    load_var _51
+    load_var _52
     make_bound_method baml.iter.FlatMap.Iterable.iter
     call_indirect
     store_var it
     jump L71
 
   L62:
-    load_var _51
+    load_var _52
     make_bound_method baml.iter.FilterMap.Iterable.iter
     call_indirect
     store_var it
     jump L71
 
   L63:
-    load_var _51
+    load_var _52
     make_bound_method baml.iter.Filter.Iterable.iter
     call_indirect
     store_var it
     jump L71
 
   L64:
-    load_var _51
+    load_var _52
     make_bound_method baml.iter.Map.Iterable.iter
     call_indirect
     store_var it
@@ -4635,13 +4638,13 @@ function baml.iter.FlatMap$stream.Iterator.next(self: baml.iter.FlatMap$stream<T
 
   L65:
     load_type #1
-    load_var _51
+    load_var _52
     call baml.iter.Repeat.Iterable.iter
     store_var it
     jump L71
 
   L66:
-    load_var _51
+    load_var _52
     make_bound_method baml.iter.Chain.Iterable.iter
     call_indirect
     store_var it
@@ -4650,26 +4653,26 @@ function baml.iter.FlatMap$stream.Iterator.next(self: baml.iter.FlatMap$stream<T
   L67:
     load_type #1
     load_type #4
-    load_var _51
+    load_var _52
     call baml.iter.StepBy.Iterable.iter
     store_var it
     jump L71
 
   L68:
     load_type #1
-    load_var _51
+    load_var _52
     call baml.iter.ArrayIterator.Iterable.iter
     store_var it
     jump L71
 
   L69:
-    load_var _51
+    load_var _52
     call baml.iter.Range.Iterable.iter
     store_var it
     jump L71
 
   L70:
-    load_var _51
+    load_var _52
     make_bound_method baml.iter.Flatten.Iterable.iter
     call_indirect
     store_var it
@@ -4962,13 +4965,16 @@ function baml.iter.FlatMap.Iterator.next(self: baml.iter.FlatMap<T, R, E, E2, E3
     jump L73
 
   L41:
+    load_var _2
+    is_type baml.iter.Done
+    pop_jump_if_false L77
     load_var self
     load_field .0
     load_type baml.iter.Iterator<Item = #0, Error = #2>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
-    store_var _46
-    load_var _46
+    store_var _47
+    load_var _47
     is_type baml.iter.Done
     pop_jump_if_false L42
     jump L72
@@ -4977,115 +4983,115 @@ function baml.iter.FlatMap.Iterator.next(self: baml.iter.FlatMap<T, R, E, E2, E3
     load_var2 4 1
     load_field .1
     call_indirect
-    store_var _51
-    load_var _51
+    store_var _52
+    load_var _52
     is_type baml.iter.Flatten<...>
     pop_jump_if_false L43
     jump L70
 
   L43:
-    load_var _51
+    load_var _52
     is_type baml.iter.Range
     pop_jump_if_false L44
     jump L69
 
   L44:
-    load_var _51
+    load_var _52
     is_type baml.iter.ArrayIterator<...>
     pop_jump_if_false L45
     jump L68
 
   L45:
-    load_var _51
+    load_var _52
     is_type baml.iter.StepBy<...>
     pop_jump_if_false L46
     jump L67
 
   L46:
-    load_var _51
+    load_var _52
     is_type baml.iter.Chain<...>
     pop_jump_if_false L47
     jump L66
 
   L47:
-    load_var _51
+    load_var _52
     is_type baml.iter.Repeat<...>
     pop_jump_if_false L48
     jump L65
 
   L48:
-    load_var _51
+    load_var _52
     is_type baml.iter.Map<...>
     pop_jump_if_false L49
     jump L64
 
   L49:
-    load_var _51
+    load_var _52
     is_type baml.iter.Filter<...>
     pop_jump_if_false L50
     jump L63
 
   L50:
-    load_var _51
+    load_var _52
     is_type baml.iter.FilterMap<...>
     pop_jump_if_false L51
     jump L62
 
   L51:
-    load_var _51
+    load_var _52
     is_type baml.iter.FlatMap<...>
     pop_jump_if_false L52
     jump L61
 
   L52:
-    load_var _51
+    load_var _52
     is_type baml.iter.Peekable<...>
     pop_jump_if_false L53
     jump L60
 
   L53:
-    load_var _51
+    load_var _52
     is_type baml.csv.CsvRows<...>
     pop_jump_if_false L54
     jump L59
 
   L54:
-    load_var _51
+    load_var _52
     is_type baml.csv.CsvReader
     pop_jump_if_false L55
     jump L58
 
   L55:
-    load_var _51
+    load_var _52
     is_type _[]
     pop_jump_if_false L56
     jump L57
 
   L56:
-    load_var _51
+    load_var _52
     is_type string
     pop_jump_if_false L77
-    load_var _51
+    load_var _52
     call baml.iter.Iterable$for$string.iter
     store_var it
     jump L71
 
   L57:
     load_type #1
-    load_var _51
+    load_var _52
     call baml.iter.Iterable$for$T[].iter
     store_var it
     jump L71
 
   L58:
-    load_var _51
+    load_var _52
     call baml.csv.CsvReader.root.iter.Iterable.iter
     store_var it
     jump L71
 
   L59:
     load_type #1
-    load_var _51
+    load_var _52
     call baml.csv.CsvRows.root.iter.Iterable.iter
     store_var it
     jump L71
@@ -5093,34 +5099,34 @@ function baml.iter.FlatMap.Iterator.next(self: baml.iter.FlatMap<T, R, E, E2, E3
   L60:
     load_type #1
     load_type #4
-    load_var _51
+    load_var _52
     call baml.iter.Peekable.Iterable.iter
     store_var it
     jump L71
 
   L61:
-    load_var _51
+    load_var _52
     make_bound_method baml.iter.FlatMap.Iterable.iter
     call_indirect
     store_var it
     jump L71
 
   L62:
-    load_var _51
+    load_var _52
     make_bound_method baml.iter.FilterMap.Iterable.iter
     call_indirect
     store_var it
     jump L71
 
   L63:
-    load_var _51
+    load_var _52
     make_bound_method baml.iter.Filter.Iterable.iter
     call_indirect
     store_var it
     jump L71
 
   L64:
-    load_var _51
+    load_var _52
     make_bound_method baml.iter.Map.Iterable.iter
     call_indirect
     store_var it
@@ -5128,13 +5134,13 @@ function baml.iter.FlatMap.Iterator.next(self: baml.iter.FlatMap<T, R, E, E2, E3
 
   L65:
     load_type #1
-    load_var _51
+    load_var _52
     call baml.iter.Repeat.Iterable.iter
     store_var it
     jump L71
 
   L66:
-    load_var _51
+    load_var _52
     make_bound_method baml.iter.Chain.Iterable.iter
     call_indirect
     store_var it
@@ -5143,26 +5149,26 @@ function baml.iter.FlatMap.Iterator.next(self: baml.iter.FlatMap<T, R, E, E2, E3
   L67:
     load_type #1
     load_type #4
-    load_var _51
+    load_var _52
     call baml.iter.StepBy.Iterable.iter
     store_var it
     jump L71
 
   L68:
     load_type #1
-    load_var _51
+    load_var _52
     call baml.iter.ArrayIterator.Iterable.iter
     store_var it
     jump L71
 
   L69:
-    load_var _51
+    load_var _52
     call baml.iter.Range.Iterable.iter
     store_var it
     jump L71
 
   L70:
-    load_var _51
+    load_var _52
     make_bound_method baml.iter.Flatten.Iterable.iter
     call_indirect
     store_var it
@@ -5455,19 +5461,22 @@ function baml.iter.Flatten$stream.Iterator.next(self: baml.iter.Flatten$stream<I
     jump L73
 
   L41:
+    load_var _2
+    is_type baml.iter.Done
+    pop_jump_if_false L77
     load_var self
     load_field .0
     load_type baml.iter.Iterator<Item = #0, Error = #2>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
-    store_var _46
-    load_var _46
+    store_var _47
+    load_var _47
     is_type baml.iter.Done
     pop_jump_if_false L42
     jump L72
 
   L42:
-    load_var _46
+    load_var _47
     store_var_load_var x
     is_type baml.iter.Flatten<...>
     pop_jump_if_false L43
@@ -5945,19 +5954,22 @@ function baml.iter.Flatten.Iterator.next(self: baml.iter.Flatten<I, R, E, E3>) -
     jump L73
 
   L41:
+    load_var _2
+    is_type baml.iter.Done
+    pop_jump_if_false L77
     load_var self
     load_field .0
     load_type baml.iter.Iterator<Item = #0, Error = #2>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
-    store_var _46
-    load_var _46
+    store_var _47
+    load_var _47
     is_type baml.iter.Done
     pop_jump_if_false L42
     jump L72
 
   L42:
-    load_var _46
+    load_var _47
     store_var_load_var x
     is_type baml.iter.Flatten<...>
     pop_jump_if_false L43
