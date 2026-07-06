@@ -51,26 +51,32 @@ function http_server.$init_test_ns_http_server_http_server(registry: testing.Tes
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "server_bound_method_handler"
+    load_const "server_serve_honors_cancel"
     make_closure .<lambda($init_test_ns_http_server_http_server, 8)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "tls_config_new_default_arg"
+    load_const "server_bound_method_handler"
     make_closure .<lambda($init_test_ns_http_server_http_server, 9)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "server_custom_config"
+    load_const "tls_config_new_default_arg"
     make_closure .<lambda($init_test_ns_http_server_http_server, 10)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "tls_config_handshake_timeout_arg"
+    load_const "server_custom_config"
     make_closure .<lambda($init_test_ns_http_server_http_server, 11)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "tls_config_handshake_timeout_arg"
+    make_closure .<lambda($init_test_ns_http_server_http_server, 12)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
@@ -406,6 +412,53 @@ function http_server.server_roundtrip() -> string {
     call baml.future.Future.cancel
     pop 1
     load_var body
+    return
+}
+
+function http_server.server_serve_honors_cancel() -> int {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_const "127.0.0.1:0"
+    sys_op baml.http.Server.bind
+    store_deref ?1
+    load_var server
+    make_closure .<lambda(server_serve_honors_cancel, 0)>, 1
+    load_const null
+    load_const null
+    spawn
+    store_var _4
+    load_var _4
+    store_var task
+    load_const "http://"
+    load_deref ?1
+    load_field .addr
+    bin_op +
+    load_const "/"
+    bin_op +
+    load_const <omitted>
+    call baml.http.fetch
+    sys_op baml.http.Response.text
+    pop 1
+    load_var task
+    call baml.future.Future.cancel
+    pop 1
+    load_var task
+    await
+    jump L2
+    load_var e
+    is_type baml.panics.Cancelled
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var e
+    rethrow
+
+  L1:
+    load_const 0
+
+  L2:
     return
 }
 

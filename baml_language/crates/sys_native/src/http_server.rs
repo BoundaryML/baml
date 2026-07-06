@@ -33,7 +33,7 @@ use hyper::{
 };
 use hyper_util::rt::{TokioExecutor, TokioIo, TokioTimer};
 use indexmap::IndexMap;
-use sys_ops::io::{SysOpOutput, VmBamlError, owned};
+use sys_ops::io::{SysOpOutput, VmBamlError, VmPanic, VmRustFnError, owned};
 use sys_types::{AsBexExternalValue, BexExternalValue, CancellationToken, Handle, VmSpawner};
 use tokio::{
     io::{AsyncRead, AsyncWrite, ReadBuf},
@@ -347,11 +347,13 @@ pub(crate) fn bind(addr: String) -> SysOpOutput<owned::http::Server> {
 }
 
 /// Backs `Server.serve`: run the accept loop on the server's already-bound
-/// listener until cancelled. The returned future never resolves on its own; the
-/// sys-op dispatcher drops it on cancellation (serve shutdown), which clears the
-/// "serving" flag (so the `Server` can be served again) and — via the connection
-/// `JoinSet`'s `Drop` — aborts every in-flight connection task. The listener
-/// stays bound (it lives in the `Server`), so the port is retained for a restart.
+/// listener until cancelled. The loop `select!`s on the future's own cancel
+/// token (B-681), so a `task.cancel()` on a spawned `serve` returns `Cancelled`
+/// cooperatively; the sys-op dispatcher would also drop the future on
+/// cancellation, and either path clears the "serving" flag (so the `Server` can
+/// be served again) and — via the connection `JoinSet`'s `Drop` — aborts every
+/// in-flight connection task. The listener stays bound (it lives in the
+/// `Server`), so the port is retained for a restart.
 #[expect(clippy::too_many_arguments)]
 pub(crate) fn serve(
     server: owned::http::Server,
@@ -418,6 +420,19 @@ pub(crate) fn serve(
         let mut accept_backoff_ms: u64 = 0;
         loop {
             let accepted = tokio::select! {
+                biased;
+                // B-681: observe the future's own cancel token directly, so a
+                // `task.cancel()` on a spawned `serve` stops the accept loop and
+                // settles `Cancelled` cooperatively — token-based, not relying
+                // solely on the sys-op dispatcher dropping this future. Returning
+                // here drops `conns` (aborting in-flight connections) and
+                // `_serving_guard` (releasing the "serving" flag); the listener
+                // stays bound (it lives in the `Server`), so the port is retained
+                // for a restart. (`biased` checks cancel first every poll so a
+                // hot accept loop can't starve it.)
+                () = cancel.cancelled() => {
+                    return Err(VmRustFnError::Panic(VmPanic::Cancelled));
+                }
                 result = state.listener.accept() => result,
                 // Reap finished connections so the set doesn't grow unbounded;
                 // only polled when there is something to reap.

@@ -185,6 +185,26 @@ test "server_reserve_after_cancel" {
     assert.equal(server_reserve_after_cancel(), "first/second")
 }
 
+// A spawned `serve` honors `task.cancel()` (B-681): the accept loop selects on
+// the future's cancel token, so cancelling stops it and `await task` settles
+// `Cancelled` promptly (a catchable `baml.panics.Cancelled`) rather than hanging.
+// The `fetch` before the cancel proves the server actually came up first.
+function server_serve_honors_cancel() -> int {
+    let server = baml.http.Server.bind("127.0.0.1:0");
+    let task = spawn {
+        server.serve((req: baml.http.Request) -> baml.http.Response {
+            baml.http.Response.new(200, { }, "ok".to_utf8())
+        })
+    };
+    let _ = baml.http.fetch("http://" + server.addr + "/").text();
+    let _ = task.cancel();
+    (await task) catch (e) { baml.panics.Cancelled => 0 }
+}
+
+test "server_serve_honors_cancel" {
+    assert.equal(server_serve_honors_cancel(), 0)
+}
+
 // A bound method used as the handler: `server.serve(greeter.handle)`. Proves the
 // callable path injects the receiver as `self` (so `self.prefix` is visible).
 class Greeter {
