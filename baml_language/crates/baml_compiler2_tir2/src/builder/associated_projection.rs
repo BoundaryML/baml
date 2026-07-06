@@ -64,7 +64,36 @@ pub(crate) fn lower_projection(
     member: Name,
 ) -> ProjectionLowering {
     let mut diagnostics = Vec::new();
-    let ty = match determine_interface(ctx, &base, explicit_interface, &member) {
+    // The explicit `(base as I)` qualifier is an interface *constraint* — a
+    // [`baml_type::Interface`] that may pin only some associated types — never a
+    // `Ty::Interface` existential (which would require all of them). Lower it to that
+    // constraint here; a qualifier that isn't an interface is its own ill-formedness.
+    let explicit = match explicit_interface {
+        None => None,
+        Some(iface_ty) => {
+            let iface_ty = expand_aliases(ctx, iface_ty);
+            match iface_ty.as_interface() {
+                Some(interface) => Some(interface),
+                // An already-errored qualifier (`(x as Nonexistent).Item`) was diagnosed
+                // where it lowered — propagate without a fresh diagnostic.
+                None if is_poisoned(&iface_ty) => {
+                    return ProjectionLowering {
+                        ty: error_ty(),
+                        diagnostics,
+                    };
+                }
+                // A resolved non-interface qualifier (`(x as SomeClass).Item`) is an error.
+                None => {
+                    diagnostics.push(TirTypeError::NonInterfaceProjectionQualifier);
+                    return ProjectionLowering {
+                        ty: error_ty(),
+                        diagnostics,
+                    };
+                }
+            }
+        }
+    };
+    let ty = match determine_interface(ctx, &base, explicit, &member) {
         Determination::Determined(interface) => {
             // Opportunistic precompute: if the determined interface already pins `member`
             // to a concrete type — `Self` carrying `Item→int`, or a bound
@@ -97,8 +126,11 @@ pub(crate) fn lower_projection(
             });
             error_ty()
         }
-        Determination::NonInterfaceQualifier => {
-            diagnostics.push(TirTypeError::NonInterfaceProjectionQualifier);
+        Determination::SubjectDoesNotImplementQualifier { subject, qualifier } => {
+            diagnostics.push(TirTypeError::TypeDoesNotImplementInterface {
+                value_type: subject,
+                interface: qualifier.to_ty(),
+            });
             error_ty()
         }
         // Undeterminable here but not ill-formed: a base that cannot carry a projection,
@@ -115,6 +147,15 @@ fn error_ty() -> Ty {
     }
 }
 
+/// Whether `ty` already carries an upstream error — an error/unknown sentinel or an
+/// unfilled inference hole — so a projection over it must not emit a fresh diagnostic.
+fn is_poisoned(ty: &Ty) -> bool {
+    matches!(
+        ty,
+        Ty::Error { .. } | Ty::Unknown { .. } | Ty::BuiltinUnknown { .. } | Ty::Infer { .. }
+    )
+}
+
 /// The outcome of resolving which interface a projection's `member` is declared on.
 enum Determination {
     /// The declaring interface, at its realized instantiation — the canonical
@@ -127,10 +168,13 @@ enum Determination {
     /// More than one distinct interface in scope declares `member`; the projection
     /// must be disambiguated with an explicit `(base as I).member`.
     Ambiguous(Vec<baml_type::Interface>),
-    /// The explicit `(base as I)` qualifier resolved to something other than an
-    /// interface — a class, enum, primitive, or type variable cannot qualify a
-    /// projection.
-    NonInterfaceQualifier,
+    /// The explicit qualifier is an interface that declares `member`, but `base`
+    /// does not implement / is not bounded by it, so `(base as I).member` is
+    /// ill-formed (Rust's E0277). Carries the subject and the written qualifier.
+    SubjectDoesNotImplementQualifier {
+        subject: Ty,
+        qualifier: baml_type::Interface,
+    },
     /// `base` is a kind that cannot carry an associated-type projection.
     InvalidBase,
     /// `base` or the explicit qualifier already errored upstream.
@@ -140,47 +184,33 @@ enum Determination {
 fn determine_interface(
     ctx: &dyn TypeExprContext<'_>,
     base: &Ty,
-    explicit_interface: Option<Ty>,
+    explicit: Option<baml_type::Interface>,
     member: &Name,
 ) -> Determination {
-    // Explicit `(base as I).member`: the interface is given. It must be an
-    // interface and must declare `member` *directly* — `requires` is a bound,
-    // not inheritance, so a required interface's member projects through that
-    // interface, not its requirer. The base is not consulted on this path, so
-    // its alias expansion is deferred to the unqualified path below.
-    if let Some(explicit_interface) = explicit_interface {
-        let explicit_interface = expand_aliases(ctx, explicit_interface);
-        let Some(interface) = explicit_interface.as_interface() else {
-            return match explicit_interface {
-                // The qualifier itself failed to lower — already diagnosed there.
-                Ty::Error { .. } | Ty::Unknown { .. } | Ty::BuiltinUnknown { .. } => {
-                    Determination::Poisoned
-                }
-                // A *resolved* non-interface (`(x as SomeClass).Item`) lowered
-                // cleanly with no diagnostic, so silence here would swallow the
-                // error entirely — it is its own ill-formedness.
-                _ => Determination::NonInterfaceQualifier,
-            };
-        };
-        return if interface_declares_member(ctx.db(), &interface.name, member) {
-            Determination::Determined(interface)
-        } else {
-            Determination::Undeclared {
-                container: AssocContainer::Interface(interface.name),
-            }
+    // An explicit `(base as I).member` qualifier must declare `member` *directly*:
+    // `requires` is a bound, not inheritance, so a required interface's member projects
+    // through *that* interface, not its requirer. Base-independent, so checked before
+    // dispatching on the base kind.
+    if let Some(qualifier) = &explicit
+        && !interface_declares_member(ctx.db(), &qualifier.name, member)
+    {
+        return Determination::Undeclared {
+            container: AssocContainer::Interface(qualifier.name.clone()),
         };
     }
 
-    // Unqualified `base.member`: pick the interface root(s) to search by the base's
-    // kind, then resolve through their `requires`-closures. Exhaustive — every kind
-    // is classified, never silently dropped.
+    // Dispatch on the base's *kind* — that fixes the resolution *mechanism* (a type
+    // variable searches its bounds' closures, an existential its own, a concrete type its
+    // impls). An explicit qualifier then narrows that search to its interface (by QTN),
+    // realizing the base's pins; an unqualified projection searches every candidate by
+    // `member`. Exhaustive — every kind is classified, never silently dropped.
     let base = expand_aliases(ctx, base.clone());
     match &base {
         // An interface existential is its own (single) search root.
         Ty::Interface(qtn, args, assoc, _) => {
             let root = baml_type::Interface::new(qtn.clone(), args.clone(), assoc.clone());
-            let container = AssocContainer::Interface(root.name.clone());
-            resolve_through_roots(ctx.db(), vec![root], member, container)
+            let undeclared = AssocContainer::Interface(root.name.clone());
+            resolve_via_roots(ctx.db(), vec![root], explicit, member, undeclared, &base)
         }
         // A type variable searches the closure of *every* interface in its bound
         // conjunction (`T extends A & B`). No bound at all means it cannot be proven
@@ -195,19 +225,34 @@ fn determine_interface(
                 "type variable `{name}` projected but not in this scope's generic_params — \
                  a lowering site failed to thread it"
             ),
-            // Declared but genuinely unbounded.
-            Some(bounds) if bounds.is_empty() => Determination::Undeclared {
-                container: AssocContainer::TypeVar(name.clone()),
+            // Declared but genuinely unbounded: it implements nothing, so an explicit
+            // qualifier cannot hold and an unqualified member is undeclared.
+            Some(bounds) if bounds.is_empty() => match explicit {
+                Some(qualifier) => Determination::SubjectDoesNotImplementQualifier {
+                    subject: base.clone(),
+                    qualifier,
+                },
+                None => Determination::Undeclared {
+                    container: AssocContainer::TypeVar(name.clone()),
+                },
             },
             Some(bounds) => {
                 // Report against the first bound if none declares `member`.
-                let container = AssocContainer::Interface(bounds[0].name.clone());
-                resolve_through_roots(ctx.db(), bounds.into_vec(), member, container)
+                let undeclared = AssocContainer::Interface(bounds[0].name.clone());
+                resolve_via_roots(
+                    ctx.db(),
+                    bounds.into_vec(),
+                    explicit,
+                    member,
+                    undeclared,
+                    &base,
+                )
             }
         },
         // Concrete receivers resolve through their own impls: an associated type
         // lives on a *separate* `impl I for C` (interfaces are bounds, not
-        // inheritance), found via the visible impl set rather than any closure.
+        // inheritance), found via the visible impl set rather than any closure. An
+        // explicit qualifier narrows to the impl of *that* interface (E0277 if none).
         Ty::Class(..)
         | Ty::Enum(..)
         | Ty::List(..)
@@ -220,7 +265,16 @@ fn determine_interface(
         | Ty::Uint8Array { .. }
         | Ty::Media(..)
         | Ty::Literal(..)
-        | Ty::EnumVariant(..) => determine_concrete(ctx, &base, member),
+        | Ty::EnumVariant(..) => match explicit {
+            None => determine_concrete(ctx, &base, member),
+            Some(qualifier) => match ctx.concrete_realized_interface(&base, &qualifier) {
+                Some(realized) => Determination::Determined(realized),
+                None => Determination::SubjectDoesNotImplementQualifier {
+                    subject: base.clone(),
+                    qualifier,
+                },
+            },
+        },
         // A chained projection base (`T.A.B`): the inner `T.A` already resolved to a
         // symbolic projection through the interface that declares `A`; `B` resolves
         // through the interface bound declared on `A` (`type A extends J`).
@@ -239,6 +293,7 @@ fn determine_interface(
                 inner_base,
                 inner_interface,
                 inner_member,
+                explicit,
                 member,
             )
         }
@@ -249,7 +304,8 @@ fn determine_interface(
         }
         // A surviving alias means the alias map was incomplete; degrade conservatively.
         Ty::TypeAlias(..) => Determination::Poisoned,
-        // Kinds that cannot carry an associated-type projection.
+        // Kinds that cannot carry an associated-type projection — with an explicit
+        // qualifier that is "the subject does not implement it"; unqualified, an invalid base.
         Ty::Union(..)
         | Ty::Future(..)
         | Ty::Function { .. }
@@ -262,8 +318,69 @@ fn determine_interface(
         | Ty::Void { .. }
         | Ty::Null { .. }
         | Ty::EvolvingList(..)
-        | Ty::EvolvingMap(..) => Determination::InvalidBase,
+        | Ty::EvolvingMap(..) => match explicit {
+            Some(qualifier) => Determination::SubjectDoesNotImplementQualifier {
+                subject: base.clone(),
+                qualifier,
+            },
+            None => Determination::InvalidBase,
+        },
     }
+}
+
+/// Resolve `member` through `roots` — the interfaces `subject` provides (an existential
+/// itself, a type variable's bounds, or a chained projection's declared bound). Unqualified,
+/// search every root's `requires`-closure for the declaring interface. With an explicit
+/// qualifier, narrow to that interface's QTN and realize it at the base (carrying the base's
+/// pins); the subject must actually provide it, else it does not implement it (E0277).
+fn resolve_via_roots(
+    db: &dyn crate::Db,
+    roots: Vec<baml_type::Interface>,
+    explicit: Option<baml_type::Interface>,
+    member: &Name,
+    undeclared: AssocContainer,
+    subject: &Ty,
+) -> Determination {
+    match explicit {
+        None => resolve_through_roots(db, roots, member, undeclared),
+        Some(qualifier) => match realize_qualifier_through_roots(db, &roots, &qualifier) {
+            Some(realized) => Determination::Determined(realized),
+            None => Determination::SubjectDoesNotImplementQualifier {
+                subject: subject.clone(),
+                qualifier,
+            },
+        },
+    }
+}
+
+/// The realized view of `qualifier` reachable from `roots` — walk each root's
+/// `requires`-closure for the qualifier's QTN and return it at its realized generic
+/// arguments and associated pins. `None` if no root provides the qualifier. This is the
+/// narrowed counterpart of [`resolve_through_roots`]: the QTN is known, so it selects that
+/// one interface instead of searching every declarer of a member.
+fn realize_qualifier_through_roots(
+    db: &dyn crate::Db,
+    roots: &[baml_type::Interface],
+    qualifier: &baml_type::Interface,
+) -> Option<baml_type::Interface> {
+    for root in roots {
+        let Some(root_loc) = resolve_interface_loc(db, &root.name) else {
+            continue;
+        };
+        for (loc, args, assoc) in crate::interfaces::interface_closure_locs_with_args_and_assoc(
+            db,
+            root_loc,
+            &root.generics,
+            &root.associated_types,
+        ) {
+            if let Some(qtn) = crate::interfaces::interface_loc_qtn(db, loc)
+                && qtn == qualifier.name
+            {
+                return Some(baml_type::Interface::new(qtn, args, assoc));
+            }
+        }
+    }
+    None
 }
 
 /// Resolve `member` through a set of interface roots — a type variable's bound
@@ -333,6 +450,7 @@ fn determine_chained(
     inner_base: &Ty,
     inner_interface: &baml_type::Interface,
     inner_member: &Name,
+    explicit: Option<baml_type::Interface>,
     member: &Name,
 ) -> Determination {
     let Some(iface_loc) = resolve_interface_loc(db, &inner_interface.name) else {
@@ -342,12 +460,21 @@ fn determine_chained(
     let Some(root) =
         associated_type_bound_interface(db, iface_loc, inner_interface, inner_base, inner_member)
     else {
-        return Determination::Undeclared {
-            container: AssocContainer::Ty(projection.clone()),
+        // The inner projection's member has no declared interface bound, so it provides no
+        // roots to resolve `member` through: unqualified it is undeclared; qualified the
+        // subject cannot implement the written interface.
+        return match explicit {
+            Some(qualifier) => Determination::SubjectDoesNotImplementQualifier {
+                subject: projection.clone(),
+                qualifier,
+            },
+            None => Determination::Undeclared {
+                container: AssocContainer::Ty(projection.clone()),
+            },
         };
     };
     let container = AssocContainer::Interface(root.name.clone());
-    resolve_through_roots(db, vec![root], member, container)
+    resolve_via_roots(db, vec![root], explicit, member, container, projection)
 }
 
 /// The interface bound declared on associated type `member` of the interface at
@@ -548,6 +675,38 @@ fn closure_declarers(
         }
     }
     declarers
+}
+
+/// A concrete `base`'s realized view of `interface` — the `implements` block's realized
+/// interface (carrying the impl's associated-type pins) when `base` implements it, else
+/// `None`. Narrows a projection search to the *written* qualifier (unlike
+/// [`resolve_concrete_projection`], which searches by member). `None` for an unrealized
+/// base or qualifier — a symbolic receiver dispatches dynamically, and
+/// [`get_implements_block`](crate::interfaces::get_implements_block) requires a fully
+/// realized `(interface, type)`.
+pub(crate) fn resolve_concrete_realized_interface(
+    db: &dyn crate::Db,
+    pkg: &Name,
+    base: &Ty,
+    interface: &baml_type::Interface,
+) -> Option<baml_type::Interface> {
+    if crate::generics::contains_typevar(base)
+        || interface
+            .generics
+            .iter()
+            .any(crate::generics::contains_typevar)
+        || interface
+            .associated_types
+            .iter()
+            .any(|(_, ty)| crate::generics::contains_typevar(ty))
+    {
+        return None;
+    }
+    let pkg_id = PackageId::new(db, pkg.clone());
+    let res_ctx = crate::package_interface::package_resolution_context(db, pkg_id);
+    let aliases = crate::inference::package_alias_map(db, res_ctx);
+    crate::interfaces::get_implements_block(db, pkg_id, base, interface, &aliases)
+        .map(|resolved| resolved.implemented_interface(db))
 }
 
 /// Resolve `base.member` for a concrete `base` through the impls visible in

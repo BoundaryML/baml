@@ -158,6 +158,11 @@ fn lower_base(type_expr: &CstTypeExpr) -> TypeExpr {
 /// Parse the base type (no modifiers, not a union).
 fn lower_base_terminal(type_expr: &CstTypeExpr) -> TypeExpr {
     let span = type_expr.syntax().span_range();
+    // BUG: a qualified projection captures only a single member — `(base as I).A.B`
+    // drops the trailing `.B` (`associated_type_projection` returns one member). A chained
+    // explicit qualifier (`(T as Outer).Asdf.Assoc`) therefore silently loses `.Assoc`,
+    // unlike the unqualified `T.Asdf.Assoc`. Fixing this is a grammar/CST change: parse the
+    // full member chain after `(base as I)` and fold it into nested projections here.
     if let Some((base, interface, member)) = type_expr.associated_type_projection() {
         return TypeExprKind::AssociatedTypeProjection {
             base: Box::new(lower_type_expr_inner(&base, false)),

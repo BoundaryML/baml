@@ -66,6 +66,17 @@ pub trait TypeExprContext<'db> {
     /// interface or type-variable base resolves through its `requires`-closure,
     /// not its impls.
     fn concrete_projection(&self, base: &Ty, member: &baml_base::Name) -> ConcreteProjection;
+
+    /// A concrete base's realized view of `interface` — the `implements` block's realized
+    /// interface (with the impl's associated-type pins) when `base` implements it, else
+    /// `None`. Narrows an explicit `(base as I).member` qualifier to the written interface
+    /// `I` (unlike [`concrete_projection`](Self::concrete_projection), which searches by
+    /// member). Only meaningful for a fully-realized concrete base.
+    fn concrete_realized_interface(
+        &self,
+        base: &Ty,
+        interface: &baml_type::Interface,
+    ) -> Option<baml_type::Interface>;
 }
 
 /// "Did you mean" candidates for an unresolved single-segment name: every namespace in
@@ -155,6 +166,19 @@ impl<'db> TypeExprContext<'db> for ScopeCtx<'_, 'db> {
             self.bounds,
             base,
             member,
+        )
+    }
+
+    fn concrete_realized_interface(
+        &self,
+        base: &Ty,
+        interface: &baml_type::Interface,
+    ) -> Option<baml_type::Interface> {
+        crate::builder::associated_projection::resolve_concrete_realized_interface(
+            self.db,
+            &self.package_items.package,
+            base,
+            interface,
         )
     }
 }
@@ -1703,6 +1727,102 @@ mod tests {
             matches!(ty, Ty::Int { .. }),
             "expected T.Item to collapse to the bound's pin, got {ty:?}"
         );
+        assert!(
+            resolved.diagnostics.is_empty(),
+            "unexpected diagnostics: {:?}",
+            resolved.diagnostics
+        );
+    }
+
+    // The explicit qualifier is first-class: `(T as HasItem).Item` intersects T's bound
+    // pins exactly as the unqualified `T.Item` does, so under `T extends HasItem<Item = int>`
+    // it collapses to `int` too — the two spellings agree (identity across spellings).
+    #[test]
+    fn explicit_qualifier_projection_carries_the_base_bound_pin() {
+        let db = compile(concat!(
+            "interface HasItem {\n  type Item\n}\n",
+            "class Holder<T extends HasItem<Item = int>> {\n  x: (T as HasItem).Item\n}\n",
+        ));
+        let user = PackageId::new(&db, Name::new("user"));
+        let items = baml_compiler2_ppir::package_items(&db, user);
+        let Some(baml_compiler2_hir::contributions::Definition::Class(holder)) =
+            items.lookup_type(&[], &Name::new("Holder"))
+        else {
+            panic!("Holder class should resolve");
+        };
+        let resolved = crate::inference::resolve_class_fields(&db, holder);
+        let (_, ty, _) = resolved
+            .fields
+            .iter()
+            .find(|(name, _, _)| name.as_str() == "x")
+            .expect("field x resolved");
+        assert!(
+            matches!(ty, Ty::Int { .. }),
+            "expected (T as HasItem).Item to collapse to the bound's pin like T.Item, got {ty:?}"
+        );
+        assert!(
+            resolved.diagnostics.is_empty(),
+            "unexpected diagnostics: {:?}",
+            resolved.diagnostics
+        );
+    }
+
+    // The explicit qualifier is verified against the base: `(string as HasItem).Item`
+    // where `string` does not implement `HasItem` is an error (Rust's E0277), not a
+    // silently-symbolic projection.
+    #[test]
+    fn explicit_qualifier_projection_requires_base_to_implement_it() {
+        let db = compile(concat!(
+            "interface HasItem {\n  type Item\n}\n",
+            "class Holder {\n  x: (string as HasItem).Item\n}\n",
+        ));
+        let user = PackageId::new(&db, Name::new("user"));
+        let items = baml_compiler2_ppir::package_items(&db, user);
+        let Some(baml_compiler2_hir::contributions::Definition::Class(holder)) =
+            items.lookup_type(&[], &Name::new("Holder"))
+        else {
+            panic!("Holder class should resolve");
+        };
+        let resolved = crate::inference::resolve_class_fields(&db, holder);
+        assert!(
+            resolved
+                .diagnostics
+                .iter()
+                .any(|(e, _)| matches!(e, TirTypeError::TypeDoesNotImplementInterface { .. })),
+            "`string` does not implement `HasItem`, so `(string as HasItem).Item` must error, got {:?}",
+            resolved.diagnostics
+        );
+    }
+
+    // An `implements` block that omits a defaulted associated type falls back to the
+    // interface's `type Asdf = default` — so `Ipsum.Asdf` (and the explicit
+    // `(Ipsum as Lorem).Asdf`) collapse to the default `int`, not a symbolic projection.
+    #[test]
+    fn concrete_projection_applies_interface_default_for_omitted_binding() {
+        let db = compile(concat!(
+            "interface Lorem {\n  type Asdf = int\n}\n",
+            "class Ipsum {\n  n: int\n  implements Lorem {}\n}\n",
+            "class Holder {\n  x: Ipsum.Asdf\n  y: (Ipsum as Lorem).Asdf\n}\n",
+        ));
+        let user = PackageId::new(&db, Name::new("user"));
+        let items = baml_compiler2_ppir::package_items(&db, user);
+        let Some(baml_compiler2_hir::contributions::Definition::Class(holder)) =
+            items.lookup_type(&[], &Name::new("Holder"))
+        else {
+            panic!("Holder class should resolve");
+        };
+        let resolved = crate::inference::resolve_class_fields(&db, holder);
+        for field in ["x", "y"] {
+            let (_, ty, _) = resolved
+                .fields
+                .iter()
+                .find(|(name, _, _)| name.as_str() == field)
+                .unwrap_or_else(|| panic!("field {field} resolved"));
+            assert!(
+                matches!(ty, Ty::Int { .. }),
+                "expected `{field}` (Ipsum.Asdf) to collapse to the default `int`, got {ty:?}"
+            );
+        }
         assert!(
             resolved.diagnostics.is_empty(),
             "unexpected diagnostics: {:?}",
