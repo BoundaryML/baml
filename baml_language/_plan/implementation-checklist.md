@@ -71,8 +71,8 @@ real `gpt-5.4-mini` at milestones. Commit after each ✅.
 - Realtime/harness (Phase 4): duplex transport (`baml.ws`/subprocess), `Channel`, lifecycle. Scenarios 22–26, 37–42 (shapes compiled).
 - Stateful persistence (Phase 5): local durable stores for sessions/compaction/memory/durable-workflows. Scenarios 18, 19, 21, 43–47 (shapes compiled).
 - D2/D8 Failure axis + typed provider errors; D4 aggregate ResponseMeta; P7 `type -> JSON Schema` for `Tool.parameters: type`.
-- Anthropic/Gemini providers in BAML (plan Phase 1; needs API keys for live).
-- ⚠ Compiler: cross-package `requires` (E0125) — blocks user-authored providers (top blocker).
+- ~~Anthropic provider in BAML~~ ✅ DONE (`ns_ai/anthropic.baml`, 6 mock tests in `ai_anthropic.rs`; live tier needs ANTHROPIC_API_KEY). Gemini in progress.
+- ~~⚠ Compiler: cross-package `requires` (E0125)~~ ✅ FIXED (`baml_lsp2_actions/src/check.rs` — required parent now resolves in the interface's own package). User-authored providers proven e2e in `ai_user_provider.rs` (EchoProvider entirely in user code through inherited call/call_with, typed error triage).
 - Client-as-sugar rewrite (replacing orchestrator delegation) — a lower_cst.rs change; big blast radius.
 
 ## Working rules
