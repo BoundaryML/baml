@@ -217,6 +217,32 @@ fn load_project_from_inner(
     from: Option<&Path>,
     on_file: impl Fn(&Path),
 ) -> Result<(ProjectDatabase, PathBuf, Vec<PathBuf>)> {
+    let resolved = resolve_project_sources(from)?;
+    let files = resolved.files.iter().map(|(p, _)| p.clone()).collect();
+    let db = build_db_from_sources(&resolved, on_file);
+    Ok((db, resolved.root, files))
+}
+
+/// A resolved project with every source read into memory but no
+/// [`ProjectDatabase`] built yet.
+///
+/// This is the seam the bytecode cache needs: computing a cache key requires
+/// the root, manifest, and file contents — but *not* a database. On a cache
+/// hit the database (and everything downstream of it: typecheck, emit) is
+/// skipped entirely; on a miss [`build_db_from_sources`] reuses these
+/// already-read contents instead of re-reading from disk.
+pub(crate) struct ResolvedProject {
+    /// Canonical project root (the directory holding `baml.toml`/`baml_src/`).
+    pub root: PathBuf,
+    /// `baml.toml` content when present (already validated).
+    pub manifest: Option<String>,
+    /// Discovered `.baml` files with contents, in discovery (sorted) order.
+    pub files: Vec<(PathBuf, String)>,
+}
+
+/// Resolve the project root, validate the manifest, and read every source
+/// file into memory. The strict-path front half of [`load_project_from`].
+pub(crate) fn resolve_project_sources(from: Option<&Path>) -> Result<ResolvedProject> {
     let canonical = resolve_search_start(from)?;
     let Some(canonical) = find_baml_project_root(&canonical) else {
         anyhow::bail!(
@@ -229,7 +255,6 @@ fn load_project_from_inner(
     };
 
     let toml_path = canonical.join("baml.toml");
-    let has_baml_toml = toml_path.exists();
 
     // Manifest validation, Cargo-style: when a `baml.toml` is present it must
     // be valid (`[package].name` mandatory). Failing here — before any source
@@ -237,7 +262,7 @@ fn load_project_from_inner(
     // `Cargo.toml`, rather than crashing several seconds in when a packaging
     // verb tries to use the name. A manifest-less `baml_src/` project skips
     // this: `baml.toml` is opt-in.
-    if has_baml_toml {
+    let manifest = if toml_path.exists() {
         let content = std::fs::read_to_string(&toml_path)
             .with_context(|| format!("Failed to read {}", toml_path.display()))?;
         let manifest = crate::manifest::parse(&content)
@@ -249,9 +274,40 @@ fn load_project_from_inner(
         for warning in crate::manifest::unknown_field_warnings(&manifest) {
             crate::reporter::print_warning(format_args!("{warning}"));
         }
-    }
+        Some(content)
+    } else {
+        None
+    };
 
-    build_project_db(canonical, on_file)
+    let walk_root = project_source_root(&canonical);
+    let files = discover_baml_files(&walk_root)
+        .into_iter()
+        .map(|path| {
+            let content = std::fs::read_to_string(&path)
+                .with_context(|| format!("Failed to read {}", path.display()))?;
+            Ok((path, content))
+        })
+        .collect::<Result<Vec<_>>>()?;
+
+    Ok(ResolvedProject {
+        root: canonical,
+        manifest,
+        files,
+    })
+}
+
+/// Build a [`ProjectDatabase`] from already-read sources.
+pub(crate) fn build_db_from_sources(
+    resolved: &ResolvedProject,
+    on_file: impl Fn(&Path),
+) -> ProjectDatabase {
+    let mut db = ProjectDatabase::new();
+    db.set_project_root(&resolved.root);
+    for (path, content) in &resolved.files {
+        on_file(path);
+        db.add_or_update_file(path, content);
+    }
+    db
 }
 
 /// Build a [`ProjectDatabase`] rooted at `canonical` (a directory already

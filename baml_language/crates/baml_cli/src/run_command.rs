@@ -20,8 +20,8 @@ use sys_native::{CallId, SysOpsExt};
 
 use crate::{
     project_load::{
-        find_project_root_from, load_project_for_build, load_project_or_default,
-        resolve_standalone_file, validate_file_from_flags,
+        find_project_root_from, load_project_or_default, resolve_standalone_file,
+        validate_file_from_flags,
     },
     reporter::Reporter,
 };
@@ -691,26 +691,56 @@ impl RunArgs {
             return self.load_and_compile_standalone(file, argv, reporter);
         }
 
-        // Per-file `Loading <file>` progress is verbose-only — by default
-        // the single `Compiling N file(s)` line below is the only progress a
-        // run shows.
-        let (db, from, baml_files) = load_project_for_build(self.from.as_deref(), reporter, false)?;
-        self.vlog(format_args!("Loading project from {}", from.display()));
-        if baml_files.is_empty() {
-            anyhow::bail!("No .baml files found in {}", from.display());
+        let resolved = crate::project_load::resolve_project_sources(self.from.as_deref())?;
+        self.vlog(format_args!(
+            "Loading project from {}",
+            resolved.root.display()
+        ));
+        if resolved.files.is_empty() {
+            anyhow::bail!("No .baml files found in {}", resolved.root.display());
         }
-        self.vlog(format_args!("Found {} .baml file(s)", baml_files.len()));
-        let needs_format_hint = baml_files.iter().any(|path| {
-            std::fs::read_to_string(path)
-                .map(|source| source_needs_format_hint(&source))
-                .unwrap_or(false)
-        });
+        self.vlog(format_args!("Found {} .baml file(s)", resolved.files.len()));
+        let needs_format_hint = resolved
+            .files
+            .iter()
+            .any(|(_, source)| source_needs_format_hint(source));
+
+        // Building the database only sets salsa inputs — the expensive work
+        // (typecheck, emit) happens lazily in the queries below, which a
+        // bytecode-cache hit skips entirely.
+        let db = crate::project_load::build_db_from_sources(&resolved, |_| {});
+
+        let cache =
+            crate::bytecode_cache::CacheContext::open(&resolved, /* emit_test_cases */ false);
+        if !crate::bytecode_cache::CacheContext::verify_enabled()
+            && let Some(ctx) = &cache
+            && let Some(program) = ctx.load()
+        {
+            self.vlog(format_args!("Bytecode cache hit — skipping compile"));
+            let engine = BexEngine::new(program, Arc::new(sys_native::SysOps::native()), argv)
+                .map_err(|e| anyhow!("Failed to create engine: {e:?}"))?;
+            return Ok((db, engine, needs_format_hint));
+        }
 
         // `baml run` keeps the compile phase silent; the program's output is
         // the point. Compile/count progress belongs to `check` and `generate`.
         self.check_project_diagnostics(&db, "Cannot run: compilation errors found", reporter)?;
         self.vlog(format_args!("Compiling..."));
-        let engine = self.compile_to_engine(&db, argv)?;
+        let program = baml_compiler2_emit::generate_project_bytecode(
+            &db,
+            &baml_compiler2_emit::CompileOptions {
+                emit_test_cases: false,
+            },
+        )
+        .map_err(|e| anyhow!("Compilation failed: {e:?}"))?;
+        if let Some(ctx) = &cache {
+            ctx.verify_against(&program)?;
+            if let Err(e) = ctx.store(&program) {
+                self.vlog(format_args!("Bytecode cache write failed: {e}"));
+            }
+        }
+        let engine = BexEngine::new(program, Arc::new(sys_native::SysOps::native()), argv)
+            .map_err(|e| anyhow!("Failed to create engine: {e:?}"))?;
         self.vlog(format_args!(
             "Compiled {} user function(s)",
             engine.user_functions().len()

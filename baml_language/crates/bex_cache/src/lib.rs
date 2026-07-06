@@ -217,6 +217,14 @@ impl BytecodeCache {
         Some(program)
     }
 
+    /// Like [`Self::load`], but returns the raw borsh payload without
+    /// deserializing. For byte-level verification against a fresh compile.
+    pub fn load_raw(&self, key: &CacheKey) -> Option<Vec<u8>> {
+        let data = fs::read(self.entry_path(key)).ok()?;
+        let payload = check_entry(&data, key)?;
+        Some(payload.to_vec())
+    }
+
     /// Serialize and store `program` under `key`. Best-effort: errors are
     /// returned for optional logging but callers should not fail on them.
     pub fn store(&self, key: &CacheKey, program: &Program) -> io::Result<()> {
@@ -231,9 +239,36 @@ impl BytecodeCache {
         entry.extend_from_slice(&payload_digest);
         entry.extend_from_slice(&payload);
 
+        // Cargo-style: the cache directory ignores itself, so a project-local
+        // cache never shows up as untracked noise or gets committed.
+        let gitignore = self.dir.join(".gitignore");
+        if !gitignore.exists() {
+            let _ = fs::create_dir_all(&self.dir);
+            let _ = fs::write(&gitignore, "*\n");
+        }
+
         let path = self.entry_path(key);
         fs::create_dir_all(path.parent().expect("entry path has parent"))?;
         write_atomic(&path, &entry)
+    }
+
+    /// Run [`Self::trim`] with the default policy (drop entries unused for
+    /// 5 days), at most once per day. Cheap no-op otherwise; call after a
+    /// store. The interval marker lives in `<dir>/trim.txt`.
+    pub fn maybe_trim(&self) {
+        const TRIM_INTERVAL: std::time::Duration = std::time::Duration::from_hours(24);
+        const TRIM_AGE: std::time::Duration = std::time::Duration::from_hours(5 * 24);
+        let marker = self.dir.join("trim.txt");
+        let due = match fs::metadata(&marker).and_then(|m| m.modified()) {
+            Ok(modified) => SystemTime::now()
+                .duration_since(modified)
+                .map(|age| age > TRIM_INTERVAL)
+                .unwrap_or(false),
+            Err(_) => true,
+        };
+        if due && fs::create_dir_all(&self.dir).is_ok() && fs::write(&marker, b"").is_ok() {
+            let _ = self.trim(TRIM_AGE);
+        }
     }
 
     /// Delete entries not used for `max_age`. Callers should rate-limit

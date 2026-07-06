@@ -732,6 +732,7 @@ dependencies = [
  "baml_type",
  "baml_version",
  "baml_workspace",
+ "bex_cache",
  "bex_engine",
  "bex_vm_types",
  "borsh",
