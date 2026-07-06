@@ -41,4 +41,15 @@ export default defineSchema({
     .index('by_created', ['createdAt'])
     .index('by_email', ['email'])
     .index('by_approved', ['approved', 'createdAt']),
+
+  // /bamlcode feedback — one row per submission from the solve page. Only
+  // `feedback` is required; name/email are optional. `slug` records which
+  // problem the user was on (helpful for triaging). See convex/bamlcodeFeedback.ts.
+  bamlcodeFeedback: defineTable({
+    feedback: v.string(),
+    name: v.optional(v.string()),
+    email: v.optional(v.string()),
+    slug: v.optional(v.string()),
+    createdAt: v.number(),
+  }).index('by_created', ['createdAt']),
 });

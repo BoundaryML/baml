@@ -8,6 +8,7 @@
  * @module
  */
 
+import type * as bamlcodeFeedback from "../bamlcodeFeedback.js";
 import type * as council from "../council.js";
 import type * as discord from "../discord.js";
 import type * as loops from "../loops.js";
@@ -21,6 +22,7 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  bamlcodeFeedback: typeof bamlcodeFeedback;
   council: typeof council;
   discord: typeof discord;
   loops: typeof loops;
