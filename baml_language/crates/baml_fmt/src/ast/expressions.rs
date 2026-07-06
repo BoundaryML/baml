@@ -54,13 +54,22 @@ pub enum Expression {
     /// `return` requires, so the output round-trips through `RETURN_STMT` (i.e. is
     /// idempotent).
     Return(VerbatimSpan),
+    /// A braceless `break` in expression position (a `BREAK_EXPR`, e.g. a
+    /// `catch`/`match` arm value like `0 => break`). Handled exactly like
+    /// [`Expression::Return`] and backed by the same [`VerbatimSpan`]: when an arm
+    /// printer wraps it into a block it appends the `;` that a block-position
+    /// `break` requires, so the output round-trips through `BREAK_STMT`.
+    Break(VerbatimSpan),
+    /// A braceless `continue` in expression position (a `CONTINUE_EXPR`). The
+    /// `continue` counterpart of [`Expression::Break`].
+    Continue(VerbatimSpan),
     Unknown(VerbatimSpan),
 }
 
 /// A node the strong AST does not model and prints verbatim: an unmodeled
 /// expression (e.g. `defer { … }`, `throw e`, `await f`, `spawn { … }`,
-/// `x.as<T>`) held as [`Expression::Unknown`], or a braceless `return …` held as
-/// [`Expression::Return`].
+/// `x.as<T>`) held as [`Expression::Unknown`], or a braceless jump held as
+/// [`Expression::Return`], [`Expression::Break`], or [`Expression::Continue`].
 ///
 /// Rather than a single whole-node span, this carries the node's true first and
 /// last *token* ranges. The trivia classifier keys leading/trailing comments to
@@ -204,6 +213,8 @@ impl FromCST for Expression {
             }
             SyntaxKind::LAMBDA_EXPR => Expression::Lambda(Box::new(LambdaExpr::from_cst(elem)?)),
             SyntaxKind::RETURN_EXPR => Expression::Return(VerbatimSpan::from_element(&elem)),
+            SyntaxKind::BREAK_EXPR => Expression::Break(VerbatimSpan::from_element(&elem)),
+            SyntaxKind::CONTINUE_EXPR => Expression::Continue(VerbatimSpan::from_element(&elem)),
             _ => Expression::Unknown(VerbatimSpan::from_element(&elem)),
         };
         Ok(expr)
@@ -253,7 +264,7 @@ impl Expression {
             }
             Expression::ByteString(bs) => Some(usize::from(bs.span().len())),
             Expression::Lambda(_) => None,
-            Expression::Return(_) => None,
+            Expression::Return(_) | Expression::Break(_) | Expression::Continue(_) => None,
             Expression::Unknown(unknown) => {
                 // Unmodeled nodes (e.g. `await f`, `x.as<T>`, `spawn { … }`,
                 // `throw e`) print their source verbatim (see `print`). When that
@@ -305,12 +316,13 @@ impl Printable for Expression {
             Expression::BacktickString(bt) => bt.print(shape, printer),
             Expression::ByteString(bs) => bs.print(shape, printer),
             Expression::Lambda(lambda) => lambda.print(shape, printer),
-            // Print the raw `return …` text. The arm printers add the `;` when
-            // they wrap this into a block (see `CatchArm`/`MatchArm`). A braceless
-            // `return` only appears as a whole arm value, never nested inside
-            // another expression, so it always reports multi-lined.
-            Expression::Return(ret) => {
-                printer.print_input_range_trimmed_start(ret.content_range());
+            // Print the raw `return …` / `break` / `continue` text. The arm
+            // printers add the `;` when they wrap this into a block (see
+            // `CatchArm`/`MatchArm`). A braceless jump only appears as a whole
+            // arm value, never nested inside another expression, so it always
+            // reports multi-lined.
+            Expression::Return(jump) | Expression::Break(jump) | Expression::Continue(jump) => {
+                printer.print_input_range_trimmed_start(jump.content_range());
                 PrintInfo::default_multi_lined()
             }
             // Unmodeled nodes print their source verbatim. Report `multi_lined`
@@ -355,8 +367,10 @@ impl Printable for Expression {
             Expression::BacktickString(bt) => bt.leftmost_token(),
             Expression::ByteString(bs) => bs.leftmost_token(),
             Expression::Lambda(lambda) => lambda.leftmost_token(),
-            Expression::Return(ret) => ret.first_token,
-            Expression::Unknown(unknown) => unknown.first_token,
+            Expression::Return(span)
+            | Expression::Break(span)
+            | Expression::Continue(span)
+            | Expression::Unknown(span) => span.first_token,
         }
     }
     fn rightmost_token(&self) -> TextRange {
@@ -387,8 +401,10 @@ impl Printable for Expression {
             Expression::BacktickString(bt) => bt.rightmost_token(),
             Expression::ByteString(bs) => bs.rightmost_token(),
             Expression::Lambda(lambda) => lambda.rightmost_token(),
-            Expression::Return(ret) => ret.last_token,
-            Expression::Unknown(unknown) => unknown.last_token,
+            Expression::Return(span)
+            | Expression::Break(span)
+            | Expression::Continue(span)
+            | Expression::Unknown(span) => span.last_token,
         }
     }
 }
@@ -1830,13 +1846,17 @@ impl MatchArm {
 /// newline are already emitted; the caller emits the closing `}`).
 ///
 /// `arm_indent` is the arm's own indent; the body is printed one level deeper.
-/// A braceless `return` body additionally gets its statement `;` — and its
-/// trailing trivia is deliberately left for the arm level so a same-line comment
-/// stays attached to the arm (emitted after the wrapped `},`) instead of being
-/// split from the `;` or dropped/duplicated when the arm has no comma (B-629).
+/// A braceless jump body (`return`/`break`/`continue`) additionally gets its
+/// statement `;` — and its trailing trivia is deliberately left for the arm
+/// level so a same-line comment stays attached to the arm (emitted after the
+/// wrapped `},`) instead of being split from the `;` or dropped/duplicated when
+/// the arm has no comma (B-629).
 fn print_wrapped_arm_body(printer: &mut Printer, body: &Expression, arm_indent: usize) {
     let inner_indent = arm_indent + printer.config.indent_width;
-    if matches!(body, Expression::Return(_)) {
+    if matches!(
+        body,
+        Expression::Return(_) | Expression::Break(_) | Expression::Continue(_)
+    ) {
         printer.print_standalone_leading_and_body(body, inner_indent);
         printer.print_str(";");
     } else {

@@ -787,6 +787,8 @@ impl LoweringContext {
             SyntaxKind::CATCH_EXPR => self.lower_catch_expr(node),
             SyntaxKind::THROW_EXPR => self.lower_throw_expr(node),
             SyntaxKind::RETURN_EXPR => self.lower_return_expr(node),
+            SyntaxKind::BREAK_EXPR => self.lower_jump_expr(node, Stmt::Break),
+            SyntaxKind::CONTINUE_EXPR => self.lower_jump_expr(node, Stmt::Continue),
             SyntaxKind::BLOCK_EXPR => {
                 if let Some(block) = baml_compiler_syntax::ast::BlockExpr::cast(node.clone()) {
                     self.lower_block_expr(&block)
@@ -4510,6 +4512,28 @@ impl LoweringContext {
     fn lower_return_expr(&mut self, node: &SyntaxNode) -> ExprId {
         let value = self.lower_optional_return_value(node);
         self.alloc_expr(Expr::Return { value }, node.span_range())
+    }
+
+    /// Lower a `break`/`continue` used in expression position (`BREAK_EXPR` /
+    /// `CONTINUE_EXPR`, e.g. a bare match arm `0 => break`) into a block that
+    /// holds the corresponding jump statement: `{ break; }` / `{ continue; }`.
+    ///
+    /// `break`/`continue` carry no value, so — unlike `return` — they need no
+    /// dedicated `Expr` variant. Desugaring to a single-statement block reuses
+    /// the fully-tested `Stmt::Break`/`Stmt::Continue` machinery (divergence
+    /// typing to `never`, defer replay/unwatch, defer-escape diagnostics) and
+    /// makes the braceless form behave identically to the already-accepted
+    /// braced arm.
+    fn lower_jump_expr(&mut self, node: &SyntaxNode, jump: Stmt) -> ExprId {
+        let span = node.span_range();
+        let stmt = self.alloc_stmt(jump, span);
+        self.alloc_expr(
+            Expr::Block {
+                stmts: vec![stmt],
+                tail_expr: None,
+            },
+            span,
+        )
     }
 
     /// Lower `defer { BODY }` (BEP-042). The CST shape is

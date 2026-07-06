@@ -4678,6 +4678,28 @@ impl<'a> Parser<'a> {
         });
     }
 
+    /// Parse `break` in expression position as a `BREAK_EXPR` — a diverging
+    /// expression of type `never`, mirroring `parse_return_expr`. This is what
+    /// lets a braceless `break` be a `catch`/`match` arm value (`0 => break`).
+    /// Statement position is still handled by `parse_break_stmt` (see
+    /// `parse_stmt`), so this only fires when `break` is reached through
+    /// expression parsing. Unlike the statement form, we don't eat a trailing
+    /// `;` here — that belongs to the enclosing statement, not the expression.
+    fn parse_break_expr(&mut self) {
+        self.with_node(SyntaxKind::BREAK_EXPR, |p| {
+            p.expect(TokenKind::Break);
+        });
+    }
+
+    /// Parse `continue` in expression position as a `CONTINUE_EXPR` — the
+    /// `continue` counterpart of `parse_break_expr`. Statement-position
+    /// `continue` is still handled by `parse_continue_stmt`.
+    fn parse_continue_expr(&mut self) {
+        self.with_node(SyntaxKind::CONTINUE_EXPR, |p| {
+            p.expect(TokenKind::Continue);
+        });
+    }
+
     fn parse_if_expr(&mut self) {
         // `if let PATTERN = SCRUTINEE { ... }` is a distinct refutable form.
         // Decided here by peeking past `if` for a `let` token — patterns
@@ -6324,6 +6346,15 @@ impl<'a> Parser<'a> {
             // `catch`/`match` arm value. Statement-position `return` is taken by
             // `parse_stmt` before reaching here.
             self.parse_return_expr();
+        } else if self.at(TokenKind::Break) {
+            // Break expression (diverging, type `never`) — lets `break` be a
+            // `catch`/`match` arm value, symmetric with `return`.
+            // Statement-position `break` is taken by `parse_stmt` first.
+            self.parse_break_expr();
+        } else if self.at(TokenKind::Continue) {
+            // Continue expression (diverging, type `never`) — the `continue`
+            // counterpart of the `break` case above.
+            self.parse_continue_expr();
         } else if self.at(TokenKind::Word) {
             // Collect text as owned String so the borrow is released before any &mut calls.
             let text: String = self.current().map(|t| t.text.clone()).unwrap_or_default();
@@ -9339,6 +9370,52 @@ function Demo() -> int {
             .filter(|n| n.kind() == SyntaxKind::THROW_EXPR)
             .count();
         assert_eq!(throw_expr_count, 2);
+    }
+
+    #[test]
+    fn parses_break_and_continue_as_match_arm_expressions() {
+        // B-619: bare `break`/`continue` are valid in match-arm expression
+        // position (symmetric with `return`), producing BREAK_EXPR/CONTINUE_EXPR
+        // nodes — no `E0010 Expected expression` error.
+        let source = r#"
+function Demo(n: int) -> int {
+  let x = n;
+  while (true) {
+    match (x) {
+      0 => break,
+      1 => continue,
+      _ => { x = x - 1; }
+    }
+  }
+  x
+}
+"#;
+
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let break_expr_count = root
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::BREAK_EXPR)
+            .count();
+        assert_eq!(break_expr_count, 1, "expected one BREAK_EXPR node");
+
+        let continue_expr_count = root
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::CONTINUE_EXPR)
+            .count();
+        assert_eq!(continue_expr_count, 1, "expected one CONTINUE_EXPR node");
+
+        // Bare `break`/`continue` in statement position still parse as the
+        // statement forms — the expression forms only fire through expression
+        // parsing (the match arms above).
+        assert_eq!(
+            root.descendants()
+                .filter(|n| n.kind() == SyntaxKind::BREAK_STMT)
+                .count(),
+            0,
+            "arm-position break should not be a BREAK_STMT"
+        );
     }
 
     #[test]
