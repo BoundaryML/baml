@@ -9,7 +9,10 @@
 
 use std::path::{Path, PathBuf};
 
-use baml_compiler2_emit::{CompileOptions, generate_project_bytecode};
+use baml_compiler2_emit::{
+    CompileOptions, OptLevel, generate_project_bytecode, generate_project_bytecode_with_stdlib,
+    generate_stdlib_program,
+};
 use baml_project::ProjectDatabase;
 use baml_workspace::discover_baml_files;
 
@@ -83,4 +86,72 @@ fn empty_project_emit_is_deterministic() {
 fn baml_src_project_emit_is_deterministic() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("baml_src");
     assert_deterministic(&root, true);
+}
+
+fn build_db(root: &Path, sources: &[(PathBuf, String)]) -> ProjectDatabase {
+    let mut db = ProjectDatabase::new();
+    db.set_project_root(root);
+    for (path, content) in sources {
+        db.add_or_update_file(path, content);
+    }
+    db
+}
+
+/// The precompiled-stdlib splice oracle: compiling on top of a stdlib
+/// `Program` slice must be byte-identical to a full compile.
+///
+/// The base is built from the *empty* project's database and spliced into the
+/// *full baml_src* compile — proving the stdlib slice is genuinely
+/// user-independent (same bytes regardless of which project's db produced
+/// it), not merely reusable within one project.
+#[test]
+fn stdlib_splice_is_byte_identical_to_full_compile() {
+    let empty_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("projects/compiles/__baml_std__");
+    let empty_sources = read_project(&empty_root);
+    let base = generate_stdlib_program(&build_db(&empty_root, &empty_sources), OptLevel::Two)
+        .expect("stdlib compile failed");
+    let base_bytes = borsh::to_vec(&base).expect("serialize stdlib base");
+
+    for (root, emit_test_cases) in [
+        (empty_root.clone(), false),
+        (Path::new(env!("CARGO_MANIFEST_DIR")).join("baml_src"), true),
+    ] {
+        let sources = read_project(&root);
+        let full = compile_to_bytes(&root, &sources, emit_test_cases);
+
+        let spliced = generate_project_bytecode_with_stdlib(
+            &build_db(&root, &sources),
+            &CompileOptions { emit_test_cases },
+            OptLevel::Two,
+            &base,
+        )
+        .unwrap_or_else(|e| panic!("splice compile of {} failed: {e:?}", root.display()));
+        let spliced = borsh::to_vec(&spliced).expect("serialize spliced program");
+
+        assert_eq!(
+            full.len(),
+            spliced.len(),
+            "splice output length differs from full compile for {}",
+            root.display()
+        );
+        assert!(
+            full == spliced,
+            "splice output differs from full compile for {} (first diff at byte {})",
+            root.display(),
+            full.iter()
+                .zip(spliced.iter())
+                .position(|(a, b)| a != b)
+                .unwrap_or(0),
+        );
+
+        // The stdlib slice must also be reproducible from THIS project's db.
+        let rebuilt = generate_stdlib_program(&build_db(&root, &sources), OptLevel::Two)
+            .expect("stdlib recompile failed");
+        let rebuilt = borsh::to_vec(&rebuilt).expect("serialize rebuilt base");
+        assert!(
+            rebuilt == base_bytes,
+            "stdlib slice is not user-independent: differs when built from {}",
+            root.display()
+        );
+    }
 }

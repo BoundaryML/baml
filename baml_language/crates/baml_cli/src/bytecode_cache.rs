@@ -12,15 +12,26 @@
 
 use std::path::PathBuf;
 
+use baml_db::baml_compiler2_emit::{
+    CompileOptions, LoweringError, OptLevel, generate_project_bytecode,
+    generate_project_bytecode_with_stdlib, generate_stdlib_program,
+};
+use baml_project::ProjectDatabase;
 use bex_cache::{BytecodeCache, CacheKey, KeyInputs, compiler_fingerprint, compute_key};
 use bex_vm_types::Program;
 
 use crate::project_load::ResolvedProject;
 
-/// An opened cache plus the key for one resolved project + compile config.
+/// The optimization level every CLI compile uses (the emit default).
+const CLI_OPT_LEVEL: OptLevel = OptLevel::Two;
+
+/// An opened cache plus the keys for one resolved project + compile config.
 pub(crate) struct CacheContext {
     cache: BytecodeCache,
+    /// Whole-project Program, keyed by sources + options + compiler build.
     key: CacheKey,
+    /// Precompiled stdlib slice, keyed by compiler build + opt level only.
+    stdlib_key: CacheKey,
 }
 
 impl CacheContext {
@@ -48,8 +59,7 @@ impl CacheContext {
 
         let key = compute_key(&KeyInputs {
             compiler_fingerprint: fingerprint,
-            // The CLI compiles at the emit default (`OptLevel::Two`).
-            opt_level: 2,
+            opt_level: CLI_OPT_LEVEL as u8,
             emit_test_cases,
             manifest: resolved.manifest.as_deref(),
             files: &files,
@@ -58,6 +68,7 @@ impl CacheContext {
         Some(CacheContext {
             cache: BytecodeCache::open(dir),
             key,
+            stdlib_key: bex_cache::stdlib_key(&fingerprint, CLI_OPT_LEVEL as u8),
         })
     }
 
@@ -101,4 +112,32 @@ impl CacheContext {
         self.cache.maybe_trim();
         Ok(())
     }
+}
+
+/// Compile the project, reusing (or materializing) the precompiled stdlib
+/// slice when a cache is available.
+///
+/// The stdlib slice depends only on the compiler build + opt level — the Go
+/// model: compiled once per toolchain, ever, then spliced into every compile.
+/// Splice output is byte-identical to a full compile (enforced by the
+/// `emit_determinism` suite), so callers and the project-blob cache see no
+/// difference beyond speed. Any stdlib-entry problem falls back to compiling
+/// it fresh; a failed write just means rebuilding it next run.
+pub(crate) fn compile_program(
+    db: &ProjectDatabase,
+    options: &CompileOptions,
+    cache: Option<&CacheContext>,
+) -> Result<Program, LoweringError> {
+    let Some(ctx) = cache else {
+        return generate_project_bytecode(db, options);
+    };
+    let base = match ctx.cache.load(&ctx.stdlib_key) {
+        Some(base) => base,
+        None => {
+            let base = generate_stdlib_program(db, CLI_OPT_LEVEL)?;
+            let _ = ctx.cache.store(&ctx.stdlib_key, &base);
+            base
+        }
+    };
+    generate_project_bytecode_with_stdlib(db, options, CLI_OPT_LEVEL, &base)
 }

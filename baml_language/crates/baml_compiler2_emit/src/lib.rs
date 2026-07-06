@@ -873,8 +873,66 @@ pub fn generate_project_bytecode_with_opt(
     options: &CompileOptions,
     opt: OptLevel,
 ) -> Result<Program, LoweringError> {
-    let mut program = Program::new();
-    let all_files = compiler2_all_files(db);
+    generate_impl(db, options, opt, None, false)
+}
+
+/// Compile ONLY the builtin stdlib into a standalone `Program` slice.
+///
+/// Because builtins occupy a contiguous, user-independent prefix of every
+/// index space (see `emit_file_group`), this Program is byte-identical to the
+/// stdlib prefix of any full project compile at the same `opt` — regardless
+/// of what user code the `db` holds. It is the cacheable artifact (keyed by
+/// compiler build + opt level) that `generate_project_bytecode_with_stdlib`
+/// splices into project compiles.
+pub fn generate_stdlib_program(
+    db: &dyn baml_compiler2_mir::Db,
+    opt: OptLevel,
+) -> Result<Program, LoweringError> {
+    generate_impl(
+        db,
+        &CompileOptions {
+            emit_test_cases: false,
+        },
+        opt,
+        None,
+        true,
+    )
+}
+
+/// Generate project bytecode on top of a precompiled stdlib `Program` slice
+/// (from [`generate_stdlib_program`], same compiler build and `opt`).
+///
+/// Skips all builtin-group lowering — the dominant fixed cost of a compile —
+/// by seeding the output program and the emit tables from `base`, then
+/// emitting only the user file group on top. The result is byte-identical to
+/// a full [`generate_project_bytecode_with_opt`] run (asserted by the
+/// `emit_determinism` integration tests).
+pub fn generate_project_bytecode_with_stdlib(
+    db: &dyn baml_compiler2_mir::Db,
+    options: &CompileOptions,
+    opt: OptLevel,
+    base: &Program,
+) -> Result<Program, LoweringError> {
+    generate_impl(db, options, opt, Some(base), false)
+}
+
+fn generate_impl(
+    db: &dyn baml_compiler2_mir::Db,
+    options: &CompileOptions,
+    opt: OptLevel,
+    base: Option<&Program>,
+    stdlib_only: bool,
+) -> Result<Program, LoweringError> {
+    let mut all_files = compiler2_all_files(db);
+    let builtin_count = all_files
+        .iter()
+        .take_while(|f| f.path(db).to_string_lossy().starts_with("<builtin>/"))
+        .count();
+    if stdlib_only {
+        // The builtin prefix is user-independent, so compiling "just the
+        // stdlib" is the full pipeline over the builtin files alone.
+        all_files.truncate(builtin_count);
+    }
     let alias_caches = build_alias_caches(db, &all_files);
     // One dispatch-candidate cache per package, shared across every function
     // lowered below so repeated interface-dispatch requests (the same
@@ -888,21 +946,26 @@ pub fn generate_project_bytecode_with_opt(
     // stdlib occupies a contiguous, user-independent prefix of the ObjectPool
     // and the globals table (`compiler2_all_files` puts builtins first for the
     // same reason). The precompiled-stdlib splice depends on that prefix.
-    let builtin_count = all_files
-        .iter()
-        .take_while(|f| f.path(db).to_string_lossy().starts_with("<builtin>/"))
-        .count();
-    let (builtin_files, user_files) = all_files.split_at(builtin_count);
-    let mut tables = EmitTables::default();
-    emit_file_group(
-        db,
-        builtin_files,
-        &mut tables,
-        &mut program,
-        &alias_caches,
-        &dispatch_caches,
-        opt,
-    )?;
+    let (builtin_files, user_files) = all_files.split_at(builtin_count.min(all_files.len()));
+    let (mut program, mut tables) = match base {
+        // Splice mode: the builtin group's output is taken wholesale from the
+        // precompiled slice; whole-program products it carries (template
+        // macros, packages) are recomputed by the trailing passes below,
+        // exactly as a full compile would.
+        Some(base) => (base.clone(), EmitTables::from_stdlib_program(base)),
+        None => (Program::new(), EmitTables::default()),
+    };
+    if base.is_none() {
+        emit_file_group(
+            db,
+            builtin_files,
+            &mut tables,
+            &mut program,
+            &alias_caches,
+            &dispatch_caches,
+            opt,
+        )?;
+    }
     emit_file_group(
         db,
         user_files,
@@ -1030,6 +1093,77 @@ struct EmitTables {
     interface_object_indices: HashMap<baml_type::TypeName, usize>,
     /// Per-package structure the loader builds `Object::Package` from.
     program_packages: indexmap::IndexMap<Name, bex_vm_types::types::ProgramPackage>,
+}
+
+impl EmitTables {
+    /// Reconstruct the emit tables the builtin group would have produced,
+    /// purely from a precompiled stdlib `Program` slice.
+    ///
+    /// Everything the user group needs to reference builtin items is
+    /// recoverable from the artifact: name→slot maps are stored on the
+    /// `Program`; class/enum/interface metadata (field order, variant order)
+    /// lives in the pool objects; the class type-tag counter equals the class
+    /// count (tags are assigned densely in pool order). Per-package
+    /// `impl_rules` and `recursive_type_aliases` are cleared — the trailing
+    /// whole-program passes regenerate them from all files exactly as a full
+    /// compile does (keeping them would double the rule vectors).
+    fn from_stdlib_program(base: &Program) -> Self {
+        let mut tables = EmitTables::default();
+
+        for (name, &slot) in &base.function_global_indices {
+            tables.globals.insert(name.clone(), slot);
+        }
+        for (name, &slot) in &base.let_global_indices {
+            tables.globals.insert(name.clone(), slot);
+        }
+
+        for (idx, obj) in base.objects.iter().enumerate() {
+            match obj {
+                Object::Class(class) => {
+                    let fq = class.name.to_string();
+                    let field_indices = class
+                        .fields
+                        .iter()
+                        .enumerate()
+                        .map(|(i, f)| (f.name.clone(), i))
+                        .collect();
+                    tables.classes.insert(fq.clone(), field_indices);
+                    tables.class_object_indices.insert(fq, idx);
+                    tables.class_type_tag_counter += 1;
+                }
+                Object::Enum(enum_def) => {
+                    let fq = enum_def.name.to_string();
+                    let variant_indices = enum_def
+                        .variants
+                        .iter()
+                        .enumerate()
+                        .map(|(i, v)| (v.name.clone(), i))
+                        .collect();
+                    tables.enum_variants.insert(fq.clone(), variant_indices);
+                    tables.enum_object_indices.insert(fq, idx);
+                }
+                Object::Interface(iface) => {
+                    tables
+                        .interface_object_indices
+                        .insert(iface.name.clone(), idx);
+                }
+                _ => {}
+            }
+        }
+
+        tables.program_packages = base
+            .packages
+            .iter()
+            .map(|(pkg_name, pkg)| {
+                let mut pkg = pkg.clone();
+                pkg.impl_rules.clear();
+                pkg.recursive_type_aliases.clear();
+                (pkg_name.clone(), pkg)
+            })
+            .collect();
+
+        tables
+    }
 }
 
 /// Run emit passes 1–4.6 over one file group.

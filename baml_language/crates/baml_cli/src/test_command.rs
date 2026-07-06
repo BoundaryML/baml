@@ -153,8 +153,9 @@ impl TestArgs {
             let compile_options = baml_compiler2_emit::CompileOptions {
                 emit_test_cases: true,
             };
-            let bytecode = baml_compiler2_emit::generate_project_bytecode(&db, &compile_options)
-                .map_err(|e| anyhow!("Compilation failed: {e:?}"))?;
+            let bytecode =
+                crate::bytecode_cache::compile_program(&db, &compile_options, cache.as_ref())
+                    .map_err(|e| anyhow!("Compilation failed: {e:?}"))?;
             if let Some(ctx) = &cache {
                 ctx.verify_against(&bytecode)?;
                 let _ = ctx.store(&bytecode);

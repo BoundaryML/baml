@@ -726,11 +726,12 @@ impl RunArgs {
         // the point. Compile/count progress belongs to `check` and `generate`.
         self.check_project_diagnostics(&db, "Cannot run: compilation errors found", reporter)?;
         self.vlog(format_args!("Compiling..."));
-        let program = baml_compiler2_emit::generate_project_bytecode(
+        let program = crate::bytecode_cache::compile_program(
             &db,
             &baml_compiler2_emit::CompileOptions {
                 emit_test_cases: false,
             },
+            cache.as_ref(),
         )
         .map_err(|e| anyhow!("Compilation failed: {e:?}"))?;
         if let Some(ctx) = &cache {

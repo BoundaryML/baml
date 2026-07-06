@@ -97,6 +97,21 @@ pub fn compute_key(inputs: &KeyInputs<'_>) -> CacheKey {
     CacheKey(h.finalize().into())
 }
 
+/// Key for the precompiled stdlib `Program` slice.
+///
+/// Depends only on the compiler build, opt level, and cache format — not on
+/// any project. One entry per compiler build serves every project on the
+/// machine (the Go model: the stdlib is compiled once per toolchain, ever).
+pub fn stdlib_key(compiler_fingerprint: &[u8; 32], opt_level: u8) -> CacheKey {
+    let mut h = Sha256::new();
+    h.update(MAGIC);
+    h.update(FORMAT_VERSION.to_le_bytes());
+    h.update(b"stdlib-slice");
+    h.update(compiler_fingerprint);
+    h.update([opt_level]);
+    CacheKey(h.finalize().into())
+}
+
 /// Identity of the running compiler build: SHA-256 of the current executable's
 /// bytes, mixed with the stamped product version.
 ///
