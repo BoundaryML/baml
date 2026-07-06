@@ -85,6 +85,10 @@ Each entry: the symptom, the rule, the workaround. Compiler-bug candidates are m
 - **Closures are `(x: T) -> R { body }`**, not `x => body`. A callback param's `throws` must be
   named and threaded explicitly (the `Iterator.map<R, E2>` pattern).
 - **Generic type aliases (`type Foo<E> = …`) don't exist** — spell unions inline.
+- **A bare object literal as a `match`-arm value parses as a block, not a record** —
+  `null => { "type": "base64", … }` errors (E0010 `Expected expression, found ':'`) because `{`
+  at statement position opens a block. Put object literals in unambiguous expression position:
+  `return { … }` from the arm, or bind `let x: json = { … };` first.
 - **`spawn { … }`'s error type infers as `null`, not `never`** — annotate future arrays as
   `baml.future.Future<T, null>[]`.
 - **`?? []` needs a typed binding** (`let xs: T[] = maybe ?? [];`) — bare coalesce against `[]`
