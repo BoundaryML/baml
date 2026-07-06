@@ -161,6 +161,29 @@ fn relink_is_byte_identical_to_full_compile() {
     // 5. Deleted file: c disappears; a and b splice into the smaller layout.
     let edited = [("a.baml", A_BAML), ("b.baml", B_BAML)];
     assert_relink_matches("deleted file", &edited, &base, &prev, &["a.baml", "b.baml"]);
+
+    // 6. Body edit that changes INFERRED interface: `throws` is inferred
+    //    from bodies, so this edit changes the transitive throws of c's
+    //    main() (which calls magnitude_ish) even though c is untouched and
+    //    no *written* signature changed. A naive splice would keep c's stale
+    //    throws metadata; the relink must detect the mismatch and demote c.
+    let b_added_throw = B_BAML.replace(
+        "p.x * p.x + p.y * p.y",
+        "if p.x == 999 {\n    throw \"boom\"\n  }\n  p.x * p.x + p.y * p.y",
+    );
+    assert_ne!(b_added_throw, B_BAML, "throw edit must apply");
+    let edited = [
+        ("a.baml", A_BAML),
+        ("b.baml", b_added_throw.as_str()),
+        ("c.baml", C_BAML),
+    ];
+    assert_relink_matches(
+        "throws-changing body edit",
+        &edited,
+        &base,
+        &prev,
+        &["a.baml", "c.baml"],
+    );
 }
 
 /// Prove the splice path actually runs (byte-equality alone would also pass

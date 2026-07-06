@@ -1300,6 +1300,53 @@ impl<'a> ReuseContext<'a> {
     }
 }
 
+/// Gate for splicing a clean file: every function's inferred transitive
+/// `throws` must match the previous compile.
+///
+/// `throws` is inferred from bodies, so it is interface that the
+/// body-blanked signature hash cannot see: a body edit elsewhere in the
+/// package can change a clean file's *transitive* throws — its stored
+/// `throws_type` metadata and, through catch lowering, potentially its
+/// bytecode. The package-wide throw graph is already solved on this path,
+/// so the comparison costs only map lookups; any mismatch demotes the file
+/// to a normal recompile. No fixpoint is needed: the graph is solved
+/// globally, so every affected file's own transitive set differs and each
+/// demotes independently.
+fn spliced_throws_match(
+    db: &dyn baml_compiler2_mir::Db,
+    file: baml_base::SourceFile,
+    prev: &Program,
+    cache: &ResolvedAliases,
+) -> bool {
+    let item_tree = file_item_tree(db, file);
+    for (local_id, func_data) in &item_tree.functions {
+        // Mirror Pass 4's skip set: these never become callable objects.
+        if matches!(
+            func_data.body,
+            Some(baml_compiler2_ast::FunctionBodyDef::Builtin(
+                BuiltinKind::Intrinsic | BuiltinKind::AwaitAny
+            ))
+        ) {
+            continue;
+        }
+        let fq = def_to_item_ref(
+            db,
+            Definition::Function(FunctionLoc::new(db, file, *local_id)),
+        )
+        .to_string();
+        let Some(&obj_idx) = prev.function_indices.get(&fq) else {
+            return false;
+        };
+        let Some(Object::Function(prev_fn)) = prev.objects.get(obj_idx) else {
+            return false;
+        };
+        if prev_fn.throws_type != compute_throws_type(db, file, &func_data.name, cache) {
+            return false;
+        }
+    }
+    true
+}
+
 /// Splice one clean file's compiled functions from the previous program into
 /// `program`, rewriting cross-function references for the new layout.
 #[allow(clippy::too_many_arguments)]
@@ -1778,20 +1825,25 @@ fn emit_file_group(
         if let Some(ctx) = reuse {
             let rel = relative_source_path(db, *file);
             if ctx.clean_files.contains(&rel) {
-                // Clean file: its compiled functions are spliced from the
-                // previous program instead of re-lowered — this is what makes
-                // a body-only edit elsewhere skip this file's TIR/MIR/emit
-                // entirely (salsa never gets asked).
-                splice_file_functions(
-                    ctx,
-                    &rel,
-                    globals,
-                    class_object_indices,
-                    enum_object_indices,
-                    interface_object_indices,
-                    program,
-                )?;
-                continue;
+                let pkg = file_package(db, *file);
+                if spliced_throws_match(db, *file, ctx.prev, &alias_caches[&pkg.package]) {
+                    // Clean file: its compiled functions are spliced from the
+                    // previous program instead of re-lowered — this is what
+                    // makes a body-only edit elsewhere skip this file's
+                    // TIR/MIR/emit entirely (salsa never gets asked).
+                    splice_file_functions(
+                        ctx,
+                        &rel,
+                        globals,
+                        class_object_indices,
+                        enum_object_indices,
+                        interface_object_indices,
+                        program,
+                    )?;
+                    continue;
+                }
+                // Inferred-throws mismatch: fall through to a normal
+                // recompile of this file.
             }
         }
         let line_starts = build_line_starts(file.text(db));
