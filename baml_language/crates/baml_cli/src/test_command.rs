@@ -500,7 +500,12 @@ fn consume_flat_report(
     // for that contradicts the `NoTestsRun` exit the caller then returns and
     // reads as success to anything parsing stdout, so skip the aggregate line
     // entirely and let the caller's "no tests selected" guard speak.
-    if flat.total == 0 {
+    //
+    // Guard *only* the vacuous-pass case: a zero-test report with a non-pass
+    // outcome must still fall through to the FAIL branch so it prints, sets
+    // `command_failed`, and synthesizes a displayed failure — a real failure
+    // is never silently dropped just because it carried no leaves.
+    if flat.total == 0 && flat.outcome == "pass" {
         return;
     }
 
@@ -785,6 +790,18 @@ mod tests {
         let parsed =
             parse_flat_report(&flat_report("pass", 0, 0, 0, 0, Vec::new(), Vec::new())).unwrap();
         assert_eq!(consume(&parsed), (0, 0, 0, 0, false));
+    }
+
+    #[test]
+    fn consume_empty_report_with_fail_outcome_still_propagates_failure() {
+        // The vacuous-pass skip must NOT swallow a zero-test report that
+        // reports a failure. A `total == 0 && outcome == "fail"` report has to
+        // fall through to the FAIL branch: it sets `command_failed` and
+        // synthesizes one displayed failure (so the summary isn't "0 failed"
+        // while the aggregate failed). Regression guard for the narrowed guard.
+        let parsed =
+            parse_flat_report(&flat_report("fail", 0, 0, 0, 0, Vec::new(), Vec::new())).unwrap();
+        assert_eq!(consume(&parsed), (0, 1, 0, 1, true));
     }
 
     #[test]
