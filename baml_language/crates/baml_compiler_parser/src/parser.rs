@@ -4241,6 +4241,16 @@ impl<'a> Parser<'a> {
                 } else if p.at(TokenKind::TypeBuilder) {
                     // Parse type_builder block - HIR will emit proper error for non-test context
                     p.parse_type_builder_block();
+                } else if p.at(TokenKind::Comma) || p.at(TokenKind::Semicolon) {
+                    // LLM-block fields are separated by a newline, not by `,`/`;`.
+                    // Name the real requirement here instead of letting the value
+                    // scanner swallow the separator and misreport `prompt` as
+                    // missing (B-621).
+                    let sep = p.current().map(|t| t.text.clone()).unwrap_or_default();
+                    p.error_here(format!(
+                        "unexpected `{sep}` between LLM function fields; separate `client` and `prompt` with a newline"
+                    ));
+                    p.bump();
                 } else {
                     // Unexpected token in LLM function
                     p.error_unexpected_token(format!(
@@ -4282,18 +4292,49 @@ impl<'a> Parser<'a> {
             if p.at(TokenKind::Quote) {
                 p.parse_string();
             } else if p.at(TokenKind::Word) {
-                // Parse unquoted client value - consume tokens until newline or brace
-                // This handles cases like: openai/gpt-4o-mini
+                // Parse unquoted client value - consume tokens until newline, brace,
+                // a field separator, or the start of the next LLM-block field. This
+                // handles multi-token shorthands like `openai/gpt-4o-mini` while still
+                // terminating the scan on a single-line body such as
+                // `{ client: Fast prompt: `...` }`, where the value must not swallow
+                // `prompt` and then misreport it as missing (B-621). Stopping at `,`/`;`
+                // keeps them out of the client value so they surface an accurate
+                // block-level diagnostic instead.
+                //
+                // The field-start boundary only applies once a value token has been
+                // consumed: a bare `client` whose value is absent (with the next field
+                // on the following line) must stop immediately via the newline check
+                // rather than absorbing that field, and a client whose name happens to
+                // be `prompt` is still read as the value.
+                let mut consumed_value = false;
                 while !p.at_end() {
-                    if p.at(TokenKind::RBrace) || p.at(TokenKind::LBrace) || p.has_newline_ahead() {
+                    if p.at(TokenKind::RBrace)
+                        || p.at(TokenKind::LBrace)
+                        || p.at(TokenKind::Comma)
+                        || p.at(TokenKind::Semicolon)
+                        || p.has_newline_ahead()
+                        || (consumed_value && p.at_llm_field_start())
+                    {
                         break;
                     }
                     p.bump();
+                    consumed_value = true;
                 }
             } else {
                 p.error_unexpected_token("client name".to_string());
             }
         });
+    }
+
+    /// True when the parser is positioned at the start of an LLM-block field
+    /// (`client`, `prompt`, or `type_builder`). The unquoted client-value scan
+    /// uses this to stop at the next field so that fields written on a single
+    /// line (with no separating newline) are not merged into the client value.
+    fn at_llm_field_start(&self) -> bool {
+        self.at(TokenKind::Client)
+            || self.at(TokenKind::TypeBuilder)
+            || (self.at(TokenKind::Word)
+                && self.current().map(|t| t.text == "prompt").unwrap_or(false))
     }
 
     fn parse_prompt_field(&mut self) {
@@ -9018,6 +9059,154 @@ function Foo() -> {
             func.children()
                 .any(|n| n.kind() == SyntaxKind::EXPR_FUNCTION_BODY),
             "expected expression body, not LLM body"
+        );
+    }
+
+    #[test]
+    fn single_line_llm_body_parses_client_and_prompt_fields() {
+        // B-621: a single-line LLM body with `client` and `prompt` on the same
+        // line must not swallow `prompt` into the unquoted client value and then
+        // misreport it as missing. Both fields must be recognized, error-free.
+        let source = "function F(raw: string) -> C { client: Fast prompt: `hi` }\n";
+
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let llm_body = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::LLM_FUNCTION_BODY)
+            .expect("expected an LLM_FUNCTION_BODY, not an expression body");
+
+        let client_field = llm_body
+            .children()
+            .find(|n| n.kind() == SyntaxKind::CLIENT_FIELD)
+            .expect("expected a CLIENT_FIELD");
+        assert!(
+            client_field.text().to_string().contains("Fast"),
+            "client field should name `Fast`, got: {}",
+            client_field.text()
+        );
+        // The `prompt` word and its value must land in the PROMPT_FIELD, not the
+        // client value.
+        assert!(
+            !client_field.text().to_string().contains("prompt"),
+            "client value must not swallow the `prompt` field: {}",
+            client_field.text()
+        );
+
+        assert!(
+            llm_body
+                .children()
+                .any(|n| n.kind() == SyntaxKind::PROMPT_FIELD),
+            "expected a PROMPT_FIELD in the single-line body"
+        );
+    }
+
+    #[test]
+    fn llm_body_bare_client_does_not_swallow_next_line_prompt_field() {
+        // B-621 regression guard: a bare `client` with no value on its line must
+        // NOT absorb the `prompt` field that starts on the following line into the
+        // client value. The client value stays empty and the PROMPT_FIELD is parsed.
+        let source = "function F(raw: string) -> C {\n  client\n  prompt #\"hi\"#\n}\n";
+
+        let (root, _errors) = parse_source(source);
+        let llm_body = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::LLM_FUNCTION_BODY)
+            .expect("expected an LLM_FUNCTION_BODY");
+
+        let client_field = llm_body
+            .children()
+            .find(|n| n.kind() == SyntaxKind::CLIENT_FIELD)
+            .expect("expected a CLIENT_FIELD");
+        assert!(
+            !client_field.text().to_string().contains("prompt"),
+            "bare `client` must not swallow the next-line `prompt` field: {}",
+            client_field.text()
+        );
+        assert!(
+            llm_body
+                .children()
+                .any(|n| n.kind() == SyntaxKind::PROMPT_FIELD),
+            "expected the `prompt` field to be parsed as its own PROMPT_FIELD"
+        );
+    }
+
+    #[test]
+    fn llm_body_client_scan_terminates_on_truncated_and_eof_inputs() {
+        // B-621 hang guard: the unquoted client-value scan must make forward
+        // progress and terminate for every input, including bodies truncated at
+        // EOF with no closing brace, newline, or next-field-start to break on.
+        // If the scan can spin, `parse_source` never returns and this test hangs
+        // (surfacing as a timeout instead of relying on wasm-pack to catch it).
+        let inputs = [
+            "function F() -> C { client",
+            "function F() -> C { client:",
+            "function F() -> C { client Fast",
+            "function F() -> C { client: Fast",
+            "function F() -> C { client Fast prompt",
+            "function F() -> C { client Fast prompt:",
+            "function F() -> C { client Fast, ",
+            "function F() -> C { client Fast; ",
+            "function F() -> C { client Fast prompt: `hi`",
+            "function F() -> C { client openai/gpt-4o-mini",
+            "function F() -> C { client openai/gpt-4o-mini prompt",
+            "function F() -> C { client Fast //trailing",
+            "function F() -> C { client Fast /*unterminated",
+            "function F() -> C { client Fast prompt `hi",
+            "function F() -> C {\n  client",
+            "function F() -> C {\n  client\n  prompt",
+            "function F() -> C {\n  client\n",
+        ];
+        for input in inputs {
+            // The assertion is simply that this call returns.
+            let _ = parse_source(input);
+        }
+    }
+
+    #[test]
+    fn single_line_llm_body_comma_separator_reports_targeted_error() {
+        // B-621: `,` between fields is not a valid separator. The diagnostic must
+        // name the real requirement (a newline) rather than falsely claiming the
+        // prompt is missing.
+        let source = "function F(raw: string) -> C { client: Fast, prompt: `hi` }\n";
+
+        let (_root, errors) = parse_source(source);
+        assert!(
+            errors.iter().any(|error| matches!(
+                error,
+                ParseError::InvalidSyntax { message, .. }
+                    if message.contains("separate `client` and `prompt` with a newline")
+            )),
+            "expected a targeted separator diagnostic, got: {errors:#?}"
+        );
+        assert!(
+            !errors
+                .iter()
+                .any(|error| format!("{error:?}").contains("missing 'prompt'")),
+            "the misleading missing-prompt error must not fire: {errors:#?}"
+        );
+    }
+
+    #[test]
+    fn single_line_llm_body_semicolon_separator_reports_targeted_error() {
+        // B-621: same as the comma case, for `;`.
+        let source = "function F(raw: string) -> C { client: Fast; prompt: `hi` }\n";
+
+        let (_root, errors) = parse_source(source);
+        assert!(
+            errors.iter().any(|error| matches!(
+                error,
+                ParseError::InvalidSyntax { message, .. }
+                    if message.contains("separate `client` and `prompt` with a newline")
+            )),
+            "expected a targeted separator diagnostic, got: {errors:#?}"
+        );
+        assert!(
+            !errors
+                .iter()
+                .any(|error| format!("{error:?}").contains("missing 'prompt'")),
+            "the misleading missing-prompt error must not fire: {errors:#?}"
         );
     }
 
