@@ -884,19 +884,197 @@ pub fn generate_project_bytecode_with_opt(
         .map(|pkg| (pkg.clone(), std::rc::Rc::default()))
         .collect();
 
+    // Emit in two file groups — builtin stubs first, then user files — so the
+    // stdlib occupies a contiguous, user-independent prefix of the ObjectPool
+    // and the globals table (`compiler2_all_files` puts builtins first for the
+    // same reason). The precompiled-stdlib splice depends on that prefix.
+    let builtin_count = all_files
+        .iter()
+        .take_while(|f| f.path(db).to_string_lossy().starts_with("<builtin>/"))
+        .count();
+    let (builtin_files, user_files) = all_files.split_at(builtin_count);
+    let mut tables = EmitTables::default();
+    emit_file_group(
+        db,
+        builtin_files,
+        &mut tables,
+        &mut program,
+        &alias_caches,
+        &dispatch_caches,
+        opt,
+    )?;
+    emit_file_group(
+        db,
+        user_files,
+        &mut tables,
+        &mut program,
+        &alias_caches,
+        &dispatch_caches,
+        opt,
+    )?;
+
+    // --- Pass 5: Template string macros ---
+    let mut template_macros = Vec::new();
+    for file in &all_files {
+        let item_tree = file_item_tree(db, *file);
+        for ts_data in item_tree.template_strings.values() {
+            let args = ts_data
+                .params
+                .iter()
+                .map(|param| param.name.to_string())
+                .collect::<Vec<_>>()
+                .join(", ");
+            if let Some(body) = &ts_data.body {
+                template_macros.push(format!(
+                    "{{% macro {name}({args}) %}}{body}{{% endmacro %}}",
+                    name = ts_data.name,
+                ));
+            }
+        }
+    }
+    program.template_strings_macros = template_macros.join("\n");
+
+    // --- Pass 6: Retry policies ---
+    // Retry policies are now synthesized as Item::Let bindings during CST lowering.
+    // Their values flow through the $init pipeline instead of being parsed here.
+    // Pass 6 is intentionally empty.
+
+    // Client metadata is now synthesized as Item::Let bindings during CST lowering.
+    // Client values (including sub-clients, retry policies) flow through the $init pipeline.
+    // Pass 7 is intentionally empty.
+
+    // --- Pass 7.5: Recursive type alias definitions (ctx.output_format bridge) ---
+    // Mirrors the legacy pipeline: only recursive aliases are stored per package
+    // (`Package.recursive_type_aliases`); non-recursive aliases are expanded inline
+    // by `convert_tir_ty_for_runtime`. This is required for correct output_format rendering at runtime.
+    for cache in alias_caches.values() {
+        for (qtn, tir_ty) in &cache.aliases {
+            if cache.recursive.contains(qtn) {
+                let mir_ty = cache.convert(tir_ty);
+                tables
+                    .program_packages
+                    .entry(qtn.package().clone())
+                    .or_default()
+                    .recursive_type_aliases
+                    .insert(
+                        bex_vm_types::types::LocalName {
+                            namespace: qtn.namespace().clone(),
+                            name: qtn.name().clone(),
+                        },
+                        mir_ty,
+                    );
+            }
+        }
+    }
+
+    build_packages(
+        db,
+        &all_files,
+        &alias_caches,
+        &program.function_indices,
+        &tables.interface_object_indices,
+        &mut tables.program_packages,
+    );
+    tables.program_packages.sort_keys();
+    program.packages = tables.program_packages;
+
+    // --- Pass 8: Test cases (only when requested) ---
+    if options.emit_test_cases {
+        for file in &all_files {
+            let item_tree = file_item_tree(db, *file);
+            for test_data in item_tree.tests.values() {
+                let function_names: Vec<String> = test_data
+                    .function_refs
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect();
+                let args: indexmap::IndexMap<String, bex_vm_types::TestArgValue> = test_data
+                    .args
+                    .iter()
+                    .map(|(k, v)| (k.to_string(), convert_test_arg_value(v)))
+                    .collect();
+                program.test_cases.push(bex_vm_types::TestCase {
+                    name: test_data.name.to_string(),
+                    function_names,
+                    args,
+                });
+            }
+        }
+    }
+
+    Ok(program)
+}
+
+/// Emit tables accumulated across file groups.
+///
+/// One instance is threaded through both [`emit_file_group`] calls (builtin
+/// stubs, then user files) so the user group can reference builtin classes,
+/// enums, interfaces, and globals by the indices the builtin group assigned.
+#[derive(Default)]
+struct EmitTables {
+    /// Function/let fq-name → global slot (Pass 1).
+    globals: HashMap<String, usize>,
+    /// Class fq-name → (field name → field index) (Pass 2).
+    classes: HashMap<String, HashMap<String, usize>>,
+    /// Class fq-name → `ObjectPool` index (Pass 2).
+    class_object_indices: HashMap<String, usize>,
+    /// Monotone class type-tag allocator (Pass 2); must visit classes in
+    /// `compiler2_all_files` order to stay in lockstep with MIR's
+    /// `class_type_tags`.
+    class_type_tag_counter: i64,
+    /// Enum fq-name → (variant name → variant index) (Pass 3).
+    enum_variants: HashMap<String, HashMap<String, usize>>,
+    /// Enum fq-name → `ObjectPool` index (Pass 3).
+    enum_object_indices: HashMap<String, usize>,
+    /// Interface type-name → `ObjectPool` index (Pass 3b).
+    interface_object_indices: HashMap<baml_type::TypeName, usize>,
+    /// Per-package structure the loader builds `Object::Package` from.
+    program_packages: indexmap::IndexMap<Name, bex_vm_types::types::ProgramPackage>,
+}
+
+/// Run emit passes 1–4.6 over one file group.
+///
+/// `generate_project_bytecode_with_opt` calls this twice — builtin stubs
+/// first, then user files — so the stdlib occupies a contiguous,
+/// user-independent prefix of the `ObjectPool` and the globals table. That
+/// prefix property is what makes a precompiled stdlib `Program` slice (keyed
+/// only by the compiler build) spliceable into any project's compile.
+#[allow(clippy::too_many_arguments)]
+fn emit_file_group(
+    db: &dyn baml_compiler2_mir::Db,
+    files: &[baml_base::SourceFile],
+    tables: &mut EmitTables,
+    program: &mut Program,
+    alias_caches: &HashMap<Name, ResolvedAliases>,
+    dispatch_caches: &HashMap<Name, std::rc::Rc<DispatchCandidateCache>>,
+    opt: OptLevel,
+) -> Result<(), LoweringError> {
+    let EmitTables {
+        globals,
+        classes,
+        class_object_indices,
+        class_type_tag_counter,
+        enum_variants,
+        enum_object_indices,
+        interface_object_indices,
+        program_packages,
+    } = tables;
+
     // --- Pass 1: Build globals map (function name -> global index) ---
     // Functions are allocated first (slots 0..N-1), then let bindings (slots N..M-1).
     // This ensures function slots match the order they're appended to program.globals
     // in Pass 4, and let binding slots don't interleave with function slots.
-    let mut globals: HashMap<String, usize> = HashMap::new();
-    let mut global_idx = 0usize;
+    // Continue after every slot earlier groups pushed (functions, lets,
+    // $init/helpers) — synthesized functions consume slots beyond the named
+    // items, so `program.globals.len()` is the only correct starting point.
+    let mut global_idx = program.globals.len();
 
     // First sub-pass: assign slots to all functions across all files.
     // Intrinsic functions are skipped: they are lowered to StatementKind::Intrinsic
     // at call sites and never appear as callable objects in the globals pool.
     // Including them here would create a mismatch between Pass-1 indices and the
     // actual program.globals array built in Pass 4 (which also skips intrinsics).
-    for file in &all_files {
+    for file in files {
         let item_tree = file_item_tree(db, *file);
         for (local_id, func_data) in &item_tree.functions {
             let func_loc = FunctionLoc::new(db, *file, *local_id);
@@ -932,7 +1110,7 @@ pub fn generate_project_bytecode_with_opt(
 
     // Second sub-pass: assign slots to all let bindings across all files,
     // after all function slots have been reserved.
-    for file in &all_files {
+    for file in files {
         let item_tree = file_item_tree(db, *file);
         for local_id in item_tree.lets.keys() {
             let let_loc = LetLoc::new(db, *file, *local_id);
@@ -949,18 +1127,12 @@ pub fn generate_project_bytecode_with_opt(
     // `vm.packages` from. Accumulated across passes 2/3/3b (classes, enums,
     // interfaces) and `build_packages` (impl rules); interface object indices are
     // tracked alongside so impl rules can point at them by index.
-    let mut interface_object_indices: HashMap<baml_type::TypeName, usize> = HashMap::new();
-    let mut program_packages: indexmap::IndexMap<Name, bex_vm_types::types::ProgramPackage> =
-        indexmap::IndexMap::new();
 
     // --- Pass 2: Build classes table ---
     // Maps fully-qualified class name -> (field name -> field index).
     // Also builds class_object_indices: class fq_name -> object index in program.objects.
-    let mut classes: HashMap<String, HashMap<String, usize>> = HashMap::new();
-    let mut class_object_indices: HashMap<String, usize> = HashMap::new();
-    let mut class_type_tag_counter = 0i64;
 
-    for file in &all_files {
+    for file in files {
         let item_tree = file_item_tree(db, *file);
         let pkg_info = file_package(db, *file);
         let pkg_id = PackageId::new(db, pkg_info.package.clone());
@@ -1036,8 +1208,8 @@ pub fn generate_project_bytecode_with_opt(
             let (class_desc, class_alias, _class_skip) =
                 extract_schema_attrs(&class_data.attributes);
 
-            let type_tag = bex_vm_types::type_tags::CLASS_BASE + class_type_tag_counter;
-            class_type_tag_counter += 1;
+            let type_tag = bex_vm_types::type_tags::CLASS_BASE + *class_type_tag_counter;
+            *class_type_tag_counter += 1;
 
             // BEP-042: does this class define a magic `cleanup(self) -> void`
             // finalizer? This MUST stay in lockstep with the canonical
@@ -1142,10 +1314,8 @@ pub fn generate_project_bytecode_with_opt(
 
     // --- Pass 3: Build enums table ---
     // Maps fully-qualified enum name -> (variant name -> variant index).
-    let mut enum_variants: HashMap<String, HashMap<String, usize>> = HashMap::new();
-    let mut enum_object_indices: HashMap<String, usize> = HashMap::new();
 
-    for file in &all_files {
+    for file in files {
         let item_tree = file_item_tree(db, *file);
         let pkg_info = file_package(db, *file);
         for enum_data in item_tree.enums.values() {
@@ -1205,7 +1375,7 @@ pub fn generate_project_bytecode_with_opt(
     // `program_packages` is the per-package structure the loader builds
     // `Object::Package` + `vm.packages` from; `build_packages` fills in each
     // package's impl rules below.
-    for file in &all_files {
+    for file in files {
         let item_tree = file_item_tree(db, *file);
         let pkg_info = file_package(db, *file);
         let resolved = &alias_caches[&pkg_info.package];
@@ -1233,7 +1403,7 @@ pub fn generate_project_bytecode_with_opt(
     }
 
     // --- Pass 4: Compile each function ---
-    for file in &all_files {
+    for file in files {
         let line_starts = build_line_starts(file.text(db));
         let item_tree = file_item_tree(db, *file);
         let pkg_info_pass4 = file_package(db, *file);
@@ -1258,11 +1428,11 @@ pub fn generate_project_bytecode_with_opt(
                         &empty_spawn_capture_indices,
                         &line_starts,
                         &source_file,
-                        &globals,
-                        &classes,
-                        &class_object_indices,
-                        &enum_object_indices,
-                        &enum_variants,
+                        globals,
+                        classes,
+                        class_object_indices,
+                        enum_object_indices,
+                        enum_variants,
                         &mut program.objects,
                         opt,
                     );
@@ -1271,11 +1441,11 @@ pub fn generate_project_bytecode_with_opt(
                     let lambda_names_vec: Vec<String> =
                         lambda_info.iter().map(|(_, name)| name.clone()).collect();
                     let ctx = MirCodegenContext {
-                        globals: &globals,
-                        classes: &classes,
-                        class_object_indices: &class_object_indices,
-                        enum_object_indices: &enum_object_indices,
-                        enum_variants: &enum_variants,
+                        globals,
+                        classes,
+                        class_object_indices,
+                        enum_object_indices,
+                        enum_variants,
                         objects: &mut program.objects,
                         lambda_object_indices: &lambda_obj_indices,
                         lambda_names: &lambda_names_vec,
@@ -1426,7 +1596,7 @@ pub fn generate_project_bytecode_with_opt(
     {
         let mut pkg_lets: HashMap<String, Vec<(String, LetLoc, baml_base::SourceFile)>> =
             HashMap::new();
-        for file in &all_files {
+        for file in files {
             let item_tree = file_item_tree(db, *file);
             let pkg_info = file_package(db, *file);
             for local_id in item_tree.lets.keys() {
@@ -1471,12 +1641,12 @@ pub fn generate_project_bytecode_with_opt(
             let init_fn = compile_init_function(
                 db,
                 &sorted_bindings,
-                &globals,
-                &classes,
-                &class_object_indices,
-                &enum_object_indices,
-                &enum_variants,
-                &mut program,
+                globals,
+                classes,
+                class_object_indices,
+                enum_object_indices,
+                enum_variants,
+                &mut *program,
                 opt,
                 &dispatch_caches[pkg_name.as_str()],
             )?;
@@ -1500,7 +1670,7 @@ pub fn generate_project_bytecode_with_opt(
             package_init_order.push(init_fq_name);
         }
 
-        program.package_init_order = package_init_order;
+        program.package_init_order.extend(package_init_order);
     }
 
     // --- Pass 4.6: Synthesize $init_test chainer per package ---
@@ -1515,7 +1685,7 @@ pub fn generate_project_bytecode_with_opt(
         // compiler metadata (HIR item trees), group by package.
         let mut pkg_init_tests: HashMap<String, Vec<(String, usize)>> = HashMap::new();
 
-        for file in &all_files {
+        for file in files {
             let item_tree = file_item_tree(db, *file);
             let pkg_info = file_package(db, *file);
             for local_id in item_tree.functions.keys() {
@@ -1542,7 +1712,14 @@ pub fn generate_project_bytecode_with_opt(
             }
         }
 
-        for (pkg_name, init_test_fns) in &pkg_init_tests {
+        // Deterministic package order — pkg_init_tests is a HashMap, and the
+        // chainers allocate objects/globals, so iteration order is emitted
+        // layout. (Latent nondeterminism before the group split: only one
+        // package ever carried $init_test functions.)
+        let mut chainer_pkgs: Vec<&String> = pkg_init_tests.keys().collect();
+        chainer_pkgs.sort();
+        for pkg_name in chainer_pkgs {
+            let init_test_fns = &pkg_init_tests[pkg_name];
             if init_test_fns.is_empty() {
                 continue;
             }
@@ -1622,95 +1799,7 @@ pub fn generate_project_bytecode_with_opt(
         }
     }
 
-    // --- Pass 5: Template string macros ---
-    let mut template_macros = Vec::new();
-    for file in &all_files {
-        let item_tree = file_item_tree(db, *file);
-        for ts_data in item_tree.template_strings.values() {
-            let args = ts_data
-                .params
-                .iter()
-                .map(|param| param.name.to_string())
-                .collect::<Vec<_>>()
-                .join(", ");
-            if let Some(body) = &ts_data.body {
-                template_macros.push(format!(
-                    "{{% macro {name}({args}) %}}{body}{{% endmacro %}}",
-                    name = ts_data.name,
-                ));
-            }
-        }
-    }
-    program.template_strings_macros = template_macros.join("\n");
-
-    // --- Pass 6: Retry policies ---
-    // Retry policies are now synthesized as Item::Let bindings during CST lowering.
-    // Their values flow through the $init pipeline instead of being parsed here.
-    // Pass 6 is intentionally empty.
-
-    // Client metadata is now synthesized as Item::Let bindings during CST lowering.
-    // Client values (including sub-clients, retry policies) flow through the $init pipeline.
-    // Pass 7 is intentionally empty.
-
-    // --- Pass 7.5: Recursive type alias definitions (ctx.output_format bridge) ---
-    // Mirrors the legacy pipeline: only recursive aliases are stored per package
-    // (`Package.recursive_type_aliases`); non-recursive aliases are expanded inline
-    // by `convert_tir_ty_for_runtime`. This is required for correct output_format rendering at runtime.
-    for cache in alias_caches.values() {
-        for (qtn, tir_ty) in &cache.aliases {
-            if cache.recursive.contains(qtn) {
-                let mir_ty = cache.convert(tir_ty);
-                program_packages
-                    .entry(qtn.package().clone())
-                    .or_default()
-                    .recursive_type_aliases
-                    .insert(
-                        bex_vm_types::types::LocalName {
-                            namespace: qtn.namespace().clone(),
-                            name: qtn.name().clone(),
-                        },
-                        mir_ty,
-                    );
-            }
-        }
-    }
-
-    build_packages(
-        db,
-        &all_files,
-        &alias_caches,
-        &program.function_indices,
-        &interface_object_indices,
-        &mut program_packages,
-    );
-    program_packages.sort_keys();
-    program.packages = program_packages;
-
-    // --- Pass 8: Test cases (only when requested) ---
-    if options.emit_test_cases {
-        for file in &all_files {
-            let item_tree = file_item_tree(db, *file);
-            for test_data in item_tree.tests.values() {
-                let function_names: Vec<String> = test_data
-                    .function_refs
-                    .iter()
-                    .map(ToString::to_string)
-                    .collect();
-                let args: indexmap::IndexMap<String, bex_vm_types::TestArgValue> = test_data
-                    .args
-                    .iter()
-                    .map(|(k, v)| (k.to_string(), convert_test_arg_value(v)))
-                    .collect();
-                program.test_cases.push(bex_vm_types::TestCase {
-                    name: test_data.name.to_string(),
-                    function_names,
-                    args,
-                });
-            }
-        }
-    }
-
-    Ok(program)
+    Ok(())
 }
 
 /// Convert a compiler2 `TestArgValue` to a `bex_vm_types::TestArgValue`.
