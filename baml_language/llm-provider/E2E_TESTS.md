@@ -8,11 +8,11 @@ assertions on the exact wire bytes. Run everything:
 ```bash
 export OPENAI_API_KEY=sk-...   # enables the live tier
 cargo test -p baml_tests --test ai_provider --test ai_responses --test ai_strict \
-    --test ai_realtime --test ai_anthropic --test ai_user_provider
+    --test ai_realtime --test ai_anthropic --test ai_gemini --test ai_user_provider
 ```
 
-Suites: `crates/baml_tests/tests/{ai_provider,ai_responses,ai_strict,ai_realtime,ai_anthropic,ai_user_provider}.rs` —
-60 tests, all green as of this writing.
+Suites: `crates/baml_tests/tests/{ai_provider,ai_responses,ai_strict,ai_realtime,ai_anthropic,ai_gemini,ai_user_provider}.rs` —
+66 tests, all green as of this writing.
 
 ## Live (18) — real API, end to end
 
@@ -37,7 +37,7 @@ Suites: `crates/baml_tests/tests/{ai_provider,ai_responses,ai_strict,ai_realtime
 | `workflow_graph_live` | workflow step graph: two model calls fan out via `spawn`/`await`, results combined | 43 |
 | `e2e_client_function_via_new_provider_live` | a user-declared `client<llm>` + LLM `function` executing through `baml.ai.OpenAi` | wiring |
 
-## Mock / deterministic (42) — wiremock, request-capture, VM
+## Mock / deterministic (48) — wiremock, request-capture, VM
 
 | Area | Tests |
 |---|---|
@@ -52,6 +52,7 @@ Suites: `crates/baml_tests/tests/{ai_provider,ai_responses,ai_strict,ai_realtime
 | Meta / schema | `call_with_projects_usage`, `response_meta_reasoning_and_logprobs`, `schema_lowering_unit` |
 | Transport | `ws_connect_unreachable_throws_io` |
 | Anthropic (`/v1/messages`, pure BAML) | `anthropic_call_via_mock`, `anthropic_request_shape_via_mock` (x-api-key + anthropic-version + system hoisted top-level), `anthropic_structured_via_mock`, `anthropic_stream_via_mock` (SSE `content_block_delta`), `anthropic_error_retryable_via_mock` (529 → Retry recovers), `anthropic_http_error_is_typed` |
+| Gemini (`generateContent`, pure BAML) | `gemini_call_via_mock`, `gemini_request_shape_via_mock` (x-goog-api-key, assistant→"model", system→systemInstruction), `gemini_structured_via_mock`, `gemini_error_retryable_via_mock`, `gemini_http_error_is_typed`, `gemini_usage_meta_via_mock` |
 | **User-authored provider** (E0125 fixed — provider lives entirely in USER code) | `user_provider_satisfies_stdlib_requires`, `user_provider_call_via_mock`, `user_provider_structured_and_meta_via_mock`, `user_provider_error_is_typed_and_triaged` |
 
 Plus **2004 BAML-level tests** in the `baml_src` suite (incl. 17 `baml.json.path` unit tests
@@ -60,4 +61,7 @@ and the compiled scenario examples in `ns_ai_examples/`), bytecode-snapshotted.
 ## Providers exercised
 `OpenAi` (Chat Completions: text/structured/streaming/tools/vision), `OpenAiStrict`
 (response_format json_schema strict), `OpenAiResponses` (/v1/responses: chains +
-background jobs), `OpenAiRealtime` (wss:// GA realtime).
+background jobs), `OpenAiRealtime` (wss:// GA realtime), `Anthropic` (/v1/messages:
+text/structured/streaming/images, mock-only), `Gemini` (generateContent:
+text/structured/media, mock-only, no streaming — host SSE accumulator lacks the
+google-ai shape), plus the user-package `EchoProvider` (authored outside the stdlib).

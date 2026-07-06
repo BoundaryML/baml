@@ -308,3 +308,116 @@ async fn anthropic_http_error_is_typed() {
         "a non-retryable 400 must not be re-driven, saw {n} requests"
     );
 }
+
+// ───────────────────────────── live tier (gated) ─────────────────────────────
+
+/// Live smoke test against the real Anthropic API. Skipped unless `ANTHROPIC_API_KEY`
+/// is set — e.g. `infisical run --env=test -- cargo test -p baml_tests --test ai_anthropic`.
+#[tokio::test]
+async fn anthropic_live_call() {
+    if std::env::var("ANTHROPIC_API_KEY").is_err() {
+        eprintln!("skipping anthropic_live_call: ANTHROPIC_API_KEY not set");
+        return;
+    }
+    let output = baml_test!(
+        r#"
+        function main() -> string {
+            let p = baml.ai.Anthropic {
+                model: "claude-haiku-4-5-20251001",
+                api_key: baml.env.get_or_panic("ANTHROPIC_API_KEY"),
+                base_url: null,
+            };
+            p.call<string>("Reply with exactly the lowercase word: pong") catch (e) {
+                let he: baml.ai.AnthropicHttpError => "HTTP:" + he.status.to_string() + ":" + he.body,
+                let u: baml.errors.UnknownError => "ERR:" + u.message.join(","),
+                let c: baml.errors.CallError => "CALLERR",
+            }
+        }
+        "#
+    );
+    let got = output.result.unwrap();
+    let BexExternalValue::String(s) = got else {
+        panic!("expected string, got {got:?}");
+    };
+    assert!(
+        s.to_lowercase().contains("pong"),
+        "live Anthropic reply did not contain 'pong': {s:?}"
+    );
+}
+
+/// Live structured extraction: `call<Person>` schema-injects, the model replies JSON,
+/// SAP decodes into the typed value. Skipped without `ANTHROPIC_API_KEY`.
+#[tokio::test]
+async fn anthropic_structured_live_call() {
+    if std::env::var("ANTHROPIC_API_KEY").is_err() {
+        eprintln!("skipping anthropic_structured_live_call: ANTHROPIC_API_KEY not set");
+        return;
+    }
+    let output = baml_test!(
+        r#"
+        class Person { name string, age int }
+        function main() -> string {
+            let p = baml.ai.Anthropic {
+                model: "claude-haiku-4-5-20251001",
+                api_key: baml.env.get_or_panic("ANTHROPIC_API_KEY"),
+                base_url: null,
+            };
+            let person: Person = p.call<Person>("Extract the person: Ada Lovelace, 36 years old.") catch (e) {
+                let he: baml.ai.AnthropicHttpError => return "HTTP:" + he.status.to_string() + ":" + he.body,
+                let u: baml.errors.UnknownError => return "ERR:" + u.message.join(","),
+                let c: baml.errors.CallError => return "CALLERR",
+            };
+            person.name + "|" + person.age.to_string()
+        }
+        "#
+    );
+    let got = output.result.unwrap();
+    let BexExternalValue::String(s) = got else {
+        panic!("expected string, got {got:?}");
+    };
+    assert!(
+        s.contains("Ada") && s.contains("36"),
+        "live structured extraction mismatch: {s:?}"
+    );
+}
+
+/// Live SSE streaming: partial deltas accumulate, `final()` returns the completed text.
+/// Skipped without `ANTHROPIC_API_KEY`.
+#[tokio::test]
+async fn anthropic_stream_live() {
+    if std::env::var("ANTHROPIC_API_KEY").is_err() {
+        eprintln!("skipping anthropic_stream_live: ANTHROPIC_API_KEY not set");
+        return;
+    }
+    let output = baml_test!(
+        r#"
+        function main() -> string {
+            let p = baml.ai.Anthropic {
+                model: "claude-haiku-4-5-20251001",
+                api_key: baml.env.get_or_panic("ANTHROPIC_API_KEY"),
+                base_url: null,
+            };
+            let s = p.stream<string, string>("Count from 1 to 5 as digits separated by spaces.") catch (e) {
+                let u: baml.errors.UnknownError => return "ERR:" + u.message.join(","),
+            };
+            let partials = 0;
+            while (partials < 10000) {
+                match (s.next()) {
+                    baml.stream.StreamFinished => { break; },
+                    let part: string => { partials = partials + 1; },
+                }
+            }
+            let final_text = s.final() catch (e) { _ => return "FINAL_ERR" };
+            if (partials > 0) { final_text } else { "NO_PARTIALS:" + final_text }
+        }
+        "#
+    );
+    let got = output.result.unwrap();
+    let BexExternalValue::String(s) = got else {
+        panic!("expected string, got {got:?}");
+    };
+    assert!(
+        s.contains('5') && !s.starts_with("NO_PARTIALS") && !s.starts_with("ERR"),
+        "live stream failed or produced no partials: {s:?}"
+    );
+}
