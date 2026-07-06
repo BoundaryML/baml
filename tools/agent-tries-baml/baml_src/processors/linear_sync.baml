@@ -351,6 +351,7 @@ class FixDispatchProcessor {
                     let _ = self.svc.transition("issues", id, "tocursor", "status", p, true) catch (_) {
                         _ => ""
                     };
+                    let _ = dispatch_set_linear(issue.linearIssueId);
                     return 0;
                 }
                 let _ = self.svc.update("issues", id, "{\"fixSlackTs\":\"\"}") catch (_) {
@@ -441,9 +442,42 @@ class FixDispatchProcessor {
                     throw ProcessError { message: "dispatch transition failed: " + baml.unstable.string(e) }
                 }
             };
+            // Mirror the board immediately (ports v1 FixDispatch's best-effort
+            // TO_CURSOR swap) — without this the card rests on `approved` until the
+            // tracker's next transition, which reads as "nothing happened".
+            let _ = dispatch_set_linear(issue.linearIssueId);
             return 0;
         }
     }
+}
+
+// Best-effort to-cursor label swap after a successful dispatch. No-ops without a
+// Linear token / mirrored card; failures only log (a board hiccup must never
+// fail a dispatch that already launched).
+function dispatch_set_linear(linear_issue_id: string?) -> int {
+    let tok = linear_token();
+    if (tok == "") {
+        return 0;
+    }
+    match (linear_issue_id) {
+        let lid: string => {
+            let lc = LinearClient { token: tok, team_id: linear_team_id() };
+            let label = linear_status_id("TO_CURSOR");
+            if (label != "") {
+                let _ = lc.set_status(lid, label) catch (e) {
+                    _ => {
+                        baml.io
+                            .eprintln(
+                                "fix_dispatch: set to-cursor label failed for " + lid + ": " + baml.unstable.string(e),
+                            );
+                        0
+                    }
+                };
+            }
+        },
+        null => null,
+    };
+    return 0;
 }
 
 // Mint a Cursor-valid agent id (`bc-<uuid>`) from the kernel UUID source. BAML has
