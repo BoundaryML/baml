@@ -4087,6 +4087,26 @@ impl BexVm {
         callee
     }
 
+    /// The class-level type arguments to curry into a bound method whose
+    /// receiver is `receiver`: the receiver instance's `class_type_args` (De
+    /// Bruijn class-param order — the method's `Self`), or empty for a
+    /// non-instance receiver (a primitive, `type`, `uint8array`, …, which has no
+    /// class generics). Captured at `MakeBoundMethod` time so the value is fully
+    /// realized; installed as the callee's `frame.type_args` at `CallIndirect`
+    /// (see the `Object::BoundMethod` arm of `execute_call_from_locals_offset`).
+    pub(crate) fn bound_method_curried_type_args(
+        &self,
+        receiver: Value,
+    ) -> Box<[baml_type::RuntimeTy]> {
+        match receiver.as_object_ptr() {
+            Some(ptr) => match self.get_object(ptr) {
+                Object::Instance(inst) => inst.class_type_args.clone(),
+                _ => Box::new([]),
+            },
+            None => Box::new([]),
+        }
+    }
+
     // ── BEX profiling event stream (bex_events::prof) ──────────────────
 
     /// The innermost live call's profiling id (`0` = at thread root). The
@@ -4540,10 +4560,14 @@ impl BexVm {
         // case, including all recursion — needs neither closure captures nor
         // bound-method class args, so it takes the empty fast path. The
         // `closure_type_args` are a Closure's captured type args; the
-        // `bound_method_class_type_args` are the receiver's class type args (De
-        // Bruijn ordering: class args ++ explicit call-site args, matching
-        // enclosing_generic_params() which puts class params first). Both are
-        // injected into the new BytecodeFrame after it is created.
+        // `bound_method_class_type_args` are the bound method's curried type args
+        // (De Bruijn ordering: class args → `Self` ++ explicit call-site args,
+        // matching enclosing_generic_params() which puts class params first).
+        // Curried at `MakeBoundMethod` time (see `bound_method_curried_type_args`)
+        // so every callable value seeds its frame from its own type-args field —
+        // the same mechanism as `Closure::captured_type_args` /
+        // `GenericFunction::type_args`. Both are injected into the new
+        // BytecodeFrame after it is created.
         let (is_host, closure_type_args, bound_method_class_type_args): (
             bool,
             Box<[baml_type::RuntimeTy]>,
@@ -4551,16 +4575,7 @@ impl BexVm {
         ) = match self.get_object(callee_ptr) {
             Object::HostClosure(_) => (true, Box::new([]), Box::new([])),
             Object::Closure(c) => (false, c.captured_type_args.clone(), Box::new([])),
-            Object::BoundMethod(bm) => {
-                let bm_args: Box<[baml_type::RuntimeTy]> = match bm.receiver.as_object_ptr() {
-                    Some(recv_ptr) => match self.get_object(recv_ptr) {
-                        Object::Instance(inst) => inst.class_type_args.clone(),
-                        _ => Box::new([]),
-                    },
-                    None => Box::new([]),
-                };
-                (false, Box::new([]), bm_args)
-            }
+            Object::BoundMethod(bm) => (false, Box::new([]), bm.type_args.clone()),
             // Plain Function (fast path) and everything else: no extra args.
             _ => (false, Box::new([]), Box::new([])),
         };
@@ -7515,9 +7530,17 @@ impl BexVm {
                     let callee_value = self.globals.get(self.proof(), global_idx);
                     let function_ptr =
                         self.as_object_ptr(callee_value, FunctionType::Callable.into())?;
+                    // Curry the receiver's class type args (→ `Self`) into the
+                    // value now, so the bound method is fully realized and the
+                    // `CallIndirect` that invokes it needs no type-arg operands.
+                    // (Method-level fn generics — `b.m<int>` — are not yet
+                    // curried here; that needs turbofish-on-member-access
+                    // support and would append after these.)
+                    let type_args = self.bound_method_curried_type_args(receiver);
                     let bound = Object::BoundMethod(BoundMethod {
                         function: function_ptr,
                         receiver,
+                        type_args,
                     });
                     let ptr = self.tlab.alloc(bound);
                     self.stack.push(Value::object(ptr));
