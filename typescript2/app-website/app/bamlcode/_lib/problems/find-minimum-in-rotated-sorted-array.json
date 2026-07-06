@@ -1,0 +1,18 @@
+{
+  "slug": "find-minimum-in-rotated-sorted-array",
+  "id": 153,
+  "title": "Find Minimum in Rotated Sorted Array",
+  "difficulty": "Medium",
+  "category": "Binary Search",
+  "statement": "Suppose a sorted ascending array of unique integers was rotated some number of times. Given the rotated array `nums`, return the **minimum element** in `O(log n)`.\n\n**Example**\n\n```\nnums = [3, 4, 5, 1, 2]        => 1\nnums = [4, 5, 6, 7, 0, 1, 2]  => 0\n```",
+  "signature": "function FindMin(nums: int[]) -> int",
+  "starter": "function FindMin(nums: int[]) -> int {\n  // Return the minimum of the rotated sorted array in O(log n).\n  return 0;\n}",
+  "solution": "function FindMin(nums: int[]) -> int {\n  let lo = 0;\n  let hi = nums.length() - 1;\n  while (lo < hi) {\n    let mid = (lo + hi) / 2;\n    if (nums[mid] > nums[hi]) {\n      lo = mid + 1;\n    } else {\n      hi = mid;\n    }\n  }\n  return nums[lo];\n}",
+  "tests": [
+    { "call": "FindMin([3, 4, 5, 1, 2])", "expected": "1" },
+    { "call": "FindMin([4, 5, 6, 7, 0, 1, 2])", "expected": "0" },
+    { "call": "FindMin([11, 13, 15, 17])", "expected": "11" },
+    { "call": "FindMin([2, 1])", "expected": "1", "hidden": true },
+    { "call": "FindMin([5, 1, 2, 3, 4])", "expected": "1", "hidden": true }
+  ]
+}

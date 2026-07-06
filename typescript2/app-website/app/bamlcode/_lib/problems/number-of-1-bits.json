@@ -1,0 +1,18 @@
+{
+  "slug": "number-of-1-bits",
+  "id": 191,
+  "title": "Number of 1 Bits",
+  "difficulty": "Easy",
+  "category": "Bit Manipulation",
+  "statement": "Write a function that takes a non-negative integer `n` and returns the number of `1` bits it has in its binary representation (also known as the Hamming weight).\n\n**Example**\n\n```\nn = 11   (1011)      => 3\nn = 128  (10000000)  => 1\n```",
+  "signature": "function HammingWeight(n: int) -> int",
+  "starter": "function HammingWeight(n: int) -> int {\n  // Return the number of set bits in n.\n  return 0;\n}",
+  "solution": "function HammingWeight(n: int) -> int {\n  let count = 0;\n  let x = n;\n  while (x > 0) {\n    let half = x / 2;\n    let bit = x - half * 2;\n    if (bit == 1) {\n      count += 1;\n    }\n    x = half;\n  }\n  return count;\n}",
+  "tests": [
+    { "call": "HammingWeight(11)", "expected": "3" },
+    { "call": "HammingWeight(128)", "expected": "1" },
+    { "call": "HammingWeight(0)", "expected": "0" },
+    { "call": "HammingWeight(255)", "expected": "8", "hidden": true },
+    { "call": "HammingWeight(4294967295)", "expected": "32", "hidden": true }
+  ]
+}
