@@ -8,8 +8,8 @@ use baml_compiler2_hir::{contributions::Definition, package::PackageId};
 use baml_type::{FunctionParamTy, Ty, TypeName};
 
 use crate::interfaces::{
-    ImplData, InterfaceImplOrigin, TypeBindings, contains_bound_typevar, impl_data,
-    impl_data_source_map, interface_loc_qtn, package_impl_locs,
+    ImplData, TypeBindings, contains_bound_typevar, impl_data, impl_data_source_map,
+    interface_loc_qtn, package_impl_locs,
 };
 
 /// Three-valued result of an overlap decision. Overlap is undecidable in general
@@ -131,6 +131,18 @@ pub fn package_coherence_diagnostics<'db>(
             aliases.entry(qtn).or_insert(ty);
         }
     }
+    // Fold each alias body toward the union canonical form the overlap solver assumes
+    // (`type TF = true | false` → `bool`, `type OI = 1 | int` → `int`), so an
+    // alias-obscured union member is compared by the same union laws (ACI + completeness)
+    // as its spelled-out form. Without this, `Bar<TF>` and `Bar<bool>` normalize to
+    // structurally-different args and are wrongly judged disjoint — admitting two impls of
+    // one interface for one type (a fails-open coherence hole).
+    {
+        let enum_variants = |qtn: &TypeName| enum_variant_names(db, qtn);
+        for body in aliases.values_mut() {
+            *body = nf(body, &enum_variants);
+        }
+    }
 
     let dep_impls: Vec<(&ImplData, Span)> = deps
         .iter()
@@ -240,41 +252,14 @@ pub fn impls_conflict<'db>(
     {
         return Overlap::No;
     }
-    // Two in-body blocks of the same class implementing the same interface (same
-    // args, ignoring associated outputs) are a duplicate reported elsewhere, not an
-    // overlap. Compare assoc-stripped interface heads through alias normalization.
-    if same_in_body_origin(a, b)
-        && crate::normalize::is_same_normalized_type(
-            &Ty::Interface(
-                a_qtn,
-                a.interface_args.clone(),
-                Vec::new(),
-                TyAttr::default(),
-            ),
-            &Ty::Interface(
-                b_qtn,
-                b.interface_args.clone(),
-                Vec::new(),
-                TyAttr::default(),
-            ),
-            aliases,
-        )
-    {
-        return Overlap::No;
-    }
+    // NOTE: same-class in-body duplicates are NOT excluded here. Their exclusion
+    // (deferring to a separate duplicate-block check) keyed that check on a Display
+    // string, which disagreed with coherence's canonicalized equality on reordered /
+    // dedupable unions (`Conv<int | string>` vs `Conv<string | int>` in one class) —
+    // letting such duplicates escape both checks. Reporting them here as an overlap
+    // (E0132) is correct: a duplicate is a degenerate overlap, matching Rust's
+    // conflicting-implementations error for exact duplicates.
     impls_overlap(db, pkg_id, a, b, aliases)
-}
-
-/// Two in-body `implements` blocks of the *same* class — a duplicate-impl case the
-/// overlap check excludes (reported as a duplicate elsewhere, not a coherence overlap).
-fn same_in_body_origin(a: &ImplData, b: &ImplData) -> bool {
-    matches!(
-        (&a.origin, &b.origin),
-        (
-            InterfaceImplOrigin::InBodyClass { class_qtn: ca },
-            InterfaceImplOrigin::InBodyClass { class_qtn: cb },
-        ) if ca == cb
-    )
 }
 
 /// Conservative symmetric overlap test over two impls of the same interface.
@@ -862,6 +847,40 @@ fn unify_into_at(
             depth + 1,
         )
         .and(unify_into_at(xe, ye, vars, aliases, bindings, depth + 1)),
+        (
+            Ty::Function {
+                params: xp,
+                ret: xr,
+                throws: xt,
+                ..
+            },
+            Ty::Function {
+                params: yp,
+                ret: yr,
+                throws: yt,
+                ..
+            },
+        ) if xp.len() == yp.len() && xp.iter().zip(yp.iter()).all(|(p, q)| p.mode == q.mode) => {
+            // Function values are realized (no binders of their own), so unify the
+            // param/ret/throws components directly. Coherence vars ride along in those
+            // positions, so a var-bearing function arg (`(T) -> int` vs `(int) -> int`)
+            // unifies at `T = int` instead of falling to the disjoint arm below and
+            // wrongly admitting two impls. Mirrors the dispatch matcher's `Function` arm.
+            let mut result = Overlap::Yes;
+            for (p, q) in xp.iter().zip(yp.iter()) {
+                result = result.and(unify_into_at(
+                    &p.ty,
+                    &q.ty,
+                    vars,
+                    aliases,
+                    bindings,
+                    depth + 1,
+                ));
+            }
+            result
+                .and(unify_into_at(xr, yr, vars, aliases, bindings, depth + 1))
+                .and(unify_into_at(xt, yt, vars, aliases, bindings, depth + 1))
+        }
         // Unions compare by covering on their member sets (ACI), so a non-union
         // operand is treated as the singleton union `{S}` and routed through the same
         // covering. That decides a variable- or literal-bearing union opposite a single
@@ -891,6 +910,16 @@ fn unify_into_at(
             bindings,
             depth + 1,
         ),
+        // An associated-type projection could stand for any concrete type, so under the
+        // possible-worlds view there IS an instantiation where it coincides with the
+        // opposing type — i.e. the impls *could* overlap. Answer `Yes` (conservatively
+        // reject as overlapping), NOT `Unknown` (which is reserved for search-budget
+        // exhaustion and renders a different "too complex — simplify" diagnostic). Today
+        // projections in impl headers are `CyclicHeader`-rejected before reaching here,
+        // so this is defense-in-depth against a future path that admits them.
+        (Ty::AssociatedTypeProjection { .. }, _) | (_, Ty::AssociatedTypeProjection { .. }) => {
+            Overlap::Yes
+        }
         // Everything else is disjoint under equality: equal subjects already unified
         // above (the normalizer), unions are handled above, and any remaining pair is
         // distinct types. A literal and its base are *distinct* here — `unify_into`
@@ -927,7 +956,6 @@ fn unify_into_at(
             | Ty::WatchAccessor(..)
             | Ty::TypeAlias(..)
             | Ty::TypeVar(..)
-            | Ty::AssociatedTypeProjection { .. }
             | Ty::BuiltinUnknown { .. }
             | Ty::Never { .. }
             | Ty::Unknown { .. }
@@ -1725,6 +1753,82 @@ mod tests {
                 &stub_enum_variants
             ),
             Ty::int()
+        );
+    }
+
+    #[test]
+    fn alias_body_normalization_makes_alias_equal_to_its_folded_form() {
+        // 4.1: an alias whose body is normalized at coherence map-build (`type TF =
+        // true | false` → `bool`) must unify with `bool` — otherwise `Bar<TF>` vs
+        // `Bar<bool>` is judged disjoint and both impls are admitted (fails open).
+        let tf = TypeName::local(Name::new("TF"));
+        let mut aliases = std::collections::HashMap::new();
+        aliases.insert(
+            tf.clone(),
+            Ty::union(vec![bool_literal(true), bool_literal(false)]),
+        );
+        // Mirror `package_coherence_diagnostics`'s alias-body normalization.
+        for body in aliases.values_mut() {
+            *body = nf(body, &stub_enum_variants);
+        }
+        let mut bindings = TypeBindings::default();
+        assert_eq!(
+            unify_into(
+                &Ty::TypeAlias(tf, TyAttr::default()),
+                &Ty::bool(),
+                &[],
+                &aliases,
+                &mut bindings,
+            ),
+            Overlap::Yes,
+        );
+    }
+
+    #[test]
+    fn var_bearing_function_arg_unifies_not_disjoint() {
+        // 4.2: `(T) -> int` vs `(int) -> int` unifies at `T = int` — before the Function
+        // arm this fell to the disjoint fallback, so coherence admitted two impls that
+        // dispatch would both match.
+        fn func(param: Ty) -> Ty {
+            Ty::Function {
+                params: vec![crate::ty::FunctionParamTy::required(None, param)],
+                ret: Box::new(Ty::int()),
+                throws: Box::new(never()),
+                attr: TyAttr::default(),
+            }
+        }
+        let vars = vec![Name::new("T")];
+        let aliases = std::collections::HashMap::default();
+        let mut bindings = TypeBindings::default();
+        assert_eq!(
+            unify_into(
+                &func(Ty::type_var("T")),
+                &func(Ty::int()),
+                &vars,
+                &aliases,
+                &mut bindings,
+            ),
+            Overlap::Yes,
+        );
+    }
+
+    #[test]
+    fn projection_conservatively_overlaps_not_disjoint() {
+        // 4.2: a projection could stand for any type, so under the possible-worlds view
+        // it *could* coincide with the opposing type — answer `Yes` (conservatively
+        // reject as overlapping), never `No` (which would admit an overlapping pair) and
+        // not `Unknown` (which is only for search-budget exhaustion).
+        let proj = Ty::AssociatedTypeProjection {
+            base: Box::new(Ty::type_var("T")),
+            interface: None,
+            member: Name::new("Item"),
+            attr: TyAttr::default(),
+        };
+        let aliases = std::collections::HashMap::default();
+        let mut bindings = TypeBindings::default();
+        assert_eq!(
+            unify_into(&proj, &Ty::int(), &[], &aliases, &mut bindings),
+            Overlap::Yes,
         );
     }
 
