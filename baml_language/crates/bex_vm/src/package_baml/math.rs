@@ -2,7 +2,7 @@ use bex_vm_types::{Object, ObjectType, Value};
 
 use super::{BamlNamespaceMath, PackageBamlImpl};
 use crate::{
-    BexVm,
+    BexVm, VmPanic,
     errors::{VmBamlError, VmRustFnError},
 };
 
@@ -47,6 +47,17 @@ fn expect_float(vm: &BexVm, value: Value, fn_name: &str, index: usize) -> f64 {
     }
 }
 
+/// Extracts an `i64` from a validated `int[]` element.
+///
+/// `int[].sum()` reaches this native path only after the type system has proven
+/// every element is an `int` (ints are unboxed tagged values, so no heap read is
+/// needed). Any other tag means an invariant was violated upstream.
+fn expect_int(value: Value, fn_name: &str, index: usize) -> i64 {
+    value
+        .as_int()
+        .unwrap_or_else(|| unreachable!("{fn_name}: expected int at index {index}"))
+}
+
 impl BamlNamespaceMath for PackageBamlImpl {
     #[allow(clippy::cast_possible_truncation)]
     fn trunc(value: f64) -> i64 {
@@ -60,6 +71,31 @@ impl BamlNamespaceMath for PackageBamlImpl {
             .enumerate()
             .map(|(index, value)| expect_float(vm, *value, "math.sum", index))
             .sum()
+    }
+
+    /// Returns the arithmetic sum of all values in an `int[]`.
+    ///
+    /// Accumulates left-to-right from `0`, checking the running total against
+    /// the `int` (i63) range at each step so overflow raises `IntegerOverflow`
+    /// exactly like repeated `+` would. Both `acc` and each element are already
+    /// in the i63 range, so the intermediate i64 add never wraps; the meaningful
+    /// bound is the tighter i63 range check. Internal helper backing
+    /// `int[].sum()`; the empty array sums to `0`.
+    fn _sum_int(values: &[Value]) -> Result<i64, VmRustFnError> {
+        let mut acc: i64 = 0;
+        for (index, value) in values.iter().enumerate() {
+            let x = expect_int(*value, "math._sum_int", index);
+            match acc.checked_add(x) {
+                Some(v) if (Value::INT_MIN..=Value::INT_MAX).contains(&v) => acc = v,
+                _ => {
+                    return Err(VmPanic::IntegerOverflow {
+                        message: format!("{acc} + {x} overflows int"),
+                    }
+                    .into());
+                }
+            }
+        }
+        Ok(acc)
     }
 
     /// Returns the arithmetic mean of `values`.

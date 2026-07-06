@@ -893,6 +893,77 @@ function arrays.$init_test_ns_arrays_sort_comparable(registry: testing.TestColle
     return
 }
 
+function arrays.$init_test_ns_arrays_sum(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "array_sum_int_basic"
+    make_closure .<lambda($init_test_ns_arrays_sum, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "array_sum_int_single"
+    make_closure .<lambda($init_test_ns_arrays_sum, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "array_sum_int_empty_is_zero"
+    make_closure .<lambda($init_test_ns_arrays_sum, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "array_sum_int_negatives"
+    make_closure .<lambda($init_test_ns_arrays_sum, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "array_sum_int_mixed_magnitudes"
+    make_closure .<lambda($init_test_ns_arrays_sum, 4)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "array_sum_int_overflow_throws"
+    make_closure .<lambda($init_test_ns_arrays_sum, 5)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "array_sum_int_boundary_no_overflow"
+    make_closure .<lambda($init_test_ns_arrays_sum, 6)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "array_sum_float_basic"
+    make_closure .<lambda($init_test_ns_arrays_sum, 7)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "array_sum_float_single"
+    make_closure .<lambda($init_test_ns_arrays_sum, 8)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "array_sum_float_empty_is_zero"
+    make_closure .<lambda($init_test_ns_arrays_sum, 9)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "array_sum_float_mixed"
+    make_closure .<lambda($init_test_ns_arrays_sum, 10)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_const null
+    return
+}
+
 function arrays.ComparableFlaky$stream.baml.Comparable.compare(self: arrays.ComparableFlaky$stream, other: arrays.ComparableFlaky$stream) -> int {
     load_var self
     load_field .0
@@ -1095,5 +1166,36 @@ function arrays.sort_strings(xs: string[]) -> string[] {
     load_type string
     load_var xs
     call baml.Sortable$for$T[].sort
+    return
+}
+
+function arrays.sum_int_overflow_(a: int, b: int) -> int {
+    load_var2 1 2
+    load_type int
+    alloc_array 2
+    call baml.Summable$for$int[].sum
+    jump L2
+    load_var e
+    is_type baml.panics.IntegerOverflow
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var e
+    rethrow
+
+  L1:
+    load_const 1
+    unary_op -
+
+  L2:
+    return
+}
+
+function arrays.sum_int_two_(a: int, b: int) -> int {
+    load_var2 1 2
+    load_type int
+    alloc_array 2
+    call baml.Summable$for$int[].sum
     return
 }

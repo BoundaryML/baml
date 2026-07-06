@@ -93,6 +93,12 @@ function baml.sort_by_key(self: ?, key: (T) -> U throws E) -> T[]  [expr] {
   { let n = self.length(); if (n Le 1) { return self }; let items = self.slice(0, n); let keys: U[] = []; for x in items { keys.push(key(x)) }; let order: int[] = []; let p = 0; while p Lt n { order.push(p); p Add= 1 }; order.sort_by((i: int, j: int) -> int throws U.CompareError { {  } match (keys.at(i)) { null => 0, ki: U => match (keys.at(j)) { null => 0, kj: U => ki.compare(kj) } } }); let sorted: T[] = []; for i in order {  } match (items.at(i)) { null => {  }, item: T => { sorted.push(item) } }; self.clear(); for s in sorted { self.push(s) }; return self }
 }
 function baml.splice(self: ?, start: int, count: int, replace: T[]) -> null  [builtin]
+function baml.sum(self: ?) -> float  [expr] {
+  {  } root.math.sum(self)
+}
+function baml.sum(self: ?) -> int  [expr] {
+  {  } root.math._sum_int(self)
+}
 function baml.unshift(self: ?, item: T) -> int  [builtin]
 function baml.values(self: ?) -> V[]  [builtin]
 
@@ -1095,6 +1101,7 @@ function baml.llm.validate_finish_reason(self: ?, finish_reason: string) -> null
 lambda (ctx) in prompt: captures [body]
 
 --- <builtin>/baml/ns_math/math.baml ---
+function baml.math._sum_int(values: int[]) -> int  [builtin]
 function baml.math.mean(values: float[]) -> float  [builtin]
 function baml.math.median(values: float[]) -> float  [builtin]
 function baml.math.sum(values: float[]) -> float  [builtin]

@@ -977,3 +977,110 @@ mod over_split_regression_tests {
         assert_formats_to(source, source);
     }
 }
+
+#[cfg(test)]
+mod defer_comment_tests {
+    //! Regression tests for B-629: `baml fmt` silently deleted the trailing
+    //! line-comment on a `defer { … }` statement while an identical comment on a
+    //! normal statement survived. A `defer` statement is an unmodeled node held
+    //! as [`crate::ast::Expression::Unknown`] and printed verbatim; it used to
+    //! report the whole node span as its leftmost/rightmost token, but the trivia
+    //! classifier keys comments to individual *token* ranges, so the comment
+    //! attached to the closing `}` token never matched and was dropped. The fix
+    //! anchors the node's leading/trailing trivia to its true first/last tokens.
+
+    use super::*;
+
+    fn assert_formats_to(source: &str, expected: &str) {
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).expect("formatter should succeed");
+        assert_eq!(
+            formatted, expected,
+            "formatter output didn't match expected\n--- got ---\n{formatted}\n--- want ---\n{expected}"
+        );
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second, "formatter should be idempotent");
+    }
+
+    /// The headline case from the ticket: the trailing comment on a `defer`
+    /// statement must survive, exactly like the one on the normal statement.
+    #[test]
+    fn test_defer_trailing_comment_preserved() {
+        let source = "function f() -> string[] {\n  let out: string[] = [];\n  defer { out.push(\"x\") }   // THIS comment on a defer line\n  out.push(\"body\");         // this one on a normal line\n  out\n}\n";
+        let expected = "function f() -> string[] {\n    let out: string[] = [];\n    defer { out.push(\"x\") } // THIS comment on a defer line\n    out.push(\"body\"); // this one on a normal line\n    out\n}\n";
+        assert_formats_to(source, expected);
+    }
+
+    /// A trailing comment on a `defer` that is the last statement in the block
+    /// (no following statement to "absorb" it) is preserved too.
+    #[test]
+    fn test_defer_trailing_comment_last_statement_preserved() {
+        let source = "function f() -> int {\n    defer { cleanup() } // bye\n    42\n}\n";
+        assert_formats_to(source, source);
+    }
+
+    /// A leading comment on its own line before a `defer` is preserved and
+    /// re-indented to the block indent (it used to be printed verbatim as part
+    /// of the node span, keeping its original indentation).
+    #[test]
+    fn test_defer_leading_comment_reindented() {
+        let source = "function f() -> int {\n  // set up cleanup\n  defer { cleanup() }\n  42\n}\n";
+        let expected =
+            "function f() -> int {\n    // set up cleanup\n    defer { cleanup() }\n    42\n}\n";
+        assert_formats_to(source, expected);
+    }
+}
+
+#[cfg(test)]
+mod return_comment_tests {
+    //! Regression tests for the same comment-loss class as B-629, applied to a
+    //! braceless `return` arm. `return …` in expression position is an unmodeled
+    //! node printed verbatim ([`crate::ast::Expression::Return`]); it used to
+    //! report the whole node span as its rightmost token. When such an arm has no
+    //! trailing comma, the arm's rightmost token delegates to the `return` body,
+    //! so a trailing comment (anchored to the return value's last token) never
+    //! matched and was silently dropped. Anchoring `Return` to its true first/last
+    //! tokens — like the `Unknown` fix — preserves the comment.
+
+    use super::*;
+
+    fn assert_formats_to(source: &str, expected: &str) {
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).expect("formatter should succeed");
+        assert_eq!(
+            formatted, expected,
+            "formatter output didn't match expected\n--- got ---\n{formatted}\n--- want ---\n{expected}"
+        );
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second, "formatter should be idempotent");
+    }
+
+    /// A trailing comment on a braceless `return` arm with no trailing comma must
+    /// survive. The formatter wraps the arm into `{ return …; }` (its established
+    /// behavior) and keeps the comment at the arm level.
+    #[test]
+    fn test_braceless_return_arm_trailing_comment_no_comma_preserved() {
+        let source = "function f(x: int) -> int {\n    match (x) {\n        0 => 1,\n        _ => return 2 // fallback\n    }\n}\n";
+        let expected = "function f(x: int) -> int {\n    match (x) {\n        0 => 1,\n        _ => {\n            return 2;\n        }, // fallback\n    }\n}\n";
+        assert_formats_to(source, expected);
+    }
+
+    /// Same, but the arm already has a trailing comma. This case never dropped
+    /// the comment, but pins that the wrap + comment placement stays consistent
+    /// with the no-comma case.
+    #[test]
+    fn test_braceless_return_arm_trailing_comment_with_comma_preserved() {
+        let source = "function f(x: int) -> int {\n    match (x) {\n        0 => 1,\n        _ => return 2, // fallback\n    }\n}\n";
+        let expected = "function f(x: int) -> int {\n    match (x) {\n        0 => 1,\n        _ => {\n            return 2;\n        }, // fallback\n    }\n}\n";
+        assert_formats_to(source, expected);
+    }
+
+    /// A braceless `return` arm in a `catch` (no comment) still round-trips —
+    /// guards the shared wrap helper against regressing the existing behavior.
+    #[test]
+    fn test_braceless_return_catch_arm_no_comment_round_trips() {
+        let source = "function f(x: int) -> int {\n    let v = g(x) catch (e) {\n        _ => return -1,\n    };\n    v\n}\n";
+        let expected = "function f(x: int) -> int {\n    let v = g(x) catch (e) {\n        _ => {\n            return -1;\n        },\n    };\n    v\n}\n";
+        assert_formats_to(source, expected);
+    }
+}
