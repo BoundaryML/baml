@@ -115,6 +115,16 @@ Each entry: the symptom, the rule, the workaround. Compiler-bug candidates are m
   { let h: HttpProvider => …, _ => … }` flags the `_` unreachable (E0063). Type the binding as the
   existential (`let p: baml.ai.Provider = …`) when you want runtime negotiation.
 
+## Streaming
+
+- **`Stream.next()` partials are best-effort, not guaranteed** — the pull loop batches SSE
+  events per network read (`_sse.next()` returns everything buffered), and when a batch
+  completes the stream (`is_done()`), `next()` returns `StreamFinished` WITHOUT yielding that
+  batch's content — it only surfaces via `final()`. A short/fast response arriving in one read
+  therefore yields **zero** partials (reproduced on mock AND live, OpenAI and Anthropic alike).
+  Don't assert partial counts in tests; UIs must treat `next()` as opportunistic and always
+  read `final()`.
+
 ## Realtime / WebSocket round
 
 - **The `OpenAI-Beta: realtime=v1` header now selects the RETIRED beta shape** and gets

@@ -12,9 +12,18 @@ cargo test -p baml_tests --test ai_provider --test ai_responses --test ai_strict
 ```
 
 Suites: `crates/baml_tests/tests/{ai_provider,ai_responses,ai_strict,ai_realtime,ai_anthropic,ai_gemini,ai_user_provider}.rs` —
-66 tests, all green as of this writing.
+71 tests, all green as of this writing — the full live tier verified against the real
+OpenAI, Anthropic, and Gemini APIs (Anthropic/Gemini keys via `infisical run --env=test`).
 
-## Live (18) — real API, end to end
+## Live (23) — real API, end to end
+
+Anthropic (`claude-haiku-4-5-20251001`, gated on `ANTHROPIC_API_KEY`): `anthropic_live_call`,
+`anthropic_structured_live_call`, `anthropic_stream_live` (final-only assertion — `next()`
+partials are best-effort on short responses, see gotchas). Gemini (`gemini-2.5-flash`, gated
+on `GOOGLE_API_KEY`): `gemini_live_call`, `gemini_structured_live_call` (wrapped in
+`.with_retry(2)` — absorbs a first-connect transport flake to googleapis on some networks).
+
+The original OpenAI 18 (`gpt-5.4-mini` / `gpt-realtime`, gated on `OPENAI_API_KEY`):
 
 | Test | Proves | Scenario |
 |---|---|---|

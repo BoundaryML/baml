@@ -292,3 +292,78 @@ async fn gemini_usage_meta_via_mock() {
         BexExternalValue::String("pong|12|5".into())
     );
 }
+
+// ───────────────────────────── live tier (gated) ─────────────────────────────
+
+/// Live smoke test against the real Gemini API. Skipped unless `GOOGLE_API_KEY` is
+/// set — e.g. `infisical run --env=test -- cargo test -p baml_tests --test ai_gemini`.
+#[tokio::test]
+async fn gemini_live_call() {
+    if std::env::var("GOOGLE_API_KEY").is_err() {
+        eprintln!("skipping gemini_live_call: GOOGLE_API_KEY not set");
+        return;
+    }
+    let output = baml_test!(
+        r#"
+        function main() -> string {
+            // with_retry absorbs a first-connect transport flake seen on this host
+            // (reqwest's initial connection to generativelanguage.googleapis.com can
+            // fail where curl's happy-eyeballs succeeds; the retry lands).
+            let p = baml.ai.Gemini {
+                model: "gemini-2.5-flash",
+                api_key: baml.env.get_or_panic("GOOGLE_API_KEY"),
+                base_url: null,
+            }.with_retry(2);
+            p.call<string>("Reply with exactly the lowercase word: pong") catch (e) {
+                let he: baml.ai.GeminiHttpError => "HTTP:" + he.status.to_string() + ":" + he.body,
+                let u: baml.errors.UnknownError => "ERR:" + u.message.join(","),
+                let c: baml.errors.CallError => "CALLERR",
+            }
+        }
+        "#
+    );
+    let got = output.result.unwrap();
+    let BexExternalValue::String(s) = got else {
+        panic!("expected string, got {got:?}");
+    };
+    assert!(
+        s.to_lowercase().contains("pong"),
+        "live Gemini reply did not contain 'pong': {s:?}"
+    );
+}
+
+/// Live structured extraction: `call<Person>` schema-injects, SAP decodes the reply.
+/// Skipped without `GOOGLE_API_KEY`.
+#[tokio::test]
+async fn gemini_structured_live_call() {
+    if std::env::var("GOOGLE_API_KEY").is_err() {
+        eprintln!("skipping gemini_structured_live_call: GOOGLE_API_KEY not set");
+        return;
+    }
+    let output = baml_test!(
+        r#"
+        class Person { name string, age int }
+        function main() -> string {
+            let p = baml.ai.Gemini {
+                model: "gemini-2.5-flash",
+                api_key: baml.env.get_or_panic("GOOGLE_API_KEY"),
+                base_url: null,
+            }.with_retry(2);
+            let person: Person = p.call<Person>("Extract the person: Ada Lovelace, 36 years old.") catch (e) {
+                let he: baml.ai.GeminiHttpError => return "HTTP:" + he.status.to_string() + ":" + he.body,
+                let u: baml.errors.UnknownError => return "ERR:" + u.message.join(","),
+                let c: baml.errors.CallError => return "CALLERR",
+            };
+            person.name + "|" + person.age.to_string()
+        }
+        "#
+    );
+    let got = output.result.unwrap();
+    let BexExternalValue::String(s) = got else {
+        panic!("expected string, got {got:?}");
+    };
+    assert!(
+        s.contains("Ada") && s.contains("36"),
+        "live structured extraction mismatch: {s:?}"
+    );
+}
