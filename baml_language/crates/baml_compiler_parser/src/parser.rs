@@ -638,6 +638,36 @@ impl<'a> Parser<'a> {
             .is_some_and(|t| t.kind == TokenKind::Word)
     }
 
+    /// True when a postfix `(` must NOT be glued onto the expression parsed so
+    /// far as a call, because that expression is *block-terminated* (its last
+    /// real token is `}` — an `if`/`match`/block/loop body) and the `(` opens a
+    /// fresh line.
+    ///
+    /// This is the guard-`if` early-return case (B-622):
+    ///   if (x < 0) { throw ... }
+    ///   (x * 2)
+    /// Without it the parser glues `{ ... }(x * 2)` into a call on the void
+    /// `if` result. Keying on a block-terminating `}` (rather than any callee)
+    /// keeps ordinary multi-line calls — a method chain whose `(` lands on a
+    /// later line than an identifier/`)` callee — parsing as calls, matching
+    /// the deliberately-tested `foo()`-then-`(1)` chained-call behavior. The
+    /// newline requirement keeps same-line `<block>(…)` forms (e.g. an
+    /// immediately-invoked block) untouched.
+    fn newline_separates_block_expr_from_paren(&self) -> bool {
+        self.has_newline_ahead() && self.last_significant_emitted_token_is_block_close()
+    }
+
+    /// Kind-check on the most recently *emitted* significant token: is it a
+    /// closing `}`? Trailing trivia after the current expression has not been
+    /// emitted yet at postfix-decision time, so the last non-trivia token event
+    /// is the final real token of the expression parsed so far.
+    fn last_significant_emitted_token_is_block_close(&self) -> bool {
+        self.events.iter().rev().find_map(|event| match event {
+            Event::Token { kind, .. } if !kind.is_trivia() => Some(*kind),
+            _ => None,
+        }) == Some(SyntaxKind::R_BRACE)
+    }
+
     /// Check if there's a newline before the next non-trivia token.
     /// Comments are treated as trivia for this purpose.
     fn has_newline_ahead(&self) -> bool {
@@ -5811,8 +5841,22 @@ impl<'a> Parser<'a> {
                 self.parse_expr_bp(5); // right_bp = 5 (left associative)
                 self.wrap_events_in_node(lhs_start, SyntaxKind::BINARY_EXPR);
                 self.finish_node();
-            } else if op == TokenKind::LParen {
-                // Function call
+            } else if op == TokenKind::LParen && !self.newline_separates_block_expr_from_paren() {
+                // Function call.
+                //
+                // The `newline_separates_block_expr_from_paren()` guard fixes a
+                // guard-style early return (B-622): a block-terminated
+                // statement whose value is discarded, followed on the *next
+                // line* by a parenthesized expression, must not glue into a
+                // call on that value. For example
+                //   if (x < 0) { throw ... }
+                //   (x * 2)
+                // would otherwise parse as `{ ... }(x * 2)`, invoking the void
+                // `if` result (E0006 "`void` is not a function"). Only the
+                // block-terminated + newline shape is separated (mirroring
+                // Rust's expression-statement rule); ordinary calls whose `(`
+                // sits on a later line than a non-`}` callee — e.g. a method
+                // chain broken across lines by comments — still parse as calls.
                 let lhs_start = self.find_previous_expr_start_after(expr_start);
                 self.wrap_events_in_node(lhs_start, SyntaxKind::CALL_EXPR);
                 self.parse_call_args();
@@ -11623,5 +11667,87 @@ function f() -> int {
 "#;
         let (_root, errors) = parse_source(source);
         assert_no_errors(&errors);
+    }
+
+    #[test]
+    fn guard_if_then_parenthesized_return_on_next_line_is_two_statements() {
+        // Regression (B-622): a guard `if (cond) { throw ... }` with no else,
+        // followed on the next line by a parenthesized return expression, must
+        // parse as TWO statements. Without the newline guard on the postfix
+        // call branch the parser glued `{ ... }(x * 2)` into a call on the void
+        // `if` result, producing a misleading E0006 downstream.
+        let source = r#"function f(x: int) -> int {
+    if (x < 0) { throw baml.errors.InvalidArgument { message: "neg" } }
+    (x * 2)
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        // The `if` and the `(x * 2)` are separate statements: the parenthesized
+        // return must NOT be wrapped in a CALL_EXPR on the if-result.
+        let call_exprs = root
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::CALL_EXPR)
+            .count();
+        assert_eq!(
+            call_exprs, 0,
+            "the parenthesized return must not be parsed as a call on the void `if` result"
+        );
+    }
+
+    #[test]
+    fn call_with_paren_on_same_line_still_parses_as_call() {
+        // The block-close guard must not disturb ordinary calls whose `(`
+        // follows the callee on the same line — including multi-line argument
+        // lists, where the `(` still sits on the callee's line.
+        let source = r#"function f() -> int {
+    let a = g(1, 2)
+    let b = g(
+        3,
+        4,
+    )
+    a + b
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let call_exprs = root
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::CALL_EXPR)
+            .count();
+        assert_eq!(
+            call_exprs, 2,
+            "both same-line and multi-line-argument calls must still parse as calls"
+        );
+    }
+
+    #[test]
+    fn non_block_callee_then_paren_on_next_line_still_chains() {
+        // The B-622 fix keys strictly on a block-terminating `}` callee: a
+        // *non*-block callee (here a call `g()`, ending in `)`) followed by `(`
+        // on the next line must STILL glue into a chained call `g()(1)`. This
+        // preserves the deliberately-tested `foo()`-then-`(1)` behavior and
+        // guards against a future over-broad "newline separates" change.
+        let source = r#"function f(g: () -> (int) -> int) -> int {
+    g()
+    (1)
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        // `g()(1)` is one CALL_EXPR wrapping another (the outer call applies the
+        // returned lambda), so two CALL_EXPR nodes total — the newline did NOT
+        // split them into separate statements.
+        let call_exprs = root
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::CALL_EXPR)
+            .count();
+        assert_eq!(
+            call_exprs, 2,
+            "a non-block callee followed by `(` on the next line must still chain as a call"
+        );
     }
 }
