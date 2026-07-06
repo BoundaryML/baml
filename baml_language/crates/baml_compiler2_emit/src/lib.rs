@@ -1248,7 +1248,7 @@ pub fn generate_project_bytecode_with_opt(
             let mut compiled_fn = match &mir.kind {
                 MirFunctionKind::Bytecode(body) => {
                     // Compile lambda children first, collecting their ObjectPool indices.
-                    let source_file = file.path(db).display().to_string();
+                    let source_file = relative_source_path(db, *file);
                     let empty_capture_types = Vec::new();
                     let empty_spawn_capture_indices = HashSet::new();
                     let lambda_info = compile_lambdas_flat(
@@ -2114,6 +2114,23 @@ fn compute_function_metadata_from_item_tree(
     }
 }
 
+/// Project-root-relative display path for `file` (our `-trimpath`).
+///
+/// `Function::source_file` is display/metadata-only (backtraces, event
+/// metadata, reflection locations) — never opened from disk — so stripping
+/// the project root keeps serialized `Program`s location-independent (a
+/// cached or packed blob is byte-identical wherever the project lives) and
+/// backtraces machine-independent. Paths outside the root — `<builtin>/…`
+/// stubs, standalone files — are kept verbatim.
+fn relative_source_path(db: &dyn baml_compiler2_mir::Db, file: baml_base::SourceFile) -> String {
+    let path = file.path(db);
+    let root = db.project().root(db);
+    path.strip_prefix(&root)
+        .unwrap_or(&path)
+        .display()
+        .to_string()
+}
+
 /// Build a table of byte offsets where each line starts in the source text.
 ///
 /// Returns `[0, offset_of_line_2, offset_of_line_3, ...]`.
@@ -2603,7 +2620,7 @@ fn compile_init_function<'db>(
             Some((mir_body, lambdas)) => {
                 let line_starts = build_line_starts(file.text(db));
                 // Compile lambda children first and collect their object indices.
-                let source_file = file.path(db).display().to_string();
+                let source_file = relative_source_path(db, *file);
                 let empty_capture_types = Vec::new();
                 let empty_spawn_capture_indices = HashSet::new();
                 let lambda_info = compile_lambdas_flat(
