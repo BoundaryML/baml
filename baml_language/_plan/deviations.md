@@ -123,7 +123,17 @@ Legend: **[lang]** forced by a missing/limited language feature · **[scope]** d
   class field can't be named `function`. Tool-calls are parsed via `baml.json.field` navigation instead of a
   typed wire class.
 
-## ⚠️ MAJOR: user-package classes cannot implement a stdlib capability interface (`requires` across packages)
+## ✅ FIXED: user-package classes cannot implement a stdlib capability interface (`requires` across packages)
+
+> **RESOLVED.** Root cause: the E0125 `requires`-satisfaction probe in
+> `baml_lsp2_actions/src/check.rs` resolved the required parent's `TypeExpr` (written in the
+> *interface's* source file, e.g. unqualified `Provider` inside `baml.ai`) against the *user's*
+> package items — so it never resolved cross-package and every sibling `implements` was ignored.
+> Fixed by threading the interface's own `iface_pkg_items` through
+> `item_implements_required_parent_for_target` / `interface_target_matches_required_parent`
+> (owning package first, candidate-context fallback for generic-substituted args). Regression
+> test: `interfaces.rs::cross_package_requires_satisfied_by_sibling_implements_is_ok`.
+> User-authored providers are now unblocked; original finding kept below for the record.
 
 - **A class in a user package cannot satisfy a stdlib interface's `requires`.** `class MyProvider {
   implements baml.ai.Provider {} implements baml.ai.HttpProvider { … } }` fails with **E0125**: *"MyProvider

@@ -93,10 +93,11 @@ Each entry: the symptom, the rule, the workaround. Compiler-bug candidates are m
   `baml.future.Future<T, null>[]`.
 - **`?? []` needs a typed binding** (`let xs: T[] = maybe ?? [];`) — bare coalesce against `[]`
   infers a bogus union.
-- **User-package classes cannot implement a stdlib interface that `requires` another** (E0125 —
-  the in-body `implements Provider {}` isn't seen by the `requires` check across packages).
-  Until fixed, provider classes must live in the stdlib. **This is the top blocker for
-  user-authored providers.**
+- **User-package classes CAN implement a stdlib interface that `requires` another** — the E0125
+  false positive (the `requires`-satisfaction probe resolved the parent against the *user's*
+  package instead of the interface's own) is FIXED in `baml_lsp2_actions/src/check.rs`
+  (regression test: `interfaces.rs::cross_package_requires_satisfied_by_sibling_implements_is_ok`).
+  User-authored providers no longer need to live in the stdlib.
 - **Stdlib edits need `touch` + rebuild** — cargo doesn't always notice `.baml` mtime changes for
   the embedded std; `touch` the file before `cargo build -p baml_cli`.
 - **The formatter can't process functions with a `client`-named param** (pre-existing, e.g. parts
