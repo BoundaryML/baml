@@ -6,10 +6,10 @@
 services:
   api:
     environment:
-      SUPERVISE: "web,ingress,baml_worker,baml_dedup"
+      SUPERVISE: "web,ingress,baml_worker,baml_dedup,linear_sync"
       INGRESS_PORT: "8081"
       CONVEX_URL: "http://convex:3210"
-      CONVEX_ADMIN_KEY: "bammy-local|016e2326881a97bc30897fc2307640fed69f26eb10479edf294500213b67fbba8191e8ef62"
+      CONVEX_ADMIN_KEY: "bammy-local|017fa262716197ab3da451de07695f72d028c1c9439796e1e840cf6122d7c1d987e51a5c67"
       SERVICE_URL: "http://localhost:8080"
       SERVICE_TOKEN: "devservicetoken"
       CLAUDE_PROXY_URLS: "http://claude-proxy:9090"
@@ -24,6 +24,9 @@ services:
       LINEAR_STATUS_REDRAFT: "lbl-redraft"
       LINEAR_STATUS_PR_PREP: "lbl-pr-prep"
       LINEAR_STATUS_REJECTED: "lbl-rejected"
+      # Webhook auth (the new ingress verifies both; Slack fails closed).
+      ATB_SLACK_SIGNING_SECRET: "test-slack-signing"
+      ATB_LINEAR_WEBHOOK_SECRET: "test-linear-secret"
     ports:
       - "8081:8081"
 
