@@ -98,6 +98,14 @@ export function ProblemEditor({
     runtime.updateSolution(inject.code);
   }, [injectSeq, inject, runtime]);
 
+  // Cancel any pending debounced edit if the editor unmounts (route change)
+  // so the callback can't fire against a disposed model.
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, []);
+
   return (
     <Editor
       beforeMount={beforeMount}
