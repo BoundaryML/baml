@@ -524,13 +524,11 @@ pub fn json_parse(vm: &mut BexVm, s: &str) -> Result<Value, VmRustFnError> {
 // ─── Error throwers ───────────────────────────────────────────────────────────
 
 fn throw_json_parse_error(vm: &mut BexVm, message: String) -> Result<Value, VmInternalError> {
-    let class_ptr = vm
-        .resolved_class_names
-        .get(JSON_PARSE_ERROR_FQN)
-        .copied()
-        .ok_or_else(|| VmInternalError::MissingNativeFunction {
+    let class_ptr = vm.lookup_type_by_fqn(JSON_PARSE_ERROR_FQN).ok_or_else(|| {
+        VmInternalError::MissingNativeFunction {
             name: JSON_PARSE_ERROR_FQN.to_string(),
-        })?;
+        }
+    })?;
     let message_val = Value::object(vm.alloc_string(message));
     Ok(Value::object(
         vm.alloc_instance(class_ptr, vec![message_val]),
@@ -543,9 +541,7 @@ fn throw_json_decode_error(
     path: &str,
 ) -> Result<Value, VmInternalError> {
     let class_ptr = vm
-        .resolved_class_names
-        .get(JSON_DECODE_ERROR_FQN)
-        .copied()
+        .lookup_type_by_fqn(JSON_DECODE_ERROR_FQN)
         .ok_or_else(|| VmInternalError::MissingNativeFunction {
             name: JSON_DECODE_ERROR_FQN.to_string(),
         })?;
@@ -563,9 +559,7 @@ fn throw_json_serialization_error(
     reason: &str,
 ) -> Result<Value, VmInternalError> {
     let class_ptr = vm
-        .resolved_class_names
-        .get(JSON_SERIALIZATION_ERROR_FQN)
-        .copied()
+        .lookup_type_by_fqn(JSON_SERIALIZATION_ERROR_FQN)
         .ok_or_else(|| VmInternalError::MissingNativeFunction {
             name: JSON_SERIALIZATION_ERROR_FQN.to_string(),
         })?;
@@ -696,6 +690,9 @@ pub fn value_to_serde(vm: &BexVm, v: Value) -> serde_json::Value {
             Object::Instance(_)
             | Object::Class(_)
             | Object::Enum(_)
+            | Object::Interface(_)
+            | Object::Package(_)
+            | Object::ImplRule(_)
             | Object::Variant(_)
             | Object::Function(_)
             | Object::Future(_)
@@ -1300,11 +1297,8 @@ fn deserialize_class_instance(
         }
     };
 
-    let key = class_lookup_key(qtn);
     let class_ptr = vm
-        .resolved_class_names
-        .get(&key)
-        .copied()
+        .lookup_type(qtn)
         .ok_or_else(|| raise_decode(vm, format!("class `{qtn}` not found"), path))?;
     let class_fields = match vm.get_object(class_ptr) {
         Object::Class(c) => c.fields.clone(),
@@ -1354,11 +1348,8 @@ fn deserialize_enum_variant(
     variant_name: &str,
     path: &mut String,
 ) -> Result<Value, VmRustFnError> {
-    let key = class_lookup_key(qtn);
     let enm_ptr = vm
-        .resolved_class_names
-        .get(&key)
-        .copied()
+        .lookup_type(qtn)
         .ok_or_else(|| raise_decode(vm, format!("enum `{qtn}` not found"), path))?;
     let idx = match vm.get_object(enm_ptr) {
         Object::Enum(e) => e.variants.iter().position(|v| v.name == variant_name),
@@ -1440,11 +1431,8 @@ fn deserialize_media(
         }
     };
 
-    let key = class_lookup_key(qtn);
     let class_ptr = vm
-        .resolved_class_names
-        .get(&key)
-        .copied()
+        .lookup_type(qtn)
         .ok_or_else(|| raise_decode(vm, format!("media class `{qtn}` not found"), path))?;
     let data_val = Value::object(vm.alloc_rust_data(media_arc));
     Ok(Value::object(vm.alloc_instance(class_ptr, vec![data_val])))
@@ -1570,7 +1558,7 @@ fn class_from_json_start(
             ));
         }
     };
-    let class_ptr = match vm.resolved_class_names.get(&class_lookup_key(qtn)).copied() {
+    let class_ptr = match vm.lookup_type(qtn) {
         Some(p) => p,
         None => {
             return NativeCallResult::Error(raise_decode(

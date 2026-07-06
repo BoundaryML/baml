@@ -237,3 +237,188 @@ function main() -> string {
     );
     assert_eq!(expect_string(output.result.unwrap()), "E");
 }
+
+/// B-611 — a non-throwing `defer` on the unwind frame must NOT wipe the
+/// propagating error's cause chain.
+///
+/// `mid` catches "origin" and throws "wrap" (so wrap.cause == origin). A
+/// `defer {}` armed in `mid` routes that expression-position throw through its
+/// landing pad, which replays the (empty) defer and then re-raises "wrap"
+/// unchanged. Before the fix the re-raise nulled the cause, so `root_cause`
+/// stopped at "wrap"; now the pad's transparent re-raise preserves the cause
+/// computed at wrap's throw site (`thrown_value_causes` in `vm.rs`), so
+/// `root_cause` still walks past "wrap" to the original "origin".
+#[tokio::test]
+async fn defer_on_unwind_preserves_cause_chain() {
+    let output = baml_test!(
+        r#"
+function fail_low() -> string { throw "origin" }
+
+function mid() -> string {
+  defer { }
+  fail_low() catch (e, ctx) {
+    _ => throw "wrap"
+  }
+}
+
+function main() -> string {
+  mid() catch (e, ctx) {
+    _ => {
+      match (ctx.root_cause().error) {
+        let s: string => s
+        _ => "LOST: cause chain wiped by the defer re-raise"
+      }
+    }
+  }
+}
+"#
+    );
+    assert_eq!(expect_string(output.result.unwrap()), "origin");
+}
+
+/// B-611 — the rendered chain must keep its "During handling of..." section
+/// across the defer re-raise. Same shape as above, but return `to_string`: the
+/// full chain (origin, then wrap) must survive, not just the surviving "wrap".
+#[tokio::test]
+async fn defer_on_unwind_preserves_to_string_chain() {
+    let output = baml_test!(
+        r#"
+function fail_low() -> string { throw "origin" }
+
+function mid() -> string {
+  defer { }
+  fail_low() catch (e, ctx) {
+    _ => throw "wrap"
+  }
+}
+
+function main() -> string {
+  mid() catch (e, ctx) {
+    _ => ctx.to_string()
+  }
+}
+"#
+    );
+    let rendered = expect_string(output.result.unwrap());
+    assert!(
+        rendered.contains("During handling of the above error, another error occurred"),
+        "missing chain separator; the defer re-raise dropped the cause:\n{rendered}"
+    );
+    assert!(
+        rendered.contains("origin"),
+        "missing the original error frame:\n{rendered}"
+    );
+    assert!(
+        rendered.contains("wrap"),
+        "missing the superseding error frame:\n{rendered}"
+    );
+}
+
+/// B-611 — a NON-empty (but non-throwing) defer body must behave the same: it
+/// is the pad's transparent re-raise, not empty-block elimination, that must
+/// preserve the cause. The defer mutates an outer local (a real, observable
+/// body) yet does not throw.
+#[tokio::test]
+async fn defer_with_body_preserves_cause_chain() {
+    let output = baml_test!(
+        r#"
+function fail_low() -> string { throw "origin" }
+
+function mid() -> string {
+  let marker = "start"
+  defer { marker = marker + "-cleanup" }
+  fail_low() catch (e, ctx) {
+    _ => throw "wrap"
+  }
+}
+
+function main() -> string {
+  mid() catch (e, ctx) {
+    _ => {
+      match (ctx.root_cause().error) {
+        let s: string => s
+        _ => "LOST: cause chain wiped by the defer re-raise"
+      }
+    }
+  }
+}
+"#
+    );
+    assert_eq!(expect_string(output.result.unwrap()), "origin");
+}
+
+/// B-611 — two stacked non-throwing defers on the unwind frame each add a
+/// transparent re-raise; the cause must survive all of them.
+#[tokio::test]
+async fn nested_defers_nonthrowing_preserve_cause() {
+    let output = baml_test!(
+        r#"
+function fail_low() -> string { throw "origin" }
+
+function mid() -> string {
+  defer { }
+  defer { }
+  fail_low() catch (e, ctx) {
+    _ => throw "wrap"
+  }
+}
+
+function main() -> string {
+  mid() catch (e, ctx) {
+    _ => {
+      match (ctx.root_cause().error) {
+        let s: string => s
+        _ => "LOST: cause chain wiped by a stacked defer re-raise"
+      }
+    }
+  }
+}
+"#
+    );
+    assert_eq!(expect_string(output.result.unwrap()), "origin");
+}
+
+/// B-611 regression guard — a defer whose body ITSELF throws must still build
+/// the full chain. `mid` catches "origin" and throws "wrap"; the armed defer
+/// then throws "cleanup" while "wrap" is unwinding. The result chains
+/// cleanup -> wrap -> origin (cleanup is "during handling of" wrap, wrap is
+/// "during handling of" origin). `root_cause` reaches "origin" and the middle
+/// "wrap" link is not dropped — confirming the fix preserves a pre-existing
+/// chain even when the defer contributes a fresh link on top of it.
+#[tokio::test]
+async fn defer_that_throws_still_chains_through_wrap() {
+    let output = baml_test!(
+        r#"
+function fail_low() -> string { throw "origin" }
+
+function mid() -> string {
+  defer { throw "cleanup" }
+  fail_low() catch (e, ctx) {
+    _ => throw "wrap"
+  }
+}
+
+function main() -> string {
+  mid() catch (e, ctx) {
+    _ => ctx.to_string()
+  }
+}
+"#
+    );
+    let rendered = expect_string(output.result.unwrap());
+    // Oldest -> newest: origin, wrap, cleanup — all three present, in order.
+    let origin_at = rendered.find("origin").expect("missing 'origin' frame");
+    let wrap_at = rendered.find("wrap").expect("missing 'wrap' frame");
+    let cleanup_at = rendered.find("cleanup").expect("missing 'cleanup' frame");
+    assert!(
+        origin_at < wrap_at && wrap_at < cleanup_at,
+        "cause chain out of order or a link dropped:\n{rendered}"
+    );
+    assert_eq!(
+        rendered
+            .matches("During handling of the above error, another error occurred")
+            .count(),
+        2,
+        "expected two chain separators (origin->wrap->cleanup):\n{rendered}"
+    );
+}

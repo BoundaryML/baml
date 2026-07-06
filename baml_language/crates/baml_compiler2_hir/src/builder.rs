@@ -1639,6 +1639,14 @@ impl<'db> SemanticIndexBuilder<'db> {
                     );
                     self.validate_schema_attributes(&field.attributes);
                 }
+                self.validate_alias_collisions(
+                    class
+                        .fields
+                        .iter()
+                        .map(|f| (&f.name, f.name_span, f.attributes.as_slice())),
+                    "class",
+                    is_builtin_file,
+                );
                 for method in &class.methods {
                     self.validate_function_phase1(method, is_builtin_file, "method");
                 }
@@ -1648,6 +1656,13 @@ impl<'db> SemanticIndexBuilder<'db> {
                 for variant in &enm.variants {
                     self.validate_schema_attributes(&variant.attributes);
                 }
+                self.validate_alias_collisions(
+                    enm.variants
+                        .iter()
+                        .map(|v| (&v.name, v.name_span, v.attributes.as_slice())),
+                    "enum",
+                    is_builtin_file,
+                );
             }
             ast::Item::TypeAlias(alias) => {
                 if let Some(type_expr) = &alias.type_expr {
@@ -1833,6 +1848,35 @@ impl<'db> SemanticIndexBuilder<'db> {
     ///
     /// Unknown attributes are silently passed through (e.g. `@stream.*` for PPIR).
     fn validate_schema_attributes(&mut self, attributes: &[ast::RawAttribute]) {
+        // E0014: reject the same single-valued schema attribute appearing more
+        // than once on one declaration. `@alias`, `@description`, and `@skip`
+        // each take effect at most once — for valued attrs the last write
+        // silently wins and the earlier ones are dropped (Linear B-648) — so a
+        // repeat is always a mistake. Only these known single-valued attributes
+        // are checked; repeatable / pass-through attributes (`@stream.*`, etc.)
+        // are intentionally left alone. Occurrences are gathered in first-seen
+        // order so the emitted diagnostics are deterministic.
+        let mut occurrences: Vec<(&str, Vec<TextRange>)> = Vec::new();
+        for attr in attributes {
+            let name = attr.name.as_str();
+            if !matches!(name, "description" | "alias" | "skip") {
+                continue;
+            }
+            if let Some(entry) = occurrences.iter_mut().find(|(n, _)| *n == name) {
+                entry.1.push(attr.span);
+            } else {
+                occurrences.push((name, vec![attr.span]));
+            }
+        }
+        for (name, sites) in occurrences {
+            if sites.len() >= 2 {
+                self.diagnostics.push(Hir2Diagnostic::DuplicateAttribute {
+                    attr_name: name.to_string(),
+                    sites,
+                });
+            }
+        }
+
         for attr in attributes {
             match attr.name.as_str() {
                 "description" | "alias" => {
@@ -1867,6 +1911,86 @@ impl<'db> SemanticIndexBuilder<'db> {
                 _ => {
                     // Unknown attributes passed through silently (e.g. @stream.*)
                 }
+            }
+        }
+    }
+
+    /// Reject a class or enum whose members don't all serialize to distinct
+    /// JSON keys.
+    ///
+    /// A member's *effective serialized key* is its `@alias` value if it carries
+    /// one, otherwise its declared name. When an `@alias` is present the real
+    /// member name is never used for matching (see `bex_sap`'s
+    /// `AnnotatedField::key_matches`), so two members with the same effective key
+    /// are indistinguishable in the serialized schema: `ctx.output_format`
+    /// renders duplicate keys and only the first can ever be satisfied. This
+    /// catches both `a @alias("x")` + `b @alias("x")` and a plain member `x`
+    /// colliding with another member's `@alias("x")`.
+    ///
+    /// Applies uniformly to class fields (an unsatisfiable output schema — a
+    /// required shadowed field can never be parsed) and enum variants (two
+    /// variants rendered under one label — the model's choice can't be resolved
+    /// back to a unique variant).
+    ///
+    /// Members marked `@skip` are excluded from the schema entirely and so
+    /// cannot collide. A pure duplicate *member name* (no aliasing involved) is
+    /// left to the existing `DuplicateField` / duplicate-variant (E0012) checks
+    /// to avoid double-reporting; this rule only fires when at least two
+    /// *distinct* member names share a key. `container` is `"class"` or `"enum"`
+    /// and is used only for the diagnostic message.
+    fn validate_alias_collisions<'a>(
+        &mut self,
+        members: impl Iterator<Item = (&'a Name, TextRange, &'a [ast::RawAttribute])>,
+        container: &'static str,
+        is_builtin_file: bool,
+    ) {
+        // Builtin stdlib declarations carry no `@alias`, and type-level
+        // validation already skips them — stay consistent and avoid surprising
+        // the stdlib.
+        if is_builtin_file {
+            return;
+        }
+
+        let mut buckets: FxHashMap<String, Vec<(Name, TextRange)>> = FxHashMap::default();
+        for (name, name_span, attributes) in members {
+            let mut alias: Option<String> = None;
+            let mut skip = false;
+            for attr in attributes {
+                match attr.name.as_str() {
+                    "alias" if attr.args.len() == 1 => {
+                        // Last `@alias` wins, mirroring emit's `extract_schema_attrs`.
+                        if let Some(value) =
+                            ast::parse_string_attr_value(attr.args[0].value.as_str())
+                        {
+                            alias = Some(value);
+                        }
+                    }
+                    "skip" => skip = true,
+                    _ => {}
+                }
+            }
+            if skip {
+                continue;
+            }
+            let key = alias.unwrap_or_else(|| name.as_str().to_string());
+            buckets
+                .entry(key)
+                .or_default()
+                .push((name.clone(), name_span));
+        }
+
+        for (key, members) in buckets {
+            // Only a collision between two *distinct* member names is a new
+            // error; repeated identical names are already reported by the
+            // duplicate-definition checks.
+            let distinct = members.iter().any(|(name, _)| name != &members[0].0);
+            if members.len() >= 2 && distinct {
+                let sites = members.into_iter().map(|(_, span)| span).collect();
+                self.diagnostics.push(Hir2Diagnostic::DuplicateFieldAlias {
+                    key,
+                    sites,
+                    container,
+                });
             }
         }
     }

@@ -353,6 +353,9 @@ impl TraceSnapshotBuilder {
             Object::Function(_)
             | Object::Class(_)
             | Object::Enum(_)
+            | Object::Interface(_)
+            | Object::Package(_)
+            | Object::ImplRule(_)
             | Object::Closure(_)
             | Object::BoundMethod(_)
             | Object::GenericFunction(_)
@@ -440,6 +443,9 @@ fn unsupported_object_message(object: &Object) -> String {
         Object::Function(_) => "function",
         Object::Class(_) => "class",
         Object::Enum(_) => "enum",
+        Object::Interface(_) => "interface",
+        Object::Package(_) => "package",
+        Object::ImplRule(_) => "impl rule",
         Object::Closure(_) => "closure",
         Object::BoundMethod(_) => "bound method",
         Object::GenericFunction(_) => "generic function",

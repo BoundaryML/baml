@@ -608,3 +608,18 @@ test "int_mul_max_by_one_no_overflow" {
 test "int_mul_min_by_one_no_overflow" {
     assert.is_true(baml.deep_equals(int_mul_(int.min_value(), 1), int.min_value()))
 }
+
+// ─── regression: bare-literal method receiver (B-614) ─────────────────────────
+//
+// A method called directly on a bare integer literal (no wrapping parens) used
+// to lower its receiver to a Missing expr: `.abs()` failed to type-check and
+// `.to_string()` panicked at runtime with "parse error". The receiver must be
+// the literal itself. Kept at the end of the file so the test registry stays
+// append-only.
+test "int_abs_bare_literal" {
+    assert.is_true(baml.deep_equals(3.abs(), 3))
+}
+
+test "int_to_string_bare_literal" {
+    assert.is_true(baml.deep_equals(7.to_string(), "7"))
+}

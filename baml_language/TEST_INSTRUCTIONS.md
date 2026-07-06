@@ -117,3 +117,162 @@ A good place to start when given a diagnostic failure or some parser issue is to
 BEFORE you run these lsp tests with update_expect, make sure to just run without it and figure out if the new results are what you expect.
 
 Just because the existing file may say 'no diagnostics expected' doesn't mean it is correct by the way. We haven't finished implementing all diagnostics. You have to see if we added some other comments elsewhere in the file to see what we should sort of expect, or just inspect the behavior manually.
+
+---
+
+# END-TO-END TESTING (running real BAML programs)
+
+The snapshot/LSP suites above test the *compiler internals*. This section is about
+testing BAML **end-to-end as a user would**: write a `.baml` program, compile it, run it,
+and run its `test` blocks — using the real CLI. Use this when you want to know "does this
+actually *work* when someone writes it", not "what CST does the parser produce".
+
+## The binary
+
+Build and use the local dev CLI (do **not** use a `brew`-installed `baml` — you must test
+*this* checkout):
+
+```bash
+cargo build -p baml_cli           # produces target/debug/baml-cli
+BAML=/Users/aaron/projects/baml/baml_language/target/debug/baml-cli
+```
+
+It prints `warning: using the internal BAML toolchain binary directly is not recommended` on
+every invocation — that is expected; ignore/grep it out. The binary name is `baml-cli`
+(hyphen), even though the crate is `baml_cli`.
+
+## `baml describe` — the CLI **is** the stdlib documentation. Never guess.
+
+The single most important tool for end-to-end work. The stdlib is large (~50 files,
+`crates/baml_builtins2/baml_std/**.baml`); rather than guess method names, ask the binary:
+
+```bash
+$BAML describe baml                 # ← THE FULL PICTURE: every namespace, type & function
+                                    #   in the stdlib in one listing (csv, env, errors, fs,
+                                    #   http, json, math, net, time, toml, yaml, iter, …)
+$BAML describe baml.json            # drill into a namespace → its types + function signatures
+$BAML describe Array                # drill into a type → full method list + docs
+$BAML describe String --budget 200  # output is line-budgeted; raise --budget to see all methods
+$BAML describe <YourSymbol>         # also works on symbols in the loaded project
+```
+
+`describe` resolves symbols against a project. From inside a project dir it just works; from
+elsewhere pass `--from <project-dir>`. Output is capped by `--budget` (default 30) and tells
+you "… N more lines (re-run with a higher --budget)" — raise it to see everything. Anything
+you can't see, `describe` it; do not guess stdlib names or signatures.
+
+## Setting up a project
+
+```bash
+$BAML init <dir> --name <name>      # scaffolds <dir>/baml.toml + <dir>/baml_src/main.baml
+                                    # (refuses to clobber an existing baml.toml)
+$BAML new <dir>                     # like init but creates a fresh dir (errors if it exists)
+```
+
+`baml.toml` minimum is just `[package]\nname = "..."`. Source lives under `baml_src/**.baml`.
+An optional `[scripts]` table aliases `baml run` invocations (e.g. `dev = "-f main"`).
+
+## Running code
+
+```bash
+# Eval a one-off expression — fastest feedback loop, doubles as a syntax/type check.
+# Runs WITHOUT a project; great for probing stdlib behavior in isolation.
+$BAML run -e '1 + 2'                                  # → 3
+$BAML run -e 'let xs=[3,1,2]; xs.length()'            # → 3
+$BAML run -e 'baml.unstable.string(6)'                # → "6"
+
+# Run a named function in the loaded project. The runtime builds a typed clap CLI from the
+# function signature and exposes each function as a SUBCOMMAND, so the function name must be
+# REPEATED after `--`, then its args as flags:
+$BAML run main                                        # simplest for a zero-arg fn (positional target)
+$BAML run --function main -- main                     # equivalent explicit form
+$BAML run --function greet -- greet --name "Ada"      # scalar args: repeat the fn name, then --flags
+$BAML run --function total -- total --json-args '{"xs":[3,1,2]}'   # collection/class/union args: use --json-args
+# GOTCHA: bare `$BAML run --function main` (no `-- main`) prints a clap usage screen, not the result.
+# GOTCHA: `--json-args` IS a real flag and is REQUIRED for array/map/class/union params (it goes
+#         AFTER the repeated function-name subcommand).
+
+# Compile-check the whole project without running:
+$BAML check
+```
+
+`baml run` always prints a `Loading … / Checking … / Compiling …` preamble; the program's
+result is printed after. On compile errors it prints rich diagnostics with `Error code: E####`
+and exits non-zero with `Cannot run: compilation errors found`.
+
+## Tests + assertions
+
+```bash
+$BAML test --list                    # discover tests without running
+$BAML test                           # run all; prints PASS/FAIL per test, exits non-zero on failure
+$BAML test -i "<testset>::<case>"    # run a single test by id
+```
+
+- A single test needs no wrapper: `test "name" { ... }`. `testset "name" { ... }` only **groups**.
+- Assertions live in the `assert` namespace and **throw** (panic) on failure:
+  `assert.is_true(cond)`, `assert.equal(actual, expected)`, `assert.not_null(v)`,
+  `assert.contains(haystack, needle)`. A test passes iff its body runs without an uncaught throw.
+- A failing assert surfaces as `UnhandledThrow { value: Instance { class_name:
+  "baml.panics.UserPanic", … } }` with a stack trace pointing into `testing/registry.baml`.
+- LLM functions (`client:` + `prompt:`) hit the network — **do not** rely on live LLM calls in
+  e2e tests. Test the deterministic logic, and for parsing use the generated `Fn$parse(raw)`
+  companion against a canned string (or `baml.json.from_string<T>(...)`).
+
+## A known-good reference program
+
+```baml
+function sum_list(xs: int[]) -> string {
+  let total = 0;
+  for (let x in xs) {        // for-loops need `(let …)` and iterate VALUES
+    total += x;
+  }
+  return "sum=" + baml.unstable.string(total);   // no implicit int→string coercion
+}
+
+test "sums inline" {
+  assert.equal(sum_list([3, 1, 2]), "sum=6")     // inline call form
+}
+```
+
+## Language cheat-sheet (the traps that cost the most time)
+
+BAML is expression-oriented and TypeScript-ish with snake_case methods. The five things that
+bite first — everything else, `baml describe` it:
+
+1. **Class fields are `name: type,`** (trailing comma); construct with `Point { x: 1 }`.
+   Methods take an explicit `self`; static factories don't. `baml fmt` normalizes layout.
+2. **Last expression in a block is its value** (Rust-style). Early exit is `return x;` (with
+   trailing `;`). A no-value function is `-> null` with a trailing `null`.
+3. **`for (let x in xs)`** iterates values and requires `let`. `if` / `match` / blocks are
+   expressions; `match (v) { 0 => "a", _ => "b" }`.
+4. **No implicit string coercion** — `"n=" + 5` will NOT compile; use `baml.unstable.string(5)`.
+   Indexing out of bounds **panics** — use `.at(i)` / map `.get(k)` which return `T?`.
+   Closures are `(x: T) -> R { ... }`; the `=>` arrow is **match-only**. `.map`/`.filter`
+   return arrays directly (no `.collect()`). **Map keys must be `string`.**
+5. **`catch` arms are type-only and non-exhaustive**: `f(x) catch (e) { BadInput => fallback }`.
+   `throws T` is part of a function's signature; **panics are not catchable**.
+
+## Recommended workflow
+
+`baml describe baml` (full picture) → sketch the program → `baml run -e` / `baml check`
+constantly for fast feedback → `baml describe <name>` whenever you need a signature →
+`baml test` → `baml fmt baml_src/*.baml` before finishing.
+
+## Finding & reporting language bugs end-to-end
+
+When something behaves wrong, **prove it is the language, not your code**:
+
+1. Reduce to the **smallest** `.baml` (or `baml run -e` one-liner) that still shows it.
+2. Confirm the *intended* behavior via `baml describe` / the stdlib source so you're sure it's
+   a real defect and not a misuse.
+3. Record an exact repro: the minimal source, the exact command, observed vs. expected, and the
+   `E####` error code or runtime throw. Classify severity:
+   `crash` (VM/compiler panic or internal error) > `wrong-result` > `spurious-compile-error`
+   (rejects valid code) > `missing-error` (accepts invalid code) > `bad-diagnostic`.
+4. A bug that only reproduces inside one construct (e.g. only inside a `test` block, only under
+   a generic) is worth noting — the construct boundary is a strong clue to the root cause.
+
+Example of a real defect found this way: inside a `test` block, a `let`-bound local does not
+compare equal to a literal of the same value — `test "x" { let r = "x"; assert.equal(r, "x") }`
+**fails**, while the inline form `assert.equal("x", "x")` and `run -e 'let r="x"; r=="x"'` both
+**pass**. Tiny source, exact command, observed≠expected, construct-scoped → that's a good report.

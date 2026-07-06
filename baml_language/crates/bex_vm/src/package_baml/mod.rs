@@ -33,7 +33,7 @@ mod math;
 mod media;
 mod ops;
 mod resolve;
-pub(crate) use resolve::{realize_frame, resolve_implements_rule};
+pub(crate) use resolve::{realize_frame, resolve_implements_rule, type_implements};
 mod root;
 mod spawn;
 mod stack_trace;

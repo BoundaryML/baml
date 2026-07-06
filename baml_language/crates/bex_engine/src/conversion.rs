@@ -224,6 +224,15 @@ impl BexEngine {
             Object::Function(_) => Err(EngineError::CannotConvert {
                 type_name: "function".to_string(),
             }),
+            Object::Interface(_) => Err(EngineError::CannotConvert {
+                type_name: "interface".to_string(),
+            }),
+            Object::Package(_) => Err(EngineError::CannotConvert {
+                type_name: "package".to_string(),
+            }),
+            Object::ImplRule(_) => Err(EngineError::CannotConvert {
+                type_name: "impl_rule".to_string(),
+            }),
             Object::Class(_) => Err(EngineError::CannotConvert {
                 type_name: "class".to_string(),
             }),
@@ -2270,6 +2279,9 @@ fn find_matching_union_member(value: Value, members: &[RuntimeTy]) -> Option<&Ru
                 }),
                 // Types that don't participate in union discrimination.
                 Object::Function(_)
+                | Object::Interface(_)
+                | Object::Package(_)
+                | Object::ImplRule(_)
                 | Object::Closure(_)
                 | Object::BoundMethod(_)
                 | Object::GenericFunction(_)
@@ -2383,6 +2395,9 @@ pub(crate) fn vm_arg_to_external(vm: &BexVm, value: Value) -> BexExternalValue {
                 }
                 // These types should not appear as sys op arguments.
                 Object::Function(_)
+                | Object::Interface(_)
+                | Object::Package(_)
+                | Object::ImplRule(_)
                 | Object::Closure(_)
                 | Object::BoundMethod(_)
                 | Object::GenericFunction(_)

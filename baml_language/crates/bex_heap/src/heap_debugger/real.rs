@@ -368,6 +368,11 @@ impl BexHeap {
             | Object::GenericFunction(_)
             | Object::Class(_)
             | Object::Enum(_)
+            // Compile-time program metadata; their pointers target other
+            // immortal compile-time objects, valid by construction.
+            | Object::Interface(_)
+            | Object::Package(_)
+            | Object::ImplRule(_)
             | Object::String(_)
             | Object::Bigint(_)
             | Object::Uint8Array(_)
