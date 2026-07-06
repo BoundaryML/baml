@@ -31,8 +31,8 @@ use baml_compiler2_ppir::file_item_tree;
 use baml_type::{RuntimeTy, TyAttr};
 use bex_vm_types::{
     Bytecode, CaptureCategory, Class, ClassField, ConstValue, Enum, EnumVariant, Function,
-    FunctionCaptureProps, FunctionKind, FunctionMeta, FunctionOrigin, Instruction, Object,
-    ObjectIndex, ObjectPool, Program,
+    FunctionCaptureProps, FunctionKind, FunctionMeta, FunctionOrigin, GlobalIndex, Instruction,
+    Object, ObjectIndex, ObjectPool, Program,
 };
 
 /// Build a per-package `ResolvedAliases` cache, keyed by package name.
@@ -759,6 +759,11 @@ pub struct CompileOptions {
 pub enum LoweringError {
     /// A stub — no errors expected from Phase 1 stub.
     Internal(String),
+    /// Per-file bytecode reuse hit a construct it cannot relocate (e.g. a
+    /// previous-program object reference that isn't a class/enum/interface
+    /// or within the file's own range). Not a compiler fault: callers should
+    /// silently fall back to a full compile.
+    ReuseUnsupported(String),
     /// The project has unresolved compile errors, so bytecode generation was
     /// not attempted. Lowering an error-bearing program would feed
     /// inference-only `Unknown`/`Error` types through the runtime-conversion
@@ -771,6 +776,9 @@ impl std::fmt::Display for LoweringError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Internal(msg) => write!(f, "internal lowering error: {msg}"),
+            Self::ReuseUnsupported(msg) => {
+                write!(f, "per-file bytecode reuse unsupported: {msg}")
+            }
             Self::ProjectHasErrors { error_count } => write!(
                 f,
                 "cannot generate bytecode: project has {error_count} unresolved compile error(s)"
@@ -873,7 +881,7 @@ pub fn generate_project_bytecode_with_opt(
     options: &CompileOptions,
     opt: OptLevel,
 ) -> Result<Program, LoweringError> {
-    generate_impl(db, options, opt, None, false)
+    generate_impl(db, options, opt, None, false, None)
 }
 
 /// Compile ONLY the builtin stdlib into a standalone `Program` slice.
@@ -896,6 +904,7 @@ pub fn generate_stdlib_program(
         opt,
         None,
         true,
+        None,
     )
 }
 
@@ -913,7 +922,40 @@ pub fn generate_project_bytecode_with_stdlib(
     opt: OptLevel,
     base: &Program,
 ) -> Result<Program, LoweringError> {
-    generate_impl(db, options, opt, Some(base), false)
+    generate_impl(db, options, opt, Some(base), false, None)
+}
+
+/// Generate project bytecode reusing per-file compiled bytecode from a
+/// previous `Program` of the same project.
+///
+/// `clean_files` names the user files (project-root-relative paths, as
+/// recorded in `Function::source_file`) whose compiled functions may be
+/// spliced from `prev` instead of re-lowered. The caller is responsible for
+/// the invalidation policy — a file may only be listed when its own content
+/// is unchanged AND nothing it references changed signature (see the CLI's
+/// manifest logic). `prev` must have been produced by the same compiler
+/// build with the same options and stdlib base.
+///
+/// The result is byte-identical to a full compile (relink oracle tests).
+/// Any construct the splice cannot relocate aborts with
+/// [`LoweringError::ReuseUnsupported`]; callers fall back to
+/// [`generate_project_bytecode_with_stdlib`].
+pub fn generate_project_bytecode_with_reuse(
+    db: &dyn baml_compiler2_mir::Db,
+    options: &CompileOptions,
+    opt: OptLevel,
+    base: &Program,
+    prev: &Program,
+    clean_files: &HashSet<String>,
+) -> Result<Program, LoweringError> {
+    generate_impl(
+        db,
+        options,
+        opt,
+        Some(base),
+        false,
+        Some((prev, clean_files)),
+    )
 }
 
 fn generate_impl(
@@ -922,6 +964,7 @@ fn generate_impl(
     opt: OptLevel,
     base: Option<&Program>,
     stdlib_only: bool,
+    reuse: Option<(&Program, &HashSet<String>)>,
 ) -> Result<Program, LoweringError> {
     let mut all_files = compiler2_all_files(db);
     let builtin_count = all_files
@@ -955,6 +998,10 @@ fn generate_impl(
         Some(base) => (base.clone(), EmitTables::from_stdlib_program(base)),
         None => (Program::new(), EmitTables::default()),
     };
+    let reuse_ctx = match reuse {
+        Some((prev, clean_files)) => Some(ReuseContext::new(prev, clean_files)?),
+        None => None,
+    };
     if base.is_none() {
         emit_file_group(
             db,
@@ -964,6 +1011,7 @@ fn generate_impl(
             &alias_caches,
             &dispatch_caches,
             opt,
+            None,
         )?;
     }
     emit_file_group(
@@ -974,6 +1022,7 @@ fn generate_impl(
         &alias_caches,
         &dispatch_caches,
         opt,
+        reuse_ctx.as_ref(),
     )?;
 
     // --- Pass 5: Template string macros ---
@@ -1168,6 +1217,180 @@ impl EmitTables {
     }
 }
 
+/// Per-file bytecode reuse: everything needed to splice a clean file's
+/// compiled functions out of a previous `Program` instead of re-lowering
+/// them.
+///
+/// Built once per relink by scanning `prev`. A file's functions (with their
+/// lambdas) occupy a contiguous range of the previous pool, grouped by
+/// `Function::source_file`; cross-function references are rewritten through
+/// the name maps (`GlobalIndex` slots and class/enum/interface objects) or
+/// rebased by the range delta (the file's own lambdas/functions). Class type
+/// tags are content-addressed and never need rewriting.
+struct ReuseContext<'a> {
+    prev: &'a Program,
+    /// Relative source path → `(start, end)` function-object range in
+    /// `prev.objects`.
+    file_ranges: HashMap<String, (usize, usize)>,
+    /// Previous object index → its global slot, for functions that had one.
+    prev_obj_globals: HashMap<usize, usize>,
+    /// Previous global slot → fq name (functions ∪ lets).
+    prev_slot_names: HashMap<usize, String>,
+    /// Relative source paths whose compiled bytecode may be reused.
+    clean_files: &'a HashSet<String>,
+}
+
+impl<'a> ReuseContext<'a> {
+    fn new(prev: &'a Program, clean_files: &'a HashSet<String>) -> Result<Self, LoweringError> {
+        let mut prev_slot_names: HashMap<usize, String> = HashMap::new();
+        for (name, &slot) in &prev.function_global_indices {
+            prev_slot_names.insert(slot, name.clone());
+        }
+        for (name, &slot) in &prev.let_global_indices {
+            prev_slot_names.insert(slot, name.clone());
+        }
+        let mut prev_obj_globals: HashMap<usize, usize> = HashMap::new();
+        for (name, &obj_idx) in &prev.function_indices {
+            if let Some(&slot) = prev.function_global_indices.get(name) {
+                prev_obj_globals.insert(obj_idx, slot);
+            }
+        }
+
+        let mut file_ranges: HashMap<String, (usize, usize)> = HashMap::new();
+        for (idx, obj) in prev.objects.iter().enumerate() {
+            let Object::Function(function) = obj else {
+                continue;
+            };
+            // Only clean files are ever spliced, so only they need ranges —
+            // and only they must satisfy the contiguity requirement. (Stdlib
+            // files legitimately violate it: $init helper functions carry
+            // their let's source file but are emitted in a later pass.)
+            if !clean_files.contains(&function.source_file) {
+                continue;
+            }
+            match file_ranges.entry(function.source_file.clone()) {
+                std::collections::hash_map::Entry::Vacant(entry) => {
+                    entry.insert((idx, idx + 1));
+                }
+                std::collections::hash_map::Entry::Occupied(mut entry) => {
+                    if entry.get().1 != idx {
+                        // A file's functions must be one contiguous pool range
+                        // for rebase-by-delta to be meaningful.
+                        return Err(LoweringError::ReuseUnsupported(format!(
+                            "non-contiguous object range for {}",
+                            function.source_file
+                        )));
+                    }
+                    entry.get_mut().1 = idx + 1;
+                }
+            }
+        }
+
+        Ok(ReuseContext {
+            prev,
+            file_ranges,
+            prev_obj_globals,
+            prev_slot_names,
+            clean_files,
+        })
+    }
+}
+
+/// Splice one clean file's compiled functions from the previous program into
+/// `program`, rewriting cross-function references for the new layout.
+#[allow(clippy::too_many_arguments)]
+fn splice_file_functions(
+    ctx: &ReuseContext<'_>,
+    rel_path: &str,
+    globals: &HashMap<String, usize>,
+    class_object_indices: &HashMap<String, usize>,
+    enum_object_indices: &HashMap<String, usize>,
+    interface_object_indices: &HashMap<baml_type::TypeName, usize>,
+    program: &mut Program,
+) -> Result<(), LoweringError> {
+    let Some(&(start, end)) = ctx.file_ranges.get(rel_path) else {
+        // A file with no compiled functions (types/lets only) has nothing to
+        // splice; passes 1-3b and 4.5+ regenerate its contributions.
+        return Ok(());
+    };
+    let new_base = program.objects.len();
+
+    for prev_idx in start..end {
+        let Some(Object::Function(prev_fn)) = ctx.prev.objects.get(prev_idx) else {
+            return Err(LoweringError::ReuseUnsupported(format!(
+                "non-function object inside {rel_path}'s range"
+            )));
+        };
+        let mut function = prev_fn.clone();
+
+        let mut failure: Option<String> = None;
+        bex_vm_types::relink::visit_index_operands(&mut function, |operand| match operand {
+            bex_vm_types::relink::IndexOperand::Global(slot) => {
+                let raw = slot.raw();
+                match ctx
+                    .prev_slot_names
+                    .get(&raw)
+                    .and_then(|name| globals.get(name))
+                {
+                    Some(&new_slot) => *slot = GlobalIndex::from_raw(new_slot),
+                    None => {
+                        failure.get_or_insert_with(|| format!("unmapped global slot {raw}"));
+                    }
+                }
+            }
+            bex_vm_types::relink::IndexOperand::Object(obj) => {
+                let raw = obj.raw();
+                if raw >= start && raw < end {
+                    // The file's own functions/lambdas: rebase by range delta.
+                    *obj = ObjectIndex::from_raw(new_base + (raw - start));
+                    return;
+                }
+                let translated = match ctx.prev.objects.get(raw) {
+                    Some(Object::Class(class)) => class_object_indices.get(&class.name.to_string()),
+                    Some(Object::Enum(enum_def)) => {
+                        enum_object_indices.get(&enum_def.name.to_string())
+                    }
+                    Some(Object::Interface(iface)) => interface_object_indices.get(&iface.name),
+                    _ => None,
+                };
+                match translated {
+                    Some(&new_idx) => *obj = ObjectIndex::from_raw(new_idx),
+                    None => {
+                        failure.get_or_insert_with(|| format!("untranslatable object ref {raw}"));
+                    }
+                }
+            }
+        });
+        if let Some(reason) = failure {
+            return Err(LoweringError::ReuseUnsupported(format!(
+                "{rel_path}: {reason}"
+            )));
+        }
+
+        let new_idx = program.add_object(Object::Function(function));
+        if let Some(&prev_slot) = ctx.prev_obj_globals.get(&prev_idx) {
+            let name = ctx.prev_slot_names.get(&prev_slot).ok_or_else(|| {
+                LoweringError::ReuseUnsupported(format!("unnamed global slot {prev_slot}"))
+            })?;
+            let expected_slot = globals.get(name).copied();
+            let new_slot = program.globals.len();
+            if expected_slot != Some(new_slot) {
+                // Slot misalignment would corrupt every later reference —
+                // refuse and let the caller fall back to a full compile.
+                return Err(LoweringError::ReuseUnsupported(format!(
+                    "global slot misalignment for {name}: expected {expected_slot:?}, got {new_slot}"
+                )));
+            }
+            program.function_indices.insert(name.clone(), new_idx);
+            program
+                .function_global_indices
+                .insert(name.clone(), new_slot);
+            program.add_global(ConstValue::Object(ObjectIndex::from_raw(new_idx)));
+        }
+    }
+    Ok(())
+}
+
 /// Run emit passes 1–4.6 over one file group.
 ///
 /// `generate_project_bytecode_with_opt` calls this twice — builtin stubs
@@ -1184,6 +1407,7 @@ fn emit_file_group(
     alias_caches: &HashMap<Name, ResolvedAliases>,
     dispatch_caches: &HashMap<Name, std::rc::Rc<DispatchCandidateCache>>,
     opt: OptLevel,
+    reuse: Option<&ReuseContext<'_>>,
 ) -> Result<(), LoweringError> {
     let EmitTables {
         globals,
@@ -1547,6 +1771,25 @@ fn emit_file_group(
 
     // --- Pass 4: Compile each function ---
     for file in files {
+        if let Some(ctx) = reuse {
+            let rel = relative_source_path(db, *file);
+            if ctx.clean_files.contains(&rel) {
+                // Clean file: its compiled functions are spliced from the
+                // previous program instead of re-lowered — this is what makes
+                // a body-only edit elsewhere skip this file's TIR/MIR/emit
+                // entirely (salsa never gets asked).
+                splice_file_functions(
+                    ctx,
+                    &rel,
+                    globals,
+                    class_object_indices,
+                    enum_object_indices,
+                    interface_object_indices,
+                    program,
+                )?;
+                continue;
+            }
+        }
         let line_starts = build_line_starts(file.text(db));
         let item_tree = file_item_tree(db, *file);
         let pkg_info_pass4 = file_package(db, *file);
