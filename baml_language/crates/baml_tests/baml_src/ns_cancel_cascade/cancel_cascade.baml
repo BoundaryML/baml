@@ -58,7 +58,8 @@ test "cancel_from_handle_then_await_catches_cancelled" {
 // pending future, hit that safepoint (a 1ms sleep), THEN cancel and `await`.
 // If cancel-after-GC regressed, the future would never settle and `await f`
 // would hang forever; a healthy runtime observes `Cancelled` promptly and the
-// catch yields 0.
+// catch yields 0. (This also pins that B-650's end-of-run wait does not stall
+// on the now-cancelled, cancel-aware sleep.)
 function cancel_after_gc_relocation_still_settles() -> int {
     let f = spawn { baml.sys.sleep(baml.time.Duration.from_milliseconds(60000n)); 42 };
 

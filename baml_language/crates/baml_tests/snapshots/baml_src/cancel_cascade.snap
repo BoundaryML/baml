@@ -151,5 +151,10 @@ function cancel_cascade.cancelled_child_future_state_is_cancelled() -> baml.futu
     pop 1
     load_var waiter
     call baml.future.Future.state
+    store_var observed
+    load_deref ?1
+    call baml.future.Future.cancel
+    pop 1
+    load_var observed
     return
 }
