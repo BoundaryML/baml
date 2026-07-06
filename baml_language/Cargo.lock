@@ -1126,6 +1126,7 @@ dependencies = [
  "bex_external_types",
  "bex_vm",
  "bex_vm_types",
+ "borsh",
  "codspeed-divan-compat",
  "darwin-kperf",
  "darwin-kperf-events",
@@ -1214,6 +1215,17 @@ name = "beef"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3a8241f3ebb85c056b509d4327ad0358fbbba6ffb340bf388f26350aeda225b1"
+
+[[package]]
+name = "bex_cache"
+version = "0.0.0-beta"
+dependencies = [
+ "baml_version",
+ "bex_vm_types",
+ "borsh",
+ "sha2",
+ "tempfile",
+]
 
 [[package]]
 name = "bex_engine"
