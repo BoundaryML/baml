@@ -751,6 +751,7 @@ dependencies = [
  "sdkgen_typescript_node",
  "serde",
  "serde_json",
+ "sha2",
  "strsim",
  "sys_native",
  "tar",

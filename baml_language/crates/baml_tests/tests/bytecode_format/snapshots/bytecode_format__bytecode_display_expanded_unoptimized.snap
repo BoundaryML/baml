@@ -3449,29 +3449,30 @@ function testing.collect_subtree_names(registry: testing.TestRegistry, ts: testi
   580   0    load_var2 1 2          
         1    call 727 ntypeargs=0   (testing.TestRegistry.expand_testset_registry)
         2    call 711 ntypeargs=0   (testing.collect_leaf_names)
-        3    jump +19               (to 22)
+        3    jump +20               (to 23)
         4    load_var 3             (e)
         5    type_tag               
-        6    jump_table 0           ([to 16, to 16, to 16, _, to 16, _, _, to 16, to 16, _, to 16, _, _, to 16, _, _, to 16, _, to 16, to 16, _, to 16, _, to 16, _, _, to 16, _, to 16, to 16], default to 7)
-        7    load_var 3             (e)
-        8    throw_if_panic         
+        6    dense_tag 0            
+        7    jump_table 0           ([to 17, to 17, to 17, to 17, to 17, to 17, to 17, to 17, to 17, to 17, to 17, to 17, to 17, to 17, to 17, to 17], default to 8)
+        8    load_var 3             (e)
+        9    throw_if_panic         
 
-  582   9    load_var 2             (ts)
-        10   load_field 0           (name)
-        11   load_const 0           ("/(failed to expand)")
-        12   bin_op +               
-        13   load_type 1            
-        14   alloc_array 1          
+  582   10   load_var 2             (ts)
+        11   load_field 0           (name)
+        12   load_const 0           ("/(failed to expand)")
+        13   bin_op +               
+        14   load_type 1            
+        15   alloc_array 1          
 
-  580   15   jump +7                (to 22)
+  580   16   jump +7                (to 23)
 
-  581   16   load_var 2             (ts)
-        17   load_field 0           (name)
-        18   load_const 2           ("/(failed to expand)")
-        19   bin_op +               
-        20   load_type 1            
-        21   alloc_array 1          
-        22   return                 
+  581   17   load_var 2             (ts)
+        18   load_field 0           (name)
+        19   load_const 2           ("/(failed to expand)")
+        20   bin_op +               
+        21   load_type 1            
+        22   alloc_array 1          
+        23   return                 
 }
 
 function testing.count_leaves(results: (testing.TestReport | testing.TestSetReport)[], tolerated_by_parent: bool) -> testing.LeafCounts {

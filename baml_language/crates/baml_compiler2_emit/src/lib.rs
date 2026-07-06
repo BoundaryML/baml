@@ -1081,10 +1081,12 @@ struct EmitTables {
     classes: HashMap<String, HashMap<String, usize>>,
     /// Class fq-name → `ObjectPool` index (Pass 2).
     class_object_indices: HashMap<String, usize>,
-    /// Monotone class type-tag allocator (Pass 2); must visit classes in
-    /// `compiler2_all_files` order to stay in lockstep with MIR's
-    /// `class_type_tags`.
-    class_type_tag_counter: i64,
+    /// Collision detector for content-addressed class type tags (Pass 2):
+    /// tag → fq-name of the class that claimed it. Tags are a pure function
+    /// of the class's fully-qualified name (`typetag::class_type_tag`), so
+    /// MIR agrees by construction; a 47-bit hash collision between two
+    /// distinct classes is reported as a compile error here.
+    class_type_tags: HashMap<i64, String>,
     /// Enum fq-name → (variant name → variant index) (Pass 3).
     enum_variants: HashMap<String, HashMap<String, usize>>,
     /// Enum fq-name → `ObjectPool` index (Pass 3).
@@ -1128,8 +1130,8 @@ impl EmitTables {
                         .map(|(i, f)| (f.name.clone(), i))
                         .collect();
                     tables.classes.insert(fq.clone(), field_indices);
-                    tables.class_object_indices.insert(fq, idx);
-                    tables.class_type_tag_counter += 1;
+                    tables.class_object_indices.insert(fq.clone(), idx);
+                    tables.class_type_tags.insert(class.type_tag, fq);
                 }
                 Object::Enum(enum_def) => {
                     let fq = enum_def.name.to_string();
@@ -1187,7 +1189,7 @@ fn emit_file_group(
         globals,
         classes,
         class_object_indices,
-        class_type_tag_counter,
+        class_type_tags,
         enum_variants,
         enum_object_indices,
         interface_object_indices,
@@ -1342,8 +1344,15 @@ fn emit_file_group(
             let (class_desc, class_alias, _class_skip) =
                 extract_schema_attrs(&class_data.attributes);
 
-            let type_tag = bex_vm_types::type_tags::CLASS_BASE + *class_type_tag_counter;
-            *class_type_tag_counter += 1;
+            let type_tag = bex_vm_types::type_tags::class_type_tag(&fq_name);
+            if let Some(previous) = class_type_tags.insert(type_tag, fq_name.clone())
+                && previous != fq_name
+            {
+                return Err(LoweringError::Internal(format!(
+                    "class type-tag hash collision between `{previous}` and `{fq_name}`; \
+                     rename one of the classes"
+                )));
+            }
 
             // BEP-042: does this class define a magic `cleanup(self) -> void`
             // finalizer? This MUST stay in lockstep with the canonical

@@ -15,6 +15,7 @@ pub mod errors;
 pub mod heap_ptr;
 pub mod indexable;
 pub mod lazy_biased_mutex;
+pub mod relink;
 mod roots;
 pub mod task_group;
 pub mod types;
