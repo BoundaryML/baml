@@ -106,6 +106,11 @@ impl TypeContext for RuntimeTypeContext<'_> {
         }
     }
 
-    // `associated_type_bound` uses the trait default (`Vec::new()`): symbolic
-    // associated projections don't arise over realized runtime values.
+    fn associated_type_bound(&self, _interface: &Interface, _assoc: Name) -> Vec<Interface> {
+        // Explicitly empty: symbolic associated projections don't arise over
+        // realized runtime values, so there is never a `(_ as I).assoc` for the
+        // subtype rule to bound here. (The trait requires this method precisely so
+        // this "no bounds" decision is deliberate, not a forgotten default.)
+        Vec::new()
+    }
 }

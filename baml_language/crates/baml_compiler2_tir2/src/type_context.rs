@@ -108,4 +108,14 @@ impl baml_type::normalize::TypeContext for GlobalTypeContext<'_, '_> {
     fn enum_variants(&self, name: &QualifiedTypeName) -> Option<Vec<Name>> {
         crate::inference::enum_variants(self.db, self.res_ctx, name)
     }
+
+    fn associated_type_bound(
+        &self,
+        interface: &baml_type::Interface,
+        assoc: Name,
+    ) -> Vec<baml_type::Interface> {
+        crate::builder::associated_projection::associated_type_declared_bound(
+            self.db, interface, &assoc,
+        )
+    }
 }

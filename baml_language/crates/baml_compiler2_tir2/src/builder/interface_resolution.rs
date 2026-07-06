@@ -226,32 +226,92 @@ impl<'db> TypeInferenceBuilder<'db> {
         let db = self.context.db();
 
         // Existential / type-var receiver: the concrete type is unknown, so a member may
-        // come from `bound.name` OR any interface it transitively `requires`. Walk that
-        // closure and resolve on each interface — `requires` is the bound here.
-        for (iface_loc, iface_type_args, iface_associated_bindings) in
-            crate::interfaces::interface_closure_locs_with_args_and_assoc(
-                db,
-                root_loc,
-                bound.type_args,
-                bound.associated_bindings,
-            )
+        // come from `bound.name` OR any interface it transitively `requires`. Resolution
+        // is *tiered*, matching the associated-type resolver `resolve_through_roots`: the
+        // directly-named interface shadows the ones it requires (root-wins), but two
+        // *incomparable* interfaces declaring the same member are ambiguous and must be
+        // qualified (`recv.as<I>.member`). So resolve through the root when it declares
+        // `member`; otherwise collect the closure interfaces that declare it — one
+        // resolves, ≥2 are ambiguous, none is unresolved.
+        let closure = crate::interfaces::interface_closure_locs_with_args_and_assoc(
+            db,
+            root_loc,
+            bound.type_args,
+            bound.associated_bindings,
+        );
+        let mut declarers: Vec<InterfaceView<'db>> = Vec::new();
+        if self
+            .interface_member_kind(root_loc, access.member)
+            .is_some()
         {
-            let Some(qtn) = crate::interfaces::interface_loc_qtn(db, iface_loc) else {
-                continue;
-            };
-            let view = InterfaceView {
-                loc: iface_loc,
-                realized: baml_type::Interface::new(
-                    qtn,
-                    iface_type_args,
-                    iface_associated_bindings,
-                ),
-            };
-            if let Some(ty) = self.resolve_member_on_one_interface(&view, recv, &access) {
-                return Some(ty);
+            // Direct tier: the root shadows everything it transitively requires.
+            if let Some((loc, args, assoc)) = closure.iter().find(|(loc, _, _)| *loc == root_loc)
+                && let Some(qtn) = crate::interfaces::interface_loc_qtn(db, *loc)
+            {
+                declarers.push(InterfaceView {
+                    loc: *loc,
+                    realized: baml_type::Interface::new(qtn, args.clone(), assoc.clone()),
+                });
+            }
+        } else {
+            // Transitive tier: closure interfaces that declare it, deduped by realized
+            // identity so a diamond (`D: A, B` both requiring `C`) counts `C` once.
+            for (loc, args, assoc) in &closure {
+                if *loc == root_loc {
+                    continue;
+                }
+                if self.interface_member_kind(*loc, access.member).is_some()
+                    && let Some(qtn) = crate::interfaces::interface_loc_qtn(db, *loc)
+                {
+                    let realized = baml_type::Interface::new(qtn, args.clone(), assoc.clone());
+                    if !declarers.iter().any(|v| v.realized == realized) {
+                        declarers.push(InterfaceView {
+                            loc: *loc,
+                            realized,
+                        });
+                    }
+                }
             }
         }
-        None
+
+        match declarers.as_slice() {
+            [] => None,
+            [one] => self.resolve_member_on_one_interface(one, recv, &access),
+            // ≥2 incomparable interfaces declare `member`: resolving it would silently pick
+            // one. Report the ambiguity (as for a union receiver) — the `recv.as<I>.member`
+            // qualification hint in the diagnostic applies.
+            _ => {
+                let is_field = self.interface_member_kind(declarers[0].loc, access.member)
+                    == Some(UnionMemberKind::Field);
+                let receiver = match &recv {
+                    SelfReceiver::RigidVar(name) => name.to_string(),
+                    SelfReceiver::ExactTy(ty)
+                    | SelfReceiver::Existential(ty)
+                    | SelfReceiver::Union(ty) => ty.render_user_facing(),
+                };
+                let sources: Vec<String> = declarers
+                    .iter()
+                    .map(|v| format_interface_display(v.realized.name.name(), &v.realized.generics))
+                    .collect();
+                let err = if is_field {
+                    TirTypeError::AmbiguousInterfaceField {
+                        class_name: Name::new(&receiver),
+                        field_name: access.member.clone(),
+                        sources: sources.into_iter().map(|s| Name::new(&s)).collect(),
+                    }
+                } else {
+                    TirTypeError::AmbiguousInterfaceMethod {
+                        class_name: Name::new(&receiver),
+                        method_name: access.member.clone(),
+                        sources,
+                    }
+                };
+                self.context.report_at_member_simple(err, access.at);
+                Some(Ty::Unknown {
+                    attr: TyAttr::default(),
+                })
+            }
+        }
     }
 
     /// Resolve `member` on a **concrete** receiver `base_ty` through the type's own impl

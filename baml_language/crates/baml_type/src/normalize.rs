@@ -112,24 +112,23 @@ pub trait TypeContext {
     /// supertypes of *any* one of them (the `.any()` at the rule site), matching
     /// [`type_var_bound`](Self::type_var_bound)'s conjunction contract.
     ///
-    /// Will power `(_ as I<…>).assoc <: B` for a *still-symbolic* projection: it
-    /// is a subtype of its bound's supertypes — the projection analogue of
-    /// [`type_var_bound`](Self::type_var_bound). Staged subtyping infrastructure:
-    /// no production `TypeContext` overrides this yet, so the default empty bound
-    /// leaves such projections opaque until a context is wired to supply bounds
-    /// (and an upstream pre-pass is expected to resolve realized-base projections
-    /// to a concrete type before they reach the rule).
+    /// Powers `(_ as I<…>).assoc <: B` for a *still-symbolic* projection: it is a
+    /// subtype of its bound's supertypes — the projection analogue of
+    /// [`type_var_bound`](Self::type_var_bound). An upstream pre-pass is expected to
+    /// resolve realized-base projections to a concrete type before they reach the
+    /// rule; this covers the remaining still-symbolic case.
     ///
     /// The bound is a function of `(interface, assoc)` only; a `Self`-referential
     /// bound (one mentioning the implementor) is not expressible here — resolving
     /// `Self` over each returned [`Interface`] would be a later step.
     ///
-    /// Defaults to no bound, so a context that does not resolve associated types
-    /// leaves such projections opaque.
-    fn associated_type_bound(&self, interface: &Interface, assoc: Name) -> Vec<Interface> {
-        let _ = (interface, assoc);
-        Vec::new()
-    }
+    /// **Required (no default).** A silently-empty default would let a context that
+    /// *should* resolve associated-type bounds forget to — leaving projections
+    /// opaque with no error, a silent soundness hole. Every context must decide
+    /// explicitly; one that genuinely cannot encounter symbolic projections (e.g. a
+    /// runtime context over already-realized values) returns an explicit
+    /// `Vec::new()`, which the doc-comment there justifies.
+    fn associated_type_bound(&self, interface: &Interface, assoc: Name) -> Vec<Interface>;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

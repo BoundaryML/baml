@@ -442,6 +442,47 @@ fn associated_type_bound_interface(
     lowered.as_interface()
 }
 
+/// The declared interface bound(s) of associated type `member` on `interface`
+/// (`type member extends J`), realized through `interface`'s generic arguments
+/// and sibling pins, with `Self` left symbolic. This is the tir2 implementation
+/// of [`baml_type::normalize::TypeContext::associated_type_bound`]: it lights up
+/// the canonical `(base as I).member <: J` subtype rule for a still-symbolic
+/// projection — the projection is a subtype of its declared bound's supertypes,
+/// the projection analogue of a bounded type variable.
+///
+/// `Self` stays symbolic (a `Ty::TypeVar("Self")` that substitutes to itself)
+/// because the oracle is a function of `(interface, member)` only — the concrete
+/// implementor a `Self`-referential bound would need is not available here, per
+/// the trait's contract. Empty (fail-safe → opaque, never over-claims) when
+/// `member` is undeclared or unbounded, its bound is not an interface, or
+/// `interface`'s name resolves to no interface / with the wrong generic arity (an
+/// under-instantiated qualifier, already reported as `WrongNumberOfTypeArgs`).
+pub(crate) fn associated_type_declared_bound(
+    db: &dyn crate::Db,
+    interface: &baml_type::Interface,
+    member: &Name,
+) -> Vec<baml_type::Interface> {
+    let Some(iface_loc) = resolve_interface_loc(db, &interface.name) else {
+        return Vec::new();
+    };
+    // Guard the `associated_type_bound_interface` arity `debug_assert`: a bare or
+    // over-applied qualifier (`(base as I).member` where `interface I<X>`) is
+    // malformed — leave the projection opaque rather than realize a bound against
+    // mismatched generics.
+    let tree = baml_compiler2_hir::file_item_tree(db, iface_loc.file(db));
+    let arity_ok = tree
+        .interfaces
+        .get(&iface_loc.id(db))
+        .is_some_and(|iface| iface.generic_params.len() == interface.generics.len());
+    if !arity_ok {
+        return Vec::new();
+    }
+    let symbolic_self = Ty::TypeVar(Name::new("Self"), TyAttr::default());
+    associated_type_bound_interface(db, iface_loc, interface, &symbolic_self, member)
+        .into_iter()
+        .collect()
+}
+
 /// Resolve a concrete base's projection through the impls visible in `ctx`'s
 /// scope, mapping the impl-set result to a [`Determination`].
 fn determine_concrete(ctx: &dyn TypeExprContext<'_>, base: &Ty, member: &Name) -> Determination {

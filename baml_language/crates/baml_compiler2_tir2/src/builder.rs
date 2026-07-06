@@ -574,6 +574,14 @@ impl baml_type::normalize::TypeContext for NormalizeCtx<'_, '_> {
     fn enum_variants(&self, name: &crate::ty::QualifiedTypeName) -> Option<Vec<Name>> {
         self.as_global().enum_variants(name)
     }
+
+    fn associated_type_bound(
+        &self,
+        interface: &baml_type::Interface,
+        assoc: Name,
+    ) -> Vec<baml_type::Interface> {
+        self.as_global().associated_type_bound(interface, assoc)
+    }
 }
 
 /// A declared interface method's generics for call-site checking, keyed by the
@@ -10690,6 +10698,48 @@ impl<'db> TypeInferenceBuilder<'db> {
                     )],
                     ret: Box::new(Ty::TypeVar(name.clone(), TyAttr::default())),
                     throws: Box::new(json_decode_error_ty()),
+                    attr: TyAttr::default(),
+                }
+            }
+            Ty::AssociatedTypeProjection {
+                interface: Some(projection_iface),
+                member: assoc,
+                ..
+            } if member.as_str() != "from_json" => {
+                // A value of an associated-type projection type (`(base as I).Assoc`)
+                // is rigid but abstract, like a bounded type variable: it dispatches
+                // members through the projection's declared bound (`type Assoc extends
+                // J`), with `Self` pinned to the projection itself (`ExactTy`). Mirrors
+                // the bounded `Ty::TypeVar` arm above; the declared bound is the same
+                // oracle that powers the `(base as I).Assoc <: J` subtype rule.
+                let bounds = crate::builder::associated_projection::associated_type_declared_bound(
+                    self.context.db(),
+                    projection_iface,
+                    assoc,
+                );
+                for bound_iface in &bounds {
+                    if let Some(ty) = self.resolve_interface_member(
+                        InterfaceBound {
+                            name: &bound_iface.name,
+                            type_args: &bound_iface.generics,
+                            associated_bindings: &bound_iface.associated_types,
+                        },
+                        SelfReceiver::ExactTy(base_ty),
+                        MemberAccess { member, at, bound },
+                    ) {
+                        return ty;
+                    }
+                }
+                // No declared bound resolves the member — an unbounded (or wrongly
+                // bounded) projection has no members, same as any receiver missing it.
+                self.context.report_at_member_simple(
+                    TirTypeError::UnresolvedMember {
+                        base_type: base_ty.clone(),
+                        member: member.clone(),
+                    },
+                    at,
+                );
+                Ty::Unknown {
                     attr: TyAttr::default(),
                 }
             }

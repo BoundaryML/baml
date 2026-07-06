@@ -1143,6 +1143,155 @@ mod tests {
         assert!(diags.is_empty(), "unexpected diagnostics: {diags:?}");
     }
 
+    // Wiring the `associated_type_bound` oracle: `type Assoc extends Bar` makes the
+    // oracle report `[Bar]` for `(_ as Foo).Assoc` — the input that lights up the
+    // canonical `(base as I).member <: J` subtype rule for a still-symbolic projection.
+    #[test]
+    fn associated_type_declared_bound_returns_the_extends_clause() {
+        let db = compile("interface Bar {}\ninterface Foo {\n  type Assoc extends Bar\n}\n");
+        let foo = baml_type::Interface::new(
+            QualifiedTypeName::new(Name::new("user"), vec![], Name::new("Foo")),
+            vec![],
+            vec![],
+        );
+        let bound = crate::builder::associated_projection::associated_type_declared_bound(
+            &db,
+            &foo,
+            &Name::new("Assoc"),
+        );
+        assert_eq!(
+            bound
+                .iter()
+                .map(|i| i.name.name().to_string())
+                .collect::<Vec<_>>(),
+            vec!["Bar".to_string()],
+            "expected `type Assoc extends Bar` to yield the `Bar` bound, got {bound:?}"
+        );
+    }
+
+    // End-to-end: the oracle feeds the canonical subtype rule, so a still-symbolic
+    // `(Self as Foo).Assoc` is a subtype of its declared bound `Bar` (the projection
+    // analogue of a bounded type variable). It was opaque — a subtype of nothing but
+    // itself — before the wiring.
+    #[test]
+    fn symbolic_projection_is_subtype_of_its_declared_bound() {
+        let db = compile("interface Bar {}\ninterface Foo {\n  type Assoc extends Bar\n}\n");
+        let user = PackageId::new(&db, Name::new("user"));
+        let res_ctx = crate::package_interface::package_resolution_context(&db, user);
+        let aliases = crate::inference::package_alias_map(&db, res_ctx);
+        let bounds = TypeVarBoundsMap::default();
+        let gctx = crate::type_context::GlobalTypeContext {
+            db: &db,
+            res_ctx,
+            aliases: &aliases,
+            bounds: crate::type_context::TypeVarBounds::Interfaces(&bounds),
+        };
+        let foo = baml_type::Interface::new(
+            QualifiedTypeName::new(Name::new("user"), vec![], Name::new("Foo")),
+            vec![],
+            vec![],
+        );
+        let projection = Ty::AssociatedTypeProjection {
+            base: Box::new(Ty::TypeVar(Name::new("Self"), TyAttr::default())),
+            interface: Some(Box::new(foo)),
+            member: Name::new("Assoc"),
+            attr: TyAttr::default(),
+        };
+        let bar = Ty::Interface(
+            QualifiedTypeName::new(Name::new("user"), vec![], Name::new("Bar")),
+            vec![],
+            vec![],
+            TyAttr::default(),
+        );
+        assert!(
+            baml_type::normalize::is_subtype(&projection, &bar, &gctx),
+            "expected (Self as Foo).Assoc <: Bar via the declared `extends Bar` bound",
+        );
+    }
+
+    // Member-access half: a value of a projection type (`Self.Assoc` where
+    // `type Assoc extends Bar`) dispatches members through the declared bound, like a
+    // bounded type variable — so `self.get().bark()` resolves `bark` on `Bar`. It was
+    // an `UnresolvedMember` error before the `AssociatedTypeProjection` receiver arm.
+    #[test]
+    fn projection_value_resolves_members_through_its_declared_bound() {
+        let db = compile(concat!(
+            "interface Bar {\n  function bark(self) -> string throws never\n}\n",
+            "interface Foo {\n",
+            "  type Assoc extends Bar\n",
+            "  function get(self) -> Self.Assoc throws never\n",
+            "  function run(self) -> string throws never {\n    self.get().bark()\n  }\n",
+            "}\n",
+        ));
+        let errs = scope_type_errors_at(&db, "Foo", "run");
+        assert!(
+            errs.is_empty(),
+            "`.bark()` on a `Self.Assoc` value should resolve through the `extends Bar` \
+             bound with no diagnostics, got {errs:?}"
+        );
+    }
+
+    // An *unbounded* associated type confers no members (like an unbounded type
+    // variable): `.bark()` on its value is unresolved. Confirms the declared bound —
+    // not the projection alone — is what makes members available.
+    #[test]
+    fn unbounded_projection_value_has_no_members() {
+        let db = compile(concat!(
+            "interface Bar {\n  function bark(self) -> string throws never\n}\n",
+            "interface Foo {\n",
+            "  type Assoc\n",
+            "  function get(self) -> Self.Assoc throws never\n",
+            "  function run(self) -> string throws never {\n    self.get().bark()\n  }\n",
+            "}\n",
+        ));
+        let errs = scope_type_errors_at(&db, "Foo", "run");
+        assert!(
+            errs.iter()
+                .any(|e| matches!(e, TirTypeError::UnresolvedMember { .. })),
+            "an unbounded `Self.Assoc` value must expose no members, got {errs:?}"
+        );
+    }
+
+    // Tiered member resolution through a bound (`resolve_interface_member`): two
+    // *incomparable* required interfaces both declaring `m` (neither requires the other)
+    // make `x.m()` ambiguous — qualify with `x.as<A>.m()`. Was silently first-won.
+    #[test]
+    fn member_declared_by_two_incomparable_required_interfaces_is_ambiguous() {
+        let db = compile(concat!(
+            "interface A {\n  function m(self) -> string throws never\n}\n",
+            "interface B {\n  function m(self) -> string throws never\n}\n",
+            "interface D requires A, B {}\n",
+            "interface Use {\n",
+            "  function run(self, x: D) -> string throws never {\n    x.m()\n  }\n",
+            "}\n",
+        ));
+        let errs = scope_type_errors_at(&db, "Use", "run");
+        assert!(
+            errs.iter()
+                .any(|e| matches!(e, TirTypeError::AmbiguousInterfaceMethod { .. })),
+            "`x.m()` where D requires A and B (both declare `m`) must be ambiguous, got {errs:?}"
+        );
+    }
+
+    // Root-wins: a directly-named interface's member shadows the same-named member of one
+    // it transitively `requires` — `x.m()` on `x: D` (D requires B, both declare `m`)
+    // resolves to D's `m` with no ambiguity, consistent with the associated-type ruling.
+    #[test]
+    fn directly_declared_member_shadows_required_interface() {
+        let db = compile(concat!(
+            "interface B {\n  function m(self) -> string throws never\n}\n",
+            "interface D requires B {\n  function m(self) -> string throws never\n}\n",
+            "interface Use {\n",
+            "  function run(self, x: D) -> string throws never {\n    x.m()\n  }\n",
+            "}\n",
+        ));
+        let errs = scope_type_errors_at(&db, "Use", "run");
+        assert!(
+            errs.is_empty(),
+            "D's own `m` should shadow B's (root-wins), no ambiguity, got {errs:?}"
+        );
+    }
+
     // Two distinct interfaces declaring the same associated type make an unqualified
     // concrete projection ambiguous — it must be disambiguated with `(Base as I).member`.
     #[test]

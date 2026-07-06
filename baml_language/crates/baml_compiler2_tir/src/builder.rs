@@ -580,6 +580,19 @@ impl baml_type::normalize::TypeContext for NormalizeCtx<'_, '_> {
         let variants = self.0.lookup_enum_variants(name);
         (!variants.is_empty()).then_some(variants)
     }
+
+    fn associated_type_bound(
+        &self,
+        _interface: &baml_type::Interface,
+        _assoc: Name,
+    ) -> Vec<baml_type::Interface> {
+        // Explicitly empty: this (legacy) stack resolves associated-type
+        // projections through its own `AssociatedProjectionResolver`, not the
+        // algebra oracle, so the `(_ as I).assoc <: J` rule stays opaque here —
+        // its prior (removed-default) behavior. The projection-reduction wiring is
+        // tir2-only; this stack is slated for deletion.
+        Vec::new()
+    }
 }
 
 /// A declared interface method's generics for call-site checking, keyed by the
