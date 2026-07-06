@@ -2365,8 +2365,11 @@ impl BexEngine {
             })
             .collect::<Result<_, EngineError>>()?;
 
-        // Create the root thread (shared heap, own TLAB) and acquire its permit.
-        let mut thread = self.new_root_thread(cancel.clone(), profile_enabled).await;
+        // Create the root thread (shared heap, own TLAB) and acquire its
+        // permit. This named-entry path is the genuine top-level root run.
+        let mut thread = self
+            .new_root_thread(cancel.clone(), profile_enabled, true)
+            .await;
 
         // Reuse the (substituted) `param_types` to thread the expected
         // `RuntimeTy` into per-arg VM conversion. Binding a `HostValue` to an
@@ -2413,11 +2416,16 @@ impl BexEngine {
 
     /// Build a fresh root [`BexThread`] over the shared heap and acquire its
     /// heap permit. Shared by the named-entry (`call_function_bound_args`) and
-    /// callable-entry (`call_callable`) paths.
+    /// callable-entry (`call_callable`) paths. `is_top_level_root` marks the
+    /// genuine top-level entry run so only it runs the B-650 end-of-run wait —
+    /// the named-entry path passes `true`, the callable-entry path (nested
+    /// host-invoked callables such as HTTP handlers) passes `false`. See
+    /// [`BexThread::is_top_level_root`].
     async fn new_root_thread(
         self: &Arc<Self>,
         cancel: CancellationToken,
         profile_enabled: bool,
+        is_top_level_root: bool,
     ) -> ActiveHeapPermit<BexThread> {
         // Globals are shared as a frozen `Arc<[Value]>` — cloning is a refcount bump.
         let vm = BexVm::new(
@@ -2449,7 +2457,7 @@ impl BexEngine {
         // straight-line into run_thread_event_loop, whose every exit path
         // emits the EndThread), and the snapshot at the same spot plus each
         // loop-head resume.
-        let root_thread = BexThread::new_root(vm, cancel);
+        let root_thread = BexThread::new_root(vm, cancel, is_top_level_root);
         let inactive = self.heap_permit_manager.new_permit(root_thread).await;
         inactive.acquire().await
     }
@@ -2649,7 +2657,16 @@ impl BexEngine {
         if cancel.is_cancelled() {
             return Err(cancelled_unhandled_throw());
         }
-        let mut thread = self.new_root_thread(cancel.clone(), profile_enabled).await;
+        // A by-value callable invocation is a NESTED host-invoked run (an HTTP
+        // request handler dispatched via `spawn_with_callable`, or any host
+        // callback), never the genuine top-level entry — even though it, like
+        // the real root, has `settles_future == None`. Marking it non-root keeps
+        // it from running the B-650 end-of-run wait, which would park forever on
+        // the outer run's still-`Pending` `serve` spawn (B-650 `baml test`
+        // hang).
+        let mut thread = self
+            .new_root_thread(cancel.clone(), profile_enabled, false)
+            .await;
 
         // Resolve the handle to the live heap object. The handle keeps it rooted.
         let entry_ptr = self
@@ -4334,7 +4351,22 @@ impl BexEngine {
                     // surfaced (B-612); the fully-racing case exited 0. We
                     // WAIT, never cancel (see
                     // `wait_for_outstanding_child_futures`).
-                    thread = self.wait_for_outstanding_child_futures(thread).await?;
+                    //
+                    // Gate on the GENUINE top-level root, NOT on
+                    // `settles_future.is_none()`: a nested host-invoked callable
+                    // (an HTTP request handler running on its own BAML thread via
+                    // `spawn_with_callable` → `call_callable`) is also a
+                    // `settles_future == None` root, so `settles_future.is_none()`
+                    // alone misclassifies it as the finalizing root. It would then
+                    // run this wait and park forever on the outer run's still-
+                    // `Pending` `serve` spawn — the handler never returns, its HTTP
+                    // response never sends, and the whole run deadlocks upstream of
+                    // cancellation (B-650 `baml test` hang). The shared
+                    // `FutureManager` sees every run's pending futures, so only the
+                    // one true root may drain them.
+                    if thread.vm_thread_is_top_level_root() {
+                        thread = self.wait_for_outstanding_child_futures(thread).await?;
+                    }
 
                     // End-of-run drain: the root task is finalizing without
                     // ever having awaited. Fire-and-forget child errors

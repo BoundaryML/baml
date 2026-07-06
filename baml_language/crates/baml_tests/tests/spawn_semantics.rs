@@ -302,3 +302,49 @@ async fn never_awaited_successful_spawn_returns_cleanly() {
     };
     assert_eq!(s.to_string(), "done");
 }
+
+/// B-650 nested-callable misclassification (the `baml test` hang). An HTTP
+/// request handler runs on its own BAML thread via `spawn_with_callable` →
+/// `call_callable`, which — like the genuine top-level root — has
+/// `settles_future == None`. The end-of-run wait must be gated on the *real*
+/// top-level root, NOT on `settles_future.is_none()`: otherwise the handler
+/// thread misclassifies itself as the finalizing root, runs the end-of-run wait,
+/// and parks forever on the still-`Pending` `serve` spawn. The handler never
+/// returns → the HTTP response never sends → `main`'s `fetch` never completes →
+/// `main` never reaches `task.cancel()`, deadlocking the whole run. Guarded by a
+/// wall-clock timeout because the pre-fix failure mode is a hang, not a wrong
+/// value.
+#[tokio::test]
+async fn serve_then_fetch_then_cancel_does_not_hang() {
+    // Compile OUTSIDE the timed region (stdlib compile is seconds and is not
+    // what this test measures).
+    let program = compile_source_with_opt(
+        r#"
+        function main() -> int {
+            let server = baml.http.Server.bind("127.0.0.1:0");
+            let task = spawn {
+                server.serve((req: baml.http.Request) -> baml.http.Response {
+                    baml.http.Response.new(503, { }, "down".to_utf8())
+                })
+            };
+            let resp = baml.http.fetch("http://" + server.addr + "/");
+            task.cancel();
+            resp.status_code
+        }
+        "#,
+        OptLevel::One,
+    );
+    let output = tokio::time::timeout(
+        Duration::from_secs(30),
+        run_compiled(program, "main", IndexMap::new(), false),
+    )
+    .await
+    .expect("serve+fetch+cancel must not hang (B-650 root misclassification)");
+    let value = output
+        .result
+        .expect("serve+fetch+cancel run should succeed");
+    let BexExternalValue::Int(status) = value else {
+        panic!("expected Int status code, got {value:?}");
+    };
+    assert_eq!(status, 503);
+}
