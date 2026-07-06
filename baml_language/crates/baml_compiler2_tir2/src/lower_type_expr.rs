@@ -1209,6 +1209,47 @@ mod tests {
         );
     }
 
+    // A projection over a *concrete* base is a pure type-level operator —
+    // `(int as Foo).Assoc` with `impl Foo for int { type Assoc = string }` *is* `string`.
+    // It normalizes to (compares equal to) its realization, not a dead symbolic leaf.
+    #[test]
+    fn concrete_projection_reduces_to_its_realization() {
+        let db = compile(concat!(
+            "interface Foo {\n  type Assoc\n}\n",
+            "implements Foo for int {\n  type Assoc = string\n}\n",
+        ));
+        let user = PackageId::new(&db, Name::new("user"));
+        let res_ctx = crate::package_interface::package_resolution_context(&db, user);
+        let aliases = crate::inference::package_alias_map(&db, res_ctx);
+        let bounds = TypeVarBoundsMap::default();
+        let gctx = crate::type_context::GlobalTypeContext {
+            db: &db,
+            res_ctx,
+            aliases: &aliases,
+            bounds: crate::type_context::TypeVarBounds::Interfaces(&bounds),
+        };
+        let foo = baml_type::Interface::new(
+            QualifiedTypeName::new(Name::new("user"), vec![], Name::new("Foo")),
+            vec![],
+            vec![],
+        );
+        let projection = Ty::AssociatedTypeProjection {
+            base: Box::new(Ty::Int {
+                attr: TyAttr::default(),
+            }),
+            interface: Some(Box::new(foo)),
+            member: Name::new("Assoc"),
+            attr: TyAttr::default(),
+        };
+        let string_ty = Ty::String {
+            attr: TyAttr::default(),
+        };
+        assert!(
+            baml_type::normalize::equivalent(&projection, &string_ty, &gctx),
+            "(int as Foo).Assoc should reduce to (be equivalent to) string",
+        );
+    }
+
     // Member-access half: a value of a projection type (`Self.Assoc` where
     // `type Assoc extends Bar`) dispatches members through the declared bound, like a
     // bounded type variable — so `self.get().bark()` resolves `bark` on `Bar`. It was

@@ -593,6 +593,19 @@ impl baml_type::normalize::TypeContext for NormalizeCtx<'_, '_> {
         // tir2-only; this stack is slated for deletion.
         Vec::new()
     }
+
+    fn project(
+        &self,
+        _base: &Ty,
+        _interface: &baml_type::Interface,
+        _member: &Name,
+    ) -> baml_type::normalize::ProjectionStep {
+        // Explicitly opaque: as with `associated_type_bound`, this legacy stack
+        // reduces projections through its own `AssociatedProjectionResolver`, not
+        // the algebra oracle — the normalization-time reduction is tir2-only. Slated
+        // for deletion.
+        baml_type::normalize::ProjectionStep::Opaque
+    }
 }
 
 /// A declared interface method's generics for call-site checking, keyed by the

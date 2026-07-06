@@ -113,4 +113,16 @@ impl TypeContext for RuntimeTypeContext<'_> {
         // this "no bounds" decision is deliberate, not a forgotten default.)
         Vec::new()
     }
+
+    fn project(
+        &self,
+        _base: &Ty,
+        _interface: &Interface,
+        _member: &Name,
+    ) -> baml_type::normalize::ProjectionStep {
+        // Explicitly opaque: for the same reason as `associated_type_bound` — a
+        // realized runtime value never carries a symbolic `(_ as I).member`
+        // projection for the algebra to reduce.
+        baml_type::normalize::ProjectionStep::Opaque
+    }
 }

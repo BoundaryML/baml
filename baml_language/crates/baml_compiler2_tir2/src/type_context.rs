@@ -118,4 +118,55 @@ impl baml_type::normalize::TypeContext for GlobalTypeContext<'_, '_> {
             self.db, interface, &assoc,
         )
     }
+
+    fn project(
+        &self,
+        base: &Ty,
+        interface: &baml_type::Interface,
+        member: &Name,
+    ) -> baml_type::normalize::ProjectionStep {
+        use baml_type::normalize::ProjectionStep;
+        // The qualifier already pins the member — that pin *is* the projection.
+        if let Some((_, pin)) = interface
+            .associated_types
+            .iter()
+            .find(|(name, _)| name == member)
+        {
+            return ProjectionStep::Reduced(pin.clone());
+        }
+        // A concrete base determines the member through its `implements` block for the
+        // written qualifier interface — `(int as Foo).Assoc` is int's `type Assoc = …`,
+        // read off the realized interface the impl provides.
+        //
+        // `get_implements_block` requires a fully-realized `(interface, type)`: a
+        // symbolic base (or qualifier) dispatches dynamically and has no static impl,
+        // so it stays opaque here rather than tripping that precondition.
+        if crate::generics::contains_typevar(base)
+            || interface
+                .generics
+                .iter()
+                .any(crate::generics::contains_typevar)
+            || interface
+                .associated_types
+                .iter()
+                .any(|(_, ty)| crate::generics::contains_typevar(ty))
+        {
+            return ProjectionStep::Opaque;
+        }
+        let pkg_id = baml_compiler2_hir::package::PackageId::new(
+            self.db,
+            self.res_ctx.own_package_name.clone(),
+        );
+        if let Some(resolved) =
+            crate::interfaces::get_implements_block(self.db, pkg_id, base, interface, self.aliases)
+            && let Some((_, ty)) = resolved
+                .implemented_interface(self.db)
+                .associated_types
+                .iter()
+                .find(|(name, _)| name == member)
+        {
+            return ProjectionStep::Reduced(ty.clone());
+        }
+        ProjectionStep::Opaque
+    }
 }

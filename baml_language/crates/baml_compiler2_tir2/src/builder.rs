@@ -582,6 +582,15 @@ impl baml_type::normalize::TypeContext for NormalizeCtx<'_, '_> {
     ) -> Vec<baml_type::Interface> {
         self.as_global().associated_type_bound(interface, assoc)
     }
+
+    fn project(
+        &self,
+        base: &Ty,
+        interface: &baml_type::Interface,
+        member: &Name,
+    ) -> baml_type::normalize::ProjectionStep {
+        self.as_global().project(base, interface, member)
+    }
 }
 
 /// A declared interface method's generics for call-site checking, keyed by the

@@ -41,6 +41,27 @@ use crate::{
 // CONTEXT
 // ═══════════════════════════════════════════════════════════════════════════
 
+/// Starting fuel for projection reduction in one `from_ty` walk: the maximum
+/// length of a reduction chain (`(A as I).X` → `(B as J).Y` → …) before a
+/// projection is left opaque. Generous for any real program; bounds a cyclic
+/// `type A = (C as I).B` / `type B = (C as J).A` (itself a declaration-level error
+/// caught elsewhere) so normalization terminates instead of recursing forever.
+const PROJECTION_REDUCTION_FUEL: u32 = 256;
+
+/// The result of reducing an associated-type projection `(base as I).member`
+/// through [`TypeContext::project`].
+pub enum ProjectionStep {
+    /// The projection *is* this type — the impl's binding or the qualifier's pin.
+    /// `(int as Foo).Assoc` with `impl Foo for int { type Assoc = string }` reduces
+    /// to `string`; the projection is a pure, side-effect-free type-level operator,
+    /// so its canonical form is the reduced type (assignable from / equal to it).
+    Reduced(Ty),
+    /// The projection cannot be reduced here — its base is still symbolic, or no
+    /// impl determines it. It stays an opaque leaf, equal only to a
+    /// structurally-identical projection.
+    Opaque,
+}
+
 /// Semantic lookups the type algebra needs, supplied by the caller over its own
 /// registries.
 ///
@@ -129,6 +150,19 @@ pub trait TypeContext {
     /// runtime context over already-realized values) returns an explicit
     /// `Vec::new()`, which the doc-comment there justifies.
     fn associated_type_bound(&self, interface: &Interface, assoc: Name) -> Vec<Interface>;
+
+    /// Reduce an associated-type projection `(base as interface).member` to the type
+    /// it denotes, when determinable — the pure type-level operator that makes
+    /// `(int as Foo).Assoc` *be* `string` (the impl's binding), analogous to how
+    /// `1 + 1` *is* `2`. [`ProjectionStep::Opaque`] when the base is still symbolic
+    /// or no impl determines it, leaving the projection a leaf.
+    ///
+    /// **Required (no default).** A silently-`Opaque` default would let a context
+    /// that *should* reduce projections forget to — leaving `(int as Foo).Assoc` a
+    /// dead symbolic type with no error, a silent soundness hole (same class as
+    /// [`associated_type_bound`](Self::associated_type_bound)). A context over
+    /// already-realized values (the runtime) returns `Opaque` explicitly.
+    fn project(&self, base: &Ty, interface: &Interface, member: &Name) -> ProjectionStep;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -255,7 +289,7 @@ pub fn constant_equality<C: TypeContext>(a: &Ty, b: &Ty, ctx: &C) -> Option<bool
 impl NormalTy {
     /// Normalize and canonicalize a [`Ty`] in one step (the shared entry point).
     fn canonical<C: TypeContext>(ty: &Ty, ctx: &C) -> NormalTy {
-        NormalTy::from_ty(ty, ctx, &mut HashSet::new()).canonicalize(ctx)
+        NormalTy::from_ty(ty, ctx, &mut HashSet::new(), PROJECTION_REDUCTION_FUEL).canonicalize(ctx)
     }
 }
 
@@ -577,6 +611,12 @@ impl NormalTy {
         ty: &Ty,
         ctx: &C,
         expanding: &mut HashSet<QualifiedTypeName>,
+        // Remaining projection-reduction steps along this path. Reducing a
+        // projection (`(int as Foo).Assoc` → `string`) is a pure type-level
+        // operator, but could loop on a cyclic `type A = (C as I).B` /
+        // `type B = (C as J).A`; each reduction spends one unit, and on exhaustion
+        // the projection stays opaque (conservative — never over-equates).
+        fuel: u32,
     ) -> NormalTy {
         match ty {
             Ty::Int { .. } => NormalTy::Int,
@@ -614,28 +654,32 @@ impl NormalTy {
             // Freshness is a compiler-only widening flag, irrelevant to type identity.
             Ty::Literal(lit, _freshness, _) => NormalTy::Literal(lit.clone()),
             Ty::Class(qn, args, _) => {
-                NormalTy::Class(qn.clone(), Self::from_tys(args, ctx, expanding))
+                NormalTy::Class(qn.clone(), Self::from_tys(args, ctx, expanding, fuel))
             }
             Ty::Interface(qn, args, bindings, _) => {
                 let mut bindings: Vec<_> = bindings
                     .iter()
-                    .map(|(name, ty)| (name.clone(), Self::from_ty(ty, ctx, expanding)))
+                    .map(|(name, ty)| (name.clone(), Self::from_ty(ty, ctx, expanding, fuel)))
                     .collect();
                 bindings.sort_by(|(a, _), (b, _)| a.cmp(b));
-                NormalTy::Interface(qn.clone(), Self::from_tys(args, ctx, expanding), bindings)
+                NormalTy::Interface(
+                    qn.clone(),
+                    Self::from_tys(args, ctx, expanding, fuel),
+                    bindings,
+                )
             }
             Ty::Enum(qn, _) => NormalTy::Enum(qn.clone()),
             Ty::EnumVariant(qn, v, _) => NormalTy::EnumVariant(qn.clone(), v.clone()),
             // Evolving containers are the list/map analogues during inference;
             // their type identity is the same as the frozen form.
             Ty::List(inner, _) | Ty::EvolvingList(inner, _) => {
-                NormalTy::List(Box::new(Self::from_ty(inner, ctx, expanding)))
+                NormalTy::List(Box::new(Self::from_ty(inner, ctx, expanding, fuel)))
             }
             Ty::Map { key, value, .. } | Ty::EvolvingMap(key, value, _) => NormalTy::Map {
-                key: Box::new(Self::from_ty(key, ctx, expanding)),
-                value: Box::new(Self::from_ty(value, ctx, expanding)),
+                key: Box::new(Self::from_ty(key, ctx, expanding, fuel)),
+                value: Box::new(Self::from_ty(value, ctx, expanding, fuel)),
             },
-            Ty::Union(members, _) => NormalTy::Union(Self::from_tys(members, ctx, expanding)),
+            Ty::Union(members, _) => NormalTy::Union(Self::from_tys(members, ctx, expanding, fuel)),
             Ty::Function {
                 params,
                 ret,
@@ -646,19 +690,19 @@ impl NormalTy {
                     .iter()
                     .map(|p| NormalParam {
                         name: p.name.clone(),
-                        ty: Self::from_ty(&p.ty, ctx, expanding),
+                        ty: Self::from_ty(&p.ty, ctx, expanding, fuel),
                         mode: p.mode,
                     })
                     .collect(),
-                ret: Box::new(Self::from_ty(ret, ctx, expanding)),
-                throws: Box::new(Self::from_ty(throws, ctx, expanding)),
+                ret: Box::new(Self::from_ty(ret, ctx, expanding, fuel)),
+                throws: Box::new(Self::from_ty(throws, ctx, expanding, fuel)),
             },
             Ty::Future(value, error, _) => NormalTy::Future(
-                Box::new(Self::from_ty(value, ctx, expanding)),
-                Box::new(Self::from_ty(error, ctx, expanding)),
+                Box::new(Self::from_ty(value, ctx, expanding, fuel)),
+                Box::new(Self::from_ty(error, ctx, expanding, fuel)),
             ),
             Ty::WatchAccessor(inner, _) => {
-                NormalTy::WatchAccessor(Box::new(Self::from_ty(inner, ctx, expanding)))
+                NormalTy::WatchAccessor(Box::new(Self::from_ty(inner, ctx, expanding, fuel)))
             }
             Ty::TypeVar(name, _) => NormalTy::TypeVar(name.clone()),
             Ty::AssociatedTypeProjection {
@@ -666,27 +710,35 @@ impl NormalTy {
                 interface,
                 member,
                 ..
-            } => NormalTy::AssociatedTypeProjection {
-                base: Box::new(Self::from_ty(base, ctx, expanding)),
-                // `interface: None` means the TIR has not yet determined this
-                // projection's interface (see the field's TODO on
-                // `Ty::AssociatedTypeProjection`). It is kept opaque here: the
-                // canonical form is equal only to a structurally-identical
-                // projection, so the two spellings `(T as ?).M` and `(T as I).M` of
-                // the *same* associated type are NOT equated (unlike the TIR's legacy
-                // `AssociatedProjectionResolver::projection_views_equivalent`, which
-                // resolves the `None` view against `T`'s bound).
-                //
-                // GATE: before equivalence/subtyping is flipped onto this algebra
-                // (normalization-unification plan, stage 5), the TIR must resolve
-                // interfaces to `Some(I)` so structural equality can't produce a
-                // false negative between the two spellings. Pinned by the
-                // `projection_with_unresolved_interface_is_opaque` test.
-                interface: interface
-                    .as_ref()
-                    .map(|i| Box::new(Self::from_ty(&i.to_ty(), ctx, expanding))),
-                member: member.clone(),
-            },
+            } => {
+                // A projection is a pure type-level operator: `(int as Foo).Assoc`
+                // *is* the type the impl binds (like `1 + 1` *is* `2`). Reduce it to
+                // that whenever the context can determine it — the reduced type
+                // becomes the canonical form, so the projection compares equal to /
+                // is assignable from its realization. Only a `Some(interface)`
+                // projection is reducible (the qualifier names the impl); fuel guards
+                // a cyclic reduction.
+                if let Some(iface) = interface
+                    && fuel > 0
+                    && let ProjectionStep::Reduced(reduced) = ctx.project(base, iface, member)
+                {
+                    return Self::from_ty(&reduced, ctx, expanding, fuel - 1);
+                }
+                // Not reducible — symbolic base, an unresolved `(T as ?).M` qualifier,
+                // or exhausted fuel: an opaque leaf, equal only to a
+                // structurally-identical projection. The two spellings `(T as ?).M`
+                // and `(T as I).M` of the same associated type are deliberately NOT
+                // equated here; the TIR must resolve the interface to `Some(I)` before
+                // an equivalence/subtype check relies on it (pinned by
+                // `projection_with_unresolved_interface_is_opaque`).
+                NormalTy::AssociatedTypeProjection {
+                    base: Box::new(Self::from_ty(base, ctx, expanding, fuel)),
+                    interface: interface
+                        .as_ref()
+                        .map(|i| Box::new(Self::from_ty(&i.to_ty(), ctx, expanding, fuel))),
+                    member: member.clone(),
+                }
+            }
             Ty::TypeAlias(qn, _) => {
                 if expanding.contains(qn) {
                     // Back-edge: we are already expanding this alias, so this is
@@ -700,7 +752,7 @@ impl NormalTy {
                     return NormalTy::OpaqueAlias(qn.clone());
                 };
                 expanding.insert(qn.clone());
-                let body = Self::from_ty(&def, ctx, expanding);
+                let body = Self::from_ty(&def, ctx, expanding, fuel);
                 expanding.remove(qn);
                 if body.mentions_rec_var(qn) {
                     NormalTy::Mu {
@@ -718,9 +770,10 @@ impl NormalTy {
         tys: &[Ty],
         ctx: &C,
         expanding: &mut HashSet<QualifiedTypeName>,
+        fuel: u32,
     ) -> Vec<NormalTy> {
         tys.iter()
-            .map(|t| Self::from_ty(t, ctx, expanding))
+            .map(|t| Self::from_ty(t, ctx, expanding, fuel))
             .collect()
     }
 
