@@ -84,11 +84,15 @@ pub fn compute_key(inputs: &KeyInputs<'_>) -> CacheKey {
         None => h.update([0u8]),
     }
     h.update((inputs.files.len() as u64).to_le_bytes());
-    debug_assert!(
-        inputs.files.windows(2).all(|w| w[0].0 <= w[1].0),
-        "KeyInputs::files must be sorted by path"
-    );
-    for (path, content) in inputs.files {
+    // Sort defensively rather than trusting the documented precondition: an
+    // unsorted caller in a release build would silently produce
+    // discovery-order-dependent keys (pure hit-rate loss, never
+    // incorrectness — the content is still fully hashed — but with no
+    // signal). The sort is O(n log n) over references, negligible next to
+    // hashing the file contents.
+    let mut ordered: Vec<&(String, &str)> = inputs.files.iter().collect();
+    ordered.sort_unstable_by(|a, b| a.0.cmp(&b.0));
+    for (path, content) in ordered {
         h.update((path.len() as u64).to_le_bytes());
         h.update(path.as_bytes());
         h.update((content.len() as u64).to_le_bytes());
@@ -340,9 +344,18 @@ fn check_entry<'a>(data: &'a [u8], key: &CacheKey) -> Option<&'a [u8]> {
 /// Write via temp file + atomic rename: readers never observe a torn entry,
 /// racing writers converge (identical content for identical keys).
 fn write_atomic(path: &Path, data: &[u8]) -> io::Result<()> {
-    let tmp = path.with_extension(format!("tmp.{}", std::process::id()));
+    // Unique per process AND per call: a pid-only suffix would let two
+    // same-process stores (e.g. concurrent compiles in a threaded host)
+    // truncate each other's temp file mid-write. `create_new` guards the
+    // residual cross-process collision case by failing instead of clobbering.
+    static WRITE_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let unique = WRITE_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let tmp = path.with_extension(format!("tmp.{}.{unique}", std::process::id()));
     let result = (|| {
-        let mut f = fs::File::create(&tmp)?;
+        let mut f = fs::File::options()
+            .write(true)
+            .create_new(true)
+            .open(&tmp)?;
         f.write_all(data)?;
         f.flush()?;
         fs::rename(&tmp, path)
