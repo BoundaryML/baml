@@ -154,6 +154,9 @@ function RunLinearSync() -> int {
 
 function RunCron() -> int {
     baml.io.println("cron starting");
+    if (changelog_poll_enabled()) {
+        let _ = spawn { run_changelog_poll(changelog_poll_secs() * 1000) };
+    }
     return run_cron(svc_from_env(), cron_interval_secs() * 1000, gen_task_count(), true);
 }
 

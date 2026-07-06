@@ -13,6 +13,11 @@ primary_region = 'sjc'
   CRON_INTERVAL_SECS = '86400'
   GEN_TASK_COUNT     = '3'
   GEN_TASK_MODEL     = 'claude-sonnet-4-6'
+  # Changelog release poller: enqueue entries for new GitHub releases (the
+  # changelog_worker on bammy-2-service generates them).
+  CHANGELOG_POLL_ENABLED = '1'
+  CHANGELOG_POLL_SECS    = '600'
+  BAML_REPO_SLUG         = 'BoundaryML/baml'
   # LLM_API_KEY (proxy token) + ATB_SERVICE_TOKEN via secrets.
 
 [[vm]]

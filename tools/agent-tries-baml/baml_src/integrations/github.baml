@@ -45,6 +45,16 @@ function github_releases(
     return github_get(token, "/repos/" + owner + "/" + repo + "/releases?per_page=20");
 }
 
+// Wider window for the changelog sweep (a multi-day backlog of nightlies can
+// exceed 20; the old sync scanned 100).
+function github_releases_wide(
+    token: string,
+    owner: string,
+    repo: string,
+) -> string throws baml.errors.Io | baml.errors.Timeout {
+    return github_get(token, "/repos/" + owner + "/" + repo + "/releases?per_page=100");
+}
+
 function github_get_pr(
     token: string,
     owner: string,

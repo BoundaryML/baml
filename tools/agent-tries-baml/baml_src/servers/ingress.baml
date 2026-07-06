@@ -1673,7 +1673,7 @@ function sync_changelog() -> int {
         let v: string => v,
         null => "baml",
     };
-    let releases = github_releases(github_token(), owner, repo) catch (_) {
+    let releases = github_releases_wide(github_token(), owner, repo) catch (_) {
         _ => "[]"
     };
     let tags = extract_release_tags(releases);
@@ -1795,12 +1795,13 @@ function requeue_changelog(version_ref: string, mode: string, guidance: string) 
     return 1;
 }
 
-// Pull the first few release tag_names out of the GitHub releases JSON.
+// Pull all release tag_names out of the GitHub releases JSON (the page size is
+// the window; sync_changelog dedups by version so a wide window is safe).
 function extract_release_tags(releases: string) -> string[] {
     let out: string[] = [];
     let segs = releases.split("\"tag_name\":\"");
     let i = 1;
-    while (i < segs.length() && i <= 3) {
+    while (i < segs.length()) {
         let seg = match (segs.at(i)) {
             let v: string => v,
             null => "",
