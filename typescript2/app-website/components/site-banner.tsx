@@ -35,8 +35,8 @@ export function SiteBanner() {
   }, []);
   const days = daysUntilLaunch();
 
-  // The /learn* pages are self-contained presentations — no marketing banner.
-  if (pathname?.startsWith('/learn')) {
+  // The /learn* and /bamlcode pages are self-contained; no marketing banner.
+  if (pathname?.startsWith('/learn') || pathname?.startsWith('/bamlcode')) {
     return null;
   }
 
