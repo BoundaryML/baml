@@ -1165,6 +1165,10 @@ fn match_ty_pattern_into(
         | (Ty::Float { .. }, Ty::Literal(Literal::Float(_), _, _))
         | (Ty::String { .. }, Ty::Literal(Literal::String(_), _, _))
         | (Ty::Bool { .. }, Ty::Literal(Literal::Bool(_), _, _)) => Some(()),
+        // An enum variant is a member of its enum's set, so a `for Side` impl (or a
+        // blanket `for T`) applies to a `Side.Left` receiver — the enum analogue of the
+        // literal→primitive arms above (L45/L75 set semantics).
+        (Ty::Enum(p_qtn, _), Ty::EnumVariant(c_qtn, _, _)) if p_qtn == c_qtn => Some(()),
         (
             Ty::Function {
                 params: p_params,
@@ -2015,6 +2019,25 @@ mod tests {
                 &std::collections::HashMap::default()
             )
             .is_none()
+        );
+    }
+
+    #[test]
+    fn match_ty_pattern_matches_enum_variant_against_enum() {
+        // A `for Side` impl (pattern `Side`) applies to a `Side.Left` receiver — an enum
+        // variant is a member of its enum's set, mirroring literal→primitive matching.
+        let side = Ty::Enum(qtn(&[], "Side"), TyAttr::default());
+        let side_left = Ty::EnumVariant(qtn(&[], "Side"), Name::new("Left"), TyAttr::default());
+        let other = Ty::EnumVariant(qtn(&[], "Coin"), Name::new("Heads"), TyAttr::default());
+        let aliases = std::collections::HashMap::default();
+
+        assert!(
+            match_ty_patterns(&[(&side, &side_left)], &[], &aliases).is_some(),
+            "`Side.Left` should match a `for Side` pattern",
+        );
+        assert!(
+            match_ty_patterns(&[(&side, &other)], &[], &aliases).is_none(),
+            "a variant of a *different* enum must not match",
         );
     }
 

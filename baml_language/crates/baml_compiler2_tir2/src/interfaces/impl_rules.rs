@@ -595,10 +595,17 @@ const BLANKET_IMPL_BOUND_DEPTH: u32 = 16;
 /// these; a type-var / interface-existential / union receiver has no single
 /// static impl and must dispatch dynamically. Containers count (their element
 /// type rides along as a nested arg). Mirrors the MIR concrete-dispatch gate.
+///
+/// This is a broader question than [`Ty::is_valid_impl_subject`], which asks
+/// whether a type may be a *written* impl's for-type: `Future` is excluded there
+/// (a top-level `implement I for Future<T>` would bake an undispatchable rule)
+/// but is a valid blanket *receiver* here — the blanket's for-template is a
+/// wildcard that binds the concrete `Future<…>` at runtime.
 fn is_concrete_receiver(ty: &Ty) -> bool {
     matches!(
         ty,
         Ty::Class(..)
+            | Ty::Enum(..)
             | Ty::Int { .. }
             | Ty::Bigint { .. }
             | Ty::Float { .. }
@@ -610,6 +617,9 @@ fn is_concrete_receiver(ty: &Ty) -> bool {
             | Ty::List(..)
             | Ty::Map { .. }
             | Ty::Future(..)
+            | Ty::Type { .. }
+            | Ty::Resource { .. }
+            | Ty::PromptAst { .. }
     )
 }
 
@@ -682,6 +692,103 @@ pub fn get_implements_block<'db>(
     )
 }
 
+/// Collect the package of every qualified type name occurring in `ty` — its head
+/// and, recursively, every nested type. Used to derive the complete set of
+/// packages a legal impl of `(ty, interface)` could live in (see
+/// [`implements_interface`]).
+fn collect_ty_packages(ty: &Ty, out: &mut Vec<Name>) {
+    let push = |qtn: &QualifiedTypeName, out: &mut Vec<Name>| {
+        if !out.contains(qtn.package()) {
+            out.push(qtn.package().clone());
+        }
+    };
+    match ty {
+        Ty::Class(qtn, args, _) => {
+            push(qtn, out);
+            for a in args {
+                collect_ty_packages(a, out);
+            }
+        }
+        Ty::Interface(qtn, args, assoc, _) => {
+            push(qtn, out);
+            for a in args {
+                collect_ty_packages(a, out);
+            }
+            for (_, t) in assoc {
+                collect_ty_packages(t, out);
+            }
+        }
+        Ty::Enum(qtn, _) | Ty::EnumVariant(qtn, _, _) | Ty::TypeAlias(qtn, _) => push(qtn, out),
+        Ty::List(inner, _) | Ty::EvolvingList(inner, _) | Ty::WatchAccessor(inner, _) => {
+            collect_ty_packages(inner, out);
+        }
+        Ty::Map { key, value, .. } | Ty::EvolvingMap(key, value, _) | Ty::Future(key, value, _) => {
+            collect_ty_packages(key, out);
+            collect_ty_packages(value, out);
+        }
+        Ty::Union(members, _) => {
+            for m in members {
+                collect_ty_packages(m, out);
+            }
+        }
+        Ty::Function {
+            params,
+            ret,
+            throws,
+            ..
+        } => {
+            for p in params {
+                collect_ty_packages(&p.ty, out);
+            }
+            collect_ty_packages(ret, out);
+            collect_ty_packages(throws, out);
+        }
+        Ty::AssociatedTypeProjection {
+            base, interface, ..
+        } => {
+            collect_ty_packages(base, out);
+            if let Some(iface) = interface {
+                collect_interface_packages(iface, out);
+            }
+        }
+        // No qualified name: primitives, literals, type variables, and sentinels.
+        Ty::Int { .. }
+        | Ty::Bigint { .. }
+        | Ty::Float { .. }
+        | Ty::String { .. }
+        | Ty::Bool { .. }
+        | Ty::Null { .. }
+        | Ty::Uint8Array { .. }
+        | Ty::Media(..)
+        | Ty::Literal(..)
+        | Ty::TypeVar(..)
+        | Ty::RustType { .. }
+        | Ty::Type { .. }
+        | Ty::Resource { .. }
+        | Ty::PromptAst { .. }
+        | Ty::Void { .. }
+        | Ty::BuiltinUnknown { .. }
+        | Ty::Never { .. }
+        | Ty::Unknown { .. }
+        | Ty::Error { .. }
+        | Ty::Infer { .. } => {}
+    }
+}
+
+/// [`collect_ty_packages`] for an interface constraint — its head plus every
+/// generic argument and associated-type binding.
+fn collect_interface_packages(iface: &baml_type::Interface, out: &mut Vec<Name>) {
+    if !out.contains(iface.name.package()) {
+        out.push(iface.name.package().clone());
+    }
+    for g in &iface.generics {
+        collect_ty_packages(g, out);
+    }
+    for (_, t) in &iface.associated_types {
+        collect_ty_packages(t, out);
+    }
+}
+
 /// Universal (∀) interface membership — the single seam every membership consumer calls.
 /// True iff EVERY realized instantiation of `concrete` (rigid vars per their bounds)
 /// implements `interface`. Realized→`get_implements_block` (unique by coherence);
@@ -692,19 +799,34 @@ pub fn implements_interface(
     concrete: &Ty,
     interface: &baml_type::Interface,
     aliases: &HashMap<QualifiedTypeName, Ty>,
-    is_subtype: impl FnMut(&Ty, &Ty) -> bool,
+    mut is_subtype: impl FnMut(&Ty, &Ty) -> bool,
 ) -> bool {
-    let pkg = match concrete {
-        Ty::Class(class_qtn, ..) => class_qtn.package().clone(),
-        _ => interface.name.package().clone(),
-    };
-    let pkg_id = PackageId::new(db, pkg);
-    if baml_type::RealizedTy::try_from(concrete).is_ok()
-        && baml_type::RealizedTy::try_from(&interface.to_ty()).is_ok()
-    {
-        return get_implements_block(db, pkg_id, concrete, interface, aliases).is_some();
+    // The orphan rule (RFC-2451 covered rule) keeps a legal impl of `(concrete,
+    // interface)` in the package of some type that *appears in the query* — the
+    // interface head, the for-type head, or a covered generic argument. So the
+    // complete search is: the package of every qualified name in `concrete` +
+    // `interface` (each search additionally expands its own dependency closure).
+    // A single guessed root (e.g. only the class's or the interface's package)
+    // misses orphan-legal placements like `implement dep.I for LocalEnum` or
+    // `implement baml.ops.Add<Meters> for int`.
+    let mut roots = Vec::new();
+    collect_ty_packages(concrete, &mut roots);
+    collect_interface_packages(interface, &mut roots);
+
+    let realized = baml_type::RealizedTy::try_from(concrete).is_ok()
+        && baml_type::RealizedTy::try_from(&interface.to_ty()).is_ok();
+    for pkg_name in roots {
+        let pkg_id = PackageId::new(db, pkg_name);
+        let found = if realized {
+            get_implements_block(db, pkg_id, concrete, interface, aliases).is_some()
+        } else {
+            type_implements_interface(db, pkg_id, concrete, interface, aliases, &mut is_subtype)
+        };
+        if found {
+            return true;
+        }
     }
-    type_implements_interface(db, pkg_id, concrete, interface, aliases, is_subtype)
+    false
 }
 
 /// Symbolic universal membership — the type-var-bearing backend.
@@ -1079,5 +1201,57 @@ impl<'db> ResolvedImpl<'db> {
             .map(|(name, ty)| (name.clone(), substitute_ty(ty, &self.bindings)))
             .collect();
         baml_type::Interface::new(name, generics, associated_types)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn qtn(pkg: &str, name: &str) -> QualifiedTypeName {
+        QualifiedTypeName::new(Name::new(pkg), Vec::new(), Name::new(name))
+    }
+
+    #[test]
+    fn collect_ty_packages_covers_head_and_nested_covered_args() {
+        // The membership root set must include every package a covered type appears in:
+        // the for-type head, and any nested generic arg / assoc pin. Mirrors the orphan
+        // rule's own anchoring — a legal impl lives in the package of one of these.
+        let ty = Ty::Class(
+            qtn("user", "Box"),
+            vec![Ty::Enum(qtn("dep", "Meters"), TyAttr::default())],
+            TyAttr::default(),
+        );
+        let mut out = Vec::new();
+        collect_ty_packages(&ty, &mut out);
+        assert!(
+            out.contains(&Name::new("user")),
+            "for-type head package, got {out:?}"
+        );
+        assert!(
+            out.contains(&Name::new("dep")),
+            "nested covered-arg package, got {out:?}"
+        );
+    }
+
+    #[test]
+    fn collect_interface_packages_covers_head_args_and_pins() {
+        let iface = baml_type::Interface::new(
+            qtn("ifacepkg", "Conv"),
+            vec![Ty::Class(
+                qtn("argpkg", "Meters"),
+                Vec::new(),
+                TyAttr::default(),
+            )],
+            vec![(
+                Name::new("Out"),
+                Ty::Enum(qtn("pinpkg", "Unit"), TyAttr::default()),
+            )],
+        );
+        let mut out = Vec::new();
+        collect_interface_packages(&iface, &mut out);
+        for pkg in ["ifacepkg", "argpkg", "pinpkg"] {
+            assert!(out.contains(&Name::new(pkg)), "missing {pkg}, got {out:?}");
+        }
     }
 }
