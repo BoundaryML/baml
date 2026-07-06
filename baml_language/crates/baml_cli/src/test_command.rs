@@ -13,7 +13,12 @@ use bex_engine::{
 use clap::Args;
 use sys_native::{CallId, SysOpsExt};
 
-use crate::{project_load::load_project_for_build, reporter::Reporter, test_filter::TestFilter};
+use crate::{
+    bytecode_cache::CacheContext,
+    project_load::{build_db_from_sources, resolve_project_sources},
+    reporter::Reporter,
+    test_filter::TestFilter,
+};
 
 #[derive(Args, Clone, Debug)]
 pub struct TestArgs {
@@ -76,65 +81,91 @@ impl TestArgs {
     pub fn run(&self) -> Result<crate::ExitCode> {
         let reporter = Reporter::new();
         // ── 1. Load project ────────────────────────────────────────────────
-        let (db, from, baml_files) =
-            load_project_for_build(self.from.as_deref(), &reporter, false)?;
-        if baml_files.is_empty() {
+        let resolved = resolve_project_sources(self.from.as_deref())?;
+        if resolved.files.is_empty() {
             reporter.abandon();
             crate::reporter::print_error(format_args!(
                 "no .baml files found in {}",
-                from.display()
+                resolved.root.display()
             ));
             return Ok(crate::ExitCode::NoTestsRun);
         }
-        let project = db
-            .get_project()
-            .ok_or_else(|| anyhow!("No project context"))?;
 
-        // ── 2. Diagnostics ─────────────────────────────────────────────────
-        // Keep `baml test` quiet during the compile phase. `baml check` and
-        // `baml generate` own the compile/count progress lines.
-        let source_files = db.get_source_files();
-        let diagnostics = baml_project::collect_diagnostics(&db, project, &source_files);
-        let errors: Vec<_> = diagnostics
-            .iter()
-            .filter(|d| d.severity == Severity::Error)
-            .collect();
-        if !errors.is_empty() {
-            // Render the full ariadne block so test errors look like
-            // run/pack errors instead of the previous "bullet list of
-            // messages" shape.
-            let mut sources = std::collections::HashMap::new();
-            let mut file_paths = std::collections::HashMap::new();
-            for sf in &source_files {
-                let file_id = sf.file_id(&db);
-                sources.insert(file_id, sf.text(&db).to_string());
-                file_paths.insert(file_id, sf.path(&db));
-            }
-            let rendered = baml_db::baml_compiler_diagnostics::render::render_diagnostics(
-                &errors.iter().copied().cloned().collect::<Vec<_>>(),
-                &sources,
-                &file_paths,
-                &baml_db::baml_compiler_diagnostics::render::RenderConfig::cli_auto(),
-            );
-            reporter.abandon();
-            eprintln!("{rendered}");
-            return Ok(crate::ExitCode::Other);
-        }
-
-        // ── 3. Discover legacy tests from HIR ──────────────────────────────
-        let legacy = discover_legacy_tests(&db, project);
-
-        // ── 4. Compile + engine + runtime ──────────────────────────────────
-        let compile_options = baml_compiler2_emit::CompileOptions {
-            emit_test_cases: true,
+        let cache = CacheContext::open(&resolved, /* emit_test_cases */ true);
+        let cached_program = if CacheContext::verify_enabled() {
+            None
+        } else {
+            cache.as_ref().and_then(CacheContext::load)
         };
-        let bytecode = baml_compiler2_emit::generate_project_bytecode(&db, &compile_options)
-            .map_err(|e| anyhow!("Compilation failed: {e:?}"))?;
 
-        let engine = Arc::new(
-            BexEngine::new(bytecode, Arc::new(sys_native::SysOps::native()), Vec::new())
-                .map_err(|e| anyhow!("Failed to create engine: {e:?}"))?,
-        );
+        let (engine, legacy) = if let Some(program) = cached_program {
+            // Bytecode-cache hit: the Program carries everything the test run
+            // needs — compiled test cases for the legacy runner, testset code
+            // for the in-VM registry — so the database (typecheck, HIR
+            // discovery, emit) is skipped entirely.
+            let legacy = legacy_tests_from_program(&program);
+            let engine = Arc::new(
+                BexEngine::new(program, Arc::new(sys_native::SysOps::native()), Vec::new())
+                    .map_err(|e| anyhow!("Failed to create engine: {e:?}"))?,
+            );
+            (engine, legacy)
+        } else {
+            let db = build_db_from_sources(&resolved, |_| {});
+            let project = db
+                .get_project()
+                .ok_or_else(|| anyhow!("No project context"))?;
+
+            // ── 2. Diagnostics ─────────────────────────────────────────────
+            // Keep `baml test` quiet during the compile phase. `baml check`
+            // and `baml generate` own the compile/count progress lines.
+            let source_files = db.get_source_files();
+            let diagnostics = baml_project::collect_diagnostics(&db, project, &source_files);
+            let errors: Vec<_> = diagnostics
+                .iter()
+                .filter(|d| d.severity == Severity::Error)
+                .collect();
+            if !errors.is_empty() {
+                // Render the full ariadne block so test errors look like
+                // run/pack errors instead of the previous "bullet list of
+                // messages" shape.
+                let mut sources = std::collections::HashMap::new();
+                let mut file_paths = std::collections::HashMap::new();
+                for sf in &source_files {
+                    let file_id = sf.file_id(&db);
+                    sources.insert(file_id, sf.text(&db).to_string());
+                    file_paths.insert(file_id, sf.path(&db));
+                }
+                let rendered = baml_db::baml_compiler_diagnostics::render::render_diagnostics(
+                    &errors.iter().copied().cloned().collect::<Vec<_>>(),
+                    &sources,
+                    &file_paths,
+                    &baml_db::baml_compiler_diagnostics::render::RenderConfig::cli_auto(),
+                );
+                reporter.abandon();
+                eprintln!("{rendered}");
+                return Ok(crate::ExitCode::Other);
+            }
+
+            // ── 3. Discover legacy tests from HIR ──────────────────────────
+            let legacy = discover_legacy_tests(&db, project);
+
+            // ── 4. Compile + engine + runtime ──────────────────────────────
+            let compile_options = baml_compiler2_emit::CompileOptions {
+                emit_test_cases: true,
+            };
+            let bytecode = baml_compiler2_emit::generate_project_bytecode(&db, &compile_options)
+                .map_err(|e| anyhow!("Compilation failed: {e:?}"))?;
+            if let Some(ctx) = &cache {
+                ctx.verify_against(&bytecode)?;
+                let _ = ctx.store(&bytecode);
+            }
+
+            let engine = Arc::new(
+                BexEngine::new(bytecode, Arc::new(sys_native::SysOps::native()), Vec::new())
+                    .map_err(|e| anyhow!("Failed to create engine: {e:?}"))?,
+            );
+            (engine, legacy)
+        };
         let rt = tokio::runtime::Runtime::new().context("Failed to create tokio runtime")?;
         let cancel = CancellationToken::new();
 
@@ -317,22 +348,63 @@ fn discover_legacy_tests(
     use baml_db::baml_compiler2_hir;
 
     let mut tests = Vec::new();
+    let root = project.root(db);
 
     for source_file in db.get_source_files() {
         let item_tree = baml_compiler2_hir::file_item_tree(db, source_file);
+        // Root-relative for display, matching how emit records source paths —
+        // keeps `--list` output identical between compiled and
+        // bytecode-cache-served runs.
         let file_path = source_file.path(db);
+        let file_path = file_path.strip_prefix(&root).unwrap_or(&file_path);
 
         for test in item_tree.tests.values() {
             for func_ref in &test.function_refs {
                 tests.push(LegacyTest {
                     function_name: func_ref.to_string(),
                     test_name: test.name.to_string(),
-                    file_path: file_path.clone(),
+                    file_path: file_path.to_path_buf(),
                 });
             }
         }
     }
 
+    tests
+}
+
+/// Derive the legacy-test list from a compiled [`bex_vm_types::Program`]
+/// (bytecode-cache hit path).
+///
+/// `Program::test_cases` holds the same (test, target functions) pairs that
+/// HIR discovery yields — `run_legacy_test` already resolves each test
+/// against the engine's copy by name — and the target function's
+/// `source_file` supplies the `--list` display path, so no database is
+/// needed. Paths come out project-root-relative (how emit records them)
+/// rather than absolute; both forms are display-only.
+fn legacy_tests_from_program(program: &bex_vm_types::Program) -> Vec<LegacyTest> {
+    let mut tests = Vec::new();
+    for tc in &program.test_cases {
+        for func in &tc.function_names {
+            // The recorded target name may carry the `[...]` list rendering
+            // from the legacy `functions [...]` block; the object pool keys
+            // are bare fully-qualified names.
+            let bare = func.trim_start_matches('[').trim_end_matches(']');
+            let file_path = [func.as_str(), bare, &format!("user.{bare}")]
+                .iter()
+                .find_map(|name| program.function_indices.get(*name))
+                .and_then(|idx| program.objects.get(*idx))
+                .and_then(|obj| match obj {
+                    bex_vm_types::Object::Function(f) => Some(PathBuf::from(&f.source_file)),
+                    _ => None,
+                })
+                .unwrap_or_default();
+            tests.push(LegacyTest {
+                function_name: func.clone(),
+                test_name: tc.name.clone(),
+                file_path,
+            });
+        }
+    }
     tests
 }
 
