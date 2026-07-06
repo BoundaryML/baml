@@ -53,7 +53,64 @@ pub enum Expression {
     /// block they append the `;` that a block-position `return` requires, so the
     /// output round-trips through `RETURN_STMT` (i.e. is idempotent).
     Return(TextRange),
-    Unknown(TextRange),
+    Unknown(UnknownExpr),
+}
+
+/// An unmodeled expression node (e.g. `defer { … }`, `throw e`, `await f`,
+/// `spawn { … }`, `x.as<T>`) that the strong AST does not model and prints
+/// verbatim.
+///
+/// Rather than a single whole-node span, this carries the node's true first and
+/// last *token* ranges. The trivia classifier keys leading/trailing comments to
+/// individual token ranges, so [`Printable::leftmost_token`] /
+/// [`Printable::rightmost_token`] must return those exact token ranges for a
+/// comment to attach and emit. A whole-node span never matches a token key, so
+/// a trailing comment on the node was silently dropped — the `defer` statement
+/// comment-loss bug (B-629). A whole-node span can also begin inside leading
+/// trivia (the parser attaches a preceding comment to the node), which would
+/// re-print that comment verbatim at the wrong indent; [`Self::content_range`]
+/// excludes it.
+#[derive(Debug)]
+pub struct UnknownExpr {
+    /// Range of the first non-trivia token — the leading-trivia anchor.
+    first_token: TextRange,
+    /// Range of the last non-trivia token — the trailing-trivia anchor.
+    last_token: TextRange,
+}
+
+impl UnknownExpr {
+    /// Build from the unmodeled syntax element, capturing its first and last
+    /// non-trivia token ranges. Any leading/trailing trivia that the CST
+    /// attaches inside the node is skipped so the anchors line up with the
+    /// classifier's per-token comment keys.
+    fn from_element(elem: &SyntaxElement) -> Self {
+        if let Some(node) = elem.as_node() {
+            let mut tokens = node
+                .descendants_with_tokens()
+                .filter_map(rowan::NodeOrToken::into_token)
+                .filter(|t| !t.kind().is_trivia());
+            if let Some(first) = tokens.next() {
+                let first_token = first.text_range();
+                let last_token = tokens.last().map_or(first_token, |t| t.text_range());
+                return UnknownExpr {
+                    first_token,
+                    last_token,
+                };
+            }
+        }
+        // A bare token, or a node with only trivia: the whole span is the token.
+        let whole = elem.text_range();
+        UnknownExpr {
+            first_token: whole,
+            last_token: whole,
+        }
+    }
+
+    /// The verbatim source span to print: from the first token to the last,
+    /// excluding any leading/trailing trivia the CST folded into the node.
+    fn content_range(&self) -> TextRange {
+        TextRange::new(self.first_token.start(), self.last_token.end())
+    }
 }
 
 impl Expression {
@@ -144,7 +201,7 @@ impl FromCST for Expression {
             }
             SyntaxKind::LAMBDA_EXPR => Expression::Lambda(Box::new(LambdaExpr::from_cst(elem)?)),
             SyntaxKind::RETURN_EXPR => Expression::Return(elem.text_range()),
-            _ => Expression::Unknown(elem.text_range()),
+            _ => Expression::Unknown(UnknownExpr::from_element(&elem)),
         };
         Ok(expr)
     }
@@ -194,14 +251,14 @@ impl Expression {
             Expression::ByteString(bs) => Some(usize::from(bs.span().len())),
             Expression::Lambda(_) => None,
             Expression::Return(_) => None,
-            Expression::Unknown(range) => {
+            Expression::Unknown(unknown) => {
                 // Unmodeled nodes (e.g. `await f`, `x.as<T>`, `spawn { … }`,
                 // `throw e`) print their source verbatim (see `print`). When that
                 // text is a single line it occupies a known width and can sit
                 // inline like any other fitting expression. Reporting `None` here
                 // used to force every *enclosing* expression to wrap even when the
                 // whole thing fit the width budget (B-231).
-                let text = &input.input[*range];
+                let text = &input.input[unknown.content_range()];
                 if text.contains('\n') {
                     None
                 } else {
@@ -258,10 +315,11 @@ impl Printable for Expression {
             // unknown node (`await f`, `x.as<T>`, …) must not claim to be
             // multi-line, or it force-wraps its parents even when everything fits
             // on one line (B-231).
-            Expression::Unknown(range) => {
-                printer.print_input_range_trimmed_start(*range);
+            Expression::Unknown(unknown) => {
+                let range = unknown.content_range();
+                printer.print_input_range_trimmed_start(range);
                 PrintInfo {
-                    multi_lined: printer.input[*range].contains('\n'),
+                    multi_lined: printer.input[range].contains('\n'),
                 }
             }
         }
@@ -294,7 +352,8 @@ impl Printable for Expression {
             Expression::BacktickString(bt) => bt.leftmost_token(),
             Expression::ByteString(bs) => bs.leftmost_token(),
             Expression::Lambda(lambda) => lambda.leftmost_token(),
-            Expression::Return(range) | Expression::Unknown(range) => *range,
+            Expression::Return(range) => *range,
+            Expression::Unknown(unknown) => unknown.first_token,
         }
     }
     fn rightmost_token(&self) -> TextRange {
@@ -325,7 +384,8 @@ impl Printable for Expression {
             Expression::BacktickString(bt) => bt.rightmost_token(),
             Expression::ByteString(bs) => bs.rightmost_token(),
             Expression::Lambda(lambda) => lambda.rightmost_token(),
-            Expression::Return(range) | Expression::Unknown(range) => *range,
+            Expression::Return(range) => *range,
+            Expression::Unknown(unknown) => unknown.last_token,
         }
     }
 }
