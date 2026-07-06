@@ -797,7 +797,7 @@ impl<T> io::IoNamespaceSchema for T {
 }
 
 /// JSON Schema lowering of a `baml_type::RuntimeTy`. In `strict` mode the emitted
-/// schema follows OpenAI structured-output rules: every object closes with
+/// schema follows `OpenAI` structured-output rules: every object closes with
 /// `"additionalProperties": false` and lists ALL fields in `required` (optional
 /// BAML fields keep their `null`-inclusive union schema rather than being dropped
 /// from `required`).
@@ -892,15 +892,16 @@ mod schema {
     }
 
     /// Widen a single-typed schema to also admit `null`. A schema whose `"type"`
-    /// is a plain string becomes a `["<type>", "null"]` array (OpenAI strict's
+    /// is a plain string becomes a `["<type>", "null"]` array (`OpenAI` strict's
     /// preferred nullable form); anything richer falls back to `anyOf`.
     fn with_null(base: Value) -> Value {
-        if let Value::Object(obj) = &base {
+        if let Value::Object(mut obj) = base {
             if let Some(Value::String(t)) = obj.get("type") {
-                let mut widened = obj.clone();
-                widened.insert("type".to_string(), json!([t, "null"]));
-                return Value::Object(widened);
+                let widened = json!([t, "null"]);
+                obj.insert("type".to_string(), widened);
+                return Value::Object(obj);
             }
+            return json!({ "anyOf": [Value::Object(obj), { "type": "null" }] });
         }
         json!({ "anyOf": [base, { "type": "null" }] })
     }

@@ -24,7 +24,10 @@ async fn ws_connect_unreachable_throws_io() {
         }
         "#
     );
-    assert_eq!(output.result.unwrap(), BexExternalValue::String("io".into()));
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("io".into())
+    );
 }
 
 /// Live smoke test against the real OpenAI Realtime API. Skipped unless `OPENAI_API_KEY`
