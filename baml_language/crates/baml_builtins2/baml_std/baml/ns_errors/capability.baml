@@ -31,11 +31,13 @@ class UnknownError {
 /// WITHOUT knowing the concrete class. Answers are author assertions (D2's honest bar:
 /// failures move from silent to typed-and-refused, not to statically proven).
 ///
-/// NOTE: the plan wanted `CallError requires Failure` (so the axis can't be dropped),
-/// but cross-package `requires`-satisfaction is broken (E0125 — a user class implementing
-/// both interfaces in-body still fails the check), which would block all user-defined
-/// capability errors. Until that compiler bug is fixed, `Failure` is OPT-IN and
-/// combinators consult it via a runtime `match` (unknown errors keep legacy behavior).
+/// NOTE: `Failure` is MANDATORY on every capability error channel — each channel
+/// interface (`CallError`, `StreamError`, `ToolError`, `RealtimeError`) `requires Failure`,
+/// so a concrete error that implements any channel must also answer the decision axis and
+/// the axis can never be dropped. (This is now expressible: the E0125 cross-package
+/// `requires`-satisfaction bug — a user class implementing both interfaces failed the
+/// check — is fixed.) Combinators still consult the axis via a runtime `match`; unknown /
+/// foreign errors, which carry no `Failure` impl, keep their legacy behavior.
 interface Failure {
   function is_retryable(self) -> bool
   function is_effectful(self) -> bool
@@ -46,7 +48,7 @@ interface Failure {
 
 /// Request/response failures. Concrete provider errors (rate limit, refusal, …)
 /// implement this so callers triage without the concrete class.
-interface CallError {
+interface CallError requires Failure {
   function is_network_error(self) -> bool
   function is_rate_limit(self) -> bool
   function is_parse_error(self) -> bool
@@ -54,17 +56,17 @@ interface CallError {
 
 /// Incremental (streaming) failures. The same concrete error can arise on the call
 /// path and mid-stream, so a provider error may implement both `CallError` and this.
-interface StreamError {
+interface StreamError requires Failure {
   function is_network_error(self) -> bool
 }
 
 /// Failures on the multi-turn tool-calling path.
-interface ToolError {
+interface ToolError requires Failure {
   function is_network_error(self) -> bool
 }
 
 /// Failures on a live/duplex (realtime) session.
-interface RealtimeError {
+interface RealtimeError requires Failure {
   function is_network_error(self) -> bool
 }
 
