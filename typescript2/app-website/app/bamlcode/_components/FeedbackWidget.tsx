@@ -1,7 +1,7 @@
 'use client';
 
 import { ConvexProvider, ConvexReactClient, useMutation } from 'convex/react';
-import { type FormEvent, useMemo, useState } from 'react';
+import { type FormEvent, useEffect, useMemo, useState } from 'react';
 import { api } from '@/convex/_generated/api';
 
 /**
@@ -15,6 +15,13 @@ export function FeedbackWidget({ slug }: { slug?: string }) {
     () => (url ? new ConvexReactClient(url) : null),
     [url],
   );
+  // Close the client's connection when the widget unmounts (route change) so we
+  // don't leak a websocket per visited problem page.
+  useEffect(() => {
+    return () => {
+      void client?.close();
+    };
+  }, [client]);
   if (!client) return null;
   return (
     <ConvexProvider client={client}>
