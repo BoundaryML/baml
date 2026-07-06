@@ -55,6 +55,28 @@ function github_releases_wide(
     return github_get(token, "/repos/" + owner + "/" + repo + "/releases?per_page=100");
 }
 
+// GET /repos/{o}/{r}/releases/tags/{tag} — one release (for its publish date).
+function github_release_by_tag(
+    token: string,
+    owner: string,
+    repo: string,
+    tag: string,
+) -> string throws baml.errors.Io | baml.errors.Timeout {
+    return github_get(token, "/repos/" + owner + "/" + repo + "/releases/tags/" + tag);
+}
+
+// GET /repos/{o}/{r}/compare/{base}...{head} — commits + file patches between
+// two refs (the changelog's grounding: what actually shipped).
+function github_compare(
+    token: string,
+    owner: string,
+    repo: string,
+    base: string,
+    head: string,
+) -> string throws baml.errors.Io | baml.errors.Timeout {
+    return github_get(token, "/repos/" + owner + "/" + repo + "/compare/" + base + "..." + head);
+}
+
 function github_get_pr(
     token: string,
     owner: string,
