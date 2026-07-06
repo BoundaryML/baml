@@ -280,85 +280,85 @@ function time.plain_date_to_plain_datetime_with_time() -> string {
 
   L3:
     load_var _3
-    is_type baml.errors.StackTrace
+    is_type baml.time.PlainDateTime
     pop_jump_if_false L4
     jump L29
 
   L4:
     load_var _3
-    is_type baml.errors.StackTrace
+    is_type baml.time.PlainDateTime
     pop_jump_if_false L5
     jump L28
 
   L5:
     load_var _3
-    is_type baml.errors.ErrorContext
+    is_type baml.time.PlainTime
     pop_jump_if_false L6
     jump L27
 
   L6:
     load_var _3
-    is_type baml.errors.ErrorContext
+    is_type baml.time.PlainTime
     pop_jump_if_false L7
     jump L26
 
   L7:
     load_var _3
-    is_type baml.time.PlainDateTime
+    is_type baml.time.ZonedDateTime
     pop_jump_if_false L8
     jump L25
 
   L8:
     load_var _3
-    is_type baml.time.PlainDateTime
+    is_type baml.time.ZonedDateTime
     pop_jump_if_false L9
     jump L24
 
   L9:
     load_var _3
-    is_type baml.time.PlainTime
+    is_type baml.time.Instant
     pop_jump_if_false L10
     jump L23
 
   L10:
     load_var _3
-    is_type baml.time.PlainTime
+    is_type baml.time.Instant
     pop_jump_if_false L11
     jump L22
 
   L11:
     load_var _3
-    is_type baml.time.ZonedDateTime
+    is_type baml.time.PlainDate
     pop_jump_if_false L12
     jump L21
 
   L12:
     load_var _3
-    is_type baml.time.ZonedDateTime
+    is_type baml.time.PlainDate
     pop_jump_if_false L13
     jump L20
 
   L13:
     load_var _3
-    is_type baml.time.Instant
+    is_type baml.errors.StackTrace
     pop_jump_if_false L14
     jump L19
 
   L14:
     load_var _3
-    is_type baml.time.Instant
+    is_type baml.errors.StackTrace
     pop_jump_if_false L15
     jump L18
 
   L15:
     load_var _3
-    is_type baml.time.PlainDate
+    is_type baml.errors.ErrorContext
     pop_jump_if_false L16
     jump L17
 
   L16:
     load_var _3
-    is_type baml.time.PlainDate
+    is_type baml.errors.ErrorContext
     pop_jump_if_false L35
     load_var _3
     call baml.ToString.to_string
@@ -366,7 +366,7 @@ function time.plain_date_to_plain_datetime_with_time() -> string {
 
   L17:
     load_var _3
-    call baml.time.PlainDate.baml.ToString.to_string
+    call baml.errors.ErrorContext.baml.ToString.to_string
     jump L34
 
   L18:
@@ -376,7 +376,7 @@ function time.plain_date_to_plain_datetime_with_time() -> string {
 
   L19:
     load_var _3
-    call baml.time.Instant.baml.ToString.to_string
+    call baml.errors.StackTrace.baml.ToString.to_string
     jump L34
 
   L20:
@@ -386,7 +386,7 @@ function time.plain_date_to_plain_datetime_with_time() -> string {
 
   L21:
     load_var _3
-    call baml.time.ZonedDateTime.baml.ToString.to_string
+    call baml.time.PlainDate.baml.ToString.to_string
     jump L34
 
   L22:
@@ -396,7 +396,7 @@ function time.plain_date_to_plain_datetime_with_time() -> string {
 
   L23:
     load_var _3
-    call baml.time.PlainTime.baml.ToString.to_string
+    call baml.time.Instant.baml.ToString.to_string
     jump L34
 
   L24:
@@ -406,7 +406,7 @@ function time.plain_date_to_plain_datetime_with_time() -> string {
 
   L25:
     load_var _3
-    call baml.time.PlainDateTime.baml.ToString.to_string
+    call baml.time.ZonedDateTime.baml.ToString.to_string
     jump L34
 
   L26:
@@ -416,7 +416,7 @@ function time.plain_date_to_plain_datetime_with_time() -> string {
 
   L27:
     load_var _3
-    call baml.errors.ErrorContext.baml.ToString.to_string
+    call baml.time.PlainTime.baml.ToString.to_string
     jump L34
 
   L28:
@@ -426,7 +426,7 @@ function time.plain_date_to_plain_datetime_with_time() -> string {
 
   L29:
     load_var _3
-    call baml.errors.StackTrace.baml.ToString.to_string
+    call baml.time.PlainDateTime.baml.ToString.to_string
     jump L34
 
   L30:

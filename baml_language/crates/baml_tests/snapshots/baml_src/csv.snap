@@ -854,85 +854,85 @@ function csv.csv_decode_all_cell_types() -> string {
 
   L7:
     load_var _31
-    is_type baml.errors.StackTrace
+    is_type baml.time.PlainDateTime
     pop_jump_if_false L8
     jump L33
 
   L8:
     load_var _31
-    is_type baml.errors.StackTrace
+    is_type baml.time.PlainDateTime
     pop_jump_if_false L9
     jump L32
 
   L9:
     load_var _31
-    is_type baml.errors.ErrorContext
+    is_type baml.time.PlainTime
     pop_jump_if_false L10
     jump L31
 
   L10:
     load_var _31
-    is_type baml.errors.ErrorContext
+    is_type baml.time.PlainTime
     pop_jump_if_false L11
     jump L30
 
   L11:
     load_var _31
-    is_type baml.time.PlainDateTime
+    is_type baml.time.ZonedDateTime
     pop_jump_if_false L12
     jump L29
 
   L12:
     load_var _31
-    is_type baml.time.PlainDateTime
+    is_type baml.time.ZonedDateTime
     pop_jump_if_false L13
     jump L28
 
   L13:
     load_var _31
-    is_type baml.time.PlainTime
+    is_type baml.time.Instant
     pop_jump_if_false L14
     jump L27
 
   L14:
     load_var _31
-    is_type baml.time.PlainTime
+    is_type baml.time.Instant
     pop_jump_if_false L15
     jump L26
 
   L15:
     load_var _31
-    is_type baml.time.ZonedDateTime
+    is_type baml.time.PlainDate
     pop_jump_if_false L16
     jump L25
 
   L16:
     load_var _31
-    is_type baml.time.ZonedDateTime
+    is_type baml.time.PlainDate
     pop_jump_if_false L17
     jump L24
 
   L17:
     load_var _31
-    is_type baml.time.Instant
+    is_type baml.errors.StackTrace
     pop_jump_if_false L18
     jump L23
 
   L18:
     load_var _31
-    is_type baml.time.Instant
+    is_type baml.errors.StackTrace
     pop_jump_if_false L19
     jump L22
 
   L19:
     load_var _31
-    is_type baml.time.PlainDate
+    is_type baml.errors.ErrorContext
     pop_jump_if_false L20
     jump L21
 
   L20:
     load_var _31
-    is_type baml.time.PlainDate
+    is_type baml.errors.ErrorContext
     pop_jump_if_false L41
     load_var _31
     call baml.ToString.to_string
@@ -941,7 +941,7 @@ function csv.csv_decode_all_cell_types() -> string {
 
   L21:
     load_var _31
-    call baml.time.PlainDate.baml.ToString.to_string
+    call baml.errors.ErrorContext.baml.ToString.to_string
     store_var _30
     jump L38
 
@@ -953,7 +953,7 @@ function csv.csv_decode_all_cell_types() -> string {
 
   L23:
     load_var _31
-    call baml.time.Instant.baml.ToString.to_string
+    call baml.errors.StackTrace.baml.ToString.to_string
     store_var _30
     jump L38
 
@@ -965,7 +965,7 @@ function csv.csv_decode_all_cell_types() -> string {
 
   L25:
     load_var _31
-    call baml.time.ZonedDateTime.baml.ToString.to_string
+    call baml.time.PlainDate.baml.ToString.to_string
     store_var _30
     jump L38
 
@@ -977,7 +977,7 @@ function csv.csv_decode_all_cell_types() -> string {
 
   L27:
     load_var _31
-    call baml.time.PlainTime.baml.ToString.to_string
+    call baml.time.Instant.baml.ToString.to_string
     store_var _30
     jump L38
 
@@ -989,7 +989,7 @@ function csv.csv_decode_all_cell_types() -> string {
 
   L29:
     load_var _31
-    call baml.time.PlainDateTime.baml.ToString.to_string
+    call baml.time.ZonedDateTime.baml.ToString.to_string
     store_var _30
     jump L38
 
@@ -1001,7 +1001,7 @@ function csv.csv_decode_all_cell_types() -> string {
 
   L31:
     load_var _31
-    call baml.errors.ErrorContext.baml.ToString.to_string
+    call baml.time.PlainTime.baml.ToString.to_string
     store_var _30
     jump L38
 
@@ -1013,7 +1013,7 @@ function csv.csv_decode_all_cell_types() -> string {
 
   L33:
     load_var _31
-    call baml.errors.StackTrace.baml.ToString.to_string
+    call baml.time.PlainDateTime.baml.ToString.to_string
     store_var _30
     jump L38
 
@@ -1695,75 +1695,62 @@ function csv.csv_duplicate_column_matched_is_header_error() -> string {
     call baml.csv.reader
     store_var r
     load_var r
-    is_type baml.iter.Flatten<...>
+    is_type baml.csv.CsvRows<...>
     pop_jump_if_false L4
     jump L21
 
   L4:
     load_var r
-    is_type baml.iter.StepBy<...>
+    is_type baml.csv.CsvReader
     pop_jump_if_false L5
     jump L20
 
   L5:
     load_var r
-    is_type baml.iter.Chain<...>
+    is_type baml.iter.Flatten<...>
     pop_jump_if_false L6
     jump L19
 
   L6:
     load_var r
-    is_type baml.iter.Map<...>
+    is_type baml.iter.StepBy<...>
     pop_jump_if_false L7
     jump L18
 
   L7:
     load_var r
-    is_type baml.iter.Filter<...>
+    is_type baml.iter.Chain<...>
     pop_jump_if_false L8
     jump L17
 
   L8:
     load_var r
-    is_type baml.iter.FilterMap<...>
+    is_type baml.iter.Map<...>
     pop_jump_if_false L9
     jump L16
 
   L9:
     load_var r
-    is_type baml.iter.FlatMap<...>
+    is_type baml.iter.Filter<...>
     pop_jump_if_false L10
     jump L15
 
   L10:
     load_var r
-    is_type baml.iter.Peekable<...>
+    is_type baml.iter.FilterMap<...>
     pop_jump_if_false L11
     jump L14
 
   L11:
     load_var r
-    is_type baml.csv.CsvRows<...>
+    is_type baml.iter.FlatMap<...>
     pop_jump_if_false L12
     jump L13
 
   L12:
     load_var r
-    is_type baml.csv.CsvReader
+    is_type baml.iter.Peekable<...>
     pop_jump_if_false L26
-    load_var r
-    call baml.csv.CsvReader.root.iter.Iterator.next
-    store_var _9
-    jump L22
-
-  L13:
-    load_type baml.csv.CsvRecord
-    load_var r
-    call baml.csv.CsvRows.root.iter.Iterator.next
-    store_var _9
-    jump L22
-
-  L14:
     load_type baml.csv.CsvRecord
     load_type baml.csv.CsvError | baml.errors.Io
     load_var r
@@ -1771,42 +1758,42 @@ function csv.csv_duplicate_column_matched_is_header_error() -> string {
     store_var _9
     jump L22
 
-  L15:
+  L13:
     load_var r
     make_bound_method baml.iter.FlatMap.Iterator.next
     call_indirect
     store_var _9
     jump L22
 
-  L16:
+  L14:
     load_var r
     make_bound_method baml.iter.FilterMap.Iterator.next
     call_indirect
     store_var _9
     jump L22
 
-  L17:
+  L15:
     load_var r
     make_bound_method baml.iter.Filter.Iterator.next
     call_indirect
     store_var _9
     jump L22
 
-  L18:
+  L16:
     load_var r
     make_bound_method baml.iter.Map.Iterator.next
     call_indirect
     store_var _9
     jump L22
 
-  L19:
+  L17:
     load_var r
     make_bound_method baml.iter.Chain.Iterator.next
     call_indirect
     store_var _9
     jump L22
 
-  L20:
+  L18:
     load_type baml.csv.CsvRecord
     load_type baml.csv.CsvError | baml.errors.Io
     load_var r
@@ -1814,10 +1801,23 @@ function csv.csv_duplicate_column_matched_is_header_error() -> string {
     store_var _9
     jump L22
 
-  L21:
+  L19:
     load_var r
     make_bound_method baml.iter.Flatten.Iterator.next
     call_indirect
+    store_var _9
+    jump L22
+
+  L20:
+    load_var r
+    call baml.csv.CsvReader.root.iter.Iterator.next
+    store_var _9
+    jump L22
+
+  L21:
+    load_type baml.csv.CsvRecord
+    load_var r
+    call baml.csv.CsvRows.root.iter.Iterator.next
     store_var _9
 
   L22:
@@ -2123,75 +2123,62 @@ function csv.csv_header_encoding_failure_is_terminal_for_headers() -> string {
     call baml.csv.reader
     store_var r
     load_var r
-    is_type baml.iter.Flatten<...>
+    is_type baml.csv.CsvRows<...>
     pop_jump_if_false L0
     jump L17
 
   L0:
     load_var r
-    is_type baml.iter.StepBy<...>
+    is_type baml.csv.CsvReader
     pop_jump_if_false L1
     jump L16
 
   L1:
     load_var r
-    is_type baml.iter.Chain<...>
+    is_type baml.iter.Flatten<...>
     pop_jump_if_false L2
     jump L15
 
   L2:
     load_var r
-    is_type baml.iter.Map<...>
+    is_type baml.iter.StepBy<...>
     pop_jump_if_false L3
     jump L14
 
   L3:
     load_var r
-    is_type baml.iter.Filter<...>
+    is_type baml.iter.Chain<...>
     pop_jump_if_false L4
     jump L13
 
   L4:
     load_var r
-    is_type baml.iter.FilterMap<...>
+    is_type baml.iter.Map<...>
     pop_jump_if_false L5
     jump L12
 
   L5:
     load_var r
-    is_type baml.iter.FlatMap<...>
+    is_type baml.iter.Filter<...>
     pop_jump_if_false L6
     jump L11
 
   L6:
     load_var r
-    is_type baml.iter.Peekable<...>
+    is_type baml.iter.FilterMap<...>
     pop_jump_if_false L7
     jump L10
 
   L7:
     load_var r
-    is_type baml.csv.CsvRows<...>
+    is_type baml.iter.FlatMap<...>
     pop_jump_if_false L8
     jump L9
 
   L8:
     load_var r
-    is_type baml.csv.CsvReader
+    is_type baml.iter.Peekable<...>
     pop_jump_if_false L51
-    load_var r
-    call baml.csv.CsvReader.root.iter.Iterator.next
-    store_var _5
-    jump L18
-
-  L9:
-    load_type baml.csv.CsvRecord
-    load_var r
-    call baml.csv.CsvRows.root.iter.Iterator.next
-    store_var _5
-    jump L18
-
-  L10:
     load_type baml.csv.CsvRecord
     load_type baml.csv.CsvError | baml.errors.Io
     load_var r
@@ -2199,42 +2186,42 @@ function csv.csv_header_encoding_failure_is_terminal_for_headers() -> string {
     store_var _5
     jump L18
 
-  L11:
+  L9:
     load_var r
     make_bound_method baml.iter.FlatMap.Iterator.next
     call_indirect
     store_var _5
     jump L18
 
-  L12:
+  L10:
     load_var r
     make_bound_method baml.iter.FilterMap.Iterator.next
     call_indirect
     store_var _5
     jump L18
 
-  L13:
+  L11:
     load_var r
     make_bound_method baml.iter.Filter.Iterator.next
     call_indirect
     store_var _5
     jump L18
 
-  L14:
+  L12:
     load_var r
     make_bound_method baml.iter.Map.Iterator.next
     call_indirect
     store_var _5
     jump L18
 
-  L15:
+  L13:
     load_var r
     make_bound_method baml.iter.Chain.Iterator.next
     call_indirect
     store_var _5
     jump L18
 
-  L16:
+  L14:
     load_type baml.csv.CsvRecord
     load_type baml.csv.CsvError | baml.errors.Io
     load_var r
@@ -2242,10 +2229,23 @@ function csv.csv_header_encoding_failure_is_terminal_for_headers() -> string {
     store_var _5
     jump L18
 
-  L17:
+  L15:
     load_var r
     make_bound_method baml.iter.Flatten.Iterator.next
     call_indirect
+    store_var _5
+    jump L18
+
+  L16:
+    load_var r
+    call baml.csv.CsvReader.root.iter.Iterator.next
+    store_var _5
+    jump L18
+
+  L17:
+    load_type baml.csv.CsvRecord
+    load_var r
+    call baml.csv.CsvRows.root.iter.Iterator.next
     store_var _5
 
   L18:
@@ -2331,75 +2331,62 @@ function csv.csv_header_encoding_failure_is_terminal_for_headers() -> string {
 
   L28:
     load_var r
-    is_type baml.iter.Flatten<...>
+    is_type baml.csv.CsvRows<...>
     pop_jump_if_false L29
     jump L46
 
   L29:
     load_var r
-    is_type baml.iter.StepBy<...>
+    is_type baml.csv.CsvReader
     pop_jump_if_false L30
     jump L45
 
   L30:
     load_var r
-    is_type baml.iter.Chain<...>
+    is_type baml.iter.Flatten<...>
     pop_jump_if_false L31
     jump L44
 
   L31:
     load_var r
-    is_type baml.iter.Map<...>
+    is_type baml.iter.StepBy<...>
     pop_jump_if_false L32
     jump L43
 
   L32:
     load_var r
-    is_type baml.iter.Filter<...>
+    is_type baml.iter.Chain<...>
     pop_jump_if_false L33
     jump L42
 
   L33:
     load_var r
-    is_type baml.iter.FilterMap<...>
+    is_type baml.iter.Map<...>
     pop_jump_if_false L34
     jump L41
 
   L34:
     load_var r
-    is_type baml.iter.FlatMap<...>
+    is_type baml.iter.Filter<...>
     pop_jump_if_false L35
     jump L40
 
   L35:
     load_var r
-    is_type baml.iter.Peekable<...>
+    is_type baml.iter.FilterMap<...>
     pop_jump_if_false L36
     jump L39
 
   L36:
     load_var r
-    is_type baml.csv.CsvRows<...>
+    is_type baml.iter.FlatMap<...>
     pop_jump_if_false L37
     jump L38
 
   L37:
     load_var r
-    is_type baml.csv.CsvReader
+    is_type baml.iter.Peekable<...>
     pop_jump_if_false L51
-    load_var r
-    call baml.csv.CsvReader.root.iter.Iterator.next
-    store_var _45
-    jump L47
-
-  L38:
-    load_type baml.csv.CsvRecord
-    load_var r
-    call baml.csv.CsvRows.root.iter.Iterator.next
-    store_var _45
-    jump L47
-
-  L39:
     load_type baml.csv.CsvRecord
     load_type baml.csv.CsvError | baml.errors.Io
     load_var r
@@ -2407,42 +2394,42 @@ function csv.csv_header_encoding_failure_is_terminal_for_headers() -> string {
     store_var _45
     jump L47
 
-  L40:
+  L38:
     load_var r
     make_bound_method baml.iter.FlatMap.Iterator.next
     call_indirect
     store_var _45
     jump L47
 
-  L41:
+  L39:
     load_var r
     make_bound_method baml.iter.FilterMap.Iterator.next
     call_indirect
     store_var _45
     jump L47
 
-  L42:
+  L40:
     load_var r
     make_bound_method baml.iter.Filter.Iterator.next
     call_indirect
     store_var _45
     jump L47
 
-  L43:
+  L41:
     load_var r
     make_bound_method baml.iter.Map.Iterator.next
     call_indirect
     store_var _45
     jump L47
 
-  L44:
+  L42:
     load_var r
     make_bound_method baml.iter.Chain.Iterator.next
     call_indirect
     store_var _45
     jump L47
 
-  L45:
+  L43:
     load_type baml.csv.CsvRecord
     load_type baml.csv.CsvError | baml.errors.Io
     load_var r
@@ -2450,10 +2437,23 @@ function csv.csv_header_encoding_failure_is_terminal_for_headers() -> string {
     store_var _45
     jump L47
 
-  L46:
+  L44:
     load_var r
     make_bound_method baml.iter.Flatten.Iterator.next
     call_indirect
+    store_var _45
+    jump L47
+
+  L45:
+    load_var r
+    call baml.csv.CsvReader.root.iter.Iterator.next
+    store_var _45
+    jump L47
+
+  L46:
+    load_type baml.csv.CsvRecord
+    load_var r
+    call baml.csv.CsvRows.root.iter.Iterator.next
     store_var _45
 
   L47:
@@ -2787,75 +2787,62 @@ function csv.csv_malformed_header_exhausts_reader() -> string {
     call baml.csv.reader
     store_var r
     load_var r
-    is_type baml.iter.Flatten<...>
+    is_type baml.csv.CsvRows<...>
     pop_jump_if_false L0
     jump L17
 
   L0:
     load_var r
-    is_type baml.iter.StepBy<...>
+    is_type baml.csv.CsvReader
     pop_jump_if_false L1
     jump L16
 
   L1:
     load_var r
-    is_type baml.iter.Chain<...>
+    is_type baml.iter.Flatten<...>
     pop_jump_if_false L2
     jump L15
 
   L2:
     load_var r
-    is_type baml.iter.Map<...>
+    is_type baml.iter.StepBy<...>
     pop_jump_if_false L3
     jump L14
 
   L3:
     load_var r
-    is_type baml.iter.Filter<...>
+    is_type baml.iter.Chain<...>
     pop_jump_if_false L4
     jump L13
 
   L4:
     load_var r
-    is_type baml.iter.FilterMap<...>
+    is_type baml.iter.Map<...>
     pop_jump_if_false L5
     jump L12
 
   L5:
     load_var r
-    is_type baml.iter.FlatMap<...>
+    is_type baml.iter.Filter<...>
     pop_jump_if_false L6
     jump L11
 
   L6:
     load_var r
-    is_type baml.iter.Peekable<...>
+    is_type baml.iter.FilterMap<...>
     pop_jump_if_false L7
     jump L10
 
   L7:
     load_var r
-    is_type baml.csv.CsvRows<...>
+    is_type baml.iter.FlatMap<...>
     pop_jump_if_false L8
     jump L9
 
   L8:
     load_var r
-    is_type baml.csv.CsvReader
+    is_type baml.iter.Peekable<...>
     pop_jump_if_false L46
-    load_var r
-    call baml.csv.CsvReader.root.iter.Iterator.next
-    store_var _4
-    jump L18
-
-  L9:
-    load_type baml.csv.CsvRecord
-    load_var r
-    call baml.csv.CsvRows.root.iter.Iterator.next
-    store_var _4
-    jump L18
-
-  L10:
     load_type baml.csv.CsvRecord
     load_type baml.csv.CsvError | baml.errors.Io
     load_var r
@@ -2863,42 +2850,42 @@ function csv.csv_malformed_header_exhausts_reader() -> string {
     store_var _4
     jump L18
 
-  L11:
+  L9:
     load_var r
     make_bound_method baml.iter.FlatMap.Iterator.next
     call_indirect
     store_var _4
     jump L18
 
-  L12:
+  L10:
     load_var r
     make_bound_method baml.iter.FilterMap.Iterator.next
     call_indirect
     store_var _4
     jump L18
 
-  L13:
+  L11:
     load_var r
     make_bound_method baml.iter.Filter.Iterator.next
     call_indirect
     store_var _4
     jump L18
 
-  L14:
+  L12:
     load_var r
     make_bound_method baml.iter.Map.Iterator.next
     call_indirect
     store_var _4
     jump L18
 
-  L15:
+  L13:
     load_var r
     make_bound_method baml.iter.Chain.Iterator.next
     call_indirect
     store_var _4
     jump L18
 
-  L16:
+  L14:
     load_type baml.csv.CsvRecord
     load_type baml.csv.CsvError | baml.errors.Io
     load_var r
@@ -2906,10 +2893,23 @@ function csv.csv_malformed_header_exhausts_reader() -> string {
     store_var _4
     jump L18
 
-  L17:
+  L15:
     load_var r
     make_bound_method baml.iter.Flatten.Iterator.next
     call_indirect
+    store_var _4
+    jump L18
+
+  L16:
+    load_var r
+    call baml.csv.CsvReader.root.iter.Iterator.next
+    store_var _4
+    jump L18
+
+  L17:
+    load_type baml.csv.CsvRecord
+    load_var r
+    call baml.csv.CsvRows.root.iter.Iterator.next
     store_var _4
 
   L18:
@@ -2953,75 +2953,62 @@ function csv.csv_malformed_header_exhausts_reader() -> string {
 
   L23:
     load_var r
-    is_type baml.iter.Flatten<...>
+    is_type baml.csv.CsvRows<...>
     pop_jump_if_false L24
     jump L41
 
   L24:
     load_var r
-    is_type baml.iter.StepBy<...>
+    is_type baml.csv.CsvReader
     pop_jump_if_false L25
     jump L40
 
   L25:
     load_var r
-    is_type baml.iter.Chain<...>
+    is_type baml.iter.Flatten<...>
     pop_jump_if_false L26
     jump L39
 
   L26:
     load_var r
-    is_type baml.iter.Map<...>
+    is_type baml.iter.StepBy<...>
     pop_jump_if_false L27
     jump L38
 
   L27:
     load_var r
-    is_type baml.iter.Filter<...>
+    is_type baml.iter.Chain<...>
     pop_jump_if_false L28
     jump L37
 
   L28:
     load_var r
-    is_type baml.iter.FilterMap<...>
+    is_type baml.iter.Map<...>
     pop_jump_if_false L29
     jump L36
 
   L29:
     load_var r
-    is_type baml.iter.FlatMap<...>
+    is_type baml.iter.Filter<...>
     pop_jump_if_false L30
     jump L35
 
   L30:
     load_var r
-    is_type baml.iter.Peekable<...>
+    is_type baml.iter.FilterMap<...>
     pop_jump_if_false L31
     jump L34
 
   L31:
     load_var r
-    is_type baml.csv.CsvRows<...>
+    is_type baml.iter.FlatMap<...>
     pop_jump_if_false L32
     jump L33
 
   L32:
     load_var r
-    is_type baml.csv.CsvReader
+    is_type baml.iter.Peekable<...>
     pop_jump_if_false L46
-    load_var r
-    call baml.csv.CsvReader.root.iter.Iterator.next
-    store_var _34
-    jump L42
-
-  L33:
-    load_type baml.csv.CsvRecord
-    load_var r
-    call baml.csv.CsvRows.root.iter.Iterator.next
-    store_var _34
-    jump L42
-
-  L34:
     load_type baml.csv.CsvRecord
     load_type baml.csv.CsvError | baml.errors.Io
     load_var r
@@ -3029,42 +3016,42 @@ function csv.csv_malformed_header_exhausts_reader() -> string {
     store_var _34
     jump L42
 
-  L35:
+  L33:
     load_var r
     make_bound_method baml.iter.FlatMap.Iterator.next
     call_indirect
     store_var _34
     jump L42
 
-  L36:
+  L34:
     load_var r
     make_bound_method baml.iter.FilterMap.Iterator.next
     call_indirect
     store_var _34
     jump L42
 
-  L37:
+  L35:
     load_var r
     make_bound_method baml.iter.Filter.Iterator.next
     call_indirect
     store_var _34
     jump L42
 
-  L38:
+  L36:
     load_var r
     make_bound_method baml.iter.Map.Iterator.next
     call_indirect
     store_var _34
     jump L42
 
-  L39:
+  L37:
     load_var r
     make_bound_method baml.iter.Chain.Iterator.next
     call_indirect
     store_var _34
     jump L42
 
-  L40:
+  L38:
     load_type baml.csv.CsvRecord
     load_type baml.csv.CsvError | baml.errors.Io
     load_var r
@@ -3072,10 +3059,23 @@ function csv.csv_malformed_header_exhausts_reader() -> string {
     store_var _34
     jump L42
 
-  L41:
+  L39:
     load_var r
     make_bound_method baml.iter.Flatten.Iterator.next
     call_indirect
+    store_var _34
+    jump L42
+
+  L40:
+    load_var r
+    call baml.csv.CsvReader.root.iter.Iterator.next
+    store_var _34
+    jump L42
+
+  L41:
+    load_type baml.csv.CsvRecord
+    load_var r
+    call baml.csv.CsvRows.root.iter.Iterator.next
     store_var _34
 
   L42:
@@ -3114,75 +3114,62 @@ function csv.csv_malformed_header_failure_is_terminal_for_headers() -> string {
     call baml.csv.reader
     store_var r
     load_var r
-    is_type baml.iter.Flatten<...>
+    is_type baml.csv.CsvRows<...>
     pop_jump_if_false L0
     jump L17
 
   L0:
     load_var r
-    is_type baml.iter.StepBy<...>
+    is_type baml.csv.CsvReader
     pop_jump_if_false L1
     jump L16
 
   L1:
     load_var r
-    is_type baml.iter.Chain<...>
+    is_type baml.iter.Flatten<...>
     pop_jump_if_false L2
     jump L15
 
   L2:
     load_var r
-    is_type baml.iter.Map<...>
+    is_type baml.iter.StepBy<...>
     pop_jump_if_false L3
     jump L14
 
   L3:
     load_var r
-    is_type baml.iter.Filter<...>
+    is_type baml.iter.Chain<...>
     pop_jump_if_false L4
     jump L13
 
   L4:
     load_var r
-    is_type baml.iter.FilterMap<...>
+    is_type baml.iter.Map<...>
     pop_jump_if_false L5
     jump L12
 
   L5:
     load_var r
-    is_type baml.iter.FlatMap<...>
+    is_type baml.iter.Filter<...>
     pop_jump_if_false L6
     jump L11
 
   L6:
     load_var r
-    is_type baml.iter.Peekable<...>
+    is_type baml.iter.FilterMap<...>
     pop_jump_if_false L7
     jump L10
 
   L7:
     load_var r
-    is_type baml.csv.CsvRows<...>
+    is_type baml.iter.FlatMap<...>
     pop_jump_if_false L8
     jump L9
 
   L8:
     load_var r
-    is_type baml.csv.CsvReader
+    is_type baml.iter.Peekable<...>
     pop_jump_if_false L51
-    load_var r
-    call baml.csv.CsvReader.root.iter.Iterator.next
-    store_var _4
-    jump L18
-
-  L9:
-    load_type baml.csv.CsvRecord
-    load_var r
-    call baml.csv.CsvRows.root.iter.Iterator.next
-    store_var _4
-    jump L18
-
-  L10:
     load_type baml.csv.CsvRecord
     load_type baml.csv.CsvError | baml.errors.Io
     load_var r
@@ -3190,42 +3177,42 @@ function csv.csv_malformed_header_failure_is_terminal_for_headers() -> string {
     store_var _4
     jump L18
 
-  L11:
+  L9:
     load_var r
     make_bound_method baml.iter.FlatMap.Iterator.next
     call_indirect
     store_var _4
     jump L18
 
-  L12:
+  L10:
     load_var r
     make_bound_method baml.iter.FilterMap.Iterator.next
     call_indirect
     store_var _4
     jump L18
 
-  L13:
+  L11:
     load_var r
     make_bound_method baml.iter.Filter.Iterator.next
     call_indirect
     store_var _4
     jump L18
 
-  L14:
+  L12:
     load_var r
     make_bound_method baml.iter.Map.Iterator.next
     call_indirect
     store_var _4
     jump L18
 
-  L15:
+  L13:
     load_var r
     make_bound_method baml.iter.Chain.Iterator.next
     call_indirect
     store_var _4
     jump L18
 
-  L16:
+  L14:
     load_type baml.csv.CsvRecord
     load_type baml.csv.CsvError | baml.errors.Io
     load_var r
@@ -3233,10 +3220,23 @@ function csv.csv_malformed_header_failure_is_terminal_for_headers() -> string {
     store_var _4
     jump L18
 
-  L17:
+  L15:
     load_var r
     make_bound_method baml.iter.Flatten.Iterator.next
     call_indirect
+    store_var _4
+    jump L18
+
+  L16:
+    load_var r
+    call baml.csv.CsvReader.root.iter.Iterator.next
+    store_var _4
+    jump L18
+
+  L17:
+    load_type baml.csv.CsvRecord
+    load_var r
+    call baml.csv.CsvRows.root.iter.Iterator.next
     store_var _4
 
   L18:
@@ -3322,75 +3322,62 @@ function csv.csv_malformed_header_failure_is_terminal_for_headers() -> string {
 
   L28:
     load_var r
-    is_type baml.iter.Flatten<...>
+    is_type baml.csv.CsvRows<...>
     pop_jump_if_false L29
     jump L46
 
   L29:
     load_var r
-    is_type baml.iter.StepBy<...>
+    is_type baml.csv.CsvReader
     pop_jump_if_false L30
     jump L45
 
   L30:
     load_var r
-    is_type baml.iter.Chain<...>
+    is_type baml.iter.Flatten<...>
     pop_jump_if_false L31
     jump L44
 
   L31:
     load_var r
-    is_type baml.iter.Map<...>
+    is_type baml.iter.StepBy<...>
     pop_jump_if_false L32
     jump L43
 
   L32:
     load_var r
-    is_type baml.iter.Filter<...>
+    is_type baml.iter.Chain<...>
     pop_jump_if_false L33
     jump L42
 
   L33:
     load_var r
-    is_type baml.iter.FilterMap<...>
+    is_type baml.iter.Map<...>
     pop_jump_if_false L34
     jump L41
 
   L34:
     load_var r
-    is_type baml.iter.FlatMap<...>
+    is_type baml.iter.Filter<...>
     pop_jump_if_false L35
     jump L40
 
   L35:
     load_var r
-    is_type baml.iter.Peekable<...>
+    is_type baml.iter.FilterMap<...>
     pop_jump_if_false L36
     jump L39
 
   L36:
     load_var r
-    is_type baml.csv.CsvRows<...>
+    is_type baml.iter.FlatMap<...>
     pop_jump_if_false L37
     jump L38
 
   L37:
     load_var r
-    is_type baml.csv.CsvReader
+    is_type baml.iter.Peekable<...>
     pop_jump_if_false L51
-    load_var r
-    call baml.csv.CsvReader.root.iter.Iterator.next
-    store_var _44
-    jump L47
-
-  L38:
-    load_type baml.csv.CsvRecord
-    load_var r
-    call baml.csv.CsvRows.root.iter.Iterator.next
-    store_var _44
-    jump L47
-
-  L39:
     load_type baml.csv.CsvRecord
     load_type baml.csv.CsvError | baml.errors.Io
     load_var r
@@ -3398,42 +3385,42 @@ function csv.csv_malformed_header_failure_is_terminal_for_headers() -> string {
     store_var _44
     jump L47
 
-  L40:
+  L38:
     load_var r
     make_bound_method baml.iter.FlatMap.Iterator.next
     call_indirect
     store_var _44
     jump L47
 
-  L41:
+  L39:
     load_var r
     make_bound_method baml.iter.FilterMap.Iterator.next
     call_indirect
     store_var _44
     jump L47
 
-  L42:
+  L40:
     load_var r
     make_bound_method baml.iter.Filter.Iterator.next
     call_indirect
     store_var _44
     jump L47
 
-  L43:
+  L41:
     load_var r
     make_bound_method baml.iter.Map.Iterator.next
     call_indirect
     store_var _44
     jump L47
 
-  L44:
+  L42:
     load_var r
     make_bound_method baml.iter.Chain.Iterator.next
     call_indirect
     store_var _44
     jump L47
 
-  L45:
+  L43:
     load_type baml.csv.CsvRecord
     load_type baml.csv.CsvError | baml.errors.Io
     load_var r
@@ -3441,10 +3428,23 @@ function csv.csv_malformed_header_failure_is_terminal_for_headers() -> string {
     store_var _44
     jump L47
 
-  L46:
+  L44:
     load_var r
     make_bound_method baml.iter.Flatten.Iterator.next
     call_indirect
+    store_var _44
+    jump L47
+
+  L45:
+    load_var r
+    call baml.csv.CsvReader.root.iter.Iterator.next
+    store_var _44
+    jump L47
+
+  L46:
+    load_type baml.csv.CsvRecord
+    load_var r
+    call baml.csv.CsvRows.root.iter.Iterator.next
     store_var _44
 
   L47:
@@ -3800,75 +3800,62 @@ function csv.csv_on_skip_observer() -> string {
     load_const 0
     store_var count
     store_var_load_var _6
-    is_type baml.iter.Flatten<...>
+    is_type baml.csv.CsvRows<...>
     pop_jump_if_false L0
     jump L17
 
   L0:
     load_var _6
-    is_type baml.iter.StepBy<...>
+    is_type baml.csv.CsvReader
     pop_jump_if_false L1
     jump L16
 
   L1:
     load_var _6
-    is_type baml.iter.Chain<...>
+    is_type baml.iter.Flatten<...>
     pop_jump_if_false L2
     jump L15
 
   L2:
     load_var _6
-    is_type baml.iter.Map<...>
+    is_type baml.iter.StepBy<...>
     pop_jump_if_false L3
     jump L14
 
   L3:
     load_var _6
-    is_type baml.iter.Filter<...>
+    is_type baml.iter.Chain<...>
     pop_jump_if_false L4
     jump L13
 
   L4:
     load_var _6
-    is_type baml.iter.FilterMap<...>
+    is_type baml.iter.Map<...>
     pop_jump_if_false L5
     jump L12
 
   L5:
     load_var _6
-    is_type baml.iter.FlatMap<...>
+    is_type baml.iter.Filter<...>
     pop_jump_if_false L6
     jump L11
 
   L6:
     load_var _6
-    is_type baml.iter.Peekable<...>
+    is_type baml.iter.FilterMap<...>
     pop_jump_if_false L7
     jump L10
 
   L7:
     load_var _6
-    is_type baml.csv.CsvRows<...>
+    is_type baml.iter.FlatMap<...>
     pop_jump_if_false L8
     jump L9
 
   L8:
     load_var _6
-    is_type baml.csv.CsvReader
+    is_type baml.iter.Peekable<...>
     pop_jump_if_false L40
-    load_var _6
-    call baml.csv.CsvReader.root.iter.Iterable.iter
-    store_var _7
-    jump L18
-
-  L9:
-    load_type baml.csv.CsvRecord
-    load_var _6
-    call baml.csv.CsvRows.root.iter.Iterable.iter
-    store_var _7
-    jump L18
-
-  L10:
     load_type baml.csv.CsvRecord
     load_type baml.csv.CsvError | baml.errors.Io
     load_var _6
@@ -3876,42 +3863,42 @@ function csv.csv_on_skip_observer() -> string {
     store_var _7
     jump L18
 
-  L11:
+  L9:
     load_var _6
     make_bound_method baml.iter.FlatMap.Iterable.iter
     call_indirect
     store_var _7
     jump L18
 
-  L12:
+  L10:
     load_var _6
     make_bound_method baml.iter.FilterMap.Iterable.iter
     call_indirect
     store_var _7
     jump L18
 
-  L13:
+  L11:
     load_var _6
     make_bound_method baml.iter.Filter.Iterable.iter
     call_indirect
     store_var _7
     jump L18
 
-  L14:
+  L12:
     load_var _6
     make_bound_method baml.iter.Map.Iterable.iter
     call_indirect
     store_var _7
     jump L18
 
-  L15:
+  L13:
     load_var _6
     make_bound_method baml.iter.Chain.Iterable.iter
     call_indirect
     store_var _7
     jump L18
 
-  L16:
+  L14:
     load_type baml.csv.CsvRecord
     load_type baml.csv.CsvError | baml.errors.Io
     load_var _6
@@ -3919,83 +3906,83 @@ function csv.csv_on_skip_observer() -> string {
     store_var _7
     jump L18
 
-  L17:
+  L15:
     load_var _6
     make_bound_method baml.iter.Flatten.Iterable.iter
     call_indirect
     store_var _7
+    jump L18
+
+  L16:
+    load_var _6
+    call baml.csv.CsvReader.root.iter.Iterable.iter
+    store_var _7
+    jump L18
+
+  L17:
+    load_type baml.csv.CsvRecord
+    load_var _6
+    call baml.csv.CsvRows.root.iter.Iterable.iter
+    store_var _7
 
   L18:
     load_var _7
-    is_type baml.iter.Flatten<...>
+    is_type baml.csv.CsvRows<...>
     pop_jump_if_false L19
     jump L36
 
   L19:
     load_var _7
-    is_type baml.iter.StepBy<...>
+    is_type baml.csv.CsvReader
     pop_jump_if_false L20
     jump L35
 
   L20:
     load_var _7
-    is_type baml.iter.Chain<...>
+    is_type baml.iter.Flatten<...>
     pop_jump_if_false L21
     jump L34
 
   L21:
     load_var _7
-    is_type baml.iter.Map<...>
+    is_type baml.iter.StepBy<...>
     pop_jump_if_false L22
     jump L33
 
   L22:
     load_var _7
-    is_type baml.iter.Filter<...>
+    is_type baml.iter.Chain<...>
     pop_jump_if_false L23
     jump L32
 
   L23:
     load_var _7
-    is_type baml.iter.FilterMap<...>
+    is_type baml.iter.Map<...>
     pop_jump_if_false L24
     jump L31
 
   L24:
     load_var _7
-    is_type baml.iter.FlatMap<...>
+    is_type baml.iter.Filter<...>
     pop_jump_if_false L25
     jump L30
 
   L25:
     load_var _7
-    is_type baml.iter.Peekable<...>
+    is_type baml.iter.FilterMap<...>
     pop_jump_if_false L26
     jump L29
 
   L26:
     load_var _7
-    is_type baml.csv.CsvRows<...>
+    is_type baml.iter.FlatMap<...>
     pop_jump_if_false L27
     jump L28
 
   L27:
     load_var _7
-    is_type baml.csv.CsvReader
+    is_type baml.iter.Peekable<...>
     pop_jump_if_false L40
-    load_var _7
-    call baml.csv.CsvReader.root.iter.Iterator.next
-    store_var _29
-    jump L37
-
-  L28:
-    load_type baml.csv.CsvRecord
-    load_var _7
-    call baml.csv.CsvRows.root.iter.Iterator.next
-    store_var _29
-    jump L37
-
-  L29:
     load_type baml.csv.CsvRecord
     load_type baml.csv.CsvError | baml.errors.Io
     load_var _7
@@ -4003,42 +3990,42 @@ function csv.csv_on_skip_observer() -> string {
     store_var _29
     jump L37
 
-  L30:
+  L28:
     load_var _7
     make_bound_method baml.iter.FlatMap.Iterator.next
     call_indirect
     store_var _29
     jump L37
 
-  L31:
+  L29:
     load_var _7
     make_bound_method baml.iter.FilterMap.Iterator.next
     call_indirect
     store_var _29
     jump L37
 
-  L32:
+  L30:
     load_var _7
     make_bound_method baml.iter.Filter.Iterator.next
     call_indirect
     store_var _29
     jump L37
 
-  L33:
+  L31:
     load_var _7
     make_bound_method baml.iter.Map.Iterator.next
     call_indirect
     store_var _29
     jump L37
 
-  L34:
+  L32:
     load_var _7
     make_bound_method baml.iter.Chain.Iterator.next
     call_indirect
     store_var _29
     jump L37
 
-  L35:
+  L33:
     load_type baml.csv.CsvRecord
     load_type baml.csv.CsvError | baml.errors.Io
     load_var _7
@@ -4046,10 +4033,23 @@ function csv.csv_on_skip_observer() -> string {
     store_var _29
     jump L37
 
-  L36:
+  L34:
     load_var _7
     make_bound_method baml.iter.Flatten.Iterator.next
     call_indirect
+    store_var _29
+    jump L37
+
+  L35:
+    load_var _7
+    call baml.csv.CsvReader.root.iter.Iterator.next
+    store_var _29
+    jump L37
+
+  L36:
+    load_type baml.csv.CsvRecord
+    load_var _7
+    call baml.csv.CsvRows.root.iter.Iterator.next
     store_var _29
 
   L37:
@@ -4110,63 +4110,56 @@ function csv.csv_open_streams_file() -> string {
     call baml.csv.CsvReader.rows
     store_var _10
     load_var _10
-    is_type baml.iter.Flatten<...>
+    is_type baml.csv.CsvRows<...>
     pop_jump_if_false L0
     jump L15
 
   L0:
     load_var _10
-    is_type baml.iter.StepBy<...>
+    is_type baml.iter.Flatten<...>
     pop_jump_if_false L1
     jump L14
 
   L1:
     load_var _10
-    is_type baml.iter.Chain<...>
+    is_type baml.iter.StepBy<...>
     pop_jump_if_false L2
     jump L13
 
   L2:
     load_var _10
-    is_type baml.iter.Map<...>
+    is_type baml.iter.Chain<...>
     pop_jump_if_false L3
     jump L12
 
   L3:
     load_var _10
-    is_type baml.iter.Filter<...>
+    is_type baml.iter.Map<...>
     pop_jump_if_false L4
     jump L11
 
   L4:
     load_var _10
-    is_type baml.iter.FilterMap<...>
+    is_type baml.iter.Filter<...>
     pop_jump_if_false L5
     jump L10
 
   L5:
     load_var _10
-    is_type baml.iter.FlatMap<...>
+    is_type baml.iter.FilterMap<...>
     pop_jump_if_false L6
     jump L9
 
   L6:
     load_var _10
-    is_type baml.iter.Peekable<...>
+    is_type baml.iter.FlatMap<...>
     pop_jump_if_false L7
     jump L8
 
   L7:
     load_var _10
-    is_type baml.csv.CsvRows<...>
+    is_type baml.iter.Peekable<...>
     pop_jump_if_false L36
-    load_type csv.IntRow
-    load_var _10
-    call baml.csv.CsvRows.root.iter.Iterable.iter
-    store_var _12
-    jump L16
-
-  L8:
     load_type csv.IntRow
     load_type baml.csv.CsvError | baml.errors.Io
     load_var _10
@@ -4174,42 +4167,42 @@ function csv.csv_open_streams_file() -> string {
     store_var _12
     jump L16
 
-  L9:
+  L8:
     load_var _10
     make_bound_method baml.iter.FlatMap.Iterable.iter
     call_indirect
     store_var _12
     jump L16
 
-  L10:
+  L9:
     load_var _10
     make_bound_method baml.iter.FilterMap.Iterable.iter
     call_indirect
     store_var _12
     jump L16
 
-  L11:
+  L10:
     load_var _10
     make_bound_method baml.iter.Filter.Iterable.iter
     call_indirect
     store_var _12
     jump L16
 
-  L12:
+  L11:
     load_var _10
     make_bound_method baml.iter.Map.Iterable.iter
     call_indirect
     store_var _12
     jump L16
 
-  L13:
+  L12:
     load_var _10
     make_bound_method baml.iter.Chain.Iterable.iter
     call_indirect
     store_var _12
     jump L16
 
-  L14:
+  L13:
     load_type csv.IntRow
     load_type baml.csv.CsvError | baml.errors.Io
     load_var _10
@@ -4217,71 +4210,71 @@ function csv.csv_open_streams_file() -> string {
     store_var _12
     jump L16
 
-  L15:
+  L14:
     load_var _10
     make_bound_method baml.iter.Flatten.Iterable.iter
     call_indirect
     store_var _12
+    jump L16
+
+  L15:
+    load_type csv.IntRow
+    load_var _10
+    call baml.csv.CsvRows.root.iter.Iterable.iter
+    store_var _12
 
   L16:
     load_var _12
-    is_type baml.iter.Flatten<...>
+    is_type baml.csv.CsvRows<...>
     pop_jump_if_false L17
     jump L32
 
   L17:
     load_var _12
-    is_type baml.iter.StepBy<...>
+    is_type baml.iter.Flatten<...>
     pop_jump_if_false L18
     jump L31
 
   L18:
     load_var _12
-    is_type baml.iter.Chain<...>
+    is_type baml.iter.StepBy<...>
     pop_jump_if_false L19
     jump L30
 
   L19:
     load_var _12
-    is_type baml.iter.Map<...>
+    is_type baml.iter.Chain<...>
     pop_jump_if_false L20
     jump L29
 
   L20:
     load_var _12
-    is_type baml.iter.Filter<...>
+    is_type baml.iter.Map<...>
     pop_jump_if_false L21
     jump L28
 
   L21:
     load_var _12
-    is_type baml.iter.FilterMap<...>
+    is_type baml.iter.Filter<...>
     pop_jump_if_false L22
     jump L27
 
   L22:
     load_var _12
-    is_type baml.iter.FlatMap<...>
+    is_type baml.iter.FilterMap<...>
     pop_jump_if_false L23
     jump L26
 
   L23:
     load_var _12
-    is_type baml.iter.Peekable<...>
+    is_type baml.iter.FlatMap<...>
     pop_jump_if_false L24
     jump L25
 
   L24:
     load_var _12
-    is_type baml.csv.CsvRows<...>
+    is_type baml.iter.Peekable<...>
     pop_jump_if_false L36
-    load_type csv.IntRow
-    load_var _12
-    call baml.csv.CsvRows.root.iter.Iterator.next
-    store_var _33
-    jump L33
-
-  L25:
     load_type csv.IntRow
     load_type baml.csv.CsvError | baml.errors.Io
     load_var _12
@@ -4289,42 +4282,42 @@ function csv.csv_open_streams_file() -> string {
     store_var _33
     jump L33
 
-  L26:
+  L25:
     load_var _12
     make_bound_method baml.iter.FlatMap.Iterator.next
     call_indirect
     store_var _33
     jump L33
 
-  L27:
+  L26:
     load_var _12
     make_bound_method baml.iter.FilterMap.Iterator.next
     call_indirect
     store_var _33
     jump L33
 
-  L28:
+  L27:
     load_var _12
     make_bound_method baml.iter.Filter.Iterator.next
     call_indirect
     store_var _33
     jump L33
 
-  L29:
+  L28:
     load_var _12
     make_bound_method baml.iter.Map.Iterator.next
     call_indirect
     store_var _33
     jump L33
 
-  L30:
+  L29:
     load_var _12
     make_bound_method baml.iter.Chain.Iterator.next
     call_indirect
     store_var _33
     jump L33
 
-  L31:
+  L30:
     load_type csv.IntRow
     load_type baml.csv.CsvError | baml.errors.Io
     load_var _12
@@ -4332,10 +4325,17 @@ function csv.csv_open_streams_file() -> string {
     store_var _33
     jump L33
 
-  L32:
+  L31:
     load_var _12
     make_bound_method baml.iter.Flatten.Iterator.next
     call_indirect
+    store_var _33
+    jump L33
+
+  L32:
+    load_type csv.IntRow
+    load_var _12
+    call baml.csv.CsvRows.root.iter.Iterator.next
     store_var _33
 
   L33:
@@ -4816,85 +4816,85 @@ function csv.csv_plaindate_cells_roundtrip() -> string {
 
   L4:
     load_var _10
-    is_type baml.errors.StackTrace
+    is_type baml.time.PlainDateTime
     pop_jump_if_false L5
     jump L30
 
   L5:
     load_var _10
-    is_type baml.errors.StackTrace
+    is_type baml.time.PlainDateTime
     pop_jump_if_false L6
     jump L29
 
   L6:
     load_var _10
-    is_type baml.errors.ErrorContext
+    is_type baml.time.PlainTime
     pop_jump_if_false L7
     jump L28
 
   L7:
     load_var _10
-    is_type baml.errors.ErrorContext
+    is_type baml.time.PlainTime
     pop_jump_if_false L8
     jump L27
 
   L8:
     load_var _10
-    is_type baml.time.PlainDateTime
+    is_type baml.time.ZonedDateTime
     pop_jump_if_false L9
     jump L26
 
   L9:
     load_var _10
-    is_type baml.time.PlainDateTime
+    is_type baml.time.ZonedDateTime
     pop_jump_if_false L10
     jump L25
 
   L10:
     load_var _10
-    is_type baml.time.PlainTime
+    is_type baml.time.Instant
     pop_jump_if_false L11
     jump L24
 
   L11:
     load_var _10
-    is_type baml.time.PlainTime
+    is_type baml.time.Instant
     pop_jump_if_false L12
     jump L23
 
   L12:
     load_var _10
-    is_type baml.time.ZonedDateTime
+    is_type baml.time.PlainDate
     pop_jump_if_false L13
     jump L22
 
   L13:
     load_var _10
-    is_type baml.time.ZonedDateTime
+    is_type baml.time.PlainDate
     pop_jump_if_false L14
     jump L21
 
   L14:
     load_var _10
-    is_type baml.time.Instant
+    is_type baml.errors.StackTrace
     pop_jump_if_false L15
     jump L20
 
   L15:
     load_var _10
-    is_type baml.time.Instant
+    is_type baml.errors.StackTrace
     pop_jump_if_false L16
     jump L19
 
   L16:
     load_var _10
-    is_type baml.time.PlainDate
+    is_type baml.errors.ErrorContext
     pop_jump_if_false L17
     jump L18
 
   L17:
     load_var _10
-    is_type baml.time.PlainDate
+    is_type baml.errors.ErrorContext
     pop_jump_if_false L77
     load_var _10
     call baml.ToString.to_string
@@ -4902,7 +4902,7 @@ function csv.csv_plaindate_cells_roundtrip() -> string {
 
   L18:
     load_var _10
-    call baml.time.PlainDate.baml.ToString.to_string
+    call baml.errors.ErrorContext.baml.ToString.to_string
     jump L35
 
   L19:
@@ -4912,7 +4912,7 @@ function csv.csv_plaindate_cells_roundtrip() -> string {
 
   L20:
     load_var _10
-    call baml.time.Instant.baml.ToString.to_string
+    call baml.errors.StackTrace.baml.ToString.to_string
     jump L35
 
   L21:
@@ -4922,7 +4922,7 @@ function csv.csv_plaindate_cells_roundtrip() -> string {
 
   L22:
     load_var _10
-    call baml.time.ZonedDateTime.baml.ToString.to_string
+    call baml.time.PlainDate.baml.ToString.to_string
     jump L35
 
   L23:
@@ -4932,7 +4932,7 @@ function csv.csv_plaindate_cells_roundtrip() -> string {
 
   L24:
     load_var _10
-    call baml.time.PlainTime.baml.ToString.to_string
+    call baml.time.Instant.baml.ToString.to_string
     jump L35
 
   L25:
@@ -4942,7 +4942,7 @@ function csv.csv_plaindate_cells_roundtrip() -> string {
 
   L26:
     load_var _10
-    call baml.time.PlainDateTime.baml.ToString.to_string
+    call baml.time.ZonedDateTime.baml.ToString.to_string
     jump L35
 
   L27:
@@ -4952,7 +4952,7 @@ function csv.csv_plaindate_cells_roundtrip() -> string {
 
   L28:
     load_var _10
-    call baml.errors.ErrorContext.baml.ToString.to_string
+    call baml.time.PlainTime.baml.ToString.to_string
     jump L35
 
   L29:
@@ -4962,7 +4962,7 @@ function csv.csv_plaindate_cells_roundtrip() -> string {
 
   L30:
     load_var _10
-    call baml.errors.StackTrace.baml.ToString.to_string
+    call baml.time.PlainDateTime.baml.ToString.to_string
     jump L35
 
   L31:
@@ -5015,85 +5015,85 @@ function csv.csv_plaindate_cells_roundtrip() -> string {
 
   L39:
     load_var _30
-    is_type baml.errors.StackTrace
+    is_type baml.time.PlainDateTime
     pop_jump_if_false L40
     jump L65
 
   L40:
     load_var _30
-    is_type baml.errors.StackTrace
+    is_type baml.time.PlainDateTime
     pop_jump_if_false L41
     jump L64
 
   L41:
     load_var _30
-    is_type baml.errors.ErrorContext
+    is_type baml.time.PlainTime
     pop_jump_if_false L42
     jump L63
 
   L42:
     load_var _30
-    is_type baml.errors.ErrorContext
+    is_type baml.time.PlainTime
     pop_jump_if_false L43
     jump L62
 
   L43:
     load_var _30
-    is_type baml.time.PlainDateTime
+    is_type baml.time.ZonedDateTime
     pop_jump_if_false L44
     jump L61
 
   L44:
     load_var _30
-    is_type baml.time.PlainDateTime
+    is_type baml.time.ZonedDateTime
     pop_jump_if_false L45
     jump L60
 
   L45:
     load_var _30
-    is_type baml.time.PlainTime
+    is_type baml.time.Instant
     pop_jump_if_false L46
     jump L59
 
   L46:
     load_var _30
-    is_type baml.time.PlainTime
+    is_type baml.time.Instant
     pop_jump_if_false L47
     jump L58
 
   L47:
     load_var _30
-    is_type baml.time.ZonedDateTime
+    is_type baml.time.PlainDate
     pop_jump_if_false L48
     jump L57
 
   L48:
     load_var _30
-    is_type baml.time.ZonedDateTime
+    is_type baml.time.PlainDate
     pop_jump_if_false L49
     jump L56
 
   L49:
     load_var _30
-    is_type baml.time.Instant
+    is_type baml.errors.StackTrace
     pop_jump_if_false L50
     jump L55
 
   L50:
     load_var _30
-    is_type baml.time.Instant
+    is_type baml.errors.StackTrace
     pop_jump_if_false L51
     jump L54
 
   L51:
     load_var _30
-    is_type baml.time.PlainDate
+    is_type baml.errors.ErrorContext
     pop_jump_if_false L52
     jump L53
 
   L52:
     load_var _30
-    is_type baml.time.PlainDate
+    is_type baml.errors.ErrorContext
     pop_jump_if_false L77
     load_var _30
     call baml.ToString.to_string
@@ -5102,7 +5102,7 @@ function csv.csv_plaindate_cells_roundtrip() -> string {
 
   L53:
     load_var _30
-    call baml.time.PlainDate.baml.ToString.to_string
+    call baml.errors.ErrorContext.baml.ToString.to_string
     store_var _29
     jump L70
 
@@ -5114,7 +5114,7 @@ function csv.csv_plaindate_cells_roundtrip() -> string {
 
   L55:
     load_var _30
-    call baml.time.Instant.baml.ToString.to_string
+    call baml.errors.StackTrace.baml.ToString.to_string
     store_var _29
     jump L70
 
@@ -5126,7 +5126,7 @@ function csv.csv_plaindate_cells_roundtrip() -> string {
 
   L57:
     load_var _30
-    call baml.time.ZonedDateTime.baml.ToString.to_string
+    call baml.time.PlainDate.baml.ToString.to_string
     store_var _29
     jump L70
 
@@ -5138,7 +5138,7 @@ function csv.csv_plaindate_cells_roundtrip() -> string {
 
   L59:
     load_var _30
-    call baml.time.PlainTime.baml.ToString.to_string
+    call baml.time.Instant.baml.ToString.to_string
     store_var _29
     jump L70
 
@@ -5150,7 +5150,7 @@ function csv.csv_plaindate_cells_roundtrip() -> string {
 
   L61:
     load_var _30
-    call baml.time.PlainDateTime.baml.ToString.to_string
+    call baml.time.ZonedDateTime.baml.ToString.to_string
     store_var _29
     jump L70
 
@@ -5162,7 +5162,7 @@ function csv.csv_plaindate_cells_roundtrip() -> string {
 
   L63:
     load_var _30
-    call baml.errors.ErrorContext.baml.ToString.to_string
+    call baml.time.PlainTime.baml.ToString.to_string
     store_var _29
     jump L70
 
@@ -5174,7 +5174,7 @@ function csv.csv_plaindate_cells_roundtrip() -> string {
 
   L65:
     load_var _30
-    call baml.errors.StackTrace.baml.ToString.to_string
+    call baml.time.PlainDateTime.baml.ToString.to_string
     store_var _29
     jump L70
 
@@ -5459,75 +5459,62 @@ function csv.csv_reader_close() -> string {
     call baml.csv.reader
     store_var r
     load_var r
-    is_type baml.iter.Flatten<...>
+    is_type baml.csv.CsvRows<...>
     pop_jump_if_false L0
     jump L17
 
   L0:
     load_var r
-    is_type baml.iter.StepBy<...>
+    is_type baml.csv.CsvReader
     pop_jump_if_false L1
     jump L16
 
   L1:
     load_var r
-    is_type baml.iter.Chain<...>
+    is_type baml.iter.Flatten<...>
     pop_jump_if_false L2
     jump L15
 
   L2:
     load_var r
-    is_type baml.iter.Map<...>
+    is_type baml.iter.StepBy<...>
     pop_jump_if_false L3
     jump L14
 
   L3:
     load_var r
-    is_type baml.iter.Filter<...>
+    is_type baml.iter.Chain<...>
     pop_jump_if_false L4
     jump L13
 
   L4:
     load_var r
-    is_type baml.iter.FilterMap<...>
+    is_type baml.iter.Map<...>
     pop_jump_if_false L5
     jump L12
 
   L5:
     load_var r
-    is_type baml.iter.FlatMap<...>
+    is_type baml.iter.Filter<...>
     pop_jump_if_false L6
     jump L11
 
   L6:
     load_var r
-    is_type baml.iter.Peekable<...>
+    is_type baml.iter.FilterMap<...>
     pop_jump_if_false L7
     jump L10
 
   L7:
     load_var r
-    is_type baml.csv.CsvRows<...>
+    is_type baml.iter.FlatMap<...>
     pop_jump_if_false L8
     jump L9
 
   L8:
     load_var r
-    is_type baml.csv.CsvReader
+    is_type baml.iter.Peekable<...>
     pop_jump_if_false L41
-    load_var r
-    call baml.csv.CsvReader.root.iter.Iterator.next
-    pop 1
-    jump L18
-
-  L9:
-    load_type baml.csv.CsvRecord
-    load_var r
-    call baml.csv.CsvRows.root.iter.Iterator.next
-    pop 1
-    jump L18
-
-  L10:
     load_type baml.csv.CsvRecord
     load_type baml.csv.CsvError | baml.errors.Io
     load_var r
@@ -5535,42 +5522,42 @@ function csv.csv_reader_close() -> string {
     pop 1
     jump L18
 
-  L11:
+  L9:
     load_var r
     make_bound_method baml.iter.FlatMap.Iterator.next
     call_indirect
     pop 1
     jump L18
 
-  L12:
+  L10:
     load_var r
     make_bound_method baml.iter.FilterMap.Iterator.next
     call_indirect
     pop 1
     jump L18
 
-  L13:
+  L11:
     load_var r
     make_bound_method baml.iter.Filter.Iterator.next
     call_indirect
     pop 1
     jump L18
 
-  L14:
+  L12:
     load_var r
     make_bound_method baml.iter.Map.Iterator.next
     call_indirect
     pop 1
     jump L18
 
-  L15:
+  L13:
     load_var r
     make_bound_method baml.iter.Chain.Iterator.next
     call_indirect
     pop 1
     jump L18
 
-  L16:
+  L14:
     load_type baml.csv.CsvRecord
     load_type baml.csv.CsvError | baml.errors.Io
     load_var r
@@ -5578,10 +5565,23 @@ function csv.csv_reader_close() -> string {
     pop 1
     jump L18
 
-  L17:
+  L15:
     load_var r
     make_bound_method baml.iter.Flatten.Iterator.next
     call_indirect
+    pop 1
+    jump L18
+
+  L16:
+    load_var r
+    call baml.csv.CsvReader.root.iter.Iterator.next
+    pop 1
+    jump L18
+
+  L17:
+    load_type baml.csv.CsvRecord
+    load_var r
+    call baml.csv.CsvRows.root.iter.Iterator.next
     pop 1
 
   L18:
@@ -5592,75 +5592,62 @@ function csv.csv_reader_close() -> string {
     call baml.csv.CsvReader.close
     pop 1
     load_var r
-    is_type baml.iter.Flatten<...>
+    is_type baml.csv.CsvRows<...>
     pop_jump_if_false L19
     jump L36
 
   L19:
     load_var r
-    is_type baml.iter.StepBy<...>
+    is_type baml.csv.CsvReader
     pop_jump_if_false L20
     jump L35
 
   L20:
     load_var r
-    is_type baml.iter.Chain<...>
+    is_type baml.iter.Flatten<...>
     pop_jump_if_false L21
     jump L34
 
   L21:
     load_var r
-    is_type baml.iter.Map<...>
+    is_type baml.iter.StepBy<...>
     pop_jump_if_false L22
     jump L33
 
   L22:
     load_var r
-    is_type baml.iter.Filter<...>
+    is_type baml.iter.Chain<...>
     pop_jump_if_false L23
     jump L32
 
   L23:
     load_var r
-    is_type baml.iter.FilterMap<...>
+    is_type baml.iter.Map<...>
     pop_jump_if_false L24
     jump L31
 
   L24:
     load_var r
-    is_type baml.iter.FlatMap<...>
+    is_type baml.iter.Filter<...>
     pop_jump_if_false L25
     jump L30
 
   L25:
     load_var r
-    is_type baml.iter.Peekable<...>
+    is_type baml.iter.FilterMap<...>
     pop_jump_if_false L26
     jump L29
 
   L26:
     load_var r
-    is_type baml.csv.CsvRows<...>
+    is_type baml.iter.FlatMap<...>
     pop_jump_if_false L27
     jump L28
 
   L27:
     load_var r
-    is_type baml.csv.CsvReader
+    is_type baml.iter.Peekable<...>
     pop_jump_if_false L41
-    load_var r
-    call baml.csv.CsvReader.root.iter.Iterator.next
-    pop 1
-    jump L39
-
-  L28:
-    load_type baml.csv.CsvRecord
-    load_var r
-    call baml.csv.CsvRows.root.iter.Iterator.next
-    pop 1
-    jump L39
-
-  L29:
     load_type baml.csv.CsvRecord
     load_type baml.csv.CsvError | baml.errors.Io
     load_var r
@@ -5668,42 +5655,42 @@ function csv.csv_reader_close() -> string {
     pop 1
     jump L39
 
-  L30:
+  L28:
     load_var r
     make_bound_method baml.iter.FlatMap.Iterator.next
     call_indirect
     pop 1
     jump L39
 
-  L31:
+  L29:
     load_var r
     make_bound_method baml.iter.FilterMap.Iterator.next
     call_indirect
     pop 1
     jump L39
 
-  L32:
+  L30:
     load_var r
     make_bound_method baml.iter.Filter.Iterator.next
     call_indirect
     pop 1
     jump L39
 
-  L33:
+  L31:
     load_var r
     make_bound_method baml.iter.Map.Iterator.next
     call_indirect
     pop 1
     jump L39
 
-  L34:
+  L32:
     load_var r
     make_bound_method baml.iter.Chain.Iterator.next
     call_indirect
     pop 1
     jump L39
 
-  L35:
+  L33:
     load_type baml.csv.CsvRecord
     load_type baml.csv.CsvError | baml.errors.Io
     load_var r
@@ -5711,10 +5698,23 @@ function csv.csv_reader_close() -> string {
     pop 1
     jump L39
 
-  L36:
+  L34:
     load_var r
     make_bound_method baml.iter.Flatten.Iterator.next
     call_indirect
+    pop 1
+    jump L39
+
+  L35:
+    load_var r
+    call baml.csv.CsvReader.root.iter.Iterator.next
+    pop 1
+    jump L39
+
+  L36:
+    load_type baml.csv.CsvRecord
+    load_var r
+    call baml.csv.CsvRows.root.iter.Iterator.next
     pop 1
     jump L39
     load_var e
@@ -5798,75 +5798,62 @@ function csv.csv_reader_position() -> string {
     call baml.csv.CsvReader.position
     store_var p1
     load_var r
-    is_type baml.iter.Flatten<...>
+    is_type baml.csv.CsvRows<...>
     pop_jump_if_false L0
     jump L17
 
   L0:
     load_var r
-    is_type baml.iter.StepBy<...>
+    is_type baml.csv.CsvReader
     pop_jump_if_false L1
     jump L16
 
   L1:
     load_var r
-    is_type baml.iter.Chain<...>
+    is_type baml.iter.Flatten<...>
     pop_jump_if_false L2
     jump L15
 
   L2:
     load_var r
-    is_type baml.iter.Map<...>
+    is_type baml.iter.StepBy<...>
     pop_jump_if_false L3
     jump L14
 
   L3:
     load_var r
-    is_type baml.iter.Filter<...>
+    is_type baml.iter.Chain<...>
     pop_jump_if_false L4
     jump L13
 
   L4:
     load_var r
-    is_type baml.iter.FilterMap<...>
+    is_type baml.iter.Map<...>
     pop_jump_if_false L5
     jump L12
 
   L5:
     load_var r
-    is_type baml.iter.FlatMap<...>
+    is_type baml.iter.Filter<...>
     pop_jump_if_false L6
     jump L11
 
   L6:
     load_var r
-    is_type baml.iter.Peekable<...>
+    is_type baml.iter.FilterMap<...>
     pop_jump_if_false L7
     jump L10
 
   L7:
     load_var r
-    is_type baml.csv.CsvRows<...>
+    is_type baml.iter.FlatMap<...>
     pop_jump_if_false L8
     jump L9
 
   L8:
     load_var r
-    is_type baml.csv.CsvReader
+    is_type baml.iter.Peekable<...>
     pop_jump_if_false L19
-    load_var r
-    call baml.csv.CsvReader.root.iter.Iterator.next
-    pop 1
-    jump L18
-
-  L9:
-    load_type baml.csv.CsvRecord
-    load_var r
-    call baml.csv.CsvRows.root.iter.Iterator.next
-    pop 1
-    jump L18
-
-  L10:
     load_type baml.csv.CsvRecord
     load_type baml.csv.CsvError | baml.errors.Io
     load_var r
@@ -5874,42 +5861,42 @@ function csv.csv_reader_position() -> string {
     pop 1
     jump L18
 
-  L11:
+  L9:
     load_var r
     make_bound_method baml.iter.FlatMap.Iterator.next
     call_indirect
     pop 1
     jump L18
 
-  L12:
+  L10:
     load_var r
     make_bound_method baml.iter.FilterMap.Iterator.next
     call_indirect
     pop 1
     jump L18
 
-  L13:
+  L11:
     load_var r
     make_bound_method baml.iter.Filter.Iterator.next
     call_indirect
     pop 1
     jump L18
 
-  L14:
+  L12:
     load_var r
     make_bound_method baml.iter.Map.Iterator.next
     call_indirect
     pop 1
     jump L18
 
-  L15:
+  L13:
     load_var r
     make_bound_method baml.iter.Chain.Iterator.next
     call_indirect
     pop 1
     jump L18
 
-  L16:
+  L14:
     load_type baml.csv.CsvRecord
     load_type baml.csv.CsvError | baml.errors.Io
     load_var r
@@ -5917,10 +5904,23 @@ function csv.csv_reader_position() -> string {
     pop 1
     jump L18
 
-  L17:
+  L15:
     load_var r
     make_bound_method baml.iter.Flatten.Iterator.next
     call_indirect
+    pop 1
+    jump L18
+
+  L16:
+    load_var r
+    call baml.csv.CsvReader.root.iter.Iterator.next
+    pop 1
+    jump L18
+
+  L17:
+    load_type baml.csv.CsvRecord
+    load_var r
+    call baml.csv.CsvRows.root.iter.Iterator.next
     pop 1
 
   L18:
@@ -5995,75 +5995,62 @@ function csv.csv_reader_resumes_after_throw() -> string {
     load_const true
     pop_jump_if_false L26
     load_var r
-    is_type baml.iter.Flatten<...>
+    is_type baml.csv.CsvRows<...>
     pop_jump_if_false L1
     jump L18
 
   L1:
     load_var r
-    is_type baml.iter.StepBy<...>
+    is_type baml.csv.CsvReader
     pop_jump_if_false L2
     jump L17
 
   L2:
     load_var r
-    is_type baml.iter.Chain<...>
+    is_type baml.iter.Flatten<...>
     pop_jump_if_false L3
     jump L16
 
   L3:
     load_var r
-    is_type baml.iter.Map<...>
+    is_type baml.iter.StepBy<...>
     pop_jump_if_false L4
     jump L15
 
   L4:
     load_var r
-    is_type baml.iter.Filter<...>
+    is_type baml.iter.Chain<...>
     pop_jump_if_false L5
     jump L14
 
   L5:
     load_var r
-    is_type baml.iter.FilterMap<...>
+    is_type baml.iter.Map<...>
     pop_jump_if_false L6
     jump L13
 
   L6:
     load_var r
-    is_type baml.iter.FlatMap<...>
+    is_type baml.iter.Filter<...>
     pop_jump_if_false L7
     jump L12
 
   L7:
     load_var r
-    is_type baml.iter.Peekable<...>
+    is_type baml.iter.FilterMap<...>
     pop_jump_if_false L8
     jump L11
 
   L8:
     load_var r
-    is_type baml.csv.CsvRows<...>
+    is_type baml.iter.FlatMap<...>
     pop_jump_if_false L9
     jump L10
 
   L9:
     load_var r
-    is_type baml.csv.CsvReader
+    is_type baml.iter.Peekable<...>
     pop_jump_if_false L27
-    load_var r
-    call baml.csv.CsvReader.root.iter.Iterator.next
-    store_var _6
-    jump L19
-
-  L10:
-    load_type baml.csv.CsvRecord
-    load_var r
-    call baml.csv.CsvRows.root.iter.Iterator.next
-    store_var _6
-    jump L19
-
-  L11:
     load_type baml.csv.CsvRecord
     load_type baml.csv.CsvError | baml.errors.Io
     load_var r
@@ -6071,42 +6058,42 @@ function csv.csv_reader_resumes_after_throw() -> string {
     store_var _6
     jump L19
 
-  L12:
+  L10:
     load_var r
     make_bound_method baml.iter.FlatMap.Iterator.next
     call_indirect
     store_var _6
     jump L19
 
-  L13:
+  L11:
     load_var r
     make_bound_method baml.iter.FilterMap.Iterator.next
     call_indirect
     store_var _6
     jump L19
 
-  L14:
+  L12:
     load_var r
     make_bound_method baml.iter.Filter.Iterator.next
     call_indirect
     store_var _6
     jump L19
 
-  L15:
+  L13:
     load_var r
     make_bound_method baml.iter.Map.Iterator.next
     call_indirect
     store_var _6
     jump L19
 
-  L16:
+  L14:
     load_var r
     make_bound_method baml.iter.Chain.Iterator.next
     call_indirect
     store_var _6
     jump L19
 
-  L17:
+  L15:
     load_type baml.csv.CsvRecord
     load_type baml.csv.CsvError | baml.errors.Io
     load_var r
@@ -6114,10 +6101,23 @@ function csv.csv_reader_resumes_after_throw() -> string {
     store_var _6
     jump L19
 
-  L18:
+  L16:
     load_var r
     make_bound_method baml.iter.Flatten.Iterator.next
     call_indirect
+    store_var _6
+    jump L19
+
+  L17:
+    load_var r
+    call baml.csv.CsvReader.root.iter.Iterator.next
+    store_var _6
+    jump L19
+
+  L18:
+    load_type baml.csv.CsvRecord
+    load_var r
+    call baml.csv.CsvRows.root.iter.Iterator.next
     store_var _6
 
   L19:
@@ -6201,75 +6201,62 @@ function csv.csv_record_api() -> string {
     call baml.csv.reader
     store_var r
     load_var r
-    is_type baml.iter.Flatten<...>
+    is_type baml.csv.CsvRows<...>
     pop_jump_if_false L0
     jump L17
 
   L0:
     load_var r
-    is_type baml.iter.StepBy<...>
+    is_type baml.csv.CsvReader
     pop_jump_if_false L1
     jump L16
 
   L1:
     load_var r
-    is_type baml.iter.Chain<...>
+    is_type baml.iter.Flatten<...>
     pop_jump_if_false L2
     jump L15
 
   L2:
     load_var r
-    is_type baml.iter.Map<...>
+    is_type baml.iter.StepBy<...>
     pop_jump_if_false L3
     jump L14
 
   L3:
     load_var r
-    is_type baml.iter.Filter<...>
+    is_type baml.iter.Chain<...>
     pop_jump_if_false L4
     jump L13
 
   L4:
     load_var r
-    is_type baml.iter.FilterMap<...>
+    is_type baml.iter.Map<...>
     pop_jump_if_false L5
     jump L12
 
   L5:
     load_var r
-    is_type baml.iter.FlatMap<...>
+    is_type baml.iter.Filter<...>
     pop_jump_if_false L6
     jump L11
 
   L6:
     load_var r
-    is_type baml.iter.Peekable<...>
+    is_type baml.iter.FilterMap<...>
     pop_jump_if_false L7
     jump L10
 
   L7:
     load_var r
-    is_type baml.csv.CsvRows<...>
+    is_type baml.iter.FlatMap<...>
     pop_jump_if_false L8
     jump L9
 
   L8:
     load_var r
-    is_type baml.csv.CsvReader
+    is_type baml.iter.Peekable<...>
     pop_jump_if_false L25
-    load_var r
-    call baml.csv.CsvReader.root.iter.Iterator.next
-    store_var _2
-    jump L18
-
-  L9:
-    load_type baml.csv.CsvRecord
-    load_var r
-    call baml.csv.CsvRows.root.iter.Iterator.next
-    store_var _2
-    jump L18
-
-  L10:
     load_type baml.csv.CsvRecord
     load_type baml.csv.CsvError | baml.errors.Io
     load_var r
@@ -6277,42 +6264,42 @@ function csv.csv_record_api() -> string {
     store_var _2
     jump L18
 
-  L11:
+  L9:
     load_var r
     make_bound_method baml.iter.FlatMap.Iterator.next
     call_indirect
     store_var _2
     jump L18
 
-  L12:
+  L10:
     load_var r
     make_bound_method baml.iter.FilterMap.Iterator.next
     call_indirect
     store_var _2
     jump L18
 
-  L13:
+  L11:
     load_var r
     make_bound_method baml.iter.Filter.Iterator.next
     call_indirect
     store_var _2
     jump L18
 
-  L14:
+  L12:
     load_var r
     make_bound_method baml.iter.Map.Iterator.next
     call_indirect
     store_var _2
     jump L18
 
-  L15:
+  L13:
     load_var r
     make_bound_method baml.iter.Chain.Iterator.next
     call_indirect
     store_var _2
     jump L18
 
-  L16:
+  L14:
     load_type baml.csv.CsvRecord
     load_type baml.csv.CsvError | baml.errors.Io
     load_var r
@@ -6320,10 +6307,23 @@ function csv.csv_record_api() -> string {
     store_var _2
     jump L18
 
-  L17:
+  L15:
     load_var r
     make_bound_method baml.iter.Flatten.Iterator.next
     call_indirect
+    store_var _2
+    jump L18
+
+  L16:
+    load_var r
+    call baml.csv.CsvReader.root.iter.Iterator.next
+    store_var _2
+    jump L18
+
+  L17:
+    load_type baml.csv.CsvRecord
+    load_var r
+    call baml.csv.CsvRows.root.iter.Iterator.next
     store_var _2
 
   L18:
@@ -6446,75 +6446,62 @@ function csv.csv_record_decode_single() -> string {
     call baml.csv.reader
     store_var r
     load_var r
-    is_type baml.iter.Flatten<...>
+    is_type baml.csv.CsvRows<...>
     pop_jump_if_false L0
     jump L17
 
   L0:
     load_var r
-    is_type baml.iter.StepBy<...>
+    is_type baml.csv.CsvReader
     pop_jump_if_false L1
     jump L16
 
   L1:
     load_var r
-    is_type baml.iter.Chain<...>
+    is_type baml.iter.Flatten<...>
     pop_jump_if_false L2
     jump L15
 
   L2:
     load_var r
-    is_type baml.iter.Map<...>
+    is_type baml.iter.StepBy<...>
     pop_jump_if_false L3
     jump L14
 
   L3:
     load_var r
-    is_type baml.iter.Filter<...>
+    is_type baml.iter.Chain<...>
     pop_jump_if_false L4
     jump L13
 
   L4:
     load_var r
-    is_type baml.iter.FilterMap<...>
+    is_type baml.iter.Map<...>
     pop_jump_if_false L5
     jump L12
 
   L5:
     load_var r
-    is_type baml.iter.FlatMap<...>
+    is_type baml.iter.Filter<...>
     pop_jump_if_false L6
     jump L11
 
   L6:
     load_var r
-    is_type baml.iter.Peekable<...>
+    is_type baml.iter.FilterMap<...>
     pop_jump_if_false L7
     jump L10
 
   L7:
     load_var r
-    is_type baml.csv.CsvRows<...>
+    is_type baml.iter.FlatMap<...>
     pop_jump_if_false L8
     jump L9
 
   L8:
     load_var r
-    is_type baml.csv.CsvReader
+    is_type baml.iter.Peekable<...>
     pop_jump_if_false L22
-    load_var r
-    call baml.csv.CsvReader.root.iter.Iterator.next
-    store_var _2
-    jump L18
-
-  L9:
-    load_type baml.csv.CsvRecord
-    load_var r
-    call baml.csv.CsvRows.root.iter.Iterator.next
-    store_var _2
-    jump L18
-
-  L10:
     load_type baml.csv.CsvRecord
     load_type baml.csv.CsvError | baml.errors.Io
     load_var r
@@ -6522,42 +6509,42 @@ function csv.csv_record_decode_single() -> string {
     store_var _2
     jump L18
 
-  L11:
+  L9:
     load_var r
     make_bound_method baml.iter.FlatMap.Iterator.next
     call_indirect
     store_var _2
     jump L18
 
-  L12:
+  L10:
     load_var r
     make_bound_method baml.iter.FilterMap.Iterator.next
     call_indirect
     store_var _2
     jump L18
 
-  L13:
+  L11:
     load_var r
     make_bound_method baml.iter.Filter.Iterator.next
     call_indirect
     store_var _2
     jump L18
 
-  L14:
+  L12:
     load_var r
     make_bound_method baml.iter.Map.Iterator.next
     call_indirect
     store_var _2
     jump L18
 
-  L15:
+  L13:
     load_var r
     make_bound_method baml.iter.Chain.Iterator.next
     call_indirect
     store_var _2
     jump L18
 
-  L16:
+  L14:
     load_type baml.csv.CsvRecord
     load_type baml.csv.CsvError | baml.errors.Io
     load_var r
@@ -6565,10 +6552,23 @@ function csv.csv_record_decode_single() -> string {
     store_var _2
     jump L18
 
-  L17:
+  L15:
     load_var r
     make_bound_method baml.iter.Flatten.Iterator.next
     call_indirect
+    store_var _2
+    jump L18
+
+  L16:
+    load_var r
+    call baml.csv.CsvReader.root.iter.Iterator.next
+    store_var _2
+    jump L18
+
+  L17:
+    load_type baml.csv.CsvRecord
+    load_var r
+    call baml.csv.CsvRows.root.iter.Iterator.next
     store_var _2
 
   L18:
@@ -6601,75 +6601,62 @@ function csv.csv_record_get_decode_error() -> string {
     call baml.csv.reader
     store_var r
     load_var r
-    is_type baml.iter.Flatten<...>
+    is_type baml.csv.CsvRows<...>
     pop_jump_if_false L0
     jump L17
 
   L0:
     load_var r
-    is_type baml.iter.StepBy<...>
+    is_type baml.csv.CsvReader
     pop_jump_if_false L1
     jump L16
 
   L1:
     load_var r
-    is_type baml.iter.Chain<...>
+    is_type baml.iter.Flatten<...>
     pop_jump_if_false L2
     jump L15
 
   L2:
     load_var r
-    is_type baml.iter.Map<...>
+    is_type baml.iter.StepBy<...>
     pop_jump_if_false L3
     jump L14
 
   L3:
     load_var r
-    is_type baml.iter.Filter<...>
+    is_type baml.iter.Chain<...>
     pop_jump_if_false L4
     jump L13
 
   L4:
     load_var r
-    is_type baml.iter.FilterMap<...>
+    is_type baml.iter.Map<...>
     pop_jump_if_false L5
     jump L12
 
   L5:
     load_var r
-    is_type baml.iter.FlatMap<...>
+    is_type baml.iter.Filter<...>
     pop_jump_if_false L6
     jump L11
 
   L6:
     load_var r
-    is_type baml.iter.Peekable<...>
+    is_type baml.iter.FilterMap<...>
     pop_jump_if_false L7
     jump L10
 
   L7:
     load_var r
-    is_type baml.csv.CsvRows<...>
+    is_type baml.iter.FlatMap<...>
     pop_jump_if_false L8
     jump L9
 
   L8:
     load_var r
-    is_type baml.csv.CsvReader
+    is_type baml.iter.Peekable<...>
     pop_jump_if_false L26
-    load_var r
-    call baml.csv.CsvReader.root.iter.Iterator.next
-    store_var _3
-    jump L18
-
-  L9:
-    load_type baml.csv.CsvRecord
-    load_var r
-    call baml.csv.CsvRows.root.iter.Iterator.next
-    store_var _3
-    jump L18
-
-  L10:
     load_type baml.csv.CsvRecord
     load_type baml.csv.CsvError | baml.errors.Io
     load_var r
@@ -6677,42 +6664,42 @@ function csv.csv_record_get_decode_error() -> string {
     store_var _3
     jump L18
 
-  L11:
+  L9:
     load_var r
     make_bound_method baml.iter.FlatMap.Iterator.next
     call_indirect
     store_var _3
     jump L18
 
-  L12:
+  L10:
     load_var r
     make_bound_method baml.iter.FilterMap.Iterator.next
     call_indirect
     store_var _3
     jump L18
 
-  L13:
+  L11:
     load_var r
     make_bound_method baml.iter.Filter.Iterator.next
     call_indirect
     store_var _3
     jump L18
 
-  L14:
+  L12:
     load_var r
     make_bound_method baml.iter.Map.Iterator.next
     call_indirect
     store_var _3
     jump L18
 
-  L15:
+  L13:
     load_var r
     make_bound_method baml.iter.Chain.Iterator.next
     call_indirect
     store_var _3
     jump L18
 
-  L16:
+  L14:
     load_type baml.csv.CsvRecord
     load_type baml.csv.CsvError | baml.errors.Io
     load_var r
@@ -6720,10 +6707,23 @@ function csv.csv_record_get_decode_error() -> string {
     store_var _3
     jump L18
 
-  L17:
+  L15:
     load_var r
     make_bound_method baml.iter.Flatten.Iterator.next
     call_indirect
+    store_var _3
+    jump L18
+
+  L16:
+    load_var r
+    call baml.csv.CsvReader.root.iter.Iterator.next
+    store_var _3
+    jump L18
+
+  L17:
+    load_type baml.csv.CsvRecord
+    load_var r
+    call baml.csv.CsvRows.root.iter.Iterator.next
     store_var _3
 
   L18:
@@ -6811,75 +6811,62 @@ function csv.csv_record_get_without_headers() -> string {
     call baml.csv.reader
     store_var r
     load_var r
-    is_type baml.iter.Flatten<...>
+    is_type baml.csv.CsvRows<...>
     pop_jump_if_false L0
     jump L17
 
   L0:
     load_var r
-    is_type baml.iter.StepBy<...>
+    is_type baml.csv.CsvReader
     pop_jump_if_false L1
     jump L16
 
   L1:
     load_var r
-    is_type baml.iter.Chain<...>
+    is_type baml.iter.Flatten<...>
     pop_jump_if_false L2
     jump L15
 
   L2:
     load_var r
-    is_type baml.iter.Map<...>
+    is_type baml.iter.StepBy<...>
     pop_jump_if_false L3
     jump L14
 
   L3:
     load_var r
-    is_type baml.iter.Filter<...>
+    is_type baml.iter.Chain<...>
     pop_jump_if_false L4
     jump L13
 
   L4:
     load_var r
-    is_type baml.iter.FilterMap<...>
+    is_type baml.iter.Map<...>
     pop_jump_if_false L5
     jump L12
 
   L5:
     load_var r
-    is_type baml.iter.FlatMap<...>
+    is_type baml.iter.Filter<...>
     pop_jump_if_false L6
     jump L11
 
   L6:
     load_var r
-    is_type baml.iter.Peekable<...>
+    is_type baml.iter.FilterMap<...>
     pop_jump_if_false L7
     jump L10
 
   L7:
     load_var r
-    is_type baml.csv.CsvRows<...>
+    is_type baml.iter.FlatMap<...>
     pop_jump_if_false L8
     jump L9
 
   L8:
     load_var r
-    is_type baml.csv.CsvReader
+    is_type baml.iter.Peekable<...>
     pop_jump_if_false L25
-    load_var r
-    call baml.csv.CsvReader.root.iter.Iterator.next
-    store_var _4
-    jump L18
-
-  L9:
-    load_type baml.csv.CsvRecord
-    load_var r
-    call baml.csv.CsvRows.root.iter.Iterator.next
-    store_var _4
-    jump L18
-
-  L10:
     load_type baml.csv.CsvRecord
     load_type baml.csv.CsvError | baml.errors.Io
     load_var r
@@ -6887,42 +6874,42 @@ function csv.csv_record_get_without_headers() -> string {
     store_var _4
     jump L18
 
-  L11:
+  L9:
     load_var r
     make_bound_method baml.iter.FlatMap.Iterator.next
     call_indirect
     store_var _4
     jump L18
 
-  L12:
+  L10:
     load_var r
     make_bound_method baml.iter.FilterMap.Iterator.next
     call_indirect
     store_var _4
     jump L18
 
-  L13:
+  L11:
     load_var r
     make_bound_method baml.iter.Filter.Iterator.next
     call_indirect
     store_var _4
     jump L18
 
-  L14:
+  L12:
     load_var r
     make_bound_method baml.iter.Map.Iterator.next
     call_indirect
     store_var _4
     jump L18
 
-  L15:
+  L13:
     load_var r
     make_bound_method baml.iter.Chain.Iterator.next
     call_indirect
     store_var _4
     jump L18
 
-  L16:
+  L14:
     load_type baml.csv.CsvRecord
     load_type baml.csv.CsvError | baml.errors.Io
     load_var r
@@ -6930,10 +6917,23 @@ function csv.csv_record_get_without_headers() -> string {
     store_var _4
     jump L18
 
-  L17:
+  L15:
     load_var r
     make_bound_method baml.iter.Flatten.Iterator.next
     call_indirect
+    store_var _4
+    jump L18
+
+  L16:
+    load_var r
+    call baml.csv.CsvReader.root.iter.Iterator.next
+    store_var _4
+    jump L18
+
+  L17:
+    load_type baml.csv.CsvRecord
+    load_var r
+    call baml.csv.CsvRows.root.iter.Iterator.next
     store_var _4
 
   L18:
@@ -6988,75 +6988,62 @@ function csv.csv_record_snapshot_outlives_reader() -> string {
     store_var kept
     load_var r
     store_var_load_var _3
-    is_type baml.iter.Flatten<...>
+    is_type baml.csv.CsvRows<...>
     pop_jump_if_false L0
     jump L17
 
   L0:
     load_var _3
-    is_type baml.iter.StepBy<...>
+    is_type baml.csv.CsvReader
     pop_jump_if_false L1
     jump L16
 
   L1:
     load_var _3
-    is_type baml.iter.Chain<...>
+    is_type baml.iter.Flatten<...>
     pop_jump_if_false L2
     jump L15
 
   L2:
     load_var _3
-    is_type baml.iter.Map<...>
+    is_type baml.iter.StepBy<...>
     pop_jump_if_false L3
     jump L14
 
   L3:
     load_var _3
-    is_type baml.iter.Filter<...>
+    is_type baml.iter.Chain<...>
     pop_jump_if_false L4
     jump L13
 
   L4:
     load_var _3
-    is_type baml.iter.FilterMap<...>
+    is_type baml.iter.Map<...>
     pop_jump_if_false L5
     jump L12
 
   L5:
     load_var _3
-    is_type baml.iter.FlatMap<...>
+    is_type baml.iter.Filter<...>
     pop_jump_if_false L6
     jump L11
 
   L6:
     load_var _3
-    is_type baml.iter.Peekable<...>
+    is_type baml.iter.FilterMap<...>
     pop_jump_if_false L7
     jump L10
 
   L7:
     load_var _3
-    is_type baml.csv.CsvRows<...>
+    is_type baml.iter.FlatMap<...>
     pop_jump_if_false L8
     jump L9
 
   L8:
     load_var _3
-    is_type baml.csv.CsvReader
+    is_type baml.iter.Peekable<...>
     pop_jump_if_false L62
-    load_var _3
-    call baml.csv.CsvReader.root.iter.Iterable.iter
-    store_var _4
-    jump L18
-
-  L9:
-    load_type baml.csv.CsvRecord
-    load_var _3
-    call baml.csv.CsvRows.root.iter.Iterable.iter
-    store_var _4
-    jump L18
-
-  L10:
     load_type baml.csv.CsvRecord
     load_type baml.csv.CsvError | baml.errors.Io
     load_var _3
@@ -7064,42 +7051,42 @@ function csv.csv_record_snapshot_outlives_reader() -> string {
     store_var _4
     jump L18
 
-  L11:
+  L9:
     load_var _3
     make_bound_method baml.iter.FlatMap.Iterable.iter
     call_indirect
     store_var _4
     jump L18
 
-  L12:
+  L10:
     load_var _3
     make_bound_method baml.iter.FilterMap.Iterable.iter
     call_indirect
     store_var _4
     jump L18
 
-  L13:
+  L11:
     load_var _3
     make_bound_method baml.iter.Filter.Iterable.iter
     call_indirect
     store_var _4
     jump L18
 
-  L14:
+  L12:
     load_var _3
     make_bound_method baml.iter.Map.Iterable.iter
     call_indirect
     store_var _4
     jump L18
 
-  L15:
+  L13:
     load_var _3
     make_bound_method baml.iter.Chain.Iterable.iter
     call_indirect
     store_var _4
     jump L18
 
-  L16:
+  L14:
     load_type baml.csv.CsvRecord
     load_type baml.csv.CsvError | baml.errors.Io
     load_var _3
@@ -7107,83 +7094,83 @@ function csv.csv_record_snapshot_outlives_reader() -> string {
     store_var _4
     jump L18
 
-  L17:
+  L15:
     load_var _3
     make_bound_method baml.iter.Flatten.Iterable.iter
     call_indirect
     store_var _4
+    jump L18
+
+  L16:
+    load_var _3
+    call baml.csv.CsvReader.root.iter.Iterable.iter
+    store_var _4
+    jump L18
+
+  L17:
+    load_type baml.csv.CsvRecord
+    load_var _3
+    call baml.csv.CsvRows.root.iter.Iterable.iter
+    store_var _4
 
   L18:
     load_var _4
-    is_type baml.iter.Flatten<...>
+    is_type baml.csv.CsvRows<...>
     pop_jump_if_false L19
     jump L36
 
   L19:
     load_var _4
-    is_type baml.iter.StepBy<...>
+    is_type baml.csv.CsvReader
     pop_jump_if_false L20
     jump L35
 
   L20:
     load_var _4
-    is_type baml.iter.Chain<...>
+    is_type baml.iter.Flatten<...>
     pop_jump_if_false L21
     jump L34
 
   L21:
     load_var _4
-    is_type baml.iter.Map<...>
+    is_type baml.iter.StepBy<...>
     pop_jump_if_false L22
     jump L33
 
   L22:
     load_var _4
-    is_type baml.iter.Filter<...>
+    is_type baml.iter.Chain<...>
     pop_jump_if_false L23
     jump L32
 
   L23:
     load_var _4
-    is_type baml.iter.FilterMap<...>
+    is_type baml.iter.Map<...>
     pop_jump_if_false L24
     jump L31
 
   L24:
     load_var _4
-    is_type baml.iter.FlatMap<...>
+    is_type baml.iter.Filter<...>
     pop_jump_if_false L25
     jump L30
 
   L25:
     load_var _4
-    is_type baml.iter.Peekable<...>
+    is_type baml.iter.FilterMap<...>
     pop_jump_if_false L26
     jump L29
 
   L26:
     load_var _4
-    is_type baml.csv.CsvRows<...>
+    is_type baml.iter.FlatMap<...>
     pop_jump_if_false L27
     jump L28
 
   L27:
     load_var _4
-    is_type baml.csv.CsvReader
+    is_type baml.iter.Peekable<...>
     pop_jump_if_false L62
-    load_var _4
-    call baml.csv.CsvReader.root.iter.Iterator.next
-    store_var _26
-    jump L37
-
-  L28:
-    load_type baml.csv.CsvRecord
-    load_var _4
-    call baml.csv.CsvRows.root.iter.Iterator.next
-    store_var _26
-    jump L37
-
-  L29:
     load_type baml.csv.CsvRecord
     load_type baml.csv.CsvError | baml.errors.Io
     load_var _4
@@ -7191,42 +7178,42 @@ function csv.csv_record_snapshot_outlives_reader() -> string {
     store_var _26
     jump L37
 
-  L30:
+  L28:
     load_var _4
     make_bound_method baml.iter.FlatMap.Iterator.next
     call_indirect
     store_var _26
     jump L37
 
-  L31:
+  L29:
     load_var _4
     make_bound_method baml.iter.FilterMap.Iterator.next
     call_indirect
     store_var _26
     jump L37
 
-  L32:
+  L30:
     load_var _4
     make_bound_method baml.iter.Filter.Iterator.next
     call_indirect
     store_var _26
     jump L37
 
-  L33:
+  L31:
     load_var _4
     make_bound_method baml.iter.Map.Iterator.next
     call_indirect
     store_var _26
     jump L37
 
-  L34:
+  L32:
     load_var _4
     make_bound_method baml.iter.Chain.Iterator.next
     call_indirect
     store_var _26
     jump L37
 
-  L35:
+  L33:
     load_type baml.csv.CsvRecord
     load_type baml.csv.CsvError | baml.errors.Io
     load_var _4
@@ -7234,10 +7221,23 @@ function csv.csv_record_snapshot_outlives_reader() -> string {
     store_var _26
     jump L37
 
-  L36:
+  L34:
     load_var _4
     make_bound_method baml.iter.Flatten.Iterator.next
     call_indirect
+    store_var _26
+    jump L37
+
+  L35:
+    load_var _4
+    call baml.csv.CsvReader.root.iter.Iterator.next
+    store_var _26
+    jump L37
+
+  L36:
+    load_type baml.csv.CsvRecord
+    load_var _4
+    call baml.csv.CsvRows.root.iter.Iterator.next
     store_var _26
 
   L37:
@@ -7537,75 +7537,62 @@ function csv.csv_skip_mode_diagnostics() -> string {
     store_var count
     load_var r
     store_var_load_var _4
-    is_type baml.iter.Flatten<...>
+    is_type baml.csv.CsvRows<...>
     pop_jump_if_false L0
     jump L17
 
   L0:
     load_var _4
-    is_type baml.iter.StepBy<...>
+    is_type baml.csv.CsvReader
     pop_jump_if_false L1
     jump L16
 
   L1:
     load_var _4
-    is_type baml.iter.Chain<...>
+    is_type baml.iter.Flatten<...>
     pop_jump_if_false L2
     jump L15
 
   L2:
     load_var _4
-    is_type baml.iter.Map<...>
+    is_type baml.iter.StepBy<...>
     pop_jump_if_false L3
     jump L14
 
   L3:
     load_var _4
-    is_type baml.iter.Filter<...>
+    is_type baml.iter.Chain<...>
     pop_jump_if_false L4
     jump L13
 
   L4:
     load_var _4
-    is_type baml.iter.FilterMap<...>
+    is_type baml.iter.Map<...>
     pop_jump_if_false L5
     jump L12
 
   L5:
     load_var _4
-    is_type baml.iter.FlatMap<...>
+    is_type baml.iter.Filter<...>
     pop_jump_if_false L6
     jump L11
 
   L6:
     load_var _4
-    is_type baml.iter.Peekable<...>
+    is_type baml.iter.FilterMap<...>
     pop_jump_if_false L7
     jump L10
 
   L7:
     load_var _4
-    is_type baml.csv.CsvRows<...>
+    is_type baml.iter.FlatMap<...>
     pop_jump_if_false L8
     jump L9
 
   L8:
     load_var _4
-    is_type baml.csv.CsvReader
+    is_type baml.iter.Peekable<...>
     pop_jump_if_false L43
-    load_var _4
-    call baml.csv.CsvReader.root.iter.Iterable.iter
-    store_var _5
-    jump L18
-
-  L9:
-    load_type baml.csv.CsvRecord
-    load_var _4
-    call baml.csv.CsvRows.root.iter.Iterable.iter
-    store_var _5
-    jump L18
-
-  L10:
     load_type baml.csv.CsvRecord
     load_type baml.csv.CsvError | baml.errors.Io
     load_var _4
@@ -7613,42 +7600,42 @@ function csv.csv_skip_mode_diagnostics() -> string {
     store_var _5
     jump L18
 
-  L11:
+  L9:
     load_var _4
     make_bound_method baml.iter.FlatMap.Iterable.iter
     call_indirect
     store_var _5
     jump L18
 
-  L12:
+  L10:
     load_var _4
     make_bound_method baml.iter.FilterMap.Iterable.iter
     call_indirect
     store_var _5
     jump L18
 
-  L13:
+  L11:
     load_var _4
     make_bound_method baml.iter.Filter.Iterable.iter
     call_indirect
     store_var _5
     jump L18
 
-  L14:
+  L12:
     load_var _4
     make_bound_method baml.iter.Map.Iterable.iter
     call_indirect
     store_var _5
     jump L18
 
-  L15:
+  L13:
     load_var _4
     make_bound_method baml.iter.Chain.Iterable.iter
     call_indirect
     store_var _5
     jump L18
 
-  L16:
+  L14:
     load_type baml.csv.CsvRecord
     load_type baml.csv.CsvError | baml.errors.Io
     load_var _4
@@ -7656,83 +7643,83 @@ function csv.csv_skip_mode_diagnostics() -> string {
     store_var _5
     jump L18
 
-  L17:
+  L15:
     load_var _4
     make_bound_method baml.iter.Flatten.Iterable.iter
     call_indirect
     store_var _5
+    jump L18
+
+  L16:
+    load_var _4
+    call baml.csv.CsvReader.root.iter.Iterable.iter
+    store_var _5
+    jump L18
+
+  L17:
+    load_type baml.csv.CsvRecord
+    load_var _4
+    call baml.csv.CsvRows.root.iter.Iterable.iter
+    store_var _5
 
   L18:
     load_var _5
-    is_type baml.iter.Flatten<...>
+    is_type baml.csv.CsvRows<...>
     pop_jump_if_false L19
     jump L36
 
   L19:
     load_var _5
-    is_type baml.iter.StepBy<...>
+    is_type baml.csv.CsvReader
     pop_jump_if_false L20
     jump L35
 
   L20:
     load_var _5
-    is_type baml.iter.Chain<...>
+    is_type baml.iter.Flatten<...>
     pop_jump_if_false L21
     jump L34
 
   L21:
     load_var _5
-    is_type baml.iter.Map<...>
+    is_type baml.iter.StepBy<...>
     pop_jump_if_false L22
     jump L33
 
   L22:
     load_var _5
-    is_type baml.iter.Filter<...>
+    is_type baml.iter.Chain<...>
     pop_jump_if_false L23
     jump L32
 
   L23:
     load_var _5
-    is_type baml.iter.FilterMap<...>
+    is_type baml.iter.Map<...>
     pop_jump_if_false L24
     jump L31
 
   L24:
     load_var _5
-    is_type baml.iter.FlatMap<...>
+    is_type baml.iter.Filter<...>
     pop_jump_if_false L25
     jump L30
 
   L25:
     load_var _5
-    is_type baml.iter.Peekable<...>
+    is_type baml.iter.FilterMap<...>
     pop_jump_if_false L26
     jump L29
 
   L26:
     load_var _5
-    is_type baml.csv.CsvRows<...>
+    is_type baml.iter.FlatMap<...>
     pop_jump_if_false L27
     jump L28
 
   L27:
     load_var _5
-    is_type baml.csv.CsvReader
+    is_type baml.iter.Peekable<...>
     pop_jump_if_false L43
-    load_var _5
-    call baml.csv.CsvReader.root.iter.Iterator.next
-    store_var _27
-    jump L37
-
-  L28:
-    load_type baml.csv.CsvRecord
-    load_var _5
-    call baml.csv.CsvRows.root.iter.Iterator.next
-    store_var _27
-    jump L37
-
-  L29:
     load_type baml.csv.CsvRecord
     load_type baml.csv.CsvError | baml.errors.Io
     load_var _5
@@ -7740,42 +7727,42 @@ function csv.csv_skip_mode_diagnostics() -> string {
     store_var _27
     jump L37
 
-  L30:
+  L28:
     load_var _5
     make_bound_method baml.iter.FlatMap.Iterator.next
     call_indirect
     store_var _27
     jump L37
 
-  L31:
+  L29:
     load_var _5
     make_bound_method baml.iter.FilterMap.Iterator.next
     call_indirect
     store_var _27
     jump L37
 
-  L32:
+  L30:
     load_var _5
     make_bound_method baml.iter.Filter.Iterator.next
     call_indirect
     store_var _27
     jump L37
 
-  L33:
+  L31:
     load_var _5
     make_bound_method baml.iter.Map.Iterator.next
     call_indirect
     store_var _27
     jump L37
 
-  L34:
+  L32:
     load_var _5
     make_bound_method baml.iter.Chain.Iterator.next
     call_indirect
     store_var _27
     jump L37
 
-  L35:
+  L33:
     load_type baml.csv.CsvRecord
     load_type baml.csv.CsvError | baml.errors.Io
     load_var _5
@@ -7783,10 +7770,23 @@ function csv.csv_skip_mode_diagnostics() -> string {
     store_var _27
     jump L37
 
-  L36:
+  L34:
     load_var _5
     make_bound_method baml.iter.Flatten.Iterator.next
     call_indirect
+    store_var _27
+    jump L37
+
+  L35:
+    load_var _5
+    call baml.csv.CsvReader.root.iter.Iterator.next
+    store_var _27
+    jump L37
+
+  L36:
+    load_type baml.csv.CsvRecord
+    load_var _5
+    call baml.csv.CsvRows.root.iter.Iterator.next
     store_var _27
 
   L37:
@@ -7895,63 +7895,56 @@ function csv.csv_skip_mode_typed_decode() -> string {
     call baml.csv.CsvReader.rows
     store_var _4
     load_var _4
-    is_type baml.iter.Flatten<...>
+    is_type baml.csv.CsvRows<...>
     pop_jump_if_false L0
     jump L15
 
   L0:
     load_var _4
-    is_type baml.iter.StepBy<...>
+    is_type baml.iter.Flatten<...>
     pop_jump_if_false L1
     jump L14
 
   L1:
     load_var _4
-    is_type baml.iter.Chain<...>
+    is_type baml.iter.StepBy<...>
     pop_jump_if_false L2
     jump L13
 
   L2:
     load_var _4
-    is_type baml.iter.Map<...>
+    is_type baml.iter.Chain<...>
     pop_jump_if_false L3
     jump L12
 
   L3:
     load_var _4
-    is_type baml.iter.Filter<...>
+    is_type baml.iter.Map<...>
     pop_jump_if_false L4
     jump L11
 
   L4:
     load_var _4
-    is_type baml.iter.FilterMap<...>
+    is_type baml.iter.Filter<...>
     pop_jump_if_false L5
     jump L10
 
   L5:
     load_var _4
-    is_type baml.iter.FlatMap<...>
+    is_type baml.iter.FilterMap<...>
     pop_jump_if_false L6
     jump L9
 
   L6:
     load_var _4
-    is_type baml.iter.Peekable<...>
+    is_type baml.iter.FlatMap<...>
     pop_jump_if_false L7
     jump L8
 
   L7:
     load_var _4
-    is_type baml.csv.CsvRows<...>
+    is_type baml.iter.Peekable<...>
     pop_jump_if_false L36
-    load_type csv.IntRow
-    load_var _4
-    call baml.csv.CsvRows.root.iter.Iterable.iter
-    store_var _6
-    jump L16
-
-  L8:
     load_type csv.IntRow
     load_type baml.csv.CsvError | baml.errors.Io
     load_var _4
@@ -7959,42 +7952,42 @@ function csv.csv_skip_mode_typed_decode() -> string {
     store_var _6
     jump L16
 
-  L9:
+  L8:
     load_var _4
     make_bound_method baml.iter.FlatMap.Iterable.iter
     call_indirect
     store_var _6
     jump L16
 
-  L10:
+  L9:
     load_var _4
     make_bound_method baml.iter.FilterMap.Iterable.iter
     call_indirect
     store_var _6
     jump L16
 
-  L11:
+  L10:
     load_var _4
     make_bound_method baml.iter.Filter.Iterable.iter
     call_indirect
     store_var _6
     jump L16
 
-  L12:
+  L11:
     load_var _4
     make_bound_method baml.iter.Map.Iterable.iter
     call_indirect
     store_var _6
     jump L16
 
-  L13:
+  L12:
     load_var _4
     make_bound_method baml.iter.Chain.Iterable.iter
     call_indirect
     store_var _6
     jump L16
 
-  L14:
+  L13:
     load_type csv.IntRow
     load_type baml.csv.CsvError | baml.errors.Io
     load_var _4
@@ -8002,71 +7995,71 @@ function csv.csv_skip_mode_typed_decode() -> string {
     store_var _6
     jump L16
 
-  L15:
+  L14:
     load_var _4
     make_bound_method baml.iter.Flatten.Iterable.iter
     call_indirect
     store_var _6
+    jump L16
+
+  L15:
+    load_type csv.IntRow
+    load_var _4
+    call baml.csv.CsvRows.root.iter.Iterable.iter
+    store_var _6
 
   L16:
     load_var _6
-    is_type baml.iter.Flatten<...>
+    is_type baml.csv.CsvRows<...>
     pop_jump_if_false L17
     jump L32
 
   L17:
     load_var _6
-    is_type baml.iter.StepBy<...>
+    is_type baml.iter.Flatten<...>
     pop_jump_if_false L18
     jump L31
 
   L18:
     load_var _6
-    is_type baml.iter.Chain<...>
+    is_type baml.iter.StepBy<...>
     pop_jump_if_false L19
     jump L30
 
   L19:
     load_var _6
-    is_type baml.iter.Map<...>
+    is_type baml.iter.Chain<...>
     pop_jump_if_false L20
     jump L29
 
   L20:
     load_var _6
-    is_type baml.iter.Filter<...>
+    is_type baml.iter.Map<...>
     pop_jump_if_false L21
     jump L28
 
   L21:
     load_var _6
-    is_type baml.iter.FilterMap<...>
+    is_type baml.iter.Filter<...>
     pop_jump_if_false L22
     jump L27
 
   L22:
     load_var _6
-    is_type baml.iter.FlatMap<...>
+    is_type baml.iter.FilterMap<...>
     pop_jump_if_false L23
     jump L26
 
   L23:
     load_var _6
-    is_type baml.iter.Peekable<...>
+    is_type baml.iter.FlatMap<...>
     pop_jump_if_false L24
     jump L25
 
   L24:
     load_var _6
-    is_type baml.csv.CsvRows<...>
+    is_type baml.iter.Peekable<...>
     pop_jump_if_false L36
-    load_type csv.IntRow
-    load_var _6
-    call baml.csv.CsvRows.root.iter.Iterator.next
-    store_var _27
-    jump L33
-
-  L25:
     load_type csv.IntRow
     load_type baml.csv.CsvError | baml.errors.Io
     load_var _6
@@ -8074,42 +8067,42 @@ function csv.csv_skip_mode_typed_decode() -> string {
     store_var _27
     jump L33
 
-  L26:
+  L25:
     load_var _6
     make_bound_method baml.iter.FlatMap.Iterator.next
     call_indirect
     store_var _27
     jump L33
 
-  L27:
+  L26:
     load_var _6
     make_bound_method baml.iter.FilterMap.Iterator.next
     call_indirect
     store_var _27
     jump L33
 
-  L28:
+  L27:
     load_var _6
     make_bound_method baml.iter.Filter.Iterator.next
     call_indirect
     store_var _27
     jump L33
 
-  L29:
+  L28:
     load_var _6
     make_bound_method baml.iter.Map.Iterator.next
     call_indirect
     store_var _27
     jump L33
 
-  L30:
+  L29:
     load_var _6
     make_bound_method baml.iter.Chain.Iterator.next
     call_indirect
     store_var _27
     jump L33
 
-  L31:
+  L30:
     load_type csv.IntRow
     load_type baml.csv.CsvError | baml.errors.Io
     load_var _6
@@ -8117,10 +8110,17 @@ function csv.csv_skip_mode_typed_decode() -> string {
     store_var _27
     jump L33
 
-  L32:
+  L31:
     load_var _6
     make_bound_method baml.iter.Flatten.Iterator.next
     call_indirect
+    store_var _27
+    jump L33
+
+  L32:
+    load_type csv.IntRow
+    load_var _6
+    call baml.csv.CsvRows.root.iter.Iterator.next
     store_var _27
 
   L33:
@@ -8425,75 +8425,62 @@ function csv.csv_trim_all() -> string {
     call user.csv.join
     store_var h
     load_var r
-    is_type baml.iter.Flatten<...>
+    is_type baml.csv.CsvRows<...>
     pop_jump_if_false L1
     jump L18
 
   L1:
     load_var r
-    is_type baml.iter.StepBy<...>
+    is_type baml.csv.CsvReader
     pop_jump_if_false L2
     jump L17
 
   L2:
     load_var r
-    is_type baml.iter.Chain<...>
+    is_type baml.iter.Flatten<...>
     pop_jump_if_false L3
     jump L16
 
   L3:
     load_var r
-    is_type baml.iter.Map<...>
+    is_type baml.iter.StepBy<...>
     pop_jump_if_false L4
     jump L15
 
   L4:
     load_var r
-    is_type baml.iter.Filter<...>
+    is_type baml.iter.Chain<...>
     pop_jump_if_false L5
     jump L14
 
   L5:
     load_var r
-    is_type baml.iter.FilterMap<...>
+    is_type baml.iter.Map<...>
     pop_jump_if_false L6
     jump L13
 
   L6:
     load_var r
-    is_type baml.iter.FlatMap<...>
+    is_type baml.iter.Filter<...>
     pop_jump_if_false L7
     jump L12
 
   L7:
     load_var r
-    is_type baml.iter.Peekable<...>
+    is_type baml.iter.FilterMap<...>
     pop_jump_if_false L8
     jump L11
 
   L8:
     load_var r
-    is_type baml.csv.CsvRows<...>
+    is_type baml.iter.FlatMap<...>
     pop_jump_if_false L9
     jump L10
 
   L9:
     load_var r
-    is_type baml.csv.CsvReader
+    is_type baml.iter.Peekable<...>
     pop_jump_if_false L23
-    load_var r
-    call baml.csv.CsvReader.root.iter.Iterator.next
-    store_var _8
-    jump L19
-
-  L10:
-    load_type baml.csv.CsvRecord
-    load_var r
-    call baml.csv.CsvRows.root.iter.Iterator.next
-    store_var _8
-    jump L19
-
-  L11:
     load_type baml.csv.CsvRecord
     load_type baml.csv.CsvError | baml.errors.Io
     load_var r
@@ -8501,42 +8488,42 @@ function csv.csv_trim_all() -> string {
     store_var _8
     jump L19
 
-  L12:
+  L10:
     load_var r
     make_bound_method baml.iter.FlatMap.Iterator.next
     call_indirect
     store_var _8
     jump L19
 
-  L13:
+  L11:
     load_var r
     make_bound_method baml.iter.FilterMap.Iterator.next
     call_indirect
     store_var _8
     jump L19
 
-  L14:
+  L12:
     load_var r
     make_bound_method baml.iter.Filter.Iterator.next
     call_indirect
     store_var _8
     jump L19
 
-  L15:
+  L13:
     load_var r
     make_bound_method baml.iter.Map.Iterator.next
     call_indirect
     store_var _8
     jump L19
 
-  L16:
+  L14:
     load_var r
     make_bound_method baml.iter.Chain.Iterator.next
     call_indirect
     store_var _8
     jump L19
 
-  L17:
+  L15:
     load_type baml.csv.CsvRecord
     load_type baml.csv.CsvError | baml.errors.Io
     load_var r
@@ -8544,10 +8531,23 @@ function csv.csv_trim_all() -> string {
     store_var _8
     jump L19
 
-  L18:
+  L16:
     load_var r
     make_bound_method baml.iter.Flatten.Iterator.next
     call_indirect
+    store_var _8
+    jump L19
+
+  L17:
+    load_var r
+    call baml.csv.CsvReader.root.iter.Iterator.next
+    store_var _8
+    jump L19
+
+  L18:
+    load_type baml.csv.CsvRecord
+    load_var r
+    call baml.csv.CsvRows.root.iter.Iterator.next
     store_var _8
 
   L19:
@@ -8656,75 +8656,62 @@ function csv.csv_unterminated_quote_exhausts() -> string {
     call baml.csv.reader
     store_var r
     load_var r
-    is_type baml.iter.Flatten<...>
+    is_type baml.csv.CsvRows<...>
     pop_jump_if_false L0
     jump L17
 
   L0:
     load_var r
-    is_type baml.iter.StepBy<...>
+    is_type baml.csv.CsvReader
     pop_jump_if_false L1
     jump L16
 
   L1:
     load_var r
-    is_type baml.iter.Chain<...>
+    is_type baml.iter.Flatten<...>
     pop_jump_if_false L2
     jump L15
 
   L2:
     load_var r
-    is_type baml.iter.Map<...>
+    is_type baml.iter.StepBy<...>
     pop_jump_if_false L3
     jump L14
 
   L3:
     load_var r
-    is_type baml.iter.Filter<...>
+    is_type baml.iter.Chain<...>
     pop_jump_if_false L4
     jump L13
 
   L4:
     load_var r
-    is_type baml.iter.FilterMap<...>
+    is_type baml.iter.Map<...>
     pop_jump_if_false L5
     jump L12
 
   L5:
     load_var r
-    is_type baml.iter.FlatMap<...>
+    is_type baml.iter.Filter<...>
     pop_jump_if_false L6
     jump L11
 
   L6:
     load_var r
-    is_type baml.iter.Peekable<...>
+    is_type baml.iter.FilterMap<...>
     pop_jump_if_false L7
     jump L10
 
   L7:
     load_var r
-    is_type baml.csv.CsvRows<...>
+    is_type baml.iter.FlatMap<...>
     pop_jump_if_false L8
     jump L9
 
   L8:
     load_var r
-    is_type baml.csv.CsvReader
+    is_type baml.iter.Peekable<...>
     pop_jump_if_false L68
-    load_var r
-    call baml.csv.CsvReader.root.iter.Iterator.next
-    store_var _4
-    jump L18
-
-  L9:
-    load_type baml.csv.CsvRecord
-    load_var r
-    call baml.csv.CsvRows.root.iter.Iterator.next
-    store_var _4
-    jump L18
-
-  L10:
     load_type baml.csv.CsvRecord
     load_type baml.csv.CsvError | baml.errors.Io
     load_var r
@@ -8732,42 +8719,42 @@ function csv.csv_unterminated_quote_exhausts() -> string {
     store_var _4
     jump L18
 
-  L11:
+  L9:
     load_var r
     make_bound_method baml.iter.FlatMap.Iterator.next
     call_indirect
     store_var _4
     jump L18
 
-  L12:
+  L10:
     load_var r
     make_bound_method baml.iter.FilterMap.Iterator.next
     call_indirect
     store_var _4
     jump L18
 
-  L13:
+  L11:
     load_var r
     make_bound_method baml.iter.Filter.Iterator.next
     call_indirect
     store_var _4
     jump L18
 
-  L14:
+  L12:
     load_var r
     make_bound_method baml.iter.Map.Iterator.next
     call_indirect
     store_var _4
     jump L18
 
-  L15:
+  L13:
     load_var r
     make_bound_method baml.iter.Chain.Iterator.next
     call_indirect
     store_var _4
     jump L18
 
-  L16:
+  L14:
     load_type baml.csv.CsvRecord
     load_type baml.csv.CsvError | baml.errors.Io
     load_var r
@@ -8775,10 +8762,23 @@ function csv.csv_unterminated_quote_exhausts() -> string {
     store_var _4
     jump L18
 
-  L17:
+  L15:
     load_var r
     make_bound_method baml.iter.Flatten.Iterator.next
     call_indirect
+    store_var _4
+    jump L18
+
+  L16:
+    load_var r
+    call baml.csv.CsvReader.root.iter.Iterator.next
+    store_var _4
+    jump L18
+
+  L17:
+    load_type baml.csv.CsvRecord
+    load_var r
+    call baml.csv.CsvRows.root.iter.Iterator.next
     store_var _4
 
   L18:
@@ -8801,75 +8801,62 @@ function csv.csv_unterminated_quote_exhausts() -> string {
 
   L21:
     load_var r
-    is_type baml.iter.Flatten<...>
+    is_type baml.csv.CsvRows<...>
     pop_jump_if_false L22
     jump L39
 
   L22:
     load_var r
-    is_type baml.iter.StepBy<...>
+    is_type baml.csv.CsvReader
     pop_jump_if_false L23
     jump L38
 
   L23:
     load_var r
-    is_type baml.iter.Chain<...>
+    is_type baml.iter.Flatten<...>
     pop_jump_if_false L24
     jump L37
 
   L24:
     load_var r
-    is_type baml.iter.Map<...>
+    is_type baml.iter.StepBy<...>
     pop_jump_if_false L25
     jump L36
 
   L25:
     load_var r
-    is_type baml.iter.Filter<...>
+    is_type baml.iter.Chain<...>
     pop_jump_if_false L26
     jump L35
 
   L26:
     load_var r
-    is_type baml.iter.FilterMap<...>
+    is_type baml.iter.Map<...>
     pop_jump_if_false L27
     jump L34
 
   L27:
     load_var r
-    is_type baml.iter.FlatMap<...>
+    is_type baml.iter.Filter<...>
     pop_jump_if_false L28
     jump L33
 
   L28:
     load_var r
-    is_type baml.iter.Peekable<...>
+    is_type baml.iter.FilterMap<...>
     pop_jump_if_false L29
     jump L32
 
   L29:
     load_var r
-    is_type baml.csv.CsvRows<...>
+    is_type baml.iter.FlatMap<...>
     pop_jump_if_false L30
     jump L31
 
   L30:
     load_var r
-    is_type baml.csv.CsvReader
+    is_type baml.iter.Peekable<...>
     pop_jump_if_false L68
-    load_var r
-    call baml.csv.CsvReader.root.iter.Iterator.next
-    store_var _31
-    jump L40
-
-  L31:
-    load_type baml.csv.CsvRecord
-    load_var r
-    call baml.csv.CsvRows.root.iter.Iterator.next
-    store_var _31
-    jump L40
-
-  L32:
     load_type baml.csv.CsvRecord
     load_type baml.csv.CsvError | baml.errors.Io
     load_var r
@@ -8877,42 +8864,42 @@ function csv.csv_unterminated_quote_exhausts() -> string {
     store_var _31
     jump L40
 
-  L33:
+  L31:
     load_var r
     make_bound_method baml.iter.FlatMap.Iterator.next
     call_indirect
     store_var _31
     jump L40
 
-  L34:
+  L32:
     load_var r
     make_bound_method baml.iter.FilterMap.Iterator.next
     call_indirect
     store_var _31
     jump L40
 
-  L35:
+  L33:
     load_var r
     make_bound_method baml.iter.Filter.Iterator.next
     call_indirect
     store_var _31
     jump L40
 
-  L36:
+  L34:
     load_var r
     make_bound_method baml.iter.Map.Iterator.next
     call_indirect
     store_var _31
     jump L40
 
-  L37:
+  L35:
     load_var r
     make_bound_method baml.iter.Chain.Iterator.next
     call_indirect
     store_var _31
     jump L40
 
-  L38:
+  L36:
     load_type baml.csv.CsvRecord
     load_type baml.csv.CsvError | baml.errors.Io
     load_var r
@@ -8920,10 +8907,23 @@ function csv.csv_unterminated_quote_exhausts() -> string {
     store_var _31
     jump L40
 
-  L39:
+  L37:
     load_var r
     make_bound_method baml.iter.Flatten.Iterator.next
     call_indirect
+    store_var _31
+    jump L40
+
+  L38:
+    load_var r
+    call baml.csv.CsvReader.root.iter.Iterator.next
+    store_var _31
+    jump L40
+
+  L39:
+    load_type baml.csv.CsvRecord
+    load_var r
+    call baml.csv.CsvRows.root.iter.Iterator.next
     store_var _31
 
   L40:
@@ -8961,75 +8961,62 @@ function csv.csv_unterminated_quote_exhausts() -> string {
 
   L45:
     load_var r
-    is_type baml.iter.Flatten<...>
+    is_type baml.csv.CsvRows<...>
     pop_jump_if_false L46
     jump L63
 
   L46:
     load_var r
-    is_type baml.iter.StepBy<...>
+    is_type baml.csv.CsvReader
     pop_jump_if_false L47
     jump L62
 
   L47:
     load_var r
-    is_type baml.iter.Chain<...>
+    is_type baml.iter.Flatten<...>
     pop_jump_if_false L48
     jump L61
 
   L48:
     load_var r
-    is_type baml.iter.Map<...>
+    is_type baml.iter.StepBy<...>
     pop_jump_if_false L49
     jump L60
 
   L49:
     load_var r
-    is_type baml.iter.Filter<...>
+    is_type baml.iter.Chain<...>
     pop_jump_if_false L50
     jump L59
 
   L50:
     load_var r
-    is_type baml.iter.FilterMap<...>
+    is_type baml.iter.Map<...>
     pop_jump_if_false L51
     jump L58
 
   L51:
     load_var r
-    is_type baml.iter.FlatMap<...>
+    is_type baml.iter.Filter<...>
     pop_jump_if_false L52
     jump L57
 
   L52:
     load_var r
-    is_type baml.iter.Peekable<...>
+    is_type baml.iter.FilterMap<...>
     pop_jump_if_false L53
     jump L56
 
   L53:
     load_var r
-    is_type baml.csv.CsvRows<...>
+    is_type baml.iter.FlatMap<...>
     pop_jump_if_false L54
     jump L55
 
   L54:
     load_var r
-    is_type baml.csv.CsvReader
+    is_type baml.iter.Peekable<...>
     pop_jump_if_false L68
-    load_var r
-    call baml.csv.CsvReader.root.iter.Iterator.next
-    store_var _59
-    jump L64
-
-  L55:
-    load_type baml.csv.CsvRecord
-    load_var r
-    call baml.csv.CsvRows.root.iter.Iterator.next
-    store_var _59
-    jump L64
-
-  L56:
     load_type baml.csv.CsvRecord
     load_type baml.csv.CsvError | baml.errors.Io
     load_var r
@@ -9037,42 +9024,42 @@ function csv.csv_unterminated_quote_exhausts() -> string {
     store_var _59
     jump L64
 
-  L57:
+  L55:
     load_var r
     make_bound_method baml.iter.FlatMap.Iterator.next
     call_indirect
     store_var _59
     jump L64
 
-  L58:
+  L56:
     load_var r
     make_bound_method baml.iter.FilterMap.Iterator.next
     call_indirect
     store_var _59
     jump L64
 
-  L59:
+  L57:
     load_var r
     make_bound_method baml.iter.Filter.Iterator.next
     call_indirect
     store_var _59
     jump L64
 
-  L60:
+  L58:
     load_var r
     make_bound_method baml.iter.Map.Iterator.next
     call_indirect
     store_var _59
     jump L64
 
-  L61:
+  L59:
     load_var r
     make_bound_method baml.iter.Chain.Iterator.next
     call_indirect
     store_var _59
     jump L64
 
-  L62:
+  L60:
     load_type baml.csv.CsvRecord
     load_type baml.csv.CsvError | baml.errors.Io
     load_var r
@@ -9080,10 +9067,23 @@ function csv.csv_unterminated_quote_exhausts() -> string {
     store_var _59
     jump L64
 
-  L63:
+  L61:
     load_var r
     make_bound_method baml.iter.Flatten.Iterator.next
     call_indirect
+    store_var _59
+    jump L64
+
+  L62:
+    load_var r
+    call baml.csv.CsvReader.root.iter.Iterator.next
+    store_var _59
+    jump L64
+
+  L63:
+    load_type baml.csv.CsvRecord
+    load_var r
+    call baml.csv.CsvRows.root.iter.Iterator.next
     store_var _59
 
   L64:

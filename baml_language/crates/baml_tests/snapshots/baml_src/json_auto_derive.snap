@@ -478,73 +478,73 @@ function json_auto_derive.alias_chain_dispatch_to_json_val() -> int {
     load_const 7
     init_instance user.json_auto_derive.BAliasTo .y
     store_var_load_var b
-    is_type baml.toml.Table
+    is_type baml.time.PlainDateTime
     pop_jump_if_false L0
     jump L61
 
   L0:
     load_var b
-    is_type baml.toml.Table
+    is_type baml.time.PlainDateTime
     pop_jump_if_false L1
     jump L60
 
   L1:
     load_var b
-    is_type baml.time.PlainDateTime
+    is_type baml.time.PlainTime
     pop_jump_if_false L2
     jump L59
 
   L2:
     load_var b
-    is_type baml.time.PlainDateTime
+    is_type baml.time.PlainTime
     pop_jump_if_false L3
     jump L58
 
   L3:
     load_var b
-    is_type baml.time.PlainTime
+    is_type baml.time.ZonedDateTime
     pop_jump_if_false L4
     jump L57
 
   L4:
     load_var b
-    is_type baml.time.PlainTime
+    is_type baml.time.ZonedDateTime
     pop_jump_if_false L5
     jump L56
 
   L5:
     load_var b
-    is_type baml.time.ZonedDateTime
+    is_type baml.time.Instant
     pop_jump_if_false L6
     jump L55
 
   L6:
     load_var b
-    is_type baml.time.ZonedDateTime
+    is_type baml.time.Instant
     pop_jump_if_false L7
     jump L54
 
   L7:
     load_var b
-    is_type baml.time.Instant
+    is_type baml.time.PlainDate
     pop_jump_if_false L8
     jump L53
 
   L8:
     load_var b
-    is_type baml.time.Instant
+    is_type baml.time.PlainDate
     pop_jump_if_false L9
     jump L52
 
   L9:
     load_var b
-    is_type baml.time.PlainDate
+    is_type baml.toml.Table
     pop_jump_if_false L10
     jump L51
 
   L10:
     load_var b
-    is_type baml.time.PlainDate
+    is_type baml.toml.Table
     pop_jump_if_false L11
     jump L50
 
@@ -793,7 +793,7 @@ function json_auto_derive.alias_chain_dispatch_to_json_val() -> int {
 
   L51:
     load_var b
-    call baml.time.PlainDate.baml.ToJson.to_json
+    call baml.toml.Table.baml.ToJson.to_json
     store_var j
     jump L62
 
@@ -805,7 +805,7 @@ function json_auto_derive.alias_chain_dispatch_to_json_val() -> int {
 
   L53:
     load_var b
-    call baml.time.Instant.baml.ToJson.to_json
+    call baml.time.PlainDate.baml.ToJson.to_json
     store_var j
     jump L62
 
@@ -817,7 +817,7 @@ function json_auto_derive.alias_chain_dispatch_to_json_val() -> int {
 
   L55:
     load_var b
-    call baml.time.ZonedDateTime.baml.ToJson.to_json
+    call baml.time.Instant.baml.ToJson.to_json
     store_var j
     jump L62
 
@@ -829,7 +829,7 @@ function json_auto_derive.alias_chain_dispatch_to_json_val() -> int {
 
   L57:
     load_var b
-    call baml.time.PlainTime.baml.ToJson.to_json
+    call baml.time.ZonedDateTime.baml.ToJson.to_json
     store_var j
     jump L62
 
@@ -841,7 +841,7 @@ function json_auto_derive.alias_chain_dispatch_to_json_val() -> int {
 
   L59:
     load_var b
-    call baml.time.PlainDateTime.baml.ToJson.to_json
+    call baml.time.PlainTime.baml.ToJson.to_json
     store_var j
     jump L62
 
@@ -853,7 +853,7 @@ function json_auto_derive.alias_chain_dispatch_to_json_val() -> int {
 
   L61:
     load_var b
-    call baml.toml.Table.baml.ToJson.to_json
+    call baml.time.PlainDateTime.baml.ToJson.to_json
     store_var j
 
   L62:
@@ -1440,73 +1440,73 @@ function json_auto_derive.round_trip_with_overrides_both_directions_val() -> str
     load_const "hunter2"
     init_instance user.json_auto_derive.SecretBoth .data
     store_var_load_var s
-    is_type baml.toml.Table
+    is_type baml.time.PlainDateTime
     pop_jump_if_false L0
     jump L61
 
   L0:
     load_var s
-    is_type baml.toml.Table
+    is_type baml.time.PlainDateTime
     pop_jump_if_false L1
     jump L60
 
   L1:
     load_var s
-    is_type baml.time.PlainDateTime
+    is_type baml.time.PlainTime
     pop_jump_if_false L2
     jump L59
 
   L2:
     load_var s
-    is_type baml.time.PlainDateTime
+    is_type baml.time.PlainTime
     pop_jump_if_false L3
     jump L58
 
   L3:
     load_var s
-    is_type baml.time.PlainTime
+    is_type baml.time.ZonedDateTime
     pop_jump_if_false L4
     jump L57
 
   L4:
     load_var s
-    is_type baml.time.PlainTime
+    is_type baml.time.ZonedDateTime
     pop_jump_if_false L5
     jump L56
 
   L5:
     load_var s
-    is_type baml.time.ZonedDateTime
+    is_type baml.time.Instant
     pop_jump_if_false L6
     jump L55
 
   L6:
     load_var s
-    is_type baml.time.ZonedDateTime
+    is_type baml.time.Instant
     pop_jump_if_false L7
     jump L54
 
   L7:
     load_var s
-    is_type baml.time.Instant
+    is_type baml.time.PlainDate
     pop_jump_if_false L8
     jump L53
 
   L8:
     load_var s
-    is_type baml.time.Instant
+    is_type baml.time.PlainDate
     pop_jump_if_false L9
     jump L52
 
   L9:
     load_var s
-    is_type baml.time.PlainDate
+    is_type baml.toml.Table
     pop_jump_if_false L10
     jump L51
 
   L10:
     load_var s
-    is_type baml.time.PlainDate
+    is_type baml.toml.Table
     pop_jump_if_false L11
     jump L50
 
@@ -1734,7 +1734,7 @@ function json_auto_derive.round_trip_with_overrides_both_directions_val() -> str
 
   L51:
     load_var s
-    call baml.time.PlainDate.baml.ToJson.to_json
+    call baml.toml.Table.baml.ToJson.to_json
     jump L62
 
   L52:
@@ -1744,7 +1744,7 @@ function json_auto_derive.round_trip_with_overrides_both_directions_val() -> str
 
   L53:
     load_var s
-    call baml.time.Instant.baml.ToJson.to_json
+    call baml.time.PlainDate.baml.ToJson.to_json
     jump L62
 
   L54:
@@ -1754,7 +1754,7 @@ function json_auto_derive.round_trip_with_overrides_both_directions_val() -> str
 
   L55:
     load_var s
-    call baml.time.ZonedDateTime.baml.ToJson.to_json
+    call baml.time.Instant.baml.ToJson.to_json
     jump L62
 
   L56:
@@ -1764,7 +1764,7 @@ function json_auto_derive.round_trip_with_overrides_both_directions_val() -> str
 
   L57:
     load_var s
-    call baml.time.PlainTime.baml.ToJson.to_json
+    call baml.time.ZonedDateTime.baml.ToJson.to_json
     jump L62
 
   L58:
@@ -1774,7 +1774,7 @@ function json_auto_derive.round_trip_with_overrides_both_directions_val() -> str
 
   L59:
     load_var s
-    call baml.time.PlainDateTime.baml.ToJson.to_json
+    call baml.time.PlainTime.baml.ToJson.to_json
     jump L62
 
   L60:
@@ -1784,7 +1784,7 @@ function json_auto_derive.round_trip_with_overrides_both_directions_val() -> str
 
   L61:
     load_var s
-    call baml.toml.Table.baml.ToJson.to_json
+    call baml.time.PlainDateTime.baml.ToJson.to_json
 
   L62:
     call baml.json.stringify
@@ -1836,73 +1836,73 @@ function json_auto_derive.user_to_json_override_result() -> baml.json.json {
     load_const "hunter2"
     init_instance user.json_auto_derive.Secret .value
     store_var_load_var s
-    is_type baml.toml.Table
+    is_type baml.time.PlainDateTime
     pop_jump_if_false L0
     jump L61
 
   L0:
     load_var s
-    is_type baml.toml.Table
+    is_type baml.time.PlainDateTime
     pop_jump_if_false L1
     jump L60
 
   L1:
     load_var s
-    is_type baml.time.PlainDateTime
+    is_type baml.time.PlainTime
     pop_jump_if_false L2
     jump L59
 
   L2:
     load_var s
-    is_type baml.time.PlainDateTime
+    is_type baml.time.PlainTime
     pop_jump_if_false L3
     jump L58
 
   L3:
     load_var s
-    is_type baml.time.PlainTime
+    is_type baml.time.ZonedDateTime
     pop_jump_if_false L4
     jump L57
 
   L4:
     load_var s
-    is_type baml.time.PlainTime
+    is_type baml.time.ZonedDateTime
     pop_jump_if_false L5
     jump L56
 
   L5:
     load_var s
-    is_type baml.time.ZonedDateTime
+    is_type baml.time.Instant
     pop_jump_if_false L6
     jump L55
 
   L6:
     load_var s
-    is_type baml.time.ZonedDateTime
+    is_type baml.time.Instant
     pop_jump_if_false L7
     jump L54
 
   L7:
     load_var s
-    is_type baml.time.Instant
+    is_type baml.time.PlainDate
     pop_jump_if_false L8
     jump L53
 
   L8:
     load_var s
-    is_type baml.time.Instant
+    is_type baml.time.PlainDate
     pop_jump_if_false L9
     jump L52
 
   L9:
     load_var s
-    is_type baml.time.PlainDate
+    is_type baml.toml.Table
     pop_jump_if_false L10
     jump L51
 
   L10:
     load_var s
-    is_type baml.time.PlainDate
+    is_type baml.toml.Table
     pop_jump_if_false L11
     jump L50
 
@@ -2130,7 +2130,7 @@ function json_auto_derive.user_to_json_override_result() -> baml.json.json {
 
   L51:
     load_var s
-    call baml.time.PlainDate.baml.ToJson.to_json
+    call baml.toml.Table.baml.ToJson.to_json
     jump L62
 
   L52:
@@ -2140,7 +2140,7 @@ function json_auto_derive.user_to_json_override_result() -> baml.json.json {
 
   L53:
     load_var s
-    call baml.time.Instant.baml.ToJson.to_json
+    call baml.time.PlainDate.baml.ToJson.to_json
     jump L62
 
   L54:
@@ -2150,7 +2150,7 @@ function json_auto_derive.user_to_json_override_result() -> baml.json.json {
 
   L55:
     load_var s
-    call baml.time.ZonedDateTime.baml.ToJson.to_json
+    call baml.time.Instant.baml.ToJson.to_json
     jump L62
 
   L56:
@@ -2160,7 +2160,7 @@ function json_auto_derive.user_to_json_override_result() -> baml.json.json {
 
   L57:
     load_var s
-    call baml.time.PlainTime.baml.ToJson.to_json
+    call baml.time.ZonedDateTime.baml.ToJson.to_json
     jump L62
 
   L58:
@@ -2170,7 +2170,7 @@ function json_auto_derive.user_to_json_override_result() -> baml.json.json {
 
   L59:
     load_var s
-    call baml.time.PlainDateTime.baml.ToJson.to_json
+    call baml.time.PlainTime.baml.ToJson.to_json
     jump L62
 
   L60:
@@ -2180,7 +2180,7 @@ function json_auto_derive.user_to_json_override_result() -> baml.json.json {
 
   L61:
     load_var s
-    call baml.toml.Table.baml.ToJson.to_json
+    call baml.time.PlainDateTime.baml.ToJson.to_json
 
   L62:
     return
