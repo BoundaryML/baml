@@ -457,7 +457,7 @@ impl ImplementsRegistry {
     }
 
     #[deprecated = "L2 matcher. Realized `C <: I` now resolves through L1 \
-        `get_implements_block` via `NormalizeCtx::implements_interface`; the only \
+        `get_implements_block` via `TypeContext::implements_interface`; the only \
         remaining callers are the non-realized symbolic fallback to migrate."]
     pub fn type_implements_interface_via_rule(
         &self,

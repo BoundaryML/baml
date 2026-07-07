@@ -782,6 +782,42 @@ fn map_ty(key: Ty, value: Ty) -> Ty {
 }
 
 #[test]
+fn containers_are_invariant_even_when_the_element_is_a_genuine_subtype() {
+    // The memory-corruption example (TYPE_SYSTEM.md §Variance): `Dog <: Animal`
+    // does NOT make `list<Dog> <: list<Animal>`. Element subtyping would let a
+    // caller holding the `list<Animal>` view store a non-`Dog` into a `list<Dog>`,
+    // so the containers are invariant — related only when the elements are mutual
+    // subtypes (equivalent). This is the exact rule value-checking now enforces by
+    // routing through this relation instead of the legacy element-covariant one.
+    let mut ctx = Ctx::default();
+    ctx.impls.push((qtn("Dog"), qtn("Animal")));
+    assert!(is_subtype(&class("Dog"), &iface("Animal"), &ctx));
+
+    assert!(!is_subtype(
+        &Ty::list(class("Dog")),
+        &Ty::list(iface("Animal")),
+        &ctx,
+    ));
+    assert!(!is_subtype(
+        &map_ty(Ty::string(), class("Dog")),
+        &map_ty(Ty::string(), iface("Animal")),
+        &ctx,
+    ));
+    // A generic class is invariant in its argument for the same reason.
+    assert!(!is_subtype(
+        &class1("Box", class("Dog")),
+        &class1("Box", iface("Animal")),
+        &ctx,
+    ));
+    // Reflexive same-instantiation still holds.
+    assert!(is_subtype(
+        &Ty::list(class("Dog")),
+        &Ty::list(class("Dog")),
+        &ctx,
+    ));
+}
+
+#[test]
 fn disjoint_containers_are_invariant() {
     let ctx = Ctx::default();
     // Different constructors / categories → disjoint.

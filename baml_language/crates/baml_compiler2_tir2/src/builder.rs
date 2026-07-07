@@ -24,6 +24,9 @@ use baml_compiler2_hir::{
     package::{PackageId, PackageItems},
     scope::{FileScopeId, ScopeId},
 };
+// The trait must be in scope so the builder (which implements it) can call the
+// defaulted type-algebra methods on itself — `self.is_subtype(a, b)`.
+use baml_type::normalize::TypeContext;
 use rustc_hash::{FxHashMap, FxHashSet};
 use text_size::TextRange;
 
@@ -523,38 +526,32 @@ struct OptionalCallContext<'a> {
     is_method_call: bool,
 }
 
-/// Adapter feeding the canonical type algebra in [`baml_type::normalize`] from a
-/// per-scope [`TypeInferenceBuilder`].
-///
-/// The nominal facts the algebra needs are entirely global (see
-/// [`GlobalTypeContext`]); this wrapper only supplies the builder's scope — its
-/// resolution context, alias map, and type-variable bounds — so every method
-/// delegates to a [`GlobalTypeContext`] via [`Self::as_global`]. It exists so
-/// call sites holding a builder keep a zero-cost `NormalizeCtx(self)` handle;
-/// the two are one implementation and never disagree.
-struct NormalizeCtx<'a, 'db>(&'a TypeInferenceBuilder<'db>);
-
-impl<'a, 'db> NormalizeCtx<'a, 'db> {
+impl<'db> TypeInferenceBuilder<'db> {
     /// The builder-free view of this scope, borrowing the builder's global
     /// inputs. The bounds are the builder's `Ty`-typed side table, read through
     /// the legacy [`TypeVarBounds::Tys`] bridge so no `Ty`/`Interface`
     /// round-trip is needed until that side table is retyped to constraints.
     #[expect(
         deprecated,
-        reason = "NormalizeCtx bridges the builder's legacy `Ty`-typed generic_param_bounds"
+        reason = "the builder's TypeContext bridges the legacy `Ty`-typed generic_param_bounds"
     )]
-    fn as_global(&self) -> GlobalTypeContext<'a, 'db> {
-        let b = self.0;
+    fn as_global(&self) -> GlobalTypeContext<'_, 'db> {
         GlobalTypeContext {
-            db: b.context.db(),
-            res_ctx: b.res_ctx,
-            aliases: &b.aliases,
-            bounds: TypeVarBounds::Tys(&b.generic_param_bounds),
+            db: self.context.db(),
+            res_ctx: self.res_ctx,
+            aliases: &self.aliases,
+            bounds: TypeVarBounds::Tys(&self.generic_param_bounds),
         }
     }
 }
 
-impl baml_type::normalize::TypeContext for NormalizeCtx<'_, '_> {
+/// The builder *is* a [`TypeContext`](baml_type::normalize::TypeContext): the
+/// nominal facts the type algebra needs are entirely global (see
+/// [`GlobalTypeContext`]), so each method delegates to a [`GlobalTypeContext`]
+/// over the builder's scope via [`Self::as_global`]. Implementing the trait
+/// directly lets value-checking call the defaulted algebra methods on the builder
+/// — `self.is_subtype(a, b)` — with no wrapper.
+impl baml_type::normalize::TypeContext for TypeInferenceBuilder<'_> {
     fn alias_def(&self, name: &crate::ty::QualifiedTypeName) -> Option<Ty> {
         self.as_global().alias_def(name)
     }
@@ -10806,13 +10803,6 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
     }
 
-    #[deprecated = "Redundant: the canonical type equality is `baml_type::normalize::equivalent`, \
-        already fed by the `NormalizeCtx` adapter. This bespoke check duplicates it; route callers \
-        through the canonical algebra and delete."]
-    fn types_equivalent(&self, a: &Ty, b: &Ty) -> bool {
-        baml_type::normalize::equivalent(a, b, &NormalizeCtx(self))
-    }
-
     fn interface_type_with_default_associated_bindings(&self, ty: Ty) -> Ty {
         let Ty::Interface(iface_qtn, iface_args, associated_bindings, attr) = ty else {
             return ty;
@@ -10837,60 +10827,6 @@ impl<'db> TypeInferenceBuilder<'db> {
         .map(|(_, _, assoc)| assoc)
         .unwrap_or_else(|| associated_bindings.clone());
         Ty::Interface(iface_qtn, iface_args, completed, attr)
-    }
-
-    fn interface_requires_instantiation(
-        &self,
-        sub_qtn: &crate::ty::QualifiedTypeName,
-        sub_args: &[Ty],
-        sub_associated_bindings: &[(Name, Ty)],
-        sup_qtn: &crate::ty::QualifiedTypeName,
-        sup_args: &[Ty],
-        sup_associated_bindings: &[(Name, Ty)],
-    ) -> bool {
-        let Some(pkg_items) = self.resolve_class_pkg_items(sub_qtn.package()) else {
-            return false;
-        };
-        let Some(Definition::Interface(sub_loc)) =
-            pkg_items.lookup_type(sub_qtn.namespace(), sub_qtn.name())
-        else {
-            return false;
-        };
-        let db = self.context.db();
-        for (iface_loc, iface_args, iface_assoc) in
-            crate::interfaces::interface_closure_locs_with_args_and_assoc(
-                db,
-                sub_loc,
-                sub_args,
-                sub_associated_bindings,
-            )
-        {
-            let iface_tree = baml_compiler2_hir::file_item_tree(db, iface_loc.file(db));
-            let Some(iface_data) = iface_tree.interfaces.get(&iface_loc.id(db)) else {
-                continue;
-            };
-            let iface_qtn = crate::lower_type_expr::qualify_def(
-                db,
-                Definition::Interface(iface_loc),
-                &iface_data.name,
-            );
-            if &iface_qtn == sup_qtn
-                && iface_args.len() == sup_args.len()
-                && iface_args
-                    .iter()
-                    .zip(sup_args.iter())
-                    .all(|(a, b)| self.types_equivalent(a, b))
-                && sup_associated_bindings.iter().all(|(sup_name, sup_ty)| {
-                    iface_assoc
-                        .iter()
-                        .find(|(iface_name, _)| iface_name == sup_name)
-                        .is_some_and(|(_, iface_ty)| self.types_equivalent(iface_ty, sup_ty))
-                })
-            {
-                return true;
-            }
-        }
-        false
     }
 
     fn interface_view_in_requires_closure(
@@ -10940,7 +10876,7 @@ impl<'db> TypeInferenceBuilder<'db> {
 
     fn merge_interface_inference_candidate(&self, current: &mut Option<Ty>, candidate: Ty) -> bool {
         match current {
-            Some(existing) => self.types_equivalent(existing, &candidate),
+            Some(existing) => self.equivalent(existing, &candidate),
             slot @ None => {
                 *slot = Some(candidate);
                 true
@@ -11768,7 +11704,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                         .generics
                         .iter()
                         .zip(target_iface_args)
-                        .all(|(a, b)| baml_type::normalize::equivalent(a, b, &NormalizeCtx(self)))
+                        .all(|(a, b)| self.equivalent(a, b))
             })
             .map(|source| source.class_field)
     }
@@ -12875,284 +12811,6 @@ impl<'db> TypeInferenceBuilder<'db> {
             .fold(types[0].clone(), |acc, t| Self::join_types(&acc, t))
     }
 
-    /// Subtype check — delegates to the normalizer which resolves type aliases
-    /// and performs equirecursive structural subtyping.
-    ///
-    /// **Nominal interface subtyping (BEP-044).** Before falling through to
-    /// structural subtyping, we short-circuit on `Class C <: Interface I`:
-    /// `C` is a subtype of `I` iff the implements registry says it is. This
-    /// preserves BAML's nominal semantics — a class without an explicit
-    /// `implements I` block never satisfies `I`, even if it has matching
-    /// fields and methods.
-    /// Whether the type variable `sub_name` is a subtype of `sup` by its own
-    /// identity (independent of its bound): `T <: T`, `T <: T?`, and
-    /// `T <: (T | …)`. Used to make type-variable reflexivity take precedence
-    /// over bound-expansion in [`Self::is_subtype`].
-    fn typevar_is_reflexive_subtype(sub_name: &Name, sup: &Ty) -> bool {
-        match sup {
-            Ty::TypeVar(sup_name, _) => sup_name == sub_name,
-            Ty::Union(members, _) => members
-                .iter()
-                .any(|m| Self::typevar_is_reflexive_subtype(sub_name, m)),
-            _ => false,
-        }
-    }
-
-    #[deprecated = "Redundant: the canonical subtype relation is `baml_type::normalize::is_subtype`, \
-        already fed by the `NormalizeCtx` adapter. This bespoke oracle (nominal short-circuit + \
-        structural fallback) duplicates it; route callers through the canonical algebra and delete."]
-    fn is_subtype(&self, sub: &Ty, sup: &Ty) -> bool {
-        if sub == sup {
-            return true;
-        }
-        // Type-variable reflexivity must be checked BEFORE expanding the
-        // variable's bound: a type variable is a subtype of *itself* (and of an
-        // optional/union containing itself), which holds for the variable's own
-        // identity regardless of its bound. Expanding the bound first would turn
-        // `T <: T` into `bound(T) <: T` (false) and wrongly reject legitimate
-        // same-variable uses like a `Self`-typed argument inside a default
-        // method, or `same<T extends Eq>(x: T, y: T) { x.eq(y) }`.
-        if let Ty::TypeVar(sub_name, _) = sub
-            && Self::typevar_is_reflexive_subtype(sub_name, sup)
-        {
-            return true;
-        }
-        let expanded_sub = self
-            .interface_type_with_default_associated_bindings(self.expand_alias_chains(sub.clone()));
-        let expanded_sup = self
-            .interface_type_with_default_associated_bindings(self.expand_alias_chains(sup.clone()));
-        if expanded_sub != *sub || expanded_sup != *sup {
-            return self.is_subtype(&expanded_sub, &expanded_sup);
-        }
-        if let Ty::TypeVar(name, _) = sub
-            && let Some(bound) = self.generic_param_bounds.get(name)
-        {
-            return self.is_subtype(&bound.clone(), sup);
-        }
-        // BEP-044 wf3 #12: a union is a subtype of `sup` iff *every* member is
-        // (join-of-subtypes). Checked before the interface/structural branches
-        // because those assume a non-union `sub` and would reject `Dog | Cat`
-        // against `Animal` early. `Dog?` (= `Dog | null`) is still rejected
-        // because `null` is not a subtype of the interface.
-        if let Ty::Union(members, _) = sub
-            && !members.is_empty()
-            && members.iter().all(|m| self.is_subtype(m, sup))
-        {
-            return true;
-        }
-        // Same-class generic args are invariant. The normalizer implements
-        // that invariance as structural EQUALITY, which is both too strict
-        // and too weak for two cases the spawn `with`-chain (and any
-        // expected-type-driven generic instantiation) hits:
-        //   1. HOLES — `Ty::Unknown` (error recovery / not-yet-constrained,
-        //      bidirectionally compatible by the top-level rule in
-        //      `normalize::is_subtype_of`) and `Ty::BuiltinUnknown` (what
-        //      unresolved callee typevars are ERASED to, e.g.
-        //      `let t = withDouble();` leaving `SpawnParams<int, unknown>`).
-        //      Equality rejects `SpawnParams<int, E> <:
-        //      SpawnParams<unknown, unknown>` even though the hole means
-        //      "anything goes here", not "a different type".
-        //   2. EQUIVALENT SPELLINGS — phase-0 can bind `T = int | 99` (arg
-        //      literal joined with the expected type); that denotes the same
-        //      type as `int` but is not structurally equal to it.
-        // Compare args pairwise instead: holes match anything, concrete args
-        // must be MUTUAL subtypes (the proper definition of invariant
-        // compatibility, of which structural equality is a special case).
-        if let (Ty::Class(sub_qtn, sub_args, _), Ty::Class(sup_qtn, sup_args, _)) = (sub, sup)
-            && sub_qtn == sup_qtn
-            && sub_args.len() == sup_args.len()
-        {
-            return sub_args.iter().zip(sup_args.iter()).all(|(a, b)| {
-                matches!(a, Ty::Unknown { .. } | Ty::BuiltinUnknown { .. })
-                    || matches!(b, Ty::Unknown { .. } | Ty::BuiltinUnknown { .. })
-                    || (self.is_subtype(a, b) && self.is_subtype(b, a))
-            });
-        }
-        if let Ty::Interface(iface_qtn, iface_args, associated_bindings, _) = sup
-            && !matches!(sub, Ty::Interface(..))
-        {
-            let requested = baml_type::Interface {
-                name: iface_qtn.clone(),
-                generics: iface_args.clone(),
-                associated_types: associated_bindings.clone(),
-            };
-            return crate::interfaces::implements_interface(
-                self.context.db(),
-                sub,
-                &requested,
-                &self.aliases,
-                |actual, bound| self.is_subtype(actual, bound),
-            );
-        }
-        // BEP-044 interface-to-interface subtyping: `Interface A <: Interface B`
-        // iff A == B or A requires B (transitively). Two unrelated interfaces
-        // that happen to share an implementor are NOT subtypes — the user must
-        // narrow via `match`/`is` first.
-        if let (
-            Ty::Interface(a_qtn, a_args, a_associated_bindings, _),
-            Ty::Interface(b_qtn, b_args, b_associated_bindings, _),
-        ) = (sub, sup)
-        {
-            let db = self.context.db();
-            let registry = crate::interfaces::package_implements_registry(db, self.package_id);
-            if a_qtn == b_qtn
-                && a_args.len() == b_args.len()
-                && a_args
-                    .iter()
-                    .zip(b_args.iter())
-                    .all(|(a, b)| self.types_equivalent(a, b))
-                && b_associated_bindings.iter().all(|(b_name, b_ty)| {
-                    a_associated_bindings
-                        .iter()
-                        .find(|(a_name, _)| a_name == b_name)
-                        .is_some_and(|(_, a_ty)| self.types_equivalent(a_ty, b_ty))
-                })
-            {
-                return true;
-            }
-            if a_qtn != b_qtn
-                && registry.interface_requires(a_qtn, b_qtn)
-                && b_args.is_empty()
-                && b_associated_bindings.is_empty()
-            {
-                return true;
-            }
-            if a_qtn != b_qtn
-                && self.interface_requires_instantiation(
-                    a_qtn,
-                    a_args,
-                    a_associated_bindings,
-                    b_qtn,
-                    b_args,
-                    b_associated_bindings,
-                )
-            {
-                return true;
-            }
-        }
-        // BEP-044: nominal interface subtyping must also hold when the target
-        // is a *union* type (including a nullable `T | null`).
-        // `normalize::is_subtype_of` has no interface arm, so without this a
-        // `Dog` (which implements `Animal`) would be rejected for `Animal | null`
-        // or `Animal | string` even though it is a subtype of a wrapped
-        // interface. We only short-circuit on a positive result here — a
-        // negative falls through to the structural check below, so non-interface
-        // union behaviour is unchanged.
-        if let Ty::Union(members, _) = sup {
-            // Decompose `sub` into members too — a nullable `T?` is now the
-            // union `T | null` — and require every `sub` member to be a
-            // subtype of some `sup` member, using the recursive (nominal
-            // interface aware) `is_subtype`. This preserves `Dog? <: Animal?`
-            // (and `Dog <: Animal?`), which `normalize::is_subtype_of` cannot
-            // decide because it has no interface arm. Strictly adds positives.
-            let sub_members: Vec<&Ty> = match sub {
-                Ty::Union(sub_members, _) => sub_members.iter().collect(),
-                other => vec![other],
-            };
-            if sub_members
-                .iter()
-                .all(|sm| members.iter().any(|m| self.is_subtype(sm, m)))
-            {
-                return true;
-            }
-        }
-        if let Some(result) = self.structural_subtype_with_nominal_interfaces(sub, sup) {
-            return result;
-        }
-        // Interface-to-interface subtyping: `Interface A <: Interface B` iff
-        // A extends B (transitively). The registry doesn't carry that
-        // directly, but every class that implements A also implements B, so
-        // we don't need a separate index — the normalizer handles equality
-        // and the `extends` chain is reflected in the per-class data already.
-        // For a pure interface-to-interface check, fall through to structural
-        // equality (matches today's behaviour for unrelated interfaces).
-        crate::normalize::is_subtype_of(sub, sup, &self.aliases)
-    }
-
-    fn structural_subtype_with_nominal_interfaces(&self, sub: &Ty, sup: &Ty) -> Option<bool> {
-        let expanded_sub = self.expand_alias_chains(sub.clone());
-        let expanded_sup = self.expand_alias_chains(sup.clone());
-        if &expanded_sub != sub || &expanded_sup != sup {
-            return self.structural_subtype_with_nominal_interfaces(&expanded_sub, &expanded_sup);
-        }
-
-        match (sub, sup) {
-            (Ty::List(..) | Ty::EvolvingList(..), Ty::List(..) | Ty::EvolvingList(..)) => {
-                Some(crate::normalize::is_subtype_of(sub, sup, &self.aliases))
-            }
-            (Ty::Map { .. } | Ty::EvolvingMap(..), Ty::Map { .. } | Ty::EvolvingMap(..)) => {
-                Some(crate::normalize::is_subtype_of(sub, sup, &self.aliases))
-            }
-            (Ty::Future(sub_value, sub_error, _), Ty::Future(sup_value, sup_error, _)) => {
-                Some(self.is_subtype(sub_value, sup_value) && self.is_subtype(sub_error, sup_error))
-            }
-            (
-                Ty::Function {
-                    params: sub_params,
-                    ret: sub_ret,
-                    throws: sub_throws,
-                    ..
-                },
-                Ty::Function {
-                    params: sup_params,
-                    ret: sup_ret,
-                    throws: sup_throws,
-                    ..
-                },
-            ) => Some(
-                self.is_subtype(sub_ret, sup_ret)
-                    && self.is_subtype(sub_throws, sup_throws)
-                    && self.function_params_subtype_with_nominal_interfaces(sub_params, sup_params),
-            ),
-            _ => None,
-        }
-    }
-
-    fn function_params_subtype_with_nominal_interfaces(
-        &self,
-        sub_params: &[FunctionParamTy],
-        sup_params: &[FunctionParamTy],
-    ) -> bool {
-        let sub_required: Vec<_> = sub_params
-            .iter()
-            .filter(|param| matches!(param.mode, FunctionParamMode::Required))
-            .collect();
-        let sup_required: Vec<_> = sup_params
-            .iter()
-            .filter(|param| matches!(param.mode, FunctionParamMode::Required))
-            .collect();
-
-        if sub_required.len() != sup_required.len() {
-            return false;
-        }
-
-        for (sub, sup) in sub_required.iter().zip(sup_required.iter()) {
-            if !self.is_subtype(&sup.ty, &sub.ty) {
-                return false;
-            }
-        }
-
-        for sup in sup_params
-            .iter()
-            .filter(|param| matches!(param.mode, FunctionParamMode::Optional))
-        {
-            let Some(name) = &sup.name else {
-                return false;
-            };
-            let Some(sub) = sub_params.iter().find(|param| {
-                matches!(param.mode, FunctionParamMode::Optional)
-                    && param.name.as_ref() == Some(name)
-            }) else {
-                return false;
-            };
-            if !self.is_subtype(&sup.ty, &sub.ty) {
-                return false;
-            }
-        }
-
-        true
-    }
-
     fn validate_function_generic_bounds(
         &mut self,
         expr_id: ExprId,
@@ -13434,7 +13092,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         // Normalize first so a structurally-union-but-collapsible spelling like
         // `int | 99` (a `catch` result widening a literal back into its base) is
         // recognized as the single concrete type `int`, not rejected as a union.
-        let ty = baml_type::normalize::normalize(ty, &NormalizeCtx(self));
+        let ty = self.normalize(ty);
         if matches!(ty, Ty::Union(..) | Ty::Interface(..) | Ty::Unknown { .. }) {
             return false;
         }
@@ -13484,7 +13142,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // to a `bool` literal so the static type agrees with the
                 // `equals_equals` runtime. Disjoint operands (`Some(false)`) also warn
                 // (the comparison is pointless); a provably-equal pair does not.
-                match baml_type::normalize::constant_equality(lhs, rhs, &NormalizeCtx(self)) {
+                match self.constant_equality(lhs, rhs) {
                     Some(eq) => {
                         if !eq {
                             self.context.report_warning_simple(
@@ -13527,8 +13185,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     // Exact-type equality via the canonical algebra, so equivalent
                     // spellings agree — e.g. a `catch` result typed `int | 99`
                     // canonicalizes to `int`, matching `int` on the other side.
-                    let same_type =
-                        baml_type::normalize::equivalent(&lhs_base, &rhs_base, &NormalizeCtx(self));
+                    let same_type = self.equivalent(&lhs_base, &rhs_base);
                     if !same_type {
                         self.context.report_simple(
                             TirTypeError::OrderingDifferentTypes {
@@ -15592,7 +15249,7 @@ impl TypeInferenceBuilder<'_> {
                                 && pattern_args
                                     .iter()
                                     .zip(scrut_args.iter())
-                                    .all(|(a, b)| self.types_equivalent(a, b)))) =>
+                                    .all(|(a, b)| self.equivalent(a, b)))) =>
                 {
                     Ty::Interface(
                         pattern_iface_qtn.clone(),

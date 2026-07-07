@@ -9,10 +9,10 @@
 //! bounds package visibility), the package's alias map, and the type-variable
 //! bounds the enclosing scope introduces.
 //!
-//! Unlike the builder's `NormalizeCtx`, it holds no per-scope *inference* state
+//! Unlike the builder's `TypeContext` impl, it holds no per-scope *inference* state
 //! (`TypeInferenceBuilder`): type-level subtyping is a function of the program's
 //! declarations plus the bounds a scope declares, never of the value-expression
-//! inference the builder performs. `NormalizeCtx` delegates to it so the two
+//! inference the builder performs. The builder delegates to it so the two
 //! never disagree, and type-expression lowering — which has no builder —
 //! constructs one directly.
 

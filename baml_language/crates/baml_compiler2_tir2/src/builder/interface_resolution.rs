@@ -9,9 +9,11 @@
 //!
 //! This is an `impl TypeInferenceBuilder` continuation split out of `builder.rs` for size;
 //! it draws the inference vocabulary it needs from the parent module.
+use baml_type::normalize::TypeContext;
+
 use super::{
-    Definition, ExprId, InterfaceBound, MemberAccess, Name, NormalizeCtx, PackageItems,
-    SelfReceiver, TirTypeError, Ty, TyAttr, TypeInferenceBuilder, format_interface_display,
+    Definition, ExprId, InterfaceBound, MemberAccess, Name, PackageItems, SelfReceiver,
+    TirTypeError, Ty, TyAttr, TypeInferenceBuilder, format_interface_display,
     function_generic_param_bounds_exprs, lower_generic_param_bounds,
 };
 use crate::signature::{DeclaredSignature, lower_signature};
@@ -467,7 +469,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             self.package_id,
             base_ty,
             &self.aliases,
-            |a, b| baml_type::normalize::is_subtype(a, b, &NormalizeCtx(self)),
+            |a, b| self.is_subtype(a, b),
         )
     }
 

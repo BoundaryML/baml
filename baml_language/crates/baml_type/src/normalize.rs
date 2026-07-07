@@ -163,127 +163,192 @@ pub trait TypeContext {
     /// [`associated_type_bound`](Self::associated_type_bound)). A context over
     /// already-realized values (the runtime) returns `Opaque` explicitly.
     fn project(&self, base: &Ty, interface: &Interface, member: &Name) -> ProjectionStep;
+
+    // ── type algebra (defaulted; the canonical implementation) ──────────────
+    //
+    // A context computes the set-theoretic relations over its *own* facts, so
+    // `ctx.is_subtype(a, b)` reads as "does this context prove `a <: b`". These
+    // methods carry the logic; the free functions below are thin wrappers over
+    // them (kept for callers that hold a context by value — deletable once those
+    // migrate to the method form). Each body passes `self` as the context, hence
+    // `where Self: Sized`: there are no `dyn TypeContext` callers, so the bound
+    // costs nothing. Do not override them — a context supplies only the facts.
+
+    /// Normalize `ty` to its canonical form and render it back as a [`Ty`].
+    ///
+    /// Two types are [`Self::equivalent`] iff their canonical forms are structurally
+    /// equal. The canonical form applies the full set-theoretic algebra (union
+    /// flatten/sort/dedup, `never` removal, `unknown` absorption, literal-into-base
+    /// and enum-completeness collapse, interface absorption, alias expansion) so
+    /// that distinct spellings of the same type converge.
+    ///
+    /// # Attributes are erased
+    ///
+    /// The returned `Ty` carries `TyAttr::default()` on every node — SAP/streaming
+    /// annotations (`@stream.done`, `sap_in_progress`, …) are dropped, because they
+    /// are parsing metadata, not part of the set of values a type denotes (and so
+    /// must not affect [`Self::equivalent`]/[`Self::is_subtype`]). This makes the
+    /// output a canonical form for type *identity* (equality, display, debugging) —
+    /// **not** an attribute-preserving rewrite. Do not feed it into a position where
+    /// SAP annotations must survive (an LLM function's return type, a generated
+    /// stream companion); derive the canonical type from the original `Ty` there
+    /// instead.
+    fn normalize(&self, ty: &Ty) -> Ty
+    where
+        Self: Sized,
+    {
+        NormalTy::canonical(ty, self).into_ty()
+    }
+
+    /// Whether `a` and `b` denote the same type under the current context.
+    ///
+    /// This is invariant equality, not assignability: use it where two spellings
+    /// must denote *the same* type (e.g. exact-type operator operands, interface
+    /// field implementations), not merely compatible ones.
+    fn equivalent(&self, a: &Ty, b: &Ty) -> bool
+    where
+        Self: Sized,
+    {
+        NormalTy::canonical(a, self) == NormalTy::canonical(b, self)
+    }
+
+    /// Whether every value of `sub` is also a value of `sup` under the current
+    /// context (the subset relation).
+    fn is_subtype(&self, sub: &Ty, sup: &Ty) -> bool
+    where
+        Self: Sized,
+    {
+        let sub = NormalTy::canonical(sub, self);
+        let sup = NormalTy::canonical(sup, self);
+        sub.is_subtype_of(&sup, self, &mut HashSet::new())
+    }
+
+    /// Whether no value of type `a` can ever be `==`-equal to a value of type `b` —
+    /// so a broad `==` between operands of these types is always `false`.
+    ///
+    /// Sound and conservative: `true` only when *certain*, so it is a safe basis for
+    /// folding `==`/`!=` to a constant and for an "always false" diagnostic. It also
+    /// stays correct under additive dynamic-package mutation — it never relies on the
+    /// *absence* of an `Equals` (a custom one could be added later), only on facts
+    /// that hold regardless of any `Equals` implementation.
+    ///
+    /// What it proves disjoint:
+    /// - **Different concrete categories** — `int`/`bigint`, `int`/`string`,
+    ///   `list<_>`/`map<_,_>`, a class vs a list, etc.
+    /// - **Distinct instantiations of an invariant generic** — `Box<int>` vs
+    ///   `Box<string>`, `list<int>` vs `list<string>`, `map<string,int>` vs
+    ///   `map<string,bool>`. Generic constructors (classes, lists, maps, futures)
+    ///   are invariant and their type arguments are real instance data, so two
+    ///   instantiations sharing no equal-everywhere argument list are disjoint.
+    /// - **Distinct primitive literals** — `1` vs `2`, `1` vs `1n` (their built-in
+    ///   reflexive equality is unoverridable). Floats are excluded (`NaN` /
+    ///   decimal-representation aliasing).
+    ///
+    /// (`unknown` is the determined top type, so `Box<unknown>` *is* disjoint from
+    /// `Box<int>` — distinct invariant instantiations — even though a bare `unknown`
+    /// operand overlaps everything.)
+    ///
+    /// What it conservatively leaves overlapping (returns `false`):
+    /// - **Same enum** (`E.A` vs `E.B`, `E.A` vs `E`): a value's `eq` dispatches on
+    ///   the enum, and a custom `Equals` on `E` could equate distinct variants.
+    /// - **An instantiation with a not-yet-resolved argument** (`Box<T>` for a
+    ///   generic `T`, or an error sentinel): it could still resolve to match.
+    /// - Functions (not invariant — contravariant/covariant), watch accessors
+    ///   (identity), interfaces, bare type variables, and a bare `unknown`.
+    fn definitely_disjoint(&self, a: &Ty, b: &Ty) -> bool
+    where
+        Self: Sized,
+    {
+        NormalTy::canonical(a, self).is_disjoint_from(&NormalTy::canonical(b, self))
+    }
+
+    /// Whether a broad `==` between operands of types `a` and `b` is always `true`.
+    ///
+    /// Holds only when both operands are pinned to the *same* single value whose
+    /// equality is the built-in, reflexive one that can never be replaced: the
+    /// operands are equivalent and that type is a non-float primitive literal
+    /// (`int`/`bigint`/`string`/`bool`) or `null`.
+    ///
+    /// Deliberately excluded:
+    /// - **Enum-variant and class singletons.** A user type's `Equals` can be added
+    ///   later by additively mutating its (dynamic) package, so the absence of an
+    ///   `Equals` today is not a stable basis for baking in a constant — the
+    ///   built-in reflexive equality is guaranteed only for types whose `Equals` the
+    ///   orphan rule forbids overriding (primitives, `null`).
+    fn definitely_equal(&self, a: &Ty, b: &Ty) -> bool
+    where
+        Self: Sized,
+    {
+        let a = NormalTy::canonical(a, self);
+        a.is_unoverridable_singleton() && a == NormalTy::canonical(b, self)
+    }
+
+    /// The statically-known result of a broad `==` between operands of types `a` and
+    /// `b`, or `None` if it depends on the runtime values.
+    ///
+    /// Combines [`Self::definitely_disjoint`] and [`Self::definitely_equal`] into one
+    /// pass — it canonicalizes each operand once rather than twice:
+    /// - `Some(false)` — the types are provably disjoint, so `==` is always `false`.
+    /// - `Some(true)` — both operands are the same unoverridable singleton, so `==`
+    ///   is always `true`.
+    /// - `None` — the result is not statically determined.
+    ///
+    /// See those two methods for the exact rules and their dynamic-package
+    /// soundness.
+    fn constant_equality(&self, a: &Ty, b: &Ty) -> Option<bool>
+    where
+        Self: Sized,
+    {
+        let a = NormalTy::canonical(a, self);
+        let b = NormalTy::canonical(b, self);
+        if a.is_disjoint_from(&b) {
+            Some(false)
+        } else if a.is_unoverridable_singleton() && a == b {
+            Some(true)
+        } else {
+            None
+        }
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
 // PUBLIC API
 // ═══════════════════════════════════════════════════════════════════════════
 
-/// Normalize `ty` to its canonical form and render it back as a [`Ty`].
-///
-/// Two types are [`equivalent`] iff their canonical forms are structurally
-/// equal. The canonical form applies the full set-theoretic algebra (union
-/// flatten/sort/dedup, `never` removal, `unknown` absorption, literal-into-base
-/// and enum-completeness collapse, interface absorption, alias expansion) so
-/// that distinct spellings of the same type converge.
-///
-/// # Attributes are erased
-///
-/// The returned `Ty` carries `TyAttr::default()` on every node — SAP/streaming
-/// annotations (`@stream.done`, `sap_in_progress`, …) are dropped, because they
-/// are parsing metadata, not part of the set of values a type denotes (and so
-/// must not affect [`equivalent`]/[`is_subtype`]). This makes the output a
-/// canonical form for type *identity* (equality, display, debugging) — **not** an
-/// attribute-preserving rewrite. Do not feed it into a position where SAP
-/// annotations must survive (an LLM function's return type, a generated stream
-/// companion); derive the canonical type from the original `Ty` there instead.
+/// Free-function form of [`TypeContext::normalize`], for a context held by value.
+/// Pending removal once every caller uses the method form.
 pub fn normalize<C: TypeContext>(ty: &Ty, ctx: &C) -> Ty {
-    NormalTy::canonical(ty, ctx).into_ty()
+    ctx.normalize(ty)
 }
 
-/// Whether `a` and `b` denote the same type under the current context.
-///
-/// This is invariant equality, not assignability: use it where two spellings
-/// must denote *the same* type (e.g. exact-type operator operands, interface
-/// field implementations), not merely compatible ones.
+/// Free-function form of [`TypeContext::equivalent`], for a context held by value.
+/// Pending removal once every caller uses the method form.
 pub fn equivalent<C: TypeContext>(a: &Ty, b: &Ty, ctx: &C) -> bool {
-    NormalTy::canonical(a, ctx) == NormalTy::canonical(b, ctx)
+    ctx.equivalent(a, b)
 }
 
-/// Whether every value of `sub` is also a value of `sup` under the current
-/// context (the subset relation).
+/// Free-function form of [`TypeContext::is_subtype`], for a context held by value.
+/// Pending removal once every caller uses the method form.
 pub fn is_subtype<C: TypeContext>(sub: &Ty, sup: &Ty, ctx: &C) -> bool {
-    let sub = NormalTy::canonical(sub, ctx);
-    let sup = NormalTy::canonical(sup, ctx);
-    sub.is_subtype_of(&sup, ctx, &mut HashSet::new())
+    ctx.is_subtype(sub, sup)
 }
 
-/// Whether no value of type `a` can ever be `==`-equal to a value of type `b` —
-/// so a broad `==` between operands of these types is always `false`.
-///
-/// Sound and conservative: `true` only when *certain*, so it is a safe basis for
-/// folding `==`/`!=` to a constant and for an "always false" diagnostic. It also
-/// stays correct under additive dynamic-package mutation — it never relies on the
-/// *absence* of an `Equals` (a custom one could be added later), only on facts
-/// that hold regardless of any `Equals` implementation.
-///
-/// What it proves disjoint:
-/// - **Different concrete categories** — `int`/`bigint`, `int`/`string`,
-///   `list<_>`/`map<_,_>`, a class vs a list, etc.
-/// - **Distinct instantiations of an invariant generic** — `Box<int>` vs
-///   `Box<string>`, `list<int>` vs `list<string>`, `map<string,int>` vs
-///   `map<string,bool>`. Generic constructors (classes, lists, maps, futures)
-///   are invariant and their type arguments are real instance data, so two
-///   instantiations sharing no equal-everywhere argument list are disjoint.
-/// - **Distinct primitive literals** — `1` vs `2`, `1` vs `1n` (their built-in
-///   reflexive equality is unoverridable). Floats are excluded (`NaN` /
-///   decimal-representation aliasing).
-///
-/// (`unknown` is the determined top type, so `Box<unknown>` *is* disjoint from
-/// `Box<int>` — distinct invariant instantiations — even though a bare `unknown`
-/// operand overlaps everything.)
-///
-/// What it conservatively leaves overlapping (returns `false`):
-/// - **Same enum** (`E.A` vs `E.B`, `E.A` vs `E`): a value's `eq` dispatches on
-///   the enum, and a custom `Equals` on `E` could equate distinct variants.
-/// - **An instantiation with a not-yet-resolved argument** (`Box<T>` for a
-///   generic `T`, or an error sentinel): it could still resolve to match.
-/// - Functions (not invariant — contravariant/covariant), watch accessors
-///   (identity), interfaces, bare type variables, and a bare `unknown`.
+/// Free-function form of [`TypeContext::definitely_disjoint`], for a context held
+/// by value. Pending removal once every caller uses the method form.
 pub fn definitely_disjoint<C: TypeContext>(a: &Ty, b: &Ty, ctx: &C) -> bool {
-    NormalTy::canonical(a, ctx).is_disjoint_from(&NormalTy::canonical(b, ctx))
+    ctx.definitely_disjoint(a, b)
 }
 
-/// Whether a broad `==` between operands of types `a` and `b` is always `true`.
-///
-/// Holds only when both operands are pinned to the *same* single value whose
-/// equality is the built-in, reflexive one that can never be replaced: the
-/// operands are equivalent and that type is a non-float primitive literal
-/// (`int`/`bigint`/`string`/`bool`) or `null`.
-///
-/// Deliberately excluded:
-/// - **Enum-variant and class singletons.** A user type's `Equals` can be added
-///   later by additively mutating its (dynamic) package, so the absence of an
-///   `Equals` today is not a stable basis for baking in a constant — the
-///   built-in reflexive equality is guaranteed only for types whose `Equals` the
-///   orphan rule forbids overriding (primitives, `null`).
+/// Free-function form of [`TypeContext::definitely_equal`], for a context held by
+/// value. Pending removal once every caller uses the method form.
 pub fn definitely_equal<C: TypeContext>(a: &Ty, b: &Ty, ctx: &C) -> bool {
-    let a = NormalTy::canonical(a, ctx);
-    a.is_unoverridable_singleton() && a == NormalTy::canonical(b, ctx)
+    ctx.definitely_equal(a, b)
 }
 
-/// The statically-known result of a broad `==` between operands of types `a` and
-/// `b`, or `None` if it depends on the runtime values.
-///
-/// Combines [`definitely_disjoint`] and [`definitely_equal`] into one pass — it
-/// canonicalizes each operand once rather than twice:
-/// - `Some(false)` — the types are provably disjoint, so `==` is always `false`.
-/// - `Some(true)` — both operands are the same unoverridable singleton, so `==`
-///   is always `true`.
-/// - `None` — the result is not statically determined.
-///
-/// See those two functions for the exact rules and their dynamic-package
-/// soundness.
+/// Free-function form of [`TypeContext::constant_equality`], for a context held by
+/// value. Pending removal once every caller uses the method form.
 pub fn constant_equality<C: TypeContext>(a: &Ty, b: &Ty, ctx: &C) -> Option<bool> {
-    let a = NormalTy::canonical(a, ctx);
-    let b = NormalTy::canonical(b, ctx);
-    if a.is_disjoint_from(&b) {
-        Some(false)
-    } else if a.is_unoverridable_singleton() && a == b {
-        Some(true)
-    } else {
-        None
-    }
+    ctx.constant_equality(a, b)
 }
 
 impl NormalTy {
