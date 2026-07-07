@@ -3096,4 +3096,85 @@ function needs<T extends Marker>(x: T) -> int throws never {
             "`-> Self?` through an existential should stay allowed, got {errors:?}"
         );
     }
+
+    // ── uninferable type args = error (not silent erasure) ──
+
+    fn has_cannot_infer(errors: &[TirTypeError]) -> bool {
+        errors
+            .iter()
+            .any(|e| matches!(e, TirTypeError::CannotInferTypeParameter { .. }))
+    }
+
+    #[test]
+    fn phantom_type_param_that_cannot_be_inferred_is_an_error() {
+        // `T` occurs nowhere in the signature, so a call cannot infer it — reported now
+        // (previously only params occurring in the return type were checked).
+        let errors = all_type_errors(
+            "function phantom<T>() -> int throws never {\n  0\n}\n\
+             function caller() -> int throws never {\n  phantom();\n  0\n}\n",
+        );
+        assert!(
+            has_cannot_infer(&errors),
+            "a phantom uninferable type parameter should error, got {errors:?}"
+        );
+    }
+
+    #[test]
+    fn uninferable_return_type_param_with_no_expected_is_an_error() {
+        // `let y = opt()` for `opt<T>() -> T?` with no annotation: `T` is uninferable and
+        // reported (previously suppressed because the expected type was `unknown`).
+        let errors = all_type_errors(
+            "function opt<T>() -> T? throws never {\n  null\n}\n\
+             function caller() -> int throws never {\n  let y = opt();\n  0\n}\n",
+        );
+        assert!(
+            has_cannot_infer(&errors),
+            "an uninferable return-type parameter with no expected type should error, got {errors:?}"
+        );
+    }
+
+    #[test]
+    fn inferable_type_param_from_argument_is_ok() {
+        let errors = all_type_errors(
+            "function id<T>(x: T) -> T throws never {\n  x\n}\n\
+             function caller() -> int throws never {\n  let y = id(5);\n  y.to_json();\n  0\n}\n",
+        );
+        assert!(
+            !has_cannot_infer(&errors),
+            "a type parameter inferable from an argument should not error, got {errors:?}"
+        );
+    }
+
+    fn has_unspecialized(errors: &[TirTypeError]) -> bool {
+        errors
+            .iter()
+            .any(|e| matches!(e, TirTypeError::GenericFunctionValueNotSpecialized { .. }))
+    }
+
+    #[test]
+    fn unspecialized_generic_function_bound_to_unknown_is_an_error() {
+        // `let f: unknown = identity` — a non-constraining annotation doesn't specialize the
+        // generic function value; it must be specialized (`identity<int>`) before use.
+        let errors = all_type_errors(
+            "function identity<T>(x: T) -> T throws never {\n  x\n}\n\
+             function caller() -> int throws never {\n  let f: unknown = identity;\n  0\n}\n",
+        );
+        assert!(
+            has_unspecialized(&errors),
+            "an unspecialized generic function value should error, got {errors:?}"
+        );
+    }
+
+    #[test]
+    fn bare_unspecialized_generic_function_value_is_an_error() {
+        // The pre-existing bare-`let` case still fires.
+        let errors = all_type_errors(
+            "function identity<T>(x: T) -> T throws never {\n  x\n}\n\
+             function caller() -> int throws never {\n  let f = identity;\n  0\n}\n",
+        );
+        assert!(
+            has_unspecialized(&errors),
+            "a bare unspecialized generic function value should error, got {errors:?}"
+        );
+    }
 }

@@ -2451,18 +2451,23 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // carrying the literal would never match `is Box<string>`.
                 // (Explicit type args never reach here; recording is gated on
                 // `!explicit_args_used`.)
+                //
+                // An uninferable parameter records `Ty::Error`, NOT `unknown`: erasing it to
+                // the top type is silent unsoundness (observable via `reflect.type_of<T>()`),
+                // so the recorded arg stays a loud error rather than a compatible-with-anything
+                // sentinel (the diagnostic is emitted by the call-site inference).
                 let ty = bindings
                     .get(param)
                     .cloned()
                     .map(Ty::widen_fresh)
-                    .unwrap_or_else(|| Ty::BuiltinUnknown {
+                    .unwrap_or_else(|| Ty::Error {
                         attr: TyAttr::default(),
                     });
                 let resolved = ty;
                 if crate::generics::contains_typevar_where(&resolved, &|name| {
                     !self.generic_params.iter().any(|param| param == name)
                 }) {
-                    Ty::BuiltinUnknown {
+                    Ty::Error {
                         attr: TyAttr::default(),
                     }
                 } else {
@@ -3991,12 +3996,14 @@ impl<'db> TypeInferenceBuilder<'db> {
                             let instantiation: Vec<Ty> = declared_params
                                 .iter()
                                 .map(|name| {
+                                    // An uninferable parameter records `Ty::Error` (loud), not an
+                                    // erased `unknown`; the call-site inference reports it.
                                     bindings
                                         .get(name)
                                         .or_else(|| typevar_bindings.get(name))
                                         .cloned()
                                         .map(Ty::widen_fresh)
-                                        .unwrap_or(Ty::Unknown {
+                                        .unwrap_or(Ty::Error {
                                             attr: TyAttr::default(),
                                         })
                                 })
@@ -4007,19 +4014,22 @@ impl<'db> TypeInferenceBuilder<'db> {
                 }
 
                 let substituted_ret = crate::generics::substitute_ty(ret, &bindings);
+                // *Every* declared type parameter must be resolved after inference — not only
+                // those occurring in the return type. A parameter the caller cannot infer
+                // (`f<T>() -> void`, or `f<T>() -> T?` with no expected type) is an error, never
+                // a silently-erased `unknown` (the realization contract, TYPE_SYSTEM.md L152).
                 let unresolved_callee_typevars: FxHashSet<Name> = generic_params
                     .iter()
                     .filter(|name| {
                         !bindings.contains_key(*name)
                             && !self.generic_params.iter().any(|param| param == *name)
-                            && crate::generics::contains_typevar_where(
-                                &substituted_ret,
-                                &|candidate| candidate == *name,
-                            )
                     })
                     .cloned()
                     .collect();
-                if !matches!(expected, Ty::Unknown { .. } | Ty::Error { .. }) {
+                // An `Error` expected type is an upstream failure — suppress to avoid a cascade.
+                // An `Unknown` expected (a synthesis position with no annotation) is exactly where
+                // inference was meant to succeed, so a failure there IS reported.
+                if !matches!(expected, Ty::Error { .. }) {
                     for name in &unresolved_callee_typevars {
                         self.context.report_simple(
                             TirTypeError::CannotInferTypeParameter { name: name.clone() },
@@ -4027,18 +4037,20 @@ impl<'db> TypeInferenceBuilder<'db> {
                         );
                     }
                 }
-                let substituted_ret = if unresolved_callee_typevars.is_empty() {
-                    substituted_ret
-                } else {
+                // The result carries erased generics only when an unresolved var actually occurs
+                // in the return type; a phantom parameter leaves the result untouched.
+                let result_carries_erased = unresolved_callee_typevars.iter().any(|name| {
+                    crate::generics::contains_typevar_where(&substituted_ret, &|c| c == name)
+                });
+                let substituted_ret =
                     crate::generics::erase_typevars_matching(&substituted_ret, &|name| {
                         unresolved_callee_typevars.contains(name)
-                    })
-                };
+                    });
                 let mut erase_diags = Vec::new();
                 let result =
                     crate::generics::erase_unresolved_typevars(&substituted_ret, &mut erase_diags);
                 let recovered_unresolved_generics =
-                    !unresolved_callee_typevars.is_empty() || !erase_diags.is_empty();
+                    result_carries_erased || !erase_diags.is_empty();
                 for d in erase_diags {
                     self.context.report_simple(d, expr_id);
                 }
@@ -6814,8 +6826,19 @@ impl<'db> TypeInferenceBuilder<'db> {
                     // bind the error type (`!error`, not an erased `unknown`) so its
                     // uses don't cascade. Method references are exempt — their
                     // receiver/`Self` is inferred at the call via dynamic dispatch —
-                    // and `foo<int>` (a `GenericApply`) is already realized.
-                    let ty = if expected_for_check.is_none()
+                    // and `foo<int>` (a `GenericApply`) is already realized. Fires whenever
+                    // the annotation does not *constrain* the specialization — no annotation,
+                    // or a non-constraining `unknown`/`error` one (`let x: unknown = identity`);
+                    // a real expected type drives expected-type specialization instead (§3.1).
+                    // `unknown` (the top type `BuiltinUnknown`) and the recovery `Unknown`
+                    // sentinel do not constrain the specialization; a real expected type does.
+                    // (`Error` is left to constrain so an already-errored annotation doesn't
+                    // cascade a second diagnostic here.)
+                    let expected_constrains_specialization =
+                        expected_for_check.as_ref().is_some_and(|e| {
+                            !matches!(e, Ty::BuiltinUnknown { .. } | Ty::Unknown { .. })
+                        });
+                    let ty = if !expected_constrains_specialization
                         && self.references_unspecialized_generic_function(init)
                     {
                         self.context.report_simple(
