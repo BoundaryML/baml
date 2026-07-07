@@ -36,7 +36,7 @@ use crate::{
     infer_context::{AssocContainer, TirTypeError},
     lower_type_expr::{ConcreteProjection, TypeExprContext},
     ty::{QualifiedTypeName, Ty},
-    type_context::{GlobalTypeContext, TypeVarBounds},
+    type_context::GlobalTypeContext,
 };
 
 /// The result of lowering a projection: the resolved [`Ty`] — the canonical
@@ -734,7 +734,7 @@ pub(crate) fn resolve_concrete_projection(
         db,
         res_ctx,
         aliases: &aliases,
-        bounds: TypeVarBounds::Interfaces(bounds),
+        bounds,
     };
 
     let mut declarers: Vec<baml_type::Interface> = Vec::new();

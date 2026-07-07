@@ -1208,7 +1208,7 @@ mod tests {
             db: &db,
             res_ctx,
             aliases: &aliases,
-            bounds: crate::type_context::TypeVarBounds::Interfaces(&bounds),
+            bounds: &bounds,
         };
         let foo = baml_type::Interface::new(
             QualifiedTypeName::new(Name::new("user"), vec![], Name::new("Foo")),
@@ -1250,7 +1250,7 @@ mod tests {
             db: &db,
             res_ctx,
             aliases: &aliases,
-            bounds: crate::type_context::TypeVarBounds::Interfaces(&bounds),
+            bounds: &bounds,
         };
         let foo = baml_type::Interface::new(
             QualifiedTypeName::new(Name::new("user"), vec![], Name::new("Foo")),

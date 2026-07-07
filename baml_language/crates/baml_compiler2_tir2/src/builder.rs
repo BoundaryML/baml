@@ -39,7 +39,7 @@ use crate::{
     package_interface::PackageResolutionContext,
     throws_analysis::ThrowsAnalysisContext,
     ty::{Freshness, FunctionParamMode, FunctionParamTy, MediaKind, PrimitiveType, Ty, TyAttr},
-    type_context::{GlobalTypeContext, TypeVarBounds},
+    type_context::GlobalTypeContext,
 };
 
 pub(crate) mod associated_projection;
@@ -528,19 +528,15 @@ struct OptionalCallContext<'a> {
 
 impl<'db> TypeInferenceBuilder<'db> {
     /// The builder-free view of this scope, borrowing the builder's global
-    /// inputs. The bounds are the builder's `Ty`-typed side table, read through
-    /// the legacy [`TypeVarBounds::Tys`] bridge so no `Ty`/`Interface`
-    /// round-trip is needed until that side table is retyped to constraints.
-    #[expect(
-        deprecated,
-        reason = "the builder's TypeContext bridges the legacy `Ty`-typed generic_param_bounds"
-    )]
+    /// inputs — including its type-variable bounds, held as interface-constraint
+    /// conjunctions (`T: A & B`), the same representation type-expression lowering
+    /// uses.
     fn as_global(&self) -> GlobalTypeContext<'_, 'db> {
         GlobalTypeContext {
             db: self.context.db(),
             res_ctx: self.res_ctx,
             aliases: &self.aliases,
-            bounds: TypeVarBounds::Tys(&self.generic_param_bounds),
+            bounds: &self.generic_param_bounds,
         }
     }
 }
@@ -684,8 +680,10 @@ pub struct TypeInferenceBuilder<'db> {
     /// `generic_params` when a function is declared with `<T extends I>`.
     /// Used by `resolve_member` to expose `I`'s contract on values of
     /// type `T`, and by call-site enforcement when a `T` is replaced by
-    /// a concrete type that must satisfy its bound.
-    pub generic_param_bounds: rustc_hash::FxHashMap<Name, Ty>,
+    /// a concrete type that must satisfy its bound. Each entry is the bound's
+    /// interface-constraint conjunction (`T: A & B`); an empty/absent entry is
+    /// unbounded (or bounded only by a non-interface type, already diagnosed).
+    pub generic_param_bounds: crate::lower_type_expr::TypeVarBoundsMap,
     /// Source map for the body being analyzed. Set by `infer_scope_types`
     /// before checking. Used to resolve `PatId` → `TextRange` when emitting
     /// pattern-position diagnostics.
@@ -1025,17 +1023,11 @@ impl<'db> TypeInferenceBuilder<'db> {
     }
 
     /// The scope's installed generic-parameter bounds as interface constraints,
-    /// for type-expression lowering (`T.member` projection resolution). Bridges
-    /// the `Ty`-typed enforcement table ([`Self::set_generic_param_bounds`]) the
-    /// same way as [`TypeVarBounds::Tys`]; a non-interface bound has no
-    /// interface view and is omitted (it constrains by substitution, never by
-    /// projection). Collapses into the table itself once it is retyped to
-    /// constraints.
+    /// for type-expression lowering (`T.member` projection resolution). The
+    /// enforcement table ([`Self::set_generic_param_bounds`]) already holds this
+    /// representation.
     fn scope_type_var_bounds(&self) -> TypeVarBoundsMap {
-        self.generic_param_bounds
-            .iter()
-            .filter_map(|(name, bound)| Some((name.clone(), vec![bound.as_interface()?])))
-            .collect()
+        self.generic_param_bounds.clone()
     }
 
     fn lower_type_expr_in_current_body(
@@ -1077,11 +1069,10 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
     }
 
-    /// BEP-044: register the bound for each generic parameter visible
-    /// inside this body. Map keys are the parameter names, values are
-    /// the lowered `Ty` of the `extends` clause. Type-vars without an
-    /// entry are unbounded.
-    pub fn set_generic_param_bounds(&mut self, bounds: rustc_hash::FxHashMap<Name, Ty>) {
+    /// BEP-044: register the bound for each generic parameter visible inside this
+    /// body. Keys are the parameter names, values are the `extends` clause's
+    /// interface-constraint conjunction. Type-vars without an entry are unbounded.
+    pub fn set_generic_param_bounds(&mut self, bounds: crate::lower_type_expr::TypeVarBoundsMap) {
         self.generic_param_bounds = bounds;
     }
 
@@ -2176,9 +2167,10 @@ impl<'db> TypeInferenceBuilder<'db> {
         // param's declared bound. Substitute the bindings first so self-referential
         // bounds (`<T extends Container<T>>`) resolve before the subtype check.
         for (idx, resolved_arg) in resolved.iter().enumerate() {
-            if let Some(Some(bound)) = generic_param_bounds.get(idx) {
-                let bound_ty = crate::generics::substitute_ty(bound, &bindings);
-                if let Some(error) = self.bounded_type_arg_error(resolved_arg, &bound_ty) {
+            if let Some(Some(bound)) = generic_param_bounds.get(idx)
+                && let Some(bound) = crate::generics::substitute_ty(bound, &bindings).as_interface()
+            {
+                if let Some(error) = self.bounded_type_arg_error(resolved_arg, &bound) {
                     self.context.report_simple(error, expr_id);
                 }
             }
@@ -3851,10 +3843,15 @@ impl<'db> TypeInferenceBuilder<'db> {
                     {
                         continue;
                     }
-                    if let Some(bound) = self.generic_param_bounds.get(name).cloned() {
-                        let bound_ty =
-                            crate::generics::substitute_ty(&bound, &bound_check_bindings);
-                        if let Some(error) = self.bounded_type_arg_error(actual, &bound_ty) {
+                    for bound in self
+                        .generic_param_bounds
+                        .get(name)
+                        .cloned()
+                        .unwrap_or_default()
+                    {
+                        let bound =
+                            crate::interfaces::substitute_interface(&bound, &bound_check_bindings);
+                        if let Some(error) = self.bounded_type_arg_error(actual, &bound) {
                             self.context.report(error, expr_id, Vec::new());
                         }
                     }
@@ -10658,21 +10655,25 @@ impl<'db> TypeInferenceBuilder<'db> {
             // — including `to_json` when `T extends baml.ToJson`.
             Ty::TypeVar(name, _)
                 if member.as_str() != "from_json"
-                    && self.generic_param_bounds.contains_key(name) =>
+                    && self
+                        .generic_param_bounds
+                        .get(name)
+                        .is_some_and(|bounds| !bounds.is_empty()) =>
             {
-                let bound_ty = self.generic_param_bounds[name].clone();
+                let bounds = self.generic_param_bounds[name].clone();
                 // The receiver is a single concrete type (the type variable),
                 // so an interface-bound member resolves with `Self` pinned to
                 // that variable — `Self`-typed parameters are sound here. This
                 // is what lets a generic `T extends Equals` (and an interface's
                 // own `self`) call `Self`-param methods, while a bare interface
-                // (existential) receiver still cannot.
-                if let Ty::Interface(iface_qtn, iface_args, associated_bindings, _) = &bound_ty {
+                // (existential) receiver still cannot. Each bound of an
+                // intersection (`T: A & B`) is tried in turn.
+                for iface in &bounds {
                     if let Some(ty) = self.resolve_interface_member(
                         InterfaceBound {
-                            name: iface_qtn,
-                            type_args: iface_args,
-                            associated_bindings,
+                            name: &iface.name,
+                            type_args: &iface.generics,
+                            associated_bindings: &iface.associated_types,
                         },
                         SelfReceiver::RigidVar(name),
                         MemberAccess { member, at, bound },
@@ -10680,7 +10681,9 @@ impl<'db> TypeInferenceBuilder<'db> {
                         return ty;
                     }
                 }
-                self.resolve_member(&bound_ty, member, at, bound)
+                // No bound declares the member — fall back to general member resolution
+                // on the first bound's existential view (single-bound today).
+                self.resolve_member(&bounds[0].to_ty(), member, at, bound)
             }
             Ty::TypeVar(name, _) if member.as_str() == "from_json" => {
                 // Type-check: every BAML type has `from_json(j: json) -> Self` after Phase 5b.1.
@@ -12817,9 +12820,11 @@ impl<'db> TypeInferenceBuilder<'db> {
     /// implementor. The one place both obligations are enforced, so every bound-check site
     /// stays consistent (see
     /// [`TYPE_SYSTEM.md` § Generics on Functions](TYPE_SYSTEM.md#generics-on-functions)).
-    fn bounded_type_arg_error(&self, actual: &Ty, bound: &Ty) -> Option<TirTypeError> {
-        // A non-interface bound is a separate declaration error (`GenericBoundNotInterface`).
-        let bound_iface = bound.as_interface()?;
+    fn bounded_type_arg_error(
+        &self,
+        actual: &Ty,
+        bound: &baml_type::Interface,
+    ) -> Option<TirTypeError> {
         // Judge the type the argument denotes: aliases expanded, `never` dropped, a reducible
         // projection collapsed. An unfilled `_` can't be normalized (`Infer` is the
         // normalizer's `unreachable!`) and is handled by the fill machinery — skip it.
@@ -12828,16 +12833,14 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
         let arg = self.normalize(actual);
         if !Self::is_bounded_arg_admissible(&arg) {
-            // The bound reached here only because it lowered to an interface (a non-interface
-            // bound is `GenericBoundNotInterface`), so it is a genuine interface conjunction.
             return Some(TirTypeError::BoundedTypeArgNotConcrete {
                 arg: actual.clone(),
-                bound: Box::new([bound_iface]),
+                bound: Box::new([bound.clone()]),
             });
         }
-        if !self.bounded_arg_implements(&arg, &bound_iface) {
+        if !self.bounded_arg_implements(&arg, bound) {
             return Some(TirTypeError::TypeMismatch {
-                expected: bound.clone(),
+                expected: bound.to_ty(),
                 got: actual.clone(),
             });
         }
@@ -12901,7 +12904,9 @@ impl<'db> TypeInferenceBuilder<'db> {
             let Some(actual) = bindings.get(param) else {
                 continue;
             };
-            let bound = crate::generics::substitute_ty(bound, bindings);
+            let Some(bound) = crate::generics::substitute_ty(bound, bindings).as_interface() else {
+                continue;
+            };
             if let Some(error) = self.bounded_type_arg_error(actual, &bound) {
                 self.context.report(error, expr_id, Vec::new());
             }
@@ -13116,7 +13121,10 @@ impl<'db> TypeInferenceBuilder<'db> {
             let Some(bound) = lowered_bounds.get(idx).and_then(Option::as_ref) else {
                 continue;
             };
-            let bound = crate::generics::substitute_ty(bound, &bindings);
+            let Some(bound) = crate::generics::substitute_ty(bound, &bindings).as_interface()
+            else {
+                continue;
+            };
             if let Some(error) = self.bounded_type_arg_error(actual, &bound) {
                 errors.push(error);
             }

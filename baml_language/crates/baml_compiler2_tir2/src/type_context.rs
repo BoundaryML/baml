@@ -19,53 +19,11 @@
 use std::collections::HashMap;
 
 use baml_base::Name;
-use rustc_hash::FxHashMap;
 
 use crate::{
     package_interface::PackageResolutionContext,
     ty::{QualifiedTypeName, Ty},
 };
-
-/// The type-variable bounds a [`GlobalTypeContext`] resolves, in whichever
-/// representation the caller already holds — so neither the builder (which keeps
-/// bounds as `Ty`) nor type-expression lowering (which keeps them as
-/// [`baml_type::Interface`] constraints) has to round-trip through the other.
-///
-/// The two variants are the same concept in two encodings; they collapse into
-/// one once the builder's bound side table is retyped to interface constraints.
-pub(crate) enum TypeVarBounds<'a> {
-    /// Bounds stored as a single lowered `Ty` per variable (the builder's
-    /// representation).
-    #[deprecated = "Legacy, lossy representation: a single lowered `Ty` per \
-        variable cannot express an intersection bound (`A & B`) and silently \
-        drops a non-interface bound (e.g. `T extends int`). The correct \
-        representation is `Interfaces` — a conjunction of interface constraints; \
-        retype the builder's `generic_param_bounds` side table and delete this."]
-    Tys(&'a FxHashMap<Name, Ty>),
-    /// Bounds lowered to interface constraints — the representation held by
-    /// type-expression lowering, which resolves projections without a builder.
-    /// The `Vec` is the conjunction of an intersection bound (`T: A & B`).
-    Interfaces(&'a crate::lower_type_expr::TypeVarBoundsMap),
-}
-
-impl TypeVarBounds<'_> {
-    /// The interface constraints bounding `name` — the conjunction of an
-    /// intersection bound, or empty if `name` is unbounded, unknown, or bounded
-    /// only by a non-interface type.
-    fn interface_bounds(&self, name: &Name) -> Vec<baml_type::Interface> {
-        match self {
-            // The bridge must read the legacy representation until it is retired;
-            // a single lowered `Ty` yields at most one interface constraint.
-            #[expect(deprecated, reason = "bridging the legacy `Tys` representation")]
-            Self::Tys(map) => map
-                .get(name)
-                .and_then(Ty::as_interface)
-                .into_iter()
-                .collect(),
-            Self::Interfaces(map) => map.get(name).cloned().unwrap_or_default(),
-        }
-    }
-}
 
 /// The nominal facts [`baml_type::normalize`] needs, derived from global
 /// information plus a scope's type-variable bounds. See the module docs.
@@ -73,7 +31,10 @@ pub(crate) struct GlobalTypeContext<'a, 'db> {
     pub(crate) db: &'db dyn crate::Db,
     pub(crate) res_ctx: &'db PackageResolutionContext<'db>,
     pub(crate) aliases: &'a HashMap<QualifiedTypeName, Ty>,
-    pub(crate) bounds: TypeVarBounds<'a>,
+    /// A scope's type-variable bounds as interface-constraint conjunctions
+    /// (`T: A & B`). The single representation both the builder and
+    /// type-expression lowering hold.
+    pub(crate) bounds: &'a crate::lower_type_expr::TypeVarBoundsMap,
 }
 
 impl baml_type::normalize::TypeContext for GlobalTypeContext<'_, '_> {
@@ -96,7 +57,8 @@ impl baml_type::normalize::TypeContext for GlobalTypeContext<'_, '_> {
     }
 
     fn type_var_bound(&self, name: &Name) -> Vec<baml_type::Interface> {
-        self.bounds.interface_bounds(name)
+        // The conjunction bounding `name` (`T: A & B`), or empty if unbounded/unknown.
+        self.bounds.get(name).cloned().unwrap_or_default()
     }
 
     fn interface_requires(&self, sub: &baml_type::Interface, sup: &baml_type::Interface) -> bool {

@@ -626,7 +626,7 @@ fn is_concrete_receiver(ty: &Ty) -> bool {
 /// Substitute an interface bound's own generics + associated types through
 /// `bindings` — a bound may reference sibling impl params (`T extends
 /// Comparable<U>`).
-fn substitute_interface(
+pub(crate) fn substitute_interface(
     iface: &baml_type::Interface,
     bindings: &TypeBindings,
 ) -> baml_type::Interface {

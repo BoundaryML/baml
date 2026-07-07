@@ -412,7 +412,7 @@ fn install_generic_param_bounds(
     env: &GenericEnv,
     span: TextRange,
 ) {
-    let mut bounds: FxHashMap<Name, Ty> = FxHashMap::default();
+    let mut bounds = crate::lower_type_expr::TypeVarBoundsMap::default();
     debug_assert_eq!(env.bound_param_names.len(), env.owned_bounds.len());
     for ((name, bound), owned) in env
         .bound_param_names
@@ -430,7 +430,7 @@ fn install_generic_param_bounds(
         // enforcement table but their diagnostics belong to — and were already
         // reported by — the owning declaration's scope.
         if !owned {
-            bounds.insert(name.clone(), bound_ty);
+            bounds.insert(name.clone(), bound_ty.as_interface().into_iter().collect());
             continue;
         }
         for diag in diags {
@@ -473,15 +473,13 @@ fn install_generic_param_bounds(
                 span,
             ),
         }
-        bounds.insert(name.clone(), bound_ty);
+        // A non-interface bound (already diagnosed above) contributes no constraint.
+        bounds.insert(name.clone(), bound_ty.as_interface().into_iter().collect());
     }
-    // The builder's `generic_param_bounds` map is still `Ty`-typed (the enforcement layer's
-    // pending constraint-retype); lift each constraint to its `Ty::Interface` only here, at
-    // that boundary.
     bounds.extend(
         env.concrete_bounds
             .iter()
-            .map(|(name, constraint)| (name.clone(), constraint.to_ty())),
+            .map(|(name, constraint)| (name.clone(), vec![constraint.clone()])),
     );
     builder.set_generic_param_bounds(bounds);
 }

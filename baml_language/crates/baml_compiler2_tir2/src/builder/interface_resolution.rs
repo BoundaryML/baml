@@ -645,10 +645,19 @@ impl<'db> TypeInferenceBuilder<'db> {
                 })
                 .collect()
             }
-            Ty::TypeVar(name, _) => match self.generic_param_bounds.get(name) {
-                Some(bound) => self.union_arm_interfaces(&bound.clone()),
-                None => Vec::new(),
-            },
+            Ty::TypeVar(name, _) => {
+                // A bounded type variable's arm interfaces are those of every interface in
+                // its bound conjunction (`T: A & B`).
+                let bounds = self
+                    .generic_param_bounds
+                    .get(name)
+                    .cloned()
+                    .unwrap_or_default();
+                bounds
+                    .iter()
+                    .flat_map(|iface| self.union_arm_interfaces(&iface.to_ty()))
+                    .collect()
+            }
             // A concrete arm's interfaces come from its own impls, with each impl's bindings
             // substituted into the interface head — so a blanket `impl<U> I<U> for Box<U>` at
             // `Box<int>` yields the *realized* `I<int>`, not the impl-space `I<U>`.
@@ -1101,8 +1110,11 @@ impl<'db> TypeInferenceBuilder<'db> {
         if let Some(receiver_generic) = &receiver_generic {
             function_generic_params.push(receiver_generic.clone());
             function_generic_param_bounds.push(Some(iface_ty.clone()));
-            self.generic_param_bounds
-                .insert(receiver_generic.clone(), iface_ty);
+            // The synthetic receiver bound is an interface; store it as the conjunction.
+            self.generic_param_bounds.insert(
+                receiver_generic.clone(),
+                iface_ty.as_interface().into_iter().collect(),
+            );
         }
         function_generic_params.extend(generic_names.iter().cloned());
         let bound_exprs: Vec<Option<baml_compiler2_ast::TypeExpr>> = spec
