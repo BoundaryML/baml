@@ -74,6 +74,26 @@ pub type EventCallback = Box<dyn Fn(salsa::Event) + Send + Sync + 'static>;
 ///     println!("{}", diag.message);
 /// }
 /// ```
+/// Cap on the total node count of a fully-inlined control-flow graph. Callee
+/// graphs are copied into every call site, so an uncapped graph grows as
+/// `fan_out^depth` on deep call chains; once the budget is reached remaining
+/// calls stay plain call nodes.
+const CFG_EXPANSION_NODE_BUDGET: usize = 5_000;
+
+/// State threaded through one top-level [`ProjectDatabase::ast_control_flow_graph`] build.
+#[derive(Default)]
+struct CfgExpansionCtx {
+    /// Functions currently being expanded (cycle guard).
+    expanding: HashSet<String>,
+    /// Fully-expanded callee graphs, built once per top-level build and
+    /// reused at every later call site. `None` records callees with no
+    /// buildable graph so they are not retried per site.
+    cache: HashMap<
+        String,
+        Option<std::sync::Arc<baml_compiler2_visualization::control_flow::ControlFlowGraph>>,
+    >,
+}
+
 #[salsa::db]
 #[derive(Clone)]
 pub struct ProjectDatabase {
@@ -438,24 +458,28 @@ impl ProjectDatabase {
     /// More error-resilient than `control_flow_graph()` — works even when code has type errors,
     /// because it builds directly from the AST using `Missing` sentinels for unresolved nodes.
     /// Suitable for the playground which must function during editing.
+    ///
+    /// Callee graphs are inlined at every call site, memoized per callee, and
+    /// capped at [`CFG_EXPANSION_NODE_BUDGET`] total nodes — the fully-inlined
+    /// representation is otherwise exponential in call-chain depth.
     pub fn ast_control_flow_graph(
         &self,
         function_name: &str,
     ) -> Option<baml_compiler2_visualization::control_flow::ControlFlowGraph> {
-        let mut expanding = HashSet::new();
-        self.ast_control_flow_graph_impl(function_name, &mut expanding)
+        let mut ctx = CfgExpansionCtx::default();
+        self.ast_control_flow_graph_impl(function_name, &mut ctx)
     }
 
     fn ast_control_flow_graph_impl(
         &self,
         function_name: &str,
-        expanding: &mut HashSet<String>,
+        ctx: &mut CfgExpansionCtx,
     ) -> Option<baml_compiler2_visualization::control_flow::ControlFlowGraph> {
         use baml_compiler2_visualization::control_flow::{
             build_control_flow_graph_from_ast, build_llm_control_flow_graph,
         };
 
-        if !expanding.insert(function_name.to_string()) {
+        if !ctx.expanding.insert(function_name.to_string()) {
             return None;
         }
 
@@ -531,9 +555,7 @@ impl ProjectDatabase {
                                     root.source_span.get_or_insert(root_span);
                                 }
                             }
-                            self.expand_user_function_calls_in_graph(
-                                &mut graph, expr_body, expanding,
-                            );
+                            self.expand_user_function_calls_in_graph(&mut graph, expr_body, ctx);
                             Some(graph)
                         }
                         baml_compiler2_hir::body::FunctionBody::Builtin(_)
@@ -547,7 +569,7 @@ impl ProjectDatabase {
             }
         }
 
-        expanding.remove(function_name);
+        ctx.expanding.remove(function_name);
         result
     }
 
@@ -555,7 +577,7 @@ impl ProjectDatabase {
         &self,
         graph: &mut baml_compiler2_visualization::control_flow::ControlFlowGraph,
         body: &baml_compiler2_ast::ExprBody,
-        expanding: &mut HashSet<String>,
+        ctx: &mut CfgExpansionCtx,
     ) {
         use baml_compiler2_visualization::control_flow::NodeType;
 
@@ -572,8 +594,26 @@ impl ProjectDatabase {
                 continue;
             }
 
-            let Some(callee_graph) = self.ast_control_flow_graph_impl(&callee_name, expanding)
-            else {
+            // Recursion is cut at the call node rather than cached: a graph
+            // truncated by the cycle guard must not be reused at sites where
+            // the callee is not part of the active expansion chain.
+            if ctx.expanding.contains(&callee_name) {
+                continue;
+            }
+            // Each callee is fully expanded once per top-level build and its
+            // graph reused at every later call site: without this, build cost
+            // multiplies by call-site fan-out at every level of the call
+            // chain (fan_out^depth).
+            let callee_graph = if let Some(cached) = ctx.cache.get(&callee_name) {
+                cached.clone()
+            } else {
+                let built = self
+                    .ast_control_flow_graph_impl(&callee_name, ctx)
+                    .map(std::sync::Arc::new);
+                ctx.cache.insert(callee_name.clone(), built.clone());
+                built
+            };
+            let Some(callee_graph) = callee_graph else {
                 continue;
             };
 
@@ -607,6 +647,13 @@ impl ProjectDatabase {
                 }
             }
 
+            // Even with per-callee memoization the merged output copies the
+            // callee graph at every call site, so deep chains still multiply
+            // node counts. Stop inlining once the graph reaches the budget;
+            // remaining calls render as plain call nodes.
+            if graph.nodes.len() + callee_graph.nodes.len() > CFG_EXPANSION_NODE_BUDGET {
+                continue;
+            }
             Self::merge_callee_graph_under_call_node(graph, call_node_id, &callee_graph);
         }
     }
@@ -1376,6 +1423,79 @@ impl std::fmt::Debug for ProjectDatabase {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn callee_graphs_are_still_inlined_per_call_site() {
+        let mut db = ProjectDatabase::new();
+        db.set_project_root(std::path::Path::new("/tmp"));
+        db.add_or_update_file(
+            std::path::Path::new("/tmp/diamond.baml"),
+            r#"
+function Leaf(input: string) -> string {
+  //# leaf work
+  let a = input;
+  a
+}
+
+function Mid(input: string) -> string {
+  let a = Leaf(input);
+  let b = Leaf(a);
+  b
+}
+
+function Top(input: string) -> string {
+  let a = Mid(input);
+  let b = Mid(a);
+  b
+}
+"#,
+        );
+        let leaf = db.ast_control_flow_graph("Leaf").unwrap();
+        let mid = db.ast_control_flow_graph("Mid").unwrap();
+        let top = db.ast_control_flow_graph("Top").unwrap();
+        // Memoization must not change the inlined-output shape: every call
+        // site still receives its own copy of the callee graph.
+        assert!(
+            mid.nodes.len() > leaf.nodes.len(),
+            "Mid should contain inlined copies of Leaf ({} vs {})",
+            mid.nodes.len(),
+            leaf.nodes.len()
+        );
+        assert!(
+            top.nodes.len() > mid.nodes.len(),
+            "Top should contain inlined copies of Mid ({} vs {})",
+            top.nodes.len(),
+            mid.nodes.len()
+        );
+    }
+
+    #[test]
+    fn deep_call_chains_are_capped_not_exponential() {
+        let mut db = ProjectDatabase::new();
+        db.set_project_root(std::path::Path::new("/tmp"));
+        // Depth 12, fan-out 3: fully inlined and uncapped this is 3^12 ≈ 531k
+        // nodes per top-level function (and exponential build time without
+        // per-callee memoization).
+        let mut src = String::from(
+            "function F12(input: string) -> string {\n  //# leaf\n  let a = input;\n  a\n}\n",
+        );
+        for i in (0..12).rev() {
+            use std::fmt::Write as _;
+            let callee = i + 1;
+            let _ = write!(
+                src,
+                "function F{i}(input: string) -> string {{\n  let v0 = F{callee}(input);\n  let v1 = F{callee}(v0);\n  let v2 = F{callee}(v1);\n  v2\n}}\n"
+            );
+        }
+        db.add_or_update_file(std::path::Path::new("/tmp/chain.baml"), &src);
+
+        let graph = db.ast_control_flow_graph("F0").unwrap();
+        assert!(
+            graph.nodes.len() <= CFG_EXPANSION_NODE_BUDGET,
+            "inlined graph must respect the node budget, got {}",
+            graph.nodes.len()
+        );
+    }
 
     #[test]
     fn header_above_if_keeps_all_branch_arms() {

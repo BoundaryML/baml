@@ -1313,16 +1313,20 @@ impl super::BexLsp for BexMulitProject {
         project_root: &str,
         generation: u64,
         function_name: &str,
-    ) -> Option<baml_compiler2_visualization::control_flow::ControlFlowGraph> {
-        let projects = self.projects.lock().ok()?;
-        projects
-            .iter()
-            .find(|(path, _)| path.as_path().to_string_lossy() == project_root)
-            .and_then(|(_, project)| {
-                project
-                    .project
-                    .control_flow_graph_for_generation(generation, function_name)
-            })
+    ) -> Option<std::sync::Arc<baml_compiler2_visualization::control_flow::ControlFlowGraph>> {
+        // Clone the project handle out of the registry lock: building a
+        // missing graph takes the project's database lock, which must not be
+        // held while the registry lock is.
+        let project = {
+            let projects = self.projects.lock().ok()?;
+            projects
+                .iter()
+                .find(|(path, _)| path.as_path().to_string_lossy() == project_root)
+                .map(|(_, project)| project.clone())?
+        };
+        project
+            .project
+            .control_flow_graph_for_generation(generation, function_name)
     }
 
     fn request_control_flow_graph(&self, function_name: &str) {

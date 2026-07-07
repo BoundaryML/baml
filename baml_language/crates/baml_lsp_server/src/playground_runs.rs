@@ -57,7 +57,13 @@ impl GraphRuntimeOverlaySpanProvider for ProjectGraphRuntimeOverlaySpanProvider 
 }
 
 fn overlay_function_name(run: &Run) -> Option<&str> {
-    match &run.target {
+    overlay_function_name_for_target(&run.target)
+}
+
+/// The function whose control-flow graph backs a run's graph overlay, if the
+/// target kind has one.
+pub fn overlay_function_name_for_target(target: &RunTarget) -> Option<&str> {
+    match target {
         RunTarget::Function { function_name } | RunTarget::Companion { function_name, .. } => {
             Some(function_name)
         }
