@@ -17,6 +17,7 @@ import type * as lib from "../lib.js";
 import type * as maintenance from "../maintenance.js";
 import type * as promoCodes from "../promoCodes.js";
 import type * as tasks from "../tasks.js";
+import type * as transcriptComments from "../transcriptComments.js";
 import type * as trophies from "../trophies.js";
 import type * as workers from "../workers.js";
 
@@ -36,6 +37,7 @@ declare const fullApi: ApiFromModules<{
   maintenance: typeof maintenance;
   promoCodes: typeof promoCodes;
   tasks: typeof tasks;
+  transcriptComments: typeof transcriptComments;
   trophies: typeof trophies;
   workers: typeof workers;
 }>;

@@ -545,7 +545,7 @@ function cleanup_staging(staging: string, session_id: string?) -> int {
         // Exactly one path segment under the root — never the root itself.
         return 0;
     }
-    let _ = run_capture("rm", ["-rf", staging], staging_root(), null, 30000, null, false, null);
+    let _ = run_capture("rm", ["-rf", staging], "/tmp", null, 30000, null, false, null);
     // The claude session jsonl for this staging dir.
     match (session_id) {
         let sid: string => {
@@ -573,7 +573,7 @@ function sweep_staging_root() -> int {
     };
     let n = 0;
     for (let e in entries) {
-        let _ = run_capture("rm", ["-rf", root + "/" + e.name], root, null, 30000, null, false, null);
+        let _ = run_capture("rm", ["-rf", root + "/" + e.name], "/tmp", null, 30000, null, false, null);
         n = n + 1;
     }
     if (n > 0) {
