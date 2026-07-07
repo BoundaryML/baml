@@ -15,14 +15,14 @@
   <h1>Which models write real BAML?</h1>
 
   <p>Five models got the same job: build a small BAML project from nothing. A receipt
-  extractor. Types, one LLM function, a couple of pure helpers, tests. None of them had
+  extractor: types, one LLM function, a couple of pure helpers, and tests. None of them had
   seen the language before. Each got a live <code>baml</code> CLI and 25 turns to learn
-  it — <code>baml describe String</code> to read the stdlib, <code>baml check</code> to
+  it: <code>baml describe String</code> to read the stdlib, <code>baml check</code> to
   find out what the compiler thinks.</p>
 
   <p>Then one grader scored every project. <code>baml-bench</code> chunks the code, routes
   each chunk against 127 design-principle cards distilled from all 50 BAML Enhancement
-  Proposals, and grades each pair on a 1–10 scale: does this code use the language the way
+  Proposals, and grades each pair on a 1 to 10 scale: does this code use the language the way
   we designed it? Evidence quotes get checked against the source before a grade counts,
   and every low grade survives a skeptic pass before it reaches this page. Total builder
   cost for all five runs: $2.24.</p>
@@ -31,7 +31,7 @@
 <section class="section">
   <h2>Scoreboard</h2>
   <div id="scoreboard"><p class="dim">loading…</p></div>
-  <p class="dim">Adherence is the weighted 1–10 mean over graded (chunk, card) pairs.
+  <p class="dim">Adherence is the weighted 1 to 10 mean over graded (chunk, card) pairs.
   Slop counts findings that survived both the evidence check and the skeptic.
   Live data from the <code>experiments</code> Convex project.</p>
 </section>
@@ -44,13 +44,13 @@
 
   <p>It wrote fluent pseudo-BAML. The shapes match what the design cards want, so the
   grader had nothing to object to, and almost none of it parses. Meanwhile claude-haiku-4-5
-  came fourth — and haiku is the only model in the table whose project compiles.</p>
+  came fourth. haiku is also the only model in the table whose project compiles.</p>
 
   <p>So the two numbers measure different skills. Adherence tells you whether the text
-  respects the language's design. Compilation tells you whether the code is real. A model
-  can fake the first one. It can't fake the second. Our takeaway for the benchmark itself:
-  the headline metric should be adherence gated by compilation, and that change is now on
-  the roadmap for baml-bench.</p>
+  respects the language's design; whether the code is real is the compiler's question,
+  and it turns out a model can fake the first one a lot more easily than the second.
+  Our takeaway for the benchmark itself: the headline metric should be adherence gated
+  by compilation. That change is on the baml-bench roadmap now.</p>
 </section>
 
 <section class="section">
@@ -71,8 +71,8 @@
   what they wrote.</p>
   <p>Caveats worth keeping: one build per model, one task, and every model ran out of
   turns rather than declaring itself done. Orderings within a point of each other are
-  noise until we run repetitions. The harness makes that cheap — judgments are cached,
-  so a rerun only pays for what changed.</p>
+  noise until we run repetitions. The harness makes that cheap, since judgments are cached and
+  a rerun only pays for what changed.</p>
   <p class="dim">Harness: <code>tools/experiments/benchmark-models/run_models.py</code>.
   Grader: <code>tools/baml-bench</code>. Full per-model reports live next to each run.</p>
 </section>
@@ -116,7 +116,7 @@ loadRows().then((rows) => {
 
   const chart = document.createElement("div");
   chart.className = "chart";
-  chart.insertAdjacentHTML("beforeend", '<p class="chart-cap">adherence, 1–10 · purple = project compiles</p>');
+  chart.insertAdjacentHTML("beforeend", '<p class="chart-cap">adherence, 1 to 10 · purple = project compiles</p>');
   for (const r of rows) {
     chart.insertAdjacentHTML("beforeend",
       `<div class="chart-row"><span class="chart-name">${esc(r.model)}</span><span class="chart-track">` +
@@ -128,7 +128,7 @@ loadRows().then((rows) => {
   const models = document.getElementById("models");
   for (const r of rows) {
     const sec = document.createElement("div");
-    let html = `<h3>${esc(r.provider)}/${esc(r.model)} — ${f2(r.adherence)}</h3><p>${esc(r.summary)}</p>`;
+    let html = `<h3>${esc(r.provider)}/${esc(r.model)} · ${f2(r.adherence)}</h3><p>${esc(r.summary)}</p>`;
     if (r.slopFindings.length) {
       html += `<p class="dim">What the grader flagged (grade ≤ 4, evidence verified against the source):</p>`;
       for (const f of r.slopFindings.slice(0, 4)) {
@@ -137,7 +137,7 @@ loadRows().then((rows) => {
       }
     }
     if (r.omissions.length) {
-      html += `<p class="dim">Omissions — primitives the goals called for that never appear:</p><ul style="margin:0 0 1rem 1.2rem; font-size:14px; color:var(--muted)">`;
+      html += `<p class="dim">Omissions, meaning primitives the goals called for that never appear:</p><ul style="margin:0 0 1rem 1.2rem; font-size:14px; color:var(--muted)">`;
       for (const o of r.omissions.slice(0, 4)) html += `<li><code>${esc(o.cardId)}</code> ${esc(o.description)}</li>`;
       html += "</ul>";
     }
