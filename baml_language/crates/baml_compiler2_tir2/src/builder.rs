@@ -12948,6 +12948,11 @@ impl<'db> TypeInferenceBuilder<'db> {
                     self.collect_type_generic_bound_errors_inner(arg, seen_aliases, errors);
                 }
                 self.collect_interface_generic_bound_errors(qtn, type_args, errors);
+                // This walk only reaches value-type (existential) positions — never an
+                // interface *bound* (`<T extends I>`), which lowers to a separate
+                // constraint. So an interface here is an existential and must pin every
+                // non-defaulted associated type (E0191-analog).
+                self.collect_missing_associated_type_bindings(qtn, associated_bindings, errors);
             }
             Ty::List(inner, _) | Ty::EvolvingList(inner, _) => {
                 self.collect_type_generic_bound_errors_inner(inner, seen_aliases, errors);
@@ -13035,6 +13040,43 @@ impl<'db> TypeInferenceBuilder<'db> {
             type_args,
             errors,
         );
+    }
+
+    /// Emit `MissingAssociatedTypeBindings` when the interface-existential `qtn` leaves a
+    /// non-defaulted associated type unpinned (E0191-analog). `associated_bindings` are the
+    /// explicit pins on the existential; an associated type with a declared default may be
+    /// omitted. Called only from the value-type walk, so `qtn` is never an interface bound.
+    fn collect_missing_associated_type_bindings(
+        &mut self,
+        qtn: &crate::ty::QualifiedTypeName,
+        associated_bindings: &[(Name, Ty)],
+        errors: &mut Vec<TirTypeError>,
+    ) {
+        let Some(interface_loc) = self.resolve_interface_loc(qtn) else {
+            return;
+        };
+        let db = self.context.db();
+        let item_tree = baml_compiler2_hir::file_item_tree(db, interface_loc.file(db));
+        let Some(interface_data) = item_tree.interfaces.get(&interface_loc.id(db)) else {
+            return;
+        };
+        let missing: Vec<Name> = interface_data
+            .associated_types
+            .iter()
+            .filter(|assoc| {
+                assoc.default.is_none()
+                    && !associated_bindings
+                        .iter()
+                        .any(|(name, _)| name == &assoc.name)
+            })
+            .map(|assoc| assoc.name.clone())
+            .collect();
+        if !missing.is_empty() {
+            errors.push(TirTypeError::MissingAssociatedTypeBindings {
+                interface: qtn.clone(),
+                missing,
+            });
+        }
     }
 
     fn collect_named_generic_bound_errors(

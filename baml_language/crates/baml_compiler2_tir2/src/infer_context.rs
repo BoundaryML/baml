@@ -458,6 +458,19 @@ pub enum TirTypeError {
         arg: Ty,
         bound: Box<[baml_type::Interface]>,
     },
+    /// [`TYPE_SYSTEM.md` § Generics on Functions](TYPE_SYSTEM.md#generics-on-functions):
+    /// an interface used as an **existential type** (a value's type — a parameter,
+    /// return, field, or annotation) must specify every associated type, like Rust's
+    /// `dyn Iterator<Item = …>` (E0191). Only associated types with a declared default
+    /// may be omitted. An unpinned existential (`Iterator` instead of
+    /// `Iterator<Item = int>`) is otherwise ill-formed: `Iterator` and
+    /// `Iterator<Item = int>` would be mutually-incomparable types and membership would
+    /// be vacuous. (Interface *bounds* — `<T extends Iterator>` — do NOT require this;
+    /// they are not existentials.) Names the interface and the unpinned associated types.
+    MissingAssociatedTypeBindings {
+        interface: crate::ty::QualifiedTypeName,
+        missing: Vec<Name>,
+    },
 }
 
 impl fmt::Display for TirTypeError {
@@ -1072,6 +1085,21 @@ impl fmt::Display for TirTypeError {
                      requires a concrete type that implements it (an abstract type like a union \
                      or interface has no single runtime type to dispatch on)",
                     arg.render_user_facing()
+                )
+            }
+            TirTypeError::MissingAssociatedTypeBindings { interface, missing } => {
+                let missing = missing
+                    .iter()
+                    .map(|name| format!("`{name}`"))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                write!(
+                    f,
+                    "interface-existential type `{}` must specify its associated type(s) {missing} \
+                     (only associated types with a default may be omitted; an interface *bound* \
+                     `<T extends {}>` does not require them)",
+                    interface.render_user_facing(),
+                    interface.render_user_facing(),
                 )
             }
         }

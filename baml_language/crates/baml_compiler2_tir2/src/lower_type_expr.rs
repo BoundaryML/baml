@@ -2974,4 +2974,63 @@ function needs<T extends Marker>(x: T) -> int throws never {
             "a bounded typevar argument should satisfy a matching bound cleanly, got {errors:?}"
         );
     }
+
+    // ── existential-pins-required (E0191-analog): an interface used as a value type must
+    //    pin every non-defaulted associated type; interface bounds need not ──
+
+    fn has_missing_assoc(errors: &[TirTypeError]) -> bool {
+        errors
+            .iter()
+            .any(|e| matches!(e, TirTypeError::MissingAssociatedTypeBindings { .. }))
+    }
+
+    #[test]
+    fn existential_interface_must_pin_associated_types() {
+        // `it: Iter` — an interface-existential value type — leaves `Item` unpinned.
+        let errors = all_type_errors(
+            "interface Iter {\n  type Item\n}\nfunction f(it: Iter) -> int throws never {\n  0\n}\n",
+        );
+        assert!(
+            has_missing_assoc(&errors),
+            "an unpinned existential should require its associated types, got {errors:?}"
+        );
+    }
+
+    #[test]
+    fn existential_interface_with_all_pins_is_ok() {
+        let errors = all_type_errors(
+            "interface Iter {\n  type Item\n}\n\
+             function f(it: Iter<Item = int>) -> int throws never {\n  0\n}\n",
+        );
+        assert!(
+            !has_missing_assoc(&errors),
+            "a fully-pinned existential should not be flagged, got {errors:?}"
+        );
+    }
+
+    #[test]
+    fn existential_interface_may_omit_defaulted_associated_type() {
+        // A defaulted associated type may be omitted (the default applies) — not flagged.
+        let errors = all_type_errors(
+            "interface Iter {\n  type Item = int\n}\nfunction f(it: Iter) -> int throws never {\n  0\n}\n",
+        );
+        assert!(
+            !has_missing_assoc(&errors),
+            "a defaulted associated type may be omitted, got {errors:?}"
+        );
+    }
+
+    #[test]
+    fn interface_bound_does_not_require_associated_types() {
+        // `<T extends Iter>` is a bound, not an existential — Rust-parity `T: Iterator`
+        // does not pin `Item`, so no MissingAssociatedTypeBindings here.
+        let errors = all_type_errors(
+            "interface Iter {\n  type Item\n}\n\
+             function f<T extends Iter>(it: T) -> int throws never {\n  0\n}\n",
+        );
+        assert!(
+            !has_missing_assoc(&errors),
+            "an interface bound must not require its associated types be pinned, got {errors:?}"
+        );
+    }
 }
