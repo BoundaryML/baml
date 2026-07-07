@@ -139,7 +139,7 @@ function TermBlock({
     entries.some((e, i) =>
       textInvokesBaml(i === 0 ? toolMatch[2].replace(/^\(/, "") : e.line),
     );
-  // A result block that reports an error renders red end-to-end — errors must
+  // A result block that reports an error renders red end-to-end; errors must
   // never read as ordinary grey output (or worse, get outshone by brand purple).
   const isError =
     entries[0]?.mode === "t-result" &&

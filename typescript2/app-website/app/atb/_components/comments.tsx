@@ -6,9 +6,9 @@
 //
 // Flow: existing comments are always visible. "add comment" opens the composer;
 // if the shared password isn't stored yet, a small popup asks for it once
-// (verified server-side on post — a rejected password re-prompts).
+// (verified server-side on post; a rejected password re-prompts).
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   type TranscriptComment,
   clearCommentsKey,
@@ -19,6 +19,22 @@ import {
   useAddComment,
 } from "@/app/atb/_lib/comments";
 import { timeAgo } from "@/app/atb/_lib/format";
+
+/** Split a leading `> `-prefixed blockquote (a folded highlight) off the body,
+ *  so it can render in a styled quote box above the comment text. */
+function splitQuoted(body: string): { quote: string | null; text: string } {
+  const lines = body.split("\n");
+  let i = 0;
+  const q: string[] = [];
+  while (i < lines.length && lines[i].startsWith("> ")) {
+    q.push(lines[i].slice(2));
+    i++;
+  }
+  if (q.length && lines[i] === "") i++; // drop the blank separator
+  return q.length
+    ? { quote: q.join("\n"), text: lines.slice(i).join("\n") }
+    : { quote: null, text: body };
+}
 
 function PasswordPopup({
   onUnlock,
@@ -81,11 +97,15 @@ export function CommentThread({
   taskId,
   turnIndex,
   comments,
+  quoteRequest,
 }: {
   trophyId: string;
   taskId?: string;
   turnIndex?: number;
   comments: TranscriptComment[];
+  /** A snippet the reader highlighted in the transcript; opens the composer
+   *  with the quote attached. `nonce` re-triggers on each fresh selection. */
+  quoteRequest?: { text: string; nonce: number } | null;
 }) {
   const addComment = useAddComment();
   const [composing, setComposing] = useState(false);
@@ -94,12 +114,20 @@ export function CommentThread({
   const [author, setAuthor] = useState(getCommentAuthor());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [quote, setQuote] = useState<string>("");
 
-  const startComposing = () => {
+  const beginCompose = (withQuote?: string) => {
     setError("");
+    if (withQuote != null) setQuote(withQuote);
     if (getCommentsKey()) setComposing(true);
     else setAskKey(true);
   };
+
+  // A highlight in the transcript opens this turn's composer with the snippet.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: fire once per selection (nonce)
+  useEffect(() => {
+    if (quoteRequest?.text) beginCompose(quoteRequest.text);
+  }, [quoteRequest?.nonce]);
 
   const submit = async () => {
     if (!body.trim() || busy) return;
@@ -107,23 +135,37 @@ export function CommentThread({
     setError("");
     try {
       if (author.trim()) setCommentAuthor(author.trim());
+      // Fold the highlighted snippet into the body as a blockquote so the write
+      // needs no extra schema field on the backend `transcriptComments` table.
+      const q = quote.trim();
+      const fullBody = q
+        ? `${q.replace(/^/gm, "> ")}\n\n${body.trim()}`
+        : body.trim();
       await addComment({
         trophyId,
         taskId,
         turnIndex,
         author: author.trim() || "anonymous",
-        body: body.trim(),
+        body: fullBody,
       });
       setBody("");
+      setQuote("");
       setComposing(false);
     } catch (e) {
-      if (String(e).includes("invalid comments password")) {
+      // Convex masks a thrown Error's text as a generic "Server Error", so a
+      // rejected password can't be positively identified. Treat both the
+      // explicit message and the masked one as a password failure and re-prompt.
+      const msg = String(e);
+      if (
+        msg.includes("invalid comments password") ||
+        msg.includes("Server Error")
+      ) {
         clearCommentsKey();
-        setError("wrong password — try again");
         setComposing(false);
         setAskKey(true);
+        setError("post rejected: re-enter the team password and try again");
       } else {
-        setError("couldn't post — try again");
+        setError("couldn't post, try again");
       }
     } finally {
       setBusy(false);
@@ -132,33 +174,42 @@ export function CommentThread({
 
   return (
     <div className="mt-2 space-y-2">
-      {comments.map((c) => (
-        <div
-          key={c._id}
-          className="rounded-lg border border-atb-line bg-atb-ivory/60 px-3 py-2"
-        >
-          <div className="flex items-baseline gap-2 mb-0.5">
-            <span className="font-atb-mono text-[11px] font-semibold text-atb-ink-2">
-              {c.author}
-            </span>
-            <span className="font-atb-mono text-[10.5px] text-atb-ink-3">
-              {timeAgo(c.createdAt, Date.now())}
-            </span>
-            {c.status !== "done" && (
-              <span className="font-atb-mono text-[10.5px] text-atb-amber">
-                → dedup queue
+      {comments.map((c) => {
+        const folded = splitQuoted(c.body);
+        const shownQuote = c.quote || folded.quote;
+        return (
+          <div
+            key={c._id}
+            className="rounded-lg border border-atb-line bg-atb-ivory/60 px-3 py-2"
+          >
+            <div className="flex items-baseline gap-2 mb-0.5">
+              <span className="font-atb-mono text-[11px] font-semibold text-atb-ink-2">
+                {c.author}
               </span>
+              <span className="font-atb-mono text-[10.5px] text-atb-ink-3">
+                {timeAgo(c.createdAt, Date.now())}
+              </span>
+              {c.status !== "done" && (
+                <span className="font-atb-mono text-[10.5px] text-atb-amber">
+                  → dedup queue
+                </span>
+              )}
+            </div>
+            {shownQuote && (
+              <pre className="mb-1 max-h-40 overflow-auto rounded border-l-2 border-atb-line-strong bg-atb-ivory px-2 py-1 font-atb-mono text-[11px] text-atb-ink-2 whitespace-pre-wrap">
+                {shownQuote}
+              </pre>
             )}
+            <p className="text-sm text-atb-ink leading-relaxed whitespace-pre-wrap">
+              {folded.text}
+            </p>
           </div>
-          <p className="text-sm text-atb-ink leading-relaxed whitespace-pre-wrap">
-            {c.body}
-          </p>
-        </div>
-      ))}
+        );
+      })}
 
       {!composing && (
         <button
-          onClick={startComposing}
+          onClick={() => beginCompose()}
           className="font-atb-mono text-[11.5px] text-atb-ink-3 hover:text-atb-ink transition-colors"
         >
           ＋ add comment
@@ -177,6 +228,20 @@ export function CommentThread({
 
       {composing && (
         <div className="rounded-lg border border-atb-line bg-atb-cloud px-3 py-2">
+          {quote && (
+            <div className="mb-1.5 flex items-start gap-1">
+              <pre className="flex-1 max-h-40 overflow-auto rounded border-l-2 border-atb-accent-deep/50 bg-atb-ivory/70 px-2 py-1 font-atb-mono text-[11px] text-atb-ink-2 whitespace-pre-wrap">
+                {quote}
+              </pre>
+              <button
+                onClick={() => setQuote("")}
+                title="remove quote"
+                className="shrink-0 px-1 text-[13px] leading-none text-atb-ink-3 hover:text-atb-ink"
+              >
+                ×
+              </button>
+            </div>
+          )}
           <textarea
             autoFocus
             value={body}
@@ -198,7 +263,10 @@ export function CommentThread({
             />
             <div className="ml-auto flex items-center gap-2">
               <button
-                onClick={() => setComposing(false)}
+                onClick={() => {
+                  setComposing(false);
+                  setQuote("");
+                }}
                 className="rounded-full px-2 py-1 text-[11px] text-atb-ink-3 hover:text-atb-ink"
               >
                 cancel

@@ -14,6 +14,8 @@ export type TranscriptComment = {
   turnIndex?: number | null;
   author: string;
   body: string;
+  /** Optional snippet the commenter highlighted in the transcript. */
+  quote?: string | null;
   status: string;
   createdAt: number;
 };

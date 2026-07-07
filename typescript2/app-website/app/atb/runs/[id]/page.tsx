@@ -4,7 +4,7 @@
 // anchored findings, the files it wrote, and the full transcript.
 
 import Link from "next/link";
-import { use } from "react";
+import { use, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { useAtbState, useDoc, bamlRefLabel } from "@/app/atb/_lib/api";
 import type { Task, Trophy } from "@/app/atb/_lib/types";
@@ -44,6 +44,11 @@ export default function RunPage({
   const task = useDoc<Task>("tasks", trophy?.taskId ?? null);
   const comments = useComments(trophy?._id ?? null);
   const state = useAtbState();
+  // Highlighting in the raw terminal opens the run-level composer with the quote.
+  const [runQuote, setRunQuote] = useState<{ text: string; nonce: number } | null>(
+    null,
+  );
+  const commentsRef = useRef<HTMLDivElement>(null);
 
   if (doc === undefined) return <RunSkeleton />;
   if (inflightTask)
@@ -78,7 +83,7 @@ export default function RunPage({
 
   const files = Object.entries(trophy.filesCreated ?? {});
 
-  // Issues this run produced — any issue whose evidence cites this trophy. Used to
+  // Issues this run produced - any issue whose evidence cites this trophy. Used to
   // deep-link the run to its tracked issues, and each finding to its issue by call.
   const runIssues = (state?.issues ?? []).filter((i) =>
     i.evidence?.some((e) => e.trophyId === trophy._id),
@@ -323,22 +328,32 @@ export default function RunPage({
             trophyId={trophy._id}
             taskId={trophy.taskId}
             comments={comments}
+            onQuote={(t) => {
+              setRunQuote({ text: t, nonce: Date.now() });
+              commentsRef.current?.scrollIntoView({
+                behavior: "smooth",
+                block: "start",
+              });
+            }}
           />
         </Reveal>
       )}
 
       {/* ---- run-level comments (turn-anchored ones live inline above) ---- */}
-      <Reveal className="mt-12">
-        <SectionHeader
-          title="Comments"
-          hint="feed the dedup agent — actionable ones become tickets"
-        />
-        <CommentThread
-          trophyId={trophy._id}
-          taskId={trophy.taskId}
-          comments={(comments ?? []).filter((c) => c.turnIndex == null)}
-        />
-      </Reveal>
+      <div ref={commentsRef}>
+        <Reveal className="mt-12">
+          <SectionHeader
+            title="Comments"
+            hint="feed the dedup agent: actionable ones become tickets"
+          />
+          <CommentThread
+            trophyId={trophy._id}
+            taskId={trophy.taskId}
+            comments={(comments ?? []).filter((c) => c.turnIndex == null)}
+            quoteRequest={runQuote}
+          />
+        </Reveal>
+      </div>
     </div>
   );
 }

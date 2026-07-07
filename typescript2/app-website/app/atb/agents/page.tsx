@@ -11,7 +11,7 @@ import { EASE, Skeleton, Stagger, StaggerItem } from "@/app/atb/_components/ui";
 import { useNow } from "@/app/atb/_components/use-now";
 
 // v1 roles are hyphenated, the v2 (pure-BAML) processors register with
-// underscores — both spellings resolve so the roster stays labeled across
+// underscores - both spellings resolve so the roster stays labeled across
 // deployments.
 const ROLE_BLURB: Record<string, string> = {
   "baml-worker": "runs benchmark tasks with the canary baml on PATH",

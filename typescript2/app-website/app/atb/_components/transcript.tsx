@@ -6,7 +6,7 @@
 // proxy and renders it as a colorized terminal with the event timeline.
 
 import { AnimatePresence, motion } from "framer-motion";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Turn, TurnTool } from "@/app/atb/_lib/types";
 import type { TranscriptComment } from "@/app/atb/_lib/comments";
 import { EASE } from "@/app/atb/_components/ui";
@@ -14,23 +14,88 @@ import { TerminalView } from "@/app/atb/_components/terminal";
 import { CodeView } from "@/app/atb/_components/code-view";
 import { CommentThread } from "@/app/atb/_components/comments";
 
+// Floating "comment on selection" affordance, positioned at a viewport point.
+// mousedown-preventDefault keeps the text selection alive through the click.
+function QuoteButton({
+  top,
+  left,
+  onClick,
+}: {
+  top: number;
+  left: number;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onMouseDown={(e) => e.preventDefault()}
+      onClick={onClick}
+      style={{
+        position: "fixed",
+        top: Math.max(8, top - 38),
+        left,
+        transform: "translateX(-50%)",
+        zIndex: 40,
+      }}
+      className="rounded-full bg-atb-ink px-3 py-1 font-atb-mono text-[11px] text-atb-cloud shadow-lg hover:bg-atb-ink-2"
+    >
+      💬 comment on selection
+    </button>
+  );
+}
+
+/** Reads the current text selection and returns its trimmed text + a viewport
+ *  anchor, or null. Ignores selections inside form controls. `within` optionally
+ *  requires the selection to sit inside a matching ancestor (e.g. a turn). */
+function readSelection(within?: string): {
+  text: string;
+  top: number;
+  left: number;
+  host: HTMLElement | null;
+} | null {
+  const s = window.getSelection();
+  if (!s || s.isCollapsed || !s.rangeCount) return null;
+  const text = s.toString().replace(/\s+$/, "");
+  if (!text.trim()) return null;
+  const anchor = s.anchorNode;
+  const el = anchor instanceof Element ? anchor : anchor?.parentElement;
+  if (el?.closest("textarea, input")) return null;
+  const host = within
+    ? (el?.closest(within) as HTMLElement | null)
+    : ((el as HTMLElement | null) ?? null);
+  if (within && !host) return null;
+  const rect = s.getRangeAt(0).getBoundingClientRect();
+  return { text, top: rect.top, left: rect.left + rect.width / 2, host };
+}
+
 export function TranscriptViewer({
   turnLog,
   transcriptStorageId,
   trophyId,
   taskId,
   comments,
+  onQuote,
 }: {
   turnLog: Turn[];
   transcriptStorageId?: string | null;
   trophyId?: string;
   taskId?: string;
   comments?: TranscriptComment[];
+  /** Highlight-to-quote from the raw terminal routes here (run-level comment). */
+  onQuote?: (text: string) => void;
 }) {
   const [view, setView] = useState<"turns" | "terminal">(
     transcriptStorageId ? "terminal" : "turns",
   );
   const [expandAll, setExpandAll] = useState(false);
+  // If the raw terminal can't be fetched (proxy down, storage gone), fall back
+  // to the structured Turns view instead of dead-ending on "unavailable".
+  const [terminalDead, setTerminalDead] = useState(false);
+  const terminalOk = !!transcriptStorageId && !terminalDead;
+  const onTerminalUnavailable = useCallback(() => {
+    setTerminalDead(true);
+    setView("turns");
+  }, []);
 
   return (
     <div>
@@ -40,7 +105,7 @@ export function TranscriptViewer({
             <button
               key={v}
               onClick={() => setView(v)}
-              disabled={v === "terminal" && !transcriptStorageId}
+              disabled={v === "terminal" && !terminalOk}
               className={`relative px-4 py-1 text-xs font-medium rounded-full transition-colors disabled:opacity-40 ${
                 view === v ? "text-atb-cloud" : "text-atb-ink-2 hover:text-atb-ink"
               }`}
@@ -77,7 +142,11 @@ export function TranscriptViewer({
           comments={comments}
         />
       ) : (
-        <RawTerminal storageId={transcriptStorageId!} />
+        <RawTerminal
+          storageId={transcriptStorageId!}
+          onUnavailable={onTerminalUnavailable}
+          onQuote={trophyId ? onQuote : undefined}
+        />
       )}
     </div>
   );
@@ -111,11 +180,39 @@ function TurnList({
     return out;
   }, [turnLog]);
 
+  // Highlight-to-quote: a text selection inside a turn raises a floating
+  // "comment on selection" button; clicking it opens that turn's composer with
+  // the highlighted snippet attached (via `pending`, keyed by a nonce).
+  const [sel, setSel] = useState<{
+    turnIndex: number;
+    text: string;
+    top: number;
+    left: number;
+  } | null>(null);
+  const [pending, setPending] = useState<{
+    turnIndex: number;
+    text: string;
+    nonce: number;
+  } | null>(null);
+
+  const onMouseUp = () => {
+    if (!trophyId) return;
+    const r = readSelection("[data-turn-index]");
+    if (!r?.host?.dataset.turnIndex) return setSel(null);
+    setSel({
+      turnIndex: Number(r.host.dataset.turnIndex),
+      text: r.text,
+      top: r.top,
+      left: r.left,
+    });
+  };
+
   return (
     <div className="relative">
       {/* timeline spine */}
       <div className="absolute left-[15px] top-2 bottom-2 w-px bg-atb-line" aria-hidden />
-      <div className="space-y-1">
+      {/** biome-ignore lint/a11y/noStaticElementInteractions: capturing text selection, not a control */}
+      <div className="space-y-1" onMouseUp={onMouseUp}>
         {turnLog.map((turn) => (
           <TurnBlock
             key={turn.i}
@@ -125,9 +222,29 @@ function TurnList({
             trophyId={trophyId}
             taskId={taskId}
             comments={(comments ?? []).filter((c) => c.turnIndex === turn.i)}
+            quoteRequest={
+              pending?.turnIndex === turn.i
+                ? { text: pending.text, nonce: pending.nonce }
+                : null
+            }
           />
         ))}
       </div>
+      {sel && (
+        <QuoteButton
+          top={sel.top}
+          left={sel.left}
+          onClick={() => {
+            setPending({
+              turnIndex: sel.turnIndex,
+              text: sel.text,
+              nonce: Date.now(),
+            });
+            setSel(null);
+            window.getSelection()?.removeAllRanges();
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -139,6 +256,7 @@ function TurnBlock({
   trophyId,
   taskId,
   comments = [],
+  quoteRequest,
 }: {
   turn: Turn;
   gapMs?: number;
@@ -146,8 +264,14 @@ function TurnBlock({
   trophyId?: string;
   taskId?: string;
   comments?: TranscriptComment[];
+  quoteRequest?: { text: string; nonce: number } | null;
 }) {
   const [showComments, setShowComments] = useState(false);
+  // A highlight-to-quote request must mount the thread so it can open.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: fire once per selection (nonce)
+  useEffect(() => {
+    if (quoteRequest?.nonce) setShowComments(true);
+  }, [quoteRequest?.nonce]);
   const hasContent =
     turn.thinking_preview || turn.text_preview || (turn.tools?.length ?? 0) > 0;
   if (!hasContent) return null;
@@ -155,6 +279,7 @@ function TurnBlock({
   return (
     <motion.div
       id={`turn-${turn.i}`}
+      data-turn-index={turn.i}
       initial={{ opacity: 0, y: 10 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, margin: "-20px" }}
@@ -223,6 +348,7 @@ function TurnBlock({
           taskId={taskId}
           turnIndex={turn.i}
           comments={comments}
+          quoteRequest={quoteRequest}
         />
       )}
     </motion.div>
@@ -397,20 +523,35 @@ function Collapsible({
 
 // ---- raw terminal view ----
 
-function RawTerminal({ storageId }: { storageId: string }) {
+function RawTerminal({
+  storageId,
+  onUnavailable,
+  onQuote,
+}: {
+  storageId: string;
+  onUnavailable?: () => void;
+  onQuote?: (text: string) => void;
+}) {
   const [text, setText] = useState<string | null>(null);
   const [error, setError] = useState(false);
+  const [sel, setSel] = useState<{ text: string; top: number; left: number } | null>(
+    null,
+  );
 
   useEffect(() => {
     let cancelled = false;
     fetch(`/api/atb/transcript/${storageId}`)
       .then((r) => (r.ok ? r.text() : Promise.reject(new Error(`${r.status}`))))
       .then((t) => !cancelled && setText(t))
-      .catch(() => !cancelled && setError(true));
+      .catch(() => {
+        if (cancelled) return;
+        setError(true);
+        onUnavailable?.();
+      });
     return () => {
       cancelled = true;
     };
-  }, [storageId]);
+  }, [storageId, onUnavailable]);
 
   if (error)
     return (
@@ -425,7 +566,21 @@ function RawTerminal({ storageId }: { storageId: string }) {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, ease: EASE }}
     >
-      <TerminalView text={text} />
+      {/** biome-ignore lint/a11y/noStaticElementInteractions: capturing text selection, not a control */}
+      <div onMouseUp={() => onQuote && setSel(readSelection())}>
+        <TerminalView text={text} />
+      </div>
+      {sel && onQuote && (
+        <QuoteButton
+          top={sel.top}
+          left={sel.left}
+          onClick={() => {
+            onQuote(sel.text);
+            setSel(null);
+            window.getSelection()?.removeAllRanges();
+          }}
+        />
+      )}
     </motion.div>
   );
 }
