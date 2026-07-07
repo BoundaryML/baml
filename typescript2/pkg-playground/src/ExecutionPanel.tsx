@@ -49,6 +49,8 @@ import type {
   WorkerOutMessage,
 } from './worker-protocol';
 import type { ResultRendererProps } from './result-renderers';
+import { ArgsForm } from './ArgsForm';
+import { defaultValueForSchema } from './args-form-model';
 import { ResultDisplay } from './ResultDisplay';
 import { ValueRenderer } from './ValueRenderer';
 import { CapturedValueCard } from './CapturedValueCard';
@@ -745,6 +747,10 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
   const [selectedFn, setSelectedFn] = useState<string | null>(null);
   const [showInternalFunctions, setShowInternalFunctions] = useState(false);
   const [argsJson, setArgsJson] = useState(initialArgsJson ?? '{}');
+  // Args editor mode. 'form' renders the schema-driven ArgsForm when the
+  // selected function carries a param schema; 'raw' is the JSON input. With
+  // no schema (`FunctionInfo.params === undefined`) raw is the only mode.
+  const [argsMode, setArgsMode] = useState<'form' | 'raw'>('form');
   // Args the user typed for each function this session — restored (over the
   // `argsByFunction` seed) when they switch back to that function.
   const typedArgsByFnRef = useRef<Record<string, string>>({});
@@ -1648,12 +1654,25 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
     projectUpdateVersion,
   ]);
 
-  const onArgsJsonChange = useCallback(
-    (e: ChangeEvent<HTMLInputElement>) => {
-      setArgsJson(e.target.value);
-      if (selectedFn) typedArgsByFnRef.current[selectedFn] = e.target.value;
+  // Single write path for args edits (form and raw): the prompt/cURL preview
+  // and run-history snapshots read `argsJson`, and per-function memory reads
+  // `typedArgsByFnRef` — an edit that misses either silently desyncs them.
+  const updateArgsJson = useCallback(
+    (next: string) => {
+      setArgsJson(next);
+      if (selectedFn) typedArgsByFnRef.current[selectedFn] = next;
     },
     [selectedFn],
+  );
+
+  const onArgsJsonChange = useCallback(
+    (e: ChangeEvent<HTMLInputElement>) => updateArgsJson(e.target.value),
+    [updateArgsJson],
+  );
+
+  const onArgsFormChange = useCallback(
+    (next: Record<string, unknown>) => updateArgsJson(JSON.stringify(next)),
+    [updateArgsJson],
   );
 
   // ── Run function ───────────────────────────────────────────────────────
@@ -1999,6 +2018,51 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
   const selectedFnInfo = visibleFunctions.find((f) => f.name === selectedFn);
   const canPreviewPrompt = selectedFnInfo?.capabilities?.renderPrompt ?? false;
   const canPreviewCurl = selectedFnInfo?.capabilities?.buildRequest ?? false;
+
+  // ── Args form wiring ─────────────────────────────────────────────────────
+  // `undefined` = no schema shipped (old engine / extraction miss) → raw-only.
+  const paramSchemas = selectedFnInfo?.params;
+  // The form can only render args that parse to a plain JSON object; anything
+  // else (mid-edit raw JSON, array) falls back to the raw input with a notice
+  // instead of destroying the user's text.
+  const parsedArgs = useMemo<Record<string, unknown> | null>(() => {
+    try {
+      const parsed: unknown = JSON.parse(argsJson);
+      if (
+        typeof parsed === 'object' &&
+        parsed !== null &&
+        !Array.isArray(parsed)
+      ) {
+        return parsed as Record<string, unknown>;
+      }
+    } catch {
+      // fall through
+    }
+    return null;
+  }, [argsJson]);
+  const showArgsForm =
+    argsMode === 'form' && paramSchemas !== undefined && parsedArgs !== null;
+  const argsFormUnavailable =
+    argsMode === 'form' && paramSchemas !== undefined && parsedArgs === null;
+
+  // Seed empty args with schema defaults, once per function per session. This
+  // is what injects `$baml` class markers and required keys without the user
+  // touching every field. Skipped when the function already has typed args.
+  const seededFnsRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!selectedFn || !paramSchemas || paramSchemas.length === 0) return;
+    if (seededFnsRef.current.has(selectedFn)) return;
+    if (typedArgsByFnRef.current[selectedFn] !== undefined) return;
+    if (parsedArgs === null || Object.keys(parsedArgs).length > 0) return;
+    seededFnsRef.current.add(selectedFn);
+    const seeded: Record<string, unknown> = {};
+    for (const param of paramSchemas) {
+      if (!param.hasDefault) {
+        seeded[param.name] = defaultValueForSchema(param.schema);
+      }
+    }
+    setArgsJson(JSON.stringify(seeded));
+  }, [selectedFn, paramSchemas, parsedArgs]);
   // Names of LLM functions — only these have a meaningful raw (un-parsed LLM
   // output) vs parsed distinction, so the Parsed/Raw toggle is shown only for
   // them. expr functions just return a structured value (raw == parsed).
@@ -2962,18 +3026,56 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                 >
                   {/* Args */}
                   {/* `nokey`: keep React Flow's global key capture (Space,
-                      Backspace, ...) out of the args input */}
-                  <div className="nokey flex items-center border-b border-vsc-border shrink-0">
-                    <span className="px-2 py-1 text-[10px] text-vsc-text-faint font-vsc-mono bg-vsc-surface border-r border-vsc-border self-stretch flex items-center">
-                      args
-                    </span>
-                    <Input
-                      spellCheck={false}
-                      value={argsJson}
-                      onChange={onArgsJsonChange}
-                      className="flex-1 h-7 rounded-none border-none font-vsc-mono text-xs"
-                      placeholder='{"key": "value"}'
-                    />
+                      Backspace, ...) out of the args inputs */}
+                  <div className="nokey flex flex-col border-b border-vsc-border shrink-0">
+                    <div className="flex items-center min-h-7">
+                      <span className="px-2 py-1 text-[10px] text-vsc-text-faint font-vsc-mono bg-vsc-surface border-r border-vsc-border self-stretch flex items-center">
+                        args
+                      </span>
+                      {showArgsForm ? (
+                        <div className="flex-1" />
+                      ) : (
+                        <div className="flex-1 flex items-center min-w-0">
+                          <Input
+                            spellCheck={false}
+                            value={argsJson}
+                            onChange={onArgsJsonChange}
+                            className="flex-1 h-7 rounded-none border-none font-vsc-mono text-xs"
+                            placeholder='{"key": "value"}'
+                          />
+                          {argsFormUnavailable && (
+                            <span className="px-2 text-[10px] text-vsc-text-faint whitespace-nowrap">
+                              not a JSON object — form off
+                            </span>
+                          )}
+                        </div>
+                      )}
+                      {paramSchemas !== undefined && (
+                        <ToggleGroup
+                          size="sm"
+                          className="px-1.5 shrink-0"
+                          value={argsMode}
+                          options={[
+                            { value: 'form', label: 'form' },
+                            { value: 'raw', label: 'raw' },
+                          ]}
+                          onValueChange={setArgsMode}
+                        />
+                      )}
+                    </div>
+                    {showArgsForm && paramSchemas && parsedArgs && (
+                      <div className="max-h-56 overflow-y-auto px-2 py-1.5 border-t border-vsc-border">
+                        {/* Key by function: the swap effect replaces argsJson
+                            externally on selection change; remounting resets
+                            widget drafts/collapse state with it. */}
+                        <ArgsForm
+                          key={selectedFn ?? ''}
+                          params={paramSchemas}
+                          value={parsedArgs}
+                          onChange={onArgsFormChange}
+                        />
+                      </div>
+                    )}
                   </div>
 
                   {/* Live graph */}

@@ -174,6 +174,123 @@ describe('ExecutionPanel StrictMode lifecycle', () => {
       ).toBe(true);
     });
   });
+
+  it('renders the args form from param schemas and serializes edits into argsJson', async () => {
+    const port = new FakeRuntimePort();
+
+    render(<ExecutionPanel port={port} />);
+
+    act(() => {
+      port.emit({
+        type: 'playgroundNotification',
+        notification: { type: 'listProjects', projects: ['project'] },
+      });
+      port.emit({
+        type: 'playgroundNotification',
+        notification: {
+          type: 'updateProject',
+          project: 'project',
+          update: {
+            isBexCurrent: true,
+            functions: [
+              {
+                name: 'Greet',
+                kind: 'expr',
+                origin: 'userDefined',
+                params: [
+                  { name: 'name', hasDefault: false, schema: { type: 'string' } },
+                  {
+                    name: 'color',
+                    hasDefault: false,
+                    schema: {
+                      type: 'enum',
+                      name: 'user.Color',
+                      values: ['Red', 'Green', 'Blue'],
+                    },
+                  },
+                ],
+              },
+            ],
+            diagnostics: [],
+          },
+        },
+      });
+    });
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Functions (1)' }),
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Greet' }));
+
+    // The form renders one widget per param: a string input and enum chips.
+    const nameInput = await screen.findByPlaceholderText('text');
+    fireEvent.change(nameInput, { target: { value: 'Ada' } });
+    fireEvent.click(await screen.findByRole('button', { name: 'Green' }));
+
+    // Raw view shows the same argsJson the form writes — including the enum
+    // wire marker — proving the form and raw input share one state.
+    fireEvent.click(await screen.findByRole('button', { name: 'raw' }));
+    const rawInput = await screen.findByPlaceholderText('{"key": "value"}');
+    const parsed = JSON.parse((rawInput as HTMLInputElement).value);
+    expect(parsed).toEqual({
+      name: 'Ada',
+      color: { $baml: { enum: 'user.Color', value: 'Green' } },
+    });
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Run' }));
+    await waitFor(() => {
+      expect(
+        port.sent.some(
+          (msg) => msg.type === 'startRun' && msg.functionName === 'Greet',
+        ),
+      ).toBe(true);
+    });
+  });
+
+  it('shows the no-arguments state for a nullary schema and still runs', async () => {
+    const port = new FakeRuntimePort();
+
+    render(<ExecutionPanel port={port} />);
+
+    act(() => {
+      port.emit({
+        type: 'playgroundNotification',
+        notification: { type: 'listProjects', projects: ['project'] },
+      });
+      port.emit({
+        type: 'playgroundNotification',
+        notification: {
+          type: 'updateProject',
+          project: 'project',
+          update: {
+            isBexCurrent: true,
+            functions: [
+              { name: 'Zero', kind: 'expr', origin: 'userDefined', params: [] },
+            ],
+            diagnostics: [],
+          },
+        },
+      });
+    });
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Functions (1)' }),
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Zero' }));
+
+    expect(
+      await screen.findByText('This function takes no arguments.'),
+    ).toBeInTheDocument();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Run' }));
+    await waitFor(() => {
+      expect(
+        port.sent.some(
+          (msg) => msg.type === 'startRun' && msg.functionName === 'Zero',
+        ),
+      ).toBe(true);
+    });
+  });
 });
 
 class FakeRuntimePort implements RuntimePort {
