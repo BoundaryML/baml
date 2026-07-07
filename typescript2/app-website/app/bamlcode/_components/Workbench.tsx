@@ -48,6 +48,7 @@ export function Workbench({ problem }: { problem: Problem }) {
   const [results, setResults] = useState<Map<number, CaseResult>>(new Map());
   const [busy, setBusy] = useState<'run' | 'submit' | null>(null);
   const [verdict, setVerdict] = useState<Verdict>(null);
+  const [compileError, setCompileError] = useState<string | null>(null);
   const [inject, setInject] = useState<{ code: string; seq: number }>({
     code: problem.starter,
     seq: 0,
@@ -59,6 +60,10 @@ export function Workbench({ problem }: { problem: Problem }) {
       if (busy) return;
       setBusy(mode);
       setVerdict(null);
+      setCompileError(null);
+      // Reset prior results so a re-run visibly restarts (rows flip to running)
+      // instead of appearing to do nothing.
+      setResults(new Map());
       const cases = mode === 'run' ? visibleCases : allCases;
       try {
         const out = await runtime.grade(cases);
@@ -67,6 +72,14 @@ export function Workbench({ problem }: { problem: Problem }) {
           for (const r of out) next.set(r.index, r);
           return next;
         });
+        // A solution that does not compile fails every case with the same
+        // diagnostic; surface it so the user knows why, not just "error".
+        const compileMsg =
+          out.length > 0 &&
+          out.every((r) => r.status === 'error' && r.errorMessage)
+            ? (out[0].errorMessage ?? null)
+            : null;
+        setCompileError(compileMsg);
         if (mode === 'submit') {
           const accepted = out.every((r) => r.status === 'pass');
           setVerdict(accepted ? 'accepted' : 'rejected');
@@ -107,6 +120,7 @@ export function Workbench({ problem }: { problem: Problem }) {
     (window as any).__bamlcode = {
       loadSolution: () => load(problem.solution),
       loadStarter: () => load(problem.starter),
+      loadCustom: (code: string) => load(code),
       run: () => runCases('run'),
       submit: () => runCases('submit'),
       execFn: (call: string) => runtime.runCall(call),
@@ -171,7 +185,12 @@ export function Workbench({ problem }: { problem: Problem }) {
           </div>
         </div>
 
-        {verdict ? (
+        {compileError ? (
+          <div className="bc-compile-error font-mono">
+            <span className="bc-compile-error-label">Does not compile</span>
+            {compileError}
+          </div>
+        ) : verdict ? (
           <div className={`bc-verdict bc-verdict-${verdict}`}>
             {verdict === 'accepted'
               ? '✓ Accepted. All tests passed.'

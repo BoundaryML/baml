@@ -79,8 +79,18 @@ function cleanRunError(msg: string): string {
     .split('\n')
     .map((l) => l.trim())
     .filter(Boolean);
-  const last = lines[lines.length - 1] ?? msg;
-  return last.length > 200 ? `${last.slice(0, 200)}…` : last;
+  // Return the full last line (the console pane scrolls) rather than hard-
+  // capping it, so the whole error is readable.
+  return lines.at(-1) ?? msg;
+}
+
+/** Strip a leading/trailing markdown code fence (```baml ... ```) from an LSP
+ * hover so `baml describe` shows a clean signature, not raw markdown. */
+function stripHoverFences(text: string): string {
+  return text
+    .replace(/^\s*```[a-zA-Z]*\n?/, '')
+    .replace(/\n?```\s*$/, '')
+    .trim();
 }
 
 function waitUntil(cond: () => boolean, timeoutMs: number): Promise<void> {
@@ -111,7 +121,8 @@ let nextLspReq = 1;
 function flattenHover(contents: unknown): string {
   if (contents == null) return '';
   if (typeof contents === 'string') return contents;
-  if (Array.isArray(contents)) return contents.map(flattenHover).filter(Boolean).join('\n\n');
+  if (Array.isArray(contents))
+    return contents.map(flattenHover).filter(Boolean).join('\n\n');
   const c = contents as { value?: unknown };
   return typeof c.value === 'string' ? c.value : '';
 }
@@ -172,7 +183,7 @@ export async function describeExpr(expr: string): Promise<string> {
   const rel = `${ID}/baml_src/describe.baml`;
   const line2 = `  let __x = ${e};`;
   const body = `function __describe() -> int {\n${line2}\n  return 0;\n}\n`;
-  w.postMessage({ type: 'openFiles', files: { [rel]: body } });
+  w.postMessage({ files: { [rel]: body }, type: 'openFiles' });
   await new Promise((r) => setTimeout(r, 800));
   // Hover on the LAST identifier of the expression (e.g. `stringify` in
   // `baml.json.stringify`, `chars` in `"abc".chars()`), not the first token.
@@ -184,12 +195,14 @@ export async function describeExpr(expr: string): Promise<string> {
   }
   const character = line2.indexOf(e) + lastIdx + Math.floor(lastLen / 2);
   const hover = await lspRequest('textDocument/hover', {
+    position: { character, line: 1 },
     textDocument: { uri: `file://${ROOT}/${rel}` },
-    position: { line: 1, character },
   });
   // Clear the scratch so it can't affect grading.
-  w.postMessage({ type: 'filesChanged', files: { [rel]: '' } });
-  const text = flattenHover((hover as { contents?: unknown })?.contents);
+  w.postMessage({ files: { [rel]: '' }, type: 'filesChanged' });
+  const text = stripHoverFences(
+    flattenHover((hover as { contents?: unknown })?.contents),
+  );
   return text || `No description found for \`${e}\`.`;
 }
 
@@ -198,7 +211,7 @@ async function lspRequest(method: string, params: unknown): Promise<unknown> {
   const reqId = nextLspReq++;
   return new Promise((resolve) => {
     pendingLsp.set(reqId, resolve);
-    w.postMessage({ type: 'lspRequest', reqId, method, params });
+    w.postMessage({ method, params, reqId, type: 'lspRequest' });
     setTimeout(() => {
       if (pendingLsp.has(reqId)) {
         pendingLsp.delete(reqId);
@@ -329,7 +342,9 @@ export function createSolveRuntime(
           // Prefer `complete` (it carries the authoritative error/result); a
           // patch can contain BOTH [setStatus, complete], and setStatus alone
           // has no error message.
-          const complete = event.patch.changes.find((c) => c.type === 'complete');
+          const complete = event.patch.changes.find(
+            (c) => c.type === 'complete',
+          );
           if (complete && complete.type === 'complete') {
             const o = complete.outcome;
             return outcomeFromStatus(
@@ -362,6 +377,25 @@ export function createSolveRuntime(
       // The shared worker is intentionally NOT terminated - it is reused across
       // problems and remounts.
     },
+    async describe(fnName: string): Promise<string> {
+      await ensureSharedWorker();
+      await waitUntil(() => !recompilePending, 6000);
+      const code = latestCode;
+      const decl = code.search(new RegExp(`function\\s+${fnName}\\b`));
+      if (decl < 0) return `Define \`${fnName}\` first.`;
+      const fnStart = code.indexOf(fnName, decl);
+      const before = code.slice(0, fnStart);
+      const line = before.split('\n').length - 1;
+      const character = fnStart - (before.lastIndexOf('\n') + 1);
+      const hover = await lspRequest('textDocument/hover', {
+        position: { character, line },
+        textDocument: { uri: SOLUTION_URI },
+      });
+      const text = stripHoverFences(
+        flattenHover((hover as { contents?: unknown })?.contents),
+      );
+      return text || `No description available for \`${fnName}\`.`;
+    },
     async grade(cases: GraderCase[]): Promise<CaseResult[]> {
       await ensureSharedWorker();
       // Wait for any in-flight recompile to settle so we grade the latest edit,
@@ -387,9 +421,14 @@ export function createSolveRuntime(
       }
       return results;
     },
+    onDiagnostics(cb: DiagHandler) {
+      diagHandler = cb;
+      if (latestDiags.length) cb(latestDiags);
+    },
     async runCall(call: string): Promise<RunView> {
       const expr = call.trim();
-      if (expr === '') return { ok: false, error: 'Enter a call, e.g. TwoSum([2, 7], 9)' };
+      if (expr === '')
+        return { error: 'Enter a call, e.g. TwoSum([2, 7], 9)', ok: false };
       const w = await ensureSharedWorker();
       // The website worker can't read a result value body (no readValue handler),
       // so a runner function panics with the JSON-stringified result and we read
@@ -399,12 +438,12 @@ export function createSolveRuntime(
         `  baml.sys.panic("${RUN_SENTINEL}" + baml.json.stringify((${expr}).to_json()));\n` +
         '}\n';
       recompilePending = true;
-      w.postMessage({ type: 'openFiles', files: { [RUNNER_REL]: wrapper } });
+      w.postMessage({ files: { [RUNNER_REL]: wrapper }, type: 'openFiles' });
       await waitUntil(() => !recompilePending, 8000);
 
       const outcome = await runOne('bc_run');
       // Reset the runner so a bad call can't poison later grading.
-      w.postMessage({ type: 'filesChanged', files: { [RUNNER_REL]: '' } });
+      w.postMessage({ files: { [RUNNER_REL]: '' }, type: 'filesChanged' });
 
       // The sentinel lands inside a Rust Debug repr of the panic instance:
       //   ...uncaught throw: Instance { ... "BCRUN:[0,1]" ... }
@@ -433,11 +472,7 @@ export function createSolveRuntime(
           return { ok: true, value: raw };
         }
       }
-      return { ok: false, error: cleanRunError(msg) };
-    },
-    onDiagnostics(cb: DiagHandler) {
-      diagHandler = cb;
-      if (latestDiags.length) cb(latestDiags);
+      return { error: cleanRunError(msg), ok: false };
     },
     solutionErrors() {
       return latestDiags.filter((d) => (d.severity ?? 1) === 1);
@@ -451,23 +486,6 @@ export function createSolveRuntime(
           type: 'filesChanged',
         }),
       );
-    },
-    async describe(fnName: string): Promise<string> {
-      await ensureSharedWorker();
-      await waitUntil(() => !recompilePending, 6000);
-      const code = latestCode;
-      const decl = code.search(new RegExp(`function\\s+${fnName}\\b`));
-      if (decl < 0) return `Define \`${fnName}\` first.`;
-      const fnStart = code.indexOf(fnName, decl);
-      const before = code.slice(0, fnStart);
-      const line = before.split('\n').length - 1;
-      const character = fnStart - (before.lastIndexOf('\n') + 1);
-      const hover = await lspRequest('textDocument/hover', {
-        textDocument: { uri: SOLUTION_URI },
-        position: { line, character },
-      });
-      const text = flattenHover((hover as { contents?: unknown })?.contents);
-      return text || `No description available for \`${fnName}\`.`;
     },
   };
 }
