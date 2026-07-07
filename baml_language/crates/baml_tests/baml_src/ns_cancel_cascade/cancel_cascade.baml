@@ -58,7 +58,8 @@ test "cancel_from_handle_then_await_catches_cancelled" {
 // pending future, hit that safepoint (a 1ms sleep), THEN cancel and `await`.
 // If cancel-after-GC regressed, the future would never settle and `await f`
 // would hang forever; a healthy runtime observes `Cancelled` promptly and the
-// catch yields 0.
+// catch yields 0. (This also pins that B-650's end-of-run wait does not stall
+// on the now-cancelled, cancel-aware sleep.)
 function cancel_after_gc_relocation_still_settles() -> int {
     let f = spawn { baml.sys.sleep(baml.time.Duration.from_milliseconds(60000n)); 42 };
 
@@ -86,11 +87,18 @@ test "cancel_after_gc_relocation_still_settles" {
 
 // State observation: after `waiter` is cancelled mid-await, its Future state
 // must reflect Cancelled (not stay Pending).
+//
+// B-650: the root now WAITS for outstanding spawns at end of run. Cancelling
+// `waiter` does NOT cascade to its sibling `slow` (cancelling an awaiter does
+// not cancel the awaited future), so `slow`'s 60s sleep would keep the process
+// alive at shutdown. Tear it down explicitly after capturing `waiter`'s state.
 function cancelled_child_future_state_is_cancelled() -> baml.future.FutureState {
     let slow = spawn { baml.sys.sleep(baml.time.Duration.from_milliseconds(60000n)); 42 };
     let waiter = spawn { await slow };
     let _ = waiter.cancel();
-    waiter.state()
+    let observed = waiter.state();
+    let _ = slow.cancel();
+    observed
 }
 
 test "cancelled_child_future_state_is_cancelled" {

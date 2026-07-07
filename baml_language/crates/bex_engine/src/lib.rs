@@ -2365,8 +2365,11 @@ impl BexEngine {
             })
             .collect::<Result<_, EngineError>>()?;
 
-        // Create the root thread (shared heap, own TLAB) and acquire its permit.
-        let mut thread = self.new_root_thread(cancel.clone(), profile_enabled).await;
+        // Create the root thread (shared heap, own TLAB) and acquire its
+        // permit. This named-entry path is the genuine top-level root run.
+        let mut thread = self
+            .new_root_thread(cancel.clone(), profile_enabled, true)
+            .await;
 
         // Reuse the (substituted) `param_types` to thread the expected
         // `RuntimeTy` into per-arg VM conversion. Binding a `HostValue` to an
@@ -2413,11 +2416,16 @@ impl BexEngine {
 
     /// Build a fresh root [`BexThread`] over the shared heap and acquire its
     /// heap permit. Shared by the named-entry (`call_function_bound_args`) and
-    /// callable-entry (`call_callable`) paths.
+    /// callable-entry (`call_callable`) paths. `is_top_level_root` marks the
+    /// genuine top-level entry run so only it runs the B-650 end-of-run wait —
+    /// the named-entry path passes `true`, the callable-entry path (nested
+    /// host-invoked callables such as HTTP handlers) passes `false`. See
+    /// [`BexThread::is_top_level_root`].
     async fn new_root_thread(
         self: &Arc<Self>,
         cancel: CancellationToken,
         profile_enabled: bool,
+        is_top_level_root: bool,
     ) -> ActiveHeapPermit<BexThread> {
         // Globals are shared as a frozen `Arc<[Value]>` — cloning is a refcount bump.
         let vm = BexVm::new(
@@ -2449,7 +2457,7 @@ impl BexEngine {
         // straight-line into run_thread_event_loop, whose every exit path
         // emits the EndThread), and the snapshot at the same spot plus each
         // loop-head resume.
-        let root_thread = BexThread::new_root(vm, cancel);
+        let root_thread = BexThread::new_root(vm, cancel, is_top_level_root);
         let inactive = self.heap_permit_manager.new_permit(root_thread).await;
         inactive.acquire().await
     }
@@ -2649,7 +2657,16 @@ impl BexEngine {
         if cancel.is_cancelled() {
             return Err(cancelled_unhandled_throw());
         }
-        let mut thread = self.new_root_thread(cancel.clone(), profile_enabled).await;
+        // A by-value callable invocation is a NESTED host-invoked run (an HTTP
+        // request handler dispatched via `spawn_with_callable`, or any host
+        // callback), never the genuine top-level entry — even though it, like
+        // the real root, has `settles_future == None`. Marking it non-root keeps
+        // it from running the B-650 end-of-run wait, which would park forever on
+        // the outer run's still-`Pending` `serve` spawn (B-650 `baml test`
+        // hang).
+        let mut thread = self
+            .new_root_thread(cancel.clone(), profile_enabled, false)
+            .await;
 
         // Resolve the handle to the live heap object. The handle keeps it rooted.
         let entry_ptr = self
@@ -3359,8 +3376,25 @@ impl BexEngine {
         value: Value,
     ) -> Result<(), EngineError> {
         let child_cancel = thread.vm_thread_cancel().clone();
-        let mut guard = self.futures.acquire(thread.proof()).await;
-        let settled_ptr = guard.future_heap_ptr(future_id);
+        let settled_ptr = {
+            let guard = self.futures.acquire(thread.proof()).await;
+            guard.future_heap_ptr(future_id)
+        };
+        // B-650: enqueue the parent-queue entry BEFORE deferring the error.
+        // `defer_error` fires the future's `ready` wake, and the end-of-run
+        // wait (`wait_for_outstanding_child_futures`) parks on that wake. The
+        // wake is set (Release) after this enqueue in program order on this
+        // child thread, and the joiner re-acquires the heap permit (Acquire)
+        // after its wait returns — so the queue entry is guaranteed visible to
+        // the joiner's post-wait drain. Enqueuing AFTER the wake (the previous
+        // order) left a window where the racing waiter saw an empty queue and
+        // dropped the error — the whole point of B-650. This is safe for the
+        // ordinary awaiter path too: the queue entry is only ever *consumed*
+        // (via `future_ready` / `remove_matching`), so its earlier presence
+        // changes nothing.
+        if let Some(ptr) = settled_ptr {
+            thread.vm_thread_notify_parent_of_error(future_id, ptr);
+        }
         // BEP-034 fire-and-forget: DEFER the error instead of settling the
         // heap `Future` to `Error` here. The future stays `Pending` (wake
         // signal fired), so any awaiter — including a sibling task — observes
@@ -3370,12 +3404,11 @@ impl BexEngine {
         // eagerly instead would let a sibling's `await`+`catch` run entirely
         // inside the VM (invisible to the engine), leaving the queue entry to
         // re-surface an already-handled error at the spawner.
-        guard.defer_error(future_id, value)?;
-        drop(guard);
-        child_cancel.cancel();
-        if let Some(ptr) = settled_ptr {
-            thread.vm_thread_notify_parent_of_error(future_id, ptr);
+        {
+            let mut guard = self.futures.acquire(thread.proof()).await;
+            guard.defer_error(future_id, value)?;
         }
+        child_cancel.cancel();
         Ok(())
     }
 
@@ -4042,6 +4075,68 @@ impl BexEngine {
         }
     }
 
+    /// B-650: end-of-run wait. Before the root finalizes, WAIT for every
+    /// outstanding spawned child future to run to completion, so a *racing*
+    /// unhandled error — a `spawn { throw ... }` whose tokio task had not been
+    /// polled yet when the root reached `Complete` — is deterministically
+    /// enqueued before the caller's [`Self::drain_one_pending_child_error`].
+    /// Without this the child's error was silently dropped when the root exited
+    /// 0 (B-612 fixed only the case where the child had ALREADY thrown by the
+    /// time the root completed). Covers both default spawns and `detach = true`
+    /// spawns, whose unhandled errors both route to the root thread's
+    /// `pending_child_errors` queue.
+    ///
+    /// **WAIT, do not cancel** — the Node.js "run until there is no pending
+    /// work" model (BEP-034 end-of-run amendment). We fire no cancel token: a
+    /// prototype that cancelled outstanding work at shutdown was rejected
+    /// because it injected `Cancelled` into legitimate background work (an
+    /// `all_complete` loser whose side effects must finish, a detached
+    /// telemetry flush) and broke the `baml test` harness. So `detach` is NOT
+    /// exempt — a finite detached task runs to completion here like any other
+    /// spawn. A spawn that never settles (never awaited, never cancelled)
+    /// blocks the process at exit; that is the amendment's deliberate red flag
+    /// for a concurrency bug (locate it with tracing), not a case we paper over
+    /// by cancelling. This also preserves the "returning futures is safe"
+    /// guarantee — nothing outstanding is torn down on normal exit.
+    ///
+    /// Loops until no strictly-`Pending` future remains, re-snapshotting to
+    /// catch grandchildren spawned while we waited.
+    ///
+    /// Deadlock-free: the heap permit is released before parking on the settles
+    /// (the wait is a safepoint), mirroring the `Await` arm, so a child task can
+    /// acquire a permit to write the heap and settle its future while we park.
+    /// No lock or permit the children need to make progress is held across the
+    /// wait — the `FutureManager` guard is dropped after the snapshot, and the
+    /// cloned `Arc<SetOnce>` wake handles survive any GC relocation of their
+    /// heap `Future`s (the moved copy shares the same `Arc`).
+    async fn wait_for_outstanding_child_futures(
+        self: &Arc<Self>,
+        mut thread: ActiveHeapPermit<BexThread>,
+    ) -> Result<ActiveHeapPermit<BexThread>, EngineError> {
+        loop {
+            let handles = {
+                let guard = self.futures.acquire(thread.proof()).await;
+                guard.pending_join_handles()
+            };
+            if handles.is_empty() {
+                return Ok(thread);
+            }
+            // Release the heap permit before parking — the wait is the
+            // safepoint (mirrors the `Await` arm). Opportunistically collect
+            // while parked; no permit dance is needed since we're released.
+            let inactive = thread.release();
+            self.maybe_collect_garbage().await;
+            for ready in handles {
+                // `ready` fires on every terminal transition AND on a deferred
+                // (fire-and-forget) error; we only need to know the future
+                // settled, so the payload (an internal-error box surfaced by
+                // the drain / a later `Await`) is discarded here.
+                let _ = ready.wait().await;
+            }
+            thread = inactive.acquire().await;
+        }
+    }
+
     /// Runs a thread's event loop (see [`Self::run_thread_event_loop_inner`])
     /// and closes its profiling lifecycle: one `EndThread` per `StartThread`,
     /// on every exit path (the inner loop has many early returns; thread
@@ -4245,6 +4340,32 @@ impl BexEngine {
 
                     if cancelled {
                         return Err(cancelled_unhandled_throw());
+                    }
+
+                    // B-650: end-of-run wait. The root is finalizing; WAIT for
+                    // any still-outstanding spawned child futures to run to
+                    // completion FIRST, so a racing `spawn { throw ... }` whose
+                    // task had not been polled yet deterministically parks its
+                    // error before the drain below. Without this, only children
+                    // that had ALREADY thrown by the time the root completed
+                    // surfaced (B-612); the fully-racing case exited 0. We
+                    // WAIT, never cancel (see
+                    // `wait_for_outstanding_child_futures`).
+                    //
+                    // Gate on the GENUINE top-level root, NOT on
+                    // `settles_future.is_none()`: a nested host-invoked callable
+                    // (an HTTP request handler running on its own BAML thread via
+                    // `spawn_with_callable` → `call_callable`) is also a
+                    // `settles_future == None` root, so `settles_future.is_none()`
+                    // alone misclassifies it as the finalizing root. It would then
+                    // run this wait and park forever on the outer run's still-
+                    // `Pending` `serve` spawn — the handler never returns, its HTTP
+                    // response never sends, and the whole run deadlocks upstream of
+                    // cancellation (B-650 `baml test` hang). The shared
+                    // `FutureManager` sees every run's pending futures, so only the
+                    // one true root may drain them.
+                    if thread.vm_thread_is_top_level_root() {
+                        thread = self.wait_for_outstanding_child_futures(thread).await?;
                     }
 
                     // End-of-run drain: the root task is finalizing without

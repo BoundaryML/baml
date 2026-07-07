@@ -45,14 +45,23 @@ use ::bex_heap::{
 };
 use ::bex_vm_types::{
     FutureRead, HeapPtr, Object, ObjectType, RootHaver, Value,
-    types::{FutureId, FutureType},
+    types::{FutureId, FutureInternalError, FutureType},
 };
 use ::core::sync::atomic::AtomicUsize;
 use ::std::{collections::HashMap, sync::Arc};
 use ::sys_types::CancellationToken;
-use ::tokio::sync::{Mutex, MutexGuard};
+use ::tokio::sync::{Mutex, MutexGuard, SetOnce};
 
 use crate::EngineError;
+
+/// One outstanding future's `ready` wake handle, snapshotted by
+/// [`FutureManagerGuard::pending_join_handles`] for the end-of-run wait
+/// (B-650). Cloning the `Arc<SetOnce>` lets the engine `.wait()` on the
+/// future's settle **without** consuming its parked fire-and-forget error
+/// (unlike [`FutureManagerGuard::future_ready`]), so the spawner's drain can
+/// still surface that error afterwards. No cancel token is captured: the
+/// end-of-run rule WAITS for outstanding work, it never cancels it.
+pub(crate) type PendingJoinHandle = Arc<SetOnce<Result<(), FutureInternalError>>>;
 
 /// Manages all futures for the Bex engine.
 ///
@@ -418,6 +427,32 @@ impl FutureManagerGuard<'_> {
                 None => Ok(()),
             }
         })
+    }
+
+    /// Snapshot the `ready` wake handle of every strictly-`Pending` future, for
+    /// the end-of-run wait (B-650).
+    ///
+    /// `ErrorPending` futures are deliberately excluded: they have already
+    /// failed (their error is parked engine-side and their `ready` wake has
+    /// already fired), so the spawner's drain surfaces them — waiting again
+    /// would return immediately and they are effectively settled. Ready /
+    /// Cancelled / Error futures are already removed from `active_futures`, so
+    /// they never appear here.
+    ///
+    /// Unlike [`Self::future_ready`], this does **not** consume any deferred
+    /// error: it clones the raw `ready` `Arc` so a joiner can wait for the
+    /// future to settle while leaving the parked error in place for the
+    /// spawner's drain to surface.
+    pub(crate) fn pending_join_handles(&self) -> Vec<PendingJoinHandle> {
+        self.holder()
+            .active_futures
+            .values()
+            .filter_map(|state| {
+                // SAFETY: caller holds the heap permit via `self.proof`.
+                let fut = unsafe { state.future_ref() }.ok()?;
+                matches!(fut.read(), FutureRead::Pending(_)).then(|| Arc::clone(&fut.ready))
+            })
+            .collect()
     }
 }
 impl TlabHolder for FutureManagerGuard<'_> {
