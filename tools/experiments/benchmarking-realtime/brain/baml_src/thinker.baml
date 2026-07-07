@@ -32,6 +32,11 @@ function DecideAction(history: string, request: string, now_iso: string) -> Thin
       30 minutes unless stated. Attendee names exactly as spoken.
     - Messages: keep the body natural first-person text ready to send; pick
       urgency from tone ("let them know whenever" -> low, "right now" -> urgent).
+    - Medication plans: do the arithmetic yourself. tablets_per_dose from
+      spoken fractions ("two and a half" -> 2.5, "half a tablet" -> 0.5).
+      doses_total = total course hours / interval_hours ("every eight hours
+      for ten days" -> 240 / 8 = 30). Resolve first_dose_iso against the
+      current datetime ("tomorrow morning at eight" -> next day 08:00).
     - If no tool fits, Answer directly in one or two spoken-style sentences.
 
     Conversation so far:
@@ -66,6 +71,7 @@ function execute(action: ThinkerAction) -> ToolOutcome {
     let a: SetTimer => run_timer(a),
     let a: CreateCalendarEvent => run_calendar(a),
     let a: SendMessage => run_send_message(a),
+    let a: PlanMedication => run_medication(a),
     let a: Answer => ToolOutcome {
       say: a.message,
       tool: "answer",

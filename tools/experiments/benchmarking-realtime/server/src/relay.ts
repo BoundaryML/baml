@@ -19,6 +19,7 @@ import {
   run_calendar_async,
   run_order_lookup_async,
   run_send_message_async,
+  run_medication_wire_async,
   run_timer_async,
   run_weather_async,
   type ToolOutcome,
@@ -43,7 +44,7 @@ function nowIso(): string {
 // of being silently coerced into a semantically wrong call.
 
 type FieldRule = {
-  type: "string" | "integer" | "string[]";
+  type: "string" | "integer" | "number" | "string[]";
   required?: boolean;
   nonEmpty?: boolean;
   enum?: string[];
@@ -67,6 +68,13 @@ const NATIVE_ARG_RULES: Record<string, Record<string, FieldRule>> = {
     duration_minutes: { type: "integer", required: true },
     attendees: { type: "string[]" },
     location: { type: "string" },
+  },
+  plan_medication: {
+    drug: { type: "string", required: true, nonEmpty: true },
+    tablets_per_dose: { type: "number", required: true },
+    interval_hours: { type: "integer", required: true },
+    doses_total: { type: "integer", required: true },
+    first_dose_iso: { type: "string", required: true, nonEmpty: true },
   },
   send_message: {
     to: { type: "string", required: true, nonEmpty: true },
@@ -101,6 +109,8 @@ export function validateNativeArgs(
       problems.push(`"${field}" must be a string, got ${typeof v}`);
     } else if (rule.type === "integer" && (typeof v !== "number" || !Number.isInteger(v))) {
       problems.push(`"${field}" must be an integer, got ${JSON.stringify(v)}`);
+    } else if (rule.type === "number" && typeof v !== "number") {
+      problems.push(`"${field}" must be a number, got ${typeof v}`);
     } else if (rule.type === "string[]" && (!Array.isArray(v) || v.some((x: any) => typeof x !== "string"))) {
       problems.push(`"${field}" must be an array of strings`);
     }
@@ -122,7 +132,8 @@ You are a friendly, quick voice assistant.
 
 You have ONE tool: delegate(request, context). A smarter reasoning engine sits
 behind it and can check weather, look up orders, set timers, create calendar
-events, send text messages to the user's contacts, and answer questions. It can
+events, send text messages to the user's contacts, plan medication courses,
+and answer questions. It can
 do ALL of these; never tell the user something on that list is impossible.
 
 Rules:
@@ -148,7 +159,7 @@ const DELEGATE_TOOL = {
   type: "function",
   name: "delegate",
   description:
-    "Send ONE of the user's requests to the reasoning engine. It can check weather, look up orders, set timers, create calendar events, send messages to contacts, and answer factual questions. Pass that request verbatim; for multi-part utterances call this once per part.",
+    "Send ONE of the user's requests to the reasoning engine. It can check weather, look up orders, set timers, create calendar events, send messages to contacts, plan medication courses, and answer factual questions. Pass that request verbatim; for multi-part utterances call this once per part.",
   parameters: {
     type: "object",
     properties: {
@@ -238,6 +249,32 @@ const NATIVE_TOOLS = [
         location: { type: "string" },
       },
       required: ["title", "start_iso", "duration_minutes"],
+    },
+  },
+  {
+    type: "function",
+    name: "plan_medication",
+    description:
+      "Plan a recurring medication course. doses_total is the TOTAL number of doses over the whole course (course duration divided by the interval). first_dose_iso is a local ISO 8601 datetime.",
+    parameters: {
+      type: "object",
+      properties: {
+        drug: { type: "string" },
+        tablets_per_dose: {
+          type: "number",
+          description: "Tablets per single dose; fractions as decimals, e.g. 2.5.",
+        },
+        interval_hours: { type: "integer", description: "Hours between doses." },
+        doses_total: {
+          type: "integer",
+          description: "Total doses across the course, e.g. every 8 hours for 10 days = 30.",
+        },
+        first_dose_iso: {
+          type: "string",
+          description: "Local ISO 8601 datetime of the first dose, e.g. 2026-07-08T08:00:00.",
+        },
+      },
+      required: ["drug", "tablets_per_dose", "interval_hours", "doses_total", "first_dose_iso"],
     },
   },
   {
@@ -490,6 +527,16 @@ export class RealtimeRelay {
             attendees: Array.isArray(args.attendees) ? args.attendees.map(String) : [],
             location: args.location != null ? String(args.location) : null,
           }),
+        );
+      } else if (name === "plan_medication") {
+        // via the wire wrapper: an integer-valued JS number into a BAML float
+        // field segfaults the pinned binding (see run_medication_wire).
+        outcome = await run_medication_wire_async(
+          String(args.drug),
+          String(args.tablets_per_dose),
+          Number(args.interval_hours),
+          Number(args.doses_total),
+          String(args.first_dose_iso),
         );
       } else if (name === "send_message") {
         const urgency = ["low", "normal", "urgent"].includes(args.urgency) ? args.urgency : "normal";

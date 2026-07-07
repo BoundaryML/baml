@@ -268,9 +268,76 @@ async function runMode(mode: "native" | "delegate"): Promise<CaseResult[]> {
 // argv: [mode filter] [suite]. Suite "hard" switches to the hard cases and
 // writes compare-results-hard.json. Mode filter spends only one session;
 // results for the other mode are reloaded from the results file.
+// Ultra suite: compound arithmetic + relative dates + spoken fractions in one
+// tool call. Native must compute doses_total and resolve dates mid-speech with
+// no clock; the thinker gets now_iso and does the math deliberately.
+const ULTRA_CASES: Case[] = [
+  {
+    id: "med-course-math",
+    utterance:
+      "i need to take two and a half tablets of amoxicillin every eight hours for ten days, starting tomorrow morning at eight",
+    expectTool: "medication",
+    check: (d) =>
+      d?.tablets_per_dose === 2.5 && d?.interval_hours === 8 && d?.doses_total === 30 &&
+      typeof d?.first_dose_iso === "string" && d.first_dose_iso.includes("T08:00"),
+    expectNote: "2.5 tablets, every 8h, 30 doses, first dose 08:00 tomorrow",
+  },
+  {
+    id: "med-inverted-frequency",
+    utterance:
+      "put me on exactly four doses a day for five days, one tablet of cetirizine each time, first one tomorrow at seven a m",
+    expectTool: "medication",
+    check: (d) =>
+      d?.tablets_per_dose === 1 && d?.interval_hours === 6 && d?.doses_total === 20 &&
+      typeof d?.first_dose_iso === "string" && d.first_dose_iso.includes("T07:00"),
+    expectNote: "interval derived from frequency: 4/day = every 6h, 20 doses",
+  },
+  {
+    id: "med-mg-conversion",
+    utterance:
+      "the ibuprofen tablets are two hundred milligrams each and i need three hundred milligrams per dose, every six hours for two days, starting tonight at eight",
+    expectTool: "medication",
+    check: (d) =>
+      d?.tablets_per_dose === 1.5 && d?.interval_hours === 6 && d?.doses_total === 8 &&
+      typeof d?.first_dose_iso === "string" && d.first_dose_iso.includes("T20:00"),
+    expectNote: "300mg / 200mg tablets = 1.5 tablets, every 6h, 8 doses",
+  },
+  {
+    id: "med-phonetic-code",
+    utterance:
+      "start me on the vitamin my doctor wrote as bee one two, one tablet with breakfast which for me is half past seven, every day for a fortnight starting tomorrow",
+    expectTool: "medication",
+    check: (d) =>
+      typeof d?.drug === "string" && /b\s*-?\s*12/i.test(d.drug) &&
+      d?.tablets_per_dose === 1 && d?.interval_hours === 24 && d?.doses_total === 14 &&
+      typeof d?.first_dose_iso === "string" && d.first_dose_iso.includes("T07:30"),
+    expectNote: "drug B12 (phonetic), daily=24h, fortnight starting tomorrow = 14 doses, 07:30",
+  },
+  {
+    id: "med-round-half",
+    utterance:
+      "i need four hundred milligrams of naproxen per dose but i only have the two twenty tablets, round to the nearest half tablet, every twelve hours for five days starting tonight at eleven",
+    expectTool: "medication",
+    check: (d) =>
+      d?.tablets_per_dose === 2 && d?.interval_hours === 12 && d?.doses_total === 10 &&
+      typeof d?.first_dose_iso === "string" && d.first_dose_iso.includes("T23:00"),
+    expectNote: "400/220=1.82 -> nearest half = 2 tablets, every 12h, 10 doses, 23:00",
+  },
+  {
+    id: "med-compound-fraction",
+    utterance:
+      "my usual dose of prednisone is two thirds of a tablet and the doctor said take one and a half times my usual, every twelve hours for four days, starting tomorrow at noon",
+    expectTool: "medication",
+    check: (d) =>
+      d?.tablets_per_dose === 1 && d?.interval_hours === 12 && d?.doses_total === 8 &&
+      typeof d?.first_dose_iso === "string" && d.first_dose_iso.includes("T12:00"),
+    expectNote: "1.5 x 2/3 = exactly 1 tablet, every 12h, 8 doses",
+  },
+];
+
 const argv = process.argv.slice(2);
-const suite = argv.includes("adv") ? "adv" : argv.includes("hard") ? "hard" : "base";
-const CASES_ACTIVE = suite === "adv" ? ADV_CASES : suite === "hard" ? HARD_CASES : CASES;
+const suite = argv.includes("ultra") ? "ultra" : argv.includes("adv") ? "adv" : argv.includes("hard") ? "hard" : "base";
+const CASES_ACTIVE = suite === "ultra" ? ULTRA_CASES : suite === "adv" ? ADV_CASES : suite === "hard" ? HARD_CASES : CASES;
 const RESULTS_FILE = `compare-results${suite === "base" ? "" : "-" + suite}.json`;
 const only = (argv.find((a) => a === "native" || a === "delegate") ?? undefined) as
   | "native"

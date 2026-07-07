@@ -335,3 +335,63 @@ function run_send_message(args: SendMessage) -> ToolOutcome {
     },
   }
 }
+
+// ---------- medication course (client-side effect; validate + do the math) ----------
+
+function run_medication(args: PlanMedication) -> ToolOutcome {
+  if (args.tablets_per_dose <= 0.0 || args.interval_hours <= 0 || args.doses_total <= 0) {
+    return ToolOutcome {
+      say: "Those medication numbers didn't add up for me — how much, how often, and for how long?",
+      tool: "error",
+      data: null,
+    };
+  }
+  if (args.interval_hours > 48 || args.doses_total > 500) {
+    return ToolOutcome {
+      say: "That schedule looks off — can you double-check the interval and course length?",
+      tool: "error",
+      data: null,
+    };
+  }
+  let course_hours = (args.doses_total - 1) * args.interval_hours;
+  let course_days = (course_hours + args.interval_hours + 23) / 24;
+  let total_tablets = args.tablets_per_dose * (args.doses_total * 1.0);
+  let d: map<string, json> = {};
+  d.set("drug", args.drug);
+  d.set("tablets_per_dose", args.tablets_per_dose);
+  d.set("interval_hours", args.interval_hours);
+  d.set("doses_total", args.doses_total);
+  d.set("first_dose_iso", args.first_dose_iso);
+  d.set("total_tablets", total_tablets);
+  ToolOutcome {
+    say: `Planned: ${args.drug}, ${args.doses_total} doses every ${plural(args.interval_hours, "hour")} over about ${plural(course_days, "day")}, starting ${speakable_datetime(args.first_dose_iso)}.`,
+    tool: "medication",
+    data: d,
+  }
+}
+
+/// TS-boundary-safe wrapper for the native lane. KNOWN UPSTREAM BUG (verified
+/// on @boundaryml/baml-core-node for 0.12.2-nightly.20260624.a): passing an
+/// integer-valued JS number (e.g. 1) into a BAML `float` field segfaults the
+/// binding; 1.5 works. Strings and ints cross safely, so the float rides as a
+/// string and parses inside the VM.
+function run_medication_wire(
+  drug: string,
+  tablets_per_dose: string,
+  interval_hours: int,
+  doses_total: int,
+  first_dose_iso: string,
+) -> ToolOutcome {
+  let tablets = float.parse(tablets_per_dose) catch (_) {
+    _ => -1.0
+  };
+  run_medication(
+    PlanMedication {
+      drug: drug,
+      tablets_per_dose: tablets,
+      interval_hours: interval_hours,
+      doses_total: doses_total,
+      first_dose_iso: first_dose_iso,
+    },
+  )
+}

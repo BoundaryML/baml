@@ -42,12 +42,31 @@ class SendMessage {
   urgency "low" | "normal" | "urgent"
 }
 
+/// Plan a recurring medication course. The hard part is arithmetic the
+/// speaker never states directly: doses_total must be COMPUTED from the
+/// course length and interval ("every eight hours for ten days" -> 30), and
+/// tablets_per_dose comes from spoken fractions ("two and a half" -> 2.5).
+/// first_dose_iso resolves relative speech against the current datetime.
+class PlanMedication {
+  drug string
+  /// Tablets per single dose; spoken fractions become decimals ("half" -> 0.5).
+  tablets_per_dose float
+  /// Hours between doses ("every eight hours" -> 8).
+  interval_hours int
+  /// TOTAL number of doses over the whole course: course duration divided by
+  /// the interval ("every 8 hours for 10 days" -> 240 / 8 = 30).
+  doses_total int
+  /// ISO 8601 local datetime of the first dose, resolved from relative
+  /// speech ("starting tomorrow morning at eight") against the current time.
+  first_dose_iso string
+}
+
 /// No tool needed: the thinker answers directly from knowledge/conversation.
 class Answer {
   message string
 }
 
-type ThinkerAction = GetWeather | LookupOrder | SetTimer | CreateCalendarEvent | SendMessage | Answer
+type ThinkerAction = GetWeather | LookupOrder | SetTimer | CreateCalendarEvent | SendMessage | PlanMedication | Answer
 
 /// What goes back to the realtime model (and the client UI).
 class ToolOutcome {

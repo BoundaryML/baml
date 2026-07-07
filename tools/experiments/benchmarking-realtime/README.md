@@ -127,3 +127,8 @@ instance passed to `execute_async(action: GetWeather | ... )` is decoded as
 the FIRST union variant (`SetTimer` arrives as `GetWeather`, panics with
 "Missing field `city`"). Workaround: call the monomorphic executors
 (`run_timer_async` etc.), as `relay.ts` does.
+
+Third one: passing an integer-valued JS number (e.g. `1`) into a BAML `float`
+field segfaults the `@boundaryml/baml-core-node` binding, while `1.5` crosses
+fine. Worked around in `run_medication_wire` (floats ride the TS boundary as
+strings and parse inside the VM with `float.parse`).

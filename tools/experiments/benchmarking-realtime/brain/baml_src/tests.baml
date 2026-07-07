@@ -91,3 +91,33 @@ testset "complex-executors" {
     assert.equal(speakable_datetime("2026-07-14T00:05:00"), "July 14 at 12:05 AM");
   }
 }
+
+testset "medication" {
+  test "course math and payload" {
+    let out = execute(
+      PlanMedication {
+        drug: "amoxicillin",
+        tablets_per_dose: 2.5,
+        interval_hours: 8,
+        doses_total: 30,
+        first_dose_iso: "2026-07-08T08:00:00",
+      },
+    );
+    assert.equal(out.tool, "medication");
+    assert.is_true(out.say.includes("30 doses every 8 hours"));
+    assert.is_true(out.say.includes("July 8 at 8:00 AM"));
+  }
+
+  test "medication rejects nonsense numbers" {
+    let out = execute(
+      PlanMedication {
+        drug: "melatonin",
+        tablets_per_dose: 0.0,
+        interval_hours: 8,
+        doses_total: 10,
+        first_dose_iso: "2026-07-08T22:00:00",
+      },
+    );
+    assert.equal(out.tool, "error");
+  }
+}
