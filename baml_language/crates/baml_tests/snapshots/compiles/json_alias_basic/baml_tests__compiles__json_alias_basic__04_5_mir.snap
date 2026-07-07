@@ -20,53 +20,89 @@ fn user.MatchJson(j: baml.json.json) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: baml.json.json // j // param
-    let _2: int
+    let _2: bool
+    let _3: bool
+    let _4: bool
+    let _5: bool
+    let _6: bool
+    let _7: bool
+    let _8: bool
 
     bb0: {
-        _2 = type_tag(_1);
-        switch copy _2 [null: bb8, bool: bb7, int: bb6, float: bb5, string: bb4, list: bb3, map: bb2, otherwise: bb1] (exhaustive);
+        _2 = copy _1 == const null;
+        branch copy _2 -> [bb14, bb1];
     }
 
     bb1: {
-        unreachable;
+        _3 = is_type(copy _1, bool);
+        branch copy _3 -> [bb13, bb2];
     }
 
     bb2: {
-        _0 = const "map";
-        goto -> bb9;
+        _4 = is_type(copy _1, int);
+        branch copy _4 -> [bb12, bb3];
     }
 
     bb3: {
-        _0 = const "array";
-        goto -> bb9;
+        _5 = is_type(copy _1, float);
+        branch copy _5 -> [bb11, bb4];
     }
 
     bb4: {
-        _0 = const "string";
-        goto -> bb9;
+        _6 = is_type(copy _1, string);
+        branch copy _6 -> [bb10, bb5];
     }
 
     bb5: {
-        _0 = const "float";
-        goto -> bb9;
+        _7 = is_type(copy _1, baml.json.json[]);
+        branch copy _7 -> [bb9, bb6];
     }
 
     bb6: {
-        _0 = const "int";
-        goto -> bb9;
+        _8 = is_type(copy _1, map<string, baml.json.json>);
+        branch copy _8 -> [bb8, bb7];
     }
 
     bb7: {
-        _0 = const "bool";
-        goto -> bb9;
+        unreachable;
     }
 
     bb8: {
-        _0 = const "null";
-        goto -> bb9;
+        _0 = const "map";
+        goto -> bb15;
     }
 
     bb9: {
+        _0 = const "array";
+        goto -> bb15;
+    }
+
+    bb10: {
+        _0 = const "string";
+        goto -> bb15;
+    }
+
+    bb11: {
+        _0 = const "float";
+        goto -> bb15;
+    }
+
+    bb12: {
+        _0 = const "int";
+        goto -> bb15;
+    }
+
+    bb13: {
+        _0 = const "bool";
+        goto -> bb15;
+    }
+
+    bb14: {
+        _0 = const "null";
+        goto -> bb15;
+    }
+
+    bb15: {
         return;
     }
 }

@@ -22,7 +22,7 @@
 
 use baml_type::{Literal, MediaKind, Name, RuntimeTy, TypeName};
 
-use crate::baml_core::cffi::{
+use crate::baml_bridge::cffi::{
     BamlTy, BamlTyAssociatedBinding, BamlTyAssociatedTypeProjection, BamlTyClass, BamlTyEnum,
     BamlTyEnumVariant, BamlTyFunction, BamlTyFunctionParam, BamlTyFunctionParamMode, BamlTyFuture,
     BamlTyInterface, BamlTyList, BamlTyLiteral, BamlTyMap, BamlTyMediaKind, BamlTyOptional,
@@ -119,7 +119,7 @@ fn runtime_ty_to_variant(ty: &RuntimeTy) -> TyVariant {
         }
 
         RuntimeTy::Literal(lit, _, _) => TyVariant::Literal(literal_to_proto(lit)),
-        RuntimeTy::Media(kind, _) => TyVariant::Media(crate::baml_core::cffi::BamlTyMedia {
+        RuntimeTy::Media(kind, _) => TyVariant::Media(crate::baml_bridge::cffi::BamlTyMedia {
             kind: media_kind_to_proto(*kind) as i32,
         }),
         RuntimeTy::Interface(name, args, bindings, _) => {
@@ -189,19 +189,19 @@ fn runtime_ty_to_variant(ty: &RuntimeTy) -> TyVariant {
         })),
 
         RuntimeTy::RustType { .. } => {
-            TyVariant::RustType(crate::baml_core::cffi::BamlTyRustType {})
+            TyVariant::RustType(crate::baml_bridge::cffi::BamlTyRustType {})
         }
-        RuntimeTy::Type { .. } => TyVariant::MetaType(crate::baml_core::cffi::BamlTyMetaType {}),
+        RuntimeTy::Type { .. } => TyVariant::MetaType(crate::baml_bridge::cffi::BamlTyMetaType {}),
         RuntimeTy::Resource { .. } => {
-            TyVariant::Resource(crate::baml_core::cffi::BamlTyResource {})
+            TyVariant::Resource(crate::baml_bridge::cffi::BamlTyResource {})
         }
         RuntimeTy::PromptAst { .. } => {
-            TyVariant::PromptAst(crate::baml_core::cffi::BamlTyPromptAst {})
+            TyVariant::PromptAst(crate::baml_bridge::cffi::BamlTyPromptAst {})
         }
-        RuntimeTy::Void { .. } => TyVariant::Void(crate::baml_core::cffi::BamlTyVoid {}),
-        RuntimeTy::Never { .. } => TyVariant::Never(crate::baml_core::cffi::BamlTyNever {}),
+        RuntimeTy::Void { .. } => TyVariant::Void(crate::baml_bridge::cffi::BamlTyVoid {}),
+        RuntimeTy::Never { .. } => TyVariant::Never(crate::baml_bridge::cffi::BamlTyNever {}),
         RuntimeTy::BuiltinUnknown { .. } => {
-            TyVariant::Unknown(crate::baml_core::cffi::BamlTyUnknown {})
+            TyVariant::Unknown(crate::baml_bridge::cffi::BamlTyUnknown {})
         }
     }
 }
@@ -244,7 +244,7 @@ mod tests {
 
     use super::runtime_ty_to_proto_ty;
     use crate::{
-        baml_core::cffi::{
+        baml_bridge::cffi::{
             BamlTy, BamlTyAssociatedBinding, BamlTyInterface, baml_ty::Ty as TyVariant,
         },
         ty_decode::proto_ty_to_runtime_ty,

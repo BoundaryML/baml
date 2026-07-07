@@ -138,7 +138,7 @@ pub enum Ty {
     /// Opaque Rust-managed state — `$rust_type` fields in stdlib stubs
     /// (e.g. `Response._body`, `SseStream._handle`). Generators render
     /// this as the host-language opaque-handle type (Python:
-    /// `baml.baml_core.BamlPyHandle`).
+    /// `baml.baml_bridge.BamlPyHandle`).
     RustType,
 }
 

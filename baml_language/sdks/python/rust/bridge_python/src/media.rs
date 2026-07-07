@@ -20,7 +20,7 @@ use bridge_cffi::{
     BamlCffiStatus, Buffer, baml_media_base64, baml_media_file, baml_media_from_base64,
     baml_media_from_file, baml_media_from_url, baml_media_mime_type, baml_media_url, free_buffer,
 };
-use bridge_ctypes::baml_core::cffi::{BamlHandleType, MediaTypeEnum};
+use bridge_ctypes::baml_bridge::cffi::{BamlHandleType, MediaTypeEnum};
 use pyo3::{
     Bound, Py, PyAny, PyResult, Python,
     exceptions::{PyRuntimeError, PyTypeError, PyValueError},
@@ -128,14 +128,14 @@ macro_rules! define_media_pyclass {
     ($name:ident, $media_kind:expr, $expected_ht:expr) => {
         // `module` sets the class's reported `__module__`. PyO3 defaults
         // it to `"builtins"`, but these types are imported from
-        // `baml_core.baml_py` (where the extension `.so` lives), and the
-        // typemap reverse-map seed in `baml_core/typemap.py` keys media
-        // identity on `("baml_core.baml_py", "Baml{Image,…}")`. Declaring
+        // `baml_bridge.baml_py` (where the extension `.so` lives), and the
+        // typemap reverse-map seed in `baml_bridge/typemap.py` keys media
+        // identity on `("baml_bridge.baml_py", "Baml{Image,…}")`. Declaring
         // the honest module makes `type(value).__module__` match that
         // seed, so `py_type_to_baml_type` resolves media values on the
         // encode path instead of returning `""` (35b "Bug B").
         #[gen_stub_pyclass]
-        #[pyclass(module = "baml_core.baml_py")]
+        #[pyclass(module = "baml_bridge.baml_py")]
         pub struct $name {
             pub(crate) handle: Py<BamlPyHandle>,
         }

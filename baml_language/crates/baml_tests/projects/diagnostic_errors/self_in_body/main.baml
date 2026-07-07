@@ -1,0 +1,54 @@
+// `Self` is a signature-only construct. In a method *body* type position it has
+// no substitution (a class body cannot name its own instantiation as a value
+// type, and an interface default method cannot name the implementor), so every
+// body-position `Self` is a compile error — rather than silently resolving to a
+// misbehaving `TypeVar("Self")` (interface default methods) or matching any
+// instantiation (generic class bodies).
+//
+// The sound alternative in a class method is to name the enclosing type
+// explicitly, e.g. `Box<T>` (exercised as a runtime test in
+// `ns_match_self_workaround`).
+
+// ── Class-body method: match arm, `is`, and turbofish ────────────────────────
+
+class Box<T> {
+    v: T,
+    function which(self, other: Box<int> | Box<string>) -> string {
+        match (other) {
+            let s: Self => "self",
+            _ => "other",
+        }
+    }
+    function is_self(self, other: Box<int> | Box<string>) -> bool {
+        other is Self
+    }
+    function let_self(self, other: Box<int>) -> int {
+        let a: Self = other;
+        1
+    }
+    function nested_self(self, w: Box<Self>) -> int {
+        match (w) {
+            let s: Box<Self> => 1,
+            _ => 0,
+        }
+    }
+    function turbofish_self(self) -> string {
+        reflect.type_of<Self>().to_string()
+    }
+}
+
+// ── Interface default-method body (the previously-silent hole) ───────────────
+
+interface Tester {
+    function eq(self, other: Self) -> bool
+    function check(self, other: Self) -> bool {
+        other is Self
+    }
+    function describe(self) -> string {
+        reflect.type_of<Self>().to_string()
+    }
+    function bind_self(self, other: Self) -> bool {
+        let a: Self = other;
+        true
+    }
+}

@@ -18,7 +18,7 @@
 use base64::Engine;
 use bridge_wasm::{
     BamlWasmRuntime, LspNotification,
-    baml_core::cffi::{
+    baml_bridge::cffi::{
         BamlHandle, BamlHandleType, BamlOutboundValue, BamlToHostCall, BamlTyClass,
         InboundClassValue, InboundMapEntry, InboundValue,
         baml_outbound_value::Value as OutboundValue, inbound_map_entry::Key as MapKeyVariant,

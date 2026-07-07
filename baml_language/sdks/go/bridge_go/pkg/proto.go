@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	pb "bridge_go/cffi/proto/baml_core/cffi/v1"
+	pb "bridge_go/cffi/proto/baml_bridge/cffi/v1"
 
 	"google.golang.org/protobuf/proto"
 )

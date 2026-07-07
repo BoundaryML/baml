@@ -15,10 +15,12 @@
 //! there is no `requires`-closure entry at runtime yet (the resolver proves
 //! `concrete: I`, not `I_a requires I_b`).
 //!
-//! NOTE: not yet wired into any caller. The `RuntimeTy::is_subtype_of` call sites
-//! migrate onto this context only once the compiler adopts the canonical algebra
-//! (the runtime must not become stricter than the compiler — see the
-//! List/Map-invariance sequencing constraint).
+//! First wired into [`crate::type_match`] — the `IsType` value matcher — as of
+//! the canonical-algebra unit. Other `RuntimeTy::is_subtype_of` call sites still
+//! migrate onto this context only as the surrounding relation is made canonical
+//! (the runtime must not become stricter than the compiler where it would break
+//! a proven-exhaustive match — see the List/Map-invariance sequencing constraint;
+//! the matcher's callers gate structural tests accordingly).
 
 use baml_type::{Interface, Name, QualifiedTypeName, RuntimeTy, Ty, normalize::TypeContext};
 use bex_vm_types::types::Object;
@@ -32,10 +34,6 @@ pub(crate) struct RuntimeTypeContext<'a> {
     vm: &'a BexVm,
 }
 
-#[expect(
-    dead_code,
-    reason = "constructed at the runtime subtyping call sites once the flip lands"
-)]
 impl<'a> RuntimeTypeContext<'a> {
     pub(crate) fn new(vm: &'a BexVm) -> Self {
         Self { vm }

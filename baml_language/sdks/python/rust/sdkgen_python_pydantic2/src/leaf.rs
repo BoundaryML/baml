@@ -116,7 +116,7 @@ impl LeafBody {
 
     /// True when any class field, function/method param, or return type
     /// in this leaf is `Ty::RustType` — i.e. needs the
-    /// `from baml_core import BamlPyHandle as _BamlPyHandle` line.
+    /// `from baml_bridge import BamlPyHandle as _BamlPyHandle` line.
     pub(crate) fn needs_baml_pyhandle(&self) -> bool {
         fn ty_uses_rust_type(ty: &Ty) -> bool {
             match ty {
@@ -582,7 +582,7 @@ fn collect_root_imports(ty: &Ty, current: &LeafPath, out: &mut RootImportSets) {
         // `media` as an attribute of `baml` for the dotted access.
         //
         // `Ty::RustType` renders as `_BamlPyHandle` and gets its own
-        // `from baml_core import BamlPyHandle as _BamlPyHandle`
+        // `from baml_bridge import BamlPyHandle as _BamlPyHandle`
         // line via `needs_baml_pyhandle` — it does *not* go through
         // the cross-leaf segment set.
         Ty::Media(_) => {
@@ -733,10 +733,10 @@ fn render_class_bases(generic_params: &[String]) -> String {
 ///
 /// `baml.media.{Image,Video,Audio,Pdf}` (15b §lines 14-19): re-exports
 /// of `PyO3` types holding `Arc<MediaValue>` directly — live in
-/// `baml_core.baml_py` (the `PyO3` extension module).
+/// `baml_bridge.baml_py` (the `PyO3` extension module).
 ///
-/// `baml.llm.Stream`: pure-Python wrapper re-exported from `baml_core`
-/// (`sdks/python/src/baml_core/_stream.py`). Lives outside the `PyO3`
+/// `baml.llm.Stream`: pure-Python wrapper re-exported from `baml_bridge`
+/// (`sdks/python/src/baml_bridge/_stream.py`). Lives outside the `PyO3`
 /// module because nothing on the call path needed Rust — the args
 /// encoder, runtime accessor, and result decoder are all already
 /// exposed to Python.
@@ -744,11 +744,11 @@ fn media_reexport_rust_name(
     c: &crate::emit::class::PyClass,
 ) -> Option<(&'static str, &'static str)> {
     match c.source.to_string().as_str() {
-        "baml.media.Image" => Some(("baml_core.baml_py", "BamlImage")),
-        "baml.media.Video" => Some(("baml_core.baml_py", "BamlVideo")),
-        "baml.media.Audio" => Some(("baml_core.baml_py", "BamlAudio")),
-        "baml.media.Pdf" => Some(("baml_core.baml_py", "BamlPdf")),
-        "baml.llm.Stream" => Some(("baml_core", "BamlStream")),
+        "baml.media.Image" => Some(("baml_bridge.baml_py", "BamlImage")),
+        "baml.media.Video" => Some(("baml_bridge.baml_py", "BamlVideo")),
+        "baml.media.Audio" => Some(("baml_bridge.baml_py", "BamlAudio")),
+        "baml.media.Pdf" => Some(("baml_bridge.baml_py", "BamlPdf")),
+        "baml.llm.Stream" => Some(("baml_bridge", "BamlStream")),
         _ => None,
     }
 }
@@ -921,7 +921,7 @@ fn render_symbol(s: &EmittedSymbol, leaf: &LeafPath) -> String {
                 // 25b2 Phase 4: media re-export is now a pure import
                 // line. The engine FQN lives only in `_TYPE_MAP`'s
                 // reverse map (seeded with the PyO3 identity →
-                // `baml.media.*` overrides in `baml_core/typemap.py`).
+                // `baml.media.*` overrides in `baml_bridge/typemap.py`).
                 return format!(
                     "from {module} import {rust_name} as {py_name}\n",
                     py_name = c.py_name,
@@ -1325,7 +1325,7 @@ pub(crate) fn render_leaf_body(body: &LeafBody, callable_child_names: &BTreeSet<
         }
     }
     let _ = (root_segments, root_names);
-    // Factory imports use absolute paths (`baml_core` is a
+    // Factory imports use absolute paths (`baml_bridge` is a
     // separate installed package, not reachable from this SDK tree)
     // with a `_` alias to keep them private to the module.
     //
@@ -1345,9 +1345,9 @@ pub(crate) fn render_leaf_body(body: &LeafBody, callable_child_names: &BTreeSet<
         out.push('\n');
         if runtime_imports.len() == 1 {
             let (original, alias) = runtime_imports[0];
-            writeln!(out, "from baml_core import {original} as {alias}").unwrap();
+            writeln!(out, "from baml_bridge import {original} as {alias}").unwrap();
         } else {
-            out.push_str("from baml_core import (\n");
+            out.push_str("from baml_bridge import (\n");
             for (original, alias) in &runtime_imports {
                 writeln!(out, "    {original} as {alias},").unwrap();
             }
@@ -1356,14 +1356,14 @@ pub(crate) fn render_leaf_body(body: &LeafBody, callable_child_names: &BTreeSet<
     }
 
     // The `BamlError` / `BamlPanic` wrappers and optional-argument sentinel
-    // are defined in `baml_core` and
+    // are defined in `baml_bridge` and
     // re-exported on the top-level `baml` builtins package so user code can
     // `from baml_sdk.baml import BamlError, BamlPanic, UNSET`.
     let is_baml_builtins_root = body.leaf.segments == ["baml"];
     if is_baml_builtins_root {
         out.push('\n');
         out.push_str(
-            "from baml_core import BamlError as BamlError, BamlPanic as BamlPanic, UNSET as UNSET\n",
+            "from baml_bridge import BamlError as BamlError, BamlPanic as BamlPanic, UNSET as UNSET\n",
         );
     }
 
@@ -1930,7 +1930,7 @@ fn render_literal_default(lit: &Literal) -> String {
 }
 
 /// Mirrors `render_leaf_body` with these differences: no
-/// `baml_core` factory imports; `typing` is needed whenever a
+/// `baml_bridge` factory imports; `typing` is needed whenever a
 /// signature is present (`needs_typing_pyi`); `enum` and `pydantic`
 /// follow the `.py` rule.
 pub(crate) fn render_leaf_body_pyi(
@@ -1999,7 +1999,7 @@ pub(crate) fn render_leaf_body_pyi(
     // can resolve `$rust_type` field annotations.
     if body.needs_baml_pyhandle() {
         out.push('\n');
-        out.push_str("from baml_core import BamlPyHandle as _BamlPyHandle\n");
+        out.push_str("from baml_bridge import BamlPyHandle as _BamlPyHandle\n");
     }
 
     // Mirror the `.py` re-export so `from baml_sdk.baml import BamlError,
@@ -2008,7 +2008,7 @@ pub(crate) fn render_leaf_body_pyi(
     if is_baml_builtins_root {
         out.push('\n');
         out.push_str(
-            "from baml_core import BamlError as BamlError, BamlPanic as BamlPanic, UNSET as UNSET\n",
+            "from baml_bridge import BamlError as BamlError, BamlPanic as BamlPanic, UNSET as UNSET\n",
         );
     }
 

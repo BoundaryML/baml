@@ -7,8 +7,8 @@ from the matching `return_*` function (which builds it engine-side via
 back into a `round_trip_*` function.
 
 Both directions work since 35c: the media PyO3 types are declared
-`#[pyclass(module = "baml_core.baml_py")]`, so `type(value).__module__`
-matches the typemap reverse-map seed `("baml_core.baml_py", "BamlImage")`
+`#[pyclass(module = "baml_bridge.baml_py")]`, so `type(value).__module__`
+matches the typemap reverse-map seed `("baml_bridge.baml_py", "BamlImage")`
 and `py_type_to_baml_type` resolves the engine FQN on encode. (Before
 that fix PyO3 reported `__module__ == "builtins"`, the seed missed, and
 re-encode failed with `Unknown class ``— 35b "Bug B".)

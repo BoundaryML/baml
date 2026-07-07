@@ -4,7 +4,7 @@ use bex_project::{BexExternalAdt, BexExternalValue};
 use indexmap::IndexMap;
 
 use crate::{
-    baml_core::cffi::{
+    baml_bridge::cffi::{
         BamlOutboundHandle, BamlOutboundMapEntry, BamlOutboundValue, BamlToHostArg, BamlToHostCall,
         BamlValueClass, BamlValueEnum, BamlValueList, BamlValueMap, BamlValueUnionVariant,
         baml_outbound_value::Value as BamlValueVariant,
@@ -146,7 +146,7 @@ pub fn external_to_outbound(
         // the host-side key; drop semantics are preserved by the Arc
         // (HostValueArc::drop fires HostReleaseFn on last drop).
         BexExternalValue::HostValue(arc) => {
-            use crate::baml_core::cffi::BamlHandleType;
+            use crate::baml_bridge::cffi::BamlHandleType;
             let ht = match arc.kind {
                 bex_project::HostValueKind::Callable => BamlHandleType::HostValueCallable as i32,
                 bex_project::HostValueKind::Opaque => BamlHandleType::HostValueOpaque as i32,
@@ -351,8 +351,10 @@ fn artifact_safe_omission(reason: &str, message: &str) -> BamlValueVariant {
     })
 }
 
-fn media_kind_to_proto_enum(kind: bex_project::MediaKind) -> crate::baml_core::cffi::MediaTypeEnum {
-    use crate::baml_core::cffi::MediaTypeEnum as E;
+fn media_kind_to_proto_enum(
+    kind: bex_project::MediaKind,
+) -> crate::baml_bridge::cffi::MediaTypeEnum {
+    use crate::baml_bridge::cffi::MediaTypeEnum as E;
     match kind {
         bex_project::MediaKind::Image => E::Image,
         bex_project::MediaKind::Audio => E::Audio,
@@ -364,8 +366,10 @@ fn media_kind_to_proto_enum(kind: bex_project::MediaKind) -> crate::baml_core::c
 
 fn bex_media_to_proto_media(
     media: &bex_project::MediaValue,
-) -> crate::baml_core::cffi::BamlValueMedia {
-    use crate::baml_core::cffi::{BamlValueMedia, baml_value_media::Value as BamlValueMediaValue};
+) -> crate::baml_bridge::cffi::BamlValueMedia {
+    use crate::baml_bridge::cffi::{
+        BamlValueMedia, baml_value_media::Value as BamlValueMediaValue,
+    };
     BamlValueMedia {
         media: media_kind_to_proto_enum(media.kind).into(),
         mime_type: media.mime_type(),
@@ -382,21 +386,21 @@ fn bex_media_to_proto_media(
 /// Adapter so we can use `.map(arc_prompt_ast_to_proto)` instead of a closure (PR review).
 fn arc_prompt_ast_to_proto(
     p: &std::sync::Arc<bex_project::PromptAst>,
-) -> crate::baml_core::cffi::BamlValuePromptAst {
+) -> crate::baml_bridge::cffi::BamlValuePromptAst {
     bex_prompt_ast_to_proto_prompt_ast(p.as_ref())
 }
 
 /// Adapter so we can use `.map(arc_prompt_ast_simple_to_proto)` instead of a closure (PR review).
 fn arc_prompt_ast_simple_to_proto(
     s: &std::sync::Arc<bex_project::PromptAstSimple>,
-) -> crate::baml_core::cffi::BamlValuePromptAstSimple {
+) -> crate::baml_bridge::cffi::BamlValuePromptAstSimple {
     bex_prompt_ast_simple_to_proto_prompt_ast_simple(s.as_ref())
 }
 
 fn bex_prompt_ast_to_proto_prompt_ast(
     prompt_ast: &bex_project::PromptAst,
-) -> crate::baml_core::cffi::BamlValuePromptAst {
-    use crate::baml_core::cffi::{
+) -> crate::baml_bridge::cffi::BamlValuePromptAst {
+    use crate::baml_bridge::cffi::{
         BamlValuePromptAst, BamlValuePromptAstMessage, BamlValuePromptAstMultiple,
         baml_value_prompt_ast::Value as BamlValuePromptAstValue,
     };
@@ -425,8 +429,8 @@ fn bex_prompt_ast_to_proto_prompt_ast(
 
 fn bex_prompt_ast_simple_to_proto_prompt_ast_simple(
     simple_prompt_ast: &bex_project::PromptAstSimple,
-) -> crate::baml_core::cffi::BamlValuePromptAstSimple {
-    use crate::baml_core::cffi::{
+) -> crate::baml_bridge::cffi::BamlValuePromptAstSimple {
+    use crate::baml_bridge::cffi::{
         BamlValuePromptAstSimple, BamlValuePromptAstSimpleMultiple,
         baml_value_prompt_ast_simple::Value as BamlValuePromptAstSimpleValue,
     };
@@ -495,7 +499,9 @@ mod tests {
     };
 
     use super::*;
-    use crate::baml_core::cffi::{BamlHandleType, baml_outbound_value::Value as BamlValueVariant};
+    use crate::baml_bridge::cffi::{
+        BamlHandleType, baml_outbound_value::Value as BamlValueVariant,
+    };
 
     fn extract_handle(out: BamlOutboundValue) -> BamlOutboundHandle {
         match out.value {

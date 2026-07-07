@@ -374,7 +374,7 @@ fn append_lazy_children_block(out: &mut String, children: &BTreeSet<String>) {
 fn render_root_init(top_children: &BTreeSet<String>, use_bytecode: bool) -> String {
     let mut out = String::new();
     out.push_str("from __future__ import annotations\n\n");
-    out.push_str("from baml_core import BamlRuntime, set_type_map\n");
+    out.push_str("from baml_bridge import BamlRuntime, set_type_map\n");
     out.push_str("from . import _inlinedbaml\n");
     out.push_str("from ._typemap import _TYPE_MAP\n\n");
     if use_bytecode {
@@ -687,7 +687,7 @@ mod tests {
         assert!(out.contains_key(&PathBuf::from("py.typed")));
 
         let root = &out[&PathBuf::from("__init__.py")];
-        assert!(root.contains("from baml_core import BamlRuntime, set_type_map"));
+        assert!(root.contains("from baml_bridge import BamlRuntime, set_type_map"));
         assert!(root.contains("from . import _inlinedbaml"));
         assert!(root.contains("from ._typemap import _TYPE_MAP"));
         assert!(root.contains("set_type_map(_TYPE_MAP)"));
@@ -1375,7 +1375,7 @@ mod tests {
         // per leaf that carries any function/companion binding, and
         // never in leaves that don't. 25b Phase 2: every leaf with a
         // class/enum/alias also pulls `register_class`/`register_enum`/
-        // `register_type_alias`, so the surrounding `from baml_core ...`
+        // `register_type_alias`, so the surrounding `from baml_bridge ...`
         // block is no longer factory-exclusive — we assert on the
         // factory name itself.
         let mut pool: SymbolPool = HashMap::new();
@@ -2401,7 +2401,7 @@ mod tests {
         // `define_function` factory, so the import collapses to one
         // line — no parenthesized form needed.
         assert!(
-            leaf.contains("from baml_core import define_function as _define_function\n"),
+            leaf.contains("from baml_bridge import define_function as _define_function\n"),
             "missing single-line factory import:\n{leaf}"
         );
     }
@@ -2587,7 +2587,7 @@ mod tests {
         );
         // No factory call, no `_define_function`.
         assert!(!leaf.contains("_define_function"));
-        assert!(!leaf.contains("baml_core"));
+        assert!(!leaf.contains("baml_bridge"));
     }
 
     #[test]
@@ -2816,8 +2816,8 @@ mod tests {
                 continue;
             }
             assert!(
-                !content.contains("baml_core"),
-                "{} must not import baml_core",
+                !content.contains("baml_bridge"),
+                "{} must not import baml_bridge",
                 path.display()
             );
             assert!(

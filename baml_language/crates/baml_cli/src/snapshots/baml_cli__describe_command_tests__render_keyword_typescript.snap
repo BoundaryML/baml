@@ -5,7 +5,7 @@ expression: output
 typescript — Use BAML from TypeScript / Node.js via a generated SDK.
 
 Syntax:
-  npm install @boundaryml/baml-core-node   # the runtime
+  npm install @boundaryml/baml-bridge   # the runtime
   
   # baml.toml — declare a generator:
   [generator.app]

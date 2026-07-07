@@ -631,12 +631,12 @@ jobs:
         working-directory: baml_language
 
       # Rust (prost) + Python (protoc) — both driven by bridge_ctypes/build.rs.
-      # Writes Python pb2/pyi into baml_language/sdks/python/src/baml_core/cffi/v1/.
+      # Writes Python pb2/pyi into baml_language/sdks/python/src/baml_bridge/cffi/v1/.
       - name: "Generate Rust + Python proto bindings (bridge_ctypes)"
         run: cargo build -p bridge_ctypes
         working-directory: baml_language
 
-      # Go (protoc-gen-go) — writes into sdks/go/bridge_go/cffi/proto/baml_core/cffi/v1/.
+      # Go (protoc-gen-go) — writes into sdks/go/bridge_go/cffi/proto/baml_bridge/cffi/v1/.
       - name: "Generate Go proto bindings (sdks/go/bridge_go)"
         run: ./build.sh
         working-directory: baml_language/sdks/go/bridge_go
@@ -667,7 +667,7 @@ jobs:
             baml_language/sdks/nodejs/bridge_nodejs
             baml_language/crates/bridge_ctypes
             baml_language/sdks/go/bridge_go
-            baml_language/sdks/python/src/baml_core/cffi
+            baml_language/sdks/python/src/baml_bridge/cffi
             typescript2/pkg-proto
           )
           README="baml_language/crates/bridge_ctypes/README.md"

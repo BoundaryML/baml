@@ -242,7 +242,7 @@ function inferred_generic_type_args.Counter.element_type(self: inferred_generic_
 
 function inferred_generic_type_args.Cursor.take_one(self: inferred_generic_type_args.Cursor<T>) -> inferred_generic_type_args.Cursor<T> {
     load_var self
-    load_type inferred_generic_type_args.Cursor<T>
+    load_type inferred_generic_type_args.Cursor<#0>
     load_const "head"
     virtual_call nargs=1 ntypeargs=0
     store_var _2
@@ -360,7 +360,7 @@ function inferred_generic_type_args.NextIter.collect2(self: inferred_generic_typ
     load_const true
     pop_jump_if_false L2
     load_var self
-    load_type inferred_generic_type_args.NextIter<T, E>
+    load_type inferred_generic_type_args.NextIter<#0, #1>
     load_const "next2"
     virtual_call nargs=1 ntypeargs=0
     store_var _3
@@ -438,7 +438,7 @@ function inferred_generic_type_args.ProbeB.TypeProbe.seen(self: inferred_generic
 
 function inferred_generic_type_args.SelfEcho.nested_self_type(self: inferred_generic_type_args.SelfEcho) -> string {
     load_var self
-    load_type Self
+    load_type _
     alloc_array 1
     call user.inferred_generic_type_args.echo_type
     return

@@ -1,0 +1,83 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] error: `Self` is only supported in a signature, not in a method body. In a class method, name the enclosing type explicitly (e.g. `Box<T>`).
+    ╭─[ main.baml:18:20 ]
+    │
+ 18 │             let s: Self => "self",
+    │                    ──┬─  
+    │                      ╰─── `Self` is only supported in a signature, not in a method body. In a class method, name the enclosing type explicitly (e.g. `Box<T>`).
+    │ 
+    │ Note: Error code: E0002
+────╯
+
+  [type] error: `Self` is only supported in a signature, not in a method body. In a class method, name the enclosing type explicitly (e.g. `Box<T>`).
+    ╭─[ main.baml:23:18 ]
+    │
+ 23 │         other is Self
+    │                  ──┬─  
+    │                    ╰─── `Self` is only supported in a signature, not in a method body. In a class method, name the enclosing type explicitly (e.g. `Box<T>`).
+    │ 
+    │ Note: Error code: E0002
+────╯
+
+  [type] error: `Self` is only supported in a signature, not in a method body. In a class method, name the enclosing type explicitly (e.g. `Box<T>`).
+    ╭─[ main.baml:26:16 ]
+    │
+ 26 │         let a: Self = other;
+    │                ──┬─  
+    │                  ╰─── `Self` is only supported in a signature, not in a method body. In a class method, name the enclosing type explicitly (e.g. `Box<T>`).
+    │ 
+    │ Note: Error code: E0002
+────╯
+
+  [type] error: `Self` is only supported in a signature, not in a method body. In a class method, name the enclosing type explicitly (e.g. `Box<T>`).
+    ╭─[ main.baml:31:24 ]
+    │
+ 31 │             let s: Box<Self> => 1,
+    │                        ──┬─  
+    │                          ╰─── `Self` is only supported in a signature, not in a method body. In a class method, name the enclosing type explicitly (e.g. `Box<T>`).
+    │ 
+    │ Note: Error code: E0002
+────╯
+
+  [type] error: `Self` is only supported in a signature, not in a method body. In a class method, name the enclosing type explicitly (e.g. `Box<T>`).
+    ╭─[ main.baml:36:9 ]
+    │
+ 36 │         reflect.type_of<Self>().to_string()
+    │         ───────────┬───────────  
+    │                    ╰───────────── `Self` is only supported in a signature, not in a method body. In a class method, name the enclosing type explicitly (e.g. `Box<T>`).
+    │ 
+    │ Note: Error code: E0002
+────╯
+
+  [type] error: `Self` is only supported in a signature, not in a method body. In a class method, name the enclosing type explicitly (e.g. `Box<T>`).
+    ╭─[ main.baml:45:18 ]
+    │
+ 45 │         other is Self
+    │                  ──┬─  
+    │                    ╰─── `Self` is only supported in a signature, not in a method body. In a class method, name the enclosing type explicitly (e.g. `Box<T>`).
+    │ 
+    │ Note: Error code: E0002
+────╯
+
+  [type] error: `Self` is only supported in a signature, not in a method body. In a class method, name the enclosing type explicitly (e.g. `Box<T>`).
+    ╭─[ main.baml:48:9 ]
+    │
+ 48 │         reflect.type_of<Self>().to_string()
+    │         ───────────┬───────────  
+    │                    ╰───────────── `Self` is only supported in a signature, not in a method body. In a class method, name the enclosing type explicitly (e.g. `Box<T>`).
+    │ 
+    │ Note: Error code: E0002
+────╯
+
+  [type] error: `Self` is only supported in a signature, not in a method body. In a class method, name the enclosing type explicitly (e.g. `Box<T>`).
+    ╭─[ main.baml:51:16 ]
+    │
+ 51 │         let a: Self = other;
+    │                ──┬─  
+    │                  ╰─── `Self` is only supported in a signature, not in a method body. In a class method, name the enclosing type explicitly (e.g. `Box<T>`).
+    │ 
+    │ Note: Error code: E0002
+────╯

@@ -213,7 +213,7 @@ fn decode_args(
     args_proto: &[u8],
     _function_name: &str,
 ) -> Result<DecodedCallArgs, bridge_cffi::BridgeError> {
-    let args = bridge_ctypes::baml_core::cffi::CallFunctionArgs::decode(args_proto)
+    let args = bridge_ctypes::baml_bridge::cffi::CallFunctionArgs::decode(args_proto)
         .map_err(bridge_ctypes::CtypesError::from)?;
 
     if args.call_id == 0 {
@@ -234,7 +234,7 @@ fn decode_args(
 /// Return the process-global `BamlRuntime`, or raise `BamlError` if
 /// `BamlRuntime.initialize_runtime(...)` has not been called yet.
 ///
-/// Used by the pure-Python factories in `baml_core` so generated
+/// Used by the pure-Python factories in `baml_bridge` so generated
 /// leaves don't have to thread a runtime reference through every call
 /// site.
 #[gen_stub_pyfunction]
