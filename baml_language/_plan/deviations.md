@@ -1,5 +1,21 @@
 # Deviations from the LLM-provider plan
 
+## Driver generics (DCP §1.2): name-based rule, not arity 1/2
+
+- **[design]** The plan fixed driver generic arity at 1 (`<T>`) or 2 (`<TPartial, T>`). That rejects
+  `drive_with<T, V, E2>`, whose projection value/error types must thread through (the
+  `Iterator.map<R, E2>` pattern). E0151 now enforces a **name-based** rule: a param named `T` is
+  the return slot (mandatory), `TPartial` the stream-expanded slot (optional), anything else is
+  passthrough inferred at the companion call site.
+
+- **[scope]** `drive_stream` ships without the conventions' call→stream buffer degrade — turning a
+  buffered `HttpProvider.call` into a `baml.llm.Stream` needs a stream constructor
+  (`stream_unfold`, net-new host surface). A non-Streaming client throws typed `Unsupported`.
+
+- **[design]** Marker placement in stdlib files: `//baml:llm_capability` sits **above** the `///`
+  doc block — `extract_docstring` treats a non-doc comment after `///` lines as detaching the
+  docstring, so marker-after-docs would have wiped LSP hover docs for every capability.
+
 ## Capability registry (DCP §1.2): HIR query, not AST pre-pass or build-time baking
 
 - **[design]** The desugar plan sketched a "package-wide syntactic pre-pass" feeding companion
