@@ -94,7 +94,12 @@ test "toml_item_from_json_rejects_null" {
 // header), and a boxed local passed to the union-typed `Item` parameter
 // fails the match arms.
 function toml_item_to_json_array() -> string {
-    let item: baml.toml.Item = [baml.time.ZonedDateTime.parse("2020-01-01T00:00:00Z"), 7];
+    // Declared `Item[]` (not `Item`) so the literal adopts `Item` as its element
+    // type — a genuine array-of-items. Ascribing `Item` instead would infer the
+    // narrow element join `ZonedDateTime | int`, which is *not* invariantly an
+    // `Item[]`, so the `Item[]` match arm would (correctly) reject it. It is still
+    // an `Item` at the top level, so the `item_to_json(item: Item)` call holds.
+    let item: baml.toml.Item[] = [baml.time.ZonedDateTime.parse("2020-01-01T00:00:00Z"), 7];
     baml.json.stringify(baml.toml.item_to_json(item))
 }
 test "toml_item_to_json_array_with_datetime" {

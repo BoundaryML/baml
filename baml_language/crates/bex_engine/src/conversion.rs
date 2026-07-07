@@ -1368,20 +1368,44 @@ pub(crate) struct ParamVarPositions {
 fn template_max_type_arg_ref(t: &baml_type::TyTemplate) -> Option<u32> {
     use baml_type::TyTemplate as T;
     match t {
-        T::Concrete(_) | T::Wildcard => None,
         T::TypeArgRef(n) | T::TypeArgRefOrWildcard(n) => Some(*n),
-        T::Array(inner) => template_max_type_arg_ref(inner),
-        T::Map(k, v) => template_max_type_arg_ref(k)
+        T::List(inner, _) | T::WatchAccessor(inner, _) => template_max_type_arg_ref(inner),
+        T::Map { key, value, .. } | T::Future(key, value, _) => template_max_type_arg_ref(key)
             .into_iter()
-            .chain(template_max_type_arg_ref(v))
+            .chain(template_max_type_arg_ref(value))
             .max(),
-        T::Union(members) => members.iter().filter_map(template_max_type_arg_ref).max(),
-        T::Class(_, args) => args.iter().filter_map(template_max_type_arg_ref).max(),
-        T::Interface(_, args, assoc) => args
+        T::Union(members, _) => members.iter().filter_map(template_max_type_arg_ref).max(),
+        T::Class(_, args, _) => args.iter().filter_map(template_max_type_arg_ref).max(),
+        T::Interface(_, args, assoc, _) => args
             .iter()
             .chain(assoc.iter().map(|(_, t)| t))
             .filter_map(template_max_type_arg_ref)
             .max(),
+        T::Function {
+            params,
+            ret,
+            throws,
+            ..
+        } => params
+            .iter()
+            .map(|p| &p.ty)
+            .chain([ret.as_ref(), throws.as_ref()])
+            .filter_map(template_max_type_arg_ref)
+            .max(),
+        T::AssociatedTypeProjection {
+            base, interface, ..
+        } => template_max_type_arg_ref(base)
+            .into_iter()
+            .chain(interface.iter().flat_map(|iface| {
+                iface
+                    .generics
+                    .iter()
+                    .chain(iface.associated_types.iter().map(|(_, t)| t))
+                    .filter_map(template_max_type_arg_ref)
+            }))
+            .max(),
+        // Realized leaves and `Wildcard` carry no frame ref.
+        _ => None,
     }
 }
 

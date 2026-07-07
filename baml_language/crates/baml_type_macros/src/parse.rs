@@ -179,6 +179,10 @@ pub(crate) struct MVariant {
     pub(crate) ident: Ident,
     pub(crate) fields: Fields,
     pub(crate) axis: usize,
+    /// Whether the variant carries a `TyAttr` (a named `attr` field or a
+    /// trailing tuple `TyAttr`). Attr-less template leaves get accessor
+    /// fallbacks instead of a compile error.
+    pub(crate) has_attr: bool,
 }
 
 impl Family {
@@ -284,21 +288,18 @@ fn resolve_variant(
         )
     })?;
     let axis = axis_index(&axis_ident)?;
-    if !carries_ty_attr(&variant.fields) {
-        return Err(syn::Error::new(
-            span,
-            format!(
-                "variant `{}` must carry a `TyAttr` (a named `attr` field, or as the last \
-                 tuple field) so `attr`/`with_attr` can be generated",
-                variant.ident
-            ),
-        ));
-    }
+    // A variant need not carry a `TyAttr`: template-only leaves (`TypeArgRef`,
+    // `Wildcard`) are pure structure with no streaming metadata. The generated
+    // `attr()`/`with_attr()` accessors fall back to `TyAttr::EMPTY` / identity
+    // for them (see `emit::attr_arm`). `has_attr` records which case applies so
+    // the accessor arms don't need to re-derive it.
+    let has_attr = carries_ty_attr(&variant.fields);
     Ok(MVariant {
         attrs,
         ident: variant.ident,
         fields: variant.fields,
         axis,
+        has_attr,
     })
 }
 

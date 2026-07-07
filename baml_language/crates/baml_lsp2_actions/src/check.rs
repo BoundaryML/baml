@@ -6191,6 +6191,7 @@ fn tir_type_error_to_diagnostic_id(
         TirTypeError::ArrayFilledMutableLiteralAliasing => DiagnosticId::ArrayFilledAliasing,
         TirTypeError::InvalidUnaryOp { .. } => DiagnosticId::InvalidOperator,
         TirTypeError::UnresolvedType { .. } => DiagnosticId::UnknownType,
+        TirTypeError::SelfInBodyPosition { .. } => DiagnosticId::UnknownType,
         TirTypeError::NonInterfaceProjectionQualifier => DiagnosticId::TypeMismatch,
         TirTypeError::UnknownAssociatedType { .. } => DiagnosticId::UnknownType,
         TirTypeError::AmbiguousAssociatedTypeProjection { .. } => DiagnosticId::TypeMismatch,
