@@ -1,0 +1,5 @@
+/baml-bench
+/out
+
+# BEP source content is internal; the grader reads it from disk, never from git
+data/beps/

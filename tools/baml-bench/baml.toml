@@ -1,0 +1,14 @@
+[package]
+name = "baml-bench-adherence"
+
+# Deterministic BAML-adherence grader ("is this codebase using BAML primitives
+# the way we designed them?"). Pure BAML, same shape as ../agent-tries-baml:
+# LLM stages are typed BAML functions on an anthropic client that points at the
+# claude-proxy (env.LLM_BASE_URL — the proxy fulfils /v1/messages by running
+# `claude -p`); everything else is deterministic expression code.
+#
+# Target toolchain: the fleet pin, 0.12.2-nightly.20260624.a.
+#
+# Entry points (see baml_src/main.baml):
+#   baml run --function Scan  -- --target <dir>            # deterministic stages only, no LLM
+#   baml run --function Run   -- --target <dir> --out <dir> # full graded run
