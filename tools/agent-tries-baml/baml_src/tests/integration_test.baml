@@ -9,7 +9,8 @@ testset "integrations" {
     test "linear issue_body_md assembles sections" {
         let md = issue_body_md(
             "the body",
-            ["https://x?call=3"],
+            ["https://x?call=3", "https://y/runs/t2#turn-4|baml 0.13.1-nightly.20260706.a"],
+            "baml `0.13.1-nightly.20260706.a` · skill `https://github.com/BoundaryML/baml-skill@abc1234`",
             "fix it",
             "bug",
             "$ baml build",
@@ -17,9 +18,37 @@ testset "integrations" {
             "https://pr/1",
         );
         assert.contains(md, "**Links:**");
+        assert.contains(md, "**Environment:** baml `0.13.1-nightly.20260706.a`");
         assert.contains(md, "## Reproduction");
         assert.contains(md, "## Suggested fix");
         assert.contains(md, "## Evidence");
+        // Annotated evidence: the |suffix becomes a " · baml <ver>" note, not part of the URL.
+        assert.contains(md, "- [run 2](https://y/runs/t2#turn-4) · baml 0.13.1-nightly.20260706.a");
+    }
+
+    test "linear env_line_of renders the environment summary" {
+        let issue = SyncIssue {
+            _id: "i1",
+            title: null,
+            status: null,
+            kind: null,
+            category: null,
+            evidence: null,
+            bamlVersion: "0.13.1-nightly.20260706.a",
+            skillUsed: "https://github.com/BoundaryML/baml-skill",
+            skillVersion: "abc1234",
+            description: null,
+            suggestion: null,
+            repro: null,
+            linearIssueId: null,
+            prUrl: null,
+            fixSlackTs: null,
+            fixAttempts: null,
+        };
+        assert.equal(
+            env_line_of(issue),
+            "baml `0.13.1-nightly.20260706.a` · skill `https://github.com/BoundaryML/baml-skill@abc1234`",
+        );
     }
 
     test "linear extract_field pulls an id" {

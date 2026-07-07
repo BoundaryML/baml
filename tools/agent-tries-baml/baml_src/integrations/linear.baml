@@ -446,6 +446,7 @@ function swap_status_label(current: string[], status_label_id: string) -> string
 function issue_body_md(
     body: string,
     evidence_links: string[],
+    env_line: string,
     suggestion: string,
     category: string,
     repro: string,
@@ -466,6 +467,9 @@ function issue_body_md(
     if (category != "") {
         parts.push("**Category:** " + category);
     }
+    if (env_line != "") {
+        parts.push("**Environment:** " + env_line);
+    }
     if (body != "") {
         parts.push(body);
     }
@@ -479,7 +483,18 @@ function issue_body_md(
         let items: string[] = [];
         let i = 1;
         for (let link in evidence_links) {
-            items.push("- [run " + baml.unstable.string(i) + "](" + link + ")");
+            // A link may carry a "|<annotation>" suffix (e.g. "|baml 0.13.1-...").
+            let segs = link.split("|");
+            let url = match (segs.at(0)) {
+                let u: string => u,
+                null => link,
+            };
+            let note = if (segs.length() > 1) {
+                " · " + join_from_sep(segs, 1, "|")
+            } else {
+                ""
+            };
+            items.push("- [run " + baml.unstable.string(i) + "](" + url + ")" + note);
             i = i + 1;
         }
         parts.push("## Evidence\n\n" + items.join("\n"));

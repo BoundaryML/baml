@@ -96,6 +96,7 @@ class Metrics {
     estimated_cost_usd: float?,
     files_touched: int?,
     loc_changed: int?,
+    skill_installed: bool?, // did the agent actually run `baml agent install`?
 }
 
 // ======================================================================
@@ -175,6 +176,8 @@ class Trophy {
     compileOk: bool?,
     compileStderr: string?,
     bamlVersion: string?,
+    skillUsed: string?, // skill repo URL
+    skillVersion: string?, // baml-skill commit sha
     metrics: json, // full Metrics bag
     transcriptStorageId: string?,
     turnLog: json[]?,

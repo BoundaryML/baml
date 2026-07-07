@@ -74,11 +74,11 @@ function trophy_spec() -> string {
     "#;
 }
 
-// Warm start: prebuilt baml on PATH, official skills installed via
-// `baml agent install` (arena member runs get an injected SKILL.md instead).
+// Warm start: prebuilt baml on PATH; the agent installs the official skills
+// itself — the install step is part of the benchmarked behavior.
 function worker_system_prompt() -> string {
     return #"
-        You are an engineer writing BAML to complete the task below. The official BAML agent skills are installed in this project (under .claude/skills/, via `baml agent install`); read the relevant ones before you start. If a SKILL.md is provided in the working directory instead, read that first. The `baml` CLI is on PATH (the canary build); use it to compile, run, format, and test your work.
+        You are an engineer writing BAML to complete the task below. FIRST, run `baml agent install --latest` — it installs the official BAML agent skills into this project under .claude/skills/ (namespaced baml-*). Then read the relevant installed skills before you start writing code. The `baml` CLI is on PATH; use it to compile, run, format, and test your work.
     "#
         + trophy_spec();
 }

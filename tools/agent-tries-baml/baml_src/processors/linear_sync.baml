@@ -16,7 +16,10 @@ class SyncIssue {
     status: string?, // lifecycle state; picks the mirrored Linear status label
     kind: string?,
     category: string?,
-    evidence: json[]?, // {trophyId, turn_index?, call_index?} entries -> run links
+    evidence: json[]?, // {trophyId, turn_index?, call_index?, bamlVersion?} entries -> run links
+    bamlVersion: string?, // env of the run(s) behind the issue (dedup-stamped)
+    skillUsed: string?,
+    skillVersion: string?,
     description: string?,
     suggestion: string?,
     repro: string?,
@@ -127,6 +130,7 @@ class LinearPushProcessor {
                     null => "",
                 },
                 evidence_links_of(issue.evidence),
+                env_line_of(issue),
                 match (issue.suggestion) {
                     let v: string => v,
                     null => "",
@@ -241,6 +245,38 @@ class LinearPushProcessor {
 class EvidenceRef {
     trophyId: string?,
     turn_index: float?,
+    bamlVersion: string?,
+}
+
+// The card's Environment line: exactly which baml + skill produced the issue.
+// "" when dedup didn't know (pre-feature issues) — issue_body_md omits it.
+function env_line_of(issue: SyncIssue) -> string {
+    let parts: string[] = [];
+    match (issue.bamlVersion) {
+        let bv: string => {
+            if (bv != "") {
+                parts.push("baml `" + bv + "`");
+            }
+        },
+        null => null,
+    };
+    let repo = match (issue.skillUsed) {
+        let r: string => r,
+        null => "",
+    };
+    let sha = match (issue.skillVersion) {
+        let v: string => v,
+        null => "",
+    };
+    if (repo != "" || sha != "") {
+        let label = if (repo != "" && sha != "") {
+            repo + "@" + sha
+        } else {
+            repo + sha
+        };
+        parts.push("skill `" + label + "`");
+    }
+    return parts.join(" · ");
 }
 
 function evidence_links_of(evidence: json[]?) -> string[] {
@@ -263,7 +299,17 @@ function evidence_links_of(evidence: json[]?) -> string[] {
                         let t: float => "#turn-" + baml.unstable.string(f2i(t)),
                         null => "",
                     };
-                    out.push(ui_base_url() + "/runs/" + tid + anchor);
+                    let suffix = match (ref.bamlVersion) {
+                        let bv: string => {
+                            if (bv != "") {
+                                "|baml " + bv
+                            } else {
+                                ""
+                            }
+                        },
+                        null => "",
+                    };
+                    out.push(ui_base_url() + "/runs/" + tid + anchor + suffix);
                 }
             },
             null => null,

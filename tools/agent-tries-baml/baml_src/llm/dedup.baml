@@ -66,6 +66,7 @@ function Dedup(reports: string, open_issues: string) -> DedupResult {
         - Set `call_index` to the exact `(call N)` number shown for the finding in reports (it links the issue to the finding and is the fallback path for attaching the repro). Use `null` only for a standalone `suggestion` with no specific failing call. Never guess a number you don't see.
         - Set `turn_index` to the finding's `anchor.turn_index` from the report's Findings json when it is present; `null` otherwise. Never guess.
         - If a report has NO actionable skill/language issue, do not invent one.
+        - reports may end with a `# human transcript comments` section: comments human reviewers left on run transcripts. Treat each as a trusted reviewer finding — dedup it against everything else, classify skill/language by the same rule, and cite the comment's run id as the evidence `report_id` (with its turn number as `turn_index` when shown). A comment with no actionable issue (praise, a question) produces nothing.
 
         # reports
         {{ reports }}

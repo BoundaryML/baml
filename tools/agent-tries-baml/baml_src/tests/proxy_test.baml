@@ -30,3 +30,43 @@ testset "proxy_baml_version" {
         assert.equal(parse_channel_version("", "nightly"), "");
     }
 }
+
+// cleanup_staging only ever removes a single path segment directly under
+// STAGING_ROOT — anything else is a guarded no-op.
+testset "staging_cleanup" {
+    test "guards refuse foreign, nested, and root paths" {
+        // These must all no-op (return 0 without touching the fs).
+        assert.equal(cleanup_staging("/etc", null), 0);
+        assert.equal(cleanup_staging("/tmp/staging-evil/x", null), 0);
+        assert.equal(cleanup_staging(staging_root() + "/a/../b", null), 0);
+        assert.equal(cleanup_staging(staging_root() + "/", null), 0);
+        assert.equal(cleanup_staging(staging_root() + "/nested/child", null), 0);
+    }
+
+    test "a real cell dir under the root is removed" {
+        let dir = staging_root() + "/cleanup-test-cell";
+        let _ = baml.fs.mkdir(dir, baml.fs.MkdirOptions { recursive: true }) catch (_) {
+            _ => null
+        };
+        let _ = baml.fs.write(dir + "/trophy.json", "{}") catch (_) {
+            _ => 0
+        };
+        let _ = cleanup_staging(dir, null);
+        let gone = baml.fs.exists(dir) catch (_) {
+            _ => true
+        };
+        assert.is_true(gone == false);
+    }
+
+    test "skill install detection reads .claude/skills" {
+        let dir = staging_root() + "/skilldetect-test";
+        let _ = baml.fs.mkdir(dir + "/.claude/skills/baml-core", baml.fs.MkdirOptions { recursive: true }) catch (_) {
+            _ => null
+        };
+        assert.is_true(match (detect_skill_install(dir)) {
+            let b: bool => b,
+            null => false,
+        });
+        let _ = cleanup_staging(dir, null);
+    }
+}

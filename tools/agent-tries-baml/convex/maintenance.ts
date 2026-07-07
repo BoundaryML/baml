@@ -20,6 +20,8 @@ const RULES: Array<[string, string, string, string, string]> = [
   // (the pending -> queued fan-in is owned by the Python reconciler, not the reaper).
   ["cohorts", "status", "comparing", "queued", "by_lease"],
   ["changelogEntries", "status", "generating", "queued", "by_lease"],
+  // Dedup claims comments alongside its trophy batch; a crashed batch requeues.
+  ["transcriptComments", "status", "deduping", "queued", "by_lease"],
 ];
 
 async function reapImpl(ctx: MutationCtx): Promise<number> {

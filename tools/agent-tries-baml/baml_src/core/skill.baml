@@ -84,6 +84,22 @@ function last_path_seg(path: string) -> string {
     };
 }
 
+// The baml-skill main HEAD sha via the GitHub API — identifies what
+// `baml agent install --latest` resolves to at dispatch time (the agent runs
+// the install itself, so there's no local clone to ask). "" on API failure.
+function skill_main_sha() -> string {
+    let raw = github_get(github_token(), "/repos/BoundaryML/baml-skill/commits/main") catch (_) {
+        _ => "{}"
+    };
+    let parsed = baml.json.from_string<GhCommitEntry>(raw) catch (_) {
+        _ => GhCommitEntry { sha: null, commit: null, author: null }
+    };
+    return match (parsed.sha) {
+        let v: string => head_str(v, 7),
+        null => "",
+    };
+}
+
 // Current baml-skill commit sha (so a run records exactly which skill it read).
 function skill_version() -> string {
     let cache = skill_cache_dir();

@@ -8,9 +8,11 @@
 // its own errors and returns a Response. Subprocesses go through core/exec.baml's
 // run_capture (grandchild-safe, timeout-bounded).
 //
-// TODO(binary-cache): _ensure_baml (download the version-pinned baml CLI from the
-// service into BAML_CACHE_DIR/<sha> and prepend to PATH) + `baml agent install`
-// are deferred; for now baml resolves from the image PATH (baml_bin_dir = null).
+// The agent-under-test's baml toolchain is resolved per-run via ensure_agent_baml
+// (BAML_VERSION wrapper); skills are installed by the AGENT itself
+// (`baml agent install --latest`, part of the benchmarked behavior — the proxy
+// only detects the install post-run). Staging dirs are removed after every run
+// (cleanup_staging; STAGING_KEEP=1 to keep them for debugging).
 
 // ---- HTTP helpers ----------------------------------------------------------
 
@@ -183,6 +185,7 @@ function run_check(cr: CheckBamlRequest) -> baml.http.Response {
     let body = baml.json.to_string(result) catch (_) {
         _ => "{\"check_id\":\"" + cr.check_id + "\",\"exit_code\":-1}"
     };
+    let _ = cleanup_staging(staging, null);
     return json_response(200, body);
 }
 
@@ -281,12 +284,13 @@ function run_agent(rr: RunAgentRequest) -> baml.http.Response {
         estimated_cost_usd: cost_of(rr, session),
         turn_log: session_turn_log(staging, session.session_id),
         post_files: collect_post_files(staging),
-        skill_installed: null,
+        skill_installed: detect_skill_install(staging),
         baml_version: nz(agent_baml),
     };
     let body = baml.json.to_string(result) catch (_) {
         _ => "{\"cell_id\":\"" + rr.cell_id + "\",\"status\":\"error\"}"
     };
+    let _ = cleanup_staging(staging, session.session_id);
     return json_response(200, body);
 }
 
@@ -310,6 +314,21 @@ function or_zero(v: int?) -> int {
         let n: int => n,
         null => 0,
     };
+}
+
+// True when the agent's staging tree contains at least one installed baml-*
+// skill (`baml agent install` writes .claude/skills/baml-<name>/). Null when
+// the .claude dir doesn't exist at all (nothing to say).
+function detect_skill_install(staging: string) -> bool? {
+    let entries: baml.fs.DirEntry[] = baml.fs.read_dir(staging + "/.claude/skills") catch (_) {
+        _ => []
+    };
+    for (let e in entries) {
+        if (e.is_dir && e.name.starts_with("baml-")) {
+            return true;
+        }
+    }
+    return false;
 }
 
 // ---- agent-under-test baml toolchain (install latest per run) --------------
@@ -471,6 +490,8 @@ function claude_messages(req: baml.http.Request) -> baml.http.Response {
                 let r: string => r,
                 null => res.stdout,
             };
+            let msg_session = parse_claude_session(res.stdout);
+            let _ = cleanup_staging(staging, msg_session.session_id);
             return json_response(200, messages_response_json(mr.model, answer));
         },
     };
@@ -503,6 +524,64 @@ function messages_response_json(model: string, text: string) -> string {
         + "}],\"stop_reason\":\"end_turn\",\"stop_sequence\":null,\"usage\":{\"input_tokens\":0,\"output_tokens\":0}}";
 }
 
+// ---- run cleanup -------------------------------------------------------------
+// Every durable output (post_files, transcript blob, turn log) is extracted
+// before this runs; the staging tree and the claude session jsonl are scratch.
+// Guarded so only paths strictly under STAGING_ROOT are ever removed, and
+// STAGING_KEEP=1 skips everything (debug escape hatch).
+
+function cleanup_staging(staging: string, session_id: string?) -> int {
+    if (env_bool("STAGING_KEEP", false)) {
+        return 0;
+    }
+    let root = staging_root() + "/";
+    if (staging.starts_with(root) == false || staging.includes("..")) {
+        return 0;
+    }
+    let rel = staging.substring(root.length(), staging.length()) catch (_) {
+        _ => ""
+    };
+    if (rel == "" || rel.includes("/")) {
+        // Exactly one path segment under the root — never the root itself.
+        return 0;
+    }
+    let _ = run_capture("rm", ["-rf", staging], staging_root(), null, 30000, null, false, null);
+    // The claude session jsonl for this staging dir.
+    match (session_id) {
+        let sid: string => {
+            if (sid != "") {
+                let _ = baml.fs.remove(session_log_path(staging, sid)) catch (_) {
+                    _ => null
+                };
+            }
+        },
+        null => null,
+    };
+    return 0;
+}
+
+// Boot-time backstop: clear crash leftovers under STAGING_ROOT (no in-flight
+// runs exist at boot). The toolchain cache (BAML_CACHE_DIR) is intentional and
+// untouched.
+function sweep_staging_root() -> int {
+    if (env_bool("STAGING_KEEP", false)) {
+        return 0;
+    }
+    let root = staging_root();
+    let entries: baml.fs.DirEntry[] = baml.fs.read_dir(root) catch (_) {
+        _ => []
+    };
+    let n = 0;
+    for (let e in entries) {
+        let _ = run_capture("rm", ["-rf", root + "/" + e.name], root, null, 30000, null, false, null);
+        n = n + 1;
+    }
+    if (n > 0) {
+        baml.io.println("proxy: swept " + baml.unstable.string(n) + " leftover staging dir(s)");
+    }
+    return n;
+}
+
 // ---- router + entrypoint ---------------------------------------------------
 
 function proxy_handler(req: baml.http.Request) -> baml.http.Response {
@@ -528,6 +607,7 @@ function proxy_handler(req: baml.http.Request) -> baml.http.Response {
 
 // `baml run Proxy` entrypoint.
 function Proxy() -> int throws baml.errors.Io {
+    let _ = sweep_staging_root();
     let addr = "[::]:" + proxy_listen_port();
     let server = baml.http.Server.bind(addr);
     baml.io.println("claude-proxy listening on " + server.addr);

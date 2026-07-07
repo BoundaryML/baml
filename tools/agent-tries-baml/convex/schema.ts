@@ -217,6 +217,22 @@ export default defineSchema({
     .index("by_channel", ["channel", "date"])
     .index("by_lease", ["status", "leaseExpiresAt"]),
 
+  // ---- transcriptComments: human comments on run transcripts ----
+  // Written from the dashboard (password-gated create). A comment is a
+  // claimable queue row: dedup claims queued comments alongside its trophy
+  // batch (queued -> deduping -> done) and turns them into issue evidence.
+  transcriptComments: defineTable({
+    trophyId: v.string(), // the run the comment is on
+    taskId: v.optional(v.string()),
+    turnIndex: v.optional(v.number()), // anchors to #turn-N; absent = run-level
+    author: v.string(), // free-text display name
+    body: v.string(),
+    ...queueFields, // status: queued -> deduping -> done | failed
+  })
+    .index("by_trophy", ["trophyId", "createdAt"])
+    .index("by_status_created", ["status", "createdAt"])
+    .index("by_lease", ["status", "leaseExpiresAt"]),
+
   // ---- promoCodes: t-shirt promo code inventory ----
   // Not a claimable queue: a claim is one synchronous OCC mutation
   // (promoCodes.claimNext), so no lease machinery is needed.

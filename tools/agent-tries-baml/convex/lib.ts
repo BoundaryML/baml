@@ -17,7 +17,8 @@ type Table =
   | "cohorts"
   | "workers"
   | "changelogEntries"
-  | "promoCodes";
+  | "promoCodes"
+  | "transcriptComments";
 
 // ---------- queries ----------
 

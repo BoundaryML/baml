@@ -111,31 +111,23 @@ class WorkerProcessor {
                 }
             };
 
-            // Warm runs onboard from the LATEST baml-skill (pulled from GitHub),
-            // injected as SKILL.md — no `baml agent install`. Cold runs install
+            // Warm runs install the official skills THEMSELVES (`baml agent install
+            // --latest`, per the system prompt) — the install is part of the
+            // benchmarked behavior. We still record the exact skill identity
+            // (repo@sha): --latest resolves to baml-skill@main, so the main HEAD
+            // sha at dispatch time identifies it to the minute. Cold runs install
             // nothing (the onboarding experience itself is under test).
-            let skill = if (cold) {
-                ""
-            } else {
-                fetch_latest_skill()
-            };
             let skill_ver = if (cold) {
                 ""
             } else {
-                skill_version()
+                skill_main_sha()
             };
-            // The skill SOURCE (repo URL) recorded on the trophy — small + reproducible
-            // (repo@sha is the exact skill identity). The full markdown is injected as
-            // SKILL.md below but never stored per-trophy (it'd blow Convex's doc limit).
-            let skill_src = if (skill == "") {
+            let skill_src = if (cold) {
                 ""
             } else {
                 skill_repo_url()
             };
             let files: map<string, string> = {};
-            if (skill != "") {
-                files.set("SKILL.md", skill);
-            }
 
             let req = RunAgentRequest {
                 cell_id: task_id,
@@ -146,7 +138,7 @@ class WorkerProcessor {
                 files: files,
                 prices: prices_for(self.model),
                 baml_version: baml_version,
-                install_skill: false,
+                install_skill: cold == false,
                 post_file_patterns: ["**/*.baml", "*.md", "trophy.json"],
                 max_file_bytes: 262144,
                 max_total_file_bytes: 4194304,
@@ -373,6 +365,7 @@ function metrics_of(result: AgentResult, model: string) -> Metrics {
         estimated_cost_usd: cost_for(result, model),
         files_touched: files_touched_of(result),
         loc_changed: loc_of(result),
+        skill_installed: result.skill_installed,
     };
 }
 
