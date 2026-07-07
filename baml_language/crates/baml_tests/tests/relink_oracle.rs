@@ -41,11 +41,19 @@ const B_BAML: &str = r#"function scale(p: Point, factor: int) -> Point {
 function magnitude_ish(p: Point) -> int {
   p.x * p.x + p.y * p.y
 }
+
+function label(p: Point) -> string {
+  "point-label"
+}
 "#;
 
 const C_BAML: &str = r#"function main() -> int {
+  let banner = "start";
+  baml.io.println(banner);
   let p = make_point(3, 4);
   let doubled = scale(p, 2);
+  let tag = label(doubled);
+  baml.io.println(tag);
   magnitude_ish(doubled)
 }
 "#;
@@ -186,6 +194,24 @@ fn relink_is_byte_identical_to_full_compile() {
         ("c.baml", C_BAML),
     ];
     assert_relink_matches("added lambda", &edited, &base, &prev, &["a.baml", "c.baml"]);
+
+    // 4b. Edit c, whose FIRST function leads with a string literal: the
+    //    literal object precedes c's first Function in the pool, so a naive
+    //    block scan glues it onto b's block — b would splice a stale copy
+    //    while dirty c re-interns its own, diverging by exactly those bytes.
+    let c_body_edit = C_BAML.replace("make_point(3, 4)", "make_point(5, 6)");
+    let edited = [
+        ("a.baml", A_BAML),
+        ("b.baml", B_BAML),
+        ("c.baml", c_body_edit.as_str()),
+    ];
+    assert_relink_matches(
+        "leading-literal dirty file",
+        &edited,
+        &base,
+        &prev,
+        &["a.baml", "b.baml"],
+    );
 
     // 5. Deleted file: c disappears; a and b splice into the smaller layout.
     let edited = [("a.baml", A_BAML), ("b.baml", B_BAML)];

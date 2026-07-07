@@ -1258,37 +1258,64 @@ impl<'a> ReuseContext<'a> {
         }
 
         let mut clean_files = clean_files.clone();
+
+        // A file's unit is the contiguous pool block written while Pass 4
+        // compiled it: its lambdas and functions PLUS the literal objects
+        // codegen interns beside them (strings, bigints, byte arrays,
+        // generic-function values). Ownership is tracked by the source_file
+        // of Function objects and extends over interleaved non-function
+        // objects until the next owner; a synthesized, source-less function
+        // ($init, chainers) closes the last block. A file whose objects form
+        // more than one block ($init let-helpers carry their let's file but
+        // are emitted in a later pass) is demoted to a normal recompile;
+        // everything else still splices.
         let mut file_ranges: HashMap<String, (usize, usize)> = HashMap::new();
         let mut demoted: HashSet<String> = HashSet::new();
+        // (owner file, block start, owner's last Function index)
+        let mut current: Option<(String, usize, usize)> = None;
+        // First literal-kind object since the last Function: a block's
+        // *leading* literals (a function's constants are interned before its
+        // Function object is pushed) belong to the NEXT owner.
+        let mut pending_literal_start: Option<usize> = None;
         for (idx, obj) in prev.objects.iter().enumerate() {
-            let Object::Function(function) = obj else {
-                continue;
-            };
-            // Only clean files are ever spliced, so only they need ranges —
-            // and only they must satisfy the contiguity requirement.
-            if !clean_files.contains(&function.source_file) {
-                continue;
-            }
-            match file_ranges.entry(function.source_file.clone()) {
-                std::collections::hash_map::Entry::Vacant(entry) => {
-                    entry.insert((idx, idx + 1));
-                }
-                std::collections::hash_map::Entry::Occupied(mut entry) => {
-                    if entry.get().1 != idx {
-                        // Rebase-by-delta needs one contiguous range. Demote
-                        // this file to a normal recompile; everything else
-                        // still splices.
-                        demoted.insert(function.source_file.clone());
+            match obj {
+                Object::Function(function) => {
+                    if function.source_file.is_empty() {
+                        // Synthesized ($init, chainers): closes the last block.
+                        close_file_block(&mut current, &mut file_ranges, &mut demoted);
+                        current = None;
+                    } else if let Some((file, _, last_fn)) = &mut current
+                        && file.as_str() == function.source_file.as_str()
+                    {
+                        *last_fn = idx;
                     } else {
-                        entry.get_mut().1 = idx + 1;
+                        close_file_block(&mut current, &mut file_ranges, &mut demoted);
+                        let start = pending_literal_start.unwrap_or(idx);
+                        current = Some((function.source_file.clone(), start, idx));
                     }
+                    pending_literal_start = None;
+                }
+                Object::String(..)
+                | Object::Bigint(..)
+                | Object::Uint8Array(..)
+                | Object::GenericFunction(..) => {
+                    // Codegen-interned literal: belongs to whichever function
+                    // is compiled next.
+                    pending_literal_start.get_or_insert(idx);
+                }
+                _ => {
+                    // Pass-2/3 objects (classes/enums/interfaces) precede all
+                    // Pass-4 blocks; anything else resets literal tracking.
+                    pending_literal_start = None;
                 }
             }
         }
+        close_file_block(&mut current, &mut file_ranges, &mut demoted);
         for file in &demoted {
             clean_files.remove(file);
-            file_ranges.remove(file);
         }
+        // Only clean files are ever consulted; drop the rest.
+        file_ranges.retain(|file, _| clean_files.contains(file));
 
         ReuseContext {
             prev,
@@ -1347,6 +1374,22 @@ fn spliced_throws_match(
     true
 }
 
+/// Close the current owner block during the [`ReuseContext`] pool scan: the
+/// block spans from its recorded start through its owner's LAST `Function`
+/// object (trailing literals belong to the next owner). A file appearing in
+/// more than one block is demoted.
+fn close_file_block(
+    current: &mut Option<(String, usize, usize)>,
+    ranges: &mut HashMap<String, (usize, usize)>,
+    demoted: &mut HashSet<String>,
+) {
+    if let Some((file, start, last_fn)) = current.take()
+        && ranges.insert(file.clone(), (start, last_fn + 1)).is_some()
+    {
+        demoted.insert(file);
+    }
+}
+
 /// Splice one clean file's compiled functions from the previous program into
 /// `program`, rewriting cross-function references for the new layout.
 #[allow(clippy::too_many_arguments)]
@@ -1366,16 +1409,21 @@ fn splice_file_functions(
     };
     let new_base = program.objects.len();
 
+    // Two-phase: translate everything into a staging buffer first, so a
+    // translation failure demotes this file without having half-written the
+    // pool (the caller then recompiles it normally).
+    let mut staged: Vec<(Object, Option<usize>)> = Vec::with_capacity(end - start);
+
     for prev_idx in start..end {
-        let Some(Object::Function(prev_fn)) = ctx.prev.objects.get(prev_idx) else {
+        let Some(prev_obj) = ctx.prev.objects.get(prev_idx) else {
             return Err(LoweringError::ReuseUnsupported(format!(
-                "non-function object inside {rel_path}'s range"
+                "range past pool end in {rel_path}"
             )));
         };
-        let mut function = prev_fn.clone();
+        let mut object = prev_obj.clone();
 
         let mut failure: Option<String> = None;
-        bex_vm_types::relink::visit_index_operands(&mut function, |operand| match operand {
+        bex_vm_types::relink::visit_object_operands(&mut object, |operand| match operand {
             bex_vm_types::relink::IndexOperand::Global(slot) => {
                 let raw = slot.raw();
                 match ctx
@@ -1407,7 +1455,13 @@ fn splice_file_functions(
                 match translated {
                     Some(&new_idx) => *obj = ObjectIndex::from_raw(new_idx),
                     None => {
-                        failure.get_or_insert_with(|| format!("untranslatable object ref {raw}"));
+                        let kind = ctx
+                            .prev
+                            .objects
+                            .get(raw)
+                            .map(|o| format!("{o:?}").chars().take(40).collect::<String>())
+                            .unwrap_or_else(|| "out of bounds".to_string());
+                        failure.get_or_insert_with(|| format!("object ref {raw} ({kind})"));
                     }
                 }
             }
@@ -1418,24 +1472,40 @@ fn splice_file_functions(
             )));
         }
 
-        let new_idx = program.add_object(Object::Function(function));
-        if let Some(&prev_slot) = ctx.prev_obj_globals.get(&prev_idx) {
-            let name = ctx.prev_slot_names.get(&prev_slot).ok_or_else(|| {
+        staged.push((object, ctx.prev_obj_globals.get(&prev_idx).copied()));
+    }
+
+    // Validate slot alignment before writing anything.
+    let mut next_slot = program.globals.len();
+    for (_, prev_slot) in &staged {
+        if let Some(prev_slot) = prev_slot {
+            let name = ctx.prev_slot_names.get(prev_slot).ok_or_else(|| {
                 LoweringError::ReuseUnsupported(format!("unnamed global slot {prev_slot}"))
             })?;
-            let expected_slot = globals.get(name).copied();
-            let new_slot = program.globals.len();
-            if expected_slot != Some(new_slot) {
+            if globals.get(name).copied() != Some(next_slot) {
                 // Slot misalignment would corrupt every later reference —
-                // refuse and let the caller fall back to a full compile.
+                // demote before anything is written.
                 return Err(LoweringError::ReuseUnsupported(format!(
-                    "global slot misalignment for {name}: expected {expected_slot:?}, got {new_slot}"
+                    "global slot misalignment for {name} (expected {next_slot})"
                 )));
             }
+            next_slot += 1;
+        }
+    }
+
+    // Commit: pool positions match the staging order by construction
+    // (`new_base` was captured before staging began).
+    for (object, prev_slot) in staged {
+        let new_idx = program.add_object(object);
+        if let Some(prev_slot) = prev_slot {
+            let name = ctx
+                .prev_slot_names
+                .get(&prev_slot)
+                .expect("validated above")
+                .clone();
+            let new_slot = program.globals.len();
             program.function_indices.insert(name.clone(), new_idx);
-            program
-                .function_global_indices
-                .insert(name.clone(), new_slot);
+            program.function_global_indices.insert(name, new_slot);
             program.add_global(ConstValue::Object(ObjectIndex::from_raw(new_idx)));
         }
     }
@@ -1831,7 +1901,7 @@ fn emit_file_group(
                     // previous program instead of re-lowered — this is what
                     // makes a body-only edit elsewhere skip this file's
                     // TIR/MIR/emit entirely (salsa never gets asked).
-                    splice_file_functions(
+                    match splice_file_functions(
                         ctx,
                         &rel,
                         globals,
@@ -1839,11 +1909,18 @@ fn emit_file_group(
                         enum_object_indices,
                         interface_object_indices,
                         program,
-                    )?;
-                    continue;
+                    ) {
+                        Ok(()) => continue,
+                        // Un-relocatable construct in THIS file only: the
+                        // two-phase splice wrote nothing, so fall through to
+                        // an honest recompile. Every other clean file still
+                        // splices.
+                        Err(LoweringError::ReuseUnsupported(_)) => {}
+                        Err(other) => return Err(other),
+                    }
                 }
-                // Inferred-throws mismatch: fall through to a normal
-                // recompile of this file.
+                // Inferred-throws mismatch (or per-file splice demotion):
+                // fall through to a normal recompile of this file.
             }
         }
         let line_starts = build_line_starts(file.text(db));

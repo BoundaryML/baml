@@ -150,6 +150,53 @@ pub fn visit_index_operands(function: &mut Function, mut visit: impl FnMut(Index
     }
 }
 
+/// Visit every cross-function index operand in a pool `object`.
+///
+/// Compile-time pools contain functions (walked instruction-by-instruction),
+/// `GenericFunction` values (whose target is a global slot), and inert
+/// literals (strings, bigints, byte arrays) interned during codegen next to
+/// the functions that use them. Runtime-only heap shapes never appear in a
+/// serialized `Program`; matching them exhaustively keeps this in lockstep
+/// with the `Object` enum — a new variant must be classified here before it
+/// can slip through a relink.
+pub fn visit_object_operands(object: &mut crate::Object, visit: impl FnMut(IndexOperand<'_>)) {
+    use crate::Object;
+    match object {
+        Object::Function(function) => visit_index_operands(function, visit),
+        Object::GenericFunction(generic) => {
+            let mut visit = visit;
+            visit(IndexOperand::Global(&mut generic.function));
+        }
+        // Inert at relink time: no cross-function index operands.
+        Object::Class(..)
+        | Object::Enum(..)
+        | Object::Interface(..)
+        | Object::Package(..)
+        | Object::ImplRule(..)
+        | Object::String(..)
+        | Object::Bigint(..)
+        | Object::Uint8Array(..)
+        | Object::Type(..) => {}
+        // Heap-debug sentinel: never present in a compiled pool.
+        #[cfg(feature = "heap_debug")]
+        Object::Sentinel(..) => {}
+        // Runtime-only heap shapes, unreachable in a compiled pool.
+        Object::Instance(..)
+        | Object::Variant(..)
+        | Object::Closure(..)
+        | Object::BoundMethod(..)
+        | Object::HostClosure(..)
+        | Object::Cell(..)
+        | Object::Array(..)
+        | Object::Map(..)
+        | Object::Float(..)
+        | Object::Future(..)
+        | Object::UnscheduledFuture(..)
+        | Object::RustData(..)
+        | Object::Collector(..) => {}
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
