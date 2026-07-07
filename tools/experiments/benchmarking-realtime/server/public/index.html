@@ -87,7 +87,7 @@
 
   .replybox { min-height: 62px; padding: 0.75rem 0.95rem; font-size: 14px; line-height: 1.55; border-bottom: 1px dashed var(--rule); white-space: pre-wrap; }
   .replybox .status { font-family: ui-monospace, monospace; font-size: 11px; color: var(--soft); text-transform: uppercase; letter-spacing: 0.1em; }
-  .cards { display: flex; flex-direction: column; gap: 0.7rem; max-height: 460px; padding: 0.8rem 0.95rem 1rem; overflow-y: auto; }
+  .cards { display: flex; flex-direction: column; gap: 0.7rem; max-height: 640px; padding: 0.8rem 0.95rem 1rem; overflow-y: auto; }
 
   .card { overflow: hidden; border: 1px solid var(--rule); border-radius: 8px; font-size: 12.5px; }
   .card-head {
@@ -97,7 +97,7 @@
   }
   .card-head .tool { font-weight: 600; color: var(--accent); }
   .card-head .ms { color: var(--soft); }
-  .card pre { padding: 6px 10px; overflow-x: auto; font-size: 11.5px; line-height: 1.6; color: var(--body); background: var(--card); }
+  .card pre { padding: 6px 10px; font-size: 11.5px; line-height: 1.6; color: var(--body); background: var(--card); white-space: pre-wrap; overflow-wrap: anywhere; max-height: 240px; overflow-y: auto; }
   .card .say { padding: 6px 10px; font-size: 12.5px; font-style: italic; color: var(--ink); border-top: 1px solid var(--rule); background: var(--paper); }
   .card--err .card-head { color: #b91c1c; background: rgba(220, 38, 38, 0.07); }
   .card--err .card-head .tool { color: #b91c1c; }
