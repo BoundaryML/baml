@@ -17478,6 +17478,327 @@ function baml.ai._realtime_json_str(j: baml.json.json) -> string {
     return
 }
 
+function baml.ai.drive_call(client: baml.ai.Provider, prompt: baml.llm.PromptAst) -> T {
+    load_var prompt
+    sys_op baml.ai.prompt_to_messages
+    store_var messages
+    load_var client
+    is_type baml.ai.Retry
+    pop_jump_if_false L0
+    jump L18
+
+  L0:
+    load_var client
+    is_type baml.ai.OpenAi
+    pop_jump_if_false L1
+    jump L18
+
+  L1:
+    load_var client
+    is_type baml.ai.Gemini
+    pop_jump_if_false L2
+    jump L18
+
+  L2:
+    load_var client
+    is_type baml.ai.OpenAiResponses
+    pop_jump_if_false L3
+    jump L18
+
+  L3:
+    load_var client
+    is_type baml.ai.RoundRobin
+    pop_jump_if_false L4
+    jump L18
+
+  L4:
+    load_var client
+    is_type baml.ai.Fallback
+    pop_jump_if_false L5
+    jump L18
+
+  L5:
+    load_var client
+    is_type baml.ai.OpenAiStrict
+    pop_jump_if_false L6
+    jump L18
+
+  L6:
+    load_var client
+    is_type baml.ai.Anthropic
+    pop_jump_if_false L7
+    jump L18
+
+  L7:
+    load_var client
+    is_type baml.ai.Retry
+    pop_jump_if_false L8
+    jump L12
+
+  L8:
+    load_var client
+    is_type baml.ai.OpenAi
+    pop_jump_if_false L9
+    jump L12
+
+  L9:
+    load_var client
+    is_type baml.ai.Fallback
+    pop_jump_if_false L10
+    jump L12
+
+  L10:
+    load_var client
+    is_type baml.ai.Anthropic
+    pop_jump_if_false L11
+    jump L12
+
+  L11:
+    load_const "client's provider supports neither HttpProvider nor Streaming"
+    init_instance baml.errors.Unsupported .message
+    throw
+
+  L12:
+    load_type #0
+    load_type #0
+    load_var2 1 4
+    load_type baml.ai.Streaming
+    load_const "stream_messages"
+    virtual_call nargs=2 ntypeargs=2
+    store_var _21
+    load_type #0
+    load_type #0
+    load_var _21
+    call baml.llm.Stream.final
+    store_var _0
+    jump L19
+    load_var e
+    is_type baml.errors.CannotRetry
+    pop_jump_if_false L13
+    jump L17
+
+  L13:
+    load_var e
+    is_type baml.ai.AnthropicHttpError
+    pop_jump_if_false L14
+    jump L17
+
+  L14:
+    load_var e
+    is_type baml.ai.GeminiHttpError
+    pop_jump_if_false L15
+    jump L17
+
+  L15:
+    load_var e
+    is_type baml.ai.OpenAiHttpError
+    pop_jump_if_false L16
+    jump L17
+
+  L16:
+    load_var e
+    throw_if_panic
+    load_var e
+    load_const "stream drain failed while degrading call -> stream"
+    load_type string
+    alloc_array 1
+    init_instance baml.errors.UnknownError .data, .message
+    throw
+
+  L17:
+    load_var e
+    throw
+
+  L18:
+    load_type #0
+    load_var2 1 4
+    load_type baml.ai.HttpProvider
+    load_const "call_messages"
+    virtual_call nargs=2 ntypeargs=1
+    store_var _0
+
+  L19:
+    load_var _0
+    return
+}
+
+function baml.ai.drive_live(client: baml.ai.Provider, prompt: baml.llm.PromptAst, io: baml.ai.Channel) -> baml.ai.Transcript {
+    load_var prompt
+    sys_op baml.llm.prompt_to_text
+    store_var text
+    load_var client
+    is_type baml.ai.ClaudeCode
+    pop_jump_if_false L0
+    jump L3
+
+  L0:
+    load_var client
+    is_type baml.ai.OpenAiRealtime
+    pop_jump_if_false L1
+    jump L3
+
+  L1:
+    load_var client
+    is_type baml.ai.PiAgent
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_const "client's provider does not support Realtime"
+    init_instance baml.errors.Unsupported .message
+    throw
+
+  L3:
+    load_var2 1 5
+    load_var io
+    load_type baml.ai.Realtime
+    load_const "run"
+    virtual_call nargs=3 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function baml.ai.drive_run_tools(client: baml.ai.Provider, prompt: baml.llm.PromptAst, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never) -> T {
+    load_var prompt
+    sys_op baml.llm.prompt_to_text
+    store_var text
+    load_var client
+    is_type baml.ai.OpenAi
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "client's provider does not support Tools"
+    init_instance baml.errors.Unsupported .message
+    throw
+
+  L1:
+    load_type #0
+    load_var2 1 6
+    load_var2 3 4
+    load_type baml.ai.Tools
+    load_const "run_tools"
+    virtual_call nargs=4 ntypeargs=1
+    store_var _0
+    load_var _0
+    return
+}
+
+function baml.ai.drive_stream(client: baml.ai.Provider, prompt: baml.llm.PromptAst) -> baml.llm.Stream<TPartial, T> {
+    load_var prompt
+    sys_op baml.ai.prompt_to_messages
+    store_var messages
+    load_var client
+    is_type baml.ai.Retry
+    pop_jump_if_false L0
+    jump L4
+
+  L0:
+    load_var client
+    is_type baml.ai.OpenAi
+    pop_jump_if_false L1
+    jump L4
+
+  L1:
+    load_var client
+    is_type baml.ai.Fallback
+    pop_jump_if_false L2
+    jump L4
+
+  L2:
+    load_var client
+    is_type baml.ai.Anthropic
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_const "client's provider does not support Streaming"
+    init_instance baml.errors.Unsupported .message
+    throw
+
+  L4:
+    load_type #0
+    load_type #1
+    load_var2 1 4
+    load_type baml.ai.Streaming
+    load_const "stream_messages"
+    virtual_call nargs=2 ntypeargs=2
+    store_var _0
+    load_var _0
+    return
+}
+
+function baml.ai.drive_with(client: baml.ai.Provider, prompt: baml.llm.PromptAst, project: (baml.ai.ResponseMeta) -> V throws E2) -> baml.ai.CallResult<T, V> {
+    load_var prompt
+    sys_op baml.ai.prompt_to_messages
+    store_var messages
+    load_var client
+    is_type baml.ai.Retry
+    pop_jump_if_false L0
+    jump L8
+
+  L0:
+    load_var client
+    is_type baml.ai.OpenAi
+    pop_jump_if_false L1
+    jump L8
+
+  L1:
+    load_var client
+    is_type baml.ai.Gemini
+    pop_jump_if_false L2
+    jump L8
+
+  L2:
+    load_var client
+    is_type baml.ai.OpenAiResponses
+    pop_jump_if_false L3
+    jump L8
+
+  L3:
+    load_var client
+    is_type baml.ai.RoundRobin
+    pop_jump_if_false L4
+    jump L8
+
+  L4:
+    load_var client
+    is_type baml.ai.Fallback
+    pop_jump_if_false L5
+    jump L8
+
+  L5:
+    load_var client
+    is_type baml.ai.OpenAiStrict
+    pop_jump_if_false L6
+    jump L8
+
+  L6:
+    load_var client
+    is_type baml.ai.Anthropic
+    pop_jump_if_false L7
+    jump L8
+
+  L7:
+    load_const "client's provider does not support HttpProvider (call_with)"
+    init_instance baml.errors.Unsupported .message
+    throw
+
+  L8:
+    load_type #0
+    load_type #1
+    load_type #2
+    load_var2 1 5
+    load_var project
+    load_type baml.ai.HttpProvider
+    load_const "call_messages_with"
+    virtual_call nargs=3 ntypeargs=3
+    store_var _0
+    load_var _0
+    return
+}
+
 function baml.ai.prompt_to_messages(prompt: baml.llm.PromptAst) -> baml.ai.ChatMessage[] {
 }
 

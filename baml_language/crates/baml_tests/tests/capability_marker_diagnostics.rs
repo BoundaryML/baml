@@ -145,6 +145,26 @@ function drive_streamy<TPartial, T>(client: baml.ai.Provider, prompt: baml.llm.P
 }
 
 #[test]
+fn e0151_passthrough_generics_are_legal() {
+    // `drive_with`-shaped drivers thread extra generics (V/E2) past the `T`
+    // slot — legal under the name-based convention.
+    let errors = compile_errors(
+        r#"
+//baml:llm_companion(projected)
+function drive_projected<T, V, E2>(
+  client: baml.ai.Provider,
+  prompt: baml.llm.PromptAst,
+  extra: V,
+) -> V {
+  let p = client;
+  extra
+}
+"#,
+    );
+    assert_no_error_with(&errors, "[E0151]");
+}
+
+#[test]
 fn e0151_zero_generics() {
     let errors = compile_errors(
         r#"

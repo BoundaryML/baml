@@ -42,8 +42,10 @@ pub struct CompanionDriver {
     pub namespace_path: Vec<Name>,
     pub file: SourceFile,
     pub item: LocalItemId<FunctionMarker>,
-    /// Generic arity as declared (convention: 1 = `<T>`, 2 = `<TPartial, T>`
-    /// with `TPartial` stream-expanded). Recorded raw; validated in TIR.
+    /// Generic arity as declared. The convention is name-based (`T` = return
+    /// slot, `TPartial` = stream-expanded slot, others passthrough); this is
+    /// the raw count, recorded for consumers — validation lives in the check
+    /// pass (E0151).
     pub generic_arity: usize,
     pub span: TextRange,
 }

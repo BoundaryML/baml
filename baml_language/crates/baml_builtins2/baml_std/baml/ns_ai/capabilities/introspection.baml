@@ -10,6 +10,7 @@ enum Support {
     Maybe, // depends on the payload — the runtime probe is the truth
 }
 
+//baml:llm_capability
 /// Graded feature support, read up front instead of gambling on a throw:
 /// `match (p) { let cap: Capabilities => cap.structured_output(), ... }`.
 interface Capabilities requires root.ai.Provider {

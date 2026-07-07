@@ -1025,7 +1025,7 @@ fn check_llm_capability_markers<'db>(
     }
 
     // ── E0151: driver-convention checks on marked functions ─────────────────
-    let mut driver_invalid = |name: &Name, reason: String, span: TextRange| {
+    let driver_invalid = |name: &Name, reason: String, span: TextRange| {
         Hir2Diagnostic::LlmCompanionDriverInvalid {
             name: name.clone(),
             reason,
@@ -1073,13 +1073,16 @@ fn check_llm_capability_markers<'db>(
                 f.name_span,
             ));
         }
-        if f.generic_params.is_empty() || f.generic_params.len() > 2 {
+        // Name-based generic convention: `T` is the LLM function's return-type
+        // slot (mandatory); `TPartial` (optional) is the stream-expanded slot;
+        // any other generic params are passthrough (e.g. `drive_with<T, V, E2>`
+        // threads the projection's value/error types, inferred at the call site).
+        if !f.generic_params.iter().any(|g| g.as_str() == "T") {
             diagnostics.push(driver_invalid(
                 &f.name,
-                format!(
-                    "expected 1 generic parameter (`<T>`) or 2 (`<TPartial, T>`), found {}",
-                    f.generic_params.len()
-                ),
+                "generic parameters must include `T` (the LLM function's return-type \
+                 slot); add `TPartial` for stream-shaped drivers"
+                    .to_string(),
                 f.name_span,
             ));
         }

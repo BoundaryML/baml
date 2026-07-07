@@ -1,5 +1,6 @@
 // Constrained decoding — a by-construction output guarantee (scenario 03).
 
+//baml:llm_capability
 /// Constrained (grammar/regex/choice) decoding with a by-construction guarantee
 /// (scenario 03). Deliberately has NO default method: a token-level guarantee cannot be
 /// faked on top of an unconstrained `.call`, so a provider either has real constrained

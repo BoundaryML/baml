@@ -1873,6 +1873,368 @@ fn baml.ai.HttpProvider.call_with(self: baml.ai.HttpProvider, prompt: string, pr
     }
 }
 
+fn baml.ai.drive_call(client: baml.ai.Provider, prompt: baml.llm.PromptAst) -> T {
+    // Locals:
+    let _0: T // _0 // return
+    let _1: baml.ai.Provider // client // param
+    let _2: baml.llm.PromptAst // prompt // param
+    let _3: baml.ai.ChatMessage[] // messages
+    let _4: bool
+    let _5: bool
+    let _6: bool
+    let _7: bool
+    let _8: bool
+    let _9: bool
+    let _10: bool
+    let _11: bool
+    let _12: baml.ai.HttpProvider // h
+    let _13: baml.ai.ChatMessage[]
+    let _14: type
+    let _15: bool
+    let _16: bool
+    let _17: bool
+    let _18: bool
+    let _19: baml.ai.Streaming // s
+    let _20: unknown // e
+    let _21: baml.llm.Stream<T, T>
+    let _22: baml.ai.ChatMessage[]
+    let _23: type
+    let _24: type
+    let _25: type
+    let _26: type
+    let _27: bool
+    let _28: bool
+    let _29: bool
+    let _30: bool
+    let _31: baml.errors.StreamError // se
+    let _32: baml.errors.UnknownError
+    let _33: baml.errors.Io | baml.errors.LlmClient | baml.errors.UnknownError
+    let _34: string[]
+    let _35: baml.errors.Unsupported
+
+    bb0: {
+        _3 = sys_op const fn baml.ai.prompt_to_messages(copy _2) -> bb1;
+    }
+
+    bb1: {
+        _4 = is_type(copy _1, baml.ai.Retry);
+        branch copy _4 -> [bb16, bb2];
+    }
+
+    bb2: {
+        _5 = is_type(copy _1, baml.ai.OpenAi);
+        branch copy _5 -> [bb16, bb3];
+    }
+
+    bb3: {
+        _6 = is_type(copy _1, baml.ai.Gemini);
+        branch copy _6 -> [bb16, bb4];
+    }
+
+    bb4: {
+        _7 = is_type(copy _1, baml.ai.OpenAiResponses);
+        branch copy _7 -> [bb16, bb5];
+    }
+
+    bb5: {
+        _8 = is_type(copy _1, baml.ai.RoundRobin);
+        branch copy _8 -> [bb16, bb6];
+    }
+
+    bb6: {
+        _9 = is_type(copy _1, baml.ai.Fallback);
+        branch copy _9 -> [bb16, bb7];
+    }
+
+    bb7: {
+        _10 = is_type(copy _1, baml.ai.OpenAiStrict);
+        branch copy _10 -> [bb16, bb8];
+    }
+
+    bb8: {
+        _11 = is_type(copy _1, baml.ai.Anthropic);
+        branch copy _11 -> [bb16, bb9];
+    }
+
+    bb9: {
+        _15 = is_type(copy _1, baml.ai.Retry);
+        branch copy _15 -> [bb14, bb10];
+    }
+
+    bb10: {
+        _16 = is_type(copy _1, baml.ai.OpenAi);
+        branch copy _16 -> [bb14, bb11];
+    }
+
+    bb11: {
+        _17 = is_type(copy _1, baml.ai.Fallback);
+        branch copy _17 -> [bb14, bb12];
+    }
+
+    bb12: {
+        _18 = is_type(copy _1, baml.ai.Anthropic);
+        branch copy _18 -> [bb14, bb13];
+    }
+
+    bb13: {
+        _35 = baml.errors.Unsupported { const "client's provider supports neither HttpProvider nor Streaming" };
+        throw copy _35;
+    }
+
+    bb14: {
+        _19 = copy _1;
+        _22 = copy _3;
+        _23 = load_type(#0);
+        _24 = load_type(#0);
+        _21 = virtual_call stream_messages as baml.ai.Streaming<copy _23, copy _24>(copy _19, copy _22) -> [bb15, unwind: bb18];
+    }
+
+    bb15: {
+        _25 = load_type(#0);
+        _26 = load_type(#0);
+        _0 = call const fn baml.llm.Stream.final<copy _25, copy _26>(copy _21) -> [bb17, unwind: bb18];
+    }
+
+    bb16: {
+        _12 = copy _1;
+        _13 = copy _3;
+        _14 = load_type(#0);
+        _0 = virtual_call call_messages as baml.ai.HttpProvider<copy _14>(copy _12, copy _13) -> [bb17];
+    }
+
+    bb17: {
+        return;
+    }
+
+    bb18: {
+        _27 = is_type(copy _20, baml.errors.CannotRetry);
+        branch copy _27 -> [bb24, bb19];
+    }
+
+    bb19: {
+        _28 = is_type(copy _20, baml.ai.AnthropicHttpError);
+        branch copy _28 -> [bb24, bb20];
+    }
+
+    bb20: {
+        _29 = is_type(copy _20, baml.ai.GeminiHttpError);
+        branch copy _29 -> [bb24, bb21];
+    }
+
+    bb21: {
+        _30 = is_type(copy _20, baml.ai.OpenAiHttpError);
+        branch copy _30 -> [bb24, bb22];
+    }
+
+    bb22: {
+        throw_if_panic copy _20 -> bb23;
+    }
+
+    bb23: {
+        _33 = copy _20;
+        _34 = [const "stream drain failed while degrading call -> stream"]: string[];
+        _32 = baml.errors.UnknownError { copy _33, copy _34 };
+        throw copy _32;
+    }
+
+    bb24: {
+        _31 = copy _20;
+        throw copy _31;
+    }
+}
+
+fn baml.ai.drive_with(client: baml.ai.Provider, prompt: baml.llm.PromptAst, project: (baml.ai.ResponseMeta) -> V throws E2) -> baml.ai.CallResult<T, V> {
+    // Locals:
+    let _0: baml.ai.CallResult<T, V> // _0 // return
+    let _1: baml.ai.Provider // client // param
+    let _2: baml.llm.PromptAst // prompt // param
+    let _3: (baml.ai.ResponseMeta) -> V throws E2 // project // param
+    let _4: baml.ai.ChatMessage[] // messages
+    let _5: bool
+    let _6: bool
+    let _7: bool
+    let _8: bool
+    let _9: bool
+    let _10: bool
+    let _11: bool
+    let _12: bool
+    let _13: baml.ai.HttpProvider // h
+    let _14: baml.ai.ChatMessage[]
+    let _15: type
+    let _16: type
+    let _17: type
+    let _18: baml.errors.Unsupported
+
+    bb0: {
+        _4 = sys_op const fn baml.ai.prompt_to_messages(copy _2) -> bb1;
+    }
+
+    bb1: {
+        _5 = is_type(copy _1, baml.ai.Retry);
+        branch copy _5 -> [bb10, bb2];
+    }
+
+    bb2: {
+        _6 = is_type(copy _1, baml.ai.OpenAi);
+        branch copy _6 -> [bb10, bb3];
+    }
+
+    bb3: {
+        _7 = is_type(copy _1, baml.ai.Gemini);
+        branch copy _7 -> [bb10, bb4];
+    }
+
+    bb4: {
+        _8 = is_type(copy _1, baml.ai.OpenAiResponses);
+        branch copy _8 -> [bb10, bb5];
+    }
+
+    bb5: {
+        _9 = is_type(copy _1, baml.ai.RoundRobin);
+        branch copy _9 -> [bb10, bb6];
+    }
+
+    bb6: {
+        _10 = is_type(copy _1, baml.ai.Fallback);
+        branch copy _10 -> [bb10, bb7];
+    }
+
+    bb7: {
+        _11 = is_type(copy _1, baml.ai.OpenAiStrict);
+        branch copy _11 -> [bb10, bb8];
+    }
+
+    bb8: {
+        _12 = is_type(copy _1, baml.ai.Anthropic);
+        branch copy _12 -> [bb10, bb9];
+    }
+
+    bb9: {
+        _18 = baml.errors.Unsupported { const "client's provider does not support HttpProvider (call_with)" };
+        throw copy _18;
+    }
+
+    bb10: {
+        _13 = copy _1;
+        _14 = copy _4;
+        _15 = load_type(#0);
+        _16 = load_type(#1);
+        _17 = load_type(#2);
+        _0 = virtual_call call_messages_with as baml.ai.HttpProvider<copy _15, copy _16, copy _17>(copy _13, copy _14, copy _3) -> [bb11];
+    }
+
+    bb11: {
+        return;
+    }
+}
+
+fn baml.ai.drive_live(client: baml.ai.Provider, prompt: baml.llm.PromptAst, io: baml.ai.Channel) -> baml.ai.Transcript {
+    // Locals:
+    let _0: baml.ai.Transcript // _0 // return
+    let _1: baml.ai.Provider // client // param
+    let _2: baml.llm.PromptAst // prompt // param
+    let _3: baml.ai.Channel // io // param
+    let _4: string // text
+    let _5: bool
+    let _6: bool
+    let _7: bool
+    let _8: baml.ai.Realtime // r
+    let _9: string
+    let _10: baml.errors.Unsupported
+
+    bb0: {
+        _4 = sys_op const fn baml.llm.prompt_to_text(copy _2) -> bb1;
+    }
+
+    bb1: {
+        _5 = is_type(copy _1, baml.ai.ClaudeCode);
+        branch copy _5 -> [bb5, bb2];
+    }
+
+    bb2: {
+        _6 = is_type(copy _1, baml.ai.OpenAiRealtime);
+        branch copy _6 -> [bb5, bb3];
+    }
+
+    bb3: {
+        _7 = is_type(copy _1, baml.ai.PiAgent);
+        branch copy _7 -> [bb5, bb4];
+    }
+
+    bb4: {
+        _10 = baml.errors.Unsupported { const "client's provider does not support Realtime" };
+        throw copy _10;
+    }
+
+    bb5: {
+        _8 = copy _1;
+        _9 = copy _4;
+        _0 = virtual_call run as baml.ai.Realtime(copy _8, copy _9, copy _3) -> [bb6];
+    }
+
+    bb6: {
+        return;
+    }
+}
+
+fn baml.ai.drive_stream(client: baml.ai.Provider, prompt: baml.llm.PromptAst) -> baml.llm.Stream<TPartial, T> {
+    // Locals:
+    let _0: baml.llm.Stream<TPartial, T> // _0 // return
+    let _1: baml.ai.Provider // client // param
+    let _2: baml.llm.PromptAst // prompt // param
+    let _3: baml.ai.ChatMessage[] // messages
+    let _4: bool
+    let _5: bool
+    let _6: bool
+    let _7: bool
+    let _8: baml.ai.Streaming // s
+    let _9: baml.ai.ChatMessage[]
+    let _10: type
+    let _11: type
+    let _12: baml.errors.Unsupported
+
+    bb0: {
+        _3 = sys_op const fn baml.ai.prompt_to_messages(copy _2) -> bb1;
+    }
+
+    bb1: {
+        _4 = is_type(copy _1, baml.ai.Retry);
+        branch copy _4 -> [bb6, bb2];
+    }
+
+    bb2: {
+        _5 = is_type(copy _1, baml.ai.OpenAi);
+        branch copy _5 -> [bb6, bb3];
+    }
+
+    bb3: {
+        _6 = is_type(copy _1, baml.ai.Fallback);
+        branch copy _6 -> [bb6, bb4];
+    }
+
+    bb4: {
+        _7 = is_type(copy _1, baml.ai.Anthropic);
+        branch copy _7 -> [bb6, bb5];
+    }
+
+    bb5: {
+        _12 = baml.errors.Unsupported { const "client's provider does not support Streaming" };
+        throw copy _12;
+    }
+
+    bb6: {
+        _8 = copy _1;
+        _9 = copy _3;
+        _10 = load_type(#0);
+        _11 = load_type(#1);
+        _0 = virtual_call stream_messages as baml.ai.Streaming<copy _10, copy _11>(copy _8, copy _9) -> [bb7];
+    }
+
+    bb7: {
+        return;
+    }
+}
+
 fn baml.ai.Streaming.stream(self: baml.ai.Streaming, prompt: string) -> baml.llm.Stream<TStream, TFinal> {
     // Locals:
     let _0: baml.llm.Stream<TStream, TFinal> // _0 // return
@@ -1897,6 +2259,46 @@ fn baml.ai.Streaming.stream(self: baml.ai.Streaming, prompt: string) -> baml.llm
     }
 
     bb2: {
+        return;
+    }
+}
+
+fn baml.ai.drive_run_tools(client: baml.ai.Provider, prompt: baml.llm.PromptAst, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never) -> T {
+    // Locals:
+    let _0: T // _0 // return
+    let _1: baml.ai.Provider // client // param
+    let _2: baml.llm.PromptAst // prompt // param
+    let _3: baml.ai.Tool[] // tools // param
+    let _4: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never // dispatch // param
+    let _5: string // text
+    let _6: bool
+    let _7: baml.ai.Tools // tp
+    let _8: string
+    let _9: type
+    let _10: baml.errors.Unsupported
+
+    bb0: {
+        _5 = sys_op const fn baml.llm.prompt_to_text(copy _2) -> bb1;
+    }
+
+    bb1: {
+        _6 = is_type(copy _1, baml.ai.OpenAi);
+        branch copy _6 -> [bb3, bb2];
+    }
+
+    bb2: {
+        _10 = baml.errors.Unsupported { const "client's provider does not support Tools" };
+        throw copy _10;
+    }
+
+    bb3: {
+        _7 = copy _1;
+        _8 = copy _5;
+        _9 = load_type(#0);
+        _0 = virtual_call run_tools as baml.ai.Tools<copy _9>(copy _7, copy _8, copy _3, copy _4) -> [bb4];
+    }
+
+    bb4: {
         return;
     }
 }

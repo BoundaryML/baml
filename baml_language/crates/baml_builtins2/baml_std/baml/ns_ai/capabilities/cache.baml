@@ -7,6 +7,7 @@ class CacheHandle {
     name: string,
 }
 
+//baml:llm_capability
 /// Create/delete provider-managed cache resources. Creating commits an external,
 /// billed effect — remember to `delete_cache` (or leak money).
 interface ManagedCache requires root.ai.Provider {

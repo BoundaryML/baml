@@ -244,6 +244,12 @@ function baml.ai.call_messages_with(self: ?, messages: ChatMessage[], project: (
 function baml.ai.call_with(self: ?, prompt: string, project: (ResponseMeta) -> V throws E2) -> CallResult<T, V>  [expr] {
   { let messages = [ChatMessage.user(prompt)] } self.call_messages_with(messages, project)
 }
+function baml.ai.drive_call(client: Provider, prompt: root.llm.PromptAst) -> T  [expr] {
+  { let messages = prompt_to_messages(prompt) } match (client) { h: HttpProvider => h.call_messages(messages), s: Streaming => s.stream_messages(messages).final() catch (e) { se: root.errors.StreamError => throw se, _ => throw root.errors.UnknownError { data: e, message: ["stream drain fail..."] } }, _ => throw root.errors.Unsupported { message: "client's provider..." } }
+}
+function baml.ai.drive_with(client: Provider, prompt: root.llm.PromptAst, project: (ResponseMeta) -> V throws E2) -> CallResult<T, V>  [expr] {
+  { let messages = prompt_to_messages(prompt) } match (client) { h: HttpProvider => h.call_messages_with(messages, project), _ => throw root.errors.Unsupported { message: "client's provider..." } }
+}
 
 --- <builtin>/baml/ns_ai/capabilities/introspection.baml ---
 enum baml.ai.Support {Yes, No, Maybe}
@@ -258,8 +264,14 @@ class baml.ai.MemoryHit {
 class baml.ai.Transcript {
   text: string
 }
+function baml.ai.drive_live(client: root.ai.Provider, prompt: root.llm.PromptAst, io: Channel) -> baml.ai.Transcript  [expr] {
+  { let text = root.llm.prompt_to_text(prompt) } match (client) { r: Realtime => r.run(text, io), _ => throw root.errors.Unsupported { message: "client's provider..." } }
+}
 
 --- <builtin>/baml/ns_ai/capabilities/streaming.baml ---
+function baml.ai.drive_stream(client: Provider, prompt: root.llm.PromptAst) -> root.llm.Stream<TPartial, T>  [expr] {
+  { let messages = prompt_to_messages(prompt) } match (client) { s: Streaming => s.stream_messages(messages), _ => throw root.errors.Unsupported { message: "client's provider..." } }
+}
 function baml.ai.stream(self: ?, prompt: string) -> root.llm.Stream<TStream, TFinal>  [expr] {
   { let messages = [ChatMessage.user(prompt)] } self.stream_messages(messages)
 }
@@ -290,6 +302,9 @@ class baml.ai.ToolCalls {
 class baml.ai.ToolResult {
   id: string
   output: string
+}
+function baml.ai.drive_run_tools(client: Provider, prompt: root.llm.PromptAst, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never) -> T  [expr] {
+  { let text = root.llm.prompt_to_text(prompt) } match (client) { tp: Tools => tp.run_tools(text, tools, dispatch), _ => throw root.errors.Unsupported { message: "client's provider..." } }
 }
 function baml.ai.from_type(name: string, description: string, params: type) -> baml.ai.Tool  [expr] {
   {  } baml.ai.Tool { name: name, description: description, parameters: root.schema.json_schema(params, false) }

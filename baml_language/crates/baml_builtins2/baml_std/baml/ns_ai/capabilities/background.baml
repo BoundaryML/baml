@@ -8,6 +8,7 @@ class Job<T> {
     owner: string,
 }
 
+//baml:llm_capability
 /// Submit-and-poll background execution. Submitting commits an external effect
 /// (a billed server-side job) — implementors are effectful (D2).
 interface Background requires root.ai.Provider {

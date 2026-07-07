@@ -317,6 +317,33 @@ function baml.ai.HttpProvider.call<T>(self: baml.ai.HttpProvider, prompt: string
 }
 lambda baml.ai.HttpProvider.call {
 }
+function baml.ai.drive_call<T>(client: baml.ai.Provider, prompt: baml.llm.PromptAst) -> T throws baml.errors.CallError | baml.errors.StreamError | baml.errors.UnknownError {
+  { : T
+    let messages = prompt_to_messages(prompt) : baml.ai.ChatMessage[]
+    match (client : baml.ai.Provider) : T
+      h: HttpProvider =>
+        h.call_messages<T>(messages) : T
+      s: Streaming =>
+        catch (s.stream_messages<T, T>(messages).final<T>() : T) : T
+          catch (e)
+            se: root.errors.StreamError =>
+              throw se : never
+            _ =>
+              throw root.errors.UnknownError { data: e, message: ["stream drain fail..."] } : never
+      _ =>
+        throw root.errors.Unsupported { message: "client's provider..." } : never
+  }
+}
+function baml.ai.drive_with<T, V, E2>(client: baml.ai.Provider, prompt: baml.llm.PromptAst, project: (baml.ai.ResponseMeta) -> V throws E2) -> baml.ai.CallResult<T, V> throws baml.errors.CallError | baml.errors.UnknownError | E2 {
+  { : baml.ai.CallResult<T, V>
+    let messages = prompt_to_messages(prompt) : baml.ai.ChatMessage[]
+    match (client : baml.ai.Provider) : baml.ai.CallResult<T, V>
+      h: HttpProvider =>
+        h.call_messages_with<V, E2>(messages, project) : baml.ai.CallResult<T, V>
+      _ =>
+        throw root.errors.Unsupported { message: "client's provider..." } : never
+  }
+}
 
 --- <builtin>/baml/ns_ai/capabilities/introspection.baml ---
 enum baml.ai.Support
@@ -335,6 +362,16 @@ class baml.ai.MemoryHit$stream {
 class baml.ai.Transcript {
   text: string
 }
+function baml.ai.drive_live<T>(client: baml.ai.Provider, prompt: baml.llm.PromptAst, io: baml.ai.Channel) -> baml.ai.Transcript throws baml.errors.RealtimeError | baml.errors.UnknownError {
+  { : baml.ai.Transcript
+    let text = root.llm.prompt_to_text(prompt) : string
+    match (client : baml.ai.Provider) : baml.ai.Transcript
+      r: Realtime =>
+        r.run(text, io) : baml.ai.Transcript
+      _ =>
+        throw root.errors.Unsupported { message: "client's provider..." } : never
+  }
+}
 class baml.ai.Transcript$stream {
   text: string | null
 }
@@ -344,6 +381,16 @@ function baml.ai.Streaming.stream<TStream, TFinal>(self: baml.ai.Streaming, prom
   { : baml.llm.Stream<TStream, TFinal>
     let messages = [ChatMessage.user(prompt)] : baml.ai.ChatMessage[]
     self.stream_messages(messages) : baml.llm.Stream<TStream, TFinal>
+  }
+}
+function baml.ai.drive_stream<TPartial, T>(client: baml.ai.Provider, prompt: baml.llm.PromptAst) -> baml.llm.Stream<TPartial, T> throws baml.errors.StreamError | baml.errors.UnknownError {
+  { : baml.llm.Stream<TPartial, T>
+    let messages = prompt_to_messages(prompt) : baml.ai.ChatMessage[]
+    match (client : baml.ai.Provider) : baml.llm.Stream<TPartial, T>
+      s: Streaming =>
+        s.stream_messages(messages) : baml.llm.Stream<TPartial, T>
+      _ =>
+        throw root.errors.Unsupported { message: "client's provider..." } : never
   }
 }
 
@@ -402,6 +449,16 @@ function baml.ai.Tools.run_tools<T>(self: baml.ai.Tools, prompt: string, tools: 
             }
       }
     root.sys.panic("unreachable") : never
+  }
+}
+function baml.ai.drive_run_tools<T>(client: baml.ai.Provider, prompt: baml.llm.PromptAst, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never) -> T throws baml.errors.ToolError | baml.errors.UnknownError {
+  { : T
+    let text = root.llm.prompt_to_text(prompt) : string
+    match (client : baml.ai.Provider) : T
+      tp: Tools =>
+        tp.run_tools<T>(text, tools, dispatch) : T
+      _ =>
+        throw root.errors.Unsupported { message: "client's provider..." } : never
   }
 }
 class baml.ai.Tool$stream {

@@ -45,6 +45,7 @@ class ToolCalls {
     calls: ToolCall[],
 }
 
+//baml:llm_capability
 /// Multi-turn tool loop. `Transcript` is provider-owned + opaque.
 interface Tools requires Provider {
     type Transcript
@@ -77,5 +78,25 @@ interface Tools requires Provider {
             }
         }
         root.sys.panic("unreachable")
+    }
+}
+
+//baml:llm_companion(run_tools)
+/// Drive the default agentic loop (the generated `Foo$run_tools` companion
+/// delegates here). Tool-calling has no honest single-call degrade — a
+/// non-Tools provider is a typed `Unsupported`. The prompt is flattened to
+/// text because `Tools.begin` speaks the string form.
+function drive_run_tools<T>(
+    client: Provider,
+    prompt: root.llm.PromptAst,
+    tools: Tool[],
+    dispatch: (ToolCall[]) -> ToolResult[] throws never,
+) -> T throws root.errors.ToolError | root.errors.UnknownError {
+    let text = root.llm.prompt_to_text(prompt);
+    match (client) {
+        let tp: Tools => tp.run_tools<T>(text, tools, dispatch),
+        _ => throw root.errors.Unsupported {
+            message: "client's provider does not support Tools",
+        },
     }
 }

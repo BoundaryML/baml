@@ -13,6 +13,7 @@ class Suspend {
     point: string,
 }
 
+//baml:llm_capability
 /// Runs that can pause and be re-entered. Outcomes are explicit sums — a suspension
 /// is a value, not an error.
 interface Suspendable requires root.ai.Provider {

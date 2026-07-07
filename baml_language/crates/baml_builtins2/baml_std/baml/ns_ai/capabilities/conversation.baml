@@ -9,6 +9,7 @@ class Session {
     _id: string,
 }
 
+//baml:llm_capability
 /// Within-run history: the provider threads the conversation for you.
 interface Conversational requires root.ai.Provider {
     function chat<T>(self, prompt: string, session: Session) -> T throws root.errors.UnknownError
@@ -19,12 +20,14 @@ class Window {
     _data: string,
 }
 
+//baml:llm_capability
 /// Context-window compaction over a session.
 interface Compaction requires root.ai.Provider {
     function window_of(self, session: Session) -> Window throws root.errors.UnknownError
     function compact(self, window: Window) -> Window throws root.errors.UnknownError
 }
 
+//baml:llm_capability
 /// Fork/branch a conversation (scenario 19).
 interface Branching requires root.ai.Provider {
     function fork(self, session: Session) -> Session throws root.errors.UnknownError

@@ -1488,9 +1488,10 @@ pub struct FunctionDef {
     /// `//baml:llm_companion(<suffix>)` marker comment: it is the capability
     /// *driver* that the generated `Foo$<suffix>` companion of every LLM
     /// function delegates to. Signature convention (validated semantically,
-    /// not here): `fn<T>(client: Provider, prompt: PromptAst, …extra) -> R`,
-    /// generic arity 1 (`T` = the LLM fn's return type) or 2 (`<TPartial, T>`
-    /// with `TPartial` stream-expanded). See
+    /// not here): `fn<T, …>(client: Provider, prompt: PromptAst, …extra) -> R`
+    /// where the generic param named `T` is the LLM fn's return-type slot,
+    /// `TPartial` (optional) the stream-expanded slot, and any other generic
+    /// params are passthrough (inferred at the call site). See
     /// `_plan/llm-desugar-capabilities-plan.md` §1.2.
     pub llm_companion_suffix: Option<Name>,
     pub span: TextRange,

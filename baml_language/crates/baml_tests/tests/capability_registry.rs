@@ -98,6 +98,47 @@ function drive_streamy<TPartial, T>(client: string, prompt: string) -> string {
 }
 
 #[test]
+fn stdlib_capabilities_and_drivers_are_registered() {
+    let reg = registry_for(&[("main.baml", "function noop() -> string { \"x\" }")]);
+    let std_caps: Vec<&str> = reg
+        .capabilities
+        .iter()
+        .filter(|c| c.package.as_str() == "baml")
+        .map(|c| c.name.as_str())
+        .collect();
+    for expected in [
+        "HttpProvider",
+        "Streaming",
+        "Tools",
+        "Realtime",
+        "Constrained",
+        "Conversational",
+        "Chain",
+        "Background",
+        "ManagedCache",
+        "Suspendable",
+    ] {
+        assert!(
+            std_caps.contains(&expected),
+            "stdlib capability `{expected}` not registered; got {std_caps:?}"
+        );
+    }
+    for (suffix, driver) in [
+        ("call", "drive_call"),
+        ("with", "drive_with"),
+        ("stream", "drive_stream"),
+        ("run_tools", "drive_run_tools"),
+        ("live", "drive_live"),
+    ] {
+        let d = reg
+            .driver_for_suffix(suffix)
+            .unwrap_or_else(|| panic!("stdlib driver suffix `{suffix}` not registered"));
+        assert_eq!(d.function.as_str(), driver);
+        assert_eq!(d.package.as_str(), "baml");
+    }
+}
+
+#[test]
 fn unmarked_items_contribute_nothing() {
     let reg = registry_for(&[(
         "main.baml",

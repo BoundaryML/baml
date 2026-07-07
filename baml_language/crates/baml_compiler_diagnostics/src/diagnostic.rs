@@ -334,9 +334,11 @@ pub enum DiagnosticId {
     /// Provider marker.
     LlmCapabilityMissingProvider,
     /// `//baml:llm_companion(<suffix>)` marks a function that does not match
-    /// the driver convention: a top-level function, generic over `<T>` or
-    /// `<TPartial, T>`, whose first two parameters are
-    /// `client: baml.ai.Provider` and `prompt: baml.llm.PromptAst`.
+    /// the driver convention: a top-level function whose generic params
+    /// include `T` (the return-type slot; `TPartial` optionally the
+    /// stream-expanded slot, others passthrough) and whose first two
+    /// parameters are `client: baml.ai.Provider` and
+    /// `prompt: baml.llm.PromptAst`.
     LlmCompanionDriverInvalid,
     /// Two driver functions register the same companion suffix (including a
     /// user package shadowing a stdlib suffix). First declaration wins.

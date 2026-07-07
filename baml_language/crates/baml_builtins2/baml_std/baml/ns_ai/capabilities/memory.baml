@@ -7,6 +7,7 @@ class MemoryHit {
     score: float,
 }
 
+//baml:llm_capability
 /// Provider-held long-term memory: remember facts, recall by query.
 interface MemoryStore requires root.ai.Provider {
     function recall(self, query: string, k: int) -> MemoryHit[] throws root.errors.UnknownError

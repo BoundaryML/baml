@@ -9,6 +9,7 @@ class ChainHandle {
     owner: string,
 }
 
+//baml:llm_capability
 /// Extend a server-stored thread: prompt in, typed value out, state stays server-side.
 interface Chain requires root.ai.Provider {
     function extend<T>(self, prompt: string, handle: ChainHandle) -> T throws root.errors.UnknownError

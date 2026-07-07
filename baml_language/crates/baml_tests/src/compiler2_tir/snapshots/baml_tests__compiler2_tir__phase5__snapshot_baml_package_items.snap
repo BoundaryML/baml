@@ -116,6 +116,11 @@ namespace baml.ai:
   function _openai_responses_envelope
   function _openai_responses_output_text
   function _realtime_json_str
+  function drive_call<T>
+  function drive_live<T>
+  function drive_run_tools<T>
+  function drive_stream<TPartial, T>
+  function drive_with<T, V, E2>
   function prompt_to_messages
 namespace baml.csv:
   class CsvError { methods: [] }
