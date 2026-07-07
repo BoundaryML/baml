@@ -5324,6 +5324,13 @@ fn ty_nominal_subtype(
     sup: &Ty,
     aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
 ) -> bool {
+    // `never` is the bottom type: it has no values, so it is a subtype of
+    // everything. Concretely this lets an implements-block method declare
+    // `throws never` against an interface channel (covariant narrowing of a
+    // body that cannot throw).
+    if matches!(sub, Ty::Never { .. }) {
+        return true;
+    }
     if baml_compiler2_tir::normalize::is_same_normalized_type(sub, sup, aliases) {
         return true;
     }
