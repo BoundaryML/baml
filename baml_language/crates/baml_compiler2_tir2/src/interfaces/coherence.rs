@@ -1,8 +1,3 @@
-// The parent `interfaces` module silences `deprecated` for its own internal self-use;
-// re-enable it here so this kept module can never silently fall back onto a deprecated
-// L2 item — coherence now reasons entirely on the `impl_data` substrate.
-#![warn(deprecated)]
-
 use baml_base::{Literal, Name, Span, TyAttr};
 use baml_compiler2_hir::{contributions::Definition, package::PackageId};
 use baml_type::{FunctionParamTy, Ty, TypeName};

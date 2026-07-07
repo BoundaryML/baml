@@ -1,9 +1,3 @@
-// Re-enable the `deprecated` lint the parent `interfaces` module silences for its own
-// internal self-use so the transitional seam body (`type_implements_interface`) still
-// flags its single remaining legacy `package_implements_registry` use — the point to
-// re-base onto `impl_data`.
-#![warn(deprecated)]
-
 use std::collections::HashMap;
 
 use baml_base::{Name, Span, TyAttr};
@@ -109,8 +103,7 @@ pub enum ImplDiagnosticLocation {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ImplDataSourceMap {
     /// The span coherence attributes a conflict to: the interface-target span
-    /// for in-body impls, the whole-block span for out-of-body impls — matching
-    /// the pre-`impl_data` `InterfaceImplRule::source_span`.
+    /// for in-body impls, the whole-block span for out-of-body impls.
     pub impl_span: Span,
     /// Span of the interface-target type expr (`implement <here> for T`).
     pub interface_target_span: Span,
@@ -526,7 +519,7 @@ pub fn impl_data_source_map<'db>(
     let item_tree = baml_compiler2_hir::file_item_tree(db, file);
     let block = item_tree.impls.get(&impl_loc.id(db))?;
     // In-body impls attribute to the interface-target span; out-of-body to the
-    // whole block span — matching the prior `InterfaceImplRule::source_span`.
+    // whole block span.
     let (impl_range, for_target_span) = match &block.subject {
         ImplSubject::InClass { .. } => (block.interface_target.span, None),
         ImplSubject::Free { for_target, .. } => {
@@ -829,9 +822,9 @@ pub fn implements_interface(
     false
 }
 
-/// Symbolic universal membership — the type-var-bearing backend.
-/// MIGRATION SEAM: today via the `InterfaceImplRule` registry; the single point to
-/// re-base onto an `impl_data`-driven symbolic resolver. Callers depend only on this sig.
+/// Symbolic universal membership — the type-var-bearing backend of
+/// [`implements_interface`], walking `impl_data` for a structurally-matching block whose
+/// pinned bounds hold. Callers depend only on this signature.
 pub fn type_implements_interface<'db>(
     db: &'db dyn crate::Db,
     pkg_id: PackageId<'db>,
@@ -1088,6 +1081,79 @@ pub(crate) fn impls_for_type<'db>(
         }
     }
     out
+}
+
+/// When `concrete` *almost* implements the interface `requested` via some impl block — the
+/// implementor shape (and interface args) match, but a concrete generic bound fails — return
+/// the first failing `(param, required_bound_as_ty, actual_arg)`. This turns a bare "type
+/// mismatch" into a message naming the unsatisfied bound (BEP-044 wf3 #G18).
+///
+/// Diagnostic-only: `None` (falling back to a plain mismatch) whenever nothing almost-matches,
+/// so precision here never affects soundness. `requested` must be an interface; anything else
+/// returns `None`. A still-symbolic bound (typevars survived substitution) is skipped — only a
+/// *definite* concrete failure is reported.
+pub(crate) fn first_failing_impl_bound<'db>(
+    db: &'db dyn crate::Db,
+    pkg_id: PackageId<'db>,
+    concrete: &Ty,
+    requested: &Ty,
+    aliases: &HashMap<QualifiedTypeName, Ty>,
+    mut is_subtype: impl FnMut(&Ty, &Ty) -> bool,
+) -> Option<(Name, Ty, Ty)> {
+    let Ty::Interface(requested_qtn, requested_args, _, _) = requested else {
+        return None;
+    };
+    let mut packages = vec![pkg_id];
+    packages.extend(baml_compiler2_hir::package::package_dependency_closure(
+        db, pkg_id,
+    ));
+    for pkg in packages {
+        for impl_loc in package_impl_locs(db, pkg) {
+            let Ok(data) = impl_data(db, impl_loc).as_ref() else {
+                continue;
+            };
+            // Only an impl of the requested interface can "almost" satisfy it.
+            if interface_loc_qtn(db, data.interface).as_ref() != Some(requested_qtn) {
+                continue;
+            }
+            let param_names: Vec<Name> = data
+                .generic_params
+                .iter()
+                .map(|(name, _)| name.clone())
+                .collect();
+            // Bind the impl's params from both the implementor shape (against the value) and
+            // the interface args (against the requested interface's args) in one unification
+            // pass. A shape or arg mismatch is a genuine non-match, not a bound failure — skip.
+            let mut pairs: Vec<(&Ty, &Ty)> = vec![(&data.for_ty_pattern, concrete)];
+            if data.interface_args.len() == requested_args.len() {
+                pairs.extend(data.interface_args.iter().zip(requested_args));
+            }
+            let Some(bindings) = match_ty_patterns(&pairs, &param_names, aliases) else {
+                continue;
+            };
+            for (name, bounds) in &data.generic_params {
+                let Some(actual) = bindings.get(name) else {
+                    continue;
+                };
+                for bound in bounds {
+                    let bound = substitute_interface(bound, &bindings);
+                    if bound.generics.iter().any(contains_typevar)
+                        || bound
+                            .associated_types
+                            .iter()
+                            .any(|(_, ty)| contains_typevar(ty))
+                    {
+                        continue;
+                    }
+                    let bound_ty = bound.to_ty();
+                    if !is_subtype(actual, &bound_ty) {
+                        return Some((name.clone(), bound_ty, actual.clone()));
+                    }
+                }
+            }
+        }
+    }
+    None
 }
 
 /// An interface method resolved on a [`ResolvedImpl`] — the function backing it

@@ -3182,6 +3182,30 @@ function needs<T extends Marker>(x: T) -> int throws never {
         );
     }
 
+    #[test]
+    fn value_almost_implementing_a_blanket_names_the_unsatisfied_bound() {
+        // `User` is not `Named`, so the blanket `implements<T extends Named> Printable for T`
+        // does not apply — constructing a `User` in a `Printable` slot fails. Because the
+        // receiver shape matches the blanket but its `Named` bound is unsatisfied, the diagnostic
+        // names the bound (BlanketBoundNotSatisfied) rather than a bare type mismatch —
+        // exercising the impl-data-backed `first_failing_impl_bound`.
+        let errors = all_type_errors(
+            "interface Named {\n  name: string\n}\n\
+             interface Printable {\n  function display(self) -> string throws never\n}\n\
+             class User {\n  name: string\n}\n\
+             implements<T extends Named> Printable for T {\n  \
+             function display(self) -> string throws never { \"named\" }\n}\n\
+             function caller() -> int throws never {\n  \
+             let p: Printable = User { name: \"hello\" };\n  0\n}\n",
+        );
+        assert!(
+            errors
+                .iter()
+                .any(|e| matches!(e, TirTypeError::BlanketBoundNotSatisfied { .. })),
+            "expected BlanketBoundNotSatisfied naming the `Named` bound, got {errors:?}"
+        );
+    }
+
     // ── `_` type-inference placeholder: rejected (inference variables unimplemented) ──
 
     #[test]

@@ -5894,11 +5894,14 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // emitting a bare `type mismatch`.
                 let bound_failure = if matches!(expected, Ty::Interface(..)) {
                     let db = self.context.db();
-                    let registry =
-                        crate::interfaces::package_implements_registry(db, self.package_id);
-                    registry.first_failing_bound(&inferred, expected, &self.aliases, |a, b| {
-                        self.is_subtype(a, b)
-                    })
+                    crate::interfaces::first_failing_impl_bound(
+                        db,
+                        self.package_id,
+                        &inferred,
+                        expected,
+                        &self.aliases,
+                        |a, b| self.is_subtype(a, b),
+                    )
                 } else {
                     None
                 };
