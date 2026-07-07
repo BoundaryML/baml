@@ -547,6 +547,24 @@ export function Article({ view = 'all' }: { view?: 'all' | 'intro' | 'deep' }) {
                 />
                 {'BAML is the programming language for agents'}
               </h1>
+              {view === 'intro' && (
+                <div className="l6-cta-wrap">
+                  <div className="l6-cta-row">
+                    <Link className="l6-cta l6-cta--primary" href="/explore">
+                      <Image
+                        alt=""
+                        aria-hidden
+                        height={18}
+                        src="/baml-lamb-white.png"
+                        style={{ filter: 'brightness(0) invert(1)' }}
+                        width={18}
+                      />
+                      {'Explore BAML'}
+                      <span aria-hidden>{'→'}</span>
+                    </Link>
+                  </div>
+                </div>
+              )}
               {view === 'intro' && <DesignGoalsCard />}
               {view === 'intro' && (
                 <p>
@@ -554,8 +572,10 @@ export function Article({ view = 'all' }: { view?: 'all' | 'intro' | 'deep' }) {
                   <em>
                     <strong style={{ color: 'var(--l6-accent)' }}>human</strong>
                   </em>
+                  {' productivity.'}
+                  <br />
                   {
-                    ' productivity. AI agents are a new paradigm that requires a new programming language, just like in the past:'
+                    'AI agents are a new paradigm that requires a new programming language, just like in the past:'
                   }
                 </p>
               )}
@@ -597,32 +617,6 @@ export function Article({ view = 'all' }: { view?: 'all' | 'intro' | 'deep' }) {
                 ))}
               </ul>
             </Section>
-
-            {/* CTA — only on the homepage landing */}
-            {view === 'intro' && (
-              <div className="l6-section l6-cta-wrap">
-                <div className="l6-cta-row">
-                  {/* "Built with BAML" CTA hidden for now.
-                  <Link className="l6-cta" href="/built-with-baml">
-                    {'Built with BAML'}
-                    <span aria-hidden>{'→'}</span>
-                  </Link>
-                  */}
-                  <Link className="l6-cta l6-cta--primary" href="/explore">
-                    <Image
-                      alt=""
-                      aria-hidden
-                      height={18}
-                      src="/baml-lamb-white.png"
-                      style={{ filter: 'brightness(0) invert(1)' }}
-                      width={18}
-                    />
-                    {'Explore BAML'}
-                    <span aria-hidden>{'→'}</span>
-                  </Link>
-                </div>
-              </div>
-            )}
           </>
         )}
 
