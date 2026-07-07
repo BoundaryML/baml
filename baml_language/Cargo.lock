@@ -1225,6 +1225,7 @@ dependencies = [
  "baml_version",
  "bex_vm_types",
  "borsh",
+ "reqwest",
  "sha2",
  "tempfile",
 ]

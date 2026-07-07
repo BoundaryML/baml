@@ -14,6 +14,7 @@ license = { workspace = true }
 baml_version = { workspace = true }
 bex_vm_types = { workspace = true }
 borsh = { workspace = true }
+reqwest = { workspace = true, features = [ "blocking", "rustls" ] }
 sha2 = { workspace = true }
 
 [dev-dependencies]

@@ -153,6 +153,7 @@ pub fn manifest_key(
     opt_level: u8,
     emit_test_cases: bool,
     project_root: &Path,
+    project_manifest_toml: Option<&str>,
 ) -> CacheKey {
     let mut h = Sha256::new();
     h.update(MAGIC);
@@ -160,7 +161,20 @@ pub fn manifest_key(
     h.update(b"project-manifest");
     h.update(compiler_fingerprint);
     h.update([opt_level, u8::from(emit_test_cases)]);
-    h.update(project_root.as_os_str().as_encoded_bytes());
+    let root = project_root.as_os_str().as_encoded_bytes();
+    h.update((root.len() as u64).to_le_bytes());
+    h.update(root);
+    // baml.toml is a compile input of the program key, so it must gate the
+    // manifest too: a config-only change must not let plan_reuse splice
+    // every source file against stale project configuration.
+    match project_manifest_toml {
+        Some(m) => {
+            h.update([1u8]);
+            h.update((m.len() as u64).to_le_bytes());
+            h.update(m.as_bytes());
+        }
+        None => h.update([0u8]),
+    }
     CacheKey(h.finalize().into())
 }
 
@@ -260,11 +274,13 @@ fn fingerprint_impl(cache_dir: &Path) -> io::Result<[u8; 32]> {
 /// keys imply equal programs, and racing writers converge on identical bytes.
 pub struct BytecodeCache {
     dir: PathBuf,
+    /// Optional shared backend for immutable entries (see [`RemoteCache`]).
+    remote: Option<RemoteCache>,
 }
 
 impl BytecodeCache {
     pub fn open(dir: PathBuf) -> Self {
-        BytecodeCache { dir }
+        BytecodeCache { dir, remote: None }
     }
 
     pub fn dir(&self) -> &Path {
@@ -566,5 +582,265 @@ mod tests {
 
         cache.trim(std::time::Duration::ZERO).expect("trim all");
         assert!(cache.load(&key).is_none(), "aged entry trimmed");
+    }
+}
+
+// ─── Remote (distributed) cache ─────────────────────────────────────────────
+
+/// Read-through / write-through remote backend for shared caches.
+///
+/// Content addressing is what makes distribution trivial: every shared entry
+/// is an immutable blob under a key that already encodes the compiler build
+/// and all inputs, so the remote needs no invalidation protocol, no locking,
+/// and no coordination — any HTTP store with GET/PUT semantics works (an S3
+/// proxy, nginx + `WebDAV`, a CI artifact shim). Typical deployment: CI fills
+/// the cache, developer machines read it. This mirrors Go's `GOCACHEPROG`
+/// split of "cache policy in the tool, storage anywhere".
+///
+/// Configured via `BAML_CACHE_REMOTE=<base-url>` (entries live at
+/// `<base-url>/<key-hex>`) and optional `BAML_CACHE_REMOTE_TOKEN` (sent as a
+/// bearer token). Only immutable entries — Program blobs and stdlib slices —
+/// are shared; the per-project manifest is a mutable local-latest pointer and
+/// deliberately stays local (it only accelerates the local edit loop).
+///
+/// Strictly best-effort: a slow or broken remote degrades to local-only
+/// behavior. Downloaded entries pass the same header/checksum validation as
+/// local ones before use, and are re-persisted locally so the remote is hit
+/// at most once per entry.
+pub struct RemoteCache {
+    base_url: String,
+    token: Option<String>,
+    client: reqwest::blocking::Client,
+}
+
+impl RemoteCache {
+    /// Build from `BAML_CACHE_REMOTE` / `BAML_CACHE_REMOTE_TOKEN`; `None`
+    /// when unset or the HTTP client cannot be constructed.
+    pub fn from_env() -> Option<RemoteCache> {
+        let base_url = std::env::var("BAML_CACHE_REMOTE").ok()?;
+        if base_url.is_empty() {
+            return None;
+        }
+        let client = reqwest::blocking::Client::builder()
+            .connect_timeout(std::time::Duration::from_secs(2))
+            .timeout(std::time::Duration::from_secs(30))
+            .build()
+            .ok()?;
+        Some(RemoteCache {
+            base_url: base_url.trim_end_matches('/').to_string(),
+            token: std::env::var("BAML_CACHE_REMOTE_TOKEN").ok(),
+            client,
+        })
+    }
+
+    fn entry_url(&self, key: &CacheKey) -> String {
+        format!("{}/{}", self.base_url, key.hex())
+    }
+
+    fn get(&self, key: &CacheKey) -> Option<Vec<u8>> {
+        let mut request = self.client.get(self.entry_url(key));
+        if let Some(token) = &self.token {
+            request = request.bearer_auth(token);
+        }
+        let response = request.send().ok()?;
+        if !response.status().is_success() {
+            return None;
+        }
+        response.bytes().ok().map(|b| b.to_vec())
+    }
+
+    fn put(&self, key: &CacheKey, entry: &[u8]) {
+        let mut request = self
+            .client
+            .put(self.entry_url(key))
+            .header("content-type", "application/octet-stream")
+            .body(entry.to_vec());
+        if let Some(token) = &self.token {
+            request = request.bearer_auth(token);
+        }
+        // Best-effort: sharing is an optimization, never a failure mode.
+        let _ = request.send();
+    }
+}
+
+impl BytecodeCache {
+    /// Attach the env-configured remote backend, if any.
+    #[must_use]
+    pub fn with_remote_from_env(mut self) -> Self {
+        self.remote = RemoteCache::from_env();
+        self
+    }
+
+    /// Like [`Self::load`], but on a local miss consults the remote backend:
+    /// a downloaded entry is validated exactly like a local one (magic,
+    /// version, key echo, payload checksum) and persisted locally before use.
+    pub fn load_shared(&self, key: &CacheKey) -> Option<Program> {
+        if let Some(program) = self.load(key) {
+            return Some(program);
+        }
+        let remote = self.remote.as_ref()?;
+        let entry = remote.get(key)?;
+        let payload = check_entry(&entry, key)?;
+        let program = borsh::from_slice::<Program>(payload).ok()?;
+        let path = self.entry_path(key);
+        if let Some(parent) = path.parent()
+            && fs::create_dir_all(parent).is_ok()
+        {
+            let _ = write_atomic(&path, &entry);
+        }
+        Some(program)
+    }
+
+    /// Like [`Self::store`], but also publishes the entry to the remote
+    /// backend (best-effort) so other machines can hit it.
+    pub fn store_shared(&self, key: &CacheKey, program: &Program) -> io::Result<()> {
+        self.store(key, program)?;
+        if let Some(remote) = &self.remote
+            && let Ok(entry) = fs::read(self.entry_path(key))
+        {
+            remote.put(key, &entry);
+        }
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod remote_tests {
+    use std::{
+        io::{BufRead, BufReader, Read as _, Write as _},
+        net::TcpListener,
+        sync::{Arc, Mutex},
+    };
+
+    use super::*;
+
+    /// Minimal in-process HTTP store: GET serves stored bodies, PUT stores
+    /// them. Std-only so the test needs no async runtime.
+    fn spawn_http_store() -> (String, Arc<Mutex<HashMapStore>>) {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
+        let addr = listener.local_addr().expect("addr");
+        let store: Arc<Mutex<HashMapStore>> = Arc::default();
+        let server_store = Arc::clone(&store);
+        std::thread::spawn(move || {
+            for stream in listener.incoming() {
+                let Ok(mut stream) = stream else { continue };
+                let mut reader = BufReader::new(stream.try_clone().expect("clone"));
+                let mut request_line = String::new();
+                if reader.read_line(&mut request_line).is_err() {
+                    continue;
+                }
+                let mut parts = request_line.split_whitespace();
+                let (method, path) = (
+                    parts.next().unwrap_or("").to_string(),
+                    parts.next().unwrap_or("").to_string(),
+                );
+                let mut content_length = 0usize;
+                loop {
+                    let mut line = String::new();
+                    if reader.read_line(&mut line).is_err() || line.trim().is_empty() {
+                        break;
+                    }
+                    if let Some(v) = line.to_ascii_lowercase().strip_prefix("content-length:") {
+                        content_length = v.trim().parse().unwrap_or(0);
+                    }
+                }
+                match method.as_str() {
+                    "PUT" => {
+                        let mut body = vec![0u8; content_length];
+                        if reader.read_exact(&mut body).is_ok() {
+                            server_store.lock().expect("lock").0.insert(path, body);
+                        }
+                        let _ = stream.write_all(b"HTTP/1.1 200 OK\r\ncontent-length: 0\r\n\r\n");
+                    }
+                    "GET" => match server_store.lock().expect("lock").0.get(&path) {
+                        Some(body) => {
+                            let _ = stream.write_all(
+                                format!(
+                                    "HTTP/1.1 200 OK\r\ncontent-length: {}\r\n\r\n",
+                                    body.len()
+                                )
+                                .as_bytes(),
+                            );
+                            let _ = stream.write_all(body);
+                        }
+                        None => {
+                            let _ = stream
+                                .write_all(b"HTTP/1.1 404 Not Found\r\ncontent-length: 0\r\n\r\n");
+                        }
+                    },
+                    _ => {
+                        let _ = stream.write_all(
+                            b"HTTP/1.1 405 Method Not Allowed\r\ncontent-length: 0\r\n\r\n",
+                        );
+                    }
+                }
+            }
+        });
+        (format!("http://{addr}"), store)
+    }
+
+    #[derive(Default)]
+    struct HashMapStore(std::collections::HashMap<String, Vec<u8>>);
+
+    fn remote_for(base_url: &str) -> RemoteCache {
+        RemoteCache {
+            base_url: base_url.trim_end_matches('/').to_string(),
+            token: None,
+            client: reqwest::blocking::Client::new(),
+        }
+    }
+
+    #[test]
+    fn shared_store_publishes_and_shared_load_populates_local() {
+        let (url, store) = spawn_http_store();
+        let program = Program::default();
+        let files = vec![("a.baml".to_string(), "fn x {}")];
+        let key = compute_key(&KeyInputs {
+            compiler_fingerprint: [9u8; 32],
+            opt_level: 2,
+            emit_test_cases: false,
+            manifest: None,
+            files: &files,
+        });
+
+        // Machine A: store publishes to the remote.
+        let dir_a = tempfile::tempdir().expect("tempdir");
+        let mut cache_a = BytecodeCache::open(dir_a.path().to_path_buf());
+        cache_a.remote = Some(remote_for(&url));
+        cache_a.store_shared(&key, &program).expect("store");
+        assert_eq!(
+            store.lock().expect("lock").0.len(),
+            1,
+            "entry published to remote"
+        );
+
+        // Machine B: local miss, remote hit, local populated.
+        let dir_b = tempfile::tempdir().expect("tempdir");
+        let mut cache_b = BytecodeCache::open(dir_b.path().to_path_buf());
+        assert!(cache_b.load(&key).is_none(), "no local entry on machine B");
+        cache_b.remote = Some(remote_for(&url));
+        assert!(cache_b.load_shared(&key).is_some(), "served from remote");
+        assert!(
+            cache_b.load(&key).is_some(),
+            "local cache populated from remote"
+        );
+
+        // A corrupted remote entry is rejected by validation.
+        let key2 = compute_key(&KeyInputs {
+            compiler_fingerprint: [10u8; 32],
+            opt_level: 2,
+            emit_test_cases: false,
+            manifest: None,
+            files: &files,
+        });
+        store
+            .lock()
+            .expect("lock")
+            .0
+            .insert(format!("/{}", key2.hex()), b"garbage".to_vec());
+        assert!(
+            cache_b.load_shared(&key2).is_none(),
+            "corrupt remote entry rejected"
+        );
     }
 }

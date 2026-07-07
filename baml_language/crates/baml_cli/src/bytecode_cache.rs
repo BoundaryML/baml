@@ -80,7 +80,7 @@ impl CacheContext {
         });
 
         Some(CacheContext {
-            cache: BytecodeCache::open(dir),
+            cache: BytecodeCache::open(dir).with_remote_from_env(),
             key,
             stdlib_key: bex_cache::stdlib_key(&fingerprint, CLI_OPT_LEVEL as u8),
             manifest_key: manifest_key(
@@ -88,6 +88,7 @@ impl CacheContext {
                 CLI_OPT_LEVEL as u8,
                 emit_test_cases,
                 &resolved.root,
+                resolved.manifest.as_deref(),
             ),
         })
     }
@@ -98,7 +99,7 @@ impl CacheContext {
     }
 
     pub(crate) fn load(&self) -> Option<Program> {
-        self.cache.load(&self.key)
+        self.cache.load_shared(&self.key)
     }
 
     /// The `BAML_CACHE_VERIFY` tripwire: byte-compare a fresh compile against
@@ -128,7 +129,7 @@ impl CacheContext {
     /// Write-through after a successful compile. Best-effort: a cache write
     /// problem must never fail the run.
     pub(crate) fn store(&self, program: &Program) -> std::io::Result<()> {
-        self.cache.store(&self.key, program)?;
+        self.cache.store_shared(&self.key, program)?;
         self.cache.maybe_trim();
         Ok(())
     }
@@ -152,11 +153,11 @@ pub(crate) fn compile_program(
     let Some(ctx) = cache else {
         return generate_project_bytecode(db, options);
     };
-    let base = match ctx.cache.load(&ctx.stdlib_key) {
+    let base = match ctx.cache.load_shared(&ctx.stdlib_key) {
         Some(base) => base,
         None => {
             let base = generate_stdlib_program(db, CLI_OPT_LEVEL)?;
-            let _ = ctx.cache.store(&ctx.stdlib_key, &base);
+            let _ = ctx.cache.store_shared(&ctx.stdlib_key, &base);
             base
         }
     };
