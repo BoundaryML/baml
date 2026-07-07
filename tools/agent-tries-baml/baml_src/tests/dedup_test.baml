@@ -59,6 +59,8 @@ testset "dedup_scope" {
         assert.is_true(in_list(s, "prprep"));
         assert.is_true(in_list(s, "pr_ready"));
         assert.is_true(in_list(s, "verifying"));
+        assert.is_true(in_list(s, "reverify"));
+        assert.is_true(in_list(s, "reverifying"));
         assert.is_true(in_list(s, "needs_human"));
     }
 
@@ -66,5 +68,30 @@ testset "dedup_scope" {
         let s = dedup_open_statuses();
         assert.is_true(in_list(s, "closed") == false);
         assert.is_true(in_list(s, "rejected") == false);
+    }
+}
+
+// The richer match context handed to the Dedup LLM: description snippets and
+// the open/closed state tag.
+testset "dedup_match_context" {
+    test "snippet flattens newlines and truncates" {
+        let s = snippet_of("first line\nsecond line\nthird", 100);
+        assert.equal(s, "first line second line third");
+        let t = snippet_of("abcdefghij", 4);
+        assert.equal(t, "abcd");
+    }
+
+    test "parse_match_outs tags state and reads snippet from description" {
+        let outs = parse_match_outs(
+            #"[{"_id":"i1","kind":"language","category":"bug","title":"T1","description":"line one\nline two"},{"_id":"","kind":"skill","title":"dropped"}]"#,
+            "closed",
+        );
+        assert.equal(outs.length(), 1);
+        for (let o in outs) {
+            assert.equal(o.id, "i1");
+            assert.equal(o.state, "closed");
+            assert.equal(o.snippet, "line one line two");
+            assert.equal(o.category, "bug");
+        }
     }
 }

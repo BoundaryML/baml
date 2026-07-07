@@ -29,7 +29,16 @@ function RunWorker() -> int {
 }
 
 // ---- baml_dedup ------------------------------------------------------------
+// Runs BOTH dedup claim loops: the trophy-seeded DedupProcessor (foreground) and
+// the comment-seeded CommentDedupProcessor (spawned), so a lone transcript
+// comment triggers issue creation without waiting for an unrelated trophy.
 function RunDedup() -> int {
+    let c: Processor = CommentDedupProcessor {
+        wid: "comment_dedup-" + baml.id.new(),
+        svc: svc_from_env(),
+        batch_size: 20,
+    };
+    let _ = spawn { c.run() };
     let p = DedupProcessor {
         wid: "baml_dedup-" + baml.id.new(),
         svc: svc_from_env(),
@@ -72,7 +81,19 @@ function RunChangelogWorker() -> int {
     return pp.run();
 }
 
+// Runs BOTH verify claim loops: first-pass BugVerify (foreground) and the
+// stale-issue ReverifyProcessor (spawned; fed by the hourly requeueReverify
+// Convex sweep against the newest ready build).
 function RunBugVerify() -> int {
+    let r: Processor = ReverifyProcessor {
+        wid: "bug_reverify-" + baml.id.new(),
+        svc: svc_from_env(),
+        proxy: proxy_from_env(),
+        model: bug_verify_model(),
+        max_turns: bug_verify_max_turns(),
+        timeout_secs: bug_verify_timeout_secs(),
+    };
+    let _ = spawn { r.run() };
     let p = BugVerifyProcessor {
         wid: "bug_verify-" + baml.id.new(),
         svc: svc_from_env(),

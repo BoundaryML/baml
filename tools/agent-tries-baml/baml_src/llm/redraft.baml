@@ -27,7 +27,7 @@ function Redraft(issue: string, feedback: string) -> RedraftResult {
         - Keep `kind` the same unless the feedback clearly demands a change.
         - Write `description` as a thorough, well-structured Markdown bug report -- this becomes the Linear issue body. Use short paragraphs, `##` subheadings, `-` bullets, **bold**, `` `inline code` ``, and ```fenced code``` where they help. Directly resolve each point of feedback.
         - Do NOT paste the repro into the description; it is attached separately and rendered in its own Reproduction section.
-        - Keep `suggestion` definitive and actionable. Always set it.
+        - Write `suggestion` as a definitive, actionable fix in structured Markdown with exactly these three parts: `**What to change:**` one sentence naming the fix; `**Where:**` the specific skill section, compiler area, or file the change lands in; `**Change sketch:**` 2-5 bullets or a short fenced before/after snippet showing the shape of the change. ~50-200 words. Always set it.
 
         # issue
         {{ issue }}

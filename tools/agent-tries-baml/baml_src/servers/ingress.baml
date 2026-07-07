@@ -844,14 +844,21 @@ class LinearWebhookData {
 
 class LinearWebhook {
     type: string?,
+    action: string?, // create | update | remove
     webhookTimestamp: float?, // ms; replay-guard input
     data: LinearWebhookData?,
 }
 
-// Only _id + status — the status gates which human move is honored.
+// The status gates which human move is honored; title + the push stamps feed
+// the human-edit backflow (sync_card_edit).
 class WebhookIssue {
     _id: string?,
     status: string?,
+    title: string?,
+    // What LinearPush last rendered onto the card (stamp_pushed). A webhook
+    // payload matching these is our own echo; a mismatch is a human edit.
+    lastPushedTitle: string?,
+    lastPushedBodyHash: string?,
 }
 
 // Doc shape for ingesting a Linear card that has no mirrored Convex issue yet.
@@ -941,9 +948,17 @@ function route_linear_webhook(w: LinearWebhook) -> baml.http.Response {
     let issues: WebhookIssue[] = baml.json.from_string<WebhookIssue[]>(raw) catch (_) {
         _ => []
     };
+    let action = match (w.action) {
+        let a: string => a,
+        null => "",
+    };
     let issue = match (issues.at(0)) {
         let i: WebhookIssue => i,
         null => {
+            if (action == "remove") {
+                // Card deleted and nothing mirrors it — nothing to do.
+                return json_response(200, "{}");
+            }
             // No Convex issue mirrors this Linear card yet — it was created/managed
             // directly on the board. Ingest it as a new issue so the human move still
             // drives the pipeline (e.g. approved -> FixDispatch -> Cursor + Slack).
@@ -956,6 +971,22 @@ function route_linear_webhook(w: LinearWebhook) -> baml.http.Response {
             return json_response(200, "{}");
         },
     };
+
+    // Card deleted on Linear: the board is the human surface — drop the mirrored
+    // Convex issue too (consistent with the REJECTED label path below).
+    if (action == "remove") {
+        let _ = ingress_svc().remove("issues", iid) catch (_) {
+            _ => 0
+        };
+        baml.io.println("linear-webhook: card " + linear_id + " removed -> deleted issue " + iid);
+        return json_response(200, "{}");
+    }
+
+    // Human edits to the card's title/body flow back into Convex (guarded by the
+    // push stamps so our own sync echoes no-op).
+    if (action == "update") {
+        let _ = sync_card_edit(iid, issue, data);
+    }
     let label_ids = webhook_label_ids(data);
     baml.io
         .println(
@@ -1083,6 +1114,76 @@ function create_issue_from_webhook(linear_id: string, data: LinearWebhookData) -
     return json_response(200, "{}");
 }
 
+// Flow a human's Linear card edit (title/body) back into the Convex issue.
+// Loop-guarded by the push stamps: LinearPush stamps lastPushedTitle +
+// lastPushedBodyHash after every card write, so a webhook payload matching the
+// stamps is our own echo (no-op). An ABSENT stamp also no-ops — pre-existing
+// cards are grandfathered until their next push stamps them, which prevents
+// mis-reading an unstamped machine render as a human edit. Deliberately does
+// NOT mark linearSyncStatus dirty: an immediate re-push would re-render the
+// body and clobber exactly what the human just typed; the next natural push
+// re-normalizes, and its echo no-ops because the hashes then match.
+function sync_card_edit(iid: string, issue: WebhookIssue, data: LinearWebhookData) -> int {
+    let pushed_title = match (issue.lastPushedTitle) {
+        let t: string => t,
+        null => "",
+    };
+    let pushed_hash = match (issue.lastPushedBodyHash) {
+        let h: string => h,
+        null => "",
+    };
+    let patch_map: map<string, json> = {};
+    let changed = false;
+
+    let new_title = match (data.title) {
+        let t: string => t,
+        null => "",
+    };
+    if (pushed_title != "" && new_title != "" && new_title != pushed_title) {
+        patch_map.set("title", new_title);
+        // Board and Convex agree on this title now; only a NEXT human edit differs.
+        patch_map.set("lastPushedTitle", new_title);
+        changed = true;
+    }
+
+    let body = match (data.description) {
+        let d: string => d,
+        null => "",
+    };
+    if (pushed_hash != "" && body != "") {
+        let h = body_hash(body);
+        if (h != pushed_hash) {
+            let region = extract_description_region(body);
+            if (region != "") {
+                patch_map.set("description", region);
+            }
+            patch_map.set("lastPushedBodyHash", h);
+            changed = true;
+        }
+    }
+
+    if (changed == false) {
+        return 0;
+    }
+    let patch = baml.json.to_string(patch_map) catch (_) {
+        _ => ""
+    };
+    if (patch == "") {
+        return 0;
+    }
+    let _ = ingress_svc().update("issues", iid, patch) catch (e) {
+        _ => {
+            baml.io
+                .eprintln(
+                    "linear-webhook: sync_card_edit update failed for " + iid + ": " + baml.unstable.string(e),
+                );
+            ""
+        }
+    };
+    baml.io.println("linear-webhook: human card edit flowed back into issue " + iid);
+    return 0;
+}
+
 // to a patch, or "" for no-op. Mirrors services/ingress/app.py _route_linear_status.
 function route_linear_status(issue: WebhookIssue, label_ids: string[]) -> string {
     let cur = match (issue.status) {
@@ -1132,7 +1233,10 @@ function approve_from(cur: string) -> bool {
         || cur == "confirmed"
         || cur == "needs_human"
         || cur == "redraft"
-        || cur == "failed";
+        || cur == "failed"
+        // A human approval wins over a queued/running stale re-check.
+        || cur == "reverify"
+        || cur == "reverifying";
 }
 
 function redraft_from(cur: string) -> bool {
@@ -1143,7 +1247,9 @@ function redraft_from(cur: string) -> bool {
         || cur == "failed"
         // A human redraft drag should win even mid-verify (a transient auto-state
         // that can also strand an issue if its claim is orphaned by a redeploy).
-        || cur == "verifying";
+        || cur == "verifying"
+        || cur == "reverify"
+        || cur == "reverifying";
 }
 
 // ---- handlers / helpers ----------------------------------------------------

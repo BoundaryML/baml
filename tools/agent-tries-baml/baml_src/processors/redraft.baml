@@ -67,14 +67,30 @@ class RedraftProcessor {
             };
 
             // Reviewer feedback = the Linear comments on the mirrored card.
+            // Fail LOUD on a fetch error: redrafting with silently-empty feedback
+            // blind-rewrites the issue the human just annotated (the reaper
+            // requeues redrafting -> redraft for a retry).
             let feedback = match (issue.linearIssueId) {
                 let lid: string => {
-                    self.linear.get_comments(lid) catch (_) {
-                        _ => ""
+                    self.linear.get_comments(lid) catch (e) {
+                        _ => {
+                            throw ProcessError { message: "linear get_comments failed: " + baml.unstable.string(e) }
+                        }
                     }
                 },
                 null => "",
             };
+
+            // Genuinely no feedback (no card, or no comments on it): nothing to
+            // redraft against — skip the LLM and re-board unchanged.
+            if (feedback.trim() == "") {
+                let _ = self.svc.transition("issues", id, "confirmed", "status", "{\"linearSyncStatus\":\"dirty\"}", true) catch (e) {
+                    _ => {
+                        throw ProcessError { message: "empty-feedback transition failed: " + baml.unstable.string(e) }
+                    }
+                };
+                return 0;
+            }
 
             let revised = Redraft(raw, feedback) catch (e) {
                 _ => {

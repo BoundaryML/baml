@@ -14,6 +14,11 @@ const RULES: Array<[string, string, string, string, string]> = [
   // approved. tocursor/prprep are owned by the tracker sweep (no claim/lease).
   ["issues", "status", "dispatching", "approved", "by_lease"],
   ["issues", "status", "redrafting", "redraft", "by_lease"],
+  // A crashed BugVerify (open -> verifying) previously stranded the issue in
+  // `verifying` forever; requeue it for another first-pass verify.
+  ["issues", "status", "verifying", "open", "by_lease"],
+  // The stale-issue re-verify loop (reverify -> reverifying), same story.
+  ["issues", "status", "reverifying", "reverify", "by_lease"],
   ["issues", "linearSyncStatus", "syncing", "dirty", "by_linear_sync"],
   ["bamlBuilds", "status", "building", "queued", "by_lease"],
   // A crashed CohortCompare requeues its cohort for another compare attempt
@@ -68,6 +73,62 @@ export const reap = internalMutation({ args: {}, handler: (ctx) => reapImpl(ctx)
  * @returns The number of rows reaped across all rules.
  */
 export const reapNow = mutation({ args: {}, handler: (ctx) => reapImpl(ctx) });
+
+// At most this many issues are queued for re-verification per sweep, so a new
+// nightly never floods bug-verify with the whole backlog at once.
+const REVERIFY_PER_SWEEP = 5;
+
+async function requeueReverifyImpl(ctx: MutationCtx): Promise<number> {
+  // Newest ready baml build = the version to re-check against.
+  const builds = await ctx.db
+    .query("bamlBuilds" as any)
+    .withIndex("by_status_created" as any, (q: any) => q.eq("status", "ready"))
+    .order("desc")
+    .take(1);
+  const newest = (builds as any[])[0];
+  if (!newest?.sha) return 0;
+
+  // Candidates: resting `confirmed` issues not yet verified against this build.
+  // Only `confirmed` is swept — approved/tocursor/prprep/needs_human are owned by
+  // humans or the fix pipeline, and sweeping `open` would race first-pass verify.
+  const rows = await ctx.db
+    .query("issues" as any)
+    .withIndex("by_status_created" as any, (q: any) => q.eq("status", "confirmed"))
+    .take(500);
+  const candidates = (rows as any[])
+    .filter((r) => r.verifyBamlVersion !== newest.sha)
+    .sort((a, b) => (a.verifiedAt ?? 0) - (b.verifiedAt ?? 0))
+    .slice(0, REVERIFY_PER_SWEEP);
+
+  const now = Date.now();
+  for (const row of candidates) {
+    await ctx.db.patch(row._id, { status: "reverify", updatedAt: now });
+  }
+  return candidates.length;
+}
+
+/**
+ * Cron entry point that re-queues stale `confirmed` issues for re-verification
+ * whenever a newer ready baml build exists (capped at REVERIFY_PER_SWEEP per
+ * run, oldest-verified first). The ReverifyProcessor claims the `reverify`
+ * status and auto-closes issues whose repro no longer fails.
+ *
+ * @returns The number of issues queued for re-verification.
+ */
+export const requeueReverify = internalMutation({
+  args: {},
+  handler: (ctx) => requeueReverifyImpl(ctx),
+});
+
+/**
+ * Public wrapper around the re-verify sweep for ops/testing.
+ *
+ * @returns The number of issues queued for re-verification.
+ */
+export const requeueReverifyNow = mutation({
+  args: {},
+  handler: (ctx) => requeueReverifyImpl(ctx),
+});
 
 /**
  * Cron entry point that deletes worker presence rows whose heartbeat is

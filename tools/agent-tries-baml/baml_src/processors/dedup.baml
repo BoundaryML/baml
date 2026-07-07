@@ -3,8 +3,11 @@
 // where Python ran an AGENT that wrote issues.json, this calls the typed Dedup()
 // function directly — no proxy, no JSON-parse glue.
 //
-// Focused port: open-issues fetch (cross-run dedup) + repro verification are
-// deferred (TODOs); new findings become new issues. batch mode.
+// Cross-run dedup hands the LLM the open board (id/kind/category/title/snippet)
+// plus the newest closed issues, so a re-found finding extends (or reopens) the
+// existing issue instead of spawning a near-duplicate. Human transcript comments
+// are handled by the separate CommentDedupProcessor (comment_dedup.baml), which
+// shares the dedup_upsert path below.
 
 class IssueEvidence {
     trophyId: string,
@@ -22,15 +25,6 @@ class RunEnv {
     skillVersion: string?,
 }
 
-// A claimed transcript comment (Convex doc; numbers are floats).
-class CommentRow {
-    _id: string?,
-    trophyId: string?,
-    turnIndex: float?,
-    author: string?,
-    body: string?,
-}
-
 class IssueCreate {
     kind: string,
     title: string,
@@ -42,32 +36,41 @@ class IssueCreate {
     bamlVersion: string?, // env of the (first) run behind the issue
     skillUsed: string?,
     skillVersion: string?,
+    brokeIn: string?, // baml version of the first evidence run
     status: string,
     linearSyncStatus: string,
     firstSeenAt: int,
     lastSeenAt: int,
 }
 
-// One currently-open issue, as handed to the Dedup LLM ({id, kind, title}) so it
-// can match a re-found finding to an existing issue and emit it with that `id`.
+// One board issue, as read for the Dedup LLM's match context. Extra doc fields
+// are ignored by the lenient decode; description feeds the snippet.
 class OpenIssueRef {
     _id: string?,
     kind: string?,
+    category: string?,
     title: string?,
+    description: string?,
 }
 
-class OpenIssueOut {
+// What the Dedup prompt sees per matchable issue. `state` is "open" or
+// "closed" — a closed match means the bug re-appeared (extend => reopen).
+class MatchIssueOut {
     id: string,
     kind: string,
+    category: string,
     title: string,
+    snippet: string,
+    state: string,
 }
 
-// Minimal read of an existing issue's evidence (to append to, not replace). Read
-// as raw json[] — Convex serializes every number as a float, so a typed read with
-// `call_index: int?` would fail to parse the stored 0.0 and silently drop ALL the
-// existing evidence. json[] round-trips it verbatim.
+// Minimal read of an existing issue's evidence + lifecycle state (to append to,
+// not replace). Evidence is read as raw json[] — Convex serializes every number
+// as a float, so a typed read with `call_index: int?` would fail to parse the
+// stored 0.0 and silently drop ALL the existing evidence. json[] round-trips it.
 class IssueEvidenceRead {
     evidence: json[]?,
+    status: string?,
 }
 
 class DedupProcessor {
@@ -128,62 +131,24 @@ class DedupProcessor {
                 };
             }
 
-            // Human transcript comments ride along with the trophy batch: claim up
-            // to 20 queued ones, feed them to the LLM as reviewer findings, and
-            // mark them done with the batch (a crashed run leaves them claimed for
-            // the reaper, same as trophies).
-            let comments: CommentRow[] = [];
-            let comment_ids: string[] = [];
-            let c_gathering = true;
-            while (c_gathering && comments.length() < 20) {
-                let more_c = self
-                    .svc
-                    .claim(
-                        "transcriptComments",
-                        self.wid,
-                        1800000,
-                        "queued",
-                        "deduping",
-                        "status",
-                        "by_status_created",
-                    ) catch (_) {
-                    _ => null
-                };
-                match (more_c) {
-                    null => {
-                        c_gathering = false;
-                    },
-                    let m: string => {
-                        let parsed_c = baml.json.from_string<CommentRow>(m) catch (_) {
-                            _ => null
-                        };
-                        match (parsed_c) {
-                            let cr: CommentRow => {
-                                comments.push(cr);
-                                match (cr._id) {
-                                    let cid: string => {
-                                        comment_ids.push(cid);
-                                    },
-                                    null => null,
-                                };
-                            },
-                            null => null,
-                        };
-                    },
-                };
-            }
-
             // trophyId -> run environment, for stamping issues/evidence.
             let envs = env_map_of(batch);
+            let reports = render_reports(batch);
 
-            let reports = render_reports(batch) + render_comments(comments);
-            // Real cross-run dedup: hand the LLM the currently-open issues so a
-            // re-found finding extends the existing issue (emitted with its `id`)
-            // instead of spawning a near-duplicate (cf. the 5 backtick-bug dupes).
-            let open_json = fetch_open_issues(self.svc, 200);
-
-            let result = Dedup(reports, open_json) catch (e) {
+            // Real cross-run dedup context. Fail-LOUD: an api hiccup swallowed to
+            // "[]" would make every finding look brand-new and burst duplicates
+            // across the whole batch. Release the extra claims before rethrowing so
+            // only the seed eats the failure.
+            let match_json = fetch_match_context(self.svc) catch (e) {
                 _ => {
+                    release_trophies(self.svc, batch, raw);
+                    throw ProcessError { message: "fetch match context failed: " + baml.unstable.string(e) }
+                }
+            };
+
+            let result = Dedup(reports, match_json) catch (e) {
+                _ => {
+                    release_trophies(self.svc, batch, raw);
                     throw ProcessError { message: "Dedup failed: " + baml.unstable.string(e) }
                 }
             };
@@ -191,186 +156,212 @@ class DedupProcessor {
             let now = baml.sys.now_ms();
             for (let iss in result.issues) {
                 if (iss.kind == "skill" || iss.kind == "language") {
-                    self.upsert(iss, now, envs);
+                    let _ = dedup_upsert(self.svc, iss, now, envs);
                 }
             }
 
-            // Mark the whole batch (trophies + comments) done.
+            // Mark the whole batch done.
             for (let b in batch) {
                 let id = trophy_id_of(b);
                 let _ = self.svc.transition("trophies", id, "done", "status", "{}", true) catch (_) {
                     _ => ""
                 };
             }
-            for (let cid in comment_ids) {
-                let _ = self.svc.transition("transcriptComments", cid, "done", "status", "{}", true) catch (_) {
-                    _ => ""
-                };
-            }
             return 0;
         }
     }
+}
 
-    // Class method (outside the implements block): create OR extend one issue. When
-    // the Dedup LLM matched the finding to an open issue it carries that issue's
-    // `id` -> extend it; otherwise it's genuinely new -> create.
-    function upsert(self, iss: DedupIssue, now: int, envs: map<string, RunEnv>) -> int throws ProcessError {
-        let existing = match (iss.id) {
-            let v: string => v,
-            null => "",
-        };
-        if (existing != "") {
-            return self.extend(existing, iss, now, envs);
-        }
-        return self.create_doc(iss, now, envs);
-    }
-
-    // Evidence entries from a finding (skips entries with no report id), each
-    // stamped with the environment of the run it came from.
-    function evidence_of(self, iss: DedupIssue, envs: map<string, RunEnv>) -> IssueEvidence[] {
-        let evidence: IssueEvidence[] = [];
-        for (let e in iss.evidence) {
-            if (e.report_id != "") {
-                let renv = env_of(envs, e.report_id);
-                evidence
-                    .push(
-                        IssueEvidence {
-                            trophyId: e.report_id,
-                            call_index: e.call_index,
-                            turn_index: e.turn_index,
-                            bamlVersion: renv.bamlVersion,
-                            skillVersion: renv.skillVersion,
-                        },
-                    );
+// Release every batch member EXCEPT the seed back to `queued` (best-effort).
+// Called before a batch-level rethrow: the base loop fails only the seed row, so
+// without this the extra claims would sit in `deduping` until the lease reaper,
+// each stranding burning one of their max attempts.
+function release_trophies(svc: ServiceClient, batch: string[], seed: string) -> int {
+    for (let b in batch) {
+        if (b != seed) {
+            let id = trophy_id_of(b);
+            if (id != "") {
+                let _ = svc.transition("trophies", id, "queued", "status", "{}", true) catch (_) {
+                    _ => ""
+                };
             }
         }
-        return evidence;
     }
+    return 0;
+}
 
-    function create_doc(self, iss: DedupIssue, now: int, envs: map<string, RunEnv>) -> int throws ProcessError {
-        let evidence = self.evidence_of(iss, envs);
-        let renv = first_env(evidence, envs);
-        let doc = IssueCreate {
-            kind: iss.kind,
-            title: iss.title,
-            description: iss.description,
-            suggestion: iss.suggestion,
-            category: iss.category,
-            evidence: evidence,
-            repro: iss.repro,
-            bamlVersion: renv.bamlVersion,
-            skillUsed: renv.skillUsed,
-            skillVersion: renv.skillVersion,
-            status: "open",
-            linearSyncStatus: "dirty",
-            firstSeenAt: now,
-            lastSeenAt: now,
-        };
-        let doc_json = baml.json.to_string(doc) catch (_) {
-            _ => ""
-        };
-        if (doc_json == "") {
-            throw ProcessError { message: "serialize issue failed" };
-        }
-        // Fail LOUD: a swallowed create silently drops the finding (the trophy
-        // still goes done). A throw fails the batch -> reaper requeues it.
-        let _ = self.svc.create("issues", doc_json) catch (e) {
-            _ => {
-                throw ProcessError { message: "create issue failed: " + baml.unstable.string(e) }
-            }
-        };
-        return 0;
-    }
+// ---- shared upsert path (used by DedupProcessor + CommentDedupProcessor) ----
 
-    // Extend a matched open issue: append this batch's evidence and bump lastSeenAt.
-    // If the issue vanished (e.g. rejected mid-batch) fall back to a fresh create so
-    // the finding isn't silently dropped.
-    function extend(self, id: string, iss: DedupIssue, now: int, envs: map<string, RunEnv>) -> int throws ProcessError {
-        let raw = self.svc.get("issues", id) catch (_) {
-            _ => null
-        };
-        let cur_raw = match (raw) {
-            let r: string => r,
-            null => "",
-        };
-        if (cur_raw == "") {
-            return self.create_doc(iss, now, envs);
-        }
-        let cur = baml.json.from_string<IssueEvidenceRead>(cur_raw) catch (_) {
-            _ => IssueEvidenceRead { evidence: null }
-        };
-        // Keep the existing evidence verbatim (json[]) and append this batch's new
-        // entries (each typed entry round-tripped through json so the array stays
-        // homogeneous and Convex-float-safe).
-        let merged: json[] = match (cur.evidence) {
-            let ev: json[] => ev,
-            null => [],
-        };
-        let fresh = self.evidence_of(iss, envs);
-        for (let e in fresh) {
-            let j = baml.json.parse(baml.json.to_string(e) catch (_) { _ => "null" }) catch (_) {
-                _ => 0
-            };
-            merged.push(j);
-        }
-        // Build the patch as a map so absent fields are OMITTED — a serialized
-        // null in a Convex patch overwrites the stored value (would clobber an
-        // existing repro/env whenever this batch lacks one).
-        let patch_map: map<string, json> = {};
-        patch_map.set("evidence", merged);
-        patch_map.set("lastSeenAt", now);
-        patch_map.set("linearSyncStatus", "dirty");
-        if (iss.description != "") {
-            patch_map.set("description", iss.description);
-        }
-        if (iss.suggestion != "") {
-            patch_map.set("suggestion", iss.suggestion);
-        }
-        match (iss.repro) {
-            let rp: string => {
-                patch_map.set("repro", rp);
-            },
-            null => null,
-        };
-        // Last-seen-on environment: update only when this batch knows it.
-        let renv = first_env(fresh, envs);
-        match (renv.bamlVersion) {
-            let bv: string => {
-                patch_map.set("bamlVersion", bv);
-            },
-            null => null,
-        };
-        match (renv.skillUsed) {
-            let su: string => {
-                patch_map.set("skillUsed", su);
-            },
-            null => null,
-        };
-        match (renv.skillVersion) {
-            let sv: string => {
-                patch_map.set("skillVersion", sv);
-            },
-            null => null,
-        };
-        let patch = baml.json.to_string(patch_map) catch (_) {
-            _ => ""
-        };
-        if (patch == "") {
-            throw ProcessError { message: "serialize extend patch failed" };
-        }
-        // Fail LOUD (this exact failure was silently eaten when the schema lacked
-        // the env fields — the evidence merge vanished while trophies went done).
-        let _ = self.svc.update("issues", id, patch) catch (e) {
-            _ => {
-                throw ProcessError { message: "extend issue failed: " + baml.unstable.string(e) }
-            }
-        };
-        return 0;
+// Create OR extend one issue. When the Dedup LLM matched the finding to a board
+// issue it carries that issue's `id` -> extend it; otherwise it's genuinely new.
+function dedup_upsert(svc: ServiceClient, iss: DedupIssue, now: int, envs: map<string, RunEnv>) -> int throws ProcessError {
+    let existing = match (iss.id) {
+        let v: string => v,
+        null => "",
+    };
+    if (existing != "") {
+        return dedup_extend(svc, existing, iss, now, envs);
     }
+    return dedup_create_doc(svc, iss, now, envs);
+}
+
+// Evidence entries from a finding (skips entries with no report id), each
+// stamped with the environment of the run it came from.
+function dedup_evidence_of(iss: DedupIssue, envs: map<string, RunEnv>) -> IssueEvidence[] {
+    let evidence: IssueEvidence[] = [];
+    for (let e in iss.evidence) {
+        if (e.report_id != "") {
+            let renv = env_of(envs, e.report_id);
+            evidence
+                .push(
+                    IssueEvidence {
+                        trophyId: e.report_id,
+                        call_index: e.call_index,
+                        turn_index: e.turn_index,
+                        bamlVersion: renv.bamlVersion,
+                        skillVersion: renv.skillVersion,
+                    },
+                );
+        }
+    }
+    return evidence;
+}
+
+function dedup_create_doc(svc: ServiceClient, iss: DedupIssue, now: int, envs: map<string, RunEnv>) -> int throws ProcessError {
+    let evidence = dedup_evidence_of(iss, envs);
+    let renv = first_env(evidence, envs);
+    let doc = IssueCreate {
+        kind: iss.kind,
+        title: iss.title,
+        description: iss.description,
+        suggestion: iss.suggestion,
+        category: iss.category,
+        evidence: evidence,
+        repro: iss.repro,
+        bamlVersion: renv.bamlVersion,
+        skillUsed: renv.skillUsed,
+        skillVersion: renv.skillVersion,
+        brokeIn: renv.bamlVersion,
+        status: "open",
+        linearSyncStatus: "dirty",
+        firstSeenAt: now,
+        lastSeenAt: now,
+    };
+    let doc_json = baml.json.to_string(doc) catch (_) {
+        _ => ""
+    };
+    if (doc_json == "") {
+        throw ProcessError { message: "serialize issue failed" };
+    }
+    // Fail LOUD: a swallowed create silently drops the finding (the trophy
+    // still goes done). A throw fails the batch -> reaper requeues it.
+    let _ = svc.create("issues", doc_json) catch (e) {
+        _ => {
+            throw ProcessError { message: "create issue failed: " + baml.unstable.string(e) }
+        }
+    };
+    return 0;
+}
+
+// Extend a matched issue: append this batch's evidence and bump lastSeenAt. A
+// closed/rejected match means the bug re-appeared -> reopen it. If the issue
+// vanished entirely fall back to a fresh create so the finding isn't dropped.
+function dedup_extend(svc: ServiceClient, id: string, iss: DedupIssue, now: int, envs: map<string, RunEnv>) -> int throws ProcessError {
+    let raw = svc.get("issues", id) catch (_) {
+        _ => null
+    };
+    let cur_raw = match (raw) {
+        let r: string => r,
+        null => "",
+    };
+    if (cur_raw == "") {
+        return dedup_create_doc(svc, iss, now, envs);
+    }
+    let cur = baml.json.from_string<IssueEvidenceRead>(cur_raw) catch (_) {
+        _ => IssueEvidenceRead { evidence: null, status: null }
+    };
+    // Keep the existing evidence verbatim (json[]) and append this batch's new
+    // entries (each typed entry round-tripped through json so the array stays
+    // homogeneous and Convex-float-safe).
+    let merged: json[] = match (cur.evidence) {
+        let ev: json[] => ev,
+        null => [],
+    };
+    let fresh = dedup_evidence_of(iss, envs);
+    for (let e in fresh) {
+        let j = baml.json.parse(baml.json.to_string(e) catch (_) { _ => "null" }) catch (_) {
+            _ => 0
+        };
+        merged.push(j);
+    }
+    // Build the patch as a map so absent fields are OMITTED — a serialized
+    // null in a Convex patch overwrites the stored value (would clobber an
+    // existing repro/env whenever this batch lacks one).
+    let patch_map: map<string, json> = {};
+    patch_map.set("evidence", merged);
+    patch_map.set("lastSeenAt", now);
+    patch_map.set("linearSyncStatus", "dirty");
+    if (iss.description != "") {
+        patch_map.set("description", iss.description);
+    }
+    if (iss.suggestion != "") {
+        patch_map.set("suggestion", iss.suggestion);
+    }
+    match (iss.repro) {
+        let rp: string => {
+            patch_map.set("repro", rp);
+        },
+        null => null,
+    };
+    // Re-found on a closed/rejected issue: the bug is back — reopen the same
+    // card rather than duplicating it. Clearing fixedIn uses "" (a serialized
+    // null in a patch is stripped, so null would be a no-op).
+    let cur_status = match (cur.status) {
+        let s: string => s,
+        null => "",
+    };
+    if (cur_status == "closed" || cur_status == "rejected") {
+        patch_map.set("status", "open");
+        patch_map.set("fixedIn", "");
+    }
+    // Last-seen-on environment: update only when this batch knows it.
+    let renv = first_env(fresh, envs);
+    match (renv.bamlVersion) {
+        let bv: string => {
+            patch_map.set("bamlVersion", bv);
+        },
+        null => null,
+    };
+    match (renv.skillUsed) {
+        let su: string => {
+            patch_map.set("skillUsed", su);
+        },
+        null => null,
+    };
+    match (renv.skillVersion) {
+        let sv: string => {
+            patch_map.set("skillVersion", sv);
+        },
+        null => null,
+    };
+    let patch = baml.json.to_string(patch_map) catch (_) {
+        _ => ""
+    };
+    if (patch == "") {
+        throw ProcessError { message: "serialize extend patch failed" };
+    }
+    // Fail LOUD (this exact failure was silently eaten when the schema lacked
+    // the env fields — the evidence merge vanished while trophies went done).
+    let _ = svc.update("issues", id, patch) catch (e) {
+        _ => {
+            throw ProcessError { message: "extend issue failed: " + baml.unstable.string(e) }
+        }
+    };
+    return 0;
 }
 
 // Statuses an issue counts as open/in-flight for cross-run dedup matching (every
-// non-terminal state; closed/rejected are terminal and excluded).
+// non-terminal state; closed/rejected are terminal and handled separately).
 function dedup_open_statuses() -> string[] {
     return [
         "open",
@@ -381,49 +372,97 @@ function dedup_open_statuses() -> string[] {
         "prprep",
         "pr_ready",
         "verifying",
+        "reverify",
+        "reverifying",
         "redraft",
         "redrafting",
         "needs_human",
     ];
 }
 
-// Fetch the currently-open issues as the {id, kind, title} JSON the Dedup prompt
-// expects (per status, capped at `limit`). "[]" when nothing is open.
-function fetch_open_issues(svc: ServiceClient, limit: int) -> string {
-    let outs: OpenIssueOut[] = [];
+// One-line match snippet from an issue description: newlines collapsed,
+// truncated to `max` chars.
+function snippet_of(desc: string, max: int) -> string {
+    let flat = desc.split("\n").join(" ").trim();
+    if (flat.length() <= max) {
+        return flat;
+    }
+    return flat.substring(0, max);
+}
+
+// Fetch the board as the {id, kind, category, title, snippet, state} JSON the
+// Dedup prompt matches against: every open/in-flight issue (capped per status)
+// plus the 30 newest closed ones (a re-found closed issue reopens instead of
+// duplicating). THROWS on any list failure — a silent "[]" here is what turned
+// one api hiccup into a batch-wide duplicate burst.
+function fetch_match_context(svc: ServiceClient) -> string throws ProcessError {
+    let outs: MatchIssueOut[] = [];
     for (let status in dedup_open_statuses()) {
-        let raw = svc.list("issues", "status", status, "by_status_created", limit) catch (_) {
-            _ => "[]"
-        };
-        let issues: OpenIssueRef[] = baml.json.from_string<OpenIssueRef[]>(raw) catch (_) {
-            _ => []
-        };
-        for (let iss in issues) {
-            let id = match (iss._id) {
-                let v: string => v,
-                null => "",
+        if (outs.length() < 150) {
+            let raw = svc.list("issues", "status", status, "by_status_created", 40) catch (e) {
+                _ => {
+                    throw ProcessError { message: "list issues (" + status + ") failed: " + baml.unstable.string(e) }
+                }
             };
-            if (id != "") {
-                outs
-                    .push(
-                        OpenIssueOut {
-                            id: id,
-                            kind: match (iss.kind) {
-                                let k: string => k,
-                                null => "",
-                            },
-                            title: match (iss.title) {
-                                let t: string => t,
-                                null => "",
-                            },
-                        },
-                    );
+            for (let m in parse_match_outs(raw, "open")) {
+                outs.push(m);
             }
         }
+    }
+    let closed_raw = svc.list("issues", "status", "closed", "by_status_created", 30) catch (e) {
+        _ => {
+            throw ProcessError { message: "list closed issues failed: " + baml.unstable.string(e) }
+        }
+    };
+    for (let m in parse_match_outs(closed_raw, "closed")) {
+        outs.push(m);
     }
     return baml.json.to_string(outs) catch (_) {
         _ => "[]"
     };
+}
+
+// Decode one list() payload into match entries tagged with `state`.
+function parse_match_outs(raw: string, state: string) -> MatchIssueOut[] {
+    let outs: MatchIssueOut[] = [];
+    let issues: OpenIssueRef[] = baml.json.from_string<OpenIssueRef[]>(raw) catch (_) {
+        _ => []
+    };
+    for (let iss in issues) {
+        let id = match (iss._id) {
+            let v: string => v,
+            null => "",
+        };
+        if (id != "") {
+            outs
+                .push(
+                    MatchIssueOut {
+                        id: id,
+                        kind: match (iss.kind) {
+                            let k: string => k,
+                            null => "",
+                        },
+                        category: match (iss.category) {
+                            let c: string => c,
+                            null => "",
+                        },
+                        title: match (iss.title) {
+                            let t: string => t,
+                            null => "",
+                        },
+                        snippet: snippet_of(
+                            match (iss.description) {
+                                let d: string => d,
+                                null => "",
+                            },
+                            160,
+                        ),
+                        state: state,
+                    },
+                );
+        }
+    }
+    return outs;
 }
 
 // trophyId -> environment (baml version + skill) for every trophy in the batch.
@@ -475,37 +514,6 @@ function first_env(evidence: IssueEvidence[], envs: map<string, RunEnv>) -> RunE
         };
     }
     return RunEnv { bamlVersion: null, skillUsed: null, skillVersion: null };
-}
-
-// Render claimed transcript comments as a reviewer-findings section appended to
-// reports.md. "" when there are none.
-function render_comments(comments: CommentRow[]) -> string {
-    if (comments.length() == 0) {
-        return "";
-    }
-    let lines: string[] = [];
-    for (let c in comments) {
-        let author = match (c.author) {
-            let a: string => a,
-            null => "anonymous",
-        };
-        let trophy = match (c.trophyId) {
-            let t: string => t,
-            null => "unknown",
-        };
-        let turn = match (c.turnIndex) {
-            let t: float => " (turn " + baml.unstable.string(f2i(t)) + ")",
-            null => "",
-        };
-        let body = match (c.body) {
-            let b: string => b,
-            null => "",
-        };
-        lines.push("- [" + author + "] on run " + trophy + turn + ": " + body);
-    }
-    return "\n\n# human transcript comments\nHuman reviewers left these directly on run transcripts. Treat each as a finding from a trusted reviewer: dedup it against the reports and open issues like any other finding. For evidence, cite the run id shown here as `report_id` (and its turn number as `turn_index` when given).\n"
-        + lines.join("\n")
-        + "\n";
 }
 
 // Render a batch of trophy JSONs into the reports.md the Dedup prompt expects.

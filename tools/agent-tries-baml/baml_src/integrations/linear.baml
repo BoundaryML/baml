@@ -362,6 +362,10 @@ function label_for_issue_status(status: string) -> string {
         "MERGED"
     } else if (status == "redraft" || status == "redrafting") {
         "REDRAFT"
+    } else if (status == "verifying" || status == "reverify" || status == "reverifying") {
+        // Auto-verify states are invisible on the board — the card rests at
+        // not-started until the verdict moves it (closed -> MERGED).
+        "NOT_STARTED"
     } else {
         "NOT_STARTED"
     };
@@ -500,6 +504,52 @@ function issue_body_md(
         parts.push("## Evidence\n\n" + items.join("\n"));
     }
     return parts.join("\n\n");
+}
+
+// ---- two-way sync helpers ---------------------------------------------------
+
+// Content hash of a rendered card body, stamped as issues.lastPushedBodyHash
+// after every push. A webhook body whose hash matches is our own echo; a
+// mismatch is a human edit on Linear. hmac_sha256_hex with a fixed key is just
+// a convenient stdlib-free SHA hash — the key carries no secret meaning.
+function body_hash(body: string) -> string {
+    return hmac_sha256_hex("atb-linear-body", body);
+}
+
+// True when a Linear GraphQL error means the referenced card no longer exists
+// (deleted/merged away) — LinearPush then drops the dead linearIssueId and
+// adopts-by-title / creates fresh instead of failing forever.
+function is_missing_entity(msg: string) -> bool {
+    let m = msg.to_lower_case();
+    return m.includes("entity not found") || m.includes("could not find");
+}
+
+// Inverse of issue_body_md for the human-owned region: given a card body,
+// return just the free-text description — skip the machine header lines
+// (**Links:** / **Category:** / **Environment:**) and stop at the first
+// machine-owned section (## Reproduction / ## Suggested fix / ## Evidence).
+// The description's own `##` subheadings survive (only the three machine
+// headings terminate the region).
+function extract_description_region(body: string) -> string {
+    let out: string[] = [];
+    let done = false;
+    for (let line in body.split("\n")) {
+        if (done == false) {
+            let t = line.trim();
+            if (t.starts_with("## Reproduction")
+                || t.starts_with("## Suggested fix")
+                || t.starts_with("## Evidence")) {
+                done = true;
+            } else if (t.starts_with("**Links:**")
+                || t.starts_with("**Category:**")
+                || t.starts_with("**Environment:**")) {
+                // machine header line — skip
+            } else {
+                out.push(line);
+            }
+        }
+    }
+    return out.join("\n").trim();
 }
 
 // ---- GraphQL response inspection -------------------------------------------

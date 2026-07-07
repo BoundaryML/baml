@@ -165,38 +165,56 @@ class LinearPushProcessor {
             // throw ProcessError, fail_item marks linearSyncStatus failed, and the
             // reaper requeues to dirty — the old retry semantics. Marking synced on
             // a failed write would lose the card forever.
-            let target = match (issue.linearIssueId) {
+            //
+            // Self-heal: a recorded id whose card no longer exists (deleted on
+            // Linear) previously retry-looped forever; now the missing-entity error
+            // clears the dead pointer and falls through to adopt/create.
+            let recorded = match (issue.linearIssueId) {
                 let lid: string => lid,
-                null => {
-                    self.linear.find_issue_by_title(title) catch (e) {
-                        _ => {
-                            throw ProcessError { message: "linear find_issue_by_title failed: " + baml.unstable.string(e) }
-                        }
-                    }
-                },
+                null => "",
             };
-
-            if (target != "") {
-                let _ = self.linear.update_card(target, title, body, status_label) catch (e) {
-                    _ => {
-                        throw ProcessError { message: "linear update_card failed: " + baml.unstable.string(e) }
-                    }
-                };
-                let has_lid = match (issue.linearIssueId) {
-                    let _v: string => true,
-                    null => false,
-                };
-                if (has_lid == false) {
-                    self.record_linear_id(id, target);
-                }
+            let wrote = if (recorded != "") {
+                self.try_update_card(recorded, title, body, status_label)
             } else {
-                let new_id = self.linear.create_issue(title, status_label, body) catch (e) {
+                false
+            };
+            if (wrote == false) {
+                if (recorded != "") {
+                    let _ = self.svc.update("issues", id, "{\"linearIssueId\":\"\"}") catch (_) {
+                        _ => ""
+                    };
+                    baml.io
+                        .println(
+                            "linear_push: issue " + id + " had a dead card " + recorded + "; re-resolving",
+                        );
+                }
+                let target = self.linear.find_issue_by_title(title) catch (e) {
                     _ => {
-                        throw ProcessError { message: "linear create_issue failed: " + baml.unstable.string(e) }
+                        throw ProcessError { message: "linear find_issue_by_title failed: " + baml.unstable.string(e) }
                     }
                 };
-                self.record_linear_id(id, new_id);
+                if (target != "") {
+                    let _ = self.linear.update_card(target, title, body, status_label) catch (e) {
+                        _ => {
+                            throw ProcessError { message: "linear update_card failed: " + baml.unstable.string(e) }
+                        }
+                    };
+                    self.record_linear_id(id, target);
+                } else {
+                    let new_id = self.linear.create_issue(title, status_label, body) catch (e) {
+                        _ => {
+                            throw ProcessError { message: "linear create_issue failed: " + baml.unstable.string(e) }
+                        }
+                    };
+                    self.record_linear_id(id, new_id);
+                }
             }
+
+            // Stamp what we just pushed (two-way-sync loop guard): a webhook whose
+            // title/body matches these is our own echo; a mismatch is a human edit
+            // to flow back into Convex. Fail-loud — an unstamped push would let the
+            // next human-edit check misread our own render as an edit.
+            self.stamp_pushed(id, title, body);
 
             // Mark synced on the SAME field we claimed.
             let _ = self.svc.transition("issues", id, "synced", "linearSyncStatus", "{}", true) catch (e) {
@@ -221,6 +239,39 @@ class LinearPushProcessor {
             }
             return 0;
         }
+    }
+
+    // Update the recorded card. True on success; false when the card no longer
+    // exists (dead pointer — caller re-resolves); throws on any other failure.
+    function try_update_card(self, target: string, title: string, body: string, status_label: string) -> bool throws ProcessError {
+        let ok = true;
+        let _ = self.linear.update_card(target, title, body, status_label) catch (e) {
+            _ => {
+                let msg = baml.unstable.string(e);
+                if (is_missing_entity(msg) == false) {
+                    throw ProcessError { message: "linear update_card failed: " + msg };
+                }
+                ok = false;
+                0
+            }
+        };
+        return ok;
+    }
+
+    // Record what this push rendered onto the card, so the ingress webhook can
+    // tell our own echo from a human edit (see sync_card_edit in ingress.baml).
+    function stamp_pushed(self, id: string, title: string, body: string) -> int throws ProcessError {
+        let patch = "{\"lastPushedTitle\":"
+            + jesc(title)
+            + ",\"lastPushedBodyHash\":"
+            + jesc(body_hash(body))
+            + "}";
+        let _ = self.svc.update("issues", id, patch) catch (e) {
+            _ => {
+                throw ProcessError { message: "stamp pushed failed: " + baml.unstable.string(e) }
+            }
+        };
+        return 0;
     }
 
     // Persist the resolved Linear card id; a failure here throws so the reaper

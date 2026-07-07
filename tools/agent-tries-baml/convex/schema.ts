@@ -114,6 +114,11 @@ export default defineSchema({
     // ---- Linear board (the human-facing layer; Convex stays source of truth) ----
     linearIssueId: v.optional(v.string()), // the 1:1 Linear issue this mirrors to
     linearSyncStatus: v.optional(v.string()), // dirty | syncing | synced
+    // Two-way-sync loop guard: what LinearPush last wrote to the card. A webhook
+    // Issue-update whose title/body matches these is our own echo (ignore); a
+    // mismatch is a human edit on Linear (flow it back into Convex).
+    lastPushedTitle: v.optional(v.string()),
+    lastPushedBodyHash: v.optional(v.string()),
     // ---- Notion board (DEPRECATED: replaced by Linear; kept optional, no migration) ----
     notionPageId: v.optional(v.string()),
     fixSlackTs: v.optional(v.string()), // FixDispatch idempotency marker / agent ref

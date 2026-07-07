@@ -16,4 +16,8 @@ crons.interval("reap stale leases", { minutes: 2 }, internal.maintenance.reap);
 // Age dead machines out of the presence roster (UI greys them long before).
 crons.interval("sweep stale workers", { minutes: 10 }, internal.maintenance.sweepStaleWorkers);
 
+// Re-queue stale confirmed issues for re-verification against the newest ready
+// baml build (capped per sweep; see maintenance.requeueReverify).
+crons.interval("requeue reverify", { hours: 1 }, internal.maintenance.requeueReverify);
+
 export default crons;
