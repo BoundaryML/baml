@@ -114,6 +114,17 @@ pub struct BexThread {
     pub name: Option<String>,
     pub cancel: CancellationToken,
     pub settles_future: Option<FutureId>,
+    /// True ONLY for the genuine top-level entry run — the host's explicit
+    /// `call_function` / `start_run` for the entry expression. Nested
+    /// host-invoked callables (HTTP request handlers and other
+    /// `spawn_with_callable` callbacks, which enter through `call_callable`)
+    /// are also `settles_future == None` roots, so `settles_future.is_none()`
+    /// alone can NOT tell them apart from the real root. Only the real root
+    /// may run the B-650 end-of-run wait; a nested callable that ran it would
+    /// park on the still-`Pending` `serve` spawn of the outer run forever
+    /// (B-650 `baml test` hang). Spawned children set this `false` too, but
+    /// they never reach the wait (they settle a future and return early).
+    pub is_top_level_root: bool,
     /// Queue of errored child futures (heap ptrs) that this thread's
     /// children push onto when they terminate fire-and-forget with an
     /// unhandled throw. Drained at this thread's next engine yield to
@@ -137,14 +148,17 @@ pub struct BexThread {
 impl BexThread {
     /// Build a root thread — no parent, no future to settle. The root's own
     /// `pending_child_errors` queue is also its `root_pending_errors`, so
-    /// detached descendants route their errors back here.
-    pub fn new_root(vm: BexVm, cancel: CancellationToken) -> Self {
+    /// detached descendants route their errors back here. `is_top_level_root`
+    /// is `true` only for the host's genuine entry run and `false` for a nested
+    /// host-invoked callable (see [`BexThread::is_top_level_root`]).
+    pub fn new_root(vm: BexVm, cancel: CancellationToken, is_top_level_root: bool) -> Self {
         let pending = ChildErrorQueue::new();
         Self {
             vm,
             name: None,
             cancel,
             settles_future: None,
+            is_top_level_root,
             pending_child_errors: Arc::clone(&pending),
             parent_pending_errors: None,
             root_pending_errors: pending,
@@ -170,6 +184,9 @@ impl BexThread {
             name,
             cancel,
             settles_future: Some(settles_future),
+            // A spawned child is never the top-level root; regardless, it
+            // settles a future and returns early before the end-of-run wait.
+            is_top_level_root: false,
             pending_child_errors: ChildErrorQueue::new(),
             parent_pending_errors: Some(parent_pending_errors),
             root_pending_errors,
@@ -181,6 +198,15 @@ impl BexThread {
     /// clearly through an `ActiveHeapPermit<BexThread>` deref.
     pub fn vm_thread_settles_future(&self) -> Option<FutureId> {
         self.settles_future
+    }
+
+    /// Whether this is the genuine top-level entry run (see
+    /// [`BexThread::is_top_level_root`]). Only the true root may run the B-650
+    /// end-of-run wait; nested host-invoked callables (also `settles_future ==
+    /// None`) must not. Named with the `vm_thread_` prefix so the call site
+    /// reads clearly through an `ActiveHeapPermit<BexThread>` deref.
+    pub fn vm_thread_is_top_level_root(&self) -> bool {
+        self.is_top_level_root
     }
 
     /// This thread's own cancellation token.
@@ -230,6 +256,23 @@ impl BexThread {
     /// spawned child as their `root_pending_errors`.
     pub fn vm_thread_root_errors_arc(&self) -> Arc<ChildErrorQueue> {
         Arc::clone(&self.root_pending_errors)
+    }
+
+    /// Opaque identity of the run this thread belongs to, for scoping the
+    /// B-650 end-of-run wait to a single run's own outstanding spawns.
+    ///
+    /// The `FutureManager` is shared across every concurrent run on one engine
+    /// (the SDK drives many `call_function` roots against one process-global
+    /// runtime), so a completing root must wait ONLY on its own descendants'
+    /// futures — not on futures belonging to another concurrent run (e.g. an
+    /// LLM call blocking on the in-process replay server's still-streaming
+    /// response spawn). Every thread in a run shares one `root_pending_errors`
+    /// Arc — propagated unchanged down the spawn tree (detached children
+    /// included) — so its allocation address is a stable per-run key: a root
+    /// and all its descendants agree on it, and distinct runs differ. Used
+    /// purely as an opaque token (never dereferenced through this value).
+    pub fn vm_thread_run_id(&self) -> usize {
+        Arc::as_ptr(&self.root_pending_errors) as usize
     }
 }
 

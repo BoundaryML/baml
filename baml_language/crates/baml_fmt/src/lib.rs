@@ -476,6 +476,58 @@ mod catch_format_tests {
 }
 
 #[cfg(test)]
+mod match_arm_jump_format_tests {
+    //! B-619: a braceless `break`/`continue` match arm is wrapped into a block
+    //! with a trailing `;` — the same treatment `return` gets — so the output
+    //! round-trips through `BREAK_STMT`/`CONTINUE_STMT` and is idempotent.
+
+    use super::*;
+
+    #[test]
+    fn braceless_break_and_continue_arms_wrap_into_blocks() {
+        let source = r#"function f(n: int) -> int {
+  let x = n;
+  while (true) {
+    match (x) {
+      0 => break,
+      1 => continue,
+      _ => { x = x - 1; }
+    }
+  }
+  x
+}
+"#;
+        let expected = r#"function f(n: int) -> int {
+    let x = n;
+    while (true) {
+        match (x) {
+            0 => {
+                break;
+            },
+            1 => {
+                continue;
+            },
+            _ => {
+                x = x - 1;
+            },
+        }
+    }
+    x
+}
+"#;
+        let options = FormatOptions::default();
+        let formatted =
+            format(source, &options).expect("formatter should succeed on break/continue arms");
+        assert_eq!(
+            formatted, expected,
+            "formatter output didn't match expected\n--- got ---\n{formatted}\n--- want ---\n{expected}"
+        );
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second, "formatter should be idempotent");
+    }
+}
+
+#[cfg(test)]
 mod is_format_tests {
     //! Formatter tests for `<expr> is <pattern>`. Each case rounds the
     //! source through `format` twice and asserts (a) the formatter

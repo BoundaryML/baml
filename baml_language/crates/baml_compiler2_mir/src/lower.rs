@@ -3952,11 +3952,35 @@ impl<'db> LoweringContext<'db> {
         expr_id: AstExprId,
         explicit_type_args: &[AstTypeExpr],
     ) -> Vec<TyTemplate> {
-        if explicit_type_args.is_empty() {
+        // Empty (`Box { … }`) or hole-bearing (`Box<_> { … }`) type args: use the
+        // class type TIR inferred/solved for this expression rather than
+        // re-lowering the raw args — a written `_` lowers to `Ty::Infer`, which
+        // cannot cross the runtime boundary.
+        let generic_params = self.enclosing_generic_params();
+        let has_hole = explicit_type_args
+            .iter()
+            .any(|arg| self.type_arg_is_infer_hole(arg, &generic_params));
+        if explicit_type_args.is_empty() || has_hole {
             self.class_type_arg_templates(expr_id)
         } else {
             self.generic_apply_type_arg_templates(explicit_type_args)
         }
+    }
+
+    /// Whether a written type argument lowers to a type that cannot cross the
+    /// runtime boundary — a `_` wildcard (`Ty::Infer`) or an error-recovery
+    /// sentinel, at any depth. A bare frame type-arg reference (`T`) and any
+    /// concrete type return `false`.
+    fn type_arg_is_infer_hole(
+        &self,
+        type_arg: &AstTypeExpr,
+        generic_params: &[baml_base::Name],
+    ) -> bool {
+        if Self::direct_frame_type_arg_template(type_arg, generic_params).is_some() {
+            return false;
+        }
+        let tir_ty = self.lower_type_arg_to_tir(type_arg, generic_params);
+        baml_type::lower_to_runtime(&tir_ty, self.resolved_aliases).is_err()
     }
 
     /// Get the `baml_type::RuntimeTy` for a pattern binding
@@ -8982,7 +9006,20 @@ impl LoweringContext<'_> {
         if let Some(template) = Self::direct_frame_type_arg_template(type_arg, generic_params) {
             return template;
         }
+        let tir_ty = self.lower_type_arg_to_tir(type_arg, generic_params);
+        self.ty_to_template(&tir_ty, generic_params)
+    }
 
+    /// Lower a written type-argument expression to its `Tir2Ty`, resolving names
+    /// against the canonical (PPIR-merged) package items and with the enclosing
+    /// generic params in scope (so `T` becomes `Tir2Ty::TypeVar("T")`). A `_`
+    /// wildcard lowers to `Tir2Ty::Infer` — callers that may see one (explicit
+    /// type-arg lowering) must fill it before it reaches runtime conversion.
+    fn lower_type_arg_to_tir(
+        &self,
+        type_arg: &AstTypeExpr,
+        generic_params: &[baml_base::Name],
+    ) -> Tir2Ty {
         let pkg_info = file_package(self.db, self.file);
         let pkg_id = PackageId::new(self.db, pkg_info.package);
         // The canonical (PPIR-merged) package items, NOT HIR's: explicit type
@@ -8993,15 +9030,14 @@ impl LoweringContext<'_> {
         // at runtime.
         let pkg_items = baml_compiler2_ppir::package_items(self.db, pkg_id);
         let mut diags = Vec::new();
-        let tir_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
+        baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
             self.db,
             type_arg,
             pkg_items,
             &pkg_info.namespace_path,
             generic_params,
             &mut diags,
-        );
-        self.ty_to_template(&tir_ty, generic_params)
+        )
     }
 
     fn direct_frame_type_arg_template(
@@ -9140,11 +9176,21 @@ impl LoweringContext<'_> {
                 Vec::new()
             };
         if !ast_type_args.is_empty() {
-            let ast_type_args = match max_count {
+            let ast_type_args: Vec<AstTypeExpr> = match max_count {
                 Some(max_count) => ast_type_args.into_iter().take(max_count).collect(),
                 None => ast_type_args,
             };
-            return self.lower_explicit_type_args(&ast_type_args);
+            // Explicit type args may carry `_` inference holes (`race<T, _>`).
+            // TIR solved those holes and recorded the result in declared-generic
+            // order (matching the written positions) on the call plan; supply it
+            // so `lower_explicit_type_args` substitutes the solved type into each
+            // hole slot instead of re-lowering the raw `_` (which would reach
+            // runtime conversion as a `Ty::Infer` and panic).
+            let solved_type_args = self
+                .tir_call_plan(self.expr_metadata_key(call_expr_id))
+                .map(|plan| plan.type_args.clone())
+                .unwrap_or_default();
+            return self.lower_explicit_type_args(&ast_type_args, &solved_type_args);
         }
         if !include_inferred {
             return Vec::new();
@@ -9195,7 +9241,11 @@ impl LoweringContext<'_> {
     ///
     /// Returns `(type_arg_operands, ntypeargs)` — the number equals
     /// `ast_type_args.len()`.  Returns an empty vec when there are no type args.
-    fn lower_explicit_type_args(&mut self, ast_type_args: &[AstTypeExpr]) -> Vec<Operand> {
+    fn lower_explicit_type_args(
+        &mut self,
+        ast_type_args: &[AstTypeExpr],
+        solved_type_args: &[Tir2Ty],
+    ) -> Vec<Operand> {
         if ast_type_args.is_empty() {
             return vec![];
         }
@@ -9204,8 +9254,19 @@ impl LoweringContext<'_> {
         let type_ty = baml_type::RuntimeTy::type_type();
 
         let mut operands = Vec::with_capacity(ast_type_args.len());
-        for type_arg in ast_type_args {
-            let template = self.type_expr_to_template(type_arg, &generic_params);
+        for (idx, type_arg) in ast_type_args.iter().enumerate() {
+            // A `_` wildcard (or a nested one, e.g. `Box<_>`) lowers to a
+            // `Tir2Ty::Infer` that cannot cross the runtime boundary. Where TIR
+            // solved that position, swap in its solved type; otherwise lower the
+            // written type faithfully (a bare frame `T` → `TypeArgRef`, a
+            // concrete arg → itself).
+            let template = if self.type_arg_is_infer_hole(type_arg, &generic_params)
+                && let Some(solved) = solved_type_args.get(idx)
+            {
+                self.ty_to_template(solved, &generic_params)
+            } else {
+                self.type_expr_to_template(type_arg, &generic_params)
+            };
             let temp = self.builder.temp(type_ty.clone());
             self.builder
                 .assign(Place::local(temp), Rvalue::LoadType(template));

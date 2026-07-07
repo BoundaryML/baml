@@ -19,7 +19,7 @@ baml-types = { path = "../baml-lib/baml-types" }
 baml-runtime = { path = "../baml-runtime", features = [
     "internal",
 ], default-features = false }
-baml-lsp-types = { path = "../baml-lsp-types" }
+baml-lsp-types = { path = "../baml-lsp-types", default-features = false }
 chrono.workspace = true
 internal-baml-core = { path = "../baml-lib/baml-core" }
 internal-baml-diagnostics = { path = "../baml-lib/diagnostics" }
@@ -32,7 +32,7 @@ indexmap = { workspace = true }
 jod-thread = { version = "0.1.2" }
 lsp-server = "0.7.6"
 lsp-types = "0.95.0"
-playground-server.workspace = true
+playground-server = { path = "../playground-server", default-features = false }
 regex = { version = "1.10.2" }
 reqwest.workspace = true
 rustc-hash = { version = "2.0.0" }
@@ -97,4 +97,10 @@ libc = { version = "0.2.169" }
 # workspace = true
 
 [features]
-default = []
+default = ["bedrock"]
+# AWS Bedrock provider support, forwarded through the runtime stack.
+bedrock = [
+  "baml-runtime/bedrock",
+  "baml-lsp-types/bedrock",
+  "playground-server/bedrock",
+]

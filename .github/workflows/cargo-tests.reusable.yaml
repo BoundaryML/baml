@@ -576,8 +576,22 @@ jobs:
 
       - name: "Install Rust toolchain"
         run: |
+          set -euo pipefail
           rustup show
-          rustup target add wasm32-unknown-unknown
+          # `rustup target add wasm32` fetches a small (~20MB) std component that
+          # normally installs in seconds. A multi-minute duration means a stalled
+          # download (rustup has no idle timeout), which otherwise burns the whole
+          # job timeout and dequeues the PR from the merge queue. Cap each attempt
+          # well above the normal time and retry on a fresh connection; surface a
+          # genuine outage after 3 tries instead of hanging.
+          for attempt in 1 2 3; do
+            if timeout 300 rustup target add wasm32-unknown-unknown; then
+              break
+            fi
+            echo "::warning::rustup target add wasm32 attempt $attempt stalled/failed; retrying" >&2
+            [ "$attempt" = 3 ] && { echo "::error::rustup target add wasm32 failed after 3 attempts"; exit 1; }
+            sleep 5
+          done
         working-directory: baml_language
 
       - name: "Install sccache and direnv"
