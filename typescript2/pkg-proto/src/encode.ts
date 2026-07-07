@@ -63,12 +63,32 @@ function serializeValue(val: unknown): InboundValue {
     if (isBamlSerializable(val)) {
       return val.toBaml();
     }
+    const bamlMarker = (val as Record<string, unknown>)['$baml'];
+    // Honour a `$baml: { enum: 'user.Color', value: 'Red' }` marker so hosts
+    // (e.g. the playground args form) can pass real enum variants. Nothing on
+    // the args path coerces a plain string into an enum variant, so without
+    // this an expr function's `param == Color.Red` is silently false. The
+    // enum name is passed verbatim: the engine resolves its registered FQN
+    // (`user.ns.Color`) directly and falls back to prepending `user.`.
+    if (
+      bamlMarker &&
+      typeof bamlMarker === 'object' &&
+      typeof (bamlMarker as Record<string, unknown>).enum === 'string' &&
+      typeof (bamlMarker as Record<string, unknown>).value === 'string'
+    ) {
+      const marker = bamlMarker as { enum: string; value: string };
+      return {
+        value: {
+          $case: 'enumValue',
+          enumValue: { name: marker.enum, value: marker.value },
+        },
+      };
+    }
     // Honour a `$baml: { type: 'ClassName' }` (or `'Namespace::ClassName'`)
     // marker so JSON shaped like `decodeCallResult` output round-trips back as
     // a `classValue`. Without this, every plain object would serialize as a
     // map, making typed function calls (e.g. `(inv: Invoice)`) fail with
     // "expected instance, got map" inside the runtime.
-    const bamlMarker = (val as Record<string, unknown>)['$baml'];
     if (
       bamlMarker &&
       typeof bamlMarker === 'object' &&

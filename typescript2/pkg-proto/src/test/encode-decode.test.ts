@@ -142,6 +142,45 @@ describe('encodeCallArgs', () => {
       expect(val.value.classValue.classTy?.name).toBe('MyClass');
     }
   });
+
+  it('encodes a $baml enum marker as an enumValue', () => {
+    const bytes = encodeCallArgs(
+      { c: { $baml: { enum: 'user.Color', value: 'Red' } } },
+      127,
+    );
+    const decoded = CallFunctionArgs.decode(bytes);
+    const val = decoded.kwargs[0].value;
+    expect(val?.value?.$case).toBe('enumValue');
+    if (val?.value?.$case === 'enumValue') {
+      expect(val.value.enumValue.name).toBe('user.Color');
+      expect(val.value.enumValue.value).toBe('Red');
+    }
+  });
+
+  it('encodes enum markers in nested positions (list element, class field)', () => {
+    const bytes = encodeCallArgs(
+      {
+        box: {
+          $baml: { type: 'user.Box' },
+          colors: [{ $baml: { enum: 'user.Color', value: 'Green' } }],
+        },
+      },
+      128,
+    );
+    const decoded = CallFunctionArgs.decode(bytes);
+    const val = decoded.kwargs[0].value;
+    expect(val?.value?.$case).toBe('classValue');
+    if (val?.value?.$case !== 'classValue') return;
+    const colors = val.value.classValue.fields[0]?.value;
+    expect(colors?.value?.$case).toBe('listValue');
+    if (colors?.value?.$case !== 'listValue') return;
+    const first = colors.value.listValue.values[0];
+    expect(first?.value?.$case).toBe('enumValue');
+    if (first?.value?.$case === 'enumValue') {
+      expect(first.value.enumValue.name).toBe('user.Color');
+      expect(first.value.enumValue.value).toBe('Green');
+    }
+  });
 });
 
 describe('decodeCallResult', () => {

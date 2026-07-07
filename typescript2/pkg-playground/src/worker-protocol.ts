@@ -47,7 +47,11 @@ export interface DiagnosticEntry {
 }
 
 export type FunctionKind = 'llm' | 'expr';
-export type FunctionOrigin = 'userDefined' | 'companion' | 'internal';
+export type FunctionOrigin =
+  | 'userDefined'
+  | 'companion'
+  | 'internal'
+  | 'autoDerive';
 
 export interface LlmCapabilities {
   /** Whether render_prompt preview is available through `startPreviewRun`. */
@@ -57,6 +61,50 @@ export interface LlmCapabilities {
   /** The LLM client name (e.g., "MyClient"). */
   clientName?: string;
 }
+
+/** Schema for one function parameter (mirrors `baml_project::ParamSchema`). */
+export interface ParamSchema {
+  name: string;
+  /** The parameter has a default value and may be omitted entirely. Distinct
+   *  from a nullable type, which appears as `{ type: 'optional' }` in
+   *  `schema`. */
+  hasDefault: boolean;
+  schema: FieldSchema;
+}
+
+/** One class field; optionality is folded into `schema` as
+ *  `{ type: 'optional' }`, not a flag here. */
+export interface FieldSchemaField {
+  name: string;
+  schema: FieldSchema;
+}
+
+/** Self-contained recursive type schema for the args form (mirrors
+ *  `baml_project::FieldSchema`). Class/enum `name`s are the canonical dotted
+ *  FQN the engine registers (`user.shapes.Foo`), usable verbatim in `$baml`
+ *  markers. */
+export type FieldSchema =
+  | { type: 'string' }
+  | { type: 'int' }
+  | { type: 'float' }
+  | { type: 'bool' }
+  | { type: 'null' }
+  | { type: 'bigint' }
+  | { type: 'media'; kind: string }
+  | { type: 'literal'; value: unknown }
+  | { type: 'enum'; name: string; values: string[] }
+  | {
+      type: 'class';
+      name: string;
+      /** Empty when `recursive` — expansion stops at a repeated class. */
+      fields: FieldSchemaField[];
+      recursive: boolean;
+    }
+  | { type: 'list'; item: FieldSchema }
+  | { type: 'map'; key: FieldSchema; value: FieldSchema }
+  | { type: 'optional'; inner: FieldSchema }
+  | { type: 'union'; variants: FieldSchema[] }
+  | { type: 'unsupported'; display: string };
 
 /** Metadata about a BAML function exposed to the playground.
  *
@@ -69,6 +117,10 @@ export interface FunctionInfo {
   kind: FunctionKind;
   origin: FunctionOrigin;
   capabilities?: LlmCapabilities;
+  /** Parameter schemas for the args form. `undefined` = no schema available
+   *  (old WASM binary or extraction skipped) → raw-JSON-only mode; `[]` = the
+   *  function takes no arguments. */
+  params?: ParamSchema[];
 }
 
 export interface ProjectUpdate {
