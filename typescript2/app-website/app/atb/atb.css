@@ -262,7 +262,18 @@
   font-style: italic;
   color: #6e7681;
 }
+.atb-terminal .t-error {
+  color: #ff6b63;
+  background: rgba(58, 32, 29, 0.55);
+  border-left: 2px solid #ff5f57;
+  padding-left: 6px;
+  margin-left: -8px;
+}
 .atb-terminal .t-result {
+  border-left: 2px solid #2e2e2c;
+  padding-left: 6px;
+  margin-left: -8px;
+
   color: #8b949e;
 }
 @keyframes atb-cursor-blink {

@@ -20,6 +20,8 @@ import {
 } from "@/app/atb/_components/ui";
 import { Markdown } from "@/app/atb/_components/markdown";
 import { TranscriptViewer } from "@/app/atb/_components/transcript";
+import { CommentThread } from "@/app/atb/_components/comments";
+import { useComments } from "@/app/atb/_lib/comments";
 import { FilesIde } from "@/app/atb/_components/files-ide";
 
 export default function RunPage({
@@ -40,6 +42,7 @@ export default function RunPage({
       ? (doc as unknown as Task)
       : null;
   const task = useDoc<Task>("tasks", trophy?.taskId ?? null);
+  const comments = useComments(trophy?._id ?? null);
   const state = useAtbState();
 
   if (doc === undefined) return <RunSkeleton />;
@@ -317,9 +320,25 @@ export default function RunPage({
           <TranscriptViewer
             turnLog={trophy.turnLog!}
             transcriptStorageId={trophy.transcriptStorageId}
+            trophyId={trophy._id}
+            taskId={trophy.taskId}
+            comments={comments}
           />
         </Reveal>
       )}
+
+      {/* ---- run-level comments (turn-anchored ones live inline above) ---- */}
+      <Reveal className="mt-12">
+        <SectionHeader
+          title="Comments"
+          hint="feed the dedup agent — actionable ones become tickets"
+        />
+        <CommentThread
+          trophyId={trophy._id}
+          taskId={trophy.taskId}
+          comments={(comments ?? []).filter((c) => c.turnIndex == null)}
+        />
+      </Reveal>
     </div>
   );
 }

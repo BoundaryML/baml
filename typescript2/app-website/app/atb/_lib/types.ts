@@ -114,6 +114,10 @@ export type Issue = QueueFields & {
   notionSyncStatus?: string;
   linearIssueId?: string | null;
   linearSyncStatus?: string;
+  // environment of the run(s) behind the issue (dedup-stamped)
+  bamlVersion?: string | null;
+  skillUsed?: string | null;
+  skillVersion?: string | null;
   // fix pipeline (Cursor -> PR -> CI/CodeRabbit)
   prUrl?: string | null;
   prNumber?: number | null;

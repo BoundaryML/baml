@@ -41,17 +41,23 @@ function textInvokesBaml(text: string): boolean {
 // readable BAML purple on the dark terminal background
 const BAML_PURPLE = "text-[#c4b5fd]";
 
-/** Renders shell text with `baml …` command segments tinted purple. */
+/** Renders shell text with the `baml` command word tinted purple (brand
+ * accent on the invocation itself; arguments stay neutral so purple never
+ * competes with the error red). */
 function bamlArgs(text: string): ReactNode {
-  return text.split(SHELL_SPLIT).map((p, i) =>
-    BAML_CMD.test(p) ? (
-      <span key={i} className={`font-semibold ${BAML_PURPLE}`}>
-        {p}
+  return text.split(SHELL_SPLIT).map((p, i) => {
+    const m = p.match(/^(\s*)(baml)(\s|$)([\s\S]*)$/);
+    return m ? (
+      <span key={i}>
+        {m[1]}
+        <span className={`font-semibold ${BAML_PURPLE}`}>{m[2]}</span>
+        {m[3]}
+        {m[4]}
       </span>
     ) : (
       <span key={i}>{p}</span>
-    ),
-  );
+    );
+  });
 }
 
 function termLine(raw: string, baml = false): ReactNode {
@@ -133,17 +139,31 @@ function TermBlock({
     entries.some((e, i) =>
       textInvokesBaml(i === 0 ? toolMatch[2].replace(/^\(/, "") : e.line),
     );
+  // A result block that reports an error renders red end-to-end — errors must
+  // never read as ordinary grey output (or worse, get outshone by brand purple).
+  const isError =
+    entries[0]?.mode === "t-result" &&
+    /\[error\]/i.test(entries.map((e) => e.line).join("\n"));
   return (
     <>
       {shown.map((e, i) => (
-        <div key={i} className={e.mode || undefined}>
+        <div
+          key={i}
+          className={
+            (isError && e.mode === "t-result" ? "t-error" : e.mode) || undefined
+          }
+        >
           {termLine(e.line, isBaml)}
         </div>
       ))}
       {long ? (
         <div>
           <button
-            className="cursor-pointer border-0 bg-transparent p-0 font-atb-mono text-[12px] italic text-[#8a8a86] hover:text-[#d7d3c8]"
+            className={`cursor-pointer border-0 bg-transparent p-0 font-atb-mono text-[12px] italic ${
+              isError
+                ? "text-[#c96a60] hover:text-[#ff6b63]"
+                : "text-[#8a8a86] hover:text-[#d7d3c8]"
+            }`}
             onClick={() => {
               setOpen((v) => !v);
               onToggle?.();
@@ -151,7 +171,7 @@ function TermBlock({
           >
             {open
               ? "  ⎿ collapse"
-              : `  … +${end - BLOCK_HEAD} lines (click to expand)`}
+              : `  … +${end - BLOCK_HEAD} lines (click to expand${isError ? "; contains error" : ""})`}
           </button>
         </div>
       ) : null}

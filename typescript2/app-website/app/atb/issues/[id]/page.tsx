@@ -89,6 +89,16 @@ export default function IssuePage({
           {issue.checkState && (
             <span className="text-xs text-atb-ink-3">ci: {issue.checkState}</span>
           )}
+          {issue.bamlVersion && (
+            <span className="font-atb-mono text-[11px] text-atb-ink-3">
+              baml {issue.bamlVersion.replace(/^baml-language-/, "")}
+            </span>
+          )}
+          {issue.skillVersion && (
+            <span className="font-atb-mono text-[11px] text-atb-ink-3">
+              skill @{issue.skillVersion}
+            </span>
+          )}
           {issue.coderabbitState && issue.coderabbitState !== "none" && (
             <span className="text-xs text-atb-ink-3">
               coderabbit: {issue.coderabbitState}

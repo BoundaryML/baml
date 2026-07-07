@@ -8,16 +8,24 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useMemo, useState } from "react";
 import type { Turn, TurnTool } from "@/app/atb/_lib/types";
+import type { TranscriptComment } from "@/app/atb/_lib/comments";
 import { EASE } from "@/app/atb/_components/ui";
 import { TerminalView } from "@/app/atb/_components/terminal";
 import { CodeView } from "@/app/atb/_components/code-view";
+import { CommentThread } from "@/app/atb/_components/comments";
 
 export function TranscriptViewer({
   turnLog,
   transcriptStorageId,
+  trophyId,
+  taskId,
+  comments,
 }: {
   turnLog: Turn[];
   transcriptStorageId?: string | null;
+  trophyId?: string;
+  taskId?: string;
+  comments?: TranscriptComment[];
 }) {
   const [view, setView] = useState<"turns" | "terminal">(
     transcriptStorageId ? "terminal" : "turns",
@@ -61,7 +69,13 @@ export function TranscriptViewer({
       </div>
 
       {view === "turns" ? (
-        <TurnList turnLog={turnLog} expandAll={expandAll} />
+        <TurnList
+          turnLog={turnLog}
+          expandAll={expandAll}
+          trophyId={trophyId}
+          taskId={taskId}
+          comments={comments}
+        />
       ) : (
         <RawTerminal storageId={transcriptStorageId!} />
       )}
@@ -71,7 +85,19 @@ export function TranscriptViewer({
 
 // ---- structured turn view ----
 
-function TurnList({ turnLog, expandAll }: { turnLog: Turn[]; expandAll: boolean }) {
+function TurnList({
+  turnLog,
+  expandAll,
+  trophyId,
+  taskId,
+  comments,
+}: {
+  turnLog: Turn[];
+  expandAll: boolean;
+  trophyId?: string;
+  taskId?: string;
+  comments?: TranscriptComment[];
+}) {
   // elapsed time between consecutive timestamped turns
   const elapsed = useMemo(() => {
     const out = new Map<number, number>();
@@ -96,6 +122,9 @@ function TurnList({ turnLog, expandAll }: { turnLog: Turn[]; expandAll: boolean 
             turn={turn}
             gapMs={elapsed.get(turn.i)}
             expandAll={expandAll}
+            trophyId={trophyId}
+            taskId={taskId}
+            comments={(comments ?? []).filter((c) => c.turnIndex === turn.i)}
           />
         ))}
       </div>
@@ -107,11 +136,18 @@ function TurnBlock({
   turn,
   gapMs,
   expandAll,
+  trophyId,
+  taskId,
+  comments = [],
 }: {
   turn: Turn;
   gapMs?: number;
   expandAll: boolean;
+  trophyId?: string;
+  taskId?: string;
+  comments?: TranscriptComment[];
 }) {
+  const [showComments, setShowComments] = useState(false);
   const hasContent =
     turn.thinking_preview || turn.text_preview || (turn.tools?.length ?? 0) > 0;
   if (!hasContent) return null;
@@ -141,6 +177,19 @@ function TurnBlock({
             +{(gapMs / 1000).toFixed(0)}s
           </span>
         )}
+        {trophyId && (
+          <button
+            onClick={() => setShowComments((v) => !v)}
+            className={`ml-auto font-atb-mono text-[11px] transition-colors ${
+              comments.length > 0
+                ? "text-atb-amber hover:text-atb-ink"
+                : "text-atb-ink-3/60 hover:text-atb-ink-2"
+            }`}
+            title="comment on this turn"
+          >
+            💬 {comments.length > 0 ? comments.length : ""}
+          </button>
+        )}
       </div>
 
       {turn.thinking_preview && (
@@ -167,6 +216,15 @@ function TurnBlock({
       {(turn.tools ?? []).map((tool, j) => (
         <ToolCall key={j} tool={tool} forceOpen={expandAll} />
       ))}
+
+      {trophyId && (showComments || comments.length > 0) && (
+        <CommentThread
+          trophyId={trophyId}
+          taskId={taskId}
+          turnIndex={turn.i}
+          comments={comments}
+        />
+      )}
     </motion.div>
   );
 }
