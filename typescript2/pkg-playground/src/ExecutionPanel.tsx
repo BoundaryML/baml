@@ -2067,8 +2067,11 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
         seeded[param.name] = defaultValueForSchema(param.schema);
       }
     }
-    setArgsJson(JSON.stringify(seeded));
-  }, [selectedFn, paramSchemas, parsedArgs]);
+    // Write through the shared setter so the seed also lands in
+    // typedArgsByFnRef — otherwise switching away and back restores '{}' and
+    // the seeded defaults/markers are lost.
+    updateArgsJson(JSON.stringify(seeded));
+  }, [selectedFn, paramSchemas, parsedArgs, updateArgsJson]);
   // Names of LLM functions — only these have a meaningful raw (un-parsed LLM
   // output) vs parsed distinction, so the Parsed/Raw toggle is shown only for
   // them. expr functions just return a structured value (raw == parsed).
@@ -2365,7 +2368,10 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
         onKeyDown={(e) => {
           if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
             e.preventDefault();
-            void onRunFunction();
+            // Same gate as the Run buttons: never start a run over build
+            // errors. (onRunFunction can't check this itself — hasErrors is
+            // derived after its declaration.)
+            if (!hasErrors) void onRunFunction();
           }
         }}
       >

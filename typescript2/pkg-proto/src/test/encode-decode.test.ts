@@ -157,6 +157,15 @@ describe('encodeCallArgs', () => {
     }
   });
 
+  it('rejects malformed $baml enum markers instead of emitting a map', () => {
+    expect(() =>
+      encodeCallArgs({ c: { $baml: { enum: 'user.Color' } } }, 129),
+    ).toThrow(/enum marker/);
+    expect(() =>
+      encodeCallArgs({ c: { $baml: { enum: 'user.Color', value: 3 } } }, 130),
+    ).toThrow(/enum marker/);
+  });
+
   it('encodes enum markers in nested positions (list element, class field)', () => {
     const bytes = encodeCallArgs(
       {

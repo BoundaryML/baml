@@ -422,3 +422,74 @@ pub(crate) fn send_wasm_playground_notification(
         };
     let _ = callback.call1(&JsValue::NULL, &js_notif);
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The tsify twins must serialize byte-identically to the
+    /// `bex_project` source types: the WebSocket transport sends the source
+    /// structs directly, so any serde divergence here would present as a
+    /// worker-transport-only wire difference. Exercises every `FieldSchema`
+    /// variant through the `From` mapping.
+    #[test]
+    fn schema_twins_serialize_identically_to_source_types() {
+        use bex_project::{
+            FieldSchema as Src, FieldSchemaField as SrcField, ParamSchema as SrcParam,
+        };
+        let src = SrcParam {
+            name: "p".to_string(),
+            has_default: true,
+            schema: Src::Union {
+                variants: vec![
+                    Src::String,
+                    Src::Int,
+                    Src::Float,
+                    Src::Bool,
+                    Src::Null,
+                    Src::Bigint,
+                    Src::Media {
+                        kind: "image".to_string(),
+                    },
+                    Src::Literal {
+                        value: serde_json::json!({ "k": [1, "two", true, null] }),
+                    },
+                    Src::Enum {
+                        name: "user.Color".to_string(),
+                        values: vec!["Red".to_string(), "Green".to_string()],
+                    },
+                    Src::Class {
+                        name: "user.Person".to_string(),
+                        fields: vec![SrcField {
+                            name: "age".to_string(),
+                            schema: Src::Optional {
+                                inner: Box::new(Src::Int),
+                            },
+                        }],
+                        recursive: false,
+                    },
+                    Src::Class {
+                        name: "user.Tree".to_string(),
+                        fields: vec![],
+                        recursive: true,
+                    },
+                    Src::List {
+                        item: Box::new(Src::String),
+                    },
+                    Src::Map {
+                        key: Box::new(Src::String),
+                        value: Box::new(Src::Float),
+                    },
+                    Src::Unsupported {
+                        display: "callback".to_string(),
+                    },
+                ],
+            },
+        };
+        let twin: ParamSchema = src.clone().into();
+        assert_eq!(
+            serde_json::to_value(&src).unwrap(),
+            serde_json::to_value(&twin).unwrap(),
+        );
+    }
+}

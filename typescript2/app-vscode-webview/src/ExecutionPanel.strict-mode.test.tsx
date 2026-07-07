@@ -257,6 +257,71 @@ describe('ExecutionPanel StrictMode lifecycle', () => {
     });
   });
 
+  it('preserves seeded defaults when switching functions and back', async () => {
+    const port = new FakeRuntimePort();
+
+    render(<ExecutionPanel port={port} />);
+
+    act(() => {
+      port.emit({
+        type: 'playgroundNotification',
+        notification: { type: 'listProjects', projects: ['project'] },
+      });
+      port.emit({
+        type: 'playgroundNotification',
+        notification: {
+          type: 'updateProject',
+          project: 'project',
+          update: {
+            isBexCurrent: true,
+            functions: [
+              {
+                name: 'Greet',
+                kind: 'expr',
+                origin: 'userDefined',
+                params: [
+                  {
+                    name: 'color',
+                    hasDefault: false,
+                    schema: {
+                      type: 'enum',
+                      name: 'user.Color',
+                      values: ['Red', 'Green', 'Blue'],
+                    },
+                  },
+                ],
+              },
+              { name: 'Zero', kind: 'expr', origin: 'userDefined', params: [] },
+            ],
+            diagnostics: [],
+          },
+        },
+      });
+    });
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Functions (2)' }),
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Greet' }));
+    // Wait for the seed effect, then bounce to Zero and back.
+    const seeded = {
+      color: { $baml: { enum: 'user.Color', value: 'Red' } },
+    };
+    fireEvent.click(await screen.findByRole('button', { name: 'raw' }));
+    const rawInput = await screen.findByPlaceholderText('{"key": "value"}');
+    await waitFor(() => {
+      expect(JSON.parse((rawInput as HTMLInputElement).value)).toEqual(seeded);
+    });
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Zero' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Greet' }));
+
+    const rawAgain = await screen.findByPlaceholderText('{"key": "value"}');
+    await waitFor(() => {
+      expect(JSON.parse((rawAgain as HTMLInputElement).value)).toEqual(seeded);
+    });
+  });
+
   it('shows the no-arguments state for a nullary schema and still runs', async () => {
     const port = new FakeRuntimePort();
 

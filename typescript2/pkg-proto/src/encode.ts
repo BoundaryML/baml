@@ -70,13 +70,19 @@ function serializeValue(val: unknown): InboundValue {
     // this an expr function's `param == Color.Red` is silently false. The
     // enum name is passed verbatim: the engine resolves its registered FQN
     // (`user.ns.Color`) directly and falls back to prepending `user.`.
-    if (
-      bamlMarker &&
-      typeof bamlMarker === 'object' &&
-      typeof (bamlMarker as Record<string, unknown>).enum === 'string' &&
-      typeof (bamlMarker as Record<string, unknown>).value === 'string'
-    ) {
-      const marker = bamlMarker as { enum: string; value: string };
+    if (bamlMarker && typeof bamlMarker === 'object' && 'enum' in bamlMarker) {
+      const marker = bamlMarker as { enum?: unknown; value?: unknown };
+      // Fail fast on a malformed marker: falling through would serialize the
+      // `$baml` object as a literal map entry, which the engine accepts
+      // silently and misinterprets.
+      if (
+        typeof marker.enum !== 'string' ||
+        typeof marker.value !== 'string'
+      ) {
+        throw new Error(
+          'Invalid $baml enum marker: expected { enum: string, value: string }',
+        );
+      }
       return {
         value: {
           $case: 'enumValue',

@@ -213,10 +213,17 @@ const NumberField: FC<FieldInputProps & { integer?: boolean }> = ({
       ? String(value)
       : '';
   const [draft, setDraft] = useDraft(canonical);
-  const parsed = draft.trim() === '' ? undefined : Number(draft);
-  const valid =
-    parsed === undefined ||
-    (Number.isFinite(parsed) && (!integer || Number.isInteger(parsed)));
+  const parse = (text: string): number | null => {
+    const trimmed = text.trim();
+    if (trimmed === '') return null;
+    const num = Number(trimmed);
+    return Number.isFinite(num) && (!integer || Number.isInteger(num))
+      ? num
+      : null;
+  };
+  // An empty or unparseable draft is an error state, not a deletion: the last
+  // committed value stays in place so required keys never silently drop out
+  // of argsJson.
   return (
     <Input
       className="h-7 text-xs font-vsc-mono"
@@ -224,19 +231,11 @@ const NumberField: FC<FieldInputProps & { integer?: boolean }> = ({
       value={draft}
       placeholder={integer ? '0' : '0.0'}
       disabled={disabled}
-      aria-invalid={!valid}
+      aria-invalid={parse(draft) === null}
       onChange={(e) => {
-        const text = e.target.value;
-        setDraft(text);
-        const num = text.trim() === '' ? undefined : Number(text);
-        if (num === undefined) {
-          onChange(undefined);
-        } else if (
-          Number.isFinite(num) &&
-          (!integer || Number.isInteger(num))
-        ) {
-          onChange(num);
-        }
+        setDraft(e.target.value);
+        const num = parse(e.target.value);
+        if (num !== null) onChange(num);
       }}
     />
   );
@@ -271,7 +270,11 @@ const EnumField: FC<
       className="max-w-[240px]"
       value={current ?? ''}
       disabled={disabled}
-      onChange={(e) => onChange(enumValue(schema.name, e.target.value))}
+      onChange={(e) => {
+        // The empty value is the "select…" placeholder, not a variant.
+        if (e.target.value === '') return;
+        onChange(enumValue(schema.name, e.target.value));
+      }}
     >
       {current === undefined && <option value="">select…</option>}
       {schema.values.map((v) => (
