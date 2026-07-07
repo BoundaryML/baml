@@ -16,7 +16,10 @@ use super::{
     TirTypeError, Ty, TyAttr, TypeInferenceBuilder, format_interface_display,
     function_generic_param_bounds_exprs, lower_generic_param_bounds,
 };
-use crate::signature::{DeclaredSignature, lower_signature};
+use crate::{
+    infer_context::SelfCallPosition,
+    signature::{DeclaredSignature, lower_signature},
+};
 
 /// One realized interface instantiation to resolve a member against: `loc` reads the declared
 /// members (fields, method signatures and bodies); `realized` is the interface at its applied
@@ -1058,26 +1061,42 @@ impl<'db> TypeInferenceBuilder<'db> {
             bindings.insert(assoc.name.clone(), value);
         }
 
-        // A pinned `Self` is a single type, so `Self`-typed parameters are sound; the
-        // object-safety restriction only applies to a bare existential receiver. The `self`
-        // receiver itself is `self: Self` by construction — exclude it, only *other* params
-        // referencing `Self` break object safety.
-        if matches!(recv, SelfReceiver::Existential(_) | SelfReceiver::Union(_))
-            && access.bound
-            && spec
+        // Object safety only applies to a bare existential / union receiver (a pinned or
+        // rigid `Self` is a single concrete type, so all `Self` usage is sound there). A
+        // method is unsafe to dispatch through such a receiver when it uses `Self` outside
+        // the receiver position:
+        //   - a non-`self` parameter typed with `Self` (the concrete implementor is unknown
+        //     for those arguments — the multi-`Self` problem), OR
+        //   - `Self` nested inside an invariant constructor in the return/throws type
+        //     (`-> Self[]`, `-> Box<Self>`): the impl returns a concretely-tagged container
+        //     that is not a subtype of the existential-tagged one. A bare top-level `-> Self`
+        //     stays legal (it collapses covariantly to the receiver).
+        if matches!(recv, SelfReceiver::Existential(_) | SelfReceiver::Union(_)) && access.bound {
+            let param_self = spec
                 .args
                 .iter()
                 .chain(&spec.kwargs)
                 .filter(|p| p.name.as_str() != "self")
-                .any(|p| Self::type_expr_contains_self(&p.ty))
-        {
-            self.context.report_simple(
-                TirTypeError::InvalidSelfCallThroughInterface {
-                    interface_name: data.name.clone(),
-                    method_name: access.member.clone(),
-                },
-                access.at,
-            );
+                .any(|p| Self::type_expr_contains_self(&p.ty));
+            let position = if param_self {
+                Some(SelfCallPosition::Parameter)
+            } else if Self::type_expr_self_in_invariant_position(&spec.return_type)
+                || Self::type_expr_self_in_invariant_position(&spec.throws)
+            {
+                Some(SelfCallPosition::NestedInReturn)
+            } else {
+                None
+            };
+            if let Some(position) = position {
+                self.context.report_simple(
+                    TirTypeError::InvalidSelfCallThroughInterface {
+                        interface_name: data.name.clone(),
+                        method_name: access.member.clone(),
+                        position,
+                    },
+                    access.at,
+                );
+            }
         }
 
         // Lower the declared signature to a type-constructor template through `ctx` (which

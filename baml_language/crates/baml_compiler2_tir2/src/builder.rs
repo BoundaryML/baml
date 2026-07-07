@@ -11473,6 +11473,55 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
     }
 
+    /// Whether `ty` references `Self` in an **invariant** position — inside a generic
+    /// argument, a list/map element, or a function type. Such a `Self` is unsound to
+    /// call through an interface-existential receiver: the impl returns a
+    /// concretely-tagged container (`Concrete[]`) that is NOT a subtype of the
+    /// existential-tagged one (`dyn I[]`), because containers are invariant.
+    ///
+    /// A *bare* top-level `Self` — or one reachable only through covariant wrappers
+    /// (`Self?`, `A | Self`) or a projection (`Self.Item`) — is NOT flagged: it
+    /// collapses covariantly to the receiver (`dyn I`), which the impl's concrete
+    /// return subtypes nominally. Used for a method's return/throws type; parameters
+    /// use the stricter [`Self::type_expr_contains_self`] (any `Self` is unsound there).
+    fn type_expr_self_in_invariant_position(ty: &TypeExpr) -> bool {
+        match &ty.kind {
+            // A class/generic head is invariant in its arguments; a bare `Self` or a
+            // `Self.Assoc` projection (the segments) is not itself an invariant nesting.
+            TypeExprKind::Path { generic_args, .. } => {
+                generic_args.iter().any(Self::type_expr_contains_self)
+            }
+            // Invariant containers: ANY `Self` inside is unsound.
+            TypeExprKind::List { inner, .. } => Self::type_expr_contains_self(inner),
+            TypeExprKind::Map { key, value, .. } => {
+                Self::type_expr_contains_self(key) || Self::type_expr_contains_self(value)
+            }
+            TypeExprKind::Function {
+                params,
+                ret,
+                throws,
+                ..
+            } => {
+                params
+                    .iter()
+                    .any(|param| Self::type_expr_contains_self(&param.ty))
+                    || Self::type_expr_contains_self(ret)
+                    || throws
+                        .as_ref()
+                        .is_some_and(|throws| Self::type_expr_contains_self(throws))
+            }
+            // Covariant-transparent wrappers: recurse, so a bare `Self` under them is
+            // fine but a `Self[]` under them is not.
+            TypeExprKind::Optional { inner, .. } => {
+                Self::type_expr_self_in_invariant_position(inner)
+            }
+            TypeExprKind::Union { variants, .. } => variants
+                .iter()
+                .any(Self::type_expr_self_in_invariant_position),
+            _ => false,
+        }
+    }
+
     /// Look up class fields from the package items (via item tree).
     ///
     /// `class_type_args` are the concrete type arguments for the class (e.g.

@@ -3033,4 +3033,67 @@ function needs<T extends Marker>(x: T) -> int throws never {
             "an interface bound must not require its associated types be pinned, got {errors:?}"
         );
     }
+
+    // ── object safety: a method whose return nests `Self` in an invariant container is
+    //    not callable through an interface-existential receiver (bare `-> Self` still is) ──
+
+    fn has_invalid_self_call(errors: &[TirTypeError]) -> bool {
+        errors
+            .iter()
+            .any(|e| matches!(e, TirTypeError::InvalidSelfCallThroughInterface { .. }))
+    }
+
+    #[test]
+    fn nested_self_return_through_existential_is_rejected() {
+        // `-> Self[]`: an impl returns `Concrete[]`, which is NOT a subtype of the
+        // existential-tagged `dyn Dup[]` (containers are invariant) — unsound to dispatch.
+        let errors = all_type_errors(
+            "interface Dup {\n  function dup(self) -> Self[] throws never\n}\n\
+             function use_it(d: Dup) -> int throws never {\n  d.dup();\n  0\n}\n",
+        );
+        assert!(
+            has_invalid_self_call(&errors),
+            "`-> Self[]` through an existential should be rejected, got {errors:?}"
+        );
+    }
+
+    #[test]
+    fn self_in_generic_arg_return_through_existential_is_rejected() {
+        // `-> Box<Self>`: `Self` in an invariant generic argument.
+        let errors = all_type_errors(
+            "class Box<T> {\n  val: T\n}\ninterface Wrap {\n  function wrap(self) -> Box<Self> throws never\n}\n\
+             function use_it(w: Wrap) -> int throws never {\n  w.wrap();\n  0\n}\n",
+        );
+        assert!(
+            has_invalid_self_call(&errors),
+            "`-> Box<Self>` through an existential should be rejected, got {errors:?}"
+        );
+    }
+
+    #[test]
+    fn bare_self_return_through_existential_is_allowed() {
+        // Bare `-> Self` collapses covariantly to the receiver (`dyn Dup`); the impl's
+        // concrete return subtypes it nominally, so it stays object-safe.
+        let errors = all_type_errors(
+            "interface Dup {\n  function dup(self) -> Self throws never\n}\n\
+             function use_it(d: Dup) -> int throws never {\n  d.dup();\n  0\n}\n",
+        );
+        assert!(
+            !has_invalid_self_call(&errors),
+            "bare `-> Self` through an existential should stay allowed, got {errors:?}"
+        );
+    }
+
+    #[test]
+    fn optional_self_return_through_existential_is_allowed() {
+        // `-> Self?` is a covariant union (`Self | null`) — no invariant nesting.
+        let errors = all_type_errors(
+            "interface Dup {\n  function dup(self) -> Self? throws never\n}\n\
+             function use_it(d: Dup) -> int throws never {\n  d.dup();\n  0\n}\n",
+        );
+        assert!(
+            !has_invalid_self_call(&errors),
+            "`-> Self?` through an existential should stay allowed, got {errors:?}"
+        );
+    }
 }

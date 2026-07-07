@@ -59,6 +59,17 @@ impl std::fmt::Display for AssocContainer {
     }
 }
 
+/// Where a disallowed `Self` appears in a method called through an
+/// interface-existential receiver — see [`TirTypeError::InvalidSelfCallThroughInterface`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SelfCallPosition {
+    /// A non-receiver parameter typed with `Self`.
+    Parameter,
+    /// `Self` nested inside an invariant constructor in the return or throws type
+    /// (e.g. `-> Self[]`, `-> Box<Self>`); a bare top-level `-> Self` is allowed.
+    NestedInReturn,
+}
+
 /// What went wrong — no location info, just the semantic error.
 ///
 /// `TirTypeError` is intentionally span-free for Salsa cacheability.
@@ -401,11 +412,17 @@ pub enum TirTypeError {
         member_name: Name,
     },
 
-    /// Interface-typed receivers cannot call methods with additional `Self`
-    /// parameters. The concrete implementor must be known for those arguments.
+    /// An interface-existential (or union) receiver cannot call a method that uses
+    /// `Self` outside the receiver position: a non-receiver `Self` parameter (the
+    /// concrete implementor is unknown for those arguments), or `Self` nested inside
+    /// an invariant constructor in the return/throws type (`-> Self[]`, `-> Box<Self>`
+    /// — the impl returns a concretely-tagged container that is NOT a subtype of the
+    /// existential-tagged one; containers are invariant). A bare top-level `-> Self`
+    /// is fine (it collapses covariantly to the receiver). Rust `dyn Trait` parity.
     InvalidSelfCallThroughInterface {
         interface_name: Name,
         method_name: Name,
+        position: SelfCallPosition,
     },
 
     /// BEP-044 §"default keyword scoping rules": `default.method()` on a
@@ -1013,11 +1030,21 @@ impl fmt::Display for TirTypeError {
             TirTypeError::InvalidSelfCallThroughInterface {
                 interface_name,
                 method_name,
-            } => write!(
-                f,
-                "method `{method_name}` on interface `{interface_name}` uses `Self` in \
-                 its parameters and requires a concrete receiver"
-            ),
+                position,
+            } => {
+                let position = match position {
+                    SelfCallPosition::Parameter => "a parameter",
+                    SelfCallPosition::NestedInReturn => {
+                        "its return/throws type, nested in a container (e.g. `Self[]`)"
+                    }
+                };
+                write!(
+                    f,
+                    "method `{method_name}` on interface `{interface_name}` uses `Self` in \
+                     {position}, so it requires a concrete receiver, not an \
+                     interface-existential one"
+                )
+            }
             TirTypeError::DefaultOnRequiredMethod {
                 interface_name,
                 method_name,
