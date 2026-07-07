@@ -2844,4 +2844,134 @@ mod tests {
         assert_eq!(params[1].name.as_deref(), Some("limit"));
         assert_eq!(params[1].mode, FunctionParamMode::Optional);
     }
+
+    // ── value-checking: the interface-bounded type-argument concreteness gate ──
+    //
+    // An interface-bounded type parameter (`<T extends Marker>`) admits only a
+    // concrete type argument, so virtual dispatch on `T` sees a single runtime
+    // type. These drive the real value-checker end-to-end through the same entry
+    // the LSP check uses.
+
+    /// Compile `source` and collect every value-checking diagnostic across all
+    /// scopes (the entry `check.rs` drives per file).
+    fn all_type_errors(source: &str) -> Vec<TirTypeError> {
+        let db = compile(source);
+        let file = baml_compiler2_hir::compiler2_all_files(&db)
+            .into_iter()
+            .next()
+            .expect("one compiled user file");
+        crate::inference::collect_file_diagnostics(&db, file)
+            .diagnostics
+            .into_iter()
+            .map(|d| d.error)
+            .collect()
+    }
+
+    fn has_not_concrete(errors: &[TirTypeError]) -> bool {
+        errors
+            .iter()
+            .any(|e| matches!(e, TirTypeError::BoundedTypeArgNotConcrete { .. }))
+    }
+
+    /// An interface `Marker`, three concrete implementors, and a `Marker`-bounded
+    /// generic `needs`. Each test appends a caller that binds `needs`'s `T`.
+    const MARKER_PROGRAM: &str = "\
+interface Marker {
+  function mark(self) -> int throws never
+}
+class Widget {
+  implements Marker {
+    function mark(self) -> int throws never { 0 }
+  }
+}
+class A {
+  implements Marker {
+    function mark(self) -> int throws never { 1 }
+  }
+}
+class B {
+  implements Marker {
+    function mark(self) -> int throws never { 2 }
+  }
+}
+function needs<T extends Marker>(x: T) -> int throws never {
+  x.mark()
+}
+";
+
+    #[test]
+    fn existential_bounded_type_arg_is_rejected_as_not_concrete() {
+        // `needs(v)` infers `T = Marker` (an interface-existential): a subtype of the
+        // bound, but not concrete — the doc's `bar<dyn AdditiveIdentity>` BAD example.
+        let src = format!(
+            "{MARKER_PROGRAM}function bad(v: Marker) -> int throws never {{\n  needs(v)\n}}\n"
+        );
+        let errors = all_type_errors(&src);
+        assert!(
+            has_not_concrete(&errors),
+            "existential type argument should trip the concreteness gate, got {errors:?}"
+        );
+    }
+
+    #[test]
+    fn union_bounded_type_arg_is_rejected_as_not_concrete() {
+        // `needs(v)` with `v: A | B` infers `T = A | B`: both members implement
+        // `Marker` (so it satisfies the bound), but a union has no single runtime type.
+        let src = format!(
+            "{MARKER_PROGRAM}function bad(v: A | B) -> int throws never {{\n  needs(v)\n}}\n"
+        );
+        let errors = all_type_errors(&src);
+        assert!(
+            has_not_concrete(&errors),
+            "union type argument should trip the concreteness gate, got {errors:?}"
+        );
+    }
+
+    #[test]
+    fn concrete_bounded_type_arg_is_accepted() {
+        // `needs(w)` with `w: Widget` — concrete AND implements `Marker` — satisfies
+        // the bound cleanly. Asserting no diagnostics also confirms the fixture itself
+        // type-checks, so the rejection tests above are not passing on a broken program.
+        let src = format!(
+            "{MARKER_PROGRAM}function good(w: Widget) -> int throws never {{\n  needs(w)\n}}\n"
+        );
+        let errors = all_type_errors(&src);
+        assert!(
+            errors.is_empty(),
+            "a concrete argument that implements the bound should compile clean, got {errors:?}"
+        );
+    }
+
+    #[test]
+    fn class_type_arg_bounded_by_interface_must_be_concrete() {
+        // A generic class's bound is checked where the type is written — a different
+        // path than a function call — so a non-concrete `Wrap<Marker>` argument is
+        // rejected there too.
+        let src = format!(
+            "{MARKER_PROGRAM}class Wrap<T extends Marker> {{\n  val: T\n}}\n\
+             function uses(w: Wrap<Marker>) -> int throws never {{\n  0\n}}\n"
+        );
+        let errors = all_type_errors(&src);
+        assert!(
+            has_not_concrete(&errors),
+            "a non-concrete class type argument should trip the concreteness gate, got {errors:?}"
+        );
+    }
+
+    #[test]
+    fn bounded_typevar_arg_satisfies_a_matching_bound() {
+        // A properly-bounded type variable is a valid argument for a matching bound: it
+        // stands for the concrete type that will fill it, which implements `Marker`. This is
+        // the "typevar as a concrete member" capability — the bound is an *implements*
+        // relation, so `U extends Marker` satisfies `T extends Marker` (rather than being
+        // treated like an interface-existential and rejected as not concrete).
+        let src = format!(
+            "{MARKER_PROGRAM}function forwards<U extends Marker>(y: U) -> int throws never {{\n  needs(y)\n}}\n"
+        );
+        let errors = all_type_errors(&src);
+        assert!(
+            errors.is_empty(),
+            "a bounded typevar argument should satisfy a matching bound cleanly, got {errors:?}"
+        );
+    }
 }

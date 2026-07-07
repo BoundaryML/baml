@@ -445,6 +445,19 @@ pub enum TirTypeError {
     /// BEP-044: a generic parameter's bound (`<T extends X>`) resolved to a
     /// concrete non-interface type. Generic bounds must be interfaces.
     GenericBoundNotInterface { bound: Ty },
+    /// [`TYPE_SYSTEM.md` § Generics on Functions](TYPE_SYSTEM.md#generics-on-functions):
+    /// an interface-bounded type parameter
+    /// (`<T extends I>`) was given a non-concrete type argument (a union,
+    /// interface-existential, literal, `unknown`, …). Only a concrete type has a
+    /// single run-time representation, so virtual dispatch on the parameter is
+    /// well-defined; a `T = A | B` would let `a.method(b)` dispatch on two
+    /// different concrete types at once. Names the argument and the interface bound
+    /// (a conjunction of interfaces — a non-interface bound is a separate
+    /// `GenericBoundNotInterface` error, never this one).
+    BoundedTypeArgNotConcrete {
+        arg: Ty,
+        bound: Box<[baml_type::Interface]>,
+    },
 }
 
 impl fmt::Display for TirTypeError {
@@ -1047,6 +1060,20 @@ impl fmt::Display for TirTypeError {
                 "generic bound `{}` is not an interface; bounds must be interfaces",
                 bound.render_user_facing()
             ),
+            TirTypeError::BoundedTypeArgNotConcrete { arg, bound } => {
+                let bound = bound
+                    .iter()
+                    .map(|iface| iface.to_ty().render_user_facing())
+                    .collect::<Vec<_>>()
+                    .join(" & ");
+                write!(
+                    f,
+                    "type argument `{}` is not concrete; a type parameter bounded by `{bound}` \
+                     requires a concrete type that implements it (an abstract type like a union \
+                     or interface has no single runtime type to dispatch on)",
+                    arg.render_user_facing()
+                )
+            }
         }
     }
 }

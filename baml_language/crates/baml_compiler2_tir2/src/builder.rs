@@ -2178,14 +2178,8 @@ impl<'db> TypeInferenceBuilder<'db> {
         for (idx, resolved_arg) in resolved.iter().enumerate() {
             if let Some(Some(bound)) = generic_param_bounds.get(idx) {
                 let bound_ty = crate::generics::substitute_ty(bound, &bindings);
-                if !self.is_subtype(resolved_arg, &bound_ty) {
-                    self.context.report_simple(
-                        TirTypeError::TypeMismatch {
-                            expected: bound_ty,
-                            got: resolved_arg.clone(),
-                        },
-                        expr_id,
-                    );
+                if let Some(error) = self.bounded_type_arg_error(resolved_arg, &bound_ty) {
+                    self.context.report_simple(error, expr_id);
                 }
             }
         }
@@ -3860,15 +3854,8 @@ impl<'db> TypeInferenceBuilder<'db> {
                     if let Some(bound) = self.generic_param_bounds.get(name).cloned() {
                         let bound_ty =
                             crate::generics::substitute_ty(&bound, &bound_check_bindings);
-                        if !self.is_subtype(actual, &bound_ty) {
-                            self.context.report(
-                                TirTypeError::TypeMismatch {
-                                    expected: bound_ty,
-                                    got: actual.clone(),
-                                },
-                                expr_id,
-                                Vec::new(),
-                            );
+                        if let Some(error) = self.bounded_type_arg_error(actual, &bound_ty) {
+                            self.context.report(error, expr_id, Vec::new());
                         }
                     }
                 }
@@ -12811,6 +12798,95 @@ impl<'db> TypeInferenceBuilder<'db> {
             .fold(types[0].clone(), |acc, t| Self::join_types(&acc, t))
     }
 
+    /// The diagnostic for a type argument `actual` checked against an interface `bound`,
+    /// or `None` if it satisfies the bound.
+    ///
+    /// A generic bound is an **implements** relation, not a subset one: `T extends I`
+    /// requires the argument to *implement* `I`, and only a concrete type implements an
+    /// interface. So the argument must be
+    ///   - a concrete type that implements `I` (through its impls), or
+    ///   - a properly-bounded type variable / associated-type projection — a symbolic
+    ///     stand-in filled later by a concrete type that satisfies its own bound, so it
+    ///     satisfies `I` iff that bound is, or transitively requires, `I`.
+    ///
+    /// A union or interface-existential passes a plain subtype check (by the subset rule)
+    /// but is *not* an implementor, so it is rejected with a dedicated diagnostic. Reading
+    /// the bound as implements — never `is_subtype` — is what lets a bounded typevar be used
+    /// as a concrete member (e.g. a virtual call to a multi-`Self` interface method): it
+    /// stands for the single concrete type that fills it, not an existential over every
+    /// implementor. The one place both obligations are enforced, so every bound-check site
+    /// stays consistent (see
+    /// [`TYPE_SYSTEM.md` § Generics on Functions](TYPE_SYSTEM.md#generics-on-functions)).
+    fn bounded_type_arg_error(&self, actual: &Ty, bound: &Ty) -> Option<TirTypeError> {
+        // A non-interface bound is a separate declaration error (`GenericBoundNotInterface`).
+        let bound_iface = bound.as_interface()?;
+        // Judge the type the argument denotes: aliases expanded, `never` dropped, a reducible
+        // projection collapsed. An unfilled `_` can't be normalized (`Infer` is the
+        // normalizer's `unreachable!`) and is handled by the fill machinery — skip it.
+        if matches!(actual, Ty::Infer { .. }) {
+            return None;
+        }
+        let arg = self.normalize(actual);
+        if !Self::is_bounded_arg_admissible(&arg) {
+            // The bound reached here only because it lowered to an interface (a non-interface
+            // bound is `GenericBoundNotInterface`), so it is a genuine interface conjunction.
+            return Some(TirTypeError::BoundedTypeArgNotConcrete {
+                arg: actual.clone(),
+                bound: Box::new([bound_iface]),
+            });
+        }
+        if !self.bounded_arg_implements(&arg, &bound_iface) {
+            return Some(TirTypeError::TypeMismatch {
+                expected: bound.clone(),
+                got: actual.clone(),
+            });
+        }
+        None
+    }
+
+    /// Whether `arg` (already normalized) is admissible as an interface-bounded type
+    /// argument by KIND: a [concrete](Ty::is_concrete) type, a symbolic stand-in that is
+    /// inductively one — a type variable or associated-type projection, filled later by a
+    /// concrete implementor — or an already-errored sentinel (skipped to avoid a cascade).
+    /// A union, interface-existential, literal, or `unknown` is not: none of them
+    /// *implements* an interface (only concrete types do), so none can fill an interface bound.
+    fn is_bounded_arg_admissible(arg: &Ty) -> bool {
+        arg.is_concrete()
+            || matches!(
+                arg,
+                Ty::TypeVar(..)
+                    | Ty::AssociatedTypeProjection { .. }
+                    | Ty::Unknown { .. }
+                    | Ty::Error { .. }
+            )
+    }
+
+    /// Whether the already-normalized, [admissible](Self::is_bounded_arg_admissible)
+    /// argument `arg` implements `bound`. A concrete type implements it through its impls;
+    /// a bounded type variable / projection is filled by a concrete type satisfying its own
+    /// bound, so it satisfies `bound` iff one of those bounds is, or transitively requires,
+    /// `bound`. An error sentinel is skipped (its own diagnostic covers it).
+    fn bounded_arg_implements(&self, arg: &Ty, bound: &baml_type::Interface) -> bool {
+        let carried_bounds = match arg {
+            Ty::Unknown { .. } | Ty::Error { .. } => return true,
+            Ty::TypeVar(name, _) => self.type_var_bound(name),
+            Ty::AssociatedTypeProjection {
+                interface: Some(iface),
+                member,
+                ..
+            } => self.associated_type_bound(iface, member.clone()),
+            // Never determined — errored upstream; don't cascade.
+            Ty::AssociatedTypeProjection {
+                interface: None, ..
+            } => return true,
+            // A concrete argument implements the bound directly through its impls.
+            _ => return self.implements_interface(arg, bound),
+        };
+        carried_bounds.iter().any(|have| {
+            self.equivalent(&have.to_ty(), &bound.to_ty()) || self.interface_requires(have, bound)
+        })
+    }
+
     fn validate_function_generic_bounds(
         &mut self,
         expr_id: ExprId,
@@ -12826,15 +12902,8 @@ impl<'db> TypeInferenceBuilder<'db> {
                 continue;
             };
             let bound = crate::generics::substitute_ty(bound, bindings);
-            if !self.is_subtype(actual, &bound) {
-                self.context.report(
-                    TirTypeError::TypeMismatch {
-                        expected: bound,
-                        got: actual.clone(),
-                    },
-                    expr_id,
-                    Vec::new(),
-                );
+            if let Some(error) = self.bounded_type_arg_error(actual, &bound) {
+                self.context.report(error, expr_id, Vec::new());
             }
         }
     }
@@ -13006,11 +13075,8 @@ impl<'db> TypeInferenceBuilder<'db> {
                 continue;
             };
             let bound = crate::generics::substitute_ty(bound, &bindings);
-            if !self.is_subtype(actual, &bound) {
-                errors.push(TirTypeError::TypeMismatch {
-                    expected: bound,
-                    got: actual.clone(),
-                });
+            if let Some(error) = self.bounded_type_arg_error(actual, &bound) {
+                errors.push(error);
             }
         }
     }
