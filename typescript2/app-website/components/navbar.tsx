@@ -68,11 +68,14 @@ function NavStars() {
       .catch(() => {});
   }, []);
 
-  const display = (hovered ? stars + 1 : stars).toLocaleString();
+  // Pin the locale: a bare toLocaleString() uses the viewer's locale on the
+  // client but en-US on the server, so a non-US digit separator (e.g. "8.423")
+  // hydration-mismatches against the server's "8,423".
+  const display = (hovered ? stars + 1 : stars).toLocaleString('en-US');
 
   return (
     <Link
-      aria-label={`BAML on GitHub, ${stars.toLocaleString()} stars`}
+      aria-label={`BAML on GitHub, ${stars.toLocaleString('en-US')} stars`}
       className="flex items-center gap-1.5 hover:text-[#6D28D9] transition-colors"
       href="https://github.com/boundaryml/baml"
       onMouseEnter={() => setHovered(true)}
