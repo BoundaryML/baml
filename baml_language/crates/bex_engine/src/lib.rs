@@ -4082,18 +4082,28 @@ impl BexEngine {
     /// enqueued before the caller's [`Self::drain_one_pending_child_error`].
     /// Without this the child's error was silently dropped when the root exited
     /// 0 (B-612 fixed only the case where the child had ALREADY thrown by the
-    /// time the root completed). Covers both default spawns and `detach = true`
-    /// spawns, whose unhandled errors both route to the root thread's
-    /// `pending_child_errors` queue.
+    /// time the root completed).
     ///
-    /// **WAIT, do not cancel** — the Node.js "run until there is no pending
-    /// work" model (BEP-034 end-of-run amendment). We fire no cancel token: a
-    /// prototype that cancelled outstanding work at shutdown was rejected
-    /// because it injected `Cancelled` into legitimate background work (an
-    /// `all_complete` loser whose side effects must finish, a detached
-    /// telemetry flush) and broke the `baml test` harness. So `detach` is NOT
-    /// exempt — a finite detached task runs to completion here like any other
-    /// spawn. A spawn that never settles (never awaited, never cancelled)
+    /// **Scope: non-detached spawns only.** A `detach = true` spawn is
+    /// contractually decoupled from its spawner and outlives the run that
+    /// created it ("behaves like a top-level task"); its unhandled error routes
+    /// to the root and is logged if the root is already gone. Waiting on a
+    /// detached spawn here contradicts that contract and deadlocks any
+    /// long-lived detached task designed to span calls — notably the SDK's
+    /// `replay_serve_detached`, whose detached `serve` is only torn down by a
+    /// *later*, separate bridge call and so can never settle while this call is
+    /// still parked on it (the sdk-test hang). Detached spawns are therefore
+    /// excluded by [`FutureManagerGuard::pending_join_handles`]; a
+    /// non-detached fire-and-forget spawn remains this run's in-flight work and
+    /// IS waited-for, so its racing/delayed throw still surfaces.
+    ///
+    /// **WAIT, do not cancel** (for the non-detached spawns we do wait on) —
+    /// the Node.js "run until there is no pending work" model (BEP-034
+    /// end-of-run amendment). We fire no cancel token: a prototype that
+    /// cancelled outstanding work at shutdown was rejected because it injected
+    /// `Cancelled` into legitimate background work (an `all_complete` loser
+    /// whose side effects must finish) and broke the `baml test` harness. A
+    /// non-detached spawn that never settles (never awaited, never cancelled)
     /// blocks the process at exit; that is the amendment's deliberate red flag
     /// for a concurrency bug (locate it with tracing), not a case we paper over
     /// by cancelling. This also preserves the "returning futures is safe"
@@ -4113,10 +4123,14 @@ impl BexEngine {
         self: &Arc<Self>,
         mut thread: ActiveHeapPermit<BexThread>,
     ) -> Result<ActiveHeapPermit<BexThread>, EngineError> {
+        // Scope the wait to THIS run's own spawns: the `FutureManager` is shared
+        // across every concurrent run on the engine, so we must not park on a
+        // different run's outstanding future. Stable for the life of the thread.
+        let run_id = thread.vm_thread_run_id();
         loop {
             let handles = {
                 let guard = self.futures.acquire(thread.proof()).await;
-                guard.pending_join_handles()
+                guard.pending_join_handles(run_id)
             };
             if handles.is_empty() {
                 return Ok(thread);
@@ -4343,14 +4357,16 @@ impl BexEngine {
                     }
 
                     // B-650: end-of-run wait. The root is finalizing; WAIT for
-                    // any still-outstanding spawned child futures to run to
-                    // completion FIRST, so a racing `spawn { throw ... }` whose
-                    // task had not been polled yet deterministically parks its
-                    // error before the drain below. Without this, only children
-                    // that had ALREADY thrown by the time the root completed
-                    // surfaced (B-612); the fully-racing case exited 0. We
-                    // WAIT, never cancel (see
-                    // `wait_for_outstanding_child_futures`).
+                    // this run's still-outstanding NON-detached spawned child
+                    // futures to run to completion FIRST, so a racing
+                    // `spawn { throw ... }` whose task had not been polled yet
+                    // deterministically parks its error before the drain below.
+                    // Without this, only children that had ALREADY thrown by the
+                    // time the root completed surfaced (B-612); the fully-racing
+                    // case exited 0. We WAIT, never cancel; the wait is scoped to
+                    // this run and skips detached spawns (see
+                    // `wait_for_outstanding_child_futures` /
+                    // `FutureManagerGuard::pending_join_handles`).
                     //
                     // Gate on the GENUINE top-level root, NOT on
                     // `settles_future.is_none()`: a nested host-invoked callable
@@ -4358,12 +4374,11 @@ impl BexEngine {
                     // `spawn_with_callable` → `call_callable`) is also a
                     // `settles_future == None` root, so `settles_future.is_none()`
                     // alone misclassifies it as the finalizing root. It would then
-                    // run this wait and park forever on the outer run's still-
-                    // `Pending` `serve` spawn — the handler never returns, its HTTP
-                    // response never sends, and the whole run deadlocks upstream of
-                    // cancellation (B-650 `baml test` hang). The shared
-                    // `FutureManager` sees every run's pending futures, so only the
-                    // one true root may drain them.
+                    // run this wait during the outer run — and, before per-run
+                    // scoping, park forever on the outer run's still-`Pending`
+                    // `serve` spawn (B-650 `baml test` hang). The shared
+                    // `FutureManager` sees every run's pending futures, so the
+                    // wait must be gated on the true root AND scoped by run id.
                     if thread.vm_thread_is_top_level_root() {
                         thread = self.wait_for_outstanding_child_futures(thread).await?;
                     }
@@ -4787,7 +4802,16 @@ impl BexEngine {
 
                     let future_ptr = {
                         let mut guard = self.futures.acquire(thread.proof()).await;
-                        let (future_id, future_ptr) = guard.new_future(child_cancel.clone());
+                        // Tag the future with `detach` and this run's id so the
+                        // B-650 end-of-run wait can (a) skip detached spawns
+                        // (decoupled, they outlive this run) and (b) scope to a
+                        // single run's own spawns on the shared `FutureManager`
+                        // (see `FutureManagerGuard::pending_join_handles`).
+                        let (future_id, future_ptr) = guard.new_future(
+                            child_cancel.clone(),
+                            detach,
+                            thread.vm_thread_run_id(),
+                        );
                         drop(guard);
                         Arc::clone(self)
                             .spawn_thread(

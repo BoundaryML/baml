@@ -257,6 +257,23 @@ impl BexThread {
     pub fn vm_thread_root_errors_arc(&self) -> Arc<ChildErrorQueue> {
         Arc::clone(&self.root_pending_errors)
     }
+
+    /// Opaque identity of the run this thread belongs to, for scoping the
+    /// B-650 end-of-run wait to a single run's own outstanding spawns.
+    ///
+    /// The `FutureManager` is shared across every concurrent run on one engine
+    /// (the SDK drives many `call_function` roots against one process-global
+    /// runtime), so a completing root must wait ONLY on its own descendants'
+    /// futures — not on futures belonging to another concurrent run (e.g. an
+    /// LLM call blocking on the in-process replay server's still-streaming
+    /// response spawn). Every thread in a run shares one `root_pending_errors`
+    /// Arc — propagated unchanged down the spawn tree (detached children
+    /// included) — so its allocation address is a stable per-run key: a root
+    /// and all its descendants agree on it, and distinct runs differ. Used
+    /// purely as an opaque token (never dereferenced through this value).
+    pub fn vm_thread_run_id(&self) -> usize {
+        Arc::as_ptr(&self.root_pending_errors) as usize
+    }
 }
 
 impl RootHaver for BexThread {

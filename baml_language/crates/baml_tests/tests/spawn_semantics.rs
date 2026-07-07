@@ -8,10 +8,16 @@
 //!
 //! The `racing_*` / `*_waited_*` tests exercise the B-650 end-of-run **wait**
 //! (BEP-034 end-of-run amendment): on root exit the runtime WAITS for every
-//! outstanding spawn to run to completion — it does NOT cancel them — so even a
-//! *racing* throw (a child whose task had not been polled when the root
-//! completed) surfaces, and even a delayed throw surfaces (a cancel-at-shutdown
-//! design would have dropped it). `detach` is not exempt from the wait.
+//! outstanding *non-detached* spawn to run to completion — it does NOT cancel
+//! them — so even a *racing* throw (a child whose task had not been polled when
+//! the root completed) surfaces, and even a delayed throw surfaces (a
+//! cancel-at-shutdown design would have dropped it).
+//!
+//! `detach = true` spawns are EXEMPT from the wait: a detached spawn is
+//! decoupled from its spawner and outlives the run that created it, so the root
+//! does not block on it (the `detached_*` tests below). Blocking on a detached
+//! spawn deadlocked the SDK's long-lived `replay_serve_detached` server, which
+//! returns immediately and is torn down only by a later, separate call.
 
 use std::time::{Duration, Instant};
 
@@ -147,29 +153,42 @@ async fn racing_never_awaited_spawn_error_surfaces_at_completion() {
     assert!(msg.contains("baml.errors.Io"), "got {msg}");
 }
 
-/// B-650: the racing case with `detach = true`. Per the `detach` contract the
-/// child's unhandled error routes to the *root* task's queue; `detach` is NOT
-/// exempt from the end-of-run wait, so the root waits for it and the racing
-/// throw surfaces at completion just like the default case.
+/// B-650 SDK-hang regression: a `detach = true` spawn that NEVER settles (an
+/// infinite sleep, standing in for the SDK's detached `server.serve(...)`) must
+/// NOT block the root's completion. A detached spawn is decoupled from its
+/// spawner and outlives the run, so the end-of-run wait excludes it; the root
+/// returns its value promptly rather than parking forever. Before the fix the
+/// wait treated detached spawns like any other outstanding future and hung —
+/// exactly the deadlock that froze the SDK's `replay_serve_detached` (which
+/// returns immediately and is torn down only by a later, separate bridge call).
+/// Wall-clock timeout-guarded because the pre-fix failure mode is a hang.
 #[tokio::test]
-async fn racing_never_awaited_detached_spawn_error_surfaces_at_completion() {
+async fn detached_infinite_spawn_does_not_block_root_completion() {
     let program = compile_source_with_opt(
         r#"
         function main() -> string {
             let f = spawn with baml.spawn.options(detach = true) {
-                throw baml.errors.Io { message: "boom" }
+                baml.sys.sleep(baml.time.Duration.from_milliseconds(600000n));
+                "never"
             };
             "done"
         }
         "#,
         OptLevel::One,
     );
-    let output = run_compiled(program, "main", IndexMap::new(), false).await;
-    let err = output
+    let output = tokio::time::timeout(
+        Duration::from_secs(30),
+        run_compiled(program, "main", IndexMap::new(), false),
+    )
+    .await
+    .expect("detached infinite spawn must not block root completion (B-650 sdk hang)");
+    let value = output
         .result
-        .expect_err("racing never-awaited detached spawn throw must surface at completion");
-    let msg = format!("{err:?}");
-    assert!(msg.contains("baml.errors.Io"), "got {msg}");
+        .expect("root should return cleanly without waiting on the detached spawn");
+    let BexExternalValue::String(s) = value else {
+        panic!("expected String, got {value:?}");
+    };
+    assert_eq!(s.to_string(), "done");
 }
 
 /// B-650 negative guard: a *racing* never-awaited child that completes
@@ -225,11 +244,15 @@ async fn never_awaited_delayed_throw_is_waited_and_surfaces() {
     assert!(msg.contains("baml.errors.Io"), "got {msg}");
 }
 
-/// B-650 wait-not-cancel proof, detached variant: a never-awaited `detach = true`
-/// child that sleeps then throws is likewise waited to completion (detach is not
-/// exempt from the wait) and its error routes to the root and surfaces.
+/// B-650 detach-is-exempt, delayed variant: a never-awaited `detach = true`
+/// child that sleeps then throws is NOT waited-for. Because a detached spawn is
+/// decoupled from its spawner and outlives the run, the root completes and
+/// returns "done" before the child's delayed throw ever happens — the throw is
+/// then dropped/logged per the detach "route to root, log if root gone"
+/// contract, not surfaced. (Contrast `never_awaited_delayed_throw_is_waited_and_surfaces`,
+/// the non-detached case, which IS waited and surfaces.)
 #[tokio::test]
-async fn never_awaited_detached_delayed_throw_is_waited_and_surfaces() {
+async fn detached_delayed_throw_is_not_waited_and_root_returns_cleanly() {
     let program = compile_source_with_opt(
         r#"
         function main() -> string {
@@ -242,20 +265,27 @@ async fn never_awaited_detached_delayed_throw_is_waited_and_surfaces() {
         "#,
         OptLevel::One,
     );
-    let output = run_compiled(program, "main", IndexMap::new(), false).await;
-    let err = output
+    let output = tokio::time::timeout(
+        Duration::from_secs(30),
+        run_compiled(program, "main", IndexMap::new(), false),
+    )
+    .await
+    .expect("detached delayed throw must not block the root (B-650 detach exemption)");
+    let value = output
         .result
-        .expect_err("delayed never-awaited detached spawn throw must be waited-for and surface");
-    let msg = format!("{err:?}");
-    assert!(msg.contains("baml.errors.Io"), "got {msg}");
+        .expect("root should return cleanly; the detached delayed throw is not waited-for");
+    let BexExternalValue::String(s) = value else {
+        panic!("expected String, got {value:?}");
+    };
+    assert_eq!(s.to_string(), "done");
 }
 
 /// B-650: a finite detached "telemetry flush" style spawn — sleeps briefly then
-/// completes successfully, never awaited — must be waited to completion at exit
-/// (its side effects run) and must NOT false-surface or hang. The root returns
-/// its value cleanly.
+/// completes successfully, never awaited — must NOT block the root or
+/// false-surface. Detached spawns are exempt from the end-of-run wait, so the
+/// root returns its value cleanly whether or not the detached task has settled.
 #[tokio::test]
-async fn finite_detached_spawn_is_waited_to_completion() {
+async fn finite_detached_spawn_does_not_block_completion() {
     let program = compile_source_with_opt(
         r#"
         function main() -> string {
@@ -271,7 +301,7 @@ async fn finite_detached_spawn_is_waited_to_completion() {
     let output = run_compiled(program, "main", IndexMap::new(), false).await;
     let value = output
         .result
-        .expect("finite detached spawn must be waited-for and the root return cleanly");
+        .expect("finite detached spawn must not block the root; it returns cleanly");
     let BexExternalValue::String(s) = value else {
         panic!("expected String, got {value:?}");
     };
