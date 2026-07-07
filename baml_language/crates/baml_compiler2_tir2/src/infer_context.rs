@@ -517,6 +517,33 @@ pub enum TirTypeError {
         interface: crate::ty::QualifiedTypeName,
         field: Name,
     },
+    /// The class field satisfying an interface field has an incompatible type — field types
+    /// are invariant, so they must be equivalent. Impl conformance (E0116).
+    InterfaceFieldTypeMismatch {
+        interface: crate::ty::QualifiedTypeName,
+        field: Name,
+        /// The interface's declared field type (realized at the impl's interface args).
+        expected: Ty,
+        /// The satisfying class field's type.
+        got: Ty,
+    },
+    /// An override's signature is not a subtype of the interface's declared signature —
+    /// args/kwargs are contravariant, return/throws covariant. Impl conformance (E0120).
+    InterfaceMethodSignatureMismatch {
+        interface: crate::ty::QualifiedTypeName,
+        method: Name,
+        /// The interface's declared signature (realized at the impl's interface args).
+        expected: Ty,
+        /// The override's signature.
+        got: Ty,
+    },
+    /// The impl's target type does not implement an interface the implemented interface
+    /// `requires` — implementing `I` requires also implementing each of `I`'s parents.
+    /// Impl conformance (E0125).
+    MissingRequiredInterface {
+        interface: crate::ty::QualifiedTypeName,
+        required: crate::ty::QualifiedTypeName,
+    },
 }
 
 impl fmt::Display for TirTypeError {
@@ -1189,6 +1216,46 @@ impl fmt::Display for TirTypeError {
                     "missing field `{field}` required by interface `{}` (add a class field named \
                      `{field}` or link one with `{field} as <class_field>`)",
                     interface.render_user_facing()
+                )
+            }
+            TirTypeError::InterfaceFieldTypeMismatch {
+                interface,
+                field,
+                expected,
+                got,
+            } => {
+                write!(
+                    f,
+                    "field `{field}` has type {}, but interface `{}` declares it as {}",
+                    got.render_user_facing(),
+                    interface.render_user_facing(),
+                    expected.render_user_facing()
+                )
+            }
+            TirTypeError::InterfaceMethodSignatureMismatch {
+                interface,
+                method,
+                expected,
+                got,
+            } => {
+                write!(
+                    f,
+                    "method `{method}` has signature {}, which does not conform to interface `{}`'s \
+                     declared {}",
+                    got.render_user_facing(),
+                    interface.render_user_facing(),
+                    expected.render_user_facing()
+                )
+            }
+            TirTypeError::MissingRequiredInterface {
+                interface,
+                required,
+            } => {
+                write!(
+                    f,
+                    "implementing `{}` also requires implementing `{}`",
+                    interface.render_user_facing(),
+                    required.render_user_facing()
                 )
             }
         }

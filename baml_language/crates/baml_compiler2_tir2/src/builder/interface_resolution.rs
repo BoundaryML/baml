@@ -59,7 +59,7 @@ struct InterfaceMethodParam {
 /// this so one builder produces the `Ty::Function`. Interfaces must label their full
 /// contract, so `return_type`/`throws` are required (sourced from the declaration, never
 /// inferred from a body).
-struct InterfaceMethodSpec {
+pub(crate) struct InterfaceMethodSpec {
     /// Positional (required) parameters, in declaration order.
     args: Vec<InterfaceMethodParam>,
     /// Keyword/optional parameters (those with a default).
@@ -71,7 +71,7 @@ struct InterfaceMethodSpec {
 }
 
 impl InterfaceMethodSpec {
-    fn from_default<'db>(
+    pub(crate) fn from_default<'db>(
         db: &'db dyn crate::Db,
         func_loc: baml_compiler2_hir::loc::FunctionLoc<'db>,
     ) -> Self {
@@ -97,7 +97,7 @@ impl InterfaceMethodSpec {
         }
     }
 
-    fn from_required(sig: &baml_compiler2_hir::item_tree::InterfaceMethodSig) -> Self {
+    pub(crate) fn from_required(sig: &baml_compiler2_hir::item_tree::InterfaceMethodSig) -> Self {
         let (args, kwargs) = split_params(sig.params.iter().map(|p| {
             let is_self = p.name.as_str() == "self" && p.type_expr.is_none();
             let ty = p.type_expr.clone().unwrap_or_else(unknown_type_expr);
@@ -116,6 +116,37 @@ impl InterfaceMethodSpec {
             throws: sig.throws.clone().unwrap_or_else(unknown_type_expr),
             generics,
         }
+    }
+
+    /// The method's own generic parameter names — in scope (as free type variables) when
+    /// lowering this spec's signature through a context.
+    pub(crate) fn generic_param_names(&self) -> Vec<Name> {
+        self.generics.iter().map(|(name, _)| name.clone()).collect()
+    }
+
+    /// Lower this normalized signature to a `Ty::Function` through `ctx` (which resolves `Self`,
+    /// `Self.Assoc`, and the in-scope generics). Still a template over its free type variables;
+    /// the caller specializes it (binding interface/method generics via `substitute_ty`).
+    pub(crate) fn to_function_ty(
+        &self,
+        ctx: &dyn crate::lower_type_expr::TypeExprContext<'_>,
+        diags: &mut Vec<TirTypeError>,
+    ) -> Ty {
+        let signature = DeclaredSignature {
+            positional: self
+                .args
+                .iter()
+                .map(|p| (Some(p.name.clone()), &p.ty))
+                .collect(),
+            keyword: self
+                .kwargs
+                .iter()
+                .map(|p| (Some(p.name.clone()), &p.ty))
+                .collect(),
+            return_type: &self.return_type,
+            throws: &self.throws,
+        };
+        lower_signature(&signature, ctx, diags).into_ty()
     }
 }
 
@@ -1102,24 +1133,8 @@ impl<'db> TypeInferenceBuilder<'db> {
         // Lower the declared signature to a type-constructor template through `ctx` (which
         // resolves `Self` and `Self.Assoc`), then specialize it — binding the interface/method
         // generics and associated types. The `bound`-receiver `self` strip happens after.
-        let signature = DeclaredSignature {
-            positional: spec
-                .args
-                .iter()
-                .map(|p| (Some(p.name.clone()), &p.ty))
-                .collect(),
-            keyword: spec
-                .kwargs
-                .iter()
-                .map(|p| (Some(p.name.clone()), &p.ty))
-                .collect(),
-            return_type: &spec.return_type,
-            throws: &spec.throws,
-        };
-        let mut fn_ty = crate::generics::substitute_ty(
-            &lower_signature(&signature, &ctx, &mut diags).into_ty(),
-            &bindings,
-        );
+        let mut fn_ty =
+            crate::generics::substitute_ty(&spec.to_function_ty(&ctx, &mut diags), &bindings);
 
         // Track the method's generic params *and* their bounds so call-site bound
         // enforcement works without the function type carrying them: the receiver generic

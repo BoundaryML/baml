@@ -2892,6 +2892,12 @@ mod tests {
                 }
                 Err(_) => {}
             }
+            // Phase-5 signature/type conformance (E0116/E0120), surfaced alongside impl_data.
+            out.extend(
+                crate::interfaces::validate_impl_signatures(&db, impl_loc)
+                    .iter()
+                    .map(|(e, _)| e.clone()),
+            );
         }
         out
     }
@@ -3374,6 +3380,104 @@ function needs<T extends Marker>(x: T) -> int throws never {
                 .iter()
                 .any(|e| matches!(e, TirTypeError::MissingInterfaceField { .. })),
             "an explicit field link should satisfy the interface field, got {diags:?}"
+        );
+    }
+
+    #[test]
+    fn mismatched_interface_field_type_is_reported() {
+        // `Holder.x: string` but `HasField.x: int` — field types are invariant (E0116).
+        let diags = impl_diagnostics(
+            "interface HasField {\n  x: int\n}\n\
+             class Holder {\n  x: string\n  implements HasField {}\n}\n",
+        );
+        assert!(
+            diags.iter().any(|e| matches!(
+                e,
+                TirTypeError::InterfaceFieldTypeMismatch { field, .. } if field.as_str() == "x"
+            )),
+            "expected InterfaceFieldTypeMismatch for `x`, got {diags:?}"
+        );
+    }
+
+    #[test]
+    fn matching_interface_field_type_is_accepted() {
+        let diags = impl_diagnostics(
+            "interface HasField {\n  x: int\n}\n\
+             class Holder {\n  x: int\n  implements HasField {}\n}\n",
+        );
+        assert!(
+            !diags
+                .iter()
+                .any(|e| matches!(e, TirTypeError::InterfaceFieldTypeMismatch { .. })),
+            "a matching field type should be accepted, got {diags:?}"
+        );
+    }
+
+    #[test]
+    fn method_signature_mismatch_is_reported() {
+        // Override returns `int` but the interface declares `string` — return is covariant, and
+        // `int </: string`, so the signature does not conform (E0120).
+        let diags = impl_diagnostics(
+            "interface Greeter {\n  function greet(self) -> string throws never\n}\n\
+             class Rude {\n  implements Greeter {\n    \
+             function greet(self) -> int throws never { 0 }\n  }\n}\n",
+        );
+        assert!(
+            diags.iter().any(|e| matches!(
+                e,
+                TirTypeError::InterfaceMethodSignatureMismatch { method, .. } if method.as_str() == "greet"
+            )),
+            "expected InterfaceMethodSignatureMismatch for `greet`, got {diags:?}"
+        );
+    }
+
+    #[test]
+    fn widened_override_param_is_accepted() {
+        // Args are contravariant: an override may accept a *supertype* (`int | string` ⊇ `int`).
+        let diags = impl_diagnostics(
+            "interface Handler {\n  function handle(self, x: int) -> int throws never\n}\n\
+             class Wide {\n  implements Handler {\n    \
+             function handle(self, x: int | string) -> int throws never { 0 }\n  }\n}\n",
+        );
+        assert!(
+            !diags
+                .iter()
+                .any(|e| matches!(e, TirTypeError::InterfaceMethodSignatureMismatch { .. })),
+            "a contravariantly-widened param should conform, got {diags:?}"
+        );
+    }
+
+    #[test]
+    fn missing_required_interface_is_reported() {
+        // `Greeter requires Named`, but `Rude` implements only `Greeter` (E0125).
+        let diags = impl_diagnostics(
+            "interface Named {\n  function name(self) -> string throws never\n}\n\
+             interface Greeter requires Named {\n  function greet(self) -> string throws never\n}\n\
+             class Rude {\n  implements Greeter {\n    \
+             function greet(self) -> string throws never { \"hi\" }\n  }\n}\n",
+        );
+        assert!(
+            diags
+                .iter()
+                .any(|e| matches!(e, TirTypeError::MissingRequiredInterface { .. })),
+            "expected MissingRequiredInterface, got {diags:?}"
+        );
+    }
+
+    #[test]
+    fn implemented_required_interface_is_accepted() {
+        let diags = impl_diagnostics(
+            "interface Named {\n  function name(self) -> string throws never\n}\n\
+             interface Greeter requires Named {\n  function greet(self) -> string throws never\n}\n\
+             class Polite {\n  \
+             implements Named {\n    function name(self) -> string throws never { \"p\" }\n  }\n  \
+             implements Greeter {\n    function greet(self) -> string throws never { \"hi\" }\n  }\n}\n",
+        );
+        assert!(
+            !diags
+                .iter()
+                .any(|e| matches!(e, TirTypeError::MissingRequiredInterface { .. })),
+            "implementing the required interface should conform, got {diags:?}"
         );
     }
 

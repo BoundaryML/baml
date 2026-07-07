@@ -44,7 +44,7 @@ use crate::{
 
 pub(crate) mod associated_projection;
 /// Interface member/method resolution for existential / type-var receivers.
-mod interface_resolution;
+pub(crate) mod interface_resolution;
 use interface_resolution::UnionMemberResolution;
 
 // ── Well-known type constructors ──────────────────────────────────────────────
