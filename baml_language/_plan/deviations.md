@@ -1,5 +1,18 @@
 # Deviations from the LLM-provider plan
 
+## Capability registry (DCP §1.2): HIR query, not AST pre-pass or build-time baking
+
+- **[design]** The desugar plan sketched a "package-wide syntactic pre-pass" feeding companion
+  expansion during AST lowering, with the stdlib table "baked at build time like
+  `PROVIDER_CONFIGS`". Reality: the compiler2 pipeline is Salsa with **per-file** AST lowering
+  (`file_semantic_index`), so a cross-file registry consumed during AST lowering would make every
+  file's lowering depend on every other file — breaking incrementality. Implemented instead as the
+  plan's own flagged fallback: marker flags flow AST → HIR item tree, and
+  `hir::capability_registry::capability_registry(db)` unions them across all files; companion
+  *generation* (Phase C) hooks PPIR, which already synthesizes the stream-expanded companions and
+  has db access. Build-time baking is unnecessary — builtins are embedded as source and lowered
+  in-session, so one collector covers stdlib + user uniformly.
+
 A running log of where the **implementation** diverged from [`llm-provider-plan.md`](./llm-provider-plan.md)
 and the design corpus in [`../llm-provider/`](../llm-provider/), and why. Updated as work proceeds.
 
