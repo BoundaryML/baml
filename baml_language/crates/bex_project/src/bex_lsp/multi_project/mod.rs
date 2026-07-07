@@ -553,6 +553,7 @@ impl BexMulitProject {
                 } else {
                     None
                 },
+                params: f.params,
             })
             .collect();
 

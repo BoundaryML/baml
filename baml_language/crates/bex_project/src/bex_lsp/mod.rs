@@ -74,6 +74,12 @@ pub struct FunctionInfo {
     pub origin: FunctionOrigin,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub capabilities: Option<LlmCapabilities>,
+    /// Parameter schemas for the playground args form. `None` (omitted on the
+    /// wire) means no schema is available and the UI degrades to raw JSON;
+    /// `Some(vec![])` means the function takes no arguments. Do not collapse
+    /// the empty vec — the UI relies on the distinction.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub params: Option<Vec<baml_project::ParamSchema>>,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]

@@ -14,6 +14,133 @@ pub struct FunctionInfo {
     pub origin: FunctionOrigin,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub capabilities: Option<LlmCapabilities>,
+    /// `None` = no schema available (UI degrades to raw JSON); `Some(vec![])`
+    /// = nullary function. The wire shape must match
+    /// `bex_project::FunctionInfo` exactly.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub params: Option<Vec<ParamSchema>>,
+}
+
+#[derive(Tsify, Serialize)]
+#[tsify(into_wasm_abi)]
+#[serde(rename_all = "camelCase")]
+pub struct ParamSchema {
+    pub name: String,
+    pub has_default: bool,
+    pub schema: FieldSchema,
+}
+
+#[derive(Tsify, Serialize)]
+#[tsify(into_wasm_abi)]
+#[serde(rename_all = "camelCase")]
+pub struct FieldSchemaField {
+    pub name: String,
+    pub schema: FieldSchema,
+}
+
+/// Twin of `baml_project::FieldSchema` (via `bex_project`); both serialize
+/// with `tag = "type"` + camelCase so the JSON matches the WebSocket
+/// transport, which serializes the source struct directly.
+#[derive(Tsify, Serialize)]
+#[tsify(into_wasm_abi)]
+#[serde(tag = "type", rename_all = "camelCase")]
+pub enum FieldSchema {
+    String,
+    Int,
+    Float,
+    Bool,
+    Null,
+    Bigint,
+    Media {
+        kind: String,
+    },
+    Literal {
+        value: serde_json::Value,
+    },
+    Enum {
+        name: String,
+        values: Vec<String>,
+    },
+    Class {
+        name: String,
+        fields: Vec<FieldSchemaField>,
+        recursive: bool,
+    },
+    List {
+        item: Box<FieldSchema>,
+    },
+    Map {
+        key: Box<FieldSchema>,
+        value: Box<FieldSchema>,
+    },
+    Optional {
+        inner: Box<FieldSchema>,
+    },
+    Union {
+        variants: Vec<FieldSchema>,
+    },
+    Unsupported {
+        display: String,
+    },
+}
+
+impl From<bex_project::ParamSchema> for ParamSchema {
+    fn from(p: bex_project::ParamSchema) -> Self {
+        ParamSchema {
+            name: p.name,
+            has_default: p.has_default,
+            schema: p.schema.into(),
+        }
+    }
+}
+
+impl From<bex_project::FieldSchemaField> for FieldSchemaField {
+    fn from(f: bex_project::FieldSchemaField) -> Self {
+        FieldSchemaField {
+            name: f.name,
+            schema: f.schema.into(),
+        }
+    }
+}
+
+impl From<bex_project::FieldSchema> for FieldSchema {
+    fn from(s: bex_project::FieldSchema) -> Self {
+        use bex_project::FieldSchema as Src;
+        match s {
+            Src::String => FieldSchema::String,
+            Src::Int => FieldSchema::Int,
+            Src::Float => FieldSchema::Float,
+            Src::Bool => FieldSchema::Bool,
+            Src::Null => FieldSchema::Null,
+            Src::Bigint => FieldSchema::Bigint,
+            Src::Media { kind } => FieldSchema::Media { kind },
+            Src::Literal { value } => FieldSchema::Literal { value },
+            Src::Enum { name, values } => FieldSchema::Enum { name, values },
+            Src::Class {
+                name,
+                fields,
+                recursive,
+            } => FieldSchema::Class {
+                name,
+                fields: fields.into_iter().map(Into::into).collect(),
+                recursive,
+            },
+            Src::List { item } => FieldSchema::List {
+                item: Box::new((*item).into()),
+            },
+            Src::Map { key, value } => FieldSchema::Map {
+                key: Box::new((*key).into()),
+                value: Box::new((*value).into()),
+            },
+            Src::Optional { inner } => FieldSchema::Optional {
+                inner: Box::new((*inner).into()),
+            },
+            Src::Union { variants } => FieldSchema::Union {
+                variants: variants.into_iter().map(Into::into).collect(),
+            },
+            Src::Unsupported { display } => FieldSchema::Unsupported { display },
+        }
+    }
 }
 
 #[derive(Tsify, Serialize)]
@@ -205,6 +332,7 @@ impl From<bex_project::PlaygroundNotification> for PlaygroundNotification {
                                     build_request: c.build_request,
                                     client_name: c.client_name,
                                 }),
+                                params: f.params.map(|ps| ps.into_iter().map(Into::into).collect()),
                             })
                             .collect(),
                         diagnostics: update
