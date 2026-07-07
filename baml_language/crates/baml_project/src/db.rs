@@ -112,6 +112,12 @@ pub struct ProjectDatabase {
     compiler2_file_map: HashMap<std::path::PathBuf, SourceFile>,
     /// Maps `FileId` to file path for reverse lookup (all files including v2 stubs).
     file_id_to_path: HashMap<FileId, std::path::PathBuf>,
+    /// `SourceFile` inputs of removed paths. Salsa never frees inputs, so a
+    /// delete/recreate cycle (branch switch, codegen rewriting `.baml`
+    /// files) would mint a new immortal input per cycle; instead the input
+    /// parks here with empty text (releasing the source string and its
+    /// downstream memos) and is revived if the path reappears.
+    removed_file_tombstones: HashMap<std::path::PathBuf, SourceFile>,
 }
 
 #[salsa::db]
@@ -177,6 +183,7 @@ impl ProjectDatabase {
             file_map: HashMap::new(),
             compiler2_file_map: HashMap::new(),
             file_id_to_path: HashMap::new(),
+            removed_file_tombstones: HashMap::new(),
         }
     }
 
@@ -196,6 +203,7 @@ impl ProjectDatabase {
             file_map: HashMap::new(),
             compiler2_file_map: HashMap::new(),
             file_id_to_path: HashMap::new(),
+            removed_file_tombstones: HashMap::new(),
         }
     }
 
@@ -269,8 +277,14 @@ impl ProjectDatabase {
             existing_file.set_text(self).to(content.to_string());
             existing_file
         } else {
-            // Create new file
-            let file = self.add_file_internal(&canonical_path, content);
+            // Revive the tombstoned input if this path existed before —
+            // creating a fresh input would leak the old one forever.
+            let file = if let Some(file) = self.removed_file_tombstones.remove(&canonical_path) {
+                file.set_text(self).to(content.to_string());
+                file
+            } else {
+                self.add_file_internal(&canonical_path, content)
+            };
             let file_id = file.file_id(self);
 
             self.file_map.insert(canonical_path.clone(), file);
@@ -289,8 +303,10 @@ impl ProjectDatabase {
 
     /// Remove a file from the database.
     ///
-    /// Note: Salsa doesn't support true removal, but we can remove it from our tracking
-    /// and the project's file list.
+    /// Note: Salsa doesn't support true removal. The input is emptied (so its
+    /// text and per-file memos can be reclaimed), removed from tracking and
+    /// the project's file list, and parked in a tombstone map for reuse if
+    /// the same path is re-added later.
     pub fn remove_file(&mut self, path: &std::path::Path) {
         let canonical_path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
 
@@ -308,6 +324,9 @@ impl ProjectDatabase {
                     .collect();
                 project.set_files(self).to(files);
             }
+
+            file.set_text(self).to(String::new());
+            self.removed_file_tombstones.insert(canonical_path, file);
         }
     }
 
@@ -1423,6 +1442,40 @@ impl std::fmt::Debug for ProjectDatabase {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn removed_files_are_revived_not_recreated() {
+        let mut db = ProjectDatabase::new();
+        db.set_project_root(std::path::Path::new("/tmp"));
+        let path = std::path::Path::new("/tmp/churn.baml");
+        let original =
+            db.add_or_update_file(path, "function A(input: string) -> string {\n  input\n}\n");
+        let original_id = original.file_id(&db);
+        let baseline = crate::collect_compiler2_diagnostics(&db).len();
+
+        // Branch switches and codegen delete and recreate files; each cycle
+        // must revive the tombstoned salsa input instead of minting a new
+        // immortal one.
+        for i in 0..3 {
+            db.remove_file(path);
+            assert!(
+                crate::collect_compiler2_diagnostics(&db).len() >= baseline,
+                "diagnostics must still compute while the file is removed"
+            );
+            let revived = db.add_or_update_file(
+                path,
+                &format!("function A(input: string) -> string {{\n  //# v{i}\n  input\n}}\n"),
+            );
+            assert_eq!(
+                revived.file_id(&db),
+                original_id,
+                "re-adding a removed path must reuse its SourceFile input"
+            );
+        }
+
+        assert_eq!(crate::collect_compiler2_diagnostics(&db).len(), baseline);
+        assert!(db.ast_control_flow_graph("A").is_some());
+    }
 
     #[test]
     fn callee_graphs_are_still_inlined_per_call_site() {

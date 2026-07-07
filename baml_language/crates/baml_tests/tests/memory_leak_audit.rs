@@ -107,6 +107,43 @@ fn editing_session_memory_growth() {
 
 #[test]
 #[ignore = "manual memory audit"]
+fn delete_recreate_churn() {
+    // Simulates branch switches / codegen rewriting files: each iteration
+    // removes the file and re-adds it with slightly different content. The
+    // tombstone-revival path in ProjectDatabase must keep RSS flat.
+    let dir = std::env::temp_dir().join(format!("baml_mem_audit_rm_{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let file_path = dir.join("main.baml");
+    std::fs::write(&file_path, project_source(50, 0)).unwrap();
+
+    let mut db = baml_project::ProjectDatabase::new();
+    db.set_project_root(&dir);
+    db.add_or_update_file(&file_path, &project_source(50, 0));
+    let _ = baml_project::collect_compiler2_diagnostics(&db);
+    println!("baseline rss={:.1}MB", phys_footprint_mb());
+
+    let iters: usize = std::env::var("MEM_AUDIT_ITERS")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(500);
+
+    for i in 1..=iters {
+        db.remove_file(&file_path);
+        let _ = baml_project::collect_compiler2_diagnostics(&db);
+        db.add_or_update_file(&file_path, &project_source(50, i));
+        let _ = baml_project::collect_compiler2_diagnostics(&db);
+        if i % 50 == 0 {
+            println!(
+                "iter {i:5}: rss={:.1}MB maxrss={:.1}MB",
+                phys_footprint_mb(),
+                rss_mb()
+            );
+        }
+    }
+}
+
+#[test]
+#[ignore = "manual memory audit"]
 fn editing_session_rename_churn() {
     // Simulates typing a new function name char by char (identity churn:
     // new LocalItemId per keystroke -> new interned FunctionLoc per keystroke).
