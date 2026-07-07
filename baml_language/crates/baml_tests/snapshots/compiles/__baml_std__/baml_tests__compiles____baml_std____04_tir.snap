@@ -234,6 +234,4260 @@ function baml.Int.min_value() -> int throws never {
 class baml.Int$stream {
 }
 
+--- <builtin>/baml/ns_ai/capabilities/background.baml ---
+class baml.ai.Job {
+  id: string
+  owner: string
+}
+class baml.ai.Job$stream {
+  id: string | null
+  owner: string | null
+}
+
+--- <builtin>/baml/ns_ai/capabilities/cache.baml ---
+class baml.ai.CacheHandle {
+  name: string
+}
+class baml.ai.CacheHandle$stream {
+  name: string | null
+}
+
+--- <builtin>/baml/ns_ai/capabilities/chain.baml ---
+class baml.ai.ChainHandle {
+  id: string
+  owner: string
+}
+class baml.ai.ChainHandle$stream {
+  id: string | null
+  owner: string | null
+}
+
+--- <builtin>/baml/ns_ai/capabilities/constrained.baml ---
+
+--- <builtin>/baml/ns_ai/capabilities/conversation.baml ---
+class baml.ai.Session {
+  _id: string
+}
+class baml.ai.Window {
+  _data: string
+}
+class baml.ai.Session$stream {
+  _id: string | null
+}
+class baml.ai.Window$stream {
+  _data: string | null
+}
+
+--- <builtin>/baml/ns_ai/capabilities/http.baml ---
+function baml.ai.HttpProvider.call_messages_with<T, V, E2>(self: baml.ai.HttpProvider, messages: baml.ai.ChatMessage[], project: (baml.ai.ResponseMeta) -> V throws E2) -> baml.ai.CallResult<T, V> throws baml.errors.CallError | baml.errors.UnknownError | E2 {
+  { : baml.ai.CallResult<T, V>
+    let body = self.send(self.build_request<T>(messages)) : Self.Body
+    CallResult { value: self.parse<T>(body), meta: project(self.meta_of(body)) } : baml.ai.CallResult<T, V>
+  }
+}
+function baml.ai.HttpProvider.call_messages<T>(self: baml.ai.HttpProvider, messages: baml.ai.ChatMessage[]) -> T throws baml.errors.CallError | baml.errors.UnknownError {
+  { : T
+    let r = self.call_messages_with<V, E2>(messages, (m: ResponseMeta) -> null { ... }) : baml.ai.CallResult<T, null>
+    r.value : T
+  }
+}
+lambda baml.ai.HttpProvider.call_messages {
+}
+function baml.ai.HttpProvider.call_with<T, V, E2>(self: baml.ai.HttpProvider, prompt: string, project: (baml.ai.ResponseMeta) -> V throws E2) -> baml.ai.CallResult<T, V> throws baml.errors.CallError | baml.errors.UnknownError | E2 {
+  { : baml.ai.CallResult<T, V>
+    let messages = [ChatMessage.user(prompt)] : baml.ai.ChatMessage[]
+    self.call_messages_with<V, E2>(messages, project) : baml.ai.CallResult<T, V>
+  }
+}
+function baml.ai.HttpProvider.call<T>(self: baml.ai.HttpProvider, prompt: string) -> T throws baml.errors.CallError | baml.errors.UnknownError {
+  { : T
+    let r = self.call_with<V, E2>(prompt, (m: ResponseMeta) -> null { ... }) : baml.ai.CallResult<T, null>
+    r.value : T
+  }
+}
+lambda baml.ai.HttpProvider.call {
+}
+
+--- <builtin>/baml/ns_ai/capabilities/introspection.baml ---
+enum baml.ai.Support
+
+--- <builtin>/baml/ns_ai/capabilities/memory.baml ---
+class baml.ai.MemoryHit {
+  text: string
+  score: float
+}
+class baml.ai.MemoryHit$stream {
+  text: string | null
+  score: float | null
+}
+
+--- <builtin>/baml/ns_ai/capabilities/realtime.baml ---
+class baml.ai.Transcript {
+  text: string
+}
+class baml.ai.Transcript$stream {
+  text: string | null
+}
+
+--- <builtin>/baml/ns_ai/capabilities/streaming.baml ---
+function baml.ai.Streaming.stream<TStream, TFinal>(self: baml.ai.Streaming, prompt: string) -> baml.llm.Stream<TStream, TFinal> throws baml.errors.StreamError | baml.errors.UnknownError {
+  { : baml.llm.Stream<TStream, TFinal>
+    let messages = [ChatMessage.user(prompt)] : baml.ai.ChatMessage[]
+    self.stream_messages(messages) : baml.llm.Stream<TStream, TFinal>
+  }
+}
+
+--- <builtin>/baml/ns_ai/capabilities/suspend.baml ---
+class baml.ai.Snapshot {
+  _data: string
+}
+class baml.ai.Suspend {
+  payload: string
+  point: string
+}
+class baml.ai.Snapshot$stream {
+  _data: string | null
+}
+class baml.ai.Suspend$stream {
+  payload: string | null
+  point: string | null
+}
+
+--- <builtin>/baml/ns_ai/capabilities/tools.baml ---
+class baml.ai.Tool {
+  name: string
+  description: string
+  parameters: string
+}
+function baml.ai.Tool.from_type(name: string, description: string, params: type) -> baml.ai.Tool throws baml.errors.Unsupported {
+  { : baml.ai.Tool
+    Tool { name: name, description: description, parameters: root.schema.json_schema(params, false) } : baml.ai.Tool
+  }
+}
+class baml.ai.ToolCall {
+  id: string
+  name: string
+  args: string
+}
+class baml.ai.ToolResult {
+  id: string
+  output: string
+}
+class baml.ai.ToolCalls {
+  calls: baml.ai.ToolCall[]
+}
+function baml.ai.Tools.run_tools<T>(self: baml.ai.Tools, prompt: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never) -> T throws baml.errors.ToolError | baml.errors.UnknownError {
+  { : never
+    let t = self.begin(prompt, tools) : Self.Transcript
+    while true
+      { : void
+        match (self.step<T>(t) : T | baml.ai.ToolCalls) : void
+          calls: ToolCalls =>
+            { : void
+              t = self.submit(t, dispatch(calls.calls)) : Self.Transcript
+            }
+          value: T =>
+            { : never
+              return value : T
+            }
+      }
+    root.sys.panic("unreachable") : never
+  }
+}
+class baml.ai.Tool$stream {
+  name: string | null
+  description: string | null
+  parameters: string | null
+}
+class baml.ai.ToolCall$stream {
+  id: string | null
+  name: string | null
+  args: string | null
+}
+class baml.ai.ToolResult$stream {
+  id: string | null
+  output: string | null
+}
+class baml.ai.ToolCalls$stream {
+  calls: baml.ai.ToolCall$stream[]
+}
+
+--- <builtin>/baml/ns_ai/combinators.baml ---
+class baml.ai.Fallback {
+  members: baml.ai.Provider[]
+}
+function baml.ai.Fallback.build_request<T>(self: baml.ai.Fallback, messages: baml.ai.ChatMessage[]) -> baml.http.Request throws baml.errors.UnknownError {
+  { : never
+    throw root.errors.UnknownError { data: null, message: ["fallback has no s..."] } : baml.errors.UnknownError
+  }
+}
+function baml.ai.Fallback.send(self: baml.ai.Fallback, request: baml.http.Request) -> unknown throws baml.errors.UnknownError {
+  { : never
+    throw root.errors.UnknownError { data: null, message: ["fallback does not..."] } : baml.errors.UnknownError
+  }
+}
+function baml.ai.Fallback.parse<T>(self: baml.ai.Fallback, from: unknown) -> T throws baml.errors.UnknownError {
+  { : never
+    throw root.errors.UnknownError { data: null, message: ["fallback does not..."] } : baml.errors.UnknownError
+  }
+}
+function baml.ai.Fallback.meta_of(self: baml.ai.Fallback, from: unknown) -> baml.ai.ResponseMeta throws baml.errors.UnknownError {
+  { : never
+    throw root.errors.UnknownError { data: null, message: ["fallback has no meta"] } : baml.errors.UnknownError
+  }
+}
+function baml.ai.Fallback.call_messages_with<T, V, E2>(self: baml.ai.Fallback, messages: baml.ai.ChatMessage[], project: (baml.ai.ResponseMeta) -> V throws E2) -> baml.ai.CallResult<T, V> throws baml.errors.CallError | baml.errors.UnknownError | E2 {
+  { : never
+    for m in self.members
+      { : never
+        match (m : baml.ai.Provider) : never
+          h: root.ai.HttpProvider =>
+            { : never
+              let r: root.ai.CallResult<T, V> = : baml.ai.CallResult<T, V>
+                catch (h.call_messages_with<V, E2>(messages, project) : baml.ai.CallResult<T, V>) : baml.ai.CallResult<T, V>
+                  catch (e)
+                    _ =>
+                      { : never
+                        continue
+                      }
+              return r : baml.ai.CallResult<T, V>
+            }
+          _ =>
+            { : never
+              continue
+            }
+      }
+    throw root.errors.UnknownError { data: null, message: ["fallback: all pro..."] } : baml.errors.UnknownError
+  }
+}
+function baml.ai.Fallback.stream_messages<TStream, TFinal>(self: baml.ai.Fallback, messages: baml.ai.ChatMessage[]) -> baml.llm.Stream<TStream, TFinal> throws baml.errors.UnknownError {
+  { : never
+    for m in self.members
+      { : never
+        match (m : baml.ai.Provider) : never
+          s: root.ai.Streaming =>
+            { : never
+              let st: root.llm.Stream<TStream, TFinal> = : baml.llm.Stream<TStream, TFinal>
+                catch (s.stream_messages(messages) : baml.llm.Stream<TStream, TFinal>) : baml.llm.Stream<TStream, TFinal>
+                  catch (e)
+                    _ =>
+                      { : never
+                        continue
+                      }
+              return st : baml.llm.Stream<TStream, TFinal>
+            }
+          _ =>
+            { : never
+              continue
+            }
+      }
+    throw root.errors.UnknownError { data: null, message: ["fallback: no stre..."] } : baml.errors.UnknownError
+  }
+}
+class baml.ai.Retry {
+  inner: baml.ai.Provider
+  max: int
+}
+function baml.ai.Retry.build_request<T>(self: baml.ai.Retry, messages: baml.ai.ChatMessage[]) -> baml.http.Request throws baml.errors.UnknownError {
+  { : never
+    throw root.errors.UnknownError { data: null, message: ["retry has no sing..."] } : baml.errors.UnknownError
+  }
+}
+function baml.ai.Retry.send(self: baml.ai.Retry, request: baml.http.Request) -> unknown throws baml.errors.UnknownError {
+  { : never
+    throw root.errors.UnknownError { data: null, message: ["retry does not se..."] } : baml.errors.UnknownError
+  }
+}
+function baml.ai.Retry.parse<T>(self: baml.ai.Retry, from: unknown) -> T throws baml.errors.UnknownError {
+  { : never
+    throw root.errors.UnknownError { data: null, message: ["retry does not pa..."] } : baml.errors.UnknownError
+  }
+}
+function baml.ai.Retry.meta_of(self: baml.ai.Retry, from: unknown) -> baml.ai.ResponseMeta throws baml.errors.UnknownError {
+  { : never
+    throw root.errors.UnknownError { data: null, message: ["retry has no meta"] } : baml.errors.UnknownError
+  }
+}
+function baml.ai.Retry.call_messages_with<T, V, E2>(self: baml.ai.Retry, messages: baml.ai.ChatMessage[], project: (baml.ai.ResponseMeta) -> V throws E2) -> baml.ai.CallResult<T, V> throws baml.errors.CallError | baml.errors.UnknownError | E2 {
+  { : never
+    if (self.inner.is_effectful() : bool) : void
+      { : never
+        throw root.errors.CannotRetry { message: "provider is effec..." } : baml.errors.CannotRetry
+      }
+    let attempt: int = 0 : 0 -> int
+    while true
+      { : never
+        match (self.inner : baml.ai.Provider) : never
+          h: root.ai.HttpProvider =>
+            { : never
+              let r: root.ai.CallResult<T, V> = : baml.ai.CallResult<T, V>
+                catch (h.call_messages_with<V, E2>(messages, project) : baml.ai.CallResult<T, V>) : baml.ai.CallResult<T, V>
+                  catch (e)
+                    f: root.errors.Failure =>
+                      { : never
+                        if (attempt < self.max && f.is_retryable() : bool) : void
+                          { : never
+                            attempt = attempt + 1 : int
+                            root.sys.sleep(root.time.Duration.from_milliseconds(100 * attempt)) : null
+                            continue
+                          }
+                        throw e : baml.errors.CallError
+                      }
+                    _ =>
+                      { : never
+                        if (attempt < self.max : bool) : void
+                          { : never
+                            attempt = attempt + 1 : int
+                            root.sys.sleep(root.time.Duration.from_milliseconds(100 * attempt)) : null
+                            continue
+                          }
+                        throw e : baml.errors.UnknownError | E2
+                      }
+              return r : baml.ai.CallResult<T, V>
+            }
+          _ =>
+            { : never
+              throw root.errors.UnknownError { data: null, message: ["retry: inner is n..."] } : baml.errors.UnknownError
+            }
+      }
+    root.sys.panic("unreachable") : never
+  }
+}
+function baml.ai.Retry.stream_messages<TStream, TFinal>(self: baml.ai.Retry, messages: baml.ai.ChatMessage[]) -> baml.llm.Stream<TStream, TFinal> throws baml.errors.StreamError | baml.errors.UnknownError {
+  { : baml.llm.Stream<TStream, TFinal>
+    match (self.inner : baml.ai.Provider) : baml.llm.Stream<TStream, TFinal>
+      s: root.ai.Streaming =>
+        s.stream_messages(messages) : baml.llm.Stream<TStream, TFinal>
+      _ =>
+        { : never
+          throw root.errors.UnknownError { data: null, message: ["retry: inner is n..."] } : baml.errors.UnknownError
+        }
+  }
+}
+class baml.ai.RoundRobin {
+  members: baml.ai.Provider[]
+  counter: int
+}
+function baml.ai.RoundRobin.build_request<T>(self: baml.ai.RoundRobin, messages: baml.ai.ChatMessage[]) -> baml.http.Request throws baml.errors.UnknownError {
+  { : never
+    throw root.errors.UnknownError { data: null, message: ["round_robin has n..."] } : baml.errors.UnknownError
+  }
+}
+function baml.ai.RoundRobin.send(self: baml.ai.RoundRobin, request: baml.http.Request) -> unknown throws baml.errors.UnknownError {
+  { : never
+    throw root.errors.UnknownError { data: null, message: ["round_robin does ..."] } : baml.errors.UnknownError
+  }
+}
+function baml.ai.RoundRobin.parse<T>(self: baml.ai.RoundRobin, from: unknown) -> T throws baml.errors.UnknownError {
+  { : never
+    throw root.errors.UnknownError { data: null, message: ["round_robin does ..."] } : baml.errors.UnknownError
+  }
+}
+function baml.ai.RoundRobin.meta_of(self: baml.ai.RoundRobin, from: unknown) -> baml.ai.ResponseMeta throws baml.errors.UnknownError {
+  { : never
+    throw root.errors.UnknownError { data: null, message: ["round_robin has n..."] } : baml.errors.UnknownError
+  }
+}
+function baml.ai.RoundRobin.call_messages_with<T, V, E2>(self: baml.ai.RoundRobin, messages: baml.ai.ChatMessage[], project: (baml.ai.ResponseMeta) -> V throws E2) -> baml.ai.CallResult<T, V> throws baml.errors.CallError | baml.errors.UnknownError | E2 {
+  { : baml.ai.CallResult<T, V>
+    let n = self.members.length() : int
+    if (n == 0 : bool) : void
+      { : never
+        throw root.errors.UnknownError { data: null, message: ["round_robin: no m..."] } : baml.errors.UnknownError
+      }
+    let idx = self.counter % n : int
+    self.counter = self.counter + 1 : int
+    match (self.members.at(idx) : baml.ai.Provider | null) : baml.ai.CallResult<T, V>
+      h: root.ai.HttpProvider =>
+        h.call_messages_with<V, E2>(messages, project) : baml.ai.CallResult<T, V>
+      _ =>
+        { : never
+          throw root.errors.UnknownError { data: null, message: ["round_robin: memb..."] } : baml.errors.UnknownError
+        }
+  }
+}
+class baml.ai.Fallback$stream {
+  members: baml.ai.Provider[]
+}
+function baml.ai.Fallback$stream.build_request<T>(self: baml.ai.Fallback$stream, messages: baml.ai.ChatMessage[]) -> baml.http.Request throws baml.errors.UnknownError {
+  { : never
+    throw root.errors.UnknownError { data: null, message: ["fallback has no s..."] } : baml.errors.UnknownError
+  }
+}
+function baml.ai.Fallback$stream.send(self: baml.ai.Fallback$stream, request: baml.http.Request) -> unknown throws baml.errors.UnknownError {
+  { : never
+    throw root.errors.UnknownError { data: null, message: ["fallback does not..."] } : baml.errors.UnknownError
+  }
+}
+function baml.ai.Fallback$stream.parse<T>(self: baml.ai.Fallback$stream, from: unknown) -> T throws baml.errors.UnknownError {
+  { : never
+    throw root.errors.UnknownError { data: null, message: ["fallback does not..."] } : baml.errors.UnknownError
+  }
+}
+function baml.ai.Fallback$stream.meta_of(self: baml.ai.Fallback$stream, from: unknown) -> baml.ai.ResponseMeta throws baml.errors.UnknownError {
+  { : never
+    throw root.errors.UnknownError { data: null, message: ["fallback has no meta"] } : baml.errors.UnknownError
+  }
+}
+function baml.ai.Fallback$stream.call_messages_with<T, V, E2>(self: baml.ai.Fallback$stream, messages: baml.ai.ChatMessage[], project: (baml.ai.ResponseMeta) -> V throws E2) -> baml.ai.CallResult<T, V> throws baml.errors.CallError | baml.errors.UnknownError | E2 {
+  { : never
+    for m in self.members
+      { : never
+        match (m : baml.ai.Provider) : never
+          h: root.ai.HttpProvider =>
+            { : never
+              let r: root.ai.CallResult<T, V> = : baml.ai.CallResult<T, V>
+                catch (h.call_messages_with<V, E2>(messages, project) : baml.ai.CallResult<T, V>) : baml.ai.CallResult<T, V>
+                  catch (e)
+                    _ =>
+                      { : never
+                        continue
+                      }
+              return r : baml.ai.CallResult<T, V>
+            }
+          _ =>
+            { : never
+              continue
+            }
+      }
+    throw root.errors.UnknownError { data: null, message: ["fallback: all pro..."] } : baml.errors.UnknownError
+  }
+}
+function baml.ai.Fallback$stream.stream_messages<TStream, TFinal>(self: baml.ai.Fallback$stream, messages: baml.ai.ChatMessage[]) -> baml.llm.Stream<TStream, TFinal> throws baml.errors.UnknownError {
+  { : never
+    for m in self.members
+      { : never
+        match (m : baml.ai.Provider) : never
+          s: root.ai.Streaming =>
+            { : never
+              let st: root.llm.Stream<TStream, TFinal> = : baml.llm.Stream<TStream, TFinal>
+                catch (s.stream_messages(messages) : baml.llm.Stream<TStream, TFinal>) : baml.llm.Stream<TStream, TFinal>
+                  catch (e)
+                    _ =>
+                      { : never
+                        continue
+                      }
+              return st : baml.llm.Stream<TStream, TFinal>
+            }
+          _ =>
+            { : never
+              continue
+            }
+      }
+    throw root.errors.UnknownError { data: null, message: ["fallback: no stre..."] } : baml.errors.UnknownError
+  }
+}
+class baml.ai.Retry$stream {
+  inner: baml.ai.Provider | null
+  max: int | null
+}
+function baml.ai.Retry$stream.build_request<T>(self: baml.ai.Retry$stream, messages: baml.ai.ChatMessage[]) -> baml.http.Request throws baml.errors.UnknownError {
+  { : never
+    throw root.errors.UnknownError { data: null, message: ["retry has no sing..."] } : baml.errors.UnknownError
+  }
+}
+function baml.ai.Retry$stream.send(self: baml.ai.Retry$stream, request: baml.http.Request) -> unknown throws baml.errors.UnknownError {
+  { : never
+    throw root.errors.UnknownError { data: null, message: ["retry does not se..."] } : baml.errors.UnknownError
+  }
+}
+function baml.ai.Retry$stream.parse<T>(self: baml.ai.Retry$stream, from: unknown) -> T throws baml.errors.UnknownError {
+  { : never
+    throw root.errors.UnknownError { data: null, message: ["retry does not pa..."] } : baml.errors.UnknownError
+  }
+}
+function baml.ai.Retry$stream.meta_of(self: baml.ai.Retry$stream, from: unknown) -> baml.ai.ResponseMeta throws baml.errors.UnknownError {
+  { : never
+    throw root.errors.UnknownError { data: null, message: ["retry has no meta"] } : baml.errors.UnknownError
+  }
+}
+function baml.ai.Retry$stream.call_messages_with<T, V, E2>(self: baml.ai.Retry$stream, messages: baml.ai.ChatMessage[], project: (baml.ai.ResponseMeta) -> V throws E2) -> baml.ai.CallResult<T, V> throws baml.errors.CallError | baml.errors.UnknownError | E2 {
+  { : never
+    if (self.inner.is_effectful() : unknown) : void
+      { : never
+        throw root.errors.CannotRetry { message: "provider is effec..." } : baml.errors.CannotRetry
+      }
+    let attempt: int = 0 : 0 -> int
+    while true
+      { : never
+        match (self.inner : baml.ai.Provider | null) : never
+          h: root.ai.HttpProvider =>
+            { : never
+              let r: root.ai.CallResult<T, V> = : baml.ai.CallResult<T, V>
+                catch (h.call_messages_with<V, E2>(messages, project) : baml.ai.CallResult<T, V>) : baml.ai.CallResult<T, V>
+                  catch (e)
+                    f: root.errors.Failure =>
+                      { : never
+                        if (attempt < self.max && f.is_retryable() : bool) : void
+                          { : never
+                            attempt = attempt + 1 : int
+                            root.sys.sleep(root.time.Duration.from_milliseconds(100 * attempt)) : null
+                            continue
+                          }
+                        throw e : baml.errors.CallError
+                      }
+                    _ =>
+                      { : never
+                        if (attempt < self.max : bool) : void
+                          { : never
+                            attempt = attempt + 1 : int
+                            root.sys.sleep(root.time.Duration.from_milliseconds(100 * attempt)) : null
+                            continue
+                          }
+                        throw e : baml.errors.UnknownError | E2
+                      }
+              return r : baml.ai.CallResult<T, V>
+            }
+          _ =>
+            { : never
+              throw root.errors.UnknownError { data: null, message: ["retry: inner is n..."] } : baml.errors.UnknownError
+            }
+      }
+    root.sys.panic("unreachable") : never
+  }
+  !! 5533..5556: did you mean `self.inner?.is_effectful`? `self.inner.is_effectful` does not handle the case when `self.inner` is null
+  !! 5533..5558: `(() -> bool throws never) | null` is not a function — it cannot be called
+  !! 5533..5556: did you mean `self.inner?.is_effectful`? `self.inner.is_effectful` does not handle the case when `self.inner` is null
+  !! 5533..5558: `(() -> bool throws never) | null` is not a function — it cannot be called
+  !! 6215..6233: cannot order `int` and `int | null` with `<`: ordering requires both operands to have the same type
+  !! 6215..6233: cannot order `int` and `int | null` with `<`: ordering requires both operands to have the same type
+  !! 6786..6804: cannot order `int` and `int | null` with `<`: ordering requires both operands to have the same type
+  !! 6786..6804: cannot order `int` and `int | null` with `<`: ordering requires both operands to have the same type
+}
+function baml.ai.Retry$stream.stream_messages<TStream, TFinal>(self: baml.ai.Retry$stream, messages: baml.ai.ChatMessage[]) -> baml.llm.Stream<TStream, TFinal> throws baml.errors.StreamError | baml.errors.UnknownError {
+  { : baml.llm.Stream<TStream, TFinal>
+    match (self.inner : baml.ai.Provider | null) : baml.llm.Stream<TStream, TFinal>
+      s: root.ai.Streaming =>
+        s.stream_messages(messages) : baml.llm.Stream<TStream, TFinal>
+      _ =>
+        { : never
+          throw root.errors.UnknownError { data: null, message: ["retry: inner is n..."] } : baml.errors.UnknownError
+        }
+  }
+}
+class baml.ai.RoundRobin$stream {
+  members: baml.ai.Provider[]
+  counter: int | null
+}
+function baml.ai.RoundRobin$stream.build_request<T>(self: baml.ai.RoundRobin$stream, messages: baml.ai.ChatMessage[]) -> baml.http.Request throws baml.errors.UnknownError {
+  { : never
+    throw root.errors.UnknownError { data: null, message: ["round_robin has n..."] } : baml.errors.UnknownError
+  }
+}
+function baml.ai.RoundRobin$stream.send(self: baml.ai.RoundRobin$stream, request: baml.http.Request) -> unknown throws baml.errors.UnknownError {
+  { : never
+    throw root.errors.UnknownError { data: null, message: ["round_robin does ..."] } : baml.errors.UnknownError
+  }
+}
+function baml.ai.RoundRobin$stream.parse<T>(self: baml.ai.RoundRobin$stream, from: unknown) -> T throws baml.errors.UnknownError {
+  { : never
+    throw root.errors.UnknownError { data: null, message: ["round_robin does ..."] } : baml.errors.UnknownError
+  }
+}
+function baml.ai.RoundRobin$stream.meta_of(self: baml.ai.RoundRobin$stream, from: unknown) -> baml.ai.ResponseMeta throws baml.errors.UnknownError {
+  { : never
+    throw root.errors.UnknownError { data: null, message: ["round_robin has n..."] } : baml.errors.UnknownError
+  }
+}
+function baml.ai.RoundRobin$stream.call_messages_with<T, V, E2>(self: baml.ai.RoundRobin$stream, messages: baml.ai.ChatMessage[], project: (baml.ai.ResponseMeta) -> V throws E2) -> baml.ai.CallResult<T, V> throws baml.errors.CallError | baml.errors.UnknownError | E2 {
+  { : baml.ai.CallResult<T, V>
+    let n = self.members.length() : int
+    if (n == 0 : bool) : void
+      { : never
+        throw root.errors.UnknownError { data: null, message: ["round_robin: no m..."] } : baml.errors.UnknownError
+      }
+    let idx = self.counter % n : unknown
+    self.counter = self.counter + 1 : unknown
+    match (self.members.at(idx) : baml.ai.Provider | null) : baml.ai.CallResult<T, V>
+      h: root.ai.HttpProvider =>
+        h.call_messages_with<V, E2>(messages, project) : baml.ai.CallResult<T, V>
+      _ =>
+        { : never
+          throw root.errors.UnknownError { data: null, message: ["round_robin: memb..."] } : baml.errors.UnknownError
+        }
+  }
+  !! 10040..10056: operator `%` cannot be applied to `int | null` and `int`
+  !! 10085..10101: operator `+` cannot be applied to `int | null` and `1`
+  !! 10085..10101: operator `+` cannot be applied to `int | null` and `1`
+}
+
+--- <builtin>/baml/ns_ai/core/messages.baml ---
+class baml.ai.MessagePart {
+  text: string | null
+  image: image | null
+  audio: audio | null
+  pdf: pdf | null
+  video: video | null
+}
+function baml.ai.MessagePart.from_text(text: string) -> baml.ai.MessagePart throws never {
+  { : baml.ai.MessagePart
+    MessagePart { text: text } : baml.ai.MessagePart
+  }
+}
+function baml.ai.MessagePart.from_image(img: image) -> baml.ai.MessagePart throws never {
+  { : baml.ai.MessagePart
+    MessagePart { image: img } : baml.ai.MessagePart
+  }
+}
+function baml.ai.MessagePart.from_audio(a: audio) -> baml.ai.MessagePart throws never {
+  { : baml.ai.MessagePart
+    MessagePart { audio: a } : baml.ai.MessagePart
+  }
+}
+class baml.ai.ChatMessage {
+  role: string
+  parts: baml.ai.MessagePart[]
+}
+function baml.ai.ChatMessage.user(text: string) -> baml.ai.ChatMessage throws never {
+  { : baml.ai.ChatMessage
+    ChatMessage { role: "user", parts: [MessagePart.from_text(text)] } : baml.ai.ChatMessage
+  }
+}
+function baml.ai.ChatMessage.system(text: string) -> baml.ai.ChatMessage throws never {
+  { : baml.ai.ChatMessage
+    ChatMessage { role: "system", parts: [MessagePart.from_text(text)] } : baml.ai.ChatMessage
+  }
+}
+function baml.ai.ChatMessage.assistant(text: string) -> baml.ai.ChatMessage throws never {
+  { : baml.ai.ChatMessage
+    ChatMessage { role: "assistant", parts: [MessagePart.from_text(text)] } : baml.ai.ChatMessage
+  }
+}
+class baml.ai.MessagePart$stream {
+  text: string | null
+  image: image | null
+  audio: audio | null
+  pdf: pdf | null
+  video: video | null
+}
+class baml.ai.ChatMessage$stream {
+  role: string | null
+  parts: baml.ai.MessagePart$stream[]
+}
+
+--- <builtin>/baml/ns_ai/core/meta.baml ---
+class baml.ai.CallResult {
+  value: T
+  meta: V
+}
+class baml.ai.Usage {
+  input_tokens: int
+  output_tokens: int
+}
+class baml.ai.Unavailable {
+  reason: string
+}
+class baml.ai.Logprob {
+  token: string
+  logprob: float
+}
+class baml.ai.Citation {
+  url: string
+  title: string
+}
+class baml.ai.CallResult$stream {
+  value: T | null
+  meta: V | null
+}
+class baml.ai.Usage$stream {
+  input_tokens: int | null
+  output_tokens: int | null
+}
+class baml.ai.Unavailable$stream {
+  reason: string | null
+}
+class baml.ai.Logprob$stream {
+  token: string | null
+  logprob: float | null
+}
+class baml.ai.Citation$stream {
+  url: string | null
+  title: string | null
+}
+
+--- <builtin>/baml/ns_ai/core/provider.baml ---
+function baml.ai.Provider.is_effectful(self: baml.ai.Provider) -> bool throws never {
+  { : false
+    false : false
+  }
+}
+function baml.ai.Provider.with_retry(self: baml.ai.Provider, max: int) -> baml.ai.Retry throws never {
+  { : baml.ai.Retry
+    Retry { inner: self, max: max } : baml.ai.Retry
+  }
+}
+function baml.ai.Provider.fallback_to(self: baml.ai.Provider, other: baml.ai.Provider) -> baml.ai.Fallback throws never {
+  { : baml.ai.Fallback
+    Fallback { members: [self, other] } : baml.ai.Fallback
+  }
+}
+
+--- <builtin>/baml/ns_ai/providers/anthropic.baml ---
+class baml.ai.AnthropicHttpError {
+  status: int
+  body: string
+}
+function baml.ai.AnthropicHttpError.is_retryable(self: baml.ai.AnthropicHttpError) -> bool throws never {
+  { : bool
+    self.status == 429 || self.status >= 500 || self.status == 529 : bool
+  }
+}
+function baml.ai.AnthropicHttpError.is_effectful(self: baml.ai.AnthropicHttpError) -> bool throws never {
+  { : false
+    false : false
+  }
+}
+function baml.ai.AnthropicHttpError.is_policy_refusal(self: baml.ai.AnthropicHttpError) -> bool throws never {
+  { : false
+    false : false
+  }
+}
+function baml.ai.AnthropicHttpError.is_resumable(self: baml.ai.AnthropicHttpError) -> bool throws never {
+  { : false
+    false : false
+  }
+}
+function baml.ai.AnthropicHttpError.is_unsupported(self: baml.ai.AnthropicHttpError) -> bool throws never {
+  { : false
+    false : false
+  }
+}
+function baml.ai.AnthropicHttpError.is_network_error(self: baml.ai.AnthropicHttpError) -> bool throws never {
+  { : false
+    false : false
+  }
+}
+function baml.ai.AnthropicHttpError.is_rate_limit(self: baml.ai.AnthropicHttpError) -> bool throws never {
+  { : bool
+    self.status == 429 : bool
+  }
+}
+function baml.ai.AnthropicHttpError.is_parse_error(self: baml.ai.AnthropicHttpError) -> bool throws never {
+  { : false
+    false : false
+  }
+}
+function baml.ai.AnthropicHttpError.is_network_error(self: baml.ai.AnthropicHttpError) -> bool throws never {
+  { : false
+    false : false
+  }
+}
+class baml.ai.AnthropicContentBlockWire {
+  type: string | null
+  text: string | null
+}
+class baml.ai.AnthropicUsageWire {
+  input_tokens: int | null
+  output_tokens: int | null
+}
+class baml.ai.AnthropicResponseWire {
+  content: baml.ai.AnthropicContentBlockWire[]
+  stop_reason: string | null
+  usage: baml.ai.AnthropicUsageWire | null
+}
+class baml.ai.AnthropicResponseMeta {
+  raw_text: string
+}
+function baml.ai.AnthropicResponseMeta._wire(self: baml.ai.AnthropicResponseMeta) -> baml.ai.AnthropicResponseWire | null throws never {
+  { : baml.ai.AnthropicResponseWire | null
+    catch (root.json.from_json<T>(root.json.parse(self.raw_text)) : baml.ai.AnthropicResponseWire) : baml.ai.AnthropicResponseWire | null
+      catch (e)
+        _ =>
+          null : null
+  }
+}
+function baml.ai.AnthropicResponseMeta.finish_reason(self: baml.ai.AnthropicResponseMeta) -> string throws never {
+  { : string | ""
+    match (self._wire() : baml.ai.AnthropicResponseWire | null) : string | ""
+      w: AnthropicResponseWire =>
+        w.stop_reason ?? "" : string
+      _ =>
+        "" : ""
+  }
+}
+function baml.ai.AnthropicResponseMeta.usage(self: baml.ai.AnthropicResponseMeta) -> baml.ai.Usage throws never {
+  { : baml.ai.Usage
+    match (self._wire() : baml.ai.AnthropicResponseWire | null) : baml.ai.Usage
+      w: AnthropicResponseWire =>
+        match (w.usage : baml.ai.AnthropicUsageWire | null) : baml.ai.Usage
+          u: AnthropicUsageWire =>
+            { : baml.ai.Usage
+              root.ai.Usage { input_tokens: u.input_tokens ?? 0, output_tokens: u.output_tokens ?? 0 } : baml.ai.Usage
+            }
+          _ =>
+            root.ai.Usage { input_tokens: 0, output_tokens: 0 } : baml.ai.Usage
+      _ =>
+        root.ai.Usage { input_tokens: 0, output_tokens: 0 } : baml.ai.Usage
+  }
+}
+function baml.ai.AnthropicResponseMeta.reasoning(self: baml.ai.AnthropicResponseMeta) -> string | baml.ai.Unavailable throws never {
+  { : baml.ai.Unavailable
+    root.ai.Unavailable { reason: "anthropic message..." } : baml.ai.Unavailable
+  }
+}
+function baml.ai.AnthropicResponseMeta.logprobs(self: baml.ai.AnthropicResponseMeta) -> baml.ai.Logprob[] | baml.ai.Unavailable throws never {
+  { : baml.ai.Unavailable
+    root.ai.Unavailable { reason: "anthropic message..." } : baml.ai.Unavailable
+  }
+}
+function baml.ai.AnthropicResponseMeta.citations(self: baml.ai.AnthropicResponseMeta) -> baml.ai.Citation[] | baml.ai.Unavailable throws never {
+  { : baml.ai.Unavailable
+    root.ai.Unavailable { reason: "anthropic message..." } : baml.ai.Unavailable
+  }
+}
+class baml.ai.Anthropic {
+  model: string
+  api_key: string | null
+  base_url: string | null
+  max_tokens: int | null
+  anthropic_version: string | null
+  extra_headers: map<string, string> | null
+  extra_body: map<string, unknown> | null
+  append_output_schema: bool | null
+}
+function baml.ai.Anthropic._api_key(self: baml.ai.Anthropic) -> string throws baml.errors.UnknownError {
+  { : string
+    match (self.api_key : string | null) : string
+      k: string =>
+        k : string
+      null =>
+        { : string
+          let v = : string | null
+            catch (root.env.get("ANTHROPIC_API_KEY") : string | null) : string | null
+              catch (e)
+                _ =>
+                  { : never
+                    throw root.errors.UnknownError { data: e, message: ["anthropic: failed..."] } : baml.errors.UnknownError
+                  }
+          v ?? "" : string
+        }
+  }
+}
+function baml.ai.Anthropic._encode_part(self: baml.ai.Anthropic, p: baml.ai.MessagePart) -> baml.json.json throws baml.errors.UnknownError {
+  { : never
+    match (p.text : string | null) : void
+      null =>
+        { : void
+        }
+      t: string =>
+        { : never
+          return map { "type": "text", "text": t } : map<string, string>
+        }
+    match (p.image : image | null) : void
+      null =>
+        { : void
+        }
+      img: image =>
+        { : never
+          match (img.url() : string | null) : never
+            null =>
+              { : never
+                return map { "type": "image", "source": map { "type": "base64", "media_type": img.mime_type() ?? "image/png", "data": img.base64() } } : map<string, string | map<string, string>>
+              }
+            u: string =>
+              { : never
+                return map { "type": "image", "source": map { "type": "url", "url": u } } : map<string, string | map<string, string>>
+              }
+        }
+    match (p.pdf : pdf | null) : void
+      null =>
+        { : void
+        }
+      d: pdf =>
+        { : never
+          return map { "type": "document", "source": map { "type": "base64", "media_type": "application/pdf", "data": d.base64() } } : map<string, string | map<string, string>>
+        }
+    throw root.errors.UnknownError { data: null, message: ["anthropic: unsupp..."] } : baml.errors.UnknownError
+  }
+}
+function baml.ai.Anthropic._encode_message(self: baml.ai.Anthropic, m: baml.ai.ChatMessage) -> baml.json.json throws baml.errors.UnknownError {
+  { : map<string, string | baml.json.json[]>
+    let parts: baml.json.json[] = [] : baml.json.json[]
+    for p in m.parts
+      { : void
+        parts.push(self._encode_part(p)) : int
+      }
+    map { "role": m.role, "content": parts } : map<string, string | baml.json.json[]>
+  }
+}
+function baml.ai.Anthropic._request_body(self: baml.ai.Anthropic, messages: baml.ai.ChatMessage[], stream: bool) -> string throws baml.errors.UnknownError {
+  { : string
+    let body: map<string, baml.json.json> = map {  } : map<string, baml.json.json>
+    body.set("model", self.model) : baml.json.json | null
+    body.set("max_tokens", self.max_tokens ?? 4096) : baml.json.json | null
+    let system_texts: string[] = [] : string[]
+    let encoded: baml.json.json[] = [] : baml.json.json[]
+    for m in messages
+      { : void
+        if (m.role == "system" : bool) : void
+          { : void
+            for p in m.parts
+              { : void
+                match (p.text : string | null) : void
+                  null =>
+                    { : void
+                    }
+                  t: string =>
+                    { : void
+                      system_texts.push(t) : int
+                    }
+              }
+          }
+        else
+          { : void
+            encoded.push(self._encode_message(m)) : int
+          }
+      }
+    if (system_texts.length() > 0 : bool) : void
+      { : void
+        body.set("system", system_texts.join("\n\n")) : baml.json.json | null
+      }
+    body.set("messages", encoded) : baml.json.json | null
+    if (stream : bool) : void
+      { : void
+        body.set("stream", true) : baml.json.json | null
+      }
+    match (self.extra_body : map<string, unknown> | null) : void
+      extra: map<string, unknown> =>
+        { : void
+          for k in extra.keys()
+            { : void
+              let v: baml.json.json = : baml.json.json -> bool | int | float | string | baml.json.json[] | map<string, baml.json.json> | null
+                catch (root.json.to_json<T>(extra.get(k)) : baml.json.json) : baml.json.json
+                  catch (e)
+                    _ =>
+                      { : never
+                        continue
+                      }
+              body.set(k, v) : baml.json.json | null
+            }
+        }
+      _ =>
+        { : void
+        }
+    root.json.stringify(body) : string
+  }
+}
+function baml.ai.Anthropic._request_headers(self: baml.ai.Anthropic) -> map<string, string> throws baml.errors.UnknownError {
+  { : map<string, string>
+    let headers: map<string, string> = map { "x-api-key": self._api_key(), "anthropic-version": self.anthropic_version ?? "2023-06-01", "content-type": "application/json" } : map<string, string>
+    match (self.extra_headers : map<string, string> | null) : void
+      extra: map<string, string> =>
+        { : void
+          for k in extra.keys()
+            { : void
+              headers.set(k, extra.get(k) ?? "") : string | null
+            }
+        }
+      _ =>
+        { : void
+        }
+    headers : map<string, string>
+  }
+}
+function baml.ai.Anthropic._append_schema(self: baml.ai.Anthropic, messages: baml.ai.ChatMessage[], schema: string) -> baml.ai.ChatMessage[] throws never {
+  { : baml.ai.ChatMessage[]
+    let n = messages.length() : int
+    if (n == 0 : bool) : void
+      { : never
+        return [root.ai.ChatMessage.user(schema)] : baml.ai.ChatMessage[]
+      }
+    let out: root.ai.ChatMessage[] = [] : baml.ai.ChatMessage[]
+    let i = 0 : 0 -> int
+    while i < n - 1
+      { : void
+        match (messages.at(i) : baml.ai.ChatMessage | null) : void
+          m: root.ai.ChatMessage =>
+            out.push(m) : int
+          _ =>
+            { : void
+            }
+        i = i + 1 : int
+      }
+    match (messages.at(n - 1) : baml.ai.ChatMessage | null) : void
+      last: root.ai.ChatMessage =>
+        { : void
+          let parts: root.ai.MessagePart[] = [] : baml.ai.MessagePart[]
+          let np = last.parts.length() : int
+          let j = 0 : 0 -> int
+          while j < np - 1
+            { : void
+              match (last.parts.at(j) : baml.ai.MessagePart | null) : void
+                p: root.ai.MessagePart =>
+                  parts.push(p) : int
+                _ =>
+                  { : void
+                  }
+              j = j + 1 : int
+            }
+          let appended = false : false -> bool
+          match (last.parts.at(np - 1) : baml.ai.MessagePart | null) : void
+            lastp: root.ai.MessagePart =>
+              match (lastp.text : string | null) : void
+                t: string =>
+                  { : void
+                    parts.push(root.ai.MessagePart.from_text(t + "\n\n" + schema)) : int
+                    appended = true : true
+                  }
+                _ =>
+                  parts.push(lastp) : int
+            _ =>
+              { : void
+              }
+          if (Not appended : bool) : void
+            { : void
+              parts.push(root.ai.MessagePart.from_text(schema)) : int
+            }
+          out.push(root.ai.ChatMessage { role: last.role, parts: parts }) : int
+        }
+      _ =>
+        { : void
+        }
+    out : baml.ai.ChatMessage[]
+  }
+}
+function baml.ai.Anthropic._messages_for(self: baml.ai.Anthropic, messages: baml.ai.ChatMessage[], schema: string) -> baml.ai.ChatMessage[] throws never {
+  { : baml.ai.ChatMessage[]
+    if (Not self.append_output_schema ?? true || schema == "" : bool) : baml.ai.ChatMessage[]
+      { : baml.ai.ChatMessage[]
+        messages : baml.ai.ChatMessage[]
+      }
+    else
+      { : baml.ai.ChatMessage[]
+        self._append_schema(messages, schema) : baml.ai.ChatMessage[]
+      }
+  }
+}
+function baml.ai.Anthropic.build_request<T>(self: baml.ai.Anthropic, messages: baml.ai.ChatMessage[]) -> baml.http.Request throws baml.errors.UnknownError {
+  { : baml.http.Request
+    let schema: string = root.llm.render_output_format(reflect.type_of<T>()) : string
+    root.http.Request { method: "POST", url: self.base_url ?? "https://api.anthr..." + "/v1/messages", headers: self._request_headers(), body: self._request_body(self._messages_for(messages, schema), false) } : baml.http.Request
+  }
+}
+function baml.ai.Anthropic.send(self: baml.ai.Anthropic, request: baml.http.Request) -> string throws baml.errors.CallError | baml.errors.UnknownError {
+  { : string
+    let resp = : baml.http.Response
+      catch (root.http.send(request) : baml.http.Response) : baml.http.Response
+        catch (e)
+          _ =>
+            throw root.errors.UnknownError { data: e, message: ["anthropic send fa..."] } : never
+    let text = : string
+      catch (resp.text() : string) : string
+        catch (e)
+          _ =>
+            { : never
+              throw root.errors.UnknownError { data: e, message: ["anthropic body re..."] } : baml.errors.UnknownError
+            }
+    if (resp.ok() : bool) : string
+      { : string
+        text : string
+      }
+    else
+      { : never
+        throw AnthropicHttpError { status: resp.status_code, body: text } : baml.ai.AnthropicHttpError
+      }
+  }
+}
+function baml.ai.Anthropic.parse<T>(self: baml.ai.Anthropic, from: string) -> T throws baml.errors.UnknownError {
+  { : T
+    let wire: AnthropicResponseWire = : baml.ai.AnthropicResponseWire
+      catch (root.json.from_json<T>(root.json.parse(from)) : baml.ai.AnthropicResponseWire) : baml.ai.AnthropicResponseWire
+        catch (e)
+          _ =>
+            throw root.errors.UnknownError { data: e, message: ["anthropic parse f..."] } : never
+    let text = "" : "" -> string
+    for b in wire.content
+      { : void
+        match (b.text : string | null) : void
+          null =>
+            { : void
+            }
+          t: string =>
+            { : void
+              text = text + t : string
+            }
+      }
+    catch (root.sap.parse<T>(text) : T) : T
+      catch (e)
+        _ =>
+          { : never
+            throw root.errors.UnknownError { data: e, message: ["anthropic SAP par..."] } : baml.errors.UnknownError
+          }
+  }
+}
+function baml.ai.Anthropic.meta_of(self: baml.ai.Anthropic, from: string) -> baml.ai.ResponseMeta throws never {
+  { : baml.ai.AnthropicResponseMeta
+    AnthropicResponseMeta { raw_text: from } : baml.ai.AnthropicResponseMeta
+  }
+}
+function baml.ai.Anthropic.stream_messages<TStream, TFinal>(self: baml.ai.Anthropic, messages: baml.ai.ChatMessage[]) -> baml.llm.Stream<TStream, TFinal> throws baml.errors.UnknownError {
+  { : baml.llm.Stream<TStream, TFinal>
+    let schema: string = root.llm.render_output_format(reflect.type_of<TFinal>()) : string
+    let req = root.http.Request { method: "POST", url: self.base_url ?? "https://api.anthr..." + "/v1/messages", headers: self._request_headers(), body: self._request_body(self._messages_for(messages, schema), true) } : baml.http.Request
+    let sse = : baml.http.SseStream
+      catch (root.http.fetch_sse(req) : baml.http.SseStream) : baml.http.SseStream
+        catch (e)
+          _ =>
+            { : never
+              throw root.errors.UnknownError { data: e, message: ["anthropic fetch_s..."] } : baml.errors.UnknownError
+            }
+    let primitive = : baml.llm.PrimitiveClient
+      catch (root.llm.from_shorthand("anthropic/" + self.model) : baml.llm.PrimitiveClient) : baml.llm.PrimitiveClient
+        catch (e)
+          _ =>
+            { : never
+              throw root.errors.UnknownError { data: e, message: ["anthropic stream ..."] } : baml.errors.UnknownError
+            }
+    let acc = : baml.llm.StreamAccumulator
+      catch (primitive.new_stream_accumulator() : baml.llm.StreamAccumulator) : baml.llm.StreamAccumulator
+        catch (e)
+          _ =>
+            { : never
+              throw root.errors.UnknownError { data: e, message: ["anthropic accumul..."] } : baml.errors.UnknownError
+            }
+    let cache = root.llm.StreamCache.new(reflect.type_of<TStream>(), reflect.type_of<TFinal>()) : baml.llm.StreamCache<TStream, TFinal>
+    root.llm.Stream { _client: primitive, _acc: acc, _sse: sse, _cache: cache } : baml.llm.Stream<TStream, TFinal>
+  }
+}
+class baml.ai.AnthropicHttpError$stream {
+  status: int | null
+  body: string | null
+}
+function baml.ai.AnthropicHttpError$stream.is_retryable(self: baml.ai.AnthropicHttpError$stream) -> bool throws never {
+  { : bool
+    self.status == 429 || self.status >= 500 || self.status == 529 : bool
+  }
+  !! 1116..1134: cannot order `int | null` and `500` with `>=`: ordering requires both operands to have the same type
+}
+function baml.ai.AnthropicHttpError$stream.is_effectful(self: baml.ai.AnthropicHttpError$stream) -> bool throws never {
+  { : false
+    false : false
+  }
+}
+function baml.ai.AnthropicHttpError$stream.is_policy_refusal(self: baml.ai.AnthropicHttpError$stream) -> bool throws never {
+  { : false
+    false : false
+  }
+}
+function baml.ai.AnthropicHttpError$stream.is_resumable(self: baml.ai.AnthropicHttpError$stream) -> bool throws never {
+  { : false
+    false : false
+  }
+}
+function baml.ai.AnthropicHttpError$stream.is_unsupported(self: baml.ai.AnthropicHttpError$stream) -> bool throws never {
+  { : false
+    false : false
+  }
+}
+function baml.ai.AnthropicHttpError$stream.is_network_error(self: baml.ai.AnthropicHttpError$stream) -> bool throws never {
+  { : false
+    false : false
+  }
+}
+function baml.ai.AnthropicHttpError$stream.is_rate_limit(self: baml.ai.AnthropicHttpError$stream) -> bool throws never {
+  { : bool
+    self.status == 429 : bool
+  }
+}
+function baml.ai.AnthropicHttpError$stream.is_parse_error(self: baml.ai.AnthropicHttpError$stream) -> bool throws never {
+  { : false
+    false : false
+  }
+}
+function baml.ai.AnthropicHttpError$stream.is_network_error(self: baml.ai.AnthropicHttpError$stream) -> bool throws never {
+  { : false
+    false : false
+  }
+}
+class baml.ai.AnthropicContentBlockWire$stream {
+  type: string | null
+  text: string | null
+}
+class baml.ai.AnthropicUsageWire$stream {
+  input_tokens: int | null
+  output_tokens: int | null
+}
+class baml.ai.AnthropicResponseWire$stream {
+  content: baml.ai.AnthropicContentBlockWire$stream[]
+  stop_reason: string | null
+  usage: baml.ai.AnthropicUsageWire$stream | null
+}
+class baml.ai.AnthropicResponseMeta$stream {
+  raw_text: string | null
+}
+function baml.ai.AnthropicResponseMeta$stream.finish_reason(self: baml.ai.AnthropicResponseMeta$stream) -> string throws never {
+  { : string | ""
+    match (self._wire() : unknown) : string | ""
+      w: AnthropicResponseWire =>
+        w.stop_reason ?? "" : string
+      _ =>
+        "" : ""
+  }
+  !! 2743..2748: type `baml.ai.AnthropicResponseMeta$stream` has no member `_wire`
+  !! 2711..2716: declared throws is `never`, but this function may also throw `unknown`
+}
+function baml.ai.AnthropicResponseMeta$stream.usage(self: baml.ai.AnthropicResponseMeta$stream) -> baml.ai.Usage throws never {
+  { : baml.ai.Usage
+    match (self._wire() : unknown) : baml.ai.Usage
+      w: AnthropicResponseWire =>
+        match (w.usage : baml.ai.AnthropicUsageWire | null) : baml.ai.Usage
+          u: AnthropicUsageWire =>
+            { : baml.ai.Usage
+              root.ai.Usage { input_tokens: u.input_tokens ?? 0, output_tokens: u.output_tokens ?? 0 } : baml.ai.Usage
+            }
+          _ =>
+            root.ai.Usage { input_tokens: 0, output_tokens: 0 } : baml.ai.Usage
+      _ =>
+        root.ai.Usage { input_tokens: 0, output_tokens: 0 } : baml.ai.Usage
+  }
+  !! 2958..2963: type `baml.ai.AnthropicResponseMeta$stream` has no member `_wire`
+  !! 2926..2931: declared throws is `never`, but this function may also throw `unknown`
+}
+function baml.ai.AnthropicResponseMeta$stream.reasoning(self: baml.ai.AnthropicResponseMeta$stream) -> string | baml.ai.Unavailable throws never {
+  { : baml.ai.Unavailable
+    root.ai.Unavailable { reason: "anthropic message..." } : baml.ai.Unavailable
+  }
+}
+function baml.ai.AnthropicResponseMeta$stream.logprobs(self: baml.ai.AnthropicResponseMeta$stream) -> baml.ai.Logprob[] | baml.ai.Unavailable throws never {
+  { : baml.ai.Unavailable
+    root.ai.Unavailable { reason: "anthropic message..." } : baml.ai.Unavailable
+  }
+}
+function baml.ai.AnthropicResponseMeta$stream.citations(self: baml.ai.AnthropicResponseMeta$stream) -> baml.ai.Citation[] | baml.ai.Unavailable throws never {
+  { : baml.ai.Unavailable
+    root.ai.Unavailable { reason: "anthropic message..." } : baml.ai.Unavailable
+  }
+}
+class baml.ai.Anthropic$stream {
+  model: string | null
+  api_key: string | null
+  base_url: string | null
+  max_tokens: int | null
+  anthropic_version: string | null
+  extra_headers: map<string, string> | null
+  extra_body: map<string, unknown> | null
+  append_output_schema: bool | null
+}
+function baml.ai.Anthropic$stream.build_request<T>(self: baml.ai.Anthropic$stream, messages: baml.ai.ChatMessage[]) -> baml.http.Request throws baml.errors.UnknownError {
+  { : baml.http.Request
+    let schema: string = root.llm.render_output_format(reflect.type_of<T>()) : string
+    root.http.Request { method: "POST", url: self.base_url ?? "https://api.anthr..." + "/v1/messages", headers: self._request_headers(), body: self._request_body(self._messages_for(messages, schema), false) } : baml.http.Request
+  }
+  !! 6135..6151: type `baml.ai.Anthropic$stream` has no member `_request_headers`
+  !! 6182..6195: type `baml.ai.Anthropic$stream` has no member `_request_body`
+  !! 6201..6214: type `baml.ai.Anthropic$stream` has no member `_messages_for`
+  !! 5674..5698: declared throws is `baml.errors.UnknownError`, but this function may also throw `unknown`
+  ?? 5674..5698: extraneous throws declaration: baml.errors.UnknownError
+}
+function baml.ai.Anthropic$stream.send(self: baml.ai.Anthropic$stream, request: baml.http.Request) -> string throws baml.errors.CallError | baml.errors.UnknownError {
+  { : string
+    let resp = : baml.http.Response
+      catch (root.http.send(request) : baml.http.Response) : baml.http.Response
+        catch (e)
+          _ =>
+            throw root.errors.UnknownError { data: e, message: ["anthropic send fa..."] } : never
+    let text = : string
+      catch (resp.text() : string) : string
+        catch (e)
+          _ =>
+            { : never
+              throw root.errors.UnknownError { data: e, message: ["anthropic body re..."] } : baml.errors.UnknownError
+            }
+    if (resp.ok() : bool) : string
+      { : string
+        text : string
+      }
+    else
+      { : never
+        throw AnthropicHttpError { status: resp.status_code, body: text } : baml.ai.AnthropicHttpError
+      }
+  }
+}
+function baml.ai.Anthropic$stream.parse<T>(self: baml.ai.Anthropic$stream, from: string) -> T throws baml.errors.UnknownError {
+  { : T
+    let wire: AnthropicResponseWire = : baml.ai.AnthropicResponseWire
+      catch (root.json.from_json<T>(root.json.parse(from)) : baml.ai.AnthropicResponseWire) : baml.ai.AnthropicResponseWire
+        catch (e)
+          _ =>
+            throw root.errors.UnknownError { data: e, message: ["anthropic parse f..."] } : never
+    let text = "" : "" -> string
+    for b in wire.content
+      { : void
+        match (b.text : string | null) : void
+          null =>
+            { : void
+            }
+          t: string =>
+            { : void
+              text = text + t : string
+            }
+      }
+    catch (root.sap.parse<T>(text) : T) : T
+      catch (e)
+        _ =>
+          { : never
+            throw root.errors.UnknownError { data: e, message: ["anthropic SAP par..."] } : baml.errors.UnknownError
+          }
+  }
+}
+function baml.ai.Anthropic$stream.meta_of(self: baml.ai.Anthropic$stream, from: string) -> baml.ai.ResponseMeta throws never {
+  { : baml.ai.AnthropicResponseMeta
+    AnthropicResponseMeta { raw_text: from } : baml.ai.AnthropicResponseMeta
+  }
+}
+function baml.ai.Anthropic$stream.stream_messages<TStream, TFinal>(self: baml.ai.Anthropic$stream, messages: baml.ai.ChatMessage[]) -> baml.llm.Stream<TStream, TFinal> throws baml.errors.UnknownError {
+  { : baml.llm.Stream<TStream, TFinal>
+    let schema: string = root.llm.render_output_format(reflect.type_of<TFinal>()) : string
+    let req = root.http.Request { method: "POST", url: self.base_url ?? "https://api.anthr..." + "/v1/messages", headers: self._request_headers(), body: self._request_body(self._messages_for(messages, schema), true) } : baml.http.Request
+    let sse = : baml.http.SseStream
+      catch (root.http.fetch_sse(req) : baml.http.SseStream) : baml.http.SseStream
+        catch (e)
+          _ =>
+            { : never
+              throw root.errors.UnknownError { data: e, message: ["anthropic fetch_s..."] } : baml.errors.UnknownError
+            }
+    let primitive = : baml.llm.PrimitiveClient
+      catch (root.llm.from_shorthand("anthropic/" + self.model) : baml.llm.PrimitiveClient) : baml.llm.PrimitiveClient
+        catch (e)
+          _ =>
+            { : never
+              throw root.errors.UnknownError { data: e, message: ["anthropic stream ..."] } : baml.errors.UnknownError
+            }
+    let acc = : baml.llm.StreamAccumulator
+      catch (primitive.new_stream_accumulator() : baml.llm.StreamAccumulator) : baml.llm.StreamAccumulator
+        catch (e)
+          _ =>
+            { : never
+              throw root.errors.UnknownError { data: e, message: ["anthropic accumul..."] } : baml.errors.UnknownError
+            }
+    let cache = root.llm.StreamCache.new(reflect.type_of<TStream>(), reflect.type_of<TFinal>()) : baml.llm.StreamCache<TStream, TFinal>
+    root.llm.Stream { _client: primitive, _acc: acc, _sse: sse, _cache: cache } : baml.llm.Stream<TStream, TFinal>
+  }
+  !! 9144..9160: type `baml.ai.Anthropic$stream` has no member `_request_headers`
+  !! 9191..9204: type `baml.ai.Anthropic$stream` has no member `_request_body`
+  !! 9210..9223: type `baml.ai.Anthropic$stream` has no member `_messages_for`
+  !! 8836..8860: declared throws is `baml.errors.UnknownError`, but this function may also throw `unknown`
+}
+
+--- <builtin>/baml/ns_ai/providers/gemini.baml ---
+class baml.ai.GeminiHttpError {
+  status: int
+  body: string
+}
+function baml.ai.GeminiHttpError.is_retryable(self: baml.ai.GeminiHttpError) -> bool throws never {
+  { : bool
+    self.status == 429 || self.status >= 500 : bool
+  }
+}
+function baml.ai.GeminiHttpError.is_effectful(self: baml.ai.GeminiHttpError) -> bool throws never {
+  { : false
+    false : false
+  }
+}
+function baml.ai.GeminiHttpError.is_policy_refusal(self: baml.ai.GeminiHttpError) -> bool throws never {
+  { : false
+    false : false
+  }
+}
+function baml.ai.GeminiHttpError.is_resumable(self: baml.ai.GeminiHttpError) -> bool throws never {
+  { : false
+    false : false
+  }
+}
+function baml.ai.GeminiHttpError.is_unsupported(self: baml.ai.GeminiHttpError) -> bool throws never {
+  { : false
+    false : false
+  }
+}
+function baml.ai.GeminiHttpError.is_network_error(self: baml.ai.GeminiHttpError) -> bool throws never {
+  { : false
+    false : false
+  }
+}
+function baml.ai.GeminiHttpError.is_rate_limit(self: baml.ai.GeminiHttpError) -> bool throws never {
+  { : bool
+    self.status == 429 : bool
+  }
+}
+function baml.ai.GeminiHttpError.is_parse_error(self: baml.ai.GeminiHttpError) -> bool throws never {
+  { : false
+    false : false
+  }
+}
+function baml.ai.GeminiHttpError.is_network_error(self: baml.ai.GeminiHttpError) -> bool throws never {
+  { : false
+    false : false
+  }
+}
+class baml.ai.GeminiPartWire {
+  text: string | null
+}
+class baml.ai.GeminiContentWire {
+  parts: baml.ai.GeminiPartWire[] | null
+  role: string | null
+}
+class baml.ai.GeminiCandidateWire {
+  content: baml.ai.GeminiContentWire | null
+  finish_reason: string | null @alias("finishReason")
+}
+class baml.ai.GeminiUsageWire {
+  prompt_token_count: int | null @alias("promptTokenCount")
+  candidates_token_count: int | null @alias("candidatesTokenCount")
+}
+class baml.ai.GeminiResponseWire {
+  candidates: baml.ai.GeminiCandidateWire[]
+  usage_metadata: baml.ai.GeminiUsageWire | null @alias("usageMetadata")
+}
+class baml.ai.GeminiResponseMeta {
+  raw_text: string
+}
+function baml.ai.GeminiResponseMeta._wire(self: baml.ai.GeminiResponseMeta) -> baml.ai.GeminiResponseWire | null throws never {
+  { : baml.ai.GeminiResponseWire | null
+    catch (root.sap.parse<T>(self.raw_text) : baml.ai.GeminiResponseWire) : baml.ai.GeminiResponseWire | null
+      catch (e)
+        _ =>
+          null : null
+  }
+}
+function baml.ai.GeminiResponseMeta.finish_reason(self: baml.ai.GeminiResponseMeta) -> string throws never {
+  { : string | ""
+    match (self._wire() : baml.ai.GeminiResponseWire | null) : string | ""
+      w: GeminiResponseWire =>
+        match (w.candidates.at(0) : baml.ai.GeminiCandidateWire | null) : string | ""
+          c: GeminiCandidateWire =>
+            c.finish_reason ?? "" : string
+          _ =>
+            "" : ""
+      _ =>
+        "" : ""
+  }
+}
+function baml.ai.GeminiResponseMeta.usage(self: baml.ai.GeminiResponseMeta) -> baml.ai.Usage throws never {
+  { : baml.ai.Usage
+    match (self._wire() : baml.ai.GeminiResponseWire | null) : baml.ai.Usage
+      w: GeminiResponseWire =>
+        match (w.usage_metadata : baml.ai.GeminiUsageWire | null) : baml.ai.Usage
+          u: GeminiUsageWire =>
+            { : baml.ai.Usage
+              root.ai.Usage { input_tokens: u.prompt_token_count ?? 0, output_tokens: u.candidates_token_count ?? 0 } : baml.ai.Usage
+            }
+          _ =>
+            root.ai.Usage { input_tokens: 0, output_tokens: 0 } : baml.ai.Usage
+      _ =>
+        root.ai.Usage { input_tokens: 0, output_tokens: 0 } : baml.ai.Usage
+  }
+}
+function baml.ai.GeminiResponseMeta.reasoning(self: baml.ai.GeminiResponseMeta) -> string | baml.ai.Unavailable throws never {
+  { : baml.ai.Unavailable
+    root.ai.Unavailable { reason: "gemini generateCo..." } : baml.ai.Unavailable
+  }
+}
+function baml.ai.GeminiResponseMeta.logprobs(self: baml.ai.GeminiResponseMeta) -> baml.ai.Logprob[] | baml.ai.Unavailable throws never {
+  { : baml.ai.Unavailable
+    root.ai.Unavailable { reason: "gemini generateCo..." } : baml.ai.Unavailable
+  }
+}
+function baml.ai.GeminiResponseMeta.citations(self: baml.ai.GeminiResponseMeta) -> baml.ai.Citation[] | baml.ai.Unavailable throws never {
+  { : baml.ai.Unavailable
+    root.ai.Unavailable { reason: "gemini generateCo..." } : baml.ai.Unavailable
+  }
+}
+class baml.ai.Gemini {
+  model: string
+  api_key: string | null
+  base_url: string | null
+  extra_headers: map<string, string> | null
+  extra_body: map<string, unknown> | null
+  append_output_schema: bool | null
+}
+function baml.ai.Gemini._api_key(self: baml.ai.Gemini) -> string throws baml.errors.UnknownError {
+  { : string
+    match (self.api_key : string | null) : string
+      k: string =>
+        k : string
+      null =>
+        { : string
+          let v = : string | null
+            catch (root.env.get("GOOGLE_API_KEY") : string | null) : string | null
+              catch (e)
+                _ =>
+                  { : never
+                    throw root.errors.UnknownError { data: e, message: ["gemini: failed to..."] } : baml.errors.UnknownError
+                  }
+          v ?? "" : string
+        }
+  }
+}
+function baml.ai.Gemini._encode_part(self: baml.ai.Gemini, p: baml.ai.MessagePart) -> baml.json.json throws baml.errors.UnknownError {
+  { : never
+    match (p.text : string | null) : void
+      null =>
+        { : void
+        }
+      t: string =>
+        { : never
+          return map { "text": t } : map<string, string>
+        }
+    match (p.image : image | null) : void
+      null =>
+        { : void
+        }
+      img: image =>
+        { : never
+          return map { "inline_data": map { "mime_type": img.mime_type() ?? "image/png", "data": img.base64() } } : map<string, map<string, string>>
+        }
+    match (p.audio : audio | null) : void
+      null =>
+        { : void
+        }
+      a: audio =>
+        { : never
+          return map { "inline_data": map { "mime_type": a.mime_type() ?? "audio/wav", "data": a.base64() } } : map<string, map<string, string>>
+        }
+    match (p.pdf : pdf | null) : void
+      null =>
+        { : void
+        }
+      d: pdf =>
+        { : never
+          return map { "inline_data": map { "mime_type": "application/pdf", "data": d.base64() } } : map<string, map<string, string>>
+        }
+    throw root.errors.UnknownError { data: null, message: ["gemini: unsupport..."] } : baml.errors.UnknownError
+  }
+}
+function baml.ai.Gemini._encode_message(self: baml.ai.Gemini, m: baml.ai.ChatMessage) -> baml.json.json throws baml.errors.UnknownError {
+  { : map<string, string | baml.json.json[]>
+    let parts: baml.json.json[] = [] : baml.json.json[]
+    for p in m.parts
+      { : void
+        parts.push(self._encode_part(p)) : int
+      }
+    let role = : "model" | string -> string
+      if (m.role == "assistant" : bool) : "model" | string
+        { : "model"
+          "model" : "model"
+        }
+      else
+        { : string
+          m.role : string
+        }
+    map { "role": role, "parts": parts } : map<string, string | baml.json.json[]>
+  }
+}
+function baml.ai.Gemini._request_body(self: baml.ai.Gemini, messages: baml.ai.ChatMessage[]) -> string throws baml.errors.UnknownError {
+  { : string
+    let body: map<string, baml.json.json> = map {  } : map<string, baml.json.json>
+    let system_parts: baml.json.json[] = [] : baml.json.json[]
+    let contents: baml.json.json[] = [] : baml.json.json[]
+    for m in messages
+      { : void
+        if (m.role == "system" : bool) : void
+          { : void
+            for p in m.parts
+              { : void
+                match (p.text : string | null) : void
+                  null =>
+                    { : void
+                    }
+                  t: string =>
+                    { : void
+                      let part: baml.json.json = map { "text": t } : map<string, string> -> bool | int | float | string | baml.json.json[] | map<string, baml.json.json> | null
+                      system_parts.push(part) : int
+                    }
+              }
+          }
+        else
+          { : void
+            contents.push(self._encode_message(m)) : int
+          }
+      }
+    body.set("contents", contents) : baml.json.json | null
+    if (system_parts.length() > 0 : bool) : void
+      { : void
+        let si: baml.json.json = map { "parts": system_parts } : map<string, baml.json.json[]> -> bool | int | float | string | baml.json.json[] | map<string, baml.json.json> | null
+        body.set("systemInstruction", si) : baml.json.json | null
+      }
+    match (self.extra_body : map<string, unknown> | null) : void
+      extra: map<string, unknown> =>
+        { : void
+          for k in extra.keys()
+            { : void
+              let v: baml.json.json = : baml.json.json -> bool | int | float | string | baml.json.json[] | map<string, baml.json.json> | null
+                catch (root.json.to_json<T>(extra.get(k)) : baml.json.json) : baml.json.json
+                  catch (e)
+                    _ =>
+                      { : never
+                        continue
+                      }
+              body.set(k, v) : baml.json.json | null
+            }
+        }
+      _ =>
+        { : void
+        }
+    root.json.stringify(body) : string
+  }
+}
+function baml.ai.Gemini._request_headers(self: baml.ai.Gemini) -> map<string, string> throws baml.errors.UnknownError {
+  { : map<string, string>
+    let headers: map<string, string> = map { "x-goog-api-key": self._api_key(), "content-type": "application/json" } : map<string, string>
+    match (self.extra_headers : map<string, string> | null) : void
+      extra: map<string, string> =>
+        { : void
+          for k in extra.keys()
+            { : void
+              headers.set(k, extra.get(k) ?? "") : string | null
+            }
+        }
+      _ =>
+        { : void
+        }
+    headers : map<string, string>
+  }
+}
+function baml.ai.Gemini._append_schema(self: baml.ai.Gemini, messages: baml.ai.ChatMessage[], schema: string) -> baml.ai.ChatMessage[] throws never {
+  { : baml.ai.ChatMessage[]
+    let n = messages.length() : int
+    if (n == 0 : bool) : void
+      { : never
+        return [root.ai.ChatMessage.user(schema)] : baml.ai.ChatMessage[]
+      }
+    let out: root.ai.ChatMessage[] = [] : baml.ai.ChatMessage[]
+    let i = 0 : 0 -> int
+    while i < n - 1
+      { : void
+        match (messages.at(i) : baml.ai.ChatMessage | null) : void
+          m: root.ai.ChatMessage =>
+            out.push(m) : int
+          _ =>
+            { : void
+            }
+        i = i + 1 : int
+      }
+    match (messages.at(n - 1) : baml.ai.ChatMessage | null) : void
+      last: root.ai.ChatMessage =>
+        { : void
+          let parts: root.ai.MessagePart[] = [] : baml.ai.MessagePart[]
+          let np = last.parts.length() : int
+          let j = 0 : 0 -> int
+          while j < np - 1
+            { : void
+              match (last.parts.at(j) : baml.ai.MessagePart | null) : void
+                p: root.ai.MessagePart =>
+                  parts.push(p) : int
+                _ =>
+                  { : void
+                  }
+              j = j + 1 : int
+            }
+          let appended = false : false -> bool
+          match (last.parts.at(np - 1) : baml.ai.MessagePart | null) : void
+            lastp: root.ai.MessagePart =>
+              match (lastp.text : string | null) : void
+                t: string =>
+                  { : void
+                    parts.push(root.ai.MessagePart.from_text(t + "\n\n" + schema)) : int
+                    appended = true : true
+                  }
+                _ =>
+                  parts.push(lastp) : int
+            _ =>
+              { : void
+              }
+          if (Not appended : bool) : void
+            { : void
+              parts.push(root.ai.MessagePart.from_text(schema)) : int
+            }
+          out.push(root.ai.ChatMessage { role: last.role, parts: parts }) : int
+        }
+      _ =>
+        { : void
+        }
+    out : baml.ai.ChatMessage[]
+  }
+}
+function baml.ai.Gemini._messages_for(self: baml.ai.Gemini, messages: baml.ai.ChatMessage[], schema: string) -> baml.ai.ChatMessage[] throws never {
+  { : baml.ai.ChatMessage[]
+    if (Not self.append_output_schema ?? true || schema == "" : bool) : baml.ai.ChatMessage[]
+      { : baml.ai.ChatMessage[]
+        messages : baml.ai.ChatMessage[]
+      }
+    else
+      { : baml.ai.ChatMessage[]
+        self._append_schema(messages, schema) : baml.ai.ChatMessage[]
+      }
+  }
+}
+function baml.ai.Gemini.build_request<T>(self: baml.ai.Gemini, messages: baml.ai.ChatMessage[]) -> baml.http.Request throws baml.errors.UnknownError {
+  { : baml.http.Request
+    let schema: string = root.llm.render_output_format(reflect.type_of<T>()) : string
+    root.http.Request { method: "POST", url: self.base_url ?? "https://generativ..." + "/models/" + self.model + ":generateContent", headers: self._request_headers(), body: self._request_body(self._messages_for(messages, schema)) } : baml.http.Request
+  }
+}
+function baml.ai.Gemini.send(self: baml.ai.Gemini, request: baml.http.Request) -> string throws baml.errors.CallError | baml.errors.UnknownError {
+  { : string
+    let resp = : baml.http.Response
+      catch (root.http.send(request) : baml.http.Response) : baml.http.Response
+        catch (e)
+          _ =>
+            throw root.errors.UnknownError { data: e, message: ["gemini send failed"] } : never
+    let text = : string
+      catch (resp.text() : string) : string
+        catch (e)
+          _ =>
+            { : never
+              throw root.errors.UnknownError { data: e, message: ["gemini body read ..."] } : baml.errors.UnknownError
+            }
+    if (resp.ok() : bool) : string
+      { : string
+        text : string
+      }
+    else
+      { : never
+        throw GeminiHttpError { status: resp.status_code, body: text } : baml.ai.GeminiHttpError
+      }
+  }
+}
+function baml.ai.Gemini.parse<T>(self: baml.ai.Gemini, from: string) -> T throws baml.errors.UnknownError {
+  { : T
+    let wire: GeminiResponseWire = : baml.ai.GeminiResponseWire
+      catch (root.sap.parse<T>(from) : baml.ai.GeminiResponseWire) : baml.ai.GeminiResponseWire
+        catch (e)
+          _ =>
+            throw root.errors.UnknownError { data: e, message: ["gemini parse failed"] } : never
+    match (wire.candidates.at(0) : baml.ai.GeminiCandidateWire | null) : T
+      c: GeminiCandidateWire =>
+        { : T
+          let text = "" : "" -> string
+          match (c.content : baml.ai.GeminiContentWire | null) : void
+            content: GeminiContentWire =>
+              match (content.parts : baml.ai.GeminiPartWire[] | null) : void
+                ps: GeminiPartWire[] =>
+                  { : void
+                    for part in ps
+                      { : void
+                        match (part.text : string | null) : void
+                          null =>
+                            { : void
+                            }
+                          t: string =>
+                            { : void
+                              text = text + t : string
+                            }
+                      }
+                  }
+                _ =>
+                  { : void
+                  }
+            _ =>
+              { : void
+              }
+          catch (root.sap.parse<T>(text) : T) : T
+            catch (e)
+              _ =>
+                { : never
+                  throw root.errors.UnknownError { data: e, message: ["gemini SAP parse ..."] } : baml.errors.UnknownError
+                }
+        }
+      _ =>
+        throw root.errors.UnknownError { data: null, message: ["gemini: no candid..."] } : never
+  }
+}
+function baml.ai.Gemini.meta_of(self: baml.ai.Gemini, from: string) -> baml.ai.ResponseMeta throws never {
+  { : baml.ai.GeminiResponseMeta
+    GeminiResponseMeta { raw_text: from } : baml.ai.GeminiResponseMeta
+  }
+}
+class baml.ai.GeminiHttpError$stream {
+  status: int | null
+  body: string | null
+}
+function baml.ai.GeminiHttpError$stream.is_retryable(self: baml.ai.GeminiHttpError$stream) -> bool throws never {
+  { : bool
+    self.status == 429 || self.status >= 500 : bool
+  }
+  !! 1355..1373: cannot order `int | null` and `500` with `>=`: ordering requires both operands to have the same type
+}
+function baml.ai.GeminiHttpError$stream.is_effectful(self: baml.ai.GeminiHttpError$stream) -> bool throws never {
+  { : false
+    false : false
+  }
+}
+function baml.ai.GeminiHttpError$stream.is_policy_refusal(self: baml.ai.GeminiHttpError$stream) -> bool throws never {
+  { : false
+    false : false
+  }
+}
+function baml.ai.GeminiHttpError$stream.is_resumable(self: baml.ai.GeminiHttpError$stream) -> bool throws never {
+  { : false
+    false : false
+  }
+}
+function baml.ai.GeminiHttpError$stream.is_unsupported(self: baml.ai.GeminiHttpError$stream) -> bool throws never {
+  { : false
+    false : false
+  }
+}
+function baml.ai.GeminiHttpError$stream.is_network_error(self: baml.ai.GeminiHttpError$stream) -> bool throws never {
+  { : false
+    false : false
+  }
+}
+function baml.ai.GeminiHttpError$stream.is_rate_limit(self: baml.ai.GeminiHttpError$stream) -> bool throws never {
+  { : bool
+    self.status == 429 : bool
+  }
+}
+function baml.ai.GeminiHttpError$stream.is_parse_error(self: baml.ai.GeminiHttpError$stream) -> bool throws never {
+  { : false
+    false : false
+  }
+}
+function baml.ai.GeminiHttpError$stream.is_network_error(self: baml.ai.GeminiHttpError$stream) -> bool throws never {
+  { : false
+    false : false
+  }
+}
+class baml.ai.GeminiPartWire$stream {
+  text: string | null
+}
+class baml.ai.GeminiContentWire$stream {
+  parts: baml.ai.GeminiPartWire$stream[] | null
+  role: string | null
+}
+class baml.ai.GeminiCandidateWire$stream {
+  content: baml.ai.GeminiContentWire$stream | null
+  finish_reason: string | null @alias("finishReason")
+}
+class baml.ai.GeminiUsageWire$stream {
+  prompt_token_count: int | null @alias("promptTokenCount")
+  candidates_token_count: int | null @alias("candidatesTokenCount")
+}
+class baml.ai.GeminiResponseWire$stream {
+  candidates: baml.ai.GeminiCandidateWire$stream[]
+  usage_metadata: baml.ai.GeminiUsageWire$stream | null @alias("usageMetadata")
+}
+class baml.ai.GeminiResponseMeta$stream {
+  raw_text: string | null
+}
+function baml.ai.GeminiResponseMeta$stream.finish_reason(self: baml.ai.GeminiResponseMeta$stream) -> string throws never {
+  { : string | ""
+    match (self._wire() : unknown) : string | ""
+      w: GeminiResponseWire =>
+        match (w.candidates.at(0) : baml.ai.GeminiCandidateWire | null) : string | ""
+          c: GeminiCandidateWire =>
+            c.finish_reason ?? "" : string
+          _ =>
+            "" : ""
+      _ =>
+        "" : ""
+  }
+  !! 3308..3313: type `baml.ai.GeminiResponseMeta$stream` has no member `_wire`
+  !! 3276..3281: declared throws is `never`, but this function may also throw `unknown`
+}
+function baml.ai.GeminiResponseMeta$stream.usage(self: baml.ai.GeminiResponseMeta$stream) -> baml.ai.Usage throws never {
+  { : baml.ai.Usage
+    match (self._wire() : unknown) : baml.ai.Usage
+      w: GeminiResponseWire =>
+        match (w.usage_metadata : baml.ai.GeminiUsageWire | null) : baml.ai.Usage
+          u: GeminiUsageWire =>
+            { : baml.ai.Usage
+              root.ai.Usage { input_tokens: u.prompt_token_count ?? 0, output_tokens: u.candidates_token_count ?? 0 } : baml.ai.Usage
+            }
+          _ =>
+            root.ai.Usage { input_tokens: 0, output_tokens: 0 } : baml.ai.Usage
+      _ =>
+        root.ai.Usage { input_tokens: 0, output_tokens: 0 } : baml.ai.Usage
+  }
+  !! 3649..3654: type `baml.ai.GeminiResponseMeta$stream` has no member `_wire`
+  !! 3617..3622: declared throws is `never`, but this function may also throw `unknown`
+}
+function baml.ai.GeminiResponseMeta$stream.reasoning(self: baml.ai.GeminiResponseMeta$stream) -> string | baml.ai.Unavailable throws never {
+  { : baml.ai.Unavailable
+    root.ai.Unavailable { reason: "gemini generateCo..." } : baml.ai.Unavailable
+  }
+}
+function baml.ai.GeminiResponseMeta$stream.logprobs(self: baml.ai.GeminiResponseMeta$stream) -> baml.ai.Logprob[] | baml.ai.Unavailable throws never {
+  { : baml.ai.Unavailable
+    root.ai.Unavailable { reason: "gemini generateCo..." } : baml.ai.Unavailable
+  }
+}
+function baml.ai.GeminiResponseMeta$stream.citations(self: baml.ai.GeminiResponseMeta$stream) -> baml.ai.Citation[] | baml.ai.Unavailable throws never {
+  { : baml.ai.Unavailable
+    root.ai.Unavailable { reason: "gemini generateCo..." } : baml.ai.Unavailable
+  }
+}
+class baml.ai.Gemini$stream {
+  model: string | null
+  api_key: string | null
+  base_url: string | null
+  extra_headers: map<string, string> | null
+  extra_body: map<string, unknown> | null
+  append_output_schema: bool | null
+}
+function baml.ai.Gemini$stream.build_request<T>(self: baml.ai.Gemini$stream, messages: baml.ai.ChatMessage[]) -> baml.http.Request throws baml.errors.UnknownError {
+  { : baml.http.Request
+    let schema: string = root.llm.render_output_format(reflect.type_of<T>()) : string
+    root.http.Request { method: "POST", url: self.base_url ?? "https://generativ..." + "/models/" + self.model + ":generateContent", headers: self._request_headers(), body: self._request_body(self._messages_for(messages, schema)) } : baml.http.Request
+  }
+  !! 6851..6867: type `baml.ai.Gemini$stream` has no member `_request_headers`
+  !! 6898..6911: type `baml.ai.Gemini$stream` has no member `_request_body`
+  !! 6917..6930: type `baml.ai.Gemini$stream` has no member `_messages_for`
+  !! 6277..6301: declared throws is `baml.errors.UnknownError`, but this function may also throw `unknown`
+  ?? 6277..6301: extraneous throws declaration: baml.errors.UnknownError
+}
+function baml.ai.Gemini$stream.send(self: baml.ai.Gemini$stream, request: baml.http.Request) -> string throws baml.errors.CallError | baml.errors.UnknownError {
+  { : string
+    let resp = : baml.http.Response
+      catch (root.http.send(request) : baml.http.Response) : baml.http.Response
+        catch (e)
+          _ =>
+            throw root.errors.UnknownError { data: e, message: ["gemini send failed"] } : never
+    let text = : string
+      catch (resp.text() : string) : string
+        catch (e)
+          _ =>
+            { : never
+              throw root.errors.UnknownError { data: e, message: ["gemini body read ..."] } : baml.errors.UnknownError
+            }
+    if (resp.ok() : bool) : string
+      { : string
+        text : string
+      }
+    else
+      { : never
+        throw GeminiHttpError { status: resp.status_code, body: text } : baml.ai.GeminiHttpError
+      }
+  }
+}
+function baml.ai.Gemini$stream.parse<T>(self: baml.ai.Gemini$stream, from: string) -> T throws baml.errors.UnknownError {
+  { : T
+    let wire: GeminiResponseWire = : baml.ai.GeminiResponseWire
+      catch (root.sap.parse<T>(from) : baml.ai.GeminiResponseWire) : baml.ai.GeminiResponseWire
+        catch (e)
+          _ =>
+            throw root.errors.UnknownError { data: e, message: ["gemini parse failed"] } : never
+    match (wire.candidates.at(0) : baml.ai.GeminiCandidateWire | null) : T
+      c: GeminiCandidateWire =>
+        { : T
+          let text = "" : "" -> string
+          match (c.content : baml.ai.GeminiContentWire | null) : void
+            content: GeminiContentWire =>
+              match (content.parts : baml.ai.GeminiPartWire[] | null) : void
+                ps: GeminiPartWire[] =>
+                  { : void
+                    for part in ps
+                      { : void
+                        match (part.text : string | null) : void
+                          null =>
+                            { : void
+                            }
+                          t: string =>
+                            { : void
+                              text = text + t : string
+                            }
+                      }
+                  }
+                _ =>
+                  { : void
+                  }
+            _ =>
+              { : void
+              }
+          catch (root.sap.parse<T>(text) : T) : T
+            catch (e)
+              _ =>
+                { : never
+                  throw root.errors.UnknownError { data: e, message: ["gemini SAP parse ..."] } : baml.errors.UnknownError
+                }
+        }
+      _ =>
+        throw root.errors.UnknownError { data: null, message: ["gemini: no candid..."] } : never
+  }
+}
+function baml.ai.Gemini$stream.meta_of(self: baml.ai.Gemini$stream, from: string) -> baml.ai.ResponseMeta throws never {
+  { : baml.ai.GeminiResponseMeta
+    GeminiResponseMeta { raw_text: from } : baml.ai.GeminiResponseMeta
+  }
+}
+
+--- <builtin>/baml/ns_ai/providers/harness.baml ---
+class baml.ai.ClaudeCode {
+  model: string | null
+  sandbox: string
+  permission_mode: string
+  allowed_tools: string[]
+}
+function baml.ai.ClaudeCode.run(self: baml.ai.ClaudeCode, prompt: string, io: baml.ai.Channel) -> baml.ai.Transcript throws baml.errors.RealtimeError {
+  { : never
+    throw root.errors.Unsupported { message: "harness subproces..." } : baml.errors.Unsupported
+  }
+}
+class baml.ai.PiAgent {
+  endpoint: string
+}
+function baml.ai.PiAgent.run(self: baml.ai.PiAgent, prompt: string, io: baml.ai.Channel) -> baml.ai.Transcript throws baml.errors.RealtimeError {
+  { : never
+    throw root.errors.Unsupported { message: "harness transport..." } : baml.errors.Unsupported
+  }
+}
+class baml.ai.ClaudeCode$stream {
+  model: string | null
+  sandbox: string | null
+  permission_mode: string | null
+  allowed_tools: string[]
+}
+function baml.ai.ClaudeCode$stream.run(self: baml.ai.ClaudeCode$stream, prompt: string, io: baml.ai.Channel) -> baml.ai.Transcript throws baml.errors.RealtimeError {
+  { : never
+    throw root.errors.Unsupported { message: "harness subproces..." } : baml.errors.Unsupported
+  }
+}
+class baml.ai.PiAgent$stream {
+  endpoint: string | null
+}
+function baml.ai.PiAgent$stream.run(self: baml.ai.PiAgent$stream, prompt: string, io: baml.ai.Channel) -> baml.ai.Transcript throws baml.errors.RealtimeError {
+  { : never
+    throw root.errors.Unsupported { message: "harness transport..." } : baml.errors.Unsupported
+  }
+}
+
+--- <builtin>/baml/ns_ai/providers/openai.baml ---
+class baml.ai.OpenAiHttpError {
+  status: int
+  body: string
+}
+function baml.ai.OpenAiHttpError.is_retryable(self: baml.ai.OpenAiHttpError) -> bool throws never {
+  { : bool
+    self.status == 429 || self.status >= 500 : bool
+  }
+}
+function baml.ai.OpenAiHttpError.is_effectful(self: baml.ai.OpenAiHttpError) -> bool throws never {
+  { : false
+    false : false
+  }
+}
+function baml.ai.OpenAiHttpError.is_policy_refusal(self: baml.ai.OpenAiHttpError) -> bool throws never {
+  { : false
+    false : false
+  }
+}
+function baml.ai.OpenAiHttpError.is_resumable(self: baml.ai.OpenAiHttpError) -> bool throws never {
+  { : false
+    false : false
+  }
+}
+function baml.ai.OpenAiHttpError.is_unsupported(self: baml.ai.OpenAiHttpError) -> bool throws never {
+  { : false
+    false : false
+  }
+}
+function baml.ai.OpenAiHttpError.is_network_error(self: baml.ai.OpenAiHttpError) -> bool throws never {
+  { : false
+    false : false
+  }
+}
+function baml.ai.OpenAiHttpError.is_rate_limit(self: baml.ai.OpenAiHttpError) -> bool throws never {
+  { : bool
+    self.status == 429 : bool
+  }
+}
+function baml.ai.OpenAiHttpError.is_parse_error(self: baml.ai.OpenAiHttpError) -> bool throws never {
+  { : false
+    false : false
+  }
+}
+function baml.ai.OpenAiHttpError.is_network_error(self: baml.ai.OpenAiHttpError) -> bool throws never {
+  { : false
+    false : false
+  }
+}
+class baml.ai.OpenAiMessageWire {
+  content: string
+}
+class baml.ai.OpenAiLogprobTokenWire {
+  token: string
+  logprob: float
+}
+class baml.ai.OpenAiLogprobsWire {
+  content: baml.ai.OpenAiLogprobTokenWire[] | null
+}
+class baml.ai.OpenAiChoiceWire {
+  message: baml.ai.OpenAiMessageWire
+  finish_reason: string | null
+  logprobs: baml.ai.OpenAiLogprobsWire | null
+}
+class baml.ai.OpenAiUsageWire {
+  prompt_tokens: int
+  completion_tokens: int
+}
+class baml.ai.OpenAiResponseWire {
+  choices: baml.ai.OpenAiChoiceWire[]
+  usage: baml.ai.OpenAiUsageWire | null
+}
+class baml.ai.OpenAiResponseMeta {
+  raw_text: string
+}
+function baml.ai.OpenAiResponseMeta._wire(self: baml.ai.OpenAiResponseMeta) -> baml.ai.OpenAiResponseWire | null throws never {
+  { : baml.ai.OpenAiResponseWire | null
+    catch (root.json.from_json<T>(root.json.parse(self.raw_text)) : baml.ai.OpenAiResponseWire) : baml.ai.OpenAiResponseWire | null
+      catch (e)
+        _ =>
+          null : null
+  }
+}
+function baml.ai.OpenAiResponseMeta.finish_reason(self: baml.ai.OpenAiResponseMeta) -> string throws never {
+  { : string | ""
+    match (self._wire() : baml.ai.OpenAiResponseWire | null) : string | ""
+      w: OpenAiResponseWire =>
+        match (w.choices.at(0) : baml.ai.OpenAiChoiceWire | null) : string | ""
+          c: OpenAiChoiceWire =>
+            c.finish_reason ?? "" : string
+          _ =>
+            "" : ""
+      _ =>
+        "" : ""
+  }
+}
+function baml.ai.OpenAiResponseMeta.usage(self: baml.ai.OpenAiResponseMeta) -> baml.ai.Usage throws never {
+  { : baml.ai.Usage
+    match (self._wire() : baml.ai.OpenAiResponseWire | null) : baml.ai.Usage
+      w: OpenAiResponseWire =>
+        match (w.usage : baml.ai.OpenAiUsageWire | null) : baml.ai.Usage
+          u: OpenAiUsageWire =>
+            { : baml.ai.Usage
+              root.ai.Usage { input_tokens: u.prompt_tokens, output_tokens: u.completion_tokens } : baml.ai.Usage
+            }
+          _ =>
+            root.ai.Usage { input_tokens: 0, output_tokens: 0 } : baml.ai.Usage
+      _ =>
+        root.ai.Usage { input_tokens: 0, output_tokens: 0 } : baml.ai.Usage
+  }
+}
+function baml.ai.OpenAiResponseMeta.reasoning(self: baml.ai.OpenAiResponseMeta) -> string | baml.ai.Unavailable throws never {
+  { : baml.ai.Unavailable
+    root.ai.Unavailable { reason: "openai chat compl..." } : baml.ai.Unavailable
+  }
+}
+function baml.ai.OpenAiResponseMeta.citations(self: baml.ai.OpenAiResponseMeta) -> baml.ai.Citation[] | baml.ai.Unavailable throws never {
+  { : baml.ai.Unavailable
+    root.ai.Unavailable { reason: "openai chat compl..." } : baml.ai.Unavailable
+  }
+}
+function baml.ai.OpenAiResponseMeta.logprobs(self: baml.ai.OpenAiResponseMeta) -> baml.ai.Logprob[] | baml.ai.Unavailable throws never {
+  { : baml.ai.Logprob[] | baml.ai.Unavailable
+    let w = : baml.ai.OpenAiResponseWire
+      match (self._wire() : baml.ai.OpenAiResponseWire | null) : baml.ai.OpenAiResponseWire
+        x: OpenAiResponseWire =>
+          x : baml.ai.OpenAiResponseWire
+        _ =>
+          { : never
+            return root.ai.Unavailable { reason: "unparseable response" } : baml.ai.Unavailable
+          }
+    let c = : baml.ai.OpenAiChoiceWire
+      match (w.choices.at(0) : baml.ai.OpenAiChoiceWire | null) : baml.ai.OpenAiChoiceWire
+        ch: OpenAiChoiceWire =>
+          ch : baml.ai.OpenAiChoiceWire
+        _ =>
+          { : never
+            return root.ai.Unavailable { reason: "no choices" } : baml.ai.Unavailable
+          }
+    let lp = : baml.ai.OpenAiLogprobsWire
+      match (c.logprobs : baml.ai.OpenAiLogprobsWire | null) : baml.ai.OpenAiLogprobsWire
+        l: OpenAiLogprobsWire =>
+          l : baml.ai.OpenAiLogprobsWire
+        _ =>
+          { : never
+            return root.ai.Unavailable { reason: "logprobs not requ..." } : baml.ai.Unavailable
+          }
+    match (lp.content : baml.ai.OpenAiLogprobTokenWire[] | null) : baml.ai.Logprob[] | baml.ai.Unavailable
+      toks: OpenAiLogprobTokenWire[] =>
+        { : baml.ai.Logprob[]
+          let out: root.ai.Logprob[] = [] : baml.ai.Logprob[]
+          for t in toks
+            { : void
+              out.push(root.ai.Logprob { token: t.token, logprob: t.logprob }) : int
+            }
+          out : baml.ai.Logprob[]
+        }
+      _ =>
+        root.ai.Unavailable { reason: "logprobs not requ..." } : baml.ai.Unavailable
+  }
+}
+class baml.ai.OpenAi {
+  model: string
+  api_key: string
+  base_url: string | null
+  extra_headers: map<string, string> | null
+  extra_body: map<string, unknown> | null
+  append_output_schema: bool | null
+}
+function baml.ai.OpenAi._encode_part(self: baml.ai.OpenAi, p: baml.ai.MessagePart) -> baml.json.json throws baml.errors.UnknownError {
+  { : never
+    match (p.text : string | null) : void
+      null =>
+        { : void
+        }
+      t: string =>
+        { : never
+          return map { "type": "text", "text": t } : map<string, string>
+        }
+    match (p.image : image | null) : void
+      null =>
+        { : void
+        }
+      img: image =>
+        { : never
+          let url = : string
+            match (img.url() : string | null) : string
+              null =>
+                "data:" + img.mime_type() ?? "image/png" + ";base64," + img.base64() : string
+              u: string =>
+                u : string
+          return map { "type": "image_url", "image_url": map { "url": url } } : map<string, string | map<string, string>>
+        }
+    match (p.audio : audio | null) : void
+      null =>
+        { : void
+        }
+      a: audio =>
+        { : never
+          let mime = a.mime_type() ?? "audio/wav" : string
+          let fmt = : "mp3" | "wav" -> string
+            if (mime.includes("mp3") || mime.includes("mpeg") : bool) : "mp3" | "wav"
+              { : "mp3"
+                "mp3" : "mp3"
+              }
+            else
+              { : "wav"
+                "wav" : "wav"
+              }
+          return map { "type": "input_audio", "input_audio": map { "data": a.base64(), "format": fmt } } : map<string, string | map<string, string>>
+        }
+    match (p.pdf : pdf | null) : void
+      null =>
+        { : void
+        }
+      d: pdf =>
+        { : never
+          return map { "type": "file", "file": map { "filename": "document.pdf", "file_data": "data:application/..." + d.base64() } } : map<string, string | map<string, string>>
+        }
+    throw root.errors.UnknownError { data: null, message: ["openai: unsupport..."] } : baml.errors.UnknownError
+  }
+}
+function baml.ai.OpenAi._encode_message(self: baml.ai.OpenAi, m: baml.ai.ChatMessage) -> baml.json.json throws baml.errors.UnknownError {
+  { : map<string, string | baml.json.json[]>
+    if (m.parts.length() == 1 : bool) : void
+      { : void
+        match (m.parts.at(0) : baml.ai.MessagePart | null) : void
+          only: root.ai.MessagePart =>
+            match (only.text : string | null) : void
+              t: string =>
+                { : never
+                  return map { "role": m.role, "content": t } : map<string, string>
+                }
+              _ =>
+                { : void
+                }
+          _ =>
+            { : void
+            }
+      }
+    let parts: baml.json.json[] = [] : baml.json.json[]
+    for p in m.parts
+      { : void
+        parts.push(self._encode_part(p)) : int
+      }
+    map { "role": m.role, "content": parts } : map<string, string | baml.json.json[]>
+  }
+}
+function baml.ai.OpenAi._request_body(self: baml.ai.OpenAi, messages: baml.ai.ChatMessage[], stream: bool) -> string throws baml.errors.UnknownError {
+  { : string
+    let body: map<string, baml.json.json> = map {  } : map<string, baml.json.json>
+    body.set("model", self.model) : baml.json.json | null
+    let encoded: baml.json.json[] = [] : baml.json.json[]
+    for m in messages
+      { : void
+        encoded.push(self._encode_message(m)) : int
+      }
+    body.set("messages", encoded) : baml.json.json | null
+    if (stream : bool) : void
+      { : void
+        body.set("stream", true) : baml.json.json | null
+      }
+    match (self.extra_body : map<string, unknown> | null) : void
+      extra: map<string, unknown> =>
+        { : void
+          for k in extra.keys()
+            { : void
+              let v: baml.json.json = : baml.json.json -> bool | int | float | string | baml.json.json[] | map<string, baml.json.json> | null
+                catch (root.json.to_json<T>(extra.get(k)) : baml.json.json) : baml.json.json
+                  catch (e)
+                    _ =>
+                      { : never
+                        continue
+                      }
+              body.set(k, v) : baml.json.json | null
+            }
+        }
+      _ =>
+        { : void
+        }
+    root.json.stringify(body) : string
+  }
+}
+function baml.ai.OpenAi._request_headers(self: baml.ai.OpenAi) -> map<string, string> throws never {
+  { : map<string, string>
+    let headers: map<string, string> = map { "Authorization": "Bearer " + self.api_key, "Content-Type": "application/json" } : map<string, string>
+    match (self.extra_headers : map<string, string> | null) : void
+      extra: map<string, string> =>
+        { : void
+          for k in extra.keys()
+            { : void
+              headers.set(k, extra.get(k) ?? "") : string | null
+            }
+        }
+      _ =>
+        { : void
+        }
+    headers : map<string, string>
+  }
+}
+function baml.ai.OpenAi._append_schema(self: baml.ai.OpenAi, messages: baml.ai.ChatMessage[], schema: string) -> baml.ai.ChatMessage[] throws never {
+  { : baml.ai.ChatMessage[]
+    let n = messages.length() : int
+    if (n == 0 : bool) : void
+      { : never
+        return [root.ai.ChatMessage.user(schema)] : baml.ai.ChatMessage[]
+      }
+    let out: root.ai.ChatMessage[] = [] : baml.ai.ChatMessage[]
+    let i = 0 : 0 -> int
+    while i < n - 1
+      { : void
+        match (messages.at(i) : baml.ai.ChatMessage | null) : void
+          m: root.ai.ChatMessage =>
+            out.push(m) : int
+          _ =>
+            { : void
+            }
+        i = i + 1 : int
+      }
+    match (messages.at(n - 1) : baml.ai.ChatMessage | null) : void
+      last: root.ai.ChatMessage =>
+        { : void
+          let parts: root.ai.MessagePart[] = [] : baml.ai.MessagePart[]
+          let np = last.parts.length() : int
+          let j = 0 : 0 -> int
+          while j < np - 1
+            { : void
+              match (last.parts.at(j) : baml.ai.MessagePart | null) : void
+                p: root.ai.MessagePart =>
+                  parts.push(p) : int
+                _ =>
+                  { : void
+                  }
+              j = j + 1 : int
+            }
+          let appended = false : false -> bool
+          match (last.parts.at(np - 1) : baml.ai.MessagePart | null) : void
+            lastp: root.ai.MessagePart =>
+              match (lastp.text : string | null) : void
+                t: string =>
+                  { : void
+                    parts.push(root.ai.MessagePart.from_text(t + "\n\n" + schema)) : int
+                    appended = true : true
+                  }
+                _ =>
+                  parts.push(lastp) : int
+            _ =>
+              { : void
+              }
+          if (Not appended : bool) : void
+            { : void
+              parts.push(root.ai.MessagePart.from_text(schema)) : int
+            }
+          out.push(root.ai.ChatMessage { role: last.role, parts: parts }) : int
+        }
+      _ =>
+        { : void
+        }
+    out : baml.ai.ChatMessage[]
+  }
+}
+function baml.ai.OpenAi._messages_for(self: baml.ai.OpenAi, messages: baml.ai.ChatMessage[], schema: string) -> baml.ai.ChatMessage[] throws never {
+  { : baml.ai.ChatMessage[]
+    if (Not self.append_output_schema ?? true || schema == "" : bool) : baml.ai.ChatMessage[]
+      { : baml.ai.ChatMessage[]
+        messages : baml.ai.ChatMessage[]
+      }
+    else
+      { : baml.ai.ChatMessage[]
+        self._append_schema(messages, schema) : baml.ai.ChatMessage[]
+      }
+  }
+}
+function baml.ai.OpenAi.build_request<T>(self: baml.ai.OpenAi, messages: baml.ai.ChatMessage[]) -> baml.http.Request throws baml.errors.UnknownError {
+  { : baml.http.Request
+    let schema: string = root.llm.render_output_format(reflect.type_of<T>()) : string
+    root.http.Request { method: "POST", url: self.base_url ?? "https://api.opena..." + "/chat/completions", headers: self._request_headers(), body: self._request_body(self._messages_for(messages, schema), false) } : baml.http.Request
+  }
+}
+function baml.ai.OpenAi.send(self: baml.ai.OpenAi, request: baml.http.Request) -> string throws baml.errors.CallError | baml.errors.UnknownError {
+  { : string
+    let resp = : baml.http.Response
+      catch (root.http.send(request) : baml.http.Response) : baml.http.Response
+        catch (e)
+          _ =>
+            throw root.errors.UnknownError { data: e, message: ["openai send failed"] } : never
+    let text = : string
+      catch (resp.text() : string) : string
+        catch (e)
+          _ =>
+            { : never
+              throw root.errors.UnknownError { data: e, message: ["openai body read ..."] } : baml.errors.UnknownError
+            }
+    if (resp.ok() : bool) : string
+      { : string
+        text : string
+      }
+    else
+      { : never
+        throw OpenAiHttpError { status: resp.status_code, body: text } : baml.ai.OpenAiHttpError
+      }
+  }
+}
+function baml.ai.OpenAi.parse<T>(self: baml.ai.OpenAi, from: string) -> T throws baml.errors.UnknownError {
+  { : T
+    let wire: OpenAiResponseWire = : baml.ai.OpenAiResponseWire
+      catch (root.json.from_json<T>(root.json.parse(from)) : baml.ai.OpenAiResponseWire) : baml.ai.OpenAiResponseWire
+        catch (e)
+          _ =>
+            throw root.errors.UnknownError { data: e, message: ["openai parse failed"] } : never
+    match (wire.choices.at(0) : baml.ai.OpenAiChoiceWire | null) : T
+      c: OpenAiChoiceWire =>
+        { : T
+          catch (root.sap.parse<T>(c.message.content) : T) : T
+            catch (e)
+              _ =>
+                { : never
+                  throw root.errors.UnknownError { data: e, message: ["openai SAP parse ..."] } : baml.errors.UnknownError
+                }
+        }
+      _ =>
+        throw root.errors.UnknownError { data: null, message: ["openai: no choices"] } : never
+  }
+}
+function baml.ai.OpenAi.meta_of(self: baml.ai.OpenAi, from: string) -> baml.ai.ResponseMeta throws never {
+  { : baml.ai.OpenAiResponseMeta
+    OpenAiResponseMeta { raw_text: from } : baml.ai.OpenAiResponseMeta
+  }
+}
+function baml.ai.OpenAi.structured_output(self: baml.ai.OpenAi) -> baml.ai.Support throws never {
+  { : baml.ai.Support.Yes
+    root.ai.Support.Yes : baml.ai.Support.Yes
+  }
+}
+function baml.ai.OpenAi.image_input(self: baml.ai.OpenAi) -> baml.ai.Support throws never {
+  { : baml.ai.Support.Yes
+    root.ai.Support.Yes : baml.ai.Support.Yes
+  }
+}
+function baml.ai.OpenAi.parallel_tools(self: baml.ai.OpenAi) -> baml.ai.Support throws never {
+  { : baml.ai.Support.Yes
+    root.ai.Support.Yes : baml.ai.Support.Yes
+  }
+}
+function baml.ai.OpenAi.max_input_tokens(self: baml.ai.OpenAi) -> int throws never {
+  { : 128000
+    128000 : 128000
+  }
+}
+function baml.ai.OpenAi.stream_messages<TStream, TFinal>(self: baml.ai.OpenAi, messages: baml.ai.ChatMessage[]) -> baml.llm.Stream<TStream, TFinal> throws baml.errors.UnknownError {
+  { : baml.llm.Stream<TStream, TFinal>
+    let schema: string = root.llm.render_output_format(reflect.type_of<TFinal>()) : string
+    let req = root.http.Request { method: "POST", url: self.base_url ?? "https://api.opena..." + "/chat/completions", headers: self._request_headers(), body: self._request_body(self._messages_for(messages, schema), true) } : baml.http.Request
+    let sse = : baml.http.SseStream
+      catch (root.http.fetch_sse(req) : baml.http.SseStream) : baml.http.SseStream
+        catch (e)
+          _ =>
+            { : never
+              throw root.errors.UnknownError { data: e, message: ["openai fetch_sse ..."] } : baml.errors.UnknownError
+            }
+    let primitive = : baml.llm.PrimitiveClient
+      catch (root.llm.from_shorthand("openai/" + self.model) : baml.llm.PrimitiveClient) : baml.llm.PrimitiveClient
+        catch (e)
+          _ =>
+            { : never
+              throw root.errors.UnknownError { data: e, message: ["openai stream set..."] } : baml.errors.UnknownError
+            }
+    let acc = : baml.llm.StreamAccumulator
+      catch (primitive.new_stream_accumulator() : baml.llm.StreamAccumulator) : baml.llm.StreamAccumulator
+        catch (e)
+          _ =>
+            { : never
+              throw root.errors.UnknownError { data: e, message: ["openai accumulato..."] } : baml.errors.UnknownError
+            }
+    let cache = root.llm.StreamCache.new(reflect.type_of<TStream>(), reflect.type_of<TFinal>()) : baml.llm.StreamCache<TStream, TFinal>
+    root.llm.Stream { _client: primitive, _acc: acc, _sse: sse, _cache: cache } : baml.llm.Stream<TStream, TFinal>
+  }
+}
+function baml.ai.OpenAi.begin<T>(self: baml.ai.OpenAi, prompt: string, tools: baml.ai.Tool[]) -> baml.ai.OpenAiToolTranscript throws baml.errors.UnknownError {
+  { : baml.ai.OpenAiToolTranscript
+    let tools_arr: baml.json.json[] = [] : baml.json.json[]
+    for t in tools
+      { : void
+        let schema: baml.json.json = : baml.json.json -> bool | int | float | string | baml.json.json[] | map<string, baml.json.json> | null
+          catch (root.json.parse(t.parameters) : baml.json.json) : baml.json.json
+            catch (e)
+              _ =>
+                { : never
+                  throw root.errors.UnknownError { data: e, message: ["tool schema not v..." + t.name] } : baml.errors.UnknownError
+                }
+        tools_arr.push(map { "type": "function", "function": map { "name": t.name, "description": t.description, "parameters": schema } }) : int
+      }
+    OpenAiToolTranscript { model: self.model, api_key: self.api_key, base_url: self.base_url, tools_json: root.json.stringify(tools_arr), messages: [map { "role": "user", "content": prompt }] } : baml.ai.OpenAiToolTranscript
+  }
+}
+function baml.ai.OpenAi.step<T>(self: baml.ai.OpenAi, t: baml.ai.OpenAiToolTranscript) -> T | baml.ai.ToolCalls throws baml.errors.UnknownError {
+  { : baml.ai.ToolCalls | T
+    let tools_val: baml.json.json = : baml.json.json -> bool | int | float | string | baml.json.json[] | map<string, baml.json.json> | null
+      catch (root.json.parse(t.tools_json) : baml.json.json) : baml.json.json
+        catch (e)
+          _ =>
+            { : never
+              throw root.errors.UnknownError { data: e, message: ["tools_json invalid"] } : baml.errors.UnknownError
+            }
+    let body: baml.json.json = map { "model": t.model, "messages": t.messages, "tools": tools_val, "tool_choice": "auto" } : map<string, string | baml.json.json[] | bool | int | float | map<string, baml.json.json> | null> -> bool | int | float | string | baml.json.json[] | map<string, baml.json.json> | null
+    let req = root.http.Request { method: "POST", url: t.base_url ?? "https://api.opena..." + "/chat/completions", headers: map { "Authorization": "Bearer " + t.api_key, "Content-Type": "application/json" }, body: root.json.stringify(body) } : baml.http.Request
+    let resp = : baml.http.Response
+      catch (root.http.send(req) : baml.http.Response) : baml.http.Response
+        catch (e)
+          _ =>
+            { : never
+              throw root.errors.UnknownError { data: e, message: ["tools send failed"] } : baml.errors.UnknownError
+            }
+    let text = : string
+      catch (resp.text() : string) : string
+        catch (e)
+          _ =>
+            { : never
+              throw root.errors.UnknownError { data: e, message: ["tools body read f..."] } : baml.errors.UnknownError
+            }
+    let parsed: OpenAiToolRespWire = : baml.ai.OpenAiToolRespWire
+      catch (root.json.from_json<T>(root.json.parse(text)) : baml.ai.OpenAiToolRespWire) : baml.ai.OpenAiToolRespWire
+        catch (e)
+          _ =>
+            { : never
+              throw root.errors.UnknownError { data: text, message: ["tools parse failed"] } : baml.errors.UnknownError
+            }
+    let msg = : baml.ai.OpenAiToolMsgWire
+      match (parsed.choices.at(0) : baml.ai.OpenAiToolChoiceWire | null) : baml.ai.OpenAiToolMsgWire
+        c: OpenAiToolChoiceWire =>
+          c.message : baml.ai.OpenAiToolMsgWire
+        _ =>
+          { : never
+            throw root.errors.UnknownError { data: text, message: ["tools: no choices"] } : baml.errors.UnknownError
+          }
+    match (msg.tool_calls : baml.json.json[] | null) : baml.ai.ToolCalls | T
+      tcs: baml.json.json[] =>
+        { : baml.ai.ToolCalls
+          t.messages.push(map { "role": "assistant", "tool_calls": tcs }) : int
+          let calls: root.ai.ToolCall[] = [] : baml.ai.ToolCall[]
+          for tc in tcs
+            { : void
+              let fn = root.json.field(tc, "function") : baml.json.json
+              calls.push(root.ai.ToolCall { id: _openai_json_str(root.json.field(tc, "id")), name: _openai_json_str(root.json.field(fn, "name")), args: _openai_json_str(root.json.field(fn, "arguments")) }) : int
+            }
+          root.ai.ToolCalls { calls: calls } : baml.ai.ToolCalls
+        }
+      _ =>
+        { : T
+          catch (root.sap.parse<T>(msg.content ?? "") : T) : T
+            catch (e)
+              _ =>
+                { : never
+                  throw root.errors.UnknownError { data: msg.content, message: ["tools final parse..."] } : baml.errors.UnknownError
+                }
+        }
+  }
+}
+function baml.ai.OpenAi.submit(self: baml.ai.OpenAi, t: baml.ai.OpenAiToolTranscript, results: baml.ai.ToolResult[]) -> baml.ai.OpenAiToolTranscript throws never {
+  { : baml.ai.OpenAiToolTranscript
+    for r in results
+      { : void
+        t.messages.push(map { "role": "tool", "tool_call_id": r.id, "content": r.output }) : int
+      }
+    t : baml.ai.OpenAiToolTranscript
+  }
+}
+class baml.ai.OpenAiToolMsgWire {
+  content: string | null
+  tool_calls: baml.json.json[] | null
+}
+class baml.ai.OpenAiToolChoiceWire {
+  message: baml.ai.OpenAiToolMsgWire
+}
+class baml.ai.OpenAiToolRespWire {
+  choices: baml.ai.OpenAiToolChoiceWire[]
+}
+class baml.ai.OpenAiToolTranscript {
+  model: string
+  api_key: string
+  base_url: string | null
+  tools_json: string
+  messages: baml.json.json[]
+}
+function baml.ai._openai_json_str(j: baml.json.json) -> string throws never {
+  { : string | ""
+    match (j : baml.json.json) : string | ""
+      s: string =>
+        s : string
+      _ =>
+        "" : ""
+  }
+}
+class baml.ai.OpenAiHttpError$stream {
+  status: int | null
+  body: string | null
+}
+function baml.ai.OpenAiHttpError$stream.is_retryable(self: baml.ai.OpenAiHttpError$stream) -> bool throws never {
+  { : bool
+    self.status == 429 || self.status >= 500 : bool
+  }
+  !! 691..709: cannot order `int | null` and `500` with `>=`: ordering requires both operands to have the same type
+}
+function baml.ai.OpenAiHttpError$stream.is_effectful(self: baml.ai.OpenAiHttpError$stream) -> bool throws never {
+  { : false
+    false : false
+  }
+}
+function baml.ai.OpenAiHttpError$stream.is_policy_refusal(self: baml.ai.OpenAiHttpError$stream) -> bool throws never {
+  { : false
+    false : false
+  }
+}
+function baml.ai.OpenAiHttpError$stream.is_resumable(self: baml.ai.OpenAiHttpError$stream) -> bool throws never {
+  { : false
+    false : false
+  }
+}
+function baml.ai.OpenAiHttpError$stream.is_unsupported(self: baml.ai.OpenAiHttpError$stream) -> bool throws never {
+  { : false
+    false : false
+  }
+}
+function baml.ai.OpenAiHttpError$stream.is_network_error(self: baml.ai.OpenAiHttpError$stream) -> bool throws never {
+  { : false
+    false : false
+  }
+}
+function baml.ai.OpenAiHttpError$stream.is_rate_limit(self: baml.ai.OpenAiHttpError$stream) -> bool throws never {
+  { : bool
+    self.status == 429 : bool
+  }
+}
+function baml.ai.OpenAiHttpError$stream.is_parse_error(self: baml.ai.OpenAiHttpError$stream) -> bool throws never {
+  { : false
+    false : false
+  }
+}
+function baml.ai.OpenAiHttpError$stream.is_network_error(self: baml.ai.OpenAiHttpError$stream) -> bool throws never {
+  { : false
+    false : false
+  }
+}
+class baml.ai.OpenAiMessageWire$stream {
+  content: string | null
+}
+class baml.ai.OpenAiLogprobTokenWire$stream {
+  token: string | null
+  logprob: float | null
+}
+class baml.ai.OpenAiLogprobsWire$stream {
+  content: baml.ai.OpenAiLogprobTokenWire$stream[] | null
+}
+class baml.ai.OpenAiChoiceWire$stream {
+  message: baml.ai.OpenAiMessageWire$stream | null
+  finish_reason: string | null
+  logprobs: baml.ai.OpenAiLogprobsWire$stream | null
+}
+class baml.ai.OpenAiUsageWire$stream {
+  prompt_tokens: int | null
+  completion_tokens: int | null
+}
+class baml.ai.OpenAiResponseWire$stream {
+  choices: baml.ai.OpenAiChoiceWire$stream[]
+  usage: baml.ai.OpenAiUsageWire$stream | null
+}
+class baml.ai.OpenAiResponseMeta$stream {
+  raw_text: string | null
+}
+function baml.ai.OpenAiResponseMeta$stream.finish_reason(self: baml.ai.OpenAiResponseMeta$stream) -> string throws never {
+  { : string | ""
+    match (self._wire() : unknown) : string | ""
+      w: OpenAiResponseWire =>
+        match (w.choices.at(0) : baml.ai.OpenAiChoiceWire | null) : string | ""
+          c: OpenAiChoiceWire =>
+            c.finish_reason ?? "" : string
+          _ =>
+            "" : ""
+      _ =>
+        "" : ""
+  }
+  !! 2485..2490: type `baml.ai.OpenAiResponseMeta$stream` has no member `_wire`
+  !! 2453..2458: declared throws is `never`, but this function may also throw `unknown`
+}
+function baml.ai.OpenAiResponseMeta$stream.usage(self: baml.ai.OpenAiResponseMeta$stream) -> baml.ai.Usage throws never {
+  { : baml.ai.Usage
+    match (self._wire() : unknown) : baml.ai.Usage
+      w: OpenAiResponseWire =>
+        match (w.usage : baml.ai.OpenAiUsageWire | null) : baml.ai.Usage
+          u: OpenAiUsageWire =>
+            { : baml.ai.Usage
+              root.ai.Usage { input_tokens: u.prompt_tokens, output_tokens: u.completion_tokens } : baml.ai.Usage
+            }
+          _ =>
+            root.ai.Usage { input_tokens: 0, output_tokens: 0 } : baml.ai.Usage
+      _ =>
+        root.ai.Usage { input_tokens: 0, output_tokens: 0 } : baml.ai.Usage
+  }
+  !! 2820..2825: type `baml.ai.OpenAiResponseMeta$stream` has no member `_wire`
+  !! 2788..2793: declared throws is `never`, but this function may also throw `unknown`
+}
+function baml.ai.OpenAiResponseMeta$stream.reasoning(self: baml.ai.OpenAiResponseMeta$stream) -> string | baml.ai.Unavailable throws never {
+  { : baml.ai.Unavailable
+    root.ai.Unavailable { reason: "openai chat compl..." } : baml.ai.Unavailable
+  }
+}
+function baml.ai.OpenAiResponseMeta$stream.citations(self: baml.ai.OpenAiResponseMeta$stream) -> baml.ai.Citation[] | baml.ai.Unavailable throws never {
+  { : baml.ai.Unavailable
+    root.ai.Unavailable { reason: "openai chat compl..." } : baml.ai.Unavailable
+  }
+}
+function baml.ai.OpenAiResponseMeta$stream.logprobs(self: baml.ai.OpenAiResponseMeta$stream) -> baml.ai.Logprob[] | baml.ai.Unavailable throws never {
+  { : baml.ai.Logprob[] | baml.ai.Unavailable
+    let w = : baml.ai.OpenAiResponseWire
+      match (self._wire() : unknown) : baml.ai.OpenAiResponseWire
+        x: OpenAiResponseWire =>
+          x : baml.ai.OpenAiResponseWire
+        _ =>
+          { : never
+            return root.ai.Unavailable { reason: "unparseable response" } : baml.ai.Unavailable
+          }
+    let c = : baml.ai.OpenAiChoiceWire
+      match (w.choices.at(0) : baml.ai.OpenAiChoiceWire | null) : baml.ai.OpenAiChoiceWire
+        ch: OpenAiChoiceWire =>
+          ch : baml.ai.OpenAiChoiceWire
+        _ =>
+          { : never
+            return root.ai.Unavailable { reason: "no choices" } : baml.ai.Unavailable
+          }
+    let lp = : baml.ai.OpenAiLogprobsWire
+      match (c.logprobs : baml.ai.OpenAiLogprobsWire | null) : baml.ai.OpenAiLogprobsWire
+        l: OpenAiLogprobsWire =>
+          l : baml.ai.OpenAiLogprobsWire
+        _ =>
+          { : never
+            return root.ai.Unavailable { reason: "logprobs not requ..." } : baml.ai.Unavailable
+          }
+    match (lp.content : baml.ai.OpenAiLogprobTokenWire[] | null) : baml.ai.Logprob[] | baml.ai.Unavailable
+      toks: OpenAiLogprobTokenWire[] =>
+        { : baml.ai.Logprob[]
+          let out: root.ai.Logprob[] = [] : baml.ai.Logprob[]
+          for t in toks
+            { : void
+              out.push(root.ai.Logprob { token: t.token, logprob: t.logprob }) : int
+            }
+          out : baml.ai.Logprob[]
+        }
+      _ =>
+        root.ai.Unavailable { reason: "logprobs not requ..." } : baml.ai.Unavailable
+  }
+  !! 3997..4002: type `baml.ai.OpenAiResponseMeta$stream` has no member `_wire`
+  !! 3957..3962: declared throws is `never`, but this function may also throw `unknown`
+}
+class baml.ai.OpenAi$stream {
+  model: string | null
+  api_key: string | null
+  base_url: string | null
+  extra_headers: map<string, string> | null
+  extra_body: map<string, unknown> | null
+  append_output_schema: bool | null
+}
+function baml.ai.OpenAi$stream.build_request<T>(self: baml.ai.OpenAi$stream, messages: baml.ai.ChatMessage[]) -> baml.http.Request throws baml.errors.UnknownError {
+  { : baml.http.Request
+    let schema: string = root.llm.render_output_format(reflect.type_of<T>()) : string
+    root.http.Request { method: "POST", url: self.base_url ?? "https://api.opena..." + "/chat/completions", headers: self._request_headers(), body: self._request_body(self._messages_for(messages, schema), false) } : baml.http.Request
+  }
+  !! 6741..6757: type `baml.ai.OpenAi$stream` has no member `_request_headers`
+  !! 6788..6801: type `baml.ai.OpenAi$stream` has no member `_request_body`
+  !! 6807..6820: type `baml.ai.OpenAi$stream` has no member `_messages_for`
+  !! 6275..6299: declared throws is `baml.errors.UnknownError`, but this function may also throw `unknown`
+  ?? 6275..6299: extraneous throws declaration: baml.errors.UnknownError
+}
+function baml.ai.OpenAi$stream.send(self: baml.ai.OpenAi$stream, request: baml.http.Request) -> string throws baml.errors.CallError | baml.errors.UnknownError {
+  { : string
+    let resp = : baml.http.Response
+      catch (root.http.send(request) : baml.http.Response) : baml.http.Response
+        catch (e)
+          _ =>
+            throw root.errors.UnknownError { data: e, message: ["openai send failed"] } : never
+    let text = : string
+      catch (resp.text() : string) : string
+        catch (e)
+          _ =>
+            { : never
+              throw root.errors.UnknownError { data: e, message: ["openai body read ..."] } : baml.errors.UnknownError
+            }
+    if (resp.ok() : bool) : string
+      { : string
+        text : string
+      }
+    else
+      { : never
+        throw OpenAiHttpError { status: resp.status_code, body: text } : baml.ai.OpenAiHttpError
+      }
+  }
+}
+function baml.ai.OpenAi$stream.parse<T>(self: baml.ai.OpenAi$stream, from: string) -> T throws baml.errors.UnknownError {
+  { : T
+    let wire: OpenAiResponseWire = : baml.ai.OpenAiResponseWire
+      catch (root.json.from_json<T>(root.json.parse(from)) : baml.ai.OpenAiResponseWire) : baml.ai.OpenAiResponseWire
+        catch (e)
+          _ =>
+            throw root.errors.UnknownError { data: e, message: ["openai parse failed"] } : never
+    match (wire.choices.at(0) : baml.ai.OpenAiChoiceWire | null) : T
+      c: OpenAiChoiceWire =>
+        { : T
+          catch (root.sap.parse<T>(c.message.content) : T) : T
+            catch (e)
+              _ =>
+                { : never
+                  throw root.errors.UnknownError { data: e, message: ["openai SAP parse ..."] } : baml.errors.UnknownError
+                }
+        }
+      _ =>
+        throw root.errors.UnknownError { data: null, message: ["openai: no choices"] } : never
+  }
+}
+function baml.ai.OpenAi$stream.meta_of(self: baml.ai.OpenAi$stream, from: string) -> baml.ai.ResponseMeta throws never {
+  { : baml.ai.OpenAiResponseMeta
+    OpenAiResponseMeta { raw_text: from } : baml.ai.OpenAiResponseMeta
+  }
+}
+function baml.ai.OpenAi$stream.structured_output(self: baml.ai.OpenAi$stream) -> baml.ai.Support throws never {
+  { : baml.ai.Support.Yes
+    root.ai.Support.Yes : baml.ai.Support.Yes
+  }
+}
+function baml.ai.OpenAi$stream.image_input(self: baml.ai.OpenAi$stream) -> baml.ai.Support throws never {
+  { : baml.ai.Support.Yes
+    root.ai.Support.Yes : baml.ai.Support.Yes
+  }
+}
+function baml.ai.OpenAi$stream.parallel_tools(self: baml.ai.OpenAi$stream) -> baml.ai.Support throws never {
+  { : baml.ai.Support.Yes
+    root.ai.Support.Yes : baml.ai.Support.Yes
+  }
+}
+function baml.ai.OpenAi$stream.max_input_tokens(self: baml.ai.OpenAi$stream) -> int throws never {
+  { : 128000
+    128000 : 128000
+  }
+}
+function baml.ai.OpenAi$stream.stream_messages<TStream, TFinal>(self: baml.ai.OpenAi$stream, messages: baml.ai.ChatMessage[]) -> baml.llm.Stream<TStream, TFinal> throws baml.errors.UnknownError {
+  { : baml.llm.Stream<TStream, TFinal>
+    let schema: string = root.llm.render_output_format(reflect.type_of<TFinal>()) : string
+    let req = root.http.Request { method: "POST", url: self.base_url ?? "https://api.opena..." + "/chat/completions", headers: self._request_headers(), body: self._request_body(self._messages_for(messages, schema), true) } : baml.http.Request
+    let sse = : baml.http.SseStream
+      catch (root.http.fetch_sse(req) : baml.http.SseStream) : baml.http.SseStream
+        catch (e)
+          _ =>
+            { : never
+              throw root.errors.UnknownError { data: e, message: ["openai fetch_sse ..."] } : baml.errors.UnknownError
+            }
+    let primitive = : baml.llm.PrimitiveClient
+      catch (root.llm.from_shorthand("openai/" + self.model) : baml.llm.PrimitiveClient) : baml.llm.PrimitiveClient
+        catch (e)
+          _ =>
+            { : never
+              throw root.errors.UnknownError { data: e, message: ["openai stream set..."] } : baml.errors.UnknownError
+            }
+    let acc = : baml.llm.StreamAccumulator
+      catch (primitive.new_stream_accumulator() : baml.llm.StreamAccumulator) : baml.llm.StreamAccumulator
+        catch (e)
+          _ =>
+            { : never
+              throw root.errors.UnknownError { data: e, message: ["openai accumulato..."] } : baml.errors.UnknownError
+            }
+    let cache = root.llm.StreamCache.new(reflect.type_of<TStream>(), reflect.type_of<TFinal>()) : baml.llm.StreamCache<TStream, TFinal>
+    root.llm.Stream { _client: primitive, _acc: acc, _sse: sse, _cache: cache } : baml.llm.Stream<TStream, TFinal>
+  }
+  !! 10197..10213: type `baml.ai.OpenAi$stream` has no member `_request_headers`
+  !! 10244..10257: type `baml.ai.OpenAi$stream` has no member `_request_body`
+  !! 10263..10276: type `baml.ai.OpenAi$stream` has no member `_messages_for`
+  !! 9884..9908: declared throws is `baml.errors.UnknownError`, but this function may also throw `unknown`
+}
+function baml.ai.OpenAi$stream.begin<T>(self: baml.ai.OpenAi$stream, prompt: string, tools: baml.ai.Tool[]) -> baml.ai.OpenAiToolTranscript throws baml.errors.UnknownError {
+  { : baml.ai.OpenAiToolTranscript
+    let tools_arr: baml.json.json[] = [] : baml.json.json[]
+    for t in tools
+      { : void
+        let schema: baml.json.json = : baml.json.json -> bool | int | float | string | baml.json.json[] | map<string, baml.json.json> | null
+          catch (root.json.parse(t.parameters) : baml.json.json) : baml.json.json
+            catch (e)
+              _ =>
+                { : never
+                  throw root.errors.UnknownError { data: e, message: ["tool schema not v..." + t.name] } : baml.errors.UnknownError
+                }
+        tools_arr.push(map { "type": "function", "function": map { "name": t.name, "description": t.description, "parameters": schema } }) : int
+      }
+    OpenAiToolTranscript { model: self.model, api_key: self.api_key, base_url: self.base_url, tools_json: root.json.stringify(tools_arr), messages: [map { "role": "user", "content": prompt }] } : baml.ai.OpenAiToolTranscript
+  }
+  !! 12273..12283: type mismatch: expected string, got string | null
+  !! 12310..12322: type mismatch: expected string, got string | null
+}
+function baml.ai.OpenAi$stream.step<T>(self: baml.ai.OpenAi$stream, t: baml.ai.OpenAiToolTranscript) -> T | baml.ai.ToolCalls throws baml.errors.UnknownError {
+  { : baml.ai.ToolCalls | T
+    let tools_val: baml.json.json = : baml.json.json -> bool | int | float | string | baml.json.json[] | map<string, baml.json.json> | null
+      catch (root.json.parse(t.tools_json) : baml.json.json) : baml.json.json
+        catch (e)
+          _ =>
+            { : never
+              throw root.errors.UnknownError { data: e, message: ["tools_json invalid"] } : baml.errors.UnknownError
+            }
+    let body: baml.json.json = map { "model": t.model, "messages": t.messages, "tools": tools_val, "tool_choice": "auto" } : map<string, string | baml.json.json[] | bool | int | float | map<string, baml.json.json> | null> -> bool | int | float | string | baml.json.json[] | map<string, baml.json.json> | null
+    let req = root.http.Request { method: "POST", url: t.base_url ?? "https://api.opena..." + "/chat/completions", headers: map { "Authorization": "Bearer " + t.api_key, "Content-Type": "application/json" }, body: root.json.stringify(body) } : baml.http.Request
+    let resp = : baml.http.Response
+      catch (root.http.send(req) : baml.http.Response) : baml.http.Response
+        catch (e)
+          _ =>
+            { : never
+              throw root.errors.UnknownError { data: e, message: ["tools send failed"] } : baml.errors.UnknownError
+            }
+    let text = : string
+      catch (resp.text() : string) : string
+        catch (e)
+          _ =>
+            { : never
+              throw root.errors.UnknownError { data: e, message: ["tools body read f..."] } : baml.errors.UnknownError
+            }
+    let parsed: OpenAiToolRespWire = : baml.ai.OpenAiToolRespWire
+      catch (root.json.from_json<T>(root.json.parse(text)) : baml.ai.OpenAiToolRespWire) : baml.ai.OpenAiToolRespWire
+        catch (e)
+          _ =>
+            { : never
+              throw root.errors.UnknownError { data: text, message: ["tools parse failed"] } : baml.errors.UnknownError
+            }
+    let msg = : baml.ai.OpenAiToolMsgWire
+      match (parsed.choices.at(0) : baml.ai.OpenAiToolChoiceWire | null) : baml.ai.OpenAiToolMsgWire
+        c: OpenAiToolChoiceWire =>
+          c.message : baml.ai.OpenAiToolMsgWire
+        _ =>
+          { : never
+            throw root.errors.UnknownError { data: text, message: ["tools: no choices"] } : baml.errors.UnknownError
+          }
+    match (msg.tool_calls : baml.json.json[] | null) : baml.ai.ToolCalls | T
+      tcs: baml.json.json[] =>
+        { : baml.ai.ToolCalls
+          t.messages.push(map { "role": "assistant", "tool_calls": tcs }) : int
+          let calls: root.ai.ToolCall[] = [] : baml.ai.ToolCall[]
+          for tc in tcs
+            { : void
+              let fn = root.json.field(tc, "function") : baml.json.json
+              calls.push(root.ai.ToolCall { id: _openai_json_str(root.json.field(tc, "id")), name: _openai_json_str(root.json.field(fn, "name")), args: _openai_json_str(root.json.field(fn, "arguments")) }) : int
+            }
+          root.ai.ToolCalls { calls: calls } : baml.ai.ToolCalls
+        }
+      _ =>
+        { : T
+          catch (root.sap.parse<T>(msg.content ?? "") : T) : T
+            catch (e)
+              _ =>
+                { : never
+                  throw root.errors.UnknownError { data: msg.content, message: ["tools final parse..."] } : baml.errors.UnknownError
+                }
+        }
+  }
+}
+function baml.ai.OpenAi$stream.submit(self: baml.ai.OpenAi$stream, t: baml.ai.OpenAiToolTranscript, results: baml.ai.ToolResult[]) -> baml.ai.OpenAiToolTranscript throws never {
+  { : baml.ai.OpenAiToolTranscript
+    for r in results
+      { : void
+        t.messages.push(map { "role": "tool", "tool_call_id": r.id, "content": r.output }) : int
+      }
+    t : baml.ai.OpenAiToolTranscript
+  }
+}
+class baml.ai.OpenAiToolMsgWire$stream {
+  content: string | null
+  tool_calls: baml.json.json$stream[] | null
+}
+class baml.ai.OpenAiToolChoiceWire$stream {
+  message: baml.ai.OpenAiToolMsgWire$stream | null
+}
+class baml.ai.OpenAiToolRespWire$stream {
+  choices: baml.ai.OpenAiToolChoiceWire$stream[]
+}
+class baml.ai.OpenAiToolTranscript$stream {
+  model: string | null
+  api_key: string | null
+  base_url: string | null
+  tools_json: string | null
+  messages: baml.json.json$stream[]
+}
+
+--- <builtin>/baml/ns_ai/providers/openai_realtime.baml ---
+class baml.ai.OpenAiRealtime {
+  model: string | null
+  voice: string
+  api_key: string
+}
+function baml.ai.OpenAiRealtime.run(self: baml.ai.OpenAiRealtime, prompt: string, io: baml.ai.Channel) -> baml.ai.Transcript throws baml.errors.UnknownError {
+  { : baml.ai.Transcript
+    let ws = : baml.ws.WsStream
+      catch (root.ws.connect("wss://api.openai...." + self.model ?? "gpt-realtime", map { "Authorization": "Bearer " + self.api_key }) : baml.ws.WsStream) : baml.ws.WsStream
+        catch (e)
+          _ =>
+            { : never
+              throw root.errors.UnknownError { data: e, message: ["realtime: connect..."] } : baml.errors.UnknownError
+            }
+    let create_item = root.json.stringify(map { "type": "conversation.item...", "item": map { "type": "message", "role": "user", "content": [map { "type": "input_text", "text": prompt }] } }) : string
+    catch (ws.send(create_item) : null) : null
+      catch (e)
+        _ =>
+          { : never
+            throw root.errors.UnknownError { data: e, message: ["realtime: send it..."] } : baml.errors.UnknownError
+          }
+    let response_create = root.json.stringify(map { "type": "response.create", "response": map { "output_modalities": ["text"] } }) : string
+    catch (ws.send(response_create) : null) : null
+      catch (e)
+        _ =>
+          { : never
+            throw root.errors.UnknownError { data: e, message: ["realtime: respons..."] } : baml.errors.UnknownError
+          }
+    let acc = "" : "" -> string
+    let done = false : false -> bool
+    while Not done
+      { : void
+        let evt = : string | null
+          catch (ws.next() : string | null) : string | null
+            catch (e)
+              _ =>
+                { : never
+                  throw root.errors.UnknownError { data: e, message: ["realtime: recv fa..."] } : baml.errors.UnknownError
+                }
+        let raw = : string
+          match (evt : string | null) : string
+            s: string =>
+              s : string
+            null =>
+              { : never
+                done = true : true
+                continue
+              }
+        catch (io.send(raw) : null) : null
+          catch (e)
+            _ =>
+              { : never
+                throw root.errors.UnknownError { data: e, message: ["realtime: channel..."] } : baml.errors.UnknownError
+              }
+        let j = : baml.json.json
+          catch (root.json.parse(raw) : baml.json.json) : baml.json.json
+            catch (e)
+              _ =>
+                { : never
+                  throw root.errors.UnknownError { data: raw, message: ["realtime: event n..."] } : baml.errors.UnknownError
+                }
+        let etype = _realtime_json_str(root.json.field(j, "type")) : string
+        if (etype == "response.output_t..." || etype == "response.text.delta" : bool) : void
+          { : void
+            acc = acc + _realtime_json_str(root.json.field(j, "delta")) : string
+          }
+        if (etype == "error" || etype == "response.failed" : bool) : void
+          { : never
+            ws.close() : null
+            throw root.errors.UnknownError { data: raw, message: ["realtime: error e..."] } : baml.errors.UnknownError
+          }
+        if (etype == "response.done" || etype == "response.completed" : bool) : void
+          { : void
+            done = true : true
+          }
+      }
+    ws.close() : null
+    Transcript { text: acc } : baml.ai.Transcript
+  }
+}
+function baml.ai.OpenAiRealtime.cancel(self: baml.ai.OpenAiRealtime, io: baml.ai.Channel) -> null throws baml.errors.RealtimeError {
+  { : never
+    throw root.errors.Unsupported { message: "realtime transpor..." } : baml.errors.Unsupported
+  }
+}
+function baml.ai.OpenAiRealtime.truncate(self: baml.ai.OpenAiRealtime, io: baml.ai.Channel, played_ms: int) -> null throws baml.errors.RealtimeError {
+  { : never
+    throw root.errors.Unsupported { message: "realtime transpor..." } : baml.errors.Unsupported
+  }
+}
+function baml.ai._realtime_json_str(j: baml.json.json) -> string throws never {
+  { : string | ""
+    match (j : baml.json.json) : string | ""
+      s: string =>
+        s : string
+      _ =>
+        "" : ""
+  }
+}
+class baml.ai.OpenAiRealtime$stream {
+  model: string | null
+  voice: string | null
+  api_key: string | null
+}
+function baml.ai.OpenAiRealtime$stream.run(self: baml.ai.OpenAiRealtime$stream, prompt: string, io: baml.ai.Channel) -> baml.ai.Transcript throws baml.errors.UnknownError {
+  { : baml.ai.Transcript
+    let ws = : baml.ws.WsStream
+      catch (root.ws.connect("wss://api.openai...." + self.model ?? "gpt-realtime", map { "Authorization": "Bearer " + self.api_key }) : baml.ws.WsStream) : baml.ws.WsStream
+        catch (e)
+          _ =>
+            { : never
+              throw root.errors.UnknownError { data: e, message: ["realtime: connect..."] } : baml.errors.UnknownError
+            }
+    let create_item = root.json.stringify(map { "type": "conversation.item...", "item": map { "type": "message", "role": "user", "content": [map { "type": "input_text", "text": prompt }] } }) : string
+    catch (ws.send(create_item) : null) : null
+      catch (e)
+        _ =>
+          { : never
+            throw root.errors.UnknownError { data: e, message: ["realtime: send it..."] } : baml.errors.UnknownError
+          }
+    let response_create = root.json.stringify(map { "type": "response.create", "response": map { "output_modalities": ["text"] } }) : string
+    catch (ws.send(response_create) : null) : null
+      catch (e)
+        _ =>
+          { : never
+            throw root.errors.UnknownError { data: e, message: ["realtime: respons..."] } : baml.errors.UnknownError
+          }
+    let acc = "" : "" -> string
+    let done = false : false -> bool
+    while Not done
+      { : void
+        let evt = : string | null
+          catch (ws.next() : string | null) : string | null
+            catch (e)
+              _ =>
+                { : never
+                  throw root.errors.UnknownError { data: e, message: ["realtime: recv fa..."] } : baml.errors.UnknownError
+                }
+        let raw = : string
+          match (evt : string | null) : string
+            s: string =>
+              s : string
+            null =>
+              { : never
+                done = true : true
+                continue
+              }
+        catch (io.send(raw) : null) : null
+          catch (e)
+            _ =>
+              { : never
+                throw root.errors.UnknownError { data: e, message: ["realtime: channel..."] } : baml.errors.UnknownError
+              }
+        let j = : baml.json.json
+          catch (root.json.parse(raw) : baml.json.json) : baml.json.json
+            catch (e)
+              _ =>
+                { : never
+                  throw root.errors.UnknownError { data: raw, message: ["realtime: event n..."] } : baml.errors.UnknownError
+                }
+        let etype = _realtime_json_str(root.json.field(j, "type")) : string
+        if (etype == "response.output_t..." || etype == "response.text.delta" : bool) : void
+          { : void
+            acc = acc + _realtime_json_str(root.json.field(j, "delta")) : string
+          }
+        if (etype == "error" || etype == "response.failed" : bool) : void
+          { : never
+            ws.close() : null
+            throw root.errors.UnknownError { data: raw, message: ["realtime: error e..."] } : baml.errors.UnknownError
+          }
+        if (etype == "response.done" || etype == "response.completed" : bool) : void
+          { : void
+            done = true : true
+          }
+      }
+    ws.close() : null
+    Transcript { text: acc } : baml.ai.Transcript
+  }
+}
+function baml.ai.OpenAiRealtime$stream.cancel(self: baml.ai.OpenAiRealtime$stream, io: baml.ai.Channel) -> null throws baml.errors.RealtimeError {
+  { : never
+    throw root.errors.Unsupported { message: "realtime transpor..." } : baml.errors.Unsupported
+  }
+}
+function baml.ai.OpenAiRealtime$stream.truncate(self: baml.ai.OpenAiRealtime$stream, io: baml.ai.Channel, played_ms: int) -> null throws baml.errors.RealtimeError {
+  { : never
+    throw root.errors.Unsupported { message: "realtime transpor..." } : baml.errors.Unsupported
+  }
+}
+
+--- <builtin>/baml/ns_ai/providers/openai_responses.baml ---
+class baml.ai.OpenAiRespContentWire {
+  type: string
+  text: string | null
+}
+class baml.ai.OpenAiRespItemWire {
+  type: string
+  content: baml.ai.OpenAiRespContentWire[] | null
+}
+class baml.ai.OpenAiRespUsageWire {
+  input_tokens: int | null
+  output_tokens: int | null
+}
+class baml.ai.OpenAiRespEnvelopeWire {
+  id: string | null
+  status: string | null
+  output: baml.ai.OpenAiRespItemWire[] | null
+  usage: baml.ai.OpenAiRespUsageWire | null
+}
+class baml.ai.OpenAiResponsesMeta {
+  raw_text: string
+}
+function baml.ai.OpenAiResponsesMeta.finish_reason(self: baml.ai.OpenAiResponsesMeta) -> string throws never {
+  { : "" | string
+    match (_openai_responses_envelope(self.raw_text) : baml.ai.OpenAiRespEnvelopeWire | null) : "" | string
+      null =>
+        "" : ""
+      envelope: OpenAiRespEnvelopeWire =>
+        envelope.status ?? "" : string
+  }
+}
+function baml.ai.OpenAiResponsesMeta.usage(self: baml.ai.OpenAiResponsesMeta) -> baml.ai.Usage throws never {
+  { : baml.ai.Usage
+    let none = root.ai.Usage { input_tokens: 0, output_tokens: 0 } : baml.ai.Usage
+    match (_openai_responses_envelope(self.raw_text) : baml.ai.OpenAiRespEnvelopeWire | null) : baml.ai.Usage
+      null =>
+        none : baml.ai.Usage
+      envelope: OpenAiRespEnvelopeWire =>
+        match (envelope.usage : baml.ai.OpenAiRespUsageWire | null) : baml.ai.Usage
+          null =>
+            none : baml.ai.Usage
+          u: OpenAiRespUsageWire =>
+            { : baml.ai.Usage
+              root.ai.Usage { input_tokens: u.input_tokens ?? 0, output_tokens: u.output_tokens ?? 0 } : baml.ai.Usage
+            }
+  }
+}
+function baml.ai.OpenAiResponsesMeta.reasoning(self: baml.ai.OpenAiResponsesMeta) -> string | baml.ai.Unavailable throws never {
+  { : baml.ai.Unavailable
+    root.ai.Unavailable { reason: "openai responses ..." } : baml.ai.Unavailable
+  }
+}
+function baml.ai.OpenAiResponsesMeta.logprobs(self: baml.ai.OpenAiResponsesMeta) -> baml.ai.Logprob[] | baml.ai.Unavailable throws never {
+  { : baml.ai.Unavailable
+    root.ai.Unavailable { reason: "openai responses ..." } : baml.ai.Unavailable
+  }
+}
+function baml.ai.OpenAiResponsesMeta.citations(self: baml.ai.OpenAiResponsesMeta) -> baml.ai.Citation[] | baml.ai.Unavailable throws never {
+  { : baml.ai.Unavailable
+    root.ai.Unavailable { reason: "openai responses ..." } : baml.ai.Unavailable
+  }
+}
+class baml.ai.OpenAiResponses {
+  model: string
+  api_key: string
+  base_url: string | null
+  extra_headers: map<string, string> | null
+  extra_body: map<string, unknown> | null
+  append_output_schema: bool | null
+  store: bool | null
+}
+function baml.ai.OpenAiResponses.start_chain(self: baml.ai.OpenAiResponses, prompt: string) -> baml.ai.ChainHandle throws baml.errors.UnknownError {
+  { : baml.ai.ChainHandle
+    let messages = [root.ai.ChatMessage.user(prompt)] : baml.ai.ChatMessage[]
+    let body = self._request_body(messages, null, true, false) : string
+    let text = self._post(body) : string
+    let envelope = : baml.ai.OpenAiRespEnvelopeWire
+      match (_openai_responses_envelope(text) : baml.ai.OpenAiRespEnvelopeWire | null) : baml.ai.OpenAiRespEnvelopeWire
+        null =>
+          { : never
+            throw root.errors.UnknownError { data: text, message: ["openai-responses ..."] } : baml.errors.UnknownError
+          }
+        e2: OpenAiRespEnvelopeWire =>
+          e2 : baml.ai.OpenAiRespEnvelopeWire
+    root.ai.ChainHandle { id: envelope.id ?? "", owner: "openai-responses" } : baml.ai.ChainHandle
+  }
+}
+function baml.ai.OpenAiResponses.extend_text(self: baml.ai.OpenAiResponses, prompt: string, handle: baml.ai.ChainHandle) -> string throws baml.errors.UnknownError {
+  { : string
+    let r: string = self.extend<T>(prompt, handle) : string
+    r : string
+  }
+}
+function baml.ai.OpenAiResponses._encode_part(self: baml.ai.OpenAiResponses, p: baml.ai.MessagePart) -> baml.json.json throws baml.errors.UnknownError {
+  { : never
+    match (p.text : string | null) : void
+      null =>
+        { : void
+        }
+      t: string =>
+        { : never
+          return map { "type": "input_text", "text": t } : map<string, string>
+        }
+    throw root.errors.UnknownError { data: null, message: ["openai-responses:..."] } : baml.errors.UnknownError
+  }
+}
+function baml.ai.OpenAiResponses._encode_message(self: baml.ai.OpenAiResponses, m: baml.ai.ChatMessage) -> baml.json.json throws baml.errors.UnknownError {
+  { : map<string, string | baml.json.json[]>
+    let content: baml.json.json[] = [] : baml.json.json[]
+    for p in m.parts
+      { : void
+        content.push(self._encode_part(p)) : int
+      }
+    map { "role": m.role, "content": content } : map<string, string | baml.json.json[]>
+  }
+}
+function baml.ai.OpenAiResponses._request_body(self: baml.ai.OpenAiResponses, messages: baml.ai.ChatMessage[], previous_response_id: string | null, store: bool, background: bool) -> string throws baml.errors.UnknownError {
+  { : string
+    let body: map<string, baml.json.json> = map {  } : map<string, baml.json.json>
+    body.set("model", self.model) : baml.json.json | null
+    if (background : bool) : void
+      { : void
+        body.set("background", true) : baml.json.json | null
+      }
+    let encoded: baml.json.json[] = [] : baml.json.json[]
+    for m in messages
+      { : void
+        encoded.push(self._encode_message(m)) : int
+      }
+    body.set("input", encoded) : baml.json.json | null
+    body.set("store", store) : baml.json.json | null
+    match (previous_response_id : string | null) : void
+      null =>
+        { : void
+        }
+      id: string =>
+        { : void
+          body.set("previous_response_id", id) : baml.json.json | null
+        }
+    match (self.extra_body : map<string, unknown> | null) : void
+      null =>
+        { : void
+        }
+      extra: map<string, unknown> =>
+        { : void
+          for k in extra.keys()
+            { : void
+              let v: baml.json.json = : baml.json.json -> bool | int | float | string | baml.json.json[] | map<string, baml.json.json> | null
+                catch (root.json.to_json<T>(extra.get(k)) : baml.json.json) : baml.json.json
+                  catch (e)
+                    _ =>
+                      { : never
+                        continue
+                      }
+              body.set(k, v) : baml.json.json | null
+            }
+        }
+    root.json.stringify(body) : string
+  }
+}
+function baml.ai.OpenAiResponses._headers_with_idempotency(self: baml.ai.OpenAiResponses, idempotency_key: string) -> map<string, string> throws never {
+  { : map<string, string>
+    let headers = self._request_headers() : map<string, string>
+    if (idempotency_key != "" : bool) : void
+      { : void
+        headers.set("Idempotency-Key", idempotency_key) : string | null
+      }
+    headers : map<string, string>
+  }
+}
+function baml.ai.OpenAiResponses._request_headers(self: baml.ai.OpenAiResponses) -> map<string, string> throws never {
+  { : map<string, string>
+    let headers: map<string, string> = map { "Authorization": "Bearer " + self.api_key, "Content-Type": "application/json" } : map<string, string>
+    match (self.extra_headers : map<string, string> | null) : void
+      null =>
+        { : void
+        }
+      extra: map<string, string> =>
+        { : void
+          for k in extra.keys()
+            { : void
+              headers.set(k, extra.get(k) ?? "") : string | null
+            }
+        }
+    headers : map<string, string>
+  }
+}
+function baml.ai.OpenAiResponses._append_schema(self: baml.ai.OpenAiResponses, messages: baml.ai.ChatMessage[], schema: string) -> baml.ai.ChatMessage[] throws never {
+  { : baml.ai.ChatMessage[]
+    let n = messages.length() : int
+    if (n == 0 : bool) : void
+      { : never
+        return [root.ai.ChatMessage.user(schema)] : baml.ai.ChatMessage[]
+      }
+    let out: root.ai.ChatMessage[] = [] : baml.ai.ChatMessage[]
+    let i = 0 : 0 -> int
+    while i < n - 1
+      { : void
+        match (messages.at(i) : baml.ai.ChatMessage | null) : void
+          null =>
+            { : void
+            }
+          m: root.ai.ChatMessage =>
+            out.push(m) : int
+        i = i + 1 : int
+      }
+    match (messages.at(n - 1) : baml.ai.ChatMessage | null) : void
+      null =>
+        { : void
+        }
+      last: root.ai.ChatMessage =>
+        { : void
+          let parts: root.ai.MessagePart[] = [] : baml.ai.MessagePart[]
+          let np = last.parts.length() : int
+          let j = 0 : 0 -> int
+          while j < np - 1
+            { : void
+              match (last.parts.at(j) : baml.ai.MessagePart | null) : void
+                null =>
+                  { : void
+                  }
+                p: root.ai.MessagePart =>
+                  parts.push(p) : int
+              j = j + 1 : int
+            }
+          let appended = false : false -> bool
+          match (last.parts.at(np - 1) : baml.ai.MessagePart | null) : void
+            null =>
+              { : void
+              }
+            lastp: root.ai.MessagePart =>
+              match (lastp.text : string | null) : void
+                null =>
+                  parts.push(lastp) : int
+                t: string =>
+                  { : void
+                    parts.push(root.ai.MessagePart.from_text(t + "\n\n" + schema)) : int
+                    appended = true : true
+                  }
+          if (Not appended : bool) : void
+            { : void
+              parts.push(root.ai.MessagePart.from_text(schema)) : int
+            }
+          out.push(root.ai.ChatMessage { role: last.role, parts: parts }) : int
+        }
+    out : baml.ai.ChatMessage[]
+  }
+}
+function baml.ai.OpenAiResponses._messages_for(self: baml.ai.OpenAiResponses, messages: baml.ai.ChatMessage[], schema: string) -> baml.ai.ChatMessage[] throws never {
+  { : baml.ai.ChatMessage[]
+    if (Not self.append_output_schema ?? true || schema == "" : bool) : baml.ai.ChatMessage[]
+      { : baml.ai.ChatMessage[]
+        messages : baml.ai.ChatMessage[]
+      }
+    else
+      { : baml.ai.ChatMessage[]
+        self._append_schema(messages, schema) : baml.ai.ChatMessage[]
+      }
+  }
+}
+function baml.ai.OpenAiResponses._post(self: baml.ai.OpenAiResponses, body: string) -> string throws baml.errors.UnknownError {
+  { : string
+    let req = root.http.Request { method: "POST", url: self.base_url ?? "https://api.opena..." + "/responses", headers: self._request_headers(), body: body } : baml.http.Request
+    let resp = : baml.http.Response
+      catch (root.http.send(req) : baml.http.Response) : baml.http.Response
+        catch (e)
+          _ =>
+            { : never
+              throw root.errors.UnknownError { data: e, message: ["openai-responses ..."] } : baml.errors.UnknownError
+            }
+    let text = : string
+      catch (resp.text() : string) : string
+        catch (e)
+          _ =>
+            { : never
+              throw root.errors.UnknownError { data: e, message: ["openai-responses ..."] } : baml.errors.UnknownError
+            }
+    if (resp.ok() : bool) : string
+      { : string
+        text : string
+      }
+    else
+      { : never
+        throw root.errors.UnknownError { data: text, message: ["openai-responses ..." + resp.status_code.to_string()] } : baml.errors.UnknownError
+      }
+  }
+}
+function baml.ai.OpenAiResponses.is_effectful(self: baml.ai.OpenAiResponses) -> bool throws never {
+  { : true
+    true : true
+  }
+}
+function baml.ai.OpenAiResponses.build_request<T>(self: baml.ai.OpenAiResponses, messages: baml.ai.ChatMessage[]) -> baml.http.Request throws baml.errors.UnknownError {
+  { : baml.http.Request
+    let schema: string = root.llm.render_output_format(reflect.type_of<T>()) : string
+    root.http.Request { method: "POST", url: self.base_url ?? "https://api.opena..." + "/responses", headers: self._request_headers(), body: self._request_body(self._messages_for(messages, schema), null, self.store ?? true, false) } : baml.http.Request
+  }
+}
+function baml.ai.OpenAiResponses.send(self: baml.ai.OpenAiResponses, request: baml.http.Request) -> string throws baml.errors.UnknownError {
+  { : string
+    let resp = : baml.http.Response
+      catch (root.http.send(request) : baml.http.Response) : baml.http.Response
+        catch (e)
+          _ =>
+            { : never
+              throw root.errors.UnknownError { data: e, message: ["openai-responses ..."] } : baml.errors.UnknownError
+            }
+    let text = : string
+      catch (resp.text() : string) : string
+        catch (e)
+          _ =>
+            { : never
+              throw root.errors.UnknownError { data: e, message: ["openai-responses ..."] } : baml.errors.UnknownError
+            }
+    if (resp.ok() : bool) : string
+      { : string
+        text : string
+      }
+    else
+      { : never
+        throw root.errors.UnknownError { data: text, message: ["openai-responses ..." + resp.status_code.to_string()] } : baml.errors.UnknownError
+      }
+  }
+}
+function baml.ai.OpenAiResponses.parse<T>(self: baml.ai.OpenAiResponses, from: string) -> T throws baml.errors.UnknownError {
+  { : T
+    let envelope = : baml.ai.OpenAiRespEnvelopeWire
+      match (_openai_responses_envelope(from) : baml.ai.OpenAiRespEnvelopeWire | null) : baml.ai.OpenAiRespEnvelopeWire
+        null =>
+          { : never
+            throw root.errors.UnknownError { data: from, message: ["openai-responses ..."] } : baml.errors.UnknownError
+          }
+        e2: OpenAiRespEnvelopeWire =>
+          e2 : baml.ai.OpenAiRespEnvelopeWire
+    match (_openai_responses_output_text(envelope) : string | null) : T
+      null =>
+        { : never
+          throw root.errors.UnknownError { data: from, message: ["openai-responses:..."] } : baml.errors.UnknownError
+        }
+      t: string =>
+        { : T
+          catch (root.sap.parse<T>(t) : T) : T
+            catch (e)
+              _ =>
+                { : never
+                  throw root.errors.UnknownError { data: t, message: ["openai-responses ..."] } : baml.errors.UnknownError
+                }
+        }
+  }
+}
+function baml.ai.OpenAiResponses.meta_of(self: baml.ai.OpenAiResponses, from: string) -> baml.ai.ResponseMeta throws never {
+  { : baml.ai.OpenAiResponsesMeta
+    OpenAiResponsesMeta { raw_text: from } : baml.ai.OpenAiResponsesMeta
+  }
+}
+function baml.ai.OpenAiResponses.extend<T>(self: baml.ai.OpenAiResponses, prompt: string, handle: baml.ai.ChainHandle) -> T throws baml.errors.UnknownError {
+  { : T
+    let schema: string = root.llm.render_output_format(reflect.type_of<T>()) : string
+    let messages = [root.ai.ChatMessage.user(prompt)] : baml.ai.ChatMessage[]
+    let body = self._request_body(self._messages_for(messages, schema), handle.id, true, false) : string
+    let text = self._post(body) : string
+    let envelope = : baml.ai.OpenAiRespEnvelopeWire
+      match (_openai_responses_envelope(text) : baml.ai.OpenAiRespEnvelopeWire | null) : baml.ai.OpenAiRespEnvelopeWire
+        null =>
+          { : never
+            throw root.errors.UnknownError { data: text, message: ["openai-responses ..."] } : baml.errors.UnknownError
+          }
+        e2: OpenAiRespEnvelopeWire =>
+          e2 : baml.ai.OpenAiRespEnvelopeWire
+    match (_openai_responses_output_text(envelope) : string | null) : T
+      null =>
+        { : never
+          throw root.errors.UnknownError { data: text, message: ["openai-responses:..."] } : baml.errors.UnknownError
+        }
+      t: string =>
+        { : T
+          catch (root.sap.parse<T>(t) : T) : T
+            catch (e)
+              _ =>
+                { : never
+                  throw root.errors.UnknownError { data: t, message: ["openai-responses ..."] } : baml.errors.UnknownError
+                }
+        }
+  }
+}
+function baml.ai.OpenAiResponses.submit<T>(self: baml.ai.OpenAiResponses, prompt: string, idempotency_key: string) -> baml.ai.Job<T> throws baml.errors.UnknownError {
+  { : baml.ai.Job<T>
+    let schema: string = root.llm.render_output_format(reflect.type_of<T>()) : string
+    let messages = [root.ai.ChatMessage.user(prompt)] : baml.ai.ChatMessage[]
+    let body = self._request_body(self._messages_for(messages, schema), null, true, true) : string
+    let req = root.http.Request { method: "POST", url: self.base_url ?? "https://api.opena..." + "/responses", headers: self._headers_with_idempotency(idempotency_key), body: body } : baml.http.Request
+    let resp = : baml.http.Response
+      catch (root.http.send(req) : baml.http.Response) : baml.http.Response
+        catch (e)
+          _ =>
+            { : never
+              throw root.errors.UnknownError { data: e, message: ["openai-responses ..."] } : baml.errors.UnknownError
+            }
+    let text = : string
+      catch (resp.text() : string) : string
+        catch (e)
+          _ =>
+            { : never
+              throw root.errors.UnknownError { data: e, message: ["openai-responses ..."] } : baml.errors.UnknownError
+            }
+    if (Not resp.ok() : bool) : void
+      { : never
+        throw root.errors.UnknownError { data: text, message: ["openai-responses ..." + resp.status_code.to_string()] } : baml.errors.UnknownError
+      }
+    let envelope = : baml.ai.OpenAiRespEnvelopeWire
+      match (_openai_responses_envelope(text) : baml.ai.OpenAiRespEnvelopeWire | null) : baml.ai.OpenAiRespEnvelopeWire
+        null =>
+          { : never
+            throw root.errors.UnknownError { data: text, message: ["openai-responses ..."] } : baml.errors.UnknownError
+          }
+        e2: OpenAiRespEnvelopeWire =>
+          e2 : baml.ai.OpenAiRespEnvelopeWire
+    root.ai.Job { id: envelope.id ?? "", owner: "openai-responses" } : baml.ai.Job<T>
+  }
+}
+function baml.ai.OpenAiResponses.poll<T>(self: baml.ai.OpenAiResponses, job: baml.ai.Job<T>) -> T | null throws baml.errors.UnknownError {
+  { : T
+    let req = root.http.Request { method: "GET", url: self.base_url ?? "https://api.opena..." + "/responses/" + job.id, headers: self._request_headers(), body: "" } : baml.http.Request
+    let resp = : baml.http.Response
+      catch (root.http.send(req) : baml.http.Response) : baml.http.Response
+        catch (e)
+          _ =>
+            { : never
+              throw root.errors.UnknownError { data: e, message: ["openai-responses ..."] } : baml.errors.UnknownError
+            }
+    let text = : string
+      catch (resp.text() : string) : string
+        catch (e)
+          _ =>
+            { : never
+              throw root.errors.UnknownError { data: e, message: ["openai-responses ..."] } : baml.errors.UnknownError
+            }
+    if (Not resp.ok() : bool) : void
+      { : never
+        throw root.errors.UnknownError { data: text, message: ["openai-responses ..." + resp.status_code.to_string()] } : baml.errors.UnknownError
+      }
+    let envelope = : baml.ai.OpenAiRespEnvelopeWire
+      match (_openai_responses_envelope(text) : baml.ai.OpenAiRespEnvelopeWire | null) : baml.ai.OpenAiRespEnvelopeWire
+        null =>
+          { : never
+            throw root.errors.UnknownError { data: text, message: ["openai-responses ..."] } : baml.errors.UnknownError
+          }
+        e2: OpenAiRespEnvelopeWire =>
+          e2 : baml.ai.OpenAiRespEnvelopeWire
+    if (envelope.status ?? "" != "completed" : bool) : void
+      { : never
+        return null : null
+      }
+    match (_openai_responses_output_text(envelope) : string | null) : T
+      null =>
+        { : never
+          throw root.errors.UnknownError { data: text, message: ["openai-responses:..."] } : baml.errors.UnknownError
+        }
+      t: string =>
+        { : T
+          catch (root.sap.parse<T>(t) : T) : T
+            catch (e)
+              _ =>
+                { : never
+                  throw root.errors.UnknownError { data: t, message: ["openai-responses ..."] } : baml.errors.UnknownError
+                }
+        }
+  }
+}
+function baml.ai._openai_responses_envelope(raw_text: string) -> baml.ai.OpenAiRespEnvelopeWire | null throws never {
+  { : baml.ai.OpenAiRespEnvelopeWire | null
+    catch (root.sap.parse<T>(raw_text) : baml.ai.OpenAiRespEnvelopeWire) : baml.ai.OpenAiRespEnvelopeWire | null
+      catch (e)
+        _ =>
+          null : null
+  }
+}
+function baml.ai._openai_responses_output_text(envelope: baml.ai.OpenAiRespEnvelopeWire) -> string | null throws never {
+  { : null
+    let items: OpenAiRespItemWire[] = envelope.output ?? [] : baml.ai.OpenAiRespItemWire[]
+    for item in items
+      { : void
+        if (item.type != "message" : bool) : void
+          { : never
+            continue
+          }
+        let contents: OpenAiRespContentWire[] = item.content ?? [] : baml.ai.OpenAiRespContentWire[]
+        for c in contents
+          { : void
+            if (c.type != "output_text" : bool) : void
+              { : never
+                continue
+              }
+            match (c.text : string | null) : void
+              null =>
+                { : void
+                }
+              t: string =>
+                { : never
+                  return t : string
+                }
+          }
+      }
+    null : null
+  }
+}
+class baml.ai.OpenAiRespContentWire$stream {
+  type: string | null
+  text: string | null
+}
+class baml.ai.OpenAiRespItemWire$stream {
+  type: string | null
+  content: baml.ai.OpenAiRespContentWire$stream[] | null
+}
+class baml.ai.OpenAiRespUsageWire$stream {
+  input_tokens: int | null
+  output_tokens: int | null
+}
+class baml.ai.OpenAiRespEnvelopeWire$stream {
+  id: string | null
+  status: string | null
+  output: baml.ai.OpenAiRespItemWire$stream[] | null
+  usage: baml.ai.OpenAiRespUsageWire$stream | null
+}
+class baml.ai.OpenAiResponsesMeta$stream {
+  raw_text: string | null
+}
+function baml.ai.OpenAiResponsesMeta$stream.finish_reason(self: baml.ai.OpenAiResponsesMeta$stream) -> string throws never {
+  { : "" | string
+    match (_openai_responses_envelope(self.raw_text) : baml.ai.OpenAiRespEnvelopeWire | null) : "" | string
+      null =>
+        "" : ""
+      envelope: OpenAiRespEnvelopeWire =>
+        envelope.status ?? "" : string
+  }
+  !! 1684..1697: type mismatch: expected string, got string | null
+}
+function baml.ai.OpenAiResponsesMeta$stream.usage(self: baml.ai.OpenAiResponsesMeta$stream) -> baml.ai.Usage throws never {
+  { : baml.ai.Usage
+    let none = root.ai.Usage { input_tokens: 0, output_tokens: 0 } : baml.ai.Usage
+    match (_openai_responses_envelope(self.raw_text) : baml.ai.OpenAiRespEnvelopeWire | null) : baml.ai.Usage
+      null =>
+        none : baml.ai.Usage
+      envelope: OpenAiRespEnvelopeWire =>
+        match (envelope.usage : baml.ai.OpenAiRespUsageWire | null) : baml.ai.Usage
+          null =>
+            none : baml.ai.Usage
+          u: OpenAiRespUsageWire =>
+            { : baml.ai.Usage
+              root.ai.Usage { input_tokens: u.input_tokens ?? 0, output_tokens: u.output_tokens ?? 0 } : baml.ai.Usage
+            }
+  }
+  !! 2017..2030: type mismatch: expected string, got string | null
+}
+function baml.ai.OpenAiResponsesMeta$stream.reasoning(self: baml.ai.OpenAiResponsesMeta$stream) -> string | baml.ai.Unavailable throws never {
+  { : baml.ai.Unavailable
+    root.ai.Unavailable { reason: "openai responses ..." } : baml.ai.Unavailable
+  }
+}
+function baml.ai.OpenAiResponsesMeta$stream.logprobs(self: baml.ai.OpenAiResponsesMeta$stream) -> baml.ai.Logprob[] | baml.ai.Unavailable throws never {
+  { : baml.ai.Unavailable
+    root.ai.Unavailable { reason: "openai responses ..." } : baml.ai.Unavailable
+  }
+}
+function baml.ai.OpenAiResponsesMeta$stream.citations(self: baml.ai.OpenAiResponsesMeta$stream) -> baml.ai.Citation[] | baml.ai.Unavailable throws never {
+  { : baml.ai.Unavailable
+    root.ai.Unavailable { reason: "openai responses ..." } : baml.ai.Unavailable
+  }
+}
+class baml.ai.OpenAiResponses$stream {
+  model: string | null
+  api_key: string | null
+  base_url: string | null
+  extra_headers: map<string, string> | null
+  extra_body: map<string, unknown> | null
+  append_output_schema: bool | null
+  store: bool | null
+}
+function baml.ai.OpenAiResponses$stream.is_effectful(self: baml.ai.OpenAiResponses$stream) -> bool throws never {
+  { : true
+    true : true
+  }
+}
+function baml.ai.OpenAiResponses$stream.build_request<T>(self: baml.ai.OpenAiResponses$stream, messages: baml.ai.ChatMessage[]) -> baml.http.Request throws baml.errors.UnknownError {
+  { : baml.http.Request
+    let schema: string = root.llm.render_output_format(reflect.type_of<T>()) : string
+    root.http.Request { method: "POST", url: self.base_url ?? "https://api.opena..." + "/responses", headers: self._request_headers(), body: self._request_body(self._messages_for(messages, schema), null, self.store ?? true, false) } : baml.http.Request
+  }
+  !! 4661..4677: type `baml.ai.OpenAiResponses$stream` has no member `_request_headers`
+  !! 4729..4742: type `baml.ai.OpenAiResponses$stream` has no member `_request_body`
+  !! 4773..4786: type `baml.ai.OpenAiResponses$stream` has no member `_messages_for`
+  !! 4370..4394: declared throws is `baml.errors.UnknownError`, but this function may also throw `unknown`
+  ?? 4370..4394: extraneous throws declaration: baml.errors.UnknownError
+}
+function baml.ai.OpenAiResponses$stream.send(self: baml.ai.OpenAiResponses$stream, request: baml.http.Request) -> string throws baml.errors.UnknownError {
+  { : string
+    let resp = : baml.http.Response
+      catch (root.http.send(request) : baml.http.Response) : baml.http.Response
+        catch (e)
+          _ =>
+            { : never
+              throw root.errors.UnknownError { data: e, message: ["openai-responses ..."] } : baml.errors.UnknownError
+            }
+    let text = : string
+      catch (resp.text() : string) : string
+        catch (e)
+          _ =>
+            { : never
+              throw root.errors.UnknownError { data: e, message: ["openai-responses ..."] } : baml.errors.UnknownError
+            }
+    if (resp.ok() : bool) : string
+      { : string
+        text : string
+      }
+    else
+      { : never
+        throw root.errors.UnknownError { data: text, message: ["openai-responses ..." + resp.status_code.to_string()] } : baml.errors.UnknownError
+      }
+  }
+}
+function baml.ai.OpenAiResponses$stream.parse<T>(self: baml.ai.OpenAiResponses$stream, from: string) -> T throws baml.errors.UnknownError {
+  { : T
+    let envelope = : baml.ai.OpenAiRespEnvelopeWire
+      match (_openai_responses_envelope(from) : baml.ai.OpenAiRespEnvelopeWire | null) : baml.ai.OpenAiRespEnvelopeWire
+        null =>
+          { : never
+            throw root.errors.UnknownError { data: from, message: ["openai-responses ..."] } : baml.errors.UnknownError
+          }
+        e2: OpenAiRespEnvelopeWire =>
+          e2 : baml.ai.OpenAiRespEnvelopeWire
+    match (_openai_responses_output_text(envelope) : string | null) : T
+      null =>
+        { : never
+          throw root.errors.UnknownError { data: from, message: ["openai-responses:..."] } : baml.errors.UnknownError
+        }
+      t: string =>
+        { : T
+          catch (root.sap.parse<T>(t) : T) : T
+            catch (e)
+              _ =>
+                { : never
+                  throw root.errors.UnknownError { data: t, message: ["openai-responses ..."] } : baml.errors.UnknownError
+                }
+        }
+  }
+}
+function baml.ai.OpenAiResponses$stream.meta_of(self: baml.ai.OpenAiResponses$stream, from: string) -> baml.ai.ResponseMeta throws never {
+  { : baml.ai.OpenAiResponsesMeta
+    OpenAiResponsesMeta { raw_text: from } : baml.ai.OpenAiResponsesMeta
+  }
+}
+function baml.ai.OpenAiResponses$stream.extend<T>(self: baml.ai.OpenAiResponses$stream, prompt: string, handle: baml.ai.ChainHandle) -> T throws baml.errors.UnknownError {
+  { : T
+    let schema: string = root.llm.render_output_format(reflect.type_of<T>()) : string
+    let messages = [root.ai.ChatMessage.user(prompt)] : baml.ai.ChatMessage[]
+    let body = self._request_body(self._messages_for(messages, schema), handle.id, true, false) : unknown
+    let text = self._post(body) : unknown
+    let envelope = : baml.ai.OpenAiRespEnvelopeWire
+      match (_openai_responses_envelope(text) : baml.ai.OpenAiRespEnvelopeWire | null) : baml.ai.OpenAiRespEnvelopeWire
+        null =>
+          { : never
+            throw root.errors.UnknownError { data: text, message: ["openai-responses ..."] } : baml.errors.UnknownError
+          }
+        e2: OpenAiRespEnvelopeWire =>
+          e2 : baml.ai.OpenAiRespEnvelopeWire
+    match (_openai_responses_output_text(envelope) : string | null) : T
+      null =>
+        { : never
+          throw root.errors.UnknownError { data: text, message: ["openai-responses:..."] } : baml.errors.UnknownError
+        }
+      t: string =>
+        { : T
+          catch (root.sap.parse<T>(t) : T) : T
+            catch (e)
+              _ =>
+                { : never
+                  throw root.errors.UnknownError { data: t, message: ["openai-responses ..."] } : baml.errors.UnknownError
+                }
+        }
+  }
+  !! 7511..7524: type `baml.ai.OpenAiResponses$stream` has no member `_request_body`
+  !! 7530..7543: type `baml.ai.OpenAiResponses$stream` has no member `_messages_for`
+  !! 7616..7621: type `baml.ai.OpenAiResponses$stream` has no member `_post`
+  !! 7307..7331: declared throws is `baml.errors.UnknownError`, but this function may also throw `unknown`
+}
+function baml.ai.OpenAiResponses$stream.submit<T>(self: baml.ai.OpenAiResponses$stream, prompt: string, idempotency_key: string) -> baml.ai.Job<T> throws baml.errors.UnknownError {
+  { : baml.ai.Job<T>
+    let schema: string = root.llm.render_output_format(reflect.type_of<T>()) : string
+    let messages = [root.ai.ChatMessage.user(prompt)] : baml.ai.ChatMessage[]
+    let body = self._request_body(self._messages_for(messages, schema), null, true, true) : unknown
+    let req = root.http.Request { method: "POST", url: self.base_url ?? "https://api.opena..." + "/responses", headers: self._headers_with_idempotency(idempotency_key), body: body } : baml.http.Request
+    let resp = : baml.http.Response
+      catch (root.http.send(req) : baml.http.Response) : baml.http.Response
+        catch (e)
+          _ =>
+            { : never
+              throw root.errors.UnknownError { data: e, message: ["openai-responses ..."] } : baml.errors.UnknownError
+            }
+    let text = : string
+      catch (resp.text() : string) : string
+        catch (e)
+          _ =>
+            { : never
+              throw root.errors.UnknownError { data: e, message: ["openai-responses ..."] } : baml.errors.UnknownError
+            }
+    if (Not resp.ok() : bool) : void
+      { : never
+        throw root.errors.UnknownError { data: text, message: ["openai-responses ..." + resp.status_code.to_string()] } : baml.errors.UnknownError
+      }
+    let envelope = : baml.ai.OpenAiRespEnvelopeWire
+      match (_openai_responses_envelope(text) : baml.ai.OpenAiRespEnvelopeWire | null) : baml.ai.OpenAiRespEnvelopeWire
+        null =>
+          { : never
+            throw root.errors.UnknownError { data: text, message: ["openai-responses ..."] } : baml.errors.UnknownError
+          }
+        e2: OpenAiRespEnvelopeWire =>
+          e2 : baml.ai.OpenAiRespEnvelopeWire
+    root.ai.Job { id: envelope.id ?? "", owner: "openai-responses" } : baml.ai.Job<T>
+  }
+  !! 9284..9297: type `baml.ai.OpenAiResponses$stream` has no member `_request_body`
+  !! 9303..9316: type `baml.ai.OpenAiResponses$stream` has no member `_messages_for`
+  !! 9543..9568: type `baml.ai.OpenAiResponses$stream` has no member `_headers_with_idempotency`
+  !! 9080..9104: declared throws is `baml.errors.UnknownError`, but this function may also throw `unknown`
+}
+function baml.ai.OpenAiResponses$stream.poll<T>(self: baml.ai.OpenAiResponses$stream, job: baml.ai.Job<T>) -> T | null throws baml.errors.UnknownError {
+  { : T
+    let req = root.http.Request { method: "GET", url: self.base_url ?? "https://api.opena..." + "/responses/" + job.id, headers: self._request_headers(), body: "" } : baml.http.Request
+    let resp = : baml.http.Response
+      catch (root.http.send(req) : baml.http.Response) : baml.http.Response
+        catch (e)
+          _ =>
+            { : never
+              throw root.errors.UnknownError { data: e, message: ["openai-responses ..."] } : baml.errors.UnknownError
+            }
+    let text = : string
+      catch (resp.text() : string) : string
+        catch (e)
+          _ =>
+            { : never
+              throw root.errors.UnknownError { data: e, message: ["openai-responses ..."] } : baml.errors.UnknownError
+            }
+    if (Not resp.ok() : bool) : void
+      { : never
+        throw root.errors.UnknownError { data: text, message: ["openai-responses ..." + resp.status_code.to_string()] } : baml.errors.UnknownError
+      }
+    let envelope = : baml.ai.OpenAiRespEnvelopeWire
+      match (_openai_responses_envelope(text) : baml.ai.OpenAiRespEnvelopeWire | null) : baml.ai.OpenAiRespEnvelopeWire
+        null =>
+          { : never
+            throw root.errors.UnknownError { data: text, message: ["openai-responses ..."] } : baml.errors.UnknownError
+          }
+        e2: OpenAiRespEnvelopeWire =>
+          e2 : baml.ai.OpenAiRespEnvelopeWire
+    if (envelope.status ?? "" != "completed" : bool) : void
+      { : never
+        return null : null
+      }
+    match (_openai_responses_output_text(envelope) : string | null) : T
+      null =>
+        { : never
+          throw root.errors.UnknownError { data: text, message: ["openai-responses:..."] } : baml.errors.UnknownError
+        }
+      t: string =>
+        { : T
+          catch (root.sap.parse<T>(t) : T) : T
+            catch (e)
+              _ =>
+                { : never
+                  throw root.errors.UnknownError { data: t, message: ["openai-responses ..."] } : baml.errors.UnknownError
+                }
+        }
+  }
+  !! 10992..11008: type `baml.ai.OpenAiResponses$stream` has no member `_request_headers`
+  !! 10768..10792: declared throws is `baml.errors.UnknownError`, but this function may also throw `unknown`
+}
+
+--- <builtin>/baml/ns_ai/providers/openai_strict.baml ---
+class baml.ai.OpenAiStrict {
+  model: string
+  api_key: string
+  base_url: string | null
+  extra_headers: map<string, string> | null
+  extra_body: map<string, unknown> | null
+}
+function baml.ai.OpenAiStrict._encode_part(self: baml.ai.OpenAiStrict, p: baml.ai.MessagePart) -> baml.json.json throws baml.errors.UnknownError {
+  { : never
+    match (p.text : string | null) : void
+      null =>
+        { : void
+        }
+      t: string =>
+        { : never
+          return map { "type": "text", "text": t } : map<string, string>
+        }
+    match (p.image : image | null) : void
+      null =>
+        { : void
+        }
+      img: image =>
+        { : never
+          let url = : string
+            match (img.url() : string | null) : string
+              null =>
+                "data:" + img.mime_type() ?? "image/png" + ";base64," + img.base64() : string
+              u: string =>
+                u : string
+          return map { "type": "image_url", "image_url": map { "url": url } } : map<string, string | map<string, string>>
+        }
+    match (p.audio : audio | null) : void
+      null =>
+        { : void
+        }
+      a: audio =>
+        { : never
+          let mime = a.mime_type() ?? "audio/wav" : string
+          let fmt = : "mp3" | "wav" -> string
+            if (mime.includes("mp3") || mime.includes("mpeg") : bool) : "mp3" | "wav"
+              { : "mp3"
+                "mp3" : "mp3"
+              }
+            else
+              { : "wav"
+                "wav" : "wav"
+              }
+          return map { "type": "input_audio", "input_audio": map { "data": a.base64(), "format": fmt } } : map<string, string | map<string, string>>
+        }
+    match (p.pdf : pdf | null) : void
+      null =>
+        { : void
+        }
+      d: pdf =>
+        { : never
+          return map { "type": "file", "file": map { "filename": "document.pdf", "file_data": "data:application/..." + d.base64() } } : map<string, string | map<string, string>>
+        }
+    throw root.errors.UnknownError { data: null, message: ["openai strict: un..."] } : baml.errors.UnknownError
+  }
+}
+function baml.ai.OpenAiStrict._encode_message(self: baml.ai.OpenAiStrict, m: baml.ai.ChatMessage) -> baml.json.json throws baml.errors.UnknownError {
+  { : map<string, string | baml.json.json[]>
+    if (m.parts.length() == 1 : bool) : void
+      { : void
+        match (m.parts.at(0) : baml.ai.MessagePart | null) : void
+          only: root.ai.MessagePart =>
+            match (only.text : string | null) : void
+              t: string =>
+                { : never
+                  return map { "role": m.role, "content": t } : map<string, string>
+                }
+              _ =>
+                { : void
+                }
+          _ =>
+            { : void
+            }
+      }
+    let parts: baml.json.json[] = [] : baml.json.json[]
+    for p in m.parts
+      { : void
+        parts.push(self._encode_part(p)) : int
+      }
+    map { "role": m.role, "content": parts } : map<string, string | baml.json.json[]>
+  }
+}
+function baml.ai.OpenAiStrict._request_headers(self: baml.ai.OpenAiStrict) -> map<string, string> throws never {
+  { : map<string, string>
+    let headers: map<string, string> = map { "Authorization": "Bearer " + self.api_key, "Content-Type": "application/json" } : map<string, string>
+    match (self.extra_headers : map<string, string> | null) : void
+      extra: map<string, string> =>
+        { : void
+          for k in extra.keys()
+            { : void
+              headers.set(k, extra.get(k) ?? "") : string | null
+            }
+        }
+      _ =>
+        { : void
+        }
+    headers : map<string, string>
+  }
+}
+function baml.ai.OpenAiStrict._request_body<T>(self: baml.ai.OpenAiStrict, messages: baml.ai.ChatMessage[]) -> string throws baml.errors.UnknownError {
+  { : string
+    let body: map<string, baml.json.json> = map {  } : map<string, baml.json.json>
+    body.set("model", self.model) : baml.json.json | null
+    let encoded: baml.json.json[] = [] : baml.json.json[]
+    for m in messages
+      { : void
+        encoded.push(self._encode_message(m)) : int
+      }
+    body.set("messages", encoded) : baml.json.json | null
+    let schema_str: string = : string | "" -> string
+      catch (root.schema.json_schema(reflect.type_of<T>(), true) : string) : string | ""
+        catch (e)
+          u: root.errors.Unsupported =>
+            "" : ""
+    if (schema_str != "" && schema_str.includes("\"properties\"") : bool) : void
+      { : void
+        let schema_json: baml.json.json = : baml.json.json -> bool | int | float | string | baml.json.json[] | map<string, baml.json.json> | null
+          catch (root.json.parse(schema_str) : baml.json.json) : baml.json.json
+            catch (e)
+              _ =>
+                { : never
+                  throw root.errors.UnknownError { data: e, message: ["openai strict: sc..."] } : baml.errors.UnknownError
+                }
+        body.set("response_format", map { "type": "json_schema", "json_schema": map { "name": "output", "strict": true, "schema": schema_json } }) : baml.json.json | null
+      }
+    match (self.extra_body : map<string, unknown> | null) : void
+      extra: map<string, unknown> =>
+        { : void
+          for k in extra.keys()
+            { : void
+              let v: baml.json.json = : baml.json.json -> bool | int | float | string | baml.json.json[] | map<string, baml.json.json> | null
+                catch (root.json.to_json<T>(extra.get(k)) : baml.json.json) : baml.json.json
+                  catch (e)
+                    _ =>
+                      { : never
+                        continue
+                      }
+              body.set(k, v) : baml.json.json | null
+            }
+        }
+      _ =>
+        { : void
+        }
+    root.json.stringify(body) : string
+  }
+}
+function baml.ai.OpenAiStrict.build_request<T>(self: baml.ai.OpenAiStrict, messages: baml.ai.ChatMessage[]) -> baml.http.Request throws baml.errors.UnknownError {
+  { : baml.http.Request
+    root.http.Request { method: "POST", url: self.base_url ?? "https://api.opena..." + "/chat/completions", headers: self._request_headers(), body: self._request_body<T>(messages) } : baml.http.Request
+  }
+}
+function baml.ai.OpenAiStrict.send(self: baml.ai.OpenAiStrict, request: baml.http.Request) -> string throws baml.errors.CallError | baml.errors.UnknownError {
+  { : string
+    let resp = : baml.http.Response
+      catch (root.http.send(request) : baml.http.Response) : baml.http.Response
+        catch (e)
+          _ =>
+            { : never
+              throw root.errors.UnknownError { data: e, message: ["openai strict sen..."] } : baml.errors.UnknownError
+            }
+    let text = : string
+      catch (resp.text() : string) : string
+        catch (e)
+          _ =>
+            { : never
+              throw root.errors.UnknownError { data: e, message: ["openai strict bod..."] } : baml.errors.UnknownError
+            }
+    if (resp.ok() : bool) : string
+      { : string
+        text : string
+      }
+    else
+      { : never
+        throw OpenAiHttpError { status: resp.status_code, body: text } : baml.ai.OpenAiHttpError
+      }
+  }
+}
+function baml.ai.OpenAiStrict.parse<T>(self: baml.ai.OpenAiStrict, from: string) -> T throws baml.errors.UnknownError {
+  { : T
+    let wire: OpenAiResponseWire = : baml.ai.OpenAiResponseWire
+      catch (root.json.from_json<T>(root.json.parse(from)) : baml.ai.OpenAiResponseWire) : baml.ai.OpenAiResponseWire
+        catch (e)
+          _ =>
+            { : never
+              throw root.errors.UnknownError { data: e, message: ["openai strict par..."] } : baml.errors.UnknownError
+            }
+    match (wire.choices.at(0) : baml.ai.OpenAiChoiceWire | null) : T
+      c: OpenAiChoiceWire =>
+        { : T
+          catch (root.sap.parse<T>(c.message.content) : T) : T
+            catch (e)
+              _ =>
+                { : never
+                  throw root.errors.UnknownError { data: e, message: ["openai strict SAP..."] } : baml.errors.UnknownError
+                }
+        }
+      _ =>
+        { : never
+          throw root.errors.UnknownError { data: null, message: ["openai strict: no..."] } : baml.errors.UnknownError
+        }
+  }
+}
+function baml.ai.OpenAiStrict.meta_of(self: baml.ai.OpenAiStrict, from: string) -> baml.ai.ResponseMeta throws never {
+  { : baml.ai.OpenAiResponseMeta
+    OpenAiResponseMeta { raw_text: from } : baml.ai.OpenAiResponseMeta
+  }
+}
+class baml.ai.OpenAiStrict$stream {
+  model: string | null
+  api_key: string | null
+  base_url: string | null
+  extra_headers: map<string, string> | null
+  extra_body: map<string, unknown> | null
+}
+function baml.ai.OpenAiStrict$stream.build_request<T>(self: baml.ai.OpenAiStrict$stream, messages: baml.ai.ChatMessage[]) -> baml.http.Request throws baml.errors.UnknownError {
+  { : baml.http.Request
+    root.http.Request { method: "POST", url: self.base_url ?? "https://api.opena..." + "/chat/completions", headers: self._request_headers(), body: self._request_body<T>(messages) } : baml.http.Request
+  }
+  !! 1581..1597: type `baml.ai.OpenAiStrict$stream` has no member `_request_headers`
+  !! 1628..1641: type `baml.ai.OpenAiStrict$stream` has no member `_request_body`
+  !! 1369..1393: declared throws is `baml.errors.UnknownError`, but this function may also throw `unknown`
+  ?? 1369..1393: extraneous throws declaration: baml.errors.UnknownError
+}
+function baml.ai.OpenAiStrict$stream.send(self: baml.ai.OpenAiStrict$stream, request: baml.http.Request) -> string throws baml.errors.CallError | baml.errors.UnknownError {
+  { : string
+    let resp = : baml.http.Response
+      catch (root.http.send(request) : baml.http.Response) : baml.http.Response
+        catch (e)
+          _ =>
+            { : never
+              throw root.errors.UnknownError { data: e, message: ["openai strict sen..."] } : baml.errors.UnknownError
+            }
+    let text = : string
+      catch (resp.text() : string) : string
+        catch (e)
+          _ =>
+            { : never
+              throw root.errors.UnknownError { data: e, message: ["openai strict bod..."] } : baml.errors.UnknownError
+            }
+    if (resp.ok() : bool) : string
+      { : string
+        text : string
+      }
+    else
+      { : never
+        throw OpenAiHttpError { status: resp.status_code, body: text } : baml.ai.OpenAiHttpError
+      }
+  }
+}
+function baml.ai.OpenAiStrict$stream.parse<T>(self: baml.ai.OpenAiStrict$stream, from: string) -> T throws baml.errors.UnknownError {
+  { : T
+    let wire: OpenAiResponseWire = : baml.ai.OpenAiResponseWire
+      catch (root.json.from_json<T>(root.json.parse(from)) : baml.ai.OpenAiResponseWire) : baml.ai.OpenAiResponseWire
+        catch (e)
+          _ =>
+            { : never
+              throw root.errors.UnknownError { data: e, message: ["openai strict par..."] } : baml.errors.UnknownError
+            }
+    match (wire.choices.at(0) : baml.ai.OpenAiChoiceWire | null) : T
+      c: OpenAiChoiceWire =>
+        { : T
+          catch (root.sap.parse<T>(c.message.content) : T) : T
+            catch (e)
+              _ =>
+                { : never
+                  throw root.errors.UnknownError { data: e, message: ["openai strict SAP..."] } : baml.errors.UnknownError
+                }
+        }
+      _ =>
+        { : never
+          throw root.errors.UnknownError { data: null, message: ["openai strict: no..."] } : baml.errors.UnknownError
+        }
+  }
+}
+function baml.ai.OpenAiStrict$stream.meta_of(self: baml.ai.OpenAiStrict$stream, from: string) -> baml.ai.ResponseMeta throws never {
+  { : baml.ai.OpenAiResponseMeta
+    OpenAiResponseMeta { raw_text: from } : baml.ai.OpenAiResponseMeta
+  }
+}
+
 --- <builtin>/baml/ns_csv/csv.baml ---
 enum baml.csv.CsvErrorKind
 class baml.csv.CsvError {
@@ -813,6 +5067,177 @@ class baml.csv.CsvWriter$stream {
 function baml.env.get_or_panic(key: string) -> string throws never {
   { : string
     get(key) ?? root.sys.panic("env var not found: " + key) : string
+  }
+}
+
+--- <builtin>/baml/ns_errors/capability.baml ---
+class baml.errors.UnknownError {
+  data: unknown
+  message: string[]
+}
+class baml.errors.CannotRetry {
+  message: string
+}
+function baml.errors.CannotRetry.is_retryable(self: baml.errors.CannotRetry) -> bool throws never {
+  { : false
+    false : false
+  }
+}
+function baml.errors.CannotRetry.is_effectful(self: baml.errors.CannotRetry) -> bool throws never {
+  { : true
+    true : true
+  }
+}
+function baml.errors.CannotRetry.is_policy_refusal(self: baml.errors.CannotRetry) -> bool throws never {
+  { : false
+    false : false
+  }
+}
+function baml.errors.CannotRetry.is_resumable(self: baml.errors.CannotRetry) -> bool throws never {
+  { : false
+    false : false
+  }
+}
+function baml.errors.CannotRetry.is_unsupported(self: baml.errors.CannotRetry) -> bool throws never {
+  { : false
+    false : false
+  }
+}
+function baml.errors.CannotRetry.is_network_error(self: baml.errors.CannotRetry) -> bool throws never {
+  { : false
+    false : false
+  }
+}
+function baml.errors.CannotRetry.is_rate_limit(self: baml.errors.CannotRetry) -> bool throws never {
+  { : false
+    false : false
+  }
+}
+function baml.errors.CannotRetry.is_parse_error(self: baml.errors.CannotRetry) -> bool throws never {
+  { : false
+    false : false
+  }
+}
+function baml.errors.CannotRetry.is_network_error(self: baml.errors.CannotRetry) -> bool throws never {
+  { : false
+    false : false
+  }
+}
+function baml.errors.CannotRetry.is_network_error(self: baml.errors.CannotRetry) -> bool throws never {
+  { : false
+    false : false
+  }
+}
+function baml.errors.is_retryable(self: unknown) -> bool throws never {
+  { : false
+    false : false
+  }
+}
+function baml.errors.is_effectful(self: unknown) -> bool throws never {
+  { : false
+    false : false
+  }
+}
+function baml.errors.is_policy_refusal(self: unknown) -> bool throws never {
+  { : false
+    false : false
+  }
+}
+function baml.errors.is_resumable(self: unknown) -> bool throws never {
+  { : false
+    false : false
+  }
+}
+function baml.errors.is_unsupported(self: unknown) -> bool throws never {
+  { : true
+    true : true
+  }
+}
+function baml.errors.is_network_error(self: unknown) -> bool throws never {
+  { : false
+    false : false
+  }
+}
+function baml.errors.is_rate_limit(self: unknown) -> bool throws never {
+  { : false
+    false : false
+  }
+}
+function baml.errors.is_parse_error(self: unknown) -> bool throws never {
+  { : false
+    false : false
+  }
+}
+function baml.errors.is_network_error(self: unknown) -> bool throws never {
+  { : false
+    false : false
+  }
+}
+function baml.errors.is_network_error(self: unknown) -> bool throws never {
+  { : false
+    false : false
+  }
+}
+function baml.errors.is_network_error(self: unknown) -> bool throws never {
+  { : false
+    false : false
+  }
+}
+class baml.errors.UnknownError$stream {
+  data: unknown
+  message: string[]
+}
+class baml.errors.CannotRetry$stream {
+  message: string | null
+}
+function baml.errors.CannotRetry$stream.is_retryable(self: baml.errors.CannotRetry$stream) -> bool throws never {
+  { : false
+    false : false
+  }
+}
+function baml.errors.CannotRetry$stream.is_effectful(self: baml.errors.CannotRetry$stream) -> bool throws never {
+  { : true
+    true : true
+  }
+}
+function baml.errors.CannotRetry$stream.is_policy_refusal(self: baml.errors.CannotRetry$stream) -> bool throws never {
+  { : false
+    false : false
+  }
+}
+function baml.errors.CannotRetry$stream.is_resumable(self: baml.errors.CannotRetry$stream) -> bool throws never {
+  { : false
+    false : false
+  }
+}
+function baml.errors.CannotRetry$stream.is_unsupported(self: baml.errors.CannotRetry$stream) -> bool throws never {
+  { : false
+    false : false
+  }
+}
+function baml.errors.CannotRetry$stream.is_network_error(self: baml.errors.CannotRetry$stream) -> bool throws never {
+  { : false
+    false : false
+  }
+}
+function baml.errors.CannotRetry$stream.is_rate_limit(self: baml.errors.CannotRetry$stream) -> bool throws never {
+  { : false
+    false : false
+  }
+}
+function baml.errors.CannotRetry$stream.is_parse_error(self: baml.errors.CannotRetry$stream) -> bool throws never {
+  { : false
+    false : false
+  }
+}
+function baml.errors.CannotRetry$stream.is_network_error(self: baml.errors.CannotRetry$stream) -> bool throws never {
+  { : false
+    false : false
+  }
+}
+function baml.errors.CannotRetry$stream.is_network_error(self: baml.errors.CannotRetry$stream) -> bool throws never {
+  { : false
+    false : false
   }
 }
 
@@ -2118,6 +6543,100 @@ function baml.json.to<T>(j: baml.json.json) -> T throws baml.json.JsonDecodeErro
     root._from_json_shim<T>(j) : T
   }
 }
+class baml.json.JsonPathError {
+  message: string
+  selector: string
+}
+function baml.json._path_field(current: baml.json.json, key: string, selector: string) -> baml.json.json throws baml.json.JsonPathError {
+  { : baml.json.json | null
+    match (current : baml.json.json) : baml.json.json | null
+      m: map<string, baml.json.json> =>
+        { : baml.json.json | null
+          if (Not m.has(key) : bool) : void
+            { : never
+              throw JsonPathError { message: "missing field '" + key + "'", selector: selector } : baml.json.JsonPathError
+            }
+          m.get(key) : baml.json.json | null
+        }
+      _ =>
+        { : never
+          throw JsonPathError { message: "field access '." + key + "' on a non-object", selector: selector } : baml.json.JsonPathError
+        }
+  }
+}
+function baml.json._path_index(current: baml.json.json, idx: int, selector: string) -> baml.json.json throws baml.json.JsonPathError {
+  { : baml.json.json | null
+    match (current : baml.json.json) : baml.json.json | null
+      arr: baml.json.json[] =>
+        { : baml.json.json | null
+          if (idx < 0 || idx >= arr.length() : bool) : void
+            { : never
+              throw JsonPathError { message: "index [" + idx.to_string() + "] out of bounds (..." + arr.length().to_string() + ")", selector: selector } : baml.json.JsonPathError
+            }
+          arr.at(idx) : baml.json.json | null
+        }
+      _ =>
+        { : never
+          throw JsonPathError { message: "index [" + idx.to_string() + "] on a non-array", selector: selector } : baml.json.JsonPathError
+        }
+  }
+}
+function baml.json.path<T>(j: baml.json.json, selector: string) -> T throws baml.json.JsonPathError {
+  { : T
+    if (Not selector.starts_with(".") || selector.starts_with("[") : bool) : void
+      { : never
+        throw JsonPathError { message: "selector must sta..." + selector + "'", selector: selector } : baml.json.JsonPathError
+      }
+    let current: baml.json.json = j : baml.json.json -> bool | int | float | string | baml.json.json[] | map<string, baml.json.json> | null
+    let pieces = selector.split("[") : string[]
+    let i = 0 : 0 -> int
+    for piece in pieces
+      { : void
+        let rest = piece : string
+        if (i > 0 : bool) : void
+          { : void
+            let closing = rest.split("]") : string[]
+            if (closing.length() < 2 : bool) : void
+              { : never
+                throw JsonPathError { message: "unterminated '[' ...", selector: selector } : baml.json.JsonPathError
+              }
+            let token = closing.at(0) ?? "" : string
+            rest = closing.at(1) ?? "" : string
+            let quoted = token.starts_with("\"") && token.ends_with("\"") && token.length() >= 2 || token.starts_with("'") && token.ends_with("'") && token.length() >= 2 : bool
+            if (quoted : bool) : void
+              { : void
+                current = _path_field(current, token.substring(1, token.length() - 1), selector) : baml.json.json
+              }
+            else
+              { : void
+                let idx = : int
+                  catch (int.parse(token) : int) : int
+                    catch (e)
+                      _ =>
+                        { : never
+                          throw JsonPathError { message: "bad bracket token '[" + token + "]'", selector: selector } : baml.json.JsonPathError
+                        }
+                current = _path_index(current, idx, selector) : baml.json.json
+              }
+          }
+        for name in rest.split(".")
+          { : void
+            if (name == "" : bool) : void
+              { : never
+                continue
+              }
+            current = _path_field(current, name, selector) : baml.json.json
+          }
+        i = i + 1 : int
+      }
+    catch (to<T>(current) : T) : T
+      catch (e)
+        _ =>
+          { : never
+            throw JsonPathError { message: "leaf does not coe...", selector: selector } : baml.json.JsonPathError
+          }
+  }
+}
 function baml.json.serialize<T>(v: T) -> string throws baml.json.JsonSerializationError {
   { : string
     stringify(to_json<T>(v)) : string
@@ -2140,6 +6659,10 @@ class baml.json.JsonSerializationError$stream {
   message: string | null
   path: string | null
   reason: string | null
+}
+class baml.json.JsonPathError$stream {
+  message: string | null
+  selector: string | null
 }
 
 --- <builtin>/baml/ns_llm/llm.baml ---
@@ -2445,6 +6968,10 @@ function baml.llm.Client.execute_once_stream<TStream, TFinal>(self: baml.llm.Cli
           let primitive = self.to_primitive_client() : baml.llm.PrimitiveClient
           let return_type = get_return_type(context.function_name) : type
           let specialized = primitive.render_specialized_prompt(context.jinja_string, context.args, return_type, context.prompt_closure) : baml.llm.PromptAst
+          if (_openai_delegation_ok(primitive, specialized) : bool) : void
+            { : never
+              return _openai_from(primitive).stream_messages(root.ai.prompt_to_messages(specialized)) : baml.llm.Stream<TStream, TFinal>
+            }
           let http_request = primitive.build_request_stream(specialized, return_type) : baml.http.Request
           let sse = root.http.fetch_sse(http_request) : baml.http.SseStream
           let stream: Stream<TStream, TFinal> = self.__make_stream(sse) : baml.llm.Stream<TStream, TFinal>
@@ -2541,6 +7068,10 @@ function baml.llm.Client.execute_once_oneshot<T>(self: baml.llm.Client, context:
           let primitive = self.to_primitive_client() : baml.llm.PrimitiveClient
           let return_type = reflect.type_of() : type
           let specialized = primitive.render_specialized_prompt(context.jinja_string, context.args, return_type, context.prompt_closure) : baml.llm.PromptAst
+          if (_openai_delegation_ok(primitive, specialized) : bool) : void
+            { : never
+              return _openai_from(primitive).call_messages<T>(root.ai.prompt_to_messages(specialized)) : T
+            }
           let http_request = primitive.build_request(specialized, return_type) : baml.http.Request
           let http_response = root.http.send(http_request) : baml.http.Response
           if (http_response.ok() : bool) : T
@@ -2766,6 +7297,40 @@ function baml.llm.prompt(body: (role: (string) -> baml.llm.Role throws never, ct
   }
 }
 lambda baml.llm.prompt {
+}
+function baml.llm._openai_delegation_ok(primitive: baml.llm.PrimitiveClient, specialized: baml.llm.PromptAst) -> bool throws never {
+  { : true
+    if (primitive.provider != "openai" : bool) : void
+      { : never
+        return false : false
+      }
+    if (primitive.options.query_params.keys().length() != 0 : bool) : void
+      { : never
+        return false : false
+      }
+    match (primitive.options.finish_reason_allow_list : string[] | null) : void
+      null =>
+        { : void
+        }
+      _ =>
+        { : never
+          return false : false
+        }
+    match (primitive.options.finish_reason_deny_list : string[] | null) : void
+      null =>
+        { : void
+        }
+      _ =>
+        { : never
+          return false : false
+        }
+    true : true
+  }
+}
+function baml.llm._openai_from(primitive: baml.llm.PrimitiveClient) -> baml.ai.OpenAi throws never {
+  { : baml.ai.OpenAi
+    root.ai.OpenAi { model: primitive.options.model ?? "gpt-4o", api_key: primitive.options.api_key ?? "", base_url: primitive.options.base_url, extra_headers: primitive.options.headers, extra_body: primitive.options.request_body, append_output_schema: false } : baml.ai.OpenAi
+  }
 }
 class baml.llm.PromptAst$stream {
   _data: $rust_type
@@ -3121,6 +7686,15 @@ class baml.panics.IntegerOverflow$stream {
   message: string | null
 }
 type baml.panics.Panic$stream = baml.panics.DivisionByZero$stream | baml.panics.IndexOutOfBounds$stream | baml.panics.InvalidFieldAccess$stream | baml.panics.MapKeyNotFound$stream | baml.panics.StackOverflow$stream | baml.panics.AssertionFailed$stream | baml.panics.Unreachable$stream | baml.panics.Cancelled$stream | baml.panics.UserPanic$stream | baml.panics.Exit$stream | baml.panics.AllocFailure$stream | baml.panics.HostUnavailable$stream | baml.panics.NegativeBitShift$stream | baml.panics.SdkPanic$stream | baml.panics.HostContractViolation$stream | baml.panics.IntegerOverflow$stream
+
+--- <builtin>/baml/ns_sap/sap.baml ---
+function baml.sap.parse<T>(text: string) -> T throws baml.errors.LlmClient {
+  { : T
+    root.llm.__sap_parse_final<TFinal>(text, root.llm.StreamCache.new(reflect.type_of<T>(), reflect.type_of<T>())) : T
+  }
+}
+
+--- <builtin>/baml/ns_schema/schema.baml ---
 
 --- <builtin>/baml/ns_spawn/spawn.baml ---
 class baml.spawn.SpawnParams {
@@ -4070,6 +8644,14 @@ function baml.toml.Table$stream.from_json(j: baml.json.json) -> unknown throws b
 }
 class baml.toml.TomlParseError$stream {
   message: string | null
+}
+
+--- <builtin>/baml/ns_ws/ws.baml ---
+class baml.ws.WsStream {
+  _handle: $rust_type
+}
+class baml.ws.WsStream$stream {
+  _handle: $rust_type
 }
 
 --- <builtin>/baml/ns_yaml/yaml.baml ---

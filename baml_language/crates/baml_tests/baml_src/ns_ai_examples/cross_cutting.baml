@@ -1,8 +1,16 @@
 // Cross-cutting family (scenarios 05, 12, 33, 35, 36). Usage patterns over the real model.
 
-// 36 — capability negotiation: query the graded Support lattice up front.
+// 36 — capability negotiation: query the graded Support lattice up front instead of
+// gambling on a throw.
 function negotiate_before_send(p: baml.ai.Provider) -> string throws never {
-    baml.ai.example_negotiate(p)
+    match (p) {
+        let cap: baml.ai.Capabilities => match (cap.structured_output()) {
+            baml.ai.Support.Yes => "yes",
+            baml.ai.Support.No => "no",
+            baml.ai.Support.Maybe => "maybe",
+        },
+        _ => "unknown",
+    }
 }
 
 // 33 — evaluation: the task is already a function->Provider; a judge is just another

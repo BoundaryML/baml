@@ -152,6 +152,103 @@ class Gemini {
     /// here relies on schema-append + SAP parsing.
     append_output_schema: bool?,
 
+    implements root.ai.Provider {}
+
+    implements root.ai.HttpProvider {
+        // Body is the raw response body TEXT (read once in `send`), so `parse` and
+        // `meta_of` both read the same buffer — `Response.text()` is not idempotent.
+        type Body = string
+
+        function build_request<T>(
+            self,
+            messages: root.ai.ChatMessage[],
+        ) -> root.http.Request throws root.errors.UnknownError {
+            // Inject the output schema so the model knows the shape to return.
+            // Empty for `T = string` (free-form text), non-empty for a structured `T`.
+            let schema: string = root.llm.render_output_format(reflect.type_of<T>());
+            root.http.Request {
+                method: "POST",
+                url: (self.base_url ?? "https://generativelanguage.googleapis.com/v1beta")
+                    + "/models/"
+                    + self.model
+                    + ":generateContent",
+                headers: self._request_headers(),
+                body: self._request_body(self._messages_for(messages, schema)),
+            }
+        }
+
+        function send(
+            self,
+            request: root.http.Request,
+        ) -> string throws root.errors.CallError | root.errors.UnknownError {
+            let resp = root.http.send(request) catch (e) {
+                _ => throw root.errors.UnknownError { data: e, message: ["gemini send failed"] },
+            };
+            let text = resp.text() catch (e) {
+                _ => {
+                    throw root.errors.UnknownError { data: e, message: ["gemini body read failed"] }
+                },
+            };
+            if (resp.ok()) {
+                text
+            } else {
+                throw GeminiHttpError { status: resp.status_code, body: text }
+            }
+        }
+
+        // Concatenate the first candidate's text parts, then coerce to `T` via SAP
+        // (Schema-Aligned Parsing) — robust to markdown fences and minor JSON deviations;
+        // for `T = string` the text passes through unchanged. The camelCase envelope is
+        // decoded via SAP too (only SAP honors the `@alias` fields).
+        function parse<T>(
+            self,
+            from: string,
+        ) -> T throws root.errors.UnknownError {
+            let wire: GeminiResponseWire = root.sap.parse<GeminiResponseWire>(from) catch (e) {
+                _ => throw root.errors.UnknownError { data: e, message: ["gemini parse failed"] },
+            };
+            match (wire.candidates.at(0)) {
+                let c: GeminiCandidateWire => {
+                    let text = "";
+                    match (c.content) {
+                        let content: GeminiContentWire => match (content.parts) {
+                            let ps: GeminiPartWire[] => {
+                                for (let part in ps) {
+                                    match (part.text) {
+                                        null => {
+                                        },
+                                        let t: string => {
+                                            text = text + t;
+                                        },
+                                    }
+                                }
+                            },
+                            _ => {
+                            },
+                        },
+                        _ => {
+                        },
+                    }
+                    root.sap.parse<T>(text) catch (e) {
+                        _ => {
+                            throw root.errors.UnknownError { data: e, message: ["gemini SAP parse failed"] }
+                        },
+                    }
+                },
+                _ => throw root.errors.UnknownError { data: null, message: ["gemini: no candidates"] },
+            }
+        }
+
+        function meta_of(
+            self,
+            from: string,
+        ) -> root.ai.ResponseMeta throws never {
+            GeminiResponseMeta { raw_text: from }
+        }
+    }
+
+    // ── private helpers ──
+
     // Resolve the API key: the explicit option, else the `GOOGLE_API_KEY` env var.
     function _api_key(self) -> string throws root.errors.UnknownError {
         match (self.api_key) {
@@ -379,101 +476,6 @@ class Gemini {
             messages
         } else {
             self._append_schema(messages, schema)
-        }
-    }
-
-    implements root.ai.Provider {}
-
-    implements root.ai.HttpProvider {
-        // Body is the raw response body TEXT (read once in `send`), so `parse` and
-        // `meta_of` both read the same buffer — `Response.text()` is not idempotent.
-        type Body = string
-
-        function build_request<T>(
-            self,
-            messages: root.ai.ChatMessage[],
-        ) -> root.http.Request throws root.errors.CallError | root.errors.UnknownError {
-            // Inject the output schema so the model knows the shape to return.
-            // Empty for `T = string` (free-form text), non-empty for a structured `T`.
-            let schema: string = root.llm.render_output_format(reflect.type_of<T>());
-            root.http.Request {
-                method: "POST",
-                url: (self.base_url ?? "https://generativelanguage.googleapis.com/v1beta")
-                    + "/models/"
-                    + self.model
-                    + ":generateContent",
-                headers: self._request_headers(),
-                body: self._request_body(self._messages_for(messages, schema)),
-            }
-        }
-
-        function send(
-            self,
-            request: root.http.Request,
-        ) -> string throws root.errors.CallError | root.errors.UnknownError {
-            let resp = root.http.send(request) catch (e) {
-                _ => throw root.errors.UnknownError { data: e, message: ["gemini send failed"] },
-            };
-            let text = resp.text() catch (e) {
-                _ => {
-                    throw root.errors.UnknownError { data: e, message: ["gemini body read failed"] }
-                },
-            };
-            if (resp.ok()) {
-                text
-            } else {
-                throw GeminiHttpError { status: resp.status_code, body: text }
-            }
-        }
-
-        // Concatenate the first candidate's text parts, then coerce to `T` via SAP
-        // (Schema-Aligned Parsing) — robust to markdown fences and minor JSON deviations;
-        // for `T = string` the text passes through unchanged. The camelCase envelope is
-        // decoded via SAP too (only SAP honors the `@alias` fields).
-        function parse<T>(
-            self,
-            from: string,
-        ) -> T throws root.errors.CallError | root.errors.UnknownError {
-            let wire: GeminiResponseWire = root.sap.parse<GeminiResponseWire>(from) catch (e) {
-                _ => throw root.errors.UnknownError { data: e, message: ["gemini parse failed"] },
-            };
-            match (wire.candidates.at(0)) {
-                let c: GeminiCandidateWire => {
-                    let text = "";
-                    match (c.content) {
-                        let content: GeminiContentWire => match (content.parts) {
-                            let ps: GeminiPartWire[] => {
-                                for (let part in ps) {
-                                    match (part.text) {
-                                        null => {
-                                        },
-                                        let t: string => {
-                                            text = text + t;
-                                        },
-                                    }
-                                }
-                            },
-                            _ => {
-                            },
-                        },
-                        _ => {
-                        },
-                    }
-                    root.sap.parse<T>(text) catch (e) {
-                        _ => {
-                            throw root.errors.UnknownError { data: e, message: ["gemini SAP parse failed"] }
-                        },
-                    }
-                },
-                _ => throw root.errors.UnknownError { data: null, message: ["gemini: no candidates"] },
-            }
-        }
-
-        function meta_of(
-            self,
-            from: string,
-        ) -> root.ai.ResponseMeta throws root.errors.CallError | root.errors.UnknownError {
-            GeminiResponseMeta { raw_text: from }
         }
     }
 }

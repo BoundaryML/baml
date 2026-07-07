@@ -899,14 +899,18 @@ async fn stateful_capabilities_negotiation() {
         r#"
         function main() -> string {
             let p: baml.ai.Provider = baml.ai.OpenAi { model: "m", api_key: "k", base_url: null };
-            let a = baml.ai.example_chat(p, "hi", baml.ai.Session { _id: "s1" }) catch (e) {
-                let u: baml.errors.UnknownError => "no_conv"
+            let session = baml.ai.Session { _id: "s1" };
+            let a = match (p) {
+                let conv: baml.ai.Conversational => conv.chat<string>("hi", session) catch (e) { _ => "conv_err" },
+                _ => "no_conv",
             };
-            let b = baml.ai.example_background(p, "job", "key1") catch (e) {
-                let u: baml.errors.UnknownError => "no_bg"
+            let b = match (p) {
+                let bg: baml.ai.Background => "bg",
+                _ => "no_bg",
             };
-            let c = baml.ai.example_suspend(p, "task") catch (e) {
-                let u: baml.errors.UnknownError => "no_suspend"
+            let c = match (p) {
+                let s: baml.ai.Suspendable => "suspendable",
+                _ => "no_suspend",
             };
             a + "|" + b + "|" + c
         }

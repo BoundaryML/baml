@@ -18,6 +18,80 @@ class OpenAiStrict {
     /// Extra top-level body params merged into the request JSON (temperature, …).
     extra_body: map<string, unknown>?,
 
+    implements root.ai.Provider {}
+
+    implements root.ai.HttpProvider {
+        // Raw response body TEXT read once in `send`; `parse` and `meta_of` share it.
+        type Body = string
+
+        function build_request<T>(
+            self,
+            messages: root.ai.ChatMessage[],
+        ) -> root.http.Request throws root.errors.UnknownError {
+            root.http.Request {
+                method: "POST",
+                url: (self.base_url ?? "https://api.openai.com/v1") + "/chat/completions",
+                headers: self._request_headers(),
+                body: self._request_body<T>(messages),
+            }
+        }
+
+        function send(
+            self,
+            request: root.http.Request,
+        ) -> string throws root.errors.CallError | root.errors.UnknownError {
+            let resp = root.http.send(request) catch (e) {
+                _ => {
+                    throw root.errors.UnknownError { data: e, message: ["openai strict send failed"] }
+                },
+            };
+            let text = resp.text() catch (e) {
+                _ => {
+                    throw root.errors.UnknownError { data: e, message: ["openai strict body read failed"] }
+                },
+            };
+            if (resp.ok()) {
+                text
+            } else {
+                throw OpenAiHttpError { status: resp.status_code, body: text }
+            }
+        }
+
+        // Strict mode returns exact JSON; SAP still handles the `T = string`
+        // passthrough and any residual fencing.
+        function parse<T>(
+            self,
+            from: string,
+        ) -> T throws root.errors.UnknownError {
+            let wire: OpenAiResponseWire = root.json.from_json<OpenAiResponseWire>(root.json.parse(from)) catch (e) {
+                _ => {
+                    throw root.errors.UnknownError { data: e, message: ["openai strict parse failed"] }
+                },
+            };
+            match (wire.choices.at(0)) {
+                let c: OpenAiChoiceWire => {
+                    root.sap.parse<T>(c.message.content) catch (e) {
+                        _ => {
+                            throw root.errors.UnknownError { data: e, message: ["openai strict SAP parse failed"] }
+                        },
+                    }
+                },
+                _ => {
+                    throw root.errors.UnknownError { data: null, message: ["openai strict: no choices"] }
+                },
+            }
+        }
+
+        function meta_of(
+            self,
+            from: string,
+        ) -> root.ai.ResponseMeta throws never {
+            OpenAiResponseMeta { raw_text: from }
+        }
+    }
+
+    // ── private helpers ──
+
     // Encode one message part into the Chat Completions content-part shape.
     // (Mirrors OpenAi._encode_part; each field null-eliminated so the media
     // runtime type-test isn't broken by a trailing `_` arm.)
@@ -158,77 +232,5 @@ class OpenAiStrict {
             },
         }
         root.json.stringify(body)
-    }
-
-    implements root.ai.Provider {}
-
-    implements root.ai.HttpProvider {
-        // Raw response body TEXT read once in `send`; `parse` and `meta_of` share it.
-        type Body = string
-
-        function build_request<T>(
-            self,
-            messages: root.ai.ChatMessage[],
-        ) -> root.http.Request throws root.errors.CallError | root.errors.UnknownError {
-            root.http.Request {
-                method: "POST",
-                url: (self.base_url ?? "https://api.openai.com/v1") + "/chat/completions",
-                headers: self._request_headers(),
-                body: self._request_body<T>(messages),
-            }
-        }
-
-        function send(
-            self,
-            request: root.http.Request,
-        ) -> string throws root.errors.CallError | root.errors.UnknownError {
-            let resp = root.http.send(request) catch (e) {
-                _ => {
-                    throw root.errors.UnknownError { data: e, message: ["openai strict send failed"] }
-                },
-            };
-            let text = resp.text() catch (e) {
-                _ => {
-                    throw root.errors.UnknownError { data: e, message: ["openai strict body read failed"] }
-                },
-            };
-            if (resp.ok()) {
-                text
-            } else {
-                throw OpenAiHttpError { status: resp.status_code, body: text }
-            }
-        }
-
-        // Strict mode returns exact JSON; SAP still handles the `T = string`
-        // passthrough and any residual fencing.
-        function parse<T>(
-            self,
-            from: string,
-        ) -> T throws root.errors.CallError | root.errors.UnknownError {
-            let wire: OpenAiResponseWire = root.json.from_json<OpenAiResponseWire>(root.json.parse(from)) catch (e) {
-                _ => {
-                    throw root.errors.UnknownError { data: e, message: ["openai strict parse failed"] }
-                },
-            };
-            match (wire.choices.at(0)) {
-                let c: OpenAiChoiceWire => {
-                    root.sap.parse<T>(c.message.content) catch (e) {
-                        _ => {
-                            throw root.errors.UnknownError { data: e, message: ["openai strict SAP parse failed"] }
-                        },
-                    }
-                },
-                _ => {
-                    throw root.errors.UnknownError { data: null, message: ["openai strict: no choices"] }
-                },
-            }
-        }
-
-        function meta_of(
-            self,
-            from: string,
-        ) -> root.ai.ResponseMeta throws root.errors.CallError | root.errors.UnknownError {
-            OpenAiResponseMeta { raw_text: from }
-        }
     }
 }

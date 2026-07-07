@@ -70,8 +70,9 @@ real `gpt-5.4-mini` at milestones. Commit after each ✅.
 ## Deferred (need host surface or compiler work)
 - Realtime/harness (Phase 4): duplex transport (`baml.ws`/subprocess), `Channel`, lifecycle. Scenarios 22–26, 37–42 (shapes compiled).
 - Stateful persistence (Phase 5): local durable stores for sessions/compaction/memory/durable-workflows. Scenarios 18, 19, 21, 43–47 (shapes compiled).
-- D2/D8 Failure axis + typed provider errors; D4 aggregate ResponseMeta; P7 `type -> JSON Schema` for `Tool.parameters: type`.
-- ~~Anthropic provider in BAML~~ ✅ DONE (`ns_ai/anthropic.baml`, 6 mock tests in `ai_anthropic.rs`; live tier needs ANTHROPIC_API_KEY). Gemini in progress.
+- ~~D2/D8 Failure axis + typed provider errors~~ ✅ DONE (Failure mandatory on every error channel; OpenAi/Anthropic/Gemini HttpErrors typed). Still open: D4 aggregate ResponseMeta.
+- ~~P7 `type -> JSON Schema`~~ ✅ DONE (`baml.schema.json_schema(t, strict)`, used by `Tool.from_type` + OpenAiStrict).
+- ~~Anthropic provider in BAML~~ ✅ DONE (`ns_ai/providers/anthropic.baml`, 6 mock tests in `ai_anthropic.rs`; live tier needs ANTHROPIC_API_KEY). Gemini in progress.
 - ~~⚠ Compiler: cross-package `requires` (E0125)~~ ✅ FIXED (`baml_lsp2_actions/src/check.rs` — required parent now resolves in the interface's own package). User-authored providers proven e2e in `ai_user_provider.rs` (EchoProvider entirely in user code through inherited call/call_with, typed error triage).
 - Client-as-sugar rewrite (replacing orchestrator delegation) — a lower_cst.rs change; big blast radius.
 
@@ -86,10 +87,10 @@ real `gpt-5.4-mini` at milestones. Commit after each ✅.
 Full impls + tests (mock+live): 01, 02, 03, 04, 09, 28, 29, 30, 32, 34.
 Enriched `ResponseMeta` (reasoning/logprobs/citations): 07, 08.
 Capabilities + negotiated examples (host transport/persistence stubbed where native):
-- Realtime family: 22, 23, 24, 25, 26 (`ns_ai/realtime.baml`)
-- Stateful: 17, 18, 19, 20, 21, 27, 31, 44 (`ns_ai/stateful.baml`)
-- Negotiation: 36 (`ns_ai/negotiation.baml`, Support lattice)
-- Harness: 37, 38, 39, 40, 41, 42 (`ns_ai/harness.baml` + usage)
+- Realtime family: 22, 23, 24, 25, 26 (`ns_ai/capabilities/realtime.baml (+ providers/openai_realtime.baml)`)
+- Stateful: 17, 18, 19, 20, 21, 27, 31, 44 (`ns_ai/capabilities/{conversation,chain,background,memory,cache,suspend}.baml`)
+- Negotiation: 36 (`ns_ai/capabilities/introspection.baml`, Support lattice)
+- Harness: 37, 38, 39, 40, 41, 42 (`ns_ai/providers/harness.baml` + usage)
 Usage examples (`crates/baml_tests/baml_src/ns_ai_examples/`):
 - Tools family: 10, 11, 14, 15 (`tools_extras.baml`); 12, 13, 16 (`cross_cutting.baml`/`misc.baml`)
 - Workflows: 43, 44, 45, 46, 47 (`workflows.baml`/`misc.baml`)
@@ -98,7 +99,6 @@ Usage examples (`crates/baml_tests/baml_src/ns_ai_examples/`):
 All example files compile as part of the `baml_src` suite (bytecode-snapshotted). Live-tested
 where the OpenAI HTTP path allows; capability shapes + negotiation compile-verified elsewhere.
 
-### Top blocker for "real user-defined providers" (see deviations.md)
-Cross-package `requires`-satisfaction is broken: a **user** class cannot implement a stdlib
-capability interface (`HttpProvider`/`Realtime`) because its `implements Provider {}` isn't seen
-by the `requires` check. Providers must live in stdlib (`ns_ai`) until this compiler fix lands.
+### ~~Top blocker for "real user-defined providers"~~ ✅ RESOLVED
+The E0125 cross-package `requires`-satisfaction false positive is fixed; user-authored
+providers work end to end (`ai_user_provider.rs`). See deviations.md for the root cause.

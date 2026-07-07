@@ -138,6 +138,125 @@ class Anthropic {
     /// response_format, so structured output relies on schema-append + SAP parsing.
     append_output_schema: bool?,
 
+    implements root.ai.Provider {}
+
+    implements root.ai.HttpProvider {
+        // Body is the raw response body TEXT (read once in `send`), so `parse` and
+        // `meta_of` both read the same buffer — `Response.text()` is not idempotent.
+        type Body = string
+
+        function build_request<T>(
+            self,
+            messages: root.ai.ChatMessage[],
+        ) -> root.http.Request throws root.errors.UnknownError {
+            // Inject the output schema so the model knows the shape to return.
+            // Empty for `T = string` (free-form text), non-empty for a structured `T`.
+            let schema: string = root.llm.render_output_format(reflect.type_of<T>());
+            root.http.Request {
+                method: "POST",
+                url: (self.base_url ?? "https://api.anthropic.com") + "/v1/messages",
+                headers: self._request_headers(),
+                body: self._request_body(self._messages_for(messages, schema), false),
+            }
+        }
+
+        function send(
+            self,
+            request: root.http.Request,
+        ) -> string throws root.errors.CallError | root.errors.UnknownError {
+            let resp = root.http.send(request) catch (e) {
+                _ => throw root.errors.UnknownError { data: e, message: ["anthropic send failed"] },
+            };
+            let text = resp.text() catch (e) {
+                _ => {
+                    throw root.errors.UnknownError { data: e, message: ["anthropic body read failed"] }
+                },
+            };
+            if (resp.ok()) {
+                text
+            } else {
+                throw AnthropicHttpError { status: resp.status_code, body: text }
+            }
+        }
+
+        // Concatenate the response's text content blocks, then coerce to `T` via SAP
+        // (Schema-Aligned Parsing) — robust to markdown fences and minor JSON deviations;
+        // for `T = string` the text passes through unchanged.
+        function parse<T>(
+            self,
+            from: string,
+        ) -> T throws root.errors.UnknownError {
+            let wire: AnthropicResponseWire = root.json.from_json<AnthropicResponseWire>(root.json.parse(from)) catch (e) {
+                _ => throw root.errors.UnknownError { data: e, message: ["anthropic parse failed"] },
+            };
+            let text = "";
+            for (let b in wire.content) {
+                match (b.text) {
+                    null => {
+                    },
+                    let t: string => {
+                        text = text + t;
+                    },
+                }
+            }
+            root.sap.parse<T>(text) catch (e) {
+                _ => {
+                    throw root.errors.UnknownError { data: e, message: ["anthropic SAP parse failed"] }
+                },
+            }
+        }
+
+        function meta_of(
+            self,
+            from: string,
+        ) -> root.ai.ResponseMeta throws never {
+            AnthropicResponseMeta { raw_text: from }
+        }
+    }
+
+    implements root.ai.Streaming {
+        // Build a streaming Messages request in BAML, open the SSE stream, and wrap it in
+        // `baml.llm.Stream`. Anthropic's SSE (`content_block_delta`/`text_delta`, terminal
+        // `message_stop`) is understood by the accumulator keyed on the `anthropic/…`
+        // shorthand; the request itself (endpoint/headers/body) is BAML.
+        function stream_messages<TStream, TFinal>(
+            self,
+            messages: root.ai.ChatMessage[],
+        ) -> root.llm.Stream<TStream, TFinal> throws root.errors.UnknownError {
+            let schema: string = root.llm.render_output_format(reflect.type_of<TFinal>());
+            let req = root.http.Request {
+                method: "POST",
+                url: (self.base_url ?? "https://api.anthropic.com") + "/v1/messages",
+                headers: self._request_headers(),
+                body: self._request_body(self._messages_for(messages, schema), true),
+            };
+            let sse = root.http.fetch_sse(req) catch (e) {
+                _ => {
+                    throw root.errors.UnknownError { data: e, message: ["anthropic fetch_sse failed"] }
+                },
+            };
+            let primitive = root.llm.from_shorthand("anthropic/" + self.model) catch (e) {
+                _ => {
+                    throw root.errors.UnknownError { data: e, message: ["anthropic stream setup failed"] }
+                },
+            };
+            let acc = primitive.new_stream_accumulator() catch (e) {
+                _ => {
+                    throw root.errors.UnknownError { data: e, message: ["anthropic accumulator failed"] }
+                },
+            };
+            let cache = root.llm.StreamCache.new(reflect.type_of<TStream>(), reflect.type_of<TFinal>());
+            root.llm.Stream<TStream, TFinal> {
+                _client: primitive,
+                _acc: acc,
+                _sse: sse,
+                _cache: cache,
+            }
+        }
+    }
+
+    // ── private helpers ──
+
     // Resolve the API key: the explicit option, else the `ANTHROPIC_API_KEY` env var.
     function _api_key(self) -> string throws root.errors.UnknownError {
         match (self.api_key) {
@@ -367,123 +486,6 @@ class Anthropic {
             messages
         } else {
             self._append_schema(messages, schema)
-        }
-    }
-
-    implements root.ai.Provider {}
-
-    implements root.ai.HttpProvider {
-        // Body is the raw response body TEXT (read once in `send`), so `parse` and
-        // `meta_of` both read the same buffer — `Response.text()` is not idempotent.
-        type Body = string
-
-        function build_request<T>(
-            self,
-            messages: root.ai.ChatMessage[],
-        ) -> root.http.Request throws root.errors.CallError | root.errors.UnknownError {
-            // Inject the output schema so the model knows the shape to return.
-            // Empty for `T = string` (free-form text), non-empty for a structured `T`.
-            let schema: string = root.llm.render_output_format(reflect.type_of<T>());
-            root.http.Request {
-                method: "POST",
-                url: (self.base_url ?? "https://api.anthropic.com") + "/v1/messages",
-                headers: self._request_headers(),
-                body: self._request_body(self._messages_for(messages, schema), false),
-            }
-        }
-
-        function send(
-            self,
-            request: root.http.Request,
-        ) -> string throws root.errors.CallError | root.errors.UnknownError {
-            let resp = root.http.send(request) catch (e) {
-                _ => throw root.errors.UnknownError { data: e, message: ["anthropic send failed"] },
-            };
-            let text = resp.text() catch (e) {
-                _ => {
-                    throw root.errors.UnknownError { data: e, message: ["anthropic body read failed"] }
-                },
-            };
-            if (resp.ok()) {
-                text
-            } else {
-                throw AnthropicHttpError { status: resp.status_code, body: text }
-            }
-        }
-
-        // Concatenate the response's text content blocks, then coerce to `T` via SAP
-        // (Schema-Aligned Parsing) — robust to markdown fences and minor JSON deviations;
-        // for `T = string` the text passes through unchanged.
-        function parse<T>(
-            self,
-            from: string,
-        ) -> T throws root.errors.CallError | root.errors.UnknownError {
-            let wire: AnthropicResponseWire = root.json.from_json<AnthropicResponseWire>(root.json.parse(from)) catch (e) {
-                _ => throw root.errors.UnknownError { data: e, message: ["anthropic parse failed"] },
-            };
-            let text = "";
-            for (let b in wire.content) {
-                match (b.text) {
-                    null => {
-                    },
-                    let t: string => {
-                        text = text + t;
-                    },
-                }
-            }
-            root.sap.parse<T>(text) catch (e) {
-                _ => {
-                    throw root.errors.UnknownError { data: e, message: ["anthropic SAP parse failed"] }
-                },
-            }
-        }
-
-        function meta_of(
-            self,
-            from: string,
-        ) -> root.ai.ResponseMeta throws root.errors.CallError | root.errors.UnknownError {
-            AnthropicResponseMeta { raw_text: from }
-        }
-    }
-
-    implements root.ai.Streaming {
-        // Build a streaming Messages request in BAML, open the SSE stream, and wrap it in
-        // `baml.llm.Stream`. Anthropic's SSE (`content_block_delta`/`text_delta`, terminal
-        // `message_stop`) is understood by the accumulator keyed on the `anthropic/…`
-        // shorthand; the request itself (endpoint/headers/body) is BAML.
-        function stream_messages<TStream, TFinal>(
-            self,
-            messages: root.ai.ChatMessage[],
-        ) -> root.llm.Stream<TStream, TFinal> throws root.errors.StreamError | root.errors.UnknownError {
-            let schema: string = root.llm.render_output_format(reflect.type_of<TFinal>());
-            let req = root.http.Request {
-                method: "POST",
-                url: (self.base_url ?? "https://api.anthropic.com") + "/v1/messages",
-                headers: self._request_headers(),
-                body: self._request_body(self._messages_for(messages, schema), true),
-            };
-            let sse = root.http.fetch_sse(req) catch (e) {
-                _ => {
-                    throw root.errors.UnknownError { data: e, message: ["anthropic fetch_sse failed"] }
-                },
-            };
-            let primitive = root.llm.from_shorthand("anthropic/" + self.model) catch (e) {
-                _ => {
-                    throw root.errors.UnknownError { data: e, message: ["anthropic stream setup failed"] }
-                },
-            };
-            let acc = primitive.new_stream_accumulator() catch (e) {
-                _ => {
-                    throw root.errors.UnknownError { data: e, message: ["anthropic accumulator failed"] }
-                },
-            };
-            let cache = root.llm.StreamCache.new(reflect.type_of<TStream>(), reflect.type_of<TFinal>());
-            root.llm.Stream<TStream, TFinal> {
-                _client: primitive,
-                _acc: acc,
-                _sse: sse,
-                _cache: cache,
-            }
         }
     }
 }

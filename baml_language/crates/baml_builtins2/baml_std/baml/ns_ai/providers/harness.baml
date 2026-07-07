@@ -18,7 +18,7 @@ class ClaudeCode {
             self,
             prompt: string,
             io: root.ai.Channel,
-        ) -> root.ai.Transcript throws root.errors.RealtimeError | root.errors.UnknownError {
+        ) -> root.ai.Transcript throws root.errors.RealtimeError {
             throw root.errors.Unsupported { message: "harness subprocess transport pending (plan P8)" }
         }
     }
@@ -34,7 +34,7 @@ class PiAgent {
             self,
             prompt: string,
             io: root.ai.Channel,
-        ) -> root.ai.Transcript throws root.errors.RealtimeError | root.errors.UnknownError {
+        ) -> root.ai.Transcript throws root.errors.RealtimeError {
             throw root.errors.Unsupported { message: "harness transport pending" }
         }
     }

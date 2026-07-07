@@ -19,25 +19,25 @@ class Fallback {
         function build_request<T>(
             self,
             messages: root.ai.ChatMessage[],
-        ) -> root.http.Request throws root.errors.CallError | root.errors.UnknownError {
+        ) -> root.http.Request throws root.errors.UnknownError {
             throw root.errors.UnknownError { data: null, message: ["fallback has no single request"] }
         }
         function send(
             self,
             request: root.http.Request,
-        ) -> unknown throws root.errors.CallError | root.errors.UnknownError {
+        ) -> unknown throws root.errors.UnknownError {
             throw root.errors.UnknownError { data: null, message: ["fallback does not send directly"] }
         }
         function parse<T>(
             self,
             from: unknown,
-        ) -> T throws root.errors.CallError | root.errors.UnknownError {
+        ) -> T throws root.errors.UnknownError {
             throw root.errors.UnknownError { data: null, message: ["fallback does not parse directly"] }
         }
         function meta_of(
             self,
             from: unknown,
-        ) -> root.ai.ResponseMeta throws root.errors.CallError | root.errors.UnknownError {
+        ) -> root.ai.ResponseMeta throws root.errors.UnknownError {
             throw root.errors.UnknownError { data: null, message: ["fallback has no meta"] }
         }
 
@@ -71,7 +71,7 @@ class Fallback {
         function stream_messages<TStream, TFinal>(
             self,
             messages: root.ai.ChatMessage[],
-        ) -> root.llm.Stream<TStream, TFinal> throws root.errors.StreamError | root.errors.UnknownError {
+        ) -> root.llm.Stream<TStream, TFinal> throws root.errors.UnknownError {
             for (let m in self.members) {
                 match (m) {
                     let s: root.ai.Streaming => {
@@ -105,25 +105,25 @@ class Retry {
         function build_request<T>(
             self,
             messages: root.ai.ChatMessage[],
-        ) -> root.http.Request throws root.errors.CallError | root.errors.UnknownError {
+        ) -> root.http.Request throws root.errors.UnknownError {
             throw root.errors.UnknownError { data: null, message: ["retry has no single request"] }
         }
         function send(
             self,
             request: root.http.Request,
-        ) -> unknown throws root.errors.CallError | root.errors.UnknownError {
+        ) -> unknown throws root.errors.UnknownError {
             throw root.errors.UnknownError { data: null, message: ["retry does not send directly"] }
         }
         function parse<T>(
             self,
             from: unknown,
-        ) -> T throws root.errors.CallError | root.errors.UnknownError {
+        ) -> T throws root.errors.UnknownError {
             throw root.errors.UnknownError { data: null, message: ["retry does not parse directly"] }
         }
         function meta_of(
             self,
             from: unknown,
-        ) -> root.ai.ResponseMeta throws root.errors.CallError | root.errors.UnknownError {
+        ) -> root.ai.ResponseMeta throws root.errors.UnknownError {
             throw root.errors.UnknownError { data: null, message: ["retry has no meta"] }
         }
 
@@ -207,25 +207,25 @@ class RoundRobin {
         function build_request<T>(
             self,
             messages: root.ai.ChatMessage[],
-        ) -> root.http.Request throws root.errors.CallError | root.errors.UnknownError {
+        ) -> root.http.Request throws root.errors.UnknownError {
             throw root.errors.UnknownError { data: null, message: ["round_robin has no single request"] }
         }
         function send(
             self,
             request: root.http.Request,
-        ) -> unknown throws root.errors.CallError | root.errors.UnknownError {
+        ) -> unknown throws root.errors.UnknownError {
             throw root.errors.UnknownError { data: null, message: ["round_robin does not send directly"] }
         }
         function parse<T>(
             self,
             from: unknown,
-        ) -> T throws root.errors.CallError | root.errors.UnknownError {
+        ) -> T throws root.errors.UnknownError {
             throw root.errors.UnknownError { data: null, message: ["round_robin does not parse directly"] }
         }
         function meta_of(
             self,
             from: unknown,
-        ) -> root.ai.ResponseMeta throws root.errors.CallError | root.errors.UnknownError {
+        ) -> root.ai.ResponseMeta throws root.errors.UnknownError {
             throw root.errors.UnknownError { data: null, message: ["round_robin has no meta"] }
         }
 

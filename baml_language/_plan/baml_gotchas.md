@@ -64,6 +64,15 @@ Each entry: the symptom, the rule, the workaround. Compiler-bug candidates are m
   harness. Always strict-check stdlib changes via `baml-cli run --file <trivial>.baml`.
 - **`catch` is a postfix on an expression** (not a trailing function block), and arms must produce
   the expression's type — use `return` inside arms to exit with a different value.
+- **E0097 (extraneous throws) fires on `implements`-block methods that declare the interface's
+  full error channel without throwing into it.** Throws tracking is exact, with ONE widening: a
+  declared *interface* fact is justified iff some thrown class implements it. Repeating the
+  interface's channel "for contract's sake" warns; declare only what the body throws. Narrowing
+  below the interface channel is legal (covariant), down to **`throws never` for throw-nothing
+  bodies** — legal since the `Never`-is-bottom fix in `check.rs::ty_nominal_subtype` (it used to
+  be rejected as a signature mismatch). NOTE: these warnings surfaced on 45 stdlib declarations
+  only when the std-diagnostics snapshot was regenerated — snapshot suites don't run on every
+  change; regen `compiles/__baml_std__` after stdlib edits.
 
 ## Host boundary (`$rust_io_function`)
 

@@ -16,7 +16,7 @@ Legend: **[lang]** forced by a missing/limited language feature · **[scope]** d
   irrefutable catch-all (proven in scratch). No `type_of_value` reflection exists either. **Workaround:**
   normalize foreign errors at the `catch` site with an interface-match arm —
   `catch (e) { let c: CallError => throw c, _ => throw UnknownError { … } }`. Shipped this way in
-  `ns_errors/capability.baml` + `ns_ai/openai.baml`.
+  `ns_errors/capability.baml` + `ns_ai/providers/openai.baml`.
 
 - **`ExtendUnknownError<E>` type alias not created.** **[lang]** Generic type aliases (plan P1) are not
   implemented. We inline `E | UnknownError` in every `throws` clause instead. Ergonomic cost only.
