@@ -7,7 +7,7 @@
 import Link from "next/link";
 import { use } from "react";
 import { motion } from "framer-motion";
-import { useAtbState, useDoc, issueStatusLabel } from "@/app/atb/_lib/api";
+import { useAtbState, useDoc, issueStatusLabel, skillRepoLabel } from "@/app/atb/_lib/api";
 import type { Issue } from "@/app/atb/_lib/types";
 import { timeAgo, usd, wallClock } from "@/app/atb/_lib/format";
 import {
@@ -94,9 +94,10 @@ export default function IssuePage({
               baml {issue.bamlVersion.replace(/^baml-language-/, "")}
             </span>
           )}
-          {issue.skillVersion && (
+          {(issue.skillUsed || issue.skillVersion) && (
             <span className="font-atb-mono text-[11px] text-atb-ink-3">
-              skill @{issue.skillVersion}
+              skill {skillRepoLabel(issue.skillUsed) ?? ""}
+              {issue.skillVersion ? `@${issue.skillVersion.slice(0, 7)}` : ""}
             </span>
           )}
           {issue.coderabbitState && issue.coderabbitState !== "none" && (
@@ -143,9 +144,7 @@ export default function IssuePage({
             <p className="text-[11px] uppercase tracking-wider text-atb-accent-deep font-semibold mb-2">
               Suggested fix
             </p>
-            <p className="text-sm text-atb-ink-2 leading-relaxed">
-              {issue.suggestion}
-            </p>
+            <Markdown>{issue.suggestion}</Markdown>
           </Card>
         </Reveal>
       )}

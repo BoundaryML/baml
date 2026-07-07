@@ -3,7 +3,13 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { useAtbState, issueStatusLabel, isOpenIssueStatus } from "@/app/atb/_lib/api";
+import {
+  useAtbState,
+  issueStatusLabel,
+  isOpenIssueStatus,
+  bamlRefLabel,
+  skillRepoLabel,
+} from "@/app/atb/_lib/api";
 import { timeAgo } from "@/app/atb/_lib/format";
 import { EASE, EmptyState, KindChip, Skeleton, StatusPill } from "@/app/atb/_components/ui";
 import { useNow } from "@/app/atb/_components/use-now";
@@ -42,8 +48,8 @@ export default function IssuesPage() {
           Issues
         </h1>
         <p className="text-atb-ink-3 mt-1 text-sm">
-          Run findings, deduplicated. Synced to Notion, then dispatched to
-          Cursor for fixes.
+          Run findings, deduplicated. Synced to Linear, dispatched to Cursor
+          for fixes, and re-verified against each new baml build.
         </p>
       </motion.div>
 
@@ -86,7 +92,25 @@ export default function IssuesPage() {
                       {issue.evidenceCount} evidence run
                       {issue.evidenceCount === 1 ? "" : "s"} · seen{" "}
                       {timeAgo(issue.lastSeenAt, now)}
+                      {issue.fixedIn ? (
+                        <span className="text-atb-accent-deep">
+                          {" "}· fixed in {bamlRefLabel(issue.fixedIn)}
+                        </span>
+                      ) : issue.verifiedAt ? (
+                        <> · verified {timeAgo(issue.verifiedAt, now)}</>
+                      ) : null}
                     </p>
+                    {(issue.bamlVersion || issue.skillVersion) && (
+                      <p className="font-atb-mono text-[10px] text-atb-ink-3/80 mt-0.5 line-clamp-1">
+                        {issue.bamlVersion
+                          ? `baml ${bamlRefLabel(issue.bamlVersion)}`
+                          : ""}
+                        {issue.bamlVersion && issue.skillVersion ? " · " : ""}
+                        {issue.skillVersion
+                          ? `skill ${skillRepoLabel(issue.skillUsed) ?? ""}@${issue.skillVersion.slice(0, 7)}`
+                          : ""}
+                      </p>
+                    )}
                   </div>
                   <StatusPill status={issueStatusLabel(issue)} />
                 </div>

@@ -213,6 +213,13 @@ export type SlimIssue = {
   // Slim evidence refs (trophy + cited call) so list/run views can link an issue
   // back to the runs that produced it without fetching the full issue doc.
   evidence?: Array<{ trophyId?: string; call_index?: number | null }>;
+  // Environment + verify facts so the list view can show them without the full doc.
+  bamlVersion?: string | null;
+  skillUsed?: string | null;
+  skillVersion?: string | null;
+  brokeIn?: string | null;
+  fixedIn?: string | null;
+  verifiedAt?: number | null;
   firstSeenAt: number;
   lastSeenAt: number;
   createdAt: number;

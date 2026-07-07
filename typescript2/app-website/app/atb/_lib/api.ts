@@ -104,6 +104,8 @@ export function issueStatusLabel(i: {
     case "pr_ready":
       return "fixing";
     case "verifying":
+    case "reverify":
+    case "reverifying":
       return "verifying";
     case "redraft":
     case "redrafting":
@@ -124,6 +126,12 @@ export function issueStatusLabel(i: {
 /** Strip the build-ref prefix for a readable version ("0.12.1-nightly..."). */
 export function bamlRefLabel(ref?: string | null): string | null {
   return ref ? ref.replace(/^baml-language-/, "") : null;
+}
+
+/** Short repo label for a skill URL ("BoundaryML/baml-skill" from the clone URL). */
+export function skillRepoLabel(url?: string | null): string | null {
+  if (!url) return null;
+  return url.replace(/^https?:\/\/(www\.)?github\.com\//, "").replace(/\.git$/, "");
 }
 
 const FRESH_MS = 3 * 60 * 1000;
