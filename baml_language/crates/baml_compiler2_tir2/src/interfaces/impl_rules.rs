@@ -85,7 +85,7 @@ unsafe impl salsa::Update for ImplData<'_> {
 
 /// Where in an `implements` block a diagnostic originated. Span-free
 /// (Salsa-stable); check.rs maps it to a source range via [`impl_data_source_map`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ImplDiagnosticLocation {
     /// The interface-target type expr (`implement <here> for T`). Also covers
     /// associated-type bindings, which are part of the interface reference.
@@ -96,6 +96,11 @@ pub enum ImplDiagnosticLocation {
     /// A generic bound (`<T extends <here>>`). Bounds carry no source span, so
     /// this resolves to the whole-block span.
     Bound,
+    /// An override method in the block, by name — resolved via
+    /// [`ImplDataSourceMap::method_spans`] to the span of *every* override with that name: if
+    /// several share the name (itself an E0093 duplicate), the diagnostic marks all of them.
+    /// Falls back to the whole block.
+    Method(Name),
 }
 
 /// Spans for an `implements` block, split out of [`ImplData`] for Salsa
@@ -110,6 +115,9 @@ pub struct ImplDataSourceMap {
     /// Span of the for-target type expr; `None` for in-body impls (no written
     /// for-target — the for-type is the synthesized class).
     pub for_target_span: Option<Span>,
+    /// Override-method name → the span of *every* override with that name (source order), so a
+    /// [`ImplDiagnosticLocation::Method`] diagnostic marks all same-named overrides.
+    pub method_spans: HashMap<Name, Vec<Span>>,
 }
 
 /// The qualified name of a resolved interface loc (head identity for building a
@@ -276,7 +284,7 @@ pub fn impl_data<'db>(
         bound_diags,
         origin,
     ) = match &block.subject {
-        ImplSubject::InClass { class, .. } => {
+        ImplSubject::InClass { class, out_of_body } => {
             let class_data = item_tree
                 .classes
                 .get(class)
@@ -324,7 +332,13 @@ pub fn impl_data<'db>(
                 // its bounds' diagnostics — so neither contributes here.
                 Vec::new(),
                 Vec::new(),
-                InterfaceImplOrigin::InBodyClass { class_qtn },
+                // A simple `implement I for C` is merged onto `C` (`InClass` subject) but
+                // written out-of-body — its origin stays `OutOfBody`.
+                if *out_of_body {
+                    InterfaceImplOrigin::OutOfBody
+                } else {
+                    InterfaceImplOrigin::InBodyClass { class_qtn }
+                },
             )
         }
         ImplSubject::Free {
@@ -458,6 +472,96 @@ pub fn impl_data<'db>(
         &mut assoc_diags,
     );
 
+    // Conformance, computed alongside lowering (each diagnostic carries its own location): a
+    // field-bearing interface can't be implemented out-of-body (E0126); every required method
+    // must be provided by an override or an inherited default (E0113); and every override must
+    // correspond to a required or default method of the interface (E0115). (Signature conformance,
+    // field links, and the `requires` closure are separate slices.)
+    let mut conformance_diags: Vec<(crate::infer_context::TirTypeError, ImplDiagnosticLocation)> =
+        Vec::new();
+    if let Some(iface_qtn) = interface_loc_qtn(db, iface_loc) {
+        if matches!(origin, InterfaceImplOrigin::OutOfBody) && !iface_data.fields.is_empty() {
+            conformance_diags.push((
+                crate::infer_context::TirTypeError::OutOfBodyImplementsFieldInterface {
+                    interface: iface_qtn.clone(),
+                },
+                ImplDiagnosticLocation::InterfaceTarget,
+            ));
+        }
+        let override_names: Vec<&Name> = block
+            .methods
+            .iter()
+            .map(|id| &item_tree[*id].name)
+            .collect();
+        let default_names: Vec<&Name> = iface_data
+            .default_methods
+            .iter()
+            .map(|id| &iface_tree[*id].name)
+            .collect();
+        // E0113: a required method with no override and no inherited default.
+        for required in &iface_data.required_methods {
+            let provided = override_names.iter().any(|n| **n == required.name)
+                || default_names.iter().any(|n| **n == required.name);
+            if !provided {
+                conformance_diags.push((
+                    crate::infer_context::TirTypeError::MissingInterfaceMethod {
+                        interface: iface_qtn.clone(),
+                        method: required.name.clone(),
+                    },
+                    ImplDiagnosticLocation::InterfaceTarget,
+                ));
+            }
+        }
+        // E0115: an override matching no required or default method overrides nothing. Reported
+        // once per name (a duplicate override is E0093; the `Method` location marks every
+        // same-named override).
+        for (idx, &name) in override_names.iter().enumerate() {
+            if override_names[..idx].contains(&name) {
+                continue;
+            }
+            let is_member = iface_data.required_methods.iter().any(|m| m.name == *name)
+                || default_names.iter().any(|n| **n == *name);
+            if !is_member {
+                conformance_diags.push((
+                    crate::infer_context::TirTypeError::UnknownInterfaceMember {
+                        interface: iface_qtn.clone(),
+                        member: name.clone(),
+                    },
+                    ImplDiagnosticLocation::Method(name.clone()),
+                ));
+            }
+        }
+        // E0124: for an in-body impl of a field interface, each interface field must be
+        // covered by a same-named class field or an explicit `field as class_field` link.
+        // (Out-of-body field impls are already E0126, so field conformance is in-body only.)
+        if !iface_data.fields.is_empty()
+            && matches!(origin, InterfaceImplOrigin::InBodyClass { .. })
+            && let ImplSubject::InClass { class, .. } = &block.subject
+        {
+            let class_loc = baml_compiler2_hir::loc::ClassLoc::new(db, file, *class);
+            let class_fields = crate::inference::resolve_class_fields(db, class_loc);
+            for iface_field in &iface_data.fields {
+                let linked = block
+                    .field_links
+                    .iter()
+                    .any(|fl| fl.interface_field == iface_field.name);
+                let same_named = class_fields
+                    .fields
+                    .iter()
+                    .any(|(name, _, _)| *name == iface_field.name);
+                if !linked && !same_named {
+                    conformance_diags.push((
+                        crate::infer_context::TirTypeError::MissingInterfaceField {
+                            interface: iface_qtn.clone(),
+                            field: iface_field.name.clone(),
+                        },
+                        ImplDiagnosticLocation::InterfaceTarget,
+                    ));
+                }
+            }
+        }
+    }
+
     // Tag each diagnostic with its origin (interface ref → InterfaceTarget,
     // associated bindings ride along the interface reference, for-target →
     // ForTarget, bounds → Bound). Deterministic order for stable output.
@@ -470,6 +574,7 @@ pub fn impl_data<'db>(
                     .into_iter()
                     .map(|e| (e, ImplDiagnosticLocation::InterfaceTarget)),
             )
+            .chain(conformance_diags)
             .chain(
                 for_target_diags
                     .into_iter()
@@ -526,10 +631,20 @@ pub fn impl_data_source_map<'db>(
             (block.span, Some(Span::new(file_id, for_target.span)))
         }
     };
+    // Group all override spans by name so a same-named duplicate marks every occurrence.
+    let mut method_spans: HashMap<Name, Vec<Span>> = HashMap::new();
+    for id in &block.methods {
+        let func = &item_tree[*id];
+        method_spans
+            .entry(func.name.clone())
+            .or_default()
+            .push(Span::new(file_id, func.span));
+    }
     Some(ImplDataSourceMap {
         impl_span: Span::new(file_id, impl_range),
         interface_target_span: Span::new(file_id, block.interface_target.span),
         for_target_span,
+        method_spans,
     })
 }
 

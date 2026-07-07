@@ -54,14 +54,16 @@ struct InterfaceTypeAssocLowering<'a, 'db> {
     self_bound: Option<baml_type::Interface>,
 }
 
-/// Where an interface implementation rule came from.
-///
-/// This is intentionally small: semantic matching only needs the rule's TIR
-/// types, while MIR can still recover methods from HIR by looking at the
-/// original class or out-of-body `implements for` block.
+/// Where an interface implementation rule was written: in a class body, or out-of-body.
+/// Diagnostic metadata ONLY — it MUST NOT drive resolution/dispatch/coherence. A simple
+/// `implement I for C` on a concrete class is merged onto `C` for resolution, but is written
+/// out-of-body, so its origin is `OutOfBody` (letting out-of-body-only rules like E0126 fire).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum InterfaceImplOrigin {
+    /// `implements I { … }` written in the class body.
     InBodyClass { class_qtn: QualifiedTypeName },
+    /// `implement<…> I for <for_target>` — any out-of-body impl (concrete class, generic, or
+    /// non-class target).
     OutOfBody,
 }
 

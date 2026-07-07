@@ -2871,6 +2871,31 @@ mod tests {
             .collect()
     }
 
+    /// Decl-level `impl_data` diagnostics for every `implements` block in the (single-file,
+    /// single-package) source — mirroring how check.rs surfaces `impl_data(loc).diagnostics`
+    /// at cutover. This is the path conformance diagnostics travel, since `collect_file_diagnostics`
+    /// (the expression/scope path) does not carry them.
+    fn impl_diagnostics(source: &str) -> Vec<TirTypeError> {
+        let db = compile(source);
+        let file = baml_compiler2_hir::compiler2_all_files(&db)
+            .into_iter()
+            .next()
+            .expect("one compiled user file");
+        let pkg = baml_compiler2_hir::file_package::file_package(&db, file).package;
+        let pkg_id = baml_compiler2_hir::package::PackageId::new(&db, pkg);
+        let mut out = Vec::new();
+        for impl_loc in crate::interfaces::package_impl_locs(&db, pkg_id) {
+            match crate::interfaces::impl_data(&db, impl_loc) {
+                Ok(data) => out.extend(data.diagnostics.iter().map(|(e, _)| e.clone())),
+                Err(crate::interfaces::ImplDataError::InterfaceUnresolved { diagnostics }) => {
+                    out.extend(diagnostics.iter().map(|(e, _)| e.clone()));
+                }
+                Err(_) => {}
+            }
+        }
+        out
+    }
+
     fn has_not_concrete(errors: &[TirTypeError]) -> bool {
         errors
             .iter()
@@ -3203,6 +3228,152 @@ function needs<T extends Marker>(x: T) -> int throws never {
                 .iter()
                 .any(|e| matches!(e, TirTypeError::BlanketBoundNotSatisfied { .. })),
             "expected BlanketBoundNotSatisfied naming the `Named` bound, got {errors:?}"
+        );
+    }
+
+    // ── impl conformance (computed alongside `impl_data` lowering) ──
+
+    #[test]
+    fn missing_required_interface_method_is_reported() {
+        // `Rude` implements `Greeter` but provides no body for the required `greet` (E0113).
+        let diags = impl_diagnostics(
+            "interface Greeter {\n  function greet(self) -> string throws never\n}\n\
+             class Rude {\n  implements Greeter {}\n}\n",
+        );
+        assert!(
+            diags.iter().any(|e| matches!(
+                e,
+                TirTypeError::MissingInterfaceMethod { method, .. } if method.as_str() == "greet"
+            )),
+            "expected MissingInterfaceMethod for `greet`, got {diags:?}"
+        );
+    }
+
+    #[test]
+    fn provided_interface_method_is_not_reported_missing() {
+        // `Polite` provides `greet` — no missing-method diagnostic (signature conformance is a
+        // separate slice, so a name match suffices here).
+        let diags = impl_diagnostics(
+            "interface Greeter {\n  function greet(self) -> string throws never\n}\n\
+             class Polite {\n  implements Greeter {\n    \
+             function greet(self) -> string throws never { \"hi\" }\n  }\n}\n",
+        );
+        assert!(
+            !diags
+                .iter()
+                .any(|e| matches!(e, TirTypeError::MissingInterfaceMethod { .. })),
+            "a provided method should not be reported missing, got {diags:?}"
+        );
+    }
+
+    #[test]
+    fn out_of_body_impl_of_field_interface_is_reported() {
+        // A field-bearing interface can only be implemented in the class body (E0126). A simple
+        // `implement HasField for Holder` is merged onto `Holder` for resolution but is written
+        // out-of-body, so its origin is `OutOfBody` and the rule fires.
+        let diags = impl_diagnostics(
+            "interface HasField {\n  x: int\n}\n\
+             class Holder {\n  x: int\n}\n\
+             implements HasField for Holder {}\n",
+        );
+        assert!(
+            diags
+                .iter()
+                .any(|e| matches!(e, TirTypeError::OutOfBodyImplementsFieldInterface { .. })),
+            "expected OutOfBodyImplementsFieldInterface, got {diags:?}"
+        );
+    }
+
+    #[test]
+    fn in_body_impl_of_field_interface_is_allowed() {
+        // The same field interface implemented *in-body* is fine — the class provides the fields.
+        let diags = impl_diagnostics(
+            "interface HasField {\n  x: int\n}\n\
+             class Holder {\n  x: int\n  implements HasField {}\n}\n",
+        );
+        assert!(
+            !diags
+                .iter()
+                .any(|e| matches!(e, TirTypeError::OutOfBodyImplementsFieldInterface { .. })),
+            "an in-body impl of a field interface should be allowed, got {diags:?}"
+        );
+    }
+
+    #[test]
+    fn impl_method_not_on_interface_is_reported() {
+        // `extra` is neither required nor a default of `Greeter`, so it overrides nothing (E0115).
+        let diags = impl_diagnostics(
+            "interface Greeter {\n  function greet(self) -> string throws never\n}\n\
+             class Polite {\n  implements Greeter {\n    \
+             function greet(self) -> string throws never { \"hi\" }\n    \
+             function extra(self) -> int throws never { 0 }\n  }\n}\n",
+        );
+        assert!(
+            diags.iter().any(|e| matches!(
+                e,
+                TirTypeError::UnknownInterfaceMember { member, .. } if member.as_str() == "extra"
+            )),
+            "expected UnknownInterfaceMember for `extra`, got {diags:?}"
+        );
+    }
+
+    #[test]
+    fn overriding_a_default_method_is_allowed() {
+        // Overriding an interface *default* method is legal — not an unknown member.
+        let diags = impl_diagnostics(
+            "interface Greeter {\n  function greet(self) -> string throws never { \"default\" }\n}\n\
+             class Polite {\n  implements Greeter {\n    \
+             function greet(self) -> string throws never { \"hi\" }\n  }\n}\n",
+        );
+        assert!(
+            !diags
+                .iter()
+                .any(|e| matches!(e, TirTypeError::UnknownInterfaceMember { .. })),
+            "overriding a default should not be UnknownInterfaceMember, got {diags:?}"
+        );
+    }
+
+    #[test]
+    fn missing_interface_field_is_reported() {
+        // `Holder` has no field for `HasField.x` (no same-name field, no link) → E0124.
+        let diags = impl_diagnostics(
+            "interface HasField {\n  x: int\n}\n\
+             class Holder {\n  y: int\n  implements HasField {}\n}\n",
+        );
+        assert!(
+            diags.iter().any(|e| matches!(
+                e,
+                TirTypeError::MissingInterfaceField { field, .. } if field.as_str() == "x"
+            )),
+            "expected MissingInterfaceField for `x`, got {diags:?}"
+        );
+    }
+
+    #[test]
+    fn same_named_field_satisfies_interface_field() {
+        let diags = impl_diagnostics(
+            "interface HasField {\n  x: int\n}\n\
+             class Holder {\n  x: int\n  implements HasField {}\n}\n",
+        );
+        assert!(
+            !diags
+                .iter()
+                .any(|e| matches!(e, TirTypeError::MissingInterfaceField { .. })),
+            "a same-named class field should satisfy the interface field, got {diags:?}"
+        );
+    }
+
+    #[test]
+    fn linked_field_satisfies_interface_field() {
+        let diags = impl_diagnostics(
+            "interface HasField {\n  x: int\n}\n\
+             class Holder {\n  y: int\n  implements HasField {\n    x as y\n  }\n}\n",
+        );
+        assert!(
+            !diags
+                .iter()
+                .any(|e| matches!(e, TirTypeError::MissingInterfaceField { .. })),
+            "an explicit field link should satisfy the interface field, got {diags:?}"
         );
     }
 

@@ -493,6 +493,30 @@ pub enum TirTypeError {
         interface: crate::ty::QualifiedTypeName,
         missing: Vec<Name>,
     },
+    /// An `implements` block does not provide a body for a method the interface
+    /// declares as required (no default). Impl conformance (E0113).
+    MissingInterfaceMethod {
+        interface: crate::ty::QualifiedTypeName,
+        method: Name,
+    },
+    /// An interface that declares fields is implemented out-of-body
+    /// (`implement I for T`). A field-bearing interface can only be implemented in the
+    /// class body, where its fields are satisfied by the class's own fields (E0126).
+    OutOfBodyImplementsFieldInterface {
+        interface: crate::ty::QualifiedTypeName,
+    },
+    /// An `implements` block provides a method the interface neither requires nor
+    /// declares as a default — so it overrides nothing. Impl conformance (E0115).
+    UnknownInterfaceMember {
+        interface: crate::ty::QualifiedTypeName,
+        member: Name,
+    },
+    /// An interface field is not satisfied by any class field — neither a same-named
+    /// field nor an explicit `field as class_field` link. Impl conformance (E0124).
+    MissingInterfaceField {
+        interface: crate::ty::QualifiedTypeName,
+        field: Name,
+    },
 }
 
 impl fmt::Display for TirTypeError {
@@ -1135,6 +1159,36 @@ impl fmt::Display for TirTypeError {
                      `<T extends {}>` does not require them)",
                     interface.render_user_facing(),
                     interface.render_user_facing(),
+                )
+            }
+            TirTypeError::MissingInterfaceMethod { interface, method } => {
+                write!(
+                    f,
+                    "missing implementation of method `{method}` required by interface `{}`",
+                    interface.render_user_facing()
+                )
+            }
+            TirTypeError::OutOfBodyImplementsFieldInterface { interface } => {
+                write!(
+                    f,
+                    "interface `{}` declares fields and can only be implemented in the class \
+                     body, not out-of-body",
+                    interface.render_user_facing()
+                )
+            }
+            TirTypeError::UnknownInterfaceMember { interface, member } => {
+                write!(
+                    f,
+                    "`{member}` is not a method of interface `{}`",
+                    interface.render_user_facing()
+                )
+            }
+            TirTypeError::MissingInterfaceField { interface, field } => {
+                write!(
+                    f,
+                    "missing field `{field}` required by interface `{}` (add a class field named \
+                     `{field}` or link one with `{field} as <class_field>`)",
+                    interface.render_user_facing()
                 )
             }
         }
