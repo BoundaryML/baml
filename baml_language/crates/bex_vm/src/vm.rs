@@ -2003,21 +2003,60 @@ impl BexVm {
     /// Does `value` belong to the (already frame-resolved) `target` type?
     ///
     /// Used by the reified `is_type` test for a bare generic `let x: T` pattern.
-    /// Mirrors `is_subtype_of` for concrete/union targets, but for an interface
-    /// target it asks the impl registry whether the value's class implements the
-    /// interface — which a purely structural `is_subtype_of` cannot know (e.g. a
-    /// concrete `ArrayIterator` value against a reified `T = Iterable`).
+    /// Total over every value kind (a reified test can be handed any sibling
+    /// union member — including a closure or future). Mirrors `is_subtype_of`
+    /// for concrete/union targets; for an interface target it asks the impl
+    /// registry whether the value's class implements the interface — which a
+    /// purely structural `is_subtype_of` cannot know (e.g. a concrete
+    /// `ArrayIterator` value against a reified `T = Iterable`).
     fn value_matches_reified_ty(&self, value: Value, target: &baml_type::RuntimeTy) -> bool {
         use baml_type::RuntimeTy;
+        use bex_vm_types::types::type_tags;
         match target {
             RuntimeTy::Union(members, _) => members
                 .iter()
                 .any(|m| self.value_matches_reified_ty(value, m)),
+            // Functions/closures/futures are not `value_concrete_runtime_ty`
+            // subjects (it would panic), and a well-typed value only reaches a
+            // function/future target when the scrutinee union carries a matching
+            // member — so a runtime-tag check is both panic-safe and sufficient.
+            RuntimeTy::Function { .. } => value_type_tag(value) == type_tags::FUNCTION,
+            RuntimeTy::Future(..) => value_type_tag(value) == type_tags::FUTURE,
             RuntimeTy::Interface(name, args, assoc, _) => {
-                let value_ty = self.value_concrete_runtime_ty(value);
-                crate::package_baml::type_implements(self, &value_ty, name, args, assoc)
+                // Only a class-instance / primitive subject can implement an
+                // interface; a function/future value never does.
+                self.is_reified_type_subject(value) && {
+                    let value_ty = self.value_concrete_runtime_ty(value);
+                    crate::package_baml::type_implements(self, &value_ty, name, args, assoc)
+                }
             }
-            _ => self.value_concrete_runtime_ty(value).is_subtype_of(target),
+            _ => {
+                self.is_reified_type_subject(value)
+                    && self.value_concrete_runtime_ty(value).is_subtype_of(target)
+            }
+        }
+    }
+
+    /// Whether `value_concrete_runtime_ty` can type `value` without panicking —
+    /// i.e. a primitive, class instance, enum variant, `type`, array, or map.
+    /// Functions, closures, futures, cells and other internal objects are not
+    /// valid subjects (they never appear as impl subjects, but a reified
+    /// `is_type` test may encounter them as a sibling union member).
+    fn is_reified_type_subject(&self, value: Value) -> bool {
+        match value.as_object_ptr() {
+            None => true, // int / bool / null
+            Some(ptr) => matches!(
+                self.get_object(ptr),
+                Object::Float(_)
+                    | Object::String(_)
+                    | Object::Bigint(_)
+                    | Object::Uint8Array(_)
+                    | Object::Instance(_)
+                    | Object::Variant(_)
+                    | Object::Type(_)
+                    | Object::Array(_)
+                    | Object::Map(_)
+            ),
         }
     }
 
