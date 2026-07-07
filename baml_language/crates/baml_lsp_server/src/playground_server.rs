@@ -2004,7 +2004,17 @@ async fn handle_ws_in_message(
                     return;
                 }
             };
-            match state.run_store.snapshot(boundary_id) {
+            // A terminal run may have been evicted from the in-memory store
+            // by the retention policy; rehydrate it from disk history like
+            // OpenHistory does.
+            let snapshot = state.run_store.snapshot(boundary_id).or_else(|| {
+                state.history_store.open(boundary_id).ok().map(|run| {
+                    let snapshot = run.clone();
+                    let _ = state.run_store.insert_replayed_run(run);
+                    snapshot
+                })
+            });
+            match snapshot {
                 Some(snapshot) => {
                     send_ws(
                         sink,

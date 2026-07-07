@@ -111,6 +111,12 @@ impl ProfileEventObserver for RunStoreProfileObserver {
             broadcast_run_patch(&self.broadcast_tx, &patch);
         }
     }
+
+    fn engine_closed(&self, engine_id: bex_events::ids::EngineId) {
+        for patch in self.run_store.engine_closed(engine_id) {
+            broadcast_run_patch(&self.broadcast_tx, &patch);
+        }
+    }
 }
 
 pub use bex_events::run::{patch_to_wire, run_summary_to_wire, run_to_wire};
