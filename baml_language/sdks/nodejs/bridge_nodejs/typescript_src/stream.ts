@@ -1,4 +1,4 @@
-// stream.ts — pure-TS analog of sdks/python/src/baml_core/_stream.py.
+// stream.ts — pure-TS analog of sdks/python/src/baml_bridge/_stream.py.
 //
 // BamlStream wraps a BamlHandle whose HANDLE_TABLE row is a
 // `CffiHandleTableEntry::Adt(BexExternalAdt::TaggedHeapHandle { ty, heap_handle })`

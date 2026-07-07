@@ -5,7 +5,7 @@ import {
   callFunction,
   callFunctionSync,
   getRuntime,
-} from "@boundaryml/baml-core-node";
+} from "@boundaryml/baml-bridge";
 import { describe, expect, it } from "vitest";
 
 const SLEEP_FQN = "user.throws_test.SleepMs";

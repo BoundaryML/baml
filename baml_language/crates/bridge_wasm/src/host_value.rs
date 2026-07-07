@@ -71,7 +71,7 @@ use std::{cell::RefCell, collections::HashMap, sync::Arc};
 
 use bex_project::{host_release_dispatch, validate_host_return};
 use bridge_ctypes::{
-    CffiHandleTableOptions, HANDLE_TABLE, baml_core::cffi::InboundValue, inbound_to_external,
+    CffiHandleTableOptions, HANDLE_TABLE, baml_bridge::cffi::InboundValue, inbound_to_external,
 };
 use js_sys::Function;
 use prost::Message;
