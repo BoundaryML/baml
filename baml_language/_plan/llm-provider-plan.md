@@ -1,5 +1,16 @@
 # LLM Provider Redesign — Implementation Plan
 
+> **STATUS (2026-07-07): frozen design record — do not update; consult for the *why*.**
+> Implementation reality is tracked in [`implementation-checklist.md`](./implementation-checklist.md)
+> (live) and indexed in [`../llm-provider/REALIZED.md`](../llm-provider/REALIZED.md) /
+> [`E2E_TESTS.md`](../llm-provider/E2E_TESTS.md). Built so far: Phases 0–3 nearly fully, plus large
+> opportunistic parts of 4–5 (realtime over `baml.ws` live; chains/background live; stateful shapes
+> compiled pending P8). The Phase-1 bullets on **`client`-as-sugar (P3) and the companion desugar**
+> were deferred (orchestrator delegation shipped instead — see `deviations.md`) and are now specced
+> in [`llm-desugar-capabilities-plan.md`](./llm-desugar-capabilities-plan.md), which **supersedes**
+> those bullets and most of Part IV (migration), and adds the `//baml:llm_capability` open registry.
+> Divergences from this doc: [`deviations.md`](./deviations.md). Directory guide: [`README.md`](./README.md).
+
 **Status:** draft · **Scope:** full breadth (single-turn → realtime → harnesses → durable workflows) · **Shape:** phased, design-completion inline then build.
 
 This plan turns the design exploration in [`../llm-provider/`](../llm-provider/) into an executable roadmap. It is grounded in two audits of the current tree (see the [Appendices](#appendix-a--current-code-change-map)):
