@@ -371,11 +371,12 @@ impl BamlRuntime {
                                     let serialized = serde_json::to_value(value.value())
                                         .unwrap_or(serde_json::Value::Null);
 
-                                    // Convert JSON value to Python object using pythonize
-                                    let py_value = match pythonize::pythonize(py, &serialized) {
-                                        Ok(v) => v,
-                                        Err(_) => py.None().into_bound(py),
-                                    };
+                                    // Convert JSON value to a Python object
+                                    let py_value =
+                                        match crate::serde_py::json_to_py(py, &serialized) {
+                                            Ok(v) => v,
+                                            Err(_) => py.None().into_bound(py),
+                                        };
 
                                     // Create a simple namespace object with attributes
                                     // We'll use types.SimpleNamespace which allows attribute access
@@ -572,11 +573,12 @@ impl BamlRuntime {
                                     let serialized = serde_json::to_value(value.value())
                                         .unwrap_or(serde_json::Value::Null);
 
-                                    // Convert JSON value to Python object using pythonize
-                                    let py_value = match pythonize::pythonize(py, &serialized) {
-                                        Ok(v) => v,
-                                        Err(_) => py.None().into_bound(py),
-                                    };
+                                    // Convert JSON value to a Python object
+                                    let py_value =
+                                        match crate::serde_py::json_to_py(py, &serialized) {
+                                            Ok(v) => v,
+                                            Err(_) => py.None().into_bound(py),
+                                        };
 
                                     // Create a simple namespace object with attributes
                                     // We'll use types.SimpleNamespace which allows attribute access

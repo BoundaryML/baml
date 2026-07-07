@@ -12,6 +12,7 @@ function         baml._is_primitive_array         <builtin>/baml/comparable.baml
 function         baml._rust_sort                  <builtin>/baml/comparable.baml:172
 class            baml.Array                       <builtin>/baml/containers.baml:2
 class            baml.Map                         <builtin>/baml/containers.baml:501
+interface        baml.Summable                    <builtin>/baml/containers.baml:610
 interface        baml.ToString                    <builtin>/baml/conversions.baml:25
 function         baml._to_string_default          <builtin>/baml/conversions.baml:39
 function         baml._to_string_shim             <builtin>/baml/conversions.baml:57
@@ -307,8 +308,9 @@ function         baml.llm.__sap_parse_final       <builtin>/baml/ns_llm/llm_type
 function         baml.llm.__sap_parse_partial     <builtin>/baml/ns_llm/llm_types.baml:866
 function         baml.math.trunc                  <builtin>/baml/ns_math/math.baml:2
 function         baml.math.sum                    <builtin>/baml/ns_math/math.baml:22
-function         baml.math.mean                   <builtin>/baml/ns_math/math.baml:39
-function         baml.math.median                 <builtin>/baml/ns_math/math.baml:60
+function         baml.math._sum_int               <builtin>/baml/ns_math/math.baml:34
+function         baml.math.mean                   <builtin>/baml/ns_math/math.baml:51
+function         baml.math.median                 <builtin>/baml/ns_math/math.baml:72
 class            baml.media.Pdf                   <builtin>/baml/ns_media/media.baml:2
 class            baml.media.Audio                 <builtin>/baml/ns_media/media.baml:46
 class            baml.media.Video                 <builtin>/baml/ns_media/media.baml:90

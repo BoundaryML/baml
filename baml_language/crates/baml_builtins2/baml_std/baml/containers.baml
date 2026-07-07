@@ -596,3 +596,57 @@ class Map<K, V> {
     $rust_function
   }
 }
+
+/// Summation for numeric arrays.
+///
+/// Implemented for `int[]` (returning `int`) and `float[]` (returning `float`).
+/// `Sum` is the element's own numeric type, so `xs.sum()` stays in the array's
+/// number domain with no implicit widening — `int` and `float` are distinct
+/// types, and there is deliberately no `int[] -> float` sum. To sum integer
+/// data as floats, map first: `ints.map((x: int) -> float { x * 1.0 }).sum()`.
+///
+/// The method form (`xs.sum()`) is the canonical surface; the free function
+/// `baml.math.sum` (over `float[]`) remains for a functional call style.
+interface Summable {
+  type Sum
+
+  function sum(self) -> Sum throws never
+}
+
+/// Sums an `int[]` and returns an `int`.
+///
+/// Adds every element left-to-right starting from `0`, so an empty array sums
+/// to `0`. Like repeated `+`, a running total that leaves the `int` range
+/// raises `baml.panics.IntegerOverflow`.
+///
+/// # Examples
+/// ```
+/// [1, 2, 3].sum()   // 6
+/// [].sum()          // 0
+/// [-5, 5].sum()     // 0
+/// ```
+implements Summable for int[] {
+  type Sum = int
+
+  function sum(self) -> int throws never {
+    root.math._sum_int(self)
+  }
+}
+
+/// Sums a `float[]` and returns a `float`.
+///
+/// Adds every element left-to-right starting from `0.0`, so an empty array sums
+/// to `0.0`. Never throws.
+///
+/// # Examples
+/// ```
+/// [1.0, 2.0, 3.0].sum()   // 6.0
+/// [].sum()                // 0.0
+/// ```
+implements Summable for float[] {
+  type Sum = float
+
+  function sum(self) -> float throws never {
+    root.math.sum(self)
+  }
+}
