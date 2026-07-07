@@ -177,9 +177,7 @@ mod tests {
         for chunk in chunks {
             decoder.push(chunk.as_bytes(), &mut out);
         }
-        out.into_iter()
-            .map(|e| (e.event, e.data, e.id))
-            .collect()
+        out.into_iter().map(|e| (e.event, e.data, e.id)).collect()
     }
 
     #[test]

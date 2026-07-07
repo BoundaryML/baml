@@ -92,9 +92,8 @@ impl BamlAudioPy {
 
     #[staticmethod]
     fn baml_deserialize(data: Bound<'_, PyAny>) -> PyResult<Self> {
-        let data: UserFacingBamlMedia =
-            serde_json::from_value(crate::serde_py::py_to_json(&data)?)
-                .map_err(BamlError::from_anyhow)?;
+        let data: UserFacingBamlMedia = serde_json::from_value(crate::serde_py::py_to_json(&data)?)
+            .map_err(BamlError::from_anyhow)?;
         Ok(Self {
             inner: data.into_baml_media(baml_types::BamlMediaType::Audio),
         })

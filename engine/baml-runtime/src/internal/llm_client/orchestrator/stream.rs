@@ -8,10 +8,10 @@ use futures::StreamExt as FuturesStreamExt;
 use internal_baml_core::ir::repr::IntermediateRepr;
 use jsonish::BamlValueWithFlags;
 use serde_json::json;
-use tokio_util::sync::CancellationToken;
 use tokio::sync::{watch, Mutex};
 #[cfg(not(target_family = "wasm"))]
 use tokio::time::*;
+use tokio_util::sync::CancellationToken;
 #[cfg(target_family = "wasm")]
 use wasmtimer::tokio::*;
 use web_time::Duration;

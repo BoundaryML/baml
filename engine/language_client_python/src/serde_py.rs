@@ -8,10 +8,12 @@
 //!   callers then feed to `serde_json::from_value` so existing serde
 //!   `rename`/`flatten`/`untagged` attributes keep working unchanged.
 
-use pyo3::exceptions::PyTypeError;
-use pyo3::prelude::*;
-use pyo3::types::{PyBool, PyDict, PyList, PyTuple};
-use pyo3::IntoPyObjectExt;
+use pyo3::{
+    exceptions::PyTypeError,
+    prelude::*,
+    types::{PyBool, PyDict, PyList, PyTuple},
+    IntoPyObjectExt,
+};
 use serde_json::Value;
 
 /// Convert a `serde_json::Value` into an equivalent Python object.

@@ -3,6 +3,7 @@ use pyo3::{
     types::{PyTuple, PyType},
     Bound, PyAny, PyObject, Python,
 };
+
 use super::media_repr::{self, UserFacingBamlMedia};
 use crate::errors::{BamlError, BamlInvalidArgumentError};
 crate::lang_wrapper!(BamlImagePy, baml_types::BamlMedia);
@@ -90,9 +91,8 @@ impl BamlImagePy {
 
     #[staticmethod]
     fn baml_deserialize(data: Bound<'_, PyAny>) -> PyResult<Self> {
-        let data: UserFacingBamlMedia =
-            serde_json::from_value(crate::serde_py::py_to_json(&data)?)
-                .map_err(BamlError::from_anyhow)?;
+        let data: UserFacingBamlMedia = serde_json::from_value(crate::serde_py::py_to_json(&data)?)
+            .map_err(BamlError::from_anyhow)?;
         Ok(Self {
             inner: data.into_baml_media(baml_types::BamlMediaType::Image),
         })

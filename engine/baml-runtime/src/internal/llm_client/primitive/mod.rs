@@ -6,9 +6,9 @@ use internal_baml_core::ir::{repr::IntermediateRepr, ClientWalker};
 use internal_baml_jinja::RenderedChatMessage;
 use internal_llm_client::{AllowedRoleMetadata, ClientProvider, OpenAIClientProviderVariant};
 
-pub(crate) use self::request::{json_body, json_headers, JsonBodyInput};
 #[cfg(feature = "bedrock")]
 use self::aws::AwsClient;
+pub(crate) use self::request::{json_body, json_headers, JsonBodyInput};
 use self::{
     anthropic::AnthropicClient, google::GoogleAIClient, openai::OpenAIClient,
     request::RequestBuilder, vertex::VertexClient,
