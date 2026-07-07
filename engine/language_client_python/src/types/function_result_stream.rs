@@ -2,11 +2,11 @@ use std::collections::HashMap;
 
 use pyo3::{
     prelude::{pymethods, PyResult},
-    PyErr, PyObject, PyRefMut, Python,
+    PyErr, PyRefMut, Python,
 };
 
 use super::{function_results::FunctionResult, runtime_ctx_manager::RuntimeContextManager};
-use crate::errors::BamlError;
+use crate::{errors::BamlError, PyObject};
 
 crate::lang_wrapper!(
     FunctionResultStream,
@@ -97,7 +97,7 @@ impl FunctionResultStream {
             let cb = cb.clone_ref(py);
             move |event| {
                 let partial = FunctionResult::from(event);
-                let res = Python::with_gil(|py| cb.call1(py, (partial,))).map(|_| ());
+                let res = Python::attach(|py| cb.call1(py, (partial,))).map(|_| ());
                 if let Err(e) = res {
                     log::error!("Error calling on_event callback: {e:?}");
                 }
@@ -107,7 +107,7 @@ impl FunctionResultStream {
         let on_tick_callback = self.on_tick.as_ref().map(|tick_cb| {
             let tick_cb = tick_cb.clone_ref(py);
             move || {
-                Python::with_gil(|py| {
+                Python::attach(|py| {
                     let res = tick_cb.call0(py);
                     if let Err(e) = res {
                         e.display(py);
@@ -167,10 +167,10 @@ impl SyncFunctionResultStream {
         };
 
         let on_event = self.on_event.as_ref().map(|cb| {
-            let cb = Python::with_gil(|py| cb.clone_ref(py));
+            let cb = Python::attach(|py| cb.clone_ref(py));
             move |event| {
                 let partial = FunctionResult::from(event);
-                let res = Python::with_gil(|py| cb.call1(py, (partial,))).map(|_| ());
+                let res = Python::attach(|py| cb.call1(py, (partial,))).map(|_| ());
                 if let Err(e) = res {
                     log::error!("Error calling on_event callback: {e:?}");
                 }
@@ -178,9 +178,9 @@ impl SyncFunctionResultStream {
         });
 
         let on_tick_callback = self.on_tick.as_ref().map(|tick_cb| {
-            let tick_cb = Python::with_gil(|py| tick_cb.clone_ref(py));
+            let tick_cb = Python::attach(|py| tick_cb.clone_ref(py));
             move || {
-                Python::with_gil(|py| {
+                Python::attach(|py| {
                     // For now, we pass "Unknown" as the reason
                     // In a full implementation, we'd get the last event from the collector
                     tick_cb.call1(py, ("Unknown", py.None())).ok();

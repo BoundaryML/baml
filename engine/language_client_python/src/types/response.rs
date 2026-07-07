@@ -1,11 +1,11 @@
 use pyo3::{
     prelude::{pymethods, Py},
     types::{PyDict, PyDictMethods},
-    PyObject, PyResult, Python,
+    PyResult, Python,
 };
 
 use super::request::HTTPBody;
-use crate::{errors::BamlError, types::log_collector::serde_value_to_py};
+use crate::{errors::BamlError, types::log_collector::serde_value_to_py, PyObject};
 
 crate::lang_wrapper!(
     HTTPResponse,

@@ -16,7 +16,7 @@ use tokio_util::sync::CancellationToken;
 static OPERATION_TRIGGERS: Lazy<DashMap<u32, CancellationToken>> = Lazy::new(DashMap::new);
 static NEXT_ID: AtomicU32 = AtomicU32::new(1);
 
-#[pyclass(module = "baml_py.baml_py")]
+#[pyclass(module = "baml_py.baml_py", from_py_object)]
 #[derive(Clone)]
 pub struct AbortController {
     id: u32,

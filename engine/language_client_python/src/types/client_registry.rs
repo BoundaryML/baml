@@ -4,10 +4,10 @@ use baml_runtime::client_registry;
 use client_registry::ClientProvider;
 use pyo3::{
     prelude::{pymethods, PyResult},
-    IntoPyObjectExt, PyObject, Python,
+    IntoPyObjectExt, Python,
 };
 
-use crate::{errors::BamlInvalidArgumentError, parse_py_type::parse_py_type};
+use crate::{errors::BamlInvalidArgumentError, parse_py_type::parse_py_type, PyObject};
 
 crate::lang_wrapper!(ClientRegistry, client_registry::ClientRegistry);
 

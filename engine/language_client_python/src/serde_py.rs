@@ -57,7 +57,7 @@ pub fn py_to_json(obj: &Bound<'_, PyAny>) -> PyResult<Value> {
     }
     // `bool` must be checked before the integer extractions because in Python
     // `bool` is a subclass of `int`.
-    if let Ok(b) = obj.downcast::<PyBool>() {
+    if let Ok(b) = obj.cast::<PyBool>() {
         return Ok(Value::Bool(b.is_true()));
     }
     if let Ok(i) = obj.extract::<i64>() {
@@ -74,21 +74,21 @@ pub fn py_to_json(obj: &Bound<'_, PyAny>) -> PyResult<Value> {
     if let Ok(s) = obj.extract::<String>() {
         return Ok(Value::String(s));
     }
-    if let Ok(dict) = obj.downcast::<PyDict>() {
+    if let Ok(dict) = obj.cast::<PyDict>() {
         let mut map = serde_json::Map::with_capacity(dict.len());
         for (k, v) in dict.iter() {
             map.insert(k.extract::<String>()?, py_to_json(&v)?);
         }
         return Ok(Value::Object(map));
     }
-    if let Ok(list) = obj.downcast::<PyList>() {
+    if let Ok(list) = obj.cast::<PyList>() {
         let mut arr = Vec::with_capacity(list.len());
         for item in list.iter() {
             arr.push(py_to_json(&item)?);
         }
         return Ok(Value::Array(arr));
     }
-    if let Ok(tuple) = obj.downcast::<PyTuple>() {
+    if let Ok(tuple) = obj.cast::<PyTuple>() {
         let mut arr = Vec::with_capacity(tuple.len());
         for item in tuple.iter() {
             arr.push(py_to_json(&item)?);

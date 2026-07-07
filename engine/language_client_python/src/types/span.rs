@@ -5,7 +5,7 @@ use baml_types::BamlValue;
 use pyo3::{
     prelude::{pymethods, PyResult},
     types::{PyAnyMethods, PyTypeMethods},
-    IntoPyObjectExt, PyObject, Python,
+    IntoPyObjectExt, Python,
 };
 
 use super::runtime_ctx_manager::RuntimeContextManager;
@@ -13,6 +13,7 @@ use crate::{
     errors::{BamlError, BamlInvalidArgumentError},
     parse_py_type::parse_py_type,
     runtime::BamlRuntime,
+    PyObject,
 };
 
 crate::lang_wrapper!(

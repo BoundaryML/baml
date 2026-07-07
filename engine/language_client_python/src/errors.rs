@@ -24,7 +24,7 @@ fn raise_baml_validation_error(
     raw_output: String,
     detailed_message: String,
 ) -> PyErr {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let internal_monkeypatch = py.import("baml_py.internal_monkeypatch").unwrap();
         let exception = internal_monkeypatch.getattr("BamlValidationError").unwrap();
         let args = (prompt, message, raw_output, detailed_message);
@@ -40,7 +40,7 @@ fn raise_baml_client_http_error(
     status_code: u16,
     detailed_message: String,
 ) -> PyErr {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let internal_monkeypatch = py.import("baml_py.internal_monkeypatch").unwrap();
         let exception = internal_monkeypatch.getattr("BamlClientHttpError").unwrap();
         let args = (client_name, message, status_code, detailed_message);
@@ -57,7 +57,7 @@ fn raise_baml_client_finish_reason_error(
     finish_reason: Option<String>,
     detailed_message: String,
 ) -> PyErr {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let internal_monkeypatch = py.import("baml_py.internal_monkeypatch").unwrap();
         let exception = internal_monkeypatch
             .getattr("BamlClientFinishReasonError")
@@ -70,7 +70,7 @@ fn raise_baml_client_finish_reason_error(
 
 #[allow(non_snake_case)]
 fn raise_baml_timeout_error(client_name: String, message: String) -> PyErr {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let internal_monkeypatch = py.import("baml_py.internal_monkeypatch").unwrap();
         let exception = internal_monkeypatch.getattr("BamlTimeoutError").unwrap();
         let args = (client_name, message);

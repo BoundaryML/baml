@@ -3,7 +3,6 @@ use std::ops::Deref;
 use baml_runtime::type_builder::{self, WithMeta};
 use baml_types::{ir_type::UnionConstructor, BamlValue};
 use pyo3::{
-    prelude::PyAnyMethods,
     pymethods,
     types::{PyTuple, PyTupleMethods},
     Bound, PyResult,
@@ -129,7 +128,7 @@ impl TypeBuilder {
         let mut rs_types = vec![];
         for idx in 0..types.len() {
             let item = types.get_item(idx)?;
-            let item = item.downcast::<FieldType>()?;
+            let item = item.cast::<FieldType>()?;
             rs_types.push(item.borrow().inner.lock().unwrap().clone());
         }
         Ok(baml_types::TypeIR::union(rs_types).into())

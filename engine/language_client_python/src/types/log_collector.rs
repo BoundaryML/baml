@@ -12,6 +12,8 @@ use pyo3::{
 };
 use serde_json::Value as JsonValue;
 
+use crate::PyObject;
+
 crate::lang_wrapper!(
     Collector,
     baml_runtime::tracingv2::storage::storage::Collector,
