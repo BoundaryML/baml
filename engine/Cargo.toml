@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
   "baml-compiler",
+  "baml-http",
   "baml-viz-events",
   "baml-lib/*",
   "baml-lsp-types",
@@ -33,6 +34,7 @@ exclude = [
 ]
 default-members = [
   "baml-compiler",
+  "baml-http",
   "baml-lsp-types",
   "baml-lib/*",
   "baml-rpc",
@@ -61,6 +63,7 @@ askama = { version = "0.14.0", features = ["code-in-doc"] }
 axum = "0.7.5"
 baml-cli = { path = "cli" }
 baml-derive = { path = "baml-lib/baml-derive" }
+baml-http = { path = "baml-http" }
 baml-ids = { path = "baml-ids" }
 baml-rpc = { path = "baml-rpc" }
 baml-types = { path = "baml-lib/baml-types" }
@@ -177,6 +180,9 @@ web-sys = { version = "0.3.78", features = [
   "Crypto",
   "CryptoKey",
   "Headers",
+  # Navigator was previously enabled transitively (async-std's wasm backend);
+  # declare it explicitly since baml-schema-wasm calls window.navigator().
+  "Navigator",
   "Request",
   "RequestInit",
   "Response",

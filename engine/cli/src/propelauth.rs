@@ -2,13 +2,13 @@ use std::time::Duration;
 
 use anyhow::{Context, Result};
 use axum::{extract::Query, routing::get, Router};
+use baml_http::RequestBuilder;
 use base64::{engine::general_purpose, Engine as _};
 use derive_more::Constructor;
 use dialoguer::{theme::ColorfulTheme, Confirm};
 use etcetera::AppStrategy;
 use indexmap::IndexMap;
 use rand::{distributions::Alphanumeric, thread_rng, Rng};
-use reqwest::RequestBuilder;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use tokio::{net::TcpListener, sync::mpsc};
@@ -27,7 +27,7 @@ const PROPELAUTH_CLI_REDIRECT_ADDR: &str = "127.0.0.1:24000";
 pub(crate) struct PropelAuthClient {
     auth_url: String,
     client_id: String,
-    client: reqwest::Client,
+    client: baml_http::Client,
 }
 
 /// The result of exchanging an authorization code for an access and refresh token.
@@ -117,7 +117,7 @@ impl PropelAuthClient {
         let state = format!("csrf-state-{}", generate_code_verifier());
 
         // Construct the authorization URL
-        let auth_url = reqwest::Url::parse_with_params(
+        let auth_url = baml_http::Url::parse_with_params(
             &format!("{}/propelauth/oauth/authorize", self.auth_url),
             &[
                 ("redirect_uri", redirect_uri.as_str()),

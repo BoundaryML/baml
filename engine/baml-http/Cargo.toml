@@ -1,0 +1,57 @@
+[package]
+name = "baml-http"
+edition = "2021"
+version.workspace = true
+authors.workspace = true
+description = "HTTP client facade for BAML: reqwest-backed by default, hyper-backed for vendored builds"
+license = "Apache-2.0"
+
+[lints.rust]
+elided_named_lifetimes = "deny"
+unused_imports = "deny"
+unused_must_use = "deny"
+unused_variables = "deny"
+
+[dependencies]
+bytes.workspace = true
+futures.workspace = true
+http.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+url.workspace = true
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+hyper = { version = "1", default-features = false, features = [
+  "client",
+  "http1",
+  "http2",
+] }
+hyper-util = { version = "0.1.14", default-features = false, features = [
+  "client",
+  "client-legacy",
+  "http1",
+  "http2",
+  "tokio",
+] }
+hyper-rustls = { version = "0.27", default-features = false, features = [
+  "http1",
+  "http2",
+  "webpki-roots",
+  "ring",
+  "tls12",
+  "native-tokio",
+] }
+rustls = { version = "0.23", default-features = false, features = [
+  "ring",
+  "std",
+  "tls12",
+] }
+webpki-roots = { version = "1.0" }
+http-body-util = { version = "0.1" }
+serde_urlencoded = { version = "0.7" }
+tokio = { version = "1", default-features = false, features = ["time"] }
+
+# On wasm32 the reqwest (browser fetch) backend is used; hyper cannot run in
+# the browser. On native targets the hyper backend is the only implementation.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+reqwest.workspace = true

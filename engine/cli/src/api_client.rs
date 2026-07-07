@@ -31,7 +31,7 @@ trait ApiResponse {
     async fn into_result(self) -> Result<serde_json::Value>;
 }
 
-impl ApiResponse for reqwest::Response {
+impl ApiResponse for baml_http::Response {
     async fn into_result(self) -> Result<serde_json::Value> {
         let status = self.status();
         if status.is_success() {

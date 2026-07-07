@@ -47,8 +47,32 @@ tracing-subscriber = { version = "0.3.18", features = [
 [features]
 # AWS Bedrock provider support, forwarded through the runtime stack. On by
 # default; build with --no-default-features to drop the aws-* dependency tree.
-default = ["bedrock"]
+default = [
+  "bedrock",
+  "lsp",
+  "serve",
+  "dev",
+  "repl",
+  "cloud",
+  "vertex",
+  "optimize",
+  "tui",
+  "studio",
+]
 bedrock = ["baml-runtime/bedrock", "baml-cli/bedrock"]
+# Forwarded baml-cli surface; all on by default so the published package is
+# unchanged. Minimal/vendored builds use --no-default-features.
+lsp = ["baml-cli/lsp"]
+serve = ["baml-cli/serve"]
+dev = ["baml-cli/dev"]
+repl = ["baml-cli/repl"]
+cloud = ["baml-cli/cloud"]
+vertex = ["baml-cli/vertex", "baml-runtime/vertex"]
+# `baml-cli optimize` and the interactive terminal UIs.
+optimize = ["baml-cli/optimize"]
+tui = ["baml-cli/tui"]
+# Boundary Studio tracing publisher.
+studio = ["baml-cli/studio", "baml-runtime/studio"]
 
 [dev-dependencies.magnus]
 version = "0.7.1"

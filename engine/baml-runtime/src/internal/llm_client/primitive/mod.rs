@@ -267,7 +267,7 @@ impl LLMPrimitiveProvider {
         prompt: either::Either<&String, &[RenderedChatMessage]>,
         allow_proxy: bool,
         stream: bool,
-    ) -> Result<reqwest::RequestBuilder> {
+    ) -> Result<baml_http::RequestBuilder> {
         match self {
             LLMPrimitiveProvider::OpenAI(client) => {
                 client
@@ -452,7 +452,7 @@ mod tests {
             allow_proxy: bool,
             stream: bool,
             expose_secrets: bool,
-        ) -> Result<reqwest::RequestBuilder> {
+        ) -> Result<baml_http::RequestBuilder> {
             unimplemented!("Not used in tests")
         }
 
@@ -460,7 +460,7 @@ mod tests {
             &self.request_options
         }
 
-        fn http_client(&self) -> &reqwest::Client {
+        fn http_client(&self) -> &baml_http::Client {
             unimplemented!("Not used in tests")
         }
 

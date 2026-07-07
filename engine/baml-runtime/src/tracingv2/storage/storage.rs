@@ -105,6 +105,7 @@ impl TraceStorage {
         //     event.call_id,
         //     event.content.type_name()
         // );
+        #[cfg(feature = "studio")]
         if let Err(e) = crate::tracingv2::publisher::publish_trace_event(event.clone()) {
             log::warn!("Failed to publish trace event: {e:?}");
         }

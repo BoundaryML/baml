@@ -79,9 +79,9 @@ pin_project! {
 unsafe impl<S> Send for StreamWrapper<S> {}
 unsafe impl<S> Sync for StreamWrapper<S> {}
 
-impl<S: Stream<Item = reqwest::Result<bytes::Bytes>>> http_body::Body for StreamWrapper<S> {
+impl<S: Stream<Item = baml_http::Result<bytes::Bytes>>> http_body::Body for StreamWrapper<S> {
     type Data = bytes::Bytes;
-    type Error = reqwest::Error;
+    type Error = baml_http::Error;
 
     fn poll_frame(
         self: Pin<&mut Self>,
@@ -102,18 +102,18 @@ impl<S: Stream<Item = reqwest::Result<bytes::Bytes>>> http_body::Body for Stream
 
 #[derive(Debug, Clone)]
 struct BrowserHttp2 {
-    client: Arc<reqwest::Client>,
+    client: Arc<baml_http::Client>,
 }
 
 impl BrowserHttp2 {
     pub fn new() -> Self {
         Self {
-            client: Arc::new(reqwest::Client::new()),
+            client: Arc::new(baml_http::Client::new()),
         }
     }
 
     async fn send3(&self, smithy_req: Request) -> Result<http::Response<SdkBody>, ConnectorError> {
-        let method = match reqwest::Method::from_bytes(smithy_req.method().as_bytes()) {
+        let method = match baml_http::Method::from_bytes(smithy_req.method().as_bytes()) {
             Ok(method) => method,
             Err(e) => return Err(ConnectorError::user(Box::new(e))),
         };

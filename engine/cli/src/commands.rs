@@ -33,21 +33,26 @@ pub(crate) enum Commands {
     #[command(about = "Checks for errors and warnings in the baml_src directory")]
     Check(baml_runtime::cli::check::CheckArgs),
 
+    #[cfg(feature = "serve")]
     #[command(about = "Starts a server that translates LLM responses to BAML responses")]
     Serve(baml_runtime::cli::serve::ServeArgs),
 
+    #[cfg(feature = "dev")]
     #[command(about = "Starts a development server")]
     Dev(baml_runtime::cli::dev::DevArgs),
 
+    #[cfg(feature = "cloud")]
     #[command(subcommand, about = "Authenticate with Boundary Cloud", hide = true)]
     Auth(crate::auth::AuthCommands),
 
+    #[cfg(feature = "cloud")]
     #[command(
         about = "Login to Boundary Cloud (alias for `baml auth login`)",
         hide = true
     )]
     Login(crate::auth::LoginArgs),
 
+    #[cfg(feature = "cloud")]
     #[command(about = "Deploy a BAML project to Boundary Cloud", hide = true)]
     Deploy(crate::deploy::DeployArgs),
 
@@ -63,12 +68,15 @@ pub(crate) enum Commands {
     #[command(about = "Print Bytecode from BAML files", hide = true)]
     DumpBytecode(baml_runtime::cli::dump_intermediate::DumpIntermediateArgs),
 
+    #[cfg(feature = "lsp")]
     #[command(about = "Starts a language server", name = "lsp")]
     LanguageServer(crate::lsp::LanguageServerArgs),
 
+    #[cfg(feature = "repl")]
     #[command(about = "Start an interactive REPL for BAML expressions", hide = true)]
     Repl(baml_runtime::cli::repl::ReplArgs),
 
+    #[cfg(feature = "optimize")]
     #[command(about = "Optimize prompts using GEPA algorithm")]
     Optimize(baml_runtime::cli::optimize::OptimizeArgs),
 }
@@ -172,6 +180,7 @@ impl RuntimeCli {
                     Ok(crate::ExitCode::Other)
                 }
             },
+            #[cfg(feature = "serve")]
             Commands::Serve(args) => {
                 args.from = BamlRuntime::parse_baml_src_path(&args.from)?;
                 match args.run(feature_flags.clone()) {
@@ -182,6 +191,7 @@ impl RuntimeCli {
                     }
                 }
             }
+            #[cfg(feature = "dev")]
             Commands::Dev(args) => {
                 args.from = BamlRuntime::parse_baml_src_path(&args.from)?;
                 match args.run(defaults, feature_flags.clone()) {
@@ -192,6 +202,7 @@ impl RuntimeCli {
                     }
                 }
             }
+            #[cfg(feature = "cloud")]
             Commands::Auth(args) => match t.block_on(async { args.run_async().await }) {
                 Ok(()) => Ok(crate::ExitCode::Success),
                 Err(e) => {
@@ -199,6 +210,7 @@ impl RuntimeCli {
                     Ok(crate::ExitCode::Other)
                 }
             },
+            #[cfg(feature = "cloud")]
             Commands::Login(args) => match t.block_on(async { args.run_async().await }) {
                 Ok(()) => Ok(crate::ExitCode::Success),
                 Err(e) => {
@@ -206,6 +218,7 @@ impl RuntimeCli {
                     Ok(crate::ExitCode::Other)
                 }
             },
+            #[cfg(feature = "cloud")]
             Commands::Deploy(args) => {
                 args.from = BamlRuntime::parse_baml_src_path(&args.from)?;
                 match t.block_on(async { args.run_async(feature_flags.clone()).await }) {
@@ -300,10 +313,12 @@ impl RuntimeCli {
                     }
                 }
             }
+            #[cfg(feature = "lsp")]
             Commands::LanguageServer(args) => match args.run() {
                 Ok(()) => Ok(crate::ExitCode::Success),
                 Err(_) => Ok(crate::ExitCode::Other),
             },
+            #[cfg(feature = "repl")]
             Commands::Repl(args) => match t.block_on(async { args.run().await }) {
                 Ok(()) => Ok(crate::ExitCode::Success),
                 Err(e) => {
@@ -311,6 +326,7 @@ impl RuntimeCli {
                     Ok(crate::ExitCode::Other)
                 }
             },
+            #[cfg(feature = "optimize")]
             Commands::Optimize(args) => {
                 match t.block_on(async { args.run(feature_flags.clone()).await }) {
                     Ok(baml_runtime::cli::optimize::OptimizeRunResult::Success) => {

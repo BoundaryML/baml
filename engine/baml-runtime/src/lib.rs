@@ -9,7 +9,7 @@ pub(crate) mod internal;
 pub mod cli;
 pub mod client_registry;
 pub mod errors;
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(all(not(target_arch = "wasm32"), feature = "optimize"))]
 pub mod optimize;
 pub mod request;
 pub mod runtime;
@@ -104,10 +104,9 @@ use runtime_interface::{ExperimentalTracingInterface, RuntimeConstructor};
 pub(crate) use runtime_methods::prepare_function::PreparedFunctionArgs;
 use serde_json::{self, json};
 use tracing::{BamlTracer, TracingCall};
-use tracingv2::{
-    publisher::flush,
-    storage::storage::{Collector, BAML_TRACER},
-};
+#[cfg(feature = "studio")]
+use tracingv2::publisher::flush;
+use tracingv2::storage::storage::{Collector, BAML_TRACER};
 use type_builder::TypeBuilder;
 pub use types::*;
 use web_time::{Duration, SystemTime};
@@ -434,6 +433,7 @@ pub struct BamlRuntime {
     pub async_runtime: Arc<tokio::runtime::Runtime>,
 
     /// Shared env vars for the tracingv2 publisher, updated at each call site.
+    #[cfg(feature = "studio")]
     publisher_env_vars: Option<tracingv2::publisher::PublisherEnvVars>,
 }
 
@@ -503,23 +503,29 @@ impl BamlRuntime {
             tracer_wrapper: Arc::new(BamlTracerWrapper::new(env_vars)?),
             #[cfg(not(target_arch = "wasm32"))]
             async_runtime: rt.clone(),
+            #[cfg(feature = "studio")]
             publisher_env_vars: None,
         };
 
-        let ast_sig: Arc<runtime::AstSignatureWrapper> = Arc::new(
-            Arc::new(runtime_for_ast)
-                .try_into()
-                .context("Internal error: Failed to create event publisher for BAML runtime")?,
-        );
+        #[cfg(feature = "studio")]
+        let publisher_env_vars = {
+            let ast_sig: Arc<runtime::AstSignatureWrapper> =
+                Arc::new(Arc::new(runtime_for_ast).try_into().context(
+                    "Internal error: Failed to create event publisher for BAML runtime",
+                )?);
 
-        let publisher_env_vars = tracingv2::publisher::PublisherEnvVars::new(env_vars.clone());
+            let publisher_env_vars = tracingv2::publisher::PublisherEnvVars::new(env_vars.clone());
 
-        tracingv2::publisher::register_publisher(
-            ast_sig,
-            publisher_env_vars.clone(),
-            #[cfg(not(target_arch = "wasm32"))]
-            rt.clone(),
-        );
+            tracingv2::publisher::register_publisher(
+                ast_sig,
+                publisher_env_vars.clone(),
+                #[cfg(not(target_arch = "wasm32"))]
+                rt.clone(),
+            );
+            publisher_env_vars
+        };
+        #[cfg(not(feature = "studio"))]
+        let _ = runtime_for_ast;
 
         let runtime = BamlRuntime {
             ir: ir.clone(),
@@ -531,6 +537,7 @@ impl BamlRuntime {
             tracer_wrapper: Arc::new(BamlTracerWrapper::new(env_vars)?),
             #[cfg(not(target_arch = "wasm32"))]
             async_runtime: rt.clone(),
+            #[cfg(feature = "studio")]
             publisher_env_vars: Some(publisher_env_vars),
         };
 
@@ -968,6 +975,7 @@ impl BamlRuntime {
         G: Fn(),
     {
         baml_log::set_from_env(&env_vars).unwrap();
+        #[cfg(feature = "studio")]
         if let Some(ref publisher_env_vars) = self.publisher_env_vars {
             publisher_env_vars.update(env_vars.clone());
         }
@@ -1397,6 +1405,7 @@ impl BamlRuntime {
     ) -> (Result<FunctionResult>, FunctionCallId) {
         // baml_log::info!("env vars: {:#?}", env_vars.clone());
         baml_log::set_from_env(&env_vars).unwrap();
+        #[cfg(feature = "studio")]
         if let Some(ref publisher_env_vars) = self.publisher_env_vars {
             publisher_env_vars.update(env_vars.clone());
         }
@@ -1470,6 +1479,7 @@ impl BamlRuntime {
         expr_tx: Option<mpsc::UnboundedSender<Vec<SerializedSpan>>>,
     ) -> Result<FunctionResultStream> {
         baml_log::set_from_env(&env_vars).unwrap();
+        #[cfg(feature = "studio")]
         if let Some(ref publisher_env_vars) = self.publisher_env_vars {
             publisher_env_vars.update(env_vars.clone());
         }
@@ -1577,7 +1587,7 @@ impl BamlRuntime {
             HTTPBody::new(
                 request
                     .body()
-                    .and_then(reqwest::Body::as_bytes)
+                    .and_then(baml_http::Body::as_bytes)
                     .unwrap_or_default()
                     .into(),
             ),
@@ -2087,14 +2097,14 @@ impl ExperimentalTracingInterface for BamlRuntime {
     }
 
     fn flush(&self) -> Result<()> {
-        #[cfg(not(target_arch = "wasm32"))]
+        #[cfg(all(not(target_arch = "wasm32"), feature = "studio"))]
         {
             if let Err(e) = self.async_runtime.block_on(flush()) {
                 log::error!("Failed to flush: {e}");
                 baml_log::debug!("Failed to flush: {}", e);
             }
         }
-        #[cfg(target_arch = "wasm32")]
+        #[cfg(all(target_arch = "wasm32", feature = "studio"))]
         {
             wasm_bindgen_futures::spawn_local(async move {
                 if let Err(e) = flush().await {

@@ -195,7 +195,7 @@ fn escape_single_quotes(s: &str) -> String {
 fn to_curl_command(
     url: &str,
     method: &str,
-    headers: &reqwest::header::HeaderMap,
+    headers: &baml_http::header::HeaderMap,
     body: Vec<u8>,
     env_vars: &std::collections::HashMap<String, String>,
     expose_secrets: bool,
@@ -362,7 +362,7 @@ where
 pub trait SseResponseTrait {
     fn response_stream(
         &self,
-        resp: reqwest::Response,
+        resp: baml_http::Response,
         prompt: &[internal_baml_jinja::RenderedChatMessage],
         system_start: web_time::SystemTime,
         instant_start: web_time::Instant,
@@ -772,8 +772,8 @@ fn as_base64(maybe_base64_url: &str) -> Option<(&str, &str)> {
 async fn fetch_with_proxy(
     url: &str,
     proxy_url: Option<&str>,
-) -> Result<reqwest::Response, anyhow::Error> {
-    let client = reqwest::Client::new();
+) -> Result<baml_http::Response, anyhow::Error> {
+    let client = baml_http::Client::new();
 
     let request = if let Some(proxy) = proxy_url {
         let new_proxy_url = format!(

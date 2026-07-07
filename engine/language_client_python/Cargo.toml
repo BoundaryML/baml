@@ -68,9 +68,36 @@ ctrlc = "3.4.5"
 pyo3-build-config = "0.21.2"
 
 [features]
-default = ["bedrock"]
+default = [
+  "bedrock",
+  "lsp",
+  "serve",
+  "dev",
+  "repl",
+  "cloud",
+  "vertex",
+  "optimize",
+  "tui",
+  "studio",
+]
 # AWS Bedrock provider support (forwards to baml-runtime). On by default; build
 # with --no-default-features to drop the aws-* dependency tree.
 bedrock = ["baml-runtime/bedrock", "baml-cli/bedrock"]
+# `baml-cli lsp` (the language server).
+lsp = ["baml-cli/lsp"]
+# `baml-cli serve` / `baml-cli dev` (axum HTTP server + file watching).
+serve = ["baml-cli/serve"]
+dev = ["baml-cli/dev"]
+# `baml-cli repl`.
+repl = ["baml-cli/repl"]
+# Boundary Cloud commands (`baml-cli auth/login/deploy`).
+cloud = ["baml-cli/cloud"]
+# Vertex AI provider auth (gcp_auth).
+vertex = ["baml-cli/vertex", "baml-runtime/vertex"]
+# `baml-cli optimize` and the interactive terminal UIs.
+optimize = ["baml-cli/optimize"]
+tui = ["baml-cli/tui"]
+# Boundary Studio tracing publisher.
+studio = ["baml-cli/studio", "baml-runtime/studio"]
 # Use the THIR interpreter runtime instead of the VM bytecode runtime
 thir-interpreter = ["baml-runtime/thir-interpreter"]

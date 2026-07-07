@@ -4,7 +4,7 @@ use anyhow::{Context, Result};
 use baml_types::BamlMediaContent;
 use chrono::Utc;
 use futures::StreamExt;
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(all(not(target_arch = "wasm32"), feature = "vertex"))]
 use gcp_auth::TokenProvider;
 use internal_baml_core::ir::ClientWalker;
 use internal_baml_jinja::{RenderContext_Client, RenderedChatMessage};
@@ -40,7 +40,7 @@ use crate::{
 
 pub struct VertexClient {
     pub name: String,
-    pub client: reqwest::Client,
+    pub client: baml_http::Client,
     pub retry_policy: Option<String>,
     pub context: RenderContext_Client,
     pub features: ModelFeatures,
@@ -233,7 +233,7 @@ impl VertexClient {
 }
 
 impl RequestBuilder for VertexClient {
-    fn http_client(&self) -> &reqwest::Client {
+    fn http_client(&self) -> &baml_http::Client {
         &self.client
     }
 
@@ -245,7 +245,7 @@ impl RequestBuilder for VertexClient {
         // There are no leakable secrets in the Vertex request because
         // VertexAuth can not be built in the WASM environment.
         _expose_secrets: bool,
-    ) -> Result<reqwest::RequestBuilder> {
+    ) -> Result<baml_http::RequestBuilder> {
         // Determine if API key auth is being used (query param 'key')
         let has_api_key_query = self.properties.query_params.contains_key("key");
         let mut vertex_auth: Option<std::sync::Arc<super::auth::VertexAuth>> = None;

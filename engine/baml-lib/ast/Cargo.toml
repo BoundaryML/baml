@@ -23,7 +23,6 @@ anyhow.workspace = true
 pest.workspace = true
 pest_derive.workspace = true
 either.workspace = true
-test-log.workspace = true
 pretty = { workspace = true }
 regex.workspace = true
 indexmap.workspace = true

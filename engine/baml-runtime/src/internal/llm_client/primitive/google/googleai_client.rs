@@ -34,7 +34,7 @@ use crate::{
 
 pub struct GoogleAIClient {
     pub name: String,
-    pub client: reqwest::Client,
+    pub client: baml_http::Client,
     pub retry_policy: Option<String>,
     pub context: RenderContext_Client,
     pub features: ModelFeatures,
@@ -209,7 +209,7 @@ impl GoogleAIClient {
 }
 
 impl RequestBuilder for GoogleAIClient {
-    fn http_client(&self) -> &reqwest::Client {
+    fn http_client(&self) -> &baml_http::Client {
         &self.client
     }
 
@@ -219,7 +219,7 @@ impl RequestBuilder for GoogleAIClient {
         allow_proxy: bool,
         stream: bool,
         expose_secrets: bool,
-    ) -> Result<reqwest::RequestBuilder> {
+    ) -> Result<baml_http::RequestBuilder> {
         let mut should_stream = "generateContent";
         if stream {
             should_stream = "streamGenerateContent?alt=sse";

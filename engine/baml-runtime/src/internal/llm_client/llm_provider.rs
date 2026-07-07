@@ -124,7 +124,7 @@ impl LLMProvider {
         stream: bool,
         ctx: &RuntimeContext,
         client_lookup: &'a impl InternalClientLookup<'a>,
-    ) -> Result<reqwest::RequestBuilder> {
+    ) -> Result<baml_http::RequestBuilder> {
         match self {
             LLMProvider::Primitive(provider) => {
                 provider.build_request(prompt, allow_proxy, stream).await

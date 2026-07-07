@@ -1,12 +1,16 @@
 pub mod check;
+#[cfg(feature = "dev")]
 pub mod dev;
 pub(crate) mod dotenv;
 pub mod dump_intermediate;
 pub mod generate;
 pub mod init;
 pub mod init_ui;
+#[cfg(feature = "optimize")]
 pub mod optimize;
+#[cfg(feature = "repl")]
 pub mod repl;
+#[cfg(feature = "serve")]
 pub mod serve;
 pub mod testing;
 
