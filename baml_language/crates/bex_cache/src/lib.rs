@@ -28,7 +28,7 @@ use sha2::{Digest, Sha256};
 
 /// Bump whenever the serialized `Program` layout or the entry header changes.
 /// Part of both the cache key and the entry header.
-pub const FORMAT_VERSION: u32 = 1;
+pub const FORMAT_VERSION: u32 = 2;
 
 const MAGIC: [u8; 4] = *b"BEXC";
 
@@ -140,6 +140,12 @@ pub struct ManifestFile {
     pub defined_names: Vec<String>,
     /// Last-segment names this file's compiled bytecode references.
     pub referenced_names: Vec<String>,
+    /// Throw-analysis facts for every function the file defines, exactly as
+    /// `baml_compiler2_tir::throw_inference::file_throw_facts` extracted
+    /// them. Re-seeded into the next compile's database so unchanged files
+    /// never re-walk their bodies just to answer "what does the package
+    /// throw" — the package-level solve then runs from facts alone.
+    pub throw_facts: Vec<baml_type::throw_facts::FunctionThrowFacts>,
 }
 
 /// Fixed per-project key for the [`ProjectManifest`].

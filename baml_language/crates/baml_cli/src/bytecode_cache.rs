@@ -195,6 +195,11 @@ pub(crate) struct ReusePlan {
     pub(crate) dirty_files: Vec<SourceFile>,
     /// The previous compile's Program, splice source.
     pub(crate) prev: Program,
+    /// Per-file throw facts for the clean files (full path → facts), to be
+    /// seeded into the database before compiling so their bodies are never
+    /// re-walked by throw inference.
+    pub(crate) seeded_throw_facts:
+        std::collections::BTreeMap<String, Vec<baml_type::throw_facts::FunctionThrowFacts>>,
 }
 
 /// Cache diagnostics to stderr, gated on `BAML_CACHE_DEBUG=1`. For support
@@ -451,10 +456,28 @@ impl CacheContext {
             dirty_files.len()
         ));
 
+        // Seed throw facts for clean files only: a clean file's content is
+        // unchanged (facts are content-derived) and nothing it references
+        // changed signature (resolution-derived parts are stable too).
+        let root = db.get_project().map(|p| p.root(db));
+        let seeded_throw_facts = manifest
+            .files
+            .iter()
+            .filter(|entry| clean_files.contains(&entry.rel_path))
+            .map(|entry| {
+                let full = root
+                    .as_ref()
+                    .map(|r| r.join(&entry.rel_path).display().to_string())
+                    .unwrap_or_else(|| entry.rel_path.clone());
+                (full, entry.throw_facts.clone())
+            })
+            .collect();
+
         Some(ReusePlan {
             clean_files,
             dirty_files,
             prev,
+            seeded_throw_facts,
         })
     }
 
@@ -475,6 +498,11 @@ impl CacheContext {
                 signature_hash: file_signature_hash(db, sf),
                 defined_names: defined_names(db, sf),
                 referenced_names: referenced.remove(&rel).unwrap_or_default(),
+                // Free: seeded files return their seeds verbatim, dirty
+                // files were extracted (and memoized) during the compile.
+                throw_facts: baml_db::baml_compiler2_tir::throw_inference::file_throw_facts(db, sf)
+                    .0
+                    .clone(),
                 rel_path: rel,
             })
             .collect();

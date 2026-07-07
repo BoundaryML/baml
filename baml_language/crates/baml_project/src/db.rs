@@ -86,6 +86,8 @@ pub struct ProjectDatabase {
     /// Compiler2-only extra files (`baml_builtins2` stubs). Held separately so
     /// they are NOT added to `project.files()`.
     compiler2_extra_files: Option<Compiler2ExtraFiles>,
+    /// Per-file throw facts seeded from a previous compile (bytecode cache).
+    seeded_throw_facts: Option<baml_workspace::SeededThrowFacts>,
     /// Maps file paths to their `SourceFile` handles (user files only).
     file_map: HashMap<std::path::PathBuf, SourceFile>,
     /// Maps file paths to compiler2-only `SourceFile` handles.
@@ -102,6 +104,10 @@ impl baml_workspace::Db for ProjectDatabase {
     fn project(&self) -> Project {
         self.project
             .expect("project must be set before querying - call set_project_root first")
+    }
+
+    fn seeded_throw_facts(&self) -> Option<baml_workspace::SeededThrowFacts> {
+        self.seeded_throw_facts
     }
 }
 
@@ -154,6 +160,7 @@ impl ProjectDatabase {
             next_file_id: Arc::new(AtomicU32::new(0)),
             project: None,
             compiler2_extra_files: None,
+            seeded_throw_facts: None,
             file_map: HashMap::new(),
             compiler2_file_map: HashMap::new(),
             file_id_to_path: HashMap::new(),
@@ -173,6 +180,7 @@ impl ProjectDatabase {
             next_file_id: Arc::new(AtomicU32::new(0)),
             project: None,
             compiler2_extra_files: None,
+            seeded_throw_facts: None,
             file_map: HashMap::new(),
             compiler2_file_map: HashMap::new(),
             file_id_to_path: HashMap::new(),
@@ -209,6 +217,19 @@ impl ProjectDatabase {
     }
 
     /// Get all source files in the database, sorted by `FileId` for deterministic ordering.
+    /// Seed per-file throw facts from a previous compile of identical file
+    /// content (bytecode-cache per-file reuse). Must be called before any
+    /// query runs; keys are full source-file path strings.
+    pub fn set_seeded_throw_facts(
+        &mut self,
+        by_path: std::collections::BTreeMap<
+            String,
+            Vec<baml_type::throw_facts::FunctionThrowFacts>,
+        >,
+    ) {
+        self.seeded_throw_facts = Some(baml_workspace::SeededThrowFacts::new(self, by_path));
+    }
+
     pub fn get_source_files(&self) -> Vec<SourceFile> {
         let mut files: Vec<SourceFile> = self.file_map.values().copied().collect();
         files.sort_by_key(|f| f.file_id(self).as_u32());

@@ -72,9 +72,38 @@ fn compile_full(files: &[(&str, &str)], base: &Program) -> Program {
 }
 
 fn relink(files: &[(&str, &str)], base: &Program, prev: &Program, clean: &[&str]) -> Program {
+    relink_with_db(build_db(files), base, prev, clean)
+}
+
+/// Relink exactly as the CLI does: throw facts for the clean files are
+/// extracted from the previous compile's database and seeded, so throw
+/// inference never re-walks their bodies.
+fn relink_seeded(
+    files: &[(&str, &str)],
+    prev_files: &[(&str, &str)],
+    base: &Program,
+    prev: &Program,
+    clean: &[&str],
+) -> Program {
+    use baml_compiler2_tir::throw_inference::file_throw_facts;
+    let prev_db = build_db(prev_files);
+    let mut seeds = std::collections::BTreeMap::new();
+    for sf in prev_db.get_source_files() {
+        let path = sf.path(&prev_db).display().to_string();
+        let rel = path.trim_start_matches(&format!("{ROOT}/")).to_string();
+        if clean.contains(&rel.as_str()) {
+            seeds.insert(path, file_throw_facts(&prev_db, sf).0.clone());
+        }
+    }
+    let mut db = build_db(files);
+    db.set_seeded_throw_facts(seeds);
+    relink_with_db(db, base, prev, clean)
+}
+
+fn relink_with_db(db: ProjectDatabase, base: &Program, prev: &Program, clean: &[&str]) -> Program {
     let clean_files: HashSet<String> = clean.iter().map(ToString::to_string).collect();
     generate_project_bytecode_with_reuse(
-        &build_db(files),
+        &db,
         &CompileOptions {
             emit_test_cases: false,
         },
@@ -184,6 +213,59 @@ fn relink_is_byte_identical_to_full_compile() {
         &prev,
         &["a.baml", "c.baml"],
     );
+}
+
+/// The CLI's real configuration: clean files' throw facts seeded from the
+/// previous compile. The throws-changing edit is the sharp scenario — the
+/// dirty file's facts are extracted fresh, the seeded solve must still
+/// propagate the new transitive throws into the clean caller, and the gate
+/// must demote it for an honest recompile. Byte-identity proves the seeded
+/// solve is indistinguishable from walking every body.
+#[test]
+fn seeded_relink_is_byte_identical_to_full_compile() {
+    let files = [("a.baml", A_BAML), ("b.baml", B_BAML), ("c.baml", C_BAML)];
+    let base = generate_stdlib_program(&build_db(&files), OptLevel::Two).expect("stdlib");
+    let prev = compile_full(&files, &base);
+
+    // Body edit.
+    let b_body_edit = B_BAML.replace("v * factor", "factor * v");
+    let edited = [
+        ("a.baml", A_BAML),
+        ("b.baml", b_body_edit.as_str()),
+        ("c.baml", C_BAML),
+    ];
+    let full = borsh::to_vec(&compile_full(&edited, &base)).expect("serialize");
+    let seeded = borsh::to_vec(&relink_seeded(
+        &edited,
+        &files,
+        &base,
+        &prev,
+        &["a.baml", "c.baml"],
+    ))
+    .expect("serialize");
+    assert!(full == seeded, "seeded relink differs (body edit)");
+
+    // Throws-changing body edit: c (clean, seeded) transitively gains the
+    // new throw through the solve and must be demoted by the gate.
+    let b_added_throw = B_BAML.replace(
+        "p.x * p.x + p.y * p.y",
+        "if p.x == 999 {\n    throw \"boom\"\n  }\n  p.x * p.x + p.y * p.y",
+    );
+    let edited = [
+        ("a.baml", A_BAML),
+        ("b.baml", b_added_throw.as_str()),
+        ("c.baml", C_BAML),
+    ];
+    let full = borsh::to_vec(&compile_full(&edited, &base)).expect("serialize");
+    let seeded = borsh::to_vec(&relink_seeded(
+        &edited,
+        &files,
+        &base,
+        &prev,
+        &["a.baml", "c.baml"],
+    ))
+    .expect("serialize");
+    assert!(full == seeded, "seeded relink differs (throws edit)");
 }
 
 /// Prove the splice path actually runs (byte-equality alone would also pass

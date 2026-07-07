@@ -44,6 +44,28 @@ pub use project_resolution::{
 pub trait Db: salsa::Database {
     /// Returns the project being analyzed.
     fn project(&self) -> Project;
+
+    /// Per-file throw-analysis facts seeded from a previous compile.
+    ///
+    /// When present, `throw_inference::file_throw_facts` returns the seeded
+    /// facts for a file instead of re-walking its body — the bytecode
+    /// cache's per-file reuse sets this for files whose content is
+    /// unchanged (facts are a pure function of file content + name
+    /// resolution, and the cache's dirty-set analysis re-walks any file
+    /// whose resolution-relevant surroundings changed). Defaults to `None`:
+    /// every other database compiles honestly.
+    fn seeded_throw_facts(&self) -> Option<SeededThrowFacts> {
+        None
+    }
+}
+
+/// Input: per-file `FunctionThrowFacts` from a previous compile, keyed by
+/// the full source-file path string (`SourceFile::path` display form).
+#[salsa::input]
+pub struct SeededThrowFacts {
+    #[returns(ref)]
+    pub by_path:
+        std::collections::BTreeMap<String, Vec<baml_type::throw_facts::FunctionThrowFacts>>,
 }
 
 /// Input: the project root configuration

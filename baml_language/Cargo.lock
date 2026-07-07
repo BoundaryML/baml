@@ -1083,6 +1083,7 @@ dependencies = [
  "baml_compiler_diagnostics",
  "baml_db",
  "baml_lsp2_actions",
+ "baml_type",
  "baml_workspace",
  "bex_vm_types",
  "la-arena",
@@ -1187,6 +1188,7 @@ name = "baml_workspace"
 version = "0.0.0-beta"
 dependencies = [
  "baml_base",
+ "baml_type",
  "salsa",
  "walkdir",
 ]
@@ -1222,6 +1224,7 @@ checksum = "3a8241f3ebb85c056b509d4327ad0358fbbba6ffb340bf388f26350aeda225b1"
 name = "bex_cache"
 version = "0.0.0-beta"
 dependencies = [
+ "baml_type",
  "baml_version",
  "bex_vm_types",
  "borsh",

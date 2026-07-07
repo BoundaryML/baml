@@ -110,7 +110,7 @@ impl TestArgs {
             );
             (engine, legacy)
         } else {
-            let db = build_db_from_sources(&resolved, |_| {});
+            let mut db = build_db_from_sources(&resolved, |_| {});
             let project = db
                 .get_project()
                 .ok_or_else(|| anyhow!("No project context"))?;
@@ -118,6 +118,11 @@ impl TestArgs {
             // Per-file reuse: decide from the manifest which files' compiled
             // bytecode can be spliced from the previous program.
             let reuse_plan = cache.as_ref().and_then(|ctx| ctx.plan_reuse(&db));
+            if let Some(plan) = &reuse_plan {
+                // Clean files' throw facts come from the manifest, so throw
+                // inference never re-walks their bodies.
+                db.set_seeded_throw_facts(plan.seeded_throw_facts.clone());
+            }
 
             // ── 2. Diagnostics ─────────────────────────────────────────────
             // Keep `baml test` quiet during the compile phase. `baml check`

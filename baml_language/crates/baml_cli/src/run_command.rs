@@ -716,7 +716,7 @@ impl RunArgs {
         // Building the database only sets salsa inputs — the expensive work
         // (typecheck, emit) happens lazily in the queries below, which a
         // bytecode-cache hit skips entirely.
-        let db = crate::project_load::build_db_from_sources(&resolved, |_| {});
+        let mut db = crate::project_load::build_db_from_sources(&resolved, |_| {});
 
         let cache =
             crate::bytecode_cache::CacheContext::open(&resolved, /* emit_test_cases */ false);
@@ -739,6 +739,9 @@ impl RunArgs {
                 plan.clean_files.len(),
                 plan.dirty_files.len()
             ));
+            // Clean files' throw facts come from the manifest, so throw
+            // inference never re-walks their bodies.
+            db.set_seeded_throw_facts(plan.seeded_throw_facts.clone());
         }
 
         // `baml run` keeps the compile phase silent; the program's output is
