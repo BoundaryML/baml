@@ -1,6 +1,9 @@
+import Link from 'next/link';
 import { createMetadata } from '@/app/_lib/metadata';
 import { Navbar } from '@/components/navbar';
-import { type EapEvent, getEapEvents } from '@/lib/luma';
+import { getEapEvents } from '@/lib/luma';
+import './eap.css';
+import { EapSchedule } from './eap-schedule';
 
 // Pull the live EAP onboarding sessions from Luma. Revalidated on the same
 // cadence as the underlying fetch (see lib/luma.ts).
@@ -13,142 +16,94 @@ export const metadata = createMetadata({
 
 // The public Luma calendar, so people can browse everything if nothing is listed.
 const LUMA_CALENDAR_URL = 'https://luma.com/baml';
+const DISCORD_URL = 'https://boundaryml.com/discord';
 
-const CSS = `
-.eap-wrap { margin: 0 auto; max-width: 560px; padding: 120px 24px 96px; }
-.eap-h1 { font-size: clamp(36px, 6vw, 52px); font-weight: 600; letter-spacing: -0.02em; line-height: 1.05; margin: 0; }
-.eap-sub { color: #6b6456; font-size: 18px; line-height: 1.6; margin: 18px 0 40px; }
-.eap-sessions { display: flex; flex-direction: column; gap: 12px; }
-.eap-session { display: flex; align-items: center; justify-content: space-between; gap: 16px;
-  border: 1px solid #e0dac9; border-radius: 12px; padding: 18px 20px; text-decoration: none;
-  color: inherit; transition: border-color 0.12s ease, background 0.12s ease; }
-.eap-session:hover { border-color: #1a1a1a; background: rgba(0,0,0,0.02); }
-.eap-session-left { display: flex; flex-direction: column; gap: 4px; }
-.eap-session-kicker { color: #8a8372; font-size: 12px; font-weight: 500; letter-spacing: 0.04em; text-transform: uppercase; }
-.eap-session-date { font-size: 19px; font-weight: 600; letter-spacing: -0.01em; }
-.eap-session-meta { display: flex; align-items: center; gap: 8px; margin-top: 2px; color: #8a8372; font-size: 13px; }
-.eap-badge { display: inline-flex; align-items: center; border-radius: 999px; padding: 2px 9px; font-size: 12px; font-weight: 500; }
-.eap-badge--open { background: rgba(22,163,74,0.12); color: #15803d; }
-.eap-badge--waitlist { background: rgba(217,119,6,0.12); color: #b45309; }
-.eap-badge--closed { background: rgba(0,0,0,0.06); color: #6b6456; }
-.eap-session-cta { color: #2563eb; font-size: 14px; font-weight: 500; white-space: nowrap; }
-.eap-empty { border: 1px dashed #e0dac9; border-radius: 12px; padding: 28px 20px; text-align: center; color: #6b6456; }
-.eap-empty a { color: #2563eb; font-weight: 500; text-decoration: none; }
-.eap-footer { margin-top: 28px; font-size: 14px; color: #8a8372; }
-.eap-footer a { color: #2563eb; text-decoration: none; }
-`;
-
-interface Availability {
-  label: string;
-  className: string;
-  bookable: boolean;
-}
-
-function availabilityOf(event: EapEvent): Availability {
-  if (event.waitlist_status === 'enabled') {
-    return {
-      bookable: true,
-      className: 'eap-badge--waitlist',
-      label: 'Waitlist open',
-    };
-  }
-  if (event.registration_open === false) {
-    return {
-      bookable: false,
-      className: 'eap-badge--closed',
-      label: 'Registration closed',
-    };
-  }
-  return { bookable: true, className: 'eap-badge--open', label: 'Open' };
-}
-
-function formatWhen(event: EapEvent): string {
-  const start = new Date(event.start_at);
-  const date = new Intl.DateTimeFormat('en-US', {
-    day: 'numeric',
-    month: 'short',
-    timeZone: event.timezone,
-    weekday: 'short',
-  }).format(start);
-  const time = new Intl.DateTimeFormat('en-US', {
-    hour: 'numeric',
-    minute: '2-digit',
-    timeZone: event.timezone,
-    timeZoneName: 'short',
-  }).format(start);
-  return `${date} · ${time}`;
-}
+const DISCORD_PATH =
+  'M20.317 4.3698a19.7913 19.7913 0 00-4.8851-1.5152.0741.0741 0 00-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 00-.0785-.037 19.7363 19.7363 0 00-4.8852 1.515.0699.0699 0 00-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 00.0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 00.0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 00-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 01-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 01.0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 01.0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 01-.0066.1276 12.2986 12.2986 0 01-1.873.8914.0766.0766 0 00-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 00.0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 00.0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 00-.0312-.0286zM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1569 2.4189zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.946 2.4189-2.1568 2.4189Z';
 
 export default async function EapPage() {
   const events = await getEapEvents();
 
+  // Secondary CTA. Rendered inside the schedule's primary column (under the
+  // featured session) so it fills the space there rather than sitting below
+  // the whole list. Passed as a slot because the schedule is a client component.
+  const discordCta = (
+    <section className="eap-cta-band">
+      <div className="eap-cta-head">
+        <svg aria-hidden="true" className="eap-cta-ico" viewBox="0 0 24 24">
+          <path d={DISCORD_PATH} fill="currentColor" />
+        </svg>
+        <div className="eap-cta-title">Questions or feedback?</div>
+      </div>
+      <p className="eap-cta-sub">
+        Join the BAML Discord. We're around to help you get set up, and we read
+        every bit of feedback.
+      </p>
+      <a
+        className="eap-discord-btn"
+        href={DISCORD_URL}
+        rel="noopener noreferrer"
+        target="_blank"
+      >
+        <svg aria-hidden="true" viewBox="0 0 24 24">
+          <path d={DISCORD_PATH} />
+        </svg>
+        Join the Discord
+      </a>
+    </section>
+  );
+
   return (
     <>
-      {/* eslint-disable-next-line react/no-danger */}
-      <style dangerouslySetInnerHTML={{ __html: CSS }} />
       <Navbar />
-      <main className="eap-wrap">
-        <h1 className="eap-h1">Early Access Sign Up</h1>
-        <p className="eap-sub">
-          Join a live onboarding session to get started with BAML. Pick a time
-          that works and book your spot below.
-        </p>
+      <div className="eap">
+        <main className="eap-wrap">
+          <div className="eap-header">
+            <h1 className="eap-h1">Early Access Sign Up</h1>
+            <p className="eap-sub">
+              Get started with BAML.{' '}
+              <Link className="eap-sub-link" href="/explore">
+                Explore on your own
+              </Link>
+              , or join a live session to go deeper with us in real time: ask
+              questions, see the latest features, and work through your actual
+              use case together.{' '}
+              <span className="eap-sub-dim">About 45 minutes on Zoom.</span>
+            </p>
+          </div>
 
-        {events.length > 0 ? (
-          <div className="eap-sessions">
-            {events.map((event) => {
-              const availability = availabilityOf(event);
-              return (
+          {events.length > 0 ? (
+            <EapSchedule discord={discordCta} events={events} />
+          ) : (
+            <>
+              <div className="eap-empty">
+                No sessions are scheduled right now. Browse the{' '}
                 <a
-                  className="eap-session"
-                  href={event.url}
-                  key={event.id}
+                  href={LUMA_CALENDAR_URL}
                   rel="noopener noreferrer"
                   target="_blank"
                 >
-                  <span className="eap-session-left">
-                    <span className="eap-session-kicker">{event.name}</span>
-                    <span className="eap-session-date">
-                      {formatWhen(event)}
-                    </span>
-                    <span className="eap-session-meta">
-                      <span className={`eap-badge ${availability.className}`}>
-                        {availability.label}
-                      </span>
-                      {event.goingCount !== null && (
-                        <span>{event.goingCount} going</span>
-                      )}
-                    </span>
-                  </span>
-                  <span className="eap-session-cta">
-                    {availability.bookable ? 'Book' : 'View'} &rarr;
-                  </span>
-                </a>
-              );
-            })}
-          </div>
-        ) : (
-          <div className="eap-empty">
-            No sessions are scheduled right now. Browse the{' '}
+                  BAML calendar
+                </a>{' '}
+                for upcoming events.
+              </div>
+              {discordCta}
+            </>
+          )}
+
+          <p className="eap-footer">
+            See every session on the{' '}
             <a
               href={LUMA_CALENDAR_URL}
               rel="noopener noreferrer"
               target="_blank"
             >
-              BAML calendar
-            </a>{' '}
-            for upcoming events.
-          </div>
-        )}
-
-        <p className="eap-footer">
-          See every session on the{' '}
-          <a href={LUMA_CALENDAR_URL} rel="noopener noreferrer" target="_blank">
-            BAML Luma calendar
-          </a>
-          .
-        </p>
-      </main>
+              BAML Luma calendar
+            </a>
+            .
+          </p>
+        </main>
+      </div>
     </>
   );
 }
