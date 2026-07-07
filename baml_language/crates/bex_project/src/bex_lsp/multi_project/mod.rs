@@ -31,6 +31,10 @@ struct LiveProject {
     /// full refresh.
     last_published_files:
         std::sync::Arc<std::sync::Mutex<std::collections::HashSet<crate::fs::FsPath>>>,
+    /// Debounce epoch for scheduled engine rebuilds: every refresh bumps it,
+    /// and a scheduled rebuild only runs if its captured epoch is still
+    /// current after the debounce delay.
+    rebuild_epoch: std::sync::atomic::AtomicU64,
 }
 
 #[derive(Clone)]
@@ -85,7 +89,12 @@ pub trait LspClientSenderTrait {
 
 enum ProjectRefreshMode {
     Full,
-    InMemoryChangesOnly,
+    /// Re-apply open-editor buffers. When `changed` is set, only that file is
+    /// re-applied (a didChange touches exactly one document); `None` re-applies
+    /// every open buffer.
+    InMemoryChangesOnly {
+        changed: Option<vfs::VfsPath>,
+    },
     Only(Vec<vfs::VfsPath>),
 }
 
@@ -138,6 +147,7 @@ impl BexMulitProject {
             last_published_files: std::sync::Arc::new(std::sync::Mutex::new(
                 std::collections::HashSet::new(),
             )),
+            rebuild_epoch: std::sync::atomic::AtomicU64::new(0),
         });
         projects.insert(crate::fs::FsPath::from_vfs(&root_path), project.clone());
         Ok(project)
@@ -455,7 +465,7 @@ impl BexMulitProject {
         use crate::bex_lsp::notification::BexLspNotification;
         let mode_label = match &refresh_mode {
             ProjectRefreshMode::Full => "Full",
-            ProjectRefreshMode::InMemoryChangesOnly => "InMemoryChangesOnly",
+            ProjectRefreshMode::InMemoryChangesOnly { .. } => "InMemoryChangesOnly",
             ProjectRefreshMode::Only(_) => "Only",
         };
         tracing::debug!(
@@ -495,20 +505,32 @@ impl BexMulitProject {
 
                 let project = &project.project;
 
-                tracing::debug!("  update_all_sources...");
-                project.update_all_sources(&sources);
-                tracing::debug!("  update_all_sources done");
+                tracing::debug!("  apply_all_sources...");
+                project.apply_all_sources(&sources);
+                tracing::debug!("  apply_all_sources done");
             }
-            ProjectRefreshMode::InMemoryChangesOnly => {
+            ProjectRefreshMode::InMemoryChangesOnly { changed } => {
                 let in_memory_changes = project.in_memory_changes.lock().unwrap();
-                let sources = in_memory_changes
-                    .iter()
-                    .map(|(path, source)| (path.clone(), source.clone()))
-                    .collect();
+                // A didChange names the one document that changed; re-applying
+                // every open buffer would dirty their whole query chains.
+                let sources: HashMap<_, _> = match &changed {
+                    Some(path) => {
+                        let key = crate::fs::FsPath::from_vfs(path);
+                        in_memory_changes
+                            .get(&key)
+                            .map(|source| (key, source.clone()))
+                            .into_iter()
+                            .collect()
+                    }
+                    None => in_memory_changes
+                        .iter()
+                        .map(|(path, source)| (path.clone(), source.clone()))
+                        .collect(),
+                };
                 drop(in_memory_changes);
 
                 let project = &project.project;
-                project.update_some_sources(&sources);
+                project.apply_some_sources(&sources);
             }
             ProjectRefreshMode::Only(paths) => {
                 // TODO: make this smarter and only read that the required files, instead of reading all files
@@ -541,9 +563,17 @@ impl BexMulitProject {
                     .collect();
 
                 let project = &project.project;
-                project.update_some_sources(&sources);
+                project.apply_some_sources(&sources);
             }
         }
+
+        // Diagnostics are computed straight from the database below; the
+        // heavy tail (bytecode + engine + test collection) is debounced onto
+        // a background task on native so fast typing costs one rebuild, not
+        // one per keystroke. WASM has no timer/blocking facilities wired
+        // here, so it keeps the synchronous rebuild.
+        #[cfg(target_arch = "wasm32")]
+        let _ = project.project.update_bex();
 
         tracing::debug!("  computing diagnostics...");
         let diagnostics = project.project.diagnostics_by_file(self.position_encoding);
@@ -591,7 +621,53 @@ impl BexMulitProject {
             self.request_collect_tests_impl(project_root.as_str());
         }
 
+        #[cfg(not(target_arch = "wasm32"))]
+        self.schedule_engine_rebuild(project_root, project);
+
         tracing::debug!("refresh_project done");
+    }
+
+    /// Debounced engine rebuild: bytecode generation, `BexEngine::new` (which
+    /// executes `$init`), and test collection are the heavy tail of a refresh.
+    /// Running them per keystroke burned CPU and heap on engines that were
+    /// discarded milliseconds later, so they run on a background task after
+    /// the project has been quiet for the debounce window.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn schedule_engine_rebuild(
+        &self,
+        project_root: &vfs::VfsPath,
+        project: std::sync::Arc<LiveProject>,
+    ) {
+        use std::sync::atomic::Ordering;
+        const ENGINE_REBUILD_DEBOUNCE: std::time::Duration = std::time::Duration::from_millis(300);
+
+        let epoch = project.rebuild_epoch.fetch_add(1, Ordering::SeqCst) + 1;
+        let this = self.clone();
+        let project_root = project_root.clone();
+        self.spawner.spawn(async move {
+            tokio::time::sleep(ENGINE_REBUILD_DEBOUNCE).await;
+            if project.rebuild_epoch.load(Ordering::SeqCst) != epoch {
+                // A newer refresh superseded this one; its own rebuild is scheduled.
+                return;
+            }
+            let rebuild_project = project.clone();
+            let rebuilt =
+                tokio::task::spawn_blocking(move || rebuild_project.project.update_bex().is_ok())
+                    .await
+                    .unwrap_or(false);
+            if !rebuilt || project.rebuild_epoch.load(Ordering::SeqCst) != epoch {
+                return;
+            }
+            // Re-announce the project now that the engine is current, and
+            // collect tests against it (mirrors the synchronous tail that ran
+            // per keystroke before debouncing).
+            let diagnostics = project.project.diagnostics_by_file(this.position_encoding);
+            let flat_diags = Self::flatten_diagnostics(&diagnostics);
+            this.send_update_project(&project_root, &project, flat_diags);
+            if project.project.is_bex_current() {
+                this.request_collect_tests_impl(project_root.as_str());
+            }
+        });
     }
 
     fn flatten_diagnostics(
@@ -1250,7 +1326,12 @@ impl super::BexLsp for BexMulitProject {
         in_memory_changes.insert(crate::fs::FsPath::from_vfs(&source_path), content);
         drop(in_memory_changes);
 
-        self.refresh_project(&project_root, ProjectRefreshMode::InMemoryChangesOnly);
+        self.refresh_project(
+            &project_root,
+            ProjectRefreshMode::InMemoryChangesOnly {
+                changed: Some(source_path),
+            },
+        );
         Ok(())
     }
 

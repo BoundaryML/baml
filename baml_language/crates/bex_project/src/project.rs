@@ -111,6 +111,21 @@ impl BexProject {
         &self,
         sources: &std::collections::HashMap<crate::fs::FsPath, String>,
     ) {
+        self.apply_all_sources(sources);
+
+        // We don't care about the result here.
+        // If someone cares, they should get the diagnostics from the diagnostics_by_file method.
+        let _ = self.update_bex();
+    }
+
+    /// Apply a full source set to the database (removing sources not present)
+    /// WITHOUT rebuilding the engine. The engine is marked outdated; callers
+    /// schedule [`Self::update_bex`] separately (the LSP debounces it off the
+    /// keystroke path).
+    pub(crate) fn apply_all_sources(
+        &self,
+        sources: &std::collections::HashMap<crate::fs::FsPath, String>,
+    ) {
         let mut db = self.db.lock().unwrap();
         let mut existing_paths: std::collections::HashSet<_> =
             db.non_builtin_file_paths().collect();
@@ -122,14 +137,11 @@ impl BexProject {
             db.remove_file(&path);
         }
         drop(db);
-
-        // We don't care about the result here.
-        // If someone cares, they should get the diagnostics from the diagnostics_by_file method.
-        let _ = self.update_bex();
+        self.set_bex_outdated();
     }
 
-    /// Update some sources in the project (but doesn't remove any sources)
-    pub(crate) fn update_some_sources(
+    /// Like [`Self::apply_all_sources`], but never removes sources.
+    pub(crate) fn apply_some_sources(
         &self,
         sources: &std::collections::HashMap<crate::fs::FsPath, String>,
     ) {
@@ -138,8 +150,7 @@ impl BexProject {
             db.add_or_update_file(path.as_path(), source);
         }
         drop(db);
-
-        let _ = self.update_bex();
+        self.set_bex_outdated();
     }
 
     pub(crate) fn take(self) -> Result<std::sync::Arc<BexEngine>, RuntimeError> {
@@ -247,7 +258,7 @@ impl BexProject {
         state.registry = None;
     }
 
-    fn update_bex(&self) -> Result<(), RuntimeError> {
+    pub(crate) fn update_bex(&self) -> Result<(), RuntimeError> {
         self.set_bex_outdated();
 
         // Skip bytecode generation if there are any diagnostic errors.
