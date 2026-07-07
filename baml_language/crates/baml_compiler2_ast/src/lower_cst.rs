@@ -434,6 +434,8 @@ fn lower_function(
     let attributes = lower_attributes_from_node(node);
     let docstring = crate::docstring::extract_docstring(node);
     let is_tagged_template_tag = crate::docstring::has_baml_marker(node, "tagged_string");
+    let llm_companion_suffix =
+        crate::docstring::baml_marker_arg(node, "llm_companion").map(|s| Name::new(&s));
 
     Some(FunctionDef {
         name,
@@ -449,6 +451,7 @@ fn lower_function(
         attributes,
         docstring,
         is_tagged_template_tag,
+        llm_companion_suffix,
         span: node.span_range(),
         name_span,
     })
@@ -1451,6 +1454,7 @@ fn lower_interface(
         associated_types,
         required_methods,
         default_methods,
+        is_llm_capability: crate::docstring::has_baml_marker(node, "llm_capability"),
         attributes: lower_attributes_from_node(node),
         docstring: crate::docstring::extract_docstring(node),
         span: node.span_range(),
@@ -2058,6 +2062,7 @@ fn synthesize_init_test_function(
         attributes: vec![],
         docstring: None,
         is_tagged_template_tag: false,
+        llm_companion_suffix: None,
         span,
         name_span: span,
     }
@@ -2098,6 +2103,7 @@ fn synthesize_register_call(
                 attributes: vec![],
                 docstring: None,
                 is_tagged_template_tag: false,
+                llm_companion_suffix: None,
                 span,
                 name_span: span,
             };
@@ -2181,6 +2187,7 @@ fn synthesize_register_call(
                 attributes: vec![],
                 docstring: None,
                 is_tagged_template_tag: false,
+                llm_companion_suffix: None,
                 span,
                 name_span: span,
             };
@@ -2883,6 +2890,7 @@ fn synthesize_client_new_companion(
         attributes: vec![],
         docstring: None,
         is_tagged_template_tag: false,
+        llm_companion_suffix: None,
         span,
         name_span: name_token.text_range(),
     }

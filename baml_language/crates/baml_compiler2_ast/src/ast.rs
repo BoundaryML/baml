@@ -1484,6 +1484,15 @@ pub struct FunctionDef {
     /// tags (a tag name immediately followed by a backtick literal), and
     /// their first parameter must be `body: (...) -> TaggedString`.
     pub is_tagged_template_tag: bool,
+    /// `Some(suffix)` when this fn is preceded by a
+    /// `//baml:llm_companion(<suffix>)` marker comment: it is the capability
+    /// *driver* that the generated `Foo$<suffix>` companion of every LLM
+    /// function delegates to. Signature convention (validated semantically,
+    /// not here): `fn<T>(client: Provider, prompt: PromptAst, …extra) -> R`,
+    /// generic arity 1 (`T` = the LLM fn's return type) or 2 (`<TPartial, T>`
+    /// with `TPartial` stream-expanded). See
+    /// `_plan/llm-desugar-capabilities-plan.md` §1.2.
+    pub llm_companion_suffix: Option<Name>,
     pub span: TextRange,
     pub name_span: TextRange,
 }
@@ -1640,6 +1649,11 @@ pub struct InterfaceDef {
     pub required_methods: Vec<MethodSigDef>,
     /// Default methods (with body). Implementing classes inherit unless they override.
     pub default_methods: Vec<FunctionDef>,
+    /// True when this interface is preceded by a `//baml:llm_capability`
+    /// marker comment, registering it as an LLM capability (it must
+    /// transitively `requires baml.ai.Provider`; validated semantically).
+    /// See `_plan/llm-desugar-capabilities-plan.md` §1.2.
+    pub is_llm_capability: bool,
     pub attributes: Vec<RawAttribute>,
     pub docstring: Option<std::string::String>,
     pub span: TextRange,

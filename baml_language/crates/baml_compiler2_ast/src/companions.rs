@@ -122,6 +122,7 @@ pub fn llm_parse(parent: &FunctionDef, type_args: Vec<TypeExpr>) -> Option<Funct
         attributes: vec![],
         docstring: parent.docstring.clone(),
         is_tagged_template_tag: parent.is_tagged_template_tag,
+        llm_companion_suffix: None,
         span: parent.span,
         name_span: parent.name_span,
     })
@@ -184,6 +185,7 @@ fn make_llm_companion(
         attributes: vec![],
         docstring: parent.docstring.clone(),
         is_tagged_template_tag: parent.is_tagged_template_tag,
+        llm_companion_suffix: None,
         span: parent.span,
         name_span: parent.name_span,
     }
