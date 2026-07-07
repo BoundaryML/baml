@@ -1,0 +1,20 @@
+{
+  "name": "voice-agent-server",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "text": "tsx src/cli.ts"
+  },
+  "dependencies": {
+    "@boundaryml/baml-core-node": "0.12.2-nightly.20260624.a",
+    "convex": "^1.42.1",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24",
+    "@types/ws": "^8",
+    "tsx": "^4.23.0",
+    "typescript": "^5.9.0"
+  }
+}

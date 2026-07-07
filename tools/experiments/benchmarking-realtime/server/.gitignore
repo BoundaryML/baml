@@ -1,0 +1,4 @@
+node_modules/
+.env
+.api-budget.json
+*.log

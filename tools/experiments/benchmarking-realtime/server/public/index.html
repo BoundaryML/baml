@@ -1,0 +1,523 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Testing tool calling for gpt realtime: baml vs native</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --ink: #1a1612; --body: #2b2520; --muted: #6f6a63; --soft: #8a8580;
+    --rule: #e7e2d6; --accent: #6d28d9; --accent-soft: #a78bfa; --amber: #b45309;
+    --paper: #fdfbf5; --card: #fffdf7; --card-head: #f6f1e4; --border: #d8cfbd;
+    --tan: #d9d2c0;
+    --gutter: clamp(1.2rem, 5vw, 4.5rem);
+  }
+  body {
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size: 16.5px; line-height: 1.68; color: var(--body); background: var(--paper);
+    padding-bottom: 5rem;
+  }
+  .mono, code, pre { font-family: ui-monospace, "SF Mono", "Geist Mono", Menlo, monospace; }
+  code { padding: 0.08em 0.32em; font-size: 0.9em; background: rgba(26,22,18,0.055); border-radius: 4px; }
+
+  .section { max-width: min(800px, calc(100vw - 2 * var(--gutter))); margin: 0 auto; padding: 2.2rem 0 0.6rem; }
+  .breakout {
+    --bw: min(1080px, calc(100vw - 2 * var(--gutter)));
+    width: var(--bw); margin-left: calc(50% - var(--bw) / 2); margin-top: 1.2rem; margin-bottom: 1.2rem;
+  }
+
+  .eyebrow { margin: 3.2rem 0 0.55rem; font-size: 11px; font-weight: 500; color: var(--accent); text-transform: uppercase; letter-spacing: 0.18em; }
+  h1 { margin: 0.4rem 0 1.4rem; font-size: clamp(30px, 4.4vw, 46px); font-weight: 680; line-height: 1.1; color: var(--ink); letter-spacing: -0.02em; }
+  h1 img.sheep { display: inline-block; height: 0.92em; width: auto; margin-right: 0.18em; vertical-align: -0.08em; }
+  h2 { margin: 2.2rem 0 1rem; font-size: clamp(24px, 3vw, 32px); font-weight: 650; line-height: 1.18; color: var(--ink); letter-spacing: -0.015em; }
+  h3 { margin: 1.6rem 0 0.6rem; font-size: 19px; font-weight: 620; color: var(--ink); }
+  p { margin: 0 0 1rem; }
+  .dim { font-size: 14.5px; color: var(--muted); }
+
+  /* ---- CTA row ---- */
+  .cta-row { display: flex; flex-wrap: wrap; gap: 0.9rem; align-items: center; margin: 0.2rem 0 0.4rem; }
+  .cta {
+    display: inline-flex; gap: 0.5rem; align-items: center; padding: 0.7rem 1.3rem;
+    font: inherit; font-size: 15px; font-weight: 550; color: var(--ink); cursor: pointer;
+    background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+    transition: border-color 140ms ease, background-color 140ms ease, transform 140ms ease;
+  }
+  .cta:hover { border-color: var(--accent); transform: translateY(-1px); }
+  .cta--primary { color: #fff; background: var(--accent); border-color: var(--accent); }
+  .cta--primary:hover { background: #5b21b6; border-color: #5b21b6; }
+  .cta:disabled { color: var(--soft); background: var(--card-head); border-color: var(--rule); cursor: default; transform: none; }
+  .cta.rec { color: #fff; background: #dc2626; border-color: #dc2626; }
+  #textinput {
+    flex: 1; min-width: 220px; font: inherit; font-size: 15px; padding: 0.68rem 1rem;
+    color: var(--ink); background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+  }
+  #textinput:focus { outline: none; border-color: var(--accent); }
+  .budget { font-family: ui-monospace, monospace; font-size: 11px; color: var(--soft); text-transform: uppercase; letter-spacing: 0.1em; margin-top: 0.5rem; }
+
+  /* ---- try-these pills ---- */
+  .pills { display: flex; flex-wrap: wrap; gap: 0.45rem; margin: 0.8rem 0 0.2rem; }
+  .pill {
+    padding: 0.32rem 0.75rem; font: inherit; font-size: 12.5px; color: var(--muted); cursor: pointer;
+    background: var(--card); border: 1px solid var(--rule); border-radius: 8px;
+    transition: border-color 120ms ease, color 120ms ease;
+  }
+  .pill:hover { color: var(--ink); border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+
+  /* ---- arena pair ---- */
+  .pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.1rem; align-items: start; }
+  @media (max-width: 880px) { .pair { grid-template-columns: minmax(0, 1fr); } }
+  .pane-label { margin: 0 0 0.5rem; font-family: ui-monospace, monospace; font-size: 11px; color: var(--soft); text-transform: uppercase; letter-spacing: 0.12em; }
+  .pane-label--baml { color: var(--accent); }
+
+  .frame { overflow: hidden; background: var(--card); border: 1px solid var(--border); border-radius: 10px; transition: box-shadow 200ms ease, border-color 200ms ease; }
+  .frame.live { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(109, 40, 217, 0.16); }
+  .frame-head {
+    display: flex; gap: 0.5rem; align-items: center; padding: 7px 12px;
+    font-family: ui-monospace, monospace; font-size: 12px; color: var(--muted);
+    background: var(--card-head); border-bottom: 1px solid var(--rule);
+    white-space: nowrap; overflow: hidden;
+  }
+  .frame-head .dots { display: flex; gap: 4px; flex: none; }
+  .frame-head .dots i { width: 9px; height: 9px; background: #d9d2c0; border-radius: 50%; }
+  .frame-head--baml { background: color-mix(in srgb, var(--accent) 14%, var(--card-head)); border-bottom: 2px solid var(--accent); }
+  .frame-head--baml .name { font-weight: 600; color: var(--accent); }
+  .frame-head--baml img { width: 18px; height: 18px; object-fit: contain; flex: none; }
+  .frame-head .spacer { margin-left: auto; font-size: 10.5px; letter-spacing: 0.06em; overflow: hidden; text-overflow: ellipsis; }
+
+  .replybox { min-height: 62px; padding: 0.75rem 0.95rem; font-size: 14px; line-height: 1.55; border-bottom: 1px dashed var(--rule); white-space: pre-wrap; }
+  .replybox .status { font-family: ui-monospace, monospace; font-size: 11px; color: var(--soft); text-transform: uppercase; letter-spacing: 0.1em; }
+  .cards { display: flex; flex-direction: column; gap: 0.7rem; max-height: 460px; padding: 0.8rem 0.95rem 1rem; overflow-y: auto; }
+
+  .card { overflow: hidden; border: 1px solid var(--rule); border-radius: 8px; font-size: 12.5px; }
+  .card-head {
+    display: flex; justify-content: space-between; gap: 0.6rem; padding: 4px 10px;
+    font-family: ui-monospace, monospace; font-size: 11px; letter-spacing: 0.04em;
+    color: var(--muted); background: var(--card-head); border-bottom: 1px solid var(--rule);
+  }
+  .card-head .tool { font-weight: 600; color: var(--accent); }
+  .card-head .ms { color: var(--soft); }
+  .card pre { padding: 6px 10px; overflow-x: auto; font-size: 11.5px; line-height: 1.6; color: var(--body); background: var(--card); }
+  .card .say { padding: 6px 10px; font-size: 12.5px; font-style: italic; color: var(--ink); border-top: 1px solid var(--rule); background: var(--paper); }
+  .card--err .card-head { color: #b91c1c; background: rgba(220, 38, 38, 0.07); }
+  .card--err .card-head .tool { color: #b91c1c; }
+  .card--timer .card-head .tool, .card--calendar .card-head .tool { color: var(--amber); }
+
+  /* ---- code frames (setup section) ---- */
+  .codeframe { overflow: hidden; background: var(--card); border: 1px solid var(--border); border-radius: 10px; margin: 1rem 0 1.4rem; }
+  .codeframe pre { padding: 0.8rem 1rem; overflow-x: auto; font-size: 12.5px; line-height: 1.7; color: var(--body); }
+  .codeframe .cmt { color: var(--soft); }
+  .codeframe .kw { color: var(--accent); }
+  .codeframe .str { color: var(--amber); }
+
+  /* ---- benchmark ---- */
+  .chart { display: flex; flex-direction: column; gap: 0.3rem; max-width: 640px; margin: 1.4rem 0 1rem; }
+  .chart-cap { margin: 0 0 0.55rem; font-family: ui-monospace, monospace; font-size: 11px; color: var(--soft); text-transform: uppercase; letter-spacing: 0.12em; }
+  .chart-row { display: grid; grid-template-columns: 10.5rem minmax(0, 1fr); gap: 0.8rem; align-items: center; padding: 5px 0; }
+  .chart-name { font-size: 12.5px; color: var(--body); }
+  .chart-track { display: flex; gap: 0.6rem; align-items: center; min-width: 0; }
+  .chart-fill { position: relative; flex: none; width: 0; height: 24px; overflow: hidden; background: var(--tan); border-radius: 4px; animation: grow 0.6s ease-out forwards; }
+  .chart-fill--baml { background: var(--accent); }
+  .chart-fill img { position: absolute; top: 50%; right: 5px; height: 17px; width: auto; filter: brightness(0) invert(1); transform: translateY(-50%); }
+  @keyframes grow { to { width: var(--w); } }
+  .chart-val { font-size: 12.5px; color: var(--ink); white-space: nowrap; opacity: 0; animation: fadein 0.3s 0.45s ease forwards; }
+  .chart-val small { color: var(--muted); }
+  @keyframes fadein { to { opacity: 1; } }
+
+  table { width: 100%; margin: 0.4rem 0 1.6rem; font-size: 14px; border-collapse: collapse; }
+  th { padding: 0.35rem 0.9rem 0.35rem 0; font-family: ui-monospace, monospace; font-size: 11px; font-weight: 500; color: var(--soft); text-align: left; text-transform: uppercase; letter-spacing: 0.1em; border-bottom: 1px solid var(--rule); }
+  td { padding: 0.45rem 0.9rem 0.45rem 0; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  td.case { font-family: ui-monospace, monospace; font-size: 12.5px; white-space: nowrap; }
+  td .ms { font-family: ui-monospace, monospace; font-size: 11px; color: var(--soft); }
+  td.pass { color: var(--body); }
+  td.pass::before { content: "✓ "; font-weight: 650; color: var(--accent); }
+  td.fail { color: #b91c1c; }
+  td.fail::before { content: "✗ "; font-weight: 650; }
+  td .detail { font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+  .suite-cap { margin: 1.8rem 0 0.2rem; font-family: ui-monospace, monospace; font-size: 11px; color: var(--soft); text-transform: uppercase; letter-spacing: 0.14em; }
+</style>
+</head>
+<body>
+
+<section class="section">
+  <p class="eyebrow">agent tries realtime</p>
+  <h1><img class="sheep" src="https://new.boundaryml.com/baml-sheep.png" alt="" onerror="this.remove()"/>Testing tool calling for gpt&nbsp;realtime: baml vs native</h1>
+
+  <div class="cta-row">
+    <button class="cta cta--primary" id="start">Start sessions <span>→</span></button>
+    <button class="cta" id="mic" disabled>🎤 talk</button>
+    <input id="textinput" placeholder="…or type an utterance" disabled />
+    <button class="cta" id="send" disabled>send</button>
+  </div>
+  <div class="budget" id="budget">budget: …</div>
+
+  <p class="dim" style="margin-top:1.2rem">Try the adversarial ones:</p>
+  <div class="pills" id="chips"></div>
+</section>
+
+<div class="breakout">
+  <div class="pair">
+    <section>
+      <p class="pane-label pane-label--baml">gpt-realtime-2.1 + baml thinker · speaks aloud</p>
+      <div class="frame" id="frame-baml">
+        <div class="frame-head frame-head--baml">
+          <img src="https://new.boundaryml.com/bamllogopurple.svg" alt="" onerror="this.remove()"/>
+          <span class="name">thinker.baml</span>
+          <span class="spacer">delegate() → typed union</span>
+        </div>
+        <div class="replybox" id="reply-baml"><span class="status">idle: start sessions</span></div>
+        <div class="cards" id="cards-baml"></div>
+      </div>
+    </section>
+    <section>
+      <p class="pane-label">gpt-realtime-2.1 native · text</p>
+      <div class="frame" id="frame-native">
+        <div class="frame-head">
+          <span class="dots"><i></i><i></i><i></i></span>
+          <span class="name">session.tools</span>
+          <span class="spacer">5 json-schema functions</span>
+        </div>
+        <div class="replybox" id="reply-native"><span class="status">idle: start sessions</span></div>
+        <div class="cards" id="cards-native"></div>
+      </div>
+    </section>
+  </div>
+</div>
+
+<section class="section">
+  <h2>The setup</h2>
+  <p>Both panes are real <code>gpt-realtime-2.1</code> sessions over the Realtime WebSocket
+  API, fed the same microphone audio and the same text. They differ in exactly one place:
+  who turns your words into a tool call.</p>
+
+  <p><strong>The native lane</strong> is the setup most realtime apps ship. Three tools are
+  declared as JSON schemas in <code>session.update</code>, and the voice model itself picks
+  a tool and extracts the arguments while it talks.</p>
+
+  <p><strong>The baml lane</strong> gives the voice model a single tool,
+  <code>delegate(request)</code>, and prompts it to pass the utterance through verbatim;
+  spelled-out letters, fractions and all. A BAML function then does the tool selection as
+  one structured decode into a typed union, and the tools themselves run in the BAML VM:</p>
+
+  <div class="codeframe"><pre><span class="cmt">// brain/baml_src/thinker.baml</span>
+<span class="kw">function</span> DecideAction(history: <span class="kw">string</span>, request: <span class="kw">string</span>, now_iso: <span class="kw">string</span>)
+    -> GetWeather | LookupOrder | SetTimer | CreateCalendarEvent | SendMessage | Answer {
+  client Thinker  <span class="cmt">// claude-sonnet-4-6</span>
+  prompt #<span class="str">"
+    Order IDs are precise alphanumerics: normalize to uppercase, keep dashes.
+    Timer durations must be converted to whole seconds.
+    Calendar events: resolve relative dates against {{ now_iso }}.
+    {{ history }} {{ request }} {{ ctx.output_format }}
+  "</span>#
+}
+
+<span class="kw">function</span> handle(history: <span class="kw">string</span>, request: <span class="kw">string</span>, now_iso: <span class="kw">string</span>) -> ToolOutcome {
+  execute(DecideAction(history, request, now_iso))  <span class="cmt">// runs the chosen tool in the VM</span>
+}</pre></div>
+
+  <p>The executors are shared (the native lane's function calls are routed into the same
+  BAML functions), so any difference between the panes is purely tool selection and
+  argument extraction. Everything lives in two small projects:</p>
+
+  <div class="codeframe"><pre>brain/baml_src/
+  types.baml     <span class="cmt">the action union (weather, orders, timer, calendar, message, answer)</span>
+  thinker.baml   <span class="cmt">the Thinker client + DecideAction + handle()</span>
+  tools.baml     <span class="cmt">executors: open-meteo weather, order DB, timers, calendar, contacts</span>
+  tests.baml     <span class="cmt">deterministic executor tests (baml test)</span>
+
+server/src/
+  relay.ts       <span class="cmt">one WebSocket per lane; delegate vs native session config</span>
+  compare.ts     <span class="cmt">the benchmark harness below (three suites)</span>
+  index.ts       <span class="cmt">this page + the dual-session bridge</span></pre></div>
+
+  <p class="dim">Every turn from both lanes, in the arena and in the benchmark harness, is
+  logged to a Convex database (<code>experiments/turns</code>) with the raw args, executor
+  payload, and latency.</p>
+</section>
+
+<section class="section">
+  <h2>Past run data</h2>
+  <div class="chart" id="chart"></div>
+  <div id="tables"></div>
+</section>
+
+<script>
+const $ = (id) => document.getElementById(id);
+
+const TRY_THESE = [
+  "check on my order a one b two dash c three d four",
+  "check order queue five are six dash ess seven tea eight",
+  "track order zed nine why eight hyphen ex seven double-u six",
+  "set a timer for half of half an hour",
+  "timer for a fifth of an hour minus one minute",
+  "give me a timer as long as one half of a soccer match",
+  "what's the weather where the golden gate bridge is",
+  "weather in the city with the eiffel tower, and i don't mean the vegas one",
+  "how's the big apple looking today",
+  "set a five minute tea timer and also tell me the weather in tokyo",
+  "put a roadmap review with alice and dr chen on my calendar next tuesday at three thirty, make it an hour",
+  "text mom that i'll be there in twenty minutes, it's urgent",
+  "schedule lunch with bob a week from friday at noon and shoot him a message saying it's booked",
+];
+
+for (const t of TRY_THESE) {
+  const b = document.createElement("button");
+  b.className = "pill";
+  b.textContent = t;
+  b.onclick = () => { $("textinput").value = t; sendText(); };
+  $("chips").appendChild(b);
+}
+
+// ---- websocket ----
+const ws = new WebSocket(`ws://${location.host}/ws`);
+let started = false;
+const replyEl = { baml: $("reply-baml"), native: $("reply-native") };
+const frameEl = { baml: $("frame-baml"), native: $("frame-native") };
+const cardsEl = { baml: $("cards-baml"), native: $("cards-native") };
+
+// ---- serialized reply rendering ----
+// Only one pane "responds" at a time: the first agent to produce text gets the
+// floor (its frame lights up); the other agent's text buffers and types out
+// once the first finishes.
+const replyBuf = { baml: "", native: "" };   // full text received so far, this turn
+const shown = { baml: 0, native: 0 };        // chars revealed
+const done = { baml: false, native: false }; // agent finished its turn
+let floor = null;                            // agent currently revealing
+let typerTimer = null;
+let lastVoiceReset = 0;
+
+function resetTurn() {
+  replyBuf.baml = replyBuf.native = "";
+  shown.baml = shown.native = 0;
+  done.baml = done.native = false;
+  floor = null;
+  clearInterval(typerTimer);
+  typerTimer = null;
+  frameEl.baml.classList.remove("live");
+  frameEl.native.classList.remove("live");
+  replyEl.baml.innerHTML = replyEl.native.innerHTML = '<span class="status">thinking…</span>';
+}
+
+function takeFloor(agent) {
+  floor = agent;
+  frameEl[agent].classList.add("live");
+  frameEl[agent === "baml" ? "native" : "baml"].classList.remove("live");
+  if (!typerTimer) typerTimer = setInterval(typeTick, 24);
+}
+
+function typeTick() {
+  if (!floor) return;
+  const a = floor;
+  if (shown[a] < replyBuf[a].length) {
+    shown[a] = Math.min(replyBuf[a].length, shown[a] + 3);
+    replyEl[a].textContent = replyBuf[a].slice(0, shown[a]);
+    return;
+  }
+  // caught up; if this agent is done, hand the floor over
+  if (done[a]) {
+    frameEl[a].classList.remove("live");
+    const other = a === "baml" ? "native" : "baml";
+    if (shown[other] < replyBuf[other].length || !done[other]) {
+      takeFloor(other);
+    } else {
+      floor = null;
+      clearInterval(typerTimer);
+      typerTimer = null;
+    }
+  }
+}
+
+ws.onmessage = (e) => {
+  const msg = JSON.parse(e.data);
+  const a = msg.agent;
+  switch (msg.type) {
+    case "status":
+      if (msg.data === "ready") replyEl[a].innerHTML = '<span class="status">ready: say or type something</span>';
+      break;
+    case "speech_stopped":
+      // a voice turn is starting; reset once (both lanes fire within ~a second)
+      if (Date.now() - lastVoiceReset > 2500) {
+        lastVoiceReset = Date.now();
+        resetTurn();
+      }
+      break;
+    case "audio":
+      playChunk(msg.data);
+      break;
+    case "text_delta":
+      if (replyBuf[a] === "" && shown[a] === 0) done[a] = false;
+      replyBuf[a] += msg.data;
+      if (!floor) takeFloor(a);
+      break;
+    case "text_done":
+      // keep buffering across the filler-then-tool-result turns: just mark done
+      // for now; a later delta for the same agent re-opens it.
+      done[a] = true;
+      replyBuf[a] += "\n";
+      if (!floor) takeFloor(a);
+      break;
+    case "tool": {
+      const card = document.createElement("div");
+      const kind = msg.outcome.tool === "error" ? " card--err" : ["timer", "calendar"].includes(msg.outcome.tool) ? " card--timer" : "";
+      card.className = "card" + kind;
+      const argsStr = JSON.stringify(msg.args);
+      const dataStr = msg.outcome.data ? JSON.stringify(msg.outcome.data) : "null";
+      card.innerHTML =
+        `<div class="card-head"><span>${escapeHtml(msg.name)} → <span class="tool">${escapeHtml(msg.outcome.tool)}</span></span><span class="ms">${msg.ms != null ? msg.ms + " ms" : ""}</span></div>` +
+        `<pre>args ${escapeHtml(argsStr)}\ndata ${escapeHtml(dataStr)}</pre>` +
+        `<div class="say">“${escapeHtml(msg.outcome.say)}”</div>`;
+      cardsEl[a].prepend(card);
+      done[a] = false; // a tool call means another reply turn is coming
+      const d = msg.outcome.data;
+      if (a === "baml" && msg.outcome.tool === "timer" && d && d.seconds) startTimer(d.seconds, d.label);
+      break;
+    }
+    case "budget":
+      $("budget").textContent = `budget: ${msg.remaining}/${msg.limit} realtime sessions left`;
+      break;
+    case "error": {
+      const card = document.createElement("div");
+      card.className = "card card--err";
+      card.innerHTML = `<div class="card-head"><span class="tool">error</span></div><pre>${escapeHtml(String(msg.data))}</pre>`;
+      (cardsEl[a] ?? cardsEl.baml).prepend(card);
+      break;
+    }
+  }
+};
+
+function escapeHtml(s) {
+  return s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+}
+
+// ---- start / input ----
+$("start").onclick = () => {
+  if (started) return;
+  started = true;
+  ws.send(JSON.stringify({ type: "start" }));
+  $("start").disabled = true;
+  $("start").innerHTML = "sessions live";
+  $("mic").disabled = false;
+  $("textinput").disabled = false;
+  $("send").disabled = false;
+  $("textinput").focus();
+};
+
+function sendText() {
+  const text = $("textinput").value.trim();
+  if (!text || !started) return;
+  resetTurn();
+  ws.send(JSON.stringify({ type: "text", data: text }));
+  $("textinput").value = "";
+}
+$("send").onclick = sendText;
+$("textinput").addEventListener("keydown", (e) => { if (e.key === "Enter") sendText(); });
+
+// ---- audio out (baml pane speaks) ----
+const playCtx = new AudioContext({ sampleRate: 24000 });
+let playhead = 0;
+function playChunk(b64) {
+  const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+  const pcm = new Int16Array(bytes.buffer);
+  const buf = playCtx.createBuffer(1, pcm.length, 24000);
+  const ch = buf.getChannelData(0);
+  for (let i = 0; i < pcm.length; i++) ch[i] = pcm[i] / 32768;
+  const src = playCtx.createBufferSource();
+  src.buffer = buf;
+  src.connect(playCtx.destination);
+  const at = Math.max(playCtx.currentTime, playhead);
+  src.start(at);
+  playhead = at + buf.duration;
+}
+
+// ---- timers ----
+function startTimer(seconds, label) {
+  const el = document.createElement("div");
+  el.className = "card card--timer";
+  cardsEl.baml.prepend(el);
+  let left = seconds;
+  const name = label ? ` · ${label}` : "";
+  const tick = () => {
+    if (left <= 0) {
+      el.innerHTML = `<div class="card-head"><span class="tool">⏰ timer done${escapeHtml(name)}</span></div>`;
+      playCtx.resume();
+      const osc = playCtx.createOscillator();
+      osc.connect(playCtx.destination);
+      osc.start(); osc.stop(playCtx.currentTime + 0.4);
+      return;
+    }
+    const m = Math.floor(left / 60), s = left % 60;
+    el.innerHTML = `<div class="card-head"><span class="tool">⏳ timer${escapeHtml(name)}</span><span class="ms">${m}:${String(s).padStart(2, "0")}</span></div>`;
+    left--;
+    setTimeout(tick, 1000);
+  };
+  tick();
+}
+
+// ---- mic ----
+let capturing = false;
+$("mic").onclick = async () => {
+  if (capturing) return;
+  capturing = true;
+  $("mic").textContent = "● live: just talk";
+  $("mic").classList.add("rec");
+  await playCtx.resume();
+  const media = await navigator.mediaDevices.getUserMedia({
+    audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true },
+  });
+  const ctx = new AudioContext({ sampleRate: 24000 });
+  const code = `class P extends AudioWorkletProcessor{process(i){const c=i[0][0];if(c){const p=new Int16Array(c.length);for(let j=0;j<c.length;j++){const s=Math.max(-1,Math.min(1,c[j]));p[j]=s<0?s*32768:s*32767}this.port.postMessage(p.buffer,[p.buffer])}return true}}registerProcessor("p",P);`;
+  await ctx.audioWorklet.addModule(URL.createObjectURL(new Blob([code], { type: "application/javascript" })));
+  const src = ctx.createMediaStreamSource(media);
+  const node = new AudioWorkletNode(ctx, "p");
+  let spoke = false;
+  node.port.onmessage = (e) => {
+    if (ws.readyState !== WebSocket.OPEN || !started) return;
+    if (!spoke) { spoke = true; }
+    const bytes = new Uint8Array(e.data);
+    let bin = "";
+    for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+    ws.send(JSON.stringify({ type: "audio", data: btoa(bin) }));
+  };
+  src.connect(node);
+};
+
+// ---- past run data ----
+fetch("/budget").then((r) => r.json()).then((b) => {
+  $("budget").textContent = `budget: ${b.remaining}/${b.limit} realtime sessions left`;
+});
+fetch("/results").then((r) => r.json()).then((suites) => {
+  let nPass = 0, nAll = 0, bPass = 0, bAll = 0, nMs = [], bMs = [];
+  const tables = $("tables");
+  for (const [suite, data] of Object.entries(suites)) {
+    if (!data.native || !data.delegate) continue;
+    const cap = document.createElement("p");
+    cap.className = "suite-cap";
+    cap.textContent = `${suite} suite`;
+    tables.appendChild(cap);
+    const table = document.createElement("table");
+    table.insertAdjacentHTML("beforeend",
+      "<tr><th style='width:11.5rem'>case</th><th>native (json-schema)</th><th>baml thinker</th></tr>");
+    for (let i = 0; i < data.native.length; i++) {
+      const n = data.native[i], d = data.delegate[i];
+      nAll++; bAll++; nMs.push(n.ms); bMs.push(d.ms);
+      if (n.pass) nPass++;
+      if (d.pass) bPass++;
+      const cell = (r) =>
+        `<td class="${r.pass ? "pass" : "fail"}"><span class="detail">${escapeHtml(r.detail.slice(0, 110))}</span> <span class="ms">${r.ms}ms</span></td>`;
+      table.insertAdjacentHTML("beforeend", `<tr><td class="case">${escapeHtml(n.id)}</td>${cell(n)}${cell(d)}</tr>`);
+    }
+    tables.appendChild(table);
+  }
+  const avg = (xs) => Math.round(xs.reduce((a, x) => a + x, 0) / (xs.length || 1) / 100) / 10;
+  const chart = $("chart");
+  chart.insertAdjacentHTML("beforeend", '<p class="chart-cap">tool-call accuracy, live gpt-realtime-2.1 sessions</p>');
+  const row = (name, frac, label, baml) =>
+    `<div class="chart-row"><span class="chart-name">${name}</span><span class="chart-track">` +
+    `<span class="chart-fill${baml ? " chart-fill--baml" : ""}" style="--w:${Math.round(frac * 100)}%">${baml ? '<img src="https://new.boundaryml.com/baml-sheep.png" onerror="this.remove()"/>' : ""}</span>` +
+    `<span class="chart-val">${label}</span></span></div>`;
+  chart.insertAdjacentHTML("beforeend", row("baml thinker", bAll ? bPass / bAll : 0, `${bPass}/${bAll} <small>· ${avg(bMs)}s/turn</small>`, true));
+  chart.insertAdjacentHTML("beforeend", row("native tools", nAll ? nPass / nAll : 0, `${nPass}/${nAll} <small>· ${avg(nMs)}s/turn</small>`, false));
+});
+</script>
+</body>
+</html>
