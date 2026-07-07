@@ -18,7 +18,7 @@
 //! and bridge_cffi → sys_native is the one-way dependency direction.
 
 use bex_project::{BexExternalValue, HostReleaseFn, host_release_dispatch};
-use bridge_ctypes::{HANDLE_TABLE, baml_core::cffi::InboundValue, inbound_to_external};
+use bridge_ctypes::{HANDLE_TABLE, baml_bridge::cffi::InboundValue, inbound_to_external};
 use prost::Message;
 use sys_native::host_dispatch;
 /// Signature for invocation requests from BAML to the host.
@@ -305,7 +305,7 @@ mod tests {
     /// pin the wire-side decode + delivery.
     #[tokio::test]
     async fn complete_host_call_throw_payload_delivers_external_value() {
-        use bridge_ctypes::baml_core::cffi::{
+        use bridge_ctypes::baml_bridge::cffi::{
             BamlTyClass, InboundClassValue, InboundMapEntry, InboundValue,
             inbound_map_entry::Key as InboundMapKey, inbound_value::Value as InboundValueVariant,
         };

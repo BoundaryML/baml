@@ -2,7 +2,7 @@
  * THIS FILE IS AUTO-GENERATED — DO NOT EDIT BY HAND.
  *
  * Source: baml_language/crates/bridge_nodejs/typescript_src/
- * Proto:  baml_language/crates/bridge_ctypes/types/baml_core/cffi/v1/*.proto
+ * Proto:  baml_language/crates/bridge_ctypes/types/baml_bridge/cffi/v1/*.proto
  * Build:  cd baml_language/crates/bridge_nodejs && pnpm build:debug
  */
 // prettier-ignore
@@ -86,8 +86,8 @@ function requireNative() {
         loadErrors.push(e)
       }
       try {
-        const binding = require('@boundaryml/baml-core-node-android-arm64')
-        const bindingPackageVersion = require('@boundaryml/baml-core-node-android-arm64/package.json').version
+        const binding = require('@boundaryml/baml-bridge-android-arm64')
+        const bindingPackageVersion = require('@boundaryml/baml-bridge-android-arm64/package.json').version
         if (bindingPackageVersion !== '0.13.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
           throw new Error(`Native binding package version mismatch, expected 0.13.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
         }
@@ -102,8 +102,8 @@ function requireNative() {
         loadErrors.push(e)
       }
       try {
-        const binding = require('@boundaryml/baml-core-node-android-arm-eabi')
-        const bindingPackageVersion = require('@boundaryml/baml-core-node-android-arm-eabi/package.json').version
+        const binding = require('@boundaryml/baml-bridge-android-arm-eabi')
+        const bindingPackageVersion = require('@boundaryml/baml-bridge-android-arm-eabi/package.json').version
         if (bindingPackageVersion !== '0.13.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
           throw new Error(`Native binding package version mismatch, expected 0.13.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
         }
@@ -123,8 +123,8 @@ function requireNative() {
         loadErrors.push(e)
       }
       try {
-        const binding = require('@boundaryml/baml-core-node-win32-x64-gnu')
-        const bindingPackageVersion = require('@boundaryml/baml-core-node-win32-x64-gnu/package.json').version
+        const binding = require('@boundaryml/baml-bridge-win32-x64-gnu')
+        const bindingPackageVersion = require('@boundaryml/baml-bridge-win32-x64-gnu/package.json').version
         if (bindingPackageVersion !== '0.13.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
           throw new Error(`Native binding package version mismatch, expected 0.13.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
         }
@@ -139,8 +139,8 @@ function requireNative() {
         loadErrors.push(e)
       }
       try {
-        const binding = require('@boundaryml/baml-core-node-win32-x64-msvc')
-        const bindingPackageVersion = require('@boundaryml/baml-core-node-win32-x64-msvc/package.json').version
+        const binding = require('@boundaryml/baml-bridge-win32-x64-msvc')
+        const bindingPackageVersion = require('@boundaryml/baml-bridge-win32-x64-msvc/package.json').version
         if (bindingPackageVersion !== '0.13.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
           throw new Error(`Native binding package version mismatch, expected 0.13.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
         }
@@ -156,8 +156,8 @@ function requireNative() {
         loadErrors.push(e)
       }
       try {
-        const binding = require('@boundaryml/baml-core-node-win32-ia32-msvc')
-        const bindingPackageVersion = require('@boundaryml/baml-core-node-win32-ia32-msvc/package.json').version
+        const binding = require('@boundaryml/baml-bridge-win32-ia32-msvc')
+        const bindingPackageVersion = require('@boundaryml/baml-bridge-win32-ia32-msvc/package.json').version
         if (bindingPackageVersion !== '0.13.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
           throw new Error(`Native binding package version mismatch, expected 0.13.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
         }
@@ -172,8 +172,8 @@ function requireNative() {
         loadErrors.push(e)
       }
       try {
-        const binding = require('@boundaryml/baml-core-node-win32-arm64-msvc')
-        const bindingPackageVersion = require('@boundaryml/baml-core-node-win32-arm64-msvc/package.json').version
+        const binding = require('@boundaryml/baml-bridge-win32-arm64-msvc')
+        const bindingPackageVersion = require('@boundaryml/baml-bridge-win32-arm64-msvc/package.json').version
         if (bindingPackageVersion !== '0.13.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
           throw new Error(`Native binding package version mismatch, expected 0.13.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
         }
@@ -191,8 +191,8 @@ function requireNative() {
       loadErrors.push(e)
     }
     try {
-      const binding = require('@boundaryml/baml-core-node-darwin-universal')
-      const bindingPackageVersion = require('@boundaryml/baml-core-node-darwin-universal/package.json').version
+      const binding = require('@boundaryml/baml-bridge-darwin-universal')
+      const bindingPackageVersion = require('@boundaryml/baml-bridge-darwin-universal/package.json').version
       if (bindingPackageVersion !== '0.13.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
         throw new Error(`Native binding package version mismatch, expected 0.13.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
       }
@@ -207,8 +207,8 @@ function requireNative() {
         loadErrors.push(e)
       }
       try {
-        const binding = require('@boundaryml/baml-core-node-darwin-x64')
-        const bindingPackageVersion = require('@boundaryml/baml-core-node-darwin-x64/package.json').version
+        const binding = require('@boundaryml/baml-bridge-darwin-x64')
+        const bindingPackageVersion = require('@boundaryml/baml-bridge-darwin-x64/package.json').version
         if (bindingPackageVersion !== '0.13.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
           throw new Error(`Native binding package version mismatch, expected 0.13.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
         }
@@ -223,8 +223,8 @@ function requireNative() {
         loadErrors.push(e)
       }
       try {
-        const binding = require('@boundaryml/baml-core-node-darwin-arm64')
-        const bindingPackageVersion = require('@boundaryml/baml-core-node-darwin-arm64/package.json').version
+        const binding = require('@boundaryml/baml-bridge-darwin-arm64')
+        const bindingPackageVersion = require('@boundaryml/baml-bridge-darwin-arm64/package.json').version
         if (bindingPackageVersion !== '0.13.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
           throw new Error(`Native binding package version mismatch, expected 0.13.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
         }
@@ -243,8 +243,8 @@ function requireNative() {
         loadErrors.push(e)
       }
       try {
-        const binding = require('@boundaryml/baml-core-node-freebsd-x64')
-        const bindingPackageVersion = require('@boundaryml/baml-core-node-freebsd-x64/package.json').version
+        const binding = require('@boundaryml/baml-bridge-freebsd-x64')
+        const bindingPackageVersion = require('@boundaryml/baml-bridge-freebsd-x64/package.json').version
         if (bindingPackageVersion !== '0.13.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
           throw new Error(`Native binding package version mismatch, expected 0.13.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
         }
@@ -259,8 +259,8 @@ function requireNative() {
         loadErrors.push(e)
       }
       try {
-        const binding = require('@boundaryml/baml-core-node-freebsd-arm64')
-        const bindingPackageVersion = require('@boundaryml/baml-core-node-freebsd-arm64/package.json').version
+        const binding = require('@boundaryml/baml-bridge-freebsd-arm64')
+        const bindingPackageVersion = require('@boundaryml/baml-bridge-freebsd-arm64/package.json').version
         if (bindingPackageVersion !== '0.13.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
           throw new Error(`Native binding package version mismatch, expected 0.13.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
         }
@@ -280,8 +280,8 @@ function requireNative() {
           loadErrors.push(e)
         }
         try {
-          const binding = require('@boundaryml/baml-core-node-linux-x64-musl')
-          const bindingPackageVersion = require('@boundaryml/baml-core-node-linux-x64-musl/package.json').version
+          const binding = require('@boundaryml/baml-bridge-linux-x64-musl')
+          const bindingPackageVersion = require('@boundaryml/baml-bridge-linux-x64-musl/package.json').version
           if (bindingPackageVersion !== '0.13.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
             throw new Error(`Native binding package version mismatch, expected 0.13.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
           }
@@ -296,8 +296,8 @@ function requireNative() {
           loadErrors.push(e)
         }
         try {
-          const binding = require('@boundaryml/baml-core-node-linux-x64-gnu')
-          const bindingPackageVersion = require('@boundaryml/baml-core-node-linux-x64-gnu/package.json').version
+          const binding = require('@boundaryml/baml-bridge-linux-x64-gnu')
+          const bindingPackageVersion = require('@boundaryml/baml-bridge-linux-x64-gnu/package.json').version
           if (bindingPackageVersion !== '0.13.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
             throw new Error(`Native binding package version mismatch, expected 0.13.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
           }
@@ -314,8 +314,8 @@ function requireNative() {
           loadErrors.push(e)
         }
         try {
-          const binding = require('@boundaryml/baml-core-node-linux-arm64-musl')
-          const bindingPackageVersion = require('@boundaryml/baml-core-node-linux-arm64-musl/package.json').version
+          const binding = require('@boundaryml/baml-bridge-linux-arm64-musl')
+          const bindingPackageVersion = require('@boundaryml/baml-bridge-linux-arm64-musl/package.json').version
           if (bindingPackageVersion !== '0.13.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
             throw new Error(`Native binding package version mismatch, expected 0.13.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
           }
@@ -330,8 +330,8 @@ function requireNative() {
           loadErrors.push(e)
         }
         try {
-          const binding = require('@boundaryml/baml-core-node-linux-arm64-gnu')
-          const bindingPackageVersion = require('@boundaryml/baml-core-node-linux-arm64-gnu/package.json').version
+          const binding = require('@boundaryml/baml-bridge-linux-arm64-gnu')
+          const bindingPackageVersion = require('@boundaryml/baml-bridge-linux-arm64-gnu/package.json').version
           if (bindingPackageVersion !== '0.13.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
             throw new Error(`Native binding package version mismatch, expected 0.13.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
           }
@@ -348,8 +348,8 @@ function requireNative() {
           loadErrors.push(e)
         }
         try {
-          const binding = require('@boundaryml/baml-core-node-linux-arm-musleabihf')
-          const bindingPackageVersion = require('@boundaryml/baml-core-node-linux-arm-musleabihf/package.json').version
+          const binding = require('@boundaryml/baml-bridge-linux-arm-musleabihf')
+          const bindingPackageVersion = require('@boundaryml/baml-bridge-linux-arm-musleabihf/package.json').version
           if (bindingPackageVersion !== '0.13.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
             throw new Error(`Native binding package version mismatch, expected 0.13.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
           }
@@ -364,8 +364,8 @@ function requireNative() {
           loadErrors.push(e)
         }
         try {
-          const binding = require('@boundaryml/baml-core-node-linux-arm-gnueabihf')
-          const bindingPackageVersion = require('@boundaryml/baml-core-node-linux-arm-gnueabihf/package.json').version
+          const binding = require('@boundaryml/baml-bridge-linux-arm-gnueabihf')
+          const bindingPackageVersion = require('@boundaryml/baml-bridge-linux-arm-gnueabihf/package.json').version
           if (bindingPackageVersion !== '0.13.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
             throw new Error(`Native binding package version mismatch, expected 0.13.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
           }
@@ -382,8 +382,8 @@ function requireNative() {
           loadErrors.push(e)
         }
         try {
-          const binding = require('@boundaryml/baml-core-node-linux-loong64-musl')
-          const bindingPackageVersion = require('@boundaryml/baml-core-node-linux-loong64-musl/package.json').version
+          const binding = require('@boundaryml/baml-bridge-linux-loong64-musl')
+          const bindingPackageVersion = require('@boundaryml/baml-bridge-linux-loong64-musl/package.json').version
           if (bindingPackageVersion !== '0.13.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
             throw new Error(`Native binding package version mismatch, expected 0.13.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
           }
@@ -398,8 +398,8 @@ function requireNative() {
           loadErrors.push(e)
         }
         try {
-          const binding = require('@boundaryml/baml-core-node-linux-loong64-gnu')
-          const bindingPackageVersion = require('@boundaryml/baml-core-node-linux-loong64-gnu/package.json').version
+          const binding = require('@boundaryml/baml-bridge-linux-loong64-gnu')
+          const bindingPackageVersion = require('@boundaryml/baml-bridge-linux-loong64-gnu/package.json').version
           if (bindingPackageVersion !== '0.13.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
             throw new Error(`Native binding package version mismatch, expected 0.13.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
           }
@@ -416,8 +416,8 @@ function requireNative() {
           loadErrors.push(e)
         }
         try {
-          const binding = require('@boundaryml/baml-core-node-linux-riscv64-musl')
-          const bindingPackageVersion = require('@boundaryml/baml-core-node-linux-riscv64-musl/package.json').version
+          const binding = require('@boundaryml/baml-bridge-linux-riscv64-musl')
+          const bindingPackageVersion = require('@boundaryml/baml-bridge-linux-riscv64-musl/package.json').version
           if (bindingPackageVersion !== '0.13.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
             throw new Error(`Native binding package version mismatch, expected 0.13.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
           }
@@ -432,8 +432,8 @@ function requireNative() {
           loadErrors.push(e)
         }
         try {
-          const binding = require('@boundaryml/baml-core-node-linux-riscv64-gnu')
-          const bindingPackageVersion = require('@boundaryml/baml-core-node-linux-riscv64-gnu/package.json').version
+          const binding = require('@boundaryml/baml-bridge-linux-riscv64-gnu')
+          const bindingPackageVersion = require('@boundaryml/baml-bridge-linux-riscv64-gnu/package.json').version
           if (bindingPackageVersion !== '0.13.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
             throw new Error(`Native binding package version mismatch, expected 0.13.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
           }
@@ -449,8 +449,8 @@ function requireNative() {
         loadErrors.push(e)
       }
       try {
-        const binding = require('@boundaryml/baml-core-node-linux-ppc64-gnu')
-        const bindingPackageVersion = require('@boundaryml/baml-core-node-linux-ppc64-gnu/package.json').version
+        const binding = require('@boundaryml/baml-bridge-linux-ppc64-gnu')
+        const bindingPackageVersion = require('@boundaryml/baml-bridge-linux-ppc64-gnu/package.json').version
         if (bindingPackageVersion !== '0.13.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
           throw new Error(`Native binding package version mismatch, expected 0.13.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
         }
@@ -465,8 +465,8 @@ function requireNative() {
         loadErrors.push(e)
       }
       try {
-        const binding = require('@boundaryml/baml-core-node-linux-s390x-gnu')
-        const bindingPackageVersion = require('@boundaryml/baml-core-node-linux-s390x-gnu/package.json').version
+        const binding = require('@boundaryml/baml-bridge-linux-s390x-gnu')
+        const bindingPackageVersion = require('@boundaryml/baml-bridge-linux-s390x-gnu/package.json').version
         if (bindingPackageVersion !== '0.13.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
           throw new Error(`Native binding package version mismatch, expected 0.13.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
         }
@@ -485,8 +485,8 @@ function requireNative() {
         loadErrors.push(e)
       }
       try {
-        const binding = require('@boundaryml/baml-core-node-openharmony-arm64')
-        const bindingPackageVersion = require('@boundaryml/baml-core-node-openharmony-arm64/package.json').version
+        const binding = require('@boundaryml/baml-bridge-openharmony-arm64')
+        const bindingPackageVersion = require('@boundaryml/baml-bridge-openharmony-arm64/package.json').version
         if (bindingPackageVersion !== '0.13.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
           throw new Error(`Native binding package version mismatch, expected 0.13.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
         }
@@ -501,8 +501,8 @@ function requireNative() {
         loadErrors.push(e)
       }
       try {
-        const binding = require('@boundaryml/baml-core-node-openharmony-x64')
-        const bindingPackageVersion = require('@boundaryml/baml-core-node-openharmony-x64/package.json').version
+        const binding = require('@boundaryml/baml-bridge-openharmony-x64')
+        const bindingPackageVersion = require('@boundaryml/baml-bridge-openharmony-x64/package.json').version
         if (bindingPackageVersion !== '0.13.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
           throw new Error(`Native binding package version mismatch, expected 0.13.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
         }
@@ -517,8 +517,8 @@ function requireNative() {
         loadErrors.push(e)
       }
       try {
-        const binding = require('@boundaryml/baml-core-node-openharmony-arm')
-        const bindingPackageVersion = require('@boundaryml/baml-core-node-openharmony-arm/package.json').version
+        const binding = require('@boundaryml/baml-bridge-openharmony-arm')
+        const bindingPackageVersion = require('@boundaryml/baml-bridge-openharmony-arm/package.json').version
         if (bindingPackageVersion !== '0.13.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
           throw new Error(`Native binding package version mismatch, expected 0.13.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
         }
@@ -559,7 +559,7 @@ if (!nativeBinding || forceWasi) {
   }
   if (!nativeBinding || forceWasi) {
     try {
-      wasiBinding = require('@boundaryml/baml-core-node-wasm32-wasi')
+      wasiBinding = require('@boundaryml/baml-bridge-wasm32-wasi')
       nativeBinding = wasiBinding
     } catch (err) {
       if (forceWasi) {

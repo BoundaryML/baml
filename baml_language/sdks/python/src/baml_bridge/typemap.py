@@ -16,19 +16,19 @@ from .errors import BamlError
 _LazyEntry = Tuple[str, str]  # (module_path, attr_name)
 
 # Hardcoded reverse-map seeds for the five stdlib re-exports whose
-# Python class identity sits at baml_core.baml_py.BamlImage etc.
+# Python class identity sits at baml_bridge.baml_py.BamlImage etc.
 # instead of at baml_sdk.baml.media.Image. The forward emit path
 # (sdkgen_python_pydantic2's `media_reexport_rust_name`) keeps its own
 # hardcoded match arms; the duplication is small enough that a
 # shared source of truth isn't worth a cross-crate constant.
 _STDLIB_REVERSE_OVERRIDES: Dict[Tuple[str, str], str] = {
-    ("baml_core.baml_py", "BamlImage"): "baml.media.Image",
-    ("baml_core.baml_py", "BamlAudio"): "baml.media.Audio",
-    ("baml_core.baml_py", "BamlVideo"): "baml.media.Video",
-    ("baml_core.baml_py", "BamlPdf"):   "baml.media.Pdf",
-    # `BamlStream` is re-exported from `baml_core` but defined in
-    # `baml_core._stream`; `__module__` reflects the defining module.
-    ("baml_core._stream", "BamlStream"): "baml.llm.Stream",
+    ("baml_bridge.baml_py", "BamlImage"): "baml.media.Image",
+    ("baml_bridge.baml_py", "BamlAudio"): "baml.media.Audio",
+    ("baml_bridge.baml_py", "BamlVideo"): "baml.media.Video",
+    ("baml_bridge.baml_py", "BamlPdf"):   "baml.media.Pdf",
+    # `BamlStream` is re-exported from `baml_bridge` but defined in
+    # `baml_bridge._stream`; `__module__` reflects the defining module.
+    ("baml_bridge._stream", "BamlStream"): "baml.llm.Stream",
 }
 
 
@@ -53,7 +53,7 @@ class BamlTypeMap:
         self._enum_cache:  Dict[str, Type] = {}
         self._alias_cache: Dict[str, object] = {}
         # Seed with the stdlib identity overrides every typemap needs
-        # (BamlImage at baml_core.baml_py → "baml.media.Image", etc.).
+        # (BamlImage at baml_bridge.baml_py → "baml.media.Image", etc.).
         # Forward entries added by `from_lazy_entries` populate more
         # keys on top.
         self._reverse: Dict[Tuple[str, str], str] = dict(_STDLIB_REVERSE_OVERRIDES)

@@ -139,7 +139,7 @@ jobs:
           echo "--- npmrc (auth lines, token redacted) ---"
           npm config ls -l 2>/dev/null | grep -iE "registry|_authtoken|provenance|userconfig" | sed -E 's/(_authToken=).*/\1<redacted>/I' || true
           echo "==============================="
-          echo "Publishing @boundaryml/baml-core-node packages with dist-tag '$tag'"
+          echo "Publishing @boundaryml/baml-bridge packages with dist-tag '$tag'"
           # `npm publish --loglevel verbose` makes the OIDC keyless exchange visible
           # in the log (a request to the id-token endpoint vs. just sending a token).
           #

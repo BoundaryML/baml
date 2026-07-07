@@ -1,7 +1,7 @@
 // wire_ty.ts — lower a host-supplied type token to a wire `Ty` (baml_type.proto).
 //
 // The Node analog of `python_type_to_wire_ty` / `_fill_wire_ty` in
-// sdks/python/src/baml_core/proto.py. Python recovers a generic instance's
+// sdks/python/src/baml_bridge/proto.py. Python recovers a generic instance's
 // concrete type args from Pydantic's runtime generic metadata and lowers
 // Python `type` objects (`int`, `str`, `Box[int]`, …) to a wire `Ty`. TypeScript
 // erases generics at runtime, so there is no metadata to recover and no `type`
@@ -13,10 +13,10 @@
 // `undefined` / `null` (an absent binding) lowers to the unknown/top type —
 // the engine treats it as a wildcard, matching Python's `_fill_wire_ty(None)`.
 
-import { baml_core } from './proto/baml_cffi.js';
+import { baml_bridge } from './proto/baml_cffi.js';
 import { getTypeMap } from './typemap.js';
 
-const TyPrimitiveKind = baml_core.cffi.v1.BamlTyPrimitiveKind;
+const TyPrimitiveKind = baml_bridge.cffi.v1.BamlTyPrimitiveKind;
 
 /**
  * The bottom type (BAML `never`). Pass as a `$types` binding to bind a TypeVar
@@ -76,7 +76,7 @@ const PRIMITIVE_KIND: Record<BamlPrimitiveToken, number> = {
  * unrecognized or absent token leaves the unknown/top type, which binds
  * nothing.
  */
-export function lowerTypeToWireTy(token: BamlType): baml_core.cffi.v1.IBamlTy {
+export function lowerTypeToWireTy(token: BamlType): baml_bridge.cffi.v1.IBamlTy {
     // Absent binding → unknown/top (matches Python's `_fill_wire_ty(None)`).
     if (token === null || token === undefined) {
         return { unknown: {} };
@@ -139,7 +139,7 @@ const TY_PRIMITIVE_TOKEN: Record<number, BamlPrimitiveToken> = {
  * wildcard.
  */
 export function outboundTyToBamlType(
-    ty: baml_core.cffi.v1.IBamlTy | null | undefined,
+    ty: baml_bridge.cffi.v1.IBamlTy | null | undefined,
 ): BamlType {
     if (!ty) return undefined;
     if (ty.primitive) {
@@ -171,7 +171,7 @@ export function outboundTyToBamlType(
  * concrete generic args. The FQN comes from the typemap reverse map; an
  * unmapped constructor lowers to unknown so it can't manufacture a bogus
  * class reference. */
-function classWireTy(ctor: BamlClassCtor, args: BamlType[]): baml_core.cffi.v1.IBamlTy {
+function classWireTy(ctor: BamlClassCtor, args: BamlType[]): baml_bridge.cffi.v1.IBamlTy {
     const fqn = getTypeMap().jsTypeToBamlType(ctor);
     if (!fqn) {
         return { unknown: {} };

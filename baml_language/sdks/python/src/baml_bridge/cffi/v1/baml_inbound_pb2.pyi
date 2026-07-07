@@ -1,5 +1,5 @@
-from baml_core.cffi.v1 import baml_handle_pb2 as _baml_handle_pb2
-from baml_core.cffi.v1 import baml_type_pb2 as _baml_type_pb2
+from baml_bridge.cffi.v1 import baml_handle_pb2 as _baml_handle_pb2
+from baml_bridge.cffi.v1 import baml_type_pb2 as _baml_type_pb2
 from google.protobuf.internal import containers as _containers
 from google.protobuf import descriptor as _descriptor
 from google.protobuf import message as _message

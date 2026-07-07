@@ -1,10 +1,10 @@
 // See crates/bridge_ctypes/README.md for the list of consumers and the
 // commands used to regenerate each language's proto client.
 syntax = "proto3";
-package baml_core.cffi.v1;
+package baml_bridge.cffi.v1;
 
-import "baml_core/cffi/v1/baml_handle.proto";
-import "baml_core/cffi/v1/baml_type.proto";
+import "baml_bridge/cffi/v1/baml_handle.proto";
+import "baml_bridge/cffi/v1/baml_type.proto";
 
 option go_package = "./cffi";
 
