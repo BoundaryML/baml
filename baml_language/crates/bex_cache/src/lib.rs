@@ -632,9 +632,26 @@ impl RemoteCache {
             .timeout(std::time::Duration::from_secs(30))
             .build()
             .ok()?;
+        let base_url = base_url.trim_end_matches('/').to_string();
+        let mut token = std::env::var("BAML_CACHE_REMOTE_TOKEN").ok();
+        // Never send a bearer token in cleartext: refuse to attach it unless
+        // the remote is https (loopback exempted for local proxies/tests).
+        let loopback = base_url.starts_with("http://localhost")
+            || base_url.starts_with("http://127.0.0.1")
+            || base_url.starts_with("http://[::1]");
+        if token.is_some() && !base_url.starts_with("https://") && !loopback {
+            #[allow(clippy::print_stderr)] // security misconfiguration warning
+            {
+                eprintln!(
+                    "warning: BAML_CACHE_REMOTE_TOKEN ignored — remote cache URL is not \
+                     https, refusing to send the token in cleartext"
+                );
+            }
+            token = None;
+        }
         Some(RemoteCache {
-            base_url: base_url.trim_end_matches('/').to_string(),
-            token: std::env::var("BAML_CACHE_REMOTE_TOKEN").ok(),
+            base_url,
+            token,
             client,
         })
     }
