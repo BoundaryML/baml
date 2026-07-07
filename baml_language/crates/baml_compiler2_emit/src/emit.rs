@@ -449,6 +449,23 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             .or_else(|| self.class_object_indices.get(tn.name().as_str()).copied())
     }
 
+    /// Enum-object index for an enum type name, mirroring
+    /// [`Self::class_object_index_for_type_name`]. Used by `is <Enum>` to test
+    /// enum identity (`ConstValue::Object`) rather than the shared `ENUM` tag,
+    /// which cannot distinguish two enum types (`Color` vs `Status`).
+    fn enum_object_index_for_type_name(&self, tn: &TypeName) -> Option<usize> {
+        let full_name = tn.render_dotted(false);
+        self.enum_object_indices
+            .get(&full_name)
+            .copied()
+            .or_else(|| {
+                self.enum_object_indices
+                    .get(tn.display_name().as_str())
+                    .copied()
+            })
+            .or_else(|| self.enum_object_indices.get(tn.name().as_str()).copied())
+    }
+
     /// Resolve the type of a MIR Place by walking from the root local through projections.
     fn resolve_place_type(&self, place: &Place) -> Option<RuntimeTy> {
         match place {
@@ -3307,6 +3324,23 @@ impl PullSink for StackifyCodegen<'_, '_> {
                         if let Some(class_obj_idx) = self.class_object_index_for_type_name(tn) {
                             let c = self.add_constant(ConstValue::Object(ObjectIndex::from_raw(
                                 class_obj_idx,
+                            )));
+                            let inst = self.emit(Instruction::IsType(c));
+                            self.set_operand(
+                                inst,
+                                OperandMeta::Const(tn.display_name().to_string()),
+                            );
+                        } else {
+                            emit_false(self);
+                        }
+                    } else if let RealizedTy::Enum(tn, _) = realized {
+                        // Enum-pointer identity: `is Color` tests the value's enum
+                        // object, so it discriminates `Color` from `Status` — the
+                        // shared `ENUM` type tag cannot. Falls back to constant-false
+                        // if the enum object is absent (e.g. an unreferenced enum).
+                        if let Some(enum_obj_idx) = self.enum_object_index_for_type_name(tn) {
+                            let c = self.add_constant(ConstValue::Object(ObjectIndex::from_raw(
+                                enum_obj_idx,
                             )));
                             let inst = self.emit(Instruction::IsType(c));
                             self.set_operand(

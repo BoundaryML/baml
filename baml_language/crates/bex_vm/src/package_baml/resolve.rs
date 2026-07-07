@@ -438,10 +438,11 @@ fn match_template(
                 ..
             } => {
                 params.len() == cparams.len()
-                    && params
-                        .iter()
-                        .zip(cparams)
-                        .all(|(p, cp)| p.mode == cp.mode && match_template(&p.ty, &cp.ty, bindings))
+                    && params.iter().zip(cparams).all(|(p, cp)| {
+                        p.name == cp.name
+                            && p.mode == cp.mode
+                            && match_template(&p.ty, &cp.ty, bindings)
+                    })
                     && match_template(ret, cret, bindings)
                     && match_template(throws, cthrows, bindings)
             }

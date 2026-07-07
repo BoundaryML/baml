@@ -7354,10 +7354,18 @@ impl BexVm {
                         }
                         _ => {
                             let expected = &function.bytecode.resolved_constants[const_idx];
-                            if let Some(class_ptr) = expected.as_object_ptr() {
+                            if let Some(expected_ptr) = expected.as_object_ptr() {
+                                // Class- or enum-pointer identity: `is Foo` checks
+                                // the instance's class object; `is Color` checks the
+                                // variant's enum object. Enum-type tests dispatch on
+                                // enum identity because the shared `ENUM` type tag
+                                // cannot tell `Color` from `Status`.
                                 match value.as_object_ptr() {
                                     Some(val_ptr) => match self.get_object(val_ptr) {
-                                        Object::Instance(instance) => instance.class == class_ptr,
+                                        Object::Instance(instance) => {
+                                            instance.class == expected_ptr
+                                        }
+                                        Object::Variant(variant) => variant.enm == expected_ptr,
                                         _ => false,
                                     },
                                     None => false,

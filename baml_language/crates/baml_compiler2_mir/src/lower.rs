@@ -1228,24 +1228,72 @@ fn wildcard_container_elements(template: TyTemplate) -> TyTemplate {
     }
 }
 
-/// Whether a coarse `LIST`/`MAP` type-tag test for the container arm `arm` is
-/// equivalent to the element-discriminating structural test, for values of the
-/// scrutinee's resolved static type `scrutinee`.
+/// A scrutinee member is *opaque* for a coarse-tag soundness proof when it could
+/// dynamically resolve to a container or class instantiation its static type
+/// does not reveal — a type alias (`json` keeps its `json[]`/`map` arms hidden
+/// behind an opaque leaf), a type variable, `unknown`, an interface (a container
+/// or class may implement it), an associated projection, or `void`. A coarse
+/// type-tag test can never be *proven* equivalent to the structural test against
+/// such a member, so a tag-sufficiency proof must fail closed on it and emit the
+/// element/arg-precise structural test instead.
 ///
-/// True when every same-shape (list or map) member of the scrutinee's flattened
-/// static type shares `arm`'s constructor identity — so no differently-typed
-/// container value can reach this arm for the coarse tag to conflate.
+/// Exhaustive on purpose: a new `RuntimeTy` variant must force a deliberate
+/// classification here rather than silently defaulting to "safe".
+fn member_is_opaque_for_tag_proof(m: &RuntimeTy) -> bool {
+    match m {
+        RuntimeTy::TypeAlias(..)
+        | RuntimeTy::TypeVar(..)
+        | RuntimeTy::BuiltinUnknown { .. }
+        | RuntimeTy::AssociatedTypeProjection { .. }
+        | RuntimeTy::Interface(..)
+        | RuntimeTy::Void { .. } => true,
+        // A union should have been flattened before this check; recurse
+        // defensively so a nested one can't smuggle an opaque member past it.
+        RuntimeTy::Union(members, _) => members.iter().any(member_is_opaque_for_tag_proof),
+        // Every concrete leaf carries a fixed runtime tag we can reason about.
+        RuntimeTy::Int { .. }
+        | RuntimeTy::Bigint { .. }
+        | RuntimeTy::Float { .. }
+        | RuntimeTy::String { .. }
+        | RuntimeTy::Bool { .. }
+        | RuntimeTy::Null { .. }
+        | RuntimeTy::Uint8Array { .. }
+        | RuntimeTy::Media(..)
+        | RuntimeTy::Class(..)
+        | RuntimeTy::Enum(..)
+        | RuntimeTy::EnumVariant(..)
+        | RuntimeTy::Literal(..)
+        | RuntimeTy::Function { .. }
+        | RuntimeTy::Future(..)
+        | RuntimeTy::List(..)
+        | RuntimeTy::Map { .. }
+        | RuntimeTy::RustType { .. }
+        | RuntimeTy::Type { .. }
+        | RuntimeTy::Resource { .. }
+        | RuntimeTy::PromptAst { .. }
+        | RuntimeTy::WatchAccessor(..)
+        | RuntimeTy::Never { .. } => false,
+    }
+}
+
+/// Whether a coarse `LIST`/`MAP` type-tag test for the container arm `arm` is a
+/// *provably sound* substitute for the element-discriminating structural test,
+/// for values of the scrutinee's resolved static type `scrutinee`.
 ///
-/// Invariance applies all the way to the top type: `unknown[]` is NOT "any
-/// list" — it denotes lists whose element type is `unknown` — so a top-typed
-/// element earns no shortcut and must be proven by scrutinee identity like any
-/// other. (The match-anything container position is the template `Wildcard`
-/// hole, produced by compiler erasure — never the `unknown` *type*.)
+/// Generic-argument positions are invariant (`TYPE_SYSTEM.md` "Variance"): `int[]`,
+/// `string[]`, and `json[]` are mutually unrelated types. So the coarse "any
+/// list" / "any map" tag is sound only when no value the scrutinee admits could
+/// carry that tag with a different element type than the arm. That holds when
+/// every same-shape (list/map) member of the scrutinee shares the arm's
+/// constructor identity, and every other member carries a tag that provably
+/// can't be the arm's — a different-shape container or a concrete non-container
+/// leaf.
 ///
-/// A recursive alias member (kept unexpanded by `convert`, e.g. `json`) is not
-/// list/map-shaped, so it contributes no same-shape member: a pure-`json`
-/// scrutinee is (correctly) tag-sufficient, since on it a coarse "any list"
-/// tag *is* the `json[]` test.
+/// We **fail closed**: an opaque member (see [`member_is_opaque_for_tag_proof`])
+/// could hide a container of a differing element type, so it blocks the proof
+/// and routes the arm through the structural matcher. In particular a `json`
+/// scrutinee (an opaque alias leaf) no longer makes an element-specific `int[]`
+/// arm "tag-sufficient" — that was fail-*open* covariance, matching any array.
 ///
 /// Returns `false` for a non-container `arm` (the caller only asks about one).
 fn container_arm_tag_sufficient(arm: &RuntimeTy, scrutinee: &RuntimeTy) -> bool {
@@ -1259,11 +1307,13 @@ fn container_arm_tag_sufficient(arm: &RuntimeTy, scrutinee: &RuntimeTy) -> bool 
     let mut members = Vec::new();
     flatten_runtime_union(scrutinee, &mut members);
     members.iter().all(|m| match m {
+        // Same-shape container: sound only for the arm's exact instantiation.
         RuntimeTy::List(..) if arm_is_list => ty_ctor_identity(m.as_ty()) == arm_id,
         RuntimeTy::Map { .. } if !arm_is_list => ty_ctor_identity(m.as_ty()) == arm_id,
-        // A different-shape container, or an alias / opaque leaf, cannot be
-        // confused with this arm's tag, so it does not block tag-sufficiency.
-        _ => true,
+        // Anything else is sound iff it cannot secretly be a differing-element
+        // container — i.e. iff it is not opaque. A different-shape container and
+        // every concrete leaf carry a tag that can't be the arm's, so they pass.
+        _ => !member_is_opaque_for_tag_proof(m),
     })
 }
 
@@ -1295,6 +1345,31 @@ fn switch_member_tag_sufficient(member: &RuntimeTy, scrutinee: Option<&RuntimeTy
         RuntimeTy::List(..) | RuntimeTy::Map { .. } => {
             scrutinee.is_some_and(|scrutinee| container_arm_tag_sufficient(member, scrutinee))
         }
+        // Every enum collapses onto the single shared `ENUM` type tag, so the
+        // jump table can key an enum-type arm only when no *other* enum type
+        // reaches this match — otherwise two enum arms dedup onto that one tag
+        // and the first swallows the rest. When several enum types coexist the
+        // arm falls to the precise chain, which dispatches on enum-pointer
+        // identity (`is Color` compares the value's enum object).
+        RuntimeTy::Enum(name, _) => {
+            let Some(scrutinee) = scrutinee else {
+                return false;
+            };
+            let mut flat = Vec::new();
+            flatten_runtime_union(scrutinee, &mut flat);
+            flat.iter().all(|m| match enum_type_name(m) {
+                // Another enum type shares this arm's `ENUM` tag → collision.
+                Some(m_name) => m_name == name,
+                // A concrete non-enum member carries a different runtime tag and
+                // can't collide, but an opaque member could dynamically be a
+                // *different* enum (also `ENUM`-tagged) — so it fails closed, like
+                // the container and class branches.
+                None => !member_is_opaque_for_tag_proof(m),
+            })
+        }
+        // A specific variant type (`Color.Red`) needs variant-level discrimination
+        // the shared `ENUM` tag can't express, so always take the precise chain.
+        RuntimeTy::EnumVariant(..) => false,
         RuntimeTy::Class(name, args, _) => {
             if args.is_empty() {
                 return true;
@@ -1313,15 +1388,21 @@ fn switch_member_tag_sufficient(member: &RuntimeTy, scrutinee: Option<&RuntimeTy
                 RuntimeTy::Class(..) => true,
                 // An opaque member may admit another instantiation of this
                 // class at runtime; the proof fails closed.
-                RuntimeTy::TypeAlias(..)
-                | RuntimeTy::BuiltinUnknown { .. }
-                | RuntimeTy::TypeVar(..)
-                | RuntimeTy::Interface(..)
-                | RuntimeTy::AssociatedTypeProjection { .. } => false,
-                _ => true,
+                _ => !member_is_opaque_for_tag_proof(m),
             })
         }
         _ => true,
+    }
+}
+
+/// The enum type name of an enum-shaped type. A bare enum (`Color`) and any of
+/// its variants (`Color.Red`) collapse onto the same shared `ENUM` type tag, so
+/// both count as "an enum of this type" for the tag-collision check in
+/// [`switch_member_tag_sufficient`].
+fn enum_type_name(ty: &RuntimeTy) -> Option<&TypeName> {
+    match ty {
+        RuntimeTy::Enum(name, _) | RuntimeTy::EnumVariant(name, _, _) => Some(name),
+        _ => None,
     }
 }
 
@@ -15083,15 +15164,13 @@ impl LoweringContext<'_> {
             RuntimeTy::Null { .. } => Some(baml_type::typetag::NULL),
             RuntimeTy::Float { .. } => Some(baml_type::typetag::FLOAT),
             RuntimeTy::Uint8Array { .. } => Some(baml_type::typetag::UINT8ARRAY),
-            // BUG: the single shared ENUM tag conflates *all* enum types (and
-            // all variants of one enum), so a TypeTag switch over e.g.
-            // `Color | Status | int | string` with `let c: Color` / `let s:
-            // Status` bind arms dedups the second enum arm away and every enum
-            // value jumps to the first — the same silent wrong-arm mechanism
-            // the container/class tag-sufficiency gate now catches. Enum arms
-            // need their own sufficiency criterion (same enum name for a bare
-            // enum arm; exact variant identity for a variant-typed bind arm)
-            // before they can be trusted on the switch path.
+            // The single shared ENUM tag conflates *all* enum types (and all
+            // variants of one enum). That's safe on the switch path only because
+            // `switch_member_tag_sufficient` bails an enum-type arm to the precise
+            // chain whenever a second enum type shares this tag, so `Color |
+            // Status` no longer dedups the second arm away; the chain tests
+            // enum-pointer identity (`is Color`). A single-enum-type switch keeps
+            // the fast tag.
             RuntimeTy::Enum(..) | RuntimeTy::EnumVariant(..) => Some(baml_type::typetag::ENUM),
             RuntimeTy::List(..) => Some(baml_type::typetag::LIST),
             RuntimeTy::Map { .. } => Some(baml_type::typetag::MAP),

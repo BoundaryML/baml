@@ -12519,712 +12519,822 @@ function baml.toml.Table.parse(s: string) -> baml.toml.Table {
 
 function baml.toml.item_from_json(json: baml.json.json) -> baml.toml.Item {
     load_var json
-    type_tag
-    jump_table [L3, L3, L3, L2, L3, _, L0, L1], default L5
+    is_type bool
+    pop_jump_if_false L0
+    jump L11
 
-  L0: list
+  L0:
+    load_var json
+    is_type int
+    pop_jump_if_false L1
+    jump L10
+
+  L1:
+    load_var json
+    is_type float
+    pop_jump_if_false L2
+    jump L9
+
+  L2:
+    load_var json
+    is_type string
+    pop_jump_if_false L3
+    jump L8
+
+  L3:
+    load_var json
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L4
+    jump L7
+
+  L4:
+    load_var json
+    is_type map<string, baml.json.json>
+    pop_jump_if_false L5
+    jump L6
+
+  L5:
+    load_var json
+    is_type baml.json.json[]
+    pop_jump_if_false L13
     load_type baml.json.json
     load_type baml.toml.Item
     load_type baml.json.JsonDecodeError
     load_var json
     load_global baml.toml.item_from_json
     call baml.Array.map
-    jump L4
+    jump L12
 
-  L1: map
+  L6:
     load_var json
     call baml.toml.Table.baml.FromJson.from_json
-    jump L4
+    jump L12
 
-  L2: null
+  L7:
     load_const "TOML does not support null"
     load_const ""
     init_instance baml.json.JsonDecodeError .message, .path
     throw
 
-  L3: float
+  L8:
+    load_var json
+    jump L12
+
+  L9:
+    load_var json
+    jump L12
+
+  L10:
+    load_var json
+    jump L12
+
+  L11:
     load_var json
 
-  L4:
+  L12:
     return
 
-  L5:
+  L13:
     unreachable
 }
 
 function baml.toml.item_to_json(item: baml.toml.Item) -> baml.json.json {
     load_var item
-    type_tag
-    dense_tag [bool, int, float, string, Table, list, ZonedDateTime, PlainDateTime, PlainDate, PlainTime]
-    jump_table [L116, L116, L116, L116, L93, L92, L69, L46, L23, L0], default L118
+    is_type bool
+    pop_jump_if_false L0
+    jump L127
 
-  L0: PlainTime
+  L0:
     load_var item
-    is_type baml.toml.Table
+    is_type int
     pop_jump_if_false L1
-    jump L22
+    jump L126
 
   L1:
     load_var item
-    is_type baml.toml.Table
+    is_type float
     pop_jump_if_false L2
-    jump L21
+    jump L125
 
   L2:
     load_var item
-    is_type baml.time.PlainDateTime
+    is_type string
     pop_jump_if_false L3
-    jump L20
+    jump L124
 
   L3:
     load_var item
-    is_type baml.time.PlainDateTime
+    is_type baml.toml.Table
     pop_jump_if_false L4
-    jump L19
+    jump L101
 
   L4:
     load_var item
-    is_type baml.time.PlainTime
+    is_type baml.toml.Item[]
     pop_jump_if_false L5
-    jump L18
+    jump L100
 
   L5:
     load_var item
-    is_type baml.time.PlainTime
+    is_type baml.time.ZonedDateTime
     pop_jump_if_false L6
-    jump L17
+    jump L77
 
   L6:
     load_var item
-    is_type baml.time.ZonedDateTime
+    is_type baml.time.PlainDateTime
     pop_jump_if_false L7
-    jump L16
+    jump L54
 
   L7:
     load_var item
-    is_type baml.time.ZonedDateTime
+    is_type baml.time.PlainDate
     pop_jump_if_false L8
-    jump L15
+    jump L31
 
   L8:
     load_var item
-    is_type baml.time.Instant
+    is_type baml.time.PlainTime
+    pop_jump_if_false L129
+    load_var item
+    is_type baml.toml.Table
     pop_jump_if_false L9
-    jump L14
+    jump L30
 
   L9:
     load_var item
-    is_type baml.time.Instant
+    is_type baml.toml.Table
     pop_jump_if_false L10
-    jump L13
+    jump L29
 
   L10:
     load_var item
-    is_type baml.time.PlainDate
+    is_type baml.time.PlainDateTime
     pop_jump_if_false L11
-    jump L12
+    jump L28
 
   L11:
     load_var item
-    is_type baml.time.PlainDate
-    pop_jump_if_false L118
-    load_var item
-    call baml.ToJson.to_json
-    jump L117
+    is_type baml.time.PlainDateTime
+    pop_jump_if_false L12
+    jump L27
 
   L12:
     load_var item
-    call baml.time.PlainDate.baml.ToJson.to_json
-    jump L117
+    is_type baml.time.PlainTime
+    pop_jump_if_false L13
+    jump L26
 
   L13:
     load_var item
-    call baml.ToJson.to_json
-    jump L117
+    is_type baml.time.PlainTime
+    pop_jump_if_false L14
+    jump L25
 
   L14:
     load_var item
-    call baml.time.Instant.baml.ToJson.to_json
-    jump L117
+    is_type baml.time.ZonedDateTime
+    pop_jump_if_false L15
+    jump L24
 
   L15:
     load_var item
-    call baml.ToJson.to_json
-    jump L117
+    is_type baml.time.ZonedDateTime
+    pop_jump_if_false L16
+    jump L23
 
   L16:
     load_var item
-    call baml.time.ZonedDateTime.baml.ToJson.to_json
-    jump L117
+    is_type baml.time.Instant
+    pop_jump_if_false L17
+    jump L22
 
   L17:
     load_var item
-    call baml.ToJson.to_json
-    jump L117
+    is_type baml.time.Instant
+    pop_jump_if_false L18
+    jump L21
 
   L18:
     load_var item
-    call baml.time.PlainTime.baml.ToJson.to_json
-    jump L117
+    is_type baml.time.PlainDate
+    pop_jump_if_false L19
+    jump L20
 
   L19:
     load_var item
+    is_type baml.time.PlainDate
+    pop_jump_if_false L129
+    load_var item
     call baml.ToJson.to_json
-    jump L117
+    jump L128
 
   L20:
     load_var item
-    call baml.time.PlainDateTime.baml.ToJson.to_json
-    jump L117
+    call baml.time.PlainDate.baml.ToJson.to_json
+    jump L128
 
   L21:
     load_var item
     call baml.ToJson.to_json
-    jump L117
+    jump L128
 
   L22:
     load_var item
-    call baml.toml.Table.baml.ToJson.to_json
-    jump L117
+    call baml.time.Instant.baml.ToJson.to_json
+    jump L128
 
-  L23: PlainDate
+  L23:
     load_var item
-    is_type baml.toml.Table
-    pop_jump_if_false L24
-    jump L45
+    call baml.ToJson.to_json
+    jump L128
 
   L24:
     load_var item
-    is_type baml.toml.Table
-    pop_jump_if_false L25
-    jump L44
+    call baml.time.ZonedDateTime.baml.ToJson.to_json
+    jump L128
 
   L25:
     load_var item
-    is_type baml.time.PlainDateTime
-    pop_jump_if_false L26
-    jump L43
+    call baml.ToJson.to_json
+    jump L128
 
   L26:
     load_var item
-    is_type baml.time.PlainDateTime
-    pop_jump_if_false L27
-    jump L42
+    call baml.time.PlainTime.baml.ToJson.to_json
+    jump L128
 
   L27:
     load_var item
-    is_type baml.time.PlainTime
-    pop_jump_if_false L28
-    jump L41
+    call baml.ToJson.to_json
+    jump L128
 
   L28:
     load_var item
-    is_type baml.time.PlainTime
-    pop_jump_if_false L29
-    jump L40
+    call baml.time.PlainDateTime.baml.ToJson.to_json
+    jump L128
 
   L29:
     load_var item
-    is_type baml.time.ZonedDateTime
-    pop_jump_if_false L30
-    jump L39
+    call baml.ToJson.to_json
+    jump L128
 
   L30:
     load_var item
-    is_type baml.time.ZonedDateTime
-    pop_jump_if_false L31
-    jump L38
+    call baml.toml.Table.baml.ToJson.to_json
+    jump L128
 
   L31:
     load_var item
-    is_type baml.time.Instant
+    is_type baml.toml.Table
     pop_jump_if_false L32
-    jump L37
+    jump L53
 
   L32:
     load_var item
-    is_type baml.time.Instant
+    is_type baml.toml.Table
     pop_jump_if_false L33
-    jump L36
+    jump L52
 
   L33:
     load_var item
-    is_type baml.time.PlainDate
+    is_type baml.time.PlainDateTime
     pop_jump_if_false L34
-    jump L35
+    jump L51
 
   L34:
     load_var item
-    is_type baml.time.PlainDate
-    pop_jump_if_false L118
-    load_var item
-    call baml.ToJson.to_json
-    jump L117
+    is_type baml.time.PlainDateTime
+    pop_jump_if_false L35
+    jump L50
 
   L35:
     load_var item
-    call baml.time.PlainDate.baml.ToJson.to_json
-    jump L117
+    is_type baml.time.PlainTime
+    pop_jump_if_false L36
+    jump L49
 
   L36:
     load_var item
-    call baml.ToJson.to_json
-    jump L117
+    is_type baml.time.PlainTime
+    pop_jump_if_false L37
+    jump L48
 
   L37:
     load_var item
-    call baml.time.Instant.baml.ToJson.to_json
-    jump L117
+    is_type baml.time.ZonedDateTime
+    pop_jump_if_false L38
+    jump L47
 
   L38:
     load_var item
-    call baml.ToJson.to_json
-    jump L117
+    is_type baml.time.ZonedDateTime
+    pop_jump_if_false L39
+    jump L46
 
   L39:
     load_var item
-    call baml.time.ZonedDateTime.baml.ToJson.to_json
-    jump L117
+    is_type baml.time.Instant
+    pop_jump_if_false L40
+    jump L45
 
   L40:
     load_var item
-    call baml.ToJson.to_json
-    jump L117
+    is_type baml.time.Instant
+    pop_jump_if_false L41
+    jump L44
 
   L41:
     load_var item
-    call baml.time.PlainTime.baml.ToJson.to_json
-    jump L117
+    is_type baml.time.PlainDate
+    pop_jump_if_false L42
+    jump L43
 
   L42:
     load_var item
+    is_type baml.time.PlainDate
+    pop_jump_if_false L129
+    load_var item
     call baml.ToJson.to_json
-    jump L117
+    jump L128
 
   L43:
     load_var item
-    call baml.time.PlainDateTime.baml.ToJson.to_json
-    jump L117
+    call baml.time.PlainDate.baml.ToJson.to_json
+    jump L128
 
   L44:
     load_var item
     call baml.ToJson.to_json
-    jump L117
+    jump L128
 
   L45:
     load_var item
-    call baml.toml.Table.baml.ToJson.to_json
-    jump L117
+    call baml.time.Instant.baml.ToJson.to_json
+    jump L128
 
-  L46: PlainDateTime
+  L46:
     load_var item
-    is_type baml.toml.Table
-    pop_jump_if_false L47
-    jump L68
+    call baml.ToJson.to_json
+    jump L128
 
   L47:
     load_var item
-    is_type baml.toml.Table
-    pop_jump_if_false L48
-    jump L67
+    call baml.time.ZonedDateTime.baml.ToJson.to_json
+    jump L128
 
   L48:
     load_var item
-    is_type baml.time.PlainDateTime
-    pop_jump_if_false L49
-    jump L66
+    call baml.ToJson.to_json
+    jump L128
 
   L49:
     load_var item
-    is_type baml.time.PlainDateTime
-    pop_jump_if_false L50
-    jump L65
+    call baml.time.PlainTime.baml.ToJson.to_json
+    jump L128
 
   L50:
     load_var item
-    is_type baml.time.PlainTime
-    pop_jump_if_false L51
-    jump L64
+    call baml.ToJson.to_json
+    jump L128
 
   L51:
     load_var item
-    is_type baml.time.PlainTime
-    pop_jump_if_false L52
-    jump L63
+    call baml.time.PlainDateTime.baml.ToJson.to_json
+    jump L128
 
   L52:
     load_var item
-    is_type baml.time.ZonedDateTime
-    pop_jump_if_false L53
-    jump L62
+    call baml.ToJson.to_json
+    jump L128
 
   L53:
     load_var item
-    is_type baml.time.ZonedDateTime
-    pop_jump_if_false L54
-    jump L61
+    call baml.toml.Table.baml.ToJson.to_json
+    jump L128
 
   L54:
     load_var item
-    is_type baml.time.Instant
+    is_type baml.toml.Table
     pop_jump_if_false L55
-    jump L60
+    jump L76
 
   L55:
     load_var item
-    is_type baml.time.Instant
+    is_type baml.toml.Table
     pop_jump_if_false L56
-    jump L59
+    jump L75
 
   L56:
     load_var item
-    is_type baml.time.PlainDate
+    is_type baml.time.PlainDateTime
     pop_jump_if_false L57
-    jump L58
+    jump L74
 
   L57:
     load_var item
-    is_type baml.time.PlainDate
-    pop_jump_if_false L118
-    load_var item
-    call baml.ToJson.to_json
-    jump L117
+    is_type baml.time.PlainDateTime
+    pop_jump_if_false L58
+    jump L73
 
   L58:
     load_var item
-    call baml.time.PlainDate.baml.ToJson.to_json
-    jump L117
+    is_type baml.time.PlainTime
+    pop_jump_if_false L59
+    jump L72
 
   L59:
     load_var item
-    call baml.ToJson.to_json
-    jump L117
+    is_type baml.time.PlainTime
+    pop_jump_if_false L60
+    jump L71
 
   L60:
     load_var item
-    call baml.time.Instant.baml.ToJson.to_json
-    jump L117
+    is_type baml.time.ZonedDateTime
+    pop_jump_if_false L61
+    jump L70
 
   L61:
     load_var item
-    call baml.ToJson.to_json
-    jump L117
+    is_type baml.time.ZonedDateTime
+    pop_jump_if_false L62
+    jump L69
 
   L62:
     load_var item
-    call baml.time.ZonedDateTime.baml.ToJson.to_json
-    jump L117
+    is_type baml.time.Instant
+    pop_jump_if_false L63
+    jump L68
 
   L63:
     load_var item
-    call baml.ToJson.to_json
-    jump L117
+    is_type baml.time.Instant
+    pop_jump_if_false L64
+    jump L67
 
   L64:
     load_var item
-    call baml.time.PlainTime.baml.ToJson.to_json
-    jump L117
+    is_type baml.time.PlainDate
+    pop_jump_if_false L65
+    jump L66
 
   L65:
     load_var item
+    is_type baml.time.PlainDate
+    pop_jump_if_false L129
+    load_var item
     call baml.ToJson.to_json
-    jump L117
+    jump L128
 
   L66:
     load_var item
-    call baml.time.PlainDateTime.baml.ToJson.to_json
-    jump L117
+    call baml.time.PlainDate.baml.ToJson.to_json
+    jump L128
 
   L67:
     load_var item
     call baml.ToJson.to_json
-    jump L117
+    jump L128
 
   L68:
     load_var item
-    call baml.toml.Table.baml.ToJson.to_json
-    jump L117
+    call baml.time.Instant.baml.ToJson.to_json
+    jump L128
 
-  L69: ZonedDateTime
+  L69:
     load_var item
-    is_type baml.toml.Table
-    pop_jump_if_false L70
-    jump L91
+    call baml.ToJson.to_json
+    jump L128
 
   L70:
     load_var item
-    is_type baml.toml.Table
-    pop_jump_if_false L71
-    jump L90
+    call baml.time.ZonedDateTime.baml.ToJson.to_json
+    jump L128
 
   L71:
     load_var item
-    is_type baml.time.PlainDateTime
-    pop_jump_if_false L72
-    jump L89
+    call baml.ToJson.to_json
+    jump L128
 
   L72:
     load_var item
-    is_type baml.time.PlainDateTime
-    pop_jump_if_false L73
-    jump L88
+    call baml.time.PlainTime.baml.ToJson.to_json
+    jump L128
 
   L73:
     load_var item
-    is_type baml.time.PlainTime
-    pop_jump_if_false L74
-    jump L87
+    call baml.ToJson.to_json
+    jump L128
 
   L74:
     load_var item
-    is_type baml.time.PlainTime
-    pop_jump_if_false L75
-    jump L86
+    call baml.time.PlainDateTime.baml.ToJson.to_json
+    jump L128
 
   L75:
     load_var item
-    is_type baml.time.ZonedDateTime
-    pop_jump_if_false L76
-    jump L85
+    call baml.ToJson.to_json
+    jump L128
 
   L76:
     load_var item
-    is_type baml.time.ZonedDateTime
-    pop_jump_if_false L77
-    jump L84
+    call baml.toml.Table.baml.ToJson.to_json
+    jump L128
 
   L77:
     load_var item
-    is_type baml.time.Instant
+    is_type baml.toml.Table
     pop_jump_if_false L78
-    jump L83
+    jump L99
 
   L78:
     load_var item
-    is_type baml.time.Instant
+    is_type baml.toml.Table
     pop_jump_if_false L79
-    jump L82
+    jump L98
 
   L79:
     load_var item
-    is_type baml.time.PlainDate
+    is_type baml.time.PlainDateTime
     pop_jump_if_false L80
-    jump L81
+    jump L97
 
   L80:
     load_var item
-    is_type baml.time.PlainDate
-    pop_jump_if_false L118
-    load_var item
-    call baml.ToJson.to_json
-    jump L117
+    is_type baml.time.PlainDateTime
+    pop_jump_if_false L81
+    jump L96
 
   L81:
     load_var item
-    call baml.time.PlainDate.baml.ToJson.to_json
-    jump L117
+    is_type baml.time.PlainTime
+    pop_jump_if_false L82
+    jump L95
 
   L82:
     load_var item
-    call baml.ToJson.to_json
-    jump L117
+    is_type baml.time.PlainTime
+    pop_jump_if_false L83
+    jump L94
 
   L83:
     load_var item
-    call baml.time.Instant.baml.ToJson.to_json
-    jump L117
+    is_type baml.time.ZonedDateTime
+    pop_jump_if_false L84
+    jump L93
 
   L84:
     load_var item
-    call baml.ToJson.to_json
-    jump L117
+    is_type baml.time.ZonedDateTime
+    pop_jump_if_false L85
+    jump L92
 
   L85:
     load_var item
-    call baml.time.ZonedDateTime.baml.ToJson.to_json
-    jump L117
+    is_type baml.time.Instant
+    pop_jump_if_false L86
+    jump L91
 
   L86:
     load_var item
-    call baml.ToJson.to_json
-    jump L117
+    is_type baml.time.Instant
+    pop_jump_if_false L87
+    jump L90
 
   L87:
     load_var item
-    call baml.time.PlainTime.baml.ToJson.to_json
-    jump L117
+    is_type baml.time.PlainDate
+    pop_jump_if_false L88
+    jump L89
 
   L88:
     load_var item
+    is_type baml.time.PlainDate
+    pop_jump_if_false L129
+    load_var item
     call baml.ToJson.to_json
-    jump L117
+    jump L128
 
   L89:
     load_var item
-    call baml.time.PlainDateTime.baml.ToJson.to_json
-    jump L117
+    call baml.time.PlainDate.baml.ToJson.to_json
+    jump L128
 
   L90:
     load_var item
     call baml.ToJson.to_json
-    jump L117
+    jump L128
 
   L91:
     load_var item
-    call baml.toml.Table.baml.ToJson.to_json
-    jump L117
+    call baml.time.Instant.baml.ToJson.to_json
+    jump L128
 
-  L92: list
+  L92:
+    load_var item
+    call baml.ToJson.to_json
+    jump L128
+
+  L93:
+    load_var item
+    call baml.time.ZonedDateTime.baml.ToJson.to_json
+    jump L128
+
+  L94:
+    load_var item
+    call baml.ToJson.to_json
+    jump L128
+
+  L95:
+    load_var item
+    call baml.time.PlainTime.baml.ToJson.to_json
+    jump L128
+
+  L96:
+    load_var item
+    call baml.ToJson.to_json
+    jump L128
+
+  L97:
+    load_var item
+    call baml.time.PlainDateTime.baml.ToJson.to_json
+    jump L128
+
+  L98:
+    load_var item
+    call baml.ToJson.to_json
+    jump L128
+
+  L99:
+    load_var item
+    call baml.toml.Table.baml.ToJson.to_json
+    jump L128
+
+  L100:
     load_type baml.toml.Item
     load_type baml.json.json
     load_type baml.json.JsonSerializationError
     load_var item
     load_global baml.toml.item_to_json
     call baml.Array.map
-    jump L117
-
-  L93: Table
-    load_var item
-    is_type baml.toml.Table
-    pop_jump_if_false L94
-    jump L115
-
-  L94:
-    load_var item
-    is_type baml.toml.Table
-    pop_jump_if_false L95
-    jump L114
-
-  L95:
-    load_var item
-    is_type baml.time.PlainDateTime
-    pop_jump_if_false L96
-    jump L113
-
-  L96:
-    load_var item
-    is_type baml.time.PlainDateTime
-    pop_jump_if_false L97
-    jump L112
-
-  L97:
-    load_var item
-    is_type baml.time.PlainTime
-    pop_jump_if_false L98
-    jump L111
-
-  L98:
-    load_var item
-    is_type baml.time.PlainTime
-    pop_jump_if_false L99
-    jump L110
-
-  L99:
-    load_var item
-    is_type baml.time.ZonedDateTime
-    pop_jump_if_false L100
-    jump L109
-
-  L100:
-    load_var item
-    is_type baml.time.ZonedDateTime
-    pop_jump_if_false L101
-    jump L108
+    jump L128
 
   L101:
     load_var item
-    is_type baml.time.Instant
+    is_type baml.toml.Table
     pop_jump_if_false L102
-    jump L107
+    jump L123
 
   L102:
     load_var item
-    is_type baml.time.Instant
+    is_type baml.toml.Table
     pop_jump_if_false L103
-    jump L106
+    jump L122
 
   L103:
     load_var item
-    is_type baml.time.PlainDate
+    is_type baml.time.PlainDateTime
     pop_jump_if_false L104
-    jump L105
+    jump L121
 
   L104:
     load_var item
-    is_type baml.time.PlainDate
-    pop_jump_if_false L118
-    load_var item
-    call baml.ToJson.to_json
-    jump L117
+    is_type baml.time.PlainDateTime
+    pop_jump_if_false L105
+    jump L120
 
   L105:
     load_var item
-    call baml.time.PlainDate.baml.ToJson.to_json
-    jump L117
+    is_type baml.time.PlainTime
+    pop_jump_if_false L106
+    jump L119
 
   L106:
     load_var item
-    call baml.ToJson.to_json
-    jump L117
+    is_type baml.time.PlainTime
+    pop_jump_if_false L107
+    jump L118
 
   L107:
     load_var item
-    call baml.time.Instant.baml.ToJson.to_json
+    is_type baml.time.ZonedDateTime
+    pop_jump_if_false L108
     jump L117
 
   L108:
     load_var item
-    call baml.ToJson.to_json
-    jump L117
+    is_type baml.time.ZonedDateTime
+    pop_jump_if_false L109
+    jump L116
 
   L109:
     load_var item
-    call baml.time.ZonedDateTime.baml.ToJson.to_json
-    jump L117
+    is_type baml.time.Instant
+    pop_jump_if_false L110
+    jump L115
 
   L110:
     load_var item
-    call baml.ToJson.to_json
-    jump L117
+    is_type baml.time.Instant
+    pop_jump_if_false L111
+    jump L114
 
   L111:
     load_var item
-    call baml.time.PlainTime.baml.ToJson.to_json
-    jump L117
+    is_type baml.time.PlainDate
+    pop_jump_if_false L112
+    jump L113
 
   L112:
     load_var item
+    is_type baml.time.PlainDate
+    pop_jump_if_false L129
+    load_var item
     call baml.ToJson.to_json
-    jump L117
+    jump L128
 
   L113:
     load_var item
-    call baml.time.PlainDateTime.baml.ToJson.to_json
-    jump L117
+    call baml.time.PlainDate.baml.ToJson.to_json
+    jump L128
 
   L114:
     load_var item
     call baml.ToJson.to_json
-    jump L117
+    jump L128
 
   L115:
     load_var item
-    call baml.toml.Table.baml.ToJson.to_json
-    jump L117
+    call baml.time.Instant.baml.ToJson.to_json
+    jump L128
 
-  L116: string
+  L116:
     load_var item
+    call baml.ToJson.to_json
+    jump L128
 
   L117:
-    return
+    load_var item
+    call baml.time.ZonedDateTime.baml.ToJson.to_json
+    jump L128
 
   L118:
+    load_var item
+    call baml.ToJson.to_json
+    jump L128
+
+  L119:
+    load_var item
+    call baml.time.PlainTime.baml.ToJson.to_json
+    jump L128
+
+  L120:
+    load_var item
+    call baml.ToJson.to_json
+    jump L128
+
+  L121:
+    load_var item
+    call baml.time.PlainDateTime.baml.ToJson.to_json
+    jump L128
+
+  L122:
+    load_var item
+    call baml.ToJson.to_json
+    jump L128
+
+  L123:
+    load_var item
+    call baml.toml.Table.baml.ToJson.to_json
+    jump L128
+
+  L124:
+    load_var item
+    jump L128
+
+  L125:
+    load_var item
+    jump L128
+
+  L126:
+    load_var item
+    jump L128
+
+  L127:
+    load_var item
+
+  L128:
+    return
+
+  L129:
     unreachable
 }
 
 function baml.toml.table_from_json(j: baml.json.json) -> baml.toml.Table {
     load_var j
-    is_type map<_, _>
+    is_type map<string, baml.json.json>
     pop_jump_if_false L0
     jump L1
 

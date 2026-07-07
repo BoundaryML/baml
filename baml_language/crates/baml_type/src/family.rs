@@ -318,7 +318,7 @@ ty_family! {
         /// name-based `TypeVar`.
         #[axis(template)]
         TypeArgRef(u32),
-        /// De Bruijn reference like [`Ty::TypeArgRef`], but a dispatch-guard hole:
+        /// De Bruijn reference like [`TyTemplate::TypeArgRef`], but a dispatch-guard hole:
         /// an unconcretized runtime slot matches any actual type argument instead
         /// of materializing `unknown` as a constraint. A type-erasure bandaid to be
         /// removed once associated-type resolution is complete.

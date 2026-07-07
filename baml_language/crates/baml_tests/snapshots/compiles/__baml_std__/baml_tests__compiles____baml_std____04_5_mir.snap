@@ -13719,43 +13719,94 @@ fn baml.toml.item_from_json(json: baml.json.json) -> baml.toml.Item {
     // Locals:
     let _0: baml.toml.Item // _0 // return
     let _1: baml.json.json // json // param
-    let _2: int
-    let _3: baml.json.JsonDecodeError
-    let _4: type
-    let _5: type
-    let _6: type
+    let _2: bool
+    let _3: bool
+    let _4: bool
+    let _5: bool
+    let _6: bool
+    let _7: baml.json.JsonDecodeError
+    let _8: bool
+    let _9: bool
+    let _10: type
+    let _11: type
+    let _12: type
 
     bb0: {
-        _2 = type_tag(_1);
-        switch copy _2 [bool: bb5, int: bb5, float: bb5, string: bb5, null: bb4, map: bb3, list: bb2, otherwise: bb1] (exhaustive);
+        _2 = is_type(copy _1, bool);
+        branch copy _2 -> [bb14, bb1];
     }
 
     bb1: {
-        unreachable;
+        _3 = is_type(copy _1, int);
+        branch copy _3 -> [bb13, bb2];
     }
 
     bb2: {
-        _4 = load_type(baml.toml.Item);
-        _5 = load_type(baml.json.JsonDecodeError);
-        _6 = load_type(baml.json.json);
-        _0 = call const fn baml.Array.map<copy _6, copy _4, copy _5>(copy _1, const fn baml.toml.item_from_json) -> [bb6];
+        _4 = is_type(copy _1, float);
+        branch copy _4 -> [bb12, bb3];
     }
 
     bb3: {
-        _0 = call const fn baml.toml.Table.baml.FromJson.from_json(copy _1) -> [bb6];
+        _5 = is_type(copy _1, string);
+        branch copy _5 -> [bb11, bb4];
     }
 
     bb4: {
-        _3 = baml.json.JsonDecodeError { const "TOML does not support null", const "" };
-        throw copy _3;
+        _6 = copy _1 == const null;
+        branch copy _6 -> [bb10, bb5];
     }
 
     bb5: {
-        _0 = copy _1;
-        goto -> bb6;
+        _8 = is_type(copy _1, map<string, baml.json.json>);
+        branch copy _8 -> [bb9, bb6];
     }
 
     bb6: {
+        _9 = is_type(copy _1, baml.json.json[]);
+        branch copy _9 -> [bb8, bb7];
+    }
+
+    bb7: {
+        unreachable;
+    }
+
+    bb8: {
+        _10 = load_type(baml.toml.Item);
+        _11 = load_type(baml.json.JsonDecodeError);
+        _12 = load_type(baml.json.json);
+        _0 = call const fn baml.Array.map<copy _12, copy _10, copy _11>(copy _1, const fn baml.toml.item_from_json) -> [bb15];
+    }
+
+    bb9: {
+        _0 = call const fn baml.toml.Table.baml.FromJson.from_json(copy _1) -> [bb15];
+    }
+
+    bb10: {
+        _7 = baml.json.JsonDecodeError { const "TOML does not support null", const "" };
+        throw copy _7;
+    }
+
+    bb11: {
+        _0 = copy _1;
+        goto -> bb15;
+    }
+
+    bb12: {
+        _0 = copy _1;
+        goto -> bb15;
+    }
+
+    bb13: {
+        _0 = copy _1;
+        goto -> bb15;
+    }
+
+    bb14: {
+        _0 = copy _1;
+        goto -> bb15;
+    }
+
+    bb15: {
         return;
     }
 }
@@ -13764,7 +13815,7 @@ fn baml.toml.item_to_json(item: baml.toml.Item) -> baml.json.json {
     // Locals:
     let _0: baml.json.json // _0 // return
     let _1: baml.toml.Item // item // param
-    let _2: int
+    let _2: bool
     let _3: bool
     let _4: bool
     let _5: bool
@@ -13777,14 +13828,14 @@ fn baml.toml.item_to_json(item: baml.toml.Item) -> baml.json.json {
     let _12: bool
     let _13: bool
     let _14: bool
-    let _15: type
-    let _16: type
-    let _17: type
+    let _15: bool
+    let _16: bool
+    let _17: bool
     let _18: bool
     let _19: bool
-    let _20: bool
-    let _21: bool
-    let _22: bool
+    let _20: type
+    let _21: type
+    let _22: type
     let _23: bool
     let _24: bool
     let _25: bool
@@ -13828,589 +13879,658 @@ fn baml.toml.item_to_json(item: baml.toml.Item) -> baml.json.json {
     let _63: bool
     let _64: bool
     let _65: bool
+    let _66: bool
+    let _67: bool
+    let _68: bool
+    let _69: bool
+    let _70: bool
+    let _71: bool
+    let _72: bool
+    let _73: bool
+    let _74: bool
 
     bb0: {
-        _2 = type_tag(_1);
-        switch copy _2 [bool: bb128, int: bb128, float: bb128, string: bb128, Table: bb103, list: bb102, ZonedDateTime: bb77, PlainDateTime: bb52, PlainDate: bb27, PlainTime: bb2, otherwise: bb1] (exhaustive);
+        _2 = is_type(copy _1, bool);
+        branch copy _2 -> [bb140, bb1];
     }
 
     bb1: {
-        unreachable;
+        _3 = is_type(copy _1, int);
+        branch copy _3 -> [bb139, bb2];
     }
 
     bb2: {
-        _54 = is_type(copy _1, baml.toml.Table);
-        branch copy _54 -> [bb26, bb3];
+        _4 = is_type(copy _1, float);
+        branch copy _4 -> [bb138, bb3];
     }
 
     bb3: {
-        _55 = is_type(copy _1, baml.toml.Table);
-        branch copy _55 -> [bb25, bb4];
+        _5 = is_type(copy _1, string);
+        branch copy _5 -> [bb137, bb4];
     }
 
     bb4: {
-        _56 = is_type(copy _1, baml.time.PlainDateTime);
-        branch copy _56 -> [bb24, bb5];
+        _6 = is_type(copy _1, baml.toml.Table);
+        branch copy _6 -> [bb112, bb5];
     }
 
     bb5: {
-        _57 = is_type(copy _1, baml.time.PlainDateTime);
-        branch copy _57 -> [bb23, bb6];
+        _19 = is_type(copy _1, baml.toml.Item[]);
+        branch copy _19 -> [bb111, bb6];
     }
 
     bb6: {
-        _58 = is_type(copy _1, baml.time.PlainTime);
-        branch copy _58 -> [bb22, bb7];
+        _23 = is_type(copy _1, baml.time.ZonedDateTime);
+        branch copy _23 -> [bb86, bb7];
     }
 
     bb7: {
-        _59 = is_type(copy _1, baml.time.PlainTime);
-        branch copy _59 -> [bb21, bb8];
+        _36 = is_type(copy _1, baml.time.PlainDateTime);
+        branch copy _36 -> [bb61, bb8];
     }
 
     bb8: {
-        _60 = is_type(copy _1, baml.time.ZonedDateTime);
-        branch copy _60 -> [bb20, bb9];
+        _49 = is_type(copy _1, baml.time.PlainDate);
+        branch copy _49 -> [bb36, bb9];
     }
 
     bb9: {
-        _61 = is_type(copy _1, baml.time.ZonedDateTime);
-        branch copy _61 -> [bb19, bb10];
+        _62 = is_type(copy _1, baml.time.PlainTime);
+        branch copy _62 -> [bb11, bb10];
     }
 
     bb10: {
-        _62 = is_type(copy _1, baml.time.Instant);
-        branch copy _62 -> [bb18, bb11];
+        unreachable;
     }
 
     bb11: {
-        _63 = is_type(copy _1, baml.time.Instant);
-        branch copy _63 -> [bb17, bb12];
+        _63 = is_type(copy _1, baml.toml.Table);
+        branch copy _63 -> [bb35, bb12];
     }
 
     bb12: {
-        _64 = is_type(copy _1, baml.time.PlainDate);
-        branch copy _64 -> [bb16, bb13];
+        _64 = is_type(copy _1, baml.toml.Table);
+        branch copy _64 -> [bb34, bb13];
     }
 
     bb13: {
-        _65 = is_type(copy _1, baml.time.PlainDate);
-        branch copy _65 -> [bb15, bb14];
+        _65 = is_type(copy _1, baml.time.PlainDateTime);
+        branch copy _65 -> [bb33, bb14];
     }
 
     bb14: {
-        unreachable;
+        _66 = is_type(copy _1, baml.time.PlainDateTime);
+        branch copy _66 -> [bb32, bb15];
     }
 
     bb15: {
-        _0 = call const fn baml.ToJson.to_json(copy _1) -> [bb129];
+        _67 = is_type(copy _1, baml.time.PlainTime);
+        branch copy _67 -> [bb31, bb16];
     }
 
     bb16: {
-        _0 = call const fn baml.time.PlainDate.baml.ToJson.to_json(copy _1) -> [bb129];
+        _68 = is_type(copy _1, baml.time.PlainTime);
+        branch copy _68 -> [bb30, bb17];
     }
 
     bb17: {
-        _0 = call const fn baml.ToJson.to_json(copy _1) -> [bb129];
+        _69 = is_type(copy _1, baml.time.ZonedDateTime);
+        branch copy _69 -> [bb29, bb18];
     }
 
     bb18: {
-        _0 = call const fn baml.time.Instant.baml.ToJson.to_json(copy _1) -> [bb129];
+        _70 = is_type(copy _1, baml.time.ZonedDateTime);
+        branch copy _70 -> [bb28, bb19];
     }
 
     bb19: {
-        _0 = call const fn baml.ToJson.to_json(copy _1) -> [bb129];
+        _71 = is_type(copy _1, baml.time.Instant);
+        branch copy _71 -> [bb27, bb20];
     }
 
     bb20: {
-        _0 = call const fn baml.time.ZonedDateTime.baml.ToJson.to_json(copy _1) -> [bb129];
+        _72 = is_type(copy _1, baml.time.Instant);
+        branch copy _72 -> [bb26, bb21];
     }
 
     bb21: {
-        _0 = call const fn baml.ToJson.to_json(copy _1) -> [bb129];
+        _73 = is_type(copy _1, baml.time.PlainDate);
+        branch copy _73 -> [bb25, bb22];
     }
 
     bb22: {
-        _0 = call const fn baml.time.PlainTime.baml.ToJson.to_json(copy _1) -> [bb129];
+        _74 = is_type(copy _1, baml.time.PlainDate);
+        branch copy _74 -> [bb24, bb23];
     }
 
     bb23: {
-        _0 = call const fn baml.ToJson.to_json(copy _1) -> [bb129];
+        unreachable;
     }
 
     bb24: {
-        _0 = call const fn baml.time.PlainDateTime.baml.ToJson.to_json(copy _1) -> [bb129];
+        _0 = call const fn baml.ToJson.to_json(copy _1) -> [bb141];
     }
 
     bb25: {
-        _0 = call const fn baml.ToJson.to_json(copy _1) -> [bb129];
+        _0 = call const fn baml.time.PlainDate.baml.ToJson.to_json(copy _1) -> [bb141];
     }
 
     bb26: {
-        _0 = call const fn baml.toml.Table.baml.ToJson.to_json(copy _1) -> [bb129];
+        _0 = call const fn baml.ToJson.to_json(copy _1) -> [bb141];
     }
 
     bb27: {
-        _42 = is_type(copy _1, baml.toml.Table);
-        branch copy _42 -> [bb51, bb28];
+        _0 = call const fn baml.time.Instant.baml.ToJson.to_json(copy _1) -> [bb141];
     }
 
     bb28: {
-        _43 = is_type(copy _1, baml.toml.Table);
-        branch copy _43 -> [bb50, bb29];
+        _0 = call const fn baml.ToJson.to_json(copy _1) -> [bb141];
     }
 
     bb29: {
-        _44 = is_type(copy _1, baml.time.PlainDateTime);
-        branch copy _44 -> [bb49, bb30];
+        _0 = call const fn baml.time.ZonedDateTime.baml.ToJson.to_json(copy _1) -> [bb141];
     }
 
     bb30: {
-        _45 = is_type(copy _1, baml.time.PlainDateTime);
-        branch copy _45 -> [bb48, bb31];
+        _0 = call const fn baml.ToJson.to_json(copy _1) -> [bb141];
     }
 
     bb31: {
-        _46 = is_type(copy _1, baml.time.PlainTime);
-        branch copy _46 -> [bb47, bb32];
+        _0 = call const fn baml.time.PlainTime.baml.ToJson.to_json(copy _1) -> [bb141];
     }
 
     bb32: {
-        _47 = is_type(copy _1, baml.time.PlainTime);
-        branch copy _47 -> [bb46, bb33];
+        _0 = call const fn baml.ToJson.to_json(copy _1) -> [bb141];
     }
 
     bb33: {
-        _48 = is_type(copy _1, baml.time.ZonedDateTime);
-        branch copy _48 -> [bb45, bb34];
+        _0 = call const fn baml.time.PlainDateTime.baml.ToJson.to_json(copy _1) -> [bb141];
     }
 
     bb34: {
-        _49 = is_type(copy _1, baml.time.ZonedDateTime);
-        branch copy _49 -> [bb44, bb35];
+        _0 = call const fn baml.ToJson.to_json(copy _1) -> [bb141];
     }
 
     bb35: {
-        _50 = is_type(copy _1, baml.time.Instant);
-        branch copy _50 -> [bb43, bb36];
+        _0 = call const fn baml.toml.Table.baml.ToJson.to_json(copy _1) -> [bb141];
     }
 
     bb36: {
-        _51 = is_type(copy _1, baml.time.Instant);
-        branch copy _51 -> [bb42, bb37];
+        _50 = is_type(copy _1, baml.toml.Table);
+        branch copy _50 -> [bb60, bb37];
     }
 
     bb37: {
-        _52 = is_type(copy _1, baml.time.PlainDate);
-        branch copy _52 -> [bb41, bb38];
+        _51 = is_type(copy _1, baml.toml.Table);
+        branch copy _51 -> [bb59, bb38];
     }
 
     bb38: {
-        _53 = is_type(copy _1, baml.time.PlainDate);
-        branch copy _53 -> [bb40, bb39];
+        _52 = is_type(copy _1, baml.time.PlainDateTime);
+        branch copy _52 -> [bb58, bb39];
     }
 
     bb39: {
-        unreachable;
+        _53 = is_type(copy _1, baml.time.PlainDateTime);
+        branch copy _53 -> [bb57, bb40];
     }
 
     bb40: {
-        _0 = call const fn baml.ToJson.to_json(copy _1) -> [bb129];
+        _54 = is_type(copy _1, baml.time.PlainTime);
+        branch copy _54 -> [bb56, bb41];
     }
 
     bb41: {
-        _0 = call const fn baml.time.PlainDate.baml.ToJson.to_json(copy _1) -> [bb129];
+        _55 = is_type(copy _1, baml.time.PlainTime);
+        branch copy _55 -> [bb55, bb42];
     }
 
     bb42: {
-        _0 = call const fn baml.ToJson.to_json(copy _1) -> [bb129];
+        _56 = is_type(copy _1, baml.time.ZonedDateTime);
+        branch copy _56 -> [bb54, bb43];
     }
 
     bb43: {
-        _0 = call const fn baml.time.Instant.baml.ToJson.to_json(copy _1) -> [bb129];
+        _57 = is_type(copy _1, baml.time.ZonedDateTime);
+        branch copy _57 -> [bb53, bb44];
     }
 
     bb44: {
-        _0 = call const fn baml.ToJson.to_json(copy _1) -> [bb129];
+        _58 = is_type(copy _1, baml.time.Instant);
+        branch copy _58 -> [bb52, bb45];
     }
 
     bb45: {
-        _0 = call const fn baml.time.ZonedDateTime.baml.ToJson.to_json(copy _1) -> [bb129];
+        _59 = is_type(copy _1, baml.time.Instant);
+        branch copy _59 -> [bb51, bb46];
     }
 
     bb46: {
-        _0 = call const fn baml.ToJson.to_json(copy _1) -> [bb129];
+        _60 = is_type(copy _1, baml.time.PlainDate);
+        branch copy _60 -> [bb50, bb47];
     }
 
     bb47: {
-        _0 = call const fn baml.time.PlainTime.baml.ToJson.to_json(copy _1) -> [bb129];
+        _61 = is_type(copy _1, baml.time.PlainDate);
+        branch copy _61 -> [bb49, bb48];
     }
 
     bb48: {
-        _0 = call const fn baml.ToJson.to_json(copy _1) -> [bb129];
+        unreachable;
     }
 
     bb49: {
-        _0 = call const fn baml.time.PlainDateTime.baml.ToJson.to_json(copy _1) -> [bb129];
+        _0 = call const fn baml.ToJson.to_json(copy _1) -> [bb141];
     }
 
     bb50: {
-        _0 = call const fn baml.ToJson.to_json(copy _1) -> [bb129];
+        _0 = call const fn baml.time.PlainDate.baml.ToJson.to_json(copy _1) -> [bb141];
     }
 
     bb51: {
-        _0 = call const fn baml.toml.Table.baml.ToJson.to_json(copy _1) -> [bb129];
+        _0 = call const fn baml.ToJson.to_json(copy _1) -> [bb141];
     }
 
     bb52: {
-        _30 = is_type(copy _1, baml.toml.Table);
-        branch copy _30 -> [bb76, bb53];
+        _0 = call const fn baml.time.Instant.baml.ToJson.to_json(copy _1) -> [bb141];
     }
 
     bb53: {
-        _31 = is_type(copy _1, baml.toml.Table);
-        branch copy _31 -> [bb75, bb54];
+        _0 = call const fn baml.ToJson.to_json(copy _1) -> [bb141];
     }
 
     bb54: {
-        _32 = is_type(copy _1, baml.time.PlainDateTime);
-        branch copy _32 -> [bb74, bb55];
+        _0 = call const fn baml.time.ZonedDateTime.baml.ToJson.to_json(copy _1) -> [bb141];
     }
 
     bb55: {
-        _33 = is_type(copy _1, baml.time.PlainDateTime);
-        branch copy _33 -> [bb73, bb56];
+        _0 = call const fn baml.ToJson.to_json(copy _1) -> [bb141];
     }
 
     bb56: {
-        _34 = is_type(copy _1, baml.time.PlainTime);
-        branch copy _34 -> [bb72, bb57];
+        _0 = call const fn baml.time.PlainTime.baml.ToJson.to_json(copy _1) -> [bb141];
     }
 
     bb57: {
-        _35 = is_type(copy _1, baml.time.PlainTime);
-        branch copy _35 -> [bb71, bb58];
+        _0 = call const fn baml.ToJson.to_json(copy _1) -> [bb141];
     }
 
     bb58: {
-        _36 = is_type(copy _1, baml.time.ZonedDateTime);
-        branch copy _36 -> [bb70, bb59];
+        _0 = call const fn baml.time.PlainDateTime.baml.ToJson.to_json(copy _1) -> [bb141];
     }
 
     bb59: {
-        _37 = is_type(copy _1, baml.time.ZonedDateTime);
-        branch copy _37 -> [bb69, bb60];
+        _0 = call const fn baml.ToJson.to_json(copy _1) -> [bb141];
     }
 
     bb60: {
-        _38 = is_type(copy _1, baml.time.Instant);
-        branch copy _38 -> [bb68, bb61];
+        _0 = call const fn baml.toml.Table.baml.ToJson.to_json(copy _1) -> [bb141];
     }
 
     bb61: {
-        _39 = is_type(copy _1, baml.time.Instant);
-        branch copy _39 -> [bb67, bb62];
+        _37 = is_type(copy _1, baml.toml.Table);
+        branch copy _37 -> [bb85, bb62];
     }
 
     bb62: {
-        _40 = is_type(copy _1, baml.time.PlainDate);
-        branch copy _40 -> [bb66, bb63];
+        _38 = is_type(copy _1, baml.toml.Table);
+        branch copy _38 -> [bb84, bb63];
     }
 
     bb63: {
-        _41 = is_type(copy _1, baml.time.PlainDate);
-        branch copy _41 -> [bb65, bb64];
+        _39 = is_type(copy _1, baml.time.PlainDateTime);
+        branch copy _39 -> [bb83, bb64];
     }
 
     bb64: {
-        unreachable;
+        _40 = is_type(copy _1, baml.time.PlainDateTime);
+        branch copy _40 -> [bb82, bb65];
     }
 
     bb65: {
-        _0 = call const fn baml.ToJson.to_json(copy _1) -> [bb129];
+        _41 = is_type(copy _1, baml.time.PlainTime);
+        branch copy _41 -> [bb81, bb66];
     }
 
     bb66: {
-        _0 = call const fn baml.time.PlainDate.baml.ToJson.to_json(copy _1) -> [bb129];
+        _42 = is_type(copy _1, baml.time.PlainTime);
+        branch copy _42 -> [bb80, bb67];
     }
 
     bb67: {
-        _0 = call const fn baml.ToJson.to_json(copy _1) -> [bb129];
+        _43 = is_type(copy _1, baml.time.ZonedDateTime);
+        branch copy _43 -> [bb79, bb68];
     }
 
     bb68: {
-        _0 = call const fn baml.time.Instant.baml.ToJson.to_json(copy _1) -> [bb129];
+        _44 = is_type(copy _1, baml.time.ZonedDateTime);
+        branch copy _44 -> [bb78, bb69];
     }
 
     bb69: {
-        _0 = call const fn baml.ToJson.to_json(copy _1) -> [bb129];
+        _45 = is_type(copy _1, baml.time.Instant);
+        branch copy _45 -> [bb77, bb70];
     }
 
     bb70: {
-        _0 = call const fn baml.time.ZonedDateTime.baml.ToJson.to_json(copy _1) -> [bb129];
+        _46 = is_type(copy _1, baml.time.Instant);
+        branch copy _46 -> [bb76, bb71];
     }
 
     bb71: {
-        _0 = call const fn baml.ToJson.to_json(copy _1) -> [bb129];
+        _47 = is_type(copy _1, baml.time.PlainDate);
+        branch copy _47 -> [bb75, bb72];
     }
 
     bb72: {
-        _0 = call const fn baml.time.PlainTime.baml.ToJson.to_json(copy _1) -> [bb129];
+        _48 = is_type(copy _1, baml.time.PlainDate);
+        branch copy _48 -> [bb74, bb73];
     }
 
     bb73: {
-        _0 = call const fn baml.ToJson.to_json(copy _1) -> [bb129];
+        unreachable;
     }
 
     bb74: {
-        _0 = call const fn baml.time.PlainDateTime.baml.ToJson.to_json(copy _1) -> [bb129];
+        _0 = call const fn baml.ToJson.to_json(copy _1) -> [bb141];
     }
 
     bb75: {
-        _0 = call const fn baml.ToJson.to_json(copy _1) -> [bb129];
+        _0 = call const fn baml.time.PlainDate.baml.ToJson.to_json(copy _1) -> [bb141];
     }
 
     bb76: {
-        _0 = call const fn baml.toml.Table.baml.ToJson.to_json(copy _1) -> [bb129];
+        _0 = call const fn baml.ToJson.to_json(copy _1) -> [bb141];
     }
 
     bb77: {
-        _18 = is_type(copy _1, baml.toml.Table);
-        branch copy _18 -> [bb101, bb78];
+        _0 = call const fn baml.time.Instant.baml.ToJson.to_json(copy _1) -> [bb141];
     }
 
     bb78: {
-        _19 = is_type(copy _1, baml.toml.Table);
-        branch copy _19 -> [bb100, bb79];
+        _0 = call const fn baml.ToJson.to_json(copy _1) -> [bb141];
     }
 
     bb79: {
-        _20 = is_type(copy _1, baml.time.PlainDateTime);
-        branch copy _20 -> [bb99, bb80];
+        _0 = call const fn baml.time.ZonedDateTime.baml.ToJson.to_json(copy _1) -> [bb141];
     }
 
     bb80: {
-        _21 = is_type(copy _1, baml.time.PlainDateTime);
-        branch copy _21 -> [bb98, bb81];
+        _0 = call const fn baml.ToJson.to_json(copy _1) -> [bb141];
     }
 
     bb81: {
-        _22 = is_type(copy _1, baml.time.PlainTime);
-        branch copy _22 -> [bb97, bb82];
+        _0 = call const fn baml.time.PlainTime.baml.ToJson.to_json(copy _1) -> [bb141];
     }
 
     bb82: {
-        _23 = is_type(copy _1, baml.time.PlainTime);
-        branch copy _23 -> [bb96, bb83];
+        _0 = call const fn baml.ToJson.to_json(copy _1) -> [bb141];
     }
 
     bb83: {
-        _24 = is_type(copy _1, baml.time.ZonedDateTime);
-        branch copy _24 -> [bb95, bb84];
+        _0 = call const fn baml.time.PlainDateTime.baml.ToJson.to_json(copy _1) -> [bb141];
     }
 
     bb84: {
-        _25 = is_type(copy _1, baml.time.ZonedDateTime);
-        branch copy _25 -> [bb94, bb85];
+        _0 = call const fn baml.ToJson.to_json(copy _1) -> [bb141];
     }
 
     bb85: {
-        _26 = is_type(copy _1, baml.time.Instant);
-        branch copy _26 -> [bb93, bb86];
+        _0 = call const fn baml.toml.Table.baml.ToJson.to_json(copy _1) -> [bb141];
     }
 
     bb86: {
-        _27 = is_type(copy _1, baml.time.Instant);
-        branch copy _27 -> [bb92, bb87];
+        _24 = is_type(copy _1, baml.toml.Table);
+        branch copy _24 -> [bb110, bb87];
     }
 
     bb87: {
-        _28 = is_type(copy _1, baml.time.PlainDate);
-        branch copy _28 -> [bb91, bb88];
+        _25 = is_type(copy _1, baml.toml.Table);
+        branch copy _25 -> [bb109, bb88];
     }
 
     bb88: {
-        _29 = is_type(copy _1, baml.time.PlainDate);
-        branch copy _29 -> [bb90, bb89];
+        _26 = is_type(copy _1, baml.time.PlainDateTime);
+        branch copy _26 -> [bb108, bb89];
     }
 
     bb89: {
-        unreachable;
+        _27 = is_type(copy _1, baml.time.PlainDateTime);
+        branch copy _27 -> [bb107, bb90];
     }
 
     bb90: {
-        _0 = call const fn baml.ToJson.to_json(copy _1) -> [bb129];
+        _28 = is_type(copy _1, baml.time.PlainTime);
+        branch copy _28 -> [bb106, bb91];
     }
 
     bb91: {
-        _0 = call const fn baml.time.PlainDate.baml.ToJson.to_json(copy _1) -> [bb129];
+        _29 = is_type(copy _1, baml.time.PlainTime);
+        branch copy _29 -> [bb105, bb92];
     }
 
     bb92: {
-        _0 = call const fn baml.ToJson.to_json(copy _1) -> [bb129];
+        _30 = is_type(copy _1, baml.time.ZonedDateTime);
+        branch copy _30 -> [bb104, bb93];
     }
 
     bb93: {
-        _0 = call const fn baml.time.Instant.baml.ToJson.to_json(copy _1) -> [bb129];
+        _31 = is_type(copy _1, baml.time.ZonedDateTime);
+        branch copy _31 -> [bb103, bb94];
     }
 
     bb94: {
-        _0 = call const fn baml.ToJson.to_json(copy _1) -> [bb129];
+        _32 = is_type(copy _1, baml.time.Instant);
+        branch copy _32 -> [bb102, bb95];
     }
 
     bb95: {
-        _0 = call const fn baml.time.ZonedDateTime.baml.ToJson.to_json(copy _1) -> [bb129];
+        _33 = is_type(copy _1, baml.time.Instant);
+        branch copy _33 -> [bb101, bb96];
     }
 
     bb96: {
-        _0 = call const fn baml.ToJson.to_json(copy _1) -> [bb129];
+        _34 = is_type(copy _1, baml.time.PlainDate);
+        branch copy _34 -> [bb100, bb97];
     }
 
     bb97: {
-        _0 = call const fn baml.time.PlainTime.baml.ToJson.to_json(copy _1) -> [bb129];
+        _35 = is_type(copy _1, baml.time.PlainDate);
+        branch copy _35 -> [bb99, bb98];
     }
 
     bb98: {
-        _0 = call const fn baml.ToJson.to_json(copy _1) -> [bb129];
-    }
-
-    bb99: {
-        _0 = call const fn baml.time.PlainDateTime.baml.ToJson.to_json(copy _1) -> [bb129];
-    }
-
-    bb100: {
-        _0 = call const fn baml.ToJson.to_json(copy _1) -> [bb129];
-    }
-
-    bb101: {
-        _0 = call const fn baml.toml.Table.baml.ToJson.to_json(copy _1) -> [bb129];
-    }
-
-    bb102: {
-        _15 = load_type(baml.json.json);
-        _16 = load_type(baml.json.JsonSerializationError);
-        _17 = load_type(baml.toml.Item);
-        _0 = call const fn baml.Array.map<copy _17, copy _15, copy _16>(copy _1, const fn baml.toml.item_to_json) -> [bb129];
-    }
-
-    bb103: {
-        _3 = is_type(copy _1, baml.toml.Table);
-        branch copy _3 -> [bb127, bb104];
-    }
-
-    bb104: {
-        _4 = is_type(copy _1, baml.toml.Table);
-        branch copy _4 -> [bb126, bb105];
-    }
-
-    bb105: {
-        _5 = is_type(copy _1, baml.time.PlainDateTime);
-        branch copy _5 -> [bb125, bb106];
-    }
-
-    bb106: {
-        _6 = is_type(copy _1, baml.time.PlainDateTime);
-        branch copy _6 -> [bb124, bb107];
-    }
-
-    bb107: {
-        _7 = is_type(copy _1, baml.time.PlainTime);
-        branch copy _7 -> [bb123, bb108];
-    }
-
-    bb108: {
-        _8 = is_type(copy _1, baml.time.PlainTime);
-        branch copy _8 -> [bb122, bb109];
-    }
-
-    bb109: {
-        _9 = is_type(copy _1, baml.time.ZonedDateTime);
-        branch copy _9 -> [bb121, bb110];
-    }
-
-    bb110: {
-        _10 = is_type(copy _1, baml.time.ZonedDateTime);
-        branch copy _10 -> [bb120, bb111];
-    }
-
-    bb111: {
-        _11 = is_type(copy _1, baml.time.Instant);
-        branch copy _11 -> [bb119, bb112];
-    }
-
-    bb112: {
-        _12 = is_type(copy _1, baml.time.Instant);
-        branch copy _12 -> [bb118, bb113];
-    }
-
-    bb113: {
-        _13 = is_type(copy _1, baml.time.PlainDate);
-        branch copy _13 -> [bb117, bb114];
-    }
-
-    bb114: {
-        _14 = is_type(copy _1, baml.time.PlainDate);
-        branch copy _14 -> [bb116, bb115];
-    }
-
-    bb115: {
         unreachable;
     }
 
+    bb99: {
+        _0 = call const fn baml.ToJson.to_json(copy _1) -> [bb141];
+    }
+
+    bb100: {
+        _0 = call const fn baml.time.PlainDate.baml.ToJson.to_json(copy _1) -> [bb141];
+    }
+
+    bb101: {
+        _0 = call const fn baml.ToJson.to_json(copy _1) -> [bb141];
+    }
+
+    bb102: {
+        _0 = call const fn baml.time.Instant.baml.ToJson.to_json(copy _1) -> [bb141];
+    }
+
+    bb103: {
+        _0 = call const fn baml.ToJson.to_json(copy _1) -> [bb141];
+    }
+
+    bb104: {
+        _0 = call const fn baml.time.ZonedDateTime.baml.ToJson.to_json(copy _1) -> [bb141];
+    }
+
+    bb105: {
+        _0 = call const fn baml.ToJson.to_json(copy _1) -> [bb141];
+    }
+
+    bb106: {
+        _0 = call const fn baml.time.PlainTime.baml.ToJson.to_json(copy _1) -> [bb141];
+    }
+
+    bb107: {
+        _0 = call const fn baml.ToJson.to_json(copy _1) -> [bb141];
+    }
+
+    bb108: {
+        _0 = call const fn baml.time.PlainDateTime.baml.ToJson.to_json(copy _1) -> [bb141];
+    }
+
+    bb109: {
+        _0 = call const fn baml.ToJson.to_json(copy _1) -> [bb141];
+    }
+
+    bb110: {
+        _0 = call const fn baml.toml.Table.baml.ToJson.to_json(copy _1) -> [bb141];
+    }
+
+    bb111: {
+        _20 = load_type(baml.json.json);
+        _21 = load_type(baml.json.JsonSerializationError);
+        _22 = load_type(baml.toml.Item);
+        _0 = call const fn baml.Array.map<copy _22, copy _20, copy _21>(copy _1, const fn baml.toml.item_to_json) -> [bb141];
+    }
+
+    bb112: {
+        _7 = is_type(copy _1, baml.toml.Table);
+        branch copy _7 -> [bb136, bb113];
+    }
+
+    bb113: {
+        _8 = is_type(copy _1, baml.toml.Table);
+        branch copy _8 -> [bb135, bb114];
+    }
+
+    bb114: {
+        _9 = is_type(copy _1, baml.time.PlainDateTime);
+        branch copy _9 -> [bb134, bb115];
+    }
+
+    bb115: {
+        _10 = is_type(copy _1, baml.time.PlainDateTime);
+        branch copy _10 -> [bb133, bb116];
+    }
+
     bb116: {
-        _0 = call const fn baml.ToJson.to_json(copy _1) -> [bb129];
+        _11 = is_type(copy _1, baml.time.PlainTime);
+        branch copy _11 -> [bb132, bb117];
     }
 
     bb117: {
-        _0 = call const fn baml.time.PlainDate.baml.ToJson.to_json(copy _1) -> [bb129];
+        _12 = is_type(copy _1, baml.time.PlainTime);
+        branch copy _12 -> [bb131, bb118];
     }
 
     bb118: {
-        _0 = call const fn baml.ToJson.to_json(copy _1) -> [bb129];
+        _13 = is_type(copy _1, baml.time.ZonedDateTime);
+        branch copy _13 -> [bb130, bb119];
     }
 
     bb119: {
-        _0 = call const fn baml.time.Instant.baml.ToJson.to_json(copy _1) -> [bb129];
+        _14 = is_type(copy _1, baml.time.ZonedDateTime);
+        branch copy _14 -> [bb129, bb120];
     }
 
     bb120: {
-        _0 = call const fn baml.ToJson.to_json(copy _1) -> [bb129];
+        _15 = is_type(copy _1, baml.time.Instant);
+        branch copy _15 -> [bb128, bb121];
     }
 
     bb121: {
-        _0 = call const fn baml.time.ZonedDateTime.baml.ToJson.to_json(copy _1) -> [bb129];
+        _16 = is_type(copy _1, baml.time.Instant);
+        branch copy _16 -> [bb127, bb122];
     }
 
     bb122: {
-        _0 = call const fn baml.ToJson.to_json(copy _1) -> [bb129];
+        _17 = is_type(copy _1, baml.time.PlainDate);
+        branch copy _17 -> [bb126, bb123];
     }
 
     bb123: {
-        _0 = call const fn baml.time.PlainTime.baml.ToJson.to_json(copy _1) -> [bb129];
+        _18 = is_type(copy _1, baml.time.PlainDate);
+        branch copy _18 -> [bb125, bb124];
     }
 
     bb124: {
-        _0 = call const fn baml.ToJson.to_json(copy _1) -> [bb129];
+        unreachable;
     }
 
     bb125: {
-        _0 = call const fn baml.time.PlainDateTime.baml.ToJson.to_json(copy _1) -> [bb129];
+        _0 = call const fn baml.ToJson.to_json(copy _1) -> [bb141];
     }
 
     bb126: {
-        _0 = call const fn baml.ToJson.to_json(copy _1) -> [bb129];
+        _0 = call const fn baml.time.PlainDate.baml.ToJson.to_json(copy _1) -> [bb141];
     }
 
     bb127: {
-        _0 = call const fn baml.toml.Table.baml.ToJson.to_json(copy _1) -> [bb129];
+        _0 = call const fn baml.ToJson.to_json(copy _1) -> [bb141];
     }
 
     bb128: {
-        _0 = copy _1;
-        goto -> bb129;
+        _0 = call const fn baml.time.Instant.baml.ToJson.to_json(copy _1) -> [bb141];
     }
 
     bb129: {
+        _0 = call const fn baml.ToJson.to_json(copy _1) -> [bb141];
+    }
+
+    bb130: {
+        _0 = call const fn baml.time.ZonedDateTime.baml.ToJson.to_json(copy _1) -> [bb141];
+    }
+
+    bb131: {
+        _0 = call const fn baml.ToJson.to_json(copy _1) -> [bb141];
+    }
+
+    bb132: {
+        _0 = call const fn baml.time.PlainTime.baml.ToJson.to_json(copy _1) -> [bb141];
+    }
+
+    bb133: {
+        _0 = call const fn baml.ToJson.to_json(copy _1) -> [bb141];
+    }
+
+    bb134: {
+        _0 = call const fn baml.time.PlainDateTime.baml.ToJson.to_json(copy _1) -> [bb141];
+    }
+
+    bb135: {
+        _0 = call const fn baml.ToJson.to_json(copy _1) -> [bb141];
+    }
+
+    bb136: {
+        _0 = call const fn baml.toml.Table.baml.ToJson.to_json(copy _1) -> [bb141];
+    }
+
+    bb137: {
+        _0 = copy _1;
+        goto -> bb141;
+    }
+
+    bb138: {
+        _0 = copy _1;
+        goto -> bb141;
+    }
+
+    bb139: {
+        _0 = copy _1;
+        goto -> bb141;
+    }
+
+    bb140: {
+        _0 = copy _1;
+        goto -> bb141;
+    }
+
+    bb141: {
         return;
     }
 }
@@ -14470,7 +14590,7 @@ fn baml.toml.table_from_json(j: baml.json.json) -> baml.toml.Table {
     let _48: baml.json.JsonDecodeError
 
     bb0: {
-        _2 = is_type(copy _1, map<_, _>);
+        _2 = is_type(copy _1, map<string, baml.json.json>);
         branch copy _2 -> [bb2, bb1];
     }
 

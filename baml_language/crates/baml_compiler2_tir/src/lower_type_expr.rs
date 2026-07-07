@@ -249,7 +249,7 @@ fn substitute_paths_walk(
 /// or `None` if it mentions no `Self`.
 ///
 /// `Self` is a signature-only construct: every signature/declaration site
-/// resolves it up front with [`substitute_self`] against a replacement it
+/// resolves it up front with `substitute_self` against a replacement it
 /// supplies (the enclosing type, the impl receiver, or the interface's `Self`
 /// bound). A method *body* has no such replacement — a class body cannot name
 /// its own instantiation as a value type, and an interface default method

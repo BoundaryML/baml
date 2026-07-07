@@ -64,7 +64,7 @@ enum Variance {
 
 /// Whether `value` is a member of the type denoted by `template`, with the
 /// enclosing frame's realized `type_args` resolving the template's frame
-/// references. The `IsType` value matcher.
+/// references. The `IsType` value matcher for `match` and `is` expressions.
 pub(crate) fn value_matches_template(
     vm: &BexVm,
     value: Value,
