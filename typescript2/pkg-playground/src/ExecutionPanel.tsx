@@ -13,7 +13,7 @@ import type { ChangeEvent, FC, RefObject } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { encodeRunArgs } from '@b/pkg-proto';
 import type { BamlJsValue } from '@b/pkg-proto';
-import { KeyRound, PanelLeft, Settings, Square } from 'lucide-react';
+import { KeyRound, PanelLeft, Play, Settings, Square } from 'lucide-react';
 import { Button } from './components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/tabs';
 import { Input } from './components/ui/input';
@@ -91,6 +91,12 @@ registerBuiltinResultRenderers();
 const LOGS_PANEL_DEFAULT_HEIGHT = 180;
 const LOGS_PANEL_MIN_HEIGHT = 40;
 const LOGS_PANEL_MAX_HEIGHT = 620;
+
+const IS_MAC =
+  typeof navigator !== 'undefined' && /Mac|iP/.test(navigator.platform);
+/** Shown on the Run button; the actual binding is the panel-scoped keydown
+ *  handler on the Tabs root. */
+const RUN_SHORTCUT_HINT = IS_MAC ? '⌘↵' : 'Ctrl+↵';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -2353,6 +2359,15 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
         value={activeTab}
         onValueChange={(v) => setActiveTab(v as typeof activeTab)}
         className="relative flex h-full min-h-0 w-full flex-1 flex-col gap-0 overflow-hidden"
+        // Panel-scoped run shortcut: fires for focus anywhere inside the
+        // playground (form fields, raw input, graph) without stealing
+        // Cmd/Ctrl+Enter from the host's code editor.
+        onKeyDown={(e) => {
+          if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+            e.preventDefault();
+            void onRunFunction();
+          }
+        }}
       >
         {/* ──── Combined top bar ──── */}
         <div className="flex items-center gap-1.5 px-2 py-1 shrink-0 border-b border-vsc-border bg-vsc-surface">
@@ -2433,17 +2448,33 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
             />
           )}
 
-          {selectedFn && !viewingCollection && !viewingTestRun && (
-            <Button
-              variant="success"
-              size="sm"
-              className="h-7 text-[11px] font-semibold"
-              disabled={hasErrors || isRunning || !selectedProject}
-              onClick={onRunFunction}
-            >
-              {isRunning ? 'Running...' : 'Run'}
-            </Button>
-          )}
+          {/* The primary Run button lives next to the args editor inside the
+              Run tab; other tabs keep a compact icon so re-running while
+              watching the graph/trace stays one click away. */}
+          {selectedFn &&
+            !viewingCollection &&
+            !viewingTestRun &&
+            activeTab !== 'run' && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="success"
+                      size="icon-xs"
+                      className="h-7 w-7"
+                      aria-label="Run"
+                      disabled={hasErrors || isRunning || !selectedProject}
+                      onClick={onRunFunction}
+                    >
+                      <Play />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    Run {selectedFn}() ({RUN_SHORTCUT_HINT})
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
 
           <TooltipProvider>
             <Tooltip>
@@ -3062,6 +3093,25 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                           onValueChange={setArgsMode}
                         />
                       )}
+                      <Button
+                        variant="success"
+                        size="xs"
+                        className="mx-1 my-0.5 shrink-0 text-[11px] font-semibold"
+                        aria-label={isRunning ? 'Running' : 'Run'}
+                        disabled={hasErrors || isRunning || !selectedProject}
+                        onClick={onRunFunction}
+                      >
+                        {isRunning ? (
+                          'Running...'
+                        ) : (
+                          <>
+                            Run
+                            <span className="font-normal opacity-70">
+                              {RUN_SHORTCUT_HINT}
+                            </span>
+                          </>
+                        )}
+                      </Button>
                     </div>
                     {showArgsForm && paramSchemas && parsedArgs && (
                       <div className="max-h-56 overflow-y-auto px-2 py-1.5 border-t border-vsc-border">

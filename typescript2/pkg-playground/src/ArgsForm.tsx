@@ -32,6 +32,7 @@ import {
 import { Input } from './components/ui/input';
 import { Select } from './components/ui/select';
 import { Switch } from './components/ui/switch';
+import { Textarea } from './components/ui/textarea';
 import { ToggleGroup } from './components/ui/toggle-group';
 import { cn } from './lib/utils';
 import type { FieldSchema, ParamSchema } from './worker-protocol';
@@ -557,12 +558,8 @@ const RawJsonField: FC<FieldInputProps> = ({
     }
   }
   return (
-    <textarea
-      className={cn(
-        'w-full min-h-[28px] rounded-md border border-vsc-input-border bg-vsc-input-bg text-vsc-input-fg px-2 py-1 font-vsc-mono text-xs outline-none resize-y',
-        'focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50',
-        !valid && 'border-destructive ring-destructive/20',
-      )}
+    <Textarea
+      className="min-h-[28px] px-2 py-1 font-vsc-mono text-xs resize-y"
       rows={1}
       value={draft}
       placeholder={`JSON (${schemaLabel(schema)})`}

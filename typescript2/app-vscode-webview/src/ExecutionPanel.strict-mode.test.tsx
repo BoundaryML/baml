@@ -245,6 +245,16 @@ describe('ExecutionPanel StrictMode lifecycle', () => {
         ),
       ).toBe(true);
     });
+
+    // Cmd/Ctrl+Enter from an args editor field runs with the current args.
+    // (The form was toggled to raw above, so target the raw input.)
+    const runCount = port.sent.filter((msg) => msg.type === 'startRun').length;
+    fireEvent.keyDown(rawInput, { key: 'Enter', metaKey: true });
+    await waitFor(() => {
+      expect(port.sent.filter((msg) => msg.type === 'startRun').length).toBe(
+        runCount + 1,
+      );
+    });
   });
 
   it('shows the no-arguments state for a nullary schema and still runs', async () => {
