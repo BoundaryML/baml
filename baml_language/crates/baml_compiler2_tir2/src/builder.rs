@@ -12898,11 +12898,8 @@ impl<'db> TypeInferenceBuilder<'db> {
         bound: &baml_type::Interface,
     ) -> Option<TirTypeError> {
         // Judge the type the argument denotes: aliases expanded, `never` dropped, a reducible
-        // projection collapsed. An unfilled `_` can't be normalized (`Infer` is the
-        // normalizer's `unreachable!`) and is handled by the fill machinery — skip it.
-        if matches!(actual, Ty::Infer { .. }) {
-            return None;
-        }
+        // projection collapsed. (A `_` placeholder is rejected at lowering — replaced by
+        // `Ty::Error`, which is an admissible sentinel below — so `Ty::Infer` never reaches here.)
         let arg = self.normalize(actual);
         if !Self::is_bounded_arg_admissible(&arg) {
             return Some(TirTypeError::BoundedTypeArgNotConcrete {

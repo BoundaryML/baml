@@ -153,6 +153,11 @@ pub enum TirTypeError {
     /// interface; without one the projection cannot be resolved, so it must not
     /// silently fall back to an unqualified projection.
     NonInterfaceProjectionQualifier,
+    /// A type-inference placeholder `_` (a `TypeExprKind::Infer` wildcard) could not have its
+    /// type inferred — inference for `_` is unavailable, so the type must be written explicitly.
+    /// Lowered to `Ty::Error` so it never reaches the canonical normalizer, which treats
+    /// `Ty::Infer` as `unreachable!`.
+    CannotInferType,
     /// An associated-type projection references `member`, but the subject it
     /// projects through does not declare (or cannot declare) it as an
     /// associated type.
@@ -605,6 +610,9 @@ impl fmt::Display for TirTypeError {
                     f,
                     "qualified associated type projection must use an interface"
                 )
+            }
+            TirTypeError::CannotInferType => {
+                write!(f, "type inference failed; write the type explicitly")
             }
             TirTypeError::UnknownAssociatedType { member, container } => {
                 write!(f, "unknown associated type `{member}` for {container}")

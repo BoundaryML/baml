@@ -815,12 +815,16 @@ pub fn lower_type_expr(
         TypeExprKind::Rust { .. } => Ty::RustType {
             attr: TyAttr::default(),
         },
-        // The wildcard `_` lowers to the inference hole, to be filled during
-        // checking (a generic-arg slot from its initializer, a `throws` member
-        // from the inferred effective throw set).
-        TypeExprKind::Infer { .. } => Ty::Infer {
-            attr: TyAttr::default(),
-        },
+        // The wildcard `_` (a type-inference placeholder) cannot be inferred — inference for
+        // `_` is unimplemented. Reject it with a diagnostic and lower to `Ty::Error` — never
+        // `Ty::Infer`, which the canonical normalizer treats as `unreachable!`. The user must
+        // write the type explicitly.
+        TypeExprKind::Infer { .. } => {
+            diagnostics.push(TirTypeError::CannotInferType);
+            Ty::Error {
+                attr: TyAttr::default(),
+            }
+        }
     }
 }
 
@@ -3175,6 +3179,68 @@ function needs<T extends Marker>(x: T) -> int throws never {
         assert!(
             has_unspecialized(&errors),
             "a bare unspecialized generic function value should error, got {errors:?}"
+        );
+    }
+
+    // ── `_` type-inference placeholder: rejected (inference variables unimplemented) ──
+
+    #[test]
+    fn type_inference_placeholder_is_rejected() {
+        // A `_` type placeholder (inference variable) is not supported — it must be a hard
+        // error, and must never lower to `Ty::Infer` (which the normalizer treats as
+        // `unreachable!`), so checking cannot panic.
+        let errors = all_type_errors(
+            "class Box<T> {\n  val: T\n}\n\
+             function make() -> Box<int> throws never {\n  Box<int> { val: 5 }\n}\n\
+             function caller() -> int throws never {\n  let b: Box<_> = make();\n  0\n}\n",
+        );
+        assert!(
+            errors
+                .iter()
+                .any(|e| matches!(e, TirTypeError::CannotInferType)),
+            "a `_` type placeholder should be rejected with CannotInferType, got {errors:?}"
+        );
+    }
+
+    // The two tests below describe the deferred `_` inference-variable feature (fill a
+    // partial annotation's holes from the initializer). They are ignored while `_` is a hard
+    // error; un-ignore and rewrite them against the real fill diagnostic when it lands.
+
+    fn has_unfilled_infer_hole(errors: &[TirTypeError]) -> bool {
+        errors
+            .iter()
+            .any(|e| matches!(e, TirTypeError::UnresolvedType { name, .. } if name.as_str() == "_"))
+    }
+
+    #[test]
+    #[ignore = "`_` inference variables are a deferred feature; `_` is currently a hard error"]
+    fn infer_hole_in_annotation_is_filled_from_initializer() {
+        // `let b: Box<_> = <Box<int>>` fills `_` to `int` — no un-inferable-`_` error, and
+        // (crucially) no panic from a `Ty::Infer` reaching the normalizer.
+        let errors = all_type_errors(
+            "class Box<T> {\n  val: T\n}\n\
+             function make() -> Box<int> throws never {\n  Box<int> { val: 5 }\n}\n\
+             function caller() -> int throws never {\n  let b: Box<_> = make();\n  0\n}\n",
+        );
+        assert!(
+            !has_unfilled_infer_hole(&errors),
+            "a fillable `_` hole should be filled, not reported, got {errors:?}"
+        );
+    }
+
+    #[test]
+    #[ignore = "`_` inference variables are a deferred feature; `_` is currently a hard error"]
+    fn uninferable_infer_hole_is_an_error() {
+        // `Box<_>` filled from a non-`Box` initializer (`5`): the `_` cannot align to a
+        // position of the initializer's type, so it is an un-inferable `_` — reported (not a
+        // panic). (There is also a type mismatch; the test only asserts the `_` diagnostic.)
+        let errors = all_type_errors(
+            "class Box<T> {\n  val: T\n}\n\
+             function caller() -> int throws never {\n  let b: Box<_> = 5;\n  0\n}\n",
+        );
+        assert!(
+            has_unfilled_infer_hole(&errors),
+            "an un-inferable `_` should be reported, got {errors:?}"
         );
     }
 }
