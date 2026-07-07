@@ -1,0 +1,91 @@
+/* Shared look for the experiments site — same language as the arena page
+   (paper background, ink text, purple accent, hairline rules). */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+:root {
+  --ink: #1a1612; --body: #2b2520; --muted: #6f6a63; --soft: #8a8580;
+  --rule: #e7e2d6; --accent: #6d28d9; --accent-soft: #a78bfa; --amber: #b45309;
+  --paper: #fdfbf5; --card: #fffdf7; --card-head: #f6f1e4; --border: #d8cfbd;
+  --tan: #d9d2c0; --red: #b91c1c; --green: #3f6212;
+  --gutter: clamp(1.2rem, 5vw, 4.5rem);
+}
+body {
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 16.5px; line-height: 1.68; color: var(--body); background: var(--paper);
+  padding-bottom: 5rem;
+}
+.mono, code, pre { font-family: ui-monospace, "SF Mono", "Geist Mono", Menlo, monospace; }
+code { padding: 0.08em 0.32em; font-size: 0.9em; background: rgba(26,22,18,0.055); border-radius: 4px; }
+
+.section { max-width: min(800px, calc(100vw - 2 * var(--gutter))); margin: 0 auto; padding: 2.2rem 0 0.6rem; }
+
+nav.crumbs { max-width: min(800px, calc(100vw - 2 * var(--gutter))); margin: 1.6rem auto 0; font-family: ui-monospace, monospace; font-size: 12px; letter-spacing: 0.06em; }
+nav.crumbs a { color: var(--muted); text-decoration: none; }
+nav.crumbs a:hover { color: var(--accent); }
+nav.crumbs span { color: var(--soft); }
+
+.eyebrow { margin: 2.4rem 0 0.55rem; font-size: 11px; font-weight: 500; color: var(--accent); text-transform: uppercase; letter-spacing: 0.18em; }
+h1 { margin: 0.4rem 0 1.4rem; font-size: clamp(30px, 4.4vw, 46px); font-weight: 680; line-height: 1.1; color: var(--ink); letter-spacing: -0.02em; }
+h1 img.sheep { display: inline-block; height: 0.92em; width: auto; margin-right: 0.18em; vertical-align: -0.08em; }
+h2 { margin: 2.2rem 0 1rem; font-size: clamp(24px, 3vw, 32px); font-weight: 650; line-height: 1.18; color: var(--ink); letter-spacing: -0.015em; }
+h3 { margin: 1.6rem 0 0.6rem; font-size: 19px; font-weight: 620; color: var(--ink); }
+p { margin: 0 0 1rem; }
+.dim { font-size: 14.5px; color: var(--muted); }
+a { color: var(--accent); }
+
+/* index cards */
+.exp-link {
+  display: block; margin: 1.1rem 0; padding: 1.1rem 1.3rem; text-decoration: none;
+  color: var(--body); background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+  transition: border-color 140ms ease, transform 140ms ease;
+}
+.exp-link:hover { border-color: var(--accent); transform: translateY(-1px); }
+.exp-link .name { font-weight: 620; color: var(--ink); font-size: 18px; }
+.exp-link .stat { font-family: ui-monospace, monospace; font-size: 11.5px; color: var(--accent); text-transform: uppercase; letter-spacing: 0.1em; margin-top: 2px; }
+.exp-link p { margin: 0.45rem 0 0; font-size: 14.5px; color: var(--muted); }
+
+/* tables */
+table { width: 100%; margin: 0.4rem 0 1.6rem; font-size: 14px; border-collapse: collapse; }
+th { padding: 0.35rem 0.9rem 0.35rem 0; font-family: ui-monospace, monospace; font-size: 11px; font-weight: 500; color: var(--soft); text-align: left; text-transform: uppercase; letter-spacing: 0.1em; border-bottom: 1px solid var(--rule); }
+td { padding: 0.45rem 0.9rem 0.45rem 0; border-bottom: 1px solid var(--rule); vertical-align: top; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+td.case { font-family: ui-monospace, monospace; font-size: 12.5px; white-space: nowrap; }
+td .ms { font-family: ui-monospace, monospace; font-size: 11px; color: var(--soft); }
+td.pass { color: var(--body); }
+td.pass::before { content: "✓ "; font-weight: 650; color: var(--accent); }
+td.fail { color: var(--red); }
+td.fail::before { content: "✗ "; font-weight: 650; }
+td .detail { font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+.suite-cap { margin: 1.8rem 0 0.2rem; font-family: ui-monospace, monospace; font-size: 11px; color: var(--soft); text-transform: uppercase; letter-spacing: 0.14em; }
+tr.winner td { background: color-mix(in srgb, var(--accent) 5%, transparent); }
+.ok { color: var(--green); font-weight: 600; }
+.bad { color: var(--red); font-weight: 600; }
+
+/* bar chart */
+.chart { display: flex; flex-direction: column; gap: 0.3rem; max-width: 640px; margin: 1.4rem 0 1rem; }
+.chart-cap { margin: 0 0 0.55rem; font-family: ui-monospace, monospace; font-size: 11px; color: var(--soft); text-transform: uppercase; letter-spacing: 0.12em; }
+.chart-row { display: grid; grid-template-columns: 12.5rem minmax(0, 1fr); gap: 0.8rem; align-items: center; padding: 5px 0; }
+.chart-name { font-size: 12.5px; color: var(--body); font-family: ui-monospace, monospace; }
+.chart-track { display: flex; gap: 0.6rem; align-items: center; min-width: 0; }
+.chart-fill { position: relative; flex: none; width: 0; height: 24px; overflow: hidden; background: var(--tan); border-radius: 4px; animation: grow 0.6s ease-out forwards; }
+.chart-fill--baml, .chart-fill--accent { background: var(--accent); }
+.chart-fill img { position: absolute; top: 50%; right: 5px; height: 17px; width: auto; filter: brightness(0) invert(1); transform: translateY(-50%); }
+@keyframes grow { to { width: var(--w); } }
+.chart-val { font-size: 12.5px; color: var(--ink); white-space: nowrap; opacity: 0; animation: fadein 0.3s 0.45s ease forwards; }
+.chart-val small { color: var(--muted); }
+@keyframes fadein { to { opacity: 1; } }
+
+/* code frames */
+.codeframe { overflow: hidden; background: var(--card); border: 1px solid var(--border); border-radius: 10px; margin: 1rem 0 1.4rem; }
+.codeframe pre { padding: 0.8rem 1rem; overflow-x: auto; font-size: 12.5px; line-height: 1.7; color: var(--body); }
+.codeframe .cmt { color: var(--soft); }
+.codeframe .kw { color: var(--accent); }
+.codeframe .str { color: var(--amber); }
+
+/* callouts */
+.note { margin: 1.2rem 0; padding: 0.85rem 1.1rem; font-size: 14.5px; color: var(--muted); background: var(--card); border: 1px dashed var(--border); border-radius: 10px; }
+.note code { background: rgba(26,22,18,0.05); }
+
+/* evidence blocks */
+.evidence { margin: 0.5rem 0 1rem; padding: 0.6rem 0.9rem; font-family: ui-monospace, monospace; font-size: 12px; line-height: 1.6; color: var(--body); background: var(--card); border-left: 3px solid var(--rule); overflow-x: auto; white-space: pre-wrap; }
+.finding-head { font-family: ui-monospace, monospace; font-size: 11.5px; color: var(--muted); letter-spacing: 0.04em; }
+.finding-head .grade { color: var(--red); font-weight: 650; }

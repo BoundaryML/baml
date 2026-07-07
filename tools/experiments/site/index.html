@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>baml experiments</title>
+<link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+
+<section class="section">
+  <p class="eyebrow">boundary</p>
+  <h1><img class="sheep" src="https://new.boundaryml.com/baml-sheep.png" alt="" onerror="this.remove()"/>baml experiments</h1>
+
+  <p>We co-design BAML with the agents and people who write it. That means running
+  experiments instead of arguing from taste: put models in front of the language,
+  measure what they do, change the language when the data says to. This page collects
+  the runs, with receipts.</p>
+
+  <a class="exp-link" href="./benchmark-models.html">
+    <span class="name">Which models write real BAML?</span>
+    <div class="stat">5 models · 127 design-principle cards · one surprise</div>
+    <p>Five models built the same small BAML project from nothing, learning the language
+    through the CLI. We graded every project against design principles distilled from all
+    50 BEPs. The best adherence score went to a project that doesn't compile.</p>
+  </a>
+
+  <a class="exp-link" href="./benchmarking-realtime.html">
+    <span class="name">Tool calling for gpt-realtime: baml vs native</span>
+    <div class="stat">19/19 vs 17/19 · live sessions · three suites</div>
+    <p>Two identical voice sessions, one difference: who turns your words into a tool
+    call. The native lane uses JSON-schema tools in the realtime session. The baml lane
+    delegates to a typed BAML function. The two failures tell you more than the seventeen passes.</p>
+  </a>
+
+  <p class="dim" style="margin-top:2rem">Data lives in the <code>experiments</code> Convex
+  project. Graders, harnesses, and raw runs are in the repo under
+  <code>tools/experiments/</code> and <code>tools/baml-bench/</code>.</p>
+</section>
+
+</body>
+</html>

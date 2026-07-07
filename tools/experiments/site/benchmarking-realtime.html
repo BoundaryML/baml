@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Tool calling for gpt realtime: baml vs native</title>
+<link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+
+<nav class="crumbs"><a href="./index.html">baml experiments</a> <span>/ benchmarking-realtime</span></nav>
+
+<section class="section">
+  <p class="eyebrow">agent tries realtime</p>
+  <h1><img class="sheep" src="https://new.boundaryml.com/baml-sheep.png" alt="" onerror="this.remove()"/>Testing tool calling for gpt&nbsp;realtime: baml vs native</h1>
+
+  <p>Two real <code>gpt-realtime-2.1</code> sessions over the Realtime WebSocket API, fed
+  the same microphone audio and the same text. They differ in exactly one place: who turns
+  your words into a tool call.</p>
+
+  <div class="note">This page shows the recorded runs. The live side-by-side arena needs a
+  long-lived WebSocket server, so it runs locally: <code>npm start</code> in
+  <code>tools/experiments/benchmarking-realtime/server</code>, then open
+  <code>http://localhost:8788</code>.</div>
+</section>
+
+<section class="section">
+  <h2>The setup</h2>
+
+  <p><strong>The native lane</strong> is the setup most realtime apps ship. Tools are
+  declared as JSON schemas in <code>session.update</code>, and the voice model itself picks
+  a tool and extracts the arguments while it talks.</p>
+
+  <p><strong>The baml lane</strong> gives the voice model a single tool,
+  <code>delegate(request)</code>, and prompts it to pass the utterance through verbatim;
+  spelled-out letters, fractions and all. A BAML function then does the tool selection as
+  one structured decode into a typed union, and the tools themselves run in the BAML VM:</p>
+
+  <div class="codeframe"><pre><span class="cmt">// brain/baml_src/thinker.baml</span>
+<span class="kw">function</span> DecideAction(history: <span class="kw">string</span>, request: <span class="kw">string</span>, now_iso: <span class="kw">string</span>)
+    -> GetWeather | LookupOrder | SetTimer | CreateCalendarEvent | SendMessage | Answer {
+  client Thinker  <span class="cmt">// claude-sonnet-4-6</span>
+  prompt #<span class="str">"
+    Order IDs are precise alphanumerics: normalize to uppercase, keep dashes.
+    Timer durations must be converted to whole seconds.
+    Calendar events: resolve relative dates against {{ now_iso }}.
+    {{ history }} {{ request }} {{ ctx.output_format }}
+  "</span>#
+}
+
+<span class="kw">function</span> handle(history: <span class="kw">string</span>, request: <span class="kw">string</span>, now_iso: <span class="kw">string</span>) -> ToolOutcome {
+  execute(DecideAction(history, request, now_iso))  <span class="cmt">// runs the chosen tool in the VM</span>
+}</pre></div>
+
+  <p>The executors are shared (the native lane's function calls are routed into the same
+  BAML functions), so any difference between the panes is purely tool selection and
+  argument extraction. Everything lives in two small projects:</p>
+
+  <div class="codeframe"><pre>brain/baml_src/
+  types.baml     <span class="cmt">the action union (weather, orders, timer, calendar, message, answer)</span>
+  thinker.baml   <span class="cmt">the Thinker client + DecideAction + handle()</span>
+  tools.baml     <span class="cmt">executors: open-meteo weather, order DB, timers, calendar, contacts</span>
+  tests.baml     <span class="cmt">deterministic executor tests (baml test)</span>
+
+server/src/
+  relay.ts       <span class="cmt">one WebSocket per lane; delegate vs native session config</span>
+  compare.ts     <span class="cmt">the benchmark harness below (three suites)</span>
+  index.ts       <span class="cmt">the live arena + the dual-session bridge</span></pre></div>
+
+  <p class="dim">Every turn from both lanes, in the arena and in the benchmark harness, is
+  logged to a Convex database (<code>experiments/turns</code>) with the raw args, executor
+  payload, and latency.</p>
+</section>
+
+<section class="section">
+  <h2>What the runs showed</h2>
+  <p>BAML went 19/19 across the base, hard, and adversarial suites. Native went 17/19,
+  and its two misses are the interesting part. One was argument extraction on confusable
+  phonetics: "queue five are six…" lost the Q. The other was an indirect location —
+  "where the golden gate bridge is" got passed to the weather tool as a literal city
+  name. Native is also about twice as fast per turn, since there's no second model hop.
+  That's the trade.</p>
+  <div class="chart" id="chart"></div>
+  <div id="tables"></div>
+</section>
+
+<script>
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+fetch("./data/realtime-results.json").then((r) => r.json()).then((suites) => {
+  let nPass = 0, nAll = 0, bPass = 0, bAll = 0, nMs = [], bMs = [];
+  const tables = document.getElementById("tables");
+  for (const [suite, data] of Object.entries(suites)) {
+    if (!data.native || !data.delegate) continue;
+    const cap = document.createElement("p");
+    cap.className = "suite-cap";
+    cap.textContent = `${suite} suite`;
+    tables.appendChild(cap);
+    const table = document.createElement("table");
+    table.insertAdjacentHTML("beforeend",
+      "<tr><th style='width:11.5rem'>case</th><th>native (json-schema)</th><th>baml thinker</th></tr>");
+    for (let i = 0; i < data.native.length; i++) {
+      const n = data.native[i], d = data.delegate[i];
+      nAll++; bAll++; nMs.push(n.ms); bMs.push(d.ms);
+      if (n.pass) nPass++;
+      if (d.pass) bPass++;
+      const cell = (r) =>
+        `<td class="${r.pass ? "pass" : "fail"}"><span class="detail">${esc(r.detail.slice(0, 110))}</span> <span class="ms">${r.ms}ms</span></td>`;
+      table.insertAdjacentHTML("beforeend", `<tr><td class="case">${esc(n.id)}</td>${cell(n)}${cell(d)}</tr>`);
+    }
+    tables.appendChild(table);
+  }
+  const avg = (xs) => Math.round(xs.reduce((a, x) => a + x, 0) / (xs.length || 1) / 100) / 10;
+  const chart = document.getElementById("chart");
+  chart.insertAdjacentHTML("beforeend", '<p class="chart-cap">tool-call accuracy, live gpt-realtime-2.1 sessions</p>');
+  const row = (name, frac, label, baml) =>
+    `<div class="chart-row"><span class="chart-name">${name}</span><span class="chart-track">` +
+    `<span class="chart-fill${baml ? " chart-fill--baml" : ""}" style="--w:${Math.round(frac * 100)}%">${baml ? '<img src="https://new.boundaryml.com/baml-sheep.png" onerror="this.remove()"/>' : ""}</span>` +
+    `<span class="chart-val">${label}</span></span></div>`;
+  chart.insertAdjacentHTML("beforeend", row("baml thinker", bAll ? bPass / bAll : 0, `${bPass}/${bAll} <small>· ${avg(bMs)}s/turn</small>`, true));
+  chart.insertAdjacentHTML("beforeend", row("native tools", nAll ? nPass / nAll : 0, `${nPass}/${nAll} <small>· ${avg(nMs)}s/turn</small>`, false));
+});
+</script>
+</body>
+</html>
