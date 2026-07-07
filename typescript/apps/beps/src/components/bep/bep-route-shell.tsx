@@ -922,6 +922,12 @@ const [copied, setCopied] = useState(false);
                 sections={allSections}
                 activeSection={activeSection}
                 onSectionClick={handleSectionChange}
+                bepNumber={bepNumber}
+                versionNumber={
+                  isViewingHistorical && routeInfo.versionNumber !== latestVersionNumber
+                    ? routeInfo.versionNumber
+                    : null
+                }
                 commentCounts={commentCounts ?? {}}
                 totalCommentCount={isViewingHistorical ? 0 : totalCommentCount}
                 openIssueCount={isViewingHistorical ? 0 : openIssueCount}
