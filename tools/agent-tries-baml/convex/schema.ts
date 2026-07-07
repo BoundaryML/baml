@@ -130,6 +130,11 @@ export default defineSchema({
     // ISO created_at high-water mark of the newest human PR comment we've acted on,
     // so team-comment pickup is robust even when the 👀 reaction POST is forbidden.
     lastHumanCommentAt: v.optional(v.string()),
+    // ---- environment of the run(s) behind this issue (stamped by dedup) ----
+    // last-seen wins on extend. skillUsed = repo URL, skillVersion = skill sha.
+    bamlVersion: v.optional(v.string()),
+    skillUsed: v.optional(v.string()),
+    skillVersion: v.optional(v.string()),
     // ---- bug-verify: re-checks against the newest nightly ----
     verifiedAt: v.optional(v.number()), // last re-check time
     verifyBamlVersion: v.optional(v.string()), // version label last checked against

@@ -214,7 +214,7 @@ class DedupProcessor {
     // Class method (outside the implements block): create OR extend one issue. When
     // the Dedup LLM matched the finding to an open issue it carries that issue's
     // `id` -> extend it; otherwise it's genuinely new -> create.
-    function upsert(self, iss: DedupIssue, now: int, envs: map<string, RunEnv>) -> int {
+    function upsert(self, iss: DedupIssue, now: int, envs: map<string, RunEnv>) -> int throws ProcessError {
         let existing = match (iss.id) {
             let v: string => v,
             null => "",
@@ -247,7 +247,7 @@ class DedupProcessor {
         return evidence;
     }
 
-    function create_doc(self, iss: DedupIssue, now: int, envs: map<string, RunEnv>) -> int {
+    function create_doc(self, iss: DedupIssue, now: int, envs: map<string, RunEnv>) -> int throws ProcessError {
         let evidence = self.evidence_of(iss, envs);
         let renv = first_env(evidence, envs);
         let doc = IssueCreate {
@@ -269,18 +269,23 @@ class DedupProcessor {
         let doc_json = baml.json.to_string(doc) catch (_) {
             _ => ""
         };
-        if (doc_json != "") {
-            let _ = self.svc.create("issues", doc_json) catch (_) {
-                _ => ""
-            };
+        if (doc_json == "") {
+            throw ProcessError { message: "serialize issue failed" };
         }
+        // Fail LOUD: a swallowed create silently drops the finding (the trophy
+        // still goes done). A throw fails the batch -> reaper requeues it.
+        let _ = self.svc.create("issues", doc_json) catch (e) {
+            _ => {
+                throw ProcessError { message: "create issue failed: " + baml.unstable.string(e) }
+            }
+        };
         return 0;
     }
 
     // Extend a matched open issue: append this batch's evidence and bump lastSeenAt.
     // If the issue vanished (e.g. rejected mid-batch) fall back to a fresh create so
     // the finding isn't silently dropped.
-    function extend(self, id: string, iss: DedupIssue, now: int, envs: map<string, RunEnv>) -> int {
+    function extend(self, id: string, iss: DedupIssue, now: int, envs: map<string, RunEnv>) -> int throws ProcessError {
         let raw = self.svc.get("issues", id) catch (_) {
             _ => null
         };
@@ -350,11 +355,16 @@ class DedupProcessor {
         let patch = baml.json.to_string(patch_map) catch (_) {
             _ => ""
         };
-        if (patch != "") {
-            let _ = self.svc.update("issues", id, patch) catch (_) {
-                _ => ""
-            };
+        if (patch == "") {
+            throw ProcessError { message: "serialize extend patch failed" };
         }
+        // Fail LOUD (this exact failure was silently eaten when the schema lacked
+        // the env fields — the evidence merge vanished while trophies went done).
+        let _ = self.svc.update("issues", id, patch) catch (e) {
+            _ => {
+                throw ProcessError { message: "extend issue failed: " + baml.unstable.string(e) }
+            }
+        };
         return 0;
     }
 }
