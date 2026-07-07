@@ -50,6 +50,7 @@ tracing = { workspace = true }
 vfs = { workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+ignore = { workspace = true }
 tokio = { workspace = true, features = [ "sync", "rt" ] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
