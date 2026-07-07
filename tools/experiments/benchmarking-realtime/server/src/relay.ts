@@ -33,6 +33,90 @@ function nowIso(): string {
   return `${iso} (${weekday})`;
 }
 
+
+// ---- native-lane argument validation ----------------------------------------
+// OpenAI only loosely conforms tool calls to the declared JSON schemas (strict
+// mode is off, matching the standard setup most realtime apps ship). Before a
+// native call reaches an executor we check it ourselves: parseable JSON, all
+// required fields present, right types, enum membership, no unknown fields.
+// A malformed call becomes a visible failure (red card, tool: "error") instead
+// of being silently coerced into a semantically wrong call.
+
+type FieldRule = {
+  type: "string" | "integer" | "string[]";
+  required?: boolean;
+  nonEmpty?: boolean;
+  enum?: string[];
+};
+
+const NATIVE_ARG_RULES: Record<string, Record<string, FieldRule>> = {
+  get_weather: {
+    city: { type: "string", required: true, nonEmpty: true },
+    region: { type: "string" },
+  },
+  lookup_order: {
+    order_id: { type: "string", required: true, nonEmpty: true },
+  },
+  set_timer: {
+    seconds: { type: "integer", required: true },
+    label: { type: "string" },
+  },
+  create_calendar_event: {
+    title: { type: "string", required: true, nonEmpty: true },
+    start_iso: { type: "string", required: true, nonEmpty: true },
+    duration_minutes: { type: "integer", required: true },
+    attendees: { type: "string[]" },
+    location: { type: "string" },
+  },
+  send_message: {
+    to: { type: "string", required: true, nonEmpty: true },
+    body: { type: "string", required: true },
+    urgency: { type: "string", enum: ["low", "normal", "urgent"] },
+  },
+};
+
+export function validateNativeArgs(
+  name: string,
+  rawArgs: string,
+): { ok: true; args: Record<string, any> } | { ok: false; problems: string[] } {
+  let parsed: any;
+  try {
+    parsed = JSON.parse(rawArgs);
+  } catch (e) {
+    return { ok: false, problems: [`arguments are not valid JSON: ${e}`] };
+  }
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    return { ok: false, problems: ["arguments must be a JSON object"] };
+  }
+  const rules = NATIVE_ARG_RULES[name];
+  if (!rules) return { ok: false, problems: [`unknown tool "${name}"`] };
+  const problems: string[] = [];
+  for (const [field, rule] of Object.entries(rules)) {
+    const v = parsed[field];
+    if (v === undefined || v === null) {
+      if (rule.required) problems.push(`missing required field "${field}"`);
+      continue;
+    }
+    if (rule.type === "string" && typeof v !== "string") {
+      problems.push(`"${field}" must be a string, got ${typeof v}`);
+    } else if (rule.type === "integer" && (typeof v !== "number" || !Number.isInteger(v))) {
+      problems.push(`"${field}" must be an integer, got ${JSON.stringify(v)}`);
+    } else if (rule.type === "string[]" && (!Array.isArray(v) || v.some((x: any) => typeof x !== "string"))) {
+      problems.push(`"${field}" must be an array of strings`);
+    }
+    if (rule.nonEmpty && typeof v === "string" && v.trim() === "") {
+      problems.push(`"${field}" must not be empty`);
+    }
+    if (rule.enum && typeof v === "string" && !rule.enum.includes(v)) {
+      problems.push(`"${field}" must be one of: ${rule.enum.join(", ")}`);
+    }
+  }
+  for (const k of Object.keys(parsed)) {
+    if (!rules[k]) problems.push(`unexpected field "${k}"`);
+  }
+  return problems.length ? { ok: false, problems } : { ok: true, args: parsed };
+}
+
 const INSTRUCTIONS = `
 You are a friendly, quick voice assistant.
 
@@ -365,11 +449,22 @@ export class RealtimeRelay {
   /** Native mode: the realtime model picked the tool and extracted the args;
    *  we map them onto the same BAML executors delegate mode uses. */
   private async runNativeTool(callId: string, name: string, rawArgs: string) {
-    let args: Record<string, any> = {};
-    try {
-      args = JSON.parse(rawArgs);
-    } catch {}
     this.history.push({ role: "user", text: `[${name}] ${rawArgs}` });
+
+    // formatting gate: malformed arguments fail loudly instead of being coerced
+    const checked = validateNativeArgs(name, rawArgs);
+    if (!checked.ok) {
+      const outcome = {
+        say: `The ${name} call was malformed, so I couldn't run it.`,
+        tool: "error",
+        data: { error: "malformed_arguments", tool: name, problems: checked.problems, raw_arguments: rawArgs },
+      } as ToolOutcome;
+      this.events.onError?.(`native tool ${name} malformed: ${checked.problems.join("; ")}`);
+      this.events.onToolResult?.(outcome, { raw: rawArgs }, name);
+      this.sendToolOutput(callId, outcome);
+      return;
+    }
+    const args = checked.args;
 
     let outcome: ToolOutcome;
     try {
