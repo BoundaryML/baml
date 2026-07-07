@@ -8,9 +8,10 @@ use baml_compiler2_hir::{
     file_item_tree,
     package::{PackageId, package_items},
 };
+use baml_compiler2_tir::package_interface::package_interface;
 use baml_db::Name;
 
-use crate::db::ProjectDatabase;
+use crate::{db::ProjectDatabase, param_schema, param_schema::ParamSchema};
 
 /// Symbol kind — locally defined since v1 HIR is removed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -49,6 +50,10 @@ pub struct FunctionSymbol {
     pub client_name: Option<String>,
     /// Whether this function is compiler-generated (`render_prompt`, `build_request`, `resolve`).
     pub is_sub_function: bool,
+    /// Parameter schemas for the playground args form. `None` means no schema
+    /// could be extracted (function missing from the package interface
+    /// mid-edit); `Some(vec![])` means the function takes no arguments.
+    pub params: Option<Vec<ParamSchema>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -108,6 +113,7 @@ pub fn list_functions(db: &ProjectDatabase) -> Vec<Symbol> {
 pub fn list_functions_with_metadata(db: &ProjectDatabase) -> Vec<FunctionSymbol> {
     let pkg_id = PackageId::new(db, Name::new("user"));
     let pkg = package_items(db, pkg_id);
+    let iface = package_interface(db, pkg_id);
     let mut result = Vec::new();
     for (namespace_path, ns_items) in &pkg.namespaces {
         for (name, defn) in &ns_items.values {
@@ -137,6 +143,7 @@ pub fn list_functions_with_metadata(db: &ProjectDatabase) -> Vec<FunctionSymbol>
                     is_llm,
                     client_name,
                     is_sub_function,
+                    params: param_schema::function_param_schemas(db, iface, namespace_path, name),
                 });
             }
         }
