@@ -495,6 +495,67 @@ impl BexExternalValue {
     pub fn is_host_value(&self) -> bool {
         matches!(self, Self::HostValue(_))
     }
+
+    /// Human-readable, structural rendering of this value — the form `baml run`
+    /// prints in debug mode and the form the CLI surfaces for an uncaught
+    /// `throw`.
+    ///
+    /// This is deliberately distinct from the [`Debug`](std::fmt::Debug) impl,
+    /// which leaks Rust-internal shapes: a thrown
+    /// `baml.errors.Io { message: "boom" }` renders here as
+    /// `baml.errors.Io { message: "boom" }` rather than
+    /// `Instance { class_name: "baml.errors.Io", type_args: [], fields: {..} }`,
+    /// and a generic instance's `type_args` are omitted entirely instead of
+    /// dumping `Class(QualifiedTypeName { .. }, [], TyAttr { .. })`.
+    ///
+    /// It is a pure structural pretty-printer, not the VM's `baml.ToString`
+    /// dispatch: it runs without a live VM (e.g. after the VM has unwound on an
+    /// uncaught throw), so it cannot honor user `to_string` overrides.
+    pub fn render_readable(&self) -> String {
+        match self {
+            BexExternalValue::Null => "null".to_string(),
+            BexExternalValue::Int(i) => i.to_string(),
+            BexExternalValue::Bigint(i) => i.to_string(),
+            BexExternalValue::Float(f) => {
+                let s = f.to_string();
+                if s.contains('.') || !f.is_finite() {
+                    s
+                } else {
+                    format!("{s}.0")
+                }
+            }
+            BexExternalValue::Bool(b) => b.to_string(),
+            BexExternalValue::String(s) => format!("{s:?}"),
+            BexExternalValue::Array { items, .. } => {
+                let inner: Vec<String> = items.iter().map(Self::render_readable).collect();
+                format!("[{}]", inner.join(", "))
+            }
+            BexExternalValue::Map { entries, .. } => {
+                let inner: Vec<String> = entries
+                    .iter()
+                    .map(|(k, v)| format!("{k:?}: {}", v.render_readable()))
+                    .collect();
+                format!("{{{}}}", inner.join(", "))
+            }
+            BexExternalValue::Instance {
+                class_name, fields, ..
+            } => {
+                let inner: Vec<String> = fields
+                    .iter()
+                    .map(|(k, v)| format!("{k}: {}", v.render_readable()))
+                    .collect();
+                if class_name.is_empty() {
+                    format!("{{{}}}", inner.join(", "))
+                } else {
+                    format!("{class_name} {{{}}}", inner.join(", "))
+                }
+            }
+            BexExternalValue::Variant { variant_name, .. } => variant_name.clone(),
+            BexExternalValue::Union { value, .. } => value.render_readable(),
+            BexExternalValue::Uint8Array(bytes) => format!("<bytes:{}>", bytes.len()),
+            _ => format!("{self:?}"),
+        }
+    }
 }
 
 impl From<i64> for BexExternalValue {
@@ -722,4 +783,61 @@ pub fn try_convert_rust_data(
         return Some(BexExternalValue::HostValue(typed));
     }
     None
+}
+
+#[cfg(test)]
+mod render_readable_tests {
+    use super::*;
+
+    /// A thrown error instance renders as `Class { field: value }`, not the
+    /// Rust `Debug` shape `Instance { class_name: .., type_args: [], fields: .. }`.
+    /// This is the exact B-623 repro.
+    #[test]
+    fn instance_renders_class_and_fields_not_debug() {
+        let value = BexExternalValue::instance(
+            "baml.errors.Io",
+            IndexMap::from([("message", BexExternalValue::from("boom"))]),
+        );
+        assert_eq!(
+            value.render_readable(),
+            r#"baml.errors.Io {message: "boom"}"#
+        );
+    }
+
+    /// A generic error instance carrying a `Class(..)` in its `type_args` — the
+    /// shape that used to dump `Class(QualifiedTypeName { .. }, [], TyAttr { .. })`
+    /// under `Debug` — renders readably with the `type_args` omitted and no Rust
+    /// internals leaked.
+    #[test]
+    fn generic_instance_omits_type_args_and_never_leaks_debug() {
+        let inner = BexExternalValue::instance(
+            "baml.errors.Io",
+            IndexMap::from([("message", BexExternalValue::from("boom"))]),
+        );
+        let value = BexExternalValue::instance_generic(
+            "baml.future.AllFailed",
+            vec![RuntimeTy::class("baml.errors.Io")],
+            IndexMap::from([(
+                "errors",
+                BexExternalValue::Array {
+                    element_type: RuntimeTy::class("baml.errors.Io"),
+                    items: vec![inner],
+                },
+            )]),
+        );
+
+        let rendered = value.render_readable();
+        assert!(
+            rendered.starts_with("baml.future.AllFailed {"),
+            "unexpected render: {rendered}"
+        );
+        assert!(
+            rendered.contains(r#"errors: [baml.errors.Io {message: "boom"}]"#),
+            "unexpected render: {rendered}"
+        );
+        // The bug: `Debug` leaks Rust-internal shapes. The readable form must not.
+        for leak in ["Instance {", "QualifiedTypeName", "TyAttr", "Class("] {
+            assert!(!rendered.contains(leak), "leaked `{leak}` in: {rendered}");
+        }
+    }
 }
