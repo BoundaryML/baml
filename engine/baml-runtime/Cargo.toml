@@ -165,8 +165,8 @@ axum-extra = { version = "0.9.3", features = [
   "erased-json",
   "typed-header",
 ], optional = true }
-# depends on ring
-gcp_auth = { version = "0.12.3", optional = true }
+# Vendored, ring-free fork (native-tls + rsa crate). See vendored/gcp-auth.
+gcp_auth = { path = "../vendored/gcp-auth", optional = true }
 hostname = "0.3.1"
 http-body-util = "0.1"
 notify-debouncer-full = { version = "0.3.1", optional = true }

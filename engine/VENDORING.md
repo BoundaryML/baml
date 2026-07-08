@@ -90,11 +90,16 @@ baml-http's TLS backend is a cargo feature:
 - **`native-tls-vendored`**: native-tls with a statically-vendored OpenSSL,
   for portable Linux wheels without a system `libssl`.
 
-With the default (`native-tls`), the base vendor profile is **ring-free**.
-The one remaining `ring` source is the `vertex` feature: `gcp_auth 0.12` links
-`ring`/`hyper-rustls` unconditionally, so a Vertex build reintroduces it. A
-fully ring-free Vertex path requires replacing/patching that auth crate or
-injecting credentials so gcp_auth is not used.
+With the default (`native-tls`), the vendor profile is **ring-free**,
+including with `--features vertex`.
+
+Vertex uses a vendored, ring-free fork of `gcp_auth` (see
+[`vendored/gcp-auth`](vendored/gcp-auth/)): upstream `gcp_auth 0.12` pulls
+`ring` for both TLS (hyper-rustls) and JWT RS256 signing. The fork swaps TLS to
+native-tls and the signer to the pure-Rust `rsa` crate. The signer is verified
+byte-identical to `openssl dgst -sha256 -sign` (a unit test in
+`vendored/gcp-auth/src/types.rs`). To use a different signing backend (e.g.
+BoringSSL), replace the ~15-line `Signer` impl in that file.
 
 ## Generating the import list
 
