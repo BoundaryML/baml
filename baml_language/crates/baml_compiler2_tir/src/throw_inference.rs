@@ -100,6 +100,11 @@ unsafe impl salsa::Update for FileThrowFacts {
 /// dependencies didn't change signature.
 #[salsa::tracked(returns(ref))]
 pub fn file_throw_facts(db: &dyn crate::Db, file: baml_base::SourceFile) -> FileThrowFacts {
+    // `seeds.by_path(db)` is a *tracked* read of the `SeededThrowFacts` input:
+    // databases that seed (e.g. `ProjectDatabase`) hold the input from
+    // construction (empty until seeded), so this memo records a dependency on
+    // the seed map and a later `set_seeded_throw_facts` reliably invalidates it.
+    // An absent/empty map yields no hit and falls through to honest extraction.
     if let Some(seeds) = db.seeded_throw_facts() {
         if let Some(facts) = seeds.by_path(db).get(&file.path(db).display().to_string()) {
             return FileThrowFacts(facts.clone());

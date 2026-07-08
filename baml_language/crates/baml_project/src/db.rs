@@ -87,6 +87,17 @@ pub struct ProjectDatabase {
     /// they are NOT added to `project.files()`.
     compiler2_extra_files: Option<Compiler2ExtraFiles>,
     /// Per-file throw facts seeded from a previous compile (bytecode cache).
+    ///
+    /// This is a real `#[salsa::input]` handle, created **once** (empty) in
+    /// `ProjectDatabase::new` and thereafter mutated *in place* by
+    /// `set_seeded_throw_facts` via its Salsa setter. It is therefore always
+    /// `Some` for a `ProjectDatabase`. Keeping the input present from
+    /// construction is what makes `throw_inference::file_throw_facts` read the
+    /// seed map through a **tracked** dependency: were the handle absent until
+    /// the first seed, a query memoized while it was `None` would record no
+    /// dependency and a later seed on a reused database would be invisible to
+    /// the memo. Mutating via the setter bumps the revision and correctly
+    /// invalidates dependents.
     seeded_throw_facts: Option<baml_workspace::SeededThrowFacts>,
     /// Maps file paths to their `SourceFile` handles (user files only).
     file_map: HashMap<std::path::PathBuf, SourceFile>,
@@ -155,7 +166,7 @@ impl ProjectDatabase {
 
     /// Create a new empty database.
     pub fn new() -> Self {
-        Self {
+        let mut db = Self {
             storage: salsa::Storage::default(),
             next_file_id: Arc::new(AtomicU32::new(0)),
             project: None,
@@ -164,7 +175,21 @@ impl ProjectDatabase {
             file_map: HashMap::new(),
             compiler2_file_map: HashMap::new(),
             file_id_to_path: HashMap::new(),
-        }
+        };
+        db.seeded_throw_facts = Some(db.empty_seeded_throw_facts());
+        db
+    }
+
+    /// Create the always-present, initially-empty `SeededThrowFacts` Salsa
+    /// input. Held as a real input (not a plain field) so that
+    /// `throw_inference::file_throw_facts` reads its `by_path` map through a
+    /// *tracked* dependency; `set_seeded_throw_facts` then mutates it via the
+    /// Salsa setter, which bumps the revision and invalidates the memo even on
+    /// a reused database. An empty map means "no seeds": every file falls
+    /// through to honest body-walking extraction, exactly as an unseeded
+    /// database. See the field docs on `seeded_throw_facts`.
+    fn empty_seeded_throw_facts(&self) -> baml_workspace::SeededThrowFacts {
+        baml_workspace::SeededThrowFacts::new(self, std::collections::BTreeMap::new())
     }
 
     /// Create a new database with an event callback for tracking query execution.
@@ -175,7 +200,7 @@ impl ProjectDatabase {
     ///
     /// This is useful for tracking incremental compilation behavior.
     pub fn new_with_event_callback(callback: EventCallback) -> Self {
-        Self {
+        let mut db = Self {
             storage: salsa::Storage::new(Some(callback)),
             next_file_id: Arc::new(AtomicU32::new(0)),
             project: None,
@@ -184,7 +209,9 @@ impl ProjectDatabase {
             file_map: HashMap::new(),
             compiler2_file_map: HashMap::new(),
             file_id_to_path: HashMap::new(),
-        }
+        };
+        db.seeded_throw_facts = Some(db.empty_seeded_throw_facts());
+        db
     }
 
     /// Get the project, if set.
@@ -218,8 +245,13 @@ impl ProjectDatabase {
 
     /// Get all source files in the database, sorted by `FileId` for deterministic ordering.
     /// Seed per-file throw facts from a previous compile of identical file
-    /// content (bytecode-cache per-file reuse). Must be called before any
-    /// query runs; keys are full source-file path strings.
+    /// content (bytecode-cache per-file reuse); keys are full source-file path
+    /// strings.
+    ///
+    /// This mutates the always-present `SeededThrowFacts` input (created in
+    /// `new`) through its Salsa setter, so it bumps the revision and correctly
+    /// invalidates any already-computed `file_throw_facts` memo — it is safe to
+    /// call before *or* after queries have run.
     pub fn set_seeded_throw_facts(
         &mut self,
         by_path: std::collections::BTreeMap<
@@ -227,7 +259,10 @@ impl ProjectDatabase {
             Vec<baml_type::throw_facts::FunctionThrowFacts>,
         >,
     ) {
-        self.seeded_throw_facts = Some(baml_workspace::SeededThrowFacts::new(self, by_path));
+        let seeds = self
+            .seeded_throw_facts
+            .expect("SeededThrowFacts input is created in ProjectDatabase::new");
+        seeds.set_by_path(self).to(by_path);
     }
 
     pub fn get_source_files(&self) -> Vec<SourceFile> {
