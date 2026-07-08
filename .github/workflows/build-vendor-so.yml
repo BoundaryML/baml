@@ -44,10 +44,9 @@ jobs:
 
       - name: Build wheel (manylinux2014, static libgcc, vendored OpenSSL)
         uses: PyO3/maturin-action@v1
-        env:
-          # Statically link the GCC runtime so the extension has no
-          # libgcc_s.so.1 / libstdc++ dynamic dependency at load time.
-          RUSTFLAGS: "-C link-arg=-static-libgcc -C link-arg=-static-libstdc++"
+        # Static libgcc linking comes from engine/.cargo/config.toml's
+        # [target.x86_64-unknown-linux-gnu] section (a host RUSTFLAGS env is not
+        # forwarded into maturin-action's build container).
         with:
           target: x86_64-unknown-linux-gnu
           command: build
