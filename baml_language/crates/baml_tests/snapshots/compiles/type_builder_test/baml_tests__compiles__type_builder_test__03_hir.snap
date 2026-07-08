@@ -21,8 +21,8 @@ function user.Fn$live(io: baml.ai.Channel, client: baml.ai.Provider = ...) -> ba
 function user.Fn$render_prompt(client: baml.ai.Provider = ...) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(client, "Fn", map {  })
 }
-function user.Fn$run_tools(tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, client: baml.ai.Provider = ...) -> string  [expr] {
-  baml.ai.drive_run_tools(client, Fn$render_prompt(client = client), tools, dispatch)
+function user.Fn$run_tools(tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: (baml.ai.LoopInfo) -> bool throws never? = null, client: baml.ai.Provider = ...) -> string | baml.ai.Budget<string>  [expr] {
+  baml.ai.drive_run_tools(client, Fn$render_prompt(client = client), tools, dispatch, stop_when = stop_when)
 }
 function user.Fn$with(project: (baml.ai.ResponseMeta) -> V throws E2, client: baml.ai.Provider = ...) -> baml.ai.CallResult<string, V>  [expr] {
   baml.ai.drive_with(client, Fn$render_prompt(client = client), project)

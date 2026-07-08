@@ -165,6 +165,10 @@ pub struct DriveCompanionSpec {
     pub extra_generics: Vec<Name>,
     /// Extra params appended after the parent's user params (name, type).
     pub extra_params: Vec<(Name, TypeExpr)>,
+    /// Extras that default to `null` (e.g. `$run_tools`'s `stop_when`). Placed
+    /// after every required/defaulted user param (E0005 ordering) and passed
+    /// BY NAME in the driver call (defaulted params reject positional passing).
+    pub null_defaulted_extras: Vec<(Name, TypeExpr)>,
     /// Explicit type args for the driver call (in the driver's declared order).
     pub driver_type_args: Vec<TypeExpr>,
     pub return_type: TypeExpr,
@@ -227,6 +231,11 @@ pub fn make_drive_companion(parent: &FunctionDef, spec: DriveCompanionSpec) -> O
         let arg = alloc(Expr::Path(vec![extra_name.clone()]));
         driver_args.push(CallArg::positional(arg));
     }
+    // Defaulted extras must ride by name (E0005).
+    for (extra_name, _) in &spec.null_defaulted_extras {
+        let arg = alloc(Expr::Path(vec![extra_name.clone()]));
+        driver_args.push(CallArg::named(extra_name.clone(), arg));
+    }
     let call = alloc(Expr::Call {
         callee: driver_callee,
         type_args: spec.driver_type_args,
@@ -244,10 +253,10 @@ pub fn make_drive_companion(parent: &FunctionDef, spec: DriveCompanionSpec) -> O
     };
 
     // Params: required user params, then the required extras, then the
-    // parent's DEFAULTED user params, then the client param. Required extras
-    // can't follow a defaulted param ("required parameter cannot appear after
-    // a defaulted parameter"), and the body passes user args by name, so this
-    // reordering is invisible to the call.
+    // parent's DEFAULTED user params, then the null-defaulted extras, then the
+    // client param. Required extras can't follow a defaulted param ("required
+    // parameter cannot appear after a defaulted parameter"), and the body
+    // passes user args by name, so this reordering is invisible to the call.
     let mut params: Vec<Param> = parent
         .params
         .iter()
@@ -270,6 +279,23 @@ pub fn make_drive_companion(parent: &FunctionDef, spec: DriveCompanionSpec) -> O
             .filter(|p| p.name.as_str() != "client" && p.default.is_some())
             .cloned(),
     );
+    let mut defaults = parent.defaults.clone();
+    for (extra_name, extra_ty) in spec.null_defaulted_extras {
+        // Allocate the `null` default into the (cloned) shared defaults arena,
+        // mirroring `append_default_client_param`.
+        let default_expr = {
+            let id = defaults.exprs.exprs.alloc(Expr::Null);
+            defaults.source_map.expr_spans.alloc(span);
+            id
+        };
+        params.push(Param {
+            name: extra_name,
+            type_expr: Some(extra_ty),
+            default: Some(crate::ast::DefaultExprId::new(default_expr)),
+            span,
+            name_span: parent.name_span,
+        });
+    }
     if let Some(client_param) = parent.params.iter().find(|p| p.name.as_str() == "client") {
         params.push(client_param.clone());
     }
@@ -286,7 +312,7 @@ pub fn make_drive_companion(parent: &FunctionDef, spec: DriveCompanionSpec) -> O
         generic_params,
         generic_param_bounds,
         params,
-        defaults: parent.defaults.clone(),
+        defaults,
         return_type: Some(spec.return_type),
         throws: None,
         body: Some(FunctionBodyDef::Expr(
@@ -336,14 +362,16 @@ fn llm_drive_with(parent: &FunctionDef) -> Option<FunctionDef> {
             driver: vec![Name::new("baml"), Name::new("ai"), Name::new("drive_with")],
             extra_generics: vec![Name::new("V"), Name::new("E2")],
             extra_params: vec![(Name::new("project"), project_ty)],
+            null_defaulted_extras: vec![],
             driver_type_args: vec![ret, ty_path(&["V"], span), ty_path(&["E2"], span)],
             return_type,
         },
     )
 }
 
-/// `Foo$run_tools(args…, tools, dispatch, client?) -> T` — the explicit-control
-/// agentic form (the primary tool surface is a ToolLoop client on plain `Foo`).
+/// `Foo$run_tools(args…, tools, dispatch, stop_when?, client?) -> T | Budget<T>`
+/// — the explicit-control agentic form (the primary tool surface is a ToolLoop
+/// client on plain `Foo`). D5: the budget outcome is a first-class return arm.
 fn llm_drive_run_tools(parent: &FunctionDef) -> Option<FunctionDef> {
     let span = parent.span;
     let ret = parent.return_type.clone()?;
@@ -373,6 +401,37 @@ fn llm_drive_run_tools(parent: &FunctionDef) -> Option<FunctionDef> {
         attrs: vec![],
     })
     .at(span);
+    // stop_when: ((baml.ai.LoopInfo) -> bool throws never)? = null
+    let stop_when_ty = (TypeExprKind::Optional {
+        inner: Box::new(
+            (TypeExprKind::Function {
+                params: vec![crate::ast::FunctionTypeParam {
+                    name: None,
+                    optional: false,
+                    ty: ty_path(&["baml", "ai", "LoopInfo"], span),
+                }],
+                ret: Box::new((TypeExprKind::Bool { attrs: vec![] }).at(span)),
+                throws: Some(Box::new((TypeExprKind::Never { attrs: vec![] }).at(span))),
+                attrs: vec![],
+            })
+            .at(span),
+        ),
+        attrs: vec![],
+    })
+    .at(span);
+    // T | baml.ai.Budget<T>
+    let budget_ty = (TypeExprKind::Path {
+        segments: vec![Name::new("baml"), Name::new("ai"), Name::new("Budget")],
+        generic_args: vec![ret.clone()],
+        associated_type_bindings: vec![],
+        attrs: vec![],
+    })
+    .at(span);
+    let return_type = (TypeExprKind::Union {
+        variants: vec![ret.clone(), budget_ty],
+        attrs: vec![],
+    })
+    .at(span);
     make_drive_companion(
         parent,
         DriveCompanionSpec {
@@ -387,8 +446,9 @@ fn llm_drive_run_tools(parent: &FunctionDef) -> Option<FunctionDef> {
                 (Name::new("tools"), tools_ty),
                 (Name::new("dispatch"), dispatch_ty),
             ],
+            null_defaulted_extras: vec![(Name::new("stop_when"), stop_when_ty)],
             driver_type_args: vec![ret.clone()],
-            return_type: ret,
+            return_type,
         },
     )
 }
@@ -404,6 +464,7 @@ fn llm_drive_live(parent: &FunctionDef) -> Option<FunctionDef> {
             driver: vec![Name::new("baml"), Name::new("ai"), Name::new("drive_live")],
             extra_generics: vec![],
             extra_params: vec![(Name::new("io"), ty_path(&["baml", "ai", "Channel"], span))],
+            null_defaulted_extras: vec![],
             driver_type_args: vec![ret],
             return_type: ty_path(&["baml", "ai", "Transcript"], span),
         },

@@ -148,36 +148,48 @@ fn user.ExtractAny$render_prompt(client: baml.ai.Provider) -> baml.llm.PromptAst
     }
 }
 
-fn user.ExtractAny$run_tools(tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, client: baml.ai.Provider) -> baml.json.json {
+fn user.ExtractAny$run_tools(tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null, client: baml.ai.Provider) -> baml.json.json | baml.ai.Budget<baml.json.json> {
     // Locals:
-    let _0: baml.json.json // _0 // return
+    let _0: baml.json.json | baml.ai.Budget<baml.json.json> // _0 // return
     let _1: baml.ai.Tool[] // tools // param
     let _2: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never // dispatch // param
-    let _3: baml.ai.Provider // client // param
-    let _4: bool
-    let _5: baml.llm.PromptAst
-    let _6: type
+    let _3: ((baml.ai.LoopInfo) -> bool throws never) | null // stop_when // param
+    let _4: baml.ai.Provider // client // param
+    let _5: bool
+    let _6: bool
+    let _7: baml.llm.PromptAst
+    let _8: type
 
     bb0: {
-        _4 = copy _3 == const <omitted>;
-        branch copy _4 -> [bb1, bb2];
+        _5 = copy _3 == const <omitted>;
+        branch copy _5 -> [bb1, bb2];
     }
 
     bb1: {
-        _3 = const fn user.TestClient;
+        _3 = const null;
         goto -> bb2;
     }
 
     bb2: {
-        _5 = call const fn user.ExtractAny$render_prompt(copy _3) -> [bb3];
+        _6 = copy _4 == const <omitted>;
+        branch copy _6 -> [bb3, bb4];
     }
 
     bb3: {
-        _6 = load_type(baml.json.json);
-        _0 = call const fn baml.ai.drive_run_tools<copy _6>(copy _3, copy _5, copy _1, copy _2) -> [bb4];
+        _4 = const fn user.TestClient;
+        goto -> bb4;
     }
 
     bb4: {
+        _7 = call const fn user.ExtractAny$render_prompt(copy _4) -> [bb5];
+    }
+
+    bb5: {
+        _8 = load_type(baml.json.json);
+        _0 = call const fn baml.ai.drive_run_tools<copy _8>(copy _4, copy _7, copy _1, copy _2, copy _3) -> [bb6];
+    }
+
+    bb6: {
         return;
     }
 }

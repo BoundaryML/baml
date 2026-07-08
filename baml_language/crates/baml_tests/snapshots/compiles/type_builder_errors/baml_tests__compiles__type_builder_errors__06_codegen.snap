@@ -191,11 +191,19 @@ function user.TypeBuilderFn$render_prompt(from_text: string, client: baml.ai.Pro
     return
 }
 
-function user.TypeBuilderFn$run_tools(from_text: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, client: baml.ai.Provider) -> Resume {
-    load_var client
+function user.TypeBuilderFn$run_tools(from_text: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null, client: baml.ai.Provider) -> Resume | baml.ai.Budget<Resume> {
+    load_var stop_when
     load_const <omitted>
     cmp_op ==
     pop_jump_if_false L0
+    load_const null
+    store_var stop_when
+
+  L0:
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L1
     load_const "openai/gpt-4o-mini"
     load_const baml.llm.ClientType.Primitive
     alloc_variant baml.llm.ClientType
@@ -206,13 +214,14 @@ function user.TypeBuilderFn$run_tools(from_text: string, tools: baml.ai.Tool[], 
     init_instance baml.llm.Client .name, .client_type, .sub_clients, .retry, .counter
     store_var client
 
-  L0:
-    load_var2 1 4
+  L1:
+    load_var2 1 5
     call user.TypeBuilderFn$render_prompt
-    store_var _7
+    store_var _9
     load_type Resume
-    load_var2 4 5
+    load_var2 5 6
     load_var2 2 3
+    load_var stop_when
     call baml.ai.drive_run_tools
     return
 }

@@ -21092,7 +21092,15 @@ function baml.ai.ToolLoop.run_to_budget(self: baml.ai.ToolLoop, prompt: string) 
     jump L2
 }
 
-function baml.ai.Tools.run_tools(self: baml.ai.Tools, prompt: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never) -> T {
+function baml.ai.Tools.run_tools(self: baml.ai.Tools, prompt: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null) -> T | baml.ai.Budget<T> {
+    load_var stop_when
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var stop_when
+
+  L0:
     load_type #1
     load_var2 1 2
     load_var tools
@@ -21100,50 +21108,78 @@ function baml.ai.Tools.run_tools(self: baml.ai.Tools, prompt: string, tools: bam
     load_const "begin"
     virtual_call nargs=3 ntypeargs=1
     store_var t
-
-  L0:
-    load_const true
-    pop_jump_if_false L1
-    jump L2
+    load_const 0
+    store_var steps
 
   L1:
-    load_const "unreachable"
-    call baml.sys.panic
-    jump L4
+    load_const true
+    pop_jump_if_false L2
+    jump L3
 
   L2:
+    load_const "unreachable"
+    call baml.sys.panic
+    jump L7
+
+  L3:
     load_type #1
-    load_var2 1 5
+    load_var2 1 6
     load_type baml.ai.Tools<Transcript = Transcript>
     load_const "step"
     virtual_call nargs=2 ntypeargs=1
-    store_var _7
-    load_var _7
+    store_var _10
+    load_var _10
     is_type baml.ai.ToolCalls
-    pop_jump_if_false L3
+    pop_jump_if_false L4
     jump L5
 
-  L3:
-    load_var _7
-
   L4:
-    return
+    load_var _10
+    jump L7
 
   L5:
+    load_var _10
+    store_var calls
+    load_var steps
+    load_const 1
+    add_int
+    store_var steps
+    load_var stop_when
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L6
+    jump L8
+
+  L6:
+    load_var2 7 9
+    load_field .calls
+    init_instance baml.ai.LoopInfo .steps, .calls
+    load_var stop_when
+    call_indirect
+    pop_jump_if_false L8
+    load_const null
+    load_var steps
+    load_type #1
+    init_instance<1> baml.ai.Budget .partial, .steps_taken
+
+  L7:
+    return
+
+  L8:
     load_var t
-    store_var _12
-    load_var _7
+    store_var _24
+    load_var calls
     load_field .calls
     load_var dispatch
     call_indirect
-    store_var _13
-    load_var2 1 7
-    load_var _13
+    store_var _25
+    load_var2 1 10
+    load_var _25
     load_type baml.ai.Tools<Transcript = Transcript>
     load_const "submit"
     virtual_call nargs=3 ntypeargs=0
     store_var t
-    jump L0
+    jump L1
 }
 
 function baml.ai.Traced$stream.root.ai.HttpProvider.build_request(self: baml.ai.Traced$stream, messages: baml.ai.ChatMessage[]) -> baml.http.Request {
@@ -22695,27 +22731,36 @@ function baml.ai.drive_live(client: baml.ai.Provider, prompt: baml.llm.PromptAst
     return
 }
 
-function baml.ai.drive_run_tools(client: baml.ai.Provider, prompt: baml.llm.PromptAst, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never) -> T {
+function baml.ai.drive_run_tools(client: baml.ai.Provider, prompt: baml.llm.PromptAst, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null) -> T | baml.ai.Budget<T> {
+    load_var stop_when
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var stop_when
+
+  L0:
     load_var prompt
     sys_op baml.llm.prompt_to_text
     store_var text
     load_var client
     is_type baml.ai.OpenAi
-    pop_jump_if_false L0
-    jump L1
+    pop_jump_if_false L1
+    jump L2
 
-  L0:
+  L1:
     load_const "client's provider does not support Tools"
     init_instance baml.errors.Unsupported .message
     throw
 
-  L1:
+  L2:
     load_type #0
-    load_var2 1 6
+    load_var2 1 7
     load_var2 3 4
+    load_var stop_when
     load_type baml.ai.Tools
     load_const "run_tools"
-    virtual_call nargs=4 ntypeargs=1
+    virtual_call nargs=5 ntypeargs=1
     store_var _0
     load_var _0
     return

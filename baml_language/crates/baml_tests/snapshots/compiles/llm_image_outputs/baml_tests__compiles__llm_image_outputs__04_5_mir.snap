@@ -153,37 +153,49 @@ fn user.GenerateImage$render_prompt(prompt: string, client: baml.ai.Provider) ->
     }
 }
 
-fn user.GenerateImage$run_tools(prompt: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, client: baml.ai.Provider) -> image {
+fn user.GenerateImage$run_tools(prompt: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null, client: baml.ai.Provider) -> image | baml.ai.Budget<image> {
     // Locals:
-    let _0: image // _0 // return
+    let _0: image | baml.ai.Budget<image> // _0 // return
     let _1: string // prompt // param
     let _2: baml.ai.Tool[] // tools // param
     let _3: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never // dispatch // param
-    let _4: baml.ai.Provider // client // param
-    let _5: bool
-    let _6: baml.llm.PromptAst
-    let _7: type
+    let _4: ((baml.ai.LoopInfo) -> bool throws never) | null // stop_when // param
+    let _5: baml.ai.Provider // client // param
+    let _6: bool
+    let _7: bool
+    let _8: baml.llm.PromptAst
+    let _9: type
 
     bb0: {
-        _5 = copy _4 == const <omitted>;
-        branch copy _5 -> [bb1, bb2];
+        _6 = copy _4 == const <omitted>;
+        branch copy _6 -> [bb1, bb2];
     }
 
     bb1: {
-        _4 = const fn user.OpenAIImageResponses;
+        _4 = const null;
         goto -> bb2;
     }
 
     bb2: {
-        _6 = call const fn user.GenerateImage$render_prompt(copy _1, copy _4) -> [bb3];
+        _7 = copy _5 == const <omitted>;
+        branch copy _7 -> [bb3, bb4];
     }
 
     bb3: {
-        _7 = load_type(image);
-        _0 = call const fn baml.ai.drive_run_tools<copy _7>(copy _4, copy _6, copy _2, copy _3) -> [bb4];
+        _5 = const fn user.OpenAIImageResponses;
+        goto -> bb4;
     }
 
     bb4: {
+        _8 = call const fn user.GenerateImage$render_prompt(copy _1, copy _5) -> [bb5];
+    }
+
+    bb5: {
+        _9 = load_type(image);
+        _0 = call const fn baml.ai.drive_run_tools<copy _9>(copy _5, copy _8, copy _2, copy _3, copy _4) -> [bb6];
+    }
+
+    bb6: {
         return;
     }
 }
@@ -377,37 +389,49 @@ fn user.GenerateImageSet$render_prompt(prompt: string, client: baml.ai.Provider)
     }
 }
 
-fn user.GenerateImageSet$run_tools(prompt: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, client: baml.ai.Provider) -> image[] {
+fn user.GenerateImageSet$run_tools(prompt: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null, client: baml.ai.Provider) -> image[] | baml.ai.Budget<image[]> {
     // Locals:
-    let _0: image[] // _0 // return
+    let _0: image[] | baml.ai.Budget<image[]> // _0 // return
     let _1: string // prompt // param
     let _2: baml.ai.Tool[] // tools // param
     let _3: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never // dispatch // param
-    let _4: baml.ai.Provider // client // param
-    let _5: bool
-    let _6: baml.llm.PromptAst
-    let _7: type
+    let _4: ((baml.ai.LoopInfo) -> bool throws never) | null // stop_when // param
+    let _5: baml.ai.Provider // client // param
+    let _6: bool
+    let _7: bool
+    let _8: baml.llm.PromptAst
+    let _9: type
 
     bb0: {
-        _5 = copy _4 == const <omitted>;
-        branch copy _5 -> [bb1, bb2];
+        _6 = copy _4 == const <omitted>;
+        branch copy _6 -> [bb1, bb2];
     }
 
     bb1: {
-        _4 = const fn user.OpenAIImageResponses;
+        _4 = const null;
         goto -> bb2;
     }
 
     bb2: {
-        _6 = call const fn user.GenerateImageSet$render_prompt(copy _1, copy _4) -> [bb3];
+        _7 = copy _5 == const <omitted>;
+        branch copy _7 -> [bb3, bb4];
     }
 
     bb3: {
-        _7 = load_type(image[]);
-        _0 = call const fn baml.ai.drive_run_tools<copy _7>(copy _4, copy _6, copy _2, copy _3) -> [bb4];
+        _5 = const fn user.OpenAIImageResponses;
+        goto -> bb4;
     }
 
     bb4: {
+        _8 = call const fn user.GenerateImageSet$render_prompt(copy _1, copy _5) -> [bb5];
+    }
+
+    bb5: {
+        _9 = load_type(image[]);
+        _0 = call const fn baml.ai.drive_run_tools<copy _9>(copy _5, copy _8, copy _2, copy _3, copy _4) -> [bb6];
+    }
+
+    bb6: {
         return;
     }
 }
@@ -601,37 +625,49 @@ fn user.GenerateMixedImageNarrative$render_prompt(prompt: string, client: baml.a
     }
 }
 
-fn user.GenerateMixedImageNarrative$run_tools(prompt: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, client: baml.ai.Provider) -> (image | string)[] {
+fn user.GenerateMixedImageNarrative$run_tools(prompt: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null, client: baml.ai.Provider) -> (image | string)[] | baml.ai.Budget<(image | string)[]> {
     // Locals:
-    let _0: (image | string)[] // _0 // return
+    let _0: (image | string)[] | baml.ai.Budget<(image | string)[]> // _0 // return
     let _1: string // prompt // param
     let _2: baml.ai.Tool[] // tools // param
     let _3: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never // dispatch // param
-    let _4: baml.ai.Provider // client // param
-    let _5: bool
-    let _6: baml.llm.PromptAst
-    let _7: type
+    let _4: ((baml.ai.LoopInfo) -> bool throws never) | null // stop_when // param
+    let _5: baml.ai.Provider // client // param
+    let _6: bool
+    let _7: bool
+    let _8: baml.llm.PromptAst
+    let _9: type
 
     bb0: {
-        _5 = copy _4 == const <omitted>;
-        branch copy _5 -> [bb1, bb2];
+        _6 = copy _4 == const <omitted>;
+        branch copy _6 -> [bb1, bb2];
     }
 
     bb1: {
-        _4 = const fn user.OpenAIImageResponses;
+        _4 = const null;
         goto -> bb2;
     }
 
     bb2: {
-        _6 = call const fn user.GenerateMixedImageNarrative$render_prompt(copy _1, copy _4) -> [bb3];
+        _7 = copy _5 == const <omitted>;
+        branch copy _7 -> [bb3, bb4];
     }
 
     bb3: {
-        _7 = load_type(image | string[]);
-        _0 = call const fn baml.ai.drive_run_tools<copy _7>(copy _4, copy _6, copy _2, copy _3) -> [bb4];
+        _5 = const fn user.OpenAIImageResponses;
+        goto -> bb4;
     }
 
     bb4: {
+        _8 = call const fn user.GenerateMixedImageNarrative$render_prompt(copy _1, copy _5) -> [bb5];
+    }
+
+    bb5: {
+        _9 = load_type(image | string[]);
+        _0 = call const fn baml.ai.drive_run_tools<copy _9>(copy _5, copy _8, copy _2, copy _3, copy _4) -> [bb6];
+    }
+
+    bb6: {
         return;
     }
 }

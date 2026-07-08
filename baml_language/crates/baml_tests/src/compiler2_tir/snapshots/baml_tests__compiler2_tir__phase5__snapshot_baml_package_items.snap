@@ -33,13 +33,15 @@ namespace baml:
   function deep_copy<T>
   function deep_equals<T>
 namespace baml.ai:
-  class Anthropic { methods: [_api_key, _encode_part, _encode_message, _request_body, _request_headers, _append_schema, _messages_for, build_request, send, parse, meta_of, stream_messages] }
+  class AggregateMeta { methods: [finish_reason, usage, reasoning, logprobs, citations] }
+  class Anthropic { methods: [_api_key, _encode_part, _encode_message, _request_body, _request_headers, _append_schema, _messages_for, build_request, send, parse, parse_meta, stream_messages] }
   class AnthropicContentBlockWire { methods: [] }
   class AnthropicHttpError { methods: [is_retryable, is_effectful, is_policy_refusal, is_resumable, is_unsupported, is_network_error, is_rate_limit, is_parse_error, is_network_error] }
   class AnthropicResponseMeta { methods: [_wire, finish_reason, usage, reasoning, logprobs, citations] }
   class AnthropicResponseWire { methods: [] }
   class AnthropicUsageWire { methods: [] }
   type Background
+  class BearerAuth { methods: [] }
   type Branching
   class Budget<T> { methods: [] }
   class CacheHandle { methods: [] }
@@ -54,8 +56,8 @@ namespace baml.ai:
   type Compaction
   type Constrained
   type Conversational
-  class Fallback { methods: [build_request, send, parse, meta_of, call_messages_with, stream_messages] }
-  class Gemini { methods: [_api_key, _encode_part, _encode_message, _request_body, _request_headers, _append_schema, _messages_for, build_request, send, parse, meta_of] }
+  class Fallback { methods: [build_request, send, parse, parse_meta, call_messages_with, stream_messages] }
+  class Gemini { methods: [_api_key, _encode_part, _encode_message, _request_body, _request_headers, _append_schema, _messages_for, build_request, send, parse, parse_meta, stream_messages] }
   class GeminiCandidateWire { methods: [] }
   class GeminiContentWire { methods: [] }
   class GeminiHttpError { methods: [is_retryable, is_effectful, is_policy_refusal, is_resumable, is_unsupported, is_network_error, is_rate_limit, is_parse_error, is_network_error] }
@@ -63,6 +65,7 @@ namespace baml.ai:
   class GeminiResponseMeta { methods: [_wire, finish_reason, usage, reasoning, logprobs, citations] }
   class GeminiResponseWire { methods: [] }
   class GeminiUsageWire { methods: [] }
+  class HeaderAuth { methods: [] }
   type HttpProvider
   class Job<T> { methods: [] }
   class LegacyMeta { methods: [finish_reason, usage, reasoning, logprobs, citations] }
@@ -74,8 +77,10 @@ namespace baml.ai:
   class MemoryHit { methods: [] }
   type MemoryStore
   class MessagePart { methods: [from_text, from_image, from_audio] }
-  class OpenAi { methods: [_encode_part, _encode_message, _request_body, _request_headers, _append_schema, _messages_for, build_request, send, parse, meta_of, structured_output, image_input, parallel_tools, max_input_tokens, stream_messages, begin, step, submit] }
+  class NoAuth { methods: [] }
+  class OpenAi { methods: [_encode_part, _encode_message, _request_body, _request_headers, _append_schema, _messages_for, build_request, send, parse, parse_meta, structured_output, image_input, parallel_tools, max_input_tokens, stream_messages, begin, step, submit] }
   class OpenAiChoiceWire { methods: [] }
+  class OpenAiCompatible { methods: [_inner, _headers, build_request, send, parse, parse_meta, stream_messages] }
   class OpenAiHttpError { methods: [is_retryable, is_effectful, is_policy_refusal, is_resumable, is_unsupported, is_network_error, is_rate_limit, is_parse_error, is_network_error] }
   class OpenAiLogprobTokenWire { methods: [] }
   class OpenAiLogprobsWire { methods: [] }
@@ -87,9 +92,9 @@ namespace baml.ai:
   class OpenAiRespUsageWire { methods: [] }
   class OpenAiResponseMeta { methods: [_wire, finish_reason, usage, reasoning, citations, logprobs] }
   class OpenAiResponseWire { methods: [] }
-  class OpenAiResponses { methods: [start_chain, extend_text, _encode_part, _encode_message, _request_body, _headers_with_idempotency, _request_headers, _append_schema, _messages_for, _post, is_effectful, build_request, send, parse, meta_of, extend, submit, poll] }
+  class OpenAiResponses { methods: [start_chain, extend_text, _encode_part, _encode_message, _request_body, _headers_with_idempotency, _request_headers, _append_schema, _messages_for, _post, is_effectful, build_request, send, parse, parse_meta, extend, submit, poll] }
   class OpenAiResponsesMeta { methods: [finish_reason, usage, reasoning, logprobs, citations] }
-  class OpenAiStrict { methods: [_encode_part, _encode_message, _request_headers, _request_body, build_request, send, parse, meta_of] }
+  class OpenAiStrict { methods: [_encode_part, _encode_message, _request_headers, _request_body, build_request, send, parse, parse_meta] }
   class OpenAiToolChoiceWire { methods: [] }
   class OpenAiToolMsgWire { methods: [] }
   class OpenAiToolRespWire { methods: [] }
@@ -99,29 +104,29 @@ namespace baml.ai:
   type Provider
   type Realtime
   type ResponseMeta
-  class Retry { methods: [build_request, send, parse, meta_of, call_messages_with, stream_messages] }
-  class RoundRobin { methods: [build_request, send, parse, meta_of, call_messages_with, stream_messages] }
+  class Retry { methods: [build_request, send, parse, parse_meta, call_messages_with, stream_messages] }
+  class RoundRobin { methods: [build_request, send, parse, parse_meta, call_messages_with, stream_messages] }
   class Session { methods: [] }
   class Snapshot { methods: [] }
   type Streaming
   enum Support
   class Suspend { methods: [] }
   type Suspendable
-  class Tool { methods: [from_type] }
+  class Tool { methods: [from_type, validate_args] }
   class ToolCall { methods: [] }
   class ToolCalls { methods: [] }
-  class ToolLoop { methods: [run_to_budget, is_effectful, build_request, send, parse, meta_of, call_messages_with] }
+  class ToolLoop { methods: [run_to_budget, is_effectful, build_request, send, parse, parse_meta, call_messages_with] }
   class ToolResult { methods: [] }
   type Tools
+  class Traced { methods: [is_effectful, build_request, send, parse, parse_meta, call_messages_with, stream_messages] }
   class Transcript { methods: [] }
   class Unavailable { methods: [] }
   class Usage { methods: [] }
+  class UsageMeter { methods: [record, calls, total, aggregate, wrap] }
   class Window { methods: [] }
   function _messages_text
-  function _openai_json_str
   function _openai_responses_envelope
   function _openai_responses_output_text
-  function _realtime_json_str
   function any_of
   function drive_call<T>
   function drive_live<T>
@@ -129,6 +134,7 @@ namespace baml.ai:
   function drive_stream<TPartial, T>
   function drive_with<T, V, E2>
   function has_tool_call
+  function invoke_tool<A>
   function messages_to_prompt
   function native_provider_for
   function prompt_to_messages
@@ -289,6 +295,7 @@ namespace baml.json:
   function from_string<T>
   function parse
   function path<T>
+  function path_or<T>
   function serialize<T>
   function stringify
   function stringify_pretty
@@ -377,6 +384,7 @@ namespace baml.panics:
   class UserPanic { methods: [] }
 namespace baml.sap:
   function parse<T>
+  function parse_type
 namespace baml.schema:
   function json_schema
 namespace baml.spawn:

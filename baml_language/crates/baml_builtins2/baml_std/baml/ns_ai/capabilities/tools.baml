@@ -105,18 +105,33 @@ interface Tools requires Provider {
     function submit(self, t: Transcript, results: ToolResult[]) -> Transcript
         throws root.errors.ToolError | root.errors.UnknownError
 
-    // The default agentic loop: begin, then step/dispatch/submit until a value falls out.
-    // `dispatch` is the app's tool executor (calls -> results); it handles its own errors.
+    // The default agentic loop: begin, then step/dispatch/submit until a value
+    // falls out. `dispatch` is the app's tool executor (calls -> results); it
+    // handles its own errors. D5: the return is the HONEST SUM — a `stop_when`
+    // budget hit is a first-class `Budget<T>` arm caught by `match`, not a
+    // control signal masquerading as a ToolError (refusals and transport
+    // failures stay on `throws`, because those ARE errors).
     function run_tools<T>(
         self,
         prompt: string,
         tools: Tool[],
         dispatch: (ToolCall[]) -> ToolResult[] throws never,
-    ) -> T throws root.errors.ToolError | root.errors.UnknownError {
+        stop_when: ((LoopInfo) -> bool throws never)? = null,
+    ) -> T | Budget<T> throws root.errors.ToolError | root.errors.UnknownError {
         let t = self.begin<T>(prompt, tools);
+        let steps = 0;
         while (true) {
             match (self.step<T>(t)) {
                 let calls: ToolCalls => {
+                    steps = steps + 1;
+                    match (stop_when) {
+                        null => {},
+                        let pred: (LoopInfo) -> bool => {
+                            if (pred(LoopInfo { steps: steps, calls: calls.calls })) {
+                                return Budget<T> { partial: null, steps_taken: steps };
+                            }
+                        },
+                    }
                     t = self.submit(t, dispatch(calls.calls));
                 },
                 let value: T => {
@@ -132,16 +147,18 @@ interface Tools requires Provider {
 /// Drive the default agentic loop (the generated `Foo$run_tools` companion
 /// delegates here). Tool-calling has no honest single-call degrade — a
 /// non-Tools provider is a typed `Unsupported`. The prompt is flattened to
-/// text because `Tools.begin` speaks the string form.
+/// text because `Tools.begin` speaks the string form. D5: the budget outcome
+/// is a `Budget<T>` return arm (see `Tools.run_tools`).
 function drive_run_tools<T>(
     client: Provider,
     prompt: root.llm.PromptAst,
     tools: Tool[],
     dispatch: (ToolCall[]) -> ToolResult[] throws never,
-) -> T throws root.errors.ToolError | root.errors.UnknownError {
+    stop_when: ((LoopInfo) -> bool throws never)? = null,
+) -> T | Budget<T> throws root.errors.ToolError | root.errors.UnknownError {
     let text = root.llm.prompt_to_text(prompt);
     match (client) {
-        let tp: Tools => tp.run_tools<T>(text, tools, dispatch),
+        let tp: Tools => tp.run_tools<T>(text, tools, dispatch, stop_when = stop_when),
         _ => throw root.errors.Unsupported {
             message: "client's provider does not support Tools",
         },

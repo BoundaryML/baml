@@ -143,21 +143,30 @@ function user.CommentAfterArrow$render_prompt(client: baml.ai.Provider) -> baml.
     return
 }
 
-function user.CommentAfterArrow$run_tools(tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, client: baml.ai.Provider) -> string {
-    load_var client
+function user.CommentAfterArrow$run_tools(tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null, client: baml.ai.Provider) -> string | baml.ai.Budget<string> {
+    load_var stop_when
     load_const <omitted>
     cmp_op ==
     pop_jump_if_false L0
-    load_global user.TestClient
-    store_var client
+    load_const null
+    store_var stop_when
 
   L0:
     load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L1
+    load_global user.TestClient
+    store_var client
+
+  L1:
+    load_var client
     call user.CommentAfterArrow$render_prompt
-    store_var _5
+    store_var _7
     load_type string
-    load_var2 3 4
+    load_var2 4 5
     load_var2 1 2
+    load_var stop_when
     call baml.ai.drive_run_tools
     return
 }
@@ -339,22 +348,31 @@ function user.FunctionWithComments$render_prompt(a: string, b: int, client: baml
     return
 }
 
-function user.FunctionWithComments$run_tools(a: string, b: int, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, client: baml.ai.Provider) -> string {
-    load_var client
+function user.FunctionWithComments$run_tools(a: string, b: int, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null, client: baml.ai.Provider) -> string | baml.ai.Budget<string> {
+    load_var stop_when
     load_const <omitted>
     cmp_op ==
     pop_jump_if_false L0
+    load_const null
+    store_var stop_when
+
+  L0:
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L1
     load_global user.TestClient
     store_var client
 
-  L0:
+  L1:
     load_var2 1 2
     load_var client
     call user.FunctionWithComments$render_prompt
-    store_var _7
+    store_var _9
     load_type string
-    load_var2 5 6
+    load_var2 6 7
     load_var2 3 4
+    load_var stop_when
     call baml.ai.drive_run_tools
     return
 }

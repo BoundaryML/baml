@@ -20,8 +20,8 @@ function user.TypeBuilderFn$live(from_text: string, io: baml.ai.Channel, client:
 function user.TypeBuilderFn$render_prompt(from_text: string, client: baml.ai.Provider = ...) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(client, "TypeBuilderFn", map { "from_text": from_text })
 }
-function user.TypeBuilderFn$run_tools(from_text: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, client: baml.ai.Provider = ...) -> user.Resume  [expr] {
-  baml.ai.drive_run_tools(client, TypeBuilderFn$render_prompt(from_text = from_text, client = client), tools, dispatch)
+function user.TypeBuilderFn$run_tools(from_text: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: (baml.ai.LoopInfo) -> bool throws never? = null, client: baml.ai.Provider = ...) -> user.Resume | baml.ai.Budget<user.Resume>  [expr] {
+  baml.ai.drive_run_tools(client, TypeBuilderFn$render_prompt(from_text = from_text, client = client), tools, dispatch, stop_when = stop_when)
 }
 function user.TypeBuilderFn$with(from_text: string, project: (baml.ai.ResponseMeta) -> V throws E2, client: baml.ai.Provider = ...) -> baml.ai.CallResult<user.Resume, V>  [expr] {
   baml.ai.drive_with(client, TypeBuilderFn$render_prompt(from_text = from_text, client = client), project)

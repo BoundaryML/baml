@@ -148,36 +148,48 @@ fn user.CommentAfterArrow$render_prompt(client: baml.ai.Provider) -> baml.llm.Pr
     }
 }
 
-fn user.CommentAfterArrow$run_tools(tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, client: baml.ai.Provider) -> string {
+fn user.CommentAfterArrow$run_tools(tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null, client: baml.ai.Provider) -> string | baml.ai.Budget<string> {
     // Locals:
-    let _0: string // _0 // return
+    let _0: string | baml.ai.Budget<string> // _0 // return
     let _1: baml.ai.Tool[] // tools // param
     let _2: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never // dispatch // param
-    let _3: baml.ai.Provider // client // param
-    let _4: bool
-    let _5: baml.llm.PromptAst
-    let _6: type
+    let _3: ((baml.ai.LoopInfo) -> bool throws never) | null // stop_when // param
+    let _4: baml.ai.Provider // client // param
+    let _5: bool
+    let _6: bool
+    let _7: baml.llm.PromptAst
+    let _8: type
 
     bb0: {
-        _4 = copy _3 == const <omitted>;
-        branch copy _4 -> [bb1, bb2];
+        _5 = copy _3 == const <omitted>;
+        branch copy _5 -> [bb1, bb2];
     }
 
     bb1: {
-        _3 = const fn user.TestClient;
+        _3 = const null;
         goto -> bb2;
     }
 
     bb2: {
-        _5 = call const fn user.CommentAfterArrow$render_prompt(copy _3) -> [bb3];
+        _6 = copy _4 == const <omitted>;
+        branch copy _6 -> [bb3, bb4];
     }
 
     bb3: {
-        _6 = load_type(string);
-        _0 = call const fn baml.ai.drive_run_tools<copy _6>(copy _3, copy _5, copy _1, copy _2) -> [bb4];
+        _4 = const fn user.TestClient;
+        goto -> bb4;
     }
 
     bb4: {
+        _7 = call const fn user.CommentAfterArrow$render_prompt(copy _4) -> [bb5];
+    }
+
+    bb5: {
+        _8 = load_type(string);
+        _0 = call const fn baml.ai.drive_run_tools<copy _8>(copy _4, copy _7, copy _1, copy _2, copy _3) -> [bb6];
+    }
+
+    bb6: {
         return;
     }
 }
@@ -375,38 +387,50 @@ fn user.FunctionWithComments$render_prompt(a: string, b: int, client: baml.ai.Pr
     }
 }
 
-fn user.FunctionWithComments$run_tools(a: string, b: int, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, client: baml.ai.Provider) -> string {
+fn user.FunctionWithComments$run_tools(a: string, b: int, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null, client: baml.ai.Provider) -> string | baml.ai.Budget<string> {
     // Locals:
-    let _0: string // _0 // return
+    let _0: string | baml.ai.Budget<string> // _0 // return
     let _1: string // a // param
     let _2: int // b // param
     let _3: baml.ai.Tool[] // tools // param
     let _4: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never // dispatch // param
-    let _5: baml.ai.Provider // client // param
-    let _6: bool
-    let _7: baml.llm.PromptAst
-    let _8: type
+    let _5: ((baml.ai.LoopInfo) -> bool throws never) | null // stop_when // param
+    let _6: baml.ai.Provider // client // param
+    let _7: bool
+    let _8: bool
+    let _9: baml.llm.PromptAst
+    let _10: type
 
     bb0: {
-        _6 = copy _5 == const <omitted>;
-        branch copy _6 -> [bb1, bb2];
+        _7 = copy _5 == const <omitted>;
+        branch copy _7 -> [bb1, bb2];
     }
 
     bb1: {
-        _5 = const fn user.TestClient;
+        _5 = const null;
         goto -> bb2;
     }
 
     bb2: {
-        _7 = call const fn user.FunctionWithComments$render_prompt(copy _1, copy _2, copy _5) -> [bb3];
+        _8 = copy _6 == const <omitted>;
+        branch copy _8 -> [bb3, bb4];
     }
 
     bb3: {
-        _8 = load_type(string);
-        _0 = call const fn baml.ai.drive_run_tools<copy _8>(copy _5, copy _7, copy _3, copy _4) -> [bb4];
+        _6 = const fn user.TestClient;
+        goto -> bb4;
     }
 
     bb4: {
+        _9 = call const fn user.FunctionWithComments$render_prompt(copy _1, copy _2, copy _6) -> [bb5];
+    }
+
+    bb5: {
+        _10 = load_type(string);
+        _0 = call const fn baml.ai.drive_run_tools<copy _10>(copy _6, copy _9, copy _3, copy _4, copy _5) -> [bb6];
+    }
+
+    bb6: {
         return;
     }
 }

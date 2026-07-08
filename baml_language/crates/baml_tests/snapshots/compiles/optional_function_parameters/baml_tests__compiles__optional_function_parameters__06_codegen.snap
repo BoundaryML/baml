@@ -240,7 +240,7 @@ function user.AskDocs$render_prompt(query: string, max_results: int, filter: str
     return
 }
 
-function user.AskDocs$run_tools(query: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, max_results: int, filter: string, client: baml.ai.Provider) -> string {
+function user.AskDocs$run_tools(query: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, max_results: int, filter: string, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null, client: baml.ai.Provider) -> string | baml.ai.Budget<string> {
     load_var max_results
     load_const <omitted>
     cmp_op ==
@@ -257,21 +257,30 @@ function user.AskDocs$run_tools(query: string, tools: baml.ai.Tool[], dispatch: 
     store_var filter
 
   L1:
-    load_var client
+    load_var stop_when
     load_const <omitted>
     cmp_op ==
     pop_jump_if_false L2
+    load_const null
+    store_var stop_when
+
+  L2:
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L3
     load_global user.TestClient
     store_var client
 
-  L2:
+  L3:
     load_var2 1 4
-    load_var2 5 6
+    load_var2 5 7
     call user.AskDocs$render_prompt
-    store_var _10
+    store_var _12
     load_type string
-    load_var2 6 7
+    load_var2 7 8
     load_var2 2 3
+    load_var stop_when
     call baml.ai.drive_run_tools
     return
 }

@@ -20,8 +20,8 @@ function user.Greet$live(name: string, io: baml.ai.Channel, client: baml.ai.Prov
 function user.Greet$render_prompt(name: string, client: baml.ai.Provider = Fast) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(client, "Greet", map { "name": name }, prompt_closure = baml.llm.prompt`...`)
 }
-function user.Greet$run_tools(name: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, client: baml.ai.Provider = Fast) -> string  [expr] {
-  baml.ai.drive_run_tools(client, Greet$render_prompt(name = name, client = client), tools, dispatch)
+function user.Greet$run_tools(name: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: (baml.ai.LoopInfo) -> bool throws never? = null, client: baml.ai.Provider = Fast) -> string | baml.ai.Budget<string>  [expr] {
+  baml.ai.drive_run_tools(client, Greet$render_prompt(name = name, client = client), tools, dispatch, stop_when = stop_when)
 }
 function user.Greet$with(name: string, project: (baml.ai.ResponseMeta) -> V throws E2, client: baml.ai.Provider = Fast) -> baml.ai.CallResult<string, V>  [expr] {
   baml.ai.drive_with(client, Greet$render_prompt(name = name, client = client), project)

@@ -25,8 +25,8 @@ function user.ClassifySentiment$live(text: string, io: baml.ai.Channel, client: 
 function user.ClassifySentiment$render_prompt(text: string, client: baml.ai.Provider = GPT4o) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(client, "ClassifySentiment", map { "text": text })
 }
-function user.ClassifySentiment$run_tools(text: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, client: baml.ai.Provider = GPT4o) -> user.Sentiment  [expr] {
-  baml.ai.drive_run_tools(client, ClassifySentiment$render_prompt(text = text, client = client), tools, dispatch)
+function user.ClassifySentiment$run_tools(text: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: (baml.ai.LoopInfo) -> bool throws never? = null, client: baml.ai.Provider = GPT4o) -> user.Sentiment | baml.ai.Budget<user.Sentiment>  [expr] {
+  baml.ai.drive_run_tools(client, ClassifySentiment$render_prompt(text = text, client = client), tools, dispatch, stop_when = stop_when)
 }
 function user.ClassifySentiment$with(text: string, project: (baml.ai.ResponseMeta) -> V throws E2, client: baml.ai.Provider = GPT4o) -> baml.ai.CallResult<user.Sentiment, V>  [expr] {
   baml.ai.drive_with(client, ClassifySentiment$render_prompt(text = text, client = client), project)
@@ -46,8 +46,8 @@ function user.ClassifySentiment2$live(text: string, io: baml.ai.Channel, client:
 function user.ClassifySentiment2$render_prompt(text: string, client: baml.ai.Provider = GPT4o) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(client, "ClassifySentiment2", map { "text": text })
 }
-function user.ClassifySentiment2$run_tools(text: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, client: baml.ai.Provider = GPT4o) -> string  [expr] {
-  baml.ai.drive_run_tools(client, ClassifySentiment2$render_prompt(text = text, client = client), tools, dispatch)
+function user.ClassifySentiment2$run_tools(text: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: (baml.ai.LoopInfo) -> bool throws never? = null, client: baml.ai.Provider = GPT4o) -> string | baml.ai.Budget<string>  [expr] {
+  baml.ai.drive_run_tools(client, ClassifySentiment2$render_prompt(text = text, client = client), tools, dispatch, stop_when = stop_when)
 }
 function user.ClassifySentiment2$with(text: string, project: (baml.ai.ResponseMeta) -> V throws E2, client: baml.ai.Provider = GPT4o) -> baml.ai.CallResult<string, V>  [expr] {
   baml.ai.drive_with(client, ClassifySentiment2$render_prompt(text = text, client = client), project)
@@ -73,8 +73,8 @@ function user.GenerateTests$live(count: int, topic: string, io: baml.ai.Channel,
 function user.GenerateTests$render_prompt(count: int, topic: string, client: baml.ai.Provider = GPT4o) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(client, "GenerateTests", map { "count": count, "topic": topic })
 }
-function user.GenerateTests$run_tools(count: int, topic: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, client: baml.ai.Provider = GPT4o) -> string[]  [expr] {
-  baml.ai.drive_run_tools(client, GenerateTests$render_prompt(count = count, topic = topic, client = client), tools, dispatch)
+function user.GenerateTests$run_tools(count: int, topic: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: (baml.ai.LoopInfo) -> bool throws never? = null, client: baml.ai.Provider = GPT4o) -> string[] | baml.ai.Budget<string[]>  [expr] {
+  baml.ai.drive_run_tools(client, GenerateTests$render_prompt(count = count, topic = topic, client = client), tools, dispatch, stop_when = stop_when)
 }
 function user.GenerateTests$with(count: int, topic: string, project: (baml.ai.ResponseMeta) -> V throws E2, client: baml.ai.Provider = GPT4o) -> baml.ai.CallResult<string[], V>  [expr] {
   baml.ai.drive_with(client, GenerateTests$render_prompt(count = count, topic = topic, client = client), project)

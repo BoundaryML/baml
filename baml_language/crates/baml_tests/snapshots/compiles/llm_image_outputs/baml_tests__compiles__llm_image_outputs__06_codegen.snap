@@ -149,21 +149,30 @@ function user.GenerateImage$render_prompt(prompt: string, client: baml.ai.Provid
     return
 }
 
-function user.GenerateImage$run_tools(prompt: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, client: baml.ai.Provider) -> image {
-    load_var client
+function user.GenerateImage$run_tools(prompt: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null, client: baml.ai.Provider) -> image | baml.ai.Budget<image> {
+    load_var stop_when
     load_const <omitted>
     cmp_op ==
     pop_jump_if_false L0
+    load_const null
+    store_var stop_when
+
+  L0:
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L1
     load_global user.OpenAIImageResponses
     store_var client
 
-  L0:
-    load_var2 1 4
+  L1:
+    load_var2 1 5
     call user.GenerateImage$render_prompt
-    store_var _6
+    store_var _8
     load_type image
-    load_var2 4 5
+    load_var2 5 6
     load_var2 2 3
+    load_var stop_when
     call baml.ai.drive_run_tools
     return
 }
@@ -340,21 +349,30 @@ function user.GenerateImageSet$render_prompt(prompt: string, client: baml.ai.Pro
     return
 }
 
-function user.GenerateImageSet$run_tools(prompt: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, client: baml.ai.Provider) -> image[] {
-    load_var client
+function user.GenerateImageSet$run_tools(prompt: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null, client: baml.ai.Provider) -> image[] | baml.ai.Budget<image[]> {
+    load_var stop_when
     load_const <omitted>
     cmp_op ==
     pop_jump_if_false L0
+    load_const null
+    store_var stop_when
+
+  L0:
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L1
     load_global user.OpenAIImageResponses
     store_var client
 
-  L0:
-    load_var2 1 4
+  L1:
+    load_var2 1 5
     call user.GenerateImageSet$render_prompt
-    store_var _6
+    store_var _8
     load_type image[]
-    load_var2 4 5
+    load_var2 5 6
     load_var2 2 3
+    load_var stop_when
     call baml.ai.drive_run_tools
     return
 }
@@ -531,21 +549,30 @@ function user.GenerateMixedImageNarrative$render_prompt(prompt: string, client: 
     return
 }
 
-function user.GenerateMixedImageNarrative$run_tools(prompt: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, client: baml.ai.Provider) -> (image | string)[] {
-    load_var client
+function user.GenerateMixedImageNarrative$run_tools(prompt: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null, client: baml.ai.Provider) -> (image | string)[] | baml.ai.Budget<(image | string)[]> {
+    load_var stop_when
     load_const <omitted>
     cmp_op ==
     pop_jump_if_false L0
+    load_const null
+    store_var stop_when
+
+  L0:
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L1
     load_global user.OpenAIImageResponses
     store_var client
 
-  L0:
-    load_var2 1 4
+  L1:
+    load_var2 1 5
     call user.GenerateMixedImageNarrative$render_prompt
-    store_var _6
+    store_var _8
     load_type image | string[]
-    load_var2 4 5
+    load_var2 5 6
     load_var2 2 3
+    load_var stop_when
     call baml.ai.drive_run_tools
     return
 }

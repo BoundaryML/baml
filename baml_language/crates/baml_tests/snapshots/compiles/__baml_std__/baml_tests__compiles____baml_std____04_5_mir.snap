@@ -3177,42 +3177,54 @@ fn baml.ai.LoopMeta.root.ai.ResponseMeta.citations(self: null) -> baml.ai.Citati
     }
 }
 
-fn baml.ai.drive_run_tools(client: baml.ai.Provider, prompt: baml.llm.PromptAst, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never) -> T {
+fn baml.ai.drive_run_tools(client: baml.ai.Provider, prompt: baml.llm.PromptAst, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null) -> T | baml.ai.Budget<T> {
     // Locals:
-    let _0: T // _0 // return
+    let _0: T | baml.ai.Budget<T> // _0 // return
     let _1: baml.ai.Provider // client // param
     let _2: baml.llm.PromptAst // prompt // param
     let _3: baml.ai.Tool[] // tools // param
     let _4: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never // dispatch // param
-    let _5: string // text
+    let _5: ((baml.ai.LoopInfo) -> bool throws never) | null // stop_when // param
     let _6: bool
-    let _7: baml.ai.Tools // tp
-    let _8: string
-    let _9: type
-    let _10: baml.errors.Unsupported
+    let _7: string // text
+    let _8: bool
+    let _9: baml.ai.Tools // tp
+    let _10: string
+    let _11: type
+    let _12: baml.errors.Unsupported
 
     bb0: {
-        _5 = sys_op const fn baml.llm.prompt_to_text(copy _2) -> bb1;
+        _6 = copy _5 == const <omitted>;
+        branch copy _6 -> [bb1, bb2];
     }
 
     bb1: {
-        _6 = is_type(copy _1, baml.ai.OpenAi);
-        branch copy _6 -> [bb3, bb2];
+        _5 = const null;
+        goto -> bb2;
     }
 
     bb2: {
-        _10 = baml.errors.Unsupported { const "client's provider does not support Tools" };
-        throw copy _10;
+        _7 = sys_op const fn baml.llm.prompt_to_text(copy _2) -> bb3;
     }
 
     bb3: {
-        _7 = copy _1;
-        _8 = copy _5;
-        _9 = load_type(#0);
-        _0 = virtual_call run_tools as baml.ai.Tools<copy _9>(copy _7, copy _8, copy _3, copy _4) -> [bb4];
+        _8 = is_type(copy _1, baml.ai.OpenAi);
+        branch copy _8 -> [bb5, bb4];
     }
 
     bb4: {
+        _12 = baml.errors.Unsupported { const "client's provider does not support Tools" };
+        throw copy _12;
+    }
+
+    bb5: {
+        _9 = copy _1;
+        _10 = copy _7;
+        _11 = load_type(#0);
+        _0 = virtual_call run_tools as baml.ai.Tools<copy _11>(copy _9, copy _10, copy _3, copy _4, copy _5) -> [bb6];
+    }
+
+    bb6: {
         return;
     }
 }
@@ -3708,68 +3720,121 @@ fn baml.ai.ToolLoop.run_to_budget(self: baml.ai.ToolLoop, prompt: string) -> T |
     }
 }
 
-fn baml.ai.Tools.run_tools(self: baml.ai.Tools, prompt: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never) -> T {
+fn baml.ai.Tools.run_tools(self: baml.ai.Tools, prompt: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null) -> T | baml.ai.Budget<T> {
     // Locals:
-    let _0: T // _0 // return
+    let _0: T | baml.ai.Budget<T> // _0 // return
     let _1: baml.ai.Tools // self // param
     let _2: string // prompt // param
     let _3: baml.ai.Tool[] // tools // param
     let _4: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never // dispatch // param
-    let _5: Transcript // t
-    let _6: type
-    let _7: T | baml.ai.ToolCalls
-    let _8: Transcript
-    let _9: type
-    let _10: bool
-    let _11: baml.ai.ToolCalls // calls
-    let _12: Transcript
-    let _13: baml.ai.ToolResult[]
-    let _14: baml.ai.ToolCall[]
-    let _15: T // value
+    let _5: ((baml.ai.LoopInfo) -> bool throws never) | null // stop_when // param
+    let _6: bool
+    let _7: Transcript // t
+    let _8: type
+    let _9: int // steps
+    let _10: T | baml.ai.ToolCalls
+    let _11: Transcript
+    let _12: type
+    let _13: bool
+    let _14: baml.ai.ToolCalls // calls
+    let _15: int
+    let _16: bool
+    let _17: (baml.ai.LoopInfo) -> bool throws never // pred
+    let _18: bool
+    let _19: (baml.ai.LoopInfo) -> bool throws never
+    let _20: baml.ai.LoopInfo
+    let _21: int
+    let _22: baml.ai.ToolCall[]
+    let _23: int
+    let _24: Transcript
+    let _25: baml.ai.ToolResult[]
+    let _26: baml.ai.ToolCall[]
+    let _27: T // value
 
     bb0: {
-        _6 = load_type(#1);
-        _5 = virtual_call begin as baml.ai.Tools<Transcript = Transcript><copy _6>(copy _1, copy _2, copy _3) -> [bb1];
+        _6 = copy _5 == const <omitted>;
+        branch copy _6 -> [bb1, bb2];
     }
 
     bb1: {
-        branch const true -> [bb3, bb2];
+        _5 = const null;
+        goto -> bb2;
     }
 
     bb2: {
-        _0 = call const fn baml.sys.panic(const "unreachable") -> [bb6];
+        _8 = load_type(#1);
+        _7 = virtual_call begin as baml.ai.Tools<Transcript = Transcript><copy _8>(copy _1, copy _2, copy _3) -> [bb3];
     }
 
     bb3: {
-        _8 = copy _5;
-        _9 = load_type(#1);
-        _7 = virtual_call step as baml.ai.Tools<Transcript = Transcript><copy _9>(copy _1, copy _8) -> [bb4];
+        _9 = const 0_i64;
+        goto -> bb4;
     }
 
     bb4: {
-        _10 = is_type(copy _7, baml.ai.ToolCalls);
-        branch copy _10 -> [bb7, bb5];
+        branch const true -> [bb6, bb5];
     }
 
     bb5: {
-        _15 = copy _7;
-        _0 = copy _15;
-        goto -> bb6;
+        _0 = call const fn baml.sys.panic(const "unreachable") -> [bb13];
     }
 
     bb6: {
-        return;
+        _11 = copy _7;
+        _12 = load_type(#1);
+        _10 = virtual_call step as baml.ai.Tools<Transcript = Transcript><copy _12>(copy _1, copy _11) -> [bb7];
     }
 
     bb7: {
-        _11 = copy _7;
-        _12 = copy _5;
-        _14 = copy _11.0;
-        _13 = call copy _4(copy _14) -> [bb8];
+        _13 = is_type(copy _10, baml.ai.ToolCalls);
+        branch copy _13 -> [bb9, bb8];
     }
 
     bb8: {
-        _5 = virtual_call submit as baml.ai.Tools<Transcript = Transcript>(copy _1, copy _12, copy _13) -> [bb1];
+        _27 = copy _10;
+        _0 = copy _27;
+        goto -> bb13;
+    }
+
+    bb9: {
+        _14 = copy _10;
+        _15 = copy _9;
+        _9 = copy _15 + const 1_i64;
+        _16 = copy _5 == const null;
+        branch copy _16 -> [bb14, bb10];
+    }
+
+    bb10: {
+        _17 = copy _5;
+        _19 = copy _17;
+        _21 = copy _9;
+        _22 = copy _14.0;
+        _20 = baml.ai.LoopInfo { copy _21, copy _22 };
+        _18 = call copy _19(copy _20) -> [bb11];
+    }
+
+    bb11: {
+        branch copy _18 -> [bb12, bb14];
+    }
+
+    bb12: {
+        _23 = copy _9;
+        _0 = baml.ai.Budget<#1> { const null, copy _23 };
+        goto -> bb13;
+    }
+
+    bb13: {
+        return;
+    }
+
+    bb14: {
+        _24 = copy _7;
+        _26 = copy _14.0;
+        _25 = call copy _4(copy _26) -> [bb15];
+    }
+
+    bb15: {
+        _7 = virtual_call submit as baml.ai.Tools<Transcript = Transcript>(copy _1, copy _24, copy _25) -> [bb4];
     }
 }
 

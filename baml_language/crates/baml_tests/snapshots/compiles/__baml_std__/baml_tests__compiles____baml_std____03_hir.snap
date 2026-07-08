@@ -336,8 +336,8 @@ function baml.ai.call_messages_with(self: ?, messages: root.ai.ChatMessage[], pr
 function baml.ai.citations(self: ?) -> root.ai.Citation[] | root.ai.Unavailable  [expr] {
   {  } root.ai.Unavailable { reason: "tool loop surface..." }
 }
-function baml.ai.drive_run_tools(client: Provider, prompt: root.llm.PromptAst, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never) -> T  [expr] {
-  { let text = root.llm.prompt_to_text(prompt) } match (client) { tp: Tools => tp.run_tools(text, tools, dispatch), _ => throw root.errors.Unsupported { message: "client's provider..." } }
+function baml.ai.drive_run_tools(client: Provider, prompt: root.llm.PromptAst, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: (baml.ai.LoopInfo) -> bool throws never? = null) -> T | baml.ai.Budget<T>  [expr] {
+  { let text = root.llm.prompt_to_text(prompt) } match (client) { tp: Tools => tp.run_tools(text, tools, dispatch, stop_when = stop_when), _ => throw root.errors.Unsupported { message: "client's provider..." } }
 }
 function baml.ai.finish_reason(self: ?) -> string  [expr] {
   {  } "tool_loop_complete"
@@ -369,8 +369,8 @@ function baml.ai.reasoning(self: ?) -> string | root.ai.Unavailable  [expr] {
 function baml.ai.run_to_budget(self: ?, prompt: string) -> T | baml.ai.Budget<T>  [expr] {
   {  } match (self.inner) { tp: Tools => { let d = self.dispatch; let steps = 0; let t = tp.begin(prompt, self.tools); while true {  } match (tp.step(t)) { calls: baml.ai.ToolCalls => { steps = steps Add 1; match (self.stop_when) { null => {  }, pred: (baml.ai.LoopInfo) -> bool => {  } if (pred(baml.ai.LoopInfo { steps: steps, calls: calls.calls })) { return baml.ai.Budget { partial: null, steps_taken: steps } } }; t = tp.submit(t, d(calls.calls)) }, value: T => { return value } } } root.sys.panic("unreachable"), _ => throw root.errors.Unsupported { message: "ToolLoop.inner do..." } }
 }
-function baml.ai.run_tools(self: ?, prompt: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never) -> T  [expr] {
-  { let t = self.begin(prompt, tools); while true {  } match (self.step(t)) { calls: baml.ai.ToolCalls => { t = self.submit(t, dispatch(calls.calls)) }, value: T => { return value } } } root.sys.panic("unreachable")
+function baml.ai.run_tools(self: ?, prompt: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: (baml.ai.LoopInfo) -> bool throws never? = null) -> T | baml.ai.Budget<T>  [expr] {
+  { let t = self.begin(prompt, tools); let steps = 0; while true {  } match (self.step(t)) { calls: baml.ai.ToolCalls => { steps = steps Add 1; match (stop_when) { null => {  }, pred: (baml.ai.LoopInfo) -> bool => {  } if (pred(baml.ai.LoopInfo { steps: steps, calls: calls.calls })) { return baml.ai.Budget { partial: null, steps_taken: steps } } }; t = self.submit(t, dispatch(calls.calls)) }, value: T => { return value } } } root.sys.panic("unreachable")
 }
 function baml.ai.send(self: ?, request: root.http.Request) -> unknown  [expr] {
   { throw root.errors.UnknownError { data: null, message: ["tool loop does no..."] } }

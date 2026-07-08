@@ -20,8 +20,8 @@ function user.TestFunc$build_request_stream(input: string, client: baml.ai.Provi
 function user.TestFunc$with<V, E2>(input: string, project: (baml.ai.ResponseMeta) -> V throws E2, client: baml.ai.Provider = TestClient) -> baml.ai.CallResult<string, V> throws never {
   baml.ai.drive_with<V, E2>(client, TestFunc$render_prompt(input = input, client = client), project) : baml.ai.CallResult<string, V>
 }
-function user.TestFunc$run_tools(input: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, client: baml.ai.Provider = TestClient) -> string throws never {
-  baml.ai.drive_run_tools<T>(client, TestFunc$render_prompt(input = input, client = client), tools, dispatch) : string
+function user.TestFunc$run_tools(input: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null = null, client: baml.ai.Provider = TestClient) -> string | baml.ai.Budget<string> throws never {
+  baml.ai.drive_run_tools<T>(client, TestFunc$render_prompt(input = input, client = client), tools, dispatch, stop_when = stop_when) : string | baml.ai.Budget<string>
 }
 function user.TestFunc$live(input: string, io: baml.ai.Channel, client: baml.ai.Provider = TestClient) -> baml.ai.Transcript throws never {
   baml.ai.drive_live(client, TestFunc$render_prompt(input = input, client = client), io) : baml.ai.Transcript

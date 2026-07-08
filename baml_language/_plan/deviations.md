@@ -448,3 +448,19 @@ nested selectors replaced the two-step `field` chains). 5 unit tests in `ns_json
 `Body`. Mechanical rename across the interface, all providers, the bridge, combinators,
 `ToolLoop`, and the test fakes. Historical mentions in this log and the frozen master
 plan keep the old spelling.
+
+## D5 slice 1 — run_tools returns the honest sum
+
+`Tools.run_tools<T>` (and `drive_run_tools` / the generated `Foo$run_tools`) gained
+`stop_when: ((LoopInfo) -> bool throws never)? = null` and now return `T | Budget<T>`:
+the budget outcome is a first-class return arm, exactly the shape `run_to_budget`
+hand-rolled (which stays, unchanged, on `ToolLoop`). The plain-call path
+(`ToolLoop.call_messages_with`) still THROWS `LoopBudgetExceeded` — structural: an
+`HttpProvider` call must produce `T`, so the sum can't ride that channel.
+
+Compiler: `DriveCompanionSpec.null_defaulted_extras` — companion extras with a `null`
+default, allocated into the cloned `FunctionDefaults` arena (the
+`append_default_client_param` pattern) and passed BY NAME in the driver call (E0005).
+
+Breaking surface change by design (plan D5): every `run_tools`/`$run_tools` caller now
+matches the sum — 8 corpus call sites migrated.

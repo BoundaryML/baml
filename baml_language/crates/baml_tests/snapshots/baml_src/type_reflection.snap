@@ -187,21 +187,30 @@ function type_reflection.GetBar$render_prompt(client: baml.ai.Provider) -> baml.
     return
 }
 
-function type_reflection.GetBar$run_tools(tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, client: baml.ai.Provider) -> type_reflection.Bar {
-    load_var client
+function type_reflection.GetBar$run_tools(tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null, client: baml.ai.Provider) -> type_reflection.Bar | baml.ai.Budget<type_reflection.Bar> {
+    load_var stop_when
     load_const <omitted>
     cmp_op ==
     pop_jump_if_false L0
-    load_global user.type_reflection.TestClient
-    store_var client
+    load_const null
+    store_var stop_when
 
   L0:
     load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L1
+    load_global user.type_reflection.TestClient
+    store_var client
+
+  L1:
+    load_var client
     call user.type_reflection.GetBar$render_prompt
-    store_var _5
+    store_var _7
     load_type type_reflection.Bar
-    load_var2 3 4
+    load_var2 4 5
     load_var2 1 2
+    load_var stop_when
     call baml.ai.drive_run_tools
     return
 }
@@ -391,21 +400,30 @@ function type_reflection.GetFoo$render_prompt(client: baml.ai.Provider) -> baml.
     return
 }
 
-function type_reflection.GetFoo$run_tools(tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, client: baml.ai.Provider) -> type_reflection.Foo {
-    load_var client
+function type_reflection.GetFoo$run_tools(tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null, client: baml.ai.Provider) -> type_reflection.Foo | baml.ai.Budget<type_reflection.Foo> {
+    load_var stop_when
     load_const <omitted>
     cmp_op ==
     pop_jump_if_false L0
-    load_global user.type_reflection.TestClient
-    store_var client
+    load_const null
+    store_var stop_when
 
   L0:
     load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L1
+    load_global user.type_reflection.TestClient
+    store_var client
+
+  L1:
+    load_var client
     call user.type_reflection.GetFoo$render_prompt
-    store_var _5
+    store_var _7
     load_type type_reflection.Foo
-    load_var2 3 4
+    load_var2 4 5
     load_var2 1 2
+    load_var stop_when
     call baml.ai.drive_run_tools
     return
 }

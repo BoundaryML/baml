@@ -463,14 +463,27 @@ function baml.ai.invoke_tool<A>(call: baml.ai.ToolCall, handler: (A) -> string t
     ToolResult { id: call.id, output: handler(args) } : baml.ai.ToolResult
   }
 }
-function baml.ai.Tools.run_tools<T>(self: baml.ai.Tools, prompt: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never) -> T throws baml.errors.ToolError | baml.errors.UnknownError {
+function baml.ai.Tools.run_tools<T>(self: baml.ai.Tools, prompt: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null = null) -> T | baml.ai.Budget<T> throws baml.errors.ToolError | baml.errors.UnknownError {
   { : never
     let t = self.begin(prompt, tools) : Self.Transcript
+    let steps = 0 : 0 -> int
     while true
       { : void
         match (self.step<T>(t) : T | baml.ai.ToolCalls) : void
           calls: ToolCalls =>
             { : void
+              steps = steps + 1 : int
+              match (stop_when : ((baml.ai.LoopInfo) -> bool throws never) | null) : void
+                null =>
+                  { : void
+                  }
+                pred: (LoopInfo) -> bool =>
+                  { : void
+                    if (pred(LoopInfo { steps: steps, calls: calls.calls }) : bool) : void
+                      { : never
+                        return Budget { partial: null, steps_taken: steps } : baml.ai.Budget<T>
+                      }
+                  }
               t = self.submit(t, dispatch(calls.calls)) : Self.Transcript
             }
           value: T =>
@@ -481,12 +494,12 @@ function baml.ai.Tools.run_tools<T>(self: baml.ai.Tools, prompt: string, tools: 
     root.sys.panic("unreachable") : never
   }
 }
-function baml.ai.drive_run_tools<T>(client: baml.ai.Provider, prompt: baml.llm.PromptAst, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never) -> T throws baml.errors.ToolError | baml.errors.UnknownError {
-  { : T
+function baml.ai.drive_run_tools<T>(client: baml.ai.Provider, prompt: baml.llm.PromptAst, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null = null) -> T | baml.ai.Budget<T> throws baml.errors.ToolError | baml.errors.UnknownError {
+  { : T | baml.ai.Budget<T>
     let text = root.llm.prompt_to_text(prompt) : string
-    match (client : baml.ai.Provider) : T
+    match (client : baml.ai.Provider) : T | baml.ai.Budget<T>
       tp: Tools =>
-        tp.run_tools<T>(text, tools, dispatch) : T
+        tp.run_tools<T>(text, tools, dispatch, stop_when = stop_when) : T | baml.ai.Budget<T>
       _ =>
         throw root.errors.Unsupported { message: "client's provider..." } : never
   }
@@ -849,9 +862,9 @@ function baml.ai.ToolLoop$stream.call_messages_with<T, V, E2>(self: baml.ai.Tool
       _ =>
         throw root.errors.Unsupported { message: "ToolLoop.inner do..." } : never
   }
-  !! 11374..11384: type mismatch: expected baml.ai.Tool[], got baml.ai.Tool$stream[]
-  !! 12462..12476: `unknown` is not a function — it cannot be called
-  !! 12462..12476: `unknown` is not a function — it cannot be called
+  !! 12340..12350: type mismatch: expected baml.ai.Tool[], got baml.ai.Tool$stream[]
+  !! 13428..13442: `unknown` is not a function — it cannot be called
+  !! 13428..13442: `unknown` is not a function — it cannot be called
 }
 
 --- <builtin>/baml/ns_ai/combinators.baml ---

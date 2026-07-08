@@ -106,26 +106,32 @@ function ai_scenarios.$init_test_ns_ai_scenarios_09_tool_calling_usage(registry:
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "09: invoke_tool coerces args to the handler's declared type (D6 standard path)"
+    load_const "09: run_tools with stop_when returns the Budget arm, not a throw (D5)"
     make_closure .<lambda($init_test_ns_ai_scenarios_09_tool_calling_usage, 2)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
+    load_const "09: invoke_tool coerces args to the handler's declared type (D6 standard path)"
+    make_closure .<lambda($init_test_ns_ai_scenarios_09_tool_calling_usage, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
     load_const "09: invoke_tool returns an error result on schema mismatch (model self-corrects)"
-    make_closure .<lambda($init_test_ns_ai_scenarios_09_tool_calling_usage, 4)>, 0
+    make_closure .<lambda($init_test_ns_ai_scenarios_09_tool_calling_usage, 5)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "09: validate_args checks calls against the STORED params type (D6 integrity)"
-    make_closure .<lambda($init_test_ns_ai_scenarios_09_tool_calling_usage, 6)>, 0
+    make_closure .<lambda($init_test_ns_ai_scenarios_09_tool_calling_usage, 7)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
     load_const "09: parse_type parses against a runtime type value and narrows via match"
-    make_closure .<lambda($init_test_ns_ai_scenarios_09_tool_calling_usage, 7)>, 0
+    make_closure .<lambda($init_test_ns_ai_scenarios_09_tool_calling_usage, 8)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
@@ -179,6 +185,12 @@ function ai_scenarios.$init_test_ns_ai_scenarios_10_agentic_loop_usage(registry:
     load_var registry
     load_const "Foo$run_tools on a capability-less client is a typed Unsupported"
     make_closure .<lambda($init_test_ns_ai_scenarios_10_agentic_loop_usage, 7)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "Foo$run_tools with stop_when surfaces the Budget arm (D5)"
+    make_closure .<lambda($init_test_ns_ai_scenarios_10_agentic_loop_usage, 8)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
@@ -871,21 +883,30 @@ function ai_scenarios.AskOnce$render_prompt(q: string, client: baml.ai.Provider)
     return
 }
 
-function ai_scenarios.AskOnce$run_tools(q: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, client: baml.ai.Provider) -> string {
-    load_var client
+function ai_scenarios.AskOnce$run_tools(q: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null, client: baml.ai.Provider) -> string | baml.ai.Budget<string> {
+    load_var stop_when
     load_const <omitted>
     cmp_op ==
     pop_jump_if_false L0
+    load_const null
+    store_var stop_when
+
+  L0:
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L1
     load_global user.ai_scenarios.DeadS01
     store_var client
 
-  L0:
-    load_var2 1 4
+  L1:
+    load_var2 1 5
     call user.ai_scenarios.AskOnce$render_prompt
-    store_var _6
+    store_var _8
     load_type string
-    load_var2 4 5
+    load_var2 5 6
     load_var2 2 3
+    load_var stop_when
     call baml.ai.drive_run_tools
     return
 }
@@ -1735,21 +1756,30 @@ function ai_scenarios.ExtractPerson$render_prompt(doc: string, client: baml.ai.P
     return
 }
 
-function ai_scenarios.ExtractPerson$run_tools(doc: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, client: baml.ai.Provider) -> ai_scenarios.S02Person {
-    load_var client
+function ai_scenarios.ExtractPerson$run_tools(doc: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null, client: baml.ai.Provider) -> ai_scenarios.S02Person | baml.ai.Budget<ai_scenarios.S02Person> {
+    load_var stop_when
     load_const <omitted>
     cmp_op ==
     pop_jump_if_false L0
+    load_const null
+    store_var stop_when
+
+  L0:
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L1
     load_global user.ai_scenarios.DeadS02
     store_var client
 
-  L0:
-    load_var2 1 4
+  L1:
+    load_var2 1 5
     call user.ai_scenarios.ExtractPerson$render_prompt
-    store_var _6
+    store_var _8
     load_type ai_scenarios.S02Person
-    load_var2 4 5
+    load_var2 5 6
     load_var2 2 3
+    load_var stop_when
     call baml.ai.drive_run_tools
     return
 }
@@ -2311,21 +2341,30 @@ function ai_scenarios.ResearchIt$render_prompt(q: string, client: baml.ai.Provid
     return
 }
 
-function ai_scenarios.ResearchIt$run_tools(q: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, client: baml.ai.Provider) -> string {
-    load_var client
+function ai_scenarios.ResearchIt$run_tools(q: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null, client: baml.ai.Provider) -> string | baml.ai.Budget<string> {
+    load_var stop_when
     load_const <omitted>
     cmp_op ==
     pop_jump_if_false L0
+    load_const null
+    store_var stop_when
+
+  L0:
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L1
     load_global user.ai_scenarios.DeadDeclared
     store_var client
 
-  L0:
-    load_var2 1 4
+  L1:
+    load_var2 1 5
     call user.ai_scenarios.ResearchIt$render_prompt
-    store_var _6
+    store_var _8
     load_type string
-    load_var2 4 5
+    load_var2 5 6
     load_var2 2 3
+    load_var stop_when
     call baml.ai.drive_run_tools
     return
 }
@@ -3147,21 +3186,30 @@ function ai_scenarios.StreamStory$render_prompt(topic: string, client: baml.ai.P
     return
 }
 
-function ai_scenarios.StreamStory$run_tools(topic: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, client: baml.ai.Provider) -> string {
-    load_var client
+function ai_scenarios.StreamStory$run_tools(topic: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null, client: baml.ai.Provider) -> string | baml.ai.Budget<string> {
+    load_var stop_when
     load_const <omitted>
     cmp_op ==
     pop_jump_if_false L0
+    load_const null
+    store_var stop_when
+
+  L0:
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L1
     load_global user.ai_scenarios.DeadS04
     store_var client
 
-  L0:
-    load_var2 1 4
+  L1:
+    load_var2 1 5
     call user.ai_scenarios.StreamStory$render_prompt
-    store_var _6
+    store_var _8
     load_type string
-    load_var2 4 5
+    load_var2 5 6
     load_var2 2 3
+    load_var stop_when
     call baml.ai.drive_run_tools
     return
 }
@@ -3357,21 +3405,30 @@ function ai_scenarios.Summarize$render_prompt(q: string, client: baml.ai.Provide
     return
 }
 
-function ai_scenarios.Summarize$run_tools(q: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, client: baml.ai.Provider) -> string {
-    load_var client
+function ai_scenarios.Summarize$run_tools(q: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null, client: baml.ai.Provider) -> string | baml.ai.Budget<string> {
+    load_var stop_when
     load_const <omitted>
     cmp_op ==
     pop_jump_if_false L0
+    load_const null
+    store_var stop_when
+
+  L0:
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L1
     load_global user.ai_scenarios.DeadObs
     store_var client
 
-  L0:
-    load_var2 1 4
+  L1:
+    load_var2 1 5
     call user.ai_scenarios.Summarize$render_prompt
-    store_var _6
+    store_var _8
     load_type string
-    load_var2 4 5
+    load_var2 5 6
     load_var2 2 3
+    load_var stop_when
     call baml.ai.drive_run_tools
     return
 }
@@ -3567,21 +3624,30 @@ function ai_scenarios.ThinkHard$render_prompt(q: string, client: baml.ai.Provide
     return
 }
 
-function ai_scenarios.ThinkHard$run_tools(q: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, client: baml.ai.Provider) -> string {
-    load_var client
+function ai_scenarios.ThinkHard$run_tools(q: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null, client: baml.ai.Provider) -> string | baml.ai.Budget<string> {
+    load_var stop_when
     load_const <omitted>
     cmp_op ==
     pop_jump_if_false L0
+    load_const null
+    store_var stop_when
+
+  L0:
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L1
     load_global user.ai_scenarios.DeadS07
     store_var client
 
-  L0:
-    load_var2 1 4
+  L1:
+    load_var2 1 5
     call user.ai_scenarios.ThinkHard$render_prompt
-    store_var _6
+    store_var _8
     load_type string
-    load_var2 4 5
+    load_var2 5 6
     load_var2 2 3
+    load_var stop_when
     call baml.ai.drive_run_tools
     return
 }
@@ -3777,21 +3843,30 @@ function ai_scenarios.VoiceChat$render_prompt(instructions: string, client: baml
     return
 }
 
-function ai_scenarios.VoiceChat$run_tools(instructions: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, client: baml.ai.Provider) -> string {
-    load_var client
+function ai_scenarios.VoiceChat$run_tools(instructions: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null, client: baml.ai.Provider) -> string | baml.ai.Budget<string> {
+    load_var stop_when
     load_const <omitted>
     cmp_op ==
     pop_jump_if_false L0
+    load_const null
+    store_var stop_when
+
+  L0:
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L1
     load_global user.ai_scenarios.DeadVoice
     store_var client
 
-  L0:
-    load_var2 1 4
+  L1:
+    load_var2 1 5
     call user.ai_scenarios.VoiceChat$render_prompt
-    store_var _6
+    store_var _8
     load_type string
-    load_var2 4 5
+    load_var2 5 6
     load_var2 2 3
+    load_var stop_when
     call baml.ai.drive_run_tools
     return
 }

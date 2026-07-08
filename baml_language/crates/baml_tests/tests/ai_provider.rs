@@ -555,7 +555,7 @@ async fn tools_loop_via_mock() {
                     parameters: "{{\"type\":\"object\",\"properties\":{{\"location\":{{\"type\":\"string\"}}}},\"required\":[\"location\"]}}",
                 }},
             ];
-            p.run_tools<string>(
+            match (p.run_tools<string>(
                 "What is the weather in Paris?",
                 tools,
                 (calls: baml.ai.ToolCall[]) -> baml.ai.ToolResult[] {{
@@ -568,6 +568,9 @@ async fn tools_loop_via_mock() {
                 }},
             ) catch (e) {{
                 let u: baml.errors.UnknownError => "ERR:" + u.message.join(","),
+            }}) {{
+                let v: string => v,
+                _ => "UNEXPECTED_BUDGET",
             }}
         }}
         "#
@@ -600,7 +603,7 @@ async fn tools_loop_live() {
                     parameters: "{\"type\":\"object\",\"properties\":{\"location\":{\"type\":\"string\"}},\"required\":[\"location\"]}",
                 },
             ];
-            p.run_tools<string>(
+            match (p.run_tools<string>(
                 "What is the weather in Paris? Use the get_weather tool, then answer in one short sentence.",
                 tools,
                 (calls: baml.ai.ToolCall[]) -> baml.ai.ToolResult[] {
@@ -613,6 +616,9 @@ async fn tools_loop_live() {
                 },
             ) catch (e) {
                 let u: baml.errors.UnknownError => "ERR:" + u.message.join(","),
+            }) {
+                let v: string => v,
+                _ => "UNEXPECTED_BUDGET",
             }
         }
         "#
@@ -1245,7 +1251,7 @@ async fn multi_tool_agent_live() {
                 },
             ];
             let called: string[] = [];
-            let answer = p.run_tools<string>(
+            let answer = match (p.run_tools<string>(
                 "What is the weather AND the current local time in Paris? Use the tools, then answer in one sentence mentioning both.",
                 tools,
                 (calls: baml.ai.ToolCall[]) -> baml.ai.ToolResult[] {
@@ -1265,6 +1271,9 @@ async fn multi_tool_agent_live() {
                 },
             ) catch (e) {
                 let u: baml.errors.UnknownError => return "ERR:" + u.message.join(","),
+            }) {
+                let v: string => v,
+                _ => "UNEXPECTED_BUDGET",
             };
             let used_weather = called.includes("get_weather");
             let used_time = called.includes("get_local_time");
@@ -1365,7 +1374,7 @@ async fn multi_agent_handoff_live() {
                 },
             ];
             let handoffs = 0;
-            let answer = orchestrator.run_tools<string>(
+            let answer = match (orchestrator.run_tools<string>(
                 "Use the translator tool to translate 'good morning' to French, then reply with just the translation.",
                 tools,
                 (calls: baml.ai.ToolCall[]) -> baml.ai.ToolResult[] {
@@ -1386,6 +1395,9 @@ async fn multi_agent_handoff_live() {
                 },
             ) catch (e) {
                 let u: baml.errors.UnknownError => return "ERR:" + u.message.join(","),
+            }) {
+                let v: string => v,
+                _ => "UNEXPECTED_BUDGET",
             };
             "handoffs=" + handoffs.to_string() + " || " + answer
         }
@@ -1431,7 +1443,7 @@ async fn typed_tool_agent_live() {
                 let un: baml.errors.Unsupported => return "SCHEMA_ERR:" + un.message,
             };
             let parsed_cities: string[] = [];
-            let answer = p.run_tools<string>(
+            let answer = match (p.run_tools<string>(
                 "What's the weather in Tokyo? Use the tool, then answer in one short sentence.",
                 [weather_tool],
                 (calls: baml.ai.ToolCall[]) -> baml.ai.ToolResult[] {
@@ -1448,6 +1460,9 @@ async fn typed_tool_agent_live() {
                 },
             ) catch (e) {
                 let u: baml.errors.UnknownError => return "ERR:" + u.message.join(","),
+            }) {
+                let v: string => v,
+                _ => "UNEXPECTED_BUDGET",
             };
             "cities=" + parsed_cities.join(";") + " || " + answer
         }

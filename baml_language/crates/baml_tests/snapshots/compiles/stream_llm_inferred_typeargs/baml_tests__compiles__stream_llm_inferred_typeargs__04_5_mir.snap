@@ -175,37 +175,49 @@ fn user.TestFunc$render_prompt(input: string, client: baml.ai.Provider) -> baml.
     }
 }
 
-fn user.TestFunc$run_tools(input: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, client: baml.ai.Provider) -> string {
+fn user.TestFunc$run_tools(input: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null, client: baml.ai.Provider) -> string | baml.ai.Budget<string> {
     // Locals:
-    let _0: string // _0 // return
+    let _0: string | baml.ai.Budget<string> // _0 // return
     let _1: string // input // param
     let _2: baml.ai.Tool[] // tools // param
     let _3: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never // dispatch // param
-    let _4: baml.ai.Provider // client // param
-    let _5: bool
-    let _6: baml.llm.PromptAst
-    let _7: type
+    let _4: ((baml.ai.LoopInfo) -> bool throws never) | null // stop_when // param
+    let _5: baml.ai.Provider // client // param
+    let _6: bool
+    let _7: bool
+    let _8: baml.llm.PromptAst
+    let _9: type
 
     bb0: {
-        _5 = copy _4 == const <omitted>;
-        branch copy _5 -> [bb1, bb2];
+        _6 = copy _4 == const <omitted>;
+        branch copy _6 -> [bb1, bb2];
     }
 
     bb1: {
-        _4 = const fn user.TestClient;
+        _4 = const null;
         goto -> bb2;
     }
 
     bb2: {
-        _6 = call const fn user.TestFunc$render_prompt(copy _1, copy _4) -> [bb3];
+        _7 = copy _5 == const <omitted>;
+        branch copy _7 -> [bb3, bb4];
     }
 
     bb3: {
-        _7 = load_type(string);
-        _0 = call const fn baml.ai.drive_run_tools<copy _7>(copy _4, copy _6, copy _2, copy _3) -> [bb4];
+        _5 = const fn user.TestClient;
+        goto -> bb4;
     }
 
     bb4: {
+        _8 = call const fn user.TestFunc$render_prompt(copy _1, copy _5) -> [bb5];
+    }
+
+    bb5: {
+        _9 = load_type(string);
+        _0 = call const fn baml.ai.drive_run_tools<copy _9>(copy _5, copy _8, copy _2, copy _3, copy _4) -> [bb6];
+    }
+
+    bb6: {
         return;
     }
 }

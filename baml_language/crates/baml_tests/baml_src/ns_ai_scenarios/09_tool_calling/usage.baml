@@ -18,13 +18,42 @@ test "09: the interface's default run_tools loop drives begin/step/submit" {
     let p: baml.ai.Provider = ScriptedTools { turns_wanted: 2, final_json: "loop done" };
     let r = match (p) {
         let tp: baml.ai.Tools => {
-            tp.run_tools<string>("go", lookup_tools(), echo_dispatch) catch (e) {
+            // D5: run_tools returns the honest sum T | Budget<T>; no budget was
+            // set here, so the Budget arm is structurally unreachable.
+            let outcome = tp.run_tools<string>("go", lookup_tools(), echo_dispatch) catch (e) {
                 _ => "loop failed"
+            };
+            match (outcome) {
+                let b: baml.ai.Budget<string> => "unexpected budget",
+                let v: string => v,
             }
         },
         _ => "no tools capability",
     };
     assert.equal(r, "loop done")
+}
+
+test "09: run_tools with stop_when returns the Budget arm, not a throw (D5)" {
+    let p: baml.ai.Provider = ScriptedTools { turns_wanted: 5, final_json: "never reached" };
+    let r = match (p) {
+        let tp: baml.ai.Tools => {
+            let outcome = tp
+                .run_tools<string>(
+                    "go",
+                    lookup_tools(),
+                    echo_dispatch,
+                    stop_when = baml.ai.step_count_is(2),
+                ) catch (e) {
+                _ => "loop failed"
+            };
+            match (outcome) {
+                let b: baml.ai.Budget<string> => "budget@" + b.steps_taken.to_string(),
+                let v: string => v,
+            }
+        },
+        _ => "no tools capability",
+    };
+    assert.equal(r, "budget@2")
 }
 
 /// D6 fixture: two required fields of distinct types — SAP's single-string-field

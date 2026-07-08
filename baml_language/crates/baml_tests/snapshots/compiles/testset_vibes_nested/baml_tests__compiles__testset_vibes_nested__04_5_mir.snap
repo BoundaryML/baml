@@ -1012,37 +1012,49 @@ fn user.ClassifySentiment$render_prompt(text: string, client: baml.ai.Provider) 
     }
 }
 
-fn user.ClassifySentiment$run_tools(text: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, client: baml.ai.Provider) -> Sentiment {
+fn user.ClassifySentiment$run_tools(text: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null, client: baml.ai.Provider) -> Sentiment | baml.ai.Budget<Sentiment> {
     // Locals:
-    let _0: Sentiment // _0 // return
+    let _0: Sentiment | baml.ai.Budget<Sentiment> // _0 // return
     let _1: string // text // param
     let _2: baml.ai.Tool[] // tools // param
     let _3: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never // dispatch // param
-    let _4: baml.ai.Provider // client // param
-    let _5: bool
-    let _6: baml.llm.PromptAst
-    let _7: type
+    let _4: ((baml.ai.LoopInfo) -> bool throws never) | null // stop_when // param
+    let _5: baml.ai.Provider // client // param
+    let _6: bool
+    let _7: bool
+    let _8: baml.llm.PromptAst
+    let _9: type
 
     bb0: {
-        _5 = copy _4 == const <omitted>;
-        branch copy _5 -> [bb1, bb2];
+        _6 = copy _4 == const <omitted>;
+        branch copy _6 -> [bb1, bb2];
     }
 
     bb1: {
-        _4 = const fn user.GPT4o;
+        _4 = const null;
         goto -> bb2;
     }
 
     bb2: {
-        _6 = call const fn user.ClassifySentiment$render_prompt(copy _1, copy _4) -> [bb3];
+        _7 = copy _5 == const <omitted>;
+        branch copy _7 -> [bb3, bb4];
     }
 
     bb3: {
-        _7 = load_type(Sentiment);
-        _0 = call const fn baml.ai.drive_run_tools<copy _7>(copy _4, copy _6, copy _2, copy _3) -> [bb4];
+        _5 = const fn user.GPT4o;
+        goto -> bb4;
     }
 
     bb4: {
+        _8 = call const fn user.ClassifySentiment$render_prompt(copy _1, copy _5) -> [bb5];
+    }
+
+    bb5: {
+        _9 = load_type(Sentiment);
+        _0 = call const fn baml.ai.drive_run_tools<copy _9>(copy _5, copy _8, copy _2, copy _3, copy _4) -> [bb6];
+    }
+
+    bb6: {
         return;
     }
 }
@@ -1236,37 +1248,49 @@ fn user.ClassifySentiment2$render_prompt(text: string, client: baml.ai.Provider)
     }
 }
 
-fn user.ClassifySentiment2$run_tools(text: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, client: baml.ai.Provider) -> string {
+fn user.ClassifySentiment2$run_tools(text: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null, client: baml.ai.Provider) -> string | baml.ai.Budget<string> {
     // Locals:
-    let _0: string // _0 // return
+    let _0: string | baml.ai.Budget<string> // _0 // return
     let _1: string // text // param
     let _2: baml.ai.Tool[] // tools // param
     let _3: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never // dispatch // param
-    let _4: baml.ai.Provider // client // param
-    let _5: bool
-    let _6: baml.llm.PromptAst
-    let _7: type
+    let _4: ((baml.ai.LoopInfo) -> bool throws never) | null // stop_when // param
+    let _5: baml.ai.Provider // client // param
+    let _6: bool
+    let _7: bool
+    let _8: baml.llm.PromptAst
+    let _9: type
 
     bb0: {
-        _5 = copy _4 == const <omitted>;
-        branch copy _5 -> [bb1, bb2];
+        _6 = copy _4 == const <omitted>;
+        branch copy _6 -> [bb1, bb2];
     }
 
     bb1: {
-        _4 = const fn user.GPT4o;
+        _4 = const null;
         goto -> bb2;
     }
 
     bb2: {
-        _6 = call const fn user.ClassifySentiment2$render_prompt(copy _1, copy _4) -> [bb3];
+        _7 = copy _5 == const <omitted>;
+        branch copy _7 -> [bb3, bb4];
     }
 
     bb3: {
-        _7 = load_type(string);
-        _0 = call const fn baml.ai.drive_run_tools<copy _7>(copy _4, copy _6, copy _2, copy _3) -> [bb4];
+        _5 = const fn user.GPT4o;
+        goto -> bb4;
     }
 
     bb4: {
+        _8 = call const fn user.ClassifySentiment2$render_prompt(copy _1, copy _5) -> [bb5];
+    }
+
+    bb5: {
+        _9 = load_type(string);
+        _0 = call const fn baml.ai.drive_run_tools<copy _9>(copy _5, copy _8, copy _2, copy _3, copy _4) -> [bb6];
+    }
+
+    bb6: {
         return;
     }
 }
@@ -1538,38 +1562,50 @@ fn user.GenerateTests$render_prompt(count: int, topic: string, client: baml.ai.P
     }
 }
 
-fn user.GenerateTests$run_tools(count: int, topic: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, client: baml.ai.Provider) -> string[] {
+fn user.GenerateTests$run_tools(count: int, topic: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null, client: baml.ai.Provider) -> string[] | baml.ai.Budget<string[]> {
     // Locals:
-    let _0: string[] // _0 // return
+    let _0: string[] | baml.ai.Budget<string[]> // _0 // return
     let _1: int // count // param
     let _2: string // topic // param
     let _3: baml.ai.Tool[] // tools // param
     let _4: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never // dispatch // param
-    let _5: baml.ai.Provider // client // param
-    let _6: bool
-    let _7: baml.llm.PromptAst
-    let _8: type
+    let _5: ((baml.ai.LoopInfo) -> bool throws never) | null // stop_when // param
+    let _6: baml.ai.Provider // client // param
+    let _7: bool
+    let _8: bool
+    let _9: baml.llm.PromptAst
+    let _10: type
 
     bb0: {
-        _6 = copy _5 == const <omitted>;
-        branch copy _6 -> [bb1, bb2];
+        _7 = copy _5 == const <omitted>;
+        branch copy _7 -> [bb1, bb2];
     }
 
     bb1: {
-        _5 = const fn user.GPT4o;
+        _5 = const null;
         goto -> bb2;
     }
 
     bb2: {
-        _7 = call const fn user.GenerateTests$render_prompt(copy _1, copy _2, copy _5) -> [bb3];
+        _8 = copy _6 == const <omitted>;
+        branch copy _8 -> [bb3, bb4];
     }
 
     bb3: {
-        _8 = load_type(string[]);
-        _0 = call const fn baml.ai.drive_run_tools<copy _8>(copy _5, copy _7, copy _3, copy _4) -> [bb4];
+        _6 = const fn user.GPT4o;
+        goto -> bb4;
     }
 
     bb4: {
+        _9 = call const fn user.GenerateTests$render_prompt(copy _1, copy _2, copy _6) -> [bb5];
+    }
+
+    bb5: {
+        _10 = load_type(string[]);
+        _0 = call const fn baml.ai.drive_run_tools<copy _10>(copy _6, copy _9, copy _3, copy _4, copy _5) -> [bb6];
+    }
+
+    bb6: {
         return;
     }
 }

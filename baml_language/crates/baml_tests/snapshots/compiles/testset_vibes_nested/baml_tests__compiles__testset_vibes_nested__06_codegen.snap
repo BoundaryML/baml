@@ -168,21 +168,30 @@ function user.ClassifySentiment$render_prompt(text: string, client: baml.ai.Prov
     return
 }
 
-function user.ClassifySentiment$run_tools(text: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, client: baml.ai.Provider) -> Sentiment {
-    load_var client
+function user.ClassifySentiment$run_tools(text: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null, client: baml.ai.Provider) -> Sentiment | baml.ai.Budget<Sentiment> {
+    load_var stop_when
     load_const <omitted>
     cmp_op ==
     pop_jump_if_false L0
+    load_const null
+    store_var stop_when
+
+  L0:
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L1
     load_global user.GPT4o
     store_var client
 
-  L0:
-    load_var2 1 4
+  L1:
+    load_var2 1 5
     call user.ClassifySentiment$render_prompt
-    store_var _6
+    store_var _8
     load_type Sentiment
-    load_var2 4 5
+    load_var2 5 6
     load_var2 2 3
+    load_var stop_when
     call baml.ai.drive_run_tools
     return
 }
@@ -359,21 +368,30 @@ function user.ClassifySentiment2$render_prompt(text: string, client: baml.ai.Pro
     return
 }
 
-function user.ClassifySentiment2$run_tools(text: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, client: baml.ai.Provider) -> string {
-    load_var client
+function user.ClassifySentiment2$run_tools(text: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null, client: baml.ai.Provider) -> string | baml.ai.Budget<string> {
+    load_var stop_when
     load_const <omitted>
     cmp_op ==
     pop_jump_if_false L0
+    load_const null
+    store_var stop_when
+
+  L0:
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L1
     load_global user.GPT4o
     store_var client
 
-  L0:
-    load_var2 1 4
+  L1:
+    load_var2 1 5
     call user.ClassifySentiment2$render_prompt
-    store_var _6
+    store_var _8
     load_type string
-    load_var2 4 5
+    load_var2 5 6
     load_var2 2 3
+    load_var stop_when
     call baml.ai.drive_run_tools
     return
 }
@@ -616,22 +634,31 @@ function user.GenerateTests$render_prompt(count: int, topic: string, client: bam
     return
 }
 
-function user.GenerateTests$run_tools(count: int, topic: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, client: baml.ai.Provider) -> string[] {
-    load_var client
+function user.GenerateTests$run_tools(count: int, topic: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null, client: baml.ai.Provider) -> string[] | baml.ai.Budget<string[]> {
+    load_var stop_when
     load_const <omitted>
     cmp_op ==
     pop_jump_if_false L0
+    load_const null
+    store_var stop_when
+
+  L0:
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L1
     load_global user.GPT4o
     store_var client
 
-  L0:
+  L1:
     load_var2 1 2
     load_var client
     call user.GenerateTests$render_prompt
-    store_var _7
+    store_var _9
     load_type string[]
-    load_var2 5 6
+    load_var2 6 7
     load_var2 3 4
+    load_var stop_when
     call baml.ai.drive_run_tools
     return
 }
