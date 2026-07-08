@@ -3019,6 +3019,35 @@ function baml.ai.Gemini.meta_of(self: baml.ai.Gemini, from: string) -> baml.ai.R
     GeminiResponseMeta { raw_text: from } : baml.ai.GeminiResponseMeta
   }
 }
+function baml.ai.Gemini.stream_messages<TStream, TFinal>(self: baml.ai.Gemini, messages: baml.ai.ChatMessage[]) -> baml.llm.Stream<TStream, TFinal> throws baml.errors.UnknownError {
+  { : baml.llm.Stream<TStream, TFinal>
+    let schema: string = root.llm.render_output_format(reflect.type_of<TFinal>()) : string
+    let req = root.http.Request { method: "POST", url: self.base_url ?? "https://generativ..." + "/models/" + self.model + ":streamGenerateCo...", headers: self._request_headers(), body: self._request_body(self._messages_for(messages, schema)) } : baml.http.Request
+    let sse = : baml.http.SseStream
+      catch (root.http.fetch_sse(req) : baml.http.SseStream) : baml.http.SseStream
+        catch (e)
+          _ =>
+            { : never
+              throw root.errors.UnknownError { data: e, message: ["gemini fetch_sse ..."] } : baml.errors.UnknownError
+            }
+    let primitive = : baml.llm.PrimitiveClient
+      catch (root.llm.from_shorthand("google-ai/" + self.model) : baml.llm.PrimitiveClient) : baml.llm.PrimitiveClient
+        catch (e)
+          _ =>
+            { : never
+              throw root.errors.UnknownError { data: e, message: ["gemini stream set..."] } : baml.errors.UnknownError
+            }
+    let acc = : baml.llm.StreamAccumulator
+      catch (primitive.new_stream_accumulator() : baml.llm.StreamAccumulator) : baml.llm.StreamAccumulator
+        catch (e)
+          _ =>
+            { : never
+              throw root.errors.UnknownError { data: e, message: ["gemini accumulato..."] } : baml.errors.UnknownError
+            }
+    let cache = root.llm.StreamCache.new(reflect.type_of<TStream>(), reflect.type_of<TFinal>()) : baml.llm.StreamCache<TStream, TFinal>
+    root.llm.Stream { _client: primitive, _acc: acc, _sse: sse, _cache: cache } : baml.llm.Stream<TStream, TFinal>
+  }
+}
 class baml.ai.GeminiHttpError$stream {
   status: int | null
   body: string | null
@@ -3027,7 +3056,7 @@ function baml.ai.GeminiHttpError$stream.is_retryable(self: baml.ai.GeminiHttpErr
   { : bool
     self.status == 429 || self.status >= 500 : bool
   }
-  !! 1355..1373: cannot order `int | null` and `500` with `>=`: ordering requires both operands to have the same type
+  !! 1320..1338: cannot order `int | null` and `500` with `>=`: ordering requires both operands to have the same type
 }
 function baml.ai.GeminiHttpError$stream.is_effectful(self: baml.ai.GeminiHttpError$stream) -> bool throws never {
   { : false
@@ -3103,8 +3132,8 @@ function baml.ai.GeminiResponseMeta$stream.finish_reason(self: baml.ai.GeminiRes
       _ =>
         "" : ""
   }
-  !! 3308..3313: type `baml.ai.GeminiResponseMeta$stream` has no member `_wire`
-  !! 3276..3281: declared throws is `never`, but this function may also throw `unknown`
+  !! 3273..3278: type `baml.ai.GeminiResponseMeta$stream` has no member `_wire`
+  !! 3241..3246: declared throws is `never`, but this function may also throw `unknown`
 }
 function baml.ai.GeminiResponseMeta$stream.usage(self: baml.ai.GeminiResponseMeta$stream) -> baml.ai.Usage throws never {
   { : baml.ai.Usage
@@ -3120,8 +3149,8 @@ function baml.ai.GeminiResponseMeta$stream.usage(self: baml.ai.GeminiResponseMet
       _ =>
         root.ai.Usage { input_tokens: 0, output_tokens: 0 } : baml.ai.Usage
   }
-  !! 3649..3654: type `baml.ai.GeminiResponseMeta$stream` has no member `_wire`
-  !! 3617..3622: declared throws is `never`, but this function may also throw `unknown`
+  !! 3614..3619: type `baml.ai.GeminiResponseMeta$stream` has no member `_wire`
+  !! 3582..3587: declared throws is `never`, but this function may also throw `unknown`
 }
 function baml.ai.GeminiResponseMeta$stream.reasoning(self: baml.ai.GeminiResponseMeta$stream) -> string | baml.ai.Unavailable throws never {
   { : baml.ai.Unavailable
@@ -3151,11 +3180,11 @@ function baml.ai.Gemini$stream.build_request<T>(self: baml.ai.Gemini$stream, mes
     let schema: string = root.llm.render_output_format(reflect.type_of<T>()) : string
     root.http.Request { method: "POST", url: self.base_url ?? "https://generativ..." + "/models/" + self.model + ":generateContent", headers: self._request_headers(), body: self._request_body(self._messages_for(messages, schema)) } : baml.http.Request
   }
-  !! 6851..6867: type `baml.ai.Gemini$stream` has no member `_request_headers`
-  !! 6898..6911: type `baml.ai.Gemini$stream` has no member `_request_body`
-  !! 6917..6930: type `baml.ai.Gemini$stream` has no member `_messages_for`
-  !! 6277..6301: declared throws is `baml.errors.UnknownError`, but this function may also throw `unknown`
-  ?? 6277..6301: extraneous throws declaration: baml.errors.UnknownError
+  !! 6816..6832: type `baml.ai.Gemini$stream` has no member `_request_headers`
+  !! 6863..6876: type `baml.ai.Gemini$stream` has no member `_request_body`
+  !! 6882..6895: type `baml.ai.Gemini$stream` has no member `_messages_for`
+  !! 6242..6266: declared throws is `baml.errors.UnknownError`, but this function may also throw `unknown`
+  ?? 6242..6266: extraneous throws declaration: baml.errors.UnknownError
 }
 function baml.ai.Gemini$stream.send(self: baml.ai.Gemini$stream, request: baml.http.Request) -> string throws baml.errors.CallError | baml.errors.UnknownError {
   { : string
@@ -3230,6 +3259,39 @@ function baml.ai.Gemini$stream.meta_of(self: baml.ai.Gemini$stream, from: string
   { : baml.ai.GeminiResponseMeta
     GeminiResponseMeta { raw_text: from } : baml.ai.GeminiResponseMeta
   }
+}
+function baml.ai.Gemini$stream.stream_messages<TStream, TFinal>(self: baml.ai.Gemini$stream, messages: baml.ai.ChatMessage[]) -> baml.llm.Stream<TStream, TFinal> throws baml.errors.UnknownError {
+  { : baml.llm.Stream<TStream, TFinal>
+    let schema: string = root.llm.render_output_format(reflect.type_of<TFinal>()) : string
+    let req = root.http.Request { method: "POST", url: self.base_url ?? "https://generativ..." + "/models/" + self.model + ":streamGenerateCo...", headers: self._request_headers(), body: self._request_body(self._messages_for(messages, schema)) } : baml.http.Request
+    let sse = : baml.http.SseStream
+      catch (root.http.fetch_sse(req) : baml.http.SseStream) : baml.http.SseStream
+        catch (e)
+          _ =>
+            { : never
+              throw root.errors.UnknownError { data: e, message: ["gemini fetch_sse ..."] } : baml.errors.UnknownError
+            }
+    let primitive = : baml.llm.PrimitiveClient
+      catch (root.llm.from_shorthand("google-ai/" + self.model) : baml.llm.PrimitiveClient) : baml.llm.PrimitiveClient
+        catch (e)
+          _ =>
+            { : never
+              throw root.errors.UnknownError { data: e, message: ["gemini stream set..."] } : baml.errors.UnknownError
+            }
+    let acc = : baml.llm.StreamAccumulator
+      catch (primitive.new_stream_accumulator() : baml.llm.StreamAccumulator) : baml.llm.StreamAccumulator
+        catch (e)
+          _ =>
+            { : never
+              throw root.errors.UnknownError { data: e, message: ["gemini accumulato..."] } : baml.errors.UnknownError
+            }
+    let cache = root.llm.StreamCache.new(reflect.type_of<TStream>(), reflect.type_of<TFinal>()) : baml.llm.StreamCache<TStream, TFinal>
+    root.llm.Stream { _client: primitive, _acc: acc, _sse: sse, _cache: cache } : baml.llm.Stream<TStream, TFinal>
+  }
+  !! 10956..10972: type `baml.ai.Gemini$stream` has no member `_request_headers`
+  !! 11003..11016: type `baml.ai.Gemini$stream` has no member `_request_body`
+  !! 11022..11035: type `baml.ai.Gemini$stream` has no member `_messages_for`
+  !! 10521..10545: declared throws is `baml.errors.UnknownError`, but this function may also throw `unknown`
 }
 
 --- <builtin>/baml/ns_ai/providers/harness.baml ---

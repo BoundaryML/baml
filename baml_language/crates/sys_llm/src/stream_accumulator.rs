@@ -59,7 +59,7 @@ static ACCUM_REGISTRY: std::sync::LazyLock<Arc<AccumulatorRegistry>> =
 /// Create a new stream accumulator for the given provider.
 ///
 /// Returns an error if the provider doesn't support streaming
-/// (e.g. `google-ai`, `aws-bedrock`).
+/// (e.g. `vertex-ai`, `aws-bedrock`).
 pub fn new_accumulator(provider_str: &str) -> Result<ResourceHandle, LlmOpError> {
     let provider = provider_str
         .parse::<LlmProvider>()
@@ -76,13 +76,14 @@ pub fn new_accumulator(provider_str: &str) -> Result<ResourceHandle, LlmOpError>
         | LlmProvider::AzureOpenAi
         | LlmProvider::Ollama
         | LlmProvider::OpenRouter
-        | LlmProvider::Anthropic => {}
+        | LlmProvider::Anthropic
+        | LlmProvider::GoogleAi => {}
         _ => {
             return Err(LlmOpError::NotImplemented {
                 message: format!(
                     "Streaming is not yet implemented for provider '{provider_str}'. \
                      Supported providers: openai, openai-generic, azure-openai, ollama, \
-                     openrouter, anthropic."
+                     openrouter, anthropic, google-ai."
                 ),
             });
         }
@@ -241,6 +242,52 @@ fn extract_delta(state: &mut AccumulatorState, data: &serde_json::Value) {
                         state.is_done = true;
                     }
                     _ => {}
+                }
+            }
+        }
+        // Gemini streamGenerateContent (`?alt=sse`) format: each `data:` payload is a
+        // full GenerateContentResponse chunk — text rides
+        // `candidates[0].content.parts[*].text`, the last chunk carries
+        // `candidates[0].finishReason` (UPPERCASE, e.g. "STOP") and cumulative
+        // `usageMetadata`. There is no `[DONE]` sentinel; a finishReason ends the stream.
+        LlmProvider::GoogleAi => {
+            if let Some(model) = data.get("modelVersion").and_then(|m| m.as_str()) {
+                state.model = Some(model.to_string());
+            }
+            if let Some(candidate) = data
+                .get("candidates")
+                .and_then(|c| c.as_array())
+                .and_then(|c| c.first())
+            {
+                if let Some(parts) = candidate
+                    .get("content")
+                    .and_then(|c| c.get("parts"))
+                    .and_then(|p| p.as_array())
+                {
+                    for part in parts {
+                        if let Some(text) = part.get("text").and_then(|t| t.as_str()) {
+                            state.content.push_str(text);
+                        }
+                    }
+                }
+                if let Some(reason) = candidate.get("finishReason").and_then(|r| r.as_str()) {
+                    state.finish_reason = Some(reason.to_string());
+                    state.is_done = true;
+                }
+            }
+            // usageMetadata is cumulative — later chunks overwrite earlier ones.
+            if let Some(usage) = data.get("usageMetadata") {
+                if let Some(pt) = usage
+                    .get("promptTokenCount")
+                    .and_then(serde_json::Value::as_u64)
+                {
+                    state.input_tokens = Some(pt);
+                }
+                if let Some(ct) = usage
+                    .get("candidatesTokenCount")
+                    .and_then(serde_json::Value::as_u64)
+                {
+                    state.output_tokens = Some(ct);
                 }
             }
         }
@@ -404,8 +451,32 @@ mod tests {
 
     #[test]
     fn test_unsupported_provider_rejected() {
-        let err = new_accumulator("google-ai").unwrap_err();
+        let err = new_accumulator("vertex-ai").unwrap_err();
         assert!(matches!(err, LlmOpError::NotImplemented { .. }));
+    }
+
+    #[test]
+    fn test_gemini_accumulation() {
+        let handle = new_accumulator("google-ai").unwrap();
+        let events = serde_json::json!([
+            {
+                "event": "message",
+                "data": "{\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"Hel\"}],\"role\":\"model\"},\"index\":0}],\"modelVersion\":\"gemini-2.5-flash\"}",
+                "id": null
+            },
+            {
+                "event": "message",
+                "data": "{\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"lo\"},{\"text\":\" there\"}],\"role\":\"model\"},\"finishReason\":\"STOP\",\"index\":0}],\"usageMetadata\":{\"promptTokenCount\":7,\"candidatesTokenCount\":12,\"totalTokenCount\":19}}",
+                "id": null
+            }
+        ]);
+        add_events(&handle, &events.to_string()).unwrap();
+        assert_eq!(get_content(&handle).unwrap(), "Hello there");
+        assert!(is_done(&handle).unwrap());
+        assert_eq!(get_finish_reason(&handle).unwrap(), Some("STOP".into()));
+        assert_eq!(get_model(&handle).unwrap(), Some("gemini-2.5-flash".into()));
+        assert_eq!(get_input_tokens(&handle).unwrap(), Some(7));
+        assert_eq!(get_output_tokens(&handle).unwrap(), Some(12));
     }
 
     /// Helper: wrap data strings into the event array format expected by `add_events`.
@@ -430,6 +501,7 @@ mod tests {
             "ollama",
             "openrouter",
             "anthropic",
+            "google-ai",
         ];
         for p in providers {
             let handle =
@@ -449,7 +521,6 @@ mod tests {
         // + status) that extract_delta does not yet parse; treat it as unsupported
         // until that handling lands.
         for p in [
-            "google-ai",
             "aws-bedrock",
             "vertex-ai",
             "openai-responses",

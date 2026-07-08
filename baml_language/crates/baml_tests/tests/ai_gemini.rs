@@ -367,3 +367,85 @@ async fn gemini_structured_live_call() {
         "live structured extraction mismatch: {s:?}"
     );
 }
+
+/// Streaming via `:streamGenerateContent?alt=sse` against a mocked SSE endpoint:
+/// the host accumulator's google-ai arm concatenates `candidates[0].content.
+/// parts[*].text` and finishes on `finishReason` (no `[DONE]` sentinel).
+#[tokio::test]
+async fn gemini_stream_via_mock() {
+    let server = MockServer::start().await;
+    let sse_body = "data: {\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"po\"}],\"role\":\"model\"},\"index\":0}]}\n\n\
+                    data: {\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"ng\"}],\"role\":\"model\"},\"finishReason\":\"STOP\",\"index\":0}],\"usageMetadata\":{\"promptTokenCount\":5,\"candidatesTokenCount\":2}}\n\n";
+    Mock::given(method("POST"))
+        .and(path("/models/gemini-2.0-flash:streamGenerateContent"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .insert_header("content-type", "text/event-stream")
+                .set_body_string(sse_body),
+        )
+        .mount(&server)
+        .await;
+    let uri = server.uri();
+
+    let output = baml_test!(&format!(
+        r#"
+        function main() -> string {{
+            let p = baml.ai.Gemini {{ model: "gemini-2.0-flash", api_key: "test-key", base_url: "{uri}" }};
+            let s = p.stream<string, string>("hi") catch (e) {{
+                let u: baml.errors.UnknownError => return "ERR:" + u.message.join(","),
+            }};
+            let n = 0;
+            while (n < 100) {{
+                match (s.next()) {{
+                    baml.stream.StreamFinished => {{ break; }},
+                    let part: string => {{ n = n + 1; }},
+                }}
+            }}
+            s.final() catch (e) {{ _ => "FINAL_ERR" }}
+        }}
+        "#
+    ));
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("pong".into())
+    );
+}
+
+/// Live streaming against the real Gemini API (skips without GOOGLE_API_KEY).
+#[tokio::test]
+async fn gemini_stream_live() {
+    if std::env::var("GOOGLE_API_KEY").is_err() {
+        eprintln!("skipping gemini_stream_live: GOOGLE_API_KEY not set");
+        return;
+    }
+    let output = baml_test!(
+        r#"
+        function main() -> string {
+            let p = baml.ai.Gemini {
+                model: "gemini-2.5-flash",
+                api_key: baml.env.get_or_panic("GOOGLE_API_KEY"),
+                base_url: null,
+            };
+            let s = p.stream<string, string>("Count from 1 to 5 as digits separated by spaces.") catch (e) {
+                let u: baml.errors.UnknownError => return "ERR:" + u.message.join(","),
+            };
+            let partials = 0;
+            while (partials < 10000) {
+                match (s.next()) {
+                    baml.stream.StreamFinished => { break; },
+                    let part: string => { partials = partials + 1; },
+                }
+            }
+            s.final() catch (e) { _ => "FINAL_ERR" }
+        }
+        "#
+    );
+    let got = output.result.unwrap();
+    let BexExternalValue::String(s) = got else {
+        panic!("expected string, got {got:?}");
+    };
+    assert!(
+        s.contains('5') && !s.starts_with("ERR") && !s.starts_with("FINAL_ERR"),
+        "live gemini stream final unexpected: {s:?}"
+    );
+}

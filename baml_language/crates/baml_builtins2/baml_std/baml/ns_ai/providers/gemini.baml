@@ -7,10 +7,10 @@
 // array with `parts`, the assistant→`"model"` role remap, top-level `systemInstruction`
 // hoisting, and the camelCase response envelope (decoded via SAP `@alias`).
 //
-// Streaming is intentionally NOT implemented: the host SSE accumulator
-// (`sys_llm::stream_accumulator`) rejects the `google-ai` provider as NotImplemented
-// (its `data:`-chunked `generateContent` shape is not yet parsed), so there is no
-// reasonable path to wrap Gemini's stream in `baml.llm.Stream` today.
+// Streaming: `:streamGenerateContent?alt=sse` (same body, different URL suffix) over
+// the host SSE accumulator, whose google-ai arm parses the chunked
+// GenerateContentResponse shape (`candidates[0].content.parts[*].text` +
+// `finishReason` + cumulative `usageMetadata`).
 
 /// A non-2xx HTTP response from the Gemini API — typed so `catch` arms and the
 /// `Failure` axis can triage it: 429 is a rate limit; 429/5xx are retryable; other
@@ -244,6 +244,52 @@ class Gemini {
             from: string,
         ) -> root.ai.ResponseMeta throws never {
             GeminiResponseMeta { raw_text: from }
+        }
+    }
+
+    implements root.ai.Streaming {
+        // Build a `:streamGenerateContent?alt=sse` request in BAML, open the SSE
+        // stream, and wrap it in `baml.llm.Stream`. Delta accumulation reuses the
+        // (leaf) host accumulator via a shorthand-built PrimitiveClient — its
+        // google-ai arm parses `candidates[0].content.parts[*].text`,
+        // `finishReason`, and cumulative `usageMetadata`. The request body is the
+        // SAME shape as the oneshot path; only the URL suffix differs.
+        function stream_messages<TStream, TFinal>(
+            self,
+            messages: root.ai.ChatMessage[],
+        ) -> root.llm.Stream<TStream, TFinal> throws root.errors.UnknownError {
+            let schema: string = root.llm.render_output_format(reflect.type_of<TFinal>());
+            let req = root.http.Request {
+                method: "POST",
+                url: (self.base_url ?? "https://generativelanguage.googleapis.com/v1beta")
+                    + "/models/"
+                    + self.model
+                    + ":streamGenerateContent?alt=sse",
+                headers: self._request_headers(),
+                body: self._request_body(self._messages_for(messages, schema)),
+            };
+            let sse = root.http.fetch_sse(req) catch (e) {
+                _ => {
+                    throw root.errors.UnknownError { data: e, message: ["gemini fetch_sse failed"] }
+                },
+            };
+            let primitive = root.llm.from_shorthand("google-ai/" + self.model) catch (e) {
+                _ => {
+                    throw root.errors.UnknownError { data: e, message: ["gemini stream setup failed"] }
+                },
+            };
+            let acc = primitive.new_stream_accumulator() catch (e) {
+                _ => {
+                    throw root.errors.UnknownError { data: e, message: ["gemini accumulator failed"] }
+                },
+            };
+            let cache = root.llm.StreamCache.new(reflect.type_of<TStream>(), reflect.type_of<TFinal>());
+            root.llm.Stream<TStream, TFinal> {
+                _client: primitive,
+                _acc: acc,
+                _sse: sse,
+                _cache: cache,
+            }
         }
     }
 
