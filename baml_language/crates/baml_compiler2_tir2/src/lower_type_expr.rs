@@ -3481,6 +3481,57 @@ function needs<T extends Marker>(x: T) -> int throws never {
         );
     }
 
+    #[test]
+    fn implements_non_interface_is_reported() {
+        // The head `NotIface` is a class, not an interface (E0119).
+        let diags = impl_diagnostics(
+            "class NotIface {\n  x: int\n}\n\
+             class C {}\n\
+             implements NotIface for C {}\n",
+        );
+        assert!(
+            diags.iter().any(|e| matches!(
+                e,
+                TirTypeError::ImplTargetNotInterface { name } if name.as_str() == "NotIface"
+            )),
+            "expected ImplTargetNotInterface, got {diags:?}"
+        );
+    }
+
+    #[test]
+    fn impl_for_non_concrete_target_is_reported() {
+        // A union `for` target is not a single concrete impl subject (E0138).
+        let diags = impl_diagnostics(
+            "interface I {\n  function m(self) -> int throws never\n}\n\
+             implements I for int | string {\n    \
+             function m(self) -> int throws never { 0 }\n}\n",
+        );
+        assert!(
+            diags
+                .iter()
+                .any(|e| matches!(e, TirTypeError::ImplTargetNotConcrete { .. })),
+            "expected ImplTargetNotConcrete, got {diags:?}"
+        );
+    }
+
+    #[test]
+    fn unconstrained_impl_generic_is_reported() {
+        // `T` is not determined by `Holder` or the (non-generic) interface (E0135).
+        let diags = impl_diagnostics(
+            "interface I {\n  function m(self) -> int throws never\n}\n\
+             class Holder {}\n\
+             implements<T> I for Holder {\n    \
+             function m(self) -> int throws never { 0 }\n}\n",
+        );
+        assert!(
+            diags.iter().any(|e| matches!(
+                e,
+                TirTypeError::UnconstrainedImplTypeParam { name } if name.as_str() == "T"
+            )),
+            "expected UnconstrainedImplTypeParam for `T`, got {diags:?}"
+        );
+    }
+
     // ── `_` type-inference placeholder: rejected (inference variables unimplemented) ──
 
     #[test]

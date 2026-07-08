@@ -544,6 +544,23 @@ pub enum TirTypeError {
         interface: crate::ty::QualifiedTypeName,
         required: crate::ty::QualifiedTypeName,
     },
+    /// An `implements` head names a type that is not an interface (a class, enum, or alias).
+    /// Impl header (E0119).
+    ImplTargetNotInterface { name: Name },
+    /// An out-of-body impl's `for` target is not a single concrete impl subject — a union,
+    /// optional, interface (`dyn`), literal, `unknown`, function, `Future`, … Impl header (E0138).
+    ImplTargetNotConcrete { target: Ty },
+    /// An impl declares a generic parameter that its `for` type and interface arguments do not
+    /// determine, so it can never be inferred at a use site. Impl header (E0135).
+    UnconstrainedImplTypeParam { name: Name },
+    /// An out-of-body impl of a *foreign* interface is not anchored on a local type — the
+    /// RFC-2451 covered rule (BEP-044). Impl header (E0139).
+    ImplViolatesOrphanRule {
+        interface: crate::ty::QualifiedTypeName,
+        /// The uncovered type parameter appearing before any local type, if that is the
+        /// failure; `None` when no local type appears anywhere in the impl's inputs.
+        uncovered_param: Option<Name>,
+    },
 }
 
 impl fmt::Display for TirTypeError {
@@ -1258,6 +1275,40 @@ impl fmt::Display for TirTypeError {
                     required.render_user_facing()
                 )
             }
+            TirTypeError::ImplTargetNotInterface { name } => {
+                write!(f, "`{name}` is not an interface and cannot be implemented")
+            }
+            TirTypeError::ImplTargetNotConcrete { target } => {
+                write!(
+                    f,
+                    "cannot implement an interface for {} — the target must be a single concrete \
+                     type",
+                    target.render_user_facing()
+                )
+            }
+            TirTypeError::UnconstrainedImplTypeParam { name } => {
+                write!(
+                    f,
+                    "generic parameter `{name}` is not constrained by the `for` type or interface \
+                     arguments, so it can never be inferred"
+                )
+            }
+            TirTypeError::ImplViolatesOrphanRule {
+                interface,
+                uncovered_param,
+            } => match uncovered_param {
+                Some(param) => write!(
+                    f,
+                    "orphan rule: implementing the foreign interface `{}` requires a local type \
+                     before the uncovered parameter `{param}`",
+                    interface.render_user_facing()
+                ),
+                None => write!(
+                    f,
+                    "orphan rule: a foreign interface `{}` can only be implemented for a local type",
+                    interface.render_user_facing()
+                ),
+            },
         }
     }
 }

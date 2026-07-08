@@ -415,8 +415,8 @@ pub fn impl_data<'db>(
         },
         &mut interface_target_diags,
     );
-    let interface_args = if let Ty::Interface(_, args, _, _) = lowered_interface {
-        args
+    let interface_args = if let Ty::Interface(_, args, _, _) = &lowered_interface {
+        args.clone()
     } else {
         Vec::new()
     };
@@ -427,15 +427,29 @@ pub fn impl_data<'db>(
     // interface declaration.
     let Some(iface_loc) = resolve_path_to_interface(db, &block.interface_target, pkg_items, ns)
     else {
-        // The head didn't name an interface. The *head* diagnostic (unknown /
-        // not-an-interface) belongs to the dedicated implements-target validator,
-        // which has a specialized message — so `interface_target_diags` (the
-        // generic "unresolved type" lowering error) is dropped here to avoid
-        // double-reporting it. Only the for-target and bound diagnostics, which
-        // nothing else reports, ride along.
-        let diagnostics = for_target_diags
+        // The head didn't name an interface. If it resolved to a named non-interface type, that
+        // is a specialized "not an interface" (E0119); otherwise the head is unknown, so the
+        // generic unresolved-type lowering error (E0112-equivalent) rides along. The for-target
+        // and bound diagnostics ride along either way.
+        let head_diags: Vec<_> = match &lowered_interface {
+            Ty::Class(qtn, ..) | Ty::Enum(qtn, ..) => vec![(
+                crate::infer_context::TirTypeError::ImplTargetNotInterface {
+                    name: qtn.name().clone(),
+                },
+                ImplDiagnosticLocation::InterfaceTarget,
+            )],
+            _ => interface_target_diags
+                .into_iter()
+                .map(|e| (e, ImplDiagnosticLocation::InterfaceTarget))
+                .collect(),
+        };
+        let diagnostics = head_diags
             .into_iter()
-            .map(|e| (e, ImplDiagnosticLocation::ForTarget))
+            .chain(
+                for_target_diags
+                    .into_iter()
+                    .map(|e| (e, ImplDiagnosticLocation::ForTarget)),
+            )
             .chain(
                 bound_diags
                     .into_iter()
@@ -648,6 +662,85 @@ pub fn impl_data_source_map<'db>(
     })
 }
 
+/// Collect every `Ty::TypeVar` name in `ty` (at any depth) into `out` — used to decide which
+/// impl generic params the for-type / interface args determine (E0135).
+fn collect_type_var_names(ty: &Ty, out: &mut Vec<Name>) {
+    match ty {
+        Ty::TypeVar(name, _) => out.push(name.clone()),
+        Ty::List(inner, _) | Ty::EvolvingList(inner, _) | Ty::WatchAccessor(inner, _) => {
+            collect_type_var_names(inner, out);
+        }
+        Ty::Map { key, value, .. } | Ty::EvolvingMap(key, value, _) => {
+            collect_type_var_names(key, out);
+            collect_type_var_names(value, out);
+        }
+        Ty::Future(value, error, _) => {
+            collect_type_var_names(value, out);
+            collect_type_var_names(error, out);
+        }
+        Ty::Union(tys, _) | Ty::Class(_, tys, _) => {
+            for t in tys {
+                collect_type_var_names(t, out);
+            }
+        }
+        Ty::Interface(_, args, bindings, _) => {
+            for t in args {
+                collect_type_var_names(t, out);
+            }
+            for (_, t) in bindings {
+                collect_type_var_names(t, out);
+            }
+        }
+        Ty::Function {
+            params,
+            ret,
+            throws,
+            ..
+        } => {
+            for p in params {
+                collect_type_var_names(&p.ty, out);
+            }
+            collect_type_var_names(ret, out);
+            collect_type_var_names(throws, out);
+        }
+        Ty::AssociatedTypeProjection { base, .. } => collect_type_var_names(base, out),
+        _ => {}
+    }
+}
+
+/// The RFC-2451 covered-rule outcome for an out-of-body impl.
+enum OrphanOutcome {
+    Ok,
+    UncoveredParam(Name),
+    NoLocalType,
+}
+
+/// RFC-2451 "covered" rule (BEP-044): an out-of-body `implement<..> I<args..> for T` of a foreign
+/// interface is allowed only if — scanning `[T, args..]` left to right — a type local to
+/// `current_package` appears before any *uncovered* type parameter (a bare `TypeVar` root).
+/// Implementing your own interface is always allowed. Non-local constructors are opaque (their
+/// args don't participate); associated bindings are outputs, excluded.
+fn orphan_check(
+    current_package: &Name,
+    iface_qtn: &QualifiedTypeName,
+    for_ty: &Ty,
+    iface_args: &[Ty],
+) -> OrphanOutcome {
+    if iface_qtn.package() == current_package {
+        return OrphanOutcome::Ok;
+    }
+    for input in std::iter::once(for_ty).chain(iface_args.iter()) {
+        match input {
+            Ty::Class(tn, ..) | Ty::Enum(tn, ..) if tn.package() == current_package => {
+                return OrphanOutcome::Ok;
+            }
+            Ty::TypeVar(name, _) => return OrphanOutcome::UncoveredParam(name.clone()),
+            _ => {}
+        }
+    }
+    OrphanOutcome::NoLocalType
+}
+
 /// Phase-5 signature/type conformance for one `implements` block. Runs strictly downstream of
 /// [`impl_data`] + associated-type resolution, so the canonical type algebra is fully
 /// determined here: `equivalent`/`is_subtype` may re-enter `impl_data` (via `impls_for_type`)
@@ -677,6 +770,7 @@ pub fn validate_impl_signatures<'db>(
         return diags;
     };
     let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
+    let current_package = pkg_info.package.clone();
     let pkg_id = PackageId::new(db, pkg_info.package);
 
     // The canonical algebra context — fully usable in this phase (see the fn doc).
@@ -755,6 +849,59 @@ pub fn validate_impl_signatures<'db>(
                     ImplDiagnosticLocation::InterfaceTarget,
                 ));
             }
+        }
+    }
+
+    // ── Impl-header gates (out-of-body only; an in-body impl's for-type is the enclosing class,
+    // always a valid local subject). ──
+    if matches!(data.origin, InterfaceImplOrigin::OutOfBody) {
+        // E0138: the for-target must be a single concrete impl subject (alias-expanded).
+        if !baml_type::normalize::normalize(&data.for_ty_pattern, &ctx).is_valid_impl_subject() {
+            diags.push((
+                crate::infer_context::TirTypeError::ImplTargetNotConcrete {
+                    target: data.for_ty_pattern.clone(),
+                },
+                ImplDiagnosticLocation::ForTarget,
+            ));
+        }
+        // E0135: every declared generic param must be determined by the for-type or interface args.
+        let mut determined = Vec::new();
+        collect_type_var_names(&data.for_ty_pattern, &mut determined);
+        for arg in &data.interface_args {
+            collect_type_var_names(arg, &mut determined);
+        }
+        for (name, _) in &data.generic_params {
+            if !determined.contains(name) {
+                diags.push((
+                    crate::infer_context::TirTypeError::UnconstrainedImplTypeParam {
+                        name: name.clone(),
+                    },
+                    ImplDiagnosticLocation::Bound,
+                ));
+            }
+        }
+        // E0139: orphan rule (RFC-2451 covered).
+        match orphan_check(
+            &current_package,
+            &iface_qtn,
+            &data.for_ty_pattern,
+            &data.interface_args,
+        ) {
+            OrphanOutcome::Ok => {}
+            OrphanOutcome::UncoveredParam(name) => diags.push((
+                crate::infer_context::TirTypeError::ImplViolatesOrphanRule {
+                    interface: iface_qtn.clone(),
+                    uncovered_param: Some(name),
+                },
+                ImplDiagnosticLocation::InterfaceTarget,
+            )),
+            OrphanOutcome::NoLocalType => diags.push((
+                crate::infer_context::TirTypeError::ImplViolatesOrphanRule {
+                    interface: iface_qtn.clone(),
+                    uncovered_param: None,
+                },
+                ImplDiagnosticLocation::InterfaceTarget,
+            )),
         }
     }
 
