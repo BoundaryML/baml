@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use baml_base::{Name, Span, TyAttr};
 use baml_compiler2_hir::{contributions::Definition, package::PackageId};
 use baml_type::{QualifiedTypeName, Ty};
@@ -598,7 +596,7 @@ pub fn get_implements_block<'db>(
     pkg_id: PackageId<'db>,
     concrete_ty: &Ty,
     requested_iface: &baml_type::Interface,
-    aliases: &HashMap<QualifiedTypeName, Ty>,
+    aliases: &crate::normalize::ResolvedAliases,
 ) -> Option<ResolvedImpl<'db>> {
     get_implements_block_within_depth(
         db,
@@ -618,7 +616,7 @@ fn get_implements_block_within_depth<'db>(
     pkg_id: PackageId<'db>,
     concrete_ty: &Ty,
     requested_iface: &baml_type::Interface,
-    aliases: &HashMap<QualifiedTypeName, Ty>,
+    aliases: &crate::normalize::ResolvedAliases,
     depth: u32,
 ) -> Option<ResolvedImpl<'db>> {
     debug_assert!(
@@ -770,7 +768,7 @@ pub fn implements_interface(
     db: &dyn crate::Db,
     concrete: &Ty,
     interface: &baml_type::Interface,
-    aliases: &HashMap<QualifiedTypeName, Ty>,
+    aliases: &crate::normalize::ResolvedAliases,
     is_subtype: impl FnMut(&Ty, &Ty) -> bool,
 ) -> bool {
     // Orphan rule: the impl lives in the implementor type's package (for a class) or
@@ -802,7 +800,7 @@ pub fn type_implements_interface<'db>(
     pkg_id: PackageId<'db>,
     concrete: &Ty,
     interface: &baml_type::Interface,
-    aliases: &HashMap<QualifiedTypeName, Ty>,
+    aliases: &crate::normalize::ResolvedAliases,
     is_subtype: impl FnMut(&Ty, &Ty) -> bool,
 ) -> bool {
     crate::interfaces::package_implements_registry(db, pkg_id).type_implements_interface_via_rule(

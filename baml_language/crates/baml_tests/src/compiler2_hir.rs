@@ -368,7 +368,7 @@ mod tests {
 
         let pkg_id = PackageId::new(&db, Name::new("user"));
         let tree = baml_compiler2_hir::file_item_tree(&db, file);
-        let aliases = std::collections::HashMap::new();
+        let aliases = baml_type::ResolvedAliases::default();
 
         let class_ty = |class_name: &str| {
             let (id, data) = tree

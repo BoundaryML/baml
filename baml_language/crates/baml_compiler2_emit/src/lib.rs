@@ -35,12 +35,14 @@ use bex_vm_types::{
     ObjectIndex, ObjectPool, Program,
 };
 
-/// Build a per-package `ResolvedAliases` cache, keyed by package name.
-fn build_alias_caches(
-    db: &dyn baml_compiler2_mir::Db,
+/// Per-package `ResolvedAliases` refs, keyed by package name — borrowed
+/// straight from the tracked `resolved_aliases_for_package` query (computed
+/// once per package for the whole compile).
+fn build_alias_caches<'db>(
+    db: &'db dyn baml_compiler2_mir::Db,
     all_files: &[baml_base::SourceFile],
-) -> HashMap<Name, ResolvedAliases> {
-    let mut caches: HashMap<Name, ResolvedAliases> = HashMap::new();
+) -> HashMap<Name, &'db ResolvedAliases> {
+    let mut caches: HashMap<Name, &'db ResolvedAliases> = HashMap::new();
     for file in all_files {
         let pkg_info = file_package(db, *file);
         caches.entry(pkg_info.package.clone()).or_insert_with(|| {
@@ -240,7 +242,7 @@ fn build_interface_def(
 fn build_packages(
     db: &dyn baml_compiler2_mir::Db,
     all_files: &[baml_base::SourceFile],
-    alias_caches: &HashMap<Name, ResolvedAliases>,
+    alias_caches: &HashMap<Name, &ResolvedAliases>,
     function_indices: &HashMap<String, usize>,
     interface_indices: &HashMap<baml_type::TypeName, usize>,
     program_packages: &mut indexmap::IndexMap<Name, bex_vm_types::types::ProgramPackage>,
@@ -2036,7 +2038,7 @@ fn compute_function_metadata_from_item_tree(
     let raw_bound_resolver =
         baml_compiler2_tir::associated_projection::AssociatedProjectionResolver::new(
             db,
-            &cache.aliases,
+            cache,
             &raw_generic_param_bounds,
         );
     let generic_param_bounds: HashMap<Name, baml_compiler2_tir::ty::Ty> = raw_generic_param_bounds
@@ -2048,7 +2050,7 @@ fn compute_function_metadata_from_item_tree(
         let tir_ty = lower_tir_type(te);
         baml_compiler2_tir::associated_projection::AssociatedProjectionResolver::new(
             db,
-            &cache.aliases,
+            cache,
             &generic_param_bounds,
         )
         .resolve_deep(&tir_ty)

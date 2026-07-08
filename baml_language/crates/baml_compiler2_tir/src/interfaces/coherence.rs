@@ -132,6 +132,10 @@ pub fn package_coherence_diagnostics<'db>(
             aliases.entry(qtn).or_insert(ty);
         }
     }
+    // Full alias environment (map + recursive set), computed once per registry
+    // build; every comparison below reuses it instead of re-deriving the
+    // recursive-alias analysis per call.
+    let aliases = crate::normalize::resolved_aliases_from_map(aliases);
 
     let dep_rules: Vec<&InterfaceImplRule> = deps
         .iter()
@@ -186,13 +190,13 @@ pub fn package_coherence_diagnostics<'db>(
 /// resolved — aliases nested under a constructor are handled by `is_same_normalized_type`.
 /// Mirrors `expand_type_alias` in the diagnostics layer so the coherence valid-subject
 /// gate sees through the same aliases the E0138 concreteness gate does.
-fn expand_alias_head(ty: &Ty, aliases: &std::collections::HashMap<TypeName, Ty>) -> Ty {
+fn expand_alias_head(ty: &Ty, aliases: &crate::normalize::ResolvedAliases) -> Ty {
     let mut current = ty.clone();
     for _ in 0..64 {
         let Ty::TypeAlias(qtn, _) = &current else {
             break;
         };
-        match aliases.get(qtn) {
+        match aliases.aliases.get(qtn) {
             Some(next) => current = next.clone(),
             None => break,
         }
@@ -209,7 +213,7 @@ pub fn impls_conflict<'db>(
     pkg_id: PackageId<'db>,
     a: &InterfaceImplRule,
     b: &InterfaceImplRule,
-    aliases: &std::collections::HashMap<TypeName, Ty>,
+    aliases: &crate::normalize::ResolvedAliases,
 ) -> Overlap {
     let (Some(a_qtn), Some(b_qtn)) = (
         interface_qtn(&a.interface_ty),
@@ -269,7 +273,7 @@ fn impls_overlap<'db>(
     pkg_id: PackageId<'db>,
     a: &InterfaceImplRule,
     b: &InterfaceImplRule,
-    aliases: &std::collections::HashMap<TypeName, Ty>,
+    aliases: &crate::normalize::ResolvedAliases,
 ) -> Overlap {
     let enum_variants = |qtn: &TypeName| enum_variant_names(db, qtn);
     let (a_for, a_args) = renamed_subject(a, 'a', &enum_variants);
@@ -675,7 +679,7 @@ fn unify_into(
     x: &Ty,
     y: &Ty,
     vars: &[Name],
-    aliases: &std::collections::HashMap<TypeName, Ty>,
+    aliases: &crate::normalize::ResolvedAliases,
     bindings: &mut TypeBindings,
 ) -> Overlap {
     unify_into_at(x, y, vars, aliases, bindings, 0)
@@ -689,7 +693,7 @@ fn unify_into_at(
     x: &Ty,
     y: &Ty,
     vars: &[Name],
-    aliases: &std::collections::HashMap<TypeName, Ty>,
+    aliases: &crate::normalize::ResolvedAliases,
     bindings: &mut TypeBindings,
     depth: usize,
 ) -> Overlap {
@@ -871,7 +875,7 @@ fn unify_all(
     xs: &[Ty],
     ys: &[Ty],
     vars: &[Name],
-    aliases: &std::collections::HashMap<TypeName, Ty>,
+    aliases: &crate::normalize::ResolvedAliases,
     bindings: &mut TypeBindings,
     depth: usize,
 ) -> Overlap {
@@ -895,7 +899,7 @@ fn unify_associated_bindings(
     xb: &[(Name, Ty)],
     yb: &[(Name, Ty)],
     vars: &[Name],
-    aliases: &std::collections::HashMap<TypeName, Ty>,
+    aliases: &crate::normalize::ResolvedAliases,
     bindings: &mut TypeBindings,
     depth: usize,
 ) -> Overlap {
@@ -941,7 +945,7 @@ fn unify_union_members_at(
     xs: &[Ty],
     ys: &[Ty],
     vars: &[Name],
-    aliases: &std::collections::HashMap<TypeName, Ty>,
+    aliases: &crate::normalize::ResolvedAliases,
     bindings: &mut TypeBindings,
     depth: usize,
 ) -> Overlap {
@@ -999,7 +1003,7 @@ fn unify_union_members(
     xs: &[Ty],
     ys: &[Ty],
     vars: &[Name],
-    aliases: &std::collections::HashMap<TypeName, Ty>,
+    aliases: &crate::normalize::ResolvedAliases,
     bindings: &mut TypeBindings,
 ) -> Overlap {
     unify_union_members_at(xs, ys, vars, aliases, bindings, 0)
@@ -1011,7 +1015,7 @@ fn try_union_set_equality(
     xs: &[Ty],
     ys: &[Ty],
     vars: &[Name],
-    aliases: &std::collections::HashMap<TypeName, Ty>,
+    aliases: &crate::normalize::ResolvedAliases,
 ) -> Option<Overlap> {
     let has_var = |members: &[Ty]| members.iter().any(|m| contains_bound_typevar(m, vars));
     if has_var(xs) || has_var(ys) {
@@ -1042,11 +1046,7 @@ fn is_bare_var(m: &Ty, vars: &[Name]) -> bool {
 /// Whether two ground unions denote the same set of types (order-insensitive).
 /// Members are de-duplicated, so equal cardinality plus "every member of `xs`
 /// has an equal member in `ys`" implies a bijection.
-fn unions_set_equal(
-    xs: &[Ty],
-    ys: &[Ty],
-    aliases: &std::collections::HashMap<TypeName, Ty>,
-) -> bool {
+fn unions_set_equal(xs: &[Ty], ys: &[Ty], aliases: &crate::normalize::ResolvedAliases) -> bool {
     xs.len() == ys.len()
         && xs.iter().all(|x| {
             ys.iter()
@@ -1072,7 +1072,7 @@ fn cover_at(
     member: &Ty,
     candidate: &Ty,
     vars: &[Name],
-    aliases: &std::collections::HashMap<TypeName, Ty>,
+    aliases: &crate::normalize::ResolvedAliases,
     bindings: &mut TypeBindings,
     depth: usize,
 ) -> Overlap {
@@ -1093,7 +1093,7 @@ fn cover(
     member: &Ty,
     candidate: &Ty,
     vars: &[Name],
-    aliases: &std::collections::HashMap<TypeName, Ty>,
+    aliases: &crate::normalize::ResolvedAliases,
     bindings: &mut TypeBindings,
 ) -> Overlap {
     cover_at(member, candidate, vars, aliases, bindings, 0)
@@ -1145,7 +1145,7 @@ fn needs_conservative_membership(a: &Ty, b: &Ty) -> bool {
 fn cover_search(
     obligations: &[(Ty, Vec<Ty>)],
     vars: &[Name],
-    aliases: &std::collections::HashMap<TypeName, Ty>,
+    aliases: &crate::normalize::ResolvedAliases,
     bindings: &mut TypeBindings,
     budget: &mut usize,
     depth: usize,
@@ -1236,7 +1236,7 @@ fn bind_unify_var(
     n: &Name,
     t: &Ty,
     vars: &[Name],
-    aliases: &std::collections::HashMap<TypeName, Ty>,
+    aliases: &crate::normalize::ResolvedAliases,
     bindings: &mut TypeBindings,
     depth: usize,
 ) -> Overlap {
@@ -1399,7 +1399,13 @@ mod tests {
         let xs = vec![Ty::int(), Ty::type_var("T")];
         let ys = vec![Ty::string(), Ty::type_var("V")];
         assert_eq!(
-            unify_union_members(&xs, &ys, &vars, &aliases, &mut bindings),
+            unify_union_members(
+                &xs,
+                &ys,
+                &vars,
+                &crate::normalize::resolved_aliases_from_map(aliases),
+                &mut bindings
+            ),
             Overlap::Yes
         );
     }
@@ -1414,7 +1420,13 @@ mod tests {
         let xs = vec![Ty::int(), Ty::type_var("T")];
         let ys = vec![Ty::int(), Ty::string(), Ty::class("Foo")];
         assert_eq!(
-            unify_union_members(&xs, &ys, &vars, &aliases, &mut bindings),
+            unify_union_members(
+                &xs,
+                &ys,
+                &vars,
+                &crate::normalize::resolved_aliases_from_map(aliases),
+                &mut bindings
+            ),
             Overlap::Yes
         );
     }
@@ -1429,7 +1441,13 @@ mod tests {
         let xs = vec![Ty::int(), Ty::type_var("T")];
         let ys = vec![Ty::string(), Ty::class("Foo")];
         assert_eq!(
-            unify_union_members(&xs, &ys, &vars, &aliases, &mut bindings),
+            unify_union_members(
+                &xs,
+                &ys,
+                &vars,
+                &crate::normalize::resolved_aliases_from_map(aliases),
+                &mut bindings
+            ),
             Overlap::No
         );
     }
@@ -1445,7 +1463,13 @@ mod tests {
         let xs = vec![Ty::class("A1"), Ty::class("A2"), Ty::type_var("T")];
         let ys: Vec<Ty> = (1..=9).map(|i| Ty::class(&format!("A{i}"))).collect();
         assert_eq!(
-            unify_union_members(&xs, &ys, &vars, &aliases, &mut bindings),
+            unify_union_members(
+                &xs,
+                &ys,
+                &vars,
+                &crate::normalize::resolved_aliases_from_map(aliases),
+                &mut bindings
+            ),
             Overlap::Yes
         );
     }
@@ -1468,7 +1492,13 @@ mod tests {
             .map(|i| Ty::list(Ty::class(&format!("A{i}"))))
             .collect();
         assert_eq!(
-            unify_union_members(&xs, &ys, &vars, &aliases, &mut bindings),
+            unify_union_members(
+                &xs,
+                &ys,
+                &vars,
+                &crate::normalize::resolved_aliases_from_map(aliases),
+                &mut bindings
+            ),
             Overlap::Yes
         );
     }
@@ -1489,7 +1519,13 @@ mod tests {
         ];
         let ys = vec![Ty::list(Ty::class("A1")), Ty::list(Ty::class("A2"))];
         assert_eq!(
-            unify_union_members(&xs, &ys, &vars, &aliases, &mut bindings),
+            unify_union_members(
+                &xs,
+                &ys,
+                &vars,
+                &crate::normalize::resolved_aliases_from_map(aliases),
+                &mut bindings
+            ),
             Overlap::Yes
         );
     }
@@ -1514,7 +1550,13 @@ mod tests {
             ys.push(pair(Ty::class(&format!("R{i}")), a2()));
         }
         assert_eq!(
-            unify_union_members(&xs, &ys, &vars, &aliases, &mut bindings),
+            unify_union_members(
+                &xs,
+                &ys,
+                &vars,
+                &crate::normalize::resolved_aliases_from_map(aliases),
+                &mut bindings
+            ),
             Overlap::Unknown
         );
     }
@@ -1529,7 +1571,13 @@ mod tests {
         let xs = vec![int_literal(1), Ty::type_var("T")];
         let ys = vec![Ty::int(), Ty::string()];
         assert_eq!(
-            unify_union_members(&xs, &ys, &vars, &aliases, &mut bindings),
+            unify_union_members(
+                &xs,
+                &ys,
+                &vars,
+                &crate::normalize::resolved_aliases_from_map(aliases),
+                &mut bindings
+            ),
             Overlap::Yes
         );
     }
@@ -1544,7 +1592,13 @@ mod tests {
         let xs = vec![Ty::int(), Ty::type_var("T")];
         let ys = vec![int_literal(1), Ty::string()];
         assert_eq!(
-            unify_union_members(&xs, &ys, &vars, &aliases, &mut bindings),
+            unify_union_members(
+                &xs,
+                &ys,
+                &vars,
+                &crate::normalize::resolved_aliases_from_map(aliases),
+                &mut bindings
+            ),
             Overlap::No
         );
     }
@@ -1559,7 +1613,13 @@ mod tests {
         let a = interface_with_assoc("I", vec![("Item", Ty::int())]);
         let b = interface_with_assoc("I", vec![("Item", Ty::string())]);
         assert_eq!(
-            unify_into(&a, &b, &[], &aliases, &mut bindings),
+            unify_into(
+                &a,
+                &b,
+                &[],
+                &crate::normalize::resolved_aliases_from_map(aliases),
+                &mut bindings
+            ),
             Overlap::No
         );
     }
@@ -1573,7 +1633,13 @@ mod tests {
         let a = interface_with_assoc("I", vec![("Item", Ty::int())]);
         let b = interface_with_assoc("I", vec![("Item", Ty::type_var("T"))]);
         assert_eq!(
-            unify_into(&a, &b, &vars, &aliases, &mut bindings),
+            unify_into(
+                &a,
+                &b,
+                &vars,
+                &crate::normalize::resolved_aliases_from_map(aliases),
+                &mut bindings
+            ),
             Overlap::Yes
         );
         assert_eq!(bindings.get(&Name::new("T")), Some(&Ty::int()));
@@ -1605,7 +1671,7 @@ mod tests {
                 &Ty::TypeAlias(r, TyAttr::default()),
                 &Ty::TypeAlias(s, TyAttr::default()),
                 &[],
-                &aliases,
+                &crate::normalize::resolved_aliases_from_map(aliases.clone()),
                 &mut bindings,
             ),
             Overlap::Unknown,
@@ -1620,7 +1686,16 @@ mod tests {
         let mut bindings = TypeBindings::default();
         let a = interface_with_assoc("I", vec![("Item", Ty::int())]);
         let b = interface_with_assoc("I", vec![("Item", Ty::string())]);
-        assert_eq!(cover(&a, &b, &[], &aliases, &mut bindings), Overlap::No);
+        assert_eq!(
+            cover(
+                &a,
+                &b,
+                &[],
+                &crate::normalize::resolved_aliases_from_map(aliases),
+                &mut bindings
+            ),
+            Overlap::No
+        );
     }
 
     #[test]
@@ -1632,7 +1707,16 @@ mod tests {
         let mut bindings = TypeBindings::default();
         let a = Ty::class("A");
         let b = interface("I", vec![]);
-        assert_eq!(cover(&a, &b, &[], &aliases, &mut bindings), Overlap::Yes);
+        assert_eq!(
+            cover(
+                &a,
+                &b,
+                &[],
+                &crate::normalize::resolved_aliases_from_map(aliases),
+                &mut bindings
+            ),
+            Overlap::Yes
+        );
     }
 
     #[test]
@@ -1720,7 +1804,13 @@ mod tests {
         let mut bindings = TypeBindings::default();
         let u = Ty::union(vec![enum_variant("Cmp", "Less"), Ty::type_var("T")]);
         assert_eq!(
-            unify_into(&u, &enum_ty("Cmp"), &vars, &aliases, &mut bindings),
+            unify_into(
+                &u,
+                &enum_ty("Cmp"),
+                &vars,
+                &crate::normalize::resolved_aliases_from_map(aliases),
+                &mut bindings
+            ),
             Overlap::Yes
         );
     }
@@ -1736,7 +1826,13 @@ mod tests {
             enum_variant("Cmp", "Equal"),
         ]);
         assert_eq!(
-            unify_into(&u, &enum_ty("Cmp"), &[], &aliases, &mut bindings),
+            unify_into(
+                &u,
+                &enum_ty("Cmp"),
+                &[],
+                &crate::normalize::resolved_aliases_from_map(aliases),
+                &mut bindings
+            ),
             Overlap::No
         );
     }
@@ -1753,7 +1849,13 @@ mod tests {
         let c = || Ty::class("C");
         let u = Ty::union(vec![c(), Ty::type_var("T")]);
         assert_eq!(
-            unify_into(&u, &c(), &vars, &aliases, &mut bindings),
+            unify_into(
+                &u,
+                &c(),
+                &vars,
+                &crate::normalize::resolved_aliases_from_map(aliases),
+                &mut bindings
+            ),
             Overlap::Yes
         );
     }
@@ -1767,7 +1869,13 @@ mod tests {
         let mut bindings = TypeBindings::default();
         let u = Ty::union(vec![int_literal(1), Ty::type_var("T")]);
         assert_eq!(
-            unify_into(&u, &Ty::int(), &vars, &aliases, &mut bindings),
+            unify_into(
+                &u,
+                &Ty::int(),
+                &vars,
+                &crate::normalize::resolved_aliases_from_map(aliases),
+                &mut bindings
+            ),
             Overlap::Yes
         );
     }
@@ -1783,7 +1891,13 @@ mod tests {
         let u = Ty::union(vec![Ty::class("D"), Ty::type_var("T")]);
         let c = Ty::class("C");
         assert_eq!(
-            unify_into(&u, &c, &vars, &aliases, &mut bindings),
+            unify_into(
+                &u,
+                &c,
+                &vars,
+                &crate::normalize::resolved_aliases_from_map(aliases),
+                &mut bindings
+            ),
             Overlap::No
         );
     }
@@ -1801,7 +1915,7 @@ mod tests {
                 &Ty::type_var("T"),
                 &Ty::unknown(),
                 &vars,
-                &aliases,
+                &crate::normalize::resolved_aliases_from_map(aliases),
                 &mut bindings
             ),
             Overlap::Yes
@@ -1816,7 +1930,13 @@ mod tests {
         let aliases = std::collections::HashMap::default();
         let mut bindings = TypeBindings::default();
         assert_eq!(
-            unify_into(&Ty::unknown(), &Ty::int(), &[], &aliases, &mut bindings),
+            unify_into(
+                &Ty::unknown(),
+                &Ty::int(),
+                &[],
+                &crate::normalize::resolved_aliases_from_map(aliases),
+                &mut bindings
+            ),
             Overlap::No
         );
     }
@@ -1839,7 +1959,13 @@ mod tests {
                 pair(a.clone(), a)
             })
             .collect();
-        unify_union_members(&xs, &ys, &vars, &aliases, &mut bindings)
+        unify_union_members(
+            &xs,
+            &ys,
+            &vars,
+            &crate::normalize::resolved_aliases_from_map(aliases),
+            &mut bindings,
+        )
     }
 
     #[test]
@@ -1897,7 +2023,13 @@ mod tests {
         xs.push(Ty::type_var("ABSORB"));
         let mut vars: Vec<Name> = (0..num_vars).map(|i| Name::new(format!("V{i}"))).collect();
         vars.push(Name::new("ABSORB"));
-        unify_union_members(&xs, &ys, &vars, &aliases, &mut bindings)
+        unify_union_members(
+            &xs,
+            &ys,
+            &vars,
+            &crate::normalize::resolved_aliases_from_map(aliases),
+            &mut bindings,
+        )
     }
 
     // All 2^n exclusion clauses over the first `n` vars ⇒ unsatisfiable.
