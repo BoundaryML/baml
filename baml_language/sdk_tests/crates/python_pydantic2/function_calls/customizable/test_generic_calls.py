@@ -37,6 +37,10 @@ from baml_sdk.generic_tests import (
     consume_int_wrapper,
     one_type_arg,
     two_type_args,
+    make_int_box,
+    make_int_container,
+    make_nested_box,
+    make_int_str_bool_triple,
 )
 
 
@@ -308,3 +312,78 @@ def test_wrap_explicit():
     w = wrap[int](5)
     assert isinstance(w, GenericBox)
     assert w.value == 5
+
+
+# ===========================================================================
+# reified generics returned by NON-generic functions
+# ===========================================================================
+# The outbound mirror of `consume_int_wrapper`: no TypeVar binding and no
+# inference — the callee's return type pins the class type args at the
+# definition site, so the host only has to decode a fully-concrete generic
+# instance flowing back out. One test per reification shape.
+
+
+def _type_args(obj):
+    """The concrete type args bound on a returned Pydantic generic instance.
+
+    A reified generic comes back as a *parametrized* subclass (`GenericBox[int]`),
+    whose `__pydantic_generic_metadata__["args"]` holds the bound args. A bare,
+    unbound instance instead has empty `args` and a leftover `~T` in `parameters`
+    — so a non-empty tuple here proves the host actually bound the TypeVars.
+    """
+    return type(obj).__pydantic_generic_metadata__["args"]
+
+
+# --- make_int_box() -> GenericBox<int> : one TypeVar, used once -------------
+
+
+def test_make_int_box_reified():
+    box = make_int_box()
+    assert isinstance(box, GenericBox)
+    assert _type_args(box) == (int,)
+    assert box.value == 7
+
+
+# --- make_int_container() -> ContainerShapes<int> : one TypeVar, many fields -
+# The single `int` binding is reified into every field shape (bare, list, map,
+# optional, union) — the host must decode all of them off one instance.
+
+
+def test_make_int_container_reified():
+    c = make_int_container()
+    assert isinstance(c, ContainerShapes)
+    assert _type_args(c) == (int,)
+    assert c.item == 1
+    assert c.items == [1, 2, 3]
+    assert c.by_key == {"k": 4}
+    assert c.maybe is None
+    assert c.mixed == 5
+
+
+# --- make_nested_box() -> GenericBox<GenericBox<int>> : nested generic arg ---
+# The type arg is itself a generic instance; the host must decode the inner
+# GenericBox out of the outer one's field.
+
+
+def test_make_nested_box_reified():
+    outer = make_nested_box()
+    assert isinstance(outer, GenericBox)
+    # The outer box's single type arg is itself the parametrized `GenericBox[int]`.
+    assert _type_args(outer) == (GenericBox[int],)
+    assert isinstance(outer.value, GenericBox)
+    assert _type_args(outer.value) == (int,)
+    assert outer.value.value == 9
+
+
+# --- make_int_str_bool_triple() -> GenericTriple<int, string, bool> ---------
+# Multiple TypeVars reified across mixed field shapes: scalar int, string list,
+# bool-valued map.
+
+
+def test_make_int_str_bool_triple_reified():
+    t = make_int_str_bool_triple()
+    assert isinstance(t, GenericTriple)
+    assert _type_args(t) == (int, str, bool)
+    assert t.first == 1
+    assert t.second == ["a", "b"]
+    assert t.third == {"k": True}
