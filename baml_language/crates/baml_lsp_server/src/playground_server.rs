@@ -440,6 +440,17 @@ pub async fn pick_port(base_port: u16, max_attempts: u16) -> anyhow::Result<(Tcp
     )
 }
 
+/// Bind exactly `port` on loopback, with an actionable error when taken.
+pub async fn bind_exact_port(port: u16) -> anyhow::Result<TcpListener> {
+    let addr = SocketAddr::from(([127, 0, 0, 1], port));
+    TcpListener::bind(addr).await.map_err(|e| {
+        anyhow::anyhow!(
+            "Could not bind playground port {port}: {e}. Another process may be \
+             using it; pass a different --port or omit it to auto-pick from 3700."
+        )
+    })
+}
+
 // ---------------------------------------------------------------------------
 // Shared state for Axum handlers
 // ---------------------------------------------------------------------------
@@ -2976,6 +2987,20 @@ mod tests {
                 "{denied}"
             );
         }
+    }
+
+    #[tokio::test]
+    async fn bind_exact_port_reports_conflict_with_actionable_error() {
+        let (occupied, port) = pick_port(3700, 100).await.expect("a free port to occupy");
+
+        let err = bind_exact_port(port)
+            .await
+            .expect_err("second bind of the same port should fail");
+        let message = format!("{err}");
+        assert!(message.contains(&port.to_string()), "{message}");
+        assert!(message.contains("--port"), "{message}");
+
+        drop(occupied);
     }
 
     #[test]

@@ -48,9 +48,13 @@ impl bex_project::PlaygroundSender for NativePlaygroundSender {
         {
             if self.open_in_browser {
                 let url = format!("http://localhost:{}", self.playground_port);
-                if let Err(e) = webbrowser::open(&url) {
-                    tracing::error!("Failed to open browser at {}: {}", url, e);
-                }
+                // `webbrowser::open` can block until a text-mode browser (lynx/w3m)
+                // exits on headless hosts; never hold up server startup on it.
+                std::thread::spawn(move || {
+                    if let Err(e) = webbrowser::open(&url) {
+                        tracing::error!("Failed to open browser at {}: {}", url, e);
+                    }
+                });
             } else {
                 let params = serde_json::json!({
                     "port": self.playground_port,
