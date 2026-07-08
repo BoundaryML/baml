@@ -321,6 +321,41 @@ fn seeded_relink_is_byte_identical_to_full_compile() {
     assert!(full == seeded, "seeded relink differs (throws edit)");
 }
 
+/// B-693 Stage 6 evidence: an incremental compile lowers ONLY the dirty files.
+/// `take_lowered_files` drains the per-thread record of files whose bodies hit
+/// Pass 4 (MIR/bytecode lowering); after a reuse compile it must contain the
+/// dirty file and none of the clean files.
+#[test]
+fn relink_lowers_only_dirty_files() {
+    use baml_compiler2_emit::take_lowered_files;
+
+    let files = [("a.baml", A_BAML), ("b.baml", B_BAML), ("c.baml", C_BAML)];
+    let base = generate_stdlib_program(&build_db(&files), OptLevel::Two).expect("stdlib");
+    let prev = prev_units(&files);
+
+    // Body-only edit in b; a and c stay clean.
+    let b_body_edit = B_BAML.replace("v * factor", "factor * v");
+    let edited = [
+        ("a.baml", A_BAML),
+        ("b.baml", b_body_edit.as_str()),
+        ("c.baml", C_BAML),
+    ];
+
+    // Drain everything the setup (stdlib + prev_units) lowered, then relink.
+    let _ = take_lowered_files();
+    let _ = relink(&edited, &base, &prev, &["a.baml", "c.baml"]);
+    let lowered = take_lowered_files();
+
+    assert!(
+        lowered.iter().any(|f| f == "b.baml"),
+        "dirty b.baml must be lowered, got {lowered:?}"
+    );
+    assert!(
+        !lowered.iter().any(|f| f == "a.baml" || f == "c.baml"),
+        "clean files must NOT be lowered, got {lowered:?}"
+    );
+}
+
 /// Prove the reuse path actually draws the clean file from `prev_units`
 /// (byte-equality alone would also pass if "clean" files were silently
 /// recompiled): plant a probe in a cosmetic, serialized field of the previous

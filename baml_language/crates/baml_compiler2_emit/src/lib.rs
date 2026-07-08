@@ -713,6 +713,27 @@ fn is_builtin_function_name(name: &str) -> bool {
     )
 }
 
+/// Is `name` a synthesized `$init` / `$init_test` chainer (per package)? These
+/// are the functions that make up the whole-group `$init` tail (design §9 R2).
+fn is_synth_init_name(name: &str) -> bool {
+    name == "$init"
+        || name == "$init_test"
+        || name.ends_with(".$init")
+        || name.ends_with(".$init_test")
+}
+
+/// Does `file` contribute to the `$init` / `$init_test` tail — i.e. declare a
+/// top-level `let` (→ `$init`) or a `test` / `testset` block (→ a per-file
+/// `$init_test_*` function chained by `$init_test`)?
+///
+/// The Stage 6 dirty-only path reuses the previous compile's tail verbatim, which
+/// is only sound when no *dirty* file changes it. A dirty tail-producing file
+/// therefore aborts the reuse and the caller falls back to a full compile.
+fn file_is_tail_producing(db: &dyn baml_compiler2_mir::Db, file: baml_base::SourceFile) -> bool {
+    let item_tree = file_item_tree(db, file);
+    !item_tree.lets.is_empty() || !item_tree.tests.is_empty()
+}
+
 fn emitted_function_origin(
     fq_name: &str,
     is_builtin_file: bool,
@@ -763,10 +784,12 @@ pub struct CompileOptions {
 pub enum LoweringError {
     /// A stub — no errors expected from Phase 1 stub.
     Internal(String),
-    /// Per-file bytecode reuse hit a construct it cannot relocate (e.g. a
-    /// previous-program object reference that isn't a class/enum/interface
-    /// or within the file's own range). Not a compiler fault: callers should
-    /// silently fall back to a full compile.
+    /// The incremental (dirty-only) reuse path cannot produce a byte-identical
+    /// image for this project — a dirty file is tail-producing (top-level `let` /
+    /// `test` block) so the `$init` tail cannot be reused, or a dirty file emits a
+    /// pooled generic-function value whose interning owner is ambiguous (design §9
+    /// R1/R2). Not a compiler fault: callers silently fall back to a full compile,
+    /// which is byte-identical.
     ReuseUnsupported(String),
     /// The project has unresolved compile errors, so bytecode generation was
     /// not attempted. Lowering an error-bearing program would feed
@@ -929,68 +952,34 @@ pub fn generate_project_bytecode_with_stdlib(
     generate_impl(db, options, opt, Some(base), false, None)
 }
 
-/// Generate project bytecode reusing per-file compiled bytecode from a
-/// previous `Program` of the same project.
+/// B-693 Stage 6: incremental compile that lowers **only the dirty files** into
+/// symbolic units, reuses clean files' units verbatim from the cached image, and
+/// links.
 ///
-/// `clean_files` names the user files (project-root-relative paths, as
-/// recorded in `Function::source_file`) whose compiled functions may be
-/// spliced from `prev` instead of re-lowered. The caller is responsible for
-/// the invalidation policy — a file may only be listed when its own content
-/// is unchanged AND nothing it references changed signature (see the CLI's
-/// manifest logic). `prev` must have been produced by the same compiler
-/// build with the same options and stdlib base.
-///
-/// The result is byte-identical to a full compile (relink oracle tests).
-/// Any construct the splice cannot relocate aborts with
-/// [`LoweringError::ReuseUnsupported`]; callers fall back to
-/// [`generate_project_bytecode_with_stdlib`].
-pub fn generate_project_bytecode_with_reuse(
-    db: &dyn baml_compiler2_mir::Db,
-    options: &CompileOptions,
-    opt: OptLevel,
-    base: &Program,
-    prev: &Program,
-    clean_files: &HashSet<String>,
-) -> Result<Program, LoweringError> {
-    generate_impl(
-        db,
-        options,
-        opt,
-        Some(base),
-        false,
-        Some((prev, clean_files)),
-    )
-}
-
-/// B-693 Stage 3: incremental compile routed through symbolic units + the
-/// load-time linker instead of the pool-splice.
-///
-/// Clean files' units are taken **verbatim** from `prev_units` (the previous
-/// compile's decomposed image) — their bodies are never re-lowered. Dirty files
-/// are emitted fresh, and `link(clean prev units + fresh dirty units)` produces
-/// a `Program` byte-identical to a full compile (the generalized relink oracle).
-///
-/// The dirty-file emit leans on the existing pool-splice machinery
-/// ([`generate_impl`] with a reuse context): it lowers only the dirty files'
-/// bodies (clean function bodies are spliced from `prev`, never re-lowered — the
-/// real win), producing a byte-identical `Program`, which is then decomposed
-/// into fresh units. Only the dirty (and throws-demoted) files' fresh units are
-/// kept; every clean file's *local* content — its classes, enums, interfaces,
-/// code, and import/export tables — comes from `prev_units`. The whole-program
-/// products (each package's fragment, the group `$init` tail) are always taken
-/// from this compile's fresh decomposition, so a clean carrier unit never
-/// re-imports stale package structure.
+/// This is direct per-file emit: clean files are neither lowered nor cloned. The
+/// user group is compiled in skip-clean mode so Pass 4 skips every
+/// clean file entirely (`take_lowered_files` afterward reports only the dirty
+/// paths); the resulting partial program is decomposed into fresh units, of which
+/// only the dirty files' units are kept. Each clean file's whole unit — classes,
+/// enums, interfaces, code, import/export tables, `lets`, throw facts — comes
+/// verbatim from `prev_units`; only the whole-program products are recomputed
+/// (package fragments freshly decomposed; the `$init`/`$init_test` tail reused
+/// from `prev_units`, whose symbolic imports the linker re-resolves against the
+/// shifted layout).
 ///
 /// `clean_files` is the caller's optimistic clean set; a file is only truly
-/// reused when its inferred transitive `throws` still match `prev` (design §4 —
-/// the throws gate stays in emit for Stage 3). `prev_units` must come from the
-/// same compiler build / options / stdlib base.
+/// reused when its inferred transitive `throws` still match the previous compile
+/// (design §4 — the throws gate). `prev_units` must come from the same compiler
+/// build / options / stdlib base.
 ///
 /// # Errors
 ///
-/// Propagates any [`LoweringError`] from the dirty-file emit or the
-/// decomposition, and returns [`LoweringError::Internal`] if `prev_units` fail
-/// to link (a corrupt / incompatible previous image).
+/// Returns [`LoweringError::Internal`] if `prev_units` fail to link (a corrupt /
+/// incompatible previous image), propagates any [`LoweringError`] from the
+/// dirty-file emit, and returns [`LoweringError::ReuseUnsupported`] when a *dirty*
+/// file is tail-producing (declares a top-level `let` or a `test` block) — the
+/// group `$init` tail cannot be reused verbatim in that case, so the caller falls
+/// back to a full (stdlib-spliced) compile, which is byte-identical.
 pub fn generate_project_bytecode_with_reuse_units(
     db: &dyn baml_compiler2_mir::Db,
     options: &CompileOptions,
@@ -999,9 +988,9 @@ pub fn generate_project_bytecode_with_reuse_units(
     prev_units: &[CompilationUnit],
     clean_files: &HashSet<String>,
 ) -> Result<Program, LoweringError> {
-    // Reconstruct the previous Program: the pool-splice needs it as its clone
-    // source, and the throws gate compares against its functions' `throws_type`.
-    // `link(prev_units)` is byte-identical to the previous full compile.
+    // Reconstruct the previous Program only to run the throws gate against its
+    // functions' `throws_type`. `link(prev_units)` is byte-identical to the
+    // previous full compile.
     let prev_program = bex_vm_types::link::link(prev_units)
         .map_err(|e| LoweringError::Internal(format!("relink previous units: {e}")))?;
 
@@ -1022,66 +1011,106 @@ pub fn generate_project_bytecode_with_reuse_units(
         }
     }
 
-    // Emit the dirty files fresh (clean function bodies are spliced from `prev`,
-    // never re-lowered), yielding a byte-identical `Program`, then decompose it
-    // into per-file symbolic units.
-    let full = generate_impl(
-        db,
-        options,
-        opt,
-        Some(base),
-        false,
-        Some((&prev_program, &effective_clean)),
-    )?;
-    let mut fresh_units = decompose_program_into_units(db, options, &full)?;
+    // Tail gate (design §9 R2): the `$init`/`$init_test` tail is reused verbatim
+    // from `prev_units`, which is only sound when no *dirty* file changes it. If a
+    // dirty file is tail-producing, abort the reuse — the caller full-compiles
+    // (byte-identical), and no clean file's `let`s are re-lowered on this path.
+    for file in &all_files {
+        let rel = relative_source_path(db, *file);
+        if !effective_clean.contains(&rel) && file_is_tail_producing(db, *file) {
+            return Err(LoweringError::ReuseUnsupported(format!(
+                "dirty tail-producing file `{rel}` (top-level let / test block)"
+            )));
+        }
+    }
 
-    // Assemble the final unit set: clean files' local content from `prev_units`,
-    // everything else fresh. Whole-program products (package fragments, the
-    // `$init` tail) always come from this compile's fresh decomposition.
+    // Direct per-file emit: lower ONLY the dirty files (clean files are skipped in
+    // Pass 4), producing a partial program whose dirty content decomposes into
+    // fresh units. The partial has no `$init` tail (Passes 4.5/4.6 do not run in
+    // `SkipClean`).
+    let partial = generate_impl(db, options, opt, Some(base), false, Some(&effective_clean))?;
+
+    // R1 (design §9): a pooled generic-function *value* (`foo<int>` used as a
+    // value → `Object::GenericFunction`) is interned once per program at the
+    // first-referencing file's position. A dirty-only emit cannot see a clean
+    // file's interned copy, so it would emit a redundant local one — and the
+    // linker does not dedup local generics across units, yielding a duplicate pool
+    // object that breaks `foo<int> === foo<int>`. If a dirty file emits any such
+    // value while clean files are being reused, abort; the caller full-compiles
+    // (byte-identical). (The `MakeGenericFunction` *instruction* path is
+    // unaffected — its base-fn operand relocates by name, no pooled object.)
+    if !effective_clean.is_empty() {
+        let base_obj_len = base.objects.len();
+        let dirty_generic = (base_obj_len..partial.objects.len()).any(|i| {
+            matches!(
+                partial.objects[ObjectIndex::from_raw(i)],
+                Object::GenericFunction(_)
+            )
+        });
+        if dirty_generic {
+            return Err(LoweringError::ReuseUnsupported(
+                "a dirty file emits a pooled generic-function value; the interning \
+                 owner is ambiguous in dirty-only emit (design §9 R1)"
+                    .to_string(),
+            ));
+        }
+    }
+
+    let mut fresh_units = decompose_program_into_units(db, options, &partial)?;
+
+    // The reused (symbolic) tail: whichever unit of the previous image carried it.
+    // Its object/global imports are names, so the linker re-resolves them against
+    // this compile's shifted layout.
+    let prev_tail = prev_units.iter().find_map(|u| u.init_tail.clone());
+
+    // Assemble: clean files verbatim from `prev_units`, dirty files fresh. The
+    // per-package fragment is always recomputed (it reflects every file in the
+    // package), so a clean carrier unit never carries a stale fragment. The tail
+    // is placed once, below.
     let prev_by_source: HashMap<&str, &CompilationUnit> = prev_units
         .iter()
         .map(|u| (u.source_file.as_str(), u))
         .collect();
     let mut assembled: Vec<CompilationUnit> = Vec::with_capacity(fresh_units.len());
     for fresh in &mut fresh_units {
-        // Reuse `prev`'s local content only when the file is (a) effectively
-        // clean and (b) its symbolic *structure* — import and export tables —
-        // still matches the fresh decomposition. The tables are a pure function
-        // of the file's own source plus the *names* it references, so for a
-        // genuinely clean file they are identical (any code-byte difference is
-        // then a cosmetic, serialized-only field we intend to preserve, e.g. a
-        // probe). If they drift — e.g. a generic-function instantiation's
-        // interning owner moved to another unit (design §9 R1), turning a local
-        // definition into an import — the fresh unit is authoritative, keeping
-        // the linked image byte-identical to a full compile.
-        let reusable = effective_clean.contains(&fresh.source_file)
-            && prev_by_source
+        let mut unit = if effective_clean.contains(&fresh.source_file) {
+            let prev = prev_by_source
                 .get(fresh.source_file.as_str())
-                .is_some_and(|prev| {
-                    prev.object_imports == fresh.object_imports
-                        && prev.global_imports == fresh.global_imports
-                        && prev.exports == fresh.exports
-                });
-        if reusable {
-            let prev = prev_by_source[fresh.source_file.as_str()];
-            let mut unit = prev.clone();
-            // Whole-program / whole-group products are recomputed every compile;
-            // take them from the fresh decomposition so a clean carrier unit
-            // never carries a stale package fragment or `$init` tail.
+                .ok_or_else(|| {
+                    LoweringError::ReuseUnsupported(format!(
+                        "clean file `{}` missing from previous units",
+                        fresh.source_file
+                    ))
+                })?;
+            let mut unit = (*prev).clone();
             unit.package_fragment = std::mem::take(&mut fresh.package_fragment);
-            unit.init_tail = fresh.init_tail.take();
-            assembled.push(unit);
+            unit
         } else {
-            assembled.push(std::mem::take(fresh));
-        }
+            std::mem::take(fresh)
+        };
+        // The tail is a single whole-group product placed on one carrier below;
+        // clear any per-unit copy first (a clean carrier would otherwise carry a
+        // stale tail).
+        unit.init_tail = None;
+        assembled.push(unit);
+    }
+
+    // Place the reused tail on the last user unit (the linker only requires it to
+    // be on *some* unit of the user group).
+    if let Some(tail) = prev_tail
+        && let Some(carrier) = assembled
+            .iter_mut()
+            .rev()
+            .find(|u| !u.source_file.starts_with("<builtin>/"))
+    {
+        carrier.init_tail = Some(tail);
     }
 
     bex_vm_types::link::link(&assembled)
         .map_err(|e| LoweringError::Internal(format!("link reused units: {e}")))
 }
 
-/// B-693 Stage 2: emit every source file as a relocatable
-/// [`CompilationUnit`](bex_vm_types::CompilationUnit).
+/// B-693 Stage 2: emit every source file as a relocatable [`CompilationUnit`].
 ///
 /// Runs the ordinary full compile ([`generate_project_bytecode_with_opt`]) and
 /// then *decomposes* the flat `Program` into per-file symbolic units: each
@@ -1210,8 +1239,17 @@ fn decompose_program_into_units(
     // chainers and `$init_let_*` helpers are not). Only the user group carries a
     // tail today (builtins define no top-level `let`s), so the tail is a suffix
     // of the whole pool.
+    // A tail exists only if the program actually synthesized `$init`/`$init_test`
+    // functions (a project with top-level `let`s or `test` blocks). Without that
+    // guard, a program whose last pool objects are trailing class/enum/interface
+    // defs (e.g. a dirty-only Stage 6 emit with no user functions) would be
+    // mis-read as having a tail.
+    let has_init_tail = program
+        .function_indices
+        .keys()
+        .any(|n| is_synth_init_name(n));
     let mut tail_start = n_obj;
-    {
+    if has_init_tail {
         let mut last_regular = None;
         for idx in 0..n_obj {
             if let Object::Function(_) = &program.objects[ObjectIndex::from_raw(idx)]
@@ -1472,33 +1510,35 @@ fn decompose_program_into_units(
                             )));
                             return;
                         };
-                        let new = if let Some(&(owner, flat)) = name_to_local_global.get(name) {
-                            if owner == u {
-                                flat as usize
-                            } else {
-                                let is_let = let_name_to_file.contains_key(name);
-                                let sym = Symbol {
-                                    kind: if is_let {
-                                        SymbolKind::Let
-                                    } else {
-                                        SymbolKind::Function
-                                    },
-                                    fq_name: name.clone(),
-                                    generic: None,
-                                };
-                                let import_idx =
-                                    *glob_import_idx.entry(name.clone()).or_insert_with(|| {
-                                        let n = global_imports.len();
-                                        global_imports.push(sym);
-                                        n
-                                    });
-                                n_local_globals + import_idx
-                            }
+                        // Local iff this unit owns the slot; otherwise an import.
+                        // A name absent from `name_to_local_global` is a reference
+                        // to a definition not lowered into this (partial) pool —
+                        // i.e. a clean file's function/let in the Stage 6 dirty-only
+                        // emit — which is likewise an import.
+                        let owned_local = name_to_local_global
+                            .get(name)
+                            .filter(|&&(owner, _)| owner == u)
+                            .map(|&(_, flat)| flat as usize);
+                        let new = if let Some(flat) = owned_local {
+                            flat
                         } else {
-                            lowering_err = Some(LoweringError::Internal(format!(
-                                "global slot {target} (`{name}`) has no local-global mapping"
-                            )));
-                            return;
+                            let is_let = let_name_to_file.contains_key(name);
+                            let sym = Symbol {
+                                kind: if is_let {
+                                    SymbolKind::Let
+                                } else {
+                                    SymbolKind::Function
+                                },
+                                fq_name: name.clone(),
+                                generic: None,
+                            };
+                            let import_idx =
+                                *glob_import_idx.entry(name.clone()).or_insert_with(|| {
+                                    let n = global_imports.len();
+                                    global_imports.push(sym);
+                                    n
+                                });
+                            n_local_globals + import_idx
                         };
                         *slot = GlobalIndex::from_raw(new);
                     }
@@ -1740,13 +1780,19 @@ fn build_package_fragment(
 ) -> Result<ProgramPackageFrag, LoweringError> {
     let obj_fq = |idx: ObjectIndex| -> Result<String, LoweringError> {
         let raw = idx.raw();
+        // A function reference resolves by name directly — this covers both real
+        // pool functions and the placeholder indices Stage 6 assigns to skipped
+        // clean-file functions (which must never be pool-indexed).
+        if let Some(name) = fn_obj_name.get(&raw) {
+            return Ok(name.clone());
+        }
         match &program.objects[idx] {
             Object::Class(c) => Ok(c.name.to_string()),
             Object::Enum(e) => Ok(e.name.to_string()),
             Object::Interface(i) => Ok(i.name.to_string()),
-            Object::Function(_) => fn_obj_name.get(&raw).cloned().ok_or_else(|| {
-                LoweringError::Internal(format!("package refs unnamed function object {raw}"))
-            }),
+            Object::Function(_) => Err(LoweringError::Internal(format!(
+                "package refs unnamed function object {raw}"
+            ))),
             other => Err(LoweringError::Internal(format!(
                 "package refs a non-def object {raw} ({})",
                 obj_variant_name(other)
@@ -1940,13 +1986,92 @@ fn build_init_tail(
     })
 }
 
+thread_local! {
+    /// Project-relative paths whose bodies were MIR/bytecode-lowered in Pass 4
+    /// since the last drain. B-693 Stage 6 evidence surface: after an incremental
+    /// compile only the *dirty* files appear here — clean files are never lowered.
+    static LOWERED_FILES: std::cell::RefCell<Vec<String>> =
+        const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// Record that `rel_path`'s function bodies are being lowered in Pass 4.
+fn record_lowered_file(rel_path: &str) {
+    LOWERED_FILES.with(|f| f.borrow_mut().push(rel_path.to_string()));
+}
+
+/// Drain and return the source paths whose bodies were lowered since the last
+/// call, on the current thread (B-693 Stage 6). A full compile returns every
+/// file; an incremental reuse compile returns only the dirty files.
+pub fn take_lowered_files() -> Vec<String> {
+    LOWERED_FILES.with(|f| std::mem::take(&mut *f.borrow_mut()))
+}
+
+/// Stage 6 (`SkipClean`): register the names a clean (skipped) file provides so
+/// the whole-program tail passes and the decomposition can resolve them by name.
+///
+/// Clean files are not lowered, so their functions/lets never enter the pool or
+/// the name maps. `build_packages` (impl-rule method FQNs) and the
+/// decomposition's operand-slot reversal both look names up in
+/// `function_indices` / `function_global_indices` / `let_global_indices`, so we
+/// seed those maps: each clean function gets a **placeholder** object index
+/// (past the real pool; only ever reversed back to a name, never pool-indexed)
+/// and its whole-project (Pass-1) global slot; each clean `let` gets its slot.
+fn inject_clean_names(
+    db: &dyn baml_compiler2_mir::Db,
+    files: &[baml_base::SourceFile],
+    clean: &HashSet<String>,
+    globals: &HashMap<String, usize>,
+    program: &mut Program,
+) {
+    let mut placeholder = program.objects.len();
+    for file in files {
+        let rel = relative_source_path(db, *file);
+        if !clean.contains(&rel) {
+            continue;
+        }
+        let item_tree = file_item_tree(db, *file);
+        for local_id in item_tree.functions.keys() {
+            let func_loc = FunctionLoc::new(db, *file, *local_id);
+            let fq = def_to_item_ref(db, Definition::Function(func_loc)).to_string();
+            // Intrinsic / await-any functions own no slot (Pass 1 skips them);
+            // the `globals` guard drops them here too.
+            if let Some(&slot) = globals.get(&fq) {
+                program
+                    .function_indices
+                    .entry(fq.clone())
+                    .or_insert_with(|| {
+                        let idx = placeholder;
+                        placeholder += 1;
+                        idx
+                    });
+                program.function_global_indices.insert(fq, slot);
+            }
+        }
+        for local_id in item_tree.lets.keys() {
+            let let_loc = LetLoc::new(db, *file, *local_id);
+            let fq = def_to_item_ref(db, Definition::Let(let_loc)).to_string();
+            if let Some(&slot) = globals.get(&fq) {
+                program.let_global_indices.insert(fq, slot);
+            }
+        }
+    }
+}
+
+/// Emit the whole project (B-693 Stage 6 core).
+///
+/// `skip_clean`, when `Some`, is the set of project-relative paths whose files
+/// are **clean** in an incremental compile: Pass 4 skips them entirely (they are
+/// neither lowered nor cloned — their units come verbatim from the cached image),
+/// and only the dirty files are lowered. Dirty functions are written to their
+/// whole-project (Pass-1) global slots so the decomposition reverses their
+/// operands to names identically to a full compile. `None` is a full compile.
 fn generate_impl(
     db: &dyn baml_compiler2_mir::Db,
     options: &CompileOptions,
     opt: OptLevel,
     base: Option<&Program>,
     stdlib_only: bool,
-    reuse: Option<(&Program, &HashSet<String>)>,
+    skip_clean: Option<&HashSet<String>>,
 ) -> Result<Program, LoweringError> {
     let mut all_files = compiler2_all_files(db);
     let builtin_count = all_files
@@ -1980,7 +2105,6 @@ fn generate_impl(
         Some(base) => (base.clone(), EmitTables::from_stdlib_program(base)),
         None => (Program::new(), EmitTables::default()),
     };
-    let reuse_ctx = reuse.map(|(prev, clean_files)| ReuseContext::new(prev, clean_files));
     if base.is_none() {
         emit_file_group(
             db,
@@ -2001,7 +2125,7 @@ fn generate_impl(
         &alias_caches,
         &dispatch_caches,
         opt,
-        reuse_ctx.as_ref(),
+        skip_clean,
     )?;
 
     // --- Pass 5: Template string macros ---
@@ -2197,147 +2321,9 @@ impl EmitTables {
     }
 }
 
-/// Per-file bytecode reuse: everything needed to splice a clean file's
-/// compiled functions out of a previous `Program` instead of re-lowering
-/// them.
-///
-/// Built once per relink by scanning `prev`. A file's functions (with their
-/// lambdas) occupy a contiguous range of the previous pool, grouped by
-/// `Function::source_file`; cross-function references are rewritten through
-/// the name maps (`GlobalIndex` slots and class/enum/interface objects) or
-/// rebased by the range delta (the file's own lambdas/functions). Class type
-/// tags are content-addressed and never need rewriting.
-struct ReuseContext<'a> {
-    prev: &'a Program,
-    /// Relative source path → `(start, end)` function-object range in
-    /// `prev.objects`.
-    file_ranges: HashMap<String, (usize, usize)>,
-    /// Previous object index → its global slot, for functions that had one.
-    prev_obj_globals: HashMap<usize, usize>,
-    /// Previous global slot → fq name (functions ∪ lets).
-    prev_slot_names: HashMap<usize, String>,
-    /// Relative source paths whose compiled bytecode may be reused. May be a
-    /// subset of what the caller requested: files whose previous range is
-    /// non-contiguous (e.g. `$init` let-helpers carry their let's source
-    /// file but are emitted in a later pass) are demoted to a normal
-    /// recompile rather than failing the whole relink.
-    clean_files: HashSet<String>,
-}
-
-impl<'a> ReuseContext<'a> {
-    fn new(prev: &'a Program, clean_files: &HashSet<String>) -> Self {
-        let mut prev_slot_names: HashMap<usize, String> = HashMap::new();
-        for (name, &slot) in &prev.function_global_indices {
-            prev_slot_names.insert(slot, name.clone());
-        }
-        for (name, &slot) in &prev.let_global_indices {
-            prev_slot_names.insert(slot, name.clone());
-        }
-        let mut prev_obj_globals: HashMap<usize, usize> = HashMap::new();
-        for (name, &obj_idx) in &prev.function_indices {
-            if let Some(&slot) = prev.function_global_indices.get(name) {
-                prev_obj_globals.insert(obj_idx, slot);
-            }
-        }
-
-        let mut clean_files = clean_files.clone();
-
-        // A file's unit is the contiguous pool block written while Pass 4
-        // compiled it: its lambdas and functions PLUS the literal objects
-        // codegen interns beside them (strings, bigints, byte arrays,
-        // generic-function values). Ownership is tracked by the source_file
-        // of Function objects and extends over interleaved non-function
-        // objects until the next owner; a synthesized, source-less function
-        // ($init, chainers) closes the last block. A file whose objects form
-        // more than one block ($init let-helpers carry their let's file but
-        // are emitted in a later pass) is demoted to a normal recompile;
-        // everything else still splices.
-        let mut file_ranges: HashMap<String, (usize, usize)> = HashMap::new();
-        let mut demoted: HashSet<String> = HashSet::new();
-        // (owner file, block start, owner's last Function index)
-        let mut current: Option<(String, usize, usize)> = None;
-        // First literal-kind object since the last Function: a block's
-        // *leading* literals (a function's constants are interned before its
-        // Function object is pushed) belong to the NEXT owner.
-        let mut pending_literal_start: Option<usize> = None;
-        for (idx, obj) in prev.objects.iter().enumerate() {
-            match obj {
-                Object::Function(function) => {
-                    if function.source_file.is_empty() {
-                        // Synthesized ($init, chainers): closes the last block.
-                        close_file_block(&mut current, &mut file_ranges, &mut demoted);
-                        current = None;
-                    } else if let Some((file, _, last_fn)) = &mut current
-                        && file.as_str() == function.source_file.as_str()
-                    {
-                        *last_fn = idx;
-                    } else {
-                        close_file_block(&mut current, &mut file_ranges, &mut demoted);
-                        let start = pending_literal_start.unwrap_or(idx);
-                        current = Some((function.source_file.clone(), start, idx));
-                    }
-                    pending_literal_start = None;
-                }
-                Object::String(..)
-                | Object::Bigint(..)
-                | Object::Uint8Array(..)
-                | Object::GenericFunction(..) => {
-                    // Codegen-interned literal: belongs to whichever function
-                    // is compiled next.
-                    pending_literal_start.get_or_insert(idx);
-                }
-                // Pass-2/3 definition/descriptor objects precede all Pass-4
-                // blocks and are inert pool entries (the same set `relink.rs`
-                // `visit_object_operands` treats as inert), never a block's
-                // leading literal, so they reset literal tracking. Enumerated
-                // explicitly — rather than folded into a bare `_` — so that a
-                // NEW compiled-pool Object kind added beside a function is a
-                // conscious decision here: an interned literal must join the arm
-                // above, anything else resets like these.
-                Object::Package(..)
-                | Object::Interface(..)
-                | Object::ImplRule(..)
-                | Object::Class(..)
-                | Object::Enum(..)
-                | Object::Type(..) => {
-                    pending_literal_start = None;
-                }
-                // Runtime-only heap shapes (Instance, Variant, Closure,
-                // BoundMethod, HostClosure, Cell, Array, Map, Float, Future,
-                // UnscheduledFuture, RustData, Collector) are created during
-                // execution and never appear in a compiled `Program` pool, so
-                // they can never be a block boundary and simply reset. The
-                // catch-all is intentional and must stay: it also absorbs the
-                // `heap_debug`-gated `Sentinel` variant, which another crate can
-                // make exist (by enabling `bex_vm_types/heap_debug`) without
-                // enabling this crate's own feature, so a `#[cfg]` arm would
-                // leave the match non-exhaustive in that config. The literal and
-                // pool-definition arms above are the ones that need a conscious
-                // update when a new *pooled* Object kind lands.
-                _ => {
-                    pending_literal_start = None;
-                }
-            }
-        }
-        close_file_block(&mut current, &mut file_ranges, &mut demoted);
-        for file in &demoted {
-            clean_files.remove(file);
-        }
-        // Only clean files are ever consulted; drop the rest.
-        file_ranges.retain(|file, _| clean_files.contains(file));
-
-        ReuseContext {
-            prev,
-            file_ranges,
-            prev_obj_globals,
-            prev_slot_names,
-            clean_files,
-        }
-    }
-}
-
-/// Gate for splicing a clean file: every function's inferred transitive
-/// `throws` must match the previous compile.
+/// Dirty-set throws gate (design §4): a caller-clean file may only be reused if
+/// every one of its functions' inferred transitive `throws` still matches the
+/// previous compile.
 ///
 /// `throws` is inferred from bodies, so it is interface that the
 /// body-blanked signature hash cannot see: a body edit elsewhere in the
@@ -2383,144 +2369,6 @@ fn spliced_throws_match(
     true
 }
 
-/// Close the current owner block during the [`ReuseContext`] pool scan: the
-/// block spans from its recorded start through its owner's LAST `Function`
-/// object (trailing literals belong to the next owner). A file appearing in
-/// more than one block is demoted.
-fn close_file_block(
-    current: &mut Option<(String, usize, usize)>,
-    ranges: &mut HashMap<String, (usize, usize)>,
-    demoted: &mut HashSet<String>,
-) {
-    if let Some((file, start, last_fn)) = current.take()
-        && ranges.insert(file.clone(), (start, last_fn + 1)).is_some()
-    {
-        demoted.insert(file);
-    }
-}
-
-/// Splice one clean file's compiled functions from the previous program into
-/// `program`, rewriting cross-function references for the new layout.
-#[allow(clippy::too_many_arguments)]
-fn splice_file_functions(
-    ctx: &ReuseContext<'_>,
-    rel_path: &str,
-    globals: &HashMap<String, usize>,
-    class_object_indices: &HashMap<String, usize>,
-    enum_object_indices: &HashMap<String, usize>,
-    interface_object_indices: &HashMap<baml_type::TypeName, usize>,
-    program: &mut Program,
-) -> Result<(), LoweringError> {
-    let Some(&(start, end)) = ctx.file_ranges.get(rel_path) else {
-        // A file with no compiled functions (types/lets only) has nothing to
-        // splice; passes 1-3b and 4.5+ regenerate its contributions.
-        return Ok(());
-    };
-    let new_base = program.objects.len();
-
-    // Two-phase: translate everything into a staging buffer first, so a
-    // translation failure demotes this file without having half-written the
-    // pool (the caller then recompiles it normally).
-    let mut staged: Vec<(Object, Option<usize>)> = Vec::with_capacity(end - start);
-
-    for prev_idx in start..end {
-        let Some(prev_obj) = ctx.prev.objects.get(prev_idx) else {
-            return Err(LoweringError::ReuseUnsupported(format!(
-                "range past pool end in {rel_path}"
-            )));
-        };
-        let mut object = prev_obj.clone();
-
-        let mut failure: Option<String> = None;
-        bex_vm_types::relink::visit_object_operands(&mut object, |operand| match operand {
-            bex_vm_types::relink::IndexOperand::Global(slot) => {
-                let raw = slot.raw();
-                match ctx
-                    .prev_slot_names
-                    .get(&raw)
-                    .and_then(|name| globals.get(name))
-                {
-                    Some(&new_slot) => *slot = GlobalIndex::from_raw(new_slot),
-                    None => {
-                        failure.get_or_insert_with(|| format!("unmapped global slot {raw}"));
-                    }
-                }
-            }
-            bex_vm_types::relink::IndexOperand::Object(obj) => {
-                let raw = obj.raw();
-                if raw >= start && raw < end {
-                    // The file's own functions/lambdas: rebase by range delta.
-                    *obj = ObjectIndex::from_raw(new_base + (raw - start));
-                    return;
-                }
-                let translated = match ctx.prev.objects.get(raw) {
-                    Some(Object::Class(class)) => class_object_indices.get(&class.name.to_string()),
-                    Some(Object::Enum(enum_def)) => {
-                        enum_object_indices.get(&enum_def.name.to_string())
-                    }
-                    Some(Object::Interface(iface)) => interface_object_indices.get(&iface.name),
-                    _ => None,
-                };
-                match translated {
-                    Some(&new_idx) => *obj = ObjectIndex::from_raw(new_idx),
-                    None => {
-                        let kind = ctx
-                            .prev
-                            .objects
-                            .get(raw)
-                            .map(|o| format!("{o:?}").chars().take(40).collect::<String>())
-                            .unwrap_or_else(|| "out of bounds".to_string());
-                        failure.get_or_insert_with(|| format!("object ref {raw} ({kind})"));
-                    }
-                }
-            }
-        });
-        if let Some(reason) = failure {
-            return Err(LoweringError::ReuseUnsupported(format!(
-                "{rel_path}: {reason}"
-            )));
-        }
-
-        staged.push((object, ctx.prev_obj_globals.get(&prev_idx).copied()));
-    }
-
-    // Validate slot alignment before writing anything.
-    let mut next_slot = program.globals.len();
-    for (_, prev_slot) in &staged {
-        if let Some(prev_slot) = prev_slot {
-            let name = ctx.prev_slot_names.get(prev_slot).ok_or_else(|| {
-                LoweringError::ReuseUnsupported(format!("unnamed global slot {prev_slot}"))
-            })?;
-            if globals.get(name).copied() != Some(next_slot) {
-                // Slot misalignment would corrupt every later reference —
-                // demote before anything is written.
-                return Err(LoweringError::ReuseUnsupported(format!(
-                    "global slot misalignment for {name} (expected {next_slot})"
-                )));
-            }
-            next_slot += 1;
-        }
-    }
-
-    // Commit: pool positions match the staging order by construction
-    // (`new_base` was captured before staging began).
-    for (object, prev_slot) in staged {
-        let new_idx = program.add_object(object);
-        if let Some(prev_slot) = prev_slot {
-            let name = ctx
-                .prev_slot_names
-                .get(&prev_slot)
-                .expect("validated above")
-                .clone();
-            let new_slot = program.globals.len();
-            program.function_indices.insert(name.clone(), new_idx);
-            program.function_global_indices.insert(name, new_slot);
-            program.add_global(ConstValue::Object(ObjectIndex::from_raw(new_idx)));
-        }
-    }
-    Ok(())
-}
-
 /// Run emit passes 1–4.6 over one file group.
 ///
 /// `generate_project_bytecode_with_opt` calls this twice — builtin stubs
@@ -2537,7 +2385,7 @@ fn emit_file_group(
     alias_caches: &HashMap<Name, ResolvedAliases>,
     dispatch_caches: &HashMap<Name, std::rc::Rc<DispatchCandidateCache>>,
     opt: OptLevel,
-    reuse: Option<&ReuseContext<'_>>,
+    skip_clean: Option<&HashSet<String>>,
 ) -> Result<(), LoweringError> {
     let EmitTables {
         globals,
@@ -2611,6 +2459,16 @@ fn emit_file_group(
                 idx
             });
         }
+    }
+
+    // Stage 6 (`SkipClean`): clean files are not lowered, so their function slots
+    // would never be pushed by Pass 4. Pre-size the globals array to the full
+    // Pass-1 count so a dirty function can be *written* at its whole-project slot
+    // (clean/let slots stay `Null` holes). The decomposition reverses operand
+    // slots to names through these holes; the array values themselves are
+    // intermediate (the final image is produced by `link`).
+    if skip_clean.is_some() && program.globals.len() < global_idx {
+        program.globals.resize(global_idx, ConstValue::Null);
     }
 
     // The per-package program structure the loader builds `Object::Package` +
@@ -2910,37 +2768,18 @@ fn emit_file_group(
 
     // --- Pass 4: Compile each function ---
     for file in files {
-        if let Some(ctx) = reuse {
-            let rel = relative_source_path(db, *file);
-            if ctx.clean_files.contains(&rel) {
-                let pkg = file_package(db, *file);
-                if spliced_throws_match(db, *file, ctx.prev, &alias_caches[&pkg.package]) {
-                    // Clean file: its compiled functions are spliced from the
-                    // previous program instead of re-lowered — this is what
-                    // makes a body-only edit elsewhere skip this file's
-                    // TIR/MIR/emit entirely (salsa never gets asked).
-                    match splice_file_functions(
-                        ctx,
-                        &rel,
-                        globals,
-                        class_object_indices,
-                        enum_object_indices,
-                        interface_object_indices,
-                        program,
-                    ) {
-                        Ok(()) => continue,
-                        // Un-relocatable construct in THIS file only: the
-                        // two-phase splice wrote nothing, so fall through to
-                        // an honest recompile. Every other clean file still
-                        // splices.
-                        Err(LoweringError::ReuseUnsupported(_)) => {}
-                        Err(other) => return Err(other),
-                    }
-                }
-                // Inferred-throws mismatch (or per-file splice demotion):
-                // fall through to a normal recompile of this file.
+        let rel_path = relative_source_path(db, *file);
+        // A clean file (incremental compile) is not emitted here at all — its
+        // compiled unit is taken verbatim from the cached image by the caller. We
+        // never lower a clean file's bodies (the core B-693 Stage 6 invariant).
+        if let Some(clean) = skip_clean {
+            if clean.contains(&rel_path) {
+                continue;
             }
         }
+        // This file's bodies are about to be MIR/bytecode-lowered — record it for
+        // the Stage 6 "only dirty files are lowered" evidence counter.
+        record_lowered_file(&rel_path);
         let line_starts = build_line_starts(file.text(db));
         let item_tree = file_item_tree(db, *file);
         let pkg_info_pass4 = file_package(db, *file);
@@ -3121,11 +2960,35 @@ fn emit_file_group(
 
             let fn_obj_idx = program.add_object(Object::Function(Box::new(compiled_fn)));
             program.function_indices.insert(fq_name.clone(), fn_obj_idx);
-            program
-                .function_global_indices
-                .insert(fq_name, program.globals.len());
-            program.add_global(ConstValue::Object(ObjectIndex::from_raw(fn_obj_idx)));
+            let val = ConstValue::Object(ObjectIndex::from_raw(fn_obj_idx));
+            if skip_clean.is_some() {
+                // Dirty-only emit: write the function value at its whole-project
+                // (Pass-1) slot rather than appending, so clean-file slot holes are
+                // preserved and every operand slot reverses to the right name.
+                let slot = globals[&fq_name];
+                program.function_global_indices.insert(fq_name, slot);
+                program.globals[slot] = val;
+            } else {
+                let slot = program.globals.len();
+                debug_assert_eq!(
+                    globals.get(&fq_name).copied(),
+                    Some(slot),
+                    "Pass-4 append slot must match the Pass-1 assignment for {fq_name}",
+                );
+                program.function_global_indices.insert(fq_name, slot);
+                program.add_global(val);
+            }
         }
+    }
+
+    // Stage 6 (`SkipClean`): the `$init` / `$init_test` tail is a whole-*group*
+    // synthesis that would re-lower every package's `let`s (including clean ones),
+    // so it is not produced here. The caller reuses the previous compile's
+    // (symbolic) tail verbatim, or — if a dirty file is tail-producing — falls
+    // back to a full compile. Passes 4.5/4.6 therefore only run outside `SkipClean`.
+    if let Some(clean) = skip_clean {
+        inject_clean_names(db, files, clean, globals, program);
+        return Ok(());
     }
 
     // --- Pass 4.5: Populate let-binding global slots and synthesize $init ---
