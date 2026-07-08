@@ -211,6 +211,18 @@ testset "scanner_members" {
         assert.equal(find_block(all, "V:v.baml:f.x#2").start_line, 9);
     }
 
+    test "test blocks get no params from body calls" {
+        let src = "test \"age\" {\n    assert.equal(age_days(Order { id: \"x\" }, 86400), 1);\n}\n";
+        let all = scan_all("t.baml", src);
+        let params = all
+            .filter(
+                (b: CodeBlock) -> bool {
+                    b.kind == "param"
+                },
+            );
+        assert.equal(params.length(), 0);
+    }
+
     test "match-arm let bindings are not vars" {
         let src = "function f(o: string?) -> string {\n"
             + "    let r = match (o) {\n"

@@ -757,7 +757,12 @@ function fn_members(decl: CodeBlock, owner: string) -> CodeBlock[] {
     let child_depth = decl.depth + 1;
 
     // ---- params from the signature ----
-    let sig = param_signature(decl.source);
+    // test blocks have no parameter list; their first "(" is a body call
+    let sig = if (decl.kind == "test") {
+        SigScan { text: "", start_rel: 0, end_rel: 0 }
+    } else {
+        param_signature(decl.source)
+    };
     if (sig.text.trim() != "") {
         for (let piece in split_params(sig.text)) {
             let t = piece.trim();
