@@ -26,6 +26,34 @@ function Scan(target: string) -> int {
     let by_id = block_index(blocks);
     baml.io.println("blocks: " + i2s(blocks.length()));
     print_subtree("PROGRAM", by_id, "");
+    let iset = build_interactions(blocks);
+    let by_depth = 0;
+    let by_level = 0;
+    let refs = 0;
+    for (let ib in iset.interactions) {
+        if (ib.kind == "by_depth") {
+            by_depth = by_depth + 1;
+        }
+        if (ib.kind == "by_level") {
+            by_level = by_level + 1;
+        }
+        if (ib.kind == "reference") {
+            refs = refs + 1;
+        }
+    }
+    baml.io
+        .println(
+            "interactions: "
+                + i2s(iset.interactions.length())
+                + " (by_depth "
+                + i2s(by_depth)
+                + ", by_level "
+                + i2s(by_level)
+                + ", reference "
+                + i2s(refs)
+                + "), cap hits: "
+                + i2s(iset.cap_hits),
+        );
     0
 }
 
