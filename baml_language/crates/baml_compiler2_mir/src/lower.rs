@@ -838,15 +838,40 @@ fn type_satisfies_bound(
             type_satisfies_bound(db, na, nb, aliases, default_pkg, depth - 1)
         })
     } else {
-        let resolver = baml_compiler2_tir::associated_projection::AssociatedProjectionResolver::new(
-            db,
-            aliases,
-            &(),
-        );
-        let resolved_actual = resolver.resolve_deep(actual);
-        let resolved_bound = resolver.resolve_deep(bound);
-        resolver.types_equivalent(&resolved_actual, &resolved_bound)
+        // `equivalent` normalizes both sides, which reduces determinable projections — the
+        // canonical algebra subsumes the old resolver's `resolve_deep` + `types_equivalent`.
+        let pkg_id = baml_compiler2_hir::package::PackageId::new(db, default_pkg.clone());
+        let empty_bounds = FxHashMap::default();
+        with_global_ctx(db, pkg_id, aliases, &empty_bounds, |ctx| {
+            baml_type::normalize::equivalent(actual, bound, ctx)
+        })
     }
+}
+
+/// Run `f` with a [`GlobalTypeContext`](baml_compiler2_tir::type_context::GlobalTypeContext) over
+/// `pkg_id`'s canonical facts — the checker's own type context — so MIR reduces projections and
+/// compares types exactly as TIR does, instead of a parallel resolver. `bounds` carry each type
+/// variable's single-`Ty` bound as its interface constraint. The context borrows an owned bounds
+/// map + the salsa-cached resolution context, so it can't escape `f`.
+fn with_global_ctx<R>(
+    db: &dyn baml_compiler2_tir::Db,
+    pkg_id: baml_compiler2_hir::package::PackageId<'_>,
+    aliases: &HashMap<QualifiedTypeName, Tir2Ty>,
+    bounds: &FxHashMap<Name, Tir2Ty>,
+    f: impl FnOnce(&baml_compiler2_tir::type_context::GlobalTypeContext<'_, '_>) -> R,
+) -> R {
+    let bounds_map: baml_compiler2_tir::lower_type_expr::TypeVarBoundsMap = bounds
+        .iter()
+        .filter_map(|(name, ty)| ty.as_interface().map(|iface| (name.clone(), vec![iface])))
+        .collect();
+    let res_ctx = baml_compiler2_tir::package_interface::package_resolution_context(db, pkg_id);
+    let ctx = baml_compiler2_tir::type_context::GlobalTypeContext {
+        db,
+        res_ctx,
+        aliases,
+        bounds: &bounds_map,
+    };
+    f(&ctx)
 }
 
 pub fn tir2_to_template(
@@ -2061,18 +2086,11 @@ impl<'db> LoweringContext<'db> {
                 .get(name)
                 .and_then(|bound| self.interface_view_for_tir_ty(bound, target_tn)),
             Tir2Ty::AssociatedTypeProjection { .. } => {
-                let resolver =
-                    baml_compiler2_tir::associated_projection::AssociatedProjectionResolver::new(
-                        self.db,
-                        &self.resolved_aliases.aliases,
-                        &self.generic_param_bounds,
-                    );
-                let resolved = resolver.resolve_deep(ty);
+                let resolved = self.resolve_ty_projections(ty);
                 if &resolved != ty {
                     return self.interface_view_for_tir_ty(&resolved, target_tn);
                 }
-                resolver
-                    .resolve_projection_bound(ty)
+                self.resolve_projection_bound(ty)
                     .and_then(|bound| self.interface_view_for_tir_ty(&bound, target_tn))
             }
             _ => self.interface_view_from_registry(ty, target_tn),
@@ -3286,13 +3304,7 @@ impl<'db> LoweringContext<'db> {
         // from the receiver's actual type. We deliberately do *not* erase type
         // variables: `RuntimeTy` carries them, and erasing to `unknown` would
         // throw away the information needed to resolve the type at run time.
-        let resolved =
-            baml_compiler2_tir::associated_projection::AssociatedProjectionResolver::new(
-                self.db,
-                &self.resolved_aliases.aliases,
-                &self.generic_param_bounds,
-            )
-            .resolve_deep(ty);
+        let resolved = self.resolve_ty_projections(ty);
         let runtime_ready = Self::erase_compiler_only_ty(resolved);
         self.resolved_aliases.convert(&runtime_ready)
     }
@@ -3434,18 +3446,11 @@ impl<'db> LoweringContext<'db> {
                     .then(|| (tn, type_args.clone(), Vec::new()))
             }
             Tir2Ty::AssociatedTypeProjection { .. } => {
-                let resolver =
-                    baml_compiler2_tir::associated_projection::AssociatedProjectionResolver::new(
-                        self.db,
-                        &self.resolved_aliases.aliases,
-                        &self.generic_param_bounds,
-                    );
-                let resolved = resolver.resolve_deep(ty);
+                let resolved = self.resolve_ty_projections(ty);
                 if &resolved != ty {
                     return self.interface_dispatch_target_for_tir_ty(&resolved);
                 }
-                resolver
-                    .resolve_projection_bound(ty)
+                self.resolve_projection_bound(ty)
                     .and_then(|bound| self.interface_dispatch_target_for_tir_ty(&bound))
             }
             _ => None,
@@ -3649,18 +3654,11 @@ impl<'db> LoweringContext<'db> {
                 .get(name)
                 .and_then(|bound| self.class_dispatch_target_for_tir_ty(bound)),
             Tir2Ty::AssociatedTypeProjection { .. } => {
-                let resolver =
-                    baml_compiler2_tir::associated_projection::AssociatedProjectionResolver::new(
-                        self.db,
-                        &self.resolved_aliases.aliases,
-                        &self.generic_param_bounds,
-                    );
-                let resolved = resolver.resolve_deep(ty);
+                let resolved = self.resolve_ty_projections(ty);
                 if &resolved != ty {
                     return self.class_dispatch_target_for_tir_ty(&resolved);
                 }
-                resolver
-                    .resolve_projection_bound(ty)
+                self.resolve_projection_bound(ty)
                     .and_then(|bound| self.class_dispatch_target_for_tir_ty(&bound))
             }
             _ => None,
@@ -11992,14 +11990,64 @@ impl<'db> LoweringContext<'db> {
     }
 
     fn tir_types_equivalent(&self, a: &Tir2Ty, b: &Tir2Ty) -> bool {
-        let resolver = baml_compiler2_tir::associated_projection::AssociatedProjectionResolver::new(
+        // `equivalent` normalizes both operands (reducing determinable projections), so it
+        // subsumes the old resolver's `resolve_deep` + `types_equivalent`.
+        let empty_bounds = FxHashMap::default();
+        with_global_ctx(
             self.db,
+            self.package_id(),
             &self.resolved_aliases.aliases,
-            &(),
-        );
-        let resolved_a = resolver.resolve_deep(a);
-        let resolved_b = resolver.resolve_deep(b);
-        resolver.types_equivalent(&resolved_a, &resolved_b)
+            &empty_bounds,
+            |ctx| baml_type::normalize::equivalent(a, b, ctx),
+        )
+    }
+
+    /// The package this lowering context is lowering into — the "local" package for the
+    /// canonical algebra's coherence-scoped impl lookup.
+    fn package_id(&self) -> baml_compiler2_hir::package::PackageId<'db> {
+        let pkg = baml_compiler2_hir::file_package::file_package(self.db, self.file)
+            .package
+            .clone();
+        baml_compiler2_hir::package::PackageId::new(self.db, pkg)
+    }
+
+    /// Reduce every determinable associated-type projection in `ty` to a fixpoint, via the
+    /// canonical `normalize` (the checker's own reduction — no parallel resolver).
+    fn resolve_ty_projections(&self, ty: &Tir2Ty) -> Tir2Ty {
+        with_global_ctx(
+            self.db,
+            self.package_id(),
+            &self.resolved_aliases.aliases,
+            &self.generic_param_bounds,
+            |ctx| baml_type::normalize::normalize(ty, ctx),
+        )
+    }
+
+    /// The declared bound of an *unreduced* (symbolic-base) projection `(base as I).member` —
+    /// interface `I`'s `type member extends J`, realized. `None` for a non-projection, an
+    /// unqualified projection, or an unbounded associated type.
+    fn resolve_projection_bound(&self, ty: &Tir2Ty) -> Option<Tir2Ty> {
+        use baml_type::normalize::TypeContext;
+        let Tir2Ty::AssociatedTypeProjection {
+            interface: Some(iface),
+            member,
+            ..
+        } = ty
+        else {
+            return None;
+        };
+        with_global_ctx(
+            self.db,
+            self.package_id(),
+            &self.resolved_aliases.aliases,
+            &self.generic_param_bounds,
+            |ctx| {
+                ctx.associated_type_bound(iface, member.clone())
+                    .into_iter()
+                    .next()
+                    .map(|bound| bound.to_ty())
+            },
+        )
     }
 
     fn interface_closure_type_name_views(

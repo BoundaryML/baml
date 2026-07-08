@@ -27,14 +27,20 @@ use crate::{
 
 /// The nominal facts [`baml_type::normalize`] needs, derived from global
 /// information plus a scope's type-variable bounds. See the module docs.
-pub(crate) struct GlobalTypeContext<'a, 'db> {
-    pub(crate) db: &'db dyn crate::Db,
-    pub(crate) res_ctx: &'db PackageResolutionContext<'db>,
-    pub(crate) aliases: &'a HashMap<QualifiedTypeName, Ty>,
+///
+/// Public so downstream consumers (MIR) can run the canonical algebra
+/// (`normalize`, `equivalent`, projection reduction) against the same facts the
+/// checker uses, instead of a parallel resolver — build one from a package's
+/// [`PackageResolutionContext`], its alias map, and the relevant type-variable
+/// bounds, then pass `&ctx` to the `baml_type::normalize` entry points.
+pub struct GlobalTypeContext<'a, 'db> {
+    pub db: &'db dyn crate::Db,
+    pub res_ctx: &'db PackageResolutionContext<'db>,
+    pub aliases: &'a HashMap<QualifiedTypeName, Ty>,
     /// A scope's type-variable bounds as interface-constraint conjunctions
     /// (`T: A & B`). The single representation both the builder and
     /// type-expression lowering hold.
-    pub(crate) bounds: &'a crate::lower_type_expr::TypeVarBoundsMap,
+    pub bounds: &'a crate::lower_type_expr::TypeVarBoundsMap,
 }
 
 impl baml_type::normalize::TypeContext for GlobalTypeContext<'_, '_> {
