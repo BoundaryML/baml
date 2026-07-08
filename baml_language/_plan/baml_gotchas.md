@@ -91,6 +91,16 @@ Each entry: the symptom, the rule, the workaround. Compiler-bug candidates are m
 
 ## Misc
 
+- ⚠ **A `ns.name` path written from INSIDE namespace `ns` compiles clean but can
+  produce a non-terminating program.** Namespace refs resolve relative-first, so
+  `ai_custom_capability.drive_moderated` referenced from within
+  `ai_custom_capability` mis-resolves (no error!) and the call looped forever at
+  runtime — every VM thread parked, zero CPU. Found via a PPIR-synthesized
+  companion whose driver path was `[namespace…, name]`; the fix is the house
+  rule: **always use the `root.`-absolute form for synthesized or cross-ns
+  paths** (`root.ai_custom_capability.drive_moderated`). Symptom signature:
+  `baml test` burns one full compile of CPU then parks silently.
+
 - **Closures are `(x: T) -> R { body }`**, not `x => body`. A callback param's `throws` must be
   named and threaded explicitly (the `Iterator.map<R, E2>` pattern).
 - **Generic type aliases (`type Foo<E> = …`) don't exist** — spell unions inline.

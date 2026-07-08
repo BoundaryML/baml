@@ -47,8 +47,8 @@ macro-phase, "DCP §…") and [`llm-provider-plan.md`](./llm-provider-plan.md) (
 - [ ] Exit: `Foo`/`Foo$stream`/`Foo$with`/`Foo$run_tools` work with declared, swapped, combinator, and bridge clients; anthropic/gemini LLM functions route natively.
 
 ### Phase D — user-defined capabilities (DCP §1.4)
-- [ ] Companion generation from user-package markers (pre-pass over the compiling package).
-- [ ] The Moderated e2e fixture as **BAML test blocks** (capability + driver + provider + companion + typed `Unsupported` + user-fn declared client); diagnostic snapshots (Rust) for the new error codes.
+- [x] Companion generation from user-package markers: PPIR (`make_user_drive_companion`) reads each non-builtin registry driver's item-tree signature — extras = params after (client, prompt); name-based generics (`T`→return, `TPartial`→stream-expanded, rest passthrough); return type via TypeExpr substitution; body reuses the shared `make_drive_companion` builder. Driver call paths are `root.`-absolute (a bare `[ns…, name]` from inside `ns` compiles clean but mis-resolves and HANGS at runtime — see gotchas). `capability_registry` is now a Salsa-tracked per-project query (per-file consumers made the plain walk O(files²)).
+- [x] The Moderated e2e fixture as **BAML test blocks** (`ns_ai_custom_capability/usage.baml`): capability + driver + provider all in user code; generated `ComposeNote$moderated` routes through the user provider; declared client without the capability → typed `Unsupported`; the driver directly callable (the no-sugar path). *(Still open: diagnostic snapshots for E0150–E0152 in the LSP snapshot suite; user-fn-declared-client already covered in Phase B tests.)*
 - [ ] Two-marker recipe documented in an `ns_ai` README-comment.
 
 ### Phase E — scenario build-out (DCP §1.5) — **the goal: the full original corpus as scenarios**
