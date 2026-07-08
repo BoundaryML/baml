@@ -1825,7 +1825,7 @@ fn baml.ai.HttpProvider.call_messages_with(self: baml.ai.HttpProvider, messages:
 
     bb3: {
         _12 = copy _4;
-        _11 = virtual_call meta_of as baml.ai.HttpProvider<Body = Body>(copy _1, copy _12) -> [bb4];
+        _11 = virtual_call parse_meta as baml.ai.HttpProvider<Body = Body>(copy _1, copy _12) -> [bb4];
     }
 
     bb4: {
@@ -3539,21 +3539,6 @@ fn baml.ai.LoopMeta.root.ai.ResponseMeta.logprobs(self: null) -> baml.ai.Logprob
     }
 }
 
-fn baml.ai.ToolLoop.root.ai.HttpProvider.meta_of(self: null, from: unknown) -> baml.ai.ResponseMeta {
-    // Locals:
-    let _0: baml.ai.ResponseMeta // _0 // return
-    let _1: null // self // param
-    let _2: unknown // from // param
-    let _3: baml.errors.UnknownError
-    let _4: string[]
-
-    bb0: {
-        _4 = [const "tool loop has no single meta"]: string[];
-        _3 = baml.errors.UnknownError { const null, copy _4 };
-        throw copy _3;
-    }
-}
-
 fn baml.ai.ToolLoop.root.ai.HttpProvider.parse(self: null, from: unknown) -> T {
     // Locals:
     let _0: T // _0 // return
@@ -3564,6 +3549,21 @@ fn baml.ai.ToolLoop.root.ai.HttpProvider.parse(self: null, from: unknown) -> T {
 
     bb0: {
         _4 = [const "tool loop does not parse directly"]: string[];
+        _3 = baml.errors.UnknownError { const null, copy _4 };
+        throw copy _3;
+    }
+}
+
+fn baml.ai.ToolLoop.root.ai.HttpProvider.parse_meta(self: null, from: unknown) -> baml.ai.ResponseMeta {
+    // Locals:
+    let _0: baml.ai.ResponseMeta // _0 // return
+    let _1: null // self // param
+    let _2: unknown // from // param
+    let _3: baml.errors.UnknownError
+    let _4: string[]
+
+    bb0: {
+        _4 = [const "tool loop has no single meta"]: string[];
         _3 = baml.errors.UnknownError { const null, copy _4 };
         throw copy _3;
     }
@@ -4902,66 +4902,6 @@ fn baml.ai.Traced.root.ai.Provider.is_effectful(self: null) -> bool {
     }
 }
 
-fn baml.ai.RoundRobin.root.ai.HttpProvider.meta_of(self: null, from: unknown) -> baml.ai.ResponseMeta {
-    // Locals:
-    let _0: baml.ai.ResponseMeta // _0 // return
-    let _1: null // self // param
-    let _2: unknown // from // param
-    let _3: baml.errors.UnknownError
-    let _4: string[]
-
-    bb0: {
-        _4 = [const "round_robin has no meta"]: string[];
-        _3 = baml.errors.UnknownError { const null, copy _4 };
-        throw copy _3;
-    }
-}
-
-fn baml.ai.Retry.root.ai.HttpProvider.meta_of(self: null, from: unknown) -> baml.ai.ResponseMeta {
-    // Locals:
-    let _0: baml.ai.ResponseMeta // _0 // return
-    let _1: null // self // param
-    let _2: unknown // from // param
-    let _3: baml.errors.UnknownError
-    let _4: string[]
-
-    bb0: {
-        _4 = [const "retry has no meta"]: string[];
-        _3 = baml.errors.UnknownError { const null, copy _4 };
-        throw copy _3;
-    }
-}
-
-fn baml.ai.Fallback.root.ai.HttpProvider.meta_of(self: null, from: unknown) -> baml.ai.ResponseMeta {
-    // Locals:
-    let _0: baml.ai.ResponseMeta // _0 // return
-    let _1: null // self // param
-    let _2: unknown // from // param
-    let _3: baml.errors.UnknownError
-    let _4: string[]
-
-    bb0: {
-        _4 = [const "fallback has no meta"]: string[];
-        _3 = baml.errors.UnknownError { const null, copy _4 };
-        throw copy _3;
-    }
-}
-
-fn baml.ai.Traced.root.ai.HttpProvider.meta_of(self: null, from: unknown) -> baml.ai.ResponseMeta {
-    // Locals:
-    let _0: baml.ai.ResponseMeta // _0 // return
-    let _1: null // self // param
-    let _2: unknown // from // param
-    let _3: baml.errors.UnknownError
-    let _4: string[]
-
-    bb0: {
-        _4 = [const "traced has no single meta"]: string[];
-        _3 = baml.errors.UnknownError { const null, copy _4 };
-        throw copy _3;
-    }
-}
-
 fn baml.ai.RoundRobin.root.ai.HttpProvider.parse(self: null, from: unknown) -> T {
     // Locals:
     let _0: T // _0 // return
@@ -5017,6 +4957,66 @@ fn baml.ai.Traced.root.ai.HttpProvider.parse(self: null, from: unknown) -> T {
 
     bb0: {
         _4 = [const "traced does not parse directly"]: string[];
+        _3 = baml.errors.UnknownError { const null, copy _4 };
+        throw copy _3;
+    }
+}
+
+fn baml.ai.RoundRobin.root.ai.HttpProvider.parse_meta(self: null, from: unknown) -> baml.ai.ResponseMeta {
+    // Locals:
+    let _0: baml.ai.ResponseMeta // _0 // return
+    let _1: null // self // param
+    let _2: unknown // from // param
+    let _3: baml.errors.UnknownError
+    let _4: string[]
+
+    bb0: {
+        _4 = [const "round_robin has no meta"]: string[];
+        _3 = baml.errors.UnknownError { const null, copy _4 };
+        throw copy _3;
+    }
+}
+
+fn baml.ai.Retry.root.ai.HttpProvider.parse_meta(self: null, from: unknown) -> baml.ai.ResponseMeta {
+    // Locals:
+    let _0: baml.ai.ResponseMeta // _0 // return
+    let _1: null // self // param
+    let _2: unknown // from // param
+    let _3: baml.errors.UnknownError
+    let _4: string[]
+
+    bb0: {
+        _4 = [const "retry has no meta"]: string[];
+        _3 = baml.errors.UnknownError { const null, copy _4 };
+        throw copy _3;
+    }
+}
+
+fn baml.ai.Fallback.root.ai.HttpProvider.parse_meta(self: null, from: unknown) -> baml.ai.ResponseMeta {
+    // Locals:
+    let _0: baml.ai.ResponseMeta // _0 // return
+    let _1: null // self // param
+    let _2: unknown // from // param
+    let _3: baml.errors.UnknownError
+    let _4: string[]
+
+    bb0: {
+        _4 = [const "fallback has no meta"]: string[];
+        _3 = baml.errors.UnknownError { const null, copy _4 };
+        throw copy _3;
+    }
+}
+
+fn baml.ai.Traced.root.ai.HttpProvider.parse_meta(self: null, from: unknown) -> baml.ai.ResponseMeta {
+    // Locals:
+    let _0: baml.ai.ResponseMeta // _0 // return
+    let _1: null // self // param
+    let _2: unknown // from // param
+    let _3: baml.errors.UnknownError
+    let _4: string[]
+
+    bb0: {
+        _4 = [const "traced has no single meta"]: string[];
         _3 = baml.errors.UnknownError { const null, copy _4 };
         throw copy _3;
     }
@@ -6462,31 +6462,31 @@ fn baml.ai.HttpProvider$for$root.llm.Client.call_messages_with(self: baml.llm.Cl
     }
 
     bb71: {
-        _59 = call const fn baml.ai.HttpProvider$for$root.llm.Client.meta_of(copy _1, copy _60) -> [bb78];
+        _59 = call const fn baml.ai.HttpProvider$for$root.llm.Client.parse_meta(copy _1, copy _60) -> [bb78];
     }
 
     bb72: {
-        _59 = call const fn baml.ai.Anthropic.root.ai.HttpProvider.meta_of(copy _1, copy _60) -> [bb78];
+        _59 = call const fn baml.ai.Anthropic.root.ai.HttpProvider.parse_meta(copy _1, copy _60) -> [bb78];
     }
 
     bb73: {
-        _59 = call const fn baml.ai.OpenAiStrict.root.ai.HttpProvider.meta_of(copy _1, copy _60) -> [bb78];
+        _59 = call const fn baml.ai.OpenAiStrict.root.ai.HttpProvider.parse_meta(copy _1, copy _60) -> [bb78];
     }
 
     bb74: {
-        _59 = call const fn baml.ai.OpenAiResponses.root.ai.HttpProvider.meta_of(copy _1, copy _60) -> [bb78];
+        _59 = call const fn baml.ai.OpenAiResponses.root.ai.HttpProvider.parse_meta(copy _1, copy _60) -> [bb78];
     }
 
     bb75: {
-        _59 = call const fn baml.ai.Gemini.root.ai.HttpProvider.meta_of(copy _1, copy _60) -> [bb78];
+        _59 = call const fn baml.ai.Gemini.root.ai.HttpProvider.parse_meta(copy _1, copy _60) -> [bb78];
     }
 
     bb76: {
-        _59 = call const fn baml.ai.OpenAi.root.ai.HttpProvider.meta_of(copy _1, copy _60) -> [bb78];
+        _59 = call const fn baml.ai.OpenAi.root.ai.HttpProvider.parse_meta(copy _1, copy _60) -> [bb78];
     }
 
     bb77: {
-        _59 = call const fn baml.ai.OpenAiCompatible.root.ai.HttpProvider.meta_of(copy _1, copy _60) -> [bb78];
+        _59 = call const fn baml.ai.OpenAiCompatible.root.ai.HttpProvider.parse_meta(copy _1, copy _60) -> [bb78];
     }
 
     bb78: {
@@ -6551,22 +6551,6 @@ fn baml.ai.LegacyMeta.ResponseMeta.logprobs(self: null) -> baml.ai.Logprob[] | b
 
     bb0: {
         _0 = baml.ai.Unavailable { const "legacy bridge surfaces no logprobs" };
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.ai.HttpProvider$for$root.llm.Client.meta_of(self: baml.llm.Client, from: string) -> baml.ai.ResponseMeta {
-    // Locals:
-    let _0: baml.ai.ResponseMeta // _0 // return
-    let _1: baml.llm.Client // self // param
-    let _2: string // from // param
-
-    bb0: {
-        _0 = baml.ai.LegacyMeta {  };
         goto -> bb1;
     }
 
@@ -6890,6 +6874,22 @@ fn baml.ai.HttpProvider$for$root.llm.Client.parse(self: baml.llm.Client, from: s
         _12 = [const "legacy bridge: parse failed"]: string[];
         _10 = baml.errors.UnknownError { copy _11, copy _12 };
         throw copy _10;
+    }
+}
+
+fn baml.ai.HttpProvider$for$root.llm.Client.parse_meta(self: baml.llm.Client, from: string) -> baml.ai.ResponseMeta {
+    // Locals:
+    let _0: baml.ai.ResponseMeta // _0 // return
+    let _1: baml.llm.Client // self // param
+    let _2: string // from // param
+
+    bb0: {
+        _0 = baml.ai.LegacyMeta {  };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
     }
 }
 
@@ -9631,22 +9631,6 @@ fn baml.ai.AnthropicResponseMeta.root.ai.ResponseMeta.logprobs(self: null) -> ba
     }
 }
 
-fn baml.ai.Anthropic.root.ai.HttpProvider.meta_of(self: null, from: string) -> baml.ai.ResponseMeta {
-    // Locals:
-    let _0: baml.ai.ResponseMeta // _0 // return
-    let _1: null // self // param
-    let _2: string // from // param
-
-    bb0: {
-        _0 = baml.ai.AnthropicResponseMeta { copy _2 };
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
 fn baml.ai.Anthropic.root.ai.HttpProvider.parse(self: null, from: string) -> T {
     // Locals:
     let _0: T // _0 // return
@@ -9887,6 +9871,22 @@ fn baml.ai.Anthropic.root.ai.HttpProvider.parse(self: null, from: string) -> T {
         _54 = [const "anthropic SAP parse failed"]: string[];
         _52 = baml.errors.UnknownError { copy _53, copy _54 };
         throw copy _52;
+    }
+}
+
+fn baml.ai.Anthropic.root.ai.HttpProvider.parse_meta(self: null, from: string) -> baml.ai.ResponseMeta {
+    // Locals:
+    let _0: baml.ai.ResponseMeta // _0 // return
+    let _1: null // self // param
+    let _2: string // from // param
+
+    bb0: {
+        _0 = baml.ai.AnthropicResponseMeta { copy _2 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
     }
 }
 
@@ -12152,22 +12152,6 @@ fn baml.ai.GeminiResponseMeta.root.ai.ResponseMeta.logprobs(self: null) -> baml.
     }
 }
 
-fn baml.ai.Gemini.root.ai.HttpProvider.meta_of(self: null, from: string) -> baml.ai.ResponseMeta {
-    // Locals:
-    let _0: baml.ai.ResponseMeta // _0 // return
-    let _1: null // self // param
-    let _2: string // from // param
-
-    bb0: {
-        _0 = baml.ai.GeminiResponseMeta { copy _2 };
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
 fn baml.ai.Gemini.root.ai.HttpProvider.parse(self: null, from: string) -> T {
     // Locals:
     let _0: T // _0 // return
@@ -12448,6 +12432,22 @@ fn baml.ai.Gemini.root.ai.HttpProvider.parse(self: null, from: string) -> T {
         _64 = [const "gemini SAP parse failed"]: string[];
         _62 = baml.errors.UnknownError { copy _63, copy _64 };
         throw copy _62;
+    }
+}
+
+fn baml.ai.Gemini.root.ai.HttpProvider.parse_meta(self: null, from: string) -> baml.ai.ResponseMeta {
+    // Locals:
+    let _0: baml.ai.ResponseMeta // _0 // return
+    let _1: null // self // param
+    let _2: string // from // param
+
+    bb0: {
+        _0 = baml.ai.GeminiResponseMeta { copy _2 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
     }
 }
 
@@ -15114,22 +15114,6 @@ fn baml.ai.OpenAi.root.ai.Capabilities.max_input_tokens(self: null) -> int {
     }
 }
 
-fn baml.ai.OpenAi.root.ai.HttpProvider.meta_of(self: null, from: string) -> baml.ai.ResponseMeta {
-    // Locals:
-    let _0: baml.ai.ResponseMeta // _0 // return
-    let _1: null // self // param
-    let _2: string // from // param
-
-    bb0: {
-        _0 = baml.ai.OpenAiResponseMeta { copy _2 };
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
 fn baml.ai.OpenAi.root.ai.Capabilities.parallel_tools(self: null) -> baml.ai.Support {
     // Locals:
     let _0: baml.ai.Support // _0 // return
@@ -15228,6 +15212,22 @@ fn baml.ai.OpenAi.root.ai.HttpProvider.parse(self: null, from: string) -> T {
         _20 = [const "openai SAP parse failed"]: string[];
         _18 = baml.errors.UnknownError { copy _19, copy _20 };
         throw copy _18;
+    }
+}
+
+fn baml.ai.OpenAi.root.ai.HttpProvider.parse_meta(self: null, from: string) -> baml.ai.ResponseMeta {
+    // Locals:
+    let _0: baml.ai.ResponseMeta // _0 // return
+    let _1: null // self // param
+    let _2: string // from // param
+
+    bb0: {
+        _0 = baml.ai.OpenAiResponseMeta { copy _2 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
     }
 }
 
@@ -16575,96 +16575,6 @@ fn baml.ai.OpenAiCompatible.root.ai.HttpProvider.build_request(self: null, messa
     }
 }
 
-fn baml.ai.OpenAiCompatible.root.ai.HttpProvider.meta_of(self: null, from: string) -> baml.ai.ResponseMeta {
-    // Locals:
-    let _0: baml.ai.ResponseMeta // _0 // return
-    let _1: null // self // param
-    let _2: string // from // param
-    let _3: baml.ai.OpenAi
-    let _4: bool
-    let _5: bool
-    let _6: bool
-    let _7: bool
-    let _8: bool
-    let _9: bool
-    let _10: bool
-
-    bb0: {
-        _3 = call const fn baml.ai.OpenAiCompatible._inner(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        _4 = is_type(copy _3, baml.ai.OpenAiCompatible);
-        branch copy _4 -> [bb15, bb2];
-    }
-
-    bb2: {
-        _5 = is_type(copy _3, baml.ai.OpenAi);
-        branch copy _5 -> [bb14, bb3];
-    }
-
-    bb3: {
-        _6 = is_type(copy _3, baml.ai.Gemini);
-        branch copy _6 -> [bb13, bb4];
-    }
-
-    bb4: {
-        _7 = is_type(copy _3, baml.ai.OpenAiResponses);
-        branch copy _7 -> [bb12, bb5];
-    }
-
-    bb5: {
-        _8 = is_type(copy _3, baml.ai.OpenAiStrict);
-        branch copy _8 -> [bb11, bb6];
-    }
-
-    bb6: {
-        _9 = is_type(copy _3, baml.ai.Anthropic);
-        branch copy _9 -> [bb10, bb7];
-    }
-
-    bb7: {
-        _10 = is_type(copy _3, baml.llm.Client);
-        branch copy _10 -> [bb9, bb8];
-    }
-
-    bb8: {
-        unreachable;
-    }
-
-    bb9: {
-        _0 = call const fn baml.ai.HttpProvider$for$root.llm.Client.meta_of(copy _3, copy _2) -> [bb16];
-    }
-
-    bb10: {
-        _0 = call const fn baml.ai.Anthropic.root.ai.HttpProvider.meta_of(copy _3, copy _2) -> [bb16];
-    }
-
-    bb11: {
-        _0 = call const fn baml.ai.OpenAiStrict.root.ai.HttpProvider.meta_of(copy _3, copy _2) -> [bb16];
-    }
-
-    bb12: {
-        _0 = call const fn baml.ai.OpenAiResponses.root.ai.HttpProvider.meta_of(copy _3, copy _2) -> [bb16];
-    }
-
-    bb13: {
-        _0 = call const fn baml.ai.Gemini.root.ai.HttpProvider.meta_of(copy _3, copy _2) -> [bb16];
-    }
-
-    bb14: {
-        _0 = call const fn baml.ai.OpenAi.root.ai.HttpProvider.meta_of(copy _3, copy _2) -> [bb16];
-    }
-
-    bb15: {
-        _0 = call const fn baml.ai.OpenAiCompatible.root.ai.HttpProvider.meta_of(copy _3, copy _2) -> [bb16];
-    }
-
-    bb16: {
-        return;
-    }
-}
-
 fn baml.ai.OpenAiCompatible.root.ai.HttpProvider.parse(self: null, from: string) -> T {
     // Locals:
     let _0: T // _0 // return
@@ -16750,6 +16660,96 @@ fn baml.ai.OpenAiCompatible.root.ai.HttpProvider.parse(self: null, from: string)
 
     bb15: {
         _0 = call const fn baml.ai.OpenAiCompatible.root.ai.HttpProvider.parse<copy _4>(copy _3, copy _2) -> [bb16];
+    }
+
+    bb16: {
+        return;
+    }
+}
+
+fn baml.ai.OpenAiCompatible.root.ai.HttpProvider.parse_meta(self: null, from: string) -> baml.ai.ResponseMeta {
+    // Locals:
+    let _0: baml.ai.ResponseMeta // _0 // return
+    let _1: null // self // param
+    let _2: string // from // param
+    let _3: baml.ai.OpenAi
+    let _4: bool
+    let _5: bool
+    let _6: bool
+    let _7: bool
+    let _8: bool
+    let _9: bool
+    let _10: bool
+
+    bb0: {
+        _3 = call const fn baml.ai.OpenAiCompatible._inner(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _4 = is_type(copy _3, baml.ai.OpenAiCompatible);
+        branch copy _4 -> [bb15, bb2];
+    }
+
+    bb2: {
+        _5 = is_type(copy _3, baml.ai.OpenAi);
+        branch copy _5 -> [bb14, bb3];
+    }
+
+    bb3: {
+        _6 = is_type(copy _3, baml.ai.Gemini);
+        branch copy _6 -> [bb13, bb4];
+    }
+
+    bb4: {
+        _7 = is_type(copy _3, baml.ai.OpenAiResponses);
+        branch copy _7 -> [bb12, bb5];
+    }
+
+    bb5: {
+        _8 = is_type(copy _3, baml.ai.OpenAiStrict);
+        branch copy _8 -> [bb11, bb6];
+    }
+
+    bb6: {
+        _9 = is_type(copy _3, baml.ai.Anthropic);
+        branch copy _9 -> [bb10, bb7];
+    }
+
+    bb7: {
+        _10 = is_type(copy _3, baml.llm.Client);
+        branch copy _10 -> [bb9, bb8];
+    }
+
+    bb8: {
+        unreachable;
+    }
+
+    bb9: {
+        _0 = call const fn baml.ai.HttpProvider$for$root.llm.Client.parse_meta(copy _3, copy _2) -> [bb16];
+    }
+
+    bb10: {
+        _0 = call const fn baml.ai.Anthropic.root.ai.HttpProvider.parse_meta(copy _3, copy _2) -> [bb16];
+    }
+
+    bb11: {
+        _0 = call const fn baml.ai.OpenAiStrict.root.ai.HttpProvider.parse_meta(copy _3, copy _2) -> [bb16];
+    }
+
+    bb12: {
+        _0 = call const fn baml.ai.OpenAiResponses.root.ai.HttpProvider.parse_meta(copy _3, copy _2) -> [bb16];
+    }
+
+    bb13: {
+        _0 = call const fn baml.ai.Gemini.root.ai.HttpProvider.parse_meta(copy _3, copy _2) -> [bb16];
+    }
+
+    bb14: {
+        _0 = call const fn baml.ai.OpenAi.root.ai.HttpProvider.parse_meta(copy _3, copy _2) -> [bb16];
+    }
+
+    bb15: {
+        _0 = call const fn baml.ai.OpenAiCompatible.root.ai.HttpProvider.parse_meta(copy _3, copy _2) -> [bb16];
     }
 
     bb16: {
@@ -19515,22 +19515,6 @@ fn baml.ai.OpenAiResponsesMeta.root.ai.ResponseMeta.logprobs(self: null) -> baml
     }
 }
 
-fn baml.ai.OpenAiResponses.root.ai.HttpProvider.meta_of(self: null, from: string) -> baml.ai.ResponseMeta {
-    // Locals:
-    let _0: baml.ai.ResponseMeta // _0 // return
-    let _1: null // self // param
-    let _2: string // from // param
-
-    bb0: {
-        _0 = baml.ai.OpenAiResponsesMeta { copy _2 };
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
 fn baml.ai.OpenAiResponses.root.ai.HttpProvider.parse(self: null, from: string) -> T {
     // Locals:
     let _0: T // _0 // return
@@ -19612,6 +19596,22 @@ fn baml.ai.OpenAiResponses.root.ai.HttpProvider.parse(self: null, from: string) 
         _20 = [const "openai-responses SAP parse failed"]: string[];
         _18 = baml.errors.UnknownError { copy _19, copy _20 };
         throw copy _18;
+    }
+}
+
+fn baml.ai.OpenAiResponses.root.ai.HttpProvider.parse_meta(self: null, from: string) -> baml.ai.ResponseMeta {
+    // Locals:
+    let _0: baml.ai.ResponseMeta // _0 // return
+    let _1: null // self // param
+    let _2: string // from // param
+
+    bb0: {
+        _0 = baml.ai.OpenAiResponsesMeta { copy _2 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
     }
 }
 
@@ -21520,22 +21520,6 @@ fn baml.ai.OpenAiStrict.root.ai.HttpProvider.build_request(self: null, messages:
     }
 }
 
-fn baml.ai.OpenAiStrict.root.ai.HttpProvider.meta_of(self: null, from: string) -> baml.ai.ResponseMeta {
-    // Locals:
-    let _0: baml.ai.ResponseMeta // _0 // return
-    let _1: null // self // param
-    let _2: string // from // param
-
-    bb0: {
-        _0 = baml.ai.OpenAiResponseMeta { copy _2 };
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
 fn baml.ai.OpenAiStrict.root.ai.HttpProvider.parse(self: null, from: string) -> T {
     // Locals:
     let _0: T // _0 // return
@@ -21619,6 +21603,22 @@ fn baml.ai.OpenAiStrict.root.ai.HttpProvider.parse(self: null, from: string) -> 
         _20 = [const "openai strict SAP parse failed"]: string[];
         _18 = baml.errors.UnknownError { copy _19, copy _20 };
         throw copy _18;
+    }
+}
+
+fn baml.ai.OpenAiStrict.root.ai.HttpProvider.parse_meta(self: null, from: string) -> baml.ai.ResponseMeta {
+    // Locals:
+    let _0: baml.ai.ResponseMeta // _0 // return
+    let _1: null // self // param
+    let _2: string // from // param
+
+    bb0: {
+        _0 = baml.ai.OpenAiResponseMeta { copy _2 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
     }
 }
 

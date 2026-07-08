@@ -239,7 +239,7 @@ function baml.ai.call_messages(self: ?, messages: ChatMessage[]) -> T  [expr] {
   { let r = self.call_messages_with(messages, (m: ResponseMeta) -> null { {  } null }) } r.value
 }
 function baml.ai.call_messages_with(self: ?, messages: ChatMessage[], project: (ResponseMeta) -> V throws E2) -> CallResult<T, V>  [expr] {
-  { let body = self.send(self.build_request(messages)) } CallResult { value: self.parse(body), meta: project(self.meta_of(body)) }
+  { let body = self.send(self.build_request(messages)) } CallResult { value: self.parse(body), meta: project(self.parse_meta(body)) }
 }
 function baml.ai.call_with(self: ?, prompt: string, project: (ResponseMeta) -> V throws E2) -> CallResult<T, V>  [expr] {
   { let messages = [ChatMessage.user(prompt)] } self.call_messages_with(messages, project)
@@ -357,11 +357,11 @@ function baml.ai.is_effectful(self: ?) -> bool  [expr] {
 function baml.ai.logprobs(self: ?) -> root.ai.Logprob[] | root.ai.Unavailable  [expr] {
   {  } root.ai.Unavailable { reason: "tool loop surface..." }
 }
-function baml.ai.meta_of(self: ?, from: unknown) -> root.ai.ResponseMeta  [expr] {
-  { throw root.errors.UnknownError { data: null, message: ["tool loop has no ..."] } }
-}
 function baml.ai.parse(self: ?, from: unknown) -> T  [expr] {
   { throw root.errors.UnknownError { data: null, message: ["tool loop does no..."] } }
+}
+function baml.ai.parse_meta(self: ?, from: unknown) -> root.ai.ResponseMeta  [expr] {
+  { throw root.errors.UnknownError { data: null, message: ["tool loop has no ..."] } }
 }
 function baml.ai.reasoning(self: ?) -> string | root.ai.Unavailable  [expr] {
   {  } root.ai.Unavailable { reason: "tool loop surface..." }
@@ -443,18 +443,6 @@ function baml.ai.calls(self: ?) -> int  [expr] {
 function baml.ai.is_effectful(self: ?) -> bool  [expr] {
   {  } self.inner.is_effectful()
 }
-function baml.ai.meta_of(self: ?, from: unknown) -> root.ai.ResponseMeta  [expr] {
-  { throw root.errors.UnknownError { data: null, message: ["round_robin has n..."] } }
-}
-function baml.ai.meta_of(self: ?, from: unknown) -> root.ai.ResponseMeta  [expr] {
-  { throw root.errors.UnknownError { data: null, message: ["retry has no meta"] } }
-}
-function baml.ai.meta_of(self: ?, from: unknown) -> root.ai.ResponseMeta  [expr] {
-  { throw root.errors.UnknownError { data: null, message: ["fallback has no meta"] } }
-}
-function baml.ai.meta_of(self: ?, from: unknown) -> root.ai.ResponseMeta  [expr] {
-  { throw root.errors.UnknownError { data: null, message: ["traced has no sin..."] } }
-}
 function baml.ai.parse(self: ?, from: unknown) -> T  [expr] {
   { throw root.errors.UnknownError { data: null, message: ["round_robin does ..."] } }
 }
@@ -466,6 +454,18 @@ function baml.ai.parse(self: ?, from: unknown) -> T  [expr] {
 }
 function baml.ai.parse(self: ?, from: unknown) -> T  [expr] {
   { throw root.errors.UnknownError { data: null, message: ["traced does not p..."] } }
+}
+function baml.ai.parse_meta(self: ?, from: unknown) -> root.ai.ResponseMeta  [expr] {
+  { throw root.errors.UnknownError { data: null, message: ["round_robin has n..."] } }
+}
+function baml.ai.parse_meta(self: ?, from: unknown) -> root.ai.ResponseMeta  [expr] {
+  { throw root.errors.UnknownError { data: null, message: ["retry has no meta"] } }
+}
+function baml.ai.parse_meta(self: ?, from: unknown) -> root.ai.ResponseMeta  [expr] {
+  { throw root.errors.UnknownError { data: null, message: ["fallback has no meta"] } }
+}
+function baml.ai.parse_meta(self: ?, from: unknown) -> root.ai.ResponseMeta  [expr] {
+  { throw root.errors.UnknownError { data: null, message: ["traced has no sin..."] } }
 }
 function baml.ai.record(self: ?, meta: root.ai.ResponseMeta) -> null  [expr] {
   { self.entries.push(meta) } null
@@ -508,7 +508,7 @@ function baml.ai.build_request(self: ?, messages: ChatMessage[]) -> root.http.Re
   { if (self.client_type Ne root.llm.ClientType.Primitive) { throw root.errors.Unsupported { message: "the legacy codec ..." } }; let primitive = self.to_primitive_client() catch (e) { _ => throw root.errors.UnknownError { data: e, message: ["legacy bridge: cl..."] } }; let ast = messages_to_prompt(messages); let specialized = primitive.specialize_prompt(ast) catch (e) { _ => throw root.errors.UnknownError { data: e, message: ["legacy bridge: sp..."] } } } primitive.build_request(specialized, reflect.type_of()) catch (e) { _ => throw root.errors.UnknownError { data: e, message: ["legacy bridge: bu..."] } }
 }
 function baml.ai.call_messages_with(self: ?, messages: ChatMessage[], project: (ResponseMeta) -> V throws E2) -> CallResult<T, V>  [expr] {
-  { if (self.client_type Eq root.llm.ClientType.Primitive) { let primitive = self.to_primitive_client() catch (e) { _ => throw root.errors.UnknownError { data: e, message: ["legacy bridge: cl..."] } } } match (native_provider_for(primitive)) { null => {  }, np: Provider => {  } match (np) { h: HttpProvider => { return h.call_messages_with(messages, project) }, _ => {  } } }; let body = self.send(self.build_request(messages)) } CallResult { value: self.parse(body), meta: project(self.meta_of(body)) }
+  { if (self.client_type Eq root.llm.ClientType.Primitive) { let primitive = self.to_primitive_client() catch (e) { _ => throw root.errors.UnknownError { data: e, message: ["legacy bridge: cl..."] } } } match (native_provider_for(primitive)) { null => {  }, np: Provider => {  } match (np) { h: HttpProvider => { return h.call_messages_with(messages, project) }, _ => {  } } }; let body = self.send(self.build_request(messages)) } CallResult { value: self.parse(body), meta: project(self.parse_meta(body)) }
 }
 function baml.ai.citations(self: ?) -> Citation[] | Unavailable  [expr] {
   {  } Unavailable { reason: "legacy bridge sur..." }
@@ -519,14 +519,14 @@ function baml.ai.finish_reason(self: ?) -> string  [expr] {
 function baml.ai.logprobs(self: ?) -> Logprob[] | Unavailable  [expr] {
   {  } Unavailable { reason: "legacy bridge sur..." }
 }
-function baml.ai.meta_of(self: ?, from: string) -> ResponseMeta  [expr] {
-  {  } baml.ai.LegacyMeta {  }
-}
 function baml.ai.native_provider_for(primitive: root.llm.PrimitiveClient) -> Provider | null  [expr] {
   { if (primitive.options.query_params.keys().length() Ne 0) { return null }; match (primitive.options.finish_reason_allow_list) { null => {  }, _ => { return null } }; match (primitive.options.finish_reason_deny_list) { null => {  }, _ => { return null } }; if (primitive.provider Eq "openai") { return OpenAi { model: primitive.options.model NullCoalesce "gpt-4o", api_key: primitive.options.api_key NullCoalesce "", base_url: primitive.options.base_url, extra_headers: primitive.options.headers, extra_body: primitive.options.request_body, append_output_schema: false } }; if (primitive.provider Eq "anthropic") { return Anthropic { model: primitive.options.model NullCoalesce "claude-sonnet-4-5", api_key: primitive.options.api_key, base_url: primitive.options.base_url, max_tokens: null, anthropic_version: null, extra_headers: primitive.options.headers, extra_body: primitive.options.request_body, append_output_schema: false } }; if (primitive.provider Eq "google-ai") { return Gemini { model: primitive.options.model NullCoalesce "gemini-2.5-flash", api_key: primitive.options.api_key, base_url: primitive.options.base_url, extra_headers: primitive.options.headers, extra_body: primitive.options.request_body, append_output_schema: false } }; if (primitive.provider Eq "openai-generic") {  } match (primitive.options.base_url) { null => { return null }, bu: string => {  } match (primitive.options.model) { null => { return null }, m: string => { let auth: BearerAuth | HeaderAuth | NoAuth = match (primitive.options.api_key) { null => NoAuth {  }, k: string => BearerAuth { token: k } }; return OpenAiCompatible { model: m, base_url: bu, auth: auth, extra_headers: primitive.options.headers, extra_body: primitive.options.request_body, append_output_schema: false } } } } } null
 }
 function baml.ai.parse(self: ?, from: string) -> T  [expr] {
   { let primitive = self.to_primitive_client() catch (e) { _ => throw root.errors.UnknownError { data: e, message: ["legacy bridge: cl..."] } } } primitive.parse(from) catch (e) { _ => throw root.errors.UnknownError { data: e, message: ["legacy bridge: pa..."] } }
+}
+function baml.ai.parse_meta(self: ?, from: string) -> ResponseMeta  [expr] {
+  {  } baml.ai.LegacyMeta {  }
 }
 function baml.ai.reasoning(self: ?) -> string | Unavailable  [expr] {
   {  } Unavailable { reason: "legacy bridge sur..." }
@@ -721,11 +721,11 @@ function baml.ai.is_unsupported(self: ?) -> bool  [expr] {
 function baml.ai.logprobs(self: ?) -> root.ai.Logprob[] | root.ai.Unavailable  [expr] {
   {  } root.ai.Unavailable { reason: "anthropic message..." }
 }
-function baml.ai.meta_of(self: ?, from: string) -> root.ai.ResponseMeta  [expr] {
-  {  } baml.ai.AnthropicResponseMeta { raw_text: from }
-}
 function baml.ai.parse(self: ?, from: string) -> T  [expr] {
   { let wire: baml.ai.AnthropicResponseWire = root.json.from_json(root.json.parse(from)) catch (e) { _ => throw root.errors.UnknownError { data: e, message: ["anthropic parse f..."] } }; let text = ""; for b in wire.content {  } match (b.text) { null => {  }, t: string => { text = text Add t } } } root.sap.parse(text) catch (e) { _ => { throw root.errors.UnknownError { data: e, message: ["anthropic SAP par..."] } } }
+}
+function baml.ai.parse_meta(self: ?, from: string) -> root.ai.ResponseMeta  [expr] {
+  {  } baml.ai.AnthropicResponseMeta { raw_text: from }
 }
 function baml.ai.reasoning(self: ?) -> string | root.ai.Unavailable  [expr] {
   {  } root.ai.Unavailable { reason: "anthropic message..." }
@@ -838,11 +838,11 @@ function baml.ai.is_unsupported(self: ?) -> bool  [expr] {
 function baml.ai.logprobs(self: ?) -> root.ai.Logprob[] | root.ai.Unavailable  [expr] {
   {  } root.ai.Unavailable { reason: "gemini generateCo..." }
 }
-function baml.ai.meta_of(self: ?, from: string) -> root.ai.ResponseMeta  [expr] {
-  {  } baml.ai.GeminiResponseMeta { raw_text: from }
-}
 function baml.ai.parse(self: ?, from: string) -> T  [expr] {
   { let wire: baml.ai.GeminiResponseWire = root.sap.parse(from) catch (e) { _ => throw root.errors.UnknownError { data: e, message: ["gemini parse failed"] } } } match (wire.candidates.at(0)) { c: baml.ai.GeminiCandidateWire => { let text = ""; match (c.content) { content: baml.ai.GeminiContentWire => match (content.parts) { ps: baml.ai.GeminiPartWire[] => { for part in ps {  } match (part.text) { null => {  }, t: string => { text = text Add t } } }, _ => {  } }, _ => {  } } } root.sap.parse(text) catch (e) { _ => { throw root.errors.UnknownError { data: e, message: ["gemini SAP parse ..."] } } }, _ => throw root.errors.UnknownError { data: null, message: ["gemini: no candid..."] } }
+}
+function baml.ai.parse_meta(self: ?, from: string) -> root.ai.ResponseMeta  [expr] {
+  {  } baml.ai.GeminiResponseMeta { raw_text: from }
 }
 function baml.ai.reasoning(self: ?) -> string | root.ai.Unavailable  [expr] {
   {  } root.ai.Unavailable { reason: "gemini generateCo..." }
@@ -999,14 +999,14 @@ function baml.ai.logprobs(self: ?) -> root.ai.Logprob[] | root.ai.Unavailable  [
 function baml.ai.max_input_tokens(self: ?) -> int  [expr] {
   {  } 128000
 }
-function baml.ai.meta_of(self: ?, from: string) -> root.ai.ResponseMeta  [expr] {
-  {  } baml.ai.OpenAiResponseMeta { raw_text: from }
-}
 function baml.ai.parallel_tools(self: ?) -> root.ai.Support  [expr] {
   {  } root.ai.Support.Yes
 }
 function baml.ai.parse(self: ?, from: string) -> T  [expr] {
   { let wire: baml.ai.OpenAiResponseWire = root.json.from_json(root.json.parse(from)) catch (e) { _ => throw root.errors.UnknownError { data: e, message: ["openai parse failed"] } } } match (wire.choices.at(0)) { c: baml.ai.OpenAiChoiceWire => {  } root.sap.parse(c.message.content) catch (e) { _ => { throw root.errors.UnknownError { data: e, message: ["openai SAP parse ..."] } } }, _ => throw root.errors.UnknownError { data: null, message: ["openai: no choices"] } }
+}
+function baml.ai.parse_meta(self: ?, from: string) -> root.ai.ResponseMeta  [expr] {
+  {  } baml.ai.OpenAiResponseMeta { raw_text: from }
 }
 function baml.ai.reasoning(self: ?) -> string | root.ai.Unavailable  [expr] {
   {  } root.ai.Unavailable { reason: "openai chat compl..." }
@@ -1057,11 +1057,11 @@ function baml.ai._inner(self: ?) -> OpenAi  [expr] {
 function baml.ai.build_request(self: ?, messages: root.ai.ChatMessage[]) -> root.http.Request  [expr] {
   { let r = self._inner().build_request(messages) } root.http.Request { method: r.method, url: r.url, headers: self._headers(), body: r.body }
 }
-function baml.ai.meta_of(self: ?, from: string) -> root.ai.ResponseMeta  [expr] {
-  {  } self._inner().meta_of(from)
-}
 function baml.ai.parse(self: ?, from: string) -> T  [expr] {
   {  } self._inner().parse(from)
+}
+function baml.ai.parse_meta(self: ?, from: string) -> root.ai.ResponseMeta  [expr] {
+  {  } self._inner().parse_meta(from)
 }
 function baml.ai.send(self: ?, request: root.http.Request) -> string  [expr] {
   {  } self._inner().send(request)
@@ -1168,11 +1168,11 @@ function baml.ai.is_effectful(self: ?) -> bool  [expr] {
 function baml.ai.logprobs(self: ?) -> root.ai.Logprob[] | root.ai.Unavailable  [expr] {
   {  } root.ai.Unavailable { reason: "openai responses ..." }
 }
-function baml.ai.meta_of(self: ?, from: string) -> root.ai.ResponseMeta  [expr] {
-  {  } baml.ai.OpenAiResponsesMeta { raw_text: from }
-}
 function baml.ai.parse(self: ?, from: string) -> T  [expr] {
   { let envelope = match (_openai_responses_envelope(from)) { null => { throw root.errors.UnknownError { data: from, message: ["openai-responses ..."] } }, e2: baml.ai.OpenAiRespEnvelopeWire => e2 } } match (_openai_responses_output_text(envelope)) { null => { throw root.errors.UnknownError { data: from, message: ["openai-responses:..."] } }, t: string => {  } root.sap.parse(t) catch (e) { _ => { throw root.errors.UnknownError { data: t, message: ["openai-responses ..."] } } } }
+}
+function baml.ai.parse_meta(self: ?, from: string) -> root.ai.ResponseMeta  [expr] {
+  {  } baml.ai.OpenAiResponsesMeta { raw_text: from }
 }
 function baml.ai.poll(self: ?, job: root.ai.Job<T>) -> T?  [expr] {
   { let req = root.http.Request { method: "GET", url: self.base_url NullCoalesce "https://api.opena..." Add "/responses/" Add job.id, headers: self._request_headers(), body: "" }; let resp = root.http.send(req) catch (e) { _ => { throw root.errors.UnknownError { data: e, message: ["openai-responses ..."] } } }; let text = resp.text() catch (e) { _ => { throw root.errors.UnknownError { data: e, message: ["openai-responses ..."] } } }; if (Not resp.ok()) { throw root.errors.UnknownError { data: text, message: ["openai-responses ..." Add resp.status_code.to_string()] } }; let envelope = match (_openai_responses_envelope(text)) { null => { throw root.errors.UnknownError { data: text, message: ["openai-responses ..."] } }, e2: baml.ai.OpenAiRespEnvelopeWire => e2 }; if (envelope.status NullCoalesce "" Ne "completed") { return null } } match (_openai_responses_output_text(envelope)) { null => { throw root.errors.UnknownError { data: text, message: ["openai-responses:..."] } }, t: string => {  } root.sap.parse(t) catch (e) { _ => { throw root.errors.UnknownError { data: t, message: ["openai-responses ..."] } } } }
@@ -1216,11 +1216,11 @@ function baml.ai._request_headers(self: ?) -> map<string, string>  [expr] {
 function baml.ai.build_request(self: ?, messages: root.ai.ChatMessage[]) -> root.http.Request  [expr] {
   {  } root.http.Request { method: "POST", url: self.base_url NullCoalesce "https://api.opena..." Add "/chat/completions", headers: self._request_headers(), body: self._request_body(messages) }
 }
-function baml.ai.meta_of(self: ?, from: string) -> root.ai.ResponseMeta  [expr] {
-  {  } OpenAiResponseMeta { raw_text: from }
-}
 function baml.ai.parse(self: ?, from: string) -> T  [expr] {
   { let wire: OpenAiResponseWire = root.json.from_json(root.json.parse(from)) catch (e) { _ => { throw root.errors.UnknownError { data: e, message: ["openai strict par..."] } } } } match (wire.choices.at(0)) { c: OpenAiChoiceWire => {  } root.sap.parse(c.message.content) catch (e) { _ => { throw root.errors.UnknownError { data: e, message: ["openai strict SAP..."] } } }, _ => { throw root.errors.UnknownError { data: null, message: ["openai strict: no..."] } } }
+}
+function baml.ai.parse_meta(self: ?, from: string) -> root.ai.ResponseMeta  [expr] {
+  {  } OpenAiResponseMeta { raw_text: from }
 }
 function baml.ai.send(self: ?, request: root.http.Request) -> string  [expr] {
   { let resp = root.http.send(request) catch (e) { _ => { throw root.errors.UnknownError { data: e, message: ["openai strict sen..."] } } }; let text = resp.text() catch (e) { _ => { throw root.errors.UnknownError { data: e, message: ["openai strict bod..."] } } } } if (resp.ok()) {  } text else { throw OpenAiHttpError { status: resp.status_code, body: text } }

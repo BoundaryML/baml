@@ -17,7 +17,7 @@ interface HttpProvider requires Provider {
       throws root.errors.CallError | root.errors.UnknownError
   function parse<T>(self, from: Body) -> T
       throws root.errors.CallError | root.errors.UnknownError
-  function meta_of(self, from: Body) -> ResponseMeta
+  function parse_meta(self, from: Body) -> ResponseMeta
       throws root.errors.CallError | root.errors.UnknownError
 
   // THE primitive: native messages in, value + projected sidecar out. `E2` threads the
@@ -29,7 +29,7 @@ interface HttpProvider requires Provider {
   ) -> CallResult<T, V>
       throws root.errors.CallError | root.errors.UnknownError | E2 {
     let body = self.send(self.build_request<T>(messages));
-    CallResult<T, V> { value: self.parse<T>(body), meta: project(self.meta_of(body)) }
+    CallResult<T, V> { value: self.parse<T>(body), meta: project(self.parse_meta(body)) }
   }
 
   // Derived: native messages, value only.

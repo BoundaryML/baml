@@ -40,7 +40,7 @@ implements Provider for root.llm.Client {}
 
 implements HttpProvider for root.llm.Client {
     // The already-read response body (read once in `send`; `parse` and
-    // `meta_of` share the string — `Response.text()` is not idempotent).
+    // `parse_meta` share the string — `Response.text()` is not idempotent).
     type Body = string
 
     function build_request<T>(
@@ -88,7 +88,7 @@ implements HttpProvider for root.llm.Client {
         }
     }
 
-    function meta_of(
+    function parse_meta(
         self,
         from: string,
     ) -> ResponseMeta throws never {
@@ -122,7 +122,7 @@ implements HttpProvider for root.llm.Client {
             }
         }
         let body = self.send(self.build_request<T>(messages));
-        CallResult<T, V> { value: self.parse<T>(body), meta: project(self.meta_of(body)) }
+        CallResult<T, V> { value: self.parse<T>(body), meta: project(self.parse_meta(body)) }
     }
 }
 

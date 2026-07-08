@@ -2190,12 +2190,6 @@ function baml.ai.Anthropic$stream.root.ai.HttpProvider.build_request(self: baml.
     return
 }
 
-function baml.ai.Anthropic$stream.root.ai.HttpProvider.meta_of(self: baml.ai.Anthropic$stream, from: string) -> baml.ai.ResponseMeta {
-    load_var from
-    init_instance baml.ai.AnthropicResponseMeta .raw_text
-    return
-}
-
 function baml.ai.Anthropic$stream.root.ai.HttpProvider.parse(self: baml.ai.Anthropic$stream, from: string) -> T {
     load_var from
     call baml.json.parse
@@ -2395,6 +2389,12 @@ function baml.ai.Anthropic$stream.root.ai.HttpProvider.parse(self: baml.ai.Anthr
 
   L25:
     unreachable
+}
+
+function baml.ai.Anthropic$stream.root.ai.HttpProvider.parse_meta(self: baml.ai.Anthropic$stream, from: string) -> baml.ai.ResponseMeta {
+    load_var from
+    init_instance baml.ai.AnthropicResponseMeta .raw_text
+    return
 }
 
 function baml.ai.Anthropic$stream.root.ai.HttpProvider.send(self: baml.ai.Anthropic$stream, request: baml.http.Request) -> string {
@@ -3943,12 +3943,6 @@ function baml.ai.Anthropic.root.ai.HttpProvider.build_request(self: baml.ai.Anth
     return
 }
 
-function baml.ai.Anthropic.root.ai.HttpProvider.meta_of(self: baml.ai.Anthropic, from: string) -> baml.ai.ResponseMeta {
-    load_var from
-    init_instance baml.ai.AnthropicResponseMeta .raw_text
-    return
-}
-
 function baml.ai.Anthropic.root.ai.HttpProvider.parse(self: baml.ai.Anthropic, from: string) -> T {
     load_var from
     call baml.json.parse
@@ -4148,6 +4142,12 @@ function baml.ai.Anthropic.root.ai.HttpProvider.parse(self: baml.ai.Anthropic, f
 
   L25:
     unreachable
+}
+
+function baml.ai.Anthropic.root.ai.HttpProvider.parse_meta(self: baml.ai.Anthropic, from: string) -> baml.ai.ResponseMeta {
+    load_var from
+    init_instance baml.ai.AnthropicResponseMeta .raw_text
+    return
 }
 
 function baml.ai.Anthropic.root.ai.HttpProvider.send(self: baml.ai.Anthropic, request: baml.http.Request) -> string {
@@ -5003,18 +5003,18 @@ function baml.ai.Fallback$stream.root.ai.HttpProvider.call_messages_with(self: b
     unreachable
 }
 
-function baml.ai.Fallback$stream.root.ai.HttpProvider.meta_of(self: baml.ai.Fallback$stream, from: unknown) -> baml.ai.ResponseMeta {
+function baml.ai.Fallback$stream.root.ai.HttpProvider.parse(self: baml.ai.Fallback$stream, from: unknown) -> T {
     load_const null
-    load_const "fallback has no meta"
+    load_const "fallback does not parse directly"
     load_type string
     alloc_array 1
     init_instance baml.errors.UnknownError .data, .message
     throw
 }
 
-function baml.ai.Fallback$stream.root.ai.HttpProvider.parse(self: baml.ai.Fallback$stream, from: unknown) -> T {
+function baml.ai.Fallback$stream.root.ai.HttpProvider.parse_meta(self: baml.ai.Fallback$stream, from: unknown) -> baml.ai.ResponseMeta {
     load_const null
-    load_const "fallback does not parse directly"
+    load_const "fallback has no meta"
     load_type string
     alloc_array 1
     init_instance baml.errors.UnknownError .data, .message
@@ -5533,18 +5533,18 @@ function baml.ai.Fallback.root.ai.HttpProvider.call_messages_with(self: baml.ai.
     unreachable
 }
 
-function baml.ai.Fallback.root.ai.HttpProvider.meta_of(self: baml.ai.Fallback, from: unknown) -> baml.ai.ResponseMeta {
+function baml.ai.Fallback.root.ai.HttpProvider.parse(self: baml.ai.Fallback, from: unknown) -> T {
     load_const null
-    load_const "fallback has no meta"
+    load_const "fallback does not parse directly"
     load_type string
     alloc_array 1
     init_instance baml.errors.UnknownError .data, .message
     throw
 }
 
-function baml.ai.Fallback.root.ai.HttpProvider.parse(self: baml.ai.Fallback, from: unknown) -> T {
+function baml.ai.Fallback.root.ai.HttpProvider.parse_meta(self: baml.ai.Fallback, from: unknown) -> baml.ai.ResponseMeta {
     load_const null
-    load_const "fallback does not parse directly"
+    load_const "fallback has no meta"
     load_type string
     alloc_array 1
     init_instance baml.errors.UnknownError .data, .message
@@ -5833,12 +5833,6 @@ function baml.ai.Gemini$stream.root.ai.HttpProvider.build_request(self: baml.ai.
     return
 }
 
-function baml.ai.Gemini$stream.root.ai.HttpProvider.meta_of(self: baml.ai.Gemini$stream, from: string) -> baml.ai.ResponseMeta {
-    load_var from
-    init_instance baml.ai.GeminiResponseMeta .raw_text
-    return
-}
-
 function baml.ai.Gemini$stream.root.ai.HttpProvider.parse(self: baml.ai.Gemini$stream, from: string) -> T {
     load_type baml.ai.GeminiResponseWire
     load_var from
@@ -6064,6 +6058,12 @@ function baml.ai.Gemini$stream.root.ai.HttpProvider.parse(self: baml.ai.Gemini$s
 
   L27:
     unreachable
+}
+
+function baml.ai.Gemini$stream.root.ai.HttpProvider.parse_meta(self: baml.ai.Gemini$stream, from: string) -> baml.ai.ResponseMeta {
+    load_var from
+    init_instance baml.ai.GeminiResponseMeta .raw_text
+    return
 }
 
 function baml.ai.Gemini$stream.root.ai.HttpProvider.send(self: baml.ai.Gemini$stream, request: baml.http.Request) -> string {
@@ -7588,12 +7588,6 @@ function baml.ai.Gemini.root.ai.HttpProvider.build_request(self: baml.ai.Gemini,
     return
 }
 
-function baml.ai.Gemini.root.ai.HttpProvider.meta_of(self: baml.ai.Gemini, from: string) -> baml.ai.ResponseMeta {
-    load_var from
-    init_instance baml.ai.GeminiResponseMeta .raw_text
-    return
-}
-
 function baml.ai.Gemini.root.ai.HttpProvider.parse(self: baml.ai.Gemini, from: string) -> T {
     load_type baml.ai.GeminiResponseWire
     load_var from
@@ -7819,6 +7813,12 @@ function baml.ai.Gemini.root.ai.HttpProvider.parse(self: baml.ai.Gemini, from: s
 
   L27:
     unreachable
+}
+
+function baml.ai.Gemini.root.ai.HttpProvider.parse_meta(self: baml.ai.Gemini, from: string) -> baml.ai.ResponseMeta {
+    load_var from
+    init_instance baml.ai.GeminiResponseMeta .raw_text
+    return
 }
 
 function baml.ai.Gemini.root.ai.HttpProvider.send(self: baml.ai.Gemini, request: baml.http.Request) -> string {
@@ -8845,37 +8845,37 @@ function baml.ai.HttpProvider$for$root.llm.Client.call_messages_with(self: baml.
     is_type baml.llm.Client<...>
     pop_jump_if_false L68
     load_var2 1 15
-    call baml.ai.HttpProvider$for$root.llm.Client.meta_of
+    call baml.ai.HttpProvider$for$root.llm.Client.parse_meta
     jump L66
 
   L60:
     load_var2 1 15
-    call baml.ai.Anthropic.root.ai.HttpProvider.meta_of
+    call baml.ai.Anthropic.root.ai.HttpProvider.parse_meta
     jump L66
 
   L61:
     load_var2 1 15
-    call baml.ai.OpenAiStrict.root.ai.HttpProvider.meta_of
+    call baml.ai.OpenAiStrict.root.ai.HttpProvider.parse_meta
     jump L66
 
   L62:
     load_var2 1 15
-    call baml.ai.OpenAiResponses.root.ai.HttpProvider.meta_of
+    call baml.ai.OpenAiResponses.root.ai.HttpProvider.parse_meta
     jump L66
 
   L63:
     load_var2 1 15
-    call baml.ai.Gemini.root.ai.HttpProvider.meta_of
+    call baml.ai.Gemini.root.ai.HttpProvider.parse_meta
     jump L66
 
   L64:
     load_var2 1 15
-    call baml.ai.OpenAi.root.ai.HttpProvider.meta_of
+    call baml.ai.OpenAi.root.ai.HttpProvider.parse_meta
     jump L66
 
   L65:
     load_var2 1 15
-    call baml.ai.OpenAiCompatible.root.ai.HttpProvider.meta_of
+    call baml.ai.OpenAiCompatible.root.ai.HttpProvider.parse_meta
 
   L66:
     load_var project
@@ -8893,11 +8893,6 @@ function baml.ai.HttpProvider$for$root.llm.Client.call_messages_with(self: baml.
 
   L68:
     unreachable
-}
-
-function baml.ai.HttpProvider$for$root.llm.Client.meta_of(self: baml.llm.Client, from: string) -> baml.ai.ResponseMeta {
-    alloc_instance baml.ai.LegacyMeta
-    return
 }
 
 function baml.ai.HttpProvider$for$root.llm.Client.parse(self: baml.llm.Client, from: string) -> T {
@@ -8928,6 +8923,11 @@ function baml.ai.HttpProvider$for$root.llm.Client.parse(self: baml.llm.Client, f
     throw
 
   L1:
+    return
+}
+
+function baml.ai.HttpProvider$for$root.llm.Client.parse_meta(self: baml.llm.Client, from: string) -> baml.ai.ResponseMeta {
+    alloc_instance baml.ai.LegacyMeta
     return
 }
 
@@ -9015,7 +9015,7 @@ function baml.ai.HttpProvider.call_messages_with(self: baml.ai.HttpProvider, mes
     store_var _7
     load_var2 1 4
     load_type baml.ai.HttpProvider<Body = Body>
-    load_const "meta_of"
+    load_const "parse_meta"
     virtual_call nargs=2 ntypeargs=0
     store_var _11
     load_var2 8 3
@@ -9259,12 +9259,6 @@ function baml.ai.OpenAi$stream.root.ai.HttpProvider.build_request(self: baml.ai.
     return
 }
 
-function baml.ai.OpenAi$stream.root.ai.HttpProvider.meta_of(self: baml.ai.OpenAi$stream, from: string) -> baml.ai.ResponseMeta {
-    load_var from
-    init_instance baml.ai.OpenAiResponseMeta .raw_text
-    return
-}
-
 function baml.ai.OpenAi$stream.root.ai.HttpProvider.parse(self: baml.ai.OpenAi$stream, from: string) -> T {
     load_var from
     call baml.json.parse
@@ -9320,6 +9314,12 @@ function baml.ai.OpenAi$stream.root.ai.HttpProvider.parse(self: baml.ai.OpenAi$s
     throw
 
   L3:
+    return
+}
+
+function baml.ai.OpenAi$stream.root.ai.HttpProvider.parse_meta(self: baml.ai.OpenAi$stream, from: string) -> baml.ai.ResponseMeta {
+    load_var from
+    init_instance baml.ai.OpenAiResponseMeta .raw_text
     return
 }
 
@@ -11481,12 +11481,6 @@ function baml.ai.OpenAi.root.ai.HttpProvider.build_request(self: baml.ai.OpenAi,
     return
 }
 
-function baml.ai.OpenAi.root.ai.HttpProvider.meta_of(self: baml.ai.OpenAi, from: string) -> baml.ai.ResponseMeta {
-    load_var from
-    init_instance baml.ai.OpenAiResponseMeta .raw_text
-    return
-}
-
 function baml.ai.OpenAi.root.ai.HttpProvider.parse(self: baml.ai.OpenAi, from: string) -> T {
     load_var from
     call baml.json.parse
@@ -11542,6 +11536,12 @@ function baml.ai.OpenAi.root.ai.HttpProvider.parse(self: baml.ai.OpenAi, from: s
     throw
 
   L3:
+    return
+}
+
+function baml.ai.OpenAi.root.ai.HttpProvider.parse_meta(self: baml.ai.OpenAi, from: string) -> baml.ai.ResponseMeta {
+    load_var from
+    init_instance baml.ai.OpenAiResponseMeta .raw_text
     return
 }
 
@@ -12553,89 +12553,6 @@ function baml.ai.OpenAiCompatible$stream.root.ai.HttpProvider.build_request(self
     unreachable
 }
 
-function baml.ai.OpenAiCompatible$stream.root.ai.HttpProvider.meta_of(self: baml.ai.OpenAiCompatible$stream, from: string) -> baml.ai.ResponseMeta {
-    load_var self
-    call baml.ai.OpenAiCompatible._inner
-    store_var _3
-    load_var _3
-    is_type baml.ai.OpenAiCompatible
-    pop_jump_if_false L0
-    jump L11
-
-  L0:
-    load_var _3
-    is_type baml.ai.OpenAi
-    pop_jump_if_false L1
-    jump L10
-
-  L1:
-    load_var _3
-    is_type baml.ai.Gemini
-    pop_jump_if_false L2
-    jump L9
-
-  L2:
-    load_var _3
-    is_type baml.ai.OpenAiResponses
-    pop_jump_if_false L3
-    jump L8
-
-  L3:
-    load_var _3
-    is_type baml.ai.OpenAiStrict
-    pop_jump_if_false L4
-    jump L7
-
-  L4:
-    load_var _3
-    is_type baml.ai.Anthropic
-    pop_jump_if_false L5
-    jump L6
-
-  L5:
-    load_var _3
-    is_type baml.llm.Client<...>
-    pop_jump_if_false L13
-    load_var2 3 2
-    call baml.ai.HttpProvider$for$root.llm.Client.meta_of
-    jump L12
-
-  L6:
-    load_var2 3 2
-    call baml.ai.Anthropic.root.ai.HttpProvider.meta_of
-    jump L12
-
-  L7:
-    load_var2 3 2
-    call baml.ai.OpenAiStrict.root.ai.HttpProvider.meta_of
-    jump L12
-
-  L8:
-    load_var2 3 2
-    call baml.ai.OpenAiResponses.root.ai.HttpProvider.meta_of
-    jump L12
-
-  L9:
-    load_var2 3 2
-    call baml.ai.Gemini.root.ai.HttpProvider.meta_of
-    jump L12
-
-  L10:
-    load_var2 3 2
-    call baml.ai.OpenAi.root.ai.HttpProvider.meta_of
-    jump L12
-
-  L11:
-    load_var2 3 2
-    call baml.ai.OpenAiCompatible.root.ai.HttpProvider.meta_of
-
-  L12:
-    return
-
-  L13:
-    unreachable
-}
-
 function baml.ai.OpenAiCompatible$stream.root.ai.HttpProvider.parse(self: baml.ai.OpenAiCompatible$stream, from: string) -> T {
     load_var self
     call baml.ai.OpenAiCompatible._inner
@@ -12720,6 +12637,89 @@ function baml.ai.OpenAiCompatible$stream.root.ai.HttpProvider.parse(self: baml.a
     load_var2 4 3
     load_var from
     call baml.ai.OpenAiCompatible.root.ai.HttpProvider.parse
+
+  L12:
+    return
+
+  L13:
+    unreachable
+}
+
+function baml.ai.OpenAiCompatible$stream.root.ai.HttpProvider.parse_meta(self: baml.ai.OpenAiCompatible$stream, from: string) -> baml.ai.ResponseMeta {
+    load_var self
+    call baml.ai.OpenAiCompatible._inner
+    store_var _3
+    load_var _3
+    is_type baml.ai.OpenAiCompatible
+    pop_jump_if_false L0
+    jump L11
+
+  L0:
+    load_var _3
+    is_type baml.ai.OpenAi
+    pop_jump_if_false L1
+    jump L10
+
+  L1:
+    load_var _3
+    is_type baml.ai.Gemini
+    pop_jump_if_false L2
+    jump L9
+
+  L2:
+    load_var _3
+    is_type baml.ai.OpenAiResponses
+    pop_jump_if_false L3
+    jump L8
+
+  L3:
+    load_var _3
+    is_type baml.ai.OpenAiStrict
+    pop_jump_if_false L4
+    jump L7
+
+  L4:
+    load_var _3
+    is_type baml.ai.Anthropic
+    pop_jump_if_false L5
+    jump L6
+
+  L5:
+    load_var _3
+    is_type baml.llm.Client<...>
+    pop_jump_if_false L13
+    load_var2 3 2
+    call baml.ai.HttpProvider$for$root.llm.Client.parse_meta
+    jump L12
+
+  L6:
+    load_var2 3 2
+    call baml.ai.Anthropic.root.ai.HttpProvider.parse_meta
+    jump L12
+
+  L7:
+    load_var2 3 2
+    call baml.ai.OpenAiStrict.root.ai.HttpProvider.parse_meta
+    jump L12
+
+  L8:
+    load_var2 3 2
+    call baml.ai.OpenAiResponses.root.ai.HttpProvider.parse_meta
+    jump L12
+
+  L9:
+    load_var2 3 2
+    call baml.ai.Gemini.root.ai.HttpProvider.parse_meta
+    jump L12
+
+  L10:
+    load_var2 3 2
+    call baml.ai.OpenAi.root.ai.HttpProvider.parse_meta
+    jump L12
+
+  L11:
+    load_var2 3 2
+    call baml.ai.OpenAiCompatible.root.ai.HttpProvider.parse_meta
 
   L12:
     return
@@ -13253,89 +13253,6 @@ function baml.ai.OpenAiCompatible.root.ai.HttpProvider.build_request(self: baml.
     unreachable
 }
 
-function baml.ai.OpenAiCompatible.root.ai.HttpProvider.meta_of(self: baml.ai.OpenAiCompatible, from: string) -> baml.ai.ResponseMeta {
-    load_var self
-    call baml.ai.OpenAiCompatible._inner
-    store_var _3
-    load_var _3
-    is_type baml.ai.OpenAiCompatible
-    pop_jump_if_false L0
-    jump L11
-
-  L0:
-    load_var _3
-    is_type baml.ai.OpenAi
-    pop_jump_if_false L1
-    jump L10
-
-  L1:
-    load_var _3
-    is_type baml.ai.Gemini
-    pop_jump_if_false L2
-    jump L9
-
-  L2:
-    load_var _3
-    is_type baml.ai.OpenAiResponses
-    pop_jump_if_false L3
-    jump L8
-
-  L3:
-    load_var _3
-    is_type baml.ai.OpenAiStrict
-    pop_jump_if_false L4
-    jump L7
-
-  L4:
-    load_var _3
-    is_type baml.ai.Anthropic
-    pop_jump_if_false L5
-    jump L6
-
-  L5:
-    load_var _3
-    is_type baml.llm.Client<...>
-    pop_jump_if_false L13
-    load_var2 3 2
-    call baml.ai.HttpProvider$for$root.llm.Client.meta_of
-    jump L12
-
-  L6:
-    load_var2 3 2
-    call baml.ai.Anthropic.root.ai.HttpProvider.meta_of
-    jump L12
-
-  L7:
-    load_var2 3 2
-    call baml.ai.OpenAiStrict.root.ai.HttpProvider.meta_of
-    jump L12
-
-  L8:
-    load_var2 3 2
-    call baml.ai.OpenAiResponses.root.ai.HttpProvider.meta_of
-    jump L12
-
-  L9:
-    load_var2 3 2
-    call baml.ai.Gemini.root.ai.HttpProvider.meta_of
-    jump L12
-
-  L10:
-    load_var2 3 2
-    call baml.ai.OpenAi.root.ai.HttpProvider.meta_of
-    jump L12
-
-  L11:
-    load_var2 3 2
-    call baml.ai.OpenAiCompatible.root.ai.HttpProvider.meta_of
-
-  L12:
-    return
-
-  L13:
-    unreachable
-}
-
 function baml.ai.OpenAiCompatible.root.ai.HttpProvider.parse(self: baml.ai.OpenAiCompatible, from: string) -> T {
     load_var self
     call baml.ai.OpenAiCompatible._inner
@@ -13420,6 +13337,89 @@ function baml.ai.OpenAiCompatible.root.ai.HttpProvider.parse(self: baml.ai.OpenA
     load_var2 4 3
     load_var from
     call baml.ai.OpenAiCompatible.root.ai.HttpProvider.parse
+
+  L12:
+    return
+
+  L13:
+    unreachable
+}
+
+function baml.ai.OpenAiCompatible.root.ai.HttpProvider.parse_meta(self: baml.ai.OpenAiCompatible, from: string) -> baml.ai.ResponseMeta {
+    load_var self
+    call baml.ai.OpenAiCompatible._inner
+    store_var _3
+    load_var _3
+    is_type baml.ai.OpenAiCompatible
+    pop_jump_if_false L0
+    jump L11
+
+  L0:
+    load_var _3
+    is_type baml.ai.OpenAi
+    pop_jump_if_false L1
+    jump L10
+
+  L1:
+    load_var _3
+    is_type baml.ai.Gemini
+    pop_jump_if_false L2
+    jump L9
+
+  L2:
+    load_var _3
+    is_type baml.ai.OpenAiResponses
+    pop_jump_if_false L3
+    jump L8
+
+  L3:
+    load_var _3
+    is_type baml.ai.OpenAiStrict
+    pop_jump_if_false L4
+    jump L7
+
+  L4:
+    load_var _3
+    is_type baml.ai.Anthropic
+    pop_jump_if_false L5
+    jump L6
+
+  L5:
+    load_var _3
+    is_type baml.llm.Client<...>
+    pop_jump_if_false L13
+    load_var2 3 2
+    call baml.ai.HttpProvider$for$root.llm.Client.parse_meta
+    jump L12
+
+  L6:
+    load_var2 3 2
+    call baml.ai.Anthropic.root.ai.HttpProvider.parse_meta
+    jump L12
+
+  L7:
+    load_var2 3 2
+    call baml.ai.OpenAiStrict.root.ai.HttpProvider.parse_meta
+    jump L12
+
+  L8:
+    load_var2 3 2
+    call baml.ai.OpenAiResponses.root.ai.HttpProvider.parse_meta
+    jump L12
+
+  L9:
+    load_var2 3 2
+    call baml.ai.Gemini.root.ai.HttpProvider.parse_meta
+    jump L12
+
+  L10:
+    load_var2 3 2
+    call baml.ai.OpenAi.root.ai.HttpProvider.parse_meta
+    jump L12
+
+  L11:
+    load_var2 3 2
+    call baml.ai.OpenAiCompatible.root.ai.HttpProvider.parse_meta
 
   L12:
     return
@@ -15360,12 +15360,6 @@ function baml.ai.OpenAiResponses$stream.root.ai.HttpProvider.build_request(self:
     return
 }
 
-function baml.ai.OpenAiResponses$stream.root.ai.HttpProvider.meta_of(self: baml.ai.OpenAiResponses$stream, from: string) -> baml.ai.ResponseMeta {
-    load_var from
-    init_instance baml.ai.OpenAiResponsesMeta .raw_text
-    return
-}
-
 function baml.ai.OpenAiResponses$stream.root.ai.HttpProvider.parse(self: baml.ai.OpenAiResponses$stream, from: string) -> T {
     load_var from
     call baml.ai._openai_responses_envelope
@@ -15420,6 +15414,12 @@ function baml.ai.OpenAiResponses$stream.root.ai.HttpProvider.parse(self: baml.ai
     alloc_array 1
     init_instance baml.errors.UnknownError .data, .message
     throw
+}
+
+function baml.ai.OpenAiResponses$stream.root.ai.HttpProvider.parse_meta(self: baml.ai.OpenAiResponses$stream, from: string) -> baml.ai.ResponseMeta {
+    load_var from
+    init_instance baml.ai.OpenAiResponsesMeta .raw_text
+    return
 }
 
 function baml.ai.OpenAiResponses$stream.root.ai.HttpProvider.send(self: baml.ai.OpenAiResponses$stream, request: baml.http.Request) -> string {
@@ -17054,12 +17054,6 @@ function baml.ai.OpenAiResponses.root.ai.HttpProvider.build_request(self: baml.a
     return
 }
 
-function baml.ai.OpenAiResponses.root.ai.HttpProvider.meta_of(self: baml.ai.OpenAiResponses, from: string) -> baml.ai.ResponseMeta {
-    load_var from
-    init_instance baml.ai.OpenAiResponsesMeta .raw_text
-    return
-}
-
 function baml.ai.OpenAiResponses.root.ai.HttpProvider.parse(self: baml.ai.OpenAiResponses, from: string) -> T {
     load_var from
     call baml.ai._openai_responses_envelope
@@ -17114,6 +17108,12 @@ function baml.ai.OpenAiResponses.root.ai.HttpProvider.parse(self: baml.ai.OpenAi
     alloc_array 1
     init_instance baml.errors.UnknownError .data, .message
     throw
+}
+
+function baml.ai.OpenAiResponses.root.ai.HttpProvider.parse_meta(self: baml.ai.OpenAiResponses, from: string) -> baml.ai.ResponseMeta {
+    load_var from
+    init_instance baml.ai.OpenAiResponsesMeta .raw_text
+    return
 }
 
 function baml.ai.OpenAiResponses.root.ai.HttpProvider.send(self: baml.ai.OpenAiResponses, request: baml.http.Request) -> string {
@@ -17500,12 +17500,6 @@ function baml.ai.OpenAiStrict$stream.root.ai.HttpProvider.build_request(self: ba
     return
 }
 
-function baml.ai.OpenAiStrict$stream.root.ai.HttpProvider.meta_of(self: baml.ai.OpenAiStrict$stream, from: string) -> baml.ai.ResponseMeta {
-    load_var from
-    init_instance baml.ai.OpenAiResponseMeta .raw_text
-    return
-}
-
 function baml.ai.OpenAiStrict$stream.root.ai.HttpProvider.parse(self: baml.ai.OpenAiStrict$stream, from: string) -> T {
     load_var from
     call baml.json.parse
@@ -17561,6 +17555,12 @@ function baml.ai.OpenAiStrict$stream.root.ai.HttpProvider.parse(self: baml.ai.Op
     throw
 
   L3:
+    return
+}
+
+function baml.ai.OpenAiStrict$stream.root.ai.HttpProvider.parse_meta(self: baml.ai.OpenAiStrict$stream, from: string) -> baml.ai.ResponseMeta {
+    load_var from
+    init_instance baml.ai.OpenAiResponseMeta .raw_text
     return
 }
 
@@ -18686,12 +18686,6 @@ function baml.ai.OpenAiStrict.root.ai.HttpProvider.build_request(self: baml.ai.O
     return
 }
 
-function baml.ai.OpenAiStrict.root.ai.HttpProvider.meta_of(self: baml.ai.OpenAiStrict, from: string) -> baml.ai.ResponseMeta {
-    load_var from
-    init_instance baml.ai.OpenAiResponseMeta .raw_text
-    return
-}
-
 function baml.ai.OpenAiStrict.root.ai.HttpProvider.parse(self: baml.ai.OpenAiStrict, from: string) -> T {
     load_var from
     call baml.json.parse
@@ -18747,6 +18741,12 @@ function baml.ai.OpenAiStrict.root.ai.HttpProvider.parse(self: baml.ai.OpenAiStr
     throw
 
   L3:
+    return
+}
+
+function baml.ai.OpenAiStrict.root.ai.HttpProvider.parse_meta(self: baml.ai.OpenAiStrict, from: string) -> baml.ai.ResponseMeta {
+    load_var from
+    init_instance baml.ai.OpenAiResponseMeta .raw_text
     return
 }
 
@@ -19096,18 +19096,18 @@ function baml.ai.Retry$stream.root.ai.HttpProvider.call_messages_with(self: baml
     throw
 }
 
-function baml.ai.Retry$stream.root.ai.HttpProvider.meta_of(self: baml.ai.Retry$stream, from: unknown) -> baml.ai.ResponseMeta {
+function baml.ai.Retry$stream.root.ai.HttpProvider.parse(self: baml.ai.Retry$stream, from: unknown) -> T {
     load_const null
-    load_const "retry has no meta"
+    load_const "retry does not parse directly"
     load_type string
     alloc_array 1
     init_instance baml.errors.UnknownError .data, .message
     throw
 }
 
-function baml.ai.Retry$stream.root.ai.HttpProvider.parse(self: baml.ai.Retry$stream, from: unknown) -> T {
+function baml.ai.Retry$stream.root.ai.HttpProvider.parse_meta(self: baml.ai.Retry$stream, from: unknown) -> baml.ai.ResponseMeta {
     load_const null
-    load_const "retry does not parse directly"
+    load_const "retry has no meta"
     load_type string
     alloc_array 1
     init_instance baml.errors.UnknownError .data, .message
@@ -19606,18 +19606,18 @@ function baml.ai.Retry.root.ai.HttpProvider.call_messages_with(self: baml.ai.Ret
     throw
 }
 
-function baml.ai.Retry.root.ai.HttpProvider.meta_of(self: baml.ai.Retry, from: unknown) -> baml.ai.ResponseMeta {
+function baml.ai.Retry.root.ai.HttpProvider.parse(self: baml.ai.Retry, from: unknown) -> T {
     load_const null
-    load_const "retry has no meta"
+    load_const "retry does not parse directly"
     load_type string
     alloc_array 1
     init_instance baml.errors.UnknownError .data, .message
     throw
 }
 
-function baml.ai.Retry.root.ai.HttpProvider.parse(self: baml.ai.Retry, from: unknown) -> T {
+function baml.ai.Retry.root.ai.HttpProvider.parse_meta(self: baml.ai.Retry, from: unknown) -> baml.ai.ResponseMeta {
     load_const null
-    load_const "retry does not parse directly"
+    load_const "retry has no meta"
     load_type string
     alloc_array 1
     init_instance baml.errors.UnknownError .data, .message
@@ -19993,18 +19993,18 @@ function baml.ai.RoundRobin$stream.root.ai.HttpProvider.call_messages_with(self:
     throw
 }
 
-function baml.ai.RoundRobin$stream.root.ai.HttpProvider.meta_of(self: baml.ai.RoundRobin$stream, from: unknown) -> baml.ai.ResponseMeta {
+function baml.ai.RoundRobin$stream.root.ai.HttpProvider.parse(self: baml.ai.RoundRobin$stream, from: unknown) -> T {
     load_const null
-    load_const "round_robin has no meta"
+    load_const "round_robin does not parse directly"
     load_type string
     alloc_array 1
     init_instance baml.errors.UnknownError .data, .message
     throw
 }
 
-function baml.ai.RoundRobin$stream.root.ai.HttpProvider.parse(self: baml.ai.RoundRobin$stream, from: unknown) -> T {
+function baml.ai.RoundRobin$stream.root.ai.HttpProvider.parse_meta(self: baml.ai.RoundRobin$stream, from: unknown) -> baml.ai.ResponseMeta {
     load_const null
-    load_const "round_robin does not parse directly"
+    load_const "round_robin has no meta"
     load_type string
     alloc_array 1
     init_instance baml.errors.UnknownError .data, .message
@@ -20267,18 +20267,18 @@ function baml.ai.RoundRobin.root.ai.HttpProvider.call_messages_with(self: baml.a
     throw
 }
 
-function baml.ai.RoundRobin.root.ai.HttpProvider.meta_of(self: baml.ai.RoundRobin, from: unknown) -> baml.ai.ResponseMeta {
+function baml.ai.RoundRobin.root.ai.HttpProvider.parse(self: baml.ai.RoundRobin, from: unknown) -> T {
     load_const null
-    load_const "round_robin has no meta"
+    load_const "round_robin does not parse directly"
     load_type string
     alloc_array 1
     init_instance baml.errors.UnknownError .data, .message
     throw
 }
 
-function baml.ai.RoundRobin.root.ai.HttpProvider.parse(self: baml.ai.RoundRobin, from: unknown) -> T {
+function baml.ai.RoundRobin.root.ai.HttpProvider.parse_meta(self: baml.ai.RoundRobin, from: unknown) -> baml.ai.ResponseMeta {
     load_const null
-    load_const "round_robin does not parse directly"
+    load_const "round_robin has no meta"
     load_type string
     alloc_array 1
     init_instance baml.errors.UnknownError .data, .message
@@ -20776,18 +20776,18 @@ function baml.ai.ToolLoop$stream.root.ai.HttpProvider.call_messages_with(self: b
     throw
 }
 
-function baml.ai.ToolLoop$stream.root.ai.HttpProvider.meta_of(self: baml.ai.ToolLoop$stream, from: unknown) -> baml.ai.ResponseMeta {
+function baml.ai.ToolLoop$stream.root.ai.HttpProvider.parse(self: baml.ai.ToolLoop$stream, from: unknown) -> T {
     load_const null
-    load_const "tool loop has no single meta"
+    load_const "tool loop does not parse directly"
     load_type string
     alloc_array 1
     init_instance baml.errors.UnknownError .data, .message
     throw
 }
 
-function baml.ai.ToolLoop$stream.root.ai.HttpProvider.parse(self: baml.ai.ToolLoop$stream, from: unknown) -> T {
+function baml.ai.ToolLoop$stream.root.ai.HttpProvider.parse_meta(self: baml.ai.ToolLoop$stream, from: unknown) -> baml.ai.ResponseMeta {
     load_const null
-    load_const "tool loop does not parse directly"
+    load_const "tool loop has no single meta"
     load_type string
     alloc_array 1
     init_instance baml.errors.UnknownError .data, .message
@@ -20957,18 +20957,18 @@ function baml.ai.ToolLoop.root.ai.HttpProvider.call_messages_with(self: baml.ai.
     throw
 }
 
-function baml.ai.ToolLoop.root.ai.HttpProvider.meta_of(self: baml.ai.ToolLoop, from: unknown) -> baml.ai.ResponseMeta {
+function baml.ai.ToolLoop.root.ai.HttpProvider.parse(self: baml.ai.ToolLoop, from: unknown) -> T {
     load_const null
-    load_const "tool loop has no single meta"
+    load_const "tool loop does not parse directly"
     load_type string
     alloc_array 1
     init_instance baml.errors.UnknownError .data, .message
     throw
 }
 
-function baml.ai.ToolLoop.root.ai.HttpProvider.parse(self: baml.ai.ToolLoop, from: unknown) -> T {
+function baml.ai.ToolLoop.root.ai.HttpProvider.parse_meta(self: baml.ai.ToolLoop, from: unknown) -> baml.ai.ResponseMeta {
     load_const null
-    load_const "tool loop does not parse directly"
+    load_const "tool loop has no single meta"
     load_type string
     alloc_array 1
     init_instance baml.errors.UnknownError .data, .message
@@ -21271,18 +21271,18 @@ function baml.ai.Traced$stream.root.ai.HttpProvider.call_messages_with(self: bam
     return
 }
 
-function baml.ai.Traced$stream.root.ai.HttpProvider.meta_of(self: baml.ai.Traced$stream, from: unknown) -> baml.ai.ResponseMeta {
+function baml.ai.Traced$stream.root.ai.HttpProvider.parse(self: baml.ai.Traced$stream, from: unknown) -> T {
     load_const null
-    load_const "traced has no single meta"
+    load_const "traced does not parse directly"
     load_type string
     alloc_array 1
     init_instance baml.errors.UnknownError .data, .message
     throw
 }
 
-function baml.ai.Traced$stream.root.ai.HttpProvider.parse(self: baml.ai.Traced$stream, from: unknown) -> T {
+function baml.ai.Traced$stream.root.ai.HttpProvider.parse_meta(self: baml.ai.Traced$stream, from: unknown) -> baml.ai.ResponseMeta {
     load_const null
-    load_const "traced does not parse directly"
+    load_const "traced has no single meta"
     load_type string
     alloc_array 1
     init_instance baml.errors.UnknownError .data, .message
@@ -21510,18 +21510,18 @@ function baml.ai.Traced.root.ai.HttpProvider.call_messages_with(self: baml.ai.Tr
     return
 }
 
-function baml.ai.Traced.root.ai.HttpProvider.meta_of(self: baml.ai.Traced, from: unknown) -> baml.ai.ResponseMeta {
+function baml.ai.Traced.root.ai.HttpProvider.parse(self: baml.ai.Traced, from: unknown) -> T {
     load_const null
-    load_const "traced has no single meta"
+    load_const "traced does not parse directly"
     load_type string
     alloc_array 1
     init_instance baml.errors.UnknownError .data, .message
     throw
 }
 
-function baml.ai.Traced.root.ai.HttpProvider.parse(self: baml.ai.Traced, from: unknown) -> T {
+function baml.ai.Traced.root.ai.HttpProvider.parse_meta(self: baml.ai.Traced, from: unknown) -> baml.ai.ResponseMeta {
     load_const null
-    load_const "traced does not parse directly"
+    load_const "traced has no single meta"
     load_type string
     alloc_array 1
     init_instance baml.errors.UnknownError .data, .message

@@ -33,7 +33,7 @@ class EchoProvider {
                 _ => throw baml.errors.UnknownError { data: e, message: ["echo parse failed"] },
             }
         }
-        function meta_of(
+        function parse_meta(
             self,
             from: string,
         ) -> baml.ai.ResponseMeta throws never {
@@ -85,7 +85,7 @@ class AlwaysFailProvider {
         ) -> T throws baml.errors.UnknownError {
             throw baml.errors.UnknownError { data: null, message: ["always fails"] }
         }
-        function meta_of(
+        function parse_meta(
             self,
             from: string,
         ) -> baml.ai.ResponseMeta throws never {

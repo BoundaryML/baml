@@ -40,7 +40,7 @@ class MeteredEcho {
         function parse<T>(self, from: string) -> T throws baml.errors.UnknownError {
             baml.sap.parse<T>(from) catch (e) { _ => throw baml.errors.UnknownError { data: e, message: ["parse"] } }
         }
-        function meta_of(self, from: string) -> baml.ai.ResponseMeta throws never {
+        function parse_meta(self, from: string) -> baml.ai.ResponseMeta throws never {
             MeteredMeta { inp: self.inp, out: self.out }
         }
         function call_messages_with<T, V, E2>(

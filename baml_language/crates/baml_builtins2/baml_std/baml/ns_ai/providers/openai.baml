@@ -175,7 +175,7 @@ class OpenAi {
 
     implements root.ai.HttpProvider {
         // Body is the raw response body TEXT (read once in `send`), so `parse` and
-        // `meta_of` both read the same buffer — `Response.text()` is not idempotent.
+        // `parse_meta` both read the same buffer — `Response.text()` is not idempotent.
         type Body = string
 
         function build_request<T>(
@@ -234,7 +234,7 @@ class OpenAi {
             }
         }
 
-        function meta_of(
+        function parse_meta(
             self,
             from: string,
         ) -> root.ai.ResponseMeta throws never {

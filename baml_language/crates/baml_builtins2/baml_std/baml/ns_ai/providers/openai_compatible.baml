@@ -73,11 +73,11 @@ class OpenAiCompatible {
             self._inner().parse<T>(from)
         }
 
-        function meta_of(
+        function parse_meta(
             self,
             from: string,
         ) -> root.ai.ResponseMeta throws never {
-            self._inner().meta_of(from)
+            self._inner().parse_meta(from)
         }
     }
 

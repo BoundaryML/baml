@@ -21,7 +21,7 @@ class OpenAiStrict {
     implements root.ai.Provider {}
 
     implements root.ai.HttpProvider {
-        // Raw response body TEXT read once in `send`; `parse` and `meta_of` share it.
+        // Raw response body TEXT read once in `send`; `parse` and `parse_meta` share it.
         type Body = string
 
         function build_request<T>(
@@ -82,7 +82,7 @@ class OpenAiStrict {
             }
         }
 
-        function meta_of(
+        function parse_meta(
             self,
             from: string,
         ) -> root.ai.ResponseMeta throws never {

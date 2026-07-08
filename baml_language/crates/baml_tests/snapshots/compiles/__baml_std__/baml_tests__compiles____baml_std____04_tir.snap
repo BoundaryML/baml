@@ -292,7 +292,7 @@ class baml.ai.Window$stream {
 function baml.ai.HttpProvider.call_messages_with<T, V, E2>(self: baml.ai.HttpProvider, messages: baml.ai.ChatMessage[], project: (baml.ai.ResponseMeta) -> V throws E2) -> baml.ai.CallResult<T, V> throws baml.errors.CallError | baml.errors.UnknownError | E2 {
   { : baml.ai.CallResult<T, V>
     let body = self.send(self.build_request<T>(messages)) : Self.Body
-    CallResult { value: self.parse<T>(body), meta: project(self.meta_of(body)) } : baml.ai.CallResult<T, V>
+    CallResult { value: self.parse<T>(body), meta: project(self.parse_meta(body)) } : baml.ai.CallResult<T, V>
   }
 }
 function baml.ai.HttpProvider.call_messages<T>(self: baml.ai.HttpProvider, messages: baml.ai.ChatMessage[]) -> T throws baml.errors.CallError | baml.errors.UnknownError {
@@ -637,7 +637,7 @@ function baml.ai.ToolLoop.parse<T>(self: baml.ai.ToolLoop, from: unknown) -> T t
     throw root.errors.UnknownError { data: null, message: ["tool loop does no..."] } : baml.errors.UnknownError
   }
 }
-function baml.ai.ToolLoop.meta_of(self: baml.ai.ToolLoop, from: unknown) -> baml.ai.ResponseMeta throws baml.errors.UnknownError {
+function baml.ai.ToolLoop.parse_meta(self: baml.ai.ToolLoop, from: unknown) -> baml.ai.ResponseMeta throws baml.errors.UnknownError {
   { : never
     throw root.errors.UnknownError { data: null, message: ["tool loop has no ..."] } : baml.errors.UnknownError
   }
@@ -797,7 +797,7 @@ function baml.ai.ToolLoop$stream.parse<T>(self: baml.ai.ToolLoop$stream, from: u
     throw root.errors.UnknownError { data: null, message: ["tool loop does no..."] } : baml.errors.UnknownError
   }
 }
-function baml.ai.ToolLoop$stream.meta_of(self: baml.ai.ToolLoop$stream, from: unknown) -> baml.ai.ResponseMeta throws baml.errors.UnknownError {
+function baml.ai.ToolLoop$stream.parse_meta(self: baml.ai.ToolLoop$stream, from: unknown) -> baml.ai.ResponseMeta throws baml.errors.UnknownError {
   { : never
     throw root.errors.UnknownError { data: null, message: ["tool loop has no ..."] } : baml.errors.UnknownError
   }
@@ -849,9 +849,9 @@ function baml.ai.ToolLoop$stream.call_messages_with<T, V, E2>(self: baml.ai.Tool
       _ =>
         throw root.errors.Unsupported { message: "ToolLoop.inner do..." } : never
   }
-  !! 11371..11381: type mismatch: expected baml.ai.Tool[], got baml.ai.Tool$stream[]
-  !! 12459..12473: `unknown` is not a function — it cannot be called
-  !! 12459..12473: `unknown` is not a function — it cannot be called
+  !! 11374..11384: type mismatch: expected baml.ai.Tool[], got baml.ai.Tool$stream[]
+  !! 12462..12476: `unknown` is not a function — it cannot be called
+  !! 12462..12476: `unknown` is not a function — it cannot be called
 }
 
 --- <builtin>/baml/ns_ai/combinators.baml ---
@@ -873,7 +873,7 @@ function baml.ai.Fallback.parse<T>(self: baml.ai.Fallback, from: unknown) -> T t
     throw root.errors.UnknownError { data: null, message: ["fallback does not..."] } : baml.errors.UnknownError
   }
 }
-function baml.ai.Fallback.meta_of(self: baml.ai.Fallback, from: unknown) -> baml.ai.ResponseMeta throws baml.errors.UnknownError {
+function baml.ai.Fallback.parse_meta(self: baml.ai.Fallback, from: unknown) -> baml.ai.ResponseMeta throws baml.errors.UnknownError {
   { : never
     throw root.errors.UnknownError { data: null, message: ["fallback has no meta"] } : baml.errors.UnknownError
   }
@@ -948,7 +948,7 @@ function baml.ai.Retry.parse<T>(self: baml.ai.Retry, from: unknown) -> T throws 
     throw root.errors.UnknownError { data: null, message: ["retry does not pa..."] } : baml.errors.UnknownError
   }
 }
-function baml.ai.Retry.meta_of(self: baml.ai.Retry, from: unknown) -> baml.ai.ResponseMeta throws baml.errors.UnknownError {
+function baml.ai.Retry.parse_meta(self: baml.ai.Retry, from: unknown) -> baml.ai.ResponseMeta throws baml.errors.UnknownError {
   { : never
     throw root.errors.UnknownError { data: null, message: ["retry has no meta"] } : baml.errors.UnknownError
   }
@@ -1076,7 +1076,7 @@ function baml.ai.RoundRobin.parse<T>(self: baml.ai.RoundRobin, from: unknown) ->
     throw root.errors.UnknownError { data: null, message: ["round_robin does ..."] } : baml.errors.UnknownError
   }
 }
-function baml.ai.RoundRobin.meta_of(self: baml.ai.RoundRobin, from: unknown) -> baml.ai.ResponseMeta throws baml.errors.UnknownError {
+function baml.ai.RoundRobin.parse_meta(self: baml.ai.RoundRobin, from: unknown) -> baml.ai.ResponseMeta throws baml.errors.UnknownError {
   { : never
     throw root.errors.UnknownError { data: null, message: ["round_robin has n..."] } : baml.errors.UnknownError
   }
@@ -1170,7 +1170,7 @@ function baml.ai.Traced.parse<T>(self: baml.ai.Traced, from: unknown) -> T throw
     throw root.errors.UnknownError { data: null, message: ["traced does not p..."] } : baml.errors.UnknownError
   }
 }
-function baml.ai.Traced.meta_of(self: baml.ai.Traced, from: unknown) -> baml.ai.ResponseMeta throws baml.errors.UnknownError {
+function baml.ai.Traced.parse_meta(self: baml.ai.Traced, from: unknown) -> baml.ai.ResponseMeta throws baml.errors.UnknownError {
   { : never
     throw root.errors.UnknownError { data: null, message: ["traced has no sin..."] } : baml.errors.UnknownError
   }
@@ -1221,7 +1221,7 @@ function baml.ai.Fallback$stream.parse<T>(self: baml.ai.Fallback$stream, from: u
     throw root.errors.UnknownError { data: null, message: ["fallback does not..."] } : baml.errors.UnknownError
   }
 }
-function baml.ai.Fallback$stream.meta_of(self: baml.ai.Fallback$stream, from: unknown) -> baml.ai.ResponseMeta throws baml.errors.UnknownError {
+function baml.ai.Fallback$stream.parse_meta(self: baml.ai.Fallback$stream, from: unknown) -> baml.ai.ResponseMeta throws baml.errors.UnknownError {
   { : never
     throw root.errors.UnknownError { data: null, message: ["fallback has no meta"] } : baml.errors.UnknownError
   }
@@ -1296,7 +1296,7 @@ function baml.ai.Retry$stream.parse<T>(self: baml.ai.Retry$stream, from: unknown
     throw root.errors.UnknownError { data: null, message: ["retry does not pa..."] } : baml.errors.UnknownError
   }
 }
-function baml.ai.Retry$stream.meta_of(self: baml.ai.Retry$stream, from: unknown) -> baml.ai.ResponseMeta throws baml.errors.UnknownError {
+function baml.ai.Retry$stream.parse_meta(self: baml.ai.Retry$stream, from: unknown) -> baml.ai.ResponseMeta throws baml.errors.UnknownError {
   { : never
     throw root.errors.UnknownError { data: null, message: ["retry has no meta"] } : baml.errors.UnknownError
   }
@@ -1348,14 +1348,14 @@ function baml.ai.Retry$stream.call_messages_with<T, V, E2>(self: baml.ai.Retry$s
       }
     root.sys.panic("unreachable") : never
   }
-  !! 6263..6286: did you mean `self.inner?.is_effectful`? `self.inner.is_effectful` does not handle the case when `self.inner` is null
-  !! 6263..6288: `(() -> bool throws never) | null` is not a function — it cannot be called
-  !! 6263..6286: did you mean `self.inner?.is_effectful`? `self.inner.is_effectful` does not handle the case when `self.inner` is null
-  !! 6263..6288: `(() -> bool throws never) | null` is not a function — it cannot be called
-  !! 7463..7481: cannot order `int` and `int | null` with `<`: ordering requires both operands to have the same type
-  !! 7463..7481: cannot order `int` and `int | null` with `<`: ordering requires both operands to have the same type
-  !! 8049..8067: cannot order `int` and `int | null` with `<`: ordering requires both operands to have the same type
-  !! 8049..8067: cannot order `int` and `int | null` with `<`: ordering requires both operands to have the same type
+  !! 6272..6295: did you mean `self.inner?.is_effectful`? `self.inner.is_effectful` does not handle the case when `self.inner` is null
+  !! 6272..6297: `(() -> bool throws never) | null` is not a function — it cannot be called
+  !! 6272..6295: did you mean `self.inner?.is_effectful`? `self.inner.is_effectful` does not handle the case when `self.inner` is null
+  !! 6272..6297: `(() -> bool throws never) | null` is not a function — it cannot be called
+  !! 7472..7490: cannot order `int` and `int | null` with `<`: ordering requires both operands to have the same type
+  !! 7472..7490: cannot order `int` and `int | null` with `<`: ordering requires both operands to have the same type
+  !! 8058..8076: cannot order `int` and `int | null` with `<`: ordering requires both operands to have the same type
+  !! 8058..8076: cannot order `int` and `int | null` with `<`: ordering requires both operands to have the same type
 }
 lambda baml.ai.Retry$stream.call_messages_with {
 }
@@ -1412,15 +1412,15 @@ function baml.ai.Retry$stream.stream_messages<TStream, TFinal>(self: baml.ai.Ret
       }
     root.sys.panic("unreachable") : never
   }
-  !! 9450..9473: did you mean `self.inner?.is_effectful`? `self.inner.is_effectful` does not handle the case when `self.inner` is null
-  !! 9450..9475: `(() -> bool throws never) | null` is not a function — it cannot be called
-  !! 9450..9473: did you mean `self.inner?.is_effectful`? `self.inner.is_effectful` does not handle the case when `self.inner` is null
-  !! 9450..9475: `(() -> bool throws never) | null` is not a function — it cannot be called
-  !! 10095..10113: cannot order `int` and `int | null` with `<`: ordering requires both operands to have the same type
-  !! 10095..10113: cannot order `int` and `int | null` with `<`: ordering requires both operands to have the same type
-  !! 10779..10797: cannot order `int` and `int | null` with `<`: ordering requires both operands to have the same type
-  !! 10779..10797: cannot order `int` and `int | null` with `<`: ordering requires both operands to have the same type
-  !! 9381..9431: declared throws is `baml.errors.StreamError | baml.errors.UnknownError`, but this function may also throw `unknown`
+  !! 9459..9482: did you mean `self.inner?.is_effectful`? `self.inner.is_effectful` does not handle the case when `self.inner` is null
+  !! 9459..9484: `(() -> bool throws never) | null` is not a function — it cannot be called
+  !! 9459..9482: did you mean `self.inner?.is_effectful`? `self.inner.is_effectful` does not handle the case when `self.inner` is null
+  !! 9459..9484: `(() -> bool throws never) | null` is not a function — it cannot be called
+  !! 10104..10122: cannot order `int` and `int | null` with `<`: ordering requires both operands to have the same type
+  !! 10104..10122: cannot order `int` and `int | null` with `<`: ordering requires both operands to have the same type
+  !! 10788..10806: cannot order `int` and `int | null` with `<`: ordering requires both operands to have the same type
+  !! 10788..10806: cannot order `int` and `int | null` with `<`: ordering requires both operands to have the same type
+  !! 9390..9440: declared throws is `baml.errors.StreamError | baml.errors.UnknownError`, but this function may also throw `unknown`
 }
 class baml.ai.RoundRobin$stream {
   members: baml.ai.Provider[]
@@ -1441,7 +1441,7 @@ function baml.ai.RoundRobin$stream.parse<T>(self: baml.ai.RoundRobin$stream, fro
     throw root.errors.UnknownError { data: null, message: ["round_robin does ..."] } : baml.errors.UnknownError
   }
 }
-function baml.ai.RoundRobin$stream.meta_of(self: baml.ai.RoundRobin$stream, from: unknown) -> baml.ai.ResponseMeta throws baml.errors.UnknownError {
+function baml.ai.RoundRobin$stream.parse_meta(self: baml.ai.RoundRobin$stream, from: unknown) -> baml.ai.ResponseMeta throws baml.errors.UnknownError {
   { : never
     throw root.errors.UnknownError { data: null, message: ["round_robin has n..."] } : baml.errors.UnknownError
   }
@@ -1463,9 +1463,9 @@ function baml.ai.RoundRobin$stream.call_messages_with<T, V, E2>(self: baml.ai.Ro
           throw root.errors.UnknownError { data: null, message: ["round_robin: memb..."] } : baml.errors.UnknownError
         }
   }
-  !! 13347..13363: operator `%` cannot be applied to `int | null` and `int`
-  !! 13392..13408: operator `+` cannot be applied to `int | null` and `1`
-  !! 13392..13408: operator `+` cannot be applied to `int | null` and `1`
+  !! 13359..13375: operator `%` cannot be applied to `int | null` and `int`
+  !! 13404..13420: operator `+` cannot be applied to `int | null` and `1`
+  !! 13404..13420: operator `+` cannot be applied to `int | null` and `1`
 }
 function baml.ai.RoundRobin$stream.stream_messages<TStream, TFinal>(self: baml.ai.RoundRobin$stream, messages: baml.ai.ChatMessage[]) -> baml.llm.Stream<TStream, TFinal> throws baml.errors.StreamError | baml.errors.UnknownError {
   { : baml.llm.Stream<TStream, TFinal>
@@ -1484,9 +1484,9 @@ function baml.ai.RoundRobin$stream.stream_messages<TStream, TFinal>(self: baml.a
           throw root.errors.UnknownError { data: null, message: ["round_robin: memb..."] } : baml.errors.UnknownError
         }
   }
-  !! 14272..14288: operator `%` cannot be applied to `int | null` and `int`
-  !! 14317..14333: operator `+` cannot be applied to `int | null` and `1`
-  !! 14317..14333: operator `+` cannot be applied to `int | null` and `1`
+  !! 14284..14300: operator `%` cannot be applied to `int | null` and `int`
+  !! 14329..14345: operator `+` cannot be applied to `int | null` and `1`
+  !! 14329..14345: operator `+` cannot be applied to `int | null` and `1`
 }
 class baml.ai.UsageMeter$stream {
   entries: baml.ai.ResponseMeta[]
@@ -1499,8 +1499,8 @@ function baml.ai.Traced$stream.is_effectful(self: baml.ai.Traced$stream) -> bool
   { : unknown
     self.inner.is_effectful() : unknown
   }
-  !! 16708..16731: did you mean `self.inner?.is_effectful`? `self.inner.is_effectful` does not handle the case when `self.inner` is null
-  !! 16708..16733: `(() -> bool throws never) | null` is not a function — it cannot be called
+  !! 16720..16743: did you mean `self.inner?.is_effectful`? `self.inner.is_effectful` does not handle the case when `self.inner` is null
+  !! 16720..16745: `(() -> bool throws never) | null` is not a function — it cannot be called
 }
 function baml.ai.Traced$stream.build_request<T>(self: baml.ai.Traced$stream, messages: baml.ai.ChatMessage[]) -> baml.http.Request throws baml.errors.UnknownError {
   { : never
@@ -1517,7 +1517,7 @@ function baml.ai.Traced$stream.parse<T>(self: baml.ai.Traced$stream, from: unkno
     throw root.errors.UnknownError { data: null, message: ["traced does not p..."] } : baml.errors.UnknownError
   }
 }
-function baml.ai.Traced$stream.meta_of(self: baml.ai.Traced$stream, from: unknown) -> baml.ai.ResponseMeta throws baml.errors.UnknownError {
+function baml.ai.Traced$stream.parse_meta(self: baml.ai.Traced$stream, from: unknown) -> baml.ai.ResponseMeta throws baml.errors.UnknownError {
   { : never
     throw root.errors.UnknownError { data: null, message: ["traced has no sin..."] } : baml.errors.UnknownError
   }
@@ -1536,9 +1536,9 @@ function baml.ai.Traced$stream.call_messages_with<T, V, E2>(self: baml.ai.Traced
           throw root.errors.UnknownError { data: null, message: ["traced: inner is ..."] } : baml.errors.UnknownError
         }
   }
-  !! 18475..18492: did you mean `self.meter?.record`? `self.meter.record` does not handle the case when `self.meter` is null
-  !! 18486..18492: type `baml.ai.UsageMeter$stream` has no member `record`
-  !! 18475..18501: `unknown | null` is not a function — it cannot be called
+  !! 18490..18507: did you mean `self.meter?.record`? `self.meter.record` does not handle the case when `self.meter` is null
+  !! 18501..18507: type `baml.ai.UsageMeter$stream` has no member `record`
+  !! 18490..18516: `unknown | null` is not a function — it cannot be called
 }
 lambda baml.ai.Traced$stream.call_messages_with {
 }
@@ -1694,7 +1694,7 @@ function baml.ai.parse<T>(self: unknown, from: string) -> T throws baml.errors.U
           throw root.errors.UnknownError { data: e, message: ["legacy bridge: pa..."] } : never
   }
 }
-function baml.ai.meta_of(self: unknown, from: string) -> baml.ai.ResponseMeta throws never {
+function baml.ai.parse_meta(self: unknown, from: string) -> baml.ai.ResponseMeta throws never {
   { : baml.ai.LegacyMeta
     LegacyMeta {  } : baml.ai.LegacyMeta
   }
@@ -1725,7 +1725,7 @@ function baml.ai.call_messages_with<T, V, E2>(self: unknown, messages: baml.ai.C
             }
       }
     let body = self.send(self.build_request<T>(messages)) : string
-    CallResult { value: self.parse<T>(body), meta: project(self.meta_of(body)) } : baml.ai.CallResult<T, V>
+    CallResult { value: self.parse<T>(body), meta: project(self.parse_meta(body)) } : baml.ai.CallResult<T, V>
   }
 }
 function baml.ai.stream_messages<TStream, TFinal>(self: unknown, messages: baml.ai.ChatMessage[]) -> baml.llm.Stream<TStream, TFinal> throws baml.errors.StreamError | baml.errors.UnknownError {
@@ -2393,7 +2393,7 @@ function baml.ai.Anthropic.parse<T>(self: baml.ai.Anthropic, from: string) -> T 
           }
   }
 }
-function baml.ai.Anthropic.meta_of(self: baml.ai.Anthropic, from: string) -> baml.ai.ResponseMeta throws never {
+function baml.ai.Anthropic.parse_meta(self: baml.ai.Anthropic, from: string) -> baml.ai.ResponseMeta throws never {
   { : baml.ai.AnthropicResponseMeta
     AnthropicResponseMeta { raw_text: from } : baml.ai.AnthropicResponseMeta
   }
@@ -2551,11 +2551,11 @@ function baml.ai.Anthropic$stream.build_request<T>(self: baml.ai.Anthropic$strea
     let schema: string = root.llm.render_output_format(reflect.type_of<T>()) : string
     root.http.Request { method: "POST", url: self.base_url ?? "https://api.anthr..." + "/v1/messages", headers: self._request_headers(), body: self._request_body(self._messages_for(messages, schema), false) } : baml.http.Request
   }
-  !! 6135..6151: type `baml.ai.Anthropic$stream` has no member `_request_headers`
-  !! 6182..6195: type `baml.ai.Anthropic$stream` has no member `_request_body`
-  !! 6201..6214: type `baml.ai.Anthropic$stream` has no member `_messages_for`
-  !! 5674..5698: declared throws is `baml.errors.UnknownError`, but this function may also throw `unknown`
-  ?? 5674..5698: extraneous throws declaration: baml.errors.UnknownError
+  !! 6138..6154: type `baml.ai.Anthropic$stream` has no member `_request_headers`
+  !! 6185..6198: type `baml.ai.Anthropic$stream` has no member `_request_body`
+  !! 6204..6217: type `baml.ai.Anthropic$stream` has no member `_messages_for`
+  !! 5677..5701: declared throws is `baml.errors.UnknownError`, but this function may also throw `unknown`
+  ?? 5677..5701: extraneous throws declaration: baml.errors.UnknownError
 }
 function baml.ai.Anthropic$stream.send(self: baml.ai.Anthropic$stream, request: baml.http.Request) -> string throws baml.errors.CallError | baml.errors.UnknownError {
   { : string
@@ -2608,7 +2608,7 @@ function baml.ai.Anthropic$stream.parse<T>(self: baml.ai.Anthropic$stream, from:
           }
   }
 }
-function baml.ai.Anthropic$stream.meta_of(self: baml.ai.Anthropic$stream, from: string) -> baml.ai.ResponseMeta throws never {
+function baml.ai.Anthropic$stream.parse_meta(self: baml.ai.Anthropic$stream, from: string) -> baml.ai.ResponseMeta throws never {
   { : baml.ai.AnthropicResponseMeta
     AnthropicResponseMeta { raw_text: from } : baml.ai.AnthropicResponseMeta
   }
@@ -2641,10 +2641,10 @@ function baml.ai.Anthropic$stream.stream_messages<TStream, TFinal>(self: baml.ai
     let cache = root.llm.StreamCache.new(reflect.type_of<TStream>(), reflect.type_of<TFinal>()) : baml.llm.StreamCache<TStream, TFinal>
     root.llm.Stream { _client: primitive, _acc: acc, _sse: sse, _cache: cache } : baml.llm.Stream<TStream, TFinal>
   }
-  !! 9144..9160: type `baml.ai.Anthropic$stream` has no member `_request_headers`
-  !! 9191..9204: type `baml.ai.Anthropic$stream` has no member `_request_body`
-  !! 9210..9223: type `baml.ai.Anthropic$stream` has no member `_messages_for`
-  !! 8836..8860: declared throws is `baml.errors.UnknownError`, but this function may also throw `unknown`
+  !! 9150..9166: type `baml.ai.Anthropic$stream` has no member `_request_headers`
+  !! 9197..9210: type `baml.ai.Anthropic$stream` has no member `_request_body`
+  !! 9216..9229: type `baml.ai.Anthropic$stream` has no member `_messages_for`
+  !! 8842..8866: declared throws is `baml.errors.UnknownError`, but this function may also throw `unknown`
 }
 
 --- <builtin>/baml/ns_ai/providers/gemini.baml ---
@@ -3071,7 +3071,7 @@ function baml.ai.Gemini.parse<T>(self: baml.ai.Gemini, from: string) -> T throws
         throw root.errors.UnknownError { data: null, message: ["gemini: no candid..."] } : never
   }
 }
-function baml.ai.Gemini.meta_of(self: baml.ai.Gemini, from: string) -> baml.ai.ResponseMeta throws never {
+function baml.ai.Gemini.parse_meta(self: baml.ai.Gemini, from: string) -> baml.ai.ResponseMeta throws never {
   { : baml.ai.GeminiResponseMeta
     GeminiResponseMeta { raw_text: from } : baml.ai.GeminiResponseMeta
   }
@@ -3237,11 +3237,11 @@ function baml.ai.Gemini$stream.build_request<T>(self: baml.ai.Gemini$stream, mes
     let schema: string = root.llm.render_output_format(reflect.type_of<T>()) : string
     root.http.Request { method: "POST", url: self.base_url ?? "https://generativ..." + "/models/" + self.model + ":generateContent", headers: self._request_headers(), body: self._request_body(self._messages_for(messages, schema)) } : baml.http.Request
   }
-  !! 6816..6832: type `baml.ai.Gemini$stream` has no member `_request_headers`
-  !! 6863..6876: type `baml.ai.Gemini$stream` has no member `_request_body`
-  !! 6882..6895: type `baml.ai.Gemini$stream` has no member `_messages_for`
-  !! 6242..6266: declared throws is `baml.errors.UnknownError`, but this function may also throw `unknown`
-  ?? 6242..6266: extraneous throws declaration: baml.errors.UnknownError
+  !! 6819..6835: type `baml.ai.Gemini$stream` has no member `_request_headers`
+  !! 6866..6879: type `baml.ai.Gemini$stream` has no member `_request_body`
+  !! 6885..6898: type `baml.ai.Gemini$stream` has no member `_messages_for`
+  !! 6245..6269: declared throws is `baml.errors.UnknownError`, but this function may also throw `unknown`
+  ?? 6245..6269: extraneous throws declaration: baml.errors.UnknownError
 }
 function baml.ai.Gemini$stream.send(self: baml.ai.Gemini$stream, request: baml.http.Request) -> string throws baml.errors.CallError | baml.errors.UnknownError {
   { : string
@@ -3312,7 +3312,7 @@ function baml.ai.Gemini$stream.parse<T>(self: baml.ai.Gemini$stream, from: strin
         throw root.errors.UnknownError { data: null, message: ["gemini: no candid..."] } : never
   }
 }
-function baml.ai.Gemini$stream.meta_of(self: baml.ai.Gemini$stream, from: string) -> baml.ai.ResponseMeta throws never {
+function baml.ai.Gemini$stream.parse_meta(self: baml.ai.Gemini$stream, from: string) -> baml.ai.ResponseMeta throws never {
   { : baml.ai.GeminiResponseMeta
     GeminiResponseMeta { raw_text: from } : baml.ai.GeminiResponseMeta
   }
@@ -3345,10 +3345,10 @@ function baml.ai.Gemini$stream.stream_messages<TStream, TFinal>(self: baml.ai.Ge
     let cache = root.llm.StreamCache.new(reflect.type_of<TStream>(), reflect.type_of<TFinal>()) : baml.llm.StreamCache<TStream, TFinal>
     root.llm.Stream { _client: primitive, _acc: acc, _sse: sse, _cache: cache } : baml.llm.Stream<TStream, TFinal>
   }
-  !! 10956..10972: type `baml.ai.Gemini$stream` has no member `_request_headers`
-  !! 11003..11016: type `baml.ai.Gemini$stream` has no member `_request_body`
-  !! 11022..11035: type `baml.ai.Gemini$stream` has no member `_messages_for`
-  !! 10521..10545: declared throws is `baml.errors.UnknownError`, but this function may also throw `unknown`
+  !! 10962..10978: type `baml.ai.Gemini$stream` has no member `_request_headers`
+  !! 11009..11022: type `baml.ai.Gemini$stream` has no member `_request_body`
+  !! 11028..11041: type `baml.ai.Gemini$stream` has no member `_messages_for`
+  !! 10527..10551: declared throws is `baml.errors.UnknownError`, but this function may also throw `unknown`
 }
 
 --- <builtin>/baml/ns_ai/providers/harness.baml ---
@@ -3816,7 +3816,7 @@ function baml.ai.OpenAi.parse<T>(self: baml.ai.OpenAi, from: string) -> T throws
         throw root.errors.UnknownError { data: null, message: ["openai: no choices"] } : never
   }
 }
-function baml.ai.OpenAi.meta_of(self: baml.ai.OpenAi, from: string) -> baml.ai.ResponseMeta throws never {
+function baml.ai.OpenAi.parse_meta(self: baml.ai.OpenAi, from: string) -> baml.ai.ResponseMeta throws never {
   { : baml.ai.OpenAiResponseMeta
     OpenAiResponseMeta { raw_text: from } : baml.ai.OpenAiResponseMeta
   }
@@ -4148,11 +4148,11 @@ function baml.ai.OpenAi$stream.build_request<T>(self: baml.ai.OpenAi$stream, mes
     let schema: string = root.llm.render_output_format(reflect.type_of<T>()) : string
     root.http.Request { method: "POST", url: self.base_url ?? "https://api.opena..." + "/chat/completions", headers: self._request_headers(), body: self._request_body(self._messages_for(messages, schema), false) } : baml.http.Request
   }
-  !! 6741..6757: type `baml.ai.OpenAi$stream` has no member `_request_headers`
-  !! 6788..6801: type `baml.ai.OpenAi$stream` has no member `_request_body`
-  !! 6807..6820: type `baml.ai.OpenAi$stream` has no member `_messages_for`
-  !! 6275..6299: declared throws is `baml.errors.UnknownError`, but this function may also throw `unknown`
-  ?? 6275..6299: extraneous throws declaration: baml.errors.UnknownError
+  !! 6744..6760: type `baml.ai.OpenAi$stream` has no member `_request_headers`
+  !! 6791..6804: type `baml.ai.OpenAi$stream` has no member `_request_body`
+  !! 6810..6823: type `baml.ai.OpenAi$stream` has no member `_messages_for`
+  !! 6278..6302: declared throws is `baml.errors.UnknownError`, but this function may also throw `unknown`
+  ?? 6278..6302: extraneous throws declaration: baml.errors.UnknownError
 }
 function baml.ai.OpenAi$stream.send(self: baml.ai.OpenAi$stream, request: baml.http.Request) -> string throws baml.errors.CallError | baml.errors.UnknownError {
   { : string
@@ -4199,7 +4199,7 @@ function baml.ai.OpenAi$stream.parse<T>(self: baml.ai.OpenAi$stream, from: strin
         throw root.errors.UnknownError { data: null, message: ["openai: no choices"] } : never
   }
 }
-function baml.ai.OpenAi$stream.meta_of(self: baml.ai.OpenAi$stream, from: string) -> baml.ai.ResponseMeta throws never {
+function baml.ai.OpenAi$stream.parse_meta(self: baml.ai.OpenAi$stream, from: string) -> baml.ai.ResponseMeta throws never {
   { : baml.ai.OpenAiResponseMeta
     OpenAiResponseMeta { raw_text: from } : baml.ai.OpenAiResponseMeta
   }
@@ -4252,10 +4252,10 @@ function baml.ai.OpenAi$stream.stream_messages<TStream, TFinal>(self: baml.ai.Op
     let cache = root.llm.StreamCache.new(reflect.type_of<TStream>(), reflect.type_of<TFinal>()) : baml.llm.StreamCache<TStream, TFinal>
     root.llm.Stream { _client: primitive, _acc: acc, _sse: sse, _cache: cache } : baml.llm.Stream<TStream, TFinal>
   }
-  !! 10197..10213: type `baml.ai.OpenAi$stream` has no member `_request_headers`
-  !! 10244..10257: type `baml.ai.OpenAi$stream` has no member `_request_body`
-  !! 10263..10276: type `baml.ai.OpenAi$stream` has no member `_messages_for`
-  !! 9884..9908: declared throws is `baml.errors.UnknownError`, but this function may also throw `unknown`
+  !! 10203..10219: type `baml.ai.OpenAi$stream` has no member `_request_headers`
+  !! 10250..10263: type `baml.ai.OpenAi$stream` has no member `_request_body`
+  !! 10269..10282: type `baml.ai.OpenAi$stream` has no member `_messages_for`
+  !! 9890..9914: declared throws is `baml.errors.UnknownError`, but this function may also throw `unknown`
 }
 function baml.ai.OpenAi$stream.begin<T>(self: baml.ai.OpenAi$stream, prompt: string, tools: baml.ai.Tool[]) -> baml.ai.OpenAiToolTranscript throws baml.errors.UnknownError {
   { : baml.ai.OpenAiToolTranscript
@@ -4273,8 +4273,8 @@ function baml.ai.OpenAi$stream.begin<T>(self: baml.ai.OpenAi$stream, prompt: str
       }
     OpenAiToolTranscript { model: self.model, api_key: self.api_key, base_url: self.base_url, tools_json: root.json.stringify(tools_arr), messages: [map { "role": "user", "content": prompt }] } : baml.ai.OpenAiToolTranscript
   }
-  !! 12273..12283: type mismatch: expected string, got string | null
-  !! 12310..12322: type mismatch: expected string, got string | null
+  !! 12279..12289: type mismatch: expected string, got string | null
+  !! 12316..12328: type mismatch: expected string, got string | null
 }
 function baml.ai.OpenAi$stream.step<T>(self: baml.ai.OpenAi$stream, t: baml.ai.OpenAiToolTranscript) -> T | baml.ai.ToolCalls throws baml.errors.UnknownError {
   { : baml.ai.ToolCalls | T
@@ -4433,9 +4433,9 @@ function baml.ai.OpenAiCompatible.parse<T>(self: baml.ai.OpenAiCompatible, from:
     self._inner().parse<T>(from) : T
   }
 }
-function baml.ai.OpenAiCompatible.meta_of(self: baml.ai.OpenAiCompatible, from: string) -> baml.ai.ResponseMeta throws never {
+function baml.ai.OpenAiCompatible.parse_meta(self: baml.ai.OpenAiCompatible, from: string) -> baml.ai.ResponseMeta throws never {
   { : baml.ai.ResponseMeta
-    self._inner().meta_of(from) : baml.ai.ResponseMeta
+    self._inner().parse_meta(from) : baml.ai.ResponseMeta
   }
 }
 function baml.ai.OpenAiCompatible.stream_messages<TStream, TFinal>(self: baml.ai.OpenAiCompatible, messages: baml.ai.ChatMessage[]) -> baml.llm.Stream<TStream, TFinal> throws baml.errors.UnknownError {
@@ -4511,13 +4511,13 @@ function baml.ai.OpenAiCompatible$stream.parse<T>(self: baml.ai.OpenAiCompatible
   !! 2798..2822: declared throws is `baml.errors.UnknownError`, but this function may also throw `unknown`
   ?? 2798..2822: extraneous throws declaration: baml.errors.UnknownError
 }
-function baml.ai.OpenAiCompatible$stream.meta_of(self: baml.ai.OpenAiCompatible$stream, from: string) -> baml.ai.ResponseMeta throws never {
+function baml.ai.OpenAiCompatible$stream.parse_meta(self: baml.ai.OpenAiCompatible$stream, from: string) -> baml.ai.ResponseMeta throws never {
   { : unknown
-    self._inner().meta_of(from) : unknown
+    self._inner().parse_meta(from) : unknown
   }
-  !! 3013..3019: type `baml.ai.OpenAiCompatible$stream` has no member `_inner`
-  !! 3008..3035: type mismatch: expected baml.ai.ResponseMeta, got unknown
-  !! 2988..2993: declared throws is `never`, but this function may also throw `unknown`
+  !! 3016..3022: type `baml.ai.OpenAiCompatible$stream` has no member `_inner`
+  !! 3011..3041: type mismatch: expected baml.ai.ResponseMeta, got unknown
+  !! 2991..2996: declared throws is `never`, but this function may also throw `unknown`
 }
 function baml.ai.OpenAiCompatible$stream.stream_messages<TStream, TFinal>(self: baml.ai.OpenAiCompatible$stream, messages: baml.ai.ChatMessage[]) -> baml.llm.Stream<TStream, TFinal> throws baml.errors.UnknownError {
   { : baml.llm.Stream<TStream, TFinal>
@@ -4548,9 +4548,9 @@ function baml.ai.OpenAiCompatible$stream.stream_messages<TStream, TFinal>(self: 
     let cache = root.llm.StreamCache.new(reflect.type_of<TStream>(), reflect.type_of<TFinal>()) : baml.llm.StreamCache<TStream, TFinal>
     root.llm.Stream { _client: primitive, _acc: acc, _sse: sse, _cache: cache } : baml.llm.Stream<TStream, TFinal>
   }
-  !! 3541..3547: type `baml.ai.OpenAiCompatible$stream` has no member `_inner`
-  !! 3804..3812: type `baml.ai.OpenAiCompatible$stream` has no member `_headers`
-  !! 3485..3509: declared throws is `baml.errors.UnknownError`, but this function may also throw `unknown`
+  !! 3547..3553: type `baml.ai.OpenAiCompatible$stream` has no member `_inner`
+  !! 3810..3818: type `baml.ai.OpenAiCompatible$stream` has no member `_headers`
+  !! 3491..3515: declared throws is `baml.errors.UnknownError`, but this function may also throw `unknown`
 }
 
 --- <builtin>/baml/ns_ai/providers/openai_realtime.baml ---
@@ -5085,7 +5085,7 @@ function baml.ai.OpenAiResponses.parse<T>(self: baml.ai.OpenAiResponses, from: s
         }
   }
 }
-function baml.ai.OpenAiResponses.meta_of(self: baml.ai.OpenAiResponses, from: string) -> baml.ai.ResponseMeta throws never {
+function baml.ai.OpenAiResponses.parse_meta(self: baml.ai.OpenAiResponses, from: string) -> baml.ai.ResponseMeta throws never {
   { : baml.ai.OpenAiResponsesMeta
     OpenAiResponsesMeta { raw_text: from } : baml.ai.OpenAiResponsesMeta
   }
@@ -5323,11 +5323,11 @@ function baml.ai.OpenAiResponses$stream.build_request<T>(self: baml.ai.OpenAiRes
     let schema: string = root.llm.render_output_format(reflect.type_of<T>()) : string
     root.http.Request { method: "POST", url: self.base_url ?? "https://api.opena..." + "/responses", headers: self._request_headers(), body: self._request_body(self._messages_for(messages, schema), null, self.store ?? true, false) } : baml.http.Request
   }
-  !! 4661..4677: type `baml.ai.OpenAiResponses$stream` has no member `_request_headers`
-  !! 4729..4742: type `baml.ai.OpenAiResponses$stream` has no member `_request_body`
-  !! 4773..4786: type `baml.ai.OpenAiResponses$stream` has no member `_messages_for`
-  !! 4370..4394: declared throws is `baml.errors.UnknownError`, but this function may also throw `unknown`
-  ?? 4370..4394: extraneous throws declaration: baml.errors.UnknownError
+  !! 4664..4680: type `baml.ai.OpenAiResponses$stream` has no member `_request_headers`
+  !! 4732..4745: type `baml.ai.OpenAiResponses$stream` has no member `_request_body`
+  !! 4776..4789: type `baml.ai.OpenAiResponses$stream` has no member `_messages_for`
+  !! 4373..4397: declared throws is `baml.errors.UnknownError`, but this function may also throw `unknown`
+  ?? 4373..4397: extraneous throws declaration: baml.errors.UnknownError
 }
 function baml.ai.OpenAiResponses$stream.send(self: baml.ai.OpenAiResponses$stream, request: baml.http.Request) -> string throws baml.errors.UnknownError {
   { : string
@@ -5381,7 +5381,7 @@ function baml.ai.OpenAiResponses$stream.parse<T>(self: baml.ai.OpenAiResponses$s
         }
   }
 }
-function baml.ai.OpenAiResponses$stream.meta_of(self: baml.ai.OpenAiResponses$stream, from: string) -> baml.ai.ResponseMeta throws never {
+function baml.ai.OpenAiResponses$stream.parse_meta(self: baml.ai.OpenAiResponses$stream, from: string) -> baml.ai.ResponseMeta throws never {
   { : baml.ai.OpenAiResponsesMeta
     OpenAiResponsesMeta { raw_text: from } : baml.ai.OpenAiResponsesMeta
   }
@@ -5415,10 +5415,10 @@ function baml.ai.OpenAiResponses$stream.extend<T>(self: baml.ai.OpenAiResponses$
                 }
         }
   }
-  !! 7511..7524: type `baml.ai.OpenAiResponses$stream` has no member `_request_body`
-  !! 7530..7543: type `baml.ai.OpenAiResponses$stream` has no member `_messages_for`
-  !! 7616..7621: type `baml.ai.OpenAiResponses$stream` has no member `_post`
-  !! 7307..7331: declared throws is `baml.errors.UnknownError`, but this function may also throw `unknown`
+  !! 7517..7530: type `baml.ai.OpenAiResponses$stream` has no member `_request_body`
+  !! 7536..7549: type `baml.ai.OpenAiResponses$stream` has no member `_messages_for`
+  !! 7622..7627: type `baml.ai.OpenAiResponses$stream` has no member `_post`
+  !! 7313..7337: declared throws is `baml.errors.UnknownError`, but this function may also throw `unknown`
 }
 function baml.ai.OpenAiResponses$stream.submit<T>(self: baml.ai.OpenAiResponses$stream, prompt: string, idempotency_key: string) -> baml.ai.Job<T> throws baml.errors.UnknownError {
   { : baml.ai.Job<T>
@@ -5454,10 +5454,10 @@ function baml.ai.OpenAiResponses$stream.submit<T>(self: baml.ai.OpenAiResponses$
           e2 : baml.ai.OpenAiRespEnvelopeWire
     root.ai.Job { id: envelope.id ?? "", owner: "openai-responses" } : baml.ai.Job<T>
   }
-  !! 9284..9297: type `baml.ai.OpenAiResponses$stream` has no member `_request_body`
-  !! 9303..9316: type `baml.ai.OpenAiResponses$stream` has no member `_messages_for`
-  !! 9543..9568: type `baml.ai.OpenAiResponses$stream` has no member `_headers_with_idempotency`
-  !! 9080..9104: declared throws is `baml.errors.UnknownError`, but this function may also throw `unknown`
+  !! 9290..9303: type `baml.ai.OpenAiResponses$stream` has no member `_request_body`
+  !! 9309..9322: type `baml.ai.OpenAiResponses$stream` has no member `_messages_for`
+  !! 9549..9574: type `baml.ai.OpenAiResponses$stream` has no member `_headers_with_idempotency`
+  !! 9086..9110: declared throws is `baml.errors.UnknownError`, but this function may also throw `unknown`
 }
 function baml.ai.OpenAiResponses$stream.poll<T>(self: baml.ai.OpenAiResponses$stream, job: baml.ai.Job<T>) -> T | null throws baml.errors.UnknownError {
   { : T
@@ -5507,8 +5507,8 @@ function baml.ai.OpenAiResponses$stream.poll<T>(self: baml.ai.OpenAiResponses$st
                 }
         }
   }
-  !! 10992..11008: type `baml.ai.OpenAiResponses$stream` has no member `_request_headers`
-  !! 10768..10792: declared throws is `baml.errors.UnknownError`, but this function may also throw `unknown`
+  !! 10998..11014: type `baml.ai.OpenAiResponses$stream` has no member `_request_headers`
+  !! 10774..10798: declared throws is `baml.errors.UnknownError`, but this function may also throw `unknown`
 }
 
 --- <builtin>/baml/ns_ai/providers/openai_strict.baml ---
@@ -5718,7 +5718,7 @@ function baml.ai.OpenAiStrict.parse<T>(self: baml.ai.OpenAiStrict, from: string)
         }
   }
 }
-function baml.ai.OpenAiStrict.meta_of(self: baml.ai.OpenAiStrict, from: string) -> baml.ai.ResponseMeta throws never {
+function baml.ai.OpenAiStrict.parse_meta(self: baml.ai.OpenAiStrict, from: string) -> baml.ai.ResponseMeta throws never {
   { : baml.ai.OpenAiResponseMeta
     OpenAiResponseMeta { raw_text: from } : baml.ai.OpenAiResponseMeta
   }
@@ -5734,10 +5734,10 @@ function baml.ai.OpenAiStrict$stream.build_request<T>(self: baml.ai.OpenAiStrict
   { : baml.http.Request
     root.http.Request { method: "POST", url: self.base_url ?? "https://api.opena..." + "/chat/completions", headers: self._request_headers(), body: self._request_body<T>(messages) } : baml.http.Request
   }
-  !! 1581..1597: type `baml.ai.OpenAiStrict$stream` has no member `_request_headers`
-  !! 1628..1641: type `baml.ai.OpenAiStrict$stream` has no member `_request_body`
-  !! 1369..1393: declared throws is `baml.errors.UnknownError`, but this function may also throw `unknown`
-  ?? 1369..1393: extraneous throws declaration: baml.errors.UnknownError
+  !! 1584..1600: type `baml.ai.OpenAiStrict$stream` has no member `_request_headers`
+  !! 1631..1644: type `baml.ai.OpenAiStrict$stream` has no member `_request_body`
+  !! 1372..1396: declared throws is `baml.errors.UnknownError`, but this function may also throw `unknown`
+  ?? 1372..1396: extraneous throws declaration: baml.errors.UnknownError
 }
 function baml.ai.OpenAiStrict$stream.send(self: baml.ai.OpenAiStrict$stream, request: baml.http.Request) -> string throws baml.errors.CallError | baml.errors.UnknownError {
   { : string
@@ -5790,7 +5790,7 @@ function baml.ai.OpenAiStrict$stream.parse<T>(self: baml.ai.OpenAiStrict$stream,
         }
   }
 }
-function baml.ai.OpenAiStrict$stream.meta_of(self: baml.ai.OpenAiStrict$stream, from: string) -> baml.ai.ResponseMeta throws never {
+function baml.ai.OpenAiStrict$stream.parse_meta(self: baml.ai.OpenAiStrict$stream, from: string) -> baml.ai.ResponseMeta throws never {
   { : baml.ai.OpenAiResponseMeta
     OpenAiResponseMeta { raw_text: from } : baml.ai.OpenAiResponseMeta
   }

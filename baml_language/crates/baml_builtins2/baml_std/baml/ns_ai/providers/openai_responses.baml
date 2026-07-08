@@ -100,7 +100,7 @@ class OpenAiResponses {
     }
 
     implements root.ai.HttpProvider {
-        // Body is the raw response TEXT (read once in `send`), shared by `parse`/`meta_of`.
+        // Body is the raw response TEXT (read once in `send`), shared by `parse`/`parse_meta`.
         type Body = string
 
         function build_request<T>(
@@ -170,7 +170,7 @@ class OpenAiResponses {
             }
         }
 
-        function meta_of(
+        function parse_meta(
             self,
             from: string,
         ) -> root.ai.ResponseMeta throws never {

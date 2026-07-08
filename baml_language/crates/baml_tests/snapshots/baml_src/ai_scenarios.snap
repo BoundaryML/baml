@@ -665,11 +665,6 @@ function ai_scenarios.AlwaysFailProvider$stream.baml.ai.HttpProvider.build_reque
     throw
 }
 
-function ai_scenarios.AlwaysFailProvider$stream.baml.ai.HttpProvider.meta_of(self: ai_scenarios.AlwaysFailProvider$stream, from: string) -> baml.ai.ResponseMeta {
-    alloc_instance baml.ai.LegacyMeta
-    return
-}
-
 function ai_scenarios.AlwaysFailProvider$stream.baml.ai.HttpProvider.parse(self: ai_scenarios.AlwaysFailProvider$stream, from: string) -> T {
     load_const null
     load_const "always fails"
@@ -677,6 +672,11 @@ function ai_scenarios.AlwaysFailProvider$stream.baml.ai.HttpProvider.parse(self:
     alloc_array 1
     init_instance baml.errors.UnknownError .data, .message
     throw
+}
+
+function ai_scenarios.AlwaysFailProvider$stream.baml.ai.HttpProvider.parse_meta(self: ai_scenarios.AlwaysFailProvider$stream, from: string) -> baml.ai.ResponseMeta {
+    alloc_instance baml.ai.LegacyMeta
+    return
 }
 
 function ai_scenarios.AlwaysFailProvider$stream.baml.ai.HttpProvider.send(self: ai_scenarios.AlwaysFailProvider$stream, request: baml.http.Request) -> string {
@@ -697,11 +697,6 @@ function ai_scenarios.AlwaysFailProvider.baml.ai.HttpProvider.build_request(self
     throw
 }
 
-function ai_scenarios.AlwaysFailProvider.baml.ai.HttpProvider.meta_of(self: ai_scenarios.AlwaysFailProvider, from: string) -> baml.ai.ResponseMeta {
-    alloc_instance baml.ai.LegacyMeta
-    return
-}
-
 function ai_scenarios.AlwaysFailProvider.baml.ai.HttpProvider.parse(self: ai_scenarios.AlwaysFailProvider, from: string) -> T {
     load_const null
     load_const "always fails"
@@ -709,6 +704,11 @@ function ai_scenarios.AlwaysFailProvider.baml.ai.HttpProvider.parse(self: ai_sce
     alloc_array 1
     init_instance baml.errors.UnknownError .data, .message
     throw
+}
+
+function ai_scenarios.AlwaysFailProvider.baml.ai.HttpProvider.parse_meta(self: ai_scenarios.AlwaysFailProvider, from: string) -> baml.ai.ResponseMeta {
+    alloc_instance baml.ai.LegacyMeta
+    return
 }
 
 function ai_scenarios.AlwaysFailProvider.baml.ai.HttpProvider.send(self: ai_scenarios.AlwaysFailProvider, request: baml.http.Request) -> string {
@@ -1137,11 +1137,6 @@ function ai_scenarios.CountingEcho$stream.baml.ai.HttpProvider.call_messages_wit
     return
 }
 
-function ai_scenarios.CountingEcho$stream.baml.ai.HttpProvider.meta_of(self: ai_scenarios.CountingEcho$stream, from: string) -> baml.ai.ResponseMeta {
-    alloc_instance baml.ai.LegacyMeta
-    return
-}
-
 function ai_scenarios.CountingEcho$stream.baml.ai.HttpProvider.parse(self: ai_scenarios.CountingEcho$stream, from: string) -> T {
     load_type #0
     load_var from
@@ -1157,6 +1152,11 @@ function ai_scenarios.CountingEcho$stream.baml.ai.HttpProvider.parse(self: ai_sc
     throw
 
   L0:
+    return
+}
+
+function ai_scenarios.CountingEcho$stream.baml.ai.HttpProvider.parse_meta(self: ai_scenarios.CountingEcho$stream, from: string) -> baml.ai.ResponseMeta {
+    alloc_instance baml.ai.LegacyMeta
     return
 }
 
@@ -1211,11 +1211,6 @@ function ai_scenarios.CountingEcho.baml.ai.HttpProvider.call_messages_with(self:
     return
 }
 
-function ai_scenarios.CountingEcho.baml.ai.HttpProvider.meta_of(self: ai_scenarios.CountingEcho, from: string) -> baml.ai.ResponseMeta {
-    alloc_instance baml.ai.LegacyMeta
-    return
-}
-
 function ai_scenarios.CountingEcho.baml.ai.HttpProvider.parse(self: ai_scenarios.CountingEcho, from: string) -> T {
     load_type #0
     load_var from
@@ -1231,6 +1226,11 @@ function ai_scenarios.CountingEcho.baml.ai.HttpProvider.parse(self: ai_scenarios
     throw
 
   L0:
+    return
+}
+
+function ai_scenarios.CountingEcho.baml.ai.HttpProvider.parse_meta(self: ai_scenarios.CountingEcho, from: string) -> baml.ai.ResponseMeta {
+    alloc_instance baml.ai.LegacyMeta
     return
 }
 
@@ -1483,11 +1483,6 @@ function ai_scenarios.EchoProvider$stream.baml.ai.HttpProvider.call_messages_wit
     return
 }
 
-function ai_scenarios.EchoProvider$stream.baml.ai.HttpProvider.meta_of(self: ai_scenarios.EchoProvider$stream, from: string) -> baml.ai.ResponseMeta {
-    alloc_instance baml.ai.LegacyMeta
-    return
-}
-
 function ai_scenarios.EchoProvider$stream.baml.ai.HttpProvider.parse(self: ai_scenarios.EchoProvider$stream, from: string) -> T {
     load_type #0
     load_var from
@@ -1503,6 +1498,11 @@ function ai_scenarios.EchoProvider$stream.baml.ai.HttpProvider.parse(self: ai_sc
     throw
 
   L0:
+    return
+}
+
+function ai_scenarios.EchoProvider$stream.baml.ai.HttpProvider.parse_meta(self: ai_scenarios.EchoProvider$stream, from: string) -> baml.ai.ResponseMeta {
+    alloc_instance baml.ai.LegacyMeta
     return
 }
 
@@ -1552,11 +1552,6 @@ function ai_scenarios.EchoProvider.baml.ai.HttpProvider.call_messages_with(self:
     return
 }
 
-function ai_scenarios.EchoProvider.baml.ai.HttpProvider.meta_of(self: ai_scenarios.EchoProvider, from: string) -> baml.ai.ResponseMeta {
-    alloc_instance baml.ai.LegacyMeta
-    return
-}
-
 function ai_scenarios.EchoProvider.baml.ai.HttpProvider.parse(self: ai_scenarios.EchoProvider, from: string) -> T {
     load_type #0
     load_var from
@@ -1572,6 +1567,11 @@ function ai_scenarios.EchoProvider.baml.ai.HttpProvider.parse(self: ai_scenarios
     throw
 
   L0:
+    return
+}
+
+function ai_scenarios.EchoProvider.baml.ai.HttpProvider.parse_meta(self: ai_scenarios.EchoProvider, from: string) -> baml.ai.ResponseMeta {
+    alloc_instance baml.ai.LegacyMeta
     return
 }
 
@@ -1923,15 +1923,6 @@ function ai_scenarios.MeteredEcho$stream.baml.ai.HttpProvider.call_messages_with
     return
 }
 
-function ai_scenarios.MeteredEcho$stream.baml.ai.HttpProvider.meta_of(self: ai_scenarios.MeteredEcho$stream, from: string) -> baml.ai.ResponseMeta {
-    load_var self
-    load_field .1
-    load_var self
-    load_field .2
-    init_instance user.ai_scenarios.MeteredMeta .inp, .out
-    return
-}
-
 function ai_scenarios.MeteredEcho$stream.baml.ai.HttpProvider.parse(self: ai_scenarios.MeteredEcho$stream, from: string) -> T {
     load_type #0
     load_var from
@@ -1947,6 +1938,15 @@ function ai_scenarios.MeteredEcho$stream.baml.ai.HttpProvider.parse(self: ai_sce
     throw
 
   L0:
+    return
+}
+
+function ai_scenarios.MeteredEcho$stream.baml.ai.HttpProvider.parse_meta(self: ai_scenarios.MeteredEcho$stream, from: string) -> baml.ai.ResponseMeta {
+    load_var self
+    load_field .1
+    load_var self
+    load_field .2
+    init_instance user.ai_scenarios.MeteredMeta .inp, .out
     return
 }
 
@@ -2000,15 +2000,6 @@ function ai_scenarios.MeteredEcho.baml.ai.HttpProvider.call_messages_with(self: 
     return
 }
 
-function ai_scenarios.MeteredEcho.baml.ai.HttpProvider.meta_of(self: ai_scenarios.MeteredEcho, from: string) -> baml.ai.ResponseMeta {
-    load_var self
-    load_field .1
-    load_var self
-    load_field .2
-    init_instance user.ai_scenarios.MeteredMeta .inp, .out
-    return
-}
-
 function ai_scenarios.MeteredEcho.baml.ai.HttpProvider.parse(self: ai_scenarios.MeteredEcho, from: string) -> T {
     load_type #0
     load_var from
@@ -2024,6 +2015,15 @@ function ai_scenarios.MeteredEcho.baml.ai.HttpProvider.parse(self: ai_scenarios.
     throw
 
   L0:
+    return
+}
+
+function ai_scenarios.MeteredEcho.baml.ai.HttpProvider.parse_meta(self: ai_scenarios.MeteredEcho, from: string) -> baml.ai.ResponseMeta {
+    load_var self
+    load_field .1
+    load_var self
+    load_field .2
+    init_instance user.ai_scenarios.MeteredMeta .inp, .out
     return
 }
 

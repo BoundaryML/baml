@@ -116,7 +116,7 @@ const ECHO_PROVIDER: &str = r#"
                 }
             }
 
-            function meta_of(self, from: string) -> baml.ai.ResponseMeta
+            function parse_meta(self, from: string) -> baml.ai.ResponseMeta
                 throws baml.errors.CallError | baml.errors.UnknownError {
                 let wire: EchoResponseWire = baml.json.from_json<EchoResponseWire>(baml.json.parse(from)) catch (e) {
                     _ => throw baml.errors.UnknownError { data: e, message: ["echo meta failed"] },

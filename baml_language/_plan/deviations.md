@@ -440,3 +440,11 @@ passthrough means validation only discriminates on multi-field arg shapes.
 helpers it obsoleted (`_openai_json_str`, `_realtime_json_str`) are deleted; the OpenAI
 tools decode and realtime event reads now use `path_or` directly (`.function.name`
 nested selectors replaced the two-step `field` chains). 5 unit tests in `ns_json_path`.
+
+## Rename: `HttpProvider.meta_of` → `parse_meta` (user direction)
+
+"meta_of" read as a getter; the method is the metadata half of the response codec —
+`parse` decodes the value, `parse_meta` decodes the `ResponseMeta` sidecar from the same
+`Body`. Mechanical rename across the interface, all providers, the bridge, combinators,
+`ToolLoop`, and the test fakes. Historical mentions in this log and the frozen master
+plan keep the old spelling.

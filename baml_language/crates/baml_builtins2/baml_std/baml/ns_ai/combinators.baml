@@ -4,7 +4,7 @@
 // the capabilities it forwards and degrades/errors at call time. Reachable fluently via
 // the factory methods on the `Provider` marker (`.with_retry`, `.fallback_to`).
 //
-// The codec methods (`build_request`/`send`/`parse`/`meta_of`) have no single honest
+// The codec methods (`build_request`/`send`/`parse`/`parse_meta`) have no single honest
 // meaning for a combinator, so they throw `Unsupported`; the combinator overrides the
 // primitive `call_with` (from which `call` derives) to do the real routing.
 
@@ -35,7 +35,7 @@ class Fallback {
         ) -> T throws root.errors.UnknownError {
             throw root.errors.UnknownError { data: null, message: ["fallback does not parse directly"] }
         }
-        function meta_of(
+        function parse_meta(
             self,
             from: unknown,
         ) -> root.ai.ResponseMeta throws root.errors.UnknownError {
@@ -131,7 +131,7 @@ class Retry {
         ) -> T throws root.errors.UnknownError {
             throw root.errors.UnknownError { data: null, message: ["retry does not parse directly"] }
         }
-        function meta_of(
+        function parse_meta(
             self,
             from: unknown,
         ) -> root.ai.ResponseMeta throws root.errors.UnknownError {
@@ -277,7 +277,7 @@ class RoundRobin {
         ) -> T throws root.errors.UnknownError {
             throw root.errors.UnknownError { data: null, message: ["round_robin does not parse directly"] }
         }
-        function meta_of(
+        function parse_meta(
             self,
             from: unknown,
         ) -> root.ai.ResponseMeta throws root.errors.UnknownError {
@@ -400,7 +400,7 @@ class Traced {
         ) -> T throws root.errors.UnknownError {
             throw root.errors.UnknownError { data: null, message: ["traced does not parse directly"] }
         }
-        function meta_of(
+        function parse_meta(
             self,
             from: unknown,
         ) -> root.ai.ResponseMeta throws root.errors.UnknownError {

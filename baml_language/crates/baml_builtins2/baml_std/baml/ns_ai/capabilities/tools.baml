@@ -265,7 +265,7 @@ class ToolLoop {
         ) -> T throws root.errors.UnknownError {
             throw root.errors.UnknownError { data: null, message: ["tool loop does not parse directly"] }
         }
-        function meta_of(
+        function parse_meta(
             self,
             from: unknown,
         ) -> root.ai.ResponseMeta throws root.errors.UnknownError {
