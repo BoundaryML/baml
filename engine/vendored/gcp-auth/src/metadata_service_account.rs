@@ -1,5 +1,4 @@
-use std::str;
-use std::sync::Arc;
+use std::{str, sync::Arc};
 
 use async_trait::async_trait;
 use bytes::Bytes;
@@ -8,8 +7,10 @@ use hyper::{Method, Request};
 use tokio::sync::RwLock;
 use tracing::{debug, instrument, Level};
 
-use crate::types::{HttpClient, Token};
-use crate::{Error, TokenProvider};
+use crate::{
+    types::{HttpClient, Token},
+    Error, TokenProvider,
+};
 
 /// A token provider that queries the GCP instance metadata server for access tokens
 ///

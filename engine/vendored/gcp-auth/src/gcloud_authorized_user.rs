@@ -1,13 +1,10 @@
-use std::process::Command;
-use std::sync::Arc;
-use std::time::Duration;
+use std::{process::Command, sync::Arc, time::Duration};
 
 use async_trait::async_trait;
 use tokio::sync::RwLock;
 use tracing::{debug, instrument};
 
-use crate::types::Token;
-use crate::{Error, TokenProvider};
+use crate::{types::Token, Error, TokenProvider};
 
 /// A token provider that queries the `gcloud` CLI for access tokens
 #[derive(Debug)]

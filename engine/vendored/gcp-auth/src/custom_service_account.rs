@@ -1,22 +1,20 @@
-use std::collections::HashMap;
-use std::path::Path;
-use std::str::FromStr;
-use std::sync::Arc;
+use std::{collections::HashMap, path::Path, str::FromStr, sync::Arc};
 
 use async_trait::async_trait;
 use base64::{engine::general_purpose::URL_SAFE, Engine};
 use bytes::Bytes;
 use chrono::Utc;
 use http_body_util::Full;
-use hyper::header::CONTENT_TYPE;
-use hyper::Request;
+use hyper::{header::CONTENT_TYPE, Request};
 use serde::Serialize;
 use tokio::sync::RwLock;
 use tracing::{debug, instrument, Level};
 use url::form_urlencoded;
 
-use crate::types::{HttpClient, ServiceAccountKey, Signer, Token};
-use crate::{Error, TokenProvider};
+use crate::{
+    types::{HttpClient, ServiceAccountKey, Signer, Token},
+    Error, TokenProvider,
+};
 
 /// A custom service account containing credentials
 ///

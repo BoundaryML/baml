@@ -1,17 +1,17 @@
-use std::path::PathBuf;
-use std::sync::Arc;
+use std::{path::PathBuf, sync::Arc};
 
 use async_trait::async_trait;
 use bytes::Bytes;
 use http_body_util::Full;
-use hyper::header::CONTENT_TYPE;
-use hyper::{Method, Request};
+use hyper::{header::CONTENT_TYPE, Method, Request};
 use serde::Serialize;
 use tokio::sync::RwLock;
 use tracing::{debug, instrument, Level};
 
-use crate::types::{AuthorizedUserRefreshToken, HttpClient, Token};
-use crate::{Error, TokenProvider};
+use crate::{
+    types::{AuthorizedUserRefreshToken, HttpClient, Token},
+    Error, TokenProvider,
+};
 
 /// A token provider that uses the default user credentials
 ///

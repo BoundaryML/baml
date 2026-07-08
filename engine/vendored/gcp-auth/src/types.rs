@@ -1,22 +1,19 @@
-use std::fs::File;
-use std::path::Path;
-use std::str::FromStr;
-use std::sync::Arc;
-use std::time::Duration;
-use std::{env, fmt};
+use std::{env, fmt, fs::File, path::Path, str::FromStr, sync::Arc, time::Duration};
 
 use bytes::Buf;
 use chrono::{DateTime, Utc};
 use http_body_util::{BodyExt, Full};
-use hyper::body::Bytes;
-use hyper::Request;
-use hyper_util::client::legacy::connect::HttpConnector;
-use hyper_util::client::legacy::Client;
-use hyper_util::rt::TokioExecutor;
-use rsa::pkcs1v15::SigningKey;
-use rsa::pkcs8::DecodePrivateKey;
-use rsa::signature::{SignatureEncoding, Signer as _};
-use rsa::RsaPrivateKey;
+use hyper::{body::Bytes, Request};
+use hyper_util::{
+    client::legacy::{connect::HttpConnector, Client},
+    rt::TokioExecutor,
+};
+use rsa::{
+    pkcs1v15::SigningKey,
+    pkcs8::DecodePrivateKey,
+    signature::{SignatureEncoding, Signer as _},
+    RsaPrivateKey,
+};
 use serde::{Deserialize, Deserializer};
 use sha2::Sha256;
 use tracing::{debug, warn};
@@ -345,7 +342,10 @@ mod signer_tests {
     const EXPECTED_SIG_HEX: &str = "8607e65a2cc1c6bcf058a6a78fd80086fa64a54a4ab934f6246763cf33a80a0274539dfbfa051e228284af05d8017975f5976aac8d766b9809876b4ac4d0b4f97202745febb449ce740e67a85dee19a1c30ee8fe29e89276d6e16788137ee39622b1e7e3019716bf5d10eabc32040bd81933000f914508106cb6e7bc8bc737a893c655d4c1619370aa2b2fdefa24626b6c9e9a26f4e2e9bb3c196d73abb1d27dc659f06a91b46264eea1771e703d9b8915c5bbeed6aab529f2b238c63c7e2907ac121941c3b7e8147f214e403ba71f51df05514e8ab203170b40300bd5321bd8a6b1b55670f2bb1eb043f2af68b9e10df16ac516e18710250600790e7938bdf1";
 
     fn hex_to_bytes(s: &str) -> Vec<u8> {
-        (0..s.len()).step_by(2).map(|i| u8::from_str_radix(&s[i..i + 2], 16).unwrap()).collect()
+        (0..s.len())
+            .step_by(2)
+            .map(|i| u8::from_str_radix(&s[i..i + 2], 16).unwrap())
+            .collect()
     }
 
     #[test]
