@@ -29,9 +29,13 @@ use serde::Serialize;
 
 use crate::db::ProjectDatabase;
 
-/// Guards runaway recursion through pathological (but legal) deeply-nested
-/// anonymous types (`map<string, map<string, …>>`). Named types don't count
-/// against it — each expands at most once into the table. Same bound as TIR's
+/// Bounds recursion through deeply-nested anonymous types
+/// (`map<string, map<string, …>>`) **and** long acyclic named-type chains:
+/// class/alias bodies expand nested within the referencing frame, so without
+/// a shared bound a generated chain of thousands of classes would overflow
+/// the stack (the WASM worker's is ~1 MB). Memoization still makes each named
+/// type expand at most once — a body first reached past the bound just bakes
+/// `Unsupported` tails into its table entry. Same bound as TIR's
 /// `CycleDetector`.
 const MAX_DEPTH: usize = 64;
 
@@ -194,9 +198,9 @@ impl<'db> SchemaCx<'db, '_> {
         }
     }
 
-    /// `depth` counts anonymous structural nesting within one type body; it
-    /// resets when a class or alias body is expanded into the table (each
-    /// body is its own source-bounded tree, expanded at most once).
+    /// `depth` counts every recursion step — structural nesting and named-type
+    /// body expansion alike — so native stack use is bounded by `MAX_DEPTH`
+    /// regardless of how the type graph is shaped.
     fn field_schema(&mut self, ty: &Ty, depth: usize) -> FieldSchema {
         if depth >= MAX_DEPTH {
             return unsupported(ty);
@@ -258,7 +262,7 @@ impl<'db> SchemaCx<'db, '_> {
                             .iter()
                             .map(|(field_name, field_ty)| FieldSchemaField {
                                 name: field_name.to_string(),
-                                schema: self.field_schema(field_ty, 0),
+                                schema: self.field_schema(field_ty, depth + 1),
                             })
                             .collect();
                         self.table
@@ -290,7 +294,7 @@ impl<'db> SchemaCx<'db, '_> {
                                 schema: FieldSchema::Null,
                             },
                         );
-                        let schema = self.field_schema(resolved, 0);
+                        let schema = self.field_schema(resolved, depth + 1);
                         self.table
                             .insert(name.clone(), TypeSchema::Alias { schema });
                         FieldSchema::Ref { name }
@@ -638,6 +642,38 @@ mod tests {
         assert_eq!(
             params_json(&listing, "F")[0]["schema"],
             json!({ "type": "ref", "name": "user.A14" })
+        );
+    }
+
+    #[test]
+    fn long_acyclic_class_chain_is_depth_bounded() {
+        // Class/alias bodies expand nested within the referencing frame, so
+        // MAX_DEPTH must count named-type hops too: a generated chain of
+        // thousands of classes would otherwise recurse one native frame per
+        // hop and overflow the stack (the WASM worker's is ~1 MB). Past the
+        // bound the tail degrades to Unsupported instead.
+        use std::fmt::Write;
+        let mut src = String::new();
+        for i in 0..100 {
+            let next = i + 1;
+            writeln!(src, "class C{i} {{ a C{next} }}").unwrap();
+        }
+        src.push_str("class C100 { x int }\nfunction F(p: C0) -> int { 1 }\n");
+        let db = db_with(&[("main.baml", &src)]);
+        let listing = list_functions_with_metadata(&db);
+        assert_eq!(
+            params_json(&listing, "F")[0]["schema"],
+            json!({ "type": "ref", "name": "user.C0" })
+        );
+        assert!(
+            listing.types.len() < 100,
+            "expected the chain to be cut at MAX_DEPTH, got {} entries",
+            listing.types.len()
+        );
+        let cut = serde_json::to_string(&types_json(&listing)).unwrap();
+        assert!(
+            cut.contains("\"unsupported\""),
+            "expected an unsupported tail"
         );
     }
 
