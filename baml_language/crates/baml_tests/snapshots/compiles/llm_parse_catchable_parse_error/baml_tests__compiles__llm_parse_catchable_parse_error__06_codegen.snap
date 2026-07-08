@@ -157,10 +157,11 @@ function user.ExtractInvoice$stream(text: string, client: baml.llm.Client) -> ba
     return
 }
 
-function user.GPT4o$new() -> null {
+function user.GPT4o$new(lenient: bool) -> null {
     load_const "OPENAI_API_KEY"
-    call baml.env.get_or_panic
-    store_var _2
+    load_var lenient
+    call baml.env.get_or_panic_lenient
+    store_var _3
     load_const "GPT4o"
     load_const "openai"
     load_const "gpt-4o"
@@ -172,7 +173,7 @@ function user.GPT4o$new() -> null {
     load_const null
     load_const null
     load_const null
-    load_var _2
+    load_var _3
     load_const null
     load_const null
     load_type string

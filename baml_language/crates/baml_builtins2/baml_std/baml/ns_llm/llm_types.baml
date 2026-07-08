@@ -98,17 +98,25 @@ class Client {
   retry RetryPolicy?
   counter int
 
-  function to_primitive_client(self) -> PrimitiveClient {
+  /// Build the primitive client this client resolves to.
+  ///
+  /// `lenient` controls how the generated constructor reads `env.X` client
+  /// options: when true, a missing variable yields "" instead of panicking.
+  /// Only the offline `render_prompt` path passes `true` — it needs the
+  /// client's provider/role metadata to render a prompt but never its
+  /// credentials. Every network path keeps the default `false`, so a missing
+  /// `api_key` env var still panics for `$call` / `$build_request`.
+  function to_primitive_client(self, lenient: bool = false) -> PrimitiveClient {
     if (self.name.includes("/")) {
       from_shorthand(self.name)
     } else {
-      self.get_constructor()()
+      self.get_constructor()(lenient)
     }
   }
 
   function get_constructor(
     self
-  ) -> (() -> PrimitiveClient throws root.errors.InvalidArgument) throws never {
+  ) -> ((bool) -> PrimitiveClient throws root.errors.InvalidArgument) throws never {
     $rust_io_function
   }
 

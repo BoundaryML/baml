@@ -47,7 +47,11 @@ function prompt_template_for(function_name: string, prompt_closure: ((Context) -
 
 function render_prompt(client: Client, function_name: string, args: map<string, unknown>, prompt_closure: ((Context) -> PromptAst)? = null) -> PromptAst {
   let return_type = get_return_type(function_name);
-  let primitive_client = client.to_primitive_client();
+  // Rendering is offline: it needs the client's provider/role metadata but no
+  // credentials. Construct leniently so a missing `api_key` env var doesn't
+  // panic — `<Fn>$render_prompt` must work without a key set. (`build_request`
+  // below stays strict, so the network paths still require the key.)
+  let primitive_client = client.to_primitive_client(lenient = true);
   let template = prompt_template_for(function_name, prompt_closure);
   // `render_specialized_prompt` is the same render the orchestrator uses, so the
   // playground preview/cURL render byte-identically to execution.

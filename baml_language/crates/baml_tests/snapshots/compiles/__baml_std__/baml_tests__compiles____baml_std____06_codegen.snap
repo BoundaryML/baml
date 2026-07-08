@@ -3461,6 +3461,35 @@ function baml.env.get_or_panic(key: string) -> string {
     return
 }
 
+function baml.env.get_or_panic_lenient(key: string, lenient: bool) -> string {
+    load_var lenient
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var key
+    call baml.env.get_or_panic
+    store_var _0
+    jump L2
+
+  L1:
+    load_var key
+    sys_op baml.env.get
+    store_var _3
+    load_var _3
+    store_var _0
+    load_var _3
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L2
+    load_const ""
+    store_var _0
+
+  L2:
+    load_var _0
+    return
+}
+
 function baml.errors.ErrorContext$stream.baml.ToString.to_string(self: baml.errors.ErrorContext$stream) -> string {
     load_var self
     call baml.errors.ErrorContext._to_string_impl
@@ -7273,6 +7302,7 @@ function baml.json.to_string(v: T) -> string {
 
 function baml.llm.Client.__make_stream(self: baml.llm.Client, sse: baml.http.SseStream) -> baml.llm.Stream<TStream, TFinal> {
     load_var self
+    load_const <omitted>
     call baml.llm.Client.to_primitive_client
     store_var primitive
     load_var primitive
@@ -7665,6 +7695,7 @@ function baml.llm.Client.build_attempt_with_state(self: baml.llm.Client, planner
 
   L48:
     load_var self
+    load_const <omitted>
     call baml.llm.Client.to_primitive_client
     store_var primitive
     load_var primitive
@@ -8155,6 +8186,7 @@ function baml.llm.Client.execute_once_oneshot(self: baml.llm.Client, context: ba
 
   L28:
     load_var self
+    load_const <omitted>
     call baml.llm.Client.to_primitive_client
     store_var primitive
     load_type #0
@@ -8466,6 +8498,7 @@ function baml.llm.Client.execute_once_stream(self: baml.llm.Client, context: bam
 
   L28:
     load_var self
+    load_const <omitted>
     call baml.llm.Client.to_primitive_client
     store_var primitive
     load_var context
@@ -8693,29 +8726,39 @@ function baml.llm.Client.execute_stream(self: baml.llm.Client, context: baml.llm
     return
 }
 
-function baml.llm.Client.get_constructor(self: baml.llm.Client) -> () -> baml.llm.PrimitiveClient throws baml.errors.InvalidArgument {
+function baml.llm.Client.get_constructor(self: baml.llm.Client) -> (bool) -> baml.llm.PrimitiveClient throws baml.errors.InvalidArgument {
 }
 
-function baml.llm.Client.to_primitive_client(self: baml.llm.Client) -> baml.llm.PrimitiveClient {
+function baml.llm.Client.to_primitive_client(self: baml.llm.Client, lenient: bool) -> baml.llm.PrimitiveClient {
+    load_var lenient
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const false
+    store_var lenient
+
+  L0:
     load_var self
     load_field .name
     load_const "/"
     call baml.String.includes
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_var self
-    sys_op baml.llm.Client.get_constructor
-    call_indirect
+    pop_jump_if_false L1
     jump L2
 
   L1:
     load_var self
+    sys_op baml.llm.Client.get_constructor
+    store_var _7
+    load_var2 2 3
+    call_indirect
+    jump L3
+
+  L2:
+    load_var self
     load_field .name
     sys_op baml.llm.from_shorthand
 
-  L2:
+  L3:
     return
 }
 
@@ -9191,6 +9234,7 @@ function baml.llm.build_request(client: baml.llm.Client, function_name: string, 
     sys_op baml.llm.get_return_type
     store_var return_type
     load_var client
+    load_const <omitted>
     call baml.llm.Client.to_primitive_client
     store_var primitive_client
     load_var2 2 4
@@ -9220,6 +9264,7 @@ function baml.llm.build_request_stream(client: baml.llm.Client, function_name: s
     sys_op baml.llm.get_return_type
     store_var return_type
     load_var client
+    load_const <omitted>
     call baml.llm.Client.to_primitive_client
     store_var primitive_client
     load_var2 2 4
@@ -9363,6 +9408,7 @@ function baml.llm.render_prompt(client: baml.llm.Client, function_name: string, 
     sys_op baml.llm.get_return_type
     store_var return_type
     load_var client
+    load_const true
     call baml.llm.Client.to_primitive_client
     store_var primitive_client
     load_var2 2 4

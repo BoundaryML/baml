@@ -147,7 +147,7 @@ function user.ExtractAny$stream(client: baml.llm.Client) -> baml.llm.Stream<baml
     return
 }
 
-function user.TestClient$new() -> null {
+function user.TestClient$new(lenient: bool) -> null {
     load_const "TestClient"
     load_const "openai"
     load_const "gpt-4o-mini"

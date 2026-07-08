@@ -437,10 +437,11 @@ function user.GenerateMixedImageNarrative$stream(prompt: string, client: baml.ll
     return
 }
 
-function user.OpenAIImageResponses$new() -> null {
+function user.OpenAIImageResponses$new(lenient: bool) -> null {
     load_const "OPENAI_API_KEY"
-    call baml.env.get_or_panic
-    store_var _2
+    load_var lenient
+    call baml.env.get_or_panic_lenient
+    store_var _3
     load_const "OpenAIImageResponses"
     load_const "openai-responses"
     load_const "gpt-4.1"
@@ -452,7 +453,7 @@ function user.OpenAIImageResponses$new() -> null {
     load_const null
     load_const null
     load_const null
-    load_var _2
+    load_var _3
     load_const null
     load_const null
     load_type string

@@ -17,7 +17,7 @@ function boundary.id() -> boundary.LocalId {
 function boundary.id.current() -> string {
 }
 
-function user.MyClient$new() -> null {
+function user.MyClient$new(lenient: bool) -> null {
     load_const "MyClient"
     load_const "openai"
     load_const null
