@@ -91,7 +91,7 @@ Check a scenario when its `ns_ai_scenarios/NN_*/` exists with green tests on the
 (offline tier at minimum; integ-test tier where the scenario is API-facing). Mark P8-blocked ones
 with the blocker instead of faking a run.
 
-- Single-turn & output: [ ] 01 [ ] 02 [ ] 03 [ ] 04 [ ] 05 [ ] 06 [ ] 07 [ ] 08
+- Single-turn & output: [x] 01 [x] 02 [x] 03 [x] 04 (negotiation offline; SSE = Rust tier) [ ] 05 (live-only: e2e_multimodal_live) [ ] 06 (needs media-output provider) [x] 07 [x] 08
 - Tools & agents: [ ] 09 [x] 10 (ToolLoop + $run_tools, offline) [x] 11 (parallel dispatch) [x] 12 (taxonomy) [x] 13 (catalog paging) [x] 14 (handoff) [x] 15 (tripwires) [x] 16 (allowlist gate + ToolLoop compose)
 - State & memory: [x] 17 (session threading, offline) [ ] 18(P8-store) [ ] 19(P8-store) [ ] 20 [ ] 21(P8-store)
 - Realtime & voice: [x] 22 (offline `$live` + fake; live tier = ai_realtime.rs) [x] 23 (negotiation) [ ] 24 [x] 25 (cascaded pipeline, offline) [ ] 26
