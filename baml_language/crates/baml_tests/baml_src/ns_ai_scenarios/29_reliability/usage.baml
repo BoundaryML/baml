@@ -19,3 +19,12 @@ test "29: fluent combinator factories chain off any provider" {
     };
     assert.equal(r, "via fluent")
 }
+
+test "29: Retry exhausts its budget over a failing provider and throws" {
+    let p: baml.ai.Provider = AlwaysFailProvider {}.with_retry(2);
+    let r = match (p) {
+        let h: baml.ai.HttpProvider => h.call<string>("q") catch (e) { _ => "exhausted" },
+        _ => "not http",
+    };
+    assert.equal(r, "exhausted")
+}

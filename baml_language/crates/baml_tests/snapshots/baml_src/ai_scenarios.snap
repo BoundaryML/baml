@@ -412,6 +412,12 @@ function ai_scenarios.$init_test_ns_ai_scenarios_29_reliability_usage(registry: 
     load_const null
     call testing.TestCollector.register_test
     pop 1
+    load_var registry
+    load_const "29: Retry exhausts its budget over a failing provider and throws"
+    make_closure .<lambda($init_test_ns_ai_scenarios_29_reliability_usage, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
     load_const null
     return
 }

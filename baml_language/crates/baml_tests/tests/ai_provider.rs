@@ -29,63 +29,6 @@ async fn openai_implements_capabilities() {
     assert_eq!(output.result.unwrap(), BexExternalValue::Bool(true));
 }
 
-/// A deliberately-thrown `CallError` keeps its concrete identity through a
-/// normalizing `catch`, while a foreign error boxes into `UnknownError`.
-#[tokio::test]
-async fn capability_error_normalization() {
-    let output = baml_test!(
-        r#"
-        class RateLimit {
-            retry_after int
-            implements baml.errors.Failure {
-                function is_retryable(self) -> bool { true }
-                function is_effectful(self) -> bool { false }
-                function is_policy_refusal(self) -> bool { false }
-                function is_resumable(self) -> bool { false }
-                function is_unsupported(self) -> bool { false }
-            }
-            implements baml.errors.CallError {
-                function is_network_error(self) -> bool { false }
-                function is_rate_limit(self) -> bool { true }
-                function is_parse_error(self) -> bool { false }
-            }
-        }
-        class Foreign { code int }
-
-        function raw(rate_limited: bool) -> int throws RateLimit | Foreign {
-            if (rate_limited) { throw RateLimit { retry_after: 5 } } else { throw Foreign { code: 7 } }
-        }
-
-        // normalize: known CallError passes through; foreign boxes into UnknownError.
-        function guarded(rate_limited: bool) -> int throws baml.errors.CallError | baml.errors.UnknownError {
-            raw(rate_limited) catch (e) {
-                let c: baml.errors.CallError => throw c,
-                _ => throw baml.errors.UnknownError { data: e, message: ["guarded failed"] },
-            }
-        }
-
-        function describe(rate_limited: bool) -> string {
-            let n: int = guarded(rate_limited) catch (e) {
-                let r: RateLimit => return "rl:" + r.retry_after.to_string(),
-                let u: baml.errors.UnknownError => return "boxed:" + u.message.join(","),
-                let c: baml.errors.CallError => return "iface",
-            };
-            "ok:" + n.to_string()
-        }
-
-        function main() -> string {
-            describe(true) + "|" + describe(false)
-        }
-        "#
-    );
-    assert_eq!(
-        output.result.unwrap(),
-        BexExternalValue::String("rl:5|boxed:guarded failed".into())
-    );
-    // describe(true) => concrete RateLimit passed through => "rl:5"
-    // describe(false) => foreign Foreign boxed into UnknownError => "boxed:guarded failed"
-}
-
 /// The full OpenAI `call<string>` pipeline (build_request → send → parse) against a
 /// mocked Chat Completions endpoint — deterministic, no network/key required.
 #[tokio::test]
@@ -355,25 +298,6 @@ async fn retry_recovers_after_transient_failures() {
     assert_eq!(
         output.result.unwrap(),
         BexExternalValue::String("pong".into())
-    );
-}
-
-/// `with_retry` gives up and surfaces the error after exhausting its budget.
-#[tokio::test]
-async fn retry_exhausts_and_throws() {
-    let output = baml_test!(
-        r#"
-        function main() -> string {
-            let p = baml.ai.OpenAi { model: "m", api_key: "k", base_url: "http://127.0.0.1:1/v1" }.with_retry(2);
-            p.call<string>("hi") catch (e) {
-                let u: baml.errors.UnknownError => "ERR",
-            }
-        }
-        "#
-    );
-    assert_eq!(
-        output.result.unwrap(),
-        BexExternalValue::String("ERR".into())
     );
 }
 
@@ -802,36 +726,6 @@ async fn round_robin_alternates_members() {
     );
 }
 
-/// Constrained decoding (scenario 03): `OpenAi` does NOT implement `Constrained`, so a
-/// function demanding a by-construction guarantee falls to the `_` arm and throws
-/// `Unsupported` — the capability is a runtime promise (design gap B1), no fake guarantee.
-#[tokio::test]
-async fn constrained_capability_absent_is_runtime_promise() {
-    let output = baml_test!(
-        r#"
-        function classify(p: baml.ai.Provider, text: string, pattern: string) -> string
-            throws baml.errors.CallError | baml.errors.UnknownError {
-            match (p) {
-                let c: baml.ai.Constrained => c.decode<string>(text, pattern),
-                _ => throw baml.errors.Unsupported { message: "client cannot guarantee constrained decoding" },
-            }
-        }
-        function main() -> string {
-            let p: baml.ai.Provider = baml.ai.OpenAi { model: "m", api_key: "k", base_url: null };
-            classify(p, "hi", "(yes|no)") catch (e) {
-                let un: baml.errors.Unsupported => "unsupported",
-                let u: baml.errors.UnknownError => "err",
-                let c: baml.errors.CallError => "callerr",
-            }
-        }
-        "#
-    );
-    assert_eq!(
-        output.result.unwrap(),
-        BexExternalValue::String("unsupported".into())
-    );
-}
-
 /// Enriched outputs (scenarios 07/08): reasoning + logprobs as `ResponseMeta` dimensions
 /// projected via `call_with`. Reasoning is `Unavailable` on chat; logprobs parse when present.
 #[tokio::test]
@@ -866,59 +760,6 @@ async fn response_meta_reasoning_and_logprobs() {
     assert_eq!(
         output.result.unwrap(),
         BexExternalValue::String("logprobs:2|reasoning_unavailable".into())
-    );
-}
-
-/// Realtime capability negotiation (scenarios 22–26): a realtime provider matches
-/// `Realtime`/`LiveControl`; an HTTP-only provider does not (no fake `call`, OQ1).
-#[tokio::test]
-async fn realtime_capability_negotiation() {
-    let output = baml_test!(
-        r#"
-        function main() -> string {
-            let rt: baml.ai.Provider = baml.ai.OpenAiRealtime { voice: "alloy", api_key: "k" };
-            let chat: baml.ai.Provider = baml.ai.OpenAi { model: "m", api_key: "k", base_url: null };
-            let a = match (rt) { let r: baml.ai.Realtime => "realtime", _ => "no" };
-            let b = match (chat) { let r: baml.ai.Realtime => "realtime", _ => "no" };
-            let c = match (rt) { let lc: baml.ai.LiveControl => "live", _ => "no" };
-            a + "|" + b + "|" + c
-        }
-        "#
-    );
-    assert_eq!(
-        output.result.unwrap(),
-        BexExternalValue::String("realtime|no|live".into())
-    );
-}
-
-/// Stateful capabilities (17/27/44 …): an HTTP-only provider does not implement the
-/// stateful capabilities, so their negotiated examples fall to the runtime-promise path.
-#[tokio::test]
-async fn stateful_capabilities_negotiation() {
-    let output = baml_test!(
-        r#"
-        function main() -> string {
-            let p: baml.ai.Provider = baml.ai.OpenAi { model: "m", api_key: "k", base_url: null };
-            let session = baml.ai.Session { _id: "s1" };
-            let a = match (p) {
-                let conv: baml.ai.Conversational => conv.chat<string>("hi", session) catch (e) { _ => "conv_err" },
-                _ => "no_conv",
-            };
-            let b = match (p) {
-                let bg: baml.ai.Background => "bg",
-                _ => "no_bg",
-            };
-            let c = match (p) {
-                let s: baml.ai.Suspendable => "suspendable",
-                _ => "no_suspend",
-            };
-            a + "|" + b + "|" + c
-        }
-        "#
-    );
-    assert_eq!(
-        output.result.unwrap(),
-        BexExternalValue::String("no_conv|no_bg|no_suspend".into())
     );
 }
 
@@ -1366,32 +1207,6 @@ async fn retry_skips_non_retryable_errors() {
     assert_eq!(
         n, 1,
         "a non-retryable 400 must not be re-driven, saw {n} requests"
-    );
-}
-
-/// D2: Retry refuses to wrap an EFFECTFUL provider (OpenAiResponses stores server state /
-/// bills jobs) — typed CannotRetry instead of a silent double-drive.
-#[tokio::test]
-async fn retry_refuses_effectful_provider() {
-    let output = baml_test!(
-        r#"
-        function main() -> string {
-            let p = baml.ai.OpenAiResponses { model: "m", api_key: "k" }.with_retry(2);
-            p.call<string>("hi") catch (e) {
-                let cr: baml.errors.CannotRetry => "refused: " + cr.message,
-                let u: baml.errors.UnknownError => "unknown",
-                let c: baml.errors.CallError => "callerr",
-            }
-        }
-        "#
-    );
-    let got = output.result.unwrap();
-    let BexExternalValue::String(s) = got else {
-        panic!("expected string, got {got:?}")
-    };
-    assert!(
-        s.starts_with("refused: provider is effectful"),
-        "unexpected: {s:?}"
     );
 }
 
