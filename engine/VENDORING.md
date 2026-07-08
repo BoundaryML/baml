@@ -64,9 +64,9 @@ requests must go through a proxy.
 
 All shipping HTTP goes through the internal [`baml-http`](baml-http/) crate:
 
-- **Native targets**: implemented directly on `hyper` + `hyper-util` +
-  `hyper-rustls` (rustls + `ring`, bundled webpki roots). reqwest is not in
-  the native dependency tree at all.
+- **Native targets**: implemented directly on `hyper` + `hyper-util`, with a
+  selectable TLS backend (see below). reqwest is not in the native dependency
+  tree at all.
 - **wasm32**: re-exports reqwest, whose browser-fetch backend is the only
   practical option there.
 
@@ -78,9 +78,23 @@ Known differences from the old reqwest stack (see `baml-http/src/lib.rs`):
 environment proxies (`HTTP_PROXY`/`HTTPS_PROXY`) are not supported, and
 `read_timeout` acts as an idle timeout between body chunks.
 
-A consumer that prefers its own trust roots over the bundled webpki set can
-patch `baml-http`'s `ClientBuilder::build` (one function) to plug in a custom
-`rustls::RootCertStore`.
+### TLS backend (and the `ring` question)
+
+baml-http's TLS backend is a cargo feature:
+
+- **`native-tls` (default)**: platform TLS (SChannel / Security.framework /
+  system OpenSSL) via hyper-tls. Reads the OS trust store (corporate/internal
+  CAs work out of the box) and **does not pull in `ring`**. Uses HTTP/1.1.
+- **`rustls-tls`**: statically-linked rustls + ring + bundled webpki roots,
+  HTTP/2 enabled. Most portable for prebuilt wheels, but pulls in `ring`.
+- **`native-tls-vendored`**: native-tls with a statically-vendored OpenSSL,
+  for portable Linux wheels without a system `libssl`.
+
+With the default (`native-tls`), the base vendor profile is **ring-free**.
+The one remaining `ring` source is the `vertex` feature: `gcp_auth 0.12` links
+`ring`/`hyper-rustls` unconditionally, so a Vertex build reintroduces it. A
+fully ring-free Vertex path requires replacing/patching that auth crate or
+injecting credentials so gcp_auth is not used.
 
 ## Generating the import list
 

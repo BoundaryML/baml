@@ -25,7 +25,7 @@ language-server = { path = "../language_server", default-features = false, optio
 baml-types.workspace = true
 baml-log.workspace = true
 clap = { workspace = true, features = ["color", "env"] }
-clap-cargo = "0.14.1"
+clap-cargo = "0.12"
 ctrlc = "3.4"
 internal-baml-core.workspace = true
 log.workspace = true

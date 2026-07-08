@@ -1,7 +1,8 @@
 //! hyper-backed implementation of the reqwest API subset BAML uses.
 //!
-//! Built on hyper + hyper-util (legacy pooling client) + hyper-rustls
-//! (webpki roots, ring). Differences from reqwest, by design:
+//! Built on hyper + hyper-util (legacy pooling client) with a feature-selected
+//! TLS backend (native-tls by default, rustls optional; see the crate docs).
+//! Differences from reqwest, by design:
 //!
 //! - No environment proxy support (HTTP_PROXY/HTTPS_PROXY are ignored).
 //! - `read_timeout` is applied as an idle-timeout between body chunks (and as
@@ -23,7 +24,14 @@ use hyper_util::{
 };
 pub use url::Url;
 
+#[cfg(feature = "native-tls")]
+type Connector = hyper_tls::HttpsConnector<HttpConnector>;
+#[cfg(all(feature = "rustls-tls", not(feature = "native-tls")))]
 type Connector = hyper_rustls::HttpsConnector<HttpConnector>;
+
+#[cfg(not(any(feature = "native-tls", feature = "rustls-tls")))]
+compile_error!("baml-http: enable a TLS backend feature (`native-tls` (default) or `rustls-tls`)");
+
 type Inner = LegacyClient<Connector, Full<Bytes>>;
 
 const MAX_REDIRECTS: usize = 10;
@@ -292,9 +300,11 @@ impl From<&'static [u8]> for Body {
 // TLS: accept-invalid-certs verifier (used for user-configured local proxies)
 // ---------------------------------------------------------------------------
 
+#[cfg(all(feature = "rustls-tls", not(feature = "native-tls")))]
 #[derive(Debug)]
 struct DangerAcceptAnyCert(rustls::crypto::CryptoProvider);
 
+#[cfg(all(feature = "rustls-tls", not(feature = "native-tls")))]
 impl rustls::client::danger::ServerCertVerifier for DangerAcceptAnyCert {
     fn verify_server_cert(
         &self,
@@ -396,6 +406,54 @@ impl ClientBuilder {
     }
 
     pub fn build(self) -> Result<Client> {
+        let mut http = HttpConnector::new();
+        http.enforce_http(false);
+        http.set_connect_timeout(self.connect_timeout);
+
+        let https = self.build_https_connector(http)?;
+
+        let mut builder = LegacyClient::builder(TokioExecutor::new());
+        builder
+            .pool_timer(TokioTimer::new())
+            .timer(TokioTimer::new())
+            .pool_idle_timeout(self.pool_idle_timeout);
+        if let Some(max) = self.pool_max_idle_per_host {
+            builder.pool_max_idle_per_host(max);
+        }
+        if let Some(interval) = self.http2_keep_alive_interval {
+            builder.http2_keep_alive_interval(interval);
+        }
+
+        Ok(Client {
+            inner: Arc::new(builder.build(https)),
+            read_timeout: self.read_timeout,
+        })
+    }
+
+    #[cfg(feature = "native-tls")]
+    fn build_https_connector(&self, http: HttpConnector) -> Result<Connector> {
+        let mut tls = native_tls::TlsConnector::builder();
+        // Force HTTP/1.1: hyper-tls does not forward the negotiated-h2 ALPN
+        // hint to hyper-util, so offering h2 makes the server speak h2 while
+        // hyper still sends HTTP/1.1 frames (hyper::Error(UnexpectedMessage)).
+        // LLM request/response and SSE streaming work fine over HTTP/1.1.
+        tls.request_alpns(&["http/1.1"]);
+        if self.danger_accept_invalid_certs {
+            tls.danger_accept_invalid_certs(true);
+        }
+        let tls = tls
+            .build()
+            .map_err(|e| Error::new(Kind::Builder).with_source(e))?;
+        let mut https =
+            hyper_tls::HttpsConnector::from((http, tokio_native_tls::TlsConnector::from(tls)));
+        // Permit plain-HTTP requests (e.g. user-configured local proxies),
+        // matching the rustls backend's `https_or_http()`.
+        https.https_only(false);
+        Ok(https)
+    }
+
+    #[cfg(all(feature = "rustls-tls", not(feature = "native-tls")))]
+    fn build_https_connector(&self, http: HttpConnector) -> Result<Connector> {
         let provider = rustls::crypto::ring::default_provider();
 
         let tls = if self.danger_accept_invalid_certs {
@@ -417,33 +475,12 @@ impl ClientBuilder {
         // Note: ALPN is configured by hyper-rustls (enable_http1/enable_http2
         // below); pre-setting tls.alpn_protocols here would panic.
 
-        let mut http = HttpConnector::new();
-        http.enforce_http(false);
-        http.set_connect_timeout(self.connect_timeout);
-
-        let https = hyper_rustls::HttpsConnectorBuilder::new()
+        Ok(hyper_rustls::HttpsConnectorBuilder::new()
             .with_tls_config(tls)
             .https_or_http()
             .enable_http1()
             .enable_http2()
-            .wrap_connector(http);
-
-        let mut builder = LegacyClient::builder(TokioExecutor::new());
-        builder
-            .pool_timer(TokioTimer::new())
-            .timer(TokioTimer::new())
-            .pool_idle_timeout(self.pool_idle_timeout);
-        if let Some(max) = self.pool_max_idle_per_host {
-            builder.pool_max_idle_per_host(max);
-        }
-        if let Some(interval) = self.http2_keep_alive_interval {
-            builder.http2_keep_alive_interval(interval);
-        }
-
-        Ok(Client {
-            inner: Arc::new(builder.build(https)),
-            read_timeout: self.read_timeout,
-        })
+            .wrap_connector(http))
     }
 }
 

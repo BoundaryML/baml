@@ -170,10 +170,9 @@ gcp_auth = { version = "0.12.3", optional = true }
 hostname = "0.3.1"
 http-body-util = "0.1"
 notify-debouncer-full = { version = "0.3.1", optional = true }
-ring = { version = "0.17.4", features = ["std"] }
 tokio = { version = "1", features = ["full"] }
 walkdir = "2.5.0"
-which = "6.0.3"
+which = "7"
 indicatif = "0.17"
 junit-report = "0.8.3"
 ratatui = { version = "0.29", optional = true }
