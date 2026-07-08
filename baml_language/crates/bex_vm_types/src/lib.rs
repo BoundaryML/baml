@@ -30,10 +30,6 @@ pub use indexable::{
 };
 pub use link::LinkError;
 pub use roots::{PermitProof, RootHaver, WriteBarrier};
-pub use unit::{
-    CompilationUnit, ExportTable, GenericFnKey, LetDef, LocalRef, ProgramImplRuleFrag,
-    ProgramMethodImplFrag, ProgramPackageFrag, Symbol, SymbolKind,
-};
 pub use task_group::{TaskGroupInner, TaskGroupPermit, TaskGroupTicket};
 pub use types::{
     ArrayContainer, ArrayReadGuard, ArrayWriteGuard, AtomicValueSlot, BoundMethod, CaptureCategory,
@@ -45,6 +41,10 @@ pub use types::{
     SysOpPanicCategory, TestArgValue, TestCase, Uint8ArrayContainer, Uint8ArrayReadGuard,
     Uint8ArrayWriteGuard, UnscheduledFuture, Value, ValueKind, Variant, format_float,
     sys_op_for_path, type_tags,
+};
+pub use unit::{
+    CompilationUnit, ExportTable, GenericFnKey, InitTail, LetDef, LocalRef, ProgramImplRuleFrag,
+    ProgramMethodImplFrag, ProgramPackageFrag, Symbol, SymbolKind,
 };
 
 /// Used to check if the VM should yield early.

@@ -237,6 +237,51 @@ pub struct CompilationUnit {
     /// Per-function throw facts, carried for the seeded-throws dirty-set path.
     /// Not folded into `Program` — consumed by the cache/manifest layer.
     pub throw_facts: Vec<FunctionThrowFacts>,
+
+    /// The whole-*group* `$init` / `$init_test` tail (design §9 R2), carried on
+    /// one unit of the group that produces it (empty on every other unit). The
+    /// tail cannot be a per-file product — `$init` topo-sorts a package's `let`s
+    /// across files — so it is captured pre-synthesized and the linker places it
+    /// after the group's regular code (see [`InitTail`]).
+    pub init_tail: Option<InitTail>,
+}
+
+/// The pre-synthesized `$init` / `$init_test` tail of one emit **group** (design
+/// §9 R2). Its objects are the per-package `$init` helper functions (with any
+/// lambdas + interned literals), the `$init` functions themselves, and the
+/// `$init_test` chainers, in the exact pool order a full compile emits them. The
+/// linker appends them after the group's regular code and assigns their global
+/// slots after the group's function+`let` slots, reproducing the flat layout.
+///
+/// # Operand convention
+///
+/// A tail object's index operands use a per-tail local/import convention
+/// mirroring §2a: an `ObjectIndex` `raw < objects.len()` is tail-local (the
+/// linker rebases it `tail_object_base + raw`); otherwise it indexes
+/// [`Self::object_imports`]. A `GlobalIndex` `raw < slot_objects.len()` is a
+/// tail-local slot (a nameless `$init` helper slot, or a named `$init`/
+/// `$init_test` slot — rebased `tail_slot_base + raw`); otherwise it indexes
+/// [`Self::global_imports`] (a `let`/function slot in the main image).
+#[derive(Clone, Debug, Default, BorshSerialize, BorshDeserialize)]
+pub struct InitTail {
+    /// Tail objects (helpers, their lambdas/literals, `$init`s, `$init_test`s)
+    /// in pool order, operands in the tail-local convention above.
+    pub objects: Vec<Object>,
+    /// Cross-tail object references (main-image classes/enums/interfaces/
+    /// functions/generic-fns), by symbol.
+    pub object_imports: Vec<Symbol>,
+    /// Cross-tail global references (main-image functions/`let`s), by symbol.
+    pub global_imports: Vec<Symbol>,
+    /// Tail-local object index of each tail object that owns a global slot, in
+    /// slot-assignment order. Every such slot holds `Object(that object)`; the
+    /// index into this vec is the tail-local slot ordinal.
+    pub slot_objects: Vec<u32>,
+    /// The named tail functions (`$init` / `$init_test` chainers) to register in
+    /// `function_indices` / `function_global_indices`: fq name → tail-local
+    /// object index.
+    pub named: Vec<(String, u32)>,
+    /// This group's contribution to `Program::package_init_order`, in order.
+    pub package_init_order: Vec<String>,
 }
 
 #[cfg(test)]
@@ -336,6 +381,7 @@ mod tests {
             template_macros: Vec::new(),
             test_cases: Vec::new(),
             throw_facts: Vec::new(),
+            init_tail: None,
         }
     }
 
@@ -347,8 +393,7 @@ mod tests {
     fn compilation_unit_borsh_round_trip() {
         let unit = sample_unit();
         let bytes = borsh::to_vec(&unit).expect("serialize unit");
-        let round_tripped: CompilationUnit =
-            borsh::from_slice(&bytes).expect("deserialize unit");
+        let round_tripped: CompilationUnit = borsh::from_slice(&bytes).expect("deserialize unit");
         let bytes_again = borsh::to_vec(&round_tripped).expect("re-serialize unit");
         assert_eq!(bytes, bytes_again, "unit must round-trip through borsh");
     }

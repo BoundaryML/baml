@@ -9,30 +9,38 @@
 //! is unchanged in shape; borsh of `link(all units)` must equal borsh of a full
 //! compile (the byte-identity oracle, design §5).
 //!
-//! # Stage 1 scope
+//! # Layout the linker must reproduce
 //!
-//! This module implements only the trivial skeleton: linking units whose
-//! references are all **local** (empty import tables). It places each unit's
-//! objects at a running base and rebases local operands `Local(i) ->
-//! object_base + i`. The full pass-major interleaving, import resolution,
-//! generic-function interning, and `$init` synthesis (design §3b) are Stage 2,
-//! marked with `STAGE 2:` below. For a single local-only unit the skeleton
-//! already reproduces the flat-`Program` layout, which is the Stage 1 gate.
+//! A full compile emits in two file **groups** — builtin stubs first, then user
+//! files — and within a group runs pass-major (all classes, then all enums,
+//! then all interfaces, then all code, then the package `$init` tail). So the
+//! flat pool is **group-major, pass-major within a group** (design §9 R3):
+//!
+//! ```text
+//! [B classes][B enums][B interfaces][B code][B $init]
+//! [U classes][U enums][U interfaces][U code][U $init]
+//! ```
+//!
+//! The linker interleaves each unit's buckets bucket-by-bucket across the units
+//! of its group, in file order, reproducing that exact pool order. Units are
+//! partitioned into groups by their [`CompilationUnit::source_file`]: builtin
+//! files carry a `<builtin>/…` path.
 
 use std::collections::HashMap;
 
+use baml_base::Name;
+
 use crate::{
-    ConstValue, GlobalIndex, ObjectIndex, Program,
+    ConstValue, GlobalIndex, Object, ObjectIndex, Program,
     relink::{IndexOperand, visit_object_operands},
-    unit::{CompilationUnit, LocalRef},
+    types::{ProgramImplRule, ProgramMethodImpl},
+    unit::{CompilationUnit, LocalRef, ProgramPackageFrag, Symbol, SymbolKind},
 };
 
 /// An error raised while linking symbolic units into a [`Program`].
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum LinkError {
-    /// An import named a fully-qualified name that no unit exports. In Stage 1
-    /// this also fires for *any* import, because cross-unit resolution is not
-    /// wired yet.
+    /// An import named a fully-qualified name that no unit exports.
     UnresolvedImport(String),
     /// Two units export the same fully-qualified name.
     DuplicateExport(String),
@@ -45,7 +53,10 @@ impl std::fmt::Display for LinkError {
                 write!(f, "unresolved import: no unit exports `{name}`")
             }
             Self::DuplicateExport(name) => {
-                write!(f, "duplicate export: `{name}` is exported by more than one unit")
+                write!(
+                    f,
+                    "duplicate export: `{name}` is exported by more than one unit"
+                )
             }
         }
     }
@@ -53,23 +64,64 @@ impl std::fmt::Display for LinkError {
 
 impl std::error::Error for LinkError {}
 
-/// Total number of pool objects a unit contributes (across all four buckets).
-fn unit_object_count(unit: &CompilationUnit) -> usize {
-    unit.classes.len() + unit.enums.len() + unit.interfaces.len() + unit.code.len()
+/// Is this unit part of the builtin (stdlib) group? Builtin source files carry a
+/// `<builtin>/…` project-relative path; user files never do.
+fn is_builtin_unit(unit: &CompilationUnit) -> bool {
+    unit.source_file.starts_with("<builtin>/")
 }
 
-/// Absolute object index of a unit-local [`LocalRef`], given the unit's object
-/// base. Buckets are laid out classes, then enums, then interfaces, then code
-/// (§2a / §3b), so each bucket contributes its predecessors' lengths.
-fn local_ref_abs(unit: &CompilationUnit, object_base: usize, local_ref: LocalRef) -> usize {
-    let classes = unit.classes.len();
-    let enums = unit.enums.len();
-    let interfaces = unit.interfaces.len();
+/// Per-unit placement layout: the absolute base of each object bucket and the
+/// global-slot bases for the unit's functions and `let`s.
+#[derive(Clone, Copy, Default)]
+struct UnitLayout {
+    class_base: usize,
+    enum_base: usize,
+    iface_base: usize,
+    code_base: usize,
+    /// Number of the unit's globals owned by functions (the rest are `let`s).
+    func_count: usize,
+    /// Absolute slot of the unit's first function global.
+    func_gbase: usize,
+    /// Absolute slot of the unit's first `let` global.
+    let_gbase: usize,
+}
+
+impl UnitLayout {
+    /// Decode a per-unit-local flat object index (§2a) to an absolute
+    /// `ObjectIndex`, applying the correct bucket base.
+    fn local_object(&self, unit: &CompilationUnit, raw: usize) -> usize {
+        let c = unit.classes.len();
+        let e = unit.enums.len();
+        let i = unit.interfaces.len();
+        if raw < c {
+            self.class_base + raw
+        } else if raw < c + e {
+            self.enum_base + (raw - c)
+        } else if raw < c + e + i {
+            self.iface_base + (raw - c - e)
+        } else {
+            self.code_base + (raw - c - e - i)
+        }
+    }
+
+    /// Decode a per-unit-local flat global index (§2a) to an absolute slot. The
+    /// local global space is `[functions 0..func_count][lets func_count..]`.
+    fn local_global(&self, raw: usize) -> usize {
+        if raw < self.func_count {
+            self.func_gbase + raw
+        } else {
+            self.let_gbase + (raw - self.func_count)
+        }
+    }
+}
+
+/// Absolute object index of an exported [`LocalRef`] given the unit's layout.
+fn export_object_abs(layout: &UnitLayout, local_ref: LocalRef) -> usize {
     match local_ref {
-        LocalRef::Class(k) => object_base + k as usize,
-        LocalRef::Enum(k) => object_base + classes + k as usize,
-        LocalRef::Interface(k) => object_base + classes + enums + k as usize,
-        LocalRef::Code(k) => object_base + classes + enums + interfaces + k as usize,
+        LocalRef::Class(k) => layout.class_base + k as usize,
+        LocalRef::Enum(k) => layout.enum_base + k as usize,
+        LocalRef::Interface(k) => layout.iface_base + k as usize,
+        LocalRef::Code(k) => layout.code_base + k as usize,
     }
 }
 
@@ -78,138 +130,520 @@ fn local_ref_abs(unit: &CompilationUnit, object_base: usize, local_ref: LocalRef
 /// `units` must already be in the deterministic file-discovery order (builtins
 /// first, then user files) — the linker's positional appends follow that order.
 ///
-/// # Stage 1 behavior
-///
-/// Handles only units with empty import tables. Objects are placed per unit at a
-/// running base (whole-unit concatenation), local operands are rebased through
-/// [`relink::visit_object_operands`](crate::relink), each function's global slot
-/// is filled with `ConstValue::Object(its object)`, each `let`'s slot is left
-/// `Null`, and the function/let name maps are populated. `$init` synthesis,
-/// generic-fn interning, package merging, and client metadata are deferred.
-///
 /// # Errors
 ///
-/// [`LinkError::UnresolvedImport`] if any unit has a non-empty import table
-/// (Stage 1 cannot resolve cross-unit references yet), and
-/// [`LinkError::DuplicateExport`] if two units claim the same fully-qualified
-/// function or `let` name.
+/// [`LinkError::UnresolvedImport`] if any unit imports a fully-qualified name no
+/// unit exports, and [`LinkError::DuplicateExport`] if two units export the same
+/// name.
+#[allow(clippy::too_many_lines)]
 pub fn link(units: &[CompilationUnit]) -> Result<Program, LinkError> {
-    // STAGE 1 restriction: every reference must be LOCAL. Cross-unit imports
-    // need the merged export table + generic-fn interning of §3b step 3.
-    // STAGE 2: resolve `object_imports`/`global_imports` here — look each
-    // `Symbol` up in the name maps built below (generic-fn imports run through
-    // the intern step) instead of refusing to link.
-    for unit in units {
-        if let Some(import) = unit.object_imports.first().or(unit.global_imports.first()) {
-            return Err(LinkError::UnresolvedImport(import.fq_name.clone()));
-        }
-    }
+    // ---- Group ordering (design §9 R3) --------------------------------------
+    // Process builtin units first, then user units; within each group the passes
+    // interleave bucket-by-bucket across units in file order.
+    let group_order: Vec<usize> = (0..units.len())
+        .filter(|&u| is_builtin_unit(&units[u]))
+        .chain((0..units.len()).filter(|&u| !is_builtin_unit(&units[u])))
+        .collect();
+    // The two group slices, as index ranges into `group_order`.
+    let builtin_len = units.iter().filter(|u| is_builtin_unit(u)).count();
+    let groups: [&[usize]; 2] = [&group_order[..builtin_len], &group_order[builtin_len..]];
 
-    let mut program = Program::new();
+    // The `$init`/`$init_test` tail of each group is carried on one of its units
+    // (at most one). It is placed after the group's regular code (design §9 R2).
+    let group_tail: [Option<usize>; 2] = [
+        groups[0]
+            .iter()
+            .copied()
+            .find(|&u| units[u].init_tail.is_some()),
+        groups[1]
+            .iter()
+            .copied()
+            .find(|&u| units[u].init_tail.is_some()),
+    ];
 
-    // ---- Precompute per-unit bases -------------------------------------
-    // STAGE 2: this is whole-unit concatenation — each unit's objects land in
-    // one contiguous block. Byte-identity with a full compile needs pass-major
-    // interleaving ACROSS units (all units' classes, then all units' enums, …;
-    // design §3b steps 2-3 / §9 R3). For a single unit the two coincide, which
-    // is the Stage 1 gate.
-    let mut object_base = Vec::with_capacity(units.len());
-    let mut global_base = Vec::with_capacity(units.len());
-    let mut object_acc = 0usize;
-    let mut global_acc = 0usize;
-    for unit in units {
-        object_base.push(object_acc);
-        global_base.push(global_acc);
-        object_acc += unit_object_count(unit);
-        global_acc += unit.exports.globals.len();
-    }
-    // Every slot is filled below: functions get `ConstValue::Object`, `let`s
-    // stay `Null` until `$init` stores their computed value at load time.
-    program.globals = vec![ConstValue::Null; global_acc];
-
-    // ---- Global-slot assignment (design §3b step 1) --------------------
+    // ---- Per-unit func/let counts -------------------------------------------
+    let mut func_count = vec![0usize; units.len()];
+    let mut let_count = vec![0usize; units.len()];
     for (u, unit) in units.iter().enumerate() {
-        // fq_name -> LocalRef for this unit's exported objects.
-        let objects_by_name: HashMap<&str, LocalRef> = unit
+        // A global is a function iff its name is exported as a `Code` object.
+        let code_names: std::collections::HashSet<&str> = unit
             .exports
             .objects
             .iter()
-            .map(|(name, local_ref)| (name.as_str(), *local_ref))
+            .filter(|(_, r)| matches!(r, LocalRef::Code(_)))
+            .map(|(n, _)| n.as_str())
             .collect();
-
-        for (name, ordinal) in &unit.exports.globals {
-            let slot = global_base[u] + *ordinal as usize;
-            match objects_by_name.get(name.as_str()) {
-                // A function: its slot holds `Object(function object)`.
-                Some(local_ref @ LocalRef::Code(_)) => {
-                    let abs = local_ref_abs(unit, object_base[u], *local_ref);
-                    program.globals[slot] = ConstValue::Object(ObjectIndex::from_raw(abs));
-                    if program.function_indices.insert(name.clone(), abs).is_some() {
-                        return Err(LinkError::DuplicateExport(name.clone()));
-                    }
-                    program.function_global_indices.insert(name.clone(), slot);
-                }
-                // Anything not backed by a code object owns a `let` slot: it
-                // stays `Null` until `$init` runs.
-                _ => {
-                    if program
-                        .let_global_indices
-                        .insert(name.clone(), slot)
-                        .is_some()
-                    {
-                        return Err(LinkError::DuplicateExport(name.clone()));
-                    }
-                }
+        for (name, _) in &unit.exports.globals {
+            if code_names.contains(name.as_str()) {
+                func_count[u] += 1;
+            } else {
+                let_count[u] += 1;
             }
         }
     }
 
-    // ---- Definition + code placement (design §3b steps 2-3) ------------
-    for (u, unit) in units.iter().enumerate() {
-        let obase = object_base[u];
-        let gbase = global_base[u];
-        // Bucket order: classes, enums, interfaces, code (the pool-prefix order
-        // a full compile produces).
-        let buckets = unit
-            .classes
-            .iter()
-            .chain(&unit.enums)
-            .chain(&unit.interfaces)
-            .chain(&unit.code);
-        for object in buckets {
-            let mut object = object.clone();
-            // The relink walker *is* the whole splice: rebase every LOCAL index
-            // operand. `raw` is a flat unit-local index (§2a); with imports
-            // rejected above it is always `< n_local`, so `obase + raw` /
-            // `gbase + raw` is the absolute slot.
-            visit_object_operands(&mut object, |operand| match operand {
-                IndexOperand::Object(idx) => {
-                    *idx = ObjectIndex::from_raw(obase + idx.raw());
-                }
-                IndexOperand::Global(slot) => {
-                    *slot = GlobalIndex::from_raw(gbase + slot.raw());
-                }
-            });
-            program.objects.push(object);
+    // ---- Object bucket bases (pass-major, group-major) ----------------------
+    let mut layout = vec![UnitLayout::default(); units.len()];
+    let mut obj_cursor = 0usize;
+    for (g, group) in groups.iter().enumerate() {
+        for &u in *group {
+            layout[u].class_base = obj_cursor;
+            obj_cursor += units[u].classes.len();
+        }
+        for &u in *group {
+            layout[u].enum_base = obj_cursor;
+            obj_cursor += units[u].enums.len();
+        }
+        for &u in *group {
+            layout[u].iface_base = obj_cursor;
+            obj_cursor += units[u].interfaces.len();
+        }
+        for &u in *group {
+            layout[u].code_base = obj_cursor;
+            obj_cursor += units[u].code.len();
+        }
+        // A group's `$init` tail objects append after its code, before the next
+        // group's classes (design §9 R2).
+        if let Some(tu) = group_tail[g] {
+            obj_cursor += units[tu].init_tail.as_ref().map_or(0, |t| t.objects.len());
         }
     }
 
-    // ---- Whole-program tails (design §3b step 5, partial) --------------
-    // These concatenations follow unit order, so they are already correct in
-    // Stage 1. The remaining whole-program synthesis is deferred:
-    // STAGE 2: $init / $init_test synthesis from `unit.lets` -> package_init_order (R2);
-    //          generic-function interning across units (R1);
-    //          merge `unit.package_fragment` into `program.packages` (symbolic -> absolute);
-    //          client_metadata (flows through $init);
-    //          class-tag 47-bit collision check (moves to link time).
+    // ---- Global-slot bases (functions then lets, then $init tail) -----------
+    let mut slot_cursor = 0usize;
+    // Absolute slot where each group's `$init` tail slots begin.
+    let mut tail_slot_base = [0usize; 2];
+    for (g, group) in groups.iter().enumerate() {
+        for &u in *group {
+            layout[u].func_count = func_count[u];
+            layout[u].func_gbase = slot_cursor;
+            slot_cursor += func_count[u];
+        }
+        for &u in *group {
+            layout[u].let_gbase = slot_cursor;
+            slot_cursor += let_count[u];
+        }
+        tail_slot_base[g] = slot_cursor;
+        if let Some(tu) = group_tail[g] {
+            slot_cursor += units[tu]
+                .init_tail
+                .as_ref()
+                .map_or(0, |t| t.slot_objects.len());
+        }
+    }
+
+    let mut program = Program::new();
+    program.globals = vec![ConstValue::Null; slot_cursor];
+
+    // ---- Name-resolution maps (from export tables) --------------------------
+    // fq name -> absolute object index (classes/enums/interfaces/functions).
+    let mut obj_by_name: HashMap<String, usize> = HashMap::new();
+    for (u, unit) in units.iter().enumerate() {
+        for (name, local_ref) in &unit.exports.objects {
+            let abs = export_object_abs(&layout[u], *local_ref);
+            if obj_by_name.insert(name.clone(), abs).is_some() {
+                return Err(LinkError::DuplicateExport(name.clone()));
+            }
+        }
+    }
+
+    // ---- Global-slot assignment (design §3b step 1) -------------------------
+    for (u, unit) in units.iter().enumerate() {
+        let code_names: std::collections::HashSet<&str> = unit
+            .exports
+            .objects
+            .iter()
+            .filter(|(_, r)| matches!(r, LocalRef::Code(_)))
+            .map(|(n, _)| n.as_str())
+            .collect();
+        for (name, flat) in &unit.exports.globals {
+            let slot = layout[u].local_global(*flat as usize);
+            if code_names.contains(name.as_str()) {
+                // A function: slot holds `Object(function object)`.
+                let abs = *obj_by_name
+                    .get(name.as_str())
+                    .ok_or_else(|| LinkError::UnresolvedImport(name.clone()))?;
+                program.globals[slot] = ConstValue::Object(ObjectIndex::from_raw(abs));
+                if program.function_indices.insert(name.clone(), abs).is_some() {
+                    return Err(LinkError::DuplicateExport(name.clone()));
+                }
+                program.function_global_indices.insert(name.clone(), slot);
+            } else if program
+                .let_global_indices
+                .insert(name.clone(), slot)
+                .is_some()
+            {
+                return Err(LinkError::DuplicateExport(name.clone()));
+            }
+        }
+    }
+
+    // ---- Resolve every unit's import tables ---------------------------------
+    // Precompute, per unit, import-index -> absolute index so the operand patch
+    // is a pure array lookup. Non-generic imports resolve against the maps above;
+    // generic-function imports (Stage 2) resolve through an intern map filled as
+    // code is placed.
+    // Global imports (functions / lets) resolve fully against the step-1 name
+    // maps, up front — this also validates them (keeping the unresolved-import
+    // contract for unused imports too).
+    let resolve_global_import = |sym: &Symbol| -> Result<usize, LinkError> {
+        match sym.kind {
+            SymbolKind::Let => program
+                .let_global_indices
+                .get(sym.fq_name.as_str())
+                .copied()
+                .ok_or_else(|| LinkError::UnresolvedImport(sym.fq_name.clone())),
+            _ => program
+                .function_global_indices
+                .get(sym.fq_name.as_str())
+                .copied()
+                .ok_or_else(|| LinkError::UnresolvedImport(sym.fq_name.clone())),
+        }
+    };
+    let mut resolved_glob_imports: Vec<Vec<usize>> = Vec::with_capacity(units.len());
+    for unit in units {
+        let mut globs = Vec::with_capacity(unit.global_imports.len());
+        for sym in &unit.global_imports {
+            globs.push(resolve_global_import(sym)?);
+        }
+        resolved_glob_imports.push(globs);
+    }
+
+    // Snapshot of function global slots for generic-fn base-function resolution
+    // (needed while `program.objects` is being mutated during placement).
+    let fn_gslot = program.function_global_indices.clone();
+    let let_gslot = program.let_global_indices.clone();
+
+    // ---- Definition placement (design §3b step 2) ---------------------------
+    // Classes, then enums, then interfaces — pass-major across the units of each
+    // group. Definitions are inert to the operand walker, so they are cloned in
+    // place. The push order here MUST match the base computation above.
+    //
+    // Generic-function values (design §9 R1) are interned across the whole
+    // program at one canonical pool position (the first-referencing unit). The
+    // decomposition keeps that single object in its owning unit's `code` bucket;
+    // other units reference it through a `GenericFn` import. As each generic
+    // function is placed, its `(base fn slot, type_args)` key is registered here
+    // so those imports resolve — the owning unit is placed no later than any
+    // importing unit (interning keeps the earliest reference), so the map is
+    // always populated before a lookup.
+    let mut generic_map: HashMap<(usize, Vec<u8>), usize> = HashMap::new();
+    for (g, group) in groups.iter().enumerate() {
+        for &u in *group {
+            for object in &units[u].classes {
+                program.objects.push(object.clone());
+            }
+        }
+        for &u in *group {
+            for object in &units[u].enums {
+                program.objects.push(object.clone());
+            }
+        }
+        for &u in *group {
+            for object in &units[u].interfaces {
+                program.objects.push(object.clone());
+            }
+        }
+        // ---- Code placement (design §3b step 3) -----------------------------
+        for &u in *group {
+            let unit = &units[u];
+            let n_local_objects =
+                unit.classes.len() + unit.enums.len() + unit.interfaces.len() + unit.code.len();
+            let n_local_globals = func_count[u] + let_count[u];
+            let lay = layout[u];
+            let glob_imports = &resolved_glob_imports[u];
+
+            // Resolve this unit's object imports now: non-generic against the
+            // name map, generic against the intern map (earlier units placed).
+            let mut obj_imports = Vec::with_capacity(unit.object_imports.len());
+            for sym in &unit.object_imports {
+                let abs = match sym.kind {
+                    SymbolKind::GenericFn => {
+                        let key = sym
+                            .generic
+                            .as_ref()
+                            .ok_or_else(|| LinkError::UnresolvedImport(sym.fq_name.clone()))?;
+                        let base = fn_gslot
+                            .get(key.base_fn.as_str())
+                            .copied()
+                            .ok_or_else(|| LinkError::UnresolvedImport(key.base_fn.clone()))?;
+                        let ta = borsh::to_vec(&key.type_args).expect("serialize type_args");
+                        generic_map.get(&(base, ta)).copied().ok_or_else(|| {
+                            LinkError::UnresolvedImport(format!("{}<generic>", key.base_fn))
+                        })?
+                    }
+                    _ => obj_by_name
+                        .get(sym.fq_name.as_str())
+                        .copied()
+                        .ok_or_else(|| LinkError::UnresolvedImport(sym.fq_name.clone()))?,
+                };
+                obj_imports.push(abs);
+            }
+
+            for object in &unit.code {
+                let mut object = object.clone();
+                visit_object_operands(&mut object, |operand| match operand {
+                    IndexOperand::Object(idx) => {
+                        let raw = idx.raw();
+                        let abs = if raw < n_local_objects {
+                            lay.local_object(unit, raw)
+                        } else {
+                            obj_imports[raw - n_local_objects]
+                        };
+                        *idx = ObjectIndex::from_raw(abs);
+                    }
+                    IndexOperand::Global(slot) => {
+                        let raw = slot.raw();
+                        let abs = if raw < n_local_globals {
+                            lay.local_global(raw)
+                        } else {
+                            glob_imports[raw - n_local_globals]
+                        };
+                        *slot = GlobalIndex::from_raw(abs);
+                    }
+                });
+                // Register a freshly-placed generic function (its `.function`
+                // operand is now absolute) so later units' imports resolve.
+                if let Object::GenericFunction(gf) = &object {
+                    let key = (
+                        gf.function.raw(),
+                        borsh::to_vec(&gf.type_args.to_vec()).expect("serialize type_args"),
+                    );
+                    generic_map.insert(key, program.objects.len());
+                }
+                program.objects.push(object);
+            }
+        }
+
+        // ---- $init / $init_test tail placement (design §3b step 4 / §9 R2) --
+        // Placed after all of this group's regular code, before the next group's
+        // classes. Objects use the tail-local/import convention of `InitTail`.
+        if let Some(tu) = group_tail[g]
+            && let Some(tail) = &units[tu].init_tail
+        {
+            let tail_object_base = program.objects.len();
+            let n_tail_objects = tail.objects.len();
+            let n_tail_slots = tail.slot_objects.len();
+            let slot_base = tail_slot_base[g];
+
+            // Resolve the tail's imports.
+            let mut obj_imports = Vec::with_capacity(tail.object_imports.len());
+            for sym in &tail.object_imports {
+                let abs = match sym.kind {
+                    SymbolKind::GenericFn => {
+                        let key = sym
+                            .generic
+                            .as_ref()
+                            .ok_or_else(|| LinkError::UnresolvedImport(sym.fq_name.clone()))?;
+                        let base = fn_gslot
+                            .get(key.base_fn.as_str())
+                            .copied()
+                            .ok_or_else(|| LinkError::UnresolvedImport(key.base_fn.clone()))?;
+                        let ta = borsh::to_vec(&key.type_args).expect("serialize type_args");
+                        generic_map.get(&(base, ta)).copied().ok_or_else(|| {
+                            LinkError::UnresolvedImport(format!("{}<generic>", key.base_fn))
+                        })?
+                    }
+                    _ => obj_by_name
+                        .get(sym.fq_name.as_str())
+                        .copied()
+                        .ok_or_else(|| LinkError::UnresolvedImport(sym.fq_name.clone()))?,
+                };
+                obj_imports.push(abs);
+            }
+            let mut glob_imports = Vec::with_capacity(tail.global_imports.len());
+            for sym in &tail.global_imports {
+                let abs = match sym.kind {
+                    SymbolKind::Let => let_gslot
+                        .get(sym.fq_name.as_str())
+                        .copied()
+                        .ok_or_else(|| LinkError::UnresolvedImport(sym.fq_name.clone()))?,
+                    _ => fn_gslot
+                        .get(sym.fq_name.as_str())
+                        .copied()
+                        .ok_or_else(|| LinkError::UnresolvedImport(sym.fq_name.clone()))?,
+                };
+                glob_imports.push(abs);
+            }
+
+            for object in &tail.objects {
+                let mut object = object.clone();
+                visit_object_operands(&mut object, |operand| match operand {
+                    IndexOperand::Object(idx) => {
+                        let raw = idx.raw();
+                        let abs = if raw < n_tail_objects {
+                            tail_object_base + raw
+                        } else {
+                            obj_imports[raw - n_tail_objects]
+                        };
+                        *idx = ObjectIndex::from_raw(abs);
+                    }
+                    IndexOperand::Global(slot) => {
+                        let raw = slot.raw();
+                        let abs = if raw < n_tail_slots {
+                            slot_base + raw
+                        } else {
+                            glob_imports[raw - n_tail_slots]
+                        };
+                        *slot = GlobalIndex::from_raw(abs);
+                    }
+                });
+                program.objects.push(object);
+            }
+
+            // Every tail slot holds `Object(its owning tail object)`.
+            for (ord, &tobj) in tail.slot_objects.iter().enumerate() {
+                program.globals[slot_base + ord] =
+                    ConstValue::Object(ObjectIndex::from_raw(tail_object_base + tobj as usize));
+            }
+            // Register the named tail functions ($init / $init_test chainers).
+            for (name, tobj) in &tail.named {
+                let abs = tail_object_base + *tobj as usize;
+                program.function_indices.insert(name.clone(), abs);
+                let ord = tail
+                    .slot_objects
+                    .iter()
+                    .position(|&x| x == *tobj)
+                    .ok_or_else(|| LinkError::UnresolvedImport(name.clone()))?;
+                program
+                    .function_global_indices
+                    .insert(name.clone(), slot_base + ord);
+            }
+            program
+                .package_init_order
+                .extend(tail.package_init_order.iter().cloned());
+        }
+    }
+
+    // ---- Package merge (design §3b step 5) ----------------------------------
+    // Each package's fragment is carried by exactly one unit (its first unit).
+    // Merge every fragment into the image's `packages`, resolving each symbolic
+    // fully-qualified name to an absolute object index, then re-sort exactly as
+    // `build_packages` does so the serialized order is content-determined.
+    for unit in units {
+        merge_package_fragment(
+            &mut program,
+            &unit.package,
+            &unit.package_fragment,
+            &obj_by_name,
+        )?;
+    }
+    sort_packages(&mut program);
+
+    // ---- Whole-program tails (design §3b step 5) ----------------------------
+    // Template macros are joined by newlines, in unit (file) order.
+    let mut macros: Vec<&str> = Vec::new();
+    for unit in units {
+        for m in &unit.template_macros {
+            macros.push(m.as_str());
+        }
+    }
+    program.template_strings_macros = macros.join("\n");
+
     for unit in units {
         program.test_cases.extend(unit.test_cases.iter().cloned());
-        for macro_fragment in &unit.template_macros {
-            program.template_strings_macros.push_str(macro_fragment);
-        }
     }
 
     Ok(program)
+}
+
+/// Merge one unit's symbolic package fragment into the image's `packages` map,
+/// resolving each fully-qualified name to an absolute object index.
+fn merge_package_fragment(
+    program: &mut Program,
+    package: &Name,
+    frag: &ProgramPackageFrag,
+    obj_by_name: &HashMap<String, usize>,
+) -> Result<(), LinkError> {
+    if frag.classes.is_empty()
+        && frag.enums.is_empty()
+        && frag.interfaces.is_empty()
+        && frag.impl_rules.is_empty()
+        && frag.recursive_type_aliases.is_empty()
+    {
+        // A unit that does not carry its package's fragment: nothing to merge,
+        // but ensure an (empty) package entry exists if it will gain classes
+        // from another unit's fragment. (No-op: `.entry` in the loops below
+        // creates it on demand.)
+        return Ok(());
+    }
+    let resolve = |fq: &str| -> Result<ObjectIndex, LinkError> {
+        obj_by_name
+            .get(fq)
+            .copied()
+            .map(ObjectIndex::from_raw)
+            .ok_or_else(|| LinkError::UnresolvedImport(fq.to_string()))
+    };
+    let pkg = program.packages.entry(package.clone()).or_default();
+    for (local, fq) in &frag.classes {
+        let abs = resolve(fq)?;
+        pkg.classes.insert(local.clone(), abs);
+    }
+    for (local, fq) in &frag.enums {
+        let abs = resolve(fq)?;
+        pkg.enums.insert(local.clone(), abs);
+    }
+    for (local, fq) in &frag.interfaces {
+        let abs = resolve(fq)?;
+        pkg.interfaces.insert(local.clone(), abs);
+    }
+    for (local, ty) in &frag.recursive_type_aliases {
+        pkg.recursive_type_aliases.insert(local.clone(), ty.clone());
+    }
+    for (iface_fq, rules) in &frag.impl_rules {
+        let interface_head = resolve(iface_fq)?;
+        let mut built = Vec::with_capacity(rules.len());
+        for rule in rules {
+            let head = resolve(&rule.interface_head)?;
+            let mut methods = indexmap::IndexMap::new();
+            for (name, method) in &rule.methods {
+                methods.insert(
+                    name.clone(),
+                    ProgramMethodImpl {
+                        fqn: resolve(&method.fqn)?,
+                        frame: method.frame.clone(),
+                    },
+                );
+            }
+            built.push(ProgramImplRule {
+                interface_head: head,
+                for_ty_pattern: rule.for_ty_pattern.clone(),
+                generic_param_bounds: rule.generic_param_bounds.clone(),
+                interface_args: rule.interface_args.clone(),
+                interface_assoc: rule.interface_assoc.clone(),
+                methods,
+            });
+        }
+        pkg.impl_rules
+            .entry(interface_head)
+            .or_default()
+            .extend(built);
+    }
+    Ok(())
+}
+
+/// Re-sort every per-package map and the top-level `packages` map exactly as the
+/// full compile's `build_packages` tail does, so the serialized order is
+/// content-determined regardless of merge order.
+fn sort_packages(program: &mut Program) {
+    for pkg in program.packages.values_mut() {
+        pkg.classes.sort_keys();
+        pkg.enums.sort_keys();
+        pkg.recursive_type_aliases.sort_keys();
+        pkg.interfaces.sort_keys();
+        pkg.impl_rules.sort_keys();
+        for rules in pkg.impl_rules.values_mut() {
+            rules.sort_by_cached_key(|rule| {
+                (
+                    rule.for_ty_pattern.to_string(),
+                    format!("{:?}", rule.for_ty_pattern),
+                    format!("{:?}", rule.interface_args),
+                    format!("{:?}", rule.interface_assoc),
+                )
+            });
+        }
+    }
+    program.packages.sort_keys();
 }
 
 #[cfg(test)]
@@ -277,7 +711,6 @@ mod tests {
             enums: Vec::new(),
             interfaces: Vec::new(),
             code: vec![
-                // user.foo: allocates MyClass (local obj 0), calls bar (global 1).
                 func(
                     "user.foo",
                     vec![
@@ -292,7 +725,6 @@ mod tests {
                         I::Return,
                     ],
                 ),
-                // user.bar: reads foo's global slot (local global 0).
                 func(
                     "user.bar",
                     vec![I::LoadGlobal(GlobalIndex::from_raw(0)), I::Return],
@@ -313,10 +745,10 @@ mod tests {
             template_macros: Vec::new(),
             test_cases: Vec::new(),
             throw_facts: Vec::new(),
+            init_tail: None,
         }
     }
 
-    /// Collect the `(globals, objects)` index operands of a function object.
     fn operands_of(object: &Object) -> (Vec<usize>, Vec<usize>) {
         let Object::Function(function) = object else {
             panic!("expected a function object");
@@ -331,14 +763,11 @@ mod tests {
         (globals, objects)
     }
 
-    /// The Stage 1 link gate: a single local-only unit links to a `Program`
-    /// whose objects are that unit's objects at base 0 with local refs intact.
     #[test]
     fn link_single_local_only_unit() {
         let unit = local_only_unit();
         let program = link(std::slice::from_ref(&unit)).expect("link");
 
-        // Objects: [MyClass, foo, bar] at indices 0, 1, 2 (classes then code).
         assert_eq!(program.objects.len(), 3);
         assert!(matches!(
             &program.objects[ObjectIndex::from_raw(0)],
@@ -349,18 +778,14 @@ mod tests {
         };
         assert_eq!(foo.name, "user.foo");
 
-        // foo's local refs were rebased: class_obj 0 -> abs 0 (MyClass),
-        // callee global 1 -> abs 1 (bar's slot).
         let (foo_globals, foo_objects) = operands_of(&program.objects[ObjectIndex::from_raw(1)]);
         assert_eq!(foo_objects, vec![0], "AllocInstance class_obj rebased");
         assert_eq!(foo_globals, vec![1], "Call callee rebased");
 
-        // bar reads foo's slot (local global 0 -> abs 0).
         let (bar_globals, bar_objects) = operands_of(&program.objects[ObjectIndex::from_raw(2)]);
         assert_eq!(bar_globals, vec![0], "LoadGlobal rebased");
         assert!(bar_objects.is_empty());
 
-        // Globals: two function slots holding their object indices.
         assert_eq!(program.globals.len(), 2);
         assert_eq!(
             program.globals[0],
@@ -373,7 +798,6 @@ mod tests {
             "slot 1 = user.bar object"
         );
 
-        // Name maps.
         assert_eq!(program.function_indices.get("user.foo").copied(), Some(1));
         assert_eq!(program.function_indices.get("user.bar").copied(), Some(2));
         assert_eq!(
@@ -387,16 +811,13 @@ mod tests {
         assert!(program.let_global_indices.is_empty());
     }
 
-    /// Linking a borsh round-tripped unit yields a byte-identical `Program`
-    /// (design §5 — `link(units) == link(round_trip(units))`).
     #[test]
     fn link_is_stable_across_unit_round_trip() {
         let unit = local_only_unit();
         let program = link(std::slice::from_ref(&unit)).expect("link fresh");
 
         let bytes = borsh::to_vec(&unit).expect("serialize unit");
-        let round_tripped: CompilationUnit =
-            borsh::from_slice(&bytes).expect("deserialize unit");
+        let round_tripped: CompilationUnit = borsh::from_slice(&bytes).expect("deserialize unit");
         let program2 = link(std::slice::from_ref(&round_tripped)).expect("link round-tripped");
 
         assert_eq!(
@@ -406,19 +827,109 @@ mod tests {
         );
     }
 
-    /// A unit with imports is rejected in Stage 1 (cross-unit resolution is
-    /// Stage 2).
+    /// Two local-only units that reference each other across the unit boundary
+    /// through the import tables. Exercises pass-major placement + import
+    /// resolution.
     #[test]
-    fn link_rejects_imports_in_stage_1() {
-        use crate::unit::{Symbol, SymbolKind};
+    fn link_two_units_with_cross_imports() {
+        use Instruction as I;
+        // Unit A: defines class A.C and function a.f (calls b.g, which is an
+        // import).
+        let unit_a = CompilationUnit {
+            source_file: "a.baml".to_string(),
+            package: baml_base::Name::new("user"),
+            classes: vec![class("a.C", 100)],
+            enums: Vec::new(),
+            interfaces: Vec::new(),
+            // code[0] = a.f. n_local_objects = 1 class + 1 code = 2.
+            // Object import 0 -> b.D at raw 2. Global import 0 -> b.g at raw 1.
+            code: vec![func(
+                "a.f",
+                vec![
+                    I::AllocInstance {
+                        class_obj: ObjectIndex::from_raw(0), // local class A.C
+                        ntypeargs: 0,
+                    },
+                    I::AllocInstance {
+                        class_obj: ObjectIndex::from_raw(2), // import 0 -> b.D
+                        ntypeargs: 0,
+                    },
+                    I::Call {
+                        callee: GlobalIndex::from_raw(1), // import 0 -> b.g
+                        ntypeargs: 0,
+                    },
+                    I::Return,
+                ],
+            )],
+            object_imports: vec![Symbol {
+                kind: SymbolKind::Class,
+                fq_name: "b.D".to_string(),
+                generic: None,
+            }],
+            global_imports: vec![Symbol {
+                kind: SymbolKind::Function,
+                fq_name: "b.g".to_string(),
+                generic: None,
+            }],
+            exports: ExportTable {
+                objects: vec![
+                    ("a.C".to_string(), LocalRef::Class(0)),
+                    ("a.f".to_string(), LocalRef::Code(0)),
+                ],
+                globals: vec![("a.f".to_string(), 0)],
+            },
+            lets: Vec::new(),
+            package_fragment: ProgramPackageFrag::default(),
+            template_macros: Vec::new(),
+            test_cases: Vec::new(),
+            throw_facts: Vec::new(),
+            init_tail: None,
+        };
+        // Unit B: defines class b.D and function b.g.
+        let unit_b = CompilationUnit {
+            source_file: "b.baml".to_string(),
+            package: baml_base::Name::new("user"),
+            classes: vec![class("b.D", 101)],
+            enums: Vec::new(),
+            interfaces: Vec::new(),
+            code: vec![func("b.g", vec![I::Return])],
+            object_imports: Vec::new(),
+            global_imports: Vec::new(),
+            exports: ExportTable {
+                objects: vec![
+                    ("b.D".to_string(), LocalRef::Class(0)),
+                    ("b.g".to_string(), LocalRef::Code(0)),
+                ],
+                globals: vec![("b.g".to_string(), 0)],
+            },
+            lets: Vec::new(),
+            package_fragment: ProgramPackageFrag::default(),
+            template_macros: Vec::new(),
+            test_cases: Vec::new(),
+            throw_facts: Vec::new(),
+            init_tail: None,
+        };
+
+        let program = link(&[unit_a, unit_b]).expect("link");
+        // Pool order (pass-major): [a.C, b.D, a.f, b.g] = indices 0,1,2,3.
+        assert_eq!(program.objects.len(), 4);
+        assert_eq!(program.function_indices.get("a.f").copied(), Some(2));
+        assert_eq!(program.function_indices.get("b.g").copied(), Some(3));
+
+        let (f_globals, f_objects) = operands_of(&program.objects[ObjectIndex::from_raw(2)]);
+        // local class A.C -> 0; import b.D -> 1; import global b.g -> slot 1.
+        assert_eq!(f_objects, vec![0, 1], "a.f object operands");
+        assert_eq!(f_globals, vec![1], "a.f global operand (b.g slot)");
+    }
+
+    #[test]
+    fn link_rejects_unresolved_import() {
         let mut unit = local_only_unit();
         unit.object_imports.push(Symbol {
             kind: SymbolKind::Class,
             fq_name: "other.External".to_string(),
             generic: None,
         });
-        // `Program` has no `PartialEq`/`Debug` (Object doesn't), so match the
-        // error variant rather than comparing/formatting the whole `Result`.
         match link(std::slice::from_ref(&unit)) {
             Err(LinkError::UnresolvedImport(name)) => assert_eq!(name, "other.External"),
             Err(e) => panic!("expected UnresolvedImport, got a different error: {e:?}"),

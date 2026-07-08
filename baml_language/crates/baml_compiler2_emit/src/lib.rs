@@ -33,6 +33,10 @@ use bex_vm_types::{
     Bytecode, CaptureCategory, Class, ClassField, ConstValue, Enum, EnumVariant, Function,
     FunctionCaptureProps, FunctionKind, FunctionMeta, FunctionOrigin, GlobalIndex, Instruction,
     Object, ObjectIndex, ObjectPool, Program,
+    unit::{
+        CompilationUnit, LocalRef, ProgramImplRuleFrag, ProgramMethodImplFrag, ProgramPackageFrag,
+        Symbol, SymbolKind,
+    },
 };
 
 /// Build a per-package `ResolvedAliases` cache, keyed by package name.
@@ -956,6 +960,845 @@ pub fn generate_project_bytecode_with_reuse(
         false,
         Some((prev, clean_files)),
     )
+}
+
+/// B-693 Stage 2: emit every source file as a relocatable
+/// [`CompilationUnit`](bex_vm_types::CompilationUnit).
+///
+/// Runs the ordinary full compile ([`generate_project_bytecode_with_opt`]) and
+/// then *decomposes* the flat `Program` into per-file symbolic units: each
+/// unit's own compiled objects are bucketed by emit pass (classes / enums /
+/// interfaces / code), every cross-file `ObjectIndex`/`GlobalIndex` reference is
+/// rewritten to the per-unit local/import convention (§2a) captured in the
+/// unit's import table, and the whole-program `packages` map is split into
+/// per-package fragments.
+///
+/// The invariant Stage 2 gates is
+/// `borsh(link(emit_units(p))) == borsh(generate_project_bytecode(p))`: because
+/// the object *content* comes straight from the real compile, only the index
+/// remapping and the linker's reassembly order can diverge.
+///
+/// # Errors
+///
+/// Propagates any [`LoweringError`] from the underlying full compile, and
+/// returns [`LoweringError::Internal`] if the flat program contains a construct
+/// the Stage 2 decomposition does not yet handle (a `$init`/generic-function
+/// tail — see design §9 R1/R2 — or an unattributable pool object).
+pub fn emit_units(
+    db: &dyn baml_compiler2_mir::Db,
+    options: &CompileOptions,
+    opt: OptLevel,
+) -> Result<Vec<CompilationUnit>, LoweringError> {
+    let program = generate_project_bytecode_with_opt(db, options, opt)?;
+    decompose_program_into_units(db, options, &program)
+}
+
+/// Per-object attribution kind, computed during the pool walk.
+enum PoolObjKind {
+    Class,
+    Enum,
+    Interface,
+    /// A named function (fully-qualified name interned in `function_indices`).
+    NamedFn(String),
+    /// A lambda / interned literal — attributed to a file by proximity, not name.
+    CodeAnon,
+}
+
+#[allow(clippy::too_many_lines)]
+fn decompose_program_into_units(
+    db: &dyn baml_compiler2_mir::Db,
+    options: &CompileOptions,
+    program: &Program,
+) -> Result<Vec<CompilationUnit>, LoweringError> {
+    let all_files = compiler2_all_files(db);
+    let n_files = all_files.len();
+
+    // ---- Per-file identity maps ---------------------------------------------
+    let mut unit_source: Vec<String> = Vec::with_capacity(n_files);
+    let mut unit_package: Vec<Name> = Vec::with_capacity(n_files);
+    let mut rel_to_file: HashMap<String, usize> = HashMap::new();
+    for (fi, file) in all_files.iter().enumerate() {
+        let rel = relative_source_path(db, *file);
+        rel_to_file.insert(rel.clone(), fi);
+        unit_source.push(rel);
+        unit_package.push(file_package(db, *file).package);
+    }
+
+    // Ordered owners for the pass-major definition buckets: the k-th class /
+    // enum / interface object in the pool belongs to the file that defines it,
+    // in the exact iteration order Passes 2/3/3b use.
+    let mut class_owner: Vec<usize> = Vec::new();
+    let mut enum_owner: Vec<usize> = Vec::new();
+    let mut iface_owner: Vec<usize> = Vec::new();
+    // fq name -> file for named functions / lets (matches `Function::name`).
+    let mut func_name_to_file: HashMap<String, usize> = HashMap::new();
+    let mut let_name_to_file: HashMap<String, usize> = HashMap::new();
+    for (fi, file) in all_files.iter().enumerate() {
+        let item_tree = file_item_tree(db, *file);
+        for _ in item_tree.classes.values() {
+            class_owner.push(fi);
+        }
+        for _ in item_tree.enums.values() {
+            enum_owner.push(fi);
+        }
+        for _ in &item_tree.interfaces {
+            iface_owner.push(fi);
+        }
+        for local_id in item_tree.functions.keys() {
+            let func_loc = FunctionLoc::new(db, *file, *local_id);
+            let fq = def_to_item_ref(db, Definition::Function(func_loc)).to_string();
+            func_name_to_file.insert(fq, fi);
+        }
+        for local_id in item_tree.lets.keys() {
+            let let_loc = LetLoc::new(db, *file, *local_id);
+            let fq = def_to_item_ref(db, Definition::Let(let_loc)).to_string();
+            let_name_to_file.insert(fq, fi);
+        }
+    }
+
+    // obj idx -> fq name for named functions (reverse of `function_indices`).
+    let mut fn_obj_name: HashMap<usize, String> = HashMap::new();
+    for (name, &idx) in &program.function_indices {
+        fn_obj_name.insert(idx, name.clone());
+    }
+
+    let n_obj = program.objects.len();
+
+    // ---- Locate the `$init`/`$init_test` tail (design §9 R2) ----------------
+    // Passes 4.5/4.6 append the tail after all of Pass 4's regular functions, so
+    // the tail is the contiguous suffix after the last *regular* named function
+    // (a function in `func_name_to_file`; the synthesized `$init`/`$init_test`
+    // chainers and `$init_let_*` helpers are not). Only the user group carries a
+    // tail today (builtins define no top-level `let`s), so the tail is a suffix
+    // of the whole pool.
+    let mut tail_start = n_obj;
+    {
+        let mut last_regular = None;
+        for idx in 0..n_obj {
+            if let Object::Function(_) = &program.objects[ObjectIndex::from_raw(idx)]
+                && let Some(name) = fn_obj_name.get(&idx)
+                && func_name_to_file.contains_key(name)
+            {
+                last_regular = Some(idx);
+            }
+        }
+        if let Some(l) = last_regular {
+            tail_start = l + 1;
+        }
+    }
+
+    // ---- Attribute every regular pool object to a file ----------------------
+    let mut obj_owner: Vec<usize> = vec![usize::MAX; n_obj];
+    let mut obj_kind: Vec<PoolObjKind> = Vec::with_capacity(tail_start);
+    let (mut ci, mut ei, mut ii) = (0usize, 0usize, 0usize);
+    // The index drives three sequences (pool read, `obj_owner` write, `obj_kind`
+    // push), so a range loop is clearer than juggling parallel iterators.
+    #[allow(clippy::needless_range_loop)]
+    for idx in 0..tail_start {
+        let obj = &program.objects[ObjectIndex::from_raw(idx)];
+        let (owner, kind) = match obj {
+            Object::Class(_) => {
+                let o = *class_owner.get(ci).ok_or_else(|| {
+                    LoweringError::Internal(format!("class object {idx} has no owning file"))
+                })?;
+                ci += 1;
+                (o, PoolObjKind::Class)
+            }
+            Object::Enum(_) => {
+                let o = *enum_owner.get(ei).ok_or_else(|| {
+                    LoweringError::Internal(format!("enum object {idx} has no owning file"))
+                })?;
+                ei += 1;
+                (o, PoolObjKind::Enum)
+            }
+            Object::Interface(_) => {
+                let o = *iface_owner.get(ii).ok_or_else(|| {
+                    LoweringError::Internal(format!("interface object {idx} has no owning file"))
+                })?;
+                ii += 1;
+                (o, PoolObjKind::Interface)
+            }
+            Object::Function(f) => {
+                if let Some(name) = fn_obj_name.get(&idx) {
+                    // Named function: attribute by fq name. A synthesized
+                    // function ($init/$init_test) has no source file — reject
+                    // (Stage 2 does not yet reproduce the $init tail; §9 R2).
+                    let o = func_name_to_file.get(name).copied().ok_or_else(|| {
+                        LoweringError::Internal(format!(
+                            "named function `{name}` (obj {idx}) is synthesized \
+                             ($init/$init_test); Stage 2 decomposition does not \
+                             handle the $init tail yet (design §9 R2)"
+                        ))
+                    })?;
+                    (o, PoolObjKind::NamedFn(name.clone()))
+                } else {
+                    // Lambda: attribute by its (relative) source file.
+                    let o = rel_to_file
+                        .get(f.source_file.as_str())
+                        .copied()
+                        .ok_or_else(|| {
+                            LoweringError::Internal(format!(
+                                "lambda object {idx} has source_file `{}` matching no file",
+                                f.source_file
+                            ))
+                        })?;
+                    (o, PoolObjKind::CodeAnon)
+                }
+            }
+            Object::String(_)
+            | Object::Bigint(_)
+            | Object::Uint8Array(_)
+            | Object::GenericFunction(_) => {
+                // Codegen-interned literal (strings/bigints/byte-arrays) or a
+                // cross-unit-interned generic-function value (§9 R1). Owner is
+                // filled by the leading-literal pass: it belongs to whichever
+                // function is compiled next.
+                (usize::MAX, PoolObjKind::CodeAnon)
+            }
+            other => {
+                return Err(LoweringError::Internal(format!(
+                    "pool object {idx} is an unexpected compiled kind: {}",
+                    obj_variant_name(other)
+                )));
+            }
+        };
+        obj_owner[idx] = owner;
+        obj_kind.push(kind);
+    }
+    // Leading-literal attribution: a literal belongs to the NEXT function object
+    // in the pool (a function's constants are interned before its own object is
+    // pushed). Scan backwards, carrying the most recent function's owner.
+    let mut next_func_owner = usize::MAX;
+    for idx in (0..tail_start).rev() {
+        match &program.objects[ObjectIndex::from_raw(idx)] {
+            Object::Function(_) => next_func_owner = obj_owner[idx],
+            Object::String(_)
+            | Object::Bigint(_)
+            | Object::Uint8Array(_)
+            | Object::GenericFunction(_) => {
+                if next_func_owner == usize::MAX {
+                    return Err(LoweringError::Internal(format!(
+                        "interned literal object {idx} has no following function \
+                         to attribute it to"
+                    )));
+                }
+                obj_owner[idx] = next_func_owner;
+            }
+            _ => {}
+        }
+    }
+
+    // ---- Bucket objects into units + record local layout --------------------
+    let mut units: Vec<CompilationUnit> = (0..n_files)
+        .map(|fi| CompilationUnit {
+            source_file: unit_source[fi].clone(),
+            package: unit_package[fi].clone(),
+            ..CompilationUnit::default()
+        })
+        .collect();
+    // Per pool object: its LocalRef within its owning unit (bucket + offset).
+    let mut obj_localref: Vec<LocalRef> = Vec::with_capacity(tail_start);
+    for (idx, kind) in obj_kind.iter().enumerate() {
+        let u = obj_owner[idx];
+        let obj = program.objects[ObjectIndex::from_raw(idx)].clone();
+        let local_ref = match kind {
+            PoolObjKind::Class => {
+                let off = units[u].classes.len();
+                units[u].classes.push(obj);
+                LocalRef::Class(u32::try_from(off).expect("class offset fits u32"))
+            }
+            PoolObjKind::Enum => {
+                let off = units[u].enums.len();
+                units[u].enums.push(obj);
+                LocalRef::Enum(u32::try_from(off).expect("enum offset fits u32"))
+            }
+            PoolObjKind::Interface => {
+                let off = units[u].interfaces.len();
+                units[u].interfaces.push(obj);
+                LocalRef::Interface(u32::try_from(off).expect("interface offset fits u32"))
+            }
+            PoolObjKind::NamedFn(_) | PoolObjKind::CodeAnon => {
+                let off = units[u].code.len();
+                units[u].code.push(obj);
+                LocalRef::Code(u32::try_from(off).expect("code offset fits u32"))
+            }
+        };
+        obj_localref.push(local_ref);
+    }
+
+    // ---- Global slot -> owner + local flat index ----------------------------
+    // slot -> fq name (functions and lets).
+    let mut slot_to_name: Vec<Option<String>> = vec![None; program.globals.len()];
+    for (name, &slot) in &program.function_global_indices {
+        slot_to_name[slot] = Some(name.clone());
+    }
+    for (name, &slot) in &program.let_global_indices {
+        slot_to_name[slot] = Some(name.clone());
+    }
+    // name -> (unit, flat local global index). The local global space is
+    // [functions 0..F_u][lets F_u..]; function ordinals follow pool (= Pass 1)
+    // order, `let` ordinals follow file order.
+    let mut name_to_local_global: HashMap<String, (usize, u32)> = HashMap::new();
+    let mut func_next: Vec<u32> = vec![0; n_files];
+    for idx in 0..tail_start {
+        if let PoolObjKind::NamedFn(name) = &obj_kind[idx] {
+            // Only functions that own a global slot participate.
+            if program.function_global_indices.contains_key(name) {
+                let u = obj_owner[idx];
+                let flat = func_next[u];
+                func_next[u] += 1;
+                name_to_local_global.insert(name.clone(), (u, flat));
+            }
+        }
+    }
+    for (fi, file) in all_files.iter().enumerate() {
+        let item_tree = file_item_tree(db, *file);
+        let mut let_ord = 0u32;
+        for local_id in item_tree.lets.keys() {
+            let let_loc = LetLoc::new(db, *file, *local_id);
+            let fq = def_to_item_ref(db, Definition::Let(let_loc)).to_string();
+            if program.let_global_indices.contains_key(&fq) {
+                name_to_local_global.insert(fq, (fi, func_next[fi] + let_ord));
+                let_ord += 1;
+            }
+        }
+    }
+
+    // ---- Rewrite code operands to the symbolic convention + build imports ---
+    for (u, unit) in units.iter_mut().enumerate() {
+        let n_local_objects =
+            unit.classes.len() + unit.enums.len() + unit.interfaces.len() + unit.code.len();
+        let c = unit.classes.len();
+        let e = unit.enums.len();
+        let i = unit.interfaces.len();
+        // The unit's local global space is [functions 0..F_u][lets F_u..]; its
+        // size is where import globals start (§2a).
+        let n_local_globals =
+            func_next[u] as usize + let_name_to_file.values().filter(|&&f| f == u).count();
+        // Dedup maps for imports (fq name -> import index).
+        let mut obj_import_idx: HashMap<String, usize> = HashMap::new();
+        let mut glob_import_idx: HashMap<String, usize> = HashMap::new();
+        let mut object_imports: Vec<Symbol> = Vec::new();
+        let mut global_imports: Vec<Symbol> = Vec::new();
+        let mut lowering_err: Option<LoweringError> = None;
+
+        // Precompute this unit's flat-local index for each pool object it owns.
+        // (Captured references keep the closure `Fn`.)
+        let flat_local = |abs: usize| -> usize {
+            match obj_localref[abs] {
+                LocalRef::Class(k) => k as usize,
+                LocalRef::Enum(k) => c + k as usize,
+                LocalRef::Interface(k) => c + e + k as usize,
+                LocalRef::Code(k) => c + e + i + k as usize,
+            }
+        };
+
+        for object in &mut unit.code {
+            bex_vm_types::relink::visit_object_operands(object, |operand| {
+                if lowering_err.is_some() {
+                    return;
+                }
+                match operand {
+                    bex_vm_types::relink::IndexOperand::Object(idx) => {
+                        let target = idx.raw();
+                        let new = if obj_owner[target] == u {
+                            flat_local(target)
+                        } else {
+                            match object_symbol(program, target, &obj_kind, &slot_to_name) {
+                                Ok(sym) => {
+                                    let key = sym.fq_name.clone();
+                                    let import_idx =
+                                        *obj_import_idx.entry(key).or_insert_with(|| {
+                                            let n = object_imports.len();
+                                            object_imports.push(sym);
+                                            n
+                                        });
+                                    n_local_objects + import_idx
+                                }
+                                Err(err) => {
+                                    lowering_err = Some(err);
+                                    return;
+                                }
+                            }
+                        };
+                        *idx = ObjectIndex::from_raw(new);
+                    }
+                    bex_vm_types::relink::IndexOperand::Global(slot) => {
+                        let target = slot.raw();
+                        let Some(name) = slot_to_name.get(target).and_then(Option::as_ref) else {
+                            lowering_err = Some(LoweringError::Internal(format!(
+                                "global slot {target} referenced by a unit object owns \
+                                 no function/let name (synthesized $init slot?); \
+                                 Stage 2 does not handle it yet (design §9 R2)"
+                            )));
+                            return;
+                        };
+                        let new = if let Some(&(owner, flat)) = name_to_local_global.get(name) {
+                            if owner == u {
+                                flat as usize
+                            } else {
+                                let is_let = let_name_to_file.contains_key(name);
+                                let sym = Symbol {
+                                    kind: if is_let {
+                                        SymbolKind::Let
+                                    } else {
+                                        SymbolKind::Function
+                                    },
+                                    fq_name: name.clone(),
+                                    generic: None,
+                                };
+                                let import_idx =
+                                    *glob_import_idx.entry(name.clone()).or_insert_with(|| {
+                                        let n = global_imports.len();
+                                        global_imports.push(sym);
+                                        n
+                                    });
+                                n_local_globals + import_idx
+                            }
+                        } else {
+                            lowering_err = Some(LoweringError::Internal(format!(
+                                "global slot {target} (`{name}`) has no local-global mapping"
+                            )));
+                            return;
+                        };
+                        *slot = GlobalIndex::from_raw(new);
+                    }
+                }
+            });
+            if let Some(err) = lowering_err {
+                return Err(err);
+            }
+        }
+        unit.object_imports = object_imports;
+        unit.global_imports = global_imports;
+    }
+
+    // ---- Export tables ------------------------------------------------------
+    for idx in 0..tail_start {
+        let u = obj_owner[idx];
+        match &obj_kind[idx] {
+            PoolObjKind::Class => {
+                let fq = class_fq(&program.objects[ObjectIndex::from_raw(idx)]);
+                units[u].exports.objects.push((fq, obj_localref[idx]));
+            }
+            PoolObjKind::Enum => {
+                let fq = enum_fq(&program.objects[ObjectIndex::from_raw(idx)]);
+                units[u].exports.objects.push((fq, obj_localref[idx]));
+            }
+            PoolObjKind::Interface => {
+                let fq = iface_fq(&program.objects[ObjectIndex::from_raw(idx)]);
+                units[u].exports.objects.push((fq, obj_localref[idx]));
+            }
+            PoolObjKind::NamedFn(name) => {
+                units[u]
+                    .exports
+                    .objects
+                    .push((name.clone(), obj_localref[idx]));
+            }
+            PoolObjKind::CodeAnon => {}
+        }
+    }
+    for (name, &(u, flat)) in &name_to_local_global {
+        units[u].exports.globals.push((name.clone(), flat));
+    }
+    // Deterministic export order (not load-bearing for the linked Program, which
+    // re-derives everything, but keeps the serialized unit stable).
+    for unit in &mut units {
+        unit.exports
+            .objects
+            .sort_by(|a, b| local_ref_sort_key(a.1).cmp(&local_ref_sort_key(b.1)));
+        unit.exports.globals.sort_by(|a, b| a.1.cmp(&b.1));
+    }
+
+    // ---- $init / $init_test tail extraction (design §9 R2) ------------------
+    if tail_start < n_obj {
+        let tail = build_init_tail(
+            program,
+            tail_start,
+            &obj_kind,
+            &slot_to_name,
+            &let_name_to_file,
+        )?;
+        // The tail belongs to the user group; carry it on the last user unit.
+        let carrier = (0..n_files)
+            .rev()
+            .find(|&fi| !unit_source[fi].starts_with("<builtin>/"))
+            .unwrap_or(n_files.saturating_sub(1));
+        units[carrier].init_tail = Some(tail);
+    }
+
+    // ---- Package fragments --------------------------------------------------
+    // Each package's fragment is carried by the first unit (lowest file index)
+    // whose file belongs to that package; the linker's merge re-sorts, so this
+    // attribution is order-free.
+    let mut package_first_unit: HashMap<Name, usize> = HashMap::new();
+    for (u, pkg) in unit_package.iter().enumerate() {
+        package_first_unit.entry(pkg.clone()).or_insert(u);
+    }
+    for (pkg_name, pkg) in &program.packages {
+        let frag = build_package_fragment(program, pkg, &fn_obj_name)?;
+        let carrier = package_first_unit
+            .get(pkg_name)
+            .copied()
+            .unwrap_or(0usize.min(n_files.saturating_sub(1)));
+        units[carrier].package_fragment = frag;
+    }
+
+    // ---- Template-string macros (Pass 5 fragment, per file) -----------------
+    for (fi, file) in all_files.iter().enumerate() {
+        let item_tree = file_item_tree(db, *file);
+        for ts_data in item_tree.template_strings.values() {
+            if let Some(body) = &ts_data.body {
+                let args = ts_data
+                    .params
+                    .iter()
+                    .map(|param| param.name.to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                units[fi].template_macros.push(format!(
+                    "{{% macro {name}({args}) %}}{body}{{% endmacro %}}",
+                    name = ts_data.name,
+                ));
+            }
+        }
+    }
+
+    // ---- Test cases (Pass 8 fragment, per file by source path) --------------
+    if options.emit_test_cases {
+        for test in &program.test_cases {
+            if let Some(&fi) = rel_to_file.get(test.source_file.as_str()) {
+                units[fi].test_cases.push(test.clone());
+            } else {
+                return Err(LoweringError::Internal(format!(
+                    "test case `{}` has source_file `{}` matching no file",
+                    test.name, test.source_file
+                )));
+            }
+        }
+    }
+
+    Ok(units)
+}
+
+/// Sort key that orders `LocalRef`s by bucket then offset.
+fn local_ref_sort_key(r: LocalRef) -> (u8, u32) {
+    match r {
+        LocalRef::Class(k) => (0, k),
+        LocalRef::Enum(k) => (1, k),
+        LocalRef::Interface(k) => (2, k),
+        LocalRef::Code(k) => (3, k),
+    }
+}
+
+fn class_fq(obj: &Object) -> String {
+    match obj {
+        Object::Class(c) => c.name.to_string(),
+        _ => unreachable!("class_fq on non-class"),
+    }
+}
+fn enum_fq(obj: &Object) -> String {
+    match obj {
+        Object::Enum(e) => e.name.to_string(),
+        _ => unreachable!("enum_fq on non-enum"),
+    }
+}
+fn iface_fq(obj: &Object) -> String {
+    match obj {
+        Object::Interface(i) => i.name.to_string(),
+        _ => unreachable!("iface_fq on non-interface"),
+    }
+}
+
+fn obj_variant_name(obj: &Object) -> &'static str {
+    match obj {
+        Object::Function(_) => "Function",
+        Object::Class(_) => "Class",
+        Object::Enum(_) => "Enum",
+        Object::Interface(_) => "Interface",
+        Object::Package(_) => "Package",
+        Object::ImplRule(_) => "ImplRule",
+        Object::String(_) => "String",
+        Object::Bigint(_) => "Bigint",
+        Object::Uint8Array(_) => "Uint8Array",
+        Object::Type(_) => "Type",
+        Object::GenericFunction(_) => "GenericFunction",
+        _ => "runtime-only",
+    }
+}
+
+/// Build the import [`Symbol`] for a cross-unit object reference by inspecting
+/// the target pool object.
+fn object_symbol(
+    program: &Program,
+    target: usize,
+    obj_kind: &[PoolObjKind],
+    slot_to_name: &[Option<String>],
+) -> Result<Symbol, LoweringError> {
+    let obj = &program.objects[ObjectIndex::from_raw(target)];
+    match obj {
+        Object::GenericFunction(gf) => {
+            // A generic-function value (`foo<int>`) interned in another unit
+            // (design §9 R1). The intern key is `(base function, type_args)`; the
+            // linker re-resolves it from the base function's name.
+            let base_slot = gf.function.raw();
+            let base_fn = slot_to_name
+                .get(base_slot)
+                .and_then(Option::clone)
+                .ok_or_else(|| {
+                    LoweringError::Internal(format!(
+                        "generic-function object {target} has base slot {base_slot} \
+                     with no function name"
+                    ))
+                })?;
+            Ok(Symbol {
+                kind: SymbolKind::GenericFn,
+                fq_name: base_fn.clone(),
+                generic: Some(bex_vm_types::GenericFnKey {
+                    base_fn,
+                    type_args: gf.type_args.to_vec(),
+                }),
+            })
+        }
+        _ => {
+            let (kind, fq_name) = match obj {
+                Object::Class(c) => (SymbolKind::Class, c.name.to_string()),
+                Object::Enum(e) => (SymbolKind::Enum, e.name.to_string()),
+                Object::Interface(i) => (SymbolKind::Interface, i.name.to_string()),
+                Object::Function(_) => match &obj_kind[target] {
+                    PoolObjKind::NamedFn(name) => (SymbolKind::Function, name.clone()),
+                    PoolObjKind::CodeAnon => {
+                        return Err(LoweringError::Internal(format!(
+                            "cross-unit reference to lambda object {target} (lambdas \
+                             are never cross-unit)"
+                        )));
+                    }
+                    _ => unreachable!("function object with non-function kind"),
+                },
+                _ => {
+                    return Err(LoweringError::Internal(format!(
+                        "cross-unit reference to a non-def object {target} \
+                         ({}); only classes/enums/interfaces/functions are importable",
+                        obj_variant_name(obj)
+                    )));
+                }
+            };
+            Ok(Symbol {
+                kind,
+                fq_name,
+                generic: None,
+            })
+        }
+    }
+}
+
+/// Convert a whole-program [`ProgramPackage`](bex_vm_types::types::ProgramPackage)
+/// into its symbolic fragment by resolving every `ObjectIndex` back to its
+/// object's fully-qualified name.
+fn build_package_fragment(
+    program: &Program,
+    pkg: &bex_vm_types::types::ProgramPackage,
+    fn_obj_name: &HashMap<usize, String>,
+) -> Result<ProgramPackageFrag, LoweringError> {
+    let obj_fq = |idx: ObjectIndex| -> Result<String, LoweringError> {
+        let raw = idx.raw();
+        match &program.objects[idx] {
+            Object::Class(c) => Ok(c.name.to_string()),
+            Object::Enum(e) => Ok(e.name.to_string()),
+            Object::Interface(i) => Ok(i.name.to_string()),
+            Object::Function(_) => fn_obj_name.get(&raw).cloned().ok_or_else(|| {
+                LoweringError::Internal(format!("package refs unnamed function object {raw}"))
+            }),
+            other => Err(LoweringError::Internal(format!(
+                "package refs a non-def object {raw} ({})",
+                obj_variant_name(other)
+            ))),
+        }
+    };
+    let mut frag = ProgramPackageFrag::default();
+    for (local, &idx) in &pkg.classes {
+        frag.classes.push((local.clone(), obj_fq(idx)?));
+    }
+    for (local, &idx) in &pkg.enums {
+        frag.enums.push((local.clone(), obj_fq(idx)?));
+    }
+    for (local, &idx) in &pkg.interfaces {
+        frag.interfaces.push((local.clone(), obj_fq(idx)?));
+    }
+    for (local, ty) in &pkg.recursive_type_aliases {
+        frag.recursive_type_aliases
+            .push((local.clone(), ty.clone()));
+    }
+    for (&iface_idx, rules) in &pkg.impl_rules {
+        let iface_fq = obj_fq(iface_idx)?;
+        let mut rule_frags = Vec::with_capacity(rules.len());
+        for rule in rules {
+            let mut methods = Vec::with_capacity(rule.methods.len());
+            for (name, method) in &rule.methods {
+                methods.push((
+                    name.clone(),
+                    ProgramMethodImplFrag {
+                        fqn: obj_fq(method.fqn)?,
+                        frame: method.frame.clone(),
+                    },
+                ));
+            }
+            rule_frags.push(ProgramImplRuleFrag {
+                interface_head: obj_fq(rule.interface_head)?,
+                for_ty_pattern: rule.for_ty_pattern.clone(),
+                generic_param_bounds: rule.generic_param_bounds.clone(),
+                interface_args: rule.interface_args.clone(),
+                interface_assoc: rule.interface_assoc.clone(),
+                methods,
+            });
+        }
+        frag.impl_rules.push((iface_fq, rule_frags));
+    }
+    Ok(frag)
+}
+
+/// Extract the `$init`/`$init_test` tail (design §9 R2) from a flat `Program`:
+/// the objects in `[tail_start, program.objects.len())`, with operands rewritten
+/// to the tail-local/import convention of [`bex_vm_types::InitTail`].
+#[allow(clippy::too_many_lines)]
+fn build_init_tail(
+    program: &Program,
+    tail_start: usize,
+    obj_kind: &[PoolObjKind],
+    slot_to_name: &[Option<String>],
+    let_name_to_file: &HashMap<String, usize>,
+) -> Result<bex_vm_types::InitTail, LoweringError> {
+    let n_obj = program.objects.len();
+    let n_tail_objects = n_obj - tail_start;
+
+    // Object index -> global slot (a function/helper slot holds `Object(obj)`).
+    let mut obj_slot: HashMap<usize, usize> = HashMap::new();
+    for (s, val) in program.globals.iter().enumerate() {
+        if let ConstValue::Object(o) = val {
+            obj_slot.insert(o.raw(), s);
+        }
+    }
+    // Tail slots: those owned by a tail object. They form a dense suffix.
+    let mut tail_slots: Vec<(usize, usize)> = Vec::new(); // (abs slot, tail obj idx)
+    for tidx in tail_start..n_obj {
+        if let Some(&s) = obj_slot.get(&tidx) {
+            tail_slots.push((s, tidx));
+        }
+    }
+    tail_slots.sort_by_key(|&(s, _)| s);
+    let tail_slot_base = tail_slots
+        .first()
+        .map_or(program.globals.len(), |&(s, _)| s);
+    for (ord, &(s, _)) in tail_slots.iter().enumerate() {
+        if s != tail_slot_base + ord {
+            return Err(LoweringError::Internal(format!(
+                "$init tail slots are not a dense suffix: slot {s} at ordinal {ord} \
+                 (base {tail_slot_base})"
+            )));
+        }
+    }
+    let n_tail_slots = tail_slots.len();
+    let slot_objects: Vec<u32> = tail_slots
+        .iter()
+        .map(|&(_, tidx)| u32::try_from(tidx - tail_start).expect("tail offset fits u32"))
+        .collect();
+
+    // Named tail functions: `$init` / `$init_test` chainers (helpers are nameless).
+    let mut named: Vec<(String, u32)> = Vec::new();
+    for (name, &idx) in &program.function_indices {
+        if idx >= tail_start {
+            named.push((
+                name.clone(),
+                u32::try_from(idx - tail_start).expect("tail offset fits u32"),
+            ));
+        }
+    }
+    named.sort_by(|a, b| a.1.cmp(&b.1));
+
+    // Encode each tail object's operands.
+    let mut obj_import_idx: HashMap<String, usize> = HashMap::new();
+    let mut glob_import_idx: HashMap<String, usize> = HashMap::new();
+    let mut object_imports: Vec<Symbol> = Vec::new();
+    let mut global_imports: Vec<Symbol> = Vec::new();
+    let mut objects: Vec<Object> = Vec::with_capacity(n_tail_objects);
+    let mut lowering_err: Option<LoweringError> = None;
+    for tidx in tail_start..n_obj {
+        let mut object = program.objects[ObjectIndex::from_raw(tidx)].clone();
+        bex_vm_types::relink::visit_object_operands(&mut object, |operand| {
+            if lowering_err.is_some() {
+                return;
+            }
+            match operand {
+                bex_vm_types::relink::IndexOperand::Object(idx) => {
+                    let t = idx.raw();
+                    let new = if t >= tail_start {
+                        t - tail_start
+                    } else {
+                        match object_symbol(program, t, obj_kind, slot_to_name) {
+                            Ok(sym) => {
+                                let import_idx = *obj_import_idx
+                                    .entry(sym.fq_name.clone())
+                                    .or_insert_with(|| {
+                                        let n = object_imports.len();
+                                        object_imports.push(sym);
+                                        n
+                                    });
+                                n_tail_objects + import_idx
+                            }
+                            Err(err) => {
+                                lowering_err = Some(err);
+                                return;
+                            }
+                        }
+                    };
+                    *idx = ObjectIndex::from_raw(new);
+                }
+                bex_vm_types::relink::IndexOperand::Global(slot) => {
+                    let s = slot.raw();
+                    let new = if s >= tail_slot_base {
+                        s - tail_slot_base
+                    } else {
+                        let Some(name) = slot_to_name.get(s).and_then(Option::as_ref) else {
+                            lowering_err = Some(LoweringError::Internal(format!(
+                                "$init tail references unnamed non-tail slot {s}"
+                            )));
+                            return;
+                        };
+                        let is_let = let_name_to_file.contains_key(name);
+                        let sym = Symbol {
+                            kind: if is_let {
+                                SymbolKind::Let
+                            } else {
+                                SymbolKind::Function
+                            },
+                            fq_name: name.clone(),
+                            generic: None,
+                        };
+                        let import_idx =
+                            *glob_import_idx.entry(name.clone()).or_insert_with(|| {
+                                let n = global_imports.len();
+                                global_imports.push(sym);
+                                n
+                            });
+                        n_tail_slots + import_idx
+                    };
+                    *slot = GlobalIndex::from_raw(new);
+                }
+            }
+        });
+        if let Some(err) = lowering_err {
+            return Err(err);
+        }
+        objects.push(object);
+    }
+
+    Ok(bex_vm_types::InitTail {
+        objects,
+        object_imports,
+        global_imports,
+        slot_objects,
+        named,
+        package_init_order: program.package_init_order.clone(),
+    })
 }
 
 fn generate_impl(
