@@ -40,8 +40,9 @@ macro-phase, "DCP §…") and [`llm-provider-plan.md`](./llm-provider-plan.md) (
 
 ### Phase C — the desugar (DCP §1.3; blast radius)
 - [x] **C.1** — `Foo$with` / `Foo$run_tools` / `Foo$live` generated per stdlib driver (companions.rs): body = `drive_<suffix><T,…>(client, Foo$render_prompt(args by name…, client = client), extras…)`; `$with` appends `V`/`E2` companion generics; param layout = required users → extras → defaulted users → client (E0005/ordering rules); `render_prompt` renders native providers with a neutral primitive (prompt-hook v1). 5 offline scenario tests + `common/fakes.baml` (EchoProvider/NoCapProvider).
-- [ ] **C.2** — desugar the main body (`Foo` → `drive_call`) + unify `Foo$stream` onto `drive_stream`; requires lowering legacy strategy configs to new-model combinators first (else strategy clients lose their loops).
-- [ ] Delete `_openai_delegation_ok`/`_openai_from` + orchestrator special-cases; `call_llm_function`/`stream_llm_function` shrink to bridge internals.
+- [x] **C.2** — native routing generalized + orchestrator delegation **deleted**: `baml.ai.native_provider_for(primitive)` maps ported configs (openai/anthropic/google-ai) onto native classes; `call_llm_function`/`stream_llm_function` route ported primitives natively (stream falls through to legacy when the native class lacks `Streaming` — the capability match is the fallback), strategy configs keep legacy loops. New e2e: declared `provider anthropic` hits the native wire. `_openai_delegation_ok`/`_openai_from` gone.
+- [x] (folded into C.2 above.)
+- [ ] **C.3 (optional cleanup)** — literal AST desugar of the main body (`Foo` → `drive_call(client, Foo$render_prompt(…))`) + `Foo$stream` onto `drive_stream`; requires strategy-config→combinator lowering so `call_llm_function` can retire fully. The semantic goals (negotiation via capability surface, delegation deleted, native routing) are already met; this is the cosmetic completion.
 - [ ] Back-compat gate: entire legacy corpus + `ai_*` suites + wire-fidelity request-capture tests pass byte-identically where asserted.
 - [ ] Exit: `Foo`/`Foo$stream`/`Foo$with`/`Foo$run_tools` work with declared, swapped, combinator, and bridge clients; anthropic/gemini LLM functions route natively.
 
