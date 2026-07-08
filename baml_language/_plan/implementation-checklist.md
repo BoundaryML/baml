@@ -93,11 +93,11 @@ with the blocker instead of faking a run.
 
 - Single-turn & output: [x] 01 [x] 02 [x] 03 [x] 04 (negotiation offline; SSE = Rust tier) [ ] 05 (live-only: e2e_multimodal_live) [ ] 06 (needs media-output provider) [x] 07 [x] 08
 - Tools & agents: [x] 09 (from_type + default loop; live = tools_loop_live) [x] 10 (ToolLoop + $run_tools, offline) [x] 11 (parallel dispatch) [x] 12 (taxonomy) [x] 13 (catalog paging) [x] 14 (handoff) [x] 15 (tripwires) [x] 16 (allowlist gate + ToolLoop compose)
-- State & memory: [x] 17 (session threading, offline) [ ] 18(P8-store) [ ] 19(P8-store) [ ] 20 [ ] 21(P8-store)
-- Realtime & voice: [x] 22 (offline `$live` + fake; live tier = ai_realtime.rs) [x] 23 (negotiation) [ ] 24 [x] 25 (cascaded pipeline, offline) [ ] 26
+- State & memory: [x] 17 (session threading, offline) [x] 18 (window round-trip; P8 store) [x] 19 (fork; P8 store) [x] 20 (owner-guarded extend; live = responses_live_chain) [x] 21 (recall; P8 store)
+- Realtime & voice: [x] 22 (offline `$live` + fake; live tier = ai_realtime.rs) [x] 23 (negotiation) [x] 24 (dual-capability negotiation) [x] 25 (cascaded pipeline, offline) [x] 26 (one model, two transports)
 - Cross-cutting: [x] 27 (submit/poll + effect marker, offline; live = ai_responses) [x] 28 (routing) [x] 29 (Fallback + fluent) [x] 30 (cascade) [x] 31 (defer lifecycle) [x] 32 ($with value+meta, offline) [x] 33 (judge scoring; live = eval_judge_live) [x] 34 (usage summing; live = usage_metering_live) [x] 35 (config variance) [x] 36 (Support lattice)
-- Harnesses (P8-subprocess): [x] 37 (config+negotiation; BLOCKED:P8 for live) [ ] 38 [ ] 39 [ ] 40 [ ] 41 [x] 42 (drive_any negotiation)
-- Workflows: [x] 43 (spawn/await graph, offline; live = workflow_graph_live) [x] 44 (suspend as sum arm, offline; P8-store for durability) [x] 45 (durable-step shape; P8-store for the log) [x] 46 (step events) [ ] 47
+- Harnesses (P8-subprocess): [x] 37 [x] 38 (sandbox posture) [x] 39 (tool surface) [ ] 40 (needs session store) [x] 41 (config variance) [x] 42 — all BLOCKED:P8 for live driving (drive_any negotiation)
+- Workflows: [x] 43 (spawn/await graph, offline; live = workflow_graph_live) [x] 44 (suspend as sum arm, offline; P8-store for durability) [x] 45 (durable-step shape; P8-store for the log) [x] 46 (step events) [x] 47 (nested agent in a spawned step)
 
 ## Working rules (summary — full version in [`README.md`](./README.md))
 
