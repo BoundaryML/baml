@@ -1,5 +1,5 @@
 [package]
-name = "baml_compiler2_tir2"
+name = "baml_compiler2_tir"
 version = "0.1.0"
 edition = "2024"
 
