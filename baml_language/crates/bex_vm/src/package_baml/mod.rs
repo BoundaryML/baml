@@ -7,12 +7,12 @@
 //! - `int` — `BamlClassInt` (abs, min, max, clamp, bit ops, ...)
 //! - `string` — `BamlClassString` (length, trim, split, ...)
 //! - `map` — `BamlClassMap` (length, has, keys, values, ...)
-//! - `math` — `BamlNamespaceMath` (trunc, sum, mean, median)
 //! - `media` — `BamlClassMedia{Pdf,Audio,Video,Image}` + `BamlNamespaceMedia`
 //! - `ops` — `BamlClassOps*` (`Equals`/`Compare` for primitives + containers)
-//! - `root` — `BamlPackageBaml` (`deep_copy`, `deep_equals`, and the
-//!   `Sortable.sort` shims `_compare_shim` / `_is_primitive_array` /
-//!   `_rust_sort` / `_float_total_cmp`)
+//! - `root` — `BamlPackageBaml` (`deep_copy`, `deep_equals`, the numeric-array
+//!   reductions `_sum_int` / `_sum_float` / `_mean_float` / `_median_float`,
+//!   the saturating `_trunc_to_int`, and the `Sortable.sort` shims
+//!   `_compare_shim` / `_is_primitive_array` / `_rust_sort` / `_float_total_cmp`)
 //!
 //! # Adding a new builtin
 //!
@@ -29,7 +29,6 @@ pub(crate) mod id;
 mod int;
 pub mod json;
 mod map;
-mod math;
 mod media;
 mod ops;
 mod resolve;

@@ -106,7 +106,6 @@ pub const ALL: &[BuiltinFile] = &[
     builtin!("baml", "ns_http/server.baml"),
     builtin!("baml", "ns_events/events.baml"),
     builtin!("baml", "ns_id/id.baml"),
-    builtin!("baml", "ns_math/math.baml"),
     builtin!("baml", "ns_sys/sys.baml"),
     builtin!("baml", "ns_fs/fs.baml"),
     builtin!("baml", "ns_glob/glob.baml"),

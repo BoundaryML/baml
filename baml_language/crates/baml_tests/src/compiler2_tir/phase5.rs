@@ -211,27 +211,24 @@ fn baml_package_contains_env_functions() {
 }
 
 #[test]
-fn baml_package_contains_math_and_sys() {
+fn baml_package_has_sys_but_not_math() {
     let db = make_db();
     let baml_pkg = PackageId::new(&db, Name::new("baml"));
     let items = package_items(&db, baml_pkg);
 
+    // B-712 removed the `baml.math` namespace entirely: its aggregates moved to
+    // `float[]` methods (`sum`/`mean`/`median`) and `trunc` became the private
+    // root helper `_trunc_to_int`.
     let math_ns_path = vec![Name::new("math")];
     assert!(
-        items.namespaces.contains_key(&math_ns_path),
-        "baml.math namespace should exist"
+        !items.namespaces.contains_key(&math_ns_path),
+        "baml.math namespace should no longer exist"
     );
 
     let sys_ns_path = vec![Name::new("sys")];
     assert!(
         items.namespaces.contains_key(&sys_ns_path),
         "baml.sys namespace should exist"
-    );
-
-    let math_ns = &items.namespaces[&math_ns_path];
-    assert!(
-        math_ns.values.contains_key(&Name::new("trunc")),
-        "baml.math.trunc should exist"
     );
 
     let sys_ns = &items.namespaces[&sys_ns_path];
@@ -404,7 +401,6 @@ fn file_package_derives_correct_namespaces() {
     let mut found_containers = false;
     let mut found_env = false;
     let mut found_http = false;
-    let mut found_math = false;
     let mut found_sys = false;
 
     for file in &files {
@@ -442,17 +438,6 @@ fn file_package_derives_correct_namespaces() {
             );
             found_http = true;
         }
-        // math.baml is at <builtin>/baml/ns_math/math.baml → namespace ["math"]
-        if path_str == "<builtin>/baml/ns_math/math.baml" {
-            let pkg_info = file_package(&db, *file);
-            assert_eq!(pkg_info.package.as_str(), "baml");
-            assert_eq!(
-                pkg_info.namespace_path,
-                vec![Name::new("math")],
-                "ns_math/math.baml should be in baml.math namespace"
-            );
-            found_math = true;
-        }
         // sys.baml is at <builtin>/baml/ns_sys/sys.baml → namespace ["sys"]
         if path_str == "<builtin>/baml/ns_sys/sys.baml" {
             let pkg_info = file_package(&db, *file);
@@ -472,7 +457,6 @@ fn file_package_derives_correct_namespaces() {
     );
     assert!(found_env, "env.baml not found in compiler2 files");
     assert!(found_http, "http.baml not found in compiler2 files");
-    assert!(found_math, "math.baml not found in compiler2 files");
     assert!(found_sys, "sys.baml not found in compiler2 files");
 }
 

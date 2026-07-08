@@ -390,18 +390,6 @@ fn render_builtin_namespace_llm() {
     insta::assert_snapshot!(output);
 }
 
-/// `baml describe baml.math` — list items in the `math` sub-namespace.
-#[test]
-fn render_builtin_namespace_math() {
-    let db = simple_project();
-    let pkg_id = baml_compiler2_hir::package::PackageId::new(&db, baml_db::Name::new("baml"));
-    let ns_path = vec![baml_db::Name::new("math")];
-    let entries = baml_lsp2_actions::list_namespace_items(&db, pkg_id, &ns_path).unwrap();
-    assert!(!entries.is_empty());
-    let output = capture_listing(&entries);
-    insta::assert_snapshot!(output);
-}
-
 /// `baml describe testing` — list items in the `testing` package.
 #[test]
 fn render_testing_package_listing() {

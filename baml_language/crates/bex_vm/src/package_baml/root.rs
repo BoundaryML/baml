@@ -2,7 +2,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use bex_heap::TlabHolder;
 use bex_vm_types::{
-    FutureRead, HeapPtr, ValueKind,
+    FutureRead, HeapPtr, ObjectType, ValueKind,
     types::{Array, AtomicValueSlot, Instance, Map, Object, Value},
 };
 use indexmap::IndexMap;
@@ -15,7 +15,10 @@ use super::{
     },
     make_compare_callee, make_to_string_callee,
 };
-use crate::BexVm;
+use crate::{
+    BexVm, VmPanic,
+    errors::{VmBamlError, VmRustFnError},
+};
 
 impl BamlPackageBaml for PackageBamlImpl {
     fn deep_copy(vm: &mut BexVm, value: &Value) -> Value {
@@ -184,6 +187,96 @@ impl BamlPackageBaml for PackageBamlImpl {
             },
             None => true,
         }
+    }
+
+    // ── Numeric-array reductions (formerly `baml.math.*`) ──────────────────────
+    //
+    // Private native backings for the `Summable` / `FloatStats` methods declared
+    // in `containers.baml`. `expect_int` / `expect_float` are infallible reads:
+    // the type system proves each element's tag before execution reaches here.
+
+    /// `baml._sum_int(values)` — native backing for `int[].sum()`.
+    ///
+    /// Accumulates left-to-right from `0`, checking the running total against
+    /// the `int` range at each step so overflow raises `IntegerOverflow` exactly
+    /// like repeated `+` would. Both `acc` and each element are already in range,
+    /// so the intermediate i64 add never wraps; the tighter range check is the
+    /// meaningful bound. The empty array sums to `0`.
+    fn _sum_int(values: &[Value]) -> Result<i64, VmRustFnError> {
+        let mut acc: i64 = 0;
+        for (index, value) in values.iter().enumerate() {
+            let x = expect_int(*value, "_sum_int", index);
+            match acc.checked_add(x) {
+                Some(v) if (Value::INT_MIN..=Value::INT_MAX).contains(&v) => acc = v,
+                _ => {
+                    return Err(VmPanic::IntegerOverflow {
+                        message: format!("{acc} + {x} overflows int"),
+                    }
+                    .into());
+                }
+            }
+        }
+        Ok(acc)
+    }
+
+    /// `baml._sum_float(values)` — native backing for `float[].sum()`.
+    ///
+    /// Sums left-to-right from `0.0`; the empty array sums to `0.0`. Never throws.
+    fn _sum_float(vm: &BexVm, values: &[Value]) -> f64 {
+        values
+            .iter()
+            .enumerate()
+            .map(|(index, value)| expect_float(vm, *value, "_sum_float", index))
+            .sum()
+    }
+
+    /// `baml._mean_float(values)` — native backing for `float[].mean()`.
+    ///
+    /// Throws `InvalidArgument` when `values` is empty.
+    #[allow(clippy::cast_precision_loss)]
+    fn _mean_float(vm: &BexVm, values: &[Value]) -> Result<f64, VmRustFnError> {
+        if values.is_empty() {
+            return Err(VmBamlError::InvalidArgument {
+                message: "float[].mean: cannot take the mean of an empty array".to_string(),
+            }
+            .into());
+        }
+        let n = values.len() as f64;
+        Ok(Self::_sum_float(vm, values) / n)
+    }
+
+    /// `baml._median_float(values)` — native backing for `float[].median()`.
+    ///
+    /// Sorts a copy with `f64::total_cmp` (BAML's total float ordering, matching
+    /// `float[].sort()`) so the caller's array is left untouched. Throws
+    /// `InvalidArgument` when `values` is empty.
+    fn _median_float(vm: &BexVm, values: &[Value]) -> Result<f64, VmRustFnError> {
+        if values.is_empty() {
+            return Err(VmBamlError::InvalidArgument {
+                message: "float[].median: cannot take the median of an empty array".to_string(),
+            }
+            .into());
+        }
+        let mut sorted: Vec<f64> = values
+            .iter()
+            .enumerate()
+            .map(|(index, value)| expect_float(vm, *value, "_median_float", index))
+            .collect();
+        sorted.sort_by(f64::total_cmp);
+        let mid = sorted.len() / 2;
+        if sorted.len() % 2 == 1 {
+            Ok(sorted[mid])
+        } else {
+            Ok(f64::midpoint(sorted[mid - 1], sorted[mid]))
+        }
+    }
+
+    /// `baml._trunc_to_int(value)` — saturating truncation toward zero (formerly
+    /// the public `baml.math.trunc`). Rust's `as` cast saturates to the `i64`
+    /// range and maps NaN to `0`; never throws.
+    #[allow(clippy::cast_possible_truncation)]
+    fn _trunc_to_int(value: f64) -> i64 {
+        value as i64
     }
 }
 
@@ -751,5 +844,78 @@ fn deep_equals_recursive(
         }
 
         _ => false,
+    }
+}
+
+// ── Helpers for the numeric-array reductions ──────────────────────────────────
+
+/// Returns a human-readable runtime type name for the `unreachable!` diagnostics
+/// in `expect_float` / `expect_int`.
+fn value_type_name(vm: &BexVm, value: Value) -> String {
+    if value.is_null() {
+        return "null".to_string();
+    }
+    if value.as_int().is_some() {
+        return "int".to_string();
+    }
+    if value.as_bool().is_some() {
+        return "bool".to_string();
+    }
+    if value.is_omitted() {
+        return "omitted".to_string();
+    }
+    if let Some(ptr) = value.as_object_ptr() {
+        return ObjectType::of(vm.get_object(ptr)).to_string();
+    }
+    "unknown".to_string()
+}
+
+/// Extracts a float from a validated `float[]` element. The `FloatStats` /
+/// `Summable` methods are declared on `float[]`, so by the time execution reaches
+/// the native path each element is a boxed float; any other tag is an upstream
+/// invariant violation.
+fn expect_float(vm: &BexVm, value: Value, fn_name: &str, index: usize) -> f64 {
+    let Some(ptr) = value.as_object_ptr() else {
+        unreachable!(
+            "{fn_name}: expected float at index {index}, got {}",
+            value_type_name(vm, value)
+        );
+    };
+    match vm.get_object(ptr) {
+        Object::Float(float) => *float,
+        _ => unreachable!(
+            "{fn_name}: expected float at index {index}, got {}",
+            value_type_name(vm, value)
+        ),
+    }
+}
+
+/// Extracts an `i64` from a validated `int[]` element. Ints are unboxed tagged
+/// values, so no heap read is needed; a missing int tag is an upstream invariant
+/// violation.
+fn expect_int(value: Value, fn_name: &str, index: usize) -> i64 {
+    value
+        .as_int()
+        .unwrap_or_else(|| unreachable!("{fn_name}: expected int at index {index}"))
+}
+
+#[cfg(test)]
+mod trunc_to_int_tests {
+    use super::{BamlPackageBaml, PackageBamlImpl};
+
+    /// `_trunc_to_int` must preserve the old `baml.math.trunc` semantics exactly:
+    /// truncate toward zero, saturate to the `i64` range, map NaN to `0`, and
+    /// never throw.
+    #[test]
+    fn trunc_to_int_saturating_semantics() {
+        assert_eq!(PackageBamlImpl::_trunc_to_int(3.7), 3);
+        assert_eq!(PackageBamlImpl::_trunc_to_int(-3.7), -3);
+        assert_eq!(PackageBamlImpl::_trunc_to_int(3.0), 3);
+        assert_eq!(PackageBamlImpl::_trunc_to_int(0.0), 0);
+        assert_eq!(PackageBamlImpl::_trunc_to_int(-0.0), 0);
+        // NaN maps to 0; ±∞ saturate to the i64 bounds (Rust's `as` cast).
+        assert_eq!(PackageBamlImpl::_trunc_to_int(f64::NAN), 0);
+        assert_eq!(PackageBamlImpl::_trunc_to_int(f64::INFINITY), i64::MAX);
+        assert_eq!(PackageBamlImpl::_trunc_to_int(f64::NEG_INFINITY), i64::MIN);
     }
 }

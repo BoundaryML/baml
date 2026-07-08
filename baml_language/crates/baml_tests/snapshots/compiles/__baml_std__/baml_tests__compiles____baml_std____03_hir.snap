@@ -48,6 +48,10 @@ class baml.Array {
 }
 class baml.Map {
 }
+function baml._mean_float(values: float[]) -> float  [builtin]
+function baml._median_float(values: float[]) -> float  [builtin]
+function baml._sum_float(values: float[]) -> float  [builtin]
+function baml._sum_int(values: int[]) -> int  [builtin]
 function baml.at(self: ?, index: int) -> T?  [builtin]
 function baml.clear(self: ?) -> null  [builtin]
 function baml.clear(self: ?) -> null  [builtin]
@@ -82,6 +86,12 @@ function baml.last_index_of(self: ?, item: T) -> int?  [builtin]
 function baml.length(self: ?) -> int  [builtin]
 function baml.length(self: ?) -> int  [builtin]
 function baml.map(self: ?, f: (T) -> U throws E) -> U[]  [builtin]
+function baml.mean(self: ?) -> float  [expr] {
+  {  } root._mean_float(self)
+}
+function baml.median(self: ?) -> float  [expr] {
+  {  } root._median_float(self)
+}
 function baml.pop(self: ?) -> T?  [builtin]
 function baml.push(self: ?, item: T) -> int  [builtin]
 function baml.reduce(self: ?, reducer: (A, T) -> A throws E, initial: A) -> A  [builtin]
@@ -97,10 +107,10 @@ function baml.sort_by_key(self: ?, key: (T) -> U throws E) -> T[]  [expr] {
 }
 function baml.splice(self: ?, start: int, count: int, replace: T[]) -> null  [builtin]
 function baml.sum(self: ?) -> float  [expr] {
-  {  } root.math.sum(self)
+  {  } root._sum_float(self)
 }
 function baml.sum(self: ?) -> int  [expr] {
-  {  } root.math._sum_int(self)
+  {  } root._sum_int(self)
 }
 function baml.unshift(self: ?, item: T) -> int  [builtin]
 function baml.values(self: ?) -> V[]  [builtin]
@@ -133,6 +143,7 @@ function baml.deep_equals(a: T, b: T) -> bool  [builtin]
 --- <builtin>/baml/float.baml ---
 class baml.Float {
 }
+function baml._trunc_to_int(value: float) -> int  [builtin]
 function baml.abs(self: ?) -> float  [builtin]
 function baml.acos(self: ?) -> float  [builtin]
 function baml.acosh(self: ?) -> float  [builtin]
@@ -1051,7 +1062,7 @@ function baml.llm.build_plan(self: ?) -> OrchestrationStep[]  [expr] {
   { let planner_state = PlannerState { rr_client_names: [] } } self.build_plan_with_state(planner_state)
 }
 function baml.llm.build_plan_with_state(self: ?, planner_state: PlannerState) -> OrchestrationStep[]  [expr] {
-  {  } match (self.retry) { r: baml.llm.RetryPolicy => { let result: OrchestrationStep[] = []; let current_delay = r.initial_delay_ms Add 0.0; { let attempt = 0; while attempt Le r.max_retries { let delay = 0; if (attempt Gt 0) { delay = root.math.trunc(current_delay); let next = current_delay Mul r.multiplier } if (next Gt r.max_delay_ms Add 0.0) { current_delay = r.max_delay_ms Add 0.0 } else { current_delay = next }; let inner = self.build_attempt_with_state(planner_state); for step in inner { result.push(OrchestrationStep { primitive_client: step.primitive_client, delay_ms: delay }) } } } } result, null => self.build_attempt_with_state(planner_state) }
+  {  } match (self.retry) { r: baml.llm.RetryPolicy => { let result: OrchestrationStep[] = []; let current_delay = r.initial_delay_ms Add 0.0; { let attempt = 0; while attempt Le r.max_retries { let delay = 0; if (attempt Gt 0) { delay = root._trunc_to_int(current_delay); let next = current_delay Mul r.multiplier } if (next Gt r.max_delay_ms Add 0.0) { current_delay = r.max_delay_ms Add 0.0 } else { current_delay = next }; let inner = self.build_attempt_with_state(planner_state); for step in inner { result.push(OrchestrationStep { primitive_client: step.primitive_client, delay_ms: delay }) } } } } result, null => self.build_attempt_with_state(planner_state) }
 }
 function baml.llm.build_prompt_context(primitive: baml.llm.PrimitiveClient, return_type: type) -> baml.llm.Context  [expr] {
   {  } baml.llm.Context { client: baml.llm.ContextClient { name: primitive.name, provider: primitive.provider, default_role: primitive.options.default_role NullCoalesce "system", allowed_roles: primitive.options.allowed_roles NullCoalesce [] }, tags: map {  }, output_format: render_output_format(return_type), _output_format: build_output_format(return_type) }
@@ -1066,10 +1077,10 @@ function baml.llm.execute_once_stream(self: ?, context: ExecutionContext, active
   {  } match (self.client_type) { baml.llm.ClientType.Primitive => { let primitive = self.to_primitive_client(); let return_type = get_return_type(context.function_name); let specialized = primitive.render_specialized_prompt(context.jinja_string, context.args, return_type, context.prompt_closure); let http_request = primitive.build_request_stream(specialized, return_type); let sse = root.http.fetch_sse(http_request); let stream: baml.llm.Stream<TStream, TFinal> = self.__make_stream(sse); return stream }, baml.llm.ClientType.Fallback => { for sub in self.sub_clients { let result2: baml.llm.Stream<TStream, TFinal> = sub.execute_stream(context, active_delay_ms) catch (e) { _ => { continue } }; return result2 }; throw root.errors.DevOther { message: "All orchestration..." } }, baml.llm.ClientType.RoundRobin => { if (self.sub_clients.length() Eq 0) { throw root.errors.DevOther { message: "RoundRobin client..." } }; let idx = self.counter Mod self.sub_clients.length(); self.counter Add= 1; let result3: baml.llm.Stream<TStream, TFinal> = self.sub_clients[idx].execute_stream(context, active_delay_ms); return result3 } }
 }
 function baml.llm.execute_oneshot(self: ?, context: ExecutionContext, inherited_delay_ms: int) -> T  [expr] {
-  {  } match (self.retry) { r: baml.llm.RetryPolicy => { let current_delay = r.initial_delay_ms Add 0.0; { let attempt = 0; while attempt Le r.max_retries { let attempt_delay = inherited_delay_ms; if (attempt Gt 0) { attempt_delay = root.math.trunc(current_delay); let next = current_delay Mul r.multiplier } if (next Gt r.max_delay_ms Add 0.0) { current_delay = r.max_delay_ms Add 0.0 } else { current_delay = next }; if (attempt Eq r.max_retries) { attempt_delay = inherited_delay_ms }; let result2: T = self.execute_once_oneshot(context, attempt_delay) catch (e) { _ => { continue } }; return result2 } }; throw root.errors.DevOther { message: "All orchestration..." } }, null => { let result: T = self.execute_once_oneshot(context, inherited_delay_ms); return result } }
+  {  } match (self.retry) { r: baml.llm.RetryPolicy => { let current_delay = r.initial_delay_ms Add 0.0; { let attempt = 0; while attempt Le r.max_retries { let attempt_delay = inherited_delay_ms; if (attempt Gt 0) { attempt_delay = root._trunc_to_int(current_delay); let next = current_delay Mul r.multiplier } if (next Gt r.max_delay_ms Add 0.0) { current_delay = r.max_delay_ms Add 0.0 } else { current_delay = next }; if (attempt Eq r.max_retries) { attempt_delay = inherited_delay_ms }; let result2: T = self.execute_once_oneshot(context, attempt_delay) catch (e) { _ => { continue } }; return result2 } }; throw root.errors.DevOther { message: "All orchestration..." } }, null => { let result: T = self.execute_once_oneshot(context, inherited_delay_ms); return result } }
 }
 function baml.llm.execute_stream(self: ?, context: ExecutionContext, inherited_delay_ms: int) -> baml.llm.Stream<TStream, TFinal>  [expr] {
-  {  } match (self.retry) { r: baml.llm.RetryPolicy => { let current_delay = r.initial_delay_ms Add 0.0; { let attempt = 0; while attempt Le r.max_retries { let attempt_delay = inherited_delay_ms; if (attempt Gt 0) { attempt_delay = root.math.trunc(current_delay); let next = current_delay Mul r.multiplier } if (next Gt r.max_delay_ms Add 0.0) { current_delay = r.max_delay_ms Add 0.0 } else { current_delay = next }; if (attempt Eq r.max_retries) { attempt_delay = inherited_delay_ms }; let result2: baml.llm.Stream<TStream, TFinal> = self.execute_once_stream(context, attempt_delay) catch (e) { _ => { continue } }; return result2 } }; throw root.errors.DevOther { message: "All orchestration..." } }, null => { let result: baml.llm.Stream<TStream, TFinal> = self.execute_once_stream(context, inherited_delay_ms); return result } }
+  {  } match (self.retry) { r: baml.llm.RetryPolicy => { let current_delay = r.initial_delay_ms Add 0.0; { let attempt = 0; while attempt Le r.max_retries { let attempt_delay = inherited_delay_ms; if (attempt Gt 0) { attempt_delay = root._trunc_to_int(current_delay); let next = current_delay Mul r.multiplier } if (next Gt r.max_delay_ms Add 0.0) { current_delay = r.max_delay_ms Add 0.0 } else { current_delay = next }; if (attempt Eq r.max_retries) { attempt_delay = inherited_delay_ms }; let result2: baml.llm.Stream<TStream, TFinal> = self.execute_once_stream(context, attempt_delay) catch (e) { _ => { continue } }; return result2 } }; throw root.errors.DevOther { message: "All orchestration..." } }, null => { let result: baml.llm.Stream<TStream, TFinal> = self.execute_once_stream(context, inherited_delay_ms); return result } }
 }
 function baml.llm.final(self: ?) -> TFinal  [expr] {
   { while Not self._acc.is_done() { let next = match (self._sse.next()) { null => { break }, next: string => next }; self._acc.add_events(next) } if (self._acc.is_done()) { self._sse.close(); break }; match (self._acc.finish_reason()) { null => { throw root.errors.LlmClient { message: "Streaming finishe..." } }, reason: string => self._client.validate_finish_reason(reason) }; let content = self._acc.content() } __sap_parse_final(content, self._cache)
@@ -1114,13 +1125,6 @@ function baml.llm.validate_finish_reason(self: ?, finish_reason: string) -> null
 
 --- captures ---
 lambda (ctx) in prompt: captures [body]
-
---- <builtin>/baml/ns_math/math.baml ---
-function baml.math._sum_int(values: int[]) -> int  [builtin]
-function baml.math.mean(values: float[]) -> float  [builtin]
-function baml.math.median(values: float[]) -> float  [builtin]
-function baml.math.sum(values: float[]) -> float  [builtin]
-function baml.math.trunc(value: float) -> int  [builtin]
 
 --- <builtin>/baml/ns_media/media.baml ---
 class baml.media.Audio {
