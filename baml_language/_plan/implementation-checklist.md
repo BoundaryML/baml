@@ -57,7 +57,7 @@ Every `../llm-provider/ideas/scenarios/NN-*` gets a `ns_ai_scenarios/NN_name/` w
 `// BLOCKED: P8 <what>` marker and graduates later). This is a **build-out**, not just a move of
 the 7 existing example files.
 - [ ] Verify nested-dir namespace behavior of `baml_src/`; scaffold `ns_ai_scenarios/NN_name/{usage,implementation}.baml` (numbering + scenario-URI header comments mirroring the original corpus).
-- [ ] Migrate + cull the 7 `ns_ai_examples/` files into their scenario homes (runnable test or real implementation — no third kind); then **fill out the remaining scenarios** from the original `usage.baml`/`implement.baml` designs, adapted to the desugared surface.
+- [x] All 7 `ns_ai_examples/` files migrated + culled; **`ns_ai_examples/` deleted**. Remaining: fill out the untouched scenarios from the original designs.
 - [ ] Multiple tests per scenario for distinct behaviors/settings (happy path, negotiation failure, client swap, per-provider variants, stream vs oneshot).
 - [ ] Triage example-squatting capabilities → `ns_ai/capabilities/` (with scenario URIs) vs per-scenario `implementation.baml`; add scenario URIs to existing capability files (map from REALIZED.md).
 - [ ] `common/fakes.baml` (EchoProvider-style offline providers); all scenario code on the desugared surface (plain `Foo(…)` first — tools via `ToolLoop` client).
@@ -92,12 +92,12 @@ Check a scenario when its `ns_ai_scenarios/NN_*/` exists with green tests on the
 with the blocker instead of faking a run.
 
 - Single-turn & output: [ ] 01 [ ] 02 [ ] 03 [ ] 04 [ ] 05 [ ] 06 [ ] 07 [ ] 08
-- Tools & agents: [ ] 09 [x] 10 (ToolLoop + $run_tools, offline) [x] 11 (parallel dispatch) [ ] 12 [ ] 13 [x] 14 (handoff) [x] 15 (tripwires) [ ] 16
+- Tools & agents: [ ] 09 [x] 10 (ToolLoop + $run_tools, offline) [x] 11 (parallel dispatch) [x] 12 (taxonomy) [x] 13 (catalog paging) [x] 14 (handoff) [x] 15 (tripwires) [x] 16 (allowlist gate + ToolLoop compose)
 - State & memory: [x] 17 (session threading, offline) [ ] 18(P8-store) [ ] 19(P8-store) [ ] 20 [ ] 21(P8-store)
-- Realtime & voice: [x] 22 (offline `$live` + fake; live tier = ai_realtime.rs) [x] 23 (negotiation) [ ] 24 [ ] 25 [ ] 26
-- Cross-cutting: [x] 27 (submit/poll + effect marker, offline; live = ai_responses) [ ] 28 [ ] 29 [ ] 30 [x] 31 (defer lifecycle) [x] 32 ($with value+meta, offline) [ ] 33 [ ] 34 [ ] 35 [ ] 36
+- Realtime & voice: [x] 22 (offline `$live` + fake; live tier = ai_realtime.rs) [x] 23 (negotiation) [ ] 24 [x] 25 (cascaded pipeline, offline) [ ] 26
+- Cross-cutting: [x] 27 (submit/poll + effect marker, offline; live = ai_responses) [ ] 28 [ ] 29 [ ] 30 [x] 31 (defer lifecycle) [x] 32 ($with value+meta, offline) [x] 33 (judge scoring; live = eval_judge_live) [ ] 34 [x] 35 (config variance) [x] 36 (Support lattice)
 - Harnesses (P8-subprocess): [x] 37 (config+negotiation; BLOCKED:P8 for live) [ ] 38 [ ] 39 [ ] 40 [ ] 41 [x] 42 (drive_any negotiation)
-- Workflows: [x] 43 (spawn/await graph, offline; live = workflow_graph_live) [x] 44 (suspend as sum arm, offline; P8-store for durability) [x] 45 (durable-step shape; P8-store for the log) [ ] 46 [ ] 47
+- Workflows: [x] 43 (spawn/await graph, offline; live = workflow_graph_live) [x] 44 (suspend as sum arm, offline; P8-store for durability) [x] 45 (durable-step shape; P8-store for the log) [x] 46 (step events) [ ] 47
 
 ## Working rules (summary — full version in [`README.md`](./README.md))
 
