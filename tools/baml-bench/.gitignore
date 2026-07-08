@@ -3,3 +3,6 @@
 
 # BEP source content is internal; the grader reads it from disk, never from git
 data/beps/
+
+# internal design notes, not for the public repo
+design-principles.md
