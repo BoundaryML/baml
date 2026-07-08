@@ -54,6 +54,57 @@ function ai_scenarios.$init_test_ns_ai_scenarios_10_agentic_loop_usage(registry:
     return
 }
 
+function ai_scenarios.$init_test_ns_ai_scenarios_11_parallel_tools_usage(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "11: parallel dispatch fans out and preserves call identity"
+    make_closure .<lambda($init_test_ns_ai_scenarios_11_parallel_tools_usage, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "11: the parallel dispatcher plugs into a real ToolLoop run"
+    make_closure .<lambda($init_test_ns_ai_scenarios_11_parallel_tools_usage, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_const null
+    return
+}
+
+function ai_scenarios.$init_test_ns_ai_scenarios_14_multi_agent_usage(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "14: the dispatcher hands off to a specialist provider"
+    make_closure .<lambda($init_test_ns_ai_scenarios_14_multi_agent_usage, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "14: a capability-less specialist degrades to a typed message, not a crash"
+    make_closure .<lambda($init_test_ns_ai_scenarios_14_multi_agent_usage, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_const null
+    return
+}
+
+function ai_scenarios.$init_test_ns_ai_scenarios_15_guardrails_usage(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "15: clean input passes through to the provider"
+    make_closure .<lambda($init_test_ns_ai_scenarios_15_guardrails_usage, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "15: tripwire input aborts with a typed error before any call"
+    make_closure .<lambda($init_test_ns_ai_scenarios_15_guardrails_usage, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_const null
+    return
+}
+
 function ai_scenarios.$init_test_ns_ai_scenarios_22_realtime_voice_usage(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "22: Foo$live drives a swapped-in Realtime provider"
@@ -1405,6 +1456,529 @@ function ai_scenarios.lookup_tools() -> baml.ai.Tool[] {
     load_type baml.ai.Tool
     alloc_array 1
     return
+}
+
+function ai_scenarios.s11_parallel_dispatch(calls: baml.ai.ToolCall[]) -> baml.ai.ToolResult[] {
+    load_var ?5
+    make_cell
+    store_var ?5
+    load_type future<baml.ai.ToolResult, null>
+    alloc_array 0
+    store_var futures
+    load_type baml.ai.ToolCall
+    load_var calls
+    call baml.iter.Iterable$for$T[].iter
+    store_var _3
+
+  L0:
+    load_var _3
+    is_type baml.iter.Flatten<...>
+    pop_jump_if_false L1
+    jump L18
+
+  L1:
+    load_var _3
+    is_type baml.iter.ArrayIterator<...>
+    pop_jump_if_false L2
+    jump L17
+
+  L2:
+    load_var _3
+    is_type baml.iter.StepBy<...>
+    pop_jump_if_false L3
+    jump L16
+
+  L3:
+    load_var _3
+    is_type baml.iter.Chain<...>
+    pop_jump_if_false L4
+    jump L15
+
+  L4:
+    load_var _3
+    is_type baml.iter.Repeat<...>
+    pop_jump_if_false L5
+    jump L14
+
+  L5:
+    load_var _3
+    is_type baml.iter.Map<...>
+    pop_jump_if_false L6
+    jump L13
+
+  L6:
+    load_var _3
+    is_type baml.iter.Filter<...>
+    pop_jump_if_false L7
+    jump L12
+
+  L7:
+    load_var _3
+    is_type baml.iter.FilterMap<...>
+    pop_jump_if_false L8
+    jump L11
+
+  L8:
+    load_var _3
+    is_type baml.iter.FlatMap<...>
+    pop_jump_if_false L9
+    jump L10
+
+  L9:
+    load_var _3
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L22
+    load_type baml.ai.ToolCall
+    load_type never
+    load_var _3
+    call baml.iter.Peekable.Iterator.next
+    store_var _5
+    jump L19
+
+  L10:
+    load_var _3
+    make_bound_method baml.iter.FlatMap.Iterator.next
+    call_indirect
+    store_var _5
+    jump L19
+
+  L11:
+    load_var _3
+    make_bound_method baml.iter.FilterMap.Iterator.next
+    call_indirect
+    store_var _5
+    jump L19
+
+  L12:
+    load_type baml.ai.ToolCall
+    load_type never
+    load_type never
+    load_var _3
+    call baml.iter.Filter.Iterator.next
+    store_var _5
+    jump L19
+
+  L13:
+    load_var _3
+    make_bound_method baml.iter.Map.Iterator.next
+    call_indirect
+    store_var _5
+    jump L19
+
+  L14:
+    load_type baml.ai.ToolCall
+    load_var _3
+    call baml.iter.Repeat.Iterator.next
+    store_var _5
+    jump L19
+
+  L15:
+    load_type baml.ai.ToolCall
+    load_type never
+    load_type never
+    load_var _3
+    call baml.iter.Chain.Iterator.next
+    store_var _5
+    jump L19
+
+  L16:
+    load_type baml.ai.ToolCall
+    load_type never
+    load_var _3
+    call baml.iter.StepBy.Iterator.next
+    store_var _5
+    jump L19
+
+  L17:
+    load_type baml.ai.ToolCall
+    load_var _3
+    call baml.iter.ArrayIterator.Iterator.next
+    store_var _5
+    jump L19
+
+  L18:
+    load_var _3
+    make_bound_method baml.iter.Flatten.Iterator.next
+    call_indirect
+    store_var _5
+
+  L19:
+    load_var _5
+    is_type baml.iter.Done
+    pop_jump_if_false L20
+    jump L21
+
+  L20:
+    load_const null
+    make_cell
+    store_var c
+    load_var _5
+    store_deref ?5
+    load_var c
+    make_closure .<lambda(s11_parallel_dispatch, 0)>, 1
+    load_const null
+    load_const null
+    spawn
+    store_var _38
+    load_var2 2 6
+    call baml.Array.push
+    pop 1
+    jump L0
+
+  L21:
+    load_type baml.ai.ToolResult
+    load_type null
+    load_var futures
+    call baml.future.all
+    await
+    return
+
+  L22:
+    unreachable
+}
+
+function ai_scenarios.s14_handoff_dispatch(specialist: baml.ai.Provider, calls: baml.ai.ToolCall[]) -> baml.ai.ToolResult[] {
+    load_type baml.ai.ToolResult
+    alloc_array 0
+    store_var results
+    load_type baml.ai.ToolCall
+    load_var calls
+    call baml.iter.Iterable$for$T[].iter
+    store_var _4
+
+  L0:
+    load_var _4
+    is_type baml.iter.Flatten<...>
+    pop_jump_if_false L1
+    jump L18
+
+  L1:
+    load_var _4
+    is_type baml.iter.ArrayIterator<...>
+    pop_jump_if_false L2
+    jump L17
+
+  L2:
+    load_var _4
+    is_type baml.iter.StepBy<...>
+    pop_jump_if_false L3
+    jump L16
+
+  L3:
+    load_var _4
+    is_type baml.iter.Chain<...>
+    pop_jump_if_false L4
+    jump L15
+
+  L4:
+    load_var _4
+    is_type baml.iter.Repeat<...>
+    pop_jump_if_false L5
+    jump L14
+
+  L5:
+    load_var _4
+    is_type baml.iter.Map<...>
+    pop_jump_if_false L6
+    jump L13
+
+  L6:
+    load_var _4
+    is_type baml.iter.Filter<...>
+    pop_jump_if_false L7
+    jump L12
+
+  L7:
+    load_var _4
+    is_type baml.iter.FilterMap<...>
+    pop_jump_if_false L8
+    jump L11
+
+  L8:
+    load_var _4
+    is_type baml.iter.FlatMap<...>
+    pop_jump_if_false L9
+    jump L10
+
+  L9:
+    load_var _4
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L35
+    load_type baml.ai.ToolCall
+    load_type never
+    load_var _4
+    call baml.iter.Peekable.Iterator.next
+    store_var _6
+    jump L19
+
+  L10:
+    load_var _4
+    make_bound_method baml.iter.FlatMap.Iterator.next
+    call_indirect
+    store_var _6
+    jump L19
+
+  L11:
+    load_var _4
+    make_bound_method baml.iter.FilterMap.Iterator.next
+    call_indirect
+    store_var _6
+    jump L19
+
+  L12:
+    load_type baml.ai.ToolCall
+    load_type never
+    load_type never
+    load_var _4
+    call baml.iter.Filter.Iterator.next
+    store_var _6
+    jump L19
+
+  L13:
+    load_var _4
+    make_bound_method baml.iter.Map.Iterator.next
+    call_indirect
+    store_var _6
+    jump L19
+
+  L14:
+    load_type baml.ai.ToolCall
+    load_var _4
+    call baml.iter.Repeat.Iterator.next
+    store_var _6
+    jump L19
+
+  L15:
+    load_type baml.ai.ToolCall
+    load_type never
+    load_type never
+    load_var _4
+    call baml.iter.Chain.Iterator.next
+    store_var _6
+    jump L19
+
+  L16:
+    load_type baml.ai.ToolCall
+    load_type never
+    load_var _4
+    call baml.iter.StepBy.Iterator.next
+    store_var _6
+    jump L19
+
+  L17:
+    load_type baml.ai.ToolCall
+    load_var _4
+    call baml.iter.ArrayIterator.Iterator.next
+    store_var _6
+    jump L19
+
+  L18:
+    load_var _4
+    make_bound_method baml.iter.Flatten.Iterator.next
+    call_indirect
+    store_var _6
+
+  L19:
+    load_var _6
+    is_type baml.iter.Done
+    pop_jump_if_false L20
+    jump L34
+
+  L20:
+    load_var _6
+    store_var c
+    load_var specialist
+    is_type baml.ai.ToolLoop
+    pop_jump_if_false L21
+    jump L32
+
+  L21:
+    load_var specialist
+    is_type baml.ai.Retry
+    pop_jump_if_false L22
+    jump L32
+
+  L22:
+    load_var specialist
+    is_type baml.ai.OpenAi
+    pop_jump_if_false L23
+    jump L32
+
+  L23:
+    load_var specialist
+    is_type baml.ai.Gemini
+    pop_jump_if_false L24
+    jump L32
+
+  L24:
+    load_var specialist
+    is_type baml.ai.OpenAiResponses
+    pop_jump_if_false L25
+    jump L32
+
+  L25:
+    load_var specialist
+    is_type baml.ai.RoundRobin
+    pop_jump_if_false L26
+    jump L32
+
+  L26:
+    load_var specialist
+    is_type baml.ai.Fallback
+    pop_jump_if_false L27
+    jump L32
+
+  L27:
+    load_var specialist
+    is_type baml.ai.OpenAiStrict
+    pop_jump_if_false L28
+    jump L32
+
+  L28:
+    load_var specialist
+    is_type baml.ai.Anthropic
+    pop_jump_if_false L29
+    jump L32
+
+  L29:
+    load_var specialist
+    is_type baml.llm.Client
+    pop_jump_if_false L30
+    jump L32
+
+  L30:
+    load_var specialist
+    is_type ai_scenarios.EchoProvider
+    pop_jump_if_false L31
+    jump L32
+
+  L31:
+    load_const "specialist is not callable"
+    store_var out
+    jump L33
+
+  L32:
+    load_type string
+    load_var2 1 6
+    load_field .args
+    load_type baml.ai.HttpProvider
+    load_const "call"
+    virtual_call nargs=2 ntypeargs=1
+    store_var out
+    jump L33
+    load_var e
+    throw_if_panic
+    load_const "sub-agent failed"
+    store_var out
+
+  L33:
+    load_var2 3 6
+    load_field .id
+    load_var out
+    init_instance baml.ai.ToolResult .id, .output
+    call baml.Array.push
+    pop 1
+    jump L0
+
+  L34:
+    load_var results
+    return
+
+  L35:
+    unreachable
+}
+
+function ai_scenarios.s15_guarded_call(p: baml.ai.Provider, prompt: string, blocked: string) -> string {
+    load_var2 2 3
+    call baml.String.includes
+    pop_jump_if_false L0
+    jump L13
+
+  L0:
+    load_var p
+    is_type baml.ai.ToolLoop
+    pop_jump_if_false L1
+    jump L12
+
+  L1:
+    load_var p
+    is_type baml.ai.Retry
+    pop_jump_if_false L2
+    jump L12
+
+  L2:
+    load_var p
+    is_type baml.ai.OpenAi
+    pop_jump_if_false L3
+    jump L12
+
+  L3:
+    load_var p
+    is_type baml.ai.Gemini
+    pop_jump_if_false L4
+    jump L12
+
+  L4:
+    load_var p
+    is_type baml.ai.OpenAiResponses
+    pop_jump_if_false L5
+    jump L12
+
+  L5:
+    load_var p
+    is_type baml.ai.RoundRobin
+    pop_jump_if_false L6
+    jump L12
+
+  L6:
+    load_var p
+    is_type baml.ai.Fallback
+    pop_jump_if_false L7
+    jump L12
+
+  L7:
+    load_var p
+    is_type baml.ai.OpenAiStrict
+    pop_jump_if_false L8
+    jump L12
+
+  L8:
+    load_var p
+    is_type baml.ai.Anthropic
+    pop_jump_if_false L9
+    jump L12
+
+  L9:
+    load_var p
+    is_type baml.llm.Client
+    pop_jump_if_false L10
+    jump L12
+
+  L10:
+    load_var p
+    is_type ai_scenarios.EchoProvider
+    pop_jump_if_false L11
+    jump L12
+
+  L11:
+    load_const "client cannot produce a value"
+    init_instance baml.errors.Unsupported .message
+    throw
+
+  L12:
+    load_type string
+    load_var2 1 2
+    load_type baml.ai.HttpProvider
+    load_const "call"
+    virtual_call nargs=2 ntypeargs=1
+    store_var _0
+    load_var _0
+    return
+
+  L13:
+    load_const "input tripwire: blocked content"
+    init_instance baml.errors.Unsupported .message
+    throw
 }
 
 function ai_scenarios.sample_claude_code() -> baml.ai.ClaudeCode {
