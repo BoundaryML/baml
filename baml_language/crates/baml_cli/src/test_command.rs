@@ -132,7 +132,7 @@ impl TestArgs {
             // is not yet proven complete, so narrowing to the reuse plan's dirty
             // files would risk stale errors from clean dependents.
             let source_files = db.get_source_files();
-            let diagnostics = baml_project::collect_diagnostics(&db, project, &source_files);
+            let diagnostics = baml_project::collect_diagnostics(&db);
             let errors: Vec<_> = diagnostics
                 .iter()
                 .filter(|d| d.severity == Severity::Error)

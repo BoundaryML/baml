@@ -17,7 +17,6 @@ use std::collections::HashMap;
 use baml_compiler_diagnostics::Diagnostic;
 use baml_db::{FileId, SourceFile};
 use baml_lsp2_actions::check_file as lsp2_check_file;
-use baml_workspace::Project;
 
 use crate::ProjectDatabase;
 
@@ -38,23 +37,18 @@ pub struct CheckResult {
 /// `baml_compiler_tir`. All diagnostics now come from the compiler2 pipeline via
 /// `baml_lsp2_actions::check_file`.
 ///
-/// Diagnostics are ALWAYS collected over the full project. The `project` and
-/// `_ignored_files` parameters are accepted for API compatibility with existing
-/// callers but are deliberately ignored: the compiler2 pipeline derives the file
-/// set internally from [`baml_compiler2_hir::compiler2_all_files`] and checks
-/// every file.
+/// Diagnostics are ALWAYS collected over the full project: the compiler2 pipeline
+/// derives the file set internally from [`baml_compiler2_hir::compiler2_all_files`]
+/// and checks every file.
 ///
-/// Callers that hold a per-file "dirty set" (e.g. from the bytecode-cache reuse
-/// plan) must NOT expect this function to honor it as a filter. Per-file
-/// diagnostics invalidation is not yet proven complete — narrowing the checked
-/// set to only the dirty files would risk surfacing stale diagnostics for clean
-/// files that transitively depend on a changed signature. Until that
-/// invalidation is proven sound, every file is re-diagnosed on every call.
-pub fn collect_diagnostics(
-    db: &ProjectDatabase,
-    _project: Project,
-    _ignored_files: &[SourceFile],
-) -> Vec<Diagnostic> {
+/// Per-file narrowing is deliberately not done yet. Callers that hold a per-file
+/// "dirty set" (e.g. from the bytecode-cache reuse plan) must NOT expect this
+/// function to honor it as a filter. Per-file diagnostics invalidation is not yet
+/// proven complete — narrowing the checked set to only the dirty files would risk
+/// surfacing stale diagnostics for clean files that transitively depend on a
+/// changed signature. Until that invalidation is proven sound, every file is
+/// re-diagnosed on every call.
+pub fn collect_diagnostics(db: &ProjectDatabase) -> Vec<Diagnostic> {
     collect_compiler2_diagnostics(db)
 }
 

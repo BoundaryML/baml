@@ -206,9 +206,6 @@ impl RunArgs {
         bail_context: &str,
         reporter: &Reporter,
     ) -> Result<()> {
-        let project = db
-            .get_project()
-            .ok_or_else(|| anyhow!("No project context"))?;
         // Diagnostics always run over the full project: `collect_diagnostics`
         // checks every file for soundness. Per-file diagnostics invalidation is
         // not yet proven complete, so passing only the reuse plan's dirty files
@@ -216,7 +213,7 @@ impl RunArgs {
         // does not exist on the callee, and this must stay that way until the
         // invalidation is sound.
         let source_files = db.get_source_files();
-        let diagnostics = baml_project::collect_diagnostics(db, project, &source_files);
+        let diagnostics = baml_project::collect_diagnostics(db);
 
         let errors: Vec<_> = diagnostics
             .iter()

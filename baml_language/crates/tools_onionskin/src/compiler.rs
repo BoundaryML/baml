@@ -3570,8 +3570,7 @@ impl CompilerRunner {
         let mut output_annotated = Vec::new();
 
         // Collect all diagnostics using the unified collect_diagnostics function
-        let source_files: Vec<_> = self.source_files.values().copied().collect();
-        self.diagnostics = collect_diagnostics(&self.db, self.project_root, &source_files);
+        self.diagnostics = collect_diagnostics(&self.db);
 
         // Build sources and file_paths maps for rendering
         let mut sources: HashMap<FileId, String> = HashMap::new();
