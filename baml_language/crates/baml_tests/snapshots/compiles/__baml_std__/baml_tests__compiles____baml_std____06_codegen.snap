@@ -9268,6 +9268,23 @@ function baml.llm.parse(json: string) -> TFinal {
     load_type #0
     load_type #1
     sys_op baml.llm.__sap_parse_final
+    jump L2
+    load_var _
+    is_type baml.errors.LlmClient
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var _
+    rethrow
+
+  L1:
+    load_var _
+    load_field .0
+    init_instance baml.errors.ParseError .message
+    throw
+
+  L2:
     return
 }
 

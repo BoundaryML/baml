@@ -7411,9 +7411,15 @@ fn baml.llm.parse(json: string) -> TFinal {
     let _2: baml.llm.StreamCache<TStream, TFinal> // cache
     let _3: type
     let _4: type
-    let _5: baml.llm.StreamCache<TStream, TFinal>
-    let _6: type
+    let _5: unknown // _
+    let _6: baml.llm.StreamCache<TStream, TFinal>
     let _7: type
+    let _8: type
+    let _9: bool
+    let _10: string
+    let _11: string // message
+    let _12: baml.errors.ParseError
+    let _13: string
 
     bb0: {
         _3 = load_type(#0);
@@ -7430,14 +7436,31 @@ fn baml.llm.parse(json: string) -> TFinal {
     }
 
     bb3: {
-        _5 = copy _2;
-        _6 = load_type(#0);
-        _7 = load_type(#1);
-        _0 = sys_op const fn baml.llm.__sap_parse_final(copy _1, copy _5, copy _6, copy _7) -> bb4;
+        _6 = copy _2;
+        _7 = load_type(#0);
+        _8 = load_type(#1);
+        _0 = sys_op const fn baml.llm.__sap_parse_final(copy _1, copy _6, copy _7, copy _8) -> bb4 unwind bb5;
     }
 
     bb4: {
         return;
+    }
+
+    bb5: {
+        _9 = is_type(copy _5, baml.errors.LlmClient);
+        branch copy _9 -> [bb7, bb6];
+    }
+
+    bb6: {
+        rethrow copy _5;
+    }
+
+    bb7: {
+        _10 = copy _5.0;
+        _11 = copy _10;
+        _13 = copy _11;
+        _12 = baml.errors.ParseError { copy _13 };
+        throw copy _12;
     }
 }
 
