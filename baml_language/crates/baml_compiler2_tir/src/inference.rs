@@ -1072,6 +1072,11 @@ impl<'db> ScopeInference<'db> {
         self.function_coercions.iter()
     }
 
+    /// Look up the function adapter required for a coerced expression in this scope.
+    pub fn function_coercion(&self, expr_id: ExprId) -> Option<&FunctionCoercion> {
+        self.function_coercions.get(&expr_id)
+    }
+
     /// Iterate over all default-parameter expression types for this scope.
     pub fn iter_default_expressions(&self) -> impl Iterator<Item = (&ExprId, &Ty)> {
         self.parameter_defaults.expressions.iter()
@@ -1128,6 +1133,67 @@ impl<'db> ScopeInference<'db> {
         &self,
     ) -> impl Iterator<Item = (&ExprId, &FunctionCoercion)> {
         self.parameter_defaults.function_coercions.iter()
+    }
+
+    // ── Parameter-default point lookups ────────────────────────────────────────
+    // Mirror the body-scope accessors above, but read the per-scope
+    // default-parameter inference sub-result (a default's expressions live in a
+    // separate metadata scope). Keep `parameter_defaults` encapsulated: consumers
+    // look up by id here rather than reaching into the sub-struct.
+
+    /// Look up a default-parameter expression's type.
+    pub fn default_expression_type(&self, expr_id: ExprId) -> Option<&Ty> {
+        self.parameter_defaults.expressions.get(&expr_id)
+    }
+
+    /// Look up a default-parameter pattern binding's type.
+    pub fn default_binding_type(&self, pat_id: PatId) -> Option<&Ty> {
+        self.parameter_defaults.pattern_types.get(&pat_id)
+    }
+
+    /// Look up a default-parameter expression's member resolution.
+    pub fn default_resolution(&self, expr_id: ExprId) -> Option<&MemberResolution<'db>> {
+        self.parameter_defaults.resolutions.get(&expr_id)
+    }
+
+    /// Whether a default-parameter match expression was determined exhaustive.
+    pub fn default_is_exhaustive_match(&self, expr_id: ExprId) -> bool {
+        self.parameter_defaults
+            .exhaustive_matches
+            .contains(&expr_id)
+    }
+
+    /// Look up a default-parameter path's root segment type.
+    pub fn default_path_root_type(&self, expr_id: ExprId) -> Option<&Ty> {
+        self.parameter_defaults.path_root_types.get(&expr_id)
+    }
+
+    /// Look up a default-parameter path's `segments[..=seg_idx]` type.
+    pub fn default_path_segment_type(&self, expr_id: ExprId, seg_idx: usize) -> Option<&Ty> {
+        self.parameter_defaults
+            .path_segment_types
+            .get(&(expr_id, seg_idx))
+    }
+
+    /// Look up a default-parameter path's per-segment member resolutions.
+    pub fn default_path_member_resolution(
+        &self,
+        expr_id: ExprId,
+    ) -> Option<&[MemberResolution<'db>]> {
+        self.parameter_defaults
+            .path_member_resolutions
+            .get(&expr_id)
+            .map(Vec::as_slice)
+    }
+
+    /// Look up a default-parameter call's argument binding plan.
+    pub fn default_call_plan(&self, expr_id: ExprId) -> Option<&CallPlan> {
+        self.parameter_defaults.call_plans.get(&expr_id)
+    }
+
+    /// Look up a default-parameter expression's function adapter.
+    pub fn default_function_coercion(&self, expr_id: ExprId) -> Option<&FunctionCoercion> {
+        self.parameter_defaults.function_coercions.get(&expr_id)
     }
 
     /// Iterate over all (`ExprId`, Ty) pairs for expressions in this scope.

@@ -1277,8 +1277,9 @@ pub struct ResolvedImpl<'db> {
 
 /// Every `implements` block id declared in a package, as stable [`ImplLoc`]s.
 /// Uniform over in-body and out-of-body impls (both live in
-/// [`file_item_tree`](baml_compiler2_hir::file_item_tree)`.impls`).
-pub(crate) fn package_impl_locs<'db>(
+/// [`file_item_tree`](baml_compiler2_hir::file_item_tree)`.impls`). Public so MIR can enumerate
+/// a package's impls to rebuild the runtime interface-implementor tables on the L1 substrate.
+pub fn package_impl_locs<'db>(
     db: &'db dyn crate::Db,
     pkg_id: PackageId<'db>,
 ) -> Vec<baml_compiler2_hir::loc::ImplLoc<'db>> {

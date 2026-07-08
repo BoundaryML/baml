@@ -376,7 +376,10 @@ pub fn match_ty_patterns(
     Some(bindings)
 }
 
-fn match_ty_pattern_into(
+/// Incrementally match `pattern` against `concrete`, recording type-variable bindings into
+/// `bindings` (params already bound must match consistently). Exposed for MIR's blanket-impl
+/// instantiation, which threads one binding set through a for-target then an interface match.
+pub fn match_ty_pattern_into(
     pattern: &Ty,
     concrete: &Ty,
     generic_params: &[Name],

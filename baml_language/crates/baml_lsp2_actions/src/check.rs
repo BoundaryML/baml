@@ -338,10 +338,10 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
                         .unwrap_or(Ty::Unknown {
                             attr: TyAttr::default(),
                         })
-                } else if let Some(imp) = enclosing_impl {
+                } else if let Some(for_target) = &self_replacement {
                     baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
                         db,
-                        &imp.for_target,
+                        for_target,
                         pkg_items,
                         &pkg_info.namespace_path,
                         &generic_params,
@@ -5310,8 +5310,6 @@ fn interface_ty_requires_nominal(query: InterfaceRequiresQuery<'_>) -> bool {
         sub_loc,
         query.sub_args,
         query.sub_assoc,
-        pkg_items,
-        &pkg.namespace_path,
     )
     .into_iter()
     .any(|(iface_loc, iface_args, iface_assoc)| {

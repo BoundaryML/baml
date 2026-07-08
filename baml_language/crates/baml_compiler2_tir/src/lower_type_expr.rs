@@ -123,7 +123,7 @@ pub type TypeVarBoundsMap = rustc_hash::FxHashMap<baml_base::Name, Vec<baml_type
 /// The general lowering scope: a package's items, a namespace, the in-scope type-variable
 /// names, and their bounds. Constructed directly at each lowering site and passed to
 /// [`lower_type_expr`].
-pub(crate) struct ScopeCtx<'a, 'db> {
+pub struct ScopeCtx<'a, 'db> {
     pub db: &'db dyn crate::Db,
     pub package_items: &'a PackageItems<'db>,
     pub ns_context: &'a [baml_base::Name],
@@ -973,6 +973,23 @@ pub fn function_in_scope_generic_param_bounds<'db>(
         ));
     }
     bounds
+}
+
+/// An `implements` block's generic-parameter interface bounds, keyed by parameter name — lets a
+/// `T.member` projection in the impl's for-target, interface arguments, or associated-type
+/// bindings resolve through `T`'s declared bound. Reuses the already-lowered bounds carried by
+/// [`crate::interfaces::impl_data`] (which computes them for both the in-body form — the class's
+/// generics — and the out-of-body form — the block's own). Empty when the impl header is
+/// malformed or cyclic (the header errors on its own path).
+#[salsa::tracked(returns(ref))]
+pub fn impl_generic_param_bounds<'db>(
+    db: &'db dyn crate::Db,
+    impl_loc: baml_compiler2_hir::loc::ImplLoc<'db>,
+) -> TypeVarBoundsMap {
+    match crate::interfaces::impl_data(db, impl_loc).as_ref() {
+        Ok(data) => data.generic_params.iter().cloned().collect(),
+        Err(_) => TypeVarBoundsMap::default(),
+    }
 }
 
 #[cfg(test)]
