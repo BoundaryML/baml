@@ -677,36 +677,56 @@ fn closure_declarers(
     declarers
 }
 
-/// A concrete `base`'s realized view of `interface` — the `implements` block's realized
-/// interface (carrying the impl's associated-type pins) when `base` implements it, else
-/// `None`. Narrows a projection search to the *written* qualifier (unlike
-/// [`resolve_concrete_projection`], which searches by member). `None` for an unrealized
-/// base or qualifier — a symbolic receiver dispatches dynamically, and
-/// [`get_implements_block`](crate::interfaces::get_implements_block) requires a fully
-/// realized `(interface, type)`.
+/// A concrete-headed `base`'s realized view of `interface` — the `implements` block's
+/// realized interface (carrying the impl's associated-type pins) when `base` implements
+/// it, else `None`. Narrows a projection search to the *written* qualifier (unlike
+/// [`resolve_concrete_projection`], which searches by member).
+///
+/// The base/qualifier may carry *rigid* type variables (`(Map<T, R> as Iterator).Item`
+/// inside a generic scope): the impl pattern is matched structurally and its generic
+/// bounds are discharged against `bounds` (the scope's constraints on those rigid vars),
+/// so the projection reduces to the impl's pin (`R`) exactly as at a realized
+/// instantiation. A base with no matching impl — including a bare type variable, whose
+/// members come from its bounds' closures, not impls — resolves to `None`.
 pub(crate) fn resolve_concrete_realized_interface(
     db: &dyn crate::Db,
     pkg: &Name,
+    bounds: &crate::lower_type_expr::TypeVarBoundsMap,
     base: &Ty,
     interface: &baml_type::Interface,
 ) -> Option<baml_type::Interface> {
-    if crate::generics::contains_typevar(base)
-        || interface
-            .generics
-            .iter()
-            .any(crate::generics::contains_typevar)
-        || interface
-            .associated_types
-            .iter()
-            .any(|(_, ty)| crate::generics::contains_typevar(ty))
-    {
-        return None;
-    }
     let pkg_id = PackageId::new(db, pkg.clone());
     let res_ctx = crate::package_interface::package_resolution_context(db, pkg_id);
     let aliases = crate::inference::package_alias_map(db, res_ctx);
-    crate::interfaces::get_implements_block(db, pkg_id, base, interface, &aliases)
-        .map(|resolved| resolved.implemented_interface(db))
+    let realized = !crate::generics::contains_typevar(base)
+        && !interface
+            .generics
+            .iter()
+            .any(crate::generics::contains_typevar)
+        && !interface
+            .associated_types
+            .iter()
+            .any(|(_, ty)| crate::generics::contains_typevar(ty));
+    let resolved = if realized {
+        // Realized fast path: unique by coherence, bounds discharged by bounded re-entry.
+        crate::interfaces::get_implements_block(db, pkg_id, base, interface, &aliases)
+    } else {
+        let gctx = GlobalTypeContext {
+            db,
+            res_ctx,
+            aliases: &aliases,
+            bounds,
+        };
+        crate::interfaces::get_implements_block_symbolic(
+            db,
+            pkg_id,
+            base,
+            interface,
+            &aliases,
+            |a, b| baml_type::normalize::is_subtype(a, b, &gctx),
+        )
+    };
+    resolved.map(|resolved| resolved.implemented_interface(db))
 }
 
 /// Resolve `base.member` for a concrete `base` through the impls visible in

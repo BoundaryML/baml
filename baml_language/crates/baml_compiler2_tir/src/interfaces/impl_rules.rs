@@ -1644,6 +1644,50 @@ pub fn type_implements_interface<'db>(
     false
 }
 
+/// Symbolic counterpart of [`get_implements_block`]: the impl block matching a possibly
+/// typevar-carrying `(concrete, interface)` — `(Map<T, R> as Iterator)` inside a generic
+/// scope — with generic bounds discharged through `is_subtype`, which judges rigid vars
+/// against the caller's scope bounds. Unlike membership ([`type_implements_interface`],
+/// where any match suffices), the caller reads the match's realized associated-type pins,
+/// so a UNIQUE matching block is required: several distinct matches return `None`
+/// (fail-closed) rather than guessing.
+pub(crate) fn get_implements_block_symbolic<'db>(
+    db: &'db dyn crate::Db,
+    pkg_id: PackageId<'db>,
+    concrete: &Ty,
+    interface: &baml_type::Interface,
+    aliases: &HashMap<QualifiedTypeName, Ty>,
+    mut is_subtype: impl FnMut(&Ty, &Ty) -> bool,
+) -> Option<ResolvedImpl<'db>> {
+    // Orphan rule: an impl lives in the package of either the interface or the
+    // implementor, so this package + its dependency closure is the complete search.
+    let mut packages = vec![pkg_id];
+    packages.extend(baml_compiler2_hir::package::package_dependency_closure(
+        db, pkg_id,
+    ));
+    let mut found: Option<ResolvedImpl<'db>> = None;
+    for pkg in packages {
+        for impl_loc in package_impl_locs(db, pkg) {
+            let Ok(data) = impl_data(db, impl_loc).as_ref() else {
+                continue;
+            };
+            let Some(bindings) = match_impl_head(db, data, concrete, interface, aliases) else {
+                continue;
+            };
+            if !impl_bounds_hold_symbolic(data, &bindings, &mut is_subtype) {
+                continue;
+            }
+            if found.is_some() {
+                // Coherence guarantees uniqueness only for realized inputs; two blocks
+                // structurally matching a symbolic query cannot both realize the pins.
+                return None;
+            }
+            found = Some(ResolvedImpl { impl_loc, bindings });
+        }
+    }
+    found
+}
+
 /// [`get_implements_block`] with an explicit recursion budget. Bound
 /// verification re-enters this function (a blanket's bound may be satisfied by
 /// another blanket), so the budget bounds that recursion.

@@ -1017,6 +1017,41 @@ impl NormalTy {
         self.is_subtype_of(other, ctx, assumptions) && other.is_subtype_of(self, ctx, assumptions)
     }
 
+    /// Whether pin `(member, value)` required of `var <: qn<args, …>` is *tautological* —
+    /// the value is `var`'s own projection of that same member through that same
+    /// interface, `(var as qn<args>).member`. Any `var` implementing `qn<args>` satisfies
+    /// it definitionally, so the [`Self::is_subtype_of`] type-variable arm strips it
+    /// before delegating to the variable's bounds. Extra pins on the projection's own
+    /// qualifier don't disqualify: a qualifier narrows which interface view is meant, it
+    /// never changes the member's value.
+    fn pin_is_tautological<C: TypeContext>(
+        var: &Name,
+        qn: &QualifiedTypeName,
+        args: &[NormalTy],
+        pin: &(Name, NormalTy),
+        ctx: &C,
+        assumptions: &mut HashSet<(NormalTy, NormalTy)>,
+    ) -> bool {
+        let (member, value) = pin;
+        let NormalTy::AssociatedTypeProjection {
+            base,
+            interface: Some(iface),
+            member: proj_member,
+        } = value
+        else {
+            return false;
+        };
+        proj_member == member
+            && matches!(&**base, NormalTy::TypeVar(base_var) if base_var == var)
+            && matches!(&**iface, NormalTy::Interface(iface_qn, iface_args, _)
+                if iface_qn == qn
+                    && iface_args.len() == args.len()
+                    && iface_args
+                        .iter()
+                        .zip(args)
+                        .all(|(a, b)| a.invariant_compatible(b, ctx, assumptions)))
+    }
+
     /// Equirecursive subtyping with co-inductive assumptions. Operands must
     /// already be canonical.
     ///
@@ -1081,6 +1116,36 @@ impl NormalTy {
             // `T` implements every listed interface, so it suffices that one bound
             // already proves membership in `sup`. (Same-var reflexivity and
             // `T <: T | U` are handled by the rules above.)
+            //
+            // When `sup` is an interface, a *tautological* pin — one that merely names
+            // the variable's own member under that same interface, `T <:
+            // I<m = (T as I).m>` — is stripped first: any `T: I` satisfies it
+            // definitionally (Rust's `T: Iterator` proves `T: Iterator<Item =
+            // <T as Iterator>::Item>`). Such pins arise when an interface's own
+            // signature (`-> Iterator<Item = Self.Item>`) is realized at a rigid `Self`.
+            (NormalTy::TypeVar(name), NormalTy::Interface(qn, args, pins))
+                if pins.iter().any(|pin| {
+                    Self::pin_is_tautological(name, qn, args, pin, ctx, assumptions)
+                }) =>
+            {
+                let stripped = NormalTy::Interface(
+                    qn.clone(),
+                    args.clone(),
+                    pins.iter()
+                        .filter(|pin| {
+                            !Self::pin_is_tautological(name, qn, args, pin, ctx, assumptions)
+                        })
+                        .cloned()
+                        .collect(),
+                );
+                ctx.type_var_bound(name).iter().any(|bound| {
+                    NormalTy::canonical(&bound.to_ty(), ctx).is_subtype_of(
+                        &stripped,
+                        ctx,
+                        assumptions,
+                    )
+                })
+            }
             (NormalTy::TypeVar(name), _) => ctx.type_var_bound(name).iter().any(|bound| {
                 NormalTy::canonical(&bound.to_ty(), ctx).is_subtype_of(sup, ctx, assumptions)
             }),

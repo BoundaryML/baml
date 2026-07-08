@@ -1094,21 +1094,23 @@ impl<'db> TypeInferenceBuilder<'db> {
 
         // Object safety only applies to a bare existential / union receiver (a pinned or
         // rigid `Self` is a single concrete type, so all `Self` usage is sound there). A
-        // method is unsafe to dispatch through such a receiver when it uses `Self` outside
-        // the receiver position:
+        // method is unsafe to dispatch through such a receiver when it uses bare `Self`
+        // outside the receiver position:
         //   - a non-`self` parameter typed with `Self` (the concrete implementor is unknown
         //     for those arguments — the multi-`Self` problem), OR
         //   - `Self` nested inside an invariant constructor in the return/throws type
         //     (`-> Self[]`, `-> Box<Self>`): the impl returns a concretely-tagged container
         //     that is not a subtype of the existential-tagged one. A bare top-level `-> Self`
         //     stays legal (it collapses covariantly to the receiver).
+        // A `Self.Assoc` projection is exempt in both positions: the existential's pins
+        // (or the assoc default) make it one concrete type for every member.
         if matches!(recv, SelfReceiver::Existential(_) | SelfReceiver::Union(_)) && access.bound {
             let param_self = spec
                 .args
                 .iter()
                 .chain(&spec.kwargs)
                 .filter(|p| p.name.as_str() != "self")
-                .any(|p| Self::type_expr_contains_self(&p.ty));
+                .any(|p| Self::type_expr_contains_bare_self(&p.ty));
             let position = if param_self {
                 Some(SelfCallPosition::Parameter)
             } else if Self::type_expr_self_in_invariant_position(&spec.return_type)

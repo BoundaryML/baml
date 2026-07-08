@@ -4494,54 +4494,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             Expr::Binary { op, lhs, rhs } => {
                 let lhs_ty = self.infer_expr(*lhs, body);
                 let rhs_ty = self.infer_expr(*rhs, body);
-
-                // Optional chaining diagnostics for ?? and ||
-                match op {
-                    baml_compiler2_ast::BinaryOp::NullCoalesce => {
-                        // E3: LHS is non-nullable — ?? is unnecessary
-                        let inner_lhs = crate::narrowing::remove_null(&lhs_ty);
-                        if inner_lhs == lhs_ty
-                            && !matches!(lhs_ty, Ty::Unknown { .. } | Ty::Error { .. })
-                        {
-                            let lhs_text = body.display_expr(*lhs);
-                            let expr_text = body.display_expr(expr_id);
-                            self.context.report_simple(
-                                TirTypeError::UnnecessaryNullCoalesce {
-                                    lhs: lhs_text,
-                                    expr: expr_text,
-                                },
-                                expr_id,
-                            );
-                        }
-                        // W2: RHS is null — ?? null is a no-op
-                        if matches!(&body.exprs[*rhs], Expr::Null) {
-                            let lhs_text = body.display_expr(*lhs);
-                            self.context.report_warning_simple(
-                                TirTypeError::NullCoalesceWithNull { lhs: lhs_text },
-                                expr_id,
-                            );
-                        }
-                    }
-                    baml_compiler2_ast::BinaryOp::Or => {
-                        // W1: LHS is nullable — suggest ?? instead of ||
-                        let inner_lhs = crate::narrowing::remove_null(&lhs_ty);
-                        if inner_lhs != lhs_ty
-                            && !matches!(lhs_ty, Ty::Unknown { .. } | Ty::Error { .. })
-                        {
-                            let lhs_text = body.display_expr(*lhs);
-                            let rhs_text = body.display_expr(*rhs);
-                            self.context.report_warning_simple(
-                                TirTypeError::SuggestNullCoalesce {
-                                    lhs: lhs_text,
-                                    rhs: rhs_text,
-                                },
-                                expr_id,
-                            );
-                        }
-                    }
-                    _ => {}
-                }
-
+                self.report_chaining_lints(*op, &lhs_ty, *lhs, *rhs, expr_id, body);
                 self.infer_binary_op(*op, &lhs_ty, &rhs_ty, expr_id)
             }
             Expr::Unary { op, expr } => {
@@ -6736,6 +6689,47 @@ impl<'db> TypeInferenceBuilder<'db> {
                 self.check_optional_call_expr(expr_id, body, expected, *callee, args)
             }
             // Catch: propagate expected type to the base expression
+            // `a ?? b` in checking position: the expected type propagates into the
+            // fallback arm — `b` is checked against `expected` directly, so an empty
+            // container literal (`xs ?? []`) adopts the expected element type instead of
+            // surviving as an evolving container that unions into the result. The LHS
+            // stays synthesized (its own nullability drives the chaining lints), and the
+            // combined result is still subtype-checked against `expected` (the LHS's
+            // non-null part may mismatch on its own).
+            Expr::Binary {
+                op: baml_compiler2_ast::BinaryOp::NullCoalesce,
+                lhs,
+                rhs,
+            } => {
+                let lhs_ty = self.infer_expr(*lhs, body);
+                self.report_chaining_lints(
+                    baml_compiler2_ast::BinaryOp::NullCoalesce,
+                    &lhs_ty,
+                    *lhs,
+                    *rhs,
+                    expr_id,
+                    body,
+                );
+                let rhs_ty = self.check_expr(*rhs, body, expected);
+                let ty = self.infer_binary_op(
+                    baml_compiler2_ast::BinaryOp::NullCoalesce,
+                    &lhs_ty,
+                    &rhs_ty,
+                    expr_id,
+                );
+                if !self.is_subtype(&ty, expected) {
+                    self.context.report(
+                        TirTypeError::TypeMismatch {
+                            expected: expected.clone(),
+                            got: ty.clone(),
+                        },
+                        expr_id,
+                        Vec::new(),
+                    );
+                }
+                self.record_expr_type(expr_id, ty.clone());
+                ty
+            }
             Expr::Catch { base, clauses } => {
                 // Record the result like the other check_expr arms — `infer_catch_expr`
                 // does not record, and unlike the synthesis path there is no
@@ -11504,28 +11498,32 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
     }
 
-    /// Whether `ty` references `Self` in an **invariant** position — inside a generic
-    /// argument, a list/map element, or a function type. Such a `Self` is unsound to
-    /// call through an interface-existential receiver: the impl returns a
-    /// concretely-tagged container (`Concrete[]`) that is NOT a subtype of the
-    /// existential-tagged one (`dyn I[]`), because containers are invariant.
-    ///
-    /// A *bare* top-level `Self` — or one reachable only through covariant wrappers
-    /// (`Self?`, `A | Self`) or a projection (`Self.Item`) — is NOT flagged: it
-    /// collapses covariantly to the receiver (`dyn I`), which the impl's concrete
-    /// return subtypes nominally. Used for a method's return/throws type; parameters
-    /// use the stricter [`Self::type_expr_contains_self`] (any `Self` is unsound there).
-    fn type_expr_self_in_invariant_position(ty: &TypeExpr) -> bool {
+    /// Whether `ty` references the *bare* `Self` type anywhere — a path of exactly
+    /// `[Self]`, recursing structurally. A `Self.Assoc` projection is NOT bare `Self`:
+    /// on an existential receiver every associated type is pinned (or defaulted), so the
+    /// projection denotes one type shared by every member of the existential — none of
+    /// the `Self`-identity problems apply. Object safety keys on this predicate;
+    /// [`Self::type_expr_contains_self`] (any `Self` reference, projections included)
+    /// remains for checks that ban `Self` outright (e.g. interface field types, where a
+    /// projection is equally unresolvable).
+    pub(crate) fn type_expr_contains_bare_self(ty: &TypeExpr) -> bool {
         match &ty.kind {
-            // A class/generic head is invariant in its arguments; a bare `Self` or a
-            // `Self.Assoc` projection (the segments) is not itself an invariant nesting.
-            TypeExprKind::Path { generic_args, .. } => {
-                generic_args.iter().any(Self::type_expr_contains_self)
+            TypeExprKind::Path {
+                segments,
+                generic_args,
+                ..
+            } => {
+                (segments.len() == 1 && segments[0].as_str() == "Self")
+                    || generic_args.iter().any(Self::type_expr_contains_bare_self)
             }
-            // Invariant containers: ANY `Self` inside is unsound.
-            TypeExprKind::List { inner, .. } => Self::type_expr_contains_self(inner),
+            TypeExprKind::List { inner, .. } | TypeExprKind::Optional { inner, .. } => {
+                Self::type_expr_contains_bare_self(inner)
+            }
             TypeExprKind::Map { key, value, .. } => {
-                Self::type_expr_contains_self(key) || Self::type_expr_contains_self(value)
+                Self::type_expr_contains_bare_self(key) || Self::type_expr_contains_bare_self(value)
+            }
+            TypeExprKind::Union { variants, .. } => {
+                variants.iter().any(Self::type_expr_contains_bare_self)
             }
             TypeExprKind::Function {
                 params,
@@ -11535,11 +11533,55 @@ impl<'db> TypeInferenceBuilder<'db> {
             } => {
                 params
                     .iter()
-                    .any(|param| Self::type_expr_contains_self(&param.ty))
-                    || Self::type_expr_contains_self(ret)
+                    .any(|param| Self::type_expr_contains_bare_self(&param.ty))
+                    || Self::type_expr_contains_bare_self(ret)
                     || throws
                         .as_ref()
-                        .is_some_and(|throws| Self::type_expr_contains_self(throws))
+                        .is_some_and(|throws| Self::type_expr_contains_bare_self(throws))
+            }
+            _ => false,
+        }
+    }
+
+    /// Whether `ty` references bare `Self` in an **invariant** position — inside a generic
+    /// argument, a list/map element, or a function type. Such a `Self` is unsound to
+    /// call through an interface-existential receiver: the impl returns a
+    /// concretely-tagged container (`Concrete[]`) that is NOT a subtype of the
+    /// existential-tagged one (`dyn I[]`), because containers are invariant.
+    ///
+    /// A *bare* top-level `Self` — or one reachable only through covariant wrappers
+    /// (`Self?`, `A | Self`) — is NOT flagged: it collapses covariantly to the receiver
+    /// (`dyn I`), which the impl's concrete return subtypes nominally. A `Self.Assoc`
+    /// projection is never flagged, even nested (`Self.Item[]`): the existential's pins
+    /// make it one concrete type for every member (see
+    /// [`Self::type_expr_contains_bare_self`]). Used for a method's return/throws type;
+    /// parameters use the stricter any-position bare-`Self` check (the multi-`Self`
+    /// problem applies in every parameter position).
+    fn type_expr_self_in_invariant_position(ty: &TypeExpr) -> bool {
+        match &ty.kind {
+            // A class/generic head is invariant in its arguments; a bare `Self` or a
+            // `Self.Assoc` projection (the segments) is not itself an invariant nesting.
+            TypeExprKind::Path { generic_args, .. } => {
+                generic_args.iter().any(Self::type_expr_contains_bare_self)
+            }
+            // Invariant containers: any bare `Self` inside is unsound.
+            TypeExprKind::List { inner, .. } => Self::type_expr_contains_bare_self(inner),
+            TypeExprKind::Map { key, value, .. } => {
+                Self::type_expr_contains_bare_self(key) || Self::type_expr_contains_bare_self(value)
+            }
+            TypeExprKind::Function {
+                params,
+                ret,
+                throws,
+                ..
+            } => {
+                params
+                    .iter()
+                    .any(|param| Self::type_expr_contains_bare_self(&param.ty))
+                    || Self::type_expr_contains_bare_self(ret)
+                    || throws
+                        .as_ref()
+                        .is_some_and(|throws| Self::type_expr_contains_bare_self(throws))
             }
             // Covariant-transparent wrappers: recurse, so a bare `Self` under them is
             // fine but a `Self[]` under them is not.
@@ -13283,6 +13325,64 @@ impl<'db> TypeInferenceBuilder<'db> {
             TyAttr::default(),
         );
         self.is_subtype(&ty, &compare)
+    }
+
+    /// The `??` / `||` optional-chaining lints, shared by the synthesis and checking
+    /// paths: `UnnecessaryNullCoalesce` (`??` on a non-nullable LHS),
+    /// `NullCoalesceWithNull` (`?? null` is a no-op), and `SuggestNullCoalesce`
+    /// (`||` on a nullable LHS).
+    fn report_chaining_lints(
+        &mut self,
+        op: baml_compiler2_ast::BinaryOp,
+        lhs_ty: &Ty,
+        lhs: ExprId,
+        rhs: ExprId,
+        expr_id: ExprId,
+        body: &ExprBody,
+    ) {
+        match op {
+            baml_compiler2_ast::BinaryOp::NullCoalesce => {
+                // LHS is non-nullable — ?? is unnecessary.
+                let inner_lhs = crate::narrowing::remove_null(lhs_ty);
+                if inner_lhs == *lhs_ty && !matches!(lhs_ty, Ty::Unknown { .. } | Ty::Error { .. })
+                {
+                    let lhs_text = body.display_expr(lhs);
+                    let expr_text = body.display_expr(expr_id);
+                    self.context.report_simple(
+                        TirTypeError::UnnecessaryNullCoalesce {
+                            lhs: lhs_text,
+                            expr: expr_text,
+                        },
+                        expr_id,
+                    );
+                }
+                // RHS is null — ?? null is a no-op.
+                if matches!(&body.exprs[rhs], Expr::Null) {
+                    let lhs_text = body.display_expr(lhs);
+                    self.context.report_warning_simple(
+                        TirTypeError::NullCoalesceWithNull { lhs: lhs_text },
+                        expr_id,
+                    );
+                }
+            }
+            baml_compiler2_ast::BinaryOp::Or => {
+                // LHS is nullable — suggest ?? instead of ||.
+                let inner_lhs = crate::narrowing::remove_null(lhs_ty);
+                if inner_lhs != *lhs_ty && !matches!(lhs_ty, Ty::Unknown { .. } | Ty::Error { .. })
+                {
+                    let lhs_text = body.display_expr(lhs);
+                    let rhs_text = body.display_expr(rhs);
+                    self.context.report_warning_simple(
+                        TirTypeError::SuggestNullCoalesce {
+                            lhs: lhs_text,
+                            rhs: rhs_text,
+                        },
+                        expr_id,
+                    );
+                }
+            }
+            _ => {}
+        }
     }
 
     fn infer_binary_op(

@@ -610,7 +610,7 @@ class Map<K, V> {
 interface Summable {
   type Sum
 
-  function sum(self) -> Sum throws never
+  function sum(self) -> Self.Sum throws never
 }
 
 /// Sums an `int[]` and returns an `int`.

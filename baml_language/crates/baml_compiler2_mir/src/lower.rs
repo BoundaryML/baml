@@ -4414,6 +4414,7 @@ impl<'db> LoweringContext<'db> {
         let pkg_info = file_package(self.db, self.file);
         let pkg_id = PackageId::new(self.db, pkg_info.package);
         let pkg_items = package_items(self.db, pkg_id);
+        let ty_expr = &self.desugar_body_type_expr(ty_expr);
         let mut diags = Vec::new();
         baml_compiler2_tir::lower_type_expr::lower_type_expr(
             ty_expr,
@@ -4427,6 +4428,125 @@ impl<'db> LoweringContext<'db> {
             },
             &mut diags,
         )
+    }
+
+    /// Desugar a type expression written in the current function's body for MIR's
+    /// re-lowering sites: inside an interface's own default method, a `Self.Item`
+    /// reference denotes the interface's associated type — exactly the assoc-name frame
+    /// slot that [`Self::enclosing_generic_params`] registers and interface dispatch
+    /// seeds. Rewrite it to that slot's bare name so it lowers to the `TypeVar` →
+    /// `TypeArgRef` the runtime realizes, like the interface's generic params. A no-op
+    /// (cheap clone) outside interface default methods.
+    fn desugar_body_type_expr(
+        &self,
+        ty_expr: &baml_compiler2_ast::TypeExpr,
+    ) -> baml_compiler2_ast::TypeExpr {
+        match self.enclosing_interface_assoc_names() {
+            Some(assoc_names) => Self::rewrite_self_assoc_annotations(ty_expr, &assoc_names),
+            None => ty_expr.clone(),
+        }
+    }
+
+    /// The associated-type names of the interface whose default method this body is —
+    /// `None` when the current function is not an interface default method.
+    fn enclosing_interface_assoc_names(&self) -> Option<Vec<baml_base::Name>> {
+        let fl = self.func_loc?;
+        let item_tree = file_item_tree(self.db, fl.file(self.db));
+        let func_id = fl.id(self.db);
+        item_tree
+            .interfaces
+            .values()
+            .find(|iface_data| iface_data.default_methods.contains(&func_id))
+            .map(|iface_data| {
+                iface_data
+                    .associated_types
+                    .iter()
+                    .map(|assoc| assoc.name.clone())
+                    .collect()
+            })
+    }
+
+    /// Rewrite every `Self.X` path (where `X` is one of `assoc_names`) to the bare `X`
+    /// path, recursing through the type constructors. See
+    /// [`Self::lower_type_annotation_tir`] — both spellings denote the same associated
+    /// type of the enclosing interface, and the bare name is the registered frame slot.
+    fn rewrite_self_assoc_annotations(
+        ty_expr: &baml_compiler2_ast::TypeExpr,
+        assoc_names: &[baml_base::Name],
+    ) -> baml_compiler2_ast::TypeExpr {
+        use baml_compiler2_ast::TypeExprKind;
+        let rewrite = |inner: &baml_compiler2_ast::TypeExpr| {
+            Self::rewrite_self_assoc_annotations(inner, assoc_names)
+        };
+        let kind = match &ty_expr.kind {
+            TypeExprKind::Path {
+                segments,
+                generic_args,
+                associated_type_bindings,
+                attrs,
+            } => {
+                let segments = if segments.len() == 2
+                    && segments[0].as_str() == "Self"
+                    && assoc_names.contains(&segments[1])
+                {
+                    vec![segments[1].clone()]
+                } else {
+                    segments.clone()
+                };
+                TypeExprKind::Path {
+                    segments,
+                    generic_args: generic_args.iter().map(rewrite).collect(),
+                    associated_type_bindings: associated_type_bindings
+                        .iter()
+                        .map(|binding| baml_compiler2_ast::AssociatedTypeBinding {
+                            name: binding.name.clone(),
+                            ty: Box::new(rewrite(&binding.ty)),
+                        })
+                        .collect(),
+                    attrs: attrs.clone(),
+                }
+            }
+            TypeExprKind::List { inner, attrs } => TypeExprKind::List {
+                inner: Box::new(rewrite(inner)),
+                attrs: attrs.clone(),
+            },
+            TypeExprKind::Optional { inner, attrs } => TypeExprKind::Optional {
+                inner: Box::new(rewrite(inner)),
+                attrs: attrs.clone(),
+            },
+            TypeExprKind::Map {
+                key, value, attrs, ..
+            } => TypeExprKind::Map {
+                key: Box::new(rewrite(key)),
+                value: Box::new(rewrite(value)),
+                attrs: attrs.clone(),
+            },
+            TypeExprKind::Union { variants, attrs } => TypeExprKind::Union {
+                variants: variants.iter().map(rewrite).collect(),
+                attrs: attrs.clone(),
+            },
+            TypeExprKind::Function {
+                params,
+                ret,
+                throws,
+                attrs,
+            } => TypeExprKind::Function {
+                params: params
+                    .iter()
+                    .map(|param| baml_compiler2_ast::FunctionTypeParam {
+                        name: param.name.clone(),
+                        optional: param.optional,
+                        ty: rewrite(&param.ty),
+                    })
+                    .collect(),
+                ret: Box::new(rewrite(ret)),
+                throws: throws.as_ref().map(|throws| Box::new(rewrite(throws))),
+                attrs: attrs.clone(),
+            },
+            // Leaves (primitives, literals, `Self`, `type`, error/unknown, …).
+            other => other.clone(),
+        };
+        kind.at(ty_expr.span)
     }
 
     /// Build a `Span` from an expression's source range.
@@ -9298,6 +9418,9 @@ impl LoweringContext<'_> {
         type_arg: &AstTypeExpr,
         generic_params: &[baml_base::Name],
     ) -> TyTemplate {
+        // `Self.Item` in a default-method body is the assoc-name frame slot — desugar
+        // before the frame-slot fast path so it maps to its `TypeArgRef`.
+        let type_arg = &self.desugar_body_type_expr(type_arg);
         if let Some(template) = Self::direct_frame_type_arg_template(type_arg, generic_params) {
             return template;
         }

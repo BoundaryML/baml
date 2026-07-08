@@ -2004,6 +2004,28 @@ fn compute_function_metadata_from_item_tree(
                 .map(|(name, conjunction)| (name.clone(), conjunction.clone())),
         );
     }
+    // Inside an interface's own method signature, `Self` is the rigid type variable
+    // bound by that interface — register the bound so a `Self.Item` projection
+    // determines its declaring interface through `Self`'s bound closure (the same
+    // recipe as TIR's signature realization).
+    if let Some(iface_data) = enclosing_interface
+        && let Some(def) = pkg_items.lookup_type(&pkg_info.namespace_path, &iface_data.name)
+        && matches!(
+            def,
+            baml_compiler2_hir::contributions::Definition::Interface(_)
+        )
+    {
+        let qtn = baml_compiler2_tir::lower_type_expr::qualify_def(db, def, &iface_data.name);
+        let args = iface_data
+            .generic_params
+            .iter()
+            .map(|p| baml_compiler2_tir::ty::Ty::TypeVar(p.clone(), baml_type::TyAttr::default()))
+            .collect();
+        scope_bounds.insert(
+            Name::new("Self"),
+            vec![baml_type::Interface::new(qtn, args, Vec::new())],
+        );
+    }
 
     // A method declared inside an interface resolves its associated types
     // (`Item`/`Error`) and `Self` against the rigid `Self` type variable, the same

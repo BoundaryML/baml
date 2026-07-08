@@ -67,11 +67,13 @@ pub trait TypeExprContext<'db> {
     /// not its impls.
     fn concrete_projection(&self, base: &Ty, member: &baml_base::Name) -> ConcreteProjection;
 
-    /// A concrete base's realized view of `interface` — the `implements` block's realized
-    /// interface (with the impl's associated-type pins) when `base` implements it, else
-    /// `None`. Narrows an explicit `(base as I).member` qualifier to the written interface
-    /// `I` (unlike [`concrete_projection`](Self::concrete_projection), which searches by
-    /// member). Only meaningful for a fully-realized concrete base.
+    /// A concrete-headed base's realized view of `interface` — the `implements` block's
+    /// realized interface (with the impl's associated-type pins) when `base` implements
+    /// it, else `None`. Narrows an explicit `(base as I).member` qualifier to the written
+    /// interface `I` (unlike [`concrete_projection`](Self::concrete_projection), which
+    /// searches by member). The base may carry rigid type variables (`Map<T, R>`): the
+    /// impl pattern-match realizes the pins at them, with bounds judged against this
+    /// scope's constraints. A bare type-variable base has no impls and resolves to `None`.
     fn concrete_realized_interface(
         &self,
         base: &Ty,
@@ -177,6 +179,7 @@ impl<'db> TypeExprContext<'db> for ScopeCtx<'_, 'db> {
         crate::builder::associated_projection::resolve_concrete_realized_interface(
             self.db,
             &self.package_items.package,
+            self.bounds,
             base,
             interface,
         )
@@ -413,7 +416,7 @@ pub(crate) fn resolve_type_in<'db>(
 /// Resolve an AST `TypeExpr` to a `Ty`, driven entirely by `ctx` (name
 /// resolution, `Self`, and type-variable bounds). Lowering is a pure recursion
 /// over the `TypeExpr`: the scope-specific decisions all funnel through
-/// [`TypeExprContext`]. Unresolved names become `Ty::Unknown` and push an
+/// [`TypeExprContext`]. Unresolved names become `Ty::Error` and push an
 /// `UnresolvedType` diagnostic to `diagnostics`.
 pub fn lower_type_expr(
     type_expr: &TypeExpr,
@@ -607,10 +610,19 @@ pub fn lower_type_expr(
                             }
                             Ty::TypeAlias(qualify_def(db, def, short), TyAttr::default())
                         }
-                        // Let bindings are values, not types — produce Unknown in a type position.
-                        _ => Ty::Unknown {
-                            attr: TyAttr::default(),
-                        },
+                        // Unreachable in practice: the package `types` namespace only holds
+                        // class/enum/interface/alias contributions (hir builder). Defensive —
+                        // if a non-type definition ever lands here, report it rather than
+                        // silently producing a compatible-with-everything sentinel.
+                        _ => {
+                            diagnostics.push(TirTypeError::UnresolvedType {
+                                name: short.clone(),
+                                suggestions: Box::new([]),
+                            });
+                            Ty::Error {
+                                attr: TyAttr::default(),
+                            }
+                        }
                     }
                 }
                 Err(suggestions) => {
@@ -681,7 +693,9 @@ pub fn lower_type_expr(
                         name: baml_base::Name::new(&name_str),
                         suggestions,
                     });
-                    Ty::Unknown {
+                    // An unresolved name is unrecoverable — `Ty::Error` (diagnosed, poisons
+                    // downstream), never `Ty::Unknown` (the missing/inferable sentinel).
+                    Ty::Error {
                         attr: TyAttr::default(),
                     }
                 }
@@ -804,7 +818,13 @@ pub fn lower_type_expr(
         TypeExprKind::BuiltinUnknown { .. } => Ty::BuiltinUnknown {
             attr: TyAttr::default(),
         },
-        TypeExprKind::Error { .. } | TypeExprKind::Unknown { .. } => Ty::Unknown {
+        // Parse recovery: the parser already reported the syntax error — unrecoverable.
+        TypeExprKind::Error { .. } => Ty::Error {
+            attr: TyAttr::default(),
+        },
+        // A missing type (an unannotated lambda param, an elided receiver type): genuinely
+        // "not yet known", to be filled by inference — NOT an error sentinel.
+        TypeExprKind::Unknown { .. } => Ty::Unknown {
             attr: TyAttr::default(),
         },
         // Dedicated Ty::Type variant — see ty.rs doc comment for design rationale.
