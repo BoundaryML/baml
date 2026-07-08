@@ -1087,6 +1087,7 @@ dependencies = [
  "lsp-types",
  "salsa",
  "serde",
+ "serde_json",
  "text-size",
 ]
 

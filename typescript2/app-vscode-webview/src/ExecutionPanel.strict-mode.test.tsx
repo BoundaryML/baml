@@ -10,11 +10,11 @@ import {
   type WorkerOutMessage,
 } from '@b/pkg-playground';
 
-describe('ExecutionPanel StrictMode lifecycle', () => {
-  beforeAll(() => {
-    HTMLElement.prototype.scrollTo ??= vi.fn();
-  });
+beforeAll(() => {
+  HTMLElement.prototype.scrollTo ??= vi.fn();
+});
 
+describe('ExecutionPanel StrictMode lifecycle', () => {
   it('keeps the run-store listener alive after StrictMode effect replay', async () => {
     const port = new FakeRuntimePort();
 
@@ -170,6 +170,484 @@ describe('ExecutionPanel StrictMode lifecycle', () => {
           (msg) =>
             msg.type === 'startRun' &&
             msg.functionName === 'paulo.childFunc1',
+        ),
+      ).toBe(true);
+    });
+  });
+});
+
+describe('ExecutionPanel args form', () => {
+  it('renders the args form from param schemas and serializes edits into argsJson', async () => {
+    const port = new FakeRuntimePort();
+
+    render(<ExecutionPanel port={port} />);
+
+    act(() => {
+      port.emit({
+        type: 'playgroundNotification',
+        notification: { type: 'listProjects', projects: ['project'] },
+      });
+      port.emit({
+        type: 'playgroundNotification',
+        notification: {
+          type: 'updateProject',
+          project: 'project',
+          update: {
+            isBexCurrent: true,
+            functions: [
+              {
+                name: 'Greet',
+                kind: 'expr',
+                origin: 'userDefined',
+                params: [
+                  { name: 'name', hasDefault: false, schema: { type: 'string' } },
+                  {
+                    name: 'color',
+                    hasDefault: false,
+                    schema: { type: 'ref', name: 'user.Color' },
+                  },
+                ],
+              },
+            ],
+            types: {
+              'user.Color': {
+                kind: 'enum',
+                values: ['Red', 'Green', 'Blue'],
+              },
+            },
+            diagnostics: [],
+          },
+        },
+      });
+    });
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Functions (1)' }),
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Greet' }));
+
+    // The form renders one widget per param: a string input and enum chips.
+    const nameInput = await screen.findByPlaceholderText('text');
+    fireEvent.change(nameInput, { target: { value: 'Ada' } });
+    fireEvent.click(await screen.findByRole('button', { name: 'Green' }));
+
+    // Raw view shows the same argsJson the form writes — including the enum
+    // wire marker — proving the form and raw input share one state.
+    fireEvent.click(await screen.findByRole('button', { name: 'raw' }));
+    const rawInput = await screen.findByPlaceholderText('{"key": "value"}');
+    const parsed = JSON.parse((rawInput as HTMLInputElement).value);
+    expect(parsed).toEqual({
+      name: 'Ada',
+      color: { $baml: { enum: 'user.Color', value: 'Green' } },
+    });
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Run' }));
+    await waitFor(() => {
+      expect(
+        port.sent.some(
+          (msg) => msg.type === 'startRun' && msg.functionName === 'Greet',
+        ),
+      ).toBe(true);
+    });
+
+    // Cmd/Ctrl+Enter from an args editor field runs with the current args.
+    // (The form was toggled to raw above, so target the raw input.)
+    const runCount = port.sent.filter((msg) => msg.type === 'startRun').length;
+    fireEvent.keyDown(rawInput, { key: 'Enter', metaKey: true });
+    await waitFor(() => {
+      expect(port.sent.filter((msg) => msg.type === 'startRun').length).toBe(
+        runCount + 1,
+      );
+    });
+  });
+
+  it('preserves seeded defaults when switching functions and back', async () => {
+    const port = new FakeRuntimePort();
+
+    render(<ExecutionPanel port={port} />);
+
+    act(() => {
+      port.emit({
+        type: 'playgroundNotification',
+        notification: { type: 'listProjects', projects: ['project'] },
+      });
+      port.emit({
+        type: 'playgroundNotification',
+        notification: {
+          type: 'updateProject',
+          project: 'project',
+          update: {
+            isBexCurrent: true,
+            functions: [
+              {
+                name: 'Greet',
+                kind: 'expr',
+                origin: 'userDefined',
+                params: [
+                  {
+                    name: 'color',
+                    hasDefault: false,
+                    schema: { type: 'ref', name: 'user.Color' },
+                  },
+                ],
+              },
+              { name: 'Zero', kind: 'expr', origin: 'userDefined', params: [] },
+            ],
+            types: {
+              'user.Color': {
+                kind: 'enum',
+                values: ['Red', 'Green', 'Blue'],
+              },
+            },
+            diagnostics: [],
+          },
+        },
+      });
+    });
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Functions (2)' }),
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Greet' }));
+    // Wait for the seed effect, then bounce to Zero and back.
+    const seeded = {
+      color: { $baml: { enum: 'user.Color', value: 'Red' } },
+    };
+    fireEvent.click(await screen.findByRole('button', { name: 'raw' }));
+    const rawInput = await screen.findByPlaceholderText('{"key": "value"}');
+    await waitFor(() => {
+      expect(JSON.parse((rawInput as HTMLInputElement).value)).toEqual(seeded);
+    });
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Zero' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Greet' }));
+
+    const rawAgain = await screen.findByPlaceholderText('{"key": "value"}');
+    await waitFor(() => {
+      expect(JSON.parse((rawAgain as HTMLInputElement).value)).toEqual(seeded);
+    });
+  });
+
+  it('keeps an explicitly chosen union variant selected when values overlap', async () => {
+    const port = new FakeRuntimePort();
+
+    render(<ExecutionPanel port={port} />);
+
+    act(() => {
+      port.emit({
+        type: 'playgroundNotification',
+        notification: { type: 'listProjects', projects: ['project'] },
+      });
+      port.emit({
+        type: 'playgroundNotification',
+        notification: {
+          type: 'updateProject',
+          project: 'project',
+          update: {
+            isBexCurrent: true,
+            functions: [
+              {
+                name: 'Mix',
+                kind: 'expr',
+                origin: 'userDefined',
+                params: [
+                  {
+                    name: 'x',
+                    hasDefault: false,
+                    schema: {
+                      type: 'union',
+                      variants: [{ type: 'int' }, { type: 'float' }],
+                    },
+                  },
+                ],
+              },
+            ],
+            types: {},
+            diagnostics: [],
+          },
+        },
+      });
+    });
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Functions (1)' }),
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Mix' }));
+
+    // Seeded to the first variant's default (int 0), which also inhabits
+    // float. Picking float must stick — first-match detection alone would
+    // snap the selection back to int and integer-gate the input.
+    const floatChip = await screen.findByRole('button', { name: 'float' });
+    fireEvent.click(floatChip);
+    expect(floatChip.className).toContain('bg-vsc-accent');
+
+    const numberInput = await screen.findByPlaceholderText('0.0');
+    fireEvent.change(numberInput, { target: { value: '1.5' } });
+    expect(floatChip.className).toContain('bg-vsc-accent');
+
+    fireEvent.click(await screen.findByRole('button', { name: 'raw' }));
+    const rawInput = await screen.findByPlaceholderText('{"key": "value"}');
+    expect(JSON.parse((rawInput as HTMLInputElement).value)).toEqual({
+      x: 1.5,
+    });
+  });
+
+  it('renders a recursive class fully typed at each expanded depth', async () => {
+    const port = new FakeRuntimePort();
+
+    render(<ExecutionPanel port={port} />);
+
+    act(() => {
+      port.emit({
+        type: 'playgroundNotification',
+        notification: { type: 'listProjects', projects: ['project'] },
+      });
+      port.emit({
+        type: 'playgroundNotification',
+        notification: {
+          type: 'updateProject',
+          project: 'project',
+          update: {
+            isBexCurrent: true,
+            functions: [
+              {
+                name: 'Walk',
+                kind: 'expr',
+                origin: 'userDefined',
+                params: [
+                  {
+                    name: 't',
+                    hasDefault: false,
+                    schema: { type: 'ref', name: 'user.Tree' },
+                  },
+                ],
+              },
+            ],
+            types: {
+              'user.Tree': {
+                kind: 'class',
+                fields: [
+                  { name: 'value', schema: { type: 'int' } },
+                  {
+                    name: 'children',
+                    schema: {
+                      type: 'list',
+                      item: { type: 'ref', name: 'user.Tree' },
+                    },
+                  },
+                ],
+              },
+            },
+            diagnostics: [],
+          },
+        },
+      });
+    });
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Functions (1)' }),
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Walk' }));
+
+    // Root Tree section is open; one typed int widget for `value`.
+    expect(await screen.findAllByPlaceholderText('0')).toHaveLength(1);
+
+    // Adding a child materializes a nested Tree section. It starts collapsed
+    // (depth ≥ 2) with its content unmounted — expanding it resolves the ref
+    // lazily and renders typed widgets: no raw-JSON cut-point at any depth.
+    fireEvent.click(await screen.findByRole('button', { name: 'add item' }));
+    const treeSections = await screen.findAllByRole('button', {
+      name: 'Tree',
+    });
+    expect(treeSections).toHaveLength(2);
+    expect(screen.getAllByPlaceholderText('0')).toHaveLength(1);
+    fireEvent.click(treeSections[1]);
+    await waitFor(() => {
+      expect(screen.getAllByPlaceholderText('0')).toHaveLength(2);
+    });
+
+    fireEvent.change(screen.getAllByPlaceholderText('0')[1], {
+      target: { value: '7' },
+    });
+    fireEvent.click(await screen.findByRole('button', { name: 'raw' }));
+    const rawInput = await screen.findByPlaceholderText('{"key": "value"}');
+    expect(JSON.parse((rawInput as HTMLInputElement).value)).toEqual({
+      t: {
+        $baml: { type: 'user.Tree' },
+        value: 0,
+        children: [
+          { $baml: { type: 'user.Tree' }, value: 7, children: [] },
+        ],
+      },
+    });
+  });
+
+  it('renders a self-referential alias as raw JSON instead of recursing', async () => {
+    // `type A = A | int` compiles clean and produces a table entry whose
+    // schema contains a ref back to itself with no value boundary in
+    // between. The render path must cut the cycle (raw-JSON fallback for the
+    // re-entrant ref), not stack-overflow.
+    const port = new FakeRuntimePort();
+
+    render(<ExecutionPanel port={port} />);
+
+    act(() => {
+      port.emit({
+        type: 'playgroundNotification',
+        notification: { type: 'listProjects', projects: ['project'] },
+      });
+      port.emit({
+        type: 'playgroundNotification',
+        notification: {
+          type: 'updateProject',
+          project: 'project',
+          update: {
+            isBexCurrent: true,
+            functions: [
+              {
+                name: 'Loop',
+                kind: 'expr',
+                origin: 'userDefined',
+                params: [
+                  {
+                    name: 'a',
+                    hasDefault: false,
+                    schema: { type: 'ref', name: 'user.A' },
+                  },
+                ],
+              },
+            ],
+            types: {
+              'user.A': {
+                kind: 'alias',
+                schema: {
+                  type: 'union',
+                  variants: [
+                    { type: 'ref', name: 'user.A' },
+                    { type: 'int' },
+                  ],
+                },
+              },
+            },
+            diagnostics: [],
+          },
+        },
+      });
+    });
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Functions (1)' }),
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Loop' }));
+
+    // Union chips render; the self-referential variant is reachable but its
+    // widget degrades to the raw-JSON textarea.
+    fireEvent.click(await screen.findByRole('button', { name: 'A' }));
+    expect(
+      await screen.findByPlaceholderText('JSON (A)'),
+    ).toBeInTheDocument();
+  });
+
+  it('normalizes a bare-enum host seed into the wire marker', async () => {
+    const port = new FakeRuntimePort();
+
+    render(<ExecutionPanel port={port} initialArgsJson='{"c":"Red"}' />);
+
+    act(() => {
+      port.emit({
+        type: 'playgroundNotification',
+        notification: { type: 'listProjects', projects: ['project'] },
+      });
+      port.emit({
+        type: 'playgroundNotification',
+        notification: {
+          type: 'updateProject',
+          project: 'project',
+          update: {
+            isBexCurrent: true,
+            functions: [
+              {
+                name: 'IsRed',
+                kind: 'expr',
+                origin: 'userDefined',
+                params: [
+                  {
+                    name: 'c',
+                    hasDefault: false,
+                    schema: { type: 'ref', name: 'user.Color' },
+                  },
+                ],
+              },
+            ],
+            types: {
+              'user.Color': {
+                kind: 'enum',
+                values: ['Red', 'Green', 'Blue'],
+              },
+            },
+            diagnostics: [],
+          },
+        },
+      });
+    });
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Functions (1)' }),
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'IsRed' }));
+
+    // The bare string would encode untyped (no String→Enum coercion exists);
+    // hydration must rewrite it to the marker even though the host seed is
+    // non-empty (so the seeding effect correctly stays away).
+    fireEvent.click(await screen.findByRole('button', { name: 'raw' }));
+    const rawInput = await screen.findByPlaceholderText('{"key": "value"}');
+    await waitFor(() => {
+      expect(JSON.parse((rawInput as HTMLInputElement).value)).toEqual({
+        c: { $baml: { enum: 'user.Color', value: 'Red' } },
+      });
+    });
+  });
+
+  it('shows the no-arguments state for a nullary schema and still runs', async () => {
+    const port = new FakeRuntimePort();
+
+    render(<ExecutionPanel port={port} />);
+
+    act(() => {
+      port.emit({
+        type: 'playgroundNotification',
+        notification: { type: 'listProjects', projects: ['project'] },
+      });
+      port.emit({
+        type: 'playgroundNotification',
+        notification: {
+          type: 'updateProject',
+          project: 'project',
+          update: {
+            isBexCurrent: true,
+            functions: [
+              { name: 'Zero', kind: 'expr', origin: 'userDefined', params: [] },
+            ],
+            diagnostics: [],
+          },
+        },
+      });
+    });
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Functions (1)' }),
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Zero' }));
+
+    expect(
+      await screen.findByText('This function takes no arguments.'),
+    ).toBeInTheDocument();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Run' }));
+    await waitFor(() => {
+      expect(
+        port.sent.some(
+          (msg) => msg.type === 'startRun' && msg.functionName === 'Zero',
         ),
       ).toBe(true);
     });

@@ -714,7 +714,9 @@ impl BexMulitProject {
 
         let db_guard = project.project.db.lock().unwrap();
         let db = db_guard.db();
-        let functions = baml_project::list_functions_with_metadata(db)
+        let listing = baml_project::list_functions_with_metadata(db);
+        let functions = listing
+            .functions
             .into_iter()
             .map(|f| crate::bex_lsp::FunctionInfo {
                 name: f.name,
@@ -733,12 +735,14 @@ impl BexMulitProject {
                 } else {
                     None
                 },
+                params: f.params,
             })
             .collect();
 
         crate::bex_lsp::ProjectUpdate {
             is_bex_current,
             functions,
+            types: Some(listing.types),
             diagnostics,
         }
     }
