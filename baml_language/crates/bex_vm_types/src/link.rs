@@ -87,23 +87,6 @@ struct UnitLayout {
 }
 
 impl UnitLayout {
-    /// Decode a per-unit-local flat object index (§2a) to an absolute
-    /// `ObjectIndex`, applying the correct bucket base.
-    fn local_object(&self, unit: &CompilationUnit, raw: usize) -> usize {
-        let c = unit.classes.len();
-        let e = unit.enums.len();
-        let i = unit.interfaces.len();
-        if raw < c {
-            self.class_base + raw
-        } else if raw < c + e {
-            self.enum_base + (raw - c)
-        } else if raw < c + e + i {
-            self.iface_base + (raw - c - e)
-        } else {
-            self.code_base + (raw - c - e - i)
-        }
-    }
-
     /// Decode a per-unit-local flat global index (§2a) to an absolute slot. The
     /// local global space is `[functions 0..func_count][lets func_count..]`.
     fn local_global(&self, raw: usize) -> usize {
@@ -116,12 +99,70 @@ impl UnitLayout {
 }
 
 /// Absolute object index of an exported [`LocalRef`] given the unit's layout.
+///
+/// Only valid for non-`Code` buckets (classes/enums/interfaces), which never
+/// contain a shadowed generic value. `Code` exports are resolved through the
+/// shadow-aware `code_abs` map instead.
 fn export_object_abs(layout: &UnitLayout, local_ref: LocalRef) -> usize {
     match local_ref {
         LocalRef::Class(k) => layout.class_base + k as usize,
         LocalRef::Enum(k) => layout.enum_base + k as usize,
         LocalRef::Interface(k) => layout.iface_base + k as usize,
         LocalRef::Code(k) => layout.code_base + k as usize,
+    }
+}
+
+/// The fully-qualified name of the base function of a generic value
+/// (`Object::GenericFunction`) in a unit's per-unit encoding (design §9 R1). The
+/// base's `GlobalIndex` is unit-local (a function this unit defines, resolved via
+/// its export table) or an import (resolved via [`CompilationUnit::global_imports`]).
+/// Together with the value's `type_args` this is the whole-program intern key.
+fn generic_base_name(
+    unit: &CompilationUnit,
+    base_raw: usize,
+    n_local_globals: usize,
+) -> Result<String, LinkError> {
+    if base_raw < n_local_globals {
+        unit.exports
+            .globals
+            .iter()
+            .find(|(_, flat)| *flat as usize == base_raw)
+            .map(|(name, _)| name.clone())
+            .ok_or_else(|| {
+                LinkError::UnresolvedImport(format!("generic base local global {base_raw}"))
+            })
+    } else {
+        unit.global_imports
+            .get(base_raw - n_local_globals)
+            .map(|sym| sym.fq_name.clone())
+            .ok_or_else(|| LinkError::UnresolvedImport(format!("generic base import {base_raw}")))
+    }
+}
+
+/// Resolve one object import to an absolute pool index: a non-generic reference
+/// through the merged export map, a generic-function value through the
+/// whole-program intern map keyed by `(base fn name, type_args)` (design §9 R1).
+fn resolve_object_import(
+    sym: &Symbol,
+    obj_by_name: &HashMap<String, usize>,
+    canonical_pos: &HashMap<(String, Vec<u8>), usize>,
+) -> Result<usize, LinkError> {
+    match sym.kind {
+        SymbolKind::GenericFn => {
+            let key = sym
+                .generic
+                .as_ref()
+                .ok_or_else(|| LinkError::UnresolvedImport(sym.fq_name.clone()))?;
+            let ta = borsh::to_vec(&key.type_args).expect("serialize type_args");
+            canonical_pos
+                .get(&(key.base_fn.clone(), ta))
+                .copied()
+                .ok_or_else(|| LinkError::UnresolvedImport(format!("{}<generic>", key.base_fn)))
+        }
+        _ => obj_by_name
+            .get(sym.fq_name.as_str())
+            .copied()
+            .ok_or_else(|| LinkError::UnresolvedImport(sym.fq_name.clone())),
     }
 }
 
@@ -182,6 +223,24 @@ pub fn link(units: &[CompilationUnit]) -> Result<Program, LinkError> {
         }
     }
 
+    // ---- Generic-value dedup layout (design §9 R1) --------------------------
+    // A generic-function VALUE (`foo<int>` used as data → `Object::GenericFunction`)
+    // is interned once per program; under per-unit reuse two units can each carry a
+    // local copy (e.g. a dirty file emits `foo<int>` while a clean unit already
+    // owns it). Keep the earliest in link order (the canonical owner) at the pool
+    // position a full compile gives it; every later copy is a "shadow" the linker
+    // skips, redirecting all references to the canonical index.
+    //
+    // `canonical_pos` maps a generic value's `(base fn name, type_args)` key to its
+    // absolute pool index; `code_abs[u][k]` is the absolute pool index of unit u's
+    // k-th `code` object (a shadow maps to its canonical's index and is itself not
+    // appended). For a full compile each key has exactly one owner, so `shadow` is
+    // empty and this reduces to the flat pass-major layout.
+    let mut shadow: Vec<std::collections::HashSet<usize>> =
+        vec![std::collections::HashSet::new(); units.len()];
+    let mut code_abs: Vec<Vec<usize>> = units.iter().map(|u| vec![0usize; u.code.len()]).collect();
+    let mut canonical_pos: HashMap<(String, Vec<u8>), usize> = HashMap::new();
+
     // ---- Object bucket bases (pass-major, group-major) ----------------------
     let mut layout = vec![UnitLayout::default(); units.len()];
     let mut obj_cursor = 0usize;
@@ -200,7 +259,30 @@ pub fn link(units: &[CompilationUnit]) -> Result<Program, LinkError> {
         }
         for &u in *group {
             layout[u].code_base = obj_cursor;
-            obj_cursor += units[u].code.len();
+            let unit = &units[u];
+            let n_local_globals = func_count[u] + let_count[u];
+            let mut placed = 0usize;
+            for (k, object) in unit.code.iter().enumerate() {
+                if let Object::GenericFunction(gf) = object {
+                    let base_name = generic_base_name(unit, gf.function.raw(), n_local_globals)?;
+                    let ta = borsh::to_vec(&gf.type_args.to_vec()).expect("serialize type_args");
+                    let key = (base_name, ta);
+                    if let Some(&canon) = canonical_pos.get(&key) {
+                        // Duplicate of an earlier unit's generic value: shadow it.
+                        shadow[u].insert(k);
+                        code_abs[u][k] = canon;
+                        continue;
+                    }
+                    let abs = obj_cursor + placed;
+                    canonical_pos.insert(key, abs);
+                    code_abs[u][k] = abs;
+                    placed += 1;
+                } else {
+                    code_abs[u][k] = obj_cursor + placed;
+                    placed += 1;
+                }
+            }
+            obj_cursor += placed;
         }
         // A group's `$init` tail objects append after its code, before the next
         // group's classes (design §9 R2).
@@ -240,7 +322,14 @@ pub fn link(units: &[CompilationUnit]) -> Result<Program, LinkError> {
     let mut obj_by_name: HashMap<String, usize> = HashMap::new();
     for (u, unit) in units.iter().enumerate() {
         for (name, local_ref) in &unit.exports.objects {
-            let abs = export_object_abs(&layout[u], *local_ref);
+            // A `Code` export (named function) may sit after a shadowed generic in
+            // its bucket, so its absolute index comes from `code_abs`, not the flat
+            // base. Generic *values* are never exported, so a `Code` export is never
+            // a shadow.
+            let abs = match local_ref {
+                LocalRef::Code(k) => code_abs[u][*k as usize],
+                other => export_object_abs(&layout[u], *other),
+            };
             if obj_by_name.insert(name.clone(), abs).is_some() {
                 return Err(LinkError::DuplicateExport(name.clone()));
             }
@@ -319,15 +408,11 @@ pub fn link(units: &[CompilationUnit]) -> Result<Program, LinkError> {
     // group. Definitions are inert to the operand walker, so they are cloned in
     // place. The push order here MUST match the base computation above.
     //
-    // Generic-function values (design §9 R1) are interned across the whole
-    // program at one canonical pool position (the first-referencing unit). The
-    // decomposition keeps that single object in its owning unit's `code` bucket;
-    // other units reference it through a `GenericFn` import. As each generic
-    // function is placed, its `(base fn slot, type_args)` key is registered here
-    // so those imports resolve — the owning unit is placed no later than any
-    // importing unit (interning keeps the earliest reference), so the map is
-    // always populated before a lookup.
-    let mut generic_map: HashMap<(usize, Vec<u8>), usize> = HashMap::new();
+    // Generic-function values (design §9 R1) are interned across the whole program
+    // at one canonical pool position (computed above into `canonical_pos`); a unit
+    // owning the canonical copy keeps it in its `code` bucket, every other copy is
+    // a shadow that is skipped here and whose references resolve to the canonical
+    // via `code_abs` / `canonical_pos`.
     for (g, group) in groups.iter().enumerate() {
         for &u in *group {
             for object in &units[u].classes {
@@ -352,41 +437,40 @@ pub fn link(units: &[CompilationUnit]) -> Result<Program, LinkError> {
             let n_local_globals = func_count[u] + let_count[u];
             let lay = layout[u];
             let glob_imports = &resolved_glob_imports[u];
+            let c = unit.classes.len();
+            let e = unit.enums.len();
+            let i = unit.interfaces.len();
 
-            // Resolve this unit's object imports now: non-generic against the
-            // name map, generic against the intern map (earlier units placed).
+            // Resolve this unit's object imports: non-generic against the name map,
+            // generic against the whole-program intern map (`canonical_pos`).
             let mut obj_imports = Vec::with_capacity(unit.object_imports.len());
             for sym in &unit.object_imports {
-                let abs = match sym.kind {
-                    SymbolKind::GenericFn => {
-                        let key = sym
-                            .generic
-                            .as_ref()
-                            .ok_or_else(|| LinkError::UnresolvedImport(sym.fq_name.clone()))?;
-                        let base = fn_gslot
-                            .get(key.base_fn.as_str())
-                            .copied()
-                            .ok_or_else(|| LinkError::UnresolvedImport(key.base_fn.clone()))?;
-                        let ta = borsh::to_vec(&key.type_args).expect("serialize type_args");
-                        generic_map.get(&(base, ta)).copied().ok_or_else(|| {
-                            LinkError::UnresolvedImport(format!("{}<generic>", key.base_fn))
-                        })?
-                    }
-                    _ => obj_by_name
-                        .get(sym.fq_name.as_str())
-                        .copied()
-                        .ok_or_else(|| LinkError::UnresolvedImport(sym.fq_name.clone()))?,
-                };
-                obj_imports.push(abs);
+                obj_imports.push(resolve_object_import(sym, &obj_by_name, &canonical_pos)?);
             }
 
-            for object in &unit.code {
+            for (k, object) in unit.code.iter().enumerate() {
+                // A shadowed generic value is a duplicate of the canonical copy —
+                // do not append it; its references already resolve to the canonical.
+                if shadow[u].contains(&k) {
+                    continue;
+                }
                 let mut object = object.clone();
                 visit_object_operands(&mut object, |operand| match operand {
                     IndexOperand::Object(idx) => {
                         let raw = idx.raw();
                         let abs = if raw < n_local_objects {
-                            lay.local_object(unit, raw)
+                            if raw < c {
+                                lay.class_base + raw
+                            } else if raw < c + e {
+                                lay.enum_base + (raw - c)
+                            } else if raw < c + e + i {
+                                lay.iface_base + (raw - c - e)
+                            } else {
+                                // A code-bucket ref: use the shadow-aware map so a
+                                // reference to a deduped generic value hits the
+                                // canonical pool position.
+                                code_abs[u][raw - c - e - i]
+                            }
                         } else {
                             obj_imports[raw - n_local_objects]
                         };
@@ -402,15 +486,6 @@ pub fn link(units: &[CompilationUnit]) -> Result<Program, LinkError> {
                         *slot = GlobalIndex::from_raw(abs);
                     }
                 });
-                // Register a freshly-placed generic function (its `.function`
-                // operand is now absolute) so later units' imports resolve.
-                if let Object::GenericFunction(gf) = &object {
-                    let key = (
-                        gf.function.raw(),
-                        borsh::to_vec(&gf.type_args.to_vec()).expect("serialize type_args"),
-                    );
-                    generic_map.insert(key, program.objects.len());
-                }
                 program.objects.push(object);
             }
         }
@@ -429,27 +504,7 @@ pub fn link(units: &[CompilationUnit]) -> Result<Program, LinkError> {
             // Resolve the tail's imports.
             let mut obj_imports = Vec::with_capacity(tail.object_imports.len());
             for sym in &tail.object_imports {
-                let abs = match sym.kind {
-                    SymbolKind::GenericFn => {
-                        let key = sym
-                            .generic
-                            .as_ref()
-                            .ok_or_else(|| LinkError::UnresolvedImport(sym.fq_name.clone()))?;
-                        let base = fn_gslot
-                            .get(key.base_fn.as_str())
-                            .copied()
-                            .ok_or_else(|| LinkError::UnresolvedImport(key.base_fn.clone()))?;
-                        let ta = borsh::to_vec(&key.type_args).expect("serialize type_args");
-                        generic_map.get(&(base, ta)).copied().ok_or_else(|| {
-                            LinkError::UnresolvedImport(format!("{}<generic>", key.base_fn))
-                        })?
-                    }
-                    _ => obj_by_name
-                        .get(sym.fq_name.as_str())
-                        .copied()
-                        .ok_or_else(|| LinkError::UnresolvedImport(sym.fq_name.clone()))?,
-                };
-                obj_imports.push(abs);
+                obj_imports.push(resolve_object_import(sym, &obj_by_name, &canonical_pos)?);
             }
             let mut glob_imports = Vec::with_capacity(tail.global_imports.len());
             for sym in &tail.global_imports {

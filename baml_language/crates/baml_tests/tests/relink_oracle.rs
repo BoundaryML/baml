@@ -14,7 +14,7 @@ use std::{collections::HashSet, path::Path};
 
 use baml_compiler2_emit::{
     CompileOptions, OptLevel, emit_units, generate_project_bytecode_with_reuse_units,
-    generate_project_bytecode_with_stdlib, generate_stdlib_program,
+    generate_project_bytecode_with_stdlib, generate_stdlib_program, take_lowered_files,
 };
 use baml_project::ProjectDatabase;
 use bex_vm_types::{CompilationUnit, Object, Program};
@@ -353,6 +353,195 @@ fn relink_lowers_only_dirty_files() {
     assert!(
         !lowered.iter().any(|f| f == "a.baml" || f == "c.baml"),
         "clean files must NOT be lowered, got {lowered:?}"
+    );
+}
+
+/// Assert an edit is handled fully INCREMENTALLY — the reuse path does NOT return
+/// [`baml_compiler2_emit::LoweringError::ReuseUnsupported`] (no fallback to a full
+/// compile), the result is byte-identical to a full compile, and only the `dirty`
+/// files were MIR/bytecode-lowered (clean files' units — including their `let`
+/// helpers and `$init_test` contributions — came from `prev_units`).
+///
+/// This is the B-693 R1/R2 gate: the three scenarios below (dirty `test` block,
+/// dirty top-level `let`, dirty generic-function value shadowing a clean owner)
+/// previously hit `ReuseUnsupported` and fell back to a full compile.
+fn assert_incremental_matches(
+    label: &str,
+    edited: &[(&str, &str)],
+    base: &Program,
+    prev_units: &[CompilationUnit],
+    clean: &[&str],
+    dirty: &[&str],
+) {
+    let full = borsh::to_vec(&compile_full(edited, base)).expect("serialize full");
+
+    let clean_files: HashSet<String> = clean.iter().map(ToString::to_string).collect();
+    let db = build_db(edited);
+    // Drain everything the setup (stdlib, prev_units, the full compile above)
+    // lowered, so the counter reflects only the reuse call below.
+    let _ = take_lowered_files();
+    let reused = generate_project_bytecode_with_reuse_units(
+        &db,
+        &CompileOptions {
+            emit_test_cases: false,
+        },
+        OptLevel::Two,
+        base,
+        prev_units,
+        &clean_files,
+    );
+    let lowered = take_lowered_files();
+
+    let reused = match reused {
+        Ok(program) => program,
+        Err(e) => panic!(
+            "{label}: reuse fell back (ReuseUnsupported / error) instead of staying \
+             incremental: {e}"
+        ),
+    };
+    let reused_bytes = borsh::to_vec(&reused).expect("serialize reuse");
+    assert!(
+        full == reused_bytes,
+        "{label}: reuse differs from full compile (lengths {} vs {}, first diff at {:?})",
+        full.len(),
+        reused_bytes.len(),
+        full.iter()
+            .zip(reused_bytes.iter())
+            .position(|(a, b)| a != b),
+    );
+
+    for d in dirty {
+        assert!(
+            lowered.iter().any(|f| f == d),
+            "{label}: dirty file `{d}` must be lowered, got {lowered:?}"
+        );
+    }
+    for c in clean {
+        assert!(
+            !lowered.iter().any(|f| f == c),
+            "{label}: clean file `{c}` must NOT be lowered, got {lowered:?}"
+        );
+    }
+}
+
+/// R2 (design §9): a dirty file with a top-level `test` block. Editing it changes
+/// the per-package `$init_test` chainer tail, which the reuse path used to reuse
+/// verbatim (→ `ReuseUnsupported`). Now the tail is resynthesized incrementally
+/// and stays byte-identical.
+#[test]
+fn incremental_dirty_test_block() {
+    const CLEAN: &str = r#"function clean_fn() -> int {
+  41
+}
+"#;
+    const DIRTY: &str = r#"function dirty_fn() -> int {
+  1
+}
+
+test "t_dirty" {
+  assert.equal(dirty_fn(), 1)
+}
+"#;
+    let files = [("t_clean.baml", CLEAN), ("t_dirty.baml", DIRTY)];
+    let base = generate_stdlib_program(&build_db(&files), OptLevel::Two).expect("stdlib");
+    let prev = prev_units(&files);
+
+    let dirty_edit = DIRTY.replace("  1\n}", "  2\n}");
+    assert_ne!(dirty_edit, DIRTY, "edit must apply");
+    let edited = [
+        ("t_clean.baml", CLEAN),
+        ("t_dirty.baml", dirty_edit.as_str()),
+    ];
+    assert_incremental_matches(
+        "dirty test block",
+        &edited,
+        &base,
+        &prev,
+        &["t_clean.baml"],
+        &["t_dirty.baml"],
+    );
+}
+
+/// R2 (design §9): a dirty file with a top-level `let` (client-like). Editing it
+/// re-participates in the package `$init` synthesis, which used to abort reuse.
+#[test]
+fn incremental_dirty_top_level_let() {
+    const CLEAN: &str = r#"function clean_fn() -> int {
+  7
+}
+"#;
+    const DIRTY: &str = r#"let greeting = "hi";
+
+function use_greeting() -> string {
+  greeting
+}
+"#;
+    let files = [("l_clean.baml", CLEAN), ("l_dirty.baml", DIRTY)];
+    let base = generate_stdlib_program(&build_db(&files), OptLevel::Two).expect("stdlib");
+    let prev = prev_units(&files);
+
+    let dirty_edit = DIRTY.replace("  greeting\n}", "  greeting\n  // edited\n}");
+    assert_ne!(dirty_edit, DIRTY, "edit must apply");
+    let edited = [
+        ("l_clean.baml", CLEAN),
+        ("l_dirty.baml", dirty_edit.as_str()),
+    ];
+    assert_incremental_matches(
+        "dirty top-level let",
+        &edited,
+        &base,
+        &prev,
+        &["l_clean.baml"],
+        &["l_dirty.baml"],
+    );
+}
+
+/// R1 (design §9): a dirty file emits a pooled generic-function *value*
+/// (`ident<int>`) that a *clean* file also uses. The clean file is the
+/// first-referencer, so it owns the canonical pooled object; the dirty-only emit
+/// re-interns a local copy. The linker must dedup them (keep the clean owner,
+/// redirect the dirty reference) to stay byte-identical — previously this aborted.
+#[test]
+fn incremental_dirty_generic_value_shadows_clean() {
+    // File order (sorted): gen_a_base < gen_b_use < gen_c_use. `gen_b_use` is the
+    // first VALUE-referencer of `ident<int>` → canonical owner; `gen_c_use` (dirty)
+    // re-emits a shadow copy the linker must fold into the canonical.
+    const BASE: &str = r#"function ident<T>(x: T) -> T {
+  x
+}
+"#;
+    const USE_A: &str = r#"function use_a() -> int {
+  let f = ident<int>;
+  f(1)
+}
+"#;
+    const USE_B: &str = r#"function use_b() -> int {
+  let f = ident<int>;
+  f(2)
+}
+"#;
+    let files = [
+        ("gen_a_base.baml", BASE),
+        ("gen_b_use.baml", USE_A),
+        ("gen_c_use.baml", USE_B),
+    ];
+    let base = generate_stdlib_program(&build_db(&files), OptLevel::Two).expect("stdlib");
+    let prev = prev_units(&files);
+
+    let dirty_edit = USE_B.replace("  f(2)", "  f(2) + 0");
+    assert_ne!(dirty_edit, USE_B, "edit must apply");
+    let edited = [
+        ("gen_a_base.baml", BASE),
+        ("gen_b_use.baml", USE_A),
+        ("gen_c_use.baml", dirty_edit.as_str()),
+    ];
+    assert_incremental_matches(
+        "dirty generic value shadows clean",
+        &edited,
+        &base,
+        &prev,
+        &["gen_a_base.baml", "gen_b_use.baml"],
+        &["gen_c_use.baml"],
     );
 }
 

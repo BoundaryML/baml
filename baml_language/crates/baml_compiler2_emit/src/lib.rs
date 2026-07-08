@@ -722,18 +722,6 @@ fn is_synth_init_name(name: &str) -> bool {
         || name.ends_with(".$init_test")
 }
 
-/// Does `file` contribute to the `$init` / `$init_test` tail — i.e. declare a
-/// top-level `let` (→ `$init`) or a `test` / `testset` block (→ a per-file
-/// `$init_test_*` function chained by `$init_test`)?
-///
-/// The Stage 6 dirty-only path reuses the previous compile's tail verbatim, which
-/// is only sound when no *dirty* file changes it. A dirty tail-producing file
-/// therefore aborts the reuse and the caller falls back to a full compile.
-fn file_is_tail_producing(db: &dyn baml_compiler2_mir::Db, file: baml_base::SourceFile) -> bool {
-    let item_tree = file_item_tree(db, file);
-    !item_tree.lets.is_empty() || !item_tree.tests.is_empty()
-}
-
 fn emitted_function_origin(
     fq_name: &str,
     is_builtin_file: bool,
@@ -784,12 +772,12 @@ pub struct CompileOptions {
 pub enum LoweringError {
     /// A stub — no errors expected from Phase 1 stub.
     Internal(String),
-    /// The incremental (dirty-only) reuse path cannot produce a byte-identical
-    /// image for this project — a dirty file is tail-producing (top-level `let` /
-    /// `test` block) so the `$init` tail cannot be reused, or a dirty file emits a
-    /// pooled generic-function value whose interning owner is ambiguous (design §9
-    /// R1/R2). Not a compiler fault: callers silently fall back to a full compile,
-    /// which is byte-identical.
+    /// The incremental (dirty-only) reuse path cannot reuse the cached image for
+    /// this project — e.g. a caller-clean file is missing from `prev_units` (a
+    /// corrupt / stale cached image). Tail-producing dirty files (top-level `let` /
+    /// `test` block, design §9 R2) and dirty generic-function values (design §9 R1)
+    /// are now handled incrementally and no longer raise this. Not a compiler
+    /// fault: callers silently fall back to a full compile, which is byte-identical.
     ReuseUnsupported(String),
     /// The project has unresolved compile errors, so bytecode generation was
     /// not attempted. Lowering an error-bearing program would feed
@@ -963,23 +951,25 @@ pub fn generate_project_bytecode_with_stdlib(
 /// only the dirty files' units are kept. Each clean file's whole unit — classes,
 /// enums, interfaces, code, import/export tables, `lets`, throw facts — comes
 /// verbatim from `prev_units`; only the whole-program products are recomputed
-/// (package fragments freshly decomposed; the `$init`/`$init_test` tail reused
-/// from `prev_units`, whose symbolic imports the linker re-resolves against the
-/// shifted layout).
+/// (package fragments freshly decomposed; the `$init`/`$init_test` tail
+/// **freshly synthesized** from every file's `let`s / `test` blocks — design §9
+/// R2 — whose symbolic imports the linker re-resolves against the shifted
+/// layout).
 ///
 /// `clean_files` is the caller's optimistic clean set; a file is only truly
 /// reused when its inferred transitive `throws` still match the previous compile
 /// (design §4 — the throws gate). `prev_units` must come from the same compiler
 /// build / options / stdlib base.
 ///
+/// A dirty *tail-producing* file (top-level `let` / `test` block) is now handled
+/// incrementally: the tail is resynthesized rather than reused verbatim, so no
+/// fallback is triggered for it (design §9 R2 is closed).
+///
 /// # Errors
 ///
 /// Returns [`LoweringError::Internal`] if `prev_units` fail to link (a corrupt /
-/// incompatible previous image), propagates any [`LoweringError`] from the
-/// dirty-file emit, and returns [`LoweringError::ReuseUnsupported`] when a *dirty*
-/// file is tail-producing (declares a top-level `let` or a `test` block) — the
-/// group `$init` tail cannot be reused verbatim in that case, so the caller falls
-/// back to a full (stdlib-spliced) compile, which is byte-identical.
+/// incompatible previous image) and propagates any [`LoweringError`] from the
+/// dirty-file emit.
 pub fn generate_project_bytecode_with_reuse_units(
     db: &dyn baml_compiler2_mir::Db,
     options: &CompileOptions,
@@ -1011,57 +1001,39 @@ pub fn generate_project_bytecode_with_reuse_units(
         }
     }
 
-    // Tail gate (design §9 R2): the `$init`/`$init_test` tail is reused verbatim
-    // from `prev_units`, which is only sound when no *dirty* file changes it. If a
-    // dirty file is tail-producing, abort the reuse — the caller full-compiles
-    // (byte-identical), and no clean file's `let`s are re-lowered on this path.
-    for file in &all_files {
-        let rel = relative_source_path(db, *file);
-        if !effective_clean.contains(&rel) && file_is_tail_producing(db, *file) {
-            return Err(LoweringError::ReuseUnsupported(format!(
-                "dirty tail-producing file `{rel}` (top-level let / test block)"
-            )));
-        }
-    }
-
     // Direct per-file emit: lower ONLY the dirty files (clean files are skipped in
     // Pass 4), producing a partial program whose dirty content decomposes into
-    // fresh units. The partial has no `$init` tail (Passes 4.5/4.6 do not run in
-    // `SkipClean`).
+    // fresh units. The partial DOES synthesize the whole-project `$init`/
+    // `$init_test` tail (design §9 R2): it is rebuilt from every file's `let`s /
+    // `test` blocks (clean `let` initializers re-lowered off salsa-cached MIR),
+    // so a dirty tail-producing file no longer aborts reuse.
     let partial = generate_impl(db, options, opt, Some(base), false, Some(&effective_clean))?;
-
-    // R1 (design §9): a pooled generic-function *value* (`foo<int>` used as a
-    // value → `Object::GenericFunction`) is interned once per program at the
-    // first-referencing file's position. A dirty-only emit cannot see a clean
-    // file's interned copy, so it would emit a redundant local one — and the
-    // linker does not dedup local generics across units, yielding a duplicate pool
-    // object that breaks `foo<int> === foo<int>`. If a dirty file emits any such
-    // value while clean files are being reused, abort; the caller full-compiles
-    // (byte-identical). (The `MakeGenericFunction` *instruction* path is
-    // unaffected — its base-fn operand relocates by name, no pooled object.)
-    if !effective_clean.is_empty() {
-        let base_obj_len = base.objects.len();
-        let dirty_generic = (base_obj_len..partial.objects.len()).any(|i| {
-            matches!(
-                partial.objects[ObjectIndex::from_raw(i)],
-                Object::GenericFunction(_)
-            )
-        });
-        if dirty_generic {
-            return Err(LoweringError::ReuseUnsupported(
-                "a dirty file emits a pooled generic-function value; the interning \
-                 owner is ambiguous in dirty-only emit (design §9 R1)"
-                    .to_string(),
-            ));
-        }
-    }
 
     let mut fresh_units = decompose_program_into_units(db, options, &partial)?;
 
-    // The reused (symbolic) tail: whichever unit of the previous image carried it.
-    // Its object/global imports are names, so the linker re-resolves them against
-    // this compile's shifted layout.
-    let prev_tail = prev_units.iter().find_map(|u| u.init_tail.clone());
+    // The freshly-synthesized (symbolic) tail: whichever fresh unit the
+    // decomposition placed it on. It reflects the *current* project's lets/tests
+    // (clean + dirty), not the previous compile's, so a changed dirty tail is
+    // captured. Its object/global imports are names, so the linker re-resolves
+    // them against this compile's shifted layout.
+    let fresh_tail = fresh_units.iter().find_map(|u| u.init_tail.clone());
+
+    // R1 tail edge (design §9): a dirty top-level `let` initializer can intern a
+    // generic-function VALUE into the freshly-synthesized tail. The linker dedups
+    // generic values across `code` buckets, but a tail-local copy that duplicates
+    // a *clean* file's code-owned copy is not covered — it would place both and
+    // break byte-identity. This is rare (a generic value as a top-level `let`);
+    // detect it precisely and fall back to a full compile for that case only.
+    if !effective_clean.is_empty()
+        && let Some(tail) = &fresh_tail
+        && tail_generic_dupes_clean(tail, prev_units, &effective_clean)
+    {
+        return Err(LoweringError::ReuseUnsupported(
+            "a dirty top-level `let` initializer interns a generic-function value \
+             already owned by a clean file (design §9 R1 tail edge)"
+                .to_string(),
+        ));
+    }
 
     // Assemble: clean files verbatim from `prev_units`, dirty files fresh. The
     // per-package fragment is always recomputed (it reflects every file in the
@@ -1095,9 +1067,9 @@ pub fn generate_project_bytecode_with_reuse_units(
         assembled.push(unit);
     }
 
-    // Place the reused tail on the last user unit (the linker only requires it to
-    // be on *some* unit of the user group).
-    if let Some(tail) = prev_tail
+    // Place the freshly-synthesized tail on the last user unit (the linker only
+    // requires it to be on *some* unit of the user group).
+    if let Some(tail) = fresh_tail
         && let Some(carrier) = assembled
             .iter_mut()
             .rev()
@@ -1261,6 +1233,11 @@ fn decompose_program_into_units(
         }
         if let Some(l) = last_regular {
             tail_start = l + 1;
+        } else {
+            // No regular functions at all (e.g. a dirty-only emit whose sole
+            // tail-producing file declares only a top-level `let`): the tail
+            // begins right after the class/enum/interface definition prefix.
+            tail_start = class_owner.len() + enum_owner.len() + iface_owner.len();
         }
     }
 
@@ -1705,6 +1682,71 @@ fn obj_variant_name(obj: &Object) -> &'static str {
     }
 }
 
+/// Resolve the fully-qualified base-function name of a generic-function value in
+/// a [`CompilationUnit`]'s per-unit encoding (§2a): a local-global base resolves
+/// through the unit's export table, an imported base through its global imports.
+fn unit_generic_base_name(unit: &CompilationUnit, base_raw: usize) -> Option<String> {
+    let n_local_globals = unit.exports.globals.len();
+    if base_raw < n_local_globals {
+        unit.exports
+            .globals
+            .iter()
+            .find(|(_, flat)| *flat as usize == base_raw)
+            .map(|(name, _)| name.clone())
+    } else {
+        unit.global_imports
+            .get(base_raw - n_local_globals)
+            .map(|sym| sym.fq_name.clone())
+    }
+}
+
+/// Does the freshly-synthesized `$init`/`$init_test` tail intern a
+/// generic-function value that a *clean* file already owns in its `code` bucket
+/// (design §9 R1 tail edge)? Such a duplicate cannot be deduped by the linker's
+/// code-bucket interning, so the reuse path must fall back for it.
+fn tail_generic_dupes_clean(
+    tail: &bex_vm_types::InitTail,
+    prev_units: &[CompilationUnit],
+    effective_clean: &HashSet<String>,
+) -> bool {
+    // (base fn fq name, type args) of every generic value clean files own.
+    let mut clean_keys: Vec<(String, Vec<RuntimeTy>)> = Vec::new();
+    for unit in prev_units {
+        if !effective_clean.contains(&unit.source_file) {
+            continue;
+        }
+        for obj in &unit.code {
+            if let Object::GenericFunction(gf) = obj
+                && let Some(base) = unit_generic_base_name(unit, gf.function.raw())
+            {
+                clean_keys.push((base, gf.type_args.to_vec()));
+            }
+        }
+    }
+    if clean_keys.is_empty() {
+        return false;
+    }
+    // A tail generic's base is always a function, so it is a tail global import.
+    let n_tail_slots = tail.slot_objects.len();
+    for obj in &tail.objects {
+        if let Object::GenericFunction(gf) = obj {
+            let base_raw = gf.function.raw();
+            if base_raw < n_tail_slots {
+                continue; // a helper slot is never a generic base
+            }
+            let Some(sym) = tail.global_imports.get(base_raw - n_tail_slots) else {
+                continue;
+            };
+            if clean_keys.iter().any(|(name, args)| {
+                name == &sym.fq_name && args.as_slice() == gf.type_args.as_ref()
+            }) {
+                return true;
+            }
+        }
+    }
+    false
+}
+
 /// Build the import [`Symbol`] for a cross-unit object reference by inspecting
 /// the target pool object.
 fn object_symbol(
@@ -1888,9 +1930,11 @@ fn build_init_tail(
         .collect();
 
     // Named tail functions: `$init` / `$init_test` chainers (helpers are nameless).
+    // Guard against clean-file placeholder indices (injected past the real pool in
+    // a Stage 6 dirty-only emit), which are `>= n_obj` and are not tail objects.
     let mut named: Vec<(String, u32)> = Vec::new();
     for (name, &idx) in &program.function_indices {
-        if idx >= tail_start {
+        if idx >= tail_start && idx < n_obj {
             named.push((
                 name.clone(),
                 u32::try_from(idx - tail_start).expect("tail offset fits u32"),
@@ -2006,17 +2050,53 @@ pub fn take_lowered_files() -> Vec<String> {
     LOWERED_FILES.with(|f| std::mem::take(&mut *f.borrow_mut()))
 }
 
-/// Stage 6 (`SkipClean`): register the names a clean (skipped) file provides so
-/// the whole-program tail passes and the decomposition can resolve them by name.
-///
-/// Clean files are not lowered, so their functions/lets never enter the pool or
-/// the name maps. `build_packages` (impl-rule method FQNs) and the
-/// decomposition's operand-slot reversal both look names up in
-/// `function_indices` / `function_global_indices` / `let_global_indices`, so we
-/// seed those maps: each clean function gets a **placeholder** object index
-/// (past the real pool; only ever reversed back to a name, never pool-indexed)
-/// and its whole-project (Pass-1) global slot; each clean `let` gets its slot.
-fn inject_clean_names(
+/// Stage 6 (`SkipClean`) phase 1: register clean (skipped) files' function/let
+/// global **slots** so the whole-program `$init` / `$init_test` tail synthesis
+/// (Passes 4.5/4.6) sees the entire project — a clean file's `$init_test_<path>`
+/// must be chained by `$init_test`, and a clean `let` owns a slot the tail may
+/// reference. Slots are the whole-project (Pass-1) values, identical to a full
+/// compile. Clean function *object* placeholders are injected separately, after
+/// the tail is emitted (see [`inject_clean_object_placeholders`]), so they land
+/// past the real pool.
+fn inject_clean_slots(
+    db: &dyn baml_compiler2_mir::Db,
+    files: &[baml_base::SourceFile],
+    clean: &HashSet<String>,
+    globals: &HashMap<String, usize>,
+    program: &mut Program,
+) {
+    for file in files {
+        let rel = relative_source_path(db, *file);
+        if !clean.contains(&rel) {
+            continue;
+        }
+        let item_tree = file_item_tree(db, *file);
+        for local_id in item_tree.functions.keys() {
+            let func_loc = FunctionLoc::new(db, *file, *local_id);
+            let fq = def_to_item_ref(db, Definition::Function(func_loc)).to_string();
+            // Intrinsic / await-any functions own no slot (Pass 1 skips them);
+            // the `globals` guard drops them here too.
+            if let Some(&slot) = globals.get(&fq) {
+                program.function_global_indices.insert(fq, slot);
+            }
+        }
+        for local_id in item_tree.lets.keys() {
+            let let_loc = LetLoc::new(db, *file, *local_id);
+            let fq = def_to_item_ref(db, Definition::Let(let_loc)).to_string();
+            if let Some(&slot) = globals.get(&fq) {
+                program.let_global_indices.insert(fq, slot);
+            }
+        }
+    }
+}
+
+/// Stage 6 (`SkipClean`) phase 2: register clean functions' **object index
+/// placeholders** so `build_packages` (impl-rule method FQNs) and the
+/// decomposition's operand reversal can map a clean function's index back to its
+/// name. Each placeholder is past the real pool (only ever reversed to a name,
+/// never pool-indexed). Must run **after** the `$init`/`$init_test` tail is
+/// emitted so the placeholders do not collide with the tail's real objects.
+fn inject_clean_object_placeholders(
     db: &dyn baml_compiler2_mir::Db,
     files: &[baml_base::SourceFile],
     clean: &HashSet<String>,
@@ -2033,25 +2113,12 @@ fn inject_clean_names(
         for local_id in item_tree.functions.keys() {
             let func_loc = FunctionLoc::new(db, *file, *local_id);
             let fq = def_to_item_ref(db, Definition::Function(func_loc)).to_string();
-            // Intrinsic / await-any functions own no slot (Pass 1 skips them);
-            // the `globals` guard drops them here too.
-            if let Some(&slot) = globals.get(&fq) {
-                program
-                    .function_indices
-                    .entry(fq.clone())
-                    .or_insert_with(|| {
-                        let idx = placeholder;
-                        placeholder += 1;
-                        idx
-                    });
-                program.function_global_indices.insert(fq, slot);
-            }
-        }
-        for local_id in item_tree.lets.keys() {
-            let let_loc = LetLoc::new(db, *file, *local_id);
-            let fq = def_to_item_ref(db, Definition::Let(let_loc)).to_string();
-            if let Some(&slot) = globals.get(&fq) {
-                program.let_global_indices.insert(fq, slot);
+            if globals.get(&fq).is_some() {
+                program.function_indices.entry(fq).or_insert_with(|| {
+                    let idx = placeholder;
+                    placeholder += 1;
+                    idx
+                });
             }
         }
     }
@@ -2981,14 +3048,17 @@ fn emit_file_group(
         }
     }
 
-    // Stage 6 (`SkipClean`): the `$init` / `$init_test` tail is a whole-*group*
-    // synthesis that would re-lower every package's `let`s (including clean ones),
-    // so it is not produced here. The caller reuses the previous compile's
-    // (symbolic) tail verbatim, or — if a dirty file is tail-producing — falls
-    // back to a full compile. Passes 4.5/4.6 therefore only run outside `SkipClean`.
+    // Stage 6 (`SkipClean`) / design §9 R2: the `$init` / `$init_test` tail is a
+    // whole-*group* synthesis. Rather than reuse the previous compile's tail
+    // verbatim (unsound when a dirty file is tail-producing), we synthesize it
+    // fresh from the entire project's `let`s / `test` blocks. Register clean
+    // files' function/let *slots* first so the tail passes see the whole project;
+    // clean function *object* placeholders are injected after the tail (below).
+    // Clean `let` initializers are re-lowered here (their MIR is salsa-cached);
+    // this does not count as a lowered *file* (`record_lowered_file` is Pass-4
+    // only) and is byte-identical to a full compile's tail.
     if let Some(clean) = skip_clean {
-        inject_clean_names(db, files, clean, globals, program);
-        return Ok(());
+        inject_clean_slots(db, files, clean, globals, program);
     }
 
     // --- Pass 4.5: Populate let-binding global slots and synthesize $init ---
@@ -3197,6 +3267,13 @@ fn emit_file_group(
                 .insert(chainer_name.clone(), gi);
             program.add_global(ConstValue::Object(ObjectIndex::from_raw(fn_obj_idx)));
         }
+    }
+
+    // Stage 6 (`SkipClean`) phase 2: the real pool is now complete (dirty
+    // functions + the synthesized `$init`/`$init_test` tail), so register clean
+    // functions' object-index placeholders past the end for name reversal.
+    if let Some(clean) = skip_clean {
+        inject_clean_object_placeholders(db, files, clean, globals, program);
     }
 
     Ok(())
