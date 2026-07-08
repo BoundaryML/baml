@@ -419,7 +419,7 @@ fn llm_drive_run_tools(parent: &FunctionDef) -> Option<FunctionDef> {
         attrs: vec![],
     })
     .at(span);
-    // T | baml.ai.Budget<T>
+    // T | baml.ai.Budget<T> | baml.ai.HandoffRequest
     let budget_ty = (TypeExprKind::Path {
         segments: vec![Name::new("baml"), Name::new("ai"), Name::new("Budget")],
         generic_args: vec![ret.clone()],
@@ -427,8 +427,9 @@ fn llm_drive_run_tools(parent: &FunctionDef) -> Option<FunctionDef> {
         attrs: vec![],
     })
     .at(span);
+    let handoff_ty = ty_path(&["baml", "ai", "HandoffRequest"], span);
     let return_type = (TypeExprKind::Union {
-        variants: vec![ret.clone(), budget_ty],
+        variants: vec![ret.clone(), budget_ty, handoff_ty],
         attrs: vec![],
     })
     .at(span);

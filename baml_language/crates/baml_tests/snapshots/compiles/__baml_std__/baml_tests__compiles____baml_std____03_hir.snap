@@ -290,6 +290,11 @@ class baml.ai.Budget {
   partial: T?
   steps_taken: int
 }
+class baml.ai.HandoffRequest {
+  to: string
+  args: string
+  steps_taken: int
+}
 class baml.ai.LoopInfo {
   steps: int
   calls: baml.ai.ToolCall[]
@@ -302,6 +307,7 @@ class baml.ai.Tool {
   description: string
   parameters: string
   params_type: type?
+  handoff: bool?
 }
 class baml.ai.ToolCall {
   id: string
@@ -321,6 +327,9 @@ class baml.ai.ToolResult {
   id: string
   output: string
 }
+function baml.ai._handoff_call(tools: baml.ai.Tool[], calls: baml.ai.ToolCall[], steps: int) -> baml.ai.HandoffRequest?  [expr] {
+  { for c in calls { for tool in tools {  } if (tool.name Eq c.name And tool.handoff NullCoalesce false) { return baml.ai.HandoffRequest { to: c.name, args: c.args, steps_taken: steps } } } } null
+}
 function baml.ai._messages_text(messages: root.ai.ChatMessage[]) -> string  [expr] {
   { let out = ""; for m in messages { for p in m.parts {  } match (p.text) { null => {  }, t: string => {  } if (out Eq "") { out = t } else { out = out Add "\n" Add t } } } } out
 }
@@ -331,12 +340,12 @@ function baml.ai.build_request(self: ?, messages: root.ai.ChatMessage[]) -> root
   { throw root.errors.UnknownError { data: null, message: ["tool loop has no ..."] } }
 }
 function baml.ai.call_messages_with(self: ?, messages: root.ai.ChatMessage[], project: (root.ai.ResponseMeta) -> V throws E2) -> root.ai.CallResult<T, V>  [expr] {
-  { let text = _messages_text(messages) } match (self.inner) { tp: Tools => { let d = self.dispatch; let steps = 0; let t = tp.begin(text, self.tools) catch (e) { _ => throw root.errors.UnknownError { data: e, message: ["tool loop: begin ..."] } }; while true { let outcome = tp.step(t) catch (e) { _ => throw root.errors.UnknownError { data: e, message: ["tool loop: step f..."] } } } match (outcome) { calls: baml.ai.ToolCalls => { steps = steps Add 1; match (self.stop_when) { null => {  }, pred: (baml.ai.LoopInfo) -> bool => {  } if (pred(baml.ai.LoopInfo { steps: steps, calls: calls.calls })) { throw root.errors.LoopBudgetExceeded { steps_taken: steps } } }; t = tp.submit(t, d(calls.calls)) catch (e) { _ => throw root.errors.UnknownError { data: e, message: ["tool loop: submit..."] } } }, value: T => { return root.ai.CallResult { value: value, meta: project(baml.ai.LoopMeta { steps: steps }) } } } } root.sys.panic("unreachable"), _ => throw root.errors.Unsupported { message: "ToolLoop.inner do..." } }
+  { let text = _messages_text(messages) } match (self.inner) { tp: Tools => { let d = self.dispatch; let steps = 0; let t = tp.begin(text, self.tools) catch (e) { _ => throw root.errors.UnknownError { data: e, message: ["tool loop: begin ..."] } }; while true { let outcome = tp.step(t) catch (e) { _ => throw root.errors.UnknownError { data: e, message: ["tool loop: step f..."] } } } match (outcome) { calls: baml.ai.ToolCalls => { steps = steps Add 1; match (self.stop_when) { null => {  }, pred: (baml.ai.LoopInfo) -> bool => {  } if (pred(baml.ai.LoopInfo { steps: steps, calls: calls.calls })) { throw root.errors.LoopBudgetExceeded { steps_taken: steps } } }; match (_handoff_call(self.tools, calls.calls, steps)) { null => {  }, h: baml.ai.HandoffRequest => { throw root.errors.HandoffUnresolved { to: h.to, steps_taken: steps } } }; t = tp.submit(t, d(calls.calls)) catch (e) { _ => throw root.errors.UnknownError { data: e, message: ["tool loop: submit..."] } } }, value: T => { return root.ai.CallResult { value: value, meta: project(baml.ai.LoopMeta { steps: steps }) } } } } root.sys.panic("unreachable"), _ => throw root.errors.Unsupported { message: "ToolLoop.inner do..." } }
 }
 function baml.ai.citations(self: ?) -> root.ai.Citation[] | root.ai.Unavailable  [expr] {
   {  } root.ai.Unavailable { reason: "tool loop surface..." }
 }
-function baml.ai.drive_run_tools(client: Provider, prompt: root.llm.PromptAst, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: (baml.ai.LoopInfo) -> bool throws never? = null) -> T | baml.ai.Budget<T>  [expr] {
+function baml.ai.drive_run_tools(client: Provider, prompt: root.llm.PromptAst, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: (baml.ai.LoopInfo) -> bool throws never? = null) -> T | baml.ai.Budget<T> | baml.ai.HandoffRequest  [expr] {
   { let text = root.llm.prompt_to_text(prompt) } match (client) { tp: Tools => tp.run_tools(text, tools, dispatch, stop_when = stop_when), _ => throw root.errors.Unsupported { message: "client's provider..." } }
 }
 function baml.ai.finish_reason(self: ?) -> string  [expr] {
@@ -366,11 +375,11 @@ function baml.ai.parse_meta(self: ?, from: unknown) -> root.ai.ResponseMeta  [ex
 function baml.ai.reasoning(self: ?) -> string | root.ai.Unavailable  [expr] {
   {  } root.ai.Unavailable { reason: "tool loop surface..." }
 }
-function baml.ai.run_to_budget(self: ?, prompt: string) -> T | baml.ai.Budget<T>  [expr] {
-  {  } match (self.inner) { tp: Tools => { let d = self.dispatch; let steps = 0; let t = tp.begin(prompt, self.tools); while true {  } match (tp.step(t)) { calls: baml.ai.ToolCalls => { steps = steps Add 1; match (self.stop_when) { null => {  }, pred: (baml.ai.LoopInfo) -> bool => {  } if (pred(baml.ai.LoopInfo { steps: steps, calls: calls.calls })) { return baml.ai.Budget { partial: null, steps_taken: steps } } }; t = tp.submit(t, d(calls.calls)) }, value: T => { return value } } } root.sys.panic("unreachable"), _ => throw root.errors.Unsupported { message: "ToolLoop.inner do..." } }
+function baml.ai.run_to_budget(self: ?, prompt: string) -> T | baml.ai.Budget<T> | baml.ai.HandoffRequest  [expr] {
+  {  } match (self.inner) { tp: Tools => { let d = self.dispatch; let steps = 0; let t = tp.begin(prompt, self.tools); while true {  } match (tp.step(t)) { calls: baml.ai.ToolCalls => { steps = steps Add 1; match (self.stop_when) { null => {  }, pred: (baml.ai.LoopInfo) -> bool => {  } if (pred(baml.ai.LoopInfo { steps: steps, calls: calls.calls })) { return baml.ai.Budget { partial: null, steps_taken: steps } } }; match (_handoff_call(self.tools, calls.calls, steps)) { null => {  }, h: baml.ai.HandoffRequest => { return h } }; t = tp.submit(t, d(calls.calls)) }, value: T => { return value } } } root.sys.panic("unreachable"), _ => throw root.errors.Unsupported { message: "ToolLoop.inner do..." } }
 }
-function baml.ai.run_tools(self: ?, prompt: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: (baml.ai.LoopInfo) -> bool throws never? = null) -> T | baml.ai.Budget<T>  [expr] {
-  { let t = self.begin(prompt, tools); let steps = 0; while true {  } match (self.step(t)) { calls: baml.ai.ToolCalls => { steps = steps Add 1; match (stop_when) { null => {  }, pred: (baml.ai.LoopInfo) -> bool => {  } if (pred(baml.ai.LoopInfo { steps: steps, calls: calls.calls })) { return baml.ai.Budget { partial: null, steps_taken: steps } } }; t = self.submit(t, dispatch(calls.calls)) }, value: T => { return value } } } root.sys.panic("unreachable")
+function baml.ai.run_tools(self: ?, prompt: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: (baml.ai.LoopInfo) -> bool throws never? = null) -> T | baml.ai.Budget<T> | baml.ai.HandoffRequest  [expr] {
+  { let t = self.begin(prompt, tools); let steps = 0; while true {  } match (self.step(t)) { calls: baml.ai.ToolCalls => { steps = steps Add 1; match (stop_when) { null => {  }, pred: (baml.ai.LoopInfo) -> bool => {  } if (pred(baml.ai.LoopInfo { steps: steps, calls: calls.calls })) { return baml.ai.Budget { partial: null, steps_taken: steps } } }; match (_handoff_call(tools, calls.calls, steps)) { null => {  }, h: baml.ai.HandoffRequest => { return h } }; t = self.submit(t, dispatch(calls.calls)) }, value: T => { return value } } } root.sys.panic("unreachable")
 }
 function baml.ai.send(self: ?, request: root.http.Request) -> unknown  [expr] {
   { throw root.errors.UnknownError { data: null, message: ["tool loop does no..."] } }
@@ -1445,6 +1454,10 @@ function baml.env.get_or_panic(key: string) -> string  [expr] {
 class baml.errors.CannotRetry {
   message: string
 }
+class baml.errors.HandoffUnresolved {
+  to: string
+  steps_taken: int
+}
 class baml.errors.LoopBudgetExceeded {
   steps_taken: int
 }
@@ -1461,8 +1474,8 @@ function baml.errors.is_effectful(self: ?) -> bool  [expr] {
 function baml.errors.is_effectful(self: ?) -> bool  [expr] {
   {  } true
 }
-function baml.errors.is_network_error(self: ?) -> bool  [expr] {
-  {  } false
+function baml.errors.is_effectful(self: ?) -> bool  [expr] {
+  {  } true
 }
 function baml.errors.is_network_error(self: ?) -> bool  [expr] {
   {  } false
@@ -1486,6 +1499,18 @@ function baml.errors.is_network_error(self: ?) -> bool  [expr] {
   {  } false
 }
 function baml.errors.is_network_error(self: ?) -> bool  [expr] {
+  {  } false
+}
+function baml.errors.is_network_error(self: ?) -> bool  [expr] {
+  {  } false
+}
+function baml.errors.is_network_error(self: ?) -> bool  [expr] {
+  {  } false
+}
+function baml.errors.is_network_error(self: ?) -> bool  [expr] {
+  {  } false
+}
+function baml.errors.is_parse_error(self: ?) -> bool  [expr] {
   {  } false
 }
 function baml.errors.is_parse_error(self: ?) -> bool  [expr] {
@@ -1506,6 +1531,12 @@ function baml.errors.is_policy_refusal(self: ?) -> bool  [expr] {
 function baml.errors.is_policy_refusal(self: ?) -> bool  [expr] {
   {  } false
 }
+function baml.errors.is_policy_refusal(self: ?) -> bool  [expr] {
+  {  } false
+}
+function baml.errors.is_rate_limit(self: ?) -> bool  [expr] {
+  {  } false
+}
 function baml.errors.is_rate_limit(self: ?) -> bool  [expr] {
   {  } false
 }
@@ -1516,12 +1547,18 @@ function baml.errors.is_rate_limit(self: ?) -> bool  [expr] {
   {  } false
 }
 function baml.errors.is_resumable(self: ?) -> bool  [expr] {
-  {  } false
+  {  } true
 }
 function baml.errors.is_resumable(self: ?) -> bool  [expr] {
   {  } false
 }
 function baml.errors.is_resumable(self: ?) -> bool  [expr] {
+  {  } false
+}
+function baml.errors.is_resumable(self: ?) -> bool  [expr] {
+  {  } false
+}
+function baml.errors.is_retryable(self: ?) -> bool  [expr] {
   {  } false
 }
 function baml.errors.is_retryable(self: ?) -> bool  [expr] {
@@ -1535,6 +1572,9 @@ function baml.errors.is_retryable(self: ?) -> bool  [expr] {
 }
 function baml.errors.is_unsupported(self: ?) -> bool  [expr] {
   {  } true
+}
+function baml.errors.is_unsupported(self: ?) -> bool  [expr] {
+  {  } false
 }
 function baml.errors.is_unsupported(self: ?) -> bool  [expr] {
   {  } false

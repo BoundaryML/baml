@@ -25,8 +25,8 @@ function user.ClassifySentiment$build_request_stream(text: string, client: baml.
 function user.ClassifySentiment$with<V, E2>(text: string, project: (baml.ai.ResponseMeta) -> V throws E2, client: baml.ai.Provider = GPT4o) -> baml.ai.CallResult<user.Sentiment, V> throws never {
   baml.ai.drive_with<V, E2>(client, ClassifySentiment$render_prompt(text = text, client = client), project) : baml.ai.CallResult<user.Sentiment, V>
 }
-function user.ClassifySentiment$run_tools(text: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null = null, client: baml.ai.Provider = GPT4o) -> user.Sentiment | baml.ai.Budget<user.Sentiment> throws never {
-  baml.ai.drive_run_tools<T>(client, ClassifySentiment$render_prompt(text = text, client = client), tools, dispatch, stop_when = stop_when) : user.Sentiment | baml.ai.Budget<user.Sentiment>
+function user.ClassifySentiment$run_tools(text: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null = null, client: baml.ai.Provider = GPT4o) -> user.Sentiment | baml.ai.Budget<user.Sentiment> | baml.ai.HandoffRequest throws never {
+  baml.ai.drive_run_tools<T>(client, ClassifySentiment$render_prompt(text = text, client = client), tools, dispatch, stop_when = stop_when) : user.Sentiment | baml.ai.Budget<user.Sentiment> | baml.ai.HandoffRequest
 }
 function user.ClassifySentiment$live(text: string, io: baml.ai.Channel, client: baml.ai.Provider = GPT4o) -> baml.ai.Transcript throws never {
   baml.ai.drive_live(client, ClassifySentiment$render_prompt(text = text, client = client), io) : baml.ai.Transcript
@@ -46,8 +46,8 @@ function user.GenerateTests$build_request_stream(count: int, topic: string, clie
 function user.GenerateTests$with<V, E2>(count: int, topic: string, project: (baml.ai.ResponseMeta) -> V throws E2, client: baml.ai.Provider = GPT4o) -> baml.ai.CallResult<string[], V> throws never {
   baml.ai.drive_with<V, E2>(client, GenerateTests$render_prompt(count = count, topic = topic, client = client), project) : baml.ai.CallResult<string[], V>
 }
-function user.GenerateTests$run_tools(count: int, topic: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null = null, client: baml.ai.Provider = GPT4o) -> string[] | baml.ai.Budget<string[]> throws never {
-  baml.ai.drive_run_tools<T>(client, GenerateTests$render_prompt(count = count, topic = topic, client = client), tools, dispatch, stop_when = stop_when) : string[] | baml.ai.Budget<string[]>
+function user.GenerateTests$run_tools(count: int, topic: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null = null, client: baml.ai.Provider = GPT4o) -> string[] | baml.ai.Budget<string[]> | baml.ai.HandoffRequest throws never {
+  baml.ai.drive_run_tools<T>(client, GenerateTests$render_prompt(count = count, topic = topic, client = client), tools, dispatch, stop_when = stop_when) : string[] | baml.ai.Budget<string[]> | baml.ai.HandoffRequest
 }
 function user.GenerateTests$live(count: int, topic: string, io: baml.ai.Channel, client: baml.ai.Provider = GPT4o) -> baml.ai.Transcript throws never {
   baml.ai.drive_live(client, GenerateTests$render_prompt(count = count, topic = topic, client = client), io) : baml.ai.Transcript
@@ -81,8 +81,8 @@ function user.ClassifySentiment2$build_request_stream(text: string, client: baml
 function user.ClassifySentiment2$with<V, E2>(text: string, project: (baml.ai.ResponseMeta) -> V throws E2, client: baml.ai.Provider = GPT4o) -> baml.ai.CallResult<string, V> throws never {
   baml.ai.drive_with<V, E2>(client, ClassifySentiment2$render_prompt(text = text, client = client), project) : baml.ai.CallResult<string, V>
 }
-function user.ClassifySentiment2$run_tools(text: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null = null, client: baml.ai.Provider = GPT4o) -> string | baml.ai.Budget<string> throws never {
-  baml.ai.drive_run_tools<T>(client, ClassifySentiment2$render_prompt(text = text, client = client), tools, dispatch, stop_when = stop_when) : string | baml.ai.Budget<string>
+function user.ClassifySentiment2$run_tools(text: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null = null, client: baml.ai.Provider = GPT4o) -> string | baml.ai.Budget<string> | baml.ai.HandoffRequest throws never {
+  baml.ai.drive_run_tools<T>(client, ClassifySentiment2$render_prompt(text = text, client = client), tools, dispatch, stop_when = stop_when) : string | baml.ai.Budget<string> | baml.ai.HandoffRequest
 }
 function user.ClassifySentiment2$live(text: string, io: baml.ai.Channel, client: baml.ai.Provider = GPT4o) -> baml.ai.Transcript throws never {
   baml.ai.drive_live(client, ClassifySentiment2$render_prompt(text = text, client = client), io) : baml.ai.Transcript

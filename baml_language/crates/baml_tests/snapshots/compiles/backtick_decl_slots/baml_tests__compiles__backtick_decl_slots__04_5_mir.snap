@@ -270,9 +270,9 @@ fn .<tagged(Greet$render_prompt, 0)>(role: (string) -> baml.llm.Role throws neve
     }
 }
 
-fn user.Greet$run_tools(name: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null, client: baml.ai.Provider) -> string | baml.ai.Budget<string> {
+fn user.Greet$run_tools(name: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null, client: baml.ai.Provider) -> string | baml.ai.Budget<string> | baml.ai.HandoffRequest {
     // Locals:
-    let _0: string | baml.ai.Budget<string> // _0 // return
+    let _0: string | baml.ai.Budget<string> | baml.ai.HandoffRequest // _0 // return
     let _1: string // name // param
     let _2: baml.ai.Tool[] // tools // param
     let _3: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never // dispatch // param

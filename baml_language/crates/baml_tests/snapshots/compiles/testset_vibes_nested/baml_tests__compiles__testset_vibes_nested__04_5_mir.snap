@@ -1012,9 +1012,9 @@ fn user.ClassifySentiment$render_prompt(text: string, client: baml.ai.Provider) 
     }
 }
 
-fn user.ClassifySentiment$run_tools(text: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null, client: baml.ai.Provider) -> Sentiment | baml.ai.Budget<Sentiment> {
+fn user.ClassifySentiment$run_tools(text: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null, client: baml.ai.Provider) -> Sentiment | baml.ai.Budget<Sentiment> | baml.ai.HandoffRequest {
     // Locals:
-    let _0: Sentiment | baml.ai.Budget<Sentiment> // _0 // return
+    let _0: Sentiment | baml.ai.Budget<Sentiment> | baml.ai.HandoffRequest // _0 // return
     let _1: string // text // param
     let _2: baml.ai.Tool[] // tools // param
     let _3: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never // dispatch // param
@@ -1248,9 +1248,9 @@ fn user.ClassifySentiment2$render_prompt(text: string, client: baml.ai.Provider)
     }
 }
 
-fn user.ClassifySentiment2$run_tools(text: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null, client: baml.ai.Provider) -> string | baml.ai.Budget<string> {
+fn user.ClassifySentiment2$run_tools(text: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null, client: baml.ai.Provider) -> string | baml.ai.Budget<string> | baml.ai.HandoffRequest {
     // Locals:
-    let _0: string | baml.ai.Budget<string> // _0 // return
+    let _0: string | baml.ai.Budget<string> | baml.ai.HandoffRequest // _0 // return
     let _1: string // text // param
     let _2: baml.ai.Tool[] // tools // param
     let _3: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never // dispatch // param
@@ -1562,9 +1562,9 @@ fn user.GenerateTests$render_prompt(count: int, topic: string, client: baml.ai.P
     }
 }
 
-fn user.GenerateTests$run_tools(count: int, topic: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null, client: baml.ai.Provider) -> string[] | baml.ai.Budget<string[]> {
+fn user.GenerateTests$run_tools(count: int, topic: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null, client: baml.ai.Provider) -> string[] | baml.ai.Budget<string[]> | baml.ai.HandoffRequest {
     // Locals:
-    let _0: string[] | baml.ai.Budget<string[]> // _0 // return
+    let _0: string[] | baml.ai.Budget<string[]> | baml.ai.HandoffRequest // _0 // return
     let _1: int // count // param
     let _2: string // topic // param
     let _3: baml.ai.Tool[] // tools // param

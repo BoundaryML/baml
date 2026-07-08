@@ -187,7 +187,7 @@ function type_reflection.GetBar$render_prompt(client: baml.ai.Provider) -> baml.
     return
 }
 
-function type_reflection.GetBar$run_tools(tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null, client: baml.ai.Provider) -> type_reflection.Bar | baml.ai.Budget<type_reflection.Bar> {
+function type_reflection.GetBar$run_tools(tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null, client: baml.ai.Provider) -> type_reflection.Bar | baml.ai.Budget<type_reflection.Bar> | baml.ai.HandoffRequest {
     load_var stop_when
     load_const <omitted>
     cmp_op ==
@@ -400,7 +400,7 @@ function type_reflection.GetFoo$render_prompt(client: baml.ai.Provider) -> baml.
     return
 }
 
-function type_reflection.GetFoo$run_tools(tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null, client: baml.ai.Provider) -> type_reflection.Foo | baml.ai.Budget<type_reflection.Foo> {
+function type_reflection.GetFoo$run_tools(tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null, client: baml.ai.Provider) -> type_reflection.Foo | baml.ai.Budget<type_reflection.Foo> | baml.ai.HandoffRequest {
     load_var stop_when
     load_const <omitted>
     cmp_op ==

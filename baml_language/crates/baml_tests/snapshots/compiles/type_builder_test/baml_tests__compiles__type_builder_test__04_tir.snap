@@ -17,8 +17,8 @@ function user.Fn$build_request_stream(client: baml.ai.Provider = ...) -> baml.ht
 function user.Fn$with<V, E2>(project: (baml.ai.ResponseMeta) -> V throws E2, client: baml.ai.Provider = ...) -> baml.ai.CallResult<string, V> throws never {
   baml.ai.drive_with<V, E2>(client, Fn$render_prompt(client = client), project) : baml.ai.CallResult<string, V>
 }
-function user.Fn$run_tools(tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null = null, client: baml.ai.Provider = ...) -> string | baml.ai.Budget<string> throws never {
-  baml.ai.drive_run_tools<T>(client, Fn$render_prompt(client = client), tools, dispatch, stop_when = stop_when) : string | baml.ai.Budget<string>
+function user.Fn$run_tools(tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null = null, client: baml.ai.Provider = ...) -> string | baml.ai.Budget<string> | baml.ai.HandoffRequest throws never {
+  baml.ai.drive_run_tools<T>(client, Fn$render_prompt(client = client), tools, dispatch, stop_when = stop_when) : string | baml.ai.Budget<string> | baml.ai.HandoffRequest
 }
 function user.Fn$live(io: baml.ai.Channel, client: baml.ai.Provider = ...) -> baml.ai.Transcript throws never {
   baml.ai.drive_live(client, Fn$render_prompt(client = client), io) : baml.ai.Transcript

@@ -12,6 +12,12 @@ class Tool {
     /// (`validate_args` checks incoming args against it). `null` for
     /// hand-constructed tools carrying an app-provided wire schema.
     params_type: type?,
+    /// D5: a HANDOFF tool — calling it means "another agent should own this
+    /// conversation". The loop does NOT dispatch it: it ends and returns a
+    /// `HandoffRequest { to, args, steps_taken }` arm; routing is the caller's
+    /// decision. The tool's `description` is the routing prompt — write it as
+    /// "when to transfer", not "what this does".
+    handoff: bool?,
 
     /// Build a tool whose parameter schema is lowered from a BAML `type` — the
     /// design-true typed entry (plan P7/D6): declare an args class, hand its `type`
@@ -70,6 +76,19 @@ class ToolCalls {
     calls: ToolCall[],
 }
 
+/// D5: an UNRESOLVED handoff — the loop ended because the model called a
+/// handoff-marked tool (`Tool.handoff: true`); the transfer is the CALLER's to
+/// route (pick the next agent, carry `args` over, or decline). `args` is the
+/// raw JSON payload the model passed to the transfer tool (SAP it with
+/// `invoke_tool`/`sap.parse` against your payload type).
+class HandoffRequest {
+    /// The handoff tool's name (e.g. "transfer_to_billing").
+    to: string,
+    /// Raw JSON arguments the model passed to the transfer tool.
+    args: string,
+    steps_taken: int,
+}
+
 /// D6, the CANONICAL inbound-args step: coerce a call's raw JSON args into the
 /// handler's declared type `A` via SAP and run the handler. A mismatch does NOT
 /// abort the loop — it returns an error `ToolResult` so the model can
@@ -117,7 +136,7 @@ interface Tools requires Provider {
         tools: Tool[],
         dispatch: (ToolCall[]) -> ToolResult[] throws never,
         stop_when: ((LoopInfo) -> bool throws never)? = null,
-    ) -> T | Budget<T> throws root.errors.ToolError | root.errors.UnknownError {
+    ) -> T | Budget<T> | HandoffRequest throws root.errors.ToolError | root.errors.UnknownError {
         let t = self.begin<T>(prompt, tools);
         let steps = 0;
         while (true) {
@@ -132,6 +151,15 @@ interface Tools requires Provider {
                             }
                         },
                     }
+                    // D5: a call to a handoff-marked tool ends the loop with the
+                    // unresolved-transfer arm — nothing is dispatched (the loop
+                    // is over; its provider-owned transcript ends with it).
+                    match (_handoff_call(tools, calls.calls, steps)) {
+                        null => {},
+                        let h: HandoffRequest => {
+                            return h;
+                        },
+                    }
                     t = self.submit(t, dispatch(calls.calls));
                 },
                 let value: T => {
@@ -141,6 +169,19 @@ interface Tools requires Provider {
         }
         root.sys.panic("unreachable")
     }
+}
+
+/// D5 helper: the first call in `calls` that targets a handoff-marked tool,
+/// as a ready `HandoffRequest` — or null when this turn is all-dispatch.
+function _handoff_call(tools: Tool[], calls: ToolCall[], steps: int) -> HandoffRequest? throws never {
+    for (let c in calls) {
+        for (let tool in tools) {
+            if (tool.name == c.name && (tool.handoff ?? false)) {
+                return HandoffRequest { to: c.name, args: c.args, steps_taken: steps };
+            }
+        }
+    }
+    null
 }
 
 //baml:llm_companion(run_tools)
@@ -155,7 +196,7 @@ function drive_run_tools<T>(
     tools: Tool[],
     dispatch: (ToolCall[]) -> ToolResult[] throws never,
     stop_when: ((LoopInfo) -> bool throws never)? = null,
-) -> T | Budget<T> throws root.errors.ToolError | root.errors.UnknownError {
+) -> T | Budget<T> | HandoffRequest throws root.errors.ToolError | root.errors.UnknownError {
     let text = root.llm.prompt_to_text(prompt);
     match (client) {
         let tp: Tools => tp.run_tools<T>(text, tools, dispatch, stop_when = stop_when),
@@ -321,6 +362,15 @@ class ToolLoop {
                                         }
                                     },
                                 }
+                                // D5: the plain-call path must produce T, so an
+                                // unresolved handoff is a typed throw here — use
+                                // run_to_budget for the HandoffRequest arm.
+                                match (_handoff_call(self.tools, calls.calls, steps)) {
+                                    null => {},
+                                    let h: HandoffRequest => {
+                                        throw root.errors.HandoffUnresolved { to: h.to, steps_taken: steps };
+                                    },
+                                }
                                 t = tp.submit(t, d(calls.calls)) catch (e) {
                                     _ => throw root.errors.UnknownError { data: e, message: ["tool loop: submit failed"] },
                                 };
@@ -344,7 +394,7 @@ class ToolLoop {
 
     /// The budget-aware explicit surface (plan D5): the stop policy yields a
     /// `Budget<T>` sum arm instead of an error.
-    function run_to_budget<T>(self, prompt: string) -> T | Budget<T>
+    function run_to_budget<T>(self, prompt: string) -> T | Budget<T> | HandoffRequest
         throws root.errors.ToolError | root.errors.UnknownError {
         match (self.inner) {
             let tp: Tools => {
@@ -361,6 +411,13 @@ class ToolLoop {
                                     if (pred(LoopInfo { steps: steps, calls: calls.calls })) {
                                         return Budget<T> { partial: null, steps_taken: steps };
                                     }
+                                },
+                            }
+                            // D5: handoff-marked tool call -> the unresolved-transfer arm.
+                            match (_handoff_call(self.tools, calls.calls, steps)) {
+                                null => {},
+                                let h: HandoffRequest => {
+                                    return h;
                                 },
                             }
                             t = tp.submit(t, d(calls.calls));

@@ -298,7 +298,7 @@ function user.TestTarget$live(io: baml.ai.Channel, client: baml.ai.Provider = Ba
 function user.TestTarget$render_prompt(client: baml.ai.Provider = BasicClient) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(client, "TestTarget", map {  })
 }
-function user.TestTarget$run_tools(tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: (baml.ai.LoopInfo) -> bool throws never? = null, client: baml.ai.Provider = BasicClient) -> string | baml.ai.Budget<string>  [expr] {
+function user.TestTarget$run_tools(tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: (baml.ai.LoopInfo) -> bool throws never? = null, client: baml.ai.Provider = BasicClient) -> string | baml.ai.Budget<string> | baml.ai.HandoffRequest  [expr] {
   baml.ai.drive_run_tools(client, TestTarget$render_prompt(client = client), tools, dispatch, stop_when = stop_when)
 }
 function user.TestTarget$with(project: (baml.ai.ResponseMeta) -> V throws E2, client: baml.ai.Provider = BasicClient) -> baml.ai.CallResult<string, V>  [expr] {
@@ -392,7 +392,7 @@ function user.LlmBasic$live(name: string, io: baml.ai.Channel, client: baml.ai.P
 function user.LlmBasic$render_prompt(name: string, client: baml.ai.Provider = GPT4) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(client, "LlmBasic", map { "name": name })
 }
-function user.LlmBasic$run_tools(name: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: (baml.ai.LoopInfo) -> bool throws never? = null, client: baml.ai.Provider = GPT4) -> string | baml.ai.Budget<string>  [expr] {
+function user.LlmBasic$run_tools(name: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: (baml.ai.LoopInfo) -> bool throws never? = null, client: baml.ai.Provider = GPT4) -> string | baml.ai.Budget<string> | baml.ai.HandoffRequest  [expr] {
   baml.ai.drive_run_tools(client, LlmBasic$render_prompt(name = name, client = client), tools, dispatch, stop_when = stop_when)
 }
 function user.LlmBasic$with(name: string, project: (baml.ai.ResponseMeta) -> V throws E2, client: baml.ai.Provider = GPT4) -> baml.ai.CallResult<string, V>  [expr] {
@@ -413,7 +413,7 @@ function user.LlmMultiLine$live(text: string, io: baml.ai.Channel, client: baml.
 function user.LlmMultiLine$render_prompt(text: string, client: baml.ai.Provider = GPT4) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(client, "LlmMultiLine", map { "text": text })
 }
-function user.LlmMultiLine$run_tools(text: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: (baml.ai.LoopInfo) -> bool throws never? = null, client: baml.ai.Provider = GPT4) -> string | baml.ai.Budget<string>  [expr] {
+function user.LlmMultiLine$run_tools(text: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: (baml.ai.LoopInfo) -> bool throws never? = null, client: baml.ai.Provider = GPT4) -> string | baml.ai.Budget<string> | baml.ai.HandoffRequest  [expr] {
   baml.ai.drive_run_tools(client, LlmMultiLine$render_prompt(text = text, client = client), tools, dispatch, stop_when = stop_when)
 }
 function user.LlmMultiLine$with(text: string, project: (baml.ai.ResponseMeta) -> V throws E2, client: baml.ai.Provider = GPT4) -> baml.ai.CallResult<string, V>  [expr] {
@@ -434,7 +434,7 @@ function user.LlmReversedOrder$live(text: string, io: baml.ai.Channel, client: b
 function user.LlmReversedOrder$render_prompt(text: string, client: baml.ai.Provider = GPT4) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(client, "LlmReversedOrder", map { "text": text })
 }
-function user.LlmReversedOrder$run_tools(text: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: (baml.ai.LoopInfo) -> bool throws never? = null, client: baml.ai.Provider = GPT4) -> string | baml.ai.Budget<string>  [expr] {
+function user.LlmReversedOrder$run_tools(text: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: (baml.ai.LoopInfo) -> bool throws never? = null, client: baml.ai.Provider = GPT4) -> string | baml.ai.Budget<string> | baml.ai.HandoffRequest  [expr] {
   baml.ai.drive_run_tools(client, LlmReversedOrder$render_prompt(text = text, client = client), tools, dispatch, stop_when = stop_when)
 }
 function user.LlmReversedOrder$with(text: string, project: (baml.ai.ResponseMeta) -> V throws E2, client: baml.ai.Provider = GPT4) -> baml.ai.CallResult<string, V>  [expr] {
@@ -455,7 +455,7 @@ function user.LlmStringClient$live(text: string, io: baml.ai.Channel, client: ba
 function user.LlmStringClient$render_prompt(text: string, client: baml.ai.Provider = ...) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(client, "LlmStringClient", map { "text": text })
 }
-function user.LlmStringClient$run_tools(text: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: (baml.ai.LoopInfo) -> bool throws never? = null, client: baml.ai.Provider = ...) -> string | baml.ai.Budget<string>  [expr] {
+function user.LlmStringClient$run_tools(text: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: (baml.ai.LoopInfo) -> bool throws never? = null, client: baml.ai.Provider = ...) -> string | baml.ai.Budget<string> | baml.ai.HandoffRequest  [expr] {
   baml.ai.drive_run_tools(client, LlmStringClient$render_prompt(text = text, client = client), tools, dispatch, stop_when = stop_when)
 }
 function user.LlmStringClient$with(text: string, project: (baml.ai.ResponseMeta) -> V throws E2, client: baml.ai.Provider = ...) -> baml.ai.CallResult<string, V>  [expr] {
@@ -476,7 +476,7 @@ function user.LlmWithLongSignature$live(first_context: string, second_context: s
 function user.LlmWithLongSignature$render_prompt(first_context: string, second_context: string, third_context: string, user_query: string, client: baml.ai.Provider = GPT4) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(client, "LlmWithLongSignature", map { "first_context": first_context, "second_context": second_context, "third_context": third_context, "user_query": user_query })
 }
-function user.LlmWithLongSignature$run_tools(first_context: string, second_context: string, third_context: string, user_query: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: (baml.ai.LoopInfo) -> bool throws never? = null, client: baml.ai.Provider = GPT4) -> string | baml.ai.Budget<string>  [expr] {
+function user.LlmWithLongSignature$run_tools(first_context: string, second_context: string, third_context: string, user_query: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: (baml.ai.LoopInfo) -> bool throws never? = null, client: baml.ai.Provider = GPT4) -> string | baml.ai.Budget<string> | baml.ai.HandoffRequest  [expr] {
   baml.ai.drive_run_tools(client, LlmWithLongSignature$render_prompt(first_context = first_context, second_context = second_context, third_context = third_context, user_query = user_query, client = client), tools, dispatch, stop_when = stop_when)
 }
 function user.LlmWithLongSignature$with(first_context: string, second_context: string, third_context: string, user_query: string, project: (baml.ai.ResponseMeta) -> V throws E2, client: baml.ai.Provider = GPT4) -> baml.ai.CallResult<string, V>  [expr] {

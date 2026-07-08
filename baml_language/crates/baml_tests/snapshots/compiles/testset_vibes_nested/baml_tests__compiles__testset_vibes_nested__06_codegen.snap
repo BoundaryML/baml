@@ -168,7 +168,7 @@ function user.ClassifySentiment$render_prompt(text: string, client: baml.ai.Prov
     return
 }
 
-function user.ClassifySentiment$run_tools(text: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null, client: baml.ai.Provider) -> Sentiment | baml.ai.Budget<Sentiment> {
+function user.ClassifySentiment$run_tools(text: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null, client: baml.ai.Provider) -> Sentiment | baml.ai.Budget<Sentiment> | baml.ai.HandoffRequest {
     load_var stop_when
     load_const <omitted>
     cmp_op ==
@@ -368,7 +368,7 @@ function user.ClassifySentiment2$render_prompt(text: string, client: baml.ai.Pro
     return
 }
 
-function user.ClassifySentiment2$run_tools(text: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null, client: baml.ai.Provider) -> string | baml.ai.Budget<string> {
+function user.ClassifySentiment2$run_tools(text: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null, client: baml.ai.Provider) -> string | baml.ai.Budget<string> | baml.ai.HandoffRequest {
     load_var stop_when
     load_const <omitted>
     cmp_op ==
@@ -634,7 +634,7 @@ function user.GenerateTests$render_prompt(count: int, topic: string, client: bam
     return
 }
 
-function user.GenerateTests$run_tools(count: int, topic: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null, client: baml.ai.Provider) -> string[] | baml.ai.Budget<string[]> {
+function user.GenerateTests$run_tools(count: int, topic: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null, client: baml.ai.Provider) -> string[] | baml.ai.Budget<string[]> | baml.ai.HandoffRequest {
     load_var stop_when
     load_const <omitted>
     cmp_op ==

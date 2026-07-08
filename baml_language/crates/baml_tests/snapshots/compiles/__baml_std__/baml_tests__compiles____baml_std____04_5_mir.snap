@@ -2377,6 +2377,379 @@ fn baml.ai.Streaming.stream(self: baml.ai.Streaming, prompt: string) -> baml.llm
     }
 }
 
+fn baml.ai._handoff_call(tools: baml.ai.Tool[], calls: baml.ai.ToolCall[], steps: int) -> baml.ai.HandoffRequest | null {
+    // Locals:
+    let _0: baml.ai.HandoffRequest | null // _0 // return
+    let _1: baml.ai.Tool[] // tools // param
+    let _2: baml.ai.ToolCall[] // calls // param
+    let _3: int // steps // param
+    let _4: baml.iter.Iterator<Item = baml.ai.ToolCall, Error = never>
+    let _5: type
+    let _6: unknown
+    let _7: bool
+    let _8: unknown
+    let _9: bool
+    let _10: type
+    let _11: bool
+    let _12: type
+    let _13: type
+    let _14: bool
+    let _15: type
+    let _16: type
+    let _17: type
+    let _18: bool
+    let _19: type
+    let _20: bool
+    let _21: unknown
+    let _22: bool
+    let _23: type
+    let _24: type
+    let _25: type
+    let _26: bool
+    let _27: unknown
+    let _28: bool
+    let _29: unknown
+    let _30: bool
+    let _31: type
+    let _32: type
+    let _33: bool
+    let _34: baml.ai.ToolCall
+    let _35: baml.ai.ToolCall // c
+    let _36: baml.iter.Iterator<Item = baml.ai.Tool, Error = never>
+    let _37: type
+    let _38: unknown
+    let _39: bool
+    let _40: unknown
+    let _41: bool
+    let _42: type
+    let _43: bool
+    let _44: type
+    let _45: type
+    let _46: bool
+    let _47: type
+    let _48: type
+    let _49: type
+    let _50: bool
+    let _51: type
+    let _52: bool
+    let _53: unknown
+    let _54: bool
+    let _55: type
+    let _56: type
+    let _57: type
+    let _58: bool
+    let _59: unknown
+    let _60: bool
+    let _61: unknown
+    let _62: bool
+    let _63: type
+    let _64: type
+    let _65: bool
+    let _66: baml.ai.Tool
+    let _67: baml.ai.Tool // tool
+    let _68: bool
+    let _69: bool
+    let _70: string
+    let _71: string
+    let _72: bool | null
+    let _73: bool
+    let _74: string
+    let _75: string
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        _5 = load_type(baml.ai.ToolCall);
+        _4 = call const fn baml.iter.Iterable$for$T[].iter<copy _5>(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        _7 = is_type(copy _4, baml.iter.Flatten<_, baml.ai.ToolCall, never, never>);
+        branch copy _7 -> [bb22, bb3];
+    }
+
+    bb3: {
+        _9 = is_type(copy _4, baml.iter.ArrayIterator<baml.ai.ToolCall>);
+        branch copy _9 -> [bb21, bb4];
+    }
+
+    bb4: {
+        _11 = is_type(copy _4, baml.iter.StepBy<baml.ai.ToolCall, never>);
+        branch copy _11 -> [bb20, bb5];
+    }
+
+    bb5: {
+        _14 = is_type(copy _4, baml.iter.Chain<baml.ai.ToolCall, never, never>);
+        branch copy _14 -> [bb19, bb6];
+    }
+
+    bb6: {
+        _18 = is_type(copy _4, baml.iter.Repeat<baml.ai.ToolCall>);
+        branch copy _18 -> [bb18, bb7];
+    }
+
+    bb7: {
+        _20 = is_type(copy _4, baml.iter.Map<_, baml.ai.ToolCall, never, never>);
+        branch copy _20 -> [bb17, bb8];
+    }
+
+    bb8: {
+        _22 = is_type(copy _4, baml.iter.Filter<baml.ai.ToolCall, never, never>);
+        branch copy _22 -> [bb16, bb9];
+    }
+
+    bb9: {
+        _26 = is_type(copy _4, baml.iter.FilterMap<_, baml.ai.ToolCall, never, never>);
+        branch copy _26 -> [bb15, bb10];
+    }
+
+    bb10: {
+        _28 = is_type(copy _4, baml.iter.FlatMap<_, baml.ai.ToolCall, never, never, never>);
+        branch copy _28 -> [bb14, bb11];
+    }
+
+    bb11: {
+        _30 = is_type(copy _4, baml.iter.Peekable<baml.ai.ToolCall, never>);
+        branch copy _30 -> [bb13, bb12];
+    }
+
+    bb12: {
+        unreachable;
+    }
+
+    bb13: {
+        _31 = load_type(baml.ai.ToolCall);
+        _32 = load_type(never);
+        _6 = call const fn baml.iter.Peekable.Iterator.next<copy _31, copy _32>(copy _4) -> [bb23];
+    }
+
+    bb14: {
+        _29 = make_bound_method baml.iter.FlatMap.Iterator.next(copy _4);
+        _6 = call copy _29() -> [bb23];
+    }
+
+    bb15: {
+        _27 = make_bound_method baml.iter.FilterMap.Iterator.next(copy _4);
+        _6 = call copy _27() -> [bb23];
+    }
+
+    bb16: {
+        _23 = load_type(baml.ai.ToolCall);
+        _24 = load_type(never);
+        _25 = load_type(never);
+        _6 = call const fn baml.iter.Filter.Iterator.next<copy _23, copy _24, copy _25>(copy _4) -> [bb23];
+    }
+
+    bb17: {
+        _21 = make_bound_method baml.iter.Map.Iterator.next(copy _4);
+        _6 = call copy _21() -> [bb23];
+    }
+
+    bb18: {
+        _19 = load_type(baml.ai.ToolCall);
+        _6 = call const fn baml.iter.Repeat.Iterator.next<copy _19>(copy _4) -> [bb23];
+    }
+
+    bb19: {
+        _15 = load_type(baml.ai.ToolCall);
+        _16 = load_type(never);
+        _17 = load_type(never);
+        _6 = call const fn baml.iter.Chain.Iterator.next<copy _15, copy _16, copy _17>(copy _4) -> [bb23];
+    }
+
+    bb20: {
+        _12 = load_type(baml.ai.ToolCall);
+        _13 = load_type(never);
+        _6 = call const fn baml.iter.StepBy.Iterator.next<copy _12, copy _13>(copy _4) -> [bb23];
+    }
+
+    bb21: {
+        _10 = load_type(baml.ai.ToolCall);
+        _6 = call const fn baml.iter.ArrayIterator.Iterator.next<copy _10>(copy _4) -> [bb23];
+    }
+
+    bb22: {
+        _8 = make_bound_method baml.iter.Flatten.Iterator.next(copy _4);
+        _6 = call copy _8() -> [bb23];
+    }
+
+    bb23: {
+        _33 = is_type(copy _6, baml.iter.Done);
+        branch copy _33 -> [bb53, bb24];
+    }
+
+    bb24: {
+        _34 = copy _6;
+        fresh_cell(_35);
+        _35 = copy _34;
+        goto -> bb25;
+    }
+
+    bb25: {
+        _37 = load_type(baml.ai.Tool);
+        _36 = call const fn baml.iter.Iterable$for$T[].iter<copy _37>(copy _1) -> [bb26];
+    }
+
+    bb26: {
+        _39 = is_type(copy _36, baml.iter.Flatten<_, baml.ai.Tool, never, never>);
+        branch copy _39 -> [bb46, bb27];
+    }
+
+    bb27: {
+        _41 = is_type(copy _36, baml.iter.ArrayIterator<baml.ai.Tool>);
+        branch copy _41 -> [bb45, bb28];
+    }
+
+    bb28: {
+        _43 = is_type(copy _36, baml.iter.StepBy<baml.ai.Tool, never>);
+        branch copy _43 -> [bb44, bb29];
+    }
+
+    bb29: {
+        _46 = is_type(copy _36, baml.iter.Chain<baml.ai.Tool, never, never>);
+        branch copy _46 -> [bb43, bb30];
+    }
+
+    bb30: {
+        _50 = is_type(copy _36, baml.iter.Repeat<baml.ai.Tool>);
+        branch copy _50 -> [bb42, bb31];
+    }
+
+    bb31: {
+        _52 = is_type(copy _36, baml.iter.Map<_, baml.ai.Tool, never, never>);
+        branch copy _52 -> [bb41, bb32];
+    }
+
+    bb32: {
+        _54 = is_type(copy _36, baml.iter.Filter<baml.ai.Tool, never, never>);
+        branch copy _54 -> [bb40, bb33];
+    }
+
+    bb33: {
+        _58 = is_type(copy _36, baml.iter.FilterMap<_, baml.ai.Tool, never, never>);
+        branch copy _58 -> [bb39, bb34];
+    }
+
+    bb34: {
+        _60 = is_type(copy _36, baml.iter.FlatMap<_, baml.ai.Tool, never, never, never>);
+        branch copy _60 -> [bb38, bb35];
+    }
+
+    bb35: {
+        _62 = is_type(copy _36, baml.iter.Peekable<baml.ai.Tool, never>);
+        branch copy _62 -> [bb37, bb36];
+    }
+
+    bb36: {
+        unreachable;
+    }
+
+    bb37: {
+        _63 = load_type(baml.ai.Tool);
+        _64 = load_type(never);
+        _38 = call const fn baml.iter.Peekable.Iterator.next<copy _63, copy _64>(copy _36) -> [bb47];
+    }
+
+    bb38: {
+        _61 = make_bound_method baml.iter.FlatMap.Iterator.next(copy _36);
+        _38 = call copy _61() -> [bb47];
+    }
+
+    bb39: {
+        _59 = make_bound_method baml.iter.FilterMap.Iterator.next(copy _36);
+        _38 = call copy _59() -> [bb47];
+    }
+
+    bb40: {
+        _55 = load_type(baml.ai.Tool);
+        _56 = load_type(never);
+        _57 = load_type(never);
+        _38 = call const fn baml.iter.Filter.Iterator.next<copy _55, copy _56, copy _57>(copy _36) -> [bb47];
+    }
+
+    bb41: {
+        _53 = make_bound_method baml.iter.Map.Iterator.next(copy _36);
+        _38 = call copy _53() -> [bb47];
+    }
+
+    bb42: {
+        _51 = load_type(baml.ai.Tool);
+        _38 = call const fn baml.iter.Repeat.Iterator.next<copy _51>(copy _36) -> [bb47];
+    }
+
+    bb43: {
+        _47 = load_type(baml.ai.Tool);
+        _48 = load_type(never);
+        _49 = load_type(never);
+        _38 = call const fn baml.iter.Chain.Iterator.next<copy _47, copy _48, copy _49>(copy _36) -> [bb47];
+    }
+
+    bb44: {
+        _44 = load_type(baml.ai.Tool);
+        _45 = load_type(never);
+        _38 = call const fn baml.iter.StepBy.Iterator.next<copy _44, copy _45>(copy _36) -> [bb47];
+    }
+
+    bb45: {
+        _42 = load_type(baml.ai.Tool);
+        _38 = call const fn baml.iter.ArrayIterator.Iterator.next<copy _42>(copy _36) -> [bb47];
+    }
+
+    bb46: {
+        _40 = make_bound_method baml.iter.Flatten.Iterator.next(copy _36);
+        _38 = call copy _40() -> [bb47];
+    }
+
+    bb47: {
+        _65 = is_type(copy _38, baml.iter.Done);
+        branch copy _65 -> [bb2, bb48];
+    }
+
+    bb48: {
+        _66 = copy _38;
+        fresh_cell(_67);
+        _67 = copy _66;
+        _70 = copy _67.0;
+        _71 = copy _35.1;
+        _69 = copy _70 == copy _71;
+        _68 = short_circuit(&&) copy _69 -> [eval: bb49, join: bb51];
+    }
+
+    bb49: {
+        _72 = copy _67.4;
+        _68 = copy _72;
+        _73 = copy _72 == const null;
+        branch copy _73 -> [bb50, bb51];
+    }
+
+    bb50: {
+        _68 = const false;
+        goto -> bb51;
+    }
+
+    bb51: {
+        branch copy _68 -> [bb52, bb26];
+    }
+
+    bb52: {
+        _74 = copy _35.1;
+        _75 = copy _35.2;
+        _0 = baml.ai.HandoffRequest { copy _74, copy _75, copy _3 };
+        goto -> bb54;
+    }
+
+    bb53: {
+        _0 = const null;
+        goto -> bb54;
+    }
+
+    bb54: {
+        return;
+    }
+}
+
 fn baml.ai._messages_text(messages: baml.ai.ChatMessage[]) -> string {
     // Locals:
     let _0: string // _0 // return
@@ -3013,20 +3386,29 @@ fn baml.ai.ToolLoop.root.ai.HttpProvider.call_messages_with(self: null, messages
     let _35: baml.ai.ToolCall[]
     let _36: baml.errors.LoopBudgetExceeded
     let _37: int
-    let _38: unknown // e
-    let _39: baml.ai.Tools.Transcript
-    let _40: baml.ai.ToolResult[]
-    let _41: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never
-    let _42: baml.ai.ToolCall[]
-    let _43: baml.errors.UnknownError
-    let _44: baml.errors.UnknownError | baml.errors.ToolError
-    let _45: string[]
-    let _46: T // value
-    let _47: T
-    let _48: V
-    let _49: baml.ai.LoopMeta
-    let _50: int
-    let _51: baml.errors.Unsupported
+    let _38: baml.ai.HandoffRequest | null
+    let _39: baml.ai.Tool[]
+    let _40: baml.ai.ToolCall[]
+    let _41: int
+    let _42: bool
+    let _43: baml.ai.HandoffRequest // h
+    let _44: baml.errors.HandoffUnresolved
+    let _45: string
+    let _46: int
+    let _47: unknown // e
+    let _48: baml.ai.Tools.Transcript
+    let _49: baml.ai.ToolResult[]
+    let _50: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never
+    let _51: baml.ai.ToolCall[]
+    let _52: baml.errors.UnknownError
+    let _53: baml.errors.UnknownError | baml.errors.ToolError
+    let _54: string[]
+    let _55: T // value
+    let _56: T
+    let _57: V
+    let _58: baml.ai.LoopMeta
+    let _59: int
+    let _60: baml.errors.Unsupported
 
     bb0: {
         _4 = call const fn baml.ai._messages_text(copy _2) -> [bb1];
@@ -3039,8 +3421,8 @@ fn baml.ai.ToolLoop.root.ai.HttpProvider.call_messages_with(self: null, messages
     }
 
     bb2: {
-        _51 = baml.errors.Unsupported { const "ToolLoop.inner does not support Tools" };
-        throw copy _51;
+        _60 = baml.errors.Unsupported { const "ToolLoop.inner does not support Tools" };
+        throw copy _60;
     }
 
     bb3: {
@@ -3050,7 +3432,7 @@ fn baml.ai.ToolLoop.root.ai.HttpProvider.call_messages_with(self: null, messages
         _12 = copy _4;
         _13 = copy _1.1;
         _14 = load_type(#0);
-        _10 = virtual_call begin as baml.ai.Tools<copy _14>(copy _7, copy _12, copy _13) -> [bb4, unwind: bb17];
+        _10 = virtual_call begin as baml.ai.Tools<copy _14>(copy _7, copy _12, copy _13) -> [bb4, unwind: bb20];
     }
 
     bb4: {
@@ -3064,7 +3446,7 @@ fn baml.ai.ToolLoop.root.ai.HttpProvider.call_messages_with(self: null, messages
     bb6: {
         _20 = copy _10;
         _21 = load_type(#0);
-        _18 = virtual_call step as baml.ai.Tools<copy _21>(copy _7, copy _20) -> [bb7, unwind: bb19];
+        _18 = virtual_call step as baml.ai.Tools<copy _21>(copy _7, copy _20) -> [bb7, unwind: bb22];
     }
 
     bb7: {
@@ -3073,15 +3455,15 @@ fn baml.ai.ToolLoop.root.ai.HttpProvider.call_messages_with(self: null, messages
     }
 
     bb8: {
-        _46 = copy _18;
-        _47 = copy _46;
-        _50 = copy _9;
-        _49 = baml.ai.LoopMeta { copy _50 };
-        _48 = call copy _3(copy _49) -> [bb9];
+        _55 = copy _18;
+        _56 = copy _55;
+        _59 = copy _9;
+        _58 = baml.ai.LoopMeta { copy _59 };
+        _57 = call copy _3(copy _58) -> [bb9];
     }
 
     bb9: {
-        _0 = baml.ai.CallResult<#0, #1> { copy _47, copy _48 };
+        _0 = baml.ai.CallResult<#0, #1> { copy _56, copy _57 };
         goto -> bb10;
     }
 
@@ -3118,47 +3500,67 @@ fn baml.ai.ToolLoop.root.ai.HttpProvider.call_messages_with(self: null, messages
     }
 
     bb15: {
-        _39 = copy _10;
-        _41 = copy _8;
-        _42 = copy _26.0;
-        _40 = call copy _41(copy _42) -> [bb16, unwind: bb21];
+        _39 = copy _1.1;
+        _40 = copy _26.0;
+        _41 = copy _9;
+        _38 = call const fn baml.ai._handoff_call(copy _39, copy _40, copy _41) -> [bb16];
     }
 
     bb16: {
-        _10 = virtual_call submit as baml.ai.Tools(copy _7, copy _39, copy _40) -> [bb4, unwind: bb21];
+        _42 = copy _38 == const null;
+        branch copy _42 -> [bb18, bb17];
     }
 
     bb17: {
-        throw_if_panic copy _11 -> bb18;
+        _43 = copy _38;
+        _45 = copy _43.0;
+        _46 = copy _9;
+        _44 = baml.errors.HandoffUnresolved { copy _45, copy _46 };
+        throw copy _44;
     }
 
     bb18: {
+        _48 = copy _10;
+        _50 = copy _8;
+        _51 = copy _26.0;
+        _49 = call copy _50(copy _51) -> [bb19, unwind: bb24];
+    }
+
+    bb19: {
+        _10 = virtual_call submit as baml.ai.Tools(copy _7, copy _48, copy _49) -> [bb4, unwind: bb24];
+    }
+
+    bb20: {
+        throw_if_panic copy _11 -> bb21;
+    }
+
+    bb21: {
         _16 = copy _11;
         _17 = [const "tool loop: begin failed"]: string[];
         _15 = baml.errors.UnknownError { copy _16, copy _17 };
         throw copy _15;
     }
 
-    bb19: {
-        throw_if_panic copy _19 -> bb20;
+    bb22: {
+        throw_if_panic copy _19 -> bb23;
     }
 
-    bb20: {
+    bb23: {
         _23 = copy _19;
         _24 = [const "tool loop: step failed"]: string[];
         _22 = baml.errors.UnknownError { copy _23, copy _24 };
         throw copy _22;
     }
 
-    bb21: {
-        throw_if_panic copy _38 -> bb22;
+    bb24: {
+        throw_if_panic copy _47 -> bb25;
     }
 
-    bb22: {
-        _44 = copy _38;
-        _45 = [const "tool loop: submit failed"]: string[];
-        _43 = baml.errors.UnknownError { copy _44, copy _45 };
-        throw copy _43;
+    bb25: {
+        _53 = copy _47;
+        _54 = [const "tool loop: submit failed"]: string[];
+        _52 = baml.errors.UnknownError { copy _53, copy _54 };
+        throw copy _52;
     }
 }
 
@@ -3177,9 +3579,9 @@ fn baml.ai.LoopMeta.root.ai.ResponseMeta.citations(self: null) -> baml.ai.Citati
     }
 }
 
-fn baml.ai.drive_run_tools(client: baml.ai.Provider, prompt: baml.llm.PromptAst, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null) -> T | baml.ai.Budget<T> {
+fn baml.ai.drive_run_tools(client: baml.ai.Provider, prompt: baml.llm.PromptAst, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null) -> T | baml.ai.Budget<T> | baml.ai.HandoffRequest {
     // Locals:
-    let _0: T | baml.ai.Budget<T> // _0 // return
+    let _0: T | baml.ai.Budget<T> | baml.ai.HandoffRequest // _0 // return
     let _1: baml.ai.Provider // client // param
     let _2: baml.llm.PromptAst // prompt // param
     let _3: baml.ai.Tool[] // tools // param
@@ -3257,7 +3659,7 @@ fn baml.ai.Tool.from_type(name: string, description: string, params: type) -> ba
     }
 
     bb1: {
-        _0 = baml.ai.Tool { copy _1, copy _2, copy _4, copy _3 };
+        _0 = baml.ai.Tool { copy _1, copy _2, copy _4, copy _3, const null };
         goto -> bb2;
     }
 
@@ -3596,9 +3998,9 @@ fn baml.ai.LoopMeta.root.ai.ResponseMeta.reasoning(self: null) -> string | baml.
     }
 }
 
-fn baml.ai.ToolLoop.run_to_budget(self: baml.ai.ToolLoop, prompt: string) -> T | baml.ai.Budget<T> {
+fn baml.ai.ToolLoop.run_to_budget(self: baml.ai.ToolLoop, prompt: string) -> T | baml.ai.Budget<T> | baml.ai.HandoffRequest {
     // Locals:
-    let _0: T | baml.ai.Budget<T> // _0 // return
+    let _0: T | baml.ai.Budget<T> | baml.ai.HandoffRequest // _0 // return
     let _1: baml.ai.ToolLoop // self // param
     let _2: string // prompt // param
     let _3: baml.ai.Provider
@@ -3624,12 +4026,18 @@ fn baml.ai.ToolLoop.run_to_budget(self: baml.ai.ToolLoop, prompt: string) -> T |
     let _23: int
     let _24: baml.ai.ToolCall[]
     let _25: int
-    let _26: baml.ai.Tools.Transcript
-    let _27: baml.ai.ToolResult[]
-    let _28: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never
-    let _29: baml.ai.ToolCall[]
-    let _30: T // value
-    let _31: baml.errors.Unsupported
+    let _26: baml.ai.HandoffRequest | null
+    let _27: baml.ai.Tool[]
+    let _28: baml.ai.ToolCall[]
+    let _29: int
+    let _30: bool
+    let _31: baml.ai.HandoffRequest // h
+    let _32: baml.ai.Tools.Transcript
+    let _33: baml.ai.ToolResult[]
+    let _34: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never
+    let _35: baml.ai.ToolCall[]
+    let _36: T // value
+    let _37: baml.errors.Unsupported
 
     bb0: {
         _3 = copy _1.0;
@@ -3638,8 +4046,8 @@ fn baml.ai.ToolLoop.run_to_budget(self: baml.ai.ToolLoop, prompt: string) -> T |
     }
 
     bb1: {
-        _31 = baml.errors.Unsupported { const "ToolLoop.inner does not support Tools" };
-        throw copy _31;
+        _37 = baml.errors.Unsupported { const "ToolLoop.inner does not support Tools" };
+        throw copy _37;
     }
 
     bb2: {
@@ -3656,7 +4064,7 @@ fn baml.ai.ToolLoop.run_to_budget(self: baml.ai.ToolLoop, prompt: string) -> T |
     }
 
     bb4: {
-        _0 = call const fn baml.sys.panic(const "unreachable") -> [bb12];
+        _0 = call const fn baml.sys.panic(const "unreachable") -> [bb15];
     }
 
     bb5: {
@@ -3671,9 +4079,9 @@ fn baml.ai.ToolLoop.run_to_budget(self: baml.ai.ToolLoop, prompt: string) -> T |
     }
 
     bb7: {
-        _30 = copy _11;
-        _0 = copy _30;
-        goto -> bb12;
+        _36 = copy _11;
+        _0 = copy _36;
+        goto -> bb15;
     }
 
     bb8: {
@@ -3682,7 +4090,7 @@ fn baml.ai.ToolLoop.run_to_budget(self: baml.ai.ToolLoop, prompt: string) -> T |
         _7 = copy _16 + const 1_i64;
         _17 = copy _1.3;
         _18 = copy _17 == const null;
-        branch copy _18 -> [bb13, bb9];
+        branch copy _18 -> [bb12, bb9];
     }
 
     bb9: {
@@ -3695,34 +4103,52 @@ fn baml.ai.ToolLoop.run_to_budget(self: baml.ai.ToolLoop, prompt: string) -> T |
     }
 
     bb10: {
-        branch copy _20 -> [bb11, bb13];
+        branch copy _20 -> [bb11, bb12];
     }
 
     bb11: {
         _25 = copy _7;
         _0 = baml.ai.Budget<#0> { const null, copy _25 };
-        goto -> bb12;
+        goto -> bb15;
     }
 
     bb12: {
-        return;
+        _27 = copy _1.1;
+        _28 = copy _15.0;
+        _29 = copy _7;
+        _26 = call const fn baml.ai._handoff_call(copy _27, copy _28, copy _29) -> [bb13];
     }
 
     bb13: {
-        _26 = copy _8;
-        _28 = copy _6;
-        _29 = copy _15.0;
-        _27 = call copy _28(copy _29) -> [bb14];
+        _30 = copy _26 == const null;
+        branch copy _30 -> [bb16, bb14];
     }
 
     bb14: {
-        _8 = virtual_call submit as baml.ai.Tools(copy _5, copy _26, copy _27) -> [bb3];
+        _31 = copy _26;
+        _0 = copy _31;
+        goto -> bb15;
+    }
+
+    bb15: {
+        return;
+    }
+
+    bb16: {
+        _32 = copy _8;
+        _34 = copy _6;
+        _35 = copy _15.0;
+        _33 = call copy _34(copy _35) -> [bb17];
+    }
+
+    bb17: {
+        _8 = virtual_call submit as baml.ai.Tools(copy _5, copy _32, copy _33) -> [bb3];
     }
 }
 
-fn baml.ai.Tools.run_tools(self: baml.ai.Tools, prompt: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null) -> T | baml.ai.Budget<T> {
+fn baml.ai.Tools.run_tools(self: baml.ai.Tools, prompt: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null) -> T | baml.ai.Budget<T> | baml.ai.HandoffRequest {
     // Locals:
-    let _0: T | baml.ai.Budget<T> // _0 // return
+    let _0: T | baml.ai.Budget<T> | baml.ai.HandoffRequest // _0 // return
     let _1: baml.ai.Tools // self // param
     let _2: string // prompt // param
     let _3: baml.ai.Tool[] // tools // param
@@ -3746,10 +4172,15 @@ fn baml.ai.Tools.run_tools(self: baml.ai.Tools, prompt: string, tools: baml.ai.T
     let _21: int
     let _22: baml.ai.ToolCall[]
     let _23: int
-    let _24: Transcript
-    let _25: baml.ai.ToolResult[]
-    let _26: baml.ai.ToolCall[]
-    let _27: T // value
+    let _24: baml.ai.HandoffRequest | null
+    let _25: baml.ai.ToolCall[]
+    let _26: int
+    let _27: bool
+    let _28: baml.ai.HandoffRequest // h
+    let _29: Transcript
+    let _30: baml.ai.ToolResult[]
+    let _31: baml.ai.ToolCall[]
+    let _32: T // value
 
     bb0: {
         _6 = copy _5 == const <omitted>;
@@ -3776,7 +4207,7 @@ fn baml.ai.Tools.run_tools(self: baml.ai.Tools, prompt: string, tools: baml.ai.T
     }
 
     bb5: {
-        _0 = call const fn baml.sys.panic(const "unreachable") -> [bb13];
+        _0 = call const fn baml.sys.panic(const "unreachable") -> [bb16];
     }
 
     bb6: {
@@ -3791,9 +4222,9 @@ fn baml.ai.Tools.run_tools(self: baml.ai.Tools, prompt: string, tools: baml.ai.T
     }
 
     bb8: {
-        _27 = copy _10;
-        _0 = copy _27;
-        goto -> bb13;
+        _32 = copy _10;
+        _0 = copy _32;
+        goto -> bb16;
     }
 
     bb9: {
@@ -3801,7 +4232,7 @@ fn baml.ai.Tools.run_tools(self: baml.ai.Tools, prompt: string, tools: baml.ai.T
         _15 = copy _9;
         _9 = copy _15 + const 1_i64;
         _16 = copy _5 == const null;
-        branch copy _16 -> [bb14, bb10];
+        branch copy _16 -> [bb13, bb10];
     }
 
     bb10: {
@@ -3814,27 +4245,44 @@ fn baml.ai.Tools.run_tools(self: baml.ai.Tools, prompt: string, tools: baml.ai.T
     }
 
     bb11: {
-        branch copy _18 -> [bb12, bb14];
+        branch copy _18 -> [bb12, bb13];
     }
 
     bb12: {
         _23 = copy _9;
         _0 = baml.ai.Budget<#1> { const null, copy _23 };
-        goto -> bb13;
+        goto -> bb16;
     }
 
     bb13: {
-        return;
+        _25 = copy _14.0;
+        _26 = copy _9;
+        _24 = call const fn baml.ai._handoff_call(copy _3, copy _25, copy _26) -> [bb14];
     }
 
     bb14: {
-        _24 = copy _7;
-        _26 = copy _14.0;
-        _25 = call copy _4(copy _26) -> [bb15];
+        _27 = copy _24 == const null;
+        branch copy _27 -> [bb17, bb15];
     }
 
     bb15: {
-        _7 = virtual_call submit as baml.ai.Tools<Transcript = Transcript>(copy _1, copy _24, copy _25) -> [bb4];
+        _28 = copy _24;
+        _0 = copy _28;
+        goto -> bb16;
+    }
+
+    bb16: {
+        return;
+    }
+
+    bb17: {
+        _29 = copy _7;
+        _31 = copy _14.0;
+        _30 = call copy _4(copy _31) -> [bb18];
+    }
+
+    bb18: {
+        _7 = virtual_call submit as baml.ai.Tools<Transcript = Transcript>(copy _1, copy _29, copy _30) -> [bb4];
     }
 }
 
@@ -4069,29 +4517,30 @@ fn baml.ai.Retry.root.ai.HttpProvider.call_messages_with(self: null, messages: b
     let _34: bool
     let _35: bool
     let _36: bool
-    let _37: baml.errors.Failure // f
-    let _38: bool
+    let _37: bool
+    let _38: baml.errors.Failure // f
     let _39: bool
-    let _40: int
+    let _40: bool
     let _41: int
     let _42: int
-    let _43: null
-    let _44: baml.time.Duration
-    let _45: int
+    let _43: int
+    let _44: null
+    let _45: baml.time.Duration
     let _46: int
-    let _47: bool
-    let _48: int
+    let _47: int
+    let _48: bool
     let _49: int
     let _50: int
-    let _51: null
-    let _52: baml.time.Duration
-    let _53: int
+    let _51: int
+    let _52: null
+    let _53: baml.time.Duration
     let _54: int
-    let _55: T
-    let _56: V
-    let _57: baml.ai.ResponseMeta
-    let _58: baml.errors.UnknownError
-    let _59: string[]
+    let _55: int
+    let _56: T
+    let _57: V
+    let _58: baml.ai.ResponseMeta
+    let _59: baml.errors.UnknownError
+    let _60: string[]
 
     bb0: {
         _5 = copy _1.0;
@@ -4107,12 +4556,12 @@ fn baml.ai.Retry.root.ai.HttpProvider.call_messages_with(self: null, messages: b
         _9 = copy _1.2;
         _8 = copy _9;
         _10 = copy _9 == const null;
-        branch copy _10 -> [bb3, bb24];
+        branch copy _10 -> [bb3, bb25];
     }
 
     bb3: {
         _8 = const 100_i64;
-        goto -> bb24;
+        goto -> bb25;
     }
 
     bb4: {
@@ -4121,200 +4570,205 @@ fn baml.ai.Retry.root.ai.HttpProvider.call_messages_with(self: null, messages: b
     }
 
     bb5: {
-        _31 = is_type(copy _26, baml.errors.CannotRetry);
-        branch copy _31 -> [bb17, bb6];
+        _31 = is_type(copy _26, baml.errors.HandoffUnresolved);
+        branch copy _31 -> [bb18, bb6];
     }
 
     bb6: {
-        _32 = is_type(copy _26, baml.errors.LoopBudgetExceeded);
-        branch copy _32 -> [bb17, bb7];
+        _32 = is_type(copy _26, baml.errors.CannotRetry);
+        branch copy _32 -> [bb18, bb7];
     }
 
     bb7: {
-        _33 = is_type(copy _26, baml.ai.AnthropicHttpError);
-        branch copy _33 -> [bb17, bb8];
+        _33 = is_type(copy _26, baml.errors.LoopBudgetExceeded);
+        branch copy _33 -> [bb18, bb8];
     }
 
     bb8: {
-        _34 = is_type(copy _26, baml.ai.GeminiHttpError);
-        branch copy _34 -> [bb17, bb9];
+        _34 = is_type(copy _26, baml.ai.AnthropicHttpError);
+        branch copy _34 -> [bb18, bb9];
     }
 
     bb9: {
-        _35 = is_type(copy _26, baml.ai.OpenAiHttpError);
-        branch copy _35 -> [bb17, bb10];
+        _35 = is_type(copy _26, baml.ai.GeminiHttpError);
+        branch copy _35 -> [bb18, bb10];
     }
 
     bb10: {
-        _36 = is_type(copy _26, baml.errors.Unsupported);
-        branch copy _36 -> [bb17, bb11];
+        _36 = is_type(copy _26, baml.ai.OpenAiHttpError);
+        branch copy _36 -> [bb18, bb11];
     }
 
     bb11: {
-        throw_if_panic copy _26 -> bb12;
+        _37 = is_type(copy _26, baml.errors.Unsupported);
+        branch copy _37 -> [bb18, bb12];
     }
 
     bb12: {
-        _48 = copy _7;
-        _49 = copy _1.1;
-        _47 = copy _48 < copy _49;
-        branch copy _47 -> [bb14, bb13];
+        throw_if_panic copy _26 -> bb13;
     }
 
     bb13: {
-        rethrow copy _26;
+        _49 = copy _7;
+        _50 = copy _1.1;
+        _48 = copy _49 < copy _50;
+        branch copy _48 -> [bb15, bb14];
     }
 
     bb14: {
-        _50 = copy _7;
-        _7 = copy _50 + const 1_i64;
-        _53 = copy _8;
-        _52 = call const fn baml.time.Duration.from_milliseconds(copy _53) -> [bb15];
-    }
-
-    bb15: {
-        _51 = sys_op const fn baml.sys.sleep(copy _52) -> bb16;
-    }
-
-    bb16: {
-        _54 = copy _8;
-        _8 = copy _54 * const 2_i64;
-        goto -> bb24;
-    }
-
-    bb17: {
-        _37 = copy _26;
-        _40 = copy _7;
-        _41 = copy _1.1;
-        _39 = copy _40 < copy _41;
-        _38 = short_circuit(&&) copy _39 -> [eval: bb18, join: bb19];
-    }
-
-    bb18: {
-        _38 = virtual_call is_retryable as baml.errors.Failure(copy _37) -> [bb19];
-    }
-
-    bb19: {
-        branch copy _38 -> [bb21, bb20];
-    }
-
-    bb20: {
         rethrow copy _26;
     }
 
+    bb15: {
+        _51 = copy _7;
+        _7 = copy _51 + const 1_i64;
+        _54 = copy _8;
+        _53 = call const fn baml.time.Duration.from_milliseconds(copy _54) -> [bb16];
+    }
+
+    bb16: {
+        _52 = sys_op const fn baml.sys.sleep(copy _53) -> bb17;
+    }
+
+    bb17: {
+        _55 = copy _8;
+        _8 = copy _55 * const 2_i64;
+        goto -> bb25;
+    }
+
+    bb18: {
+        _38 = copy _26;
+        _41 = copy _7;
+        _42 = copy _1.1;
+        _40 = copy _41 < copy _42;
+        _39 = short_circuit(&&) copy _40 -> [eval: bb19, join: bb20];
+    }
+
+    bb19: {
+        _39 = virtual_call is_retryable as baml.errors.Failure(copy _38) -> [bb20];
+    }
+
+    bb20: {
+        branch copy _39 -> [bb22, bb21];
+    }
+
     bb21: {
-        _42 = copy _7;
-        _7 = copy _42 + const 1_i64;
-        _45 = copy _8;
-        _44 = call const fn baml.time.Duration.from_milliseconds(copy _45) -> [bb22];
+        rethrow copy _26;
     }
 
     bb22: {
-        _43 = sys_op const fn baml.sys.sleep(copy _44) -> bb23;
+        _43 = copy _7;
+        _7 = copy _43 + const 1_i64;
+        _46 = copy _8;
+        _45 = call const fn baml.time.Duration.from_milliseconds(copy _46) -> [bb23];
     }
 
     bb23: {
-        _46 = copy _8;
-        _8 = copy _46 * const 2_i64;
-        goto -> bb24;
+        _44 = sys_op const fn baml.sys.sleep(copy _45) -> bb24;
     }
 
     bb24: {
-        branch const true -> [bb26, bb25];
+        _47 = copy _8;
+        _8 = copy _47 * const 2_i64;
+        goto -> bb25;
     }
 
     bb25: {
-        _0 = call const fn baml.sys.panic(const "unreachable") -> [bb42];
+        branch const true -> [bb27, bb26];
     }
 
     bb26: {
-        _11 = copy _1.0;
-        _12 = is_type(copy _11, baml.ai.Traced);
-        branch copy _12 -> [bb39, bb27];
+        _0 = call const fn baml.sys.panic(const "unreachable") -> [bb43];
     }
 
     bb27: {
-        _13 = is_type(copy _11, baml.ai.OpenAiCompatible);
-        branch copy _13 -> [bb39, bb28];
+        _11 = copy _1.0;
+        _12 = is_type(copy _11, baml.ai.Traced);
+        branch copy _12 -> [bb40, bb28];
     }
 
     bb28: {
-        _14 = is_type(copy _11, baml.ai.ToolLoop);
-        branch copy _14 -> [bb39, bb29];
+        _13 = is_type(copy _11, baml.ai.OpenAiCompatible);
+        branch copy _13 -> [bb40, bb29];
     }
 
     bb29: {
-        _15 = is_type(copy _11, baml.ai.Retry);
-        branch copy _15 -> [bb39, bb30];
+        _14 = is_type(copy _11, baml.ai.ToolLoop);
+        branch copy _14 -> [bb40, bb30];
     }
 
     bb30: {
-        _16 = is_type(copy _11, baml.ai.OpenAi);
-        branch copy _16 -> [bb39, bb31];
+        _15 = is_type(copy _11, baml.ai.Retry);
+        branch copy _15 -> [bb40, bb31];
     }
 
     bb31: {
-        _17 = is_type(copy _11, baml.ai.Gemini);
-        branch copy _17 -> [bb39, bb32];
+        _16 = is_type(copy _11, baml.ai.OpenAi);
+        branch copy _16 -> [bb40, bb32];
     }
 
     bb32: {
-        _18 = is_type(copy _11, baml.ai.OpenAiResponses);
-        branch copy _18 -> [bb39, bb33];
+        _17 = is_type(copy _11, baml.ai.Gemini);
+        branch copy _17 -> [bb40, bb33];
     }
 
     bb33: {
-        _19 = is_type(copy _11, baml.ai.RoundRobin);
-        branch copy _19 -> [bb39, bb34];
+        _18 = is_type(copy _11, baml.ai.OpenAiResponses);
+        branch copy _18 -> [bb40, bb34];
     }
 
     bb34: {
-        _20 = is_type(copy _11, baml.ai.Fallback);
-        branch copy _20 -> [bb39, bb35];
+        _19 = is_type(copy _11, baml.ai.RoundRobin);
+        branch copy _19 -> [bb40, bb35];
     }
 
     bb35: {
-        _21 = is_type(copy _11, baml.ai.OpenAiStrict);
-        branch copy _21 -> [bb39, bb36];
+        _20 = is_type(copy _11, baml.ai.Fallback);
+        branch copy _20 -> [bb40, bb36];
     }
 
     bb36: {
-        _22 = is_type(copy _11, baml.ai.Anthropic);
-        branch copy _22 -> [bb39, bb37];
+        _21 = is_type(copy _11, baml.ai.OpenAiStrict);
+        branch copy _21 -> [bb40, bb37];
     }
 
     bb37: {
-        _23 = is_type(copy _11, baml.llm.Client);
-        branch copy _23 -> [bb39, bb38];
+        _22 = is_type(copy _11, baml.ai.Anthropic);
+        branch copy _22 -> [bb40, bb38];
     }
 
     bb38: {
-        _59 = [const "retry: inner is not callable"]: string[];
-        _58 = baml.errors.UnknownError { const null, copy _59 };
-        throw copy _58;
+        _23 = is_type(copy _11, baml.llm.Client);
+        branch copy _23 -> [bb40, bb39];
     }
 
     bb39: {
+        _60 = [const "retry: inner is not callable"]: string[];
+        _59 = baml.errors.UnknownError { const null, copy _60 };
+        throw copy _59;
+    }
+
+    bb40: {
         _24 = copy _11;
         _27 = make_closure lambda[0]<3 type_args>();
         _28 = load_type(#0);
         _29 = load_type(baml.ai.ResponseMeta);
         _30 = load_type(never);
-        _25 = virtual_call call_messages_with as baml.ai.HttpProvider<copy _28, copy _29, copy _30>(copy _24, copy _2, copy _27) -> [bb40, unwind: bb5];
-    }
-
-    bb40: {
-        _55 = copy _25.0;
-        _57 = copy _25.1;
-        _56 = call copy _3(copy _57) -> [bb41];
+        _25 = virtual_call call_messages_with as baml.ai.HttpProvider<copy _28, copy _29, copy _30>(copy _24, copy _2, copy _27) -> [bb41, unwind: bb5];
     }
 
     bb41: {
-        _0 = baml.ai.CallResult<#0, #1> { copy _55, copy _56 };
-        goto -> bb42;
+        _56 = copy _25.0;
+        _58 = copy _25.1;
+        _57 = call copy _3(copy _58) -> [bb42];
     }
 
     bb42: {
+        _0 = baml.ai.CallResult<#0, #1> { copy _56, copy _57 };
+        goto -> bb43;
+    }
+
+    bb43: {
         return;
     }
 }
@@ -23825,6 +24279,21 @@ fn baml.errors.Failure$for$Unsupported.is_effectful(self: baml.errors.Unsupporte
     }
 }
 
+fn baml.errors.HandoffUnresolved.Failure.is_effectful(self: null) -> bool {
+    // Locals:
+    let _0: bool // _0 // return
+    let _1: null // self // param
+
+    bb0: {
+        _0 = const true;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
 fn baml.errors.LoopBudgetExceeded.Failure.is_effectful(self: null) -> bool {
     // Locals:
     let _0: bool // _0 // return
@@ -23832,6 +24301,21 @@ fn baml.errors.LoopBudgetExceeded.Failure.is_effectful(self: null) -> bool {
 
     bb0: {
         _0 = const true;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn baml.errors.StreamError$for$Unsupported.is_network_error(self: baml.errors.Unsupported) -> bool {
+    // Locals:
+    let _0: bool // _0 // return
+    let _1: baml.errors.Unsupported // self // param
+
+    bb0: {
+        _0 = const false;
         goto -> bb1;
     }
 
@@ -23856,81 +24340,6 @@ fn baml.errors.CannotRetry.StreamError.is_network_error(self: null) -> bool {
 }
 
 fn baml.errors.LoopBudgetExceeded.ToolError.is_network_error(self: null) -> bool {
-    // Locals:
-    let _0: bool // _0 // return
-    let _1: null // self // param
-
-    bb0: {
-        _0 = const false;
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.errors.ToolError$for$Unsupported.is_network_error(self: baml.errors.Unsupported) -> bool {
-    // Locals:
-    let _0: bool // _0 // return
-    let _1: baml.errors.Unsupported // self // param
-
-    bb0: {
-        _0 = const false;
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.errors.CannotRetry.CallError.is_network_error(self: null) -> bool {
-    // Locals:
-    let _0: bool // _0 // return
-    let _1: null // self // param
-
-    bb0: {
-        _0 = const false;
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.errors.LoopBudgetExceeded.CallError.is_network_error(self: null) -> bool {
-    // Locals:
-    let _0: bool // _0 // return
-    let _1: null // self // param
-
-    bb0: {
-        _0 = const false;
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.errors.StreamError$for$Unsupported.is_network_error(self: baml.errors.Unsupported) -> bool {
-    // Locals:
-    let _0: bool // _0 // return
-    let _1: baml.errors.Unsupported // self // param
-
-    bb0: {
-        _0 = const false;
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml.errors.CannotRetry.ToolError.is_network_error(self: null) -> bool {
     // Locals:
     let _0: bool // _0 // return
     let _1: null // self // param
@@ -23975,10 +24384,100 @@ fn baml.errors.RealtimeError$for$Unsupported.is_network_error(self: baml.errors.
     }
 }
 
-fn baml.errors.CallError$for$Unsupported.is_parse_error(self: baml.errors.Unsupported) -> bool {
+fn baml.errors.CannotRetry.CallError.is_network_error(self: null) -> bool {
+    // Locals:
+    let _0: bool // _0 // return
+    let _1: null // self // param
+
+    bb0: {
+        _0 = const false;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn baml.errors.LoopBudgetExceeded.CallError.is_network_error(self: null) -> bool {
+    // Locals:
+    let _0: bool // _0 // return
+    let _1: null // self // param
+
+    bb0: {
+        _0 = const false;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn baml.errors.HandoffUnresolved.ToolError.is_network_error(self: null) -> bool {
+    // Locals:
+    let _0: bool // _0 // return
+    let _1: null // self // param
+
+    bb0: {
+        _0 = const false;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn baml.errors.ToolError$for$Unsupported.is_network_error(self: baml.errors.Unsupported) -> bool {
     // Locals:
     let _0: bool // _0 // return
     let _1: baml.errors.Unsupported // self // param
+
+    bb0: {
+        _0 = const false;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn baml.errors.CannotRetry.ToolError.is_network_error(self: null) -> bool {
+    // Locals:
+    let _0: bool // _0 // return
+    let _1: null // self // param
+
+    bb0: {
+        _0 = const false;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn baml.errors.HandoffUnresolved.CallError.is_network_error(self: null) -> bool {
+    // Locals:
+    let _0: bool // _0 // return
+    let _1: null // self // param
+
+    bb0: {
+        _0 = const false;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn baml.errors.HandoffUnresolved.CallError.is_parse_error(self: null) -> bool {
+    // Locals:
+    let _0: bool // _0 // return
+    let _1: null // self // param
 
     bb0: {
         _0 = const false;
@@ -24020,10 +24519,25 @@ fn baml.errors.CannotRetry.CallError.is_parse_error(self: null) -> bool {
     }
 }
 
-fn baml.errors.Failure$for$Unsupported.is_policy_refusal(self: baml.errors.Unsupported) -> bool {
+fn baml.errors.CallError$for$Unsupported.is_parse_error(self: baml.errors.Unsupported) -> bool {
     // Locals:
     let _0: bool // _0 // return
     let _1: baml.errors.Unsupported // self // param
+
+    bb0: {
+        _0 = const false;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn baml.errors.HandoffUnresolved.Failure.is_policy_refusal(self: null) -> bool {
+    // Locals:
+    let _0: bool // _0 // return
+    let _1: null // self // param
 
     bb0: {
         _0 = const false;
@@ -24065,10 +24579,40 @@ fn baml.errors.CannotRetry.Failure.is_policy_refusal(self: null) -> bool {
     }
 }
 
+fn baml.errors.Failure$for$Unsupported.is_policy_refusal(self: baml.errors.Unsupported) -> bool {
+    // Locals:
+    let _0: bool // _0 // return
+    let _1: baml.errors.Unsupported // self // param
+
+    bb0: {
+        _0 = const false;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
 fn baml.errors.CallError$for$Unsupported.is_rate_limit(self: baml.errors.Unsupported) -> bool {
     // Locals:
     let _0: bool // _0 // return
     let _1: baml.errors.Unsupported // self // param
+
+    bb0: {
+        _0 = const false;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn baml.errors.HandoffUnresolved.CallError.is_rate_limit(self: null) -> bool {
+    // Locals:
+    let _0: bool // _0 // return
+    let _1: null // self // param
 
     bb0: {
         _0 = const false;
@@ -24110,13 +24654,13 @@ fn baml.errors.CannotRetry.CallError.is_rate_limit(self: null) -> bool {
     }
 }
 
-fn baml.errors.Failure$for$Unsupported.is_resumable(self: baml.errors.Unsupported) -> bool {
+fn baml.errors.HandoffUnresolved.Failure.is_resumable(self: null) -> bool {
     // Locals:
     let _0: bool // _0 // return
-    let _1: baml.errors.Unsupported // self // param
+    let _1: null // self // param
 
     bb0: {
-        _0 = const false;
+        _0 = const true;
         goto -> bb1;
     }
 
@@ -24144,6 +24688,21 @@ fn baml.errors.CannotRetry.Failure.is_resumable(self: null) -> bool {
     // Locals:
     let _0: bool // _0 // return
     let _1: null // self // param
+
+    bb0: {
+        _0 = const false;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn baml.errors.Failure$for$Unsupported.is_resumable(self: baml.errors.Unsupported) -> bool {
+    // Locals:
+    let _0: bool // _0 // return
+    let _1: baml.errors.Unsupported // self // param
 
     bb0: {
         _0 = const false;
@@ -24200,6 +24759,21 @@ fn baml.errors.Failure$for$Unsupported.is_retryable(self: baml.errors.Unsupporte
     }
 }
 
+fn baml.errors.HandoffUnresolved.Failure.is_retryable(self: null) -> bool {
+    // Locals:
+    let _0: bool // _0 // return
+    let _1: null // self // param
+
+    bb0: {
+        _0 = const false;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
 fn baml.errors.Failure$for$Unsupported.is_unsupported(self: baml.errors.Unsupported) -> bool {
     // Locals:
     let _0: bool // _0 // return
@@ -24207,6 +24781,21 @@ fn baml.errors.Failure$for$Unsupported.is_unsupported(self: baml.errors.Unsuppor
 
     bb0: {
         _0 = const true;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn baml.errors.HandoffUnresolved.Failure.is_unsupported(self: null) -> bool {
+    // Locals:
+    let _0: bool // _0 // return
+    let _1: null // self // param
+
+    bb0: {
+        _0 = const false;
         goto -> bb1;
     }
 

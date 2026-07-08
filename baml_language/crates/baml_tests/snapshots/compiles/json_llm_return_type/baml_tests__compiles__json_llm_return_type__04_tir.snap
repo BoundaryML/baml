@@ -20,8 +20,8 @@ function user.ExtractAny$build_request_stream(client: baml.ai.Provider = TestCli
 function user.ExtractAny$with<V, E2>(project: (baml.ai.ResponseMeta) -> V throws E2, client: baml.ai.Provider = TestClient) -> baml.ai.CallResult<baml.json.json, V> throws never {
   baml.ai.drive_with<V, E2>(client, ExtractAny$render_prompt(client = client), project) : baml.ai.CallResult<baml.json.json, V>
 }
-function user.ExtractAny$run_tools(tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null = null, client: baml.ai.Provider = TestClient) -> baml.json.json | baml.ai.Budget<baml.json.json> throws never {
-  baml.ai.drive_run_tools<T>(client, ExtractAny$render_prompt(client = client), tools, dispatch, stop_when = stop_when) : baml.json.json | baml.ai.Budget<baml.json.json>
+function user.ExtractAny$run_tools(tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null = null, client: baml.ai.Provider = TestClient) -> baml.json.json | baml.ai.Budget<baml.json.json> | baml.ai.HandoffRequest throws never {
+  baml.ai.drive_run_tools<T>(client, ExtractAny$render_prompt(client = client), tools, dispatch, stop_when = stop_when) : baml.json.json | baml.ai.Budget<baml.json.json> | baml.ai.HandoffRequest
 }
 function user.ExtractAny$live(io: baml.ai.Channel, client: baml.ai.Provider = TestClient) -> baml.ai.Transcript throws never {
   baml.ai.drive_live(client, ExtractAny$render_prompt(client = client), io) : baml.ai.Transcript

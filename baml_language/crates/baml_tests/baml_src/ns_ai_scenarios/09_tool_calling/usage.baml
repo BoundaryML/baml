@@ -25,6 +25,7 @@ test "09: the interface's default run_tools loop drives begin/step/submit" {
             };
             match (outcome) {
                 let b: baml.ai.Budget<string> => "unexpected budget",
+                let h: baml.ai.HandoffRequest => "unexpected handoff",
                 let v: string => v,
             }
         },
@@ -48,6 +49,7 @@ test "09: run_tools with stop_when returns the Budget arm, not a throw (D5)" {
             };
             match (outcome) {
                 let b: baml.ai.Budget<string> => "budget@" + b.steps_taken.to_string(),
+                let h: baml.ai.HandoffRequest => "unexpected handoff",
                 let v: string => v,
             }
         },

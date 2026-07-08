@@ -23,8 +23,8 @@ function user.GetBoxedInt$build_request_stream(client: baml.ai.Provider = Dummy)
 function user.GetBoxedInt$with<V, E2>(project: (baml.ai.ResponseMeta) -> V throws E2, client: baml.ai.Provider = Dummy) -> baml.ai.CallResult<user.Box<int>, V> throws never {
   baml.ai.drive_with<V, E2>(client, GetBoxedInt$render_prompt(client = client), project) : baml.ai.CallResult<user.Box<int>, V>
 }
-function user.GetBoxedInt$run_tools(tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null = null, client: baml.ai.Provider = Dummy) -> user.Box<int> | baml.ai.Budget<user.Box<int>> throws never {
-  baml.ai.drive_run_tools<T>(client, GetBoxedInt$render_prompt(client = client), tools, dispatch, stop_when = stop_when) : user.Box<int> | baml.ai.Budget<user.Box<int>>
+function user.GetBoxedInt$run_tools(tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null = null, client: baml.ai.Provider = Dummy) -> user.Box<int> | baml.ai.Budget<user.Box<int>> | baml.ai.HandoffRequest throws never {
+  baml.ai.drive_run_tools<T>(client, GetBoxedInt$render_prompt(client = client), tools, dispatch, stop_when = stop_when) : user.Box<int> | baml.ai.Budget<user.Box<int>> | baml.ai.HandoffRequest
 }
 function user.GetBoxedInt$live(io: baml.ai.Channel, client: baml.ai.Provider = Dummy) -> baml.ai.Transcript throws never {
   baml.ai.drive_live(client, GetBoxedInt$render_prompt(client = client), io) : baml.ai.Transcript

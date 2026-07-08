@@ -18853,7 +18853,7 @@ function baml.ai.Retry$stream.root.ai.HttpProvider.call_messages_with(self: baml
     store_var _4
     load_var _4
     pop_jump_if_false L0
-    jump L31
+    jump L32
 
   L0:
     load_const 0
@@ -18878,7 +18878,7 @@ function baml.ai.Retry$stream.root.ai.HttpProvider.call_messages_with(self: baml
   L2:
     load_const "unreachable"
     call baml.sys.panic
-    jump L30
+    jump L31
 
   L3:
     load_var self
@@ -18975,56 +18975,62 @@ function baml.ai.Retry$stream.root.ai.HttpProvider.call_messages_with(self: baml
     load_const "call_messages_with"
     virtual_call nargs=3 ntypeargs=3
     store_var r0
-    jump L29
+    jump L30
     load_var e
-    is_type baml.errors.CannotRetry
+    is_type baml.errors.HandoffUnresolved
     pop_jump_if_false L17
-    jump L25
+    jump L26
 
   L17:
     load_var e
-    is_type baml.errors.LoopBudgetExceeded
+    is_type baml.errors.CannotRetry
     pop_jump_if_false L18
-    jump L25
+    jump L26
 
   L18:
     load_var e
-    is_type baml.ai.AnthropicHttpError
+    is_type baml.errors.LoopBudgetExceeded
     pop_jump_if_false L19
-    jump L25
+    jump L26
 
   L19:
     load_var e
-    is_type baml.ai.GeminiHttpError
+    is_type baml.ai.AnthropicHttpError
     pop_jump_if_false L20
-    jump L25
+    jump L26
 
   L20:
     load_var e
-    is_type baml.ai.OpenAiHttpError
+    is_type baml.ai.GeminiHttpError
     pop_jump_if_false L21
-    jump L25
+    jump L26
 
   L21:
     load_var e
-    is_type baml.errors.Unsupported
+    is_type baml.ai.OpenAiHttpError
     pop_jump_if_false L22
-    jump L25
+    jump L26
 
   L22:
+    load_var e
+    is_type baml.errors.Unsupported
+    pop_jump_if_false L23
+    jump L26
+
+  L23:
     load_var e
     throw_if_panic
     load_var2 5 1
     load_field .1
     cmp_int_op <
-    pop_jump_if_false L23
-    jump L24
+    pop_jump_if_false L24
+    jump L25
 
-  L23:
+  L24:
     load_var e
     rethrow
 
-  L24:
+  L25:
     load_var attempt
     load_const 1
     add_int
@@ -19039,26 +19045,26 @@ function baml.ai.Retry$stream.root.ai.HttpProvider.call_messages_with(self: baml
     store_var delay_ms
     jump L1
 
-  L25:
+  L26:
     load_var2 5 1
     load_field .1
     cmp_int_op <
-    jump_if_false L26
+    jump_if_false L27
     pop 1
     load_var e
     load_type baml.errors.Failure
     load_const "is_retryable"
     virtual_call nargs=1 ntypeargs=0
 
-  L26:
-    pop_jump_if_false L27
-    jump L28
-
   L27:
+    pop_jump_if_false L28
+    jump L29
+
+  L28:
     load_var e
     rethrow
 
-  L28:
+  L29:
     load_var attempt
     load_const 1
     add_int
@@ -19073,24 +19079,24 @@ function baml.ai.Retry$stream.root.ai.HttpProvider.call_messages_with(self: baml
     store_var delay_ms
     jump L1
 
-  L29:
+  L30:
     load_var r0
     load_field .value
-    store_var _55
+    store_var _56
     load_var r0
     load_field .meta
     load_var project
     call_indirect
-    store_var _56
+    store_var _57
     load_var2 11 12
     load_type #0
     load_type #1
     init_instance<2> baml.ai.CallResult .value, .meta
 
-  L30:
+  L31:
     return
 
-  L31:
+  L32:
     load_const "provider is effectful; wrap the idempotent part or use a bespoke combinator"
     init_instance baml.errors.CannotRetry .message
     throw
@@ -19363,7 +19369,7 @@ function baml.ai.Retry.root.ai.HttpProvider.call_messages_with(self: baml.ai.Ret
     store_var _4
     load_var _4
     pop_jump_if_false L0
-    jump L31
+    jump L32
 
   L0:
     load_const 0
@@ -19388,7 +19394,7 @@ function baml.ai.Retry.root.ai.HttpProvider.call_messages_with(self: baml.ai.Ret
   L2:
     load_const "unreachable"
     call baml.sys.panic
-    jump L30
+    jump L31
 
   L3:
     load_var self
@@ -19485,56 +19491,62 @@ function baml.ai.Retry.root.ai.HttpProvider.call_messages_with(self: baml.ai.Ret
     load_const "call_messages_with"
     virtual_call nargs=3 ntypeargs=3
     store_var r0
-    jump L29
+    jump L30
     load_var e
-    is_type baml.errors.CannotRetry
+    is_type baml.errors.HandoffUnresolved
     pop_jump_if_false L17
-    jump L25
+    jump L26
 
   L17:
     load_var e
-    is_type baml.errors.LoopBudgetExceeded
+    is_type baml.errors.CannotRetry
     pop_jump_if_false L18
-    jump L25
+    jump L26
 
   L18:
     load_var e
-    is_type baml.ai.AnthropicHttpError
+    is_type baml.errors.LoopBudgetExceeded
     pop_jump_if_false L19
-    jump L25
+    jump L26
 
   L19:
     load_var e
-    is_type baml.ai.GeminiHttpError
+    is_type baml.ai.AnthropicHttpError
     pop_jump_if_false L20
-    jump L25
+    jump L26
 
   L20:
     load_var e
-    is_type baml.ai.OpenAiHttpError
+    is_type baml.ai.GeminiHttpError
     pop_jump_if_false L21
-    jump L25
+    jump L26
 
   L21:
     load_var e
-    is_type baml.errors.Unsupported
+    is_type baml.ai.OpenAiHttpError
     pop_jump_if_false L22
-    jump L25
+    jump L26
 
   L22:
+    load_var e
+    is_type baml.errors.Unsupported
+    pop_jump_if_false L23
+    jump L26
+
+  L23:
     load_var e
     throw_if_panic
     load_var2 5 1
     load_field .1
     cmp_int_op <
-    pop_jump_if_false L23
-    jump L24
+    pop_jump_if_false L24
+    jump L25
 
-  L23:
+  L24:
     load_var e
     rethrow
 
-  L24:
+  L25:
     load_var attempt
     load_const 1
     add_int
@@ -19549,26 +19561,26 @@ function baml.ai.Retry.root.ai.HttpProvider.call_messages_with(self: baml.ai.Ret
     store_var delay_ms
     jump L1
 
-  L25:
+  L26:
     load_var2 5 1
     load_field .1
     cmp_int_op <
-    jump_if_false L26
+    jump_if_false L27
     pop 1
     load_var e
     load_type baml.errors.Failure
     load_const "is_retryable"
     virtual_call nargs=1 ntypeargs=0
 
-  L26:
-    pop_jump_if_false L27
-    jump L28
-
   L27:
+    pop_jump_if_false L28
+    jump L29
+
+  L28:
     load_var e
     rethrow
 
-  L28:
+  L29:
     load_var attempt
     load_const 1
     add_int
@@ -19583,24 +19595,24 @@ function baml.ai.Retry.root.ai.HttpProvider.call_messages_with(self: baml.ai.Ret
     store_var delay_ms
     jump L1
 
-  L29:
+  L30:
     load_var r0
     load_field .value
-    store_var _55
+    store_var _56
     load_var r0
     load_field .meta
     load_var project
     call_indirect
-    store_var _56
+    store_var _57
     load_var2 11 12
     load_type #0
     load_type #1
     init_instance<2> baml.ai.CallResult .value, .meta
 
-  L30:
+  L31:
     return
 
-  L31:
+  L32:
     load_const "provider is effectful; wrap the idempotent part or use a bespoke combinator"
     init_instance baml.errors.CannotRetry .message
     throw
@@ -20592,7 +20604,8 @@ function baml.ai.Tool.from_type(name: string, description: string, params: type)
     store_var _4
     load_var2 1 2
     load_var2 4 3
-    init_instance baml.ai.Tool .name, .description, .parameters, .params_type
+    load_const null
+    init_instance baml.ai.Tool .name, .description, .parameters, .params_type, .handoff
     return
 }
 
@@ -20716,8 +20729,8 @@ function baml.ai.ToolLoop$stream.root.ai.HttpProvider.call_messages_with(self: b
     init_instance baml.ai.LoopMeta .steps
     load_var project
     call_indirect
-    store_var _48
-    load_var2 11 18
+    store_var _57
+    load_var2 11 19
     load_type #0
     load_type #1
     init_instance<2> baml.ai.CallResult .value, .meta
@@ -20752,15 +20765,36 @@ function baml.ai.ToolLoop$stream.root.ai.HttpProvider.call_messages_with(self: b
     throw
 
   L10:
+    load_var self
+    load_field .1
+    load_var calls
+    load_field .calls
+    load_var steps
+    call baml.ai._handoff_call
+    store_var _38
+    load_var _38
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L11
+    jump L12
+
+  L11:
+    load_var _38
+    load_field .to
+    load_var steps
+    init_instance baml.errors.HandoffUnresolved .to, .steps_taken
+    throw
+
+  L12:
     load_var t
-    store_var _39
+    store_var _48
     load_var calls
     load_field .calls
     load_var d
     call_indirect
-    store_var _40
-    load_var2 6 16
-    load_var _40
+    store_var _49
+    load_var2 6 17
+    load_var _49
     load_type baml.ai.Tools
     load_const "submit"
     virtual_call nargs=3 ntypeargs=0
@@ -20897,8 +20931,8 @@ function baml.ai.ToolLoop.root.ai.HttpProvider.call_messages_with(self: baml.ai.
     init_instance baml.ai.LoopMeta .steps
     load_var project
     call_indirect
-    store_var _48
-    load_var2 11 18
+    store_var _57
+    load_var2 11 19
     load_type #0
     load_type #1
     init_instance<2> baml.ai.CallResult .value, .meta
@@ -20933,15 +20967,36 @@ function baml.ai.ToolLoop.root.ai.HttpProvider.call_messages_with(self: baml.ai.
     throw
 
   L10:
+    load_var self
+    load_field .1
+    load_var calls
+    load_field .calls
+    load_var steps
+    call baml.ai._handoff_call
+    store_var _38
+    load_var _38
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L11
+    jump L12
+
+  L11:
+    load_var _38
+    load_field .to
+    load_var steps
+    init_instance baml.errors.HandoffUnresolved .to, .steps_taken
+    throw
+
+  L12:
     load_var t
-    store_var _39
+    store_var _48
     load_var calls
     load_field .calls
     load_var d
     call_indirect
-    store_var _40
-    load_var2 6 16
-    load_var _40
+    store_var _49
+    load_var2 6 17
+    load_var _49
     load_type baml.ai.Tools
     load_const "submit"
     virtual_call nargs=3 ntypeargs=0
@@ -20989,7 +21044,7 @@ function baml.ai.ToolLoop.root.ai.Provider.is_effectful(self: baml.ai.ToolLoop) 
     return
 }
 
-function baml.ai.ToolLoop.run_to_budget(self: baml.ai.ToolLoop, prompt: string) -> T | baml.ai.Budget<T> {
+function baml.ai.ToolLoop.run_to_budget(self: baml.ai.ToolLoop, prompt: string) -> T | baml.ai.Budget<T> | baml.ai.HandoffRequest {
     load_var self
     load_field .inner
     store_var_load_var _3
@@ -21027,7 +21082,7 @@ function baml.ai.ToolLoop.run_to_budget(self: baml.ai.ToolLoop, prompt: string) 
   L3:
     load_const "unreachable"
     call baml.sys.panic
-    jump L8
+    jump L10
 
   L4:
     load_type #0
@@ -21043,7 +21098,7 @@ function baml.ai.ToolLoop.run_to_budget(self: baml.ai.ToolLoop, prompt: string) 
 
   L5:
     load_var _11
-    jump L8
+    jump L10
 
   L6:
     load_var _11
@@ -21058,7 +21113,7 @@ function baml.ai.ToolLoop.run_to_budget(self: baml.ai.ToolLoop, prompt: string) 
     load_const null
     cmp_op ==
     pop_jump_if_false L7
-    jump L9
+    jump L8
 
   L7:
     load_var2 6 9
@@ -21066,25 +21121,43 @@ function baml.ai.ToolLoop.run_to_budget(self: baml.ai.ToolLoop, prompt: string) 
     init_instance baml.ai.LoopInfo .steps, .calls
     load_var _17
     call_indirect
-    pop_jump_if_false L9
+    pop_jump_if_false L8
     load_const null
     load_var steps
     load_type #0
     init_instance<1> baml.ai.Budget .partial, .steps_taken
+    jump L10
 
   L8:
-    return
+    load_var self
+    load_field .tools
+    load_var calls
+    load_field .calls
+    load_var steps
+    call baml.ai._handoff_call
+    store_var _26
+    load_var _26
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L9
+    jump L11
 
   L9:
+    load_var _26
+
+  L10:
+    return
+
+  L11:
     load_var t
-    store_var _26
+    store_var _32
     load_var calls
     load_field .calls
     load_var d
     call_indirect
-    store_var _27
-    load_var2 4 11
-    load_var _27
+    store_var _33
+    load_var2 4 12
+    load_var _33
     load_type baml.ai.Tools
     load_const "submit"
     virtual_call nargs=3 ntypeargs=0
@@ -21092,7 +21165,7 @@ function baml.ai.ToolLoop.run_to_budget(self: baml.ai.ToolLoop, prompt: string) 
     jump L2
 }
 
-function baml.ai.Tools.run_tools(self: baml.ai.Tools, prompt: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null) -> T | baml.ai.Budget<T> {
+function baml.ai.Tools.run_tools(self: baml.ai.Tools, prompt: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null) -> T | baml.ai.Budget<T> | baml.ai.HandoffRequest {
     load_var stop_when
     load_const <omitted>
     cmp_op ==
@@ -21119,7 +21192,7 @@ function baml.ai.Tools.run_tools(self: baml.ai.Tools, prompt: string, tools: bam
   L2:
     load_const "unreachable"
     call baml.sys.panic
-    jump L7
+    jump L9
 
   L3:
     load_type #1
@@ -21135,7 +21208,7 @@ function baml.ai.Tools.run_tools(self: baml.ai.Tools, prompt: string, tools: bam
 
   L4:
     load_var _10
-    jump L7
+    jump L9
 
   L5:
     load_var _10
@@ -21148,7 +21221,7 @@ function baml.ai.Tools.run_tools(self: baml.ai.Tools, prompt: string, tools: bam
     load_const null
     cmp_op ==
     pop_jump_if_false L6
-    jump L8
+    jump L7
 
   L6:
     load_var2 7 9
@@ -21156,25 +21229,41 @@ function baml.ai.Tools.run_tools(self: baml.ai.Tools, prompt: string, tools: bam
     init_instance baml.ai.LoopInfo .steps, .calls
     load_var stop_when
     call_indirect
-    pop_jump_if_false L8
+    pop_jump_if_false L7
     load_const null
     load_var steps
     load_type #1
     init_instance<1> baml.ai.Budget .partial, .steps_taken
+    jump L9
 
   L7:
-    return
+    load_var2 3 9
+    load_field .calls
+    load_var steps
+    call baml.ai._handoff_call
+    store_var _24
+    load_var _24
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L8
+    jump L10
 
   L8:
+    load_var _24
+
+  L9:
+    return
+
+  L10:
     load_var t
-    store_var _24
+    store_var _29
     load_var calls
     load_field .calls
     load_var dispatch
     call_indirect
-    store_var _25
-    load_var2 1 10
-    load_var _25
+    store_var _30
+    load_var2 1 11
+    load_var _30
     load_type baml.ai.Tools<Transcript = Transcript>
     load_const "submit"
     virtual_call nargs=3 ntypeargs=0
@@ -21772,6 +21861,334 @@ function baml.ai.UsageMeter.wrap(self: baml.ai.UsageMeter, p: baml.ai.Provider) 
     load_var2 2 1
     init_instance baml.ai.Traced .inner, .meter
     return
+}
+
+function baml.ai._handoff_call(tools: baml.ai.Tool[], calls: baml.ai.ToolCall[], steps: int) -> baml.ai.HandoffRequest | null {
+    load_type baml.ai.ToolCall
+    load_var calls
+    call baml.iter.Iterable$for$T[].iter
+    store_var _4
+
+  L0:
+    load_var _4
+    is_type baml.iter.Flatten<...>
+    pop_jump_if_false L1
+    jump L18
+
+  L1:
+    load_var _4
+    is_type baml.iter.ArrayIterator<...>
+    pop_jump_if_false L2
+    jump L17
+
+  L2:
+    load_var _4
+    is_type baml.iter.StepBy<...>
+    pop_jump_if_false L3
+    jump L16
+
+  L3:
+    load_var _4
+    is_type baml.iter.Chain<...>
+    pop_jump_if_false L4
+    jump L15
+
+  L4:
+    load_var _4
+    is_type baml.iter.Repeat<...>
+    pop_jump_if_false L5
+    jump L14
+
+  L5:
+    load_var _4
+    is_type baml.iter.Map<...>
+    pop_jump_if_false L6
+    jump L13
+
+  L6:
+    load_var _4
+    is_type baml.iter.Filter<...>
+    pop_jump_if_false L7
+    jump L12
+
+  L7:
+    load_var _4
+    is_type baml.iter.FilterMap<...>
+    pop_jump_if_false L8
+    jump L11
+
+  L8:
+    load_var _4
+    is_type baml.iter.FlatMap<...>
+    pop_jump_if_false L9
+    jump L10
+
+  L9:
+    load_var _4
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L45
+    load_type baml.ai.ToolCall
+    load_type never
+    load_var _4
+    call baml.iter.Peekable.Iterator.next
+    store_var _6
+    jump L19
+
+  L10:
+    load_var _4
+    make_bound_method baml.iter.FlatMap.Iterator.next
+    call_indirect
+    store_var _6
+    jump L19
+
+  L11:
+    load_var _4
+    make_bound_method baml.iter.FilterMap.Iterator.next
+    call_indirect
+    store_var _6
+    jump L19
+
+  L12:
+    load_type baml.ai.ToolCall
+    load_type never
+    load_type never
+    load_var _4
+    call baml.iter.Filter.Iterator.next
+    store_var _6
+    jump L19
+
+  L13:
+    load_var _4
+    make_bound_method baml.iter.Map.Iterator.next
+    call_indirect
+    store_var _6
+    jump L19
+
+  L14:
+    load_type baml.ai.ToolCall
+    load_var _4
+    call baml.iter.Repeat.Iterator.next
+    store_var _6
+    jump L19
+
+  L15:
+    load_type baml.ai.ToolCall
+    load_type never
+    load_type never
+    load_var _4
+    call baml.iter.Chain.Iterator.next
+    store_var _6
+    jump L19
+
+  L16:
+    load_type baml.ai.ToolCall
+    load_type never
+    load_var _4
+    call baml.iter.StepBy.Iterator.next
+    store_var _6
+    jump L19
+
+  L17:
+    load_type baml.ai.ToolCall
+    load_var _4
+    call baml.iter.ArrayIterator.Iterator.next
+    store_var _6
+    jump L19
+
+  L18:
+    load_var _4
+    make_bound_method baml.iter.Flatten.Iterator.next
+    call_indirect
+    store_var _6
+
+  L19:
+    load_var _6
+    is_type baml.iter.Done
+    pop_jump_if_false L20
+    jump L43
+
+  L20:
+    load_var _6
+    store_var c
+    load_type baml.ai.Tool
+    load_var tools
+    call baml.iter.Iterable$for$T[].iter
+    store_var _36
+
+  L21:
+    load_var _36
+    is_type baml.iter.Flatten<...>
+    pop_jump_if_false L22
+    jump L39
+
+  L22:
+    load_var _36
+    is_type baml.iter.ArrayIterator<...>
+    pop_jump_if_false L23
+    jump L38
+
+  L23:
+    load_var _36
+    is_type baml.iter.StepBy<...>
+    pop_jump_if_false L24
+    jump L37
+
+  L24:
+    load_var _36
+    is_type baml.iter.Chain<...>
+    pop_jump_if_false L25
+    jump L36
+
+  L25:
+    load_var _36
+    is_type baml.iter.Repeat<...>
+    pop_jump_if_false L26
+    jump L35
+
+  L26:
+    load_var _36
+    is_type baml.iter.Map<...>
+    pop_jump_if_false L27
+    jump L34
+
+  L27:
+    load_var _36
+    is_type baml.iter.Filter<...>
+    pop_jump_if_false L28
+    jump L33
+
+  L28:
+    load_var _36
+    is_type baml.iter.FilterMap<...>
+    pop_jump_if_false L29
+    jump L32
+
+  L29:
+    load_var _36
+    is_type baml.iter.FlatMap<...>
+    pop_jump_if_false L30
+    jump L31
+
+  L30:
+    load_var _36
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L45
+    load_type baml.ai.Tool
+    load_type never
+    load_var _36
+    call baml.iter.Peekable.Iterator.next
+    store_var _38
+    jump L40
+
+  L31:
+    load_var _36
+    make_bound_method baml.iter.FlatMap.Iterator.next
+    call_indirect
+    store_var _38
+    jump L40
+
+  L32:
+    load_var _36
+    make_bound_method baml.iter.FilterMap.Iterator.next
+    call_indirect
+    store_var _38
+    jump L40
+
+  L33:
+    load_type baml.ai.Tool
+    load_type never
+    load_type never
+    load_var _36
+    call baml.iter.Filter.Iterator.next
+    store_var _38
+    jump L40
+
+  L34:
+    load_var _36
+    make_bound_method baml.iter.Map.Iterator.next
+    call_indirect
+    store_var _38
+    jump L40
+
+  L35:
+    load_type baml.ai.Tool
+    load_var _36
+    call baml.iter.Repeat.Iterator.next
+    store_var _38
+    jump L40
+
+  L36:
+    load_type baml.ai.Tool
+    load_type never
+    load_type never
+    load_var _36
+    call baml.iter.Chain.Iterator.next
+    store_var _38
+    jump L40
+
+  L37:
+    load_type baml.ai.Tool
+    load_type never
+    load_var _36
+    call baml.iter.StepBy.Iterator.next
+    store_var _38
+    jump L40
+
+  L38:
+    load_type baml.ai.Tool
+    load_var _36
+    call baml.iter.ArrayIterator.Iterator.next
+    store_var _38
+    jump L40
+
+  L39:
+    load_var _36
+    make_bound_method baml.iter.Flatten.Iterator.next
+    call_indirect
+    store_var _38
+
+  L40:
+    load_var _38
+    is_type baml.iter.Done
+    pop_jump_if_false L41
+    jump L0
+
+  L41:
+    load_var _38
+    store_var_load_var tool
+    load_field .name
+    load_var c
+    load_field .name
+    cmp_op ==
+    jump_if_false L42
+    pop 1
+    load_var tool
+    load_field .handoff
+    store_var _72
+    load_var2 10 10
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L42
+    load_const false
+
+  L42:
+    pop_jump_if_false L21
+    load_var c
+    load_field .name
+    load_var c
+    load_field .args
+    load_var steps
+    init_instance baml.ai.HandoffRequest .to, .args, .steps_taken
+    jump L44
+
+  L43:
+    load_const null
+
+  L44:
+    return
+
+  L45:
+    unreachable
 }
 
 function baml.ai._messages_text(messages: baml.ai.ChatMessage[]) -> string {
@@ -22731,7 +23148,7 @@ function baml.ai.drive_live(client: baml.ai.Provider, prompt: baml.llm.PromptAst
     return
 }
 
-function baml.ai.drive_run_tools(client: baml.ai.Provider, prompt: baml.llm.PromptAst, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null) -> T | baml.ai.Budget<T> {
+function baml.ai.drive_run_tools(client: baml.ai.Provider, prompt: baml.llm.PromptAst, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null) -> T | baml.ai.Budget<T> | baml.ai.HandoffRequest {
     load_var stop_when
     load_const <omitted>
     cmp_op ==
@@ -25151,6 +25568,96 @@ function baml.errors.Failure$for$Unsupported.is_retryable(self: baml.errors.Unsu
 
 function baml.errors.Failure$for$Unsupported.is_unsupported(self: baml.errors.Unsupported) -> bool {
     load_const true
+    return
+}
+
+function baml.errors.HandoffUnresolved$stream.CallError.is_network_error(self: baml.errors.HandoffUnresolved$stream) -> bool {
+    load_const false
+    return
+}
+
+function baml.errors.HandoffUnresolved$stream.CallError.is_parse_error(self: baml.errors.HandoffUnresolved$stream) -> bool {
+    load_const false
+    return
+}
+
+function baml.errors.HandoffUnresolved$stream.CallError.is_rate_limit(self: baml.errors.HandoffUnresolved$stream) -> bool {
+    load_const false
+    return
+}
+
+function baml.errors.HandoffUnresolved$stream.Failure.is_effectful(self: baml.errors.HandoffUnresolved$stream) -> bool {
+    load_const true
+    return
+}
+
+function baml.errors.HandoffUnresolved$stream.Failure.is_policy_refusal(self: baml.errors.HandoffUnresolved$stream) -> bool {
+    load_const false
+    return
+}
+
+function baml.errors.HandoffUnresolved$stream.Failure.is_resumable(self: baml.errors.HandoffUnresolved$stream) -> bool {
+    load_const true
+    return
+}
+
+function baml.errors.HandoffUnresolved$stream.Failure.is_retryable(self: baml.errors.HandoffUnresolved$stream) -> bool {
+    load_const false
+    return
+}
+
+function baml.errors.HandoffUnresolved$stream.Failure.is_unsupported(self: baml.errors.HandoffUnresolved$stream) -> bool {
+    load_const false
+    return
+}
+
+function baml.errors.HandoffUnresolved$stream.ToolError.is_network_error(self: baml.errors.HandoffUnresolved$stream) -> bool {
+    load_const false
+    return
+}
+
+function baml.errors.HandoffUnresolved.CallError.is_network_error(self: baml.errors.HandoffUnresolved) -> bool {
+    load_const false
+    return
+}
+
+function baml.errors.HandoffUnresolved.CallError.is_parse_error(self: baml.errors.HandoffUnresolved) -> bool {
+    load_const false
+    return
+}
+
+function baml.errors.HandoffUnresolved.CallError.is_rate_limit(self: baml.errors.HandoffUnresolved) -> bool {
+    load_const false
+    return
+}
+
+function baml.errors.HandoffUnresolved.Failure.is_effectful(self: baml.errors.HandoffUnresolved) -> bool {
+    load_const true
+    return
+}
+
+function baml.errors.HandoffUnresolved.Failure.is_policy_refusal(self: baml.errors.HandoffUnresolved) -> bool {
+    load_const false
+    return
+}
+
+function baml.errors.HandoffUnresolved.Failure.is_resumable(self: baml.errors.HandoffUnresolved) -> bool {
+    load_const true
+    return
+}
+
+function baml.errors.HandoffUnresolved.Failure.is_retryable(self: baml.errors.HandoffUnresolved) -> bool {
+    load_const false
+    return
+}
+
+function baml.errors.HandoffUnresolved.Failure.is_unsupported(self: baml.errors.HandoffUnresolved) -> bool {
+    load_const false
+    return
+}
+
+function baml.errors.HandoffUnresolved.ToolError.is_network_error(self: baml.errors.HandoffUnresolved) -> bool {
+    load_const false
     return
 }
 

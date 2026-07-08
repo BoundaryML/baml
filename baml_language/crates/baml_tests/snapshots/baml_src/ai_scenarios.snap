@@ -250,6 +250,24 @@ function ai_scenarios.$init_test_ns_ai_scenarios_14_multi_agent_usage(registry: 
     load_const null
     call testing.TestCollector.register_test
     pop 1
+    load_var registry
+    load_const "14: a handoff-marked tool call returns the HandoffRequest arm (run_to_budget)"
+    make_closure .<lambda($init_test_ns_ai_scenarios_14_multi_agent_usage, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "14: the plain LLM-function path surfaces an unresolved handoff as a TYPED throw"
+    make_closure .<lambda($init_test_ns_ai_scenarios_14_multi_agent_usage, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "14: run_tools surfaces the HandoffRequest arm on the interface loop too"
+    make_closure .<lambda($init_test_ns_ai_scenarios_14_multi_agent_usage, 4)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
     load_const null
     return
 }
@@ -883,7 +901,7 @@ function ai_scenarios.AskOnce$render_prompt(q: string, client: baml.ai.Provider)
     return
 }
 
-function ai_scenarios.AskOnce$run_tools(q: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null, client: baml.ai.Provider) -> string | baml.ai.Budget<string> {
+function ai_scenarios.AskOnce$run_tools(q: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null, client: baml.ai.Provider) -> string | baml.ai.Budget<string> | baml.ai.HandoffRequest {
     load_var stop_when
     load_const <omitted>
     cmp_op ==
@@ -1756,7 +1774,7 @@ function ai_scenarios.ExtractPerson$render_prompt(doc: string, client: baml.ai.P
     return
 }
 
-function ai_scenarios.ExtractPerson$run_tools(doc: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null, client: baml.ai.Provider) -> ai_scenarios.S02Person | baml.ai.Budget<ai_scenarios.S02Person> {
+function ai_scenarios.ExtractPerson$run_tools(doc: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null, client: baml.ai.Provider) -> ai_scenarios.S02Person | baml.ai.Budget<ai_scenarios.S02Person> | baml.ai.HandoffRequest {
     load_var stop_when
     load_const <omitted>
     cmp_op ==
@@ -2341,7 +2359,7 @@ function ai_scenarios.ResearchIt$render_prompt(q: string, client: baml.ai.Provid
     return
 }
 
-function ai_scenarios.ResearchIt$run_tools(q: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null, client: baml.ai.Provider) -> string | baml.ai.Budget<string> {
+function ai_scenarios.ResearchIt$run_tools(q: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null, client: baml.ai.Provider) -> string | baml.ai.Budget<string> | baml.ai.HandoffRequest {
     load_var stop_when
     load_const <omitted>
     cmp_op ==
@@ -3186,7 +3204,7 @@ function ai_scenarios.StreamStory$render_prompt(topic: string, client: baml.ai.P
     return
 }
 
-function ai_scenarios.StreamStory$run_tools(topic: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null, client: baml.ai.Provider) -> string | baml.ai.Budget<string> {
+function ai_scenarios.StreamStory$run_tools(topic: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null, client: baml.ai.Provider) -> string | baml.ai.Budget<string> | baml.ai.HandoffRequest {
     load_var stop_when
     load_const <omitted>
     cmp_op ==
@@ -3405,7 +3423,7 @@ function ai_scenarios.Summarize$render_prompt(q: string, client: baml.ai.Provide
     return
 }
 
-function ai_scenarios.Summarize$run_tools(q: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null, client: baml.ai.Provider) -> string | baml.ai.Budget<string> {
+function ai_scenarios.Summarize$run_tools(q: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null, client: baml.ai.Provider) -> string | baml.ai.Budget<string> | baml.ai.HandoffRequest {
     load_var stop_when
     load_const <omitted>
     cmp_op ==
@@ -3624,7 +3642,7 @@ function ai_scenarios.ThinkHard$render_prompt(q: string, client: baml.ai.Provide
     return
 }
 
-function ai_scenarios.ThinkHard$run_tools(q: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null, client: baml.ai.Provider) -> string | baml.ai.Budget<string> {
+function ai_scenarios.ThinkHard$run_tools(q: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null, client: baml.ai.Provider) -> string | baml.ai.Budget<string> | baml.ai.HandoffRequest {
     load_var stop_when
     load_const <omitted>
     cmp_op ==
@@ -3843,7 +3861,7 @@ function ai_scenarios.VoiceChat$render_prompt(instructions: string, client: baml
     return
 }
 
-function ai_scenarios.VoiceChat$run_tools(instructions: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null, client: baml.ai.Provider) -> string | baml.ai.Budget<string> {
+function ai_scenarios.VoiceChat$run_tools(instructions: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null, client: baml.ai.Provider) -> string | baml.ai.Budget<string> | baml.ai.HandoffRequest {
     load_var stop_when
     load_const <omitted>
     cmp_op ==
@@ -4303,7 +4321,8 @@ function ai_scenarios.lookup_tools() -> baml.ai.Tool[] {
     load_const "Look something up."
     load_const "{}"
     load_const null
-    init_instance baml.ai.Tool .name, .description, .parameters, .params_type
+    load_const null
+    init_instance baml.ai.Tool .name, .description, .parameters, .params_type, .handoff
     load_type baml.ai.Tool
     alloc_array 1
     return
@@ -5106,6 +5125,18 @@ function ai_scenarios.s14_handoff_dispatch(specialist: baml.ai.Provider, calls: 
 
   L40:
     unreachable
+}
+
+function ai_scenarios.s14_transfer_tools() -> baml.ai.Tool[] {
+    load_const "lookup"
+    load_const "Transfer this conversation to the lookup specialist."
+    load_const "{}"
+    load_const null
+    load_const true
+    init_instance baml.ai.Tool .name, .description, .parameters, .params_type, .handoff
+    load_type baml.ai.Tool
+    alloc_array 1
+    return
 }
 
 function ai_scenarios.s15_guarded_call(p: baml.ai.Provider, prompt: string, blocked: string) -> string {

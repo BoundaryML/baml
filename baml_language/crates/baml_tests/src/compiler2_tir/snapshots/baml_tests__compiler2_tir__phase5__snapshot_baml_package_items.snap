@@ -65,6 +65,7 @@ namespace baml.ai:
   class GeminiResponseMeta { methods: [_wire, finish_reason, usage, reasoning, logprobs, citations] }
   class GeminiResponseWire { methods: [] }
   class GeminiUsageWire { methods: [] }
+  class HandoffRequest { methods: [] }
   class HeaderAuth { methods: [] }
   type HttpProvider
   class Job<T> { methods: [] }
@@ -124,6 +125,7 @@ namespace baml.ai:
   class Usage { methods: [] }
   class UsageMeter { methods: [record, calls, total, aggregate, wrap] }
   class Window { methods: [] }
+  function _handoff_call
   function _messages_text
   function _openai_responses_envelope
   function _openai_responses_output_text
@@ -193,6 +195,7 @@ namespace baml.errors:
   class ErrorContext { methods: [root_cause, _to_string_impl, to_string] }
   type Failure
   class GenericSdkError { methods: [] }
+  class HandoffUnresolved { methods: [is_retryable, is_effectful, is_policy_refusal, is_resumable, is_unsupported, is_network_error, is_rate_limit, is_parse_error, is_network_error] }
   class HostCallable { methods: [] }
   class InvalidArgument { methods: [] }
   class Io { methods: [] }

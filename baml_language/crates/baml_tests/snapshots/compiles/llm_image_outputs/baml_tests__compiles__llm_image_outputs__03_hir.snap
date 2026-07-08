@@ -17,7 +17,7 @@ function user.GenerateImage$live(prompt: string, io: baml.ai.Channel, client: ba
 function user.GenerateImage$render_prompt(prompt: string, client: baml.ai.Provider = OpenAIImageResponses) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(client, "GenerateImage", map { "prompt": prompt })
 }
-function user.GenerateImage$run_tools(prompt: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: (baml.ai.LoopInfo) -> bool throws never? = null, client: baml.ai.Provider = OpenAIImageResponses) -> image | baml.ai.Budget<image>  [expr] {
+function user.GenerateImage$run_tools(prompt: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: (baml.ai.LoopInfo) -> bool throws never? = null, client: baml.ai.Provider = OpenAIImageResponses) -> image | baml.ai.Budget<image> | baml.ai.HandoffRequest  [expr] {
   baml.ai.drive_run_tools(client, GenerateImage$render_prompt(prompt = prompt, client = client), tools, dispatch, stop_when = stop_when)
 }
 function user.GenerateImage$with(prompt: string, project: (baml.ai.ResponseMeta) -> V throws E2, client: baml.ai.Provider = OpenAIImageResponses) -> baml.ai.CallResult<image, V>  [expr] {
@@ -38,7 +38,7 @@ function user.GenerateImageSet$live(prompt: string, io: baml.ai.Channel, client:
 function user.GenerateImageSet$render_prompt(prompt: string, client: baml.ai.Provider = OpenAIImageResponses) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(client, "GenerateImageSet", map { "prompt": prompt })
 }
-function user.GenerateImageSet$run_tools(prompt: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: (baml.ai.LoopInfo) -> bool throws never? = null, client: baml.ai.Provider = OpenAIImageResponses) -> image[] | baml.ai.Budget<image[]>  [expr] {
+function user.GenerateImageSet$run_tools(prompt: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: (baml.ai.LoopInfo) -> bool throws never? = null, client: baml.ai.Provider = OpenAIImageResponses) -> image[] | baml.ai.Budget<image[]> | baml.ai.HandoffRequest  [expr] {
   baml.ai.drive_run_tools(client, GenerateImageSet$render_prompt(prompt = prompt, client = client), tools, dispatch, stop_when = stop_when)
 }
 function user.GenerateImageSet$with(prompt: string, project: (baml.ai.ResponseMeta) -> V throws E2, client: baml.ai.Provider = OpenAIImageResponses) -> baml.ai.CallResult<image[], V>  [expr] {
@@ -59,7 +59,7 @@ function user.GenerateMixedImageNarrative$live(prompt: string, io: baml.ai.Chann
 function user.GenerateMixedImageNarrative$render_prompt(prompt: string, client: baml.ai.Provider = OpenAIImageResponses) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(client, "GenerateMixedImag...", map { "prompt": prompt })
 }
-function user.GenerateMixedImageNarrative$run_tools(prompt: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: (baml.ai.LoopInfo) -> bool throws never? = null, client: baml.ai.Provider = OpenAIImageResponses) -> image | string[] | baml.ai.Budget<image | string[]>  [expr] {
+function user.GenerateMixedImageNarrative$run_tools(prompt: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: (baml.ai.LoopInfo) -> bool throws never? = null, client: baml.ai.Provider = OpenAIImageResponses) -> image | string[] | baml.ai.Budget<image | string[]> | baml.ai.HandoffRequest  [expr] {
   baml.ai.drive_run_tools(client, GenerateMixedImageNarrative$render_prompt(prompt = prompt, client = client), tools, dispatch, stop_when = stop_when)
 }
 function user.GenerateMixedImageNarrative$with(prompt: string, project: (baml.ai.ResponseMeta) -> V throws E2, client: baml.ai.Provider = OpenAIImageResponses) -> baml.ai.CallResult<image | string[], V>  [expr] {

@@ -268,9 +268,9 @@ fn user.AskDocs$render_prompt(query: string, max_results: int, filter: string, c
     }
 }
 
-fn user.AskDocs$run_tools(query: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, max_results: int, filter: string, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null, client: baml.ai.Provider) -> string | baml.ai.Budget<string> {
+fn user.AskDocs$run_tools(query: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, max_results: int, filter: string, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null, client: baml.ai.Provider) -> string | baml.ai.Budget<string> | baml.ai.HandoffRequest {
     // Locals:
-    let _0: string | baml.ai.Budget<string> // _0 // return
+    let _0: string | baml.ai.Budget<string> | baml.ai.HandoffRequest // _0 // return
     let _1: string // query // param
     let _2: baml.ai.Tool[] // tools // param
     let _3: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never // dispatch // param

@@ -163,9 +163,9 @@ fn user.TypeBuilderFn$render_prompt(from_text: string, client: baml.ai.Provider)
     }
 }
 
-fn user.TypeBuilderFn$run_tools(from_text: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null, client: baml.ai.Provider) -> Resume | baml.ai.Budget<Resume> {
+fn user.TypeBuilderFn$run_tools(from_text: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null, client: baml.ai.Provider) -> Resume | baml.ai.Budget<Resume> | baml.ai.HandoffRequest {
     // Locals:
-    let _0: Resume | baml.ai.Budget<Resume> // _0 // return
+    let _0: Resume | baml.ai.Budget<Resume> | baml.ai.HandoffRequest // _0 // return
     let _1: string // from_text // param
     let _2: baml.ai.Tool[] // tools // param
     let _3: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never // dispatch // param

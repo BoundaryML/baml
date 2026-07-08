@@ -153,3 +153,32 @@ implements CallError for LoopBudgetExceeded {
 implements ToolError for LoopBudgetExceeded {
   function is_network_error(self) -> bool { false }
 }
+
+/// D5: thrown when the model called a handoff-marked tool on the PLAIN call
+/// path (whose return type has no handoff arm — an `HttpProvider` call must
+/// produce `T`). Use `run_tools`/`$run_tools` (or `ToolLoop.run_to_budget`) to
+/// receive the `HandoffRequest` outcome instead. A deliberate transfer: not
+/// retryable (re-driving replays tool side effects), effectful (turns already
+/// ran and billed).
+class HandoffUnresolved {
+    to: string,
+    steps_taken: int,
+}
+
+implements Failure for HandoffUnresolved {
+  function is_retryable(self) -> bool { false }
+  function is_effectful(self) -> bool { true }
+  function is_policy_refusal(self) -> bool { false }
+  function is_resumable(self) -> bool { true }
+  function is_unsupported(self) -> bool { false }
+}
+
+implements CallError for HandoffUnresolved {
+  function is_network_error(self) -> bool { false }
+  function is_rate_limit(self) -> bool { false }
+  function is_parse_error(self) -> bool { false }
+}
+
+implements ToolError for HandoffUnresolved {
+  function is_network_error(self) -> bool { false }
+}

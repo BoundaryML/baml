@@ -101,6 +101,7 @@ test "run_to_budget returns the Budget sum arm instead of throwing" {
     };
     let label = match (outcome) {
         let b: baml.ai.Budget<string> => "stopped at " + b.steps_taken.to_string(),
+        let h: baml.ai.HandoffRequest => "unexpected handoff",
         let s: string => s,
     };
     assert.equal(label, "stopped at 1")
@@ -121,6 +122,7 @@ test "has_tool_call stops when the named tool is requested" {
     };
     let label = match (outcome) {
         let b: baml.ai.Budget<string> => "stopped at " + b.steps_taken.to_string(),
+        let h: baml.ai.HandoffRequest => "unexpected handoff",
         let s: string => s,
     };
     assert.equal(label, "stopped at 1")
@@ -179,6 +181,7 @@ test "Foo$run_tools drives the loop through a swapped-in Tools provider" {
     };
     let r = match (outcome) {
         let b: baml.ai.Budget<string> => "unexpected budget",
+        let h: baml.ai.HandoffRequest => "unexpected handoff",
         let v: string => v,
     };
     assert.equal(r, "companion answer")
@@ -209,6 +212,7 @@ test "Foo$run_tools with stop_when surfaces the Budget arm (D5)" {
     };
     let r = match (outcome) {
         let b: baml.ai.Budget<string> => "budget@" + b.steps_taken.to_string(),
+        let h: baml.ai.HandoffRequest => "unexpected handoff",
         let v: string => v,
     };
     assert.equal(r, "budget@1")

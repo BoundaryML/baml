@@ -191,7 +191,7 @@ function user.TypeBuilderFn$render_prompt(from_text: string, client: baml.ai.Pro
     return
 }
 
-function user.TypeBuilderFn$run_tools(from_text: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null, client: baml.ai.Provider) -> Resume | baml.ai.Budget<Resume> {
+function user.TypeBuilderFn$run_tools(from_text: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null, client: baml.ai.Provider) -> Resume | baml.ai.Budget<Resume> | baml.ai.HandoffRequest {
     load_var stop_when
     load_const <omitted>
     cmp_op ==

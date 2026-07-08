@@ -27,8 +27,8 @@ function user.HelloWorld$with<V, E2>(name: string, project: (baml.ai.ResponseMet
   !! 44..104: unresolved name: GPT4
   !! 44..104: type mismatch: expected baml.ai.Provider, got unknown
 }
-function user.HelloWorld$run_tools(name: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null = null, client: baml.ai.Provider = GPT4) -> string | baml.ai.Budget<string> throws never {
-  baml.ai.drive_run_tools<T>(client, HelloWorld$render_prompt(name = name, client = client), tools, dispatch, stop_when = stop_when) : string | baml.ai.Budget<string>
+function user.HelloWorld$run_tools(name: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null = null, client: baml.ai.Provider = GPT4) -> string | baml.ai.Budget<string> | baml.ai.HandoffRequest throws never {
+  baml.ai.drive_run_tools<T>(client, HelloWorld$render_prompt(name = name, client = client), tools, dispatch, stop_when = stop_when) : string | baml.ai.Budget<string> | baml.ai.HandoffRequest
   !! 44..104: unresolved name: GPT4
   !! 44..104: type mismatch: expected baml.ai.Provider, got unknown
 }

@@ -17,7 +17,7 @@ function user.ExtractAny$live(io: baml.ai.Channel, client: baml.ai.Provider = Te
 function user.ExtractAny$render_prompt(client: baml.ai.Provider = TestClient) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(client, "ExtractAny", map {  })
 }
-function user.ExtractAny$run_tools(tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: (baml.ai.LoopInfo) -> bool throws never? = null, client: baml.ai.Provider = TestClient) -> baml.json.json | baml.ai.Budget<baml.json.json>  [expr] {
+function user.ExtractAny$run_tools(tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: (baml.ai.LoopInfo) -> bool throws never? = null, client: baml.ai.Provider = TestClient) -> baml.json.json | baml.ai.Budget<baml.json.json> | baml.ai.HandoffRequest  [expr] {
   baml.ai.drive_run_tools(client, ExtractAny$render_prompt(client = client), tools, dispatch, stop_when = stop_when)
 }
 function user.ExtractAny$with(project: (baml.ai.ResponseMeta) -> V throws E2, client: baml.ai.Provider = TestClient) -> baml.ai.CallResult<baml.json.json, V>  [expr] {

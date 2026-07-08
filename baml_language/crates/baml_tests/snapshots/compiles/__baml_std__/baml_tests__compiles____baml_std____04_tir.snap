@@ -416,6 +416,7 @@ class baml.ai.Tool {
   description: string
   parameters: string
   params_type: type | null
+  handoff: bool | null
 }
 function baml.ai.Tool.from_type(name: string, description: string, params: type) -> baml.ai.Tool throws baml.errors.Unsupported {
   { : baml.ai.Tool
@@ -451,6 +452,11 @@ class baml.ai.ToolResult {
 class baml.ai.ToolCalls {
   calls: baml.ai.ToolCall[]
 }
+class baml.ai.HandoffRequest {
+  to: string
+  args: string
+  steps_taken: int
+}
 function baml.ai.invoke_tool<A>(call: baml.ai.ToolCall, handler: (A) -> string throws never) -> baml.ai.ToolResult throws never {
   { : baml.ai.ToolResult
     let args: A = : A
@@ -463,7 +469,7 @@ function baml.ai.invoke_tool<A>(call: baml.ai.ToolCall, handler: (A) -> string t
     ToolResult { id: call.id, output: handler(args) } : baml.ai.ToolResult
   }
 }
-function baml.ai.Tools.run_tools<T>(self: baml.ai.Tools, prompt: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null = null) -> T | baml.ai.Budget<T> throws baml.errors.ToolError | baml.errors.UnknownError {
+function baml.ai.Tools.run_tools<T>(self: baml.ai.Tools, prompt: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null = null) -> T | baml.ai.Budget<T> | baml.ai.HandoffRequest throws baml.errors.ToolError | baml.errors.UnknownError {
   { : never
     let t = self.begin(prompt, tools) : Self.Transcript
     let steps = 0 : 0 -> int
@@ -484,6 +490,14 @@ function baml.ai.Tools.run_tools<T>(self: baml.ai.Tools, prompt: string, tools: 
                         return Budget { partial: null, steps_taken: steps } : baml.ai.Budget<T>
                       }
                   }
+              match (_handoff_call(tools, calls.calls, steps) : baml.ai.HandoffRequest | null) : void
+                null =>
+                  { : void
+                  }
+                h: HandoffRequest =>
+                  { : never
+                    return h : baml.ai.HandoffRequest
+                  }
               t = self.submit(t, dispatch(calls.calls)) : Self.Transcript
             }
           value: T =>
@@ -494,12 +508,27 @@ function baml.ai.Tools.run_tools<T>(self: baml.ai.Tools, prompt: string, tools: 
     root.sys.panic("unreachable") : never
   }
 }
-function baml.ai.drive_run_tools<T>(client: baml.ai.Provider, prompt: baml.llm.PromptAst, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null = null) -> T | baml.ai.Budget<T> throws baml.errors.ToolError | baml.errors.UnknownError {
-  { : T | baml.ai.Budget<T>
+function baml.ai._handoff_call(tools: baml.ai.Tool[], calls: baml.ai.ToolCall[], steps: int) -> baml.ai.HandoffRequest | null throws never {
+  { : null
+    for c in calls
+      { : void
+        for tool in tools
+          { : void
+            if (tool.name == c.name && tool.handoff ?? false : bool) : void
+              { : never
+                return HandoffRequest { to: c.name, args: c.args, steps_taken: steps } : baml.ai.HandoffRequest
+              }
+          }
+      }
+    null : null
+  }
+}
+function baml.ai.drive_run_tools<T>(client: baml.ai.Provider, prompt: baml.llm.PromptAst, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null = null) -> T | baml.ai.Budget<T> | baml.ai.HandoffRequest throws baml.errors.ToolError | baml.errors.UnknownError {
+  { : T | baml.ai.Budget<T> | baml.ai.HandoffRequest
     let text = root.llm.prompt_to_text(prompt) : string
-    match (client : baml.ai.Provider) : T | baml.ai.Budget<T>
+    match (client : baml.ai.Provider) : T | baml.ai.Budget<T> | baml.ai.HandoffRequest
       tp: Tools =>
-        tp.run_tools<T>(text, tools, dispatch, stop_when = stop_when) : T | baml.ai.Budget<T>
+        tp.run_tools<T>(text, tools, dispatch, stop_when = stop_when) : T | baml.ai.Budget<T> | baml.ai.HandoffRequest
       _ =>
         throw root.errors.Unsupported { message: "client's provider..." } : never
   }
@@ -592,7 +621,7 @@ class baml.ai.ToolLoop {
   dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never
   stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null
 }
-function baml.ai.ToolLoop.run_to_budget<T>(self: baml.ai.ToolLoop, prompt: string) -> T | baml.ai.Budget<T> throws baml.errors.ToolError | baml.errors.UnknownError {
+function baml.ai.ToolLoop.run_to_budget<T>(self: baml.ai.ToolLoop, prompt: string) -> T | baml.ai.Budget<T> | baml.ai.HandoffRequest throws baml.errors.ToolError | baml.errors.UnknownError {
   { : never
     match (self.inner : baml.ai.Provider) : never
       tp: Tools =>
@@ -616,6 +645,14 @@ function baml.ai.ToolLoop.run_to_budget<T>(self: baml.ai.ToolLoop, prompt: strin
                             { : never
                               return Budget { partial: null, steps_taken: steps } : baml.ai.Budget<T>
                             }
+                        }
+                    match (_handoff_call(self.tools, calls.calls, steps) : baml.ai.HandoffRequest | null) : void
+                      null =>
+                        { : void
+                        }
+                      h: HandoffRequest =>
+                        { : never
+                          return h : baml.ai.HandoffRequest
                         }
                     t = tp.submit(t, d(calls.calls)) : baml.ai.Tools.Transcript
                   }
@@ -690,6 +727,14 @@ function baml.ai.ToolLoop.call_messages_with<T, V, E2>(self: baml.ai.ToolLoop, m
                               throw root.errors.LoopBudgetExceeded { steps_taken: steps } : baml.errors.LoopBudgetExceeded
                             }
                         }
+                    match (_handoff_call(self.tools, calls.calls, steps) : baml.ai.HandoffRequest | null) : void
+                      null =>
+                        { : void
+                        }
+                      h: HandoffRequest =>
+                        { : never
+                          throw root.errors.HandoffUnresolved { to: h.to, steps_taken: steps } : baml.errors.HandoffUnresolved
+                        }
                     t = tp.submit(t, d(calls.calls)) catch (e) { _ => throw root.errors.UnknownError { data: e, message: ["tool loop: submit..."] } } : baml.ai.Tools.Transcript
                   }
                 value: T =>
@@ -735,6 +780,7 @@ class baml.ai.Tool$stream {
   description: string | null
   parameters: string | null
   params_type: unknown | null
+  handoff: bool | null
 }
 class baml.ai.ToolCall$stream {
   id: string | null
@@ -747,6 +793,11 @@ class baml.ai.ToolResult$stream {
 }
 class baml.ai.ToolCalls$stream {
   calls: baml.ai.ToolCall$stream[]
+}
+class baml.ai.HandoffRequest$stream {
+  to: string | null
+  args: string | null
+  steps_taken: int | null
 }
 class baml.ai.LoopInfo$stream {
   steps: int | null
@@ -850,6 +901,14 @@ function baml.ai.ToolLoop$stream.call_messages_with<T, V, E2>(self: baml.ai.Tool
                               throw root.errors.LoopBudgetExceeded { steps_taken: steps } : baml.errors.LoopBudgetExceeded
                             }
                         }
+                    match (_handoff_call(self.tools, calls.calls, steps) : baml.ai.HandoffRequest | null) : void
+                      null =>
+                        { : void
+                        }
+                      h: HandoffRequest =>
+                        { : never
+                          throw root.errors.HandoffUnresolved { to: h.to, steps_taken: steps } : baml.errors.HandoffUnresolved
+                        }
                     t = tp.submit(t, d(calls.calls)) catch (e) { _ => throw root.errors.UnknownError { data: e, message: ["tool loop: submit..."] } } : baml.ai.Tools.Transcript
                   }
                 value: T =>
@@ -862,9 +921,10 @@ function baml.ai.ToolLoop$stream.call_messages_with<T, V, E2>(self: baml.ai.Tool
       _ =>
         throw root.errors.Unsupported { message: "ToolLoop.inner do..." } : never
   }
-  !! 12340..12350: type mismatch: expected baml.ai.Tool[], got baml.ai.Tool$stream[]
-  !! 13428..13442: `unknown` is not a function — it cannot be called
-  !! 13428..13442: `unknown` is not a function — it cannot be called
+  !! 14334..14344: type mismatch: expected baml.ai.Tool[], got baml.ai.Tool$stream[]
+  !! 15668..15678: type mismatch: expected baml.ai.Tool[], got baml.ai.Tool$stream[]
+  !! 16046..16060: `unknown` is not a function — it cannot be called
+  !! 16046..16060: `unknown` is not a function — it cannot be called
 }
 
 --- <builtin>/baml/ns_ai/combinators.baml ---
@@ -6497,6 +6557,55 @@ function baml.errors.LoopBudgetExceeded.is_network_error(self: baml.errors.LoopB
     false : false
   }
 }
+class baml.errors.HandoffUnresolved {
+  to: string
+  steps_taken: int
+}
+function baml.errors.HandoffUnresolved.is_retryable(self: baml.errors.HandoffUnresolved) -> bool throws never {
+  { : false
+    false : false
+  }
+}
+function baml.errors.HandoffUnresolved.is_effectful(self: baml.errors.HandoffUnresolved) -> bool throws never {
+  { : true
+    true : true
+  }
+}
+function baml.errors.HandoffUnresolved.is_policy_refusal(self: baml.errors.HandoffUnresolved) -> bool throws never {
+  { : false
+    false : false
+  }
+}
+function baml.errors.HandoffUnresolved.is_resumable(self: baml.errors.HandoffUnresolved) -> bool throws never {
+  { : true
+    true : true
+  }
+}
+function baml.errors.HandoffUnresolved.is_unsupported(self: baml.errors.HandoffUnresolved) -> bool throws never {
+  { : false
+    false : false
+  }
+}
+function baml.errors.HandoffUnresolved.is_network_error(self: baml.errors.HandoffUnresolved) -> bool throws never {
+  { : false
+    false : false
+  }
+}
+function baml.errors.HandoffUnresolved.is_rate_limit(self: baml.errors.HandoffUnresolved) -> bool throws never {
+  { : false
+    false : false
+  }
+}
+function baml.errors.HandoffUnresolved.is_parse_error(self: baml.errors.HandoffUnresolved) -> bool throws never {
+  { : false
+    false : false
+  }
+}
+function baml.errors.HandoffUnresolved.is_network_error(self: baml.errors.HandoffUnresolved) -> bool throws never {
+  { : false
+    false : false
+  }
+}
 function baml.errors.is_retryable(self: unknown) -> bool throws never {
   { : false
     false : false
@@ -6653,6 +6762,55 @@ function baml.errors.LoopBudgetExceeded$stream.is_parse_error(self: baml.errors.
   }
 }
 function baml.errors.LoopBudgetExceeded$stream.is_network_error(self: baml.errors.LoopBudgetExceeded$stream) -> bool throws never {
+  { : false
+    false : false
+  }
+}
+class baml.errors.HandoffUnresolved$stream {
+  to: string | null
+  steps_taken: int | null
+}
+function baml.errors.HandoffUnresolved$stream.is_retryable(self: baml.errors.HandoffUnresolved$stream) -> bool throws never {
+  { : false
+    false : false
+  }
+}
+function baml.errors.HandoffUnresolved$stream.is_effectful(self: baml.errors.HandoffUnresolved$stream) -> bool throws never {
+  { : true
+    true : true
+  }
+}
+function baml.errors.HandoffUnresolved$stream.is_policy_refusal(self: baml.errors.HandoffUnresolved$stream) -> bool throws never {
+  { : false
+    false : false
+  }
+}
+function baml.errors.HandoffUnresolved$stream.is_resumable(self: baml.errors.HandoffUnresolved$stream) -> bool throws never {
+  { : true
+    true : true
+  }
+}
+function baml.errors.HandoffUnresolved$stream.is_unsupported(self: baml.errors.HandoffUnresolved$stream) -> bool throws never {
+  { : false
+    false : false
+  }
+}
+function baml.errors.HandoffUnresolved$stream.is_network_error(self: baml.errors.HandoffUnresolved$stream) -> bool throws never {
+  { : false
+    false : false
+  }
+}
+function baml.errors.HandoffUnresolved$stream.is_rate_limit(self: baml.errors.HandoffUnresolved$stream) -> bool throws never {
+  { : false
+    false : false
+  }
+}
+function baml.errors.HandoffUnresolved$stream.is_parse_error(self: baml.errors.HandoffUnresolved$stream) -> bool throws never {
+  { : false
+    false : false
+  }
+}
+function baml.errors.HandoffUnresolved$stream.is_network_error(self: baml.errors.HandoffUnresolved$stream) -> bool throws never {
   { : false
     false : false
   }
