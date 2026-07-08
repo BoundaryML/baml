@@ -93,11 +93,11 @@ with the blocker instead of faking a run.
 
 - Single-turn & output: [ ] 01 [ ] 02 [ ] 03 [ ] 04 [ ] 05 [ ] 06 [ ] 07 [ ] 08
 - Tools & agents: [ ] 09 [x] 10 (ToolLoop + $run_tools, offline) [x] 11 (parallel dispatch) [ ] 12 [ ] 13 [x] 14 (handoff) [x] 15 (tripwires) [ ] 16
-- State & memory: [ ] 17 [ ] 18(P8-store) [ ] 19(P8-store) [ ] 20 [ ] 21(P8-store)
+- State & memory: [x] 17 (session threading, offline) [ ] 18(P8-store) [ ] 19(P8-store) [ ] 20 [ ] 21(P8-store)
 - Realtime & voice: [x] 22 (offline `$live` + fake; live tier = ai_realtime.rs) [x] 23 (negotiation) [ ] 24 [ ] 25 [ ] 26
-- Cross-cutting: [ ] 27 [ ] 28 [ ] 29 [ ] 30 [ ] 31 [x] 32 ($with value+meta, offline) [ ] 33 [ ] 34 [ ] 35 [ ] 36
+- Cross-cutting: [x] 27 (submit/poll + effect marker, offline; live = ai_responses) [ ] 28 [ ] 29 [ ] 30 [x] 31 (defer lifecycle) [x] 32 ($with value+meta, offline) [ ] 33 [ ] 34 [ ] 35 [ ] 36
 - Harnesses (P8-subprocess): [x] 37 (config+negotiation; BLOCKED:P8 for live) [ ] 38 [ ] 39 [ ] 40 [ ] 41 [x] 42 (drive_any negotiation)
-- Workflows: [ ] 43 [ ] 44(P8-store) [ ] 45(P8-store) [ ] 46 [ ] 47
+- Workflows: [ ] 43 [x] 44 (suspend as sum arm, offline; P8-store for durability) [ ] 45(P8-store) [ ] 46 [ ] 47
 
 ## Working rules (summary — full version in [`README.md`](./README.md))
 
