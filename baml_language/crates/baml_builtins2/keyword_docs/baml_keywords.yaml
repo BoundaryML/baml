@@ -701,6 +701,10 @@ playground:
 
       ssh -L 4265:localhost:4265 user@host
 
+    The printed URL carries a `?token=...` query parameter that authorizes the
+    session — open it verbatim and treat it as a per-session secret. API requests
+    without the token are rejected.
+
     See also: `baml describe check`.
 
 spawn:

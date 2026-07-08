@@ -234,6 +234,12 @@ fn run_server_inner(
     let doc_mirror: playground_server::DocMirror =
         Arc::new(std::sync::Mutex::new(std::collections::HashMap::new()));
 
+    // Per-session bearer token for /api, browser mode only. In LSP/editor
+    // mode no token is minted and the guard behaves exactly as before (D6).
+    let session_token: Option<Arc<str>> =
+        matches!(playground_open_target, PlaygroundOpenTarget::Browser)
+            .then(|| uuid::Uuid::new_v4().simple().to_string().into());
+
     // Pick the playground port early so we can pass it to the sender.
     let (playground_listener, playground_port): (Option<TcpListener>, u16) = {
         let bind_result = match options.port {
@@ -255,7 +261,7 @@ fn run_server_inner(
     };
 
     if matches!(playground_open_target, PlaygroundOpenTarget::Browser) {
-        print_playground_banner(playground_port, &workspace_roots);
+        print_playground_banner(playground_port, &workspace_roots, session_token.as_deref());
     }
 
     // Playground sender (needs port + lsp_sender for OpenPlayground)
@@ -265,6 +271,7 @@ fn run_server_inner(
             lsp_sender.clone(),
             playground_port,
             matches!(playground_open_target, PlaygroundOpenTarget::Browser),
+            session_token.clone(),
         ));
 
     // Create the BexLsp (multi-project LSP)
@@ -355,6 +362,7 @@ fn run_server_inner(
                 lsp_out_tx,
                 doc_mirror,
                 workspace_roots.clone(),
+                session_token,
             ));
         }
 
@@ -371,6 +379,7 @@ fn run_server_inner(
                 lsp_out_tx,
                 doc_mirror,
                 workspace_roots_for_server,
+                session_token,
             )
             .await
             {
@@ -442,17 +451,22 @@ fn run_server_inner(
 }
 
 #[allow(clippy::print_stdout)] // user-facing banner; browser mode has no stdio LSP client
-fn print_playground_banner(port: u16, roots: &[PathBuf]) {
-    println!("{}", format_playground_banner(port, roots));
+fn print_playground_banner(port: u16, roots: &[PathBuf], token: Option<&str>) {
+    println!("{}", format_playground_banner(port, roots, token));
 }
 
-fn format_playground_banner(port: u16, roots: &[PathBuf]) -> String {
+fn format_playground_banner(port: u16, roots: &[PathBuf], token: Option<&str>) -> String {
     let root = roots
         .first()
         .map(|r| r.display().to_string())
         .unwrap_or_else(|| "(no workspace roots)".to_string());
+    // The token rides the URL, not the tunnel, so the ssh hint doesn't carry it.
+    let url = match token {
+        Some(token) => format!("http://localhost:{port}/?token={token}"),
+        None => format!("http://localhost:{port}/"),
+    };
     format!(
-        "\n  Playground:  http://localhost:{port}/\n  Project:     {root}\n\n  \
+        "\n  Playground:  {url}\n  Project:     {root}\n\n  \
          Remote machine? Forward the port, then open the URL locally:\n    \
          ssh -L {port}:localhost:{port} <user@host>\n\n  Press Ctrl-C to stop.\n"
     )
@@ -606,8 +620,9 @@ mod tests {
 
     #[test]
     fn playground_banner_shows_url_project_root_and_ssh_hint() {
-        let banner = format_playground_banner(4265, &[PathBuf::from("/home/dev/my-app")]);
+        let banner = format_playground_banner(4265, &[PathBuf::from("/home/dev/my-app")], None);
         assert!(banner.contains("http://localhost:4265/"), "{banner}");
+        assert!(!banner.contains("?token="), "{banner}");
         assert!(banner.contains("/home/dev/my-app"), "{banner}");
         assert!(
             banner.contains("ssh -L 4265:localhost:4265 <user@host>"),
@@ -615,9 +630,25 @@ mod tests {
         );
         assert!(banner.contains("Press Ctrl-C to stop."), "{banner}");
 
-        let no_roots = format_playground_banner(4270, &[]);
+        let no_roots = format_playground_banner(4270, &[], None);
         assert!(no_roots.contains("(no workspace roots)"), "{no_roots}");
         assert!(no_roots.contains("http://localhost:4270/"), "{no_roots}");
+    }
+
+    #[test]
+    fn playground_banner_carries_the_session_token_on_the_url_only() {
+        let banner =
+            format_playground_banner(4265, &[PathBuf::from("/home/dev/my-app")], Some("abc123"));
+        assert!(
+            banner.contains("http://localhost:4265/?token=abc123"),
+            "{banner}"
+        );
+        // The token rides the URL, not the tunnel: the ssh hint stays bare.
+        assert!(
+            banner.contains("ssh -L 4265:localhost:4265 <user@host>"),
+            "{banner}"
+        );
+        assert_eq!(banner.matches("token").count(), 1, "{banner}");
     }
 
     #[test]
