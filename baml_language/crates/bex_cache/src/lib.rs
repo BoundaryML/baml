@@ -28,7 +28,7 @@ use sha2::{Digest, Sha256};
 
 /// Bump whenever the serialized `Program` layout or the entry header changes.
 /// Part of both the cache key and the entry header.
-pub const FORMAT_VERSION: u32 = 2;
+pub const FORMAT_VERSION: u32 = 3;
 
 const MAGIC: [u8; 4] = *b"BEXC";
 
@@ -205,8 +205,11 @@ pub fn stdlib_key(compiler_fingerprint: &[u8; 32], opt_level: u8) -> CacheKey {
 /// Hashing the binary itself (rather than trusting a version string) is what
 /// makes dev builds safe: two `canary` checkouts both claim "0.13.0" but emit
 /// incompatible bytecode. The hash is memoized on disk under `cache_dir`,
-/// keyed by the exe's `(len, mtime)`, so the full read happens once per
-/// rebuild rather than once per run.
+/// keyed by the exe's `(len, mtime, ctime)` — the `ctime` (inode-change time)
+/// component is unix-only and is what defeats mtime-preserving restores
+/// (`cp -p`, tar, CI cache restore) that would otherwise replay a stale hash
+/// for a different build. The full read still happens only once per rebuild.
+/// Residual gap: non-unix targets fall back to the `(len, mtime)` key.
 pub fn compiler_fingerprint(cache_dir: &Path) -> [u8; 32] {
     fingerprint_impl(cache_dir).unwrap_or_else(|_| {
         // Can't identify the binary (no exe path, unreadable, ...): return a
@@ -232,8 +235,14 @@ fn fingerprint_impl(cache_dir: &Path) -> io::Result<[u8; 32]> {
         .duration_since(SystemTime::UNIX_EPOCH)
         .map(|d| d.as_nanos())
         .unwrap_or(0);
+    // ctime (inode-change time) is set to "now" by a copy even when the copier
+    // preserves mtime (`cp -p`, tar, CI cache restore), so folding it into the
+    // memo key stops a restored-but-different exe with a matching (len, mtime)
+    // from replaying a stale fingerprint. Unix-only; see `exe_ctime`.
+    let ctime = exe_ctime(&meta);
 
-    // Memo file named by the hash of the exe path, holding "len mtime hex".
+    // Memo file named by the hash of the exe path, holding
+    // "len mtime ctime hex".
     let mut path_hasher = Sha256::new();
     path_hasher.update(exe.as_os_str().as_encoded_bytes());
     let memo_name: [u8; 32] = path_hasher.finalize().into();
@@ -241,9 +250,11 @@ fn fingerprint_impl(cache_dir: &Path) -> io::Result<[u8; 32]> {
 
     if let Ok(memo) = fs::read_to_string(&memo_path) {
         let mut parts = memo.split_whitespace();
-        if let (Some(l), Some(m), Some(hx)) = (parts.next(), parts.next(), parts.next())
+        if let (Some(l), Some(m), Some(c), Some(hx)) =
+            (parts.next(), parts.next(), parts.next(), parts.next())
             && l == len.to_string()
             && m == mtime_ns.to_string()
+            && c == ctime
             && let Some(bytes) = unhex32(hx)
         {
             return Ok(bytes);
@@ -268,10 +279,27 @@ fn fingerprint_impl(cache_dir: &Path) -> io::Result<[u8; 32]> {
     if fs::create_dir_all(memo_path.parent().expect("memo path has parent")).is_ok() {
         let _ = write_atomic(
             &memo_path,
-            format!("{len} {mtime_ns} {}\n", hex(&digest)).as_bytes(),
+            format!("{len} {mtime_ns} {ctime} {}\n", hex(&digest)).as_bytes(),
         );
     }
     Ok(digest)
+}
+
+/// The exe's inode-change time as a `"secs.nsecs"` token for the fingerprint
+/// memo key. On unix this reads `MetadataExt::ctime` / `ctime_nsec`; other
+/// targets return a fixed placeholder so the memo degrades to the
+/// `(len, mtime)` key.
+fn exe_ctime(meta: &fs::Metadata) -> String {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt as _;
+        format!("{}.{}", meta.ctime(), meta.ctime_nsec())
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = meta;
+        String::from("na")
+    }
 }
 
 /// On-disk store: `<dir>/bytecode/<first-two-hex>/<key-hex>.bexc`.
@@ -619,6 +647,21 @@ pub struct RemoteCache {
     client: reqwest::blocking::Client,
 }
 
+/// Whether a bearer token may be attached to `base_url`: true over https, or
+/// to a real http loopback host (`localhost`, `127.0.0.1`, `::1`). The host is
+/// taken from a parsed URL, so `host_str` drops any userinfo and port — a
+/// look-alike authority such as `localhost.evil.com` or `127.0.0.1@evil.com`
+/// resolves to a non-loopback host and is correctly rejected, closing the
+/// cleartext-token leak those inputs would otherwise cause.
+fn token_allowed(base_url: &str) -> bool {
+    if base_url.starts_with("https://") {
+        return true;
+    }
+    reqwest::Url::parse(base_url).is_ok_and(|u| {
+        u.scheme() == "http" && matches!(u.host_str(), Some("localhost" | "127.0.0.1" | "::1"))
+    })
+}
+
 impl RemoteCache {
     /// Build from `BAML_CACHE_REMOTE` / `BAML_CACHE_REMOTE_TOKEN`; `None`
     /// when unset or the HTTP client cannot be constructed.
@@ -634,12 +677,12 @@ impl RemoteCache {
             .ok()?;
         let base_url = base_url.trim_end_matches('/').to_string();
         let mut token = std::env::var("BAML_CACHE_REMOTE_TOKEN").ok();
-        // Never send a bearer token in cleartext: refuse to attach it unless
-        // the remote is https (loopback exempted for local proxies/tests).
-        let loopback = base_url.starts_with("http://localhost")
-            || base_url.starts_with("http://127.0.0.1")
-            || base_url.starts_with("http://[::1]");
-        if token.is_some() && !base_url.starts_with("https://") && !loopback {
+        // Never send a bearer token in cleartext: attach it only over https or
+        // to a genuine http loopback host. `token_allowed` matches the host of
+        // a parsed URL, so look-alikes (`http://localhost.evil.com`) and
+        // userinfo tricks (`http://127.0.0.1@evil.com`) are treated as remote
+        // and drop the token.
+        if token.is_some() && !token_allowed(&base_url) {
             #[allow(clippy::print_stderr)] // security misconfiguration warning
             {
                 eprintln!(
@@ -660,6 +703,11 @@ impl RemoteCache {
         format!("{}/{}", self.base_url, key.hex())
     }
 
+    /// Hard ceiling on a downloaded entry body. Without it, reading the body of
+    /// a hostile or broken remote could stream unbounded and OOM the compiler.
+    /// Real bytecode blobs are far smaller than this; 256 MiB.
+    const REMOTE_MAX_BYTES: u64 = 256 * 1024 * 1024;
+
     fn get(&self, key: &CacheKey) -> Option<Vec<u8>> {
         let mut request = self.client.get(self.entry_url(key));
         if let Some(token) = &self.token {
@@ -669,7 +717,28 @@ impl RemoteCache {
         if !response.status().is_success() {
             return None;
         }
-        response.bytes().ok().map(|b| b.to_vec())
+        // Reject early if the advertised length already exceeds the cap.
+        if response
+            .content_length()
+            .is_some_and(|n| n > Self::REMOTE_MAX_BYTES)
+        {
+            return None;
+        }
+        // Then bound the actual read: `Content-Length` is advisory, so a lying
+        // or chunked response is still capped here. Read one byte past the cap
+        // so an over-limit body is rejected rather than silently truncated.
+        let mut body = Vec::new();
+        if response
+            .take(Self::REMOTE_MAX_BYTES + 1)
+            .read_to_end(&mut body)
+            .is_err()
+        {
+            return None;
+        }
+        if body.len() as u64 > Self::REMOTE_MAX_BYTES {
+            return None;
+        }
+        Some(body)
     }
 
     fn put(&self, key: &CacheKey, entry: &[u8]) {
@@ -703,6 +772,13 @@ impl BytecodeCache {
         }
         let remote = self.remote.as_ref()?;
         let entry = remote.get(key)?;
+        // SECURITY: `check_entry` is integrity-only — the payload SHA lives in
+        // the entry itself, so it catches corruption/truncation but not a
+        // forged blob. A remote that chooses the bytes (a malicious origin, or
+        // a MITM on an untrusted mirror) can serve a valid-looking executable
+        // `Program`. We therefore assume a trusted remote reached over https.
+        // Authenticating entries — e.g. an HMAC over the payload keyed by the
+        // shared token, verified here — is a follow-up (see report).
         let payload = check_entry(&entry, key)?;
         let program = borsh::from_slice::<Program>(payload).ok()?;
         let path = self.entry_path(key);
@@ -864,6 +940,30 @@ mod remote_tests {
         assert!(
             cache_b.load_shared(&key2).is_none(),
             "corrupt remote entry rejected"
+        );
+    }
+
+    #[test]
+    fn token_attached_only_over_https_or_loopback() {
+        assert!(
+            token_allowed("https://cache.example.com"),
+            "https keeps token"
+        );
+        assert!(
+            !token_allowed("http://cache.example.com"),
+            "plain http drops token"
+        );
+        assert!(
+            token_allowed("http://localhost:8080"),
+            "http loopback keeps token"
+        );
+        assert!(
+            !token_allowed("http://localhost.evil.com"),
+            "look-alike host drops token"
+        );
+        assert!(
+            !token_allowed("http://127.0.0.1@evil.com"),
+            "userinfo trick drops token"
         );
     }
 }
