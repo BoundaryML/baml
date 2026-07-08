@@ -47,15 +47,22 @@ class Fallback {
             messages: root.ai.ChatMessage[],
             project: (root.ai.ResponseMeta) -> V throws E2,
         ) -> root.ai.CallResult<T, V> throws root.errors.CallError | root.errors.UnknownError | E2 {
+            // Members are tried with an identity projection; the caller's
+            // `project` runs once on the WINNING member's meta — a throwing
+            // projection must not look like a member failure and trigger
+            // failover onto a second billed call.
             for (let m in self.members) {
                 match (m) {
                     let h: root.ai.HttpProvider => {
-                        let r: root.ai.CallResult<T, V> = h.call_messages_with<T, V, E2>(messages, project) catch (e) {
+                        let r0: root.ai.CallResult<T, root.ai.ResponseMeta> = h.call_messages_with<T, root.ai.ResponseMeta, never>(
+                            messages,
+                            (mm: root.ai.ResponseMeta) -> root.ai.ResponseMeta { mm },
+                        ) catch (e) {
                             _ => {
                                 continue;
                             }
                         };
-                        return r;
+                        return root.ai.CallResult<T, V> { value: r0.value, meta: project(r0.meta) };
                     },
                     _ => {
                         continue;
@@ -96,6 +103,9 @@ class Fallback {
 class Retry {
     inner: root.ai.Provider,
     max: int,
+    /// First-retry delay in ms (default 100); doubles per attempt (exponential
+    /// backoff, matching the legacy retry policies).
+    base_delay_ms: int?,
 
     implements root.ai.Provider {}
 
@@ -139,17 +149,25 @@ class Retry {
                     message: "provider is effectful; wrap the idempotent part or use a bespoke combinator",
                 };
             }
+            // The retry loop drives the WIRE CALL with an identity projection;
+            // the caller's `project` runs ONCE after success. A throwing
+            // projection therefore surfaces immediately instead of re-driving
+            // (and re-billing) the call it rode on.
             let attempt: int = 0;
+            let delay_ms: int = self.base_delay_ms ?? 100;
             while (true) {
                 match (self.inner) {
                     let h: root.ai.HttpProvider => {
-                        let r: root.ai.CallResult<T, V> = h.call_messages_with<T, V, E2>(messages, project) catch (e) {
+                        let r0: root.ai.CallResult<T, root.ai.ResponseMeta> = h.call_messages_with<T, root.ai.ResponseMeta, never>(
+                            messages,
+                            (m: root.ai.ResponseMeta) -> root.ai.ResponseMeta { m },
+                        ) catch (e) {
                             let f: root.errors.Failure => {
                                 // Typed errors decide: a 400/policy-refusal is futile to retry.
                                 if (attempt < self.max && f.is_retryable()) {
                                     attempt = attempt + 1;
-                                    root.sys
-                                        .sleep(root.time.Duration.from_milliseconds(100 * attempt));
+                                    root.sys.sleep(root.time.Duration.from_milliseconds(delay_ms));
+                                    delay_ms = delay_ms * 2;
                                     continue;
                                 }
                                 throw e;
@@ -158,14 +176,14 @@ class Retry {
                                 // Unknown/foreign errors keep the legacy assume-transient behavior.
                                 if (attempt < self.max) {
                                     attempt = attempt + 1;
-                                    root.sys
-                                        .sleep(root.time.Duration.from_milliseconds(100 * attempt));
+                                    root.sys.sleep(root.time.Duration.from_milliseconds(delay_ms));
+                                    delay_ms = delay_ms * 2;
                                     continue;
                                 }
                                 throw e;
                             }
                         };
-                        return r;
+                        return root.ai.CallResult<T, V> { value: r0.value, meta: project(r0.meta) };
                     },
                     _ => {
                         throw root.errors.UnknownError { data: null, message: ["retry: inner is not callable"] }

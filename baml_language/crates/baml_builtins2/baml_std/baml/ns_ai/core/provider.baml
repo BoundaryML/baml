@@ -42,7 +42,7 @@ interface Provider {
   }
 
   function with_retry(self, max: int) -> Retry throws never {
-    Retry { inner: self, max: max }
+    Retry { inner: self, max: max, base_delay_ms: null }
   }
   function fallback_to(self, other: Provider) -> Fallback throws never {
     Fallback { members: [self, other] }

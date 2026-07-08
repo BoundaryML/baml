@@ -390,6 +390,7 @@ class baml.ai.Fallback {
 class baml.ai.Retry {
   inner: root.ai.Provider
   max: int
+  base_delay_ms: int?
 }
 class baml.ai.RoundRobin {
   members: root.ai.Provider[]
@@ -405,10 +406,10 @@ function baml.ai.build_request(self: ?, messages: root.ai.ChatMessage[]) -> root
   { throw root.errors.UnknownError { data: null, message: ["retry has no sing..."] } }
 }
 function baml.ai.call_messages_with(self: ?, messages: root.ai.ChatMessage[], project: (root.ai.ResponseMeta) -> V throws E2) -> root.ai.CallResult<T, V>  [expr] {
-  { for m in self.members {  } match (m) { h: root.ai.HttpProvider => { let r: root.ai.CallResult<T, V> = h.call_messages_with(messages, project) catch (e) { _ => { continue } }; return r }, _ => { continue } }; throw root.errors.UnknownError { data: null, message: ["fallback: all pro..."] } }
+  { for m in self.members {  } match (m) { h: root.ai.HttpProvider => { let r0: root.ai.CallResult<T, root.ai.ResponseMeta> = h.call_messages_with(messages, (mm: root.ai.ResponseMeta) -> root.ai.ResponseMeta { {  } mm }) catch (e) { _ => { continue } }; return root.ai.CallResult { value: r0.value, meta: project(r0.meta) } }, _ => { continue } }; throw root.errors.UnknownError { data: null, message: ["fallback: all pro..."] } }
 }
 function baml.ai.call_messages_with(self: ?, messages: root.ai.ChatMessage[], project: (root.ai.ResponseMeta) -> V throws E2) -> root.ai.CallResult<T, V>  [expr] {
-  { if (self.inner.is_effectful()) { throw root.errors.CannotRetry { message: "provider is effec..." } }; let attempt: int = 0; while true {  } match (self.inner) { h: root.ai.HttpProvider => { let r: root.ai.CallResult<T, V> = h.call_messages_with(messages, project) catch (e) { f: root.errors.Failure => { if (attempt Lt self.max And f.is_retryable()) { attempt = attempt Add 1; root.sys.sleep(root.time.Duration.from_milliseconds(100 Mul attempt)); continue }; throw e }, _ => { if (attempt Lt self.max) { attempt = attempt Add 1; root.sys.sleep(root.time.Duration.from_milliseconds(100 Mul attempt)); continue }; throw e } }; return r }, _ => { throw root.errors.UnknownError { data: null, message: ["retry: inner is n..."] } } } } root.sys.panic("unreachable")
+  { if (self.inner.is_effectful()) { throw root.errors.CannotRetry { message: "provider is effec..." } }; let attempt: int = 0; let delay_ms: int = self.base_delay_ms NullCoalesce 100; while true {  } match (self.inner) { h: root.ai.HttpProvider => { let r0: root.ai.CallResult<T, root.ai.ResponseMeta> = h.call_messages_with(messages, (m: root.ai.ResponseMeta) -> root.ai.ResponseMeta { {  } m }) catch (e) { f: root.errors.Failure => { if (attempt Lt self.max And f.is_retryable()) { attempt = attempt Add 1; root.sys.sleep(root.time.Duration.from_milliseconds(delay_ms)); delay_ms = delay_ms Mul 2; continue }; throw e }, _ => { if (attempt Lt self.max) { attempt = attempt Add 1; root.sys.sleep(root.time.Duration.from_milliseconds(delay_ms)); delay_ms = delay_ms Mul 2; continue }; throw e } }; return root.ai.CallResult { value: r0.value, meta: project(r0.meta) } }, _ => { throw root.errors.UnknownError { data: null, message: ["retry: inner is n..."] } } } } root.sys.panic("unreachable")
 }
 function baml.ai.call_messages_with(self: ?, messages: root.ai.ChatMessage[], project: (root.ai.ResponseMeta) -> V throws E2) -> root.ai.CallResult<T, V>  [expr] {
   { let n = self.members.length(); if (n Eq 0) { throw root.errors.UnknownError { data: null, message: ["round_robin: no m..."] } }; let idx = self.counter Mod n; self.counter = self.counter Add 1 } match (self.members.at(idx)) { h: root.ai.HttpProvider => h.call_messages_with(messages, project), _ => { throw root.errors.UnknownError { data: null, message: ["round_robin: memb..."] } } }
@@ -543,7 +544,7 @@ function baml.ai.is_effectful(self: ?) -> bool  [expr] {
   {  } false
 }
 function baml.ai.with_retry(self: ?, max: int) -> Retry  [expr] {
-  {  } Retry { inner: self, max: max }
+  {  } Retry { inner: self, max: max, base_delay_ms: null }
 }
 
 --- <builtin>/baml/ns_ai/providers/anthropic.baml ---

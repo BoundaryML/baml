@@ -4486,21 +4486,35 @@ function baml.ai.Fallback$stream.root.ai.HttpProvider.call_messages_with(self: b
 
   L30:
     load_type #0
+    load_type baml.ai.ResponseMeta
+    load_type never
+    load_var2 7 2
+    load_type #0
     load_type #1
     load_type #2
-    load_var2 7 2
-    load_var project
+    make_closure .<lambda(Fallback.call_messages_with, 0)>, captures=0, ntypeargs=3
     load_type baml.ai.HttpProvider
     load_const "call_messages_with"
     virtual_call nargs=3 ntypeargs=3
-    store_var r
+    store_var r0
     jump L31
     load_var e
     throw_if_panic
     jump L0
 
   L31:
-    load_var r
+    load_var r0
+    load_field .value
+    store_var _54
+    load_var r0
+    load_field .meta
+    load_var project
+    call_indirect
+    store_var _55
+    load_var2 10 11
+    load_type #0
+    load_type #1
+    init_instance<2> baml.ai.CallResult .value, .meta
     return
 
   L32:
@@ -4960,21 +4974,35 @@ function baml.ai.Fallback.root.ai.HttpProvider.call_messages_with(self: baml.ai.
 
   L30:
     load_type #0
+    load_type baml.ai.ResponseMeta
+    load_type never
+    load_var2 7 2
+    load_type #0
     load_type #1
     load_type #2
-    load_var2 7 2
-    load_var project
+    make_closure .<lambda(Fallback.call_messages_with, 0)>, captures=0, ntypeargs=3
     load_type baml.ai.HttpProvider
     load_const "call_messages_with"
     virtual_call nargs=3 ntypeargs=3
-    store_var r
+    store_var r0
     jump L31
     load_var e
     throw_if_panic
     jump L0
 
   L31:
-    load_var r
+    load_var r0
+    load_field .value
+    store_var _54
+    load_var r0
+    load_field .meta
+    load_var project
+    call_indirect
+    store_var _55
+    load_var2 10 11
+    load_type #0
+    load_type #1
+    init_instance<2> baml.ai.CallResult .value, .meta
     return
 
   L32:
@@ -16438,7 +16466,8 @@ function baml.ai.Provider.is_effectful(self: baml.ai.Provider) -> bool {
 
 function baml.ai.Provider.with_retry(self: baml.ai.Provider, max: int) -> baml.ai.Retry {
     load_var2 1 2
-    init_instance baml.ai.Retry .inner, .max
+    load_const null
+    init_instance baml.ai.Retry .inner, .max, .base_delay_ms
     return
 }
 
@@ -16465,6 +16494,17 @@ function baml.ai.Retry$stream.root.ai.HttpProvider.call_messages_with(self: baml
   L0:
     load_const 0
     store_var attempt
+    load_var self
+    load_field .2
+    store_var _9
+    load_var _9
+    store_var delay_ms
+    load_var _9
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L1
+    load_const 100
+    store_var delay_ms
 
   L1:
     load_const true
@@ -16479,61 +16519,61 @@ function baml.ai.Retry$stream.root.ai.HttpProvider.call_messages_with(self: baml
   L3:
     load_var self
     load_field .0
-    store_var_load_var _8
+    store_var_load_var _11
     is_type baml.ai.ToolLoop
     pop_jump_if_false L4
     jump L14
 
   L4:
-    load_var _8
+    load_var _11
     is_type baml.ai.Retry
     pop_jump_if_false L5
     jump L14
 
   L5:
-    load_var _8
+    load_var _11
     is_type baml.ai.OpenAi
     pop_jump_if_false L6
     jump L14
 
   L6:
-    load_var _8
+    load_var _11
     is_type baml.ai.Gemini
     pop_jump_if_false L7
     jump L14
 
   L7:
-    load_var _8
+    load_var _11
     is_type baml.ai.OpenAiResponses
     pop_jump_if_false L8
     jump L14
 
   L8:
-    load_var _8
+    load_var _11
     is_type baml.ai.RoundRobin
     pop_jump_if_false L9
     jump L14
 
   L9:
-    load_var _8
+    load_var _11
     is_type baml.ai.Fallback
     pop_jump_if_false L10
     jump L14
 
   L10:
-    load_var _8
+    load_var _11
     is_type baml.ai.OpenAiStrict
     pop_jump_if_false L11
     jump L14
 
   L11:
-    load_var _8
+    load_var _11
     is_type baml.ai.Anthropic
     pop_jump_if_false L12
     jump L14
 
   L12:
-    load_var _8
+    load_var _11
     is_type baml.llm.Client
     pop_jump_if_false L13
     jump L14
@@ -16548,14 +16588,17 @@ function baml.ai.Retry$stream.root.ai.HttpProvider.call_messages_with(self: baml
 
   L14:
     load_type #0
+    load_type baml.ai.ResponseMeta
+    load_type never
+    load_var2 8 2
+    load_type #0
     load_type #1
     load_type #2
-    load_var2 6 2
-    load_var project
+    make_closure .<lambda(Retry.call_messages_with, 0)>, captures=0, ntypeargs=3
     load_type baml.ai.HttpProvider
     load_const "call_messages_with"
     virtual_call nargs=3 ntypeargs=3
-    store_var r
+    store_var r0
     jump L27
     load_var e
     is_type baml.errors.CannotRetry
@@ -16610,12 +16653,14 @@ function baml.ai.Retry$stream.root.ai.HttpProvider.call_messages_with(self: baml
     load_const 1
     add_int
     store_var attempt
-    load_const 100
-    load_var attempt
-    mul_int
+    load_var delay_ms
     call baml.time.Duration.from_milliseconds
     sys_op baml.sys.sleep
     pop 1
+    load_var delay_ms
+    load_const 2
+    mul_int
+    store_var delay_ms
     jump L1
 
   L23:
@@ -16642,16 +16687,29 @@ function baml.ai.Retry$stream.root.ai.HttpProvider.call_messages_with(self: baml
     load_const 1
     add_int
     store_var attempt
-    load_const 100
-    load_var attempt
-    mul_int
+    load_var delay_ms
     call baml.time.Duration.from_milliseconds
     sys_op baml.sys.sleep
     pop 1
+    load_var delay_ms
+    load_const 2
+    mul_int
+    store_var delay_ms
     jump L1
 
   L27:
-    load_var r
+    load_var r0
+    load_field .value
+    store_var _53
+    load_var r0
+    load_field .meta
+    load_var project
+    call_indirect
+    store_var _54
+    load_var2 11 12
+    load_type #0
+    load_type #1
+    init_instance<2> baml.ai.CallResult .value, .meta
 
   L28:
     return
@@ -16758,6 +16816,17 @@ function baml.ai.Retry.root.ai.HttpProvider.call_messages_with(self: baml.ai.Ret
   L0:
     load_const 0
     store_var attempt
+    load_var self
+    load_field .2
+    store_var _9
+    load_var _9
+    store_var delay_ms
+    load_var _9
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L1
+    load_const 100
+    store_var delay_ms
 
   L1:
     load_const true
@@ -16772,61 +16841,61 @@ function baml.ai.Retry.root.ai.HttpProvider.call_messages_with(self: baml.ai.Ret
   L3:
     load_var self
     load_field .0
-    store_var_load_var _8
+    store_var_load_var _11
     is_type baml.ai.ToolLoop
     pop_jump_if_false L4
     jump L14
 
   L4:
-    load_var _8
+    load_var _11
     is_type baml.ai.Retry
     pop_jump_if_false L5
     jump L14
 
   L5:
-    load_var _8
+    load_var _11
     is_type baml.ai.OpenAi
     pop_jump_if_false L6
     jump L14
 
   L6:
-    load_var _8
+    load_var _11
     is_type baml.ai.Gemini
     pop_jump_if_false L7
     jump L14
 
   L7:
-    load_var _8
+    load_var _11
     is_type baml.ai.OpenAiResponses
     pop_jump_if_false L8
     jump L14
 
   L8:
-    load_var _8
+    load_var _11
     is_type baml.ai.RoundRobin
     pop_jump_if_false L9
     jump L14
 
   L9:
-    load_var _8
+    load_var _11
     is_type baml.ai.Fallback
     pop_jump_if_false L10
     jump L14
 
   L10:
-    load_var _8
+    load_var _11
     is_type baml.ai.OpenAiStrict
     pop_jump_if_false L11
     jump L14
 
   L11:
-    load_var _8
+    load_var _11
     is_type baml.ai.Anthropic
     pop_jump_if_false L12
     jump L14
 
   L12:
-    load_var _8
+    load_var _11
     is_type baml.llm.Client
     pop_jump_if_false L13
     jump L14
@@ -16841,14 +16910,17 @@ function baml.ai.Retry.root.ai.HttpProvider.call_messages_with(self: baml.ai.Ret
 
   L14:
     load_type #0
+    load_type baml.ai.ResponseMeta
+    load_type never
+    load_var2 8 2
+    load_type #0
     load_type #1
     load_type #2
-    load_var2 6 2
-    load_var project
+    make_closure .<lambda(Retry.call_messages_with, 0)>, captures=0, ntypeargs=3
     load_type baml.ai.HttpProvider
     load_const "call_messages_with"
     virtual_call nargs=3 ntypeargs=3
-    store_var r
+    store_var r0
     jump L27
     load_var e
     is_type baml.errors.CannotRetry
@@ -16903,12 +16975,14 @@ function baml.ai.Retry.root.ai.HttpProvider.call_messages_with(self: baml.ai.Ret
     load_const 1
     add_int
     store_var attempt
-    load_const 100
-    load_var attempt
-    mul_int
+    load_var delay_ms
     call baml.time.Duration.from_milliseconds
     sys_op baml.sys.sleep
     pop 1
+    load_var delay_ms
+    load_const 2
+    mul_int
+    store_var delay_ms
     jump L1
 
   L23:
@@ -16935,16 +17009,29 @@ function baml.ai.Retry.root.ai.HttpProvider.call_messages_with(self: baml.ai.Ret
     load_const 1
     add_int
     store_var attempt
-    load_const 100
-    load_var attempt
-    mul_int
+    load_var delay_ms
     call baml.time.Duration.from_milliseconds
     sys_op baml.sys.sleep
     pop 1
+    load_var delay_ms
+    load_const 2
+    mul_int
+    store_var delay_ms
     jump L1
 
   L27:
-    load_var r
+    load_var r0
+    load_field .value
+    store_var _53
+    load_var r0
+    load_field .meta
+    load_var project
+    call_indirect
+    store_var _54
+    load_var2 11 12
+    load_type #0
+    load_type #1
+    init_instance<2> baml.ai.CallResult .value, .meta
 
   L28:
     return

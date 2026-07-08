@@ -854,14 +854,14 @@ function baml.ai.Fallback.call_messages_with<T, V, E2>(self: baml.ai.Fallback, m
         match (m : baml.ai.Provider) : never
           h: root.ai.HttpProvider =>
             { : never
-              let r: root.ai.CallResult<T, V> = : baml.ai.CallResult<T, V>
-                catch (h.call_messages_with<V, E2>(messages, project) : baml.ai.CallResult<T, V>) : baml.ai.CallResult<T, V>
+              let r0: root.ai.CallResult<T, root.ai.ResponseMeta> = : baml.ai.CallResult<T, baml.ai.ResponseMeta>
+                catch (h.call_messages_with<V, E2>(messages, (mm: root.ai.ResponseMeta) -> root.ai.ResponseMeta { ... }) : baml.ai.CallResult<T, baml.ai.ResponseMeta>) : baml.ai.CallResult<T, baml.ai.ResponseMeta>
                   catch (e)
                     _ =>
                       { : never
                         continue
                       }
-              return r : baml.ai.CallResult<T, V>
+              return root.ai.CallResult { value: r0.value, meta: project(r0.meta) } : baml.ai.CallResult<T, V>
             }
           _ =>
             { : never
@@ -870,6 +870,8 @@ function baml.ai.Fallback.call_messages_with<T, V, E2>(self: baml.ai.Fallback, m
       }
     throw root.errors.UnknownError { data: null, message: ["fallback: all pro..."] } : baml.errors.UnknownError
   }
+}
+lambda baml.ai.Fallback.call_messages_with {
 }
 function baml.ai.Fallback.stream_messages<TStream, TFinal>(self: baml.ai.Fallback, messages: baml.ai.ChatMessage[]) -> baml.llm.Stream<TStream, TFinal> throws baml.errors.UnknownError {
   { : never
@@ -898,6 +900,7 @@ function baml.ai.Fallback.stream_messages<TStream, TFinal>(self: baml.ai.Fallbac
 class baml.ai.Retry {
   inner: baml.ai.Provider
   max: int
+  base_delay_ms: int | null
 }
 function baml.ai.Retry.build_request<T>(self: baml.ai.Retry, messages: baml.ai.ChatMessage[]) -> baml.http.Request throws baml.errors.UnknownError {
   { : never
@@ -926,20 +929,22 @@ function baml.ai.Retry.call_messages_with<T, V, E2>(self: baml.ai.Retry, message
         throw root.errors.CannotRetry { message: "provider is effec..." } : baml.errors.CannotRetry
       }
     let attempt: int = 0 : 0 -> int
+    let delay_ms: int = self.base_delay_ms ?? 100 : int
     while true
       { : never
         match (self.inner : baml.ai.Provider) : never
           h: root.ai.HttpProvider =>
             { : never
-              let r: root.ai.CallResult<T, V> = : baml.ai.CallResult<T, V>
-                catch (h.call_messages_with<V, E2>(messages, project) : baml.ai.CallResult<T, V>) : baml.ai.CallResult<T, V>
+              let r0: root.ai.CallResult<T, root.ai.ResponseMeta> = : baml.ai.CallResult<T, baml.ai.ResponseMeta>
+                catch (h.call_messages_with<V, E2>(messages, (m: root.ai.ResponseMeta) -> root.ai.ResponseMeta { ... }) : baml.ai.CallResult<T, baml.ai.ResponseMeta>) : baml.ai.CallResult<T, baml.ai.ResponseMeta>
                   catch (e)
                     f: root.errors.Failure =>
                       { : never
                         if (attempt < self.max && f.is_retryable() : bool) : void
                           { : never
                             attempt = attempt + 1 : int
-                            root.sys.sleep(root.time.Duration.from_milliseconds(100 * attempt)) : null
+                            root.sys.sleep(root.time.Duration.from_milliseconds(delay_ms)) : null
+                            delay_ms = delay_ms * 2 : int
                             continue
                           }
                         throw e : baml.errors.CallError
@@ -949,12 +954,13 @@ function baml.ai.Retry.call_messages_with<T, V, E2>(self: baml.ai.Retry, message
                         if (attempt < self.max : bool) : void
                           { : never
                             attempt = attempt + 1 : int
-                            root.sys.sleep(root.time.Duration.from_milliseconds(100 * attempt)) : null
+                            root.sys.sleep(root.time.Duration.from_milliseconds(delay_ms)) : null
+                            delay_ms = delay_ms * 2 : int
                             continue
                           }
-                        throw e : baml.errors.UnknownError | E2
+                        throw e : baml.errors.UnknownError
                       }
-              return r : baml.ai.CallResult<T, V>
+              return root.ai.CallResult { value: r0.value, meta: project(r0.meta) } : baml.ai.CallResult<T, V>
             }
           _ =>
             { : never
@@ -963,6 +969,8 @@ function baml.ai.Retry.call_messages_with<T, V, E2>(self: baml.ai.Retry, message
       }
     root.sys.panic("unreachable") : never
   }
+}
+lambda baml.ai.Retry.call_messages_with {
 }
 function baml.ai.Retry.stream_messages<TStream, TFinal>(self: baml.ai.Retry, messages: baml.ai.ChatMessage[]) -> baml.llm.Stream<TStream, TFinal> throws baml.errors.StreamError | baml.errors.UnknownError {
   { : baml.llm.Stream<TStream, TFinal>
@@ -1047,14 +1055,14 @@ function baml.ai.Fallback$stream.call_messages_with<T, V, E2>(self: baml.ai.Fall
         match (m : baml.ai.Provider) : never
           h: root.ai.HttpProvider =>
             { : never
-              let r: root.ai.CallResult<T, V> = : baml.ai.CallResult<T, V>
-                catch (h.call_messages_with<V, E2>(messages, project) : baml.ai.CallResult<T, V>) : baml.ai.CallResult<T, V>
+              let r0: root.ai.CallResult<T, root.ai.ResponseMeta> = : baml.ai.CallResult<T, baml.ai.ResponseMeta>
+                catch (h.call_messages_with<V, E2>(messages, (mm: root.ai.ResponseMeta) -> root.ai.ResponseMeta { ... }) : baml.ai.CallResult<T, baml.ai.ResponseMeta>) : baml.ai.CallResult<T, baml.ai.ResponseMeta>
                   catch (e)
                     _ =>
                       { : never
                         continue
                       }
-              return r : baml.ai.CallResult<T, V>
+              return root.ai.CallResult { value: r0.value, meta: project(r0.meta) } : baml.ai.CallResult<T, V>
             }
           _ =>
             { : never
@@ -1063,6 +1071,8 @@ function baml.ai.Fallback$stream.call_messages_with<T, V, E2>(self: baml.ai.Fall
       }
     throw root.errors.UnknownError { data: null, message: ["fallback: all pro..."] } : baml.errors.UnknownError
   }
+}
+lambda baml.ai.Fallback$stream.call_messages_with {
 }
 function baml.ai.Fallback$stream.stream_messages<TStream, TFinal>(self: baml.ai.Fallback$stream, messages: baml.ai.ChatMessage[]) -> baml.llm.Stream<TStream, TFinal> throws baml.errors.UnknownError {
   { : never
@@ -1091,6 +1101,7 @@ function baml.ai.Fallback$stream.stream_messages<TStream, TFinal>(self: baml.ai.
 class baml.ai.Retry$stream {
   inner: baml.ai.Provider | null
   max: int | null
+  base_delay_ms: int | null
 }
 function baml.ai.Retry$stream.build_request<T>(self: baml.ai.Retry$stream, messages: baml.ai.ChatMessage[]) -> baml.http.Request throws baml.errors.UnknownError {
   { : never
@@ -1119,20 +1130,22 @@ function baml.ai.Retry$stream.call_messages_with<T, V, E2>(self: baml.ai.Retry$s
         throw root.errors.CannotRetry { message: "provider is effec..." } : baml.errors.CannotRetry
       }
     let attempt: int = 0 : 0 -> int
+    let delay_ms: int = self.base_delay_ms ?? 100 : int
     while true
       { : never
         match (self.inner : baml.ai.Provider | null) : never
           h: root.ai.HttpProvider =>
             { : never
-              let r: root.ai.CallResult<T, V> = : baml.ai.CallResult<T, V>
-                catch (h.call_messages_with<V, E2>(messages, project) : baml.ai.CallResult<T, V>) : baml.ai.CallResult<T, V>
+              let r0: root.ai.CallResult<T, root.ai.ResponseMeta> = : baml.ai.CallResult<T, baml.ai.ResponseMeta>
+                catch (h.call_messages_with<V, E2>(messages, (m: root.ai.ResponseMeta) -> root.ai.ResponseMeta { ... }) : baml.ai.CallResult<T, baml.ai.ResponseMeta>) : baml.ai.CallResult<T, baml.ai.ResponseMeta>
                   catch (e)
                     f: root.errors.Failure =>
                       { : never
                         if (attempt < self.max && f.is_retryable() : bool) : void
                           { : never
                             attempt = attempt + 1 : int
-                            root.sys.sleep(root.time.Duration.from_milliseconds(100 * attempt)) : null
+                            root.sys.sleep(root.time.Duration.from_milliseconds(delay_ms)) : null
+                            delay_ms = delay_ms * 2 : int
                             continue
                           }
                         throw e : baml.errors.CallError
@@ -1142,12 +1155,13 @@ function baml.ai.Retry$stream.call_messages_with<T, V, E2>(self: baml.ai.Retry$s
                         if (attempt < self.max : bool) : void
                           { : never
                             attempt = attempt + 1 : int
-                            root.sys.sleep(root.time.Duration.from_milliseconds(100 * attempt)) : null
+                            root.sys.sleep(root.time.Duration.from_milliseconds(delay_ms)) : null
+                            delay_ms = delay_ms * 2 : int
                             continue
                           }
-                        throw e : baml.errors.UnknownError | E2
+                        throw e : baml.errors.UnknownError
                       }
-              return r : baml.ai.CallResult<T, V>
+              return root.ai.CallResult { value: r0.value, meta: project(r0.meta) } : baml.ai.CallResult<T, V>
             }
           _ =>
             { : never
@@ -1156,14 +1170,16 @@ function baml.ai.Retry$stream.call_messages_with<T, V, E2>(self: baml.ai.Retry$s
       }
     root.sys.panic("unreachable") : never
   }
-  !! 5533..5556: did you mean `self.inner?.is_effectful`? `self.inner.is_effectful` does not handle the case when `self.inner` is null
-  !! 5533..5558: `(() -> bool throws never) | null` is not a function — it cannot be called
-  !! 5533..5556: did you mean `self.inner?.is_effectful`? `self.inner.is_effectful` does not handle the case when `self.inner` is null
-  !! 5533..5558: `(() -> bool throws never) | null` is not a function — it cannot be called
-  !! 6215..6233: cannot order `int` and `int | null` with `<`: ordering requires both operands to have the same type
-  !! 6215..6233: cannot order `int` and `int | null` with `<`: ordering requires both operands to have the same type
-  !! 6786..6804: cannot order `int` and `int | null` with `<`: ordering requires both operands to have the same type
-  !! 6786..6804: cannot order `int` and `int | null` with `<`: ordering requires both operands to have the same type
+  !! 6213..6236: did you mean `self.inner?.is_effectful`? `self.inner.is_effectful` does not handle the case when `self.inner` is null
+  !! 6213..6238: `(() -> bool throws never) | null` is not a function — it cannot be called
+  !! 6213..6236: did you mean `self.inner?.is_effectful`? `self.inner.is_effectful` does not handle the case when `self.inner` is null
+  !! 6213..6238: `(() -> bool throws never) | null` is not a function — it cannot be called
+  !! 7413..7431: cannot order `int` and `int | null` with `<`: ordering requires both operands to have the same type
+  !! 7413..7431: cannot order `int` and `int | null` with `<`: ordering requires both operands to have the same type
+  !! 7999..8017: cannot order `int` and `int | null` with `<`: ordering requires both operands to have the same type
+  !! 7999..8017: cannot order `int` and `int | null` with `<`: ordering requires both operands to have the same type
+}
+lambda baml.ai.Retry$stream.call_messages_with {
 }
 function baml.ai.Retry$stream.stream_messages<TStream, TFinal>(self: baml.ai.Retry$stream, messages: baml.ai.ChatMessage[]) -> baml.llm.Stream<TStream, TFinal> throws baml.errors.StreamError | baml.errors.UnknownError {
   { : baml.llm.Stream<TStream, TFinal>
@@ -1217,9 +1233,9 @@ function baml.ai.RoundRobin$stream.call_messages_with<T, V, E2>(self: baml.ai.Ro
           throw root.errors.UnknownError { data: null, message: ["round_robin: memb..."] } : baml.errors.UnknownError
         }
   }
-  !! 10040..10056: operator `%` cannot be applied to `int | null` and `int`
-  !! 10085..10101: operator `+` cannot be applied to `int | null` and `1`
-  !! 10085..10101: operator `+` cannot be applied to `int | null` and `1`
+  !! 11335..11351: operator `%` cannot be applied to `int | null` and `int`
+  !! 11380..11396: operator `+` cannot be applied to `int | null` and `1`
+  !! 11380..11396: operator `+` cannot be applied to `int | null` and `1`
 }
 
 --- <builtin>/baml/ns_ai/core/legacy.baml ---
@@ -1471,7 +1487,7 @@ function baml.ai.Provider.is_effectful(self: baml.ai.Provider) -> bool throws ne
 }
 function baml.ai.Provider.with_retry(self: baml.ai.Provider, max: int) -> baml.ai.Retry throws never {
   { : baml.ai.Retry
-    Retry { inner: self, max: max } : baml.ai.Retry
+    Retry { inner: self, max: max, base_delay_ms: null } : baml.ai.Retry
   }
 }
 function baml.ai.Provider.fallback_to(self: baml.ai.Provider, other: baml.ai.Provider) -> baml.ai.Fallback throws never {

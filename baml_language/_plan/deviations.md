@@ -344,3 +344,16 @@ JSON-native group, which is where an LLM wire-format language must be.
     than changing the field type — keeps app-provided schemas possible).
 - Host ops CAN throw typed BAML errors (`throws root.errors.Unsupported` +
   `VmBamlError::Unsupported`) — the plan's hedge about `throws never` fallback was unnecessary.
+
+## Combinator hardening: backoff + projection-channel separation (backlog items)
+
+- **`Retry.base_delay_ms`** (optional, default 100): first-retry delay, doubling per attempt.
+  This restores the legacy exponential-backoff behavior but with a single knob — the legacy
+  `RetryPolicy` multiplier/max-delay shape is NOT reproduced; if strategy-config lowering
+  (C.3) needs fidelity to declared `retry_policy` options, extend `Retry` then.
+- **Projection throws no longer re-drive the wire call.** `Retry` and `Fallback` previously
+  passed the caller's `project` straight into the member's `call_messages_with`, so an `E2`
+  throw was indistinguishable from a member failure (Retry re-issued a billed call; Fallback
+  failed over to a second member). Both now drive members with an identity projection
+  (`(m) -> ResponseMeta { m }`, `throws never`) and apply `project` exactly once to the
+  winning result. Asserted by call-counting tests in `ns_ai_scenarios/29_reliability`.
