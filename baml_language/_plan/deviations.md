@@ -1,5 +1,25 @@
 # Deviations from the LLM-provider plan
 
+## Phase B bridge (DCP §1.1): `Client` IS a Provider — no `LegacyClient` wrapper
+
+- **[design]** The DCP sketched a `LegacyClient { inner: baml.llm.Client }` wrapper class, with the
+  injected param's default wrapped at lowering time. Reality check: the corpus supports **legacy
+  call-site overrides** (`Ask(x, client = OverrideClient)` passing a raw legacy `Client` — pinned by
+  `phase3a::llm_client_override_argument_…`), which a wrapper-typed param breaks. Implemented
+  instead: `baml.llm.Client` itself implements `Provider`/`HttpProvider` via **out-of-body
+  `implements … for` blocks** (`ns_ai/core/legacy.baml`), so raw legacy values flow through the
+  `Provider`-typed param unchanged in both the default and override positions, and the wrapper class
+  is deleted. `call_llm_function` orders its match with the concrete `Client` arm first (legacy
+  strategy loops intact), then native HttpProvider/Streaming override arms.
+- Two compiler potholes fixed en route: the parser's LLM-body sniffer misread `Foo(x, client = …)`
+  as a declarative body (named-arg exclusion added), and out-of-body class implements never
+  registered as **match implementors** in MIR (dispatch worked; negotiation fell to `_`).
+- **[scope]** Native-override rendering uses a neutral legacy renderer (openai-shaped
+  specialization) before `prompt_to_messages`; provider-specific prompt specialization for
+  overrides is the Phase C hook. Double-schema hazard when a template references
+  `ctx.output_format` AND the override provider appends its own schema — construct override
+  providers with `append_output_schema: false` for structured outputs until Phase C.
+
 ## Driver generics (DCP §1.2): name-based rule, not arity 1/2
 
 - **[design]** The plan fixed driver generic arity at 1 (`<T>`) or 2 (`<TPartial, T>`). That rejects
