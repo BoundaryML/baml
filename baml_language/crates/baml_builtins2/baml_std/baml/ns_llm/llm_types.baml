@@ -217,7 +217,7 @@ class Client {
         for (let attempt = 0; attempt <= r.max_retries; attempt += 1) {
           let delay = 0;
           if (attempt > 0) {
-            delay = root.math.trunc(current_delay)
+            delay = root._trunc_to_int(current_delay)
             let next = current_delay * r.multiplier;
             if (next > r.max_delay_ms + 0.0) {
               current_delay = r.max_delay_ms + 0.0;
@@ -253,7 +253,7 @@ class Client {
         for (let attempt = 0; attempt <= r.max_retries; attempt += 1) {
           let attempt_delay = inherited_delay_ms
           if (attempt > 0) {
-            attempt_delay = root.math.trunc(current_delay)
+            attempt_delay = root._trunc_to_int(current_delay)
             let next = current_delay * r.multiplier
             if (next > r.max_delay_ms + 0.0) {
               current_delay = r.max_delay_ms + 0.0
@@ -368,7 +368,7 @@ class Client {
         for (let attempt = 0; attempt <= r.max_retries; attempt += 1) {
           let attempt_delay = inherited_delay_ms
           if (attempt > 0) {
-            attempt_delay = root.math.trunc(current_delay)
+            attempt_delay = root._trunc_to_int(current_delay)
             let next = current_delay * r.multiplier
             if (next > r.max_delay_ms + 0.0) {
               current_delay = r.max_delay_ms + 0.0

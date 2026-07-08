@@ -810,6 +810,59 @@ function arrays.$init_test_ns_arrays_arrays(registry: testing.TestCollector) -> 
     return
 }
 
+function arrays.$init_test_ns_arrays_reductions(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "float_mean_basic"
+    make_closure .<lambda($init_test_ns_arrays_reductions, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "float_mean_single"
+    make_closure .<lambda($init_test_ns_arrays_reductions, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "float_mean_empty_throws"
+    make_closure .<lambda($init_test_ns_arrays_reductions, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "float_median_odd"
+    make_closure .<lambda($init_test_ns_arrays_reductions, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "float_median_even"
+    make_closure .<lambda($init_test_ns_arrays_reductions, 4)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "float_median_unsorted_input"
+    make_closure .<lambda($init_test_ns_arrays_reductions, 5)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "float_median_does_not_mutate_input"
+    make_closure .<lambda($init_test_ns_arrays_reductions, 6)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "float_median_empty_throws"
+    make_closure .<lambda($init_test_ns_arrays_reductions, 7)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_const null
+    return
+}
+
 function arrays.$init_test_ns_arrays_sort_comparable(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "comparable_int_compare"

@@ -1333,6 +1333,18 @@ function baml.Float.to_radians(self: baml.Float) -> float {
 function baml.Float.trunc(self: baml.Float) -> float {
 }
 
+function baml.FloatStats$for$float[].mean(self: float[]) -> float {
+    load_var self
+    call baml._mean_float
+    return
+}
+
+function baml.FloatStats$for$float[].median(self: float[]) -> float {
+    load_var self
+    call baml._median_float
+    return
+}
+
 function baml.Int.abs(self: baml.Int) -> int {
 }
 
@@ -1581,13 +1593,13 @@ function baml.String.trim_start(self: baml.String) -> string {
 
 function baml.Summable$for$float[].sum(self: float[]) -> float {
     load_var self
-    call baml.math.sum
+    call baml._sum_float
     return
 }
 
 function baml.Summable$for$int[].sum(self: int[]) -> int {
     load_var self
-    call baml.math._sum_int
+    call baml._sum_int
     return
 }
 
@@ -1705,7 +1717,19 @@ function baml._from_json_shim(j: baml.json.json) -> T {
 function baml._is_primitive_array(arr: T[]) -> bool {
 }
 
+function baml._mean_float(values: float[]) -> float {
+}
+
+function baml._median_float(values: float[]) -> float {
+}
+
 function baml._rust_sort(arr: A) -> A {
+}
+
+function baml._sum_float(values: float[]) -> float {
+}
+
+function baml._sum_int(values: int[]) -> int {
 }
 
 function baml._to_json_default(value: T) -> baml.json.json {
@@ -1718,6 +1742,9 @@ function baml._to_string_default(value: T) -> string {
 }
 
 function baml._to_string_shim(value: T) -> string {
+}
+
+function baml._trunc_to_int(value: float) -> int {
 }
 
 function baml.csv.CsvReader$stream.root.iter.Iterable.iter(self: baml.csv.CsvReader$stream) -> baml.iter.Iterator<Item = baml.csv.CsvRecord, Error = baml.csv.CsvError | baml.errors.Io> {
@@ -7768,7 +7795,7 @@ function baml.llm.Client.build_plan_with_state(self: baml.llm.Client, planner_st
     cmp_int_op >
     pop_jump_if_false L8
     load_var current_delay
-    call baml.math.trunc
+    call baml._trunc_to_int
     store_var delay
     load_var2 6 4
     load_field .multiplier
@@ -8575,7 +8602,7 @@ function baml.llm.Client.execute_oneshot(self: baml.llm.Client, context: baml.ll
     cmp_int_op >
     pop_jump_if_false L7
     load_var current_delay
-    call baml.math.trunc
+    call baml._trunc_to_int
     store_var attempt_delay
     load_var2 6 5
     load_field .multiplier
@@ -8673,7 +8700,7 @@ function baml.llm.Client.execute_stream(self: baml.llm.Client, context: baml.llm
     cmp_int_op >
     pop_jump_if_false L7
     load_var current_delay
-    call baml.math.trunc
+    call baml._trunc_to_int
     store_var attempt_delay
     load_var2 6 5
     load_field .multiplier
@@ -9474,21 +9501,6 @@ function baml.llm.stream_llm_function(client: baml.llm.Client, function_name: st
     load_const 0
     call baml.llm.Client.execute_stream
     return
-}
-
-function baml.math._sum_int(values: int[]) -> int {
-}
-
-function baml.math.mean(values: float[]) -> float {
-}
-
-function baml.math.median(values: float[]) -> float {
-}
-
-function baml.math.sum(values: float[]) -> float {
-}
-
-function baml.math.trunc(value: float) -> int {
 }
 
 function baml.media.Audio.base64(self: baml.media.Audio) -> string {

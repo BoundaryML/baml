@@ -184,12 +184,22 @@ class baml.Map {
 }
 function baml.sum(self: unknown) -> int throws never {
   { : int
-    root.math._sum_int(self) : int
+    root._sum_int(self) : int
   }
 }
 function baml.sum(self: unknown) -> float throws never {
   { : float
-    root.math.sum(self) : float
+    root._sum_float(self) : float
+  }
+}
+function baml.mean(self: unknown) -> float throws baml.errors.InvalidArgument {
+  { : float
+    root._mean_float(self) : float
+  }
+}
+function baml.median(self: unknown) -> float throws baml.errors.InvalidArgument {
+  { : float
+    root._median_float(self) : float
   }
 }
 class baml.Array$stream {
@@ -2412,7 +2422,7 @@ function baml.llm.Client.build_plan_with_state(self: baml.llm.Client, planner_st
                 let delay = 0 : 0 -> int
                 if (attempt > 0 : bool) : void
                   { : void
-                    delay = root.math.trunc(current_delay) : int
+                    delay = root._trunc_to_int(current_delay) : int
                     let next = current_delay * r.multiplier : float
                     if (next > r.max_delay_ms + 0.0 : bool) : void
                       { : void
@@ -2449,7 +2459,7 @@ function baml.llm.Client.execute_stream<TStream, TFinal>(self: baml.llm.Client, 
                 let attempt_delay = inherited_delay_ms : int
                 if (attempt > 0 : bool) : void
                   { : void
-                    attempt_delay = root.math.trunc(current_delay) : int
+                    attempt_delay = root._trunc_to_int(current_delay) : int
                     let next = current_delay * r.multiplier : float
                     if (next > r.max_delay_ms + 0.0 : bool) : void
                       { : void
@@ -2545,7 +2555,7 @@ function baml.llm.Client.execute_oneshot<T>(self: baml.llm.Client, context: baml
                 let attempt_delay = inherited_delay_ms : int
                 if (attempt > 0 : bool) : void
                   { : void
-                    attempt_delay = root.math.trunc(current_delay) : int
+                    attempt_delay = root._trunc_to_int(current_delay) : int
                     let next = current_delay * r.multiplier : float
                     if (next > r.max_delay_ms + 0.0 : bool) : void
                       { : void
@@ -2926,8 +2936,6 @@ class baml.llm.PrimitiveClient$stream {
   provider: string | null
   options: baml.llm.PrimitiveClientOptions$stream | null
 }
-
---- <builtin>/baml/ns_math/math.baml ---
 
 --- <builtin>/baml/ns_media/media.baml ---
 class baml.media.Pdf {

@@ -2,7 +2,7 @@
 //
 // `sum()` is a method — the canonical surface for array summation — implemented
 // for `int[]` (returning `int`, native `_sum_int`) and `float[]` (returning
-// `float`, delegating to `baml.math.sum`). `int` and `float` are distinct types
+// `float`, native `_sum_float`). `int` and `float` are distinct types
 // with no widening, so each impl stays in its own number domain. Results are
 // compared with `baml.deep_equals`, which is type-aware: an `int` `6` does not
 // deep-equal a `float` `6.0`, so these also pin the return type.
