@@ -2,20 +2,6 @@
 [build]
 rustflags = ["--cfg", "tracing_unstable"]
 
-# Statically link libgcc so the extension/wheel loads in ultra-hermetic
-# sandboxes that strip libgcc_s.so.1 (e.g. Blaze/Forge GRTE). A target section
-# replaces (does not merge with) [build].rustflags, so tracing_unstable is
-# repeated here. -static-libstdc++ is a harmless no-op (nothing links it).
-[target.x86_64-unknown-linux-gnu]
-rustflags = [
-  "--cfg",
-  "tracing_unstable",
-  "-C",
-  "link-arg=-static-libgcc",
-  "-C",
-  "link-arg=-static-libstdc++",
-]
-
 # https://github.com/rust-lang/cargo/issues/8607
 [target.x86_64-unknown-linux-musl]
 rustflags = ["-C", "target-feature=-crt-static", "--cfg", "tracing_unstable"]

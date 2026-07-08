@@ -44,12 +44,19 @@ jobs:
 
       - name: Build wheel (manylinux2014, static libgcc, vendored OpenSSL)
         uses: PyO3/maturin-action@v1
-        # Static libgcc linking comes from engine/.cargo/config.toml's
-        # [target.x86_64-unknown-linux-gnu] section (a host RUSTFLAGS env is not
-        # forwarded into maturin-action's build container).
+        env:
+          # CARGO_BUILD_RUSTFLAGS applies to host builds too (unlike
+          # [target.<triple>].rustflags, which cargo ignores for the host target
+          # per rust-lang/cargo#8607, and which is how maturin builds here).
+          # It replaces [build].rustflags, so `--cfg tracing_unstable` is kept.
+          # `-static-libgcc` removes the libgcc_s.so.1 runtime dependency.
+          CARGO_BUILD_RUSTFLAGS: "--cfg tracing_unstable -C link-arg=-static-libgcc"
         with:
           target: x86_64-unknown-linux-gnu
           command: build
+          # Forward CARGO_BUILD_RUSTFLAGS into maturin-action's build container
+          # (it does not forward arbitrary host env vars by default).
+          docker-options: -e CARGO_BUILD_RUSTFLAGS
           # Build from engine/ so .cargo/config.toml is picked up.
           working-directory: engine
           manylinux: "2_17"
