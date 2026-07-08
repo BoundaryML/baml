@@ -828,6 +828,9 @@ function Plain(x: int) -> int { x }
         let golden = include_str!(
             "../../../../typescript2/pkg-playground/src/__fixtures__/param-schema-golden.json"
         );
+        // .gitattributes pins the fixture to LF, but stale Windows checkouts
+        // (attribute added after the file) may still hold CRLF — normalize.
+        let golden = golden.replace("\r\n", "\n");
         assert_eq!(
             actual,
             golden.trim_end(),
