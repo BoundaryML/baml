@@ -1545,6 +1545,11 @@ pub enum BuiltinKind {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LlmBodyDef {
     pub client: Option<Name>,
+    /// True for the call form `client Gpt()` (DCP §1.4): the name references
+    /// a user function returning `baml.ai.Provider`, and the injected client
+    /// param's default becomes the call `Gpt()` instead of a binding
+    /// reference. Zero-arg only.
+    pub client_is_call: bool,
     pub prompt: Option<RawPrompt>,
     /// BEP-049 M5e: for a new-mode (backtick) prompt, the pre-lowered body of
     /// the `$stream` companion — a `stream_llm_function(...)` call whose 4th

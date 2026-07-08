@@ -48,6 +48,13 @@ pub enum LoweringDiagnostic {
     /// An enum variant has no name token.
     MissingVariantName { enum_name: String, span: TextRange },
 
+    /// The call form of a client reference (`client Gpt(...)`) carried
+    /// arguments — client functions are zero-arg for now (DCP §1.4).
+    LlmClientCallWithArgs {
+        function_name: String,
+        span: TextRange,
+    },
+
     /// An attribute could not be lowered (missing name token).
     MalformedAttribute {
         context: String, // "field `Foo.bar`", "class `Foo`"
@@ -220,6 +227,18 @@ impl LoweringDiagnostic {
                 format!("parameter defaults are not supported in {context}"),
                 *span,
                 "default value is not allowed here",
+            ),
+            LoweringDiagnostic::LlmClientCallWithArgs {
+                function_name,
+                span,
+            } => (
+                DiagnosticId::InvalidSyntax,
+                Severity::Error,
+                format!(
+                    "LLM function `{function_name}`: a client function reference takes no arguments — write `client Name()`"
+                ),
+                *span,
+                "client function references are zero-arg",
             ),
             LoweringDiagnostic::ReservedLlmClientParam {
                 function_name,

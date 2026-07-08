@@ -327,8 +327,23 @@ fn lower_function(
         let mut llm_body_def = lower_llm_body(&llm);
         reject_reserved_llm_client_params(&mut params, name.as_str(), diags);
         let client_name = llm_body_def.client.as_ref().map(|n| n.as_str().to_string());
+        if llm_body_def.client_is_call
+            && let Some(cf) = llm.client_field()
+            && cf.call_has_args()
+        {
+            diags.push(LoweringDiagnostic::LlmClientCallWithArgs {
+                function_name: name.as_str().to_string(),
+                span: cf.syntax().span_range(),
+            });
+        }
         if let Some(client_name) = client_name.as_deref() {
-            append_default_client_param(&mut params, &mut defaults, client_name, llm_body_def.span);
+            append_default_client_param(
+                &mut params,
+                &mut defaults,
+                client_name,
+                llm_body_def.client_is_call,
+                llm_body_def.span,
+            );
         }
         let param_names: Vec<Name> = params
             .iter()
@@ -615,6 +630,7 @@ pub(crate) fn append_default_client_param(
     params: &mut Vec<Param>,
     defaults: &mut FunctionDefaults,
     client_name: &str,
+    client_is_call: bool,
     span: text_size::TextRange,
 ) {
     // DCP §1.1 (Phase B): the injected parameter is the NEW-model existential
@@ -623,8 +639,28 @@ pub(crate) fn append_default_client_param(
     // as the default unchanged — `baml.llm.Client` itself implements
     // `Provider`/`HttpProvider` (out-of-body blocks in `ns_ai/core/legacy.baml`),
     // which also keeps legacy call-site overrides (`client = OtherClient`)
-    // working.
-    let default_expr = alloc_client_override_default_expr(defaults, client_name, span);
+    // working. The call form `client Gpt()` (DCP §1.4) makes the default a
+    // call to a user function returning `Provider` — the declared-custom-client
+    // path.
+    let default_expr = if client_is_call {
+        let callee = {
+            let id = defaults
+                .exprs
+                .exprs
+                .alloc(Expr::Path(vec![Name::new(client_name)]));
+            defaults.source_map.expr_spans.alloc(span);
+            id
+        };
+        let id = defaults.exprs.exprs.alloc(Expr::Call {
+            callee,
+            type_args: vec![],
+            args: vec![],
+        });
+        defaults.source_map.expr_spans.alloc(span);
+        id
+    } else {
+        alloc_client_override_default_expr(defaults, client_name, span)
+    };
     params.push(Param {
         name: Name::new("client"),
         type_expr: Some(
@@ -727,6 +763,7 @@ fn lower_llm_body(llm_body: &ast::LlmFunctionBody) -> LlmBodyDef {
         .client_field()
         .and_then(|cf| cf.value())
         .map(|name| Name::new(&name));
+    let client_is_call = llm_body.client_field().is_some_and(|cf| cf.is_call());
 
     let prompt = llm_body
         .prompt_field()
@@ -735,6 +772,7 @@ fn lower_llm_body(llm_body: &ast::LlmFunctionBody) -> LlmBodyDef {
 
     LlmBodyDef {
         client,
+        client_is_call,
         prompt,
         // Filled in by the LLM-function branch once param names are known.
         stream_body: None,

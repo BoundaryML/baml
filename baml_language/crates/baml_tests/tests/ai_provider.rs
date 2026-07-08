@@ -1781,3 +1781,76 @@ async fn e2e_client_override_combinator_mock() {
         BexExternalValue::String("fallback-pong".into())
     );
 }
+
+/// DCP §1.4: `client MyClientFn()` — the declared client is a USER FUNCTION
+/// returning `baml.ai.Provider`, so a custom/native provider can be the
+/// function's default client (not just a call-site override).
+#[tokio::test]
+async fn e2e_declared_client_function_mock() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/chat/completions"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_string(r#"{"choices":[{"message":{"content":"fn-client-pong"}}]}"#),
+        )
+        .mount(&server)
+        .await;
+    let uri = server.uri();
+
+    let output = baml_test!(&format!(
+        r#"
+        function NativeGpt() -> baml.ai.Provider {{
+            baml.ai.OpenAi {{ model: "gpt-5.4-mini", api_key: "test-key", base_url: "{uri}" }}
+        }}
+        function Ask(q: string) -> string {{
+          client NativeGpt()
+          prompt `${{q}}`
+        }}
+        function main() -> string {{
+            Ask("hi") catch (e) {{ _ => "declared client fn failed" }}
+        }}
+        "#
+    ));
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("fn-client-pong".into())
+    );
+    let reqs = server.received_requests().await.unwrap();
+    assert_eq!(reqs.len(), 1);
+}
+
+/// The call-site override still beats a function-declared client.
+#[tokio::test]
+async fn e2e_declared_client_function_override_mock() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/chat/completions"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_string(r#"{"choices":[{"message":{"content":"override-wins"}}]}"#),
+        )
+        .mount(&server)
+        .await;
+    let uri = server.uri();
+
+    let output = baml_test!(&format!(
+        r#"
+        function DeadProvider() -> baml.ai.Provider {{
+            baml.ai.OpenAi {{ model: "m", api_key: "k", base_url: "http://127.0.0.1:9" }}
+        }}
+        function Ask(q: string) -> string {{
+          client DeadProvider()
+          prompt `${{q}}`
+        }}
+        function main() -> string {{
+            let live = baml.ai.OpenAi {{ model: "gpt-5.4-mini", api_key: "k", base_url: "{uri}" }};
+            Ask("hi", client = live) catch (e) {{ _ => "override failed" }}
+        }}
+        "#
+    ));
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("override-wins".into())
+    );
+}

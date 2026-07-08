@@ -1140,6 +1140,36 @@ impl ClientField {
             .find(|token| token.kind() == SyntaxKind::WORD)
     }
 
+    /// True when the client value is the call form — `client Gpt()` — which
+    /// references a client FUNCTION returning `baml.ai.Provider` rather than
+    /// a `client<llm>` config binding (DCP §1.4). Zero-arg only for now.
+    pub fn is_call(&self) -> bool {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(|c| c.into_token())
+            .any(|t| t.kind() == SyntaxKind::L_PAREN)
+    }
+
+    /// True when the call form carries anything between its parens
+    /// (`client Gpt(x)`) — unsupported; the lowering rejects it.
+    pub fn call_has_args(&self) -> bool {
+        let mut inside = false;
+        for tok in self
+            .syntax
+            .children_with_tokens()
+            .filter_map(|c| c.into_token())
+        {
+            match tok.kind() {
+                SyntaxKind::L_PAREN => inside = true,
+                SyntaxKind::R_PAREN => inside = false,
+                SyntaxKind::WHITESPACE | SyntaxKind::NEWLINE | SyntaxKind::LINE_COMMENT => {}
+                _ if inside => return true,
+                _ => {}
+            }
+        }
+        false
+    }
+
     /// Get the client value as a string, whether it's an identifier or a string literal.
     ///
     /// For `client GPT4`, returns "GPT4".
