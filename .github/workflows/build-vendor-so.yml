@@ -70,6 +70,9 @@ jobs:
         working-directory: engine/language_client_python/dist
         run: |
           set -euo pipefail
+          # maturin-action builds inside a container as root, so dist/ is
+          # root-owned; take ownership before writing into it.
+          sudo chown -R "$(id -u):$(id -g)" .
           whl=$(ls *.whl)
           echo "Built wheel: $whl"
           python -m zipfile -e "$whl" extracted/
