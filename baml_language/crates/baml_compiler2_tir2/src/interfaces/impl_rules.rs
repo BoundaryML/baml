@@ -939,8 +939,17 @@ pub fn validate_impl_signatures<'db>(
     use crate::builder::interface_resolution::InterfaceMethodSpec;
 
     let mut diags = Vec::new();
-    let Ok(data) = impl_data(db, impl_loc).as_ref() else {
-        return diags;
+    let data = match impl_data(db, impl_loc).as_ref() {
+        Ok(data) => data,
+        // A cyclic header (`impl_data`'s cycle fallback) can't carry its own diagnostic — re-detect
+        // and surface it here so the user's impl doesn't silently vanish.
+        Err(ImplDataError::CyclicHeader) => {
+            return vec![(
+                crate::infer_context::TirTypeError::CyclicImplHeader,
+                ImplDiagnosticLocation::ForTarget,
+            )];
+        }
+        Err(ImplDataError::InterfaceUnresolved { .. } | ImplDataError::Malformed) => return diags,
     };
     let Some(iface_qtn) = interface_loc_qtn(db, data.interface) else {
         return diags;

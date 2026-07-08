@@ -2364,6 +2364,24 @@ mod tests {
         );
     }
 
+    #[test]
+    fn cyclic_impl_header_is_reported() {
+        // The `CyclicHeader` cycle fallback carries no diagnostic; `validate_impl_signatures`
+        // re-detects it and surfaces `CyclicImplHeader` so the impl doesn't silently vanish.
+        let diags = impl_diagnostics(
+            "interface HasItem {\n  type Item\n}\n\
+             class Numbers {\n  n: int\n  implements HasItem {\n    type Item = int\n  }\n}\n\
+             interface Marker {}\n\
+             implement Marker for Numbers.Item {}\n",
+        );
+        assert!(
+            diags
+                .iter()
+                .any(|e| matches!(e, TirTypeError::CyclicImplHeader)),
+            "expected CyclicImplHeader, got {diags:?}"
+        );
+    }
+
     /// Lower `T.member` where `T` is an in-scope type variable bounded by the named
     /// interfaces (`&[]` = declared but unbounded), each a bare constraint.
     fn lower_tvar_projection(
@@ -3718,6 +3736,166 @@ function needs<T extends Marker>(x: T) -> int throws never {
                 .iter()
                 .any(|e| matches!(e, TirTypeError::AssociatedTypeBindingViolatesBound { .. })),
             "a binding implementing the bound should be accepted, got {diags:?}"
+        );
+    }
+
+    // ── Interface declaration well-formedness ──
+
+    #[test]
+    fn self_in_interface_field_is_reported() {
+        let db = compile("interface HasSelf {\n  x: Self\n}\n");
+        let errs = decl_scope_type_errors(&db, "HasSelf");
+        assert!(
+            errs.iter().any(|e| matches!(
+                e,
+                TirTypeError::SelfInInterfaceField { field, .. } if field.as_str() == "x"
+            )),
+            "expected SelfInInterfaceField for `x`, got {errs:?}"
+        );
+    }
+
+    #[test]
+    fn concrete_interface_field_is_accepted() {
+        let db = compile("interface HasField {\n  x: int\n}\n");
+        let errs = decl_scope_type_errors(&db, "HasField");
+        assert!(
+            !errs
+                .iter()
+                .any(|e| matches!(e, TirTypeError::SelfInInterfaceField { .. })),
+            "a concrete field type should not trigger SelfInInterfaceField, got {errs:?}"
+        );
+    }
+
+    #[test]
+    fn requires_non_interface_is_reported() {
+        let db = compile("class NotIface {}\ninterface I requires NotIface {}\n");
+        let errs = decl_scope_type_errors(&db, "I");
+        assert!(
+            errs.iter().any(|e| matches!(
+                e,
+                TirTypeError::InterfaceRequiresNonInterface { target, .. } if target.as_str() == "NotIface"
+            )),
+            "expected InterfaceRequiresNonInterface for `NotIface`, got {errs:?}"
+        );
+    }
+
+    #[test]
+    fn requires_interface_is_accepted() {
+        let db = compile("interface Base {}\ninterface I requires Base {}\n");
+        let errs = decl_scope_type_errors(&db, "I");
+        assert!(
+            !errs
+                .iter()
+                .any(|e| matches!(e, TirTypeError::InterfaceRequiresNonInterface { .. })),
+            "requiring an interface should be accepted, got {errs:?}"
+        );
+    }
+
+    #[test]
+    fn requires_cycle_is_reported() {
+        let db = compile("interface A requires B {}\ninterface B requires A {}\n");
+        let errs = decl_scope_type_errors(&db, "A");
+        assert!(
+            errs.iter()
+                .any(|e| matches!(e, TirTypeError::InterfaceRequiresCycle { .. })),
+            "expected InterfaceRequiresCycle for `A`, got {errs:?}"
+        );
+    }
+
+    #[test]
+    fn acyclic_requires_is_accepted() {
+        let db = compile("interface Base {}\ninterface I requires Base {}\n");
+        let errs = decl_scope_type_errors(&db, "I");
+        assert!(
+            !errs
+                .iter()
+                .any(|e| matches!(e, TirTypeError::InterfaceRequiresCycle { .. })),
+            "an acyclic `requires` should not report a cycle, got {errs:?}"
+        );
+    }
+
+    #[test]
+    fn associated_type_default_violating_bound_is_reported() {
+        // `type Item extends Bar = int`, but `int` does not implement `Bar`.
+        let db =
+            compile("interface Bar {}\ninterface HasItem {\n  type Item extends Bar = int\n}\n");
+        let errs = decl_scope_type_errors(&db, "HasItem");
+        assert!(
+            errs.iter().any(|e| matches!(
+                e,
+                TirTypeError::AssociatedTypeDefaultViolatesBound { name, .. } if name.as_str() == "Item"
+            )),
+            "expected AssociatedTypeDefaultViolatesBound for `Item`, got {errs:?}"
+        );
+    }
+
+    #[test]
+    fn associated_type_default_satisfying_bound_is_accepted() {
+        // `Impl` implements `Bar`, so the default `type Item extends Bar = Impl` satisfies it.
+        let db = compile(
+            "interface Bar {}\nclass Impl {\n  implements Bar {}\n}\n\
+             interface HasItem {\n  type Item extends Bar = Impl\n}\n",
+        );
+        let errs = decl_scope_type_errors(&db, "HasItem");
+        assert!(
+            !errs
+                .iter()
+                .any(|e| matches!(e, TirTypeError::AssociatedTypeDefaultViolatesBound { .. })),
+            "a default implementing its bound should be accepted, got {errs:?}"
+        );
+    }
+
+    #[test]
+    fn same_named_fields_across_required_interfaces_are_allowed() {
+        // Interfaces are traits: `A.x` and `B.x` are distinct obligations even at different types,
+        // satisfiable independently via field links. `C requires A, B` is NOT a conflict.
+        let db = compile(
+            "interface A {\n  x: int\n}\ninterface B {\n  x: string\n}\n\
+             interface C requires A, B {}\n",
+        );
+        let errs = decl_scope_type_errors(&db, "C");
+        assert!(
+            errs.is_empty(),
+            "same-named fields across required interfaces are not a declaration conflict, got {errs:?}"
+        );
+    }
+
+    #[test]
+    fn interface_method_missing_throws_is_reported() {
+        let db = compile("interface I {\n  function m(self) -> int\n}\n");
+        let errs = decl_scope_type_errors(&db, "I");
+        assert!(
+            errs.iter().any(|e| matches!(
+                e,
+                TirTypeError::InterfaceMethodMissingThrows { method, .. } if method.as_str() == "m"
+            )),
+            "expected InterfaceMethodMissingThrows for `m`, got {errs:?}"
+        );
+    }
+
+    #[test]
+    fn default_method_missing_throws_is_reported() {
+        // The rule covers default methods (with a body) too — their `throws` is not inferred.
+        let db = compile("interface I {\n  function m(self) -> int {\n    0\n  }\n}\n");
+        let errs = decl_scope_type_errors(&db, "I");
+        assert!(
+            errs.iter().any(|e| matches!(
+                e,
+                TirTypeError::InterfaceMethodMissingThrows { method, .. } if method.as_str() == "m"
+            )),
+            "expected InterfaceMethodMissingThrows for default `m`, got {errs:?}"
+        );
+    }
+
+    #[test]
+    fn interface_method_declaring_throws_is_accepted() {
+        let db = compile("interface I {\n  function m(self) -> int throws never\n}\n");
+        let errs = decl_scope_type_errors(&db, "I");
+        assert!(
+            !errs
+                .iter()
+                .any(|e| matches!(e, TirTypeError::InterfaceMethodMissingThrows { .. })),
+            "an interface method declaring `throws` should raise no error, got {errs:?}"
         );
     }
 

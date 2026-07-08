@@ -614,6 +614,41 @@ pub enum TirTypeError {
         binding: Ty,
         bound: baml_type::Interface,
     },
+    /// `Self` appears in an interface *field* type. `Self` is only meaningful in method
+    /// signatures; a recursive field must name the interface itself. Interface-declaration well-formedness (E0136).
+    SelfInInterfaceField {
+        interface: crate::ty::QualifiedTypeName,
+        field: Name,
+    },
+    /// An interface's `requires` clause names a type that is not an interface (a class, enum, or
+    /// alias). Only interfaces can be required. Interface-declaration well-formedness (E0133).
+    InterfaceRequiresNonInterface {
+        interface: crate::ty::QualifiedTypeName,
+        target: Name,
+    },
+    /// An interface's transitive `requires` graph cycles back to itself. Interface-declaration well-formedness (E0118).
+    /// `chain` is the witnessing name path `[root, …, root]`.
+    InterfaceRequiresCycle { chain: Vec<Name> },
+    /// An interface associated type's default does not implement its declared bound (`type Item
+    /// extends J = V` where `V` does not implement `J`). Interface-declaration well-formedness.
+    AssociatedTypeDefaultViolatesBound {
+        interface: crate::ty::QualifiedTypeName,
+        name: Name,
+        /// The default type that fails to implement the bound.
+        default: Ty,
+        bound: baml_type::Interface,
+    },
+    /// An impl header contains a concrete associated-type projection (`implement I for C.Item`, or
+    /// an interface argument `I<X = C.Item>`) whose resolution enumerates this very impl set, so it
+    /// cycles. The `impl_data` cycle fallback can't carry a diagnostic, so it is re-detected and
+    /// reported here. Impl header.
+    CyclicImplHeader,
+    /// An interface method (required or default) omits its `throws` clause. Interface signatures
+    /// must declare it explicitly — it is never inferred (`TYPE_SYSTEM.md` rule 1). Interface-declaration well-formedness.
+    InterfaceMethodMissingThrows {
+        interface: crate::ty::QualifiedTypeName,
+        method: Name,
+    },
 }
 
 impl fmt::Display for TirTypeError {
@@ -1429,6 +1464,56 @@ impl fmt::Display for TirTypeError {
                      by interface `{}`",
                     binding.render_user_facing(),
                     bound.to_ty().render_user_facing(),
+                    interface.render_user_facing()
+                )
+            }
+            TirTypeError::SelfInInterfaceField { interface, field } => {
+                write!(
+                    f,
+                    "`Self` is not allowed in the type of interface field `{field}` on `{}`; name \
+                     the interface itself for recursion",
+                    interface.render_user_facing()
+                )
+            }
+            TirTypeError::InterfaceRequiresNonInterface { interface, target } => {
+                write!(
+                    f,
+                    "interface `{}` cannot require `{target}`, which is not an interface",
+                    interface.render_user_facing()
+                )
+            }
+            TirTypeError::InterfaceRequiresCycle { chain } => {
+                let rendered = chain
+                    .iter()
+                    .map(Name::as_str)
+                    .collect::<Vec<_>>()
+                    .join(" → ");
+                write!(f, "interface `requires` cycle: {rendered}")
+            }
+            TirTypeError::AssociatedTypeDefaultViolatesBound {
+                interface,
+                name,
+                default,
+                bound,
+            } => {
+                write!(
+                    f,
+                    "associated type default `{name}` = `{}` does not implement bound `{}` declared \
+                     by interface `{}`",
+                    default.render_user_facing(),
+                    bound.to_ty().render_user_facing(),
+                    interface.render_user_facing()
+                )
+            }
+            TirTypeError::CyclicImplHeader => write!(
+                f,
+                "a concrete associated-type projection in an impl header is illegal here (it \
+                 resolves through this impl); name the resolved type directly"
+            ),
+            TirTypeError::InterfaceMethodMissingThrows { interface, method } => {
+                write!(
+                    f,
+                    "interface method `{method}` on `{}` must declare an explicit `throws` clause",
                     interface.render_user_facing()
                 )
             }

@@ -631,6 +631,62 @@ pub fn resolve_path_to_interface<'db>(
         .map(|resolved| resolved.loc)
 }
 
+/// If `root`'s transitive `requires` graph cycles back to `root`, return the name chain
+/// `[root, …, root]` witnessing it; else `None`. A plain worklist walk (resolving each
+/// `requires` target to an [`InterfaceLoc`](baml_compiler2_hir::loc::InterfaceLoc)) with a
+/// visited set, so it terminates on any cycle. This is the user-facing detector (E0118) for the
+/// cycle that [`interface_closure_locs`] skips silently. A cycle among *ancestors* that does not
+/// pass back through `root` is that ancestor's own violation, reported when it is validated.
+pub(crate) fn interface_requires_cycle<'db>(
+    db: &'db dyn crate::Db,
+    root: baml_compiler2_hir::loc::InterfaceLoc<'db>,
+) -> Option<Vec<Name>> {
+    let iface_name = |loc: baml_compiler2_hir::loc::InterfaceLoc<'db>| -> Name {
+        baml_compiler2_hir::file_item_tree(db, loc.file(db))
+            .interfaces
+            .get(&loc.id(db))
+            .map(|i| i.name.clone())
+            .unwrap_or_default()
+    };
+    let required_locs =
+        |loc: baml_compiler2_hir::loc::InterfaceLoc<'db>| -> Vec<baml_compiler2_hir::loc::InterfaceLoc<'db>> {
+            let tree = baml_compiler2_hir::file_item_tree(db, loc.file(db));
+            let Some(iface) = tree.interfaces.get(&loc.id(db)) else {
+                return Vec::new();
+            };
+            let pkg = baml_compiler2_hir::file_package::file_package(db, loc.file(db));
+            let pkg_items =
+                baml_compiler2_ppir::package_items(db, PackageId::new(db, pkg.package.clone()));
+            iface
+                .requires
+                .iter()
+                .filter_map(|p| resolve_path_to_interface(db, p, pkg_items, &pkg.namespace_path))
+                .collect()
+        };
+    let root_name = iface_name(root);
+    // Frontier item: (interface to expand, the name chain from `root` to it).
+    let mut frontier: Vec<(baml_compiler2_hir::loc::InterfaceLoc<'db>, Vec<Name>)> =
+        required_locs(root)
+            .into_iter()
+            .map(|p| (p, vec![root_name.clone(), iface_name(p)]))
+            .collect();
+    let mut visited: FxHashSet<baml_compiler2_hir::loc::InterfaceLoc<'db>> = FxHashSet::default();
+    while let Some((loc, chain)) = frontier.pop() {
+        if loc == root {
+            return Some(chain);
+        }
+        if !visited.insert(loc) {
+            continue;
+        }
+        for p in required_locs(loc) {
+            let mut next = chain.clone();
+            next.push(iface_name(p));
+            frontier.push((p, next));
+        }
+    }
+    None
+}
+
 /// Walk the transitive `extends` closure of `root_iface` and return every
 /// interface in it (including `root_iface` itself), in BFS order so the
 /// receiver appears before its parents. Cycles are skipped silently — they

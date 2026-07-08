@@ -11462,7 +11462,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
     }
 
-    fn type_expr_contains_self(ty: &TypeExpr) -> bool {
+    pub(crate) fn type_expr_contains_self(ty: &TypeExpr) -> bool {
         match &ty.kind {
             TypeExprKind::Path {
                 segments,

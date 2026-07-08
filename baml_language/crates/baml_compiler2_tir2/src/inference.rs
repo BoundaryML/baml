@@ -2250,6 +2250,103 @@ pub fn infer_scope_types<'db>(
                         );
                     }
                 }
+                // Interface-declaration well-formedness (BEP-044). `iface_qtn` names the
+                // interface for each diagnostic.
+                let iface_qtn = crate::lower_type_expr::qualify_def(
+                    db,
+                    baml_compiler2_hir::contributions::Definition::Interface(iface_loc),
+                    &iface_data.name,
+                );
+                // E0118: a `requires` graph that cycles back to this interface.
+                if let Some(chain) = crate::interfaces::interface_requires_cycle(db, iface_loc) {
+                    builder.report_at_span(
+                        crate::infer_context::TirTypeError::InterfaceRequiresCycle { chain },
+                        iface_data.span,
+                    );
+                }
+                // E0136: `Self` is only meaningful in method signatures; a field type may not use
+                // it (a recursive field must name the interface itself).
+                for field in &iface_data.fields {
+                    if let Some(type_expr) = &field.type_expr
+                        && crate::builder::TypeInferenceBuilder::type_expr_contains_self(type_expr)
+                    {
+                        builder.report_at_span(
+                            crate::infer_context::TirTypeError::SelfInInterfaceField {
+                                interface: iface_qtn.clone(),
+                                field: field.name.clone(),
+                            },
+                            type_expr.span,
+                        );
+                    }
+                }
+                // E0133: a `requires` clause may only name interfaces. A resolved non-interface
+                // type is rejected here; an unknown name forwards its own lowering error.
+                let requires_scope = crate::lower_type_expr::ScopeCtx {
+                    db,
+                    package_items: pkg_items,
+                    ns_context: &pkg_info.namespace_path,
+                    generic_params: &iface_data.generic_params,
+                    bounds: &crate::lower_type_expr::TypeVarBoundsMap::default(),
+                    self_ty: None,
+                };
+                for requires_te in &iface_data.requires {
+                    if crate::interfaces::resolve_path_to_interface(
+                        db,
+                        requires_te,
+                        pkg_items,
+                        &pkg_info.namespace_path,
+                    )
+                    .is_some()
+                    {
+                        continue;
+                    }
+                    let mut requires_diags = Vec::new();
+                    let lowered = crate::lower_type_expr::lower_type_expr(
+                        requires_te,
+                        &requires_scope,
+                        &mut requires_diags,
+                    );
+                    match &lowered {
+                        Ty::Class(qtn, ..) | Ty::Enum(qtn, ..) => builder.report_at_span(
+                            crate::infer_context::TirTypeError::InterfaceRequiresNonInterface {
+                                interface: iface_qtn.clone(),
+                                target: qtn.name().clone(),
+                            },
+                            requires_te.span,
+                        ),
+                        _ => {
+                            for e in requires_diags {
+                                builder.report_at_span(e, requires_te.span);
+                            }
+                        }
+                    }
+                }
+                // Every interface method (required or default) must declare an explicit `throws`
+                // clause: a signature is the contract, and unlike a free function its error type is
+                // never inferred (TYPE_SYSTEM.md rule 1). (The return type is required for *all*
+                // functions, not just interface ones — a universal syntax-layer rule, not enforced
+                // here.)
+                for (method, throws, span) in iface_data
+                    .required_methods
+                    .iter()
+                    .map(|s| (&s.name, s.throws.as_ref(), s.span))
+                    .chain(iface_data.default_methods.iter().filter_map(|id| {
+                        item_tree
+                            .functions
+                            .get(id)
+                            .map(|f| (&f.name, f.throws.as_ref(), f.span))
+                    }))
+                {
+                    if throws.is_none() {
+                        builder.report_at_span(
+                            crate::infer_context::TirTypeError::InterfaceMethodMissingThrows {
+                                interface: iface_qtn.clone(),
+                                method: method.clone(),
+                            },
+                            span,
+                        );
+                    }
+                }
                 let (iface_params, iface_bounds) = interface_type_level_params_and_bounds(
                     db,
                     iface_loc,
@@ -2383,6 +2480,73 @@ pub fn infer_scope_types<'db>(
                         );
                     }
                 }
+                // An associated type's default must implement its declared bound (`type Item
+                // extends J = V` requires `V` to implement `J`) — the decl-side analogue of the
+                // impl-side binding check, via the same shared bound-satisfaction helper. Cycle-safe
+                // (the bound resolves without a `requires`-closure walk). A self-referential default
+                // bound realizes only partially (`Self` stays symbolic) — rare.
+                let default_bound_iface = baml_type::Interface::new(
+                    iface_qtn.clone(),
+                    iface_data
+                        .generic_params
+                        .iter()
+                        .map(|p| Ty::TypeVar(p.clone(), TyAttr::default()))
+                        .collect(),
+                    Vec::new(),
+                );
+                let iface_generic_bounds =
+                    crate::lower_type_expr::interface_generic_param_bounds(db, iface_loc);
+                let default_scope = crate::lower_type_expr::ScopeCtx {
+                    db,
+                    package_items: pkg_items,
+                    ns_context: &pkg_info.namespace_path,
+                    generic_params: &iface_data.generic_params,
+                    bounds: iface_generic_bounds,
+                    self_ty: Some(self_ty),
+                };
+                for assoc in &iface_data.associated_types {
+                    let (Some(_), Some(default_te)) = (&assoc.bound, &assoc.default) else {
+                        continue;
+                    };
+                    let mut default_diags = Vec::new();
+                    let default_ty = crate::lower_type_expr::lower_type_expr(
+                        default_te,
+                        &default_scope,
+                        &mut default_diags,
+                    );
+                    let normalized = baml_type::normalize::normalize(&default_ty, &builder);
+                    for bound in
+                        crate::builder::associated_projection::associated_type_declared_bound(
+                            db,
+                            &default_bound_iface,
+                            &assoc.name,
+                        )
+                    {
+                        if !crate::interfaces::normalized_arg_implements_bound(
+                            &builder,
+                            &normalized,
+                            &bound,
+                        ) {
+                            builder.report_at_span(
+                                crate::infer_context::TirTypeError::AssociatedTypeDefaultViolatesBound {
+                                    interface: iface_qtn.clone(),
+                                    name: assoc.name.clone(),
+                                    default: default_ty.clone(),
+                                    bound,
+                                },
+                                default_te.span,
+                            );
+                        }
+                    }
+                }
+                // NOTE: interfaces are traits, not inheritance — `Foo.x` and `Bar.x` are distinct,
+                // per-interface obligations (like `<T as Foo>::Item` vs `<T as Bar>::Item`), and a
+                // type satisfies each independently (via `field as class_field` links mapping them
+                // to different class fields). So two interfaces sharing a field name with different
+                // types is NOT a `requires`-declaration conflict. A genuine clash surfaces only at
+                // the impl site when one class field is forced to satisfy two of them (E0116), and
+                // ambiguous unqualified access is a use-site check. There is deliberately no
+                // declaration-level inherited-field-conflict check.
                 break;
             }
         }
