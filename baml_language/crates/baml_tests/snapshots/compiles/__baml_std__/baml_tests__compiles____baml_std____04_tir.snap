@@ -7450,8 +7450,13 @@ function baml.llm.call_llm_function<T>(client: baml.ai.Provider, function_name: 
         { : T
           let renderer = from_shorthand("openai/gpt-4o") : baml.llm.PrimitiveClient
           let return_type = get_return_type(function_name) : type
-          let specialized = renderer.render_specialized_prompt(jinja_string, args, return_type, prompt_closure) : baml.llm.PromptAst
-          let messages = root.ai.prompt_to_messages(specialized) : baml.ai.ChatMessage[]
+          let prompt0 = : baml.llm.PromptAst
+            match (prompt_closure : ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null) : baml.llm.PromptAst
+              null =>
+                renderer.render_prompt(jinja_string, args, return_type) : baml.llm.PromptAst
+              closure: (Context) -> PromptAst =>
+                closure(build_prompt_context(renderer, return_type)) : baml.llm.PromptAst
+          let messages = root.ai.prompt_to_messages(prompt0) : baml.ai.ChatMessage[]
           h.call_messages<T>(messages) : T
         }
       _ =>
@@ -7498,8 +7503,13 @@ function baml.llm.stream_llm_function<TStream, TFinal>(client: baml.ai.Provider,
         { : baml.llm.Stream<TStream, TFinal>
           let renderer = from_shorthand("openai/gpt-4o") : baml.llm.PrimitiveClient
           let return_type = get_return_type(function_name) : type
-          let specialized = renderer.render_specialized_prompt(jinja_string, args, return_type, prompt_closure) : baml.llm.PromptAst
-          let messages = root.ai.prompt_to_messages(specialized) : baml.ai.ChatMessage[]
+          let prompt0 = : baml.llm.PromptAst
+            match (prompt_closure : ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null) : baml.llm.PromptAst
+              null =>
+                renderer.render_prompt(jinja_string, args, return_type) : baml.llm.PromptAst
+              closure: (Context) -> PromptAst =>
+                closure(build_prompt_context(renderer, return_type)) : baml.llm.PromptAst
+          let messages = root.ai.prompt_to_messages(prompt0) : baml.ai.ChatMessage[]
           s.stream_messages(messages) : baml.llm.Stream<TStream, TFinal>
         }
       _ =>

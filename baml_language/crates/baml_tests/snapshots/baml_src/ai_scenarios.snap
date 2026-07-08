@@ -14,6 +14,12 @@ function ai_scenarios.$init_test_ns_ai_scenarios_01_single_turn_usage(registry: 
     load_const null
     call testing.TestCollector.register_test
     pop 1
+    load_var registry
+    load_const "integ-test-01"
+    make_closure .<lambda($init_test_ns_ai_scenarios_01_single_turn_usage, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test_set
+    pop 1
     load_const null
     return
 }
@@ -30,6 +36,12 @@ function ai_scenarios.$init_test_ns_ai_scenarios_02_structured_output_usage(regi
     make_closure .<lambda($init_test_ns_ai_scenarios_02_structured_output_usage, 1)>, 0
     load_const null
     call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "integ-test-02"
+    make_closure .<lambda($init_test_ns_ai_scenarios_02_structured_output_usage, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test_set
     pop 1
     load_const null
     return

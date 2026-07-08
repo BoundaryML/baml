@@ -31,3 +31,17 @@ test "02: SAP is schema-aligned — prose around the JSON still parses" {
     };
     assert.equal(p.name, "Grace")
 }
+
+testset "integ-test-02" {
+    test "02 live: structured extraction through a native OpenAI override" {
+        let p = ExtractPerson("Ada Lovelace, aged 36, wrote the first program.", client = baml.ai.OpenAi {
+            model: "gpt-5.4-mini",
+            api_key: baml.env.get_or_panic("OPENAI_API_KEY"),
+            base_url: null,
+        }) catch (e) {
+            _ => S02Person { name: "live failed", age: -1 },
+        };
+        assert.equal(p.age, 36)
+        assert.is_true(p.name.includes("Ada"))
+    }
+}

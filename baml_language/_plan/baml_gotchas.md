@@ -91,6 +91,16 @@ Each entry: the symptom, the rule, the workaround. Compiler-bug candidates are m
 
 ## Misc
 
+- ⚠ **Two `testset "same-name"` blocks in DIFFERENT files silently drop one** —
+  only one block's tests are discovered (no diagnostic). Convention: unique
+  per-file names sharing a filterable prefix (`integ-test-01`, `integ-test-02`)
+  and glob filters (`-i "integ-test*::"`).
+- **A system-only message list 400s on Anthropic** ("messages: at least one
+  message is required") — the /v1/messages builder hoists system messages
+  top-level, so a rendered prompt whose specialize pass assigned everything the
+  "system" role leaves zero messages. The native-override render path therefore
+  renders UNSPECIALIZED (role-less → "user" in `prompt_to_messages`).
+
 - ⚠ **A `ns.name` path written from INSIDE namespace `ns` compiles clean but can
   produce a non-terminating program.** Namespace refs resolve relative-first, so
   `ai_custom_capability.drive_moderated` referenced from within

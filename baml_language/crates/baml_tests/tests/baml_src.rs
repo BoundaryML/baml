@@ -145,6 +145,8 @@ fn bytecode() {
 /// Execute `baml test`
 #[test]
 fn baml_test() {
+    // The default suite never touches the network: the live tier lives in
+    // `testset "integ-test"` blocks and is excluded here (DCP §1.6).
     let status = std::process::Command::new("cargo")
         .args([
             "run",
@@ -154,6 +156,34 @@ fn baml_test() {
             "test",
             "--from",
             concat!(env!("CARGO_MANIFEST_DIR"), "/baml_src"),
+            "-x",
+            "integ-test*::",
+        ])
+        .status()
+        .expect("baml_cli test should not fail");
+    assert!(status.success());
+}
+
+/// The live tier: runs ONLY the `testset "integ-test"` blocks against real
+/// APIs. Gated on API keys (skips silently without them, like the `ai_*`
+/// live tests); inject via `infisical run --env=test -- cargo test …`.
+#[test]
+fn baml_integ_test() {
+    if std::env::var("OPENAI_API_KEY").is_err() {
+        eprintln!("skipping baml_integ_test: OPENAI_API_KEY not set");
+        return;
+    }
+    let status = std::process::Command::new("cargo")
+        .args([
+            "run",
+            "-p",
+            "baml_cli",
+            "--",
+            "test",
+            "--from",
+            concat!(env!("CARGO_MANIFEST_DIR"), "/baml_src"),
+            "-i",
+            "integ-test*::",
         ])
         .status()
         .expect("baml_cli test should not fail");

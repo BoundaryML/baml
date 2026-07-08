@@ -160,8 +160,15 @@ function call_llm_function<T>(client: root.ai.Provider, function_name: string, a
     let h: root.ai.HttpProvider => {
       let renderer = from_shorthand("openai/gpt-4o");
       let return_type = get_return_type(function_name);
-      let specialized = renderer.render_specialized_prompt(jinja_string, args, return_type, prompt_closure);
-      let messages = root.ai.prompt_to_messages(specialized);
+      // Render UNSPECIALIZED: the neutral renderer's specialize pass assigns
+      // its own default role ("system") to bare prompts, and providers that
+      // hoist system messages (Anthropic) would then see ZERO messages (400).
+      // Role-less content becomes a "user" message in prompt_to_messages.
+      let prompt0 = match (prompt_closure) {
+        null => renderer.render_prompt(jinja_string, args, return_type),
+        let closure: (Context) -> PromptAst => closure(build_prompt_context(renderer, return_type)),
+      };
+      let messages = root.ai.prompt_to_messages(prompt0);
       h.call_messages<T>(messages)
     },
     _ => throw root.errors.Unsupported {
@@ -219,8 +226,11 @@ function stream_llm_function<TStream, TFinal>(client: root.ai.Provider, function
         let s: root.ai.Streaming => {
             let renderer = from_shorthand("openai/gpt-4o");
             let return_type = get_return_type(function_name);
-            let specialized = renderer.render_specialized_prompt(jinja_string, args, return_type, prompt_closure);
-            let messages = root.ai.prompt_to_messages(specialized);
+            let prompt0 = match (prompt_closure) {
+                null => renderer.render_prompt(jinja_string, args, return_type),
+                let closure: (Context) -> PromptAst => closure(build_prompt_context(renderer, return_type)),
+            };
+            let messages = root.ai.prompt_to_messages(prompt0);
             s.stream_messages<TStream, TFinal>(messages)
         },
         _ => throw root.errors.Unsupported {
