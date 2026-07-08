@@ -67,6 +67,9 @@ function baml.flat_map(self: ?, f: (T) -> U[] throws E) -> U[]  [builtin]
 function baml.for_each(self: ?, fn: (T) -> void throws E) -> void  [expr] {
   { for x in self.slice(0, self.length()) { fn(x) } }
 }
+function baml.generate(length: int, f: (int) -> T throws E) -> T[]  [expr] {
+  { let out: T[] = []; let i = 0; while i Lt length { out.push(f(i)); i Add= 1 } } out
+}
 function baml.get(self: ?, key: K) -> V?  [builtin]
 function baml.get_or_insert(self: ?, key: K, default: V) -> V  [builtin]
 function baml.has(self: ?, key: K) -> bool  [builtin]

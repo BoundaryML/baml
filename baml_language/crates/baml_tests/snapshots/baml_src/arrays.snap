@@ -758,6 +758,54 @@ function arrays.$init_test_ns_arrays_arrays(registry: testing.TestCollector) -> 
     load_const null
     call testing.TestCollector.register_test
     pop 1
+    load_var registry
+    load_const "array_generate_passes_index_0_to_n_minus_1"
+    make_closure .<lambda($init_test_ns_arrays_arrays, 179)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "array_generate_maps_index_through_f"
+    make_closure .<lambda($init_test_ns_arrays_arrays, 181)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "array_generate_calls_f_once_per_index"
+    make_closure .<lambda($init_test_ns_arrays_arrays, 183)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "array_generate_slots_are_independent"
+    make_closure .<lambda($init_test_ns_arrays_arrays, 185)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "array_filled_shares_mutable_slots_unlike_generate"
+    make_closure .<lambda($init_test_ns_arrays_arrays, 186)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "array_generate_zero_length_is_empty"
+    make_closure .<lambda($init_test_ns_arrays_arrays, 187)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "array_generate_negative_length_is_empty"
+    make_closure .<lambda($init_test_ns_arrays_arrays, 189)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "array_generate_propagates_error"
+    make_closure .<lambda($init_test_ns_arrays_arrays, 191)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
     load_const null
     return
 }
@@ -1106,6 +1154,46 @@ function arrays.array_index_write(idx: int) -> int[] {
     load_const 99
     store_array_element
     load_var xs
+    return
+}
+
+function arrays.filled_aliases_grid() -> int[][] {
+    load_type int
+    load_const 2
+    load_const 0
+    call baml.Array.filled
+    store_var row
+    load_type int[]
+    load_const 3
+    load_var row
+    call baml.Array.filled
+    store_var grid
+    load_type int
+    load_var grid
+    load_const 0
+    load_array_element
+    load_const 99
+    call baml.Array.push
+    pop 1
+    load_var grid
+    return
+}
+
+function arrays.generate_independence_grid() -> int[][] {
+    load_type int[]
+    load_type never
+    load_const 3
+    make_closure .<lambda(generate_independence_grid, 0)>, 0
+    call baml.Array.generate
+    store_var grid
+    load_type int
+    load_var grid
+    load_const 0
+    load_array_element
+    load_const 99
+    call baml.Array.push
+    pop 1
+    load_var grid
     return
 }
 

@@ -405,6 +405,37 @@ function baml.Array.for_each(self: baml.Array<T>, fn: (T) -> void throws E) -> v
     unreachable
 }
 
+function baml.Array.generate(length: int, f: (int) -> T throws E) -> T[] {
+    load_type #0
+    alloc_array 0
+    store_var out
+    load_const 0
+    store_var i
+
+  L0:
+    load_var2 4 1
+    cmp_int_op <
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var out
+    return
+
+  L2:
+    load_var2 4 2
+    call_indirect
+    store_var _8
+    load_var2 3 5
+    call baml.Array.push
+    pop 1
+    load_var i
+    load_const 1
+    add_int
+    store_var i
+    jump L0
+}
+
 function baml.Array.includes(self: baml.Array<T>, item: T) -> bool {
 }
 

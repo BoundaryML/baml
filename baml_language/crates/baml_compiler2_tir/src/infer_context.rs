@@ -602,7 +602,7 @@ impl fmt::Display for TirTypeError {
             TirTypeError::ArrayFilledMutableLiteralAliasing => {
                 write!(
                     f,
-                    "`Array.filled` reuses the same mutable value in every slot; mutating one slot mutates all of them. Build independent slots with a `while` loop that pushes a fresh literal each iteration"
+                    "`Array.filled` reuses the same mutable value in every slot; mutating one slot mutates all of them. Use `Array.generate(length, f)` to build an independent value per slot (`f` is called once per index)"
                 )
             }
             TirTypeError::InvalidUnaryOp { op, operand } => {

@@ -96,6 +96,18 @@ function baml.compare(self: unknown, other: unknown) -> int throws never {
 --- <builtin>/baml/containers.baml ---
 class baml.Array {
 }
+function baml.Array.generate<E>(length: int, f: (int) -> T throws E) -> T[] throws E {
+  { : T[]
+    let out: T[] = [] : T[]
+    let i = 0 : 0 -> int
+    while i < length
+      { : void
+        out.push<T>(f(i)) : int
+        i Add= 1 : int
+      }
+    out : T[]
+  }
+}
 function baml.Array.for_each<E>(self: baml.Array<T>, fn: (T) -> void throws E) -> void throws E {
   { : void
     for x in self.slice(0, self.length())

@@ -17,14 +17,10 @@ class Array<T> {
   /// types (arrays, maps, class instances), every slot aliases the same object.
   /// Mutating one slot mutates all slots.
   ///
-  /// Use a `while` loop to allocate independent mutable slots:
+  /// To get independent per-slot values, use `Array.generate`, which calls a
+  /// factory once per index:
   /// ```
-  /// let rows: int[][] = [];
-  /// let i = 0;
-  /// while (i < 3) {
-  ///   rows.push([]);
-  ///   i += 1;
-  /// }
+  /// Array.generate(3, (i: int) -> int[] { [] })   // three independent []s
   /// ```
   ///
   /// # Returns
@@ -43,6 +39,41 @@ class Array<T> {
   /// ```
   function filled(length: int, value: T) -> T[] throws never {
     $rust_function
+  }
+
+  /// Builds a new array of `length` elements by calling `f` once per index.
+  ///
+  /// `f` is invoked with each index `0, 1, ..., length - 1` in order, and its
+  /// result is stored in that slot. Unlike `Array.filled`, which reuses one
+  /// shared value, `generate` produces an **independent value per slot** — the
+  /// alias-free way to build runtime-sized buffers of reference types (rows of a
+  /// grid, per-slot maps or class instances). It mirrors JavaScript's
+  /// `Array.from({ length }, f)` and a Python list comprehension.
+  ///
+  /// # Parameters
+  /// - `length`: the number of elements to create. A negative or zero `length`
+  ///   produces an empty array and never calls `f`.
+  /// - `f`: called once per index to produce that slot's value. Any error it
+  ///   throws propagates to the caller, halting generation.
+  ///
+  /// # Returns
+  /// A fresh `T[]` of length `max(length, 0)` whose element `i` is `f(i)`.
+  ///
+  /// # Examples
+  /// ```
+  /// Array.generate(3, (i: int) -> int { i * i })      // [0, 1, 4]
+  /// Array.generate(0, (i: int) -> int { i })          // []
+  /// // A 2D grid with independent rows (mutating one row leaves the rest):
+  /// Array.generate(rows, (r: int) -> int[] { Array.filled(cols, 0) })
+  /// ```
+  function generate<E>(length: int, f: (int) -> T throws E) -> T[] throws E {
+    let out: T[] = [];
+    let i = 0;
+    while (i < length) {
+      out.push(f(i));
+      i += 1;
+    }
+    out
   }
 
   /// Returns the number of elements in the array.
