@@ -75,6 +75,41 @@ pub struct ResolvedInterface<'db> {
     pub qtn: QualifiedTypeName,
 }
 
+/// Whether `arg` (already [normalized](baml_type::normalize::TypeContext::normalize)) implements
+/// the interface `bound`. A bound is an *implements* relation, never the subset `is_subtype`: only
+/// concrete types implement interfaces, so a union/existential that passes a subtype check is not
+/// an implementor. A concrete type implements `bound` through its impls; a bounded type variable
+/// or associated-type projection is filled by a concrete type satisfying its own carried bound, so
+/// it satisfies `bound` iff one of those bounds is, or transitively requires, `bound`. An error
+/// sentinel is treated as satisfying it (its own diagnostic covers it — no cascade).
+///
+/// Shared by the builder's generic-argument bound gate and the impl-side associated-type-binding
+/// bound check, so every bound-check site reads a bound identically.
+pub(crate) fn normalized_arg_implements_bound(
+    ctx: &impl baml_type::normalize::TypeContext,
+    arg: &Ty,
+    bound: &baml_type::Interface,
+) -> bool {
+    let carried_bounds = match arg {
+        Ty::Unknown { .. } | Ty::Error { .. } => return true,
+        Ty::TypeVar(name, _) => ctx.type_var_bound(name),
+        Ty::AssociatedTypeProjection {
+            interface: Some(iface),
+            member,
+            ..
+        } => ctx.associated_type_bound(iface, member.clone()),
+        // Never determined — errored upstream; don't cascade.
+        Ty::AssociatedTypeProjection {
+            interface: None, ..
+        } => return true,
+        // A concrete argument implements the bound directly through its impls.
+        _ => return ctx.implements_interface(arg, bound),
+    };
+    carried_bounds.iter().any(|have| {
+        ctx.equivalent(&have.to_ty(), &bound.to_ty()) || ctx.interface_requires(have, bound)
+    })
+}
+
 #[allow(clippy::too_many_arguments)]
 fn lower_interface_associated_bindings(
     db: &dyn crate::Db,

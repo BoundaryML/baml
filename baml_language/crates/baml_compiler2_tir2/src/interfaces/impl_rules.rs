@@ -8,7 +8,7 @@ use crate::{
     generics::{contains_typevar, substitute_ty},
     interfaces::{
         InterfaceImplOrigin, TypeBindings, lower_interface_associated_bindings, match_ty_patterns,
-        resolve_path_to_interface,
+        normalized_arg_implements_bound, resolve_path_to_interface,
     },
     lower_type_expr::qualify_def,
     normalize::is_same_normalized_type,
@@ -109,6 +109,10 @@ pub enum ImplDiagnosticLocation {
     /// [`ImplDataSourceMap::class_field_link_spans`] to *every* link with that class-field name.
     /// Falls back to the whole block.
     ClassFieldLink(Name),
+    /// A `type Name = …` associated-type binding in the block, by binding name — resolved via
+    /// [`ImplDataSourceMap::associated_binding_spans`] to *every* binding with that name (a
+    /// duplicate marks all sites). Falls back to the whole block.
+    AssociatedBinding(Name),
 }
 
 /// Spans for an `implements` block, split out of [`ImplData`] for Salsa
@@ -134,6 +138,9 @@ pub struct ImplDataSourceMap {
     /// with that name, so an [`ImplDiagnosticLocation::ClassFieldLink`] diagnostic (E0129) marks
     /// all such links.
     pub class_field_link_spans: HashMap<Name, Vec<Span>>,
+    /// Associated-binding name → the name span of *every* `type Name = …` binding in the block, so
+    /// an [`ImplDiagnosticLocation::AssociatedBinding`] diagnostic marks all same-named bindings.
+    pub associated_binding_spans: HashMap<Name, Vec<Span>>,
 }
 
 /// The qualified name of a resolved interface loc (head identity for building a
@@ -652,6 +659,76 @@ pub fn impl_data<'db>(
                 }
             }
         }
+
+        // Associated-type binding hygiene, name-based (applies to every impl, in-body or
+        // out-of-body). Bound satisfaction needs the type algebra and is checked downstream in
+        // `validate_impl_signatures`.
+        let is_assoc = |name: &Name| iface_data.associated_types.iter().any(|a| a.name == *name);
+        for (idx, binding) in block.associated_type_bindings.iter().enumerate() {
+            // Dedup by binding name (the location marks every binding with that name).
+            if block.associated_type_bindings[..idx]
+                .iter()
+                .any(|b| b.name == binding.name)
+            {
+                continue;
+            }
+            // Duplicate: the same associated type is bound by a later sibling too.
+            if block.associated_type_bindings[idx + 1..]
+                .iter()
+                .any(|b| b.name == binding.name)
+            {
+                conformance_diags.push((
+                    crate::infer_context::TirTypeError::DuplicateAssociatedTypeBinding {
+                        interface: iface_qtn.clone(),
+                        name: binding.name.clone(),
+                    },
+                    ImplDiagnosticLocation::AssociatedBinding(binding.name.clone()),
+                ));
+            }
+            // Unknown: names no associated type of the interface.
+            if !is_assoc(&binding.name) {
+                conformance_diags.push((
+                    crate::infer_context::TirTypeError::UnknownAssociatedTypeBinding {
+                        interface: iface_qtn.clone(),
+                        name: binding.name.clone(),
+                    },
+                    ImplDiagnosticLocation::AssociatedBinding(binding.name.clone()),
+                ));
+            }
+        }
+        // Missing: an associated type the interface declares with no default is not bound, so it
+        // is left undetermined.
+        for assoc in &iface_data.associated_types {
+            if assoc.default.is_none()
+                && !block
+                    .associated_type_bindings
+                    .iter()
+                    .any(|b| b.name == assoc.name)
+            {
+                conformance_diags.push((
+                    crate::infer_context::TirTypeError::MissingImplAssociatedTypeBinding {
+                        interface: iface_qtn.clone(),
+                        name: assoc.name.clone(),
+                    },
+                    ImplDiagnosticLocation::InterfaceTarget,
+                ));
+            }
+        }
+        // Bindings written on the `implements` target (`implements I<Item = …>`) instead of in
+        // the block are rejected — the block's `type Name = …` is the only binding site.
+        if let baml_compiler2_ast::TypeExprKind::Path {
+            associated_type_bindings,
+            ..
+        } = &block.interface_target.kind
+            && !associated_type_bindings.is_empty()
+        {
+            conformance_diags.push((
+                crate::infer_context::TirTypeError::AssociatedTypeBindingsOnImplementsTarget {
+                    interface: iface_qtn,
+                },
+                ImplDiagnosticLocation::InterfaceTarget,
+            ));
+        }
     }
 
     // Tag each diagnostic with its origin (interface ref → InterfaceTarget,
@@ -746,6 +823,15 @@ pub fn impl_data_source_map<'db>(
             .or_default()
             .push(Span::new(file_id, link.class_field_span));
     }
+    // Group each `type Name = …` binding's name span by name, so a per-name assoc-binding
+    // diagnostic (unknown / duplicate / bound violation) marks every binding with that name.
+    let mut associated_binding_spans: HashMap<Name, Vec<Span>> = HashMap::new();
+    for binding in &block.associated_type_bindings {
+        associated_binding_spans
+            .entry(binding.name.clone())
+            .or_default()
+            .push(Span::new(file_id, binding.name_span));
+    }
     Some(ImplDataSourceMap {
         impl_span: Span::new(file_id, impl_range),
         interface_target_span: Span::new(file_id, block.interface_target.span),
@@ -753,6 +839,7 @@ pub fn impl_data_source_map<'db>(
         method_spans,
         interface_field_link_spans,
         class_field_link_spans,
+        associated_binding_spans,
     })
 }
 
@@ -1120,6 +1207,46 @@ pub fn validate_impl_signatures<'db>(
                     },
                     ImplDiagnosticLocation::InterfaceTarget,
                 ));
+            }
+        }
+    }
+
+    // ── Associated-type binding bound satisfaction: an explicit `type Name = V` binding must
+    // *implement* the interface's declared bound for `Name` (`type Name extends J`) — an implements
+    // relation, like a generic bound. Cycle-safe here (the bound check re-enters `impl_data`, never
+    // this query). Defaults are the interface's own obligation, checked at its declaration. ──
+    {
+        let target_iface = baml_type::Interface {
+            name: iface_qtn.clone(),
+            generics: data.interface_args.clone(),
+            associated_types: data.associated_types.clone(),
+        };
+        for binding in &block.associated_type_bindings {
+            // The explicit binding's resolved value; skip unknown bindings (impl_data reports those).
+            let Some((_, binding_ty)) = data
+                .associated_types
+                .iter()
+                .find(|(n, _)| *n == binding.name)
+            else {
+                continue;
+            };
+            let normalized = baml_type::normalize::normalize(binding_ty, &ctx);
+            for bound in crate::builder::associated_projection::associated_type_declared_bound(
+                db,
+                &target_iface,
+                &binding.name,
+            ) {
+                if !normalized_arg_implements_bound(&ctx, &normalized, &bound) {
+                    diags.push((
+                        crate::infer_context::TirTypeError::AssociatedTypeBindingViolatesBound {
+                            interface: iface_qtn.clone(),
+                            name: binding.name.clone(),
+                            binding: binding_ty.clone(),
+                            bound,
+                        },
+                        ImplDiagnosticLocation::AssociatedBinding(binding.name.clone()),
+                    ));
+                }
             }
         }
     }

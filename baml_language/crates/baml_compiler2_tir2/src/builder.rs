@@ -12936,30 +12936,13 @@ impl<'db> TypeInferenceBuilder<'db> {
             )
     }
 
-    /// Whether the already-normalized, [admissible](Self::is_bounded_arg_admissible)
-    /// argument `arg` implements `bound`. A concrete type implements it through its impls;
-    /// a bounded type variable / projection is filled by a concrete type satisfying its own
-    /// bound, so it satisfies `bound` iff one of those bounds is, or transitively requires,
-    /// `bound`. An error sentinel is skipped (its own diagnostic covers it).
+    /// Whether the already-normalized, [admissible](Self::is_bounded_arg_admissible) argument
+    /// `arg` implements `bound`. Delegates to the shared
+    /// [`normalized_arg_implements_bound`](crate::interfaces::normalized_arg_implements_bound) so
+    /// the builder's generic-argument gate and the impl-side associated-type-binding check read a
+    /// bound identically.
     fn bounded_arg_implements(&self, arg: &Ty, bound: &baml_type::Interface) -> bool {
-        let carried_bounds = match arg {
-            Ty::Unknown { .. } | Ty::Error { .. } => return true,
-            Ty::TypeVar(name, _) => self.type_var_bound(name),
-            Ty::AssociatedTypeProjection {
-                interface: Some(iface),
-                member,
-                ..
-            } => self.associated_type_bound(iface, member.clone()),
-            // Never determined — errored upstream; don't cascade.
-            Ty::AssociatedTypeProjection {
-                interface: None, ..
-            } => return true,
-            // A concrete argument implements the bound directly through its impls.
-            _ => return self.implements_interface(arg, bound),
-        };
-        carried_bounds.iter().any(|have| {
-            self.equivalent(&have.to_ty(), &bound.to_ty()) || self.interface_requires(have, bound)
-        })
+        crate::interfaces::normalized_arg_implements_bound(self, arg, bound)
     }
 
     fn validate_function_generic_bounds(

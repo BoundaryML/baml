@@ -580,6 +580,40 @@ pub enum TirTypeError {
         interface: crate::ty::QualifiedTypeName,
         field: Name,
     },
+    /// A `type Name = …` binding in an `implements` block names an associated type the
+    /// interface does not declare. Assoc-binding hygiene.
+    UnknownAssociatedTypeBinding {
+        interface: crate::ty::QualifiedTypeName,
+        name: Name,
+    },
+    /// An `implements` block binds the same associated type more than once. Assoc-binding
+    /// hygiene.
+    DuplicateAssociatedTypeBinding {
+        interface: crate::ty::QualifiedTypeName,
+        name: Name,
+    },
+    /// An `implements` block does not bind an associated type the interface declares with no
+    /// default, so it is left undetermined. Assoc-binding hygiene. (Distinct from
+    /// [`Self::MissingAssociatedTypeBindings`], which is the existential *value*-position rule.)
+    MissingImplAssociatedTypeBinding {
+        interface: crate::ty::QualifiedTypeName,
+        name: Name,
+    },
+    /// Associated type bindings were written on an `implements` *target* (`implements
+    /// I<Item = …>`) instead of inside the block (`type Item = …`). Assoc-binding hygiene.
+    AssociatedTypeBindingsOnImplementsTarget {
+        interface: crate::ty::QualifiedTypeName,
+    },
+    /// An `implements` block binds an associated type to a type that does not implement the
+    /// interface's declared bound for it (`type Item extends J`) — a bound is an *implements*
+    /// relation, like a generic bound. Assoc-binding hygiene.
+    AssociatedTypeBindingViolatesBound {
+        interface: crate::ty::QualifiedTypeName,
+        name: Name,
+        /// The bound type the binding fails to implement.
+        binding: Ty,
+        bound: baml_type::Interface,
+    },
 }
 
 impl fmt::Display for TirTypeError {
@@ -1350,6 +1384,51 @@ impl fmt::Display for TirTypeError {
                 write!(
                     f,
                     "field `{field}` of interface `{}` is linked more than once",
+                    interface.render_user_facing()
+                )
+            }
+            TirTypeError::UnknownAssociatedTypeBinding { interface, name } => {
+                write!(
+                    f,
+                    "unknown associated type `{name}` for interface `{}`",
+                    interface.render_user_facing()
+                )
+            }
+            TirTypeError::DuplicateAssociatedTypeBinding { interface, name } => {
+                write!(
+                    f,
+                    "associated type `{name}` of interface `{}` is bound more than once",
+                    interface.render_user_facing()
+                )
+            }
+            TirTypeError::MissingImplAssociatedTypeBinding { interface, name } => {
+                write!(
+                    f,
+                    "missing associated type binding `{name}` for interface `{}` (add `type {name} = \
+                     …` to the implements block)",
+                    interface.render_user_facing()
+                )
+            }
+            TirTypeError::AssociatedTypeBindingsOnImplementsTarget { interface } => {
+                write!(
+                    f,
+                    "associated type bindings are not allowed on an `implements` target for `{}`; \
+                     bind them inside the block with `type Name = …`",
+                    interface.render_user_facing()
+                )
+            }
+            TirTypeError::AssociatedTypeBindingViolatesBound {
+                interface,
+                name,
+                binding,
+                bound,
+            } => {
+                write!(
+                    f,
+                    "associated type binding `{name}` = `{}` does not implement bound `{}` declared \
+                     by interface `{}`",
+                    binding.render_user_facing(),
+                    bound.to_ty().render_user_facing(),
                     interface.render_user_facing()
                 )
             }

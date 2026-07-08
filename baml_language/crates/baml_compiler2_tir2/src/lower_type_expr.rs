@@ -3604,6 +3604,123 @@ function needs<T extends Marker>(x: T) -> int throws never {
         );
     }
 
+    // ── Associated-type binding hygiene (impl side) ──
+
+    #[test]
+    fn unknown_associated_type_binding_is_reported() {
+        // `type Bogus = int` names no associated type of `HasItem`. `Item` is bound so nothing
+        // else fires, isolating the unknown-binding diagnostic.
+        let diags = impl_diagnostics(
+            "interface HasItem {\n  type Item\n}\n\
+             class C {\n  implements HasItem {\n    type Item = int\n    type Bogus = int\n  }\n}\n",
+        );
+        assert!(
+            diags.iter().any(|e| matches!(
+                e,
+                TirTypeError::UnknownAssociatedTypeBinding { name, .. } if name.as_str() == "Bogus"
+            )),
+            "expected UnknownAssociatedTypeBinding for `Bogus`, got {diags:?}"
+        );
+    }
+
+    #[test]
+    fn duplicate_associated_type_binding_is_reported() {
+        let diags = impl_diagnostics(
+            "interface HasItem {\n  type Item\n}\n\
+             class C {\n  implements HasItem {\n    type Item = int\n    type Item = string\n  }\n}\n",
+        );
+        assert!(
+            diags.iter().any(|e| matches!(
+                e,
+                TirTypeError::DuplicateAssociatedTypeBinding { name, .. } if name.as_str() == "Item"
+            )),
+            "expected DuplicateAssociatedTypeBinding for `Item`, got {diags:?}"
+        );
+    }
+
+    #[test]
+    fn missing_associated_type_binding_is_reported() {
+        // `Item` has no default and the impl does not bind it.
+        let diags = impl_diagnostics(
+            "interface HasItem {\n  type Item\n}\n\
+             class C {\n  implements HasItem {}\n}\n",
+        );
+        assert!(
+            diags.iter().any(|e| matches!(
+                e,
+                TirTypeError::MissingImplAssociatedTypeBinding { name, .. } if name.as_str() == "Item"
+            )),
+            "expected MissingImplAssociatedTypeBinding for `Item`, got {diags:?}"
+        );
+    }
+
+    #[test]
+    fn defaulted_associated_type_may_be_omitted() {
+        // `Item` has a default, so an impl that omits it is not missing anything.
+        let diags = impl_diagnostics(
+            "interface HasItem {\n  type Item = int\n}\n\
+             class C {\n  implements HasItem {}\n}\n",
+        );
+        assert!(
+            !diags
+                .iter()
+                .any(|e| matches!(e, TirTypeError::MissingImplAssociatedTypeBinding { .. })),
+            "a defaulted associated type may be omitted, got {diags:?}"
+        );
+    }
+
+    #[test]
+    fn associated_type_bindings_on_target_are_reported() {
+        // Bindings belong in the block (`type Item = …`), not on the target (`HasItem<Item = …>`).
+        // `Item` has a default so nothing is missing, isolating the on-target diagnostic.
+        let diags = impl_diagnostics(
+            "interface HasItem {\n  type Item = int\n}\n\
+             class C {\n  implements HasItem<Item = string> {}\n}\n",
+        );
+        assert!(
+            diags.iter().any(|e| matches!(
+                e,
+                TirTypeError::AssociatedTypeBindingsOnImplementsTarget { .. }
+            )),
+            "expected AssociatedTypeBindingsOnImplementsTarget, got {diags:?}"
+        );
+    }
+
+    #[test]
+    fn associated_type_binding_violating_bound_is_reported() {
+        // `type Item extends Bar`, but `int` does not implement `Bar` (a bound is an implements
+        // relation).
+        let diags = impl_diagnostics(
+            "interface Bar {}\n\
+             interface HasItem {\n  type Item extends Bar\n}\n\
+             class C {\n  implements HasItem {\n    type Item = int\n  }\n}\n",
+        );
+        assert!(
+            diags.iter().any(|e| matches!(
+                e,
+                TirTypeError::AssociatedTypeBindingViolatesBound { name, .. } if name.as_str() == "Item"
+            )),
+            "expected AssociatedTypeBindingViolatesBound for `Item`, got {diags:?}"
+        );
+    }
+
+    #[test]
+    fn associated_type_binding_satisfying_bound_is_accepted() {
+        // `Impl` implements `Bar`, so binding `type Item = Impl` satisfies `type Item extends Bar`.
+        let diags = impl_diagnostics(
+            "interface Bar {}\n\
+             class Impl {\n  implements Bar {}\n}\n\
+             interface HasItem {\n  type Item extends Bar\n}\n\
+             class C {\n  implements HasItem {\n    type Item = Impl\n  }\n}\n",
+        );
+        assert!(
+            !diags
+                .iter()
+                .any(|e| matches!(e, TirTypeError::AssociatedTypeBindingViolatesBound { .. })),
+            "a binding implementing the bound should be accepted, got {diags:?}"
+        );
+    }
+
     // ── `_` type-inference placeholder: rejected (inference variables unimplemented) ──
 
     #[test]
