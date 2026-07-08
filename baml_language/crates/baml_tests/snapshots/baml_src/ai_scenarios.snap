@@ -105,6 +105,23 @@ function ai_scenarios.$init_test_ns_ai_scenarios_15_guardrails_usage(registry: t
     return
 }
 
+function ai_scenarios.$init_test_ns_ai_scenarios_17_history_sessions_usage(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "17: provider-held conversation threads the session handle"
+    make_closure .<lambda($init_test_ns_ai_scenarios_17_history_sessions_usage, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "31: cache lifecycle is scope-bound with defer (the BEP-042 pattern)"
+    make_closure .<lambda($init_test_ns_ai_scenarios_17_history_sessions_usage, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_const null
+    return
+}
+
 function ai_scenarios.$init_test_ns_ai_scenarios_22_realtime_voice_usage(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "22: Foo$live drives a swapped-in Realtime provider"
@@ -121,6 +138,29 @@ function ai_scenarios.$init_test_ns_ai_scenarios_22_realtime_voice_usage(registr
     load_var registry
     load_const "23: LiveControl is negotiated on top of Realtime"
     make_closure .<lambda($init_test_ns_ai_scenarios_22_realtime_voice_usage, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_const null
+    return
+}
+
+function ai_scenarios.$init_test_ns_ai_scenarios_27_background_jobs_usage(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "27: submit carries the idempotency key onto the job handle"
+    make_closure .<lambda($init_test_ns_ai_scenarios_27_background_jobs_usage, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "27: an unfinished job polls as pending, not an error"
+    make_closure .<lambda($init_test_ns_ai_scenarios_27_background_jobs_usage, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "27: Retry refuses to wrap the effectful background provider"
+    make_closure .<lambda($init_test_ns_ai_scenarios_27_background_jobs_usage, 2)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
@@ -161,6 +201,17 @@ function ai_scenarios.$init_test_ns_ai_scenarios_37_harness_basics_usage(registr
     load_var registry
     load_const "37: driving the stubbed harness transport is a typed Unsupported (P8 pending)"
     make_closure .<lambda($init_test_ns_ai_scenarios_37_harness_basics_usage, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_const null
+    return
+}
+
+function ai_scenarios.$init_test_ns_ai_scenarios_44_workflow_suspend_usage(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "44: a suspension surfaces as a sum arm, not an error"
+    make_closure .<lambda($init_test_ns_ai_scenarios_44_workflow_suspend_usage, 0)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
@@ -671,6 +722,100 @@ function ai_scenarios.ResearchIt$with(q: string, project: (baml.ai.ResponseMeta)
     return
 }
 
+function ai_scenarios.ScriptedJobs$stream.baml.ai.Background.poll(self: ai_scenarios.ScriptedJobs$stream, job: baml.ai.Job<T>) -> T | null {
+    load_var self
+    load_field .0
+    load_const 0
+    cmp_int_op >
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_type #0
+    load_const "finished "
+    load_var job
+    load_field .id
+    bin_op +
+    call baml.sap.parse
+    jump L2
+    load_var e
+    throw_if_panic
+    load_var e
+    load_const "poll parse"
+    load_type string
+    alloc_array 1
+    init_instance baml.errors.UnknownError .data, .message
+    throw
+
+  L1:
+    load_const null
+
+  L2:
+    return
+}
+
+function ai_scenarios.ScriptedJobs$stream.baml.ai.Background.submit(self: ai_scenarios.ScriptedJobs$stream, prompt: string, idempotency_key: string) -> baml.ai.Job<T> {
+    load_const "job-"
+    load_var idempotency_key
+    bin_op +
+    load_const "scripted"
+    load_type #0
+    init_instance<1> baml.ai.Job .id, .owner
+    return
+}
+
+function ai_scenarios.ScriptedJobs$stream.baml.ai.Provider.is_effectful(self: ai_scenarios.ScriptedJobs$stream) -> bool {
+    load_const true
+    return
+}
+
+function ai_scenarios.ScriptedJobs.baml.ai.Background.poll(self: ai_scenarios.ScriptedJobs, job: baml.ai.Job<T>) -> T | null {
+    load_var self
+    load_field .0
+    load_const 0
+    cmp_int_op >
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_type #0
+    load_const "finished "
+    load_var job
+    load_field .id
+    bin_op +
+    call baml.sap.parse
+    jump L2
+    load_var e
+    throw_if_panic
+    load_var e
+    load_const "poll parse"
+    load_type string
+    alloc_array 1
+    init_instance baml.errors.UnknownError .data, .message
+    throw
+
+  L1:
+    load_const null
+
+  L2:
+    return
+}
+
+function ai_scenarios.ScriptedJobs.baml.ai.Background.submit(self: ai_scenarios.ScriptedJobs, prompt: string, idempotency_key: string) -> baml.ai.Job<T> {
+    load_const "job-"
+    load_var idempotency_key
+    bin_op +
+    load_const "scripted"
+    load_type #0
+    init_instance<1> baml.ai.Job .id, .owner
+    return
+}
+
+function ai_scenarios.ScriptedJobs.baml.ai.Provider.is_effectful(self: ai_scenarios.ScriptedJobs) -> bool {
+    load_const true
+    return
+}
+
 function ai_scenarios.ScriptedRealtime$stream.baml.ai.Realtime.run(self: ai_scenarios.ScriptedRealtime$stream, prompt: string, io: baml.ai.Channel) -> baml.ai.Transcript {
     load_var self
     load_field .0
@@ -690,6 +835,136 @@ function ai_scenarios.ScriptedRealtime.baml.ai.Realtime.run(self: ai_scenarios.S
     load_var prompt
     bin_op +
     init_instance baml.ai.Transcript .text
+    return
+}
+
+function ai_scenarios.ScriptedSessions$stream.baml.ai.Conversational.chat(self: ai_scenarios.ScriptedSessions$stream, prompt: string, session: baml.ai.Session) -> T {
+    load_type #0
+    load_const "session "
+    load_var session
+    load_field ._id
+    bin_op +
+    load_const ": "
+    bin_op +
+    load_var prompt
+    bin_op +
+    call baml.sap.parse
+    jump L0
+    load_var e
+    throw_if_panic
+    load_var e
+    load_const "chat parse"
+    load_type string
+    alloc_array 1
+    init_instance baml.errors.UnknownError .data, .message
+    throw
+
+  L0:
+    return
+}
+
+function ai_scenarios.ScriptedSessions$stream.baml.ai.ManagedCache.create_cache(self: ai_scenarios.ScriptedSessions$stream, prefix: string, ttl_secs: int) -> baml.ai.CacheHandle {
+    load_const "cache-"
+    load_var prefix
+    bin_op +
+    init_instance baml.ai.CacheHandle .name
+    return
+}
+
+function ai_scenarios.ScriptedSessions$stream.baml.ai.ManagedCache.delete_cache(self: ai_scenarios.ScriptedSessions$stream, handle: baml.ai.CacheHandle) -> null {
+    load_const null
+    return
+}
+
+function ai_scenarios.ScriptedSessions.baml.ai.Conversational.chat(self: ai_scenarios.ScriptedSessions, prompt: string, session: baml.ai.Session) -> T {
+    load_type #0
+    load_const "session "
+    load_var session
+    load_field ._id
+    bin_op +
+    load_const ": "
+    bin_op +
+    load_var prompt
+    bin_op +
+    call baml.sap.parse
+    jump L0
+    load_var e
+    throw_if_panic
+    load_var e
+    load_const "chat parse"
+    load_type string
+    alloc_array 1
+    init_instance baml.errors.UnknownError .data, .message
+    throw
+
+  L0:
+    return
+}
+
+function ai_scenarios.ScriptedSessions.baml.ai.ManagedCache.create_cache(self: ai_scenarios.ScriptedSessions, prefix: string, ttl_secs: int) -> baml.ai.CacheHandle {
+    load_const "cache-"
+    load_var prefix
+    bin_op +
+    init_instance baml.ai.CacheHandle .name
+    return
+}
+
+function ai_scenarios.ScriptedSessions.baml.ai.ManagedCache.delete_cache(self: ai_scenarios.ScriptedSessions, handle: baml.ai.CacheHandle) -> null {
+    load_const null
+    return
+}
+
+function ai_scenarios.ScriptedSuspend$stream.baml.ai.Suspendable.reenter(self: ai_scenarios.ScriptedSuspend$stream, snap: baml.ai.Snapshot, resume: string) -> T | baml.ai.Suspend {
+    load_type #0
+    load_const "resumed: "
+    load_var resume
+    bin_op +
+    call baml.sap.parse
+    jump L0
+    load_var e
+    throw_if_panic
+    load_var e
+    load_const "reenter parse"
+    load_type string
+    alloc_array 1
+    init_instance baml.errors.UnknownError .data, .message
+    throw
+
+  L0:
+    return
+}
+
+function ai_scenarios.ScriptedSuspend$stream.baml.ai.Suspendable.start(self: ai_scenarios.ScriptedSuspend$stream, prompt: string) -> T | baml.ai.Suspend {
+    load_var prompt
+    load_const "human-approval"
+    init_instance baml.ai.Suspend .payload, .point
+    return
+}
+
+function ai_scenarios.ScriptedSuspend.baml.ai.Suspendable.reenter(self: ai_scenarios.ScriptedSuspend, snap: baml.ai.Snapshot, resume: string) -> T | baml.ai.Suspend {
+    load_type #0
+    load_const "resumed: "
+    load_var resume
+    bin_op +
+    call baml.sap.parse
+    jump L0
+    load_var e
+    throw_if_panic
+    load_var e
+    load_const "reenter parse"
+    load_type string
+    alloc_array 1
+    init_instance baml.errors.UnknownError .data, .message
+    throw
+
+  L0:
+    return
+}
+
+function ai_scenarios.ScriptedSuspend.baml.ai.Suspendable.start(self: ai_scenarios.ScriptedSuspend, prompt: string) -> T | baml.ai.Suspend {
+    load_var prompt
+    load_const "human-approval"
+    init_instance baml.ai.Suspend .payload, .point
     return
 }
 
