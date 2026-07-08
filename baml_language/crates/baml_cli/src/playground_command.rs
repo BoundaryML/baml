@@ -16,7 +16,7 @@ pub struct PlaygroundArgs {
     pub from: Option<PathBuf>,
 
     /// Listen on exactly this port (errors if unavailable).
-    /// Default: the first free port from 3700.
+    /// Default: the first free port from 4265.
     #[arg(long, value_name = "PORT")]
     pub port: Option<u16>,
 

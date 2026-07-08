@@ -108,7 +108,7 @@ pub fn run_server(workspace_roots: Vec<PathBuf>) -> anyhow::Result<()> {
 /// Options for `run_playground_server` (browser mode only; LSP mode ignores them).
 #[derive(Debug, Clone)]
 pub struct PlaygroundServerOptions {
-    /// Bind exactly this port; error if unavailable. `None` = scan from 3700.
+    /// Bind exactly this port; error if unavailable. `None` = scan from 4265.
     pub port: Option<u16>,
     /// Open the local browser once the server is up.
     pub open_browser: bool,
@@ -240,7 +240,7 @@ fn run_server_inner(
             Some(port) => tokio_runtime
                 .block_on(playground_server::bind_exact_port(port))
                 .map(|listener| (listener, port)),
-            None => tokio_runtime.block_on(playground_server::pick_port(3700, 100)),
+            None => tokio_runtime.block_on(playground_server::pick_port(4265, 100)),
         };
         match bind_result {
             Ok((listener, port)) => (Some(listener), port),

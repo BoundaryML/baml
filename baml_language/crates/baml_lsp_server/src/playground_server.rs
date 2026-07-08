@@ -446,7 +446,7 @@ pub async fn bind_exact_port(port: u16) -> anyhow::Result<TcpListener> {
     TcpListener::bind(addr).await.map_err(|e| {
         anyhow::anyhow!(
             "Could not bind playground port {port}: {e}. Another process may be \
-             using it; pass a different --port or omit it to auto-pick from 3700."
+             using it; pass a different --port or omit it to auto-pick from 4265."
         )
     })
 }
@@ -2991,7 +2991,7 @@ mod tests {
 
     #[tokio::test]
     async fn bind_exact_port_reports_conflict_with_actionable_error() {
-        let (occupied, port) = pick_port(3700, 100).await.expect("a free port to occupy");
+        let (occupied, port) = pick_port(4265, 100).await.expect("a free port to occupy");
 
         let err = bind_exact_port(port)
             .await
