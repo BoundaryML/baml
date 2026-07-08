@@ -321,7 +321,8 @@ fn add_type_display<T: std::fmt::Display>(te: &T, out: &mut HashSet<String>) {
 fn is_builtin_type_word(word: &str) -> bool {
     matches!(
         word,
-        "int" | "bigint"
+        "int"
+            | "bigint"
             | "float"
             | "string"
             | "bool"
@@ -770,8 +771,11 @@ impl CacheContext {
                 // types named in this file's source-level annotations, so
                 // layout/alias dependencies invisible to the bytecode are
                 // tracked too.
-                let mut set: HashSet<String> =
-                    referenced.remove(&rel).unwrap_or_default().into_iter().collect();
+                let mut set: HashSet<String> = referenced
+                    .remove(&rel)
+                    .unwrap_or_default()
+                    .into_iter()
+                    .collect();
                 set.extend(syntactic_type_names(db, sf));
                 let mut referenced_names: Vec<String> = set.into_iter().collect();
                 referenced_names.sort_unstable();
@@ -873,6 +877,18 @@ mod tests {
         if cache_disabled() {
             return None;
         }
+        // These integration tests round-trip through the on-disk cache and run
+        // on Linux (the primary CI platform). They are skipped on macOS/Windows,
+        // where the on-disk round-trip is environment-sensitive (temp-dir
+        // canonicalization, filesystem timestamp granularity, path separators —
+        // see B-748). The dirty-set *mechanism* they exercise is asserted
+        // directly, and platform-independently, by the unit tests below
+        // (`defined_names_includes_type_aliases`,
+        // `syntactic_type_names_capture_signature_and_alias_types`,
+        // `referenced_names_carry_layout_sentinel_for_field_reader`).
+        if !cfg!(target_os = "linux") {
+            return None;
+        }
         let root = unique_root();
         let _ = std::fs::remove_dir_all(&root);
 
@@ -908,12 +924,18 @@ mod tests {
     fn plan_reuse_dirties_field_reader_on_field_reorder() {
         let initial = [
             ("a.baml", "class Point {\n  x int\n  y int\n}\n"),
-            ("b.baml", "function diff(p: Point) -> int {\n  p.x - p.y\n}\n"),
+            (
+                "b.baml",
+                "function diff(p: Point) -> int {\n  p.x - p.y\n}\n",
+            ),
             ("c.baml", "function unrelated() -> int {\n  42\n}\n"),
         ];
         let edited = [
             ("a.baml", "class Point {\n  y int\n  x int\n}\n"),
-            ("b.baml", "function diff(p: Point) -> int {\n  p.x - p.y\n}\n"),
+            (
+                "b.baml",
+                "function diff(p: Point) -> int {\n  p.x - p.y\n}\n",
+            ),
             ("c.baml", "function unrelated() -> int {\n  42\n}\n"),
         ];
         let Some(dirty) = dirty_after_edit(&initial, &edited) else {
@@ -1002,8 +1024,7 @@ mod tests {
         // `pay` forwards a `Money` value (no field access → no layout sentinel),
         // so only tracking the *alias name* `Money` — via `defined_names` and
         // `syntactic_type_names` — can dirty it when the RHS changes.
-        let a_v1 =
-            "class Dollars {\n  v int\n}\nclass Euros {\n  v int\n}\ntype Money = Dollars\n";
+        let a_v1 = "class Dollars {\n  v int\n}\nclass Euros {\n  v int\n}\ntype Money = Dollars\n";
         let a_v2 = "class Dollars {\n  v int\n}\nclass Euros {\n  v int\n}\ntype Money = Euros\n";
         let pay = "function pay(m: Money) -> Money {\n  m\n}\n";
         let unrelated = "function unrelated() -> int {\n  42\n}\n";

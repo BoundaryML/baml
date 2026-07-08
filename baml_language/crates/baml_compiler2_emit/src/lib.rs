@@ -1320,30 +1320,19 @@ impl<'a> ReuseContext<'a> {
                 | Object::Type(..) => {
                     pending_literal_start = None;
                 }
-                // Runtime-only heap shapes: created during execution, never
-                // present in a compiled `Program` pool, so they can never be a
-                // block boundary and simply reset literal tracking. Enumerated
-                // exhaustively (no bare `_`) so a NEW `Object` variant is a
-                // compile error here, forcing a conscious classification.
-                Object::Instance(..)
-                | Object::Variant(..)
-                | Object::Closure(..)
-                | Object::BoundMethod(..)
-                | Object::HostClosure(..)
-                | Object::Cell(..)
-                | Object::Array(..)
-                | Object::Map(..)
-                | Object::Float(..)
-                | Object::Future(..)
-                | Object::UnscheduledFuture(..)
-                | Object::RustData(..)
-                | Object::Collector(..) => {
-                    pending_literal_start = None;
-                }
-                // Debug-only heap sentinel (feature-gated); this crate forwards
-                // `heap_debug` to bex_vm_types so the variant is nameable.
-                #[cfg(feature = "heap_debug")]
-                Object::Sentinel(..) => {
+                // Runtime-only heap shapes (Instance, Variant, Closure,
+                // BoundMethod, HostClosure, Cell, Array, Map, Float, Future,
+                // UnscheduledFuture, RustData, Collector) are created during
+                // execution and never appear in a compiled `Program` pool, so
+                // they can never be a block boundary and simply reset. The
+                // catch-all is intentional and must stay: it also absorbs the
+                // `heap_debug`-gated `Sentinel` variant, which another crate can
+                // make exist (by enabling `bex_vm_types/heap_debug`) without
+                // enabling this crate's own feature, so a `#[cfg]` arm would
+                // leave the match non-exhaustive in that config. The literal and
+                // pool-definition arms above are the ones that need a conscious
+                // update when a new *pooled* Object kind lands.
+                _ => {
                     pending_literal_start = None;
                 }
             }
