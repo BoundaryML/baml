@@ -1000,6 +1000,10 @@ class baml.llm.PrimitiveClientOptions {
 class baml.llm.PromptAst {
   _data: $rust_type
 }
+class baml.llm.PromptMessage {
+  role: string
+  content: string
+}
 class baml.llm.RetryPolicy {
   max_retries: int
   initial_delay_ms: int
@@ -1080,6 +1084,7 @@ function baml.llm.is_done(self: ?) -> bool  [builtin]
 function baml.llm.make_role(name: string) -> baml.llm.Role  [expr] {
   {  } baml.llm.Role { name: name, metadata: map {  } }
 }
+function baml.llm.messages(self: ?) -> baml.llm.PromptMessage[]  [builtin]
 function baml.llm.model(self: ?) -> string?  [builtin]
 function baml.llm.new(t_stream: type, t_final: type) -> baml.llm.StreamCache<TStream, TFinal>  [builtin]
 function baml.llm.new_stream_accumulator(self: ?) -> baml.llm.StreamAccumulator  [builtin]
@@ -1098,8 +1103,12 @@ function baml.llm.render_specialized_prompt(self: ?, template: string, args: map
   { let prompt = match (prompt_closure) { null => self.render_prompt(template, args, return_type), closure: (baml.llm.Context) -> baml.llm.PromptAst => closure(build_prompt_context(self, return_type)) } } self.specialize_prompt(prompt)
 }
 function baml.llm.specialize_prompt(self: ?, prompt: baml.llm.PromptAst) -> baml.llm.PromptAst  [builtin]
+function baml.llm.text(self: ?) -> string  [builtin]
 function baml.llm.to_primitive_client(self: ?, lenient: bool = false) -> baml.llm.PrimitiveClient  [expr] {
   {  } if (self.name.includes("/")) {  } from_shorthand(self.name) else {  } self.get_constructor()(lenient)
+}
+function baml.llm.to_string(self: ?) -> string  [expr] {
+  {  } self.text()
 }
 function baml.llm.validate_finish_reason(self: ?, finish_reason: string) -> null  [builtin]
 
