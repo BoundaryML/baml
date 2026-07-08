@@ -805,20 +805,11 @@ fn capture_loss_message(capture_kind: &str, skipped: u64) -> String {
 }
 
 #[derive(Clone, Debug)]
-struct PlaygroundAccessGuard {
-    allowed_origins: Arc<Vec<String>>,
-}
+struct PlaygroundAccessGuard {}
 
 impl PlaygroundAccessGuard {
-    fn for_listener_addr(addr: SocketAddr) -> Self {
-        let port = addr.port();
-        Self {
-            allowed_origins: Arc::new(vec![
-                format!("http://localhost:{port}"),
-                format!("http://127.0.0.1:{port}"),
-                format!("http://[::1]:{port}"),
-            ]),
-        }
+    fn new() -> Self {
+        Self {}
     }
 
     fn is_allowed_origin(&self, origin: Option<&HeaderValue>) -> bool {
@@ -828,10 +819,7 @@ impl PlaygroundAccessGuard {
         let Ok(origin) = origin.to_str() else {
             return false;
         };
-        self.allowed_origins
-            .iter()
-            .any(|allowed| origin.eq_ignore_ascii_case(allowed))
-            || is_vscode_webview_origin(origin)
+        is_loopback_origin(origin) || is_vscode_webview_origin(origin)
     }
 
     fn cors_origin(&self, origin: Option<&HeaderValue>) -> Option<HeaderValue> {
@@ -842,6 +830,31 @@ impl PlaygroundAccessGuard {
             None
         }
     }
+}
+
+/// True when `origin` is an http(s) origin whose host is loopback
+/// (`localhost`, a 127.0.0.0/8 address, or `[::1]`), on any port.
+///
+/// Through an `ssh -L` tunnel the page's origin is the local tunnel endpoint:
+/// loopback host, arbitrary port. The host, not the port, is the trust signal;
+/// a hostile web page's fetch/WS still carries its real remote origin -> denied.
+fn is_loopback_origin(origin: &str) -> bool {
+    let Ok(uri) = origin.parse::<Uri>() else {
+        return false;
+    };
+    if !matches!(uri.scheme_str(), Some("http") | Some("https")) {
+        return false;
+    }
+    let Some(host) = uri.host() else {
+        return false;
+    };
+    if host.eq_ignore_ascii_case("localhost") {
+        return true;
+    }
+    host.trim_start_matches('[')
+        .trim_end_matches(']')
+        .parse::<std::net::IpAddr>()
+        .is_ok_and(|ip| ip.is_loopback())
 }
 
 fn is_vscode_webview_origin(origin: &str) -> bool {
@@ -904,7 +917,7 @@ pub async fn run(
     workspace_roots: Vec<PathBuf>,
 ) -> anyhow::Result<()> {
     let local_addr = listener.local_addr()?;
-    let access_guard = PlaygroundAccessGuard::for_listener_addr(local_addr);
+    let access_guard = PlaygroundAccessGuard::new();
     let app = build_router(
         bex,
         broadcast_tx,
@@ -2933,21 +2946,36 @@ mod tests {
     }
 
     #[test]
-    fn playground_access_guard_accepts_localhost_and_vscode_origins_only() {
-        let guard =
-            PlaygroundAccessGuard::for_listener_addr(SocketAddr::from(([127, 0, 0, 1], 3700)));
+    fn playground_access_guard_accepts_any_loopback_port_and_vscode_origins() {
+        let guard = PlaygroundAccessGuard::new();
         assert!(guard.is_allowed_origin(None));
-        assert!(guard.is_allowed_origin(Some(&HeaderValue::from_static("http://localhost:3700"))));
-        assert!(
-            guard.is_allowed_origin(Some(&HeaderValue::from_static("vscode-webview://abc123")))
-        );
-        assert!(guard.is_allowed_origin(Some(&HeaderValue::from_static(
-            "https://abc123.vscode-cdn.net"
-        ))));
-        assert!(!guard.is_allowed_origin(Some(&HeaderValue::from_static("https://example.com"))));
-        assert!(!guard.is_allowed_origin(Some(&HeaderValue::from_static(
-            "https://vscode-cdn.net.example.com"
-        ))));
+        for allowed in [
+            "http://localhost:4265",
+            "http://localhost:8000", // ssh -L remapped tunnel port
+            "http://127.0.0.1:9999",
+            "http://[::1]:4000",
+            "https://localhost:8443",
+            "vscode-webview://abc123",
+            "https://abc123.vscode-cdn.net",
+        ] {
+            assert!(
+                guard.is_allowed_origin(Some(&HeaderValue::from_static(allowed))),
+                "{allowed}"
+            );
+        }
+        for denied in [
+            "https://example.com",
+            "http://localhost.evil.com", // suffix trick
+            "http://10.0.0.5:4265",      // non-loopback IP
+            "http://127.0.0.1.evil.com:4265",
+            "null",
+            "https://vscode-cdn.net.example.com",
+        ] {
+            assert!(
+                !guard.is_allowed_origin(Some(&HeaderValue::from_static(denied))),
+                "{denied}"
+            );
+        }
     }
 
     #[test]
