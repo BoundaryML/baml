@@ -127,3 +127,29 @@ implements StreamError for CannotRetry {
 implements ToolError for CannotRetry {
   function is_network_error(self) -> bool { false }
 }
+
+/// Thrown when a `root.ai.ToolLoop` stop policy halts the loop before the model
+/// produced a final value on the plain call path (whose return type has no partial
+/// arm). Use `ToolLoop.run_to_budget` to receive the `Budget<T>` outcome instead.
+/// A deliberate stop: not retryable (re-driving replays tool side effects).
+class LoopBudgetExceeded {
+    steps_taken: int,
+}
+
+implements Failure for LoopBudgetExceeded {
+  function is_retryable(self) -> bool { false }
+  function is_effectful(self) -> bool { true }
+  function is_policy_refusal(self) -> bool { true }
+  function is_resumable(self) -> bool { false }
+  function is_unsupported(self) -> bool { false }
+}
+
+implements CallError for LoopBudgetExceeded {
+  function is_network_error(self) -> bool { false }
+  function is_rate_limit(self) -> bool { false }
+  function is_parse_error(self) -> bool { false }
+}
+
+implements ToolError for LoopBudgetExceeded {
+  function is_network_error(self) -> bool { false }
+}

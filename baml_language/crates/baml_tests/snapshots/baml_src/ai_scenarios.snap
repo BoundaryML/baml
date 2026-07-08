@@ -1,0 +1,337 @@
+---
+source: crates/baml_tests/tests/baml_src.rs
+---
+function ai_scenarios.$init_test_ns_ai_scenarios_10_agentic_loop_usage(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "tool loop runs to completion through the plain call path"
+    make_closure .<lambda($init_test_ns_ai_scenarios_10_agentic_loop_usage, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "step_count_is halts the plain path with a typed LoopBudgetExceeded"
+    make_closure .<lambda($init_test_ns_ai_scenarios_10_agentic_loop_usage, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "run_to_budget returns the Budget sum arm instead of throwing"
+    make_closure .<lambda($init_test_ns_ai_scenarios_10_agentic_loop_usage, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "has_tool_call stops when the named tool is requested"
+    make_closure .<lambda($init_test_ns_ai_scenarios_10_agentic_loop_usage, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "non-Tools inner is a typed Unsupported"
+    make_closure .<lambda($init_test_ns_ai_scenarios_10_agentic_loop_usage, 4)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "retry refuses to wrap the effectful loop"
+    make_closure .<lambda($init_test_ns_ai_scenarios_10_agentic_loop_usage, 5)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_const null
+    return
+}
+
+function ai_scenarios.ScriptedTools$stream.baml.ai.Tools.begin(self: ai_scenarios.ScriptedTools$stream, prompt: string, tools: baml.ai.Tool[]) -> ai_scenarios.ScriptState {
+    load_var self
+    load_field .0
+    load_const 0
+    load_var self
+    load_field .1
+    init_instance user.ai_scenarios.ScriptState .turns_wanted, .turns_done, .final_json
+    return
+}
+
+function ai_scenarios.ScriptedTools$stream.baml.ai.Tools.step(self: ai_scenarios.ScriptedTools$stream, t: ai_scenarios.ScriptState) -> T | baml.ai.ToolCalls {
+    load_var t
+    load_field .turns_done
+    load_var t
+    load_field .turns_wanted
+    cmp_int_op <
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_type #0
+    load_var t
+    load_field .final_json
+    call baml.sap.parse
+    jump L2
+    load_var e
+    throw_if_panic
+    load_var e
+    load_const "script final parse failed"
+    load_type string
+    alloc_array 1
+    init_instance baml.errors.UnknownError .data, .message
+    throw
+
+  L1:
+    load_const "call_1"
+    load_const "lookup"
+    load_const "{}"
+    init_instance baml.ai.ToolCall .id, .name, .args
+    load_type baml.ai.ToolCall
+    alloc_array 1
+    init_instance baml.ai.ToolCalls .calls
+
+  L2:
+    return
+}
+
+function ai_scenarios.ScriptedTools$stream.baml.ai.Tools.submit(self: ai_scenarios.ScriptedTools$stream, t: ai_scenarios.ScriptState, results: baml.ai.ToolResult[]) -> ai_scenarios.ScriptState {
+    load_var t
+    load_field .turns_wanted
+    load_var t
+    load_field .turns_done
+    load_const 1
+    add_int
+    load_var t
+    load_field .final_json
+    init_instance user.ai_scenarios.ScriptState .turns_wanted, .turns_done, .final_json
+    return
+}
+
+function ai_scenarios.ScriptedTools.baml.ai.Tools.begin(self: ai_scenarios.ScriptedTools, prompt: string, tools: baml.ai.Tool[]) -> ai_scenarios.ScriptState {
+    load_var self
+    load_field .0
+    load_const 0
+    load_var self
+    load_field .1
+    init_instance user.ai_scenarios.ScriptState .turns_wanted, .turns_done, .final_json
+    return
+}
+
+function ai_scenarios.ScriptedTools.baml.ai.Tools.step(self: ai_scenarios.ScriptedTools, t: ai_scenarios.ScriptState) -> T | baml.ai.ToolCalls {
+    load_var t
+    load_field .turns_done
+    load_var t
+    load_field .turns_wanted
+    cmp_int_op <
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_type #0
+    load_var t
+    load_field .final_json
+    call baml.sap.parse
+    jump L2
+    load_var e
+    throw_if_panic
+    load_var e
+    load_const "script final parse failed"
+    load_type string
+    alloc_array 1
+    init_instance baml.errors.UnknownError .data, .message
+    throw
+
+  L1:
+    load_const "call_1"
+    load_const "lookup"
+    load_const "{}"
+    init_instance baml.ai.ToolCall .id, .name, .args
+    load_type baml.ai.ToolCall
+    alloc_array 1
+    init_instance baml.ai.ToolCalls .calls
+
+  L2:
+    return
+}
+
+function ai_scenarios.ScriptedTools.baml.ai.Tools.submit(self: ai_scenarios.ScriptedTools, t: ai_scenarios.ScriptState, results: baml.ai.ToolResult[]) -> ai_scenarios.ScriptState {
+    load_var t
+    load_field .turns_wanted
+    load_var t
+    load_field .turns_done
+    load_const 1
+    add_int
+    load_var t
+    load_field .final_json
+    init_instance user.ai_scenarios.ScriptState .turns_wanted, .turns_done, .final_json
+    return
+}
+
+function ai_scenarios.echo_dispatch(calls: baml.ai.ToolCall[]) -> baml.ai.ToolResult[] {
+    load_type baml.ai.ToolResult
+    alloc_array 0
+    store_var out
+    load_type baml.ai.ToolCall
+    load_var calls
+    call baml.iter.Iterable$for$T[].iter
+    store_var _3
+
+  L0:
+    load_var _3
+    is_type baml.iter.Flatten<...>
+    pop_jump_if_false L1
+    jump L18
+
+  L1:
+    load_var _3
+    is_type baml.iter.ArrayIterator<...>
+    pop_jump_if_false L2
+    jump L17
+
+  L2:
+    load_var _3
+    is_type baml.iter.StepBy<...>
+    pop_jump_if_false L3
+    jump L16
+
+  L3:
+    load_var _3
+    is_type baml.iter.Chain<...>
+    pop_jump_if_false L4
+    jump L15
+
+  L4:
+    load_var _3
+    is_type baml.iter.Repeat<...>
+    pop_jump_if_false L5
+    jump L14
+
+  L5:
+    load_var _3
+    is_type baml.iter.Map<...>
+    pop_jump_if_false L6
+    jump L13
+
+  L6:
+    load_var _3
+    is_type baml.iter.Filter<...>
+    pop_jump_if_false L7
+    jump L12
+
+  L7:
+    load_var _3
+    is_type baml.iter.FilterMap<...>
+    pop_jump_if_false L8
+    jump L11
+
+  L8:
+    load_var _3
+    is_type baml.iter.FlatMap<...>
+    pop_jump_if_false L9
+    jump L10
+
+  L9:
+    load_var _3
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L22
+    load_type baml.ai.ToolCall
+    load_type never
+    load_var _3
+    call baml.iter.Peekable.Iterator.next
+    store_var _5
+    jump L19
+
+  L10:
+    load_var _3
+    make_bound_method baml.iter.FlatMap.Iterator.next
+    call_indirect
+    store_var _5
+    jump L19
+
+  L11:
+    load_var _3
+    make_bound_method baml.iter.FilterMap.Iterator.next
+    call_indirect
+    store_var _5
+    jump L19
+
+  L12:
+    load_type baml.ai.ToolCall
+    load_type never
+    load_type never
+    load_var _3
+    call baml.iter.Filter.Iterator.next
+    store_var _5
+    jump L19
+
+  L13:
+    load_var _3
+    make_bound_method baml.iter.Map.Iterator.next
+    call_indirect
+    store_var _5
+    jump L19
+
+  L14:
+    load_type baml.ai.ToolCall
+    load_var _3
+    call baml.iter.Repeat.Iterator.next
+    store_var _5
+    jump L19
+
+  L15:
+    load_type baml.ai.ToolCall
+    load_type never
+    load_type never
+    load_var _3
+    call baml.iter.Chain.Iterator.next
+    store_var _5
+    jump L19
+
+  L16:
+    load_type baml.ai.ToolCall
+    load_type never
+    load_var _3
+    call baml.iter.StepBy.Iterator.next
+    store_var _5
+    jump L19
+
+  L17:
+    load_type baml.ai.ToolCall
+    load_var _3
+    call baml.iter.ArrayIterator.Iterator.next
+    store_var _5
+    jump L19
+
+  L18:
+    load_var _3
+    make_bound_method baml.iter.Flatten.Iterator.next
+    call_indirect
+    store_var _5
+
+  L19:
+    load_var _5
+    is_type baml.iter.Done
+    pop_jump_if_false L20
+    jump L21
+
+  L20:
+    load_var2 2 4
+    load_field .id
+    load_const "looked-up"
+    init_instance baml.ai.ToolResult .id, .output
+    call baml.Array.push
+    pop 1
+    jump L0
+
+  L21:
+    load_var out
+    return
+
+  L22:
+    unreachable
+}
+
+function ai_scenarios.lookup_tools() -> baml.ai.Tool[] {
+    load_const "lookup"
+    load_const "Look something up."
+    load_const "{}"
+    init_instance baml.ai.Tool .name, .description, .parameters
+    load_type baml.ai.Tool
+    alloc_array 1
+    return
+}

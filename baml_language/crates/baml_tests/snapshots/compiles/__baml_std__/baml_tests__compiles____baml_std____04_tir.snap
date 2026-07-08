@@ -461,6 +461,232 @@ function baml.ai.drive_run_tools<T>(client: baml.ai.Provider, prompt: baml.llm.P
         throw root.errors.Unsupported { message: "client's provider..." } : never
   }
 }
+class baml.ai.LoopInfo {
+  steps: int
+  calls: baml.ai.ToolCall[]
+}
+class baml.ai.Budget {
+  partial: T | null
+  steps_taken: int
+}
+function baml.ai.step_count_is(n: int) -> (baml.ai.LoopInfo) -> bool throws never throws never {
+  { : (info: baml.ai.LoopInfo) -> bool throws never
+    (info: LoopInfo) -> bool { ... } : (info: baml.ai.LoopInfo) -> bool throws never
+      {
+        info.steps >= n
+      }
+  }
+}
+lambda baml.ai.step_count_is {
+}
+function baml.ai.has_tool_call(name: string) -> (baml.ai.LoopInfo) -> bool throws never throws never {
+  { : (info: baml.ai.LoopInfo) -> bool throws never
+    (info: LoopInfo) -> bool { ... } : (info: baml.ai.LoopInfo) -> bool throws never
+      {
+        let found = false
+        for c in info.calls
+          {
+            if (c.name == name)
+              {
+                found = true
+              }
+          }
+        found
+      }
+  }
+}
+lambda baml.ai.has_tool_call {
+}
+function baml.ai.any_of(preds: ((baml.ai.LoopInfo) -> bool throws never)[]) -> (baml.ai.LoopInfo) -> bool throws never throws never {
+  { : (info: baml.ai.LoopInfo) -> bool throws never
+    (info: LoopInfo) -> bool { ... } : (info: baml.ai.LoopInfo) -> bool throws never
+      {
+        let hit = false
+        for p in preds
+          {
+            if (p(info))
+              {
+                hit = true
+              }
+          }
+        hit
+      }
+  }
+}
+lambda baml.ai.any_of {
+}
+class baml.ai.LoopMeta {
+  steps: int
+}
+function baml.ai.LoopMeta.finish_reason(self: baml.ai.LoopMeta) -> string throws never {
+  { : "tool_loop_complete"
+    "tool_loop_complete" : "tool_loop_complete"
+  }
+}
+function baml.ai.LoopMeta.usage(self: baml.ai.LoopMeta) -> baml.ai.Usage throws never {
+  { : baml.ai.Usage
+    root.ai.Usage { input_tokens: 0, output_tokens: 0 } : baml.ai.Usage
+  }
+}
+function baml.ai.LoopMeta.reasoning(self: baml.ai.LoopMeta) -> string | baml.ai.Unavailable throws never {
+  { : baml.ai.Unavailable
+    root.ai.Unavailable { reason: "tool loop surface..." } : baml.ai.Unavailable
+  }
+}
+function baml.ai.LoopMeta.logprobs(self: baml.ai.LoopMeta) -> baml.ai.Logprob[] | baml.ai.Unavailable throws never {
+  { : baml.ai.Unavailable
+    root.ai.Unavailable { reason: "tool loop surface..." } : baml.ai.Unavailable
+  }
+}
+function baml.ai.LoopMeta.citations(self: baml.ai.LoopMeta) -> baml.ai.Citation[] | baml.ai.Unavailable throws never {
+  { : baml.ai.Unavailable
+    root.ai.Unavailable { reason: "tool loop surface..." } : baml.ai.Unavailable
+  }
+}
+class baml.ai.ToolLoop {
+  inner: baml.ai.Provider
+  tools: baml.ai.Tool[]
+  dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never
+  stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null
+}
+function baml.ai.ToolLoop.run_to_budget<T>(self: baml.ai.ToolLoop, prompt: string) -> T | baml.ai.Budget<T> throws baml.errors.ToolError | baml.errors.UnknownError {
+  { : never
+    match (self.inner : baml.ai.Provider) : never
+      tp: Tools =>
+        { : never
+          let d = self.dispatch : (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never
+          let steps = 0 : 0 -> int
+          let t = tp.begin(prompt, self.tools) : baml.ai.Tools.Transcript
+          while true
+            { : void
+              match (tp.step<T>(t) : T | baml.ai.ToolCalls) : void
+                calls: ToolCalls =>
+                  { : void
+                    steps = steps + 1 : int
+                    match (self.stop_when : ((baml.ai.LoopInfo) -> bool throws never) | null) : void
+                      null =>
+                        { : void
+                        }
+                      pred: (LoopInfo) -> bool =>
+                        { : void
+                          if (pred(LoopInfo { steps: steps, calls: calls.calls }) : bool) : void
+                            { : never
+                              return Budget { partial: null, steps_taken: steps } : baml.ai.Budget<T>
+                            }
+                        }
+                    t = tp.submit(t, d(calls.calls)) : baml.ai.Tools.Transcript
+                  }
+                value: T =>
+                  { : never
+                    return value : T
+                  }
+            }
+          root.sys.panic("unreachable") : never
+        }
+      _ =>
+        throw root.errors.Unsupported { message: "ToolLoop.inner do..." } : never
+  }
+}
+function baml.ai.ToolLoop.is_effectful(self: baml.ai.ToolLoop) -> bool throws never {
+  { : true
+    true : true
+  }
+}
+function baml.ai.ToolLoop.build_request<T>(self: baml.ai.ToolLoop, messages: baml.ai.ChatMessage[]) -> baml.http.Request throws baml.errors.UnknownError {
+  { : never
+    throw root.errors.UnknownError { data: null, message: ["tool loop has no ..."] } : baml.errors.UnknownError
+  }
+}
+function baml.ai.ToolLoop.send(self: baml.ai.ToolLoop, request: baml.http.Request) -> unknown throws baml.errors.UnknownError {
+  { : never
+    throw root.errors.UnknownError { data: null, message: ["tool loop does no..."] } : baml.errors.UnknownError
+  }
+}
+function baml.ai.ToolLoop.parse<T>(self: baml.ai.ToolLoop, from: unknown) -> T throws baml.errors.UnknownError {
+  { : never
+    throw root.errors.UnknownError { data: null, message: ["tool loop does no..."] } : baml.errors.UnknownError
+  }
+}
+function baml.ai.ToolLoop.meta_of(self: baml.ai.ToolLoop, from: unknown) -> baml.ai.ResponseMeta throws baml.errors.UnknownError {
+  { : never
+    throw root.errors.UnknownError { data: null, message: ["tool loop has no ..."] } : baml.errors.UnknownError
+  }
+}
+function baml.ai.ToolLoop.call_messages_with<T, V, E2>(self: baml.ai.ToolLoop, messages: baml.ai.ChatMessage[], project: (baml.ai.ResponseMeta) -> V throws E2) -> baml.ai.CallResult<T, V> throws baml.errors.CallError | baml.errors.UnknownError | E2 {
+  { : never
+    let text = _messages_text(messages) : string
+    match (self.inner : baml.ai.Provider) : never
+      tp: Tools =>
+        { : never
+          let d = self.dispatch : (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never
+          let steps = 0 : 0 -> int
+          let t = : baml.ai.Tools.Transcript
+            catch (tp.begin(text, self.tools) : baml.ai.Tools.Transcript) : baml.ai.Tools.Transcript
+              catch (e)
+                _ =>
+                  throw root.errors.UnknownError { data: e, message: ["tool loop: begin ..."] } : never
+          while true
+            { : void
+              let outcome = : T | baml.ai.ToolCalls
+                catch (tp.step<T>(t) : T | baml.ai.ToolCalls) : T | baml.ai.ToolCalls
+                  catch (e)
+                    _ =>
+                      throw root.errors.UnknownError { data: e, message: ["tool loop: step f..."] } : never
+              match (outcome : T | baml.ai.ToolCalls) : void
+                calls: ToolCalls =>
+                  { : void
+                    steps = steps + 1 : int
+                    match (self.stop_when : ((baml.ai.LoopInfo) -> bool throws never) | null) : void
+                      null =>
+                        { : void
+                        }
+                      pred: (LoopInfo) -> bool =>
+                        { : void
+                          if (pred(LoopInfo { steps: steps, calls: calls.calls }) : bool) : void
+                            { : never
+                              throw root.errors.LoopBudgetExceeded { steps_taken: steps } : baml.errors.LoopBudgetExceeded
+                            }
+                        }
+                    t = tp.submit(t, d(calls.calls)) catch (e) { _ => throw root.errors.UnknownError { data: e, message: ["tool loop: submit..."] } } : baml.ai.Tools.Transcript
+                  }
+                value: T =>
+                  { : never
+                    return root.ai.CallResult { value: value, meta: project(LoopMeta { steps: steps }) } : baml.ai.CallResult<T, V>
+                  }
+            }
+          root.sys.panic("unreachable") : never
+        }
+      _ =>
+        throw root.errors.Unsupported { message: "ToolLoop.inner do..." } : never
+  }
+}
+function baml.ai._messages_text(messages: baml.ai.ChatMessage[]) -> string throws never {
+  { : string
+    let out = "" : "" -> string
+    for m in messages
+      { : void
+        for p in m.parts
+          { : void
+            match (p.text : string | null) : void
+              null =>
+                { : void
+                }
+              t: string =>
+                { : void
+                  if (out == "" : bool) : void
+                    { : void
+                      out = t : string
+                    }
+                  else
+                    { : void
+                      out = out + "\n" + t : string
+                    }
+                }
+          }
+      }
+    out : string
+  }
+}
 class baml.ai.Tool$stream {
   name: string | null
   description: string | null
@@ -477,6 +703,124 @@ class baml.ai.ToolResult$stream {
 }
 class baml.ai.ToolCalls$stream {
   calls: baml.ai.ToolCall$stream[]
+}
+class baml.ai.LoopInfo$stream {
+  steps: int | null
+  calls: baml.ai.ToolCall$stream[]
+}
+class baml.ai.Budget$stream {
+  partial: T | null
+  steps_taken: int | null
+}
+class baml.ai.LoopMeta$stream {
+  steps: int | null
+}
+function baml.ai.LoopMeta$stream.finish_reason(self: baml.ai.LoopMeta$stream) -> string throws never {
+  { : "tool_loop_complete"
+    "tool_loop_complete" : "tool_loop_complete"
+  }
+}
+function baml.ai.LoopMeta$stream.usage(self: baml.ai.LoopMeta$stream) -> baml.ai.Usage throws never {
+  { : baml.ai.Usage
+    root.ai.Usage { input_tokens: 0, output_tokens: 0 } : baml.ai.Usage
+  }
+}
+function baml.ai.LoopMeta$stream.reasoning(self: baml.ai.LoopMeta$stream) -> string | baml.ai.Unavailable throws never {
+  { : baml.ai.Unavailable
+    root.ai.Unavailable { reason: "tool loop surface..." } : baml.ai.Unavailable
+  }
+}
+function baml.ai.LoopMeta$stream.logprobs(self: baml.ai.LoopMeta$stream) -> baml.ai.Logprob[] | baml.ai.Unavailable throws never {
+  { : baml.ai.Unavailable
+    root.ai.Unavailable { reason: "tool loop surface..." } : baml.ai.Unavailable
+  }
+}
+function baml.ai.LoopMeta$stream.citations(self: baml.ai.LoopMeta$stream) -> baml.ai.Citation[] | baml.ai.Unavailable throws never {
+  { : baml.ai.Unavailable
+    root.ai.Unavailable { reason: "tool loop surface..." } : baml.ai.Unavailable
+  }
+}
+class baml.ai.ToolLoop$stream {
+  inner: baml.ai.Provider | null
+  tools: baml.ai.Tool$stream[]
+  dispatch: unknown
+  stop_when: unknown | null
+}
+function baml.ai.ToolLoop$stream.is_effectful(self: baml.ai.ToolLoop$stream) -> bool throws never {
+  { : true
+    true : true
+  }
+}
+function baml.ai.ToolLoop$stream.build_request<T>(self: baml.ai.ToolLoop$stream, messages: baml.ai.ChatMessage[]) -> baml.http.Request throws baml.errors.UnknownError {
+  { : never
+    throw root.errors.UnknownError { data: null, message: ["tool loop has no ..."] } : baml.errors.UnknownError
+  }
+}
+function baml.ai.ToolLoop$stream.send(self: baml.ai.ToolLoop$stream, request: baml.http.Request) -> unknown throws baml.errors.UnknownError {
+  { : never
+    throw root.errors.UnknownError { data: null, message: ["tool loop does no..."] } : baml.errors.UnknownError
+  }
+}
+function baml.ai.ToolLoop$stream.parse<T>(self: baml.ai.ToolLoop$stream, from: unknown) -> T throws baml.errors.UnknownError {
+  { : never
+    throw root.errors.UnknownError { data: null, message: ["tool loop does no..."] } : baml.errors.UnknownError
+  }
+}
+function baml.ai.ToolLoop$stream.meta_of(self: baml.ai.ToolLoop$stream, from: unknown) -> baml.ai.ResponseMeta throws baml.errors.UnknownError {
+  { : never
+    throw root.errors.UnknownError { data: null, message: ["tool loop has no ..."] } : baml.errors.UnknownError
+  }
+}
+function baml.ai.ToolLoop$stream.call_messages_with<T, V, E2>(self: baml.ai.ToolLoop$stream, messages: baml.ai.ChatMessage[], project: (baml.ai.ResponseMeta) -> V throws E2) -> baml.ai.CallResult<T, V> throws baml.errors.CallError | baml.errors.UnknownError | E2 {
+  { : never
+    let text = _messages_text(messages) : string
+    match (self.inner : baml.ai.Provider | null) : never
+      tp: Tools =>
+        { : never
+          let d = self.dispatch : unknown
+          let steps = 0 : 0 -> int
+          let t = : baml.ai.Tools.Transcript
+            catch (tp.begin(text, self.tools) : baml.ai.Tools.Transcript) : baml.ai.Tools.Transcript
+              catch (e)
+                _ =>
+                  throw root.errors.UnknownError { data: e, message: ["tool loop: begin ..."] } : never
+          while true
+            { : void
+              let outcome = : T | baml.ai.ToolCalls
+                catch (tp.step<T>(t) : T | baml.ai.ToolCalls) : T | baml.ai.ToolCalls
+                  catch (e)
+                    _ =>
+                      throw root.errors.UnknownError { data: e, message: ["tool loop: step f..."] } : never
+              match (outcome : T | baml.ai.ToolCalls) : void
+                calls: ToolCalls =>
+                  { : void
+                    steps = steps + 1 : int
+                    match (self.stop_when : unknown | null) : void
+                      null =>
+                        { : void
+                        }
+                      pred: (LoopInfo) -> bool =>
+                        { : void
+                          if (pred(LoopInfo { steps: steps, calls: calls.calls }) : bool) : void
+                            { : never
+                              throw root.errors.LoopBudgetExceeded { steps_taken: steps } : baml.errors.LoopBudgetExceeded
+                            }
+                        }
+                    t = tp.submit(t, d(calls.calls)) catch (e) { _ => throw root.errors.UnknownError { data: e, message: ["tool loop: submit..."] } } : baml.ai.Tools.Transcript
+                  }
+                value: T =>
+                  { : never
+                    return root.ai.CallResult { value: value, meta: project(LoopMeta { steps: steps }) } : baml.ai.CallResult<T, V>
+                  }
+            }
+          root.sys.panic("unreachable") : never
+        }
+      _ =>
+        throw root.errors.Unsupported { message: "ToolLoop.inner do..." } : never
+  }
+  !! 9375..9385: type mismatch: expected baml.ai.Tool[], got baml.ai.Tool$stream[]
+  !! 10463..10477: `unknown` is not a function — it cannot be called
+  !! 10463..10477: `unknown` is not a function — it cannot be called
 }
 
 --- <builtin>/baml/ns_ai/combinators.baml ---
@@ -5195,6 +5539,54 @@ function baml.errors.CannotRetry.is_network_error(self: baml.errors.CannotRetry)
     false : false
   }
 }
+class baml.errors.LoopBudgetExceeded {
+  steps_taken: int
+}
+function baml.errors.LoopBudgetExceeded.is_retryable(self: baml.errors.LoopBudgetExceeded) -> bool throws never {
+  { : false
+    false : false
+  }
+}
+function baml.errors.LoopBudgetExceeded.is_effectful(self: baml.errors.LoopBudgetExceeded) -> bool throws never {
+  { : true
+    true : true
+  }
+}
+function baml.errors.LoopBudgetExceeded.is_policy_refusal(self: baml.errors.LoopBudgetExceeded) -> bool throws never {
+  { : true
+    true : true
+  }
+}
+function baml.errors.LoopBudgetExceeded.is_resumable(self: baml.errors.LoopBudgetExceeded) -> bool throws never {
+  { : false
+    false : false
+  }
+}
+function baml.errors.LoopBudgetExceeded.is_unsupported(self: baml.errors.LoopBudgetExceeded) -> bool throws never {
+  { : false
+    false : false
+  }
+}
+function baml.errors.LoopBudgetExceeded.is_network_error(self: baml.errors.LoopBudgetExceeded) -> bool throws never {
+  { : false
+    false : false
+  }
+}
+function baml.errors.LoopBudgetExceeded.is_rate_limit(self: baml.errors.LoopBudgetExceeded) -> bool throws never {
+  { : false
+    false : false
+  }
+}
+function baml.errors.LoopBudgetExceeded.is_parse_error(self: baml.errors.LoopBudgetExceeded) -> bool throws never {
+  { : false
+    false : false
+  }
+}
+function baml.errors.LoopBudgetExceeded.is_network_error(self: baml.errors.LoopBudgetExceeded) -> bool throws never {
+  { : false
+    false : false
+  }
+}
 function baml.errors.is_retryable(self: unknown) -> bool throws never {
   { : false
     false : false
@@ -5303,6 +5695,54 @@ function baml.errors.CannotRetry$stream.is_network_error(self: baml.errors.Canno
   }
 }
 function baml.errors.CannotRetry$stream.is_network_error(self: baml.errors.CannotRetry$stream) -> bool throws never {
+  { : false
+    false : false
+  }
+}
+class baml.errors.LoopBudgetExceeded$stream {
+  steps_taken: int | null
+}
+function baml.errors.LoopBudgetExceeded$stream.is_retryable(self: baml.errors.LoopBudgetExceeded$stream) -> bool throws never {
+  { : false
+    false : false
+  }
+}
+function baml.errors.LoopBudgetExceeded$stream.is_effectful(self: baml.errors.LoopBudgetExceeded$stream) -> bool throws never {
+  { : true
+    true : true
+  }
+}
+function baml.errors.LoopBudgetExceeded$stream.is_policy_refusal(self: baml.errors.LoopBudgetExceeded$stream) -> bool throws never {
+  { : true
+    true : true
+  }
+}
+function baml.errors.LoopBudgetExceeded$stream.is_resumable(self: baml.errors.LoopBudgetExceeded$stream) -> bool throws never {
+  { : false
+    false : false
+  }
+}
+function baml.errors.LoopBudgetExceeded$stream.is_unsupported(self: baml.errors.LoopBudgetExceeded$stream) -> bool throws never {
+  { : false
+    false : false
+  }
+}
+function baml.errors.LoopBudgetExceeded$stream.is_network_error(self: baml.errors.LoopBudgetExceeded$stream) -> bool throws never {
+  { : false
+    false : false
+  }
+}
+function baml.errors.LoopBudgetExceeded$stream.is_rate_limit(self: baml.errors.LoopBudgetExceeded$stream) -> bool throws never {
+  { : false
+    false : false
+  }
+}
+function baml.errors.LoopBudgetExceeded$stream.is_parse_error(self: baml.errors.LoopBudgetExceeded$stream) -> bool throws never {
+  { : false
+    false : false
+  }
+}
+function baml.errors.LoopBudgetExceeded$stream.is_network_error(self: baml.errors.LoopBudgetExceeded$stream) -> bool throws never {
   { : false
     false : false
   }

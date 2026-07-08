@@ -11,58 +11,64 @@ function ai_examples._fetch_doc(url: string) -> ai_examples.Doc {
 
 function ai_examples._model_text(p: baml.ai.Provider, prompt: string) -> string {
     load_var p
-    is_type baml.ai.Retry
+    is_type baml.ai.ToolLoop
     pop_jump_if_false L0
-    jump L8
+    jump L9
 
   L0:
     load_var p
-    is_type baml.ai.OpenAi
+    is_type baml.ai.Retry
     pop_jump_if_false L1
-    jump L8
+    jump L9
 
   L1:
     load_var p
-    is_type baml.ai.Gemini
+    is_type baml.ai.OpenAi
     pop_jump_if_false L2
-    jump L8
+    jump L9
 
   L2:
     load_var p
-    is_type baml.ai.OpenAiResponses
+    is_type baml.ai.Gemini
     pop_jump_if_false L3
-    jump L8
+    jump L9
 
   L3:
     load_var p
-    is_type baml.ai.RoundRobin
+    is_type baml.ai.OpenAiResponses
     pop_jump_if_false L4
-    jump L8
+    jump L9
 
   L4:
     load_var p
-    is_type baml.ai.Fallback
+    is_type baml.ai.RoundRobin
     pop_jump_if_false L5
-    jump L8
+    jump L9
 
   L5:
     load_var p
-    is_type baml.ai.OpenAiStrict
+    is_type baml.ai.Fallback
     pop_jump_if_false L6
-    jump L8
+    jump L9
 
   L6:
     load_var p
-    is_type baml.ai.Anthropic
+    is_type baml.ai.OpenAiStrict
     pop_jump_if_false L7
-    jump L8
+    jump L9
 
   L7:
+    load_var p
+    is_type baml.ai.Anthropic
+    pop_jump_if_false L8
+    jump L9
+
+  L8:
     load_const "client cannot produce a value"
     init_instance baml.errors.Unsupported .message
     throw
 
-  L8:
+  L9:
     load_type string
     load_var2 1 2
     load_type baml.ai.HttpProvider
@@ -77,14 +83,20 @@ function ai_examples.bounded_agent(p: baml.ai.Provider, prompt: string, tools: b
     load_var p
     is_type baml.ai.OpenAi
     pop_jump_if_false L0
-    jump L1
+    jump L2
 
   L0:
+    load_var p
+    is_type ai_scenarios.ScriptedTools
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
     load_const "client cannot run tools"
     init_instance baml.errors.Unsupported .message
     throw
 
-  L1:
+  L2:
     load_type string
     load_var2 1 2
     load_var tools
@@ -95,25 +107,25 @@ function ai_examples.bounded_agent(p: baml.ai.Provider, prompt: string, tools: b
     load_const 0
     store_var step_no
 
-  L2:
+  L3:
     load_var2 6 4
     cmp_int_op <
-    pop_jump_if_false L3
-    jump L4
+    pop_jump_if_false L4
+    jump L5
 
-  L3:
+  L4:
     load_type int
     load_var max_steps
     call baml.String.from
-    store_var _59
+    store_var _60
     load_const "[budget hit after "
-    load_var _59
+    load_var _60
     bin_op +
     load_const " steps]"
     bin_op +
-    jump L6
+    jump L7
 
-  L4:
+  L5:
     load_var step_no
     load_const 1
     add_int
@@ -123,187 +135,187 @@ function ai_examples.bounded_agent(p: baml.ai.Provider, prompt: string, tools: b
     load_type baml.ai.Tools
     load_const "step"
     virtual_call nargs=2 ntypeargs=1
-    store_var _13
-    load_var _13
+    store_var _14
+    load_var _14
     is_type baml.ai.ToolCalls
-    pop_jump_if_false L5
-    jump L7
-
-  L5:
-    load_var _13
+    pop_jump_if_false L6
+    jump L8
 
   L6:
-    return
+    load_var _14
 
   L7:
+    return
+
+  L8:
     load_type baml.ai.ToolResult
     alloc_array 0
     store_var results
-    load_var _13
+    load_var _14
     load_field .calls
-    store_var _19
-    load_type baml.ai.ToolCall
-    load_var _19
-    call baml.iter.Iterable$for$T[].iter
     store_var _20
-
-  L8:
+    load_type baml.ai.ToolCall
     load_var _20
-    is_type baml.iter.Flatten<...>
-    pop_jump_if_false L9
-    jump L26
+    call baml.iter.Iterable$for$T[].iter
+    store_var _21
 
   L9:
-    load_var _20
-    is_type baml.iter.ArrayIterator<...>
+    load_var _21
+    is_type baml.iter.Flatten<...>
     pop_jump_if_false L10
-    jump L25
+    jump L27
 
   L10:
-    load_var _20
-    is_type baml.iter.StepBy<...>
+    load_var _21
+    is_type baml.iter.ArrayIterator<...>
     pop_jump_if_false L11
-    jump L24
+    jump L26
 
   L11:
-    load_var _20
-    is_type baml.iter.Chain<...>
+    load_var _21
+    is_type baml.iter.StepBy<...>
     pop_jump_if_false L12
-    jump L23
+    jump L25
 
   L12:
-    load_var _20
-    is_type baml.iter.Repeat<...>
+    load_var _21
+    is_type baml.iter.Chain<...>
     pop_jump_if_false L13
-    jump L22
+    jump L24
 
   L13:
-    load_var _20
-    is_type baml.iter.Map<...>
+    load_var _21
+    is_type baml.iter.Repeat<...>
     pop_jump_if_false L14
-    jump L21
+    jump L23
 
   L14:
-    load_var _20
-    is_type baml.iter.Filter<...>
+    load_var _21
+    is_type baml.iter.Map<...>
     pop_jump_if_false L15
-    jump L20
+    jump L22
 
   L15:
-    load_var _20
-    is_type baml.iter.FilterMap<...>
+    load_var _21
+    is_type baml.iter.Filter<...>
     pop_jump_if_false L16
-    jump L19
+    jump L21
 
   L16:
-    load_var _20
-    is_type baml.iter.FlatMap<...>
+    load_var _21
+    is_type baml.iter.FilterMap<...>
     pop_jump_if_false L17
-    jump L18
+    jump L20
 
   L17:
-    load_var _20
-    is_type baml.iter.Peekable<...>
-    pop_jump_if_false L30
-    load_type baml.ai.ToolCall
-    load_type never
-    load_var _20
-    call baml.iter.Peekable.Iterator.next
-    store_var _22
-    jump L27
+    load_var _21
+    is_type baml.iter.FlatMap<...>
+    pop_jump_if_false L18
+    jump L19
 
   L18:
-    load_var _20
-    make_bound_method baml.iter.FlatMap.Iterator.next
-    call_indirect
-    store_var _22
-    jump L27
+    load_var _21
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L31
+    load_type baml.ai.ToolCall
+    load_type never
+    load_var _21
+    call baml.iter.Peekable.Iterator.next
+    store_var _23
+    jump L28
 
   L19:
-    load_var _20
-    make_bound_method baml.iter.FilterMap.Iterator.next
+    load_var _21
+    make_bound_method baml.iter.FlatMap.Iterator.next
     call_indirect
-    store_var _22
-    jump L27
+    store_var _23
+    jump L28
 
   L20:
-    load_type baml.ai.ToolCall
-    load_type never
-    load_type never
-    load_var _20
-    call baml.iter.Filter.Iterator.next
-    store_var _22
-    jump L27
+    load_var _21
+    make_bound_method baml.iter.FilterMap.Iterator.next
+    call_indirect
+    store_var _23
+    jump L28
 
   L21:
-    load_var _20
-    make_bound_method baml.iter.Map.Iterator.next
-    call_indirect
-    store_var _22
-    jump L27
+    load_type baml.ai.ToolCall
+    load_type never
+    load_type never
+    load_var _21
+    call baml.iter.Filter.Iterator.next
+    store_var _23
+    jump L28
 
   L22:
-    load_type baml.ai.ToolCall
-    load_var _20
-    call baml.iter.Repeat.Iterator.next
-    store_var _22
-    jump L27
+    load_var _21
+    make_bound_method baml.iter.Map.Iterator.next
+    call_indirect
+    store_var _23
+    jump L28
 
   L23:
     load_type baml.ai.ToolCall
-    load_type never
-    load_type never
-    load_var _20
-    call baml.iter.Chain.Iterator.next
-    store_var _22
-    jump L27
+    load_var _21
+    call baml.iter.Repeat.Iterator.next
+    store_var _23
+    jump L28
 
   L24:
     load_type baml.ai.ToolCall
     load_type never
-    load_var _20
-    call baml.iter.StepBy.Iterator.next
-    store_var _22
-    jump L27
+    load_type never
+    load_var _21
+    call baml.iter.Chain.Iterator.next
+    store_var _23
+    jump L28
 
   L25:
     load_type baml.ai.ToolCall
-    load_var _20
-    call baml.iter.ArrayIterator.Iterator.next
-    store_var _22
-    jump L27
+    load_type never
+    load_var _21
+    call baml.iter.StepBy.Iterator.next
+    store_var _23
+    jump L28
 
   L26:
-    load_var _20
-    make_bound_method baml.iter.Flatten.Iterator.next
-    call_indirect
-    store_var _22
+    load_type baml.ai.ToolCall
+    load_var _21
+    call baml.iter.ArrayIterator.Iterator.next
+    store_var _23
+    jump L28
 
   L27:
-    load_var _22
-    is_type baml.iter.Done
-    pop_jump_if_false L28
-    jump L29
+    load_var _21
+    make_bound_method baml.iter.Flatten.Iterator.next
+    call_indirect
+    store_var _23
 
   L28:
+    load_var _23
+    is_type baml.iter.Done
+    pop_jump_if_false L29
+    jump L30
+
+  L29:
     load_var2 8 11
     load_field .id
     load_const "{}"
     init_instance baml.ai.ToolResult .id, .output
     call baml.Array.push
     pop 1
-    jump L8
+    jump L9
 
-  L29:
+  L30:
     load_var2 1 5
     load_var results
     load_type baml.ai.Tools
     load_const "submit"
     virtual_call nargs=3 ntypeargs=0
     store_var t
-    jump L2
+    jump L3
 
-  L30:
+  L31:
     unreachable
 }
 
@@ -325,58 +337,64 @@ function ai_examples.cascaded_voice(stt: ai_examples.Stt, llm: baml.ai.Provider,
     virtual_call nargs=2 ntypeargs=0
     store_var text
     load_var llm
-    is_type baml.ai.Retry
+    is_type baml.ai.ToolLoop
     pop_jump_if_false L0
-    jump L8
+    jump L9
 
   L0:
     load_var llm
-    is_type baml.ai.OpenAi
+    is_type baml.ai.Retry
     pop_jump_if_false L1
-    jump L8
+    jump L9
 
   L1:
     load_var llm
-    is_type baml.ai.Gemini
+    is_type baml.ai.OpenAi
     pop_jump_if_false L2
-    jump L8
+    jump L9
 
   L2:
     load_var llm
-    is_type baml.ai.OpenAiResponses
+    is_type baml.ai.Gemini
     pop_jump_if_false L3
-    jump L8
+    jump L9
 
   L3:
     load_var llm
-    is_type baml.ai.RoundRobin
+    is_type baml.ai.OpenAiResponses
     pop_jump_if_false L4
-    jump L8
+    jump L9
 
   L4:
     load_var llm
-    is_type baml.ai.Fallback
+    is_type baml.ai.RoundRobin
     pop_jump_if_false L5
-    jump L8
+    jump L9
 
   L5:
     load_var llm
-    is_type baml.ai.OpenAiStrict
+    is_type baml.ai.Fallback
     pop_jump_if_false L6
-    jump L8
+    jump L9
 
   L6:
     load_var llm
-    is_type baml.ai.Anthropic
+    is_type baml.ai.OpenAiStrict
     pop_jump_if_false L7
-    jump L8
+    jump L9
 
   L7:
+    load_var llm
+    is_type baml.ai.Anthropic
+    pop_jump_if_false L8
+    jump L9
+
+  L8:
     load_const "llm stage cannot produce a value"
     init_instance baml.errors.Unsupported .message
     throw
 
-  L8:
+  L9:
     load_type string
     load_var2 2 6
     load_type baml.ai.HttpProvider
@@ -770,62 +788,68 @@ function ai_examples.guarded_call(p: baml.ai.Provider, prompt: string, blocked: 
     load_var2 2 3
     call baml.String.includes
     pop_jump_if_false L0
-    jump L10
+    jump L11
 
   L0:
     load_var p
-    is_type baml.ai.Retry
+    is_type baml.ai.ToolLoop
     pop_jump_if_false L1
-    jump L9
+    jump L10
 
   L1:
     load_var p
-    is_type baml.ai.OpenAi
+    is_type baml.ai.Retry
     pop_jump_if_false L2
-    jump L9
+    jump L10
 
   L2:
     load_var p
-    is_type baml.ai.Gemini
+    is_type baml.ai.OpenAi
     pop_jump_if_false L3
-    jump L9
+    jump L10
 
   L3:
     load_var p
-    is_type baml.ai.OpenAiResponses
+    is_type baml.ai.Gemini
     pop_jump_if_false L4
-    jump L9
+    jump L10
 
   L4:
     load_var p
-    is_type baml.ai.RoundRobin
+    is_type baml.ai.OpenAiResponses
     pop_jump_if_false L5
-    jump L9
+    jump L10
 
   L5:
     load_var p
-    is_type baml.ai.Fallback
+    is_type baml.ai.RoundRobin
     pop_jump_if_false L6
-    jump L9
+    jump L10
 
   L6:
     load_var p
-    is_type baml.ai.OpenAiStrict
+    is_type baml.ai.Fallback
     pop_jump_if_false L7
-    jump L9
+    jump L10
 
   L7:
     load_var p
-    is_type baml.ai.Anthropic
+    is_type baml.ai.OpenAiStrict
     pop_jump_if_false L8
-    jump L9
+    jump L10
 
   L8:
+    load_var p
+    is_type baml.ai.Anthropic
+    pop_jump_if_false L9
+    jump L10
+
+  L9:
     load_const "client cannot produce a value"
     init_instance baml.errors.Unsupported .message
     throw
 
-  L9:
+  L10:
     load_type string
     load_var2 1 2
     load_type baml.ai.HttpProvider
@@ -835,7 +859,7 @@ function ai_examples.guarded_call(p: baml.ai.Provider, prompt: string, blocked: 
     load_var _0
     return
 
-  L10:
+  L11:
     load_const "input tripwire: blocked content"
     init_instance baml.errors.Unsupported .message
     throw
@@ -907,7 +931,7 @@ function ai_examples.handoff_dispatch(specialist: baml.ai.Provider, calls: baml.
   L9:
     load_var _4
     is_type baml.iter.Peekable<...>
-    pop_jump_if_false L32
+    pop_jump_if_false L33
     load_type baml.ai.ToolCall
     load_type never
     load_var _4
@@ -986,64 +1010,70 @@ function ai_examples.handoff_dispatch(specialist: baml.ai.Provider, calls: baml.
     load_var _6
     is_type baml.iter.Done
     pop_jump_if_false L20
-    jump L31
+    jump L32
 
   L20:
     load_var _6
     store_var c
     load_var specialist
-    is_type baml.ai.Retry
+    is_type baml.ai.ToolLoop
     pop_jump_if_false L21
-    jump L29
+    jump L30
 
   L21:
     load_var specialist
-    is_type baml.ai.OpenAi
+    is_type baml.ai.Retry
     pop_jump_if_false L22
-    jump L29
+    jump L30
 
   L22:
     load_var specialist
-    is_type baml.ai.Gemini
+    is_type baml.ai.OpenAi
     pop_jump_if_false L23
-    jump L29
+    jump L30
 
   L23:
     load_var specialist
-    is_type baml.ai.OpenAiResponses
+    is_type baml.ai.Gemini
     pop_jump_if_false L24
-    jump L29
+    jump L30
 
   L24:
     load_var specialist
-    is_type baml.ai.RoundRobin
+    is_type baml.ai.OpenAiResponses
     pop_jump_if_false L25
-    jump L29
+    jump L30
 
   L25:
     load_var specialist
-    is_type baml.ai.Fallback
+    is_type baml.ai.RoundRobin
     pop_jump_if_false L26
-    jump L29
+    jump L30
 
   L26:
     load_var specialist
-    is_type baml.ai.OpenAiStrict
+    is_type baml.ai.Fallback
     pop_jump_if_false L27
-    jump L29
+    jump L30
 
   L27:
     load_var specialist
-    is_type baml.ai.Anthropic
+    is_type baml.ai.OpenAiStrict
     pop_jump_if_false L28
-    jump L29
+    jump L30
 
   L28:
-    load_const "specialist is not callable"
-    store_var out
+    load_var specialist
+    is_type baml.ai.Anthropic
+    pop_jump_if_false L29
     jump L30
 
   L29:
+    load_const "specialist is not callable"
+    store_var out
+    jump L31
+
+  L30:
     load_type string
     load_var2 1 6
     load_field .args
@@ -1051,13 +1081,13 @@ function ai_examples.handoff_dispatch(specialist: baml.ai.Provider, calls: baml.
     load_const "call"
     virtual_call nargs=2 ntypeargs=1
     store_var out
-    jump L30
+    jump L31
     load_var e
     throw_if_panic
     load_const "sub-agent failed"
     store_var out
 
-  L30:
+  L31:
     load_var2 3 6
     load_field .id
     load_var out
@@ -1066,11 +1096,11 @@ function ai_examples.handoff_dispatch(specialist: baml.ai.Provider, calls: baml.
     pop 1
     jump L0
 
-  L31:
+  L32:
     load_var results
     return
 
-  L32:
+  L33:
     unreachable
 }
 
@@ -1493,58 +1523,64 @@ function ai_examples.parallel_dispatch(calls: baml.ai.ToolCall[]) -> baml.ai.Too
 
 function ai_examples.run_eval(task: baml.ai.Provider, judge: ai_examples.Scorer, input: string) -> ai_examples.Score {
     load_var task
-    is_type baml.ai.Retry
+    is_type baml.ai.ToolLoop
     pop_jump_if_false L0
-    jump L8
+    jump L9
 
   L0:
     load_var task
-    is_type baml.ai.OpenAi
+    is_type baml.ai.Retry
     pop_jump_if_false L1
-    jump L8
+    jump L9
 
   L1:
     load_var task
-    is_type baml.ai.Gemini
+    is_type baml.ai.OpenAi
     pop_jump_if_false L2
-    jump L8
+    jump L9
 
   L2:
     load_var task
-    is_type baml.ai.OpenAiResponses
+    is_type baml.ai.Gemini
     pop_jump_if_false L3
-    jump L8
+    jump L9
 
   L3:
     load_var task
-    is_type baml.ai.RoundRobin
+    is_type baml.ai.OpenAiResponses
     pop_jump_if_false L4
-    jump L8
+    jump L9
 
   L4:
     load_var task
-    is_type baml.ai.Fallback
+    is_type baml.ai.RoundRobin
     pop_jump_if_false L5
-    jump L8
+    jump L9
 
   L5:
     load_var task
-    is_type baml.ai.OpenAiStrict
+    is_type baml.ai.Fallback
     pop_jump_if_false L6
-    jump L8
+    jump L9
 
   L6:
     load_var task
-    is_type baml.ai.Anthropic
+    is_type baml.ai.OpenAiStrict
     pop_jump_if_false L7
-    jump L8
+    jump L9
 
   L7:
+    load_var task
+    is_type baml.ai.Anthropic
+    pop_jump_if_false L8
+    jump L9
+
+  L8:
     load_const "task client cannot produce a value"
     init_instance baml.errors.Unsupported .message
     throw
 
-  L8:
+  L9:
     load_type string
     load_var2 1 3
     load_type baml.ai.HttpProvider

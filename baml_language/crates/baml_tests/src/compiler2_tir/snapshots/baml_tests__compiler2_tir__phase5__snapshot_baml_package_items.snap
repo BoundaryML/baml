@@ -41,6 +41,7 @@ namespace baml.ai:
   class AnthropicUsageWire { methods: [] }
   type Background
   type Branching
+  class Budget<T> { methods: [] }
   class CacheHandle { methods: [] }
   class CallResult<T, V> { methods: [] }
   type Capabilities
@@ -66,6 +67,8 @@ namespace baml.ai:
   class Job<T> { methods: [] }
   type LiveControl
   class Logprob { methods: [] }
+  class LoopInfo { methods: [] }
+  class LoopMeta { methods: [finish_reason, usage, reasoning, logprobs, citations] }
   type ManagedCache
   class MemoryHit { methods: [] }
   type MemoryStore
@@ -106,22 +109,27 @@ namespace baml.ai:
   class Tool { methods: [from_type] }
   class ToolCall { methods: [] }
   class ToolCalls { methods: [] }
+  class ToolLoop { methods: [run_to_budget, is_effectful, build_request, send, parse, meta_of, call_messages_with] }
   class ToolResult { methods: [] }
   type Tools
   class Transcript { methods: [] }
   class Unavailable { methods: [] }
   class Usage { methods: [] }
   class Window { methods: [] }
+  function _messages_text
   function _openai_json_str
   function _openai_responses_envelope
   function _openai_responses_output_text
   function _realtime_json_str
+  function any_of
   function drive_call<T>
   function drive_live<T>
   function drive_run_tools<T>
   function drive_stream<TPartial, T>
   function drive_with<T, V, E2>
+  function has_tool_call
   function prompt_to_messages
+  function step_count_is
 namespace baml.csv:
   class CsvError { methods: [] }
   enum CsvErrorKind
@@ -180,6 +188,7 @@ namespace baml.errors:
   class InvalidArgument { methods: [] }
   class Io { methods: [] }
   class LlmClient { methods: [] }
+  class LoopBudgetExceeded { methods: [is_retryable, is_effectful, is_policy_refusal, is_resumable, is_unsupported, is_network_error, is_rate_limit, is_parse_error, is_network_error] }
   class NotImplemented { methods: [] }
   class ParseError { methods: [] }
   type RealtimeError
