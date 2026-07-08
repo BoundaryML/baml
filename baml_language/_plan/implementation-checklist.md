@@ -39,7 +39,8 @@ macro-phase, "DCP §…") and [`llm-provider-plan.md`](./llm-provider-plan.md) (
 - [x] Exit met: full corpus green (lib 1768 / baml_src 2040 / all ai_* suites); native + combinator + legacy overrides and declared client functions all work e2e; snapshots regenned. **Phase B complete** (shorthand→native-class map deferred into Phase C as an optimization).
 
 ### Phase C — the desugar (DCP §1.3; blast radius)
-- [ ] LLM body → `drive_call<T>(client, Foo$render_prompt(…))`; generate `Foo$<suffix>` per **stdlib** driver; unify `Foo$stream` onto the mechanism; prompt-specialization hook for the bridge.
+- [x] **C.1** — `Foo$with` / `Foo$run_tools` / `Foo$live` generated per stdlib driver (companions.rs): body = `drive_<suffix><T,…>(client, Foo$render_prompt(args by name…, client = client), extras…)`; `$with` appends `V`/`E2` companion generics; param layout = required users → extras → defaulted users → client (E0005/ordering rules); `render_prompt` renders native providers with a neutral primitive (prompt-hook v1). 5 offline scenario tests + `common/fakes.baml` (EchoProvider/NoCapProvider).
+- [ ] **C.2** — desugar the main body (`Foo` → `drive_call`) + unify `Foo$stream` onto `drive_stream`; requires lowering legacy strategy configs to new-model combinators first (else strategy clients lose their loops).
 - [ ] Delete `_openai_delegation_ok`/`_openai_from` + orchestrator special-cases; `call_llm_function`/`stream_llm_function` shrink to bridge internals.
 - [ ] Back-compat gate: entire legacy corpus + `ai_*` suites + wire-fidelity request-capture tests pass byte-identically where asserted.
 - [ ] Exit: `Foo`/`Foo$stream`/`Foo$with`/`Foo$run_tools` work with declared, swapped, combinator, and bridge clients; anthropic/gemini LLM functions route natively.
