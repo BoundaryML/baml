@@ -37,6 +37,23 @@ use crate::{file_signature::file_signature_hash, project_load::ResolvedProject};
 /// The optimization level every CLI compile uses (the emit default).
 const CLI_OPT_LEVEL: OptLevel = OptLevel::Two;
 
+/// Sentinel entry injected into a file's `referenced_names` when its compiled
+/// bytecode bakes in a type's *layout* through an operand that carries no
+/// recoverable type reference — a positional field offset (`LoadField`), an
+/// enum discriminant (`Discriminant`/`JumpTable`), a type-tag/union dispatch,
+/// or a virtual-dispatch slot (`VirtualCall`). Paired with a matching sentinel
+/// added to `changed_names` whenever any *type* signature changes, it forces
+/// such a file to be re-lowered on any type-layout change. This is the
+/// conservative fallback for layout dependencies whose receiver type isn't
+/// recoverable without full type inference (e.g. `let p = mk(); p.x`, where
+/// `p`'s class is inferred and named nowhere in the file). See
+/// `bakes_type_layout`.
+///
+/// The value is deliberately not a valid identifier (it holds `\0`, `:`, `-`),
+/// so it can never collide with a real last-segment item name, with a
+/// `syntactic_type_names` token, or with anything `defined_names` produces.
+const LAYOUT_SENTINEL: &str = "\u{0}::any-type-layout::";
+
 /// An opened cache plus the keys for one resolved project + compile config.
 pub(crate) struct CacheContext {
     cache: BytecodeCache,
@@ -225,7 +242,7 @@ fn content_hash(text: &str) -> [u8; 32] {
 fn defined_names(db: &ProjectDatabase, file: SourceFile) -> Vec<String> {
     use baml_compiler2_hir::{
         contributions::Definition,
-        loc::{ClassLoc, EnumLoc, FunctionLoc, InterfaceLoc, LetLoc},
+        loc::{ClassLoc, EnumLoc, FunctionLoc, InterfaceLoc, LetLoc, TypeAliasLoc},
     };
     use baml_db::baml_compiler2_mir::def_to_item_ref;
     let item_tree = baml_compiler2_hir::file_item_tree(db, file);
@@ -256,9 +273,222 @@ fn defined_names(db: &ProjectDatabase, file: SourceFile) -> Vec<String> {
         );
         names.push(last_segment(&fq.to_string()).to_string());
     }
+    // Type aliases are erased into their consumers (a non-recursive alias is
+    // expanded inline at every use), so an alias whose RHS changes must reach
+    // the change-propagation set by *name*. Omitting them (the original bug)
+    // left an alias edit invisible: consumers that named the alias spliced the
+    // stale expansion. `def_to_item_ref` handles `TypeAlias` like any other
+    // named item.
+    for local_id in item_tree.type_aliases.keys() {
+        let fq = def_to_item_ref(
+            db,
+            Definition::TypeAlias(TypeAliasLoc::new(db, file, *local_id)),
+        );
+        names.push(last_segment(&fq.to_string()).to_string());
+    }
     names.sort_unstable();
     names.dedup();
     names
+}
+
+/// Add every named type in a single type annotation to `out`, keyed by the
+/// name's last path segment (matching `defined_names`/`changed_names`).
+///
+/// The HIR stores annotations as `baml_compiler2_ast::TypeExpr`, whose crate is
+/// not a direct dependency of `baml_cli`, so the enum can't be matched
+/// structurally here. Names are recovered from the annotation's canonical
+/// `Display` instead — see `syntactic_type_names` for why this over-approximate
+/// tokenization is sound.
+fn add_type_display<T: std::fmt::Display>(te: &T, out: &mut HashSet<String>) {
+    for token in te
+        .to_string()
+        .split(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
+    {
+        if token.is_empty()
+            || token.starts_with(|c: char| c.is_ascii_digit())
+            || is_builtin_type_word(token)
+        {
+            continue;
+        }
+        out.insert(token.to_string());
+    }
+}
+
+/// Primitive / structural keywords that `TypeExpr`'s `Display` emits (`int`,
+/// `map`, `throws`, …). None can name a user type, so dropping them just trims
+/// noise; keeping any would be harmless, since a token only ever *adds* a file
+/// to the dirty set (over-dirtying costs reuse, never correctness).
+fn is_builtin_type_word(word: &str) -> bool {
+    matches!(
+        word,
+        "int" | "bigint"
+            | "float"
+            | "string"
+            | "bool"
+            | "null"
+            | "never"
+            | "void"
+            | "uint8array"
+            | "unknown"
+            | "type"
+            | "error"
+            | "map"
+            | "throws"
+    )
+}
+
+/// Last-segment type names *syntactically named* in `file`'s signatures and
+/// type-level annotations: function/method params, returns, `throws`, and
+/// generic bounds; class & interface field types; `implements`/`requires`/`for`
+/// targets; associated-type bounds/defaults; and — crucially — type-alias
+/// right-hand sides.
+///
+/// This complements `referenced_names_by_file`, which is derived from compiled
+/// bytecode operands and therefore only captures types that surface as an
+/// `Object` operand (a class constructed, an enum variant allocated). A file
+/// that touches a type purely through its *layout* — positional field access
+/// (`p.x` → `LoadField`), an enum variant match (`Discriminant`/`JumpTable`), a
+/// virtual call, or an inline-expanded type alias — leaves no such operand, so
+/// those references never enter the bytecode set. Extracting the names written
+/// in the file's type annotations recovers every dependency that appears in a
+/// signature (the common case, and every empirically-reproduced miss:
+/// `diff(p: Point)`, `pay(m: Money)`).
+///
+/// Extraction is a deliberate over-approximation: tokenizing each annotation's
+/// `Display` also yields primitive keywords, generic-parameter names, and
+/// dotted-path prefixes. All are harmless — a spurious name only ever adds a
+/// file to the dirty set, never removes one — while every real type name is
+/// always present as an identifier run. The floor this guarantees: any file
+/// naming a changed type in a signature is dirtied.
+fn syntactic_type_names(db: &ProjectDatabase, file: SourceFile) -> HashSet<String> {
+    let item_tree = baml_compiler2_hir::file_item_tree(db, file);
+    let mut names: HashSet<String> = HashSet::new();
+
+    for func in item_tree.functions.values() {
+        for te in func.params.iter().filter_map(|p| p.type_expr.as_ref()) {
+            add_type_display(te, &mut names);
+        }
+        if let Some(te) = &func.return_type {
+            add_type_display(te, &mut names);
+        }
+        if let Some(te) = &func.throws {
+            add_type_display(te, &mut names);
+        }
+        for te in func.generic_param_bounds.iter().flatten() {
+            add_type_display(te, &mut names);
+        }
+    }
+    for ts in item_tree.template_strings.values() {
+        for te in ts.params.iter().filter_map(|p| p.type_expr.as_ref()) {
+            add_type_display(te, &mut names);
+        }
+    }
+    for class in item_tree.classes.values() {
+        for te in class.fields.iter().filter_map(|f| f.type_expr.as_ref()) {
+            add_type_display(te, &mut names);
+        }
+        for te in class.generic_param_bounds.iter().flatten() {
+            add_type_display(te, &mut names);
+        }
+        for block in &class.implements {
+            add_type_display(&block.target, &mut names);
+        }
+    }
+    for iface in item_tree.interfaces.values() {
+        for te in iface.fields.iter().filter_map(|f| f.type_expr.as_ref()) {
+            add_type_display(te, &mut names);
+        }
+        for te in &iface.requires {
+            add_type_display(te, &mut names);
+        }
+        for te in iface.generic_param_bounds.iter().flatten() {
+            add_type_display(te, &mut names);
+        }
+        for method in &iface.required_methods {
+            for te in method.params.iter().filter_map(|p| p.type_expr.as_ref()) {
+                add_type_display(te, &mut names);
+            }
+            if let Some(te) = &method.return_type {
+                add_type_display(te, &mut names);
+            }
+            if let Some(te) = &method.throws {
+                add_type_display(te, &mut names);
+            }
+            for te in method.generic_param_bounds.iter().flatten() {
+                add_type_display(te, &mut names);
+            }
+        }
+        for assoc in &iface.associated_types {
+            if let Some(te) = &assoc.bound {
+                add_type_display(te, &mut names);
+            }
+            if let Some(te) = &assoc.default {
+                add_type_display(te, &mut names);
+            }
+        }
+    }
+    for alias in item_tree.type_aliases.values() {
+        if let Some(te) = &alias.type_expr {
+            add_type_display(te, &mut names);
+        }
+    }
+    for imp in item_tree.impls.values() {
+        add_type_display(&imp.interface_target, &mut names);
+    }
+    for imp in &item_tree.implements_for {
+        add_type_display(&imp.interface_target, &mut names);
+        add_type_display(&imp.for_target, &mut names);
+    }
+    names
+}
+
+/// Whether `file` declares any type whose *layout* another file's bytecode may
+/// bake in: a class (field order), an enum (discriminants), an interface
+/// (dispatch), or a type alias (inline expansion). Gates the `LAYOUT_SENTINEL`:
+/// only a change to a file defining such a type can move a layout, so a
+/// function-only edit never trips the conservative fallback.
+fn file_defines_type(db: &ProjectDatabase, file: SourceFile) -> bool {
+    let item_tree = baml_compiler2_hir::file_item_tree(db, file);
+    !item_tree.classes.is_empty()
+        || !item_tree.enums.is_empty()
+        || !item_tree.interfaces.is_empty()
+        || !item_tree.type_aliases.is_empty()
+}
+
+/// Whether `function`'s bytecode bakes a type's layout through an operand that
+/// carries no recoverable type reference: a positional field offset
+/// (`LoadField`/`StoreField`/`InitField`/`InitSpread`/`InitInstance`), an enum
+/// discriminant (`Discriminant`/`JumpTable`), a type-tag/union dispatch
+/// (`TypeTag`/`DenseTag`/`IsType`/`LoadType`), or a virtual-dispatch slot
+/// (`VirtualCall`/`VirtualCallWithRuntimeId`). Such a function must be
+/// re-lowered whenever the (possibly type-inferred, hence un-named) receiver
+/// type's layout changes; the name-based `referenced`/`changed` match can't see
+/// these, so the file is tagged with `LAYOUT_SENTINEL` as a fallback.
+///
+/// NOTE: keep this in step with the layout-affecting opcodes in
+/// `bex_vm_types::bytecode::Instruction`. A missed opcode *under*-approximates
+/// (a correctness risk); when in doubt, include it — over-inclusion only costs
+/// reuse.
+fn bakes_type_layout(function: &bex_vm_types::types::Function) -> bool {
+    use bex_vm_types::Instruction as I;
+    function.bytecode.instructions.iter().any(|inst| {
+        matches!(
+            inst,
+            I::LoadField(_)
+                | I::StoreField(_)
+                | I::InitField(_)
+                | I::InitSpread(_)
+                | I::InitInstance(_)
+                | I::Discriminant
+                | I::JumpTable(_)
+                | I::TypeTag
+                | I::DenseTag(_)
+                | I::IsType(_)
+                | I::LoadType(_)
+                | I::VirtualCall { .. }
+                | I::VirtualCallWithRuntimeId { .. }
+        )
+    })
 }
 
 /// Last-segment names referenced by each user file's compiled bytecode,
@@ -269,6 +499,12 @@ fn defined_names(db: &ProjectDatabase, file: SourceFile) -> Vec<String> {
 /// resolve through the pool (classes/enums/interfaces by name; function
 /// objects are a file's own lambdas — internal, skipped); global slots
 /// resolve through the inverted name maps.
+///
+/// A file whose bytecode bakes a type's *layout* through a non-`Object`
+/// operand (field offsets, enum discriminants, virtual-dispatch slots) also
+/// gets the `LAYOUT_SENTINEL` — see `bakes_type_layout`. The bytecode set is
+/// unioned with `syntactic_type_names` in `store_with_manifest`, so both
+/// desugared-reference coverage and source-level type dependencies are kept.
 fn referenced_names_by_file(program: &Program) -> HashMap<String, Vec<String>> {
     let mut slot_names: HashMap<usize, &str> = HashMap::new();
     for (name, &slot) in &program.function_global_indices {
@@ -307,6 +543,11 @@ fn referenced_names_by_file(program: &Program) -> HashMap<String, Vec<String>> {
                 }
             }
         });
+        // Field offsets / discriminants / vtable slots bake a type's layout but
+        // name no `Object`; tag the file so any type-layout change re-lowers it.
+        if bakes_type_layout(function) {
+            names.insert(LAYOUT_SENTINEL.to_string());
+        }
     }
     by_file
         .into_iter()
@@ -357,6 +598,14 @@ impl CacheContext {
     /// additions without needing resolution-aware dependency edges. One
     /// round suffices — signature changes only originate from actual edits,
     /// never from recompilation.
+    ///
+    /// A file's referenced names include both its bytecode operands and the
+    /// types named in its source annotations (`syntactic_type_names`), plus a
+    /// `LAYOUT_SENTINEL` when its bytecode bakes a type's layout. Δ gains the
+    /// same sentinel on any type-signature change. Together these close the
+    /// layout holes the bytecode-only set missed: a positional field read
+    /// (`p.x`), an enum variant match, a virtual call, or an inline-expanded
+    /// type alias whose defining type's layout shifts.
     pub(crate) fn plan_reuse(&self, db: &ProjectDatabase) -> Option<ReusePlan> {
         // The verify tripwire must exercise the full compile path — a
         // relink-produced blob verified against a relink compile would only
@@ -391,6 +640,10 @@ impl CacheContext {
         let mut changed_names: HashSet<String> = HashSet::new();
         // Files needing recompilation for their own sake.
         let mut dirty: HashSet<String> = HashSet::new();
+        // Did any *type* (class/enum/interface/alias) signature change? Gates
+        // the `LAYOUT_SENTINEL`: a layout can only move when a type-defining
+        // file's signature changes, so a function-only edit leaves it false.
+        let mut type_signature_changed = false;
 
         for (sf, rel) in &current {
             match prev_files.get(rel.as_str()) {
@@ -399,6 +652,9 @@ impl CacheContext {
                     // existing references anywhere.
                     dirty.insert(rel.clone());
                     changed_names.extend(defined_names(db, *sf));
+                    if file_defines_type(db, *sf) {
+                        type_signature_changed = true;
+                    }
                 }
                 Some(entry) => {
                     if entry.content_hash == content_hash(sf.text(db)) {
@@ -408,15 +664,30 @@ impl CacheContext {
                     if entry.signature_hash != file_signature_hash(db, *sf) {
                         changed_names.extend(entry.defined_names.iter().cloned());
                         changed_names.extend(defined_names(db, *sf));
+                        // A type's layout may have moved. (Over-approximate: a
+                        // function-only edit in a file that also defines a type
+                        // trips this too — sound, only costs reuse.)
+                        if file_defines_type(db, *sf) {
+                            type_signature_changed = true;
+                        }
                     }
                 }
             }
         }
         for (rel, entry) in &prev_files {
             if !current_rels.contains(rel) {
-                // Removed file: its names vanish from resolution.
+                // Removed file: its names vanish from resolution. Its item kind
+                // isn't recoverable from the manifest, so conservatively assume
+                // a type (and thus a layout) may have vanished.
                 changed_names.extend(entry.defined_names.iter().cloned());
+                type_signature_changed = true;
             }
+        }
+        // Conservative fallback for layout dependencies whose receiver type is
+        // inferred (named in no signature): any type-layout change re-lowers
+        // every file whose bytecode baked a layout (`LAYOUT_SENTINEL`).
+        if type_signature_changed {
+            changed_names.insert(LAYOUT_SENTINEL.to_string());
         }
 
         // Propagate: unchanged files referencing a changed name are dirty.
@@ -493,17 +764,31 @@ impl CacheContext {
         let mut referenced = referenced_names_by_file(program);
         let mut files: Vec<ManifestFile> = user_files_with_rel_paths(db)
             .into_iter()
-            .map(|(sf, rel)| ManifestFile {
-                content_hash: content_hash(sf.text(db)),
-                signature_hash: file_signature_hash(db, sf),
-                defined_names: defined_names(db, sf),
-                referenced_names: referenced.remove(&rel).unwrap_or_default(),
-                // Free: seeded files return their seeds verbatim, dirty
-                // files were extracted (and memoized) during the compile.
-                throw_facts: baml_db::baml_compiler2_tir::throw_inference::file_throw_facts(db, sf)
+            .map(|(sf, rel)| {
+                // Union the bytecode-derived references (desugared calls,
+                // constructed classes, plus the layout sentinel) with the
+                // types named in this file's source-level annotations, so
+                // layout/alias dependencies invisible to the bytecode are
+                // tracked too.
+                let mut set: HashSet<String> =
+                    referenced.remove(&rel).unwrap_or_default().into_iter().collect();
+                set.extend(syntactic_type_names(db, sf));
+                let mut referenced_names: Vec<String> = set.into_iter().collect();
+                referenced_names.sort_unstable();
+                ManifestFile {
+                    content_hash: content_hash(sf.text(db)),
+                    signature_hash: file_signature_hash(db, sf),
+                    defined_names: defined_names(db, sf),
+                    referenced_names,
+                    // Free: seeded files return their seeds verbatim, dirty
+                    // files were extracted (and memoized) during the compile.
+                    throw_facts: baml_db::baml_compiler2_tir::throw_inference::file_throw_facts(
+                        db, sf,
+                    )
                     .0
                     .clone(),
-                rel_path: rel,
+                    rel_path: rel,
+                }
             })
             .collect();
         files.sort_by(|a, b| a.rel_path.cmp(&b.rel_path));
@@ -515,5 +800,275 @@ impl CacheContext {
         let payload = borsh::to_vec(&manifest)
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
         self.cache.store_raw(&self.manifest_key, &payload)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    //! Soundness of the dirty-set computation for the layout dependencies the
+    //! bytecode-operand set alone misses (field reorder, enum variant reorder,
+    //! type-alias change, and inferred-receiver field access). Each `plan_reuse`
+    //! test caches an initial compile, edits one type, and asserts the affected
+    //! consumer is dirtied while an unrelated file stays clean — the exact
+    //! verdicts that were wrong before the fix.
+
+    use std::{
+        path::{Path, PathBuf},
+        sync::atomic::{AtomicUsize, Ordering},
+    };
+
+    use super::*;
+
+    static COUNTER: AtomicUsize = AtomicUsize::new(0);
+
+    fn opts() -> CompileOptions {
+        CompileOptions {
+            emit_test_cases: false,
+        }
+    }
+
+    fn build_db(files: &[(&str, &str)]) -> ProjectDatabase {
+        let mut db = ProjectDatabase::new();
+        db.set_project_root(Path::new("/bc-test"));
+        for (name, content) in files {
+            db.add_or_update_file(&Path::new("/bc-test").join(name), content);
+        }
+        db
+    }
+
+    fn file_named(db: &ProjectDatabase, name: &str) -> SourceFile {
+        db.get_source_files()
+            .into_iter()
+            .find(|sf| sf.path(db).to_string_lossy().ends_with(name))
+            .expect("source file present")
+    }
+
+    fn cache_disabled() -> bool {
+        std::env::var_os("BAML_NO_BYTECODE_CACHE").is_some()
+            || std::env::var_os("BAML_CACHE_VERIFY").is_some()
+    }
+
+    fn unique_root() -> PathBuf {
+        let n = COUNTER.fetch_add(1, Ordering::Relaxed);
+        std::env::temp_dir().join(format!("baml-bc-cache-test-{}-{n}", std::process::id()))
+    }
+
+    fn resolved(root: &Path, files: &[(&str, &str)]) -> ResolvedProject {
+        ResolvedProject {
+            root: root.to_path_buf(),
+            manifest: None,
+            files: files
+                .iter()
+                .map(|(name, content)| (root.join(name), (*content).to_string()))
+                .collect(),
+        }
+    }
+
+    /// Compile+cache `initial`, then plan a reuse against `edited`; return the
+    /// set of dirty file names (`None` when caching is disabled by env).
+    fn dirty_after_edit(
+        initial: &[(&str, &str)],
+        edited: &[(&str, &str)],
+    ) -> Option<HashSet<String>> {
+        if cache_disabled() {
+            return None;
+        }
+        let root = unique_root();
+        let _ = std::fs::remove_dir_all(&root);
+
+        let r1 = resolved(&root, initial);
+        let db1 = crate::project_load::build_db_from_sources(&r1, |_| {});
+        let ctx1 = CacheContext::open(&r1, false).expect("cache opens");
+        let program1 =
+            compile_program(&db1, &opts(), Some(&ctx1), None).expect("initial compile succeeds");
+        ctx1.store_with_manifest(&db1, &program1)
+            .expect("manifest stored");
+
+        let r2 = resolved(&root, edited);
+        let db2 = crate::project_load::build_db_from_sources(&r2, |_| {});
+        let ctx2 = CacheContext::open(&r2, false).expect("cache reopens");
+        let plan = ctx2.plan_reuse(&db2).expect("reuse plan available");
+
+        let dirty: HashSet<String> = plan
+            .dirty_files
+            .iter()
+            .filter_map(|sf| {
+                sf.path(&db2)
+                    .file_name()
+                    .map(|n| n.to_string_lossy().into_owned())
+            })
+            .collect();
+        let _ = std::fs::remove_dir_all(&root);
+        Some(dirty)
+    }
+
+    // ── FINDING 1: field reorder (receiver named in the signature) ───────────
+
+    #[test]
+    fn plan_reuse_dirties_field_reader_on_field_reorder() {
+        let initial = [
+            ("a.baml", "class Point {\n  x int\n  y int\n}\n"),
+            ("b.baml", "function diff(p: Point) -> int {\n  p.x - p.y\n}\n"),
+            ("c.baml", "function unrelated() -> int {\n  42\n}\n"),
+        ];
+        let edited = [
+            ("a.baml", "class Point {\n  y int\n  x int\n}\n"),
+            ("b.baml", "function diff(p: Point) -> int {\n  p.x - p.y\n}\n"),
+            ("c.baml", "function unrelated() -> int {\n  42\n}\n"),
+        ];
+        let Some(dirty) = dirty_after_edit(&initial, &edited) else {
+            return;
+        };
+        assert!(
+            dirty.contains("b.baml"),
+            "field reader must be dirtied when Point's fields reorder; dirty = {dirty:?}"
+        );
+        assert!(
+            !dirty.contains("c.baml"),
+            "a file referencing no changed type must stay clean; dirty = {dirty:?}"
+        );
+    }
+
+    // ── FINDING 1 (deep): inferred receiver, caught only by the sentinel ─────
+
+    #[test]
+    fn plan_reuse_dirties_inferred_receiver_field_access_via_layout_sentinel() {
+        // `use_it` names no type: `p`'s class is inferred from `mk()`'s return,
+        // so only the layout sentinel (its `LoadField` bakes Point's offsets)
+        // can catch a reorder. `mk` lives in its own file, so reordering Point
+        // does not change `mk`'s file signature — ruling out a name-based hit.
+        let point_v1 = "class Point {\n  x int\n  y int\n}\n";
+        let point_v2 = "class Point {\n  y int\n  x int\n}\n";
+        let mk = "function mk() -> Point {\n  Point { x: 1, y: 2 }\n}\n";
+        let use_it = "function use_it() -> int {\n  let p = mk();\n  p.x\n}\n";
+        let unrelated = "function unrelated() -> int {\n  42\n}\n";
+        let initial = [
+            ("a.baml", point_v1),
+            ("d.baml", mk),
+            ("b.baml", use_it),
+            ("c.baml", unrelated),
+        ];
+        let edited = [
+            ("a.baml", point_v2),
+            ("d.baml", mk),
+            ("b.baml", use_it),
+            ("c.baml", unrelated),
+        ];
+        let Some(dirty) = dirty_after_edit(&initial, &edited) else {
+            return;
+        };
+        assert!(
+            dirty.contains("b.baml"),
+            "inferred-receiver field reader must be dirtied via the layout sentinel; \
+             dirty = {dirty:?}"
+        );
+        assert!(
+            !dirty.contains("c.baml"),
+            "unrelated file must stay clean; dirty = {dirty:?}"
+        );
+    }
+
+    // ── FINDING 1 (enum analog): variant reorder ─────────────────────────────
+
+    #[test]
+    fn plan_reuse_dirties_enum_consumer_on_variant_reorder() {
+        let initial = [
+            ("a.baml", "enum Color {\n  Red\n  Green\n}\n"),
+            ("b.baml", "function pick(c: Color) -> Color {\n  c\n}\n"),
+            ("c.baml", "function unrelated() -> int {\n  42\n}\n"),
+        ];
+        let edited = [
+            ("a.baml", "enum Color {\n  Green\n  Red\n}\n"),
+            ("b.baml", "function pick(c: Color) -> Color {\n  c\n}\n"),
+            ("c.baml", "function unrelated() -> int {\n  42\n}\n"),
+        ];
+        let Some(dirty) = dirty_after_edit(&initial, &edited) else {
+            return;
+        };
+        assert!(
+            dirty.contains("b.baml"),
+            "enum consumer must be dirtied when Color's variants reorder; dirty = {dirty:?}"
+        );
+        assert!(
+            !dirty.contains("c.baml"),
+            "unrelated file must stay clean; dirty = {dirty:?}"
+        );
+    }
+
+    // ── FINDING 2: type-alias change ─────────────────────────────────────────
+
+    #[test]
+    fn plan_reuse_dirties_type_alias_consumer_on_alias_change() {
+        // `pay` forwards a `Money` value (no field access → no layout sentinel),
+        // so only tracking the *alias name* `Money` — via `defined_names` and
+        // `syntactic_type_names` — can dirty it when the RHS changes.
+        let a_v1 =
+            "class Dollars {\n  v int\n}\nclass Euros {\n  v int\n}\ntype Money = Dollars\n";
+        let a_v2 = "class Dollars {\n  v int\n}\nclass Euros {\n  v int\n}\ntype Money = Euros\n";
+        let pay = "function pay(m: Money) -> Money {\n  m\n}\n";
+        let unrelated = "function unrelated() -> int {\n  42\n}\n";
+        let initial = [("a.baml", a_v1), ("b.baml", pay), ("c.baml", unrelated)];
+        let edited = [("a.baml", a_v2), ("b.baml", pay), ("c.baml", unrelated)];
+        let Some(dirty) = dirty_after_edit(&initial, &edited) else {
+            return;
+        };
+        assert!(
+            dirty.contains("b.baml"),
+            "type-alias consumer must be dirtied when the alias RHS changes; dirty = {dirty:?}"
+        );
+    }
+
+    // ── Mechanism-level assertions (independent of the on-disk cache) ─────────
+
+    #[test]
+    fn defined_names_includes_type_aliases() {
+        let db = build_db(&[("m.baml", "type Money = int\n")]);
+        let f = file_named(&db, "m.baml");
+        let names = defined_names(&db, f);
+        assert!(
+            names.iter().any(|n| n == "Money"),
+            "a type alias must contribute a defined name; got {names:?}"
+        );
+    }
+
+    #[test]
+    fn syntactic_type_names_capture_signature_and_alias_types() {
+        let db = build_db(&[(
+            "t.baml",
+            "class Point {\n  x int\n  y int\n}\n\
+             type Money = int\n\
+             function diff(p: Point) -> int {\n  p.x - p.y\n}\n\
+             function pay(m: Money) -> Money {\n  m\n}\n",
+        )]);
+        let f = file_named(&db, "t.baml");
+        let names = syntactic_type_names(&db, f);
+        for expected in ["Point", "Money"] {
+            assert!(
+                names.contains(expected),
+                "expected `{expected}` among syntactic type names {names:?}"
+            );
+        }
+        assert!(
+            !names.contains("int"),
+            "primitive keywords must be filtered out; got {names:?}"
+        );
+    }
+
+    #[test]
+    fn referenced_names_carry_layout_sentinel_for_field_reader() {
+        let db = build_db(&[(
+            "a.baml",
+            "class Point {\n  x int\n  y int\n}\n\
+             function diff(p: Point) -> int {\n  p.x - p.y\n}\n",
+        )]);
+        let base = generate_stdlib_program(&db, CLI_OPT_LEVEL).expect("stdlib compiles");
+        let program = generate_project_bytecode_with_stdlib(&db, &opts(), CLI_OPT_LEVEL, &base)
+            .expect("project compiles");
+        let refs = referenced_names_by_file(&program);
+        let a = refs.get("a.baml").expect("a.baml has referenced names");
+        assert!(
+            a.iter().any(|n| n == LAYOUT_SENTINEL),
+            "a field reader's bytecode must carry the layout sentinel; got {a:?}"
+        );
     }
 }
