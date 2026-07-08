@@ -42,21 +42,33 @@ jobs:
         with:
           python-version: "3.8"
 
+      - name: Inject -static-libgcc into [build].rustflags (runner-local)
+        run: |
+          set -euo pipefail
+          cfg=engine/.cargo/config.toml
+          # maturin reads [build].rustflags and encodes them into
+          # CARGO_ENCODED_RUSTFLAGS, which overrides RUSTFLAGS /
+          # CARGO_BUILD_RUSTFLAGS / target-specific config. So the only reliable
+          # way to add a link flag is via [build].rustflags itself. We only edit
+          # the ephemeral CI checkout here (never committed), so mac/windows
+          # release builds are unaffected. -static-libgcc drops libgcc_s.so.1.
+          python3 - "$cfg" <<'PY'
+          import sys
+          p = sys.argv[1]
+          s = open(p).read()
+          old = 'rustflags = ["--cfg", "tracing_unstable"]'
+          new = 'rustflags = ["--cfg", "tracing_unstable", "-C", "link-arg=-static-libgcc"]'
+          assert old in s, "expected [build].rustflags line not found"
+          open(p, "w").write(s.replace(old, new, 1))
+          print("patched:", new)
+          PY
+          grep -A2 '^\[build\]' "$cfg"
+
       - name: Build wheel (manylinux2014, static libgcc, vendored OpenSSL)
         uses: PyO3/maturin-action@v1
-        env:
-          # CARGO_BUILD_RUSTFLAGS applies to host builds too (unlike
-          # [target.<triple>].rustflags, which cargo ignores for the host target
-          # per rust-lang/cargo#8607, and which is how maturin builds here).
-          # It replaces [build].rustflags, so `--cfg tracing_unstable` is kept.
-          # `-static-libgcc` removes the libgcc_s.so.1 runtime dependency.
-          CARGO_BUILD_RUSTFLAGS: "--cfg tracing_unstable -C link-arg=-static-libgcc"
         with:
           target: x86_64-unknown-linux-gnu
           command: build
-          # Forward CARGO_BUILD_RUSTFLAGS into maturin-action's build container
-          # (it does not forward arbitrary host env vars by default).
-          docker-options: -e CARGO_BUILD_RUSTFLAGS
           # Build from engine/ so .cargo/config.toml is picked up.
           working-directory: engine
           manylinux: "2_17"
