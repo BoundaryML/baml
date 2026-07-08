@@ -442,8 +442,11 @@ fn build_packages(
         let ns = &pkg_info.namespace_path;
         let resolved = &alias_caches[&pkg_info.package];
         // Lower a type expr in this file's namespace, discarding diagnostics
-        // (these targets were already validated upstream).
-        let lower = |expr: &TypeExpr, generics: &[Name]| -> ty::Ty {
+        // (these targets were already validated upstream). `bounds` carries the
+        // enclosing impl's/class's generic-param bounds so a bound-typevar
+        // projection in a binding value (`type SortError = T.CompareError`)
+        // determines its interface instead of erasing.
+        let lower = |expr: &TypeExpr, generics: &[Name], bounds: &TypeVarBoundsMap| -> ty::Ty {
             let mut diags = Vec::new();
             lower_type_expr(
                 expr,
@@ -452,7 +455,7 @@ fn build_packages(
                     package_items: pkg_items,
                     ns_context: ns,
                     generic_params: generics,
-                    bounds: &TypeVarBoundsMap::default(),
+                    bounds,
                     self_ty: None,
                 },
                 &mut diags,
@@ -466,21 +469,21 @@ fn build_packages(
         // (`None`); dropping a rule only ever loses a dispatch, never adds a wrong
         // one.
         let bound_sets = |param_bounds: &[Option<TypeExpr>],
-                          generics: &[Name]|
+                          generics: &[Name],
+                          bounds: &TypeVarBoundsMap|
          -> Option<Vec<Vec<InterfaceBound>>> {
             param_bounds
                 .iter()
                 .map(|b| match b {
                     None => Some(Vec::new()),
-                    Some(te) => split_interface(&lower(te, generics), resolved, generics).map(
-                        |(interface, args, assoc)| {
+                    Some(te) => split_interface(&lower(te, generics, bounds), resolved, generics)
+                        .map(|(interface, args, assoc)| {
                             vec![InterfaceBound {
                                 interface,
                                 args,
                                 assoc,
                             }]
-                        },
-                    ),
+                        }),
                 })
                 .collect()
         };
@@ -489,7 +492,8 @@ fn build_packages(
         // only sees the target), so lower them here to fold into the implemented
         // interface's bindings.
         let lower_assoc = |bindings: &[baml_compiler2_ast::AssociatedTypeBindingDef],
-                           generics: &[Name]|
+                           generics: &[Name],
+                           bounds: &TypeVarBoundsMap|
          -> Vec<(Name, baml_type::TyTemplate)> {
             bindings
                 .iter()
@@ -498,7 +502,7 @@ fn build_packages(
                     Some((
                         b.name.clone(),
                         baml_compiler2_mir::tir2_to_template(
-                            &lower(te, generics),
+                            &lower(te, generics, bounds),
                             resolved,
                             generics,
                         ),
@@ -525,8 +529,12 @@ fn build_packages(
             // Legacy flat single-bound form (first `&`-bound per param).
             let impl_param_bounds: Vec<Option<baml_compiler2_ast::TypeExpr>> =
                 generics.iter().map(|g| g.bounds.first().cloned()).collect();
+            let impl_bounds = baml_compiler2_tir::lower_type_expr::impl_generic_param_bounds(
+                db,
+                baml_compiler2_hir::loc::ImplLoc::new(db, *file, *impl_id),
+            );
             let Some((iface_tn, interface_args, mut interface_assoc)) = split_interface(
-                &lower(&block.interface_target, &impl_param_names),
+                &lower(&block.interface_target, &impl_param_names, impl_bounds),
                 resolved,
                 &impl_param_names,
             ) else {
@@ -535,13 +543,15 @@ fn build_packages(
             interface_assoc.extend(lower_assoc(
                 &block.associated_type_bindings,
                 &impl_param_names,
+                impl_bounds,
             ));
             let for_ty_pattern = baml_compiler2_mir::tir2_to_template(
-                &lower(for_target, &impl_param_names),
+                &lower(for_target, &impl_param_names, impl_bounds),
                 resolved,
                 &impl_param_names,
             );
-            let Some(generic_param_bounds) = bound_sets(&impl_param_bounds, &impl_param_names)
+            let Some(generic_param_bounds) =
+                bound_sets(&impl_param_bounds, &impl_param_names, impl_bounds)
             else {
                 continue;
             };
@@ -605,6 +615,10 @@ fn build_packages(
                 &class_data.name,
             );
             let generics = &class_data.generic_params;
+            let class_bounds = baml_compiler2_tir::lower_type_expr::class_generic_param_bounds(
+                db,
+                ClassLoc::new(db, *file, *class_id),
+            );
 
             // Each folded method tagged with the full interface instantiation it
             // implements (name + args). A class may implement the same interface
@@ -622,8 +636,11 @@ fn build_packages(
                 .iter()
                 .filter_map(|&m| {
                     let target = item_tree.method_to_iface_target.get(&m)?;
-                    let (m_iface_tn, m_args, _m_assoc) =
-                        split_interface(&lower(target, generics), resolved, generics)?;
+                    let (m_iface_tn, m_args, _m_assoc) = split_interface(
+                        &lower(target, generics, class_bounds),
+                        resolved,
+                        generics,
+                    )?;
                     Some((
                         m_iface_tn,
                         m_args,
@@ -650,7 +667,8 @@ fn build_packages(
                         .collect(),
                 )
             };
-            let Some(generic_param_bounds) = bound_sets(&class_data.generic_param_bounds, generics)
+            let Some(generic_param_bounds) =
+                bound_sets(&class_data.generic_param_bounds, generics, class_bounds)
             else {
                 continue;
             };
@@ -661,12 +679,18 @@ fn build_packages(
                 .collect();
 
             for block in &class_data.implements {
-                let Some((iface_tn, interface_args, mut interface_assoc)) =
-                    split_interface(&lower(&block.target, generics), resolved, generics)
-                else {
+                let Some((iface_tn, interface_args, mut interface_assoc)) = split_interface(
+                    &lower(&block.target, generics, class_bounds),
+                    resolved,
+                    generics,
+                ) else {
                     continue;
                 };
-                interface_assoc.extend(lower_assoc(&block.associated_type_bindings, generics));
+                interface_assoc.extend(lower_assoc(
+                    &block.associated_type_bindings,
+                    generics,
+                    class_bounds,
+                ));
                 // Match folded methods to THIS block by the full interface
                 // instantiation (name + args), not name alone — coherence makes a
                 // given `(type, Iface<Args>)` unique, so this picks exactly this
