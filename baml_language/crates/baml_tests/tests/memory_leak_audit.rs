@@ -11,7 +11,9 @@ fn rss_mb() -> f64 {
     // macOS: ru_maxrss is bytes
     let mut usage = std::mem::MaybeUninit::<libc::rusage>::uninit();
     unsafe {
-        libc::getrusage(libc::RUSAGE_SELF, usage.as_mut_ptr());
+        if libc::getrusage(libc::RUSAGE_SELF, usage.as_mut_ptr()) != 0 {
+            return 0.0;
+        }
         let usage = usage.assume_init();
         #[cfg(target_os = "macos")]
         {

@@ -80,18 +80,37 @@ pub type EventCallback = Box<dyn Fn(salsa::Event) + Send + Sync + 'static>;
 /// calls stay plain call nodes.
 const CFG_EXPANSION_NODE_BUDGET: usize = 5_000;
 
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+struct CfgExpansionCacheKey {
+    callee_name: String,
+    active_expansions: Vec<String>,
+}
+
 /// State threaded through one top-level [`ProjectDatabase::ast_control_flow_graph`] build.
 #[derive(Default)]
 struct CfgExpansionCtx {
     /// Functions currently being expanded (cycle guard).
     expanding: HashSet<String>,
-    /// Fully-expanded callee graphs, built once per top-level build and
-    /// reused at every later call site. `None` records callees with no
-    /// buildable graph so they are not retried per site.
+    /// Fully-expanded callee graphs keyed by the active expansion context.
+    /// `None` records callees with no buildable graph so they are not retried
+    /// per equivalent site.
     cache: HashMap<
-        String,
+        CfgExpansionCacheKey,
         Option<std::sync::Arc<baml_compiler2_visualization::control_flow::ControlFlowGraph>>,
     >,
+}
+
+impl CfgExpansionCtx {
+    fn cache_key(&self, callee_name: String) -> CfgExpansionCacheKey {
+        // The recursion guard depends on membership in `expanding`, not call
+        // order, so a sorted active set is the safe memoization context.
+        let mut active_expansions = self.expanding.iter().cloned().collect::<Vec<_>>();
+        active_expansions.sort();
+        CfgExpansionCacheKey {
+            callee_name,
+            active_expansions,
+        }
+    }
 }
 
 #[salsa::db]
@@ -478,8 +497,8 @@ impl ProjectDatabase {
     /// because it builds directly from the AST using `Missing` sentinels for unresolved nodes.
     /// Suitable for the playground which must function during editing.
     ///
-    /// Callee graphs are inlined at every call site, memoized per callee, and
-    /// capped at 5,000 total nodes — the fully-inlined
+    /// Callee graphs are inlined at every call site, memoized per callee and
+    /// active recursion context, and capped at 5,000 total nodes — the fully-inlined
     /// representation is otherwise exponential in call-chain depth.
     pub fn ast_control_flow_graph(
         &self,
@@ -619,17 +638,18 @@ impl ProjectDatabase {
             if ctx.expanding.contains(&callee_name) {
                 continue;
             }
-            // Each callee is fully expanded once per top-level build and its
-            // graph reused at every later call site: without this, build cost
-            // multiplies by call-site fan-out at every level of the call
-            // chain (fan_out^depth).
-            let callee_graph = if let Some(cached) = ctx.cache.get(&callee_name) {
+            // Each callee is fully expanded once per equivalent recursion
+            // context and reused at later matching call sites. The active
+            // expansion set is part of the key because it controls which
+            // recursive edges are intentionally left as plain call nodes.
+            let cache_key = ctx.cache_key(callee_name.clone());
+            let callee_graph = if let Some(cached) = ctx.cache.get(&cache_key) {
                 cached.clone()
             } else {
                 let built = self
                     .ast_control_flow_graph_impl(&callee_name, ctx)
                     .map(std::sync::Arc::new);
-                ctx.cache.insert(callee_name.clone(), built.clone());
+                ctx.cache.insert(cache_key, built.clone());
                 built
             };
             let Some(callee_graph) = callee_graph else {
@@ -1519,6 +1539,52 @@ function Top(input: string) -> string {
             "Top should contain inlined copies of Mid ({} vs {})",
             top.nodes.len(),
             mid.nodes.len()
+        );
+    }
+
+    #[test]
+    fn recursive_callee_cache_is_scoped_by_active_expansions() {
+        let mut db = ProjectDatabase::new();
+        db.set_project_root(std::path::Path::new("/tmp"));
+        db.add_or_update_file(
+            std::path::Path::new("/tmp/recursive-cache.baml"),
+            r#"
+//# a step
+function A(input: string) -> string {
+  let next = B(input);
+  next
+}
+
+//# b step
+function B(input: string) -> string {
+  let looped = A(input);
+  let done = Leaf(looped);
+  done
+}
+
+//# leaf step
+function Leaf(input: string) -> string {
+  input
+}
+
+function Top(input: string) -> string {
+  let first = A(input);
+  let second = B(first);
+  second
+}
+"#,
+        );
+
+        let graph = db.ast_control_flow_graph("Top").unwrap();
+        let a_step_count = graph
+            .nodes
+            .values()
+            .filter(|node| node.label == "a step")
+            .count();
+
+        assert!(
+            a_step_count >= 2,
+            "direct B expansion must not reuse a B graph truncated under A recursion; got {a_step_count} A call node(s)"
         );
     }
 
