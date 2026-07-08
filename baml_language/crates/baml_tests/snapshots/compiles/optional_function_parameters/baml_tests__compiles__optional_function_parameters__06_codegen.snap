@@ -379,7 +379,7 @@ function user.SearchService.Run(self: SearchService, query: string, limit: int) 
     return
 }
 
-function user.TestClient$new() -> null {
+function user.TestClient$new(lenient: bool) -> null {
     load_const "TestClient"
     load_const "openai"
     load_const null

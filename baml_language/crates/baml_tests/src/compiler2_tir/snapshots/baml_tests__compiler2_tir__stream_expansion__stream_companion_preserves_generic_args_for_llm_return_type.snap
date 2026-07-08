@@ -5,7 +5,7 @@ expression: "render_tir(&db, file)"
 class user.Box {
   value: T
 }
-function user.Dummy$new() -> ? throws never {
+function user.Dummy$new(lenient: bool) -> ? throws never {
   baml.llm.PrimitiveClient { name: "Dummy", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } } : baml.llm.PrimitiveClient
 }
 function user.GetBoxedInt(client: baml.llm.Client = Dummy) -> user.Box<int> throws never {

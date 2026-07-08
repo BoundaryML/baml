@@ -116,25 +116,26 @@ fn user.ExtractInvoice$render_prompt(text: string, client: baml.llm.Client) -> b
     }
 }
 
-fn user.GPT4o$new() -> null {
+fn user.GPT4o$new(lenient: bool) -> null {
     // Locals:
     let _0: null // _0 // return
-    let _1: baml.llm.PrimitiveClientOptions
-    let _2: string
-    let _3: map<string, string>
+    let _1: bool // lenient // param
+    let _2: baml.llm.PrimitiveClientOptions
+    let _3: string
     let _4: map<string, string>
-    let _5: map<string, unknown>
+    let _5: map<string, string>
+    let _6: map<string, unknown>
 
     bb0: {
-        _2 = call const fn baml.env.get_or_panic(const "OPENAI_API_KEY") -> [bb1];
+        _3 = call const fn baml.env.get_or_panic_lenient(const "OPENAI_API_KEY", copy _1) -> [bb1];
     }
 
     bb1: {
-        _3 = {  }: map<string, string>;
         _4 = {  }: map<string, string>;
-        _5 = {  }: map<string, unknown>;
-        _1 = baml.llm.PrimitiveClientOptions { const "gpt-4o", const null, const null, const null, const null, const null, const null, const null, const null, copy _2, const null, const null, copy _3, copy _4, copy _5 };
-        _0 = baml.llm.PrimitiveClient { const "GPT4o", const "openai", copy _1 };
+        _5 = {  }: map<string, string>;
+        _6 = {  }: map<string, unknown>;
+        _2 = baml.llm.PrimitiveClientOptions { const "gpt-4o", const null, const null, const null, const null, const null, const null, const null, const null, copy _3, const null, const null, copy _4, copy _5, copy _6 };
+        _0 = baml.llm.PrimitiveClient { const "GPT4o", const "openai", copy _2 };
         goto -> bb2;
     }
 

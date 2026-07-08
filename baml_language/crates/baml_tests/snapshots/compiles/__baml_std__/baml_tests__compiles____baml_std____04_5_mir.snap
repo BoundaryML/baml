@@ -3784,6 +3784,42 @@ fn baml.env.get_or_panic(key: string) -> string {
     }
 }
 
+fn baml.env.get_or_panic_lenient(key: string, lenient: bool) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // key // param
+    let _2: bool // lenient // param
+    let _3: string | null
+    let _4: bool
+
+    bb0: {
+        branch copy _2 -> [bb2, bb1];
+    }
+
+    bb1: {
+        _0 = call const fn baml.env.get_or_panic(copy _1) -> [bb5];
+    }
+
+    bb2: {
+        _3 = sys_op const fn baml.env.get(copy _1) -> bb3;
+    }
+
+    bb3: {
+        _0 = copy _3;
+        _4 = copy _3 == const null;
+        branch copy _4 -> [bb4, bb5];
+    }
+
+    bb4: {
+        _0 = const "";
+        goto -> bb5;
+    }
+
+    bb5: {
+        return;
+    }
+}
+
 fn baml.errors.ErrorContext._to_string_impl = builtin(vm)
 
 fn baml.errors.ErrorContext.root_cause(self: baml.errors.ErrorContext) -> baml.errors.ErrorContext {
@@ -7315,7 +7351,7 @@ fn baml.llm.build_request(client: baml.llm.Client, function_name: string, args: 
     }
 
     bb3: {
-        _7 = call const fn baml.llm.Client.to_primitive_client(copy _1) -> [bb4];
+        _7 = call const fn baml.llm.Client.to_primitive_client(copy _1, const <omitted>) -> [bb4];
     }
 
     bb4: {
@@ -7371,7 +7407,7 @@ fn baml.llm.build_request_stream(client: baml.llm.Client, function_name: string,
     }
 
     bb3: {
-        _7 = call const fn baml.llm.Client.to_primitive_client(copy _1) -> [bb4];
+        _7 = call const fn baml.llm.Client.to_primitive_client(copy _1, const <omitted>) -> [bb4];
     }
 
     bb4: {
@@ -7568,7 +7604,7 @@ fn baml.llm.render_prompt(client: baml.llm.Client, function_name: string, args: 
     }
 
     bb3: {
-        _7 = call const fn baml.llm.Client.to_primitive_client(copy _1) -> [bb4];
+        _7 = call const fn baml.llm.Client.to_primitive_client(copy _1, const true) -> [bb4];
     }
 
     bb4: {
@@ -7889,7 +7925,7 @@ fn baml.llm.Client.__make_stream(self: baml.llm.Client, sse: baml.http.SseStream
     let _10: baml.llm.StreamCache<TStream, TFinal>
 
     bb0: {
-        _3 = call const fn baml.llm.Client.to_primitive_client(copy _1) -> [bb1];
+        _3 = call const fn baml.llm.Client.to_primitive_client(copy _1, const <omitted>) -> [bb1];
     }
 
     bb1: {
@@ -8354,7 +8390,7 @@ fn baml.llm.Client.build_attempt_with_state(self: baml.llm.Client, planner_state
     }
 
     bb58: {
-        _5 = call const fn baml.llm.Client.to_primitive_client(copy _1) -> [bb59];
+        _5 = call const fn baml.llm.Client.to_primitive_client(copy _1, const <omitted>) -> [bb59];
     }
 
     bb59: {
@@ -8890,7 +8926,7 @@ fn baml.llm.Client.execute_once_oneshot(self: baml.llm.Client, context: baml.llm
     }
 
     bb10: {
-        _6 = call const fn baml.llm.Client.to_primitive_client(copy _1) -> [bb11];
+        _6 = call const fn baml.llm.Client.to_primitive_client(copy _1, const <omitted>) -> [bb11];
     }
 
     bb11: {
@@ -9286,7 +9322,7 @@ fn baml.llm.Client.execute_once_stream(self: baml.llm.Client, context: baml.llm.
     }
 
     bb10: {
-        _6 = call const fn baml.llm.Client.to_primitive_client(copy _1) -> [bb11];
+        _6 = call const fn baml.llm.Client.to_primitive_client(copy _1, const <omitted>) -> [bb11];
     }
 
     bb11: {
@@ -10135,38 +10171,50 @@ fn baml.llm.PrimitiveClient.render_specialized_prompt(self: baml.llm.PrimitiveCl
 
 fn baml.llm.PrimitiveClient.specialize_prompt = builtin(io)
 
-fn baml.llm.Client.to_primitive_client(self: baml.llm.Client) -> baml.llm.PrimitiveClient {
+fn baml.llm.Client.to_primitive_client(self: baml.llm.Client, lenient: bool) -> baml.llm.PrimitiveClient {
     // Locals:
     let _0: baml.llm.PrimitiveClient // _0 // return
     let _1: baml.llm.Client // self // param
-    let _2: bool
-    let _3: (baml.String, string) -> bool throws never
-    let _4: string
-    let _5: () -> baml.llm.PrimitiveClient throws baml.errors.InvalidArgument
+    let _2: bool // lenient // param
+    let _3: bool
+    let _4: bool
+    let _5: (baml.String, string) -> bool throws never
+    let _6: string
+    let _7: (bool) -> baml.llm.PrimitiveClient throws baml.errors.InvalidArgument
 
     bb0: {
-        _3 = copy _1.0;
-        _2 = call const fn baml.String.includes(copy _3, const "/") -> [bb1];
+        _3 = copy _2 == const <omitted>;
+        branch copy _3 -> [bb1, bb2];
     }
 
     bb1: {
-        branch copy _2 -> [bb4, bb2];
+        _2 = const false;
+        goto -> bb2;
     }
 
     bb2: {
-        _5 = sys_op const fn baml.llm.Client.get_constructor(copy _1) -> bb3;
+        _5 = copy _1.0;
+        _4 = call const fn baml.String.includes(copy _5, const "/") -> [bb3];
     }
 
     bb3: {
-        _0 = call copy _5() -> [bb5];
+        branch copy _4 -> [bb6, bb4];
     }
 
     bb4: {
-        _4 = copy _1.0;
-        _0 = sys_op const fn baml.llm.from_shorthand(copy _4) -> bb5;
+        _7 = sys_op const fn baml.llm.Client.get_constructor(copy _1) -> bb5;
     }
 
     bb5: {
+        _0 = call copy _7(copy _2) -> [bb7];
+    }
+
+    bb6: {
+        _6 = copy _1.0;
+        _0 = sys_op const fn baml.llm.from_shorthand(copy _6) -> bb7;
+    }
+
+    bb7: {
         return;
     }
 }

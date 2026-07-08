@@ -37,8 +37,8 @@ function user.ClassifySentiment2$render_prompt(text: string, client: baml.llm.Cl
 function user.Foo() -> string | image  [expr] {
   { let x = "foo"; let y = 2; { let i = 0; while i Lt y { x = "hi:  " Add x } } } x
 }
-function user.GPT4o$new() -> ?  [expr] {
-  baml.llm.PrimitiveClient { name: "GPT4o", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4o", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: baml.env.get_or_panic("OPENAI_API_KEY"), provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } }
+function user.GPT4o$new(lenient: bool) -> ?  [expr] {
+  baml.llm.PrimitiveClient { name: "GPT4o", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4o", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: baml.env.get_or_panic_lenient("OPENAI_API_KEY", lenient), provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } }
 }
 function user.GenerateTests(count: int, topic: string, client: baml.llm.Client = GPT4o) -> string[]  [llm] {
   baml.llm.call_llm_function(client, "GenerateTests", map { "count": count, "topic": topic })
