@@ -20587,8 +20587,39 @@ function baml.ai.Tool.from_type(name: string, description: string, params: type)
     sys_op baml.schema.json_schema
     store_var _4
     load_var2 1 2
-    load_var _4
-    init_instance baml.ai.Tool .name, .description, .parameters
+    load_var2 4 3
+    init_instance baml.ai.Tool .name, .description, .parameters, .params_type
+    return
+}
+
+function baml.ai.Tool.validate_args(self: baml.ai.Tool, call: baml.ai.ToolCall) -> bool {
+    load_var self
+    load_field .params_type
+    store_var_load_var _3
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L2
+
+  L0:
+    load_var2 3 2
+    load_field .args
+    call baml.sap.parse_type
+    pop 1
+    jump L1
+    load_var e
+    throw_if_panic
+    load_const false
+    jump L3
+
+  L1:
+    load_const true
+    jump L3
+
+  L2:
+    load_const true
+
+  L3:
     return
 }
 
@@ -22894,6 +22925,34 @@ function baml.ai.has_tool_call(name: string) -> (baml.ai.LoopInfo) -> bool throw
     store_var ?1
     load_var name
     make_closure .<lambda(has_tool_call, 0)>, 1
+    return
+}
+
+function baml.ai.invoke_tool(call: baml.ai.ToolCall, handler: (A) -> string throws never) -> baml.ai.ToolResult {
+    load_type #0
+    load_var call
+    load_field .args
+    call baml.sap.parse
+    jump L0
+    load_var e
+    throw_if_panic
+    load_var call
+    load_field .id
+    load_const "error: arguments did not match the tool's schema; fix them and retry"
+    init_instance baml.ai.ToolResult .id, .output
+    jump L1
+
+  L0:
+    load_var call
+    load_field .id
+    store_var _8
+    load_var handler
+    call_indirect
+    store_var _9
+    load_var2 4 5
+    init_instance baml.ai.ToolResult .id, .output
+
+  L1:
     return
 }
 
@@ -30630,6 +30689,17 @@ function baml.sap.parse(text: string) -> T {
     load_var2 1 2
     load_type #0
     load_type #0
+    sys_op baml.llm.__sap_parse_final
+    return
+}
+
+function baml.sap.parse_type(t: type, text: string) -> unknown {
+    load_var2 1 1
+    sys_op baml.llm.StreamCache.new
+    store_var cache
+    load_var2 2 3
+    load_type unknown
+    load_type unknown
     sys_op baml.llm.__sap_parse_final
     return
 }

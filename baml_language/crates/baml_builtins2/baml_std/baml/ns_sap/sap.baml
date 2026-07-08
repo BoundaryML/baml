@@ -13,3 +13,14 @@ function parse<T>(text: string) -> T throws root.errors.LlmClient {
             root.llm.StreamCache.new(reflect.type_of<T>(), reflect.type_of<T>()),
         )
 }
+
+/// D6: SAP-parse `text` against a RUNTIME `type` value instead of a lexical `T`
+/// — for seams where the schema is data, not a type in scope (e.g. validating
+/// `ToolCall.args` against a stored `Tool.params_type`). The parse is driven by
+/// the `StreamCache`'s stored runtime types, so no generic threading is needed;
+/// the result is `unknown` — narrow it with a `match` arm where a concrete type
+/// IS in scope.
+function parse_type(t: type, text: string) -> unknown throws root.errors.LlmClient {
+    let cache: root.llm.StreamCache<unknown, unknown> = root.llm.StreamCache.new(t, t);
+    root.llm.__sap_parse_final<unknown, unknown>(text, cache)
+}

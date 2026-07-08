@@ -3245,7 +3245,7 @@ fn baml.ai.Tool.from_type(name: string, description: string, params: type) -> ba
     }
 
     bb1: {
-        _0 = baml.ai.Tool { copy _1, copy _2, copy _4 };
+        _0 = baml.ai.Tool { copy _1, copy _2, copy _4, copy _3 };
         goto -> bb2;
     }
 
@@ -3459,6 +3459,52 @@ fn .<lambda(has_tool_call, 0)>(info: baml.ai.LoopInfo) -> null {
     }
 
     bb27: {
+        return;
+    }
+}
+
+fn baml.ai.invoke_tool(call: baml.ai.ToolCall, handler: (A) -> string throws never) -> baml.ai.ToolResult {
+    // Locals:
+    let _0: baml.ai.ToolResult // _0 // return
+    let _1: baml.ai.ToolCall // call // param
+    let _2: (A) -> string throws never // handler // param
+    let _3: A // args
+    let _4: unknown // e
+    let _5: string
+    let _6: type
+    let _7: string
+    let _8: string
+    let _9: string
+    let _10: A
+
+    bb0: {
+        _5 = copy _1.2;
+        _6 = load_type(#0);
+        _3 = call const fn baml.sap.parse<copy _6>(copy _5) -> [bb1, unwind: bb3];
+    }
+
+    bb1: {
+        _8 = copy _1.0;
+        _10 = copy _3;
+        _9 = call copy _2(copy _10) -> [bb2];
+    }
+
+    bb2: {
+        _0 = baml.ai.ToolResult { copy _8, copy _9 };
+        goto -> bb5;
+    }
+
+    bb3: {
+        throw_if_panic copy _4 -> bb4;
+    }
+
+    bb4: {
+        _7 = copy _1.0;
+        _0 = baml.ai.ToolResult { copy _7, const "error: arguments did not match the tool's schema; fix them and retry" };
+        goto -> bb5;
+    }
+
+    bb5: {
         return;
     }
 }
@@ -3788,6 +3834,56 @@ fn baml.ai.LoopMeta.root.ai.ResponseMeta.usage(self: null) -> baml.ai.Usage {
     }
 
     bb1: {
+        return;
+    }
+}
+
+fn baml.ai.Tool.validate_args(self: baml.ai.Tool, call: baml.ai.ToolCall) -> bool {
+    // Locals:
+    let _0: bool // _0 // return
+    let _1: baml.ai.Tool // self // param
+    let _2: baml.ai.ToolCall // call // param
+    let _3: type | null
+    let _4: bool
+    let _5: type // t
+    let _6: unknown
+    let _7: unknown // e
+    let _8: type
+    let _9: string
+
+    bb0: {
+        _3 = copy _1.3;
+        _4 = copy _3 == const null;
+        branch copy _4 -> [bb3, bb1];
+    }
+
+    bb1: {
+        _5 = copy _3;
+        _8 = copy _5;
+        _9 = copy _2.2;
+        _6 = call const fn baml.sap.parse_type(copy _8, copy _9) -> [bb2, unwind: bb4];
+    }
+
+    bb2: {
+        _0 = const true;
+        goto -> bb6;
+    }
+
+    bb3: {
+        _0 = const true;
+        goto -> bb6;
+    }
+
+    bb4: {
+        throw_if_panic copy _7 -> bb5;
+    }
+
+    bb5: {
+        _0 = const false;
+        goto -> bb6;
+    }
+
+    bb6: {
         return;
     }
 }
@@ -29978,6 +30074,32 @@ fn baml.sap.parse(text: string) -> T {
     }
 
     bb4: {
+        return;
+    }
+}
+
+fn baml.sap.parse_type(t: type, text: string) -> unknown {
+    // Locals:
+    let _0: unknown // _0 // return
+    let _1: type // t // param
+    let _2: string // text // param
+    let _3: baml.llm.StreamCache<unknown, unknown> // cache
+    let _4: baml.llm.StreamCache<unknown, unknown>
+    let _5: type
+    let _6: type
+
+    bb0: {
+        _3 = sys_op const fn baml.llm.StreamCache.new(copy _1, copy _1) -> bb1;
+    }
+
+    bb1: {
+        _4 = copy _3;
+        _5 = load_type(unknown);
+        _6 = load_type(unknown);
+        _0 = sys_op const fn baml.llm.__sap_parse_final(copy _2, copy _4, copy _5, copy _6) -> bb2;
+    }
+
+    bb2: {
         return;
     }
 }

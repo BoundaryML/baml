@@ -105,6 +105,30 @@ function ai_scenarios.$init_test_ns_ai_scenarios_09_tool_calling_usage(registry:
     load_const null
     call testing.TestCollector.register_test
     pop 1
+    load_var registry
+    load_const "09: invoke_tool coerces args to the handler's declared type (D6 standard path)"
+    make_closure .<lambda($init_test_ns_ai_scenarios_09_tool_calling_usage, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "09: invoke_tool returns an error result on schema mismatch (model self-corrects)"
+    make_closure .<lambda($init_test_ns_ai_scenarios_09_tool_calling_usage, 4)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "09: validate_args checks calls against the STORED params type (D6 integrity)"
+    make_closure .<lambda($init_test_ns_ai_scenarios_09_tool_calling_usage, 6)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "09: parse_type parses against a runtime type value and narrows via match"
+    make_closure .<lambda($init_test_ns_ai_scenarios_09_tool_calling_usage, 7)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
     load_const null
     return
 }
@@ -4203,7 +4227,8 @@ function ai_scenarios.lookup_tools() -> baml.ai.Tool[] {
     load_const "lookup"
     load_const "Look something up."
     load_const "{}"
-    init_instance baml.ai.Tool .name, .description, .parameters
+    load_const null
+    init_instance baml.ai.Tool .name, .description, .parameters, .params_type
     load_type baml.ai.Tool
     alloc_array 1
     return

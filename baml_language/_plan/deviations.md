@@ -420,3 +420,14 @@ Deliberate divergences:
   unobservable — same D7 seam gap as `per_turn_tools`.
 - `Traced.stream_messages` forwards without recording (stream metas aren't observable from
   the `Stream` handle).
+
+## D6 inbound args integrity — canonical coercion + stored-type validation
+
+Per plan D6 recommendation (b) + (c): `baml.ai.invoke_tool<A>(call, handler)` is the
+canonical inbound step (SAP against the handler's declared type; mismatch → error
+`ToolResult`, the loop continues so the model can self-correct); `Tool` grew an optional
+`params_type: type?` (set by `from_type`) and `validate_args(call)` checks raw args
+against the STORED type. `baml.sap.parse_type(t: type, raw)` shipped as pure BAML over
+`StreamCache.new(t, t)` — no new host surface (divergence from the plan's "net-new"
+assumption, in the good direction). Caveat recorded in gotchas: SAP's single-string-field
+passthrough means validation only discriminates on multi-field arg shapes.

@@ -177,3 +177,16 @@ Each entry: the symptom, the rule, the workaround. Compiler-bug candidates are m
   `output_format`. `sys_llm::render_output_format` now returns "" for a top-level
   `BuiltinUnknown` — but the real fix in new code is always passing explicit type args
   (the desugared companions do).
+
+## SAP leniency and the single-string-field class (D6 round)
+
+- **A class with ONE string field SAP-parses from almost ANY input** — the whole raw
+  text passes through into the field (`W { city: string }` accepts `{"temperature": 12}`
+  → city = "{temperature: 12}"). Schema validation via SAP (`Tool.validate_args`,
+  `invoke_tool` mismatch arms) only *bites* on shapes with 2+ fields / distinct types.
+  Write args classes accordingly (and test mismatch paths with multi-field classes).
+- **`baml.sap.parse_type(t, raw)` is pure BAML** — `StreamCache.new(t, t)` carries
+  runtime `type` values and the host SAP keys off the cache, so no dynamic-type host
+  fn was needed (the plan's P8 hedge was unnecessary here).
+- **`let v = expr catch { _ => null }` can collapse the binding's type** so a later
+  class-match arm is "unreachable" (E0063) — annotate (`let v: unknown = …`).

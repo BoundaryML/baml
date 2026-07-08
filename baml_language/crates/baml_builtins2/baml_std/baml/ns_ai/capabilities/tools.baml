@@ -7,10 +7,16 @@ class Tool {
     name: string,
     description: string,
     parameters: string, // JSON Schema for the tool's arguments (the wire form)
+    /// D6: the source `type` the wire schema was lowered from, kept so the
+    /// advertised schema and the dispatch-side coercion cannot silently drift
+    /// (`validate_args` checks incoming args against it). `null` for
+    /// hand-constructed tools carrying an app-provided wire schema.
+    params_type: type?,
 
     /// Build a tool whose parameter schema is lowered from a BAML `type` — the
     /// design-true typed entry (plan P7/D6): declare an args class, hand its `type`
-    /// here, and SAP-parse `ToolCall.args` back into it in your dispatcher.
+    /// here, and SAP-parse `ToolCall.args` back into it in your dispatcher
+    /// (`invoke_tool` below is the canonical form).
     ///
     ///   class WeatherArgs { city: string }
     ///   Tool.from_type("get_weather", "…", reflect.type_of<WeatherArgs>())
@@ -20,6 +26,25 @@ class Tool {
             name: name,
             description: description,
             parameters: root.schema.json_schema(params, false),
+            params_type: params,
+        }
+    }
+
+    /// D6 optional integrity check: do the raw `args` of a call SAP-parse
+    /// against this tool's STORED source type? `true` when there is nothing to
+    /// validate against (hand-constructed tool, no `params_type`). Use it in a
+    /// dispatcher to reject drifted calls before invoking the handler.
+    function validate_args(self, call: ToolCall) -> bool throws never {
+        match (self.params_type) {
+            null => true,
+            let t: type => {
+                root.sap.parse_type(t, call.args) catch (e) {
+                    _ => {
+                        return false;
+                    }
+                };
+                true
+            },
         }
     }
 }
@@ -43,6 +68,28 @@ class ToolResult {
 /// (the `Done`-shaped arm of the `step` loop).
 class ToolCalls {
     calls: ToolCall[],
+}
+
+/// D6, the CANONICAL inbound-args step: coerce a call's raw JSON args into the
+/// handler's declared type `A` via SAP and run the handler. A mismatch does NOT
+/// abort the loop — it returns an error `ToolResult` so the model can
+/// self-correct on the next turn (the design's explicit intent, previously
+/// hand-rolled inside each `Tool.from_type` dispatcher).
+///
+///   let r = invoke_tool<WeatherArgs>(call, (a: WeatherArgs) -> string { lookup(a.city) });
+function invoke_tool<A>(
+    call: ToolCall,
+    handler: (A) -> string throws never,
+) -> ToolResult throws never {
+    let args: A = root.sap.parse<A>(call.args) catch (e) {
+        _ => {
+            return ToolResult {
+                id: call.id,
+                output: "error: arguments did not match the tool's schema; fix them and retry",
+            };
+        },
+    };
+    ToolResult { id: call.id, output: handler(args) }
 }
 
 //baml:llm_capability

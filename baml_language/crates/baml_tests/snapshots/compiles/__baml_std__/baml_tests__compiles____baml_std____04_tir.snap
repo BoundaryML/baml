@@ -415,10 +415,28 @@ class baml.ai.Tool {
   name: string
   description: string
   parameters: string
+  params_type: type | null
 }
 function baml.ai.Tool.from_type(name: string, description: string, params: type) -> baml.ai.Tool throws baml.errors.Unsupported {
   { : baml.ai.Tool
-    Tool { name: name, description: description, parameters: root.schema.json_schema(params, false) } : baml.ai.Tool
+    Tool { name: name, description: description, parameters: root.schema.json_schema(params, false), params_type: params } : baml.ai.Tool
+  }
+}
+function baml.ai.Tool.validate_args(self: baml.ai.Tool, call: baml.ai.ToolCall) -> bool throws never {
+  { : true
+    match (self.params_type : type | null) : true
+      null =>
+        true : true
+      t: type =>
+        { : true
+          catch (root.sap.parse_type(t, call.args) : unknown) : unknown
+            catch (e)
+              _ =>
+                { : never
+                  return false : false
+                }
+          true : true
+        }
   }
 }
 class baml.ai.ToolCall {
@@ -432,6 +450,18 @@ class baml.ai.ToolResult {
 }
 class baml.ai.ToolCalls {
   calls: baml.ai.ToolCall[]
+}
+function baml.ai.invoke_tool<A>(call: baml.ai.ToolCall, handler: (A) -> string throws never) -> baml.ai.ToolResult throws never {
+  { : baml.ai.ToolResult
+    let args: A = : A
+      catch (root.sap.parse<T>(call.args) : A) : A
+        catch (e)
+          _ =>
+            { : never
+              return ToolResult { id: call.id, output: "error: arguments ..." } : baml.ai.ToolResult
+            }
+    ToolResult { id: call.id, output: handler(args) } : baml.ai.ToolResult
+  }
 }
 function baml.ai.Tools.run_tools<T>(self: baml.ai.Tools, prompt: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never) -> T throws baml.errors.ToolError | baml.errors.UnknownError {
   { : never
@@ -691,6 +721,7 @@ class baml.ai.Tool$stream {
   name: string | null
   description: string | null
   parameters: string | null
+  params_type: unknown | null
 }
 class baml.ai.ToolCall$stream {
   id: string | null
@@ -818,9 +849,9 @@ function baml.ai.ToolLoop$stream.call_messages_with<T, V, E2>(self: baml.ai.Tool
       _ =>
         throw root.errors.Unsupported { message: "ToolLoop.inner do..." } : never
   }
-  !! 9375..9385: type mismatch: expected baml.ai.Tool[], got baml.ai.Tool$stream[]
-  !! 10463..10477: `unknown` is not a function — it cannot be called
-  !! 10463..10477: `unknown` is not a function — it cannot be called
+  !! 11371..11381: type mismatch: expected baml.ai.Tool[], got baml.ai.Tool$stream[]
+  !! 12459..12473: `unknown` is not a function — it cannot be called
+  !! 12459..12473: `unknown` is not a function — it cannot be called
 }
 
 --- <builtin>/baml/ns_ai/combinators.baml ---
@@ -8719,6 +8750,12 @@ type baml.panics.Panic$stream = baml.panics.DivisionByZero$stream | baml.panics.
 function baml.sap.parse<T>(text: string) -> T throws baml.errors.LlmClient {
   { : T
     root.llm.__sap_parse_final<TFinal>(text, root.llm.StreamCache.new(reflect.type_of<T>(), reflect.type_of<T>())) : T
+  }
+}
+function baml.sap.parse_type(t: type, text: string) -> unknown throws baml.errors.LlmClient {
+  { : unknown
+    let cache: root.llm.StreamCache<unknown, unknown> = root.llm.StreamCache.new(t, t) : baml.llm.StreamCache<unknown, unknown>
+    root.llm.__sap_parse_final<TFinal>(text, cache) : unknown
   }
 }
 
