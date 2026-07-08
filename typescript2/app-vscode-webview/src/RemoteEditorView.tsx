@@ -17,7 +17,12 @@
  */
 
 import { useEffect, useMemo, useState } from 'react';
-import { MonacoEditor, createRemoteBackend, remoteUrlsFromLocation } from '@b/pkg-editor';
+import {
+  MonacoEditor,
+  createRemoteBackend,
+  remoteUrlsFromLocation,
+  withPlaygroundToken,
+} from '@b/pkg-editor';
 import '@b/pkg-editor/views-workbench.css';
 
 interface SourceFile {
@@ -54,7 +59,9 @@ const RemoteEditorView: React.FC<RemoteEditorViewProps> = ({ project, onUnsavedC
     setError(null);
     void (async () => {
       try {
-        const res = await fetch(`/api/source-files?project=${encodeURIComponent(project)}`);
+        const res = await fetch(
+          withPlaygroundToken(`/api/source-files?project=${encodeURIComponent(project)}`),
+        );
         if (!res.ok) throw new Error(`Failed to load source files (${res.status})`);
         const data = (await res.json()) as SourceFilesResponse;
         if (cancelled) return;

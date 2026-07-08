@@ -323,6 +323,8 @@ mod tests {
         assert!(help.contains("Usage: baml playground [OPTIONS]"), "{help}");
         assert!(help.contains("--file <PATH>"), "{help}");
         assert!(help.contains("--from <PATH>"), "{help}");
+        assert!(help.contains("--port <PORT>"), "{help}");
+        assert!(help.contains("--no-open"), "{help}");
     }
 
     /// `run -e` accepts hyphen-prefixed values without consuming run flags.

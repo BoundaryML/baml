@@ -682,6 +682,31 @@ check:
     baml run --list --from .
   details: "`baml check` compiles the project and reports compiler errors without running anything — the most direct way to validate. Other commands (`baml run`, `baml run --list`, `baml fmt`, `baml test`) also load and check the project before their main work. Use `baml run --list` when you additionally want the compiled function signatures."
 
+playground:
+  summary: "Serves the BAML playground web UI for a project and opens it in a browser."
+  syntax: |
+    baml playground                      # current project, first free port from 4265
+    baml playground --from ./my-app      # explicit project directory
+    baml playground --file ./one.baml    # standalone single file
+    baml playground --port 4265          # pin the port (errors if taken)
+    baml playground --no-open            # don't launch a browser (automatic in SSH/headless sessions)
+  details: |
+    `baml playground` starts a loopback-only web server hosting the playground UI
+    and an LSP backend for the loaded project. It binds the first free port from
+    4265 (scanning up to 4364) unless `--port` pins one, prints the URL to stdout,
+    and opens a browser unless `--no-open` is set or the session is headless
+    (SSH, or no display on Linux).
+
+    On a remote machine, forward the port and open the printed URL locally:
+
+      ssh -L 4265:localhost:4265 user@host
+
+    The printed URL carries a `?token=...` query parameter that authorizes the
+    session — open it verbatim and treat it as a per-session secret. API requests
+    without the token are rejected.
+
+    See also: `baml describe check`.
+
 spawn:
   summary: "Launches a concurrent task that runs in the background."
   syntax: |
