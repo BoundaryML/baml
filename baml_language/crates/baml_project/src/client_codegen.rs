@@ -505,12 +505,16 @@ fn resolve_type_expr(
 ) -> Option<cg::Ty> {
     let spanned = spanned?;
     let mut diagnostics = Vec::new();
-    let tir_ty = lower_type_expr::lower_type_expr_in_ns(
-        db,
+    let tir_ty = lower_type_expr::lower_type_expr(
         spanned,
-        package_items,
-        ns_context,
-        generic_params,
+        &lower_type_expr::ScopeCtx {
+            db,
+            package_items,
+            ns_context,
+            generic_params,
+            bounds: &lower_type_expr::TypeVarBoundsMap::default(),
+            self_ty: None,
+        },
         &mut diagnostics,
     );
     Some(convert_tir_to_codegen_ty(

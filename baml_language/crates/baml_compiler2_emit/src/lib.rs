@@ -68,7 +68,10 @@ fn build_interface_def(
     iface_tn: baml_type::TypeName,
     resolved: &ResolvedAliases,
 ) -> bex_vm_types::types::InterfaceDef {
-    use baml_compiler2_tir::{lower_type_expr::lower_type_expr_in_ns, ty};
+    use baml_compiler2_tir::{
+        lower_type_expr::{ScopeCtx, TypeVarBoundsMap, lower_type_expr},
+        ty,
+    };
     use baml_type::RuntimeInterface;
     use bex_vm_types::types::{InterfaceDef, InterfaceMethodDef};
 
@@ -89,7 +92,18 @@ fn build_interface_def(
     // follow-up.)
     let lower_rt = |expr: &TypeExpr, scope: &[Name]| -> Option<RuntimeTy> {
         let mut diags = Vec::new();
-        let ty = lower_type_expr_in_ns(db, expr, pkg_items, ns, scope, &mut diags);
+        let ty = lower_type_expr(
+            expr,
+            &ScopeCtx {
+                db,
+                package_items: pkg_items,
+                ns_context: ns,
+                generic_params: scope,
+                bounds: &TypeVarBoundsMap::default(),
+                self_ty: None,
+            },
+            &mut diags,
+        );
         baml_type::lower_to_runtime(&ty, resolved).ok()
     };
     // Lower an interface bound / `requires` target to its runtime form. A
@@ -97,9 +111,18 @@ fn build_interface_def(
     // a bound that mentions an unsubstituted `Self`/associated type (see `lower_rt`).
     let lower_iface = |expr: &TypeExpr, scope: &[Name]| -> Option<RuntimeInterface> {
         let mut diags = Vec::new();
-        let ty::Ty::Interface(qtn, args, assoc, _) =
-            lower_type_expr_in_ns(db, expr, pkg_items, ns, scope, &mut diags)
-        else {
+        let ty::Ty::Interface(qtn, args, assoc, _) = lower_type_expr(
+            expr,
+            &ScopeCtx {
+                db,
+                package_items: pkg_items,
+                ns_context: ns,
+                generic_params: scope,
+                bounds: &TypeVarBoundsMap::default(),
+                self_ty: None,
+            },
+            &mut diags,
+        ) else {
             return None;
         };
         let generics = args
@@ -246,7 +269,7 @@ fn build_packages(
     program_packages: &mut indexmap::IndexMap<Name, bex_vm_types::types::ProgramPackage>,
 ) {
     use baml_compiler2_tir::{
-        lower_type_expr::{lower_type_expr_in_ns, qualify_def},
+        lower_type_expr::{ScopeCtx, TypeVarBoundsMap, lower_type_expr, qualify_def},
         ty,
     };
     use bex_vm_types::{
@@ -422,7 +445,18 @@ fn build_packages(
         // (these targets were already validated upstream).
         let lower = |expr: &TypeExpr, generics: &[Name]| -> ty::Ty {
             let mut diags = Vec::new();
-            lower_type_expr_in_ns(db, expr, pkg_items, ns, generics, &mut diags)
+            lower_type_expr(
+                expr,
+                &ScopeCtx {
+                    db,
+                    package_items: pkg_items,
+                    ns_context: ns,
+                    generic_params: generics,
+                    bounds: &TypeVarBoundsMap::default(),
+                    self_ty: None,
+                },
+                &mut diags,
+            )
         };
         // Each generic param's interface bound set (`T extends A & B` → {A, B};
         // a param has at most one bound today). A bound is an interface, possibly
@@ -1017,8 +1051,19 @@ pub fn generate_project_bytecode_with_opt(
                         // erased-`Ty` (TypeVar→BuiltinUnknown) used by codegen and to
                         // the `TyTemplate` (TypeVar→TypeArgRef(N)) used by
                         // typed runtime walking.
-                        let tir_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
-                            db, te, pkg_items, ns, gen_params, &mut diags,
+                        let tir_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr(
+                            te,
+                            &baml_compiler2_tir::lower_type_expr::ScopeCtx {
+                                db,
+                                package_items: pkg_items,
+                                ns_context: ns,
+                                generic_params: gen_params,
+                                bounds:
+                                    &baml_compiler2_tir::lower_type_expr::TypeVarBoundsMap::default(
+                                    ),
+                                self_ty: None,
+                            },
+                            &mut diags,
                         );
                         let resolved_ty = cache.convert(&tir_ty);
                         let template = baml_compiler2_mir::tir2_to_template(
@@ -1856,16 +1901,23 @@ fn compute_function_metadata_from_item_tree(
     };
 
     let item_tree = file_item_tree(db, file);
-    let enclosing_impl_for_target = item_tree.free_impls.iter().find_map(|impl_id| {
+    // The out-of-body `implement … for …` block whose method list contains this
+    // function, if any (mirrors MIR's `enclosing_free_impl`). Yields the block so
+    // both its `for_target` (for `Self` substitution) and its declared
+    // generics/bounds are recoverable — replacing the removed
+    // `item_tree.implements_for`, which exposed those as flat fields.
+    let enclosing_free_impl = item_tree.free_impls.iter().find_map(|impl_id| {
         let block = item_tree.impls.get(impl_id)?;
-        if !block.methods.contains(&func_id) {
-            return None;
-        }
-        match &block.subject {
+        block
+            .methods
+            .contains(&func_id)
+            .then_some((*impl_id, block))
+    });
+    let enclosing_impl_for_target =
+        enclosing_free_impl.and_then(|(_, block)| match &block.subject {
             baml_compiler2_hir::item_tree::ImplSubject::Free { for_target, .. } => Some(for_target),
             baml_compiler2_hir::item_tree::ImplSubject::InClass { .. } => None,
-        }
-    });
+        });
     let enclosing_class = item_tree
         .classes
         .values()
@@ -1875,7 +1927,7 @@ fn compute_function_metadata_from_item_tree(
         .values()
         .find(|iface_data| iface_data.default_methods.contains(&func_id));
     let self_replacement = enclosing_impl_for_target
-        .map(|for_target| for_target.clone())
+        .cloned()
         .or_else(|| {
             enclosing_class.map(|class_data| {
                 type_expr_for_name_with_generic_args(
@@ -1897,11 +1949,21 @@ fn compute_function_metadata_from_item_tree(
     // params are in scope inside the method signature. Mirror
     // `MirLowerer::enclosing_generic_params`: enclosing params come first, then
     // function-level params.
-    let (scoped_generic_param_names, scoped_generic_bound_exprs) = if let Some(imp) = enclosing_impl
+    let (scoped_generic_param_names, scoped_generic_bound_exprs) = if let Some((_, block)) =
+        enclosing_free_impl
     {
-        let mut names = imp.generic_params.clone();
+        // The impl block's declared generics as `(names, each's single optional
+        // bound)` — the flat form the removed `implements_for` exposed directly
+        // (mirrors MIR's `free_impl_generics`). Only the first `&`-bound per param
+        // is kept, matching the legacy shape.
+        let (mut names, mut bounds): (Vec<Name>, Vec<Option<TypeExpr>>) = match &block.subject {
+            baml_compiler2_hir::item_tree::ImplSubject::Free { generics, .. } => (
+                generics.iter().map(|g| g.name.clone()).collect(),
+                generics.iter().map(|g| g.bounds.first().cloned()).collect(),
+            ),
+            baml_compiler2_hir::item_tree::ImplSubject::InClass { .. } => (Vec::new(), Vec::new()),
+        };
         names.extend(func_data.generic_params.iter().cloned());
-        let mut bounds = imp.generic_param_bounds.clone();
         bounds.extend(func_data.generic_param_bounds.iter().cloned());
         (names, bounds)
     } else if let Some(iface_data) = enclosing_interface {
@@ -1923,28 +1985,40 @@ fn compute_function_metadata_from_item_tree(
     };
     let enclosing_generics = scoped_generic_param_names.clone();
 
-    // A method declared inside an interface resolves its associated types
-    // (`Item`/`Error`) and `Self` against the rigid `Self` type variable, the
-    // same way the method body does (`infer_scope_types`). Build those bindings
-    // once so the signature keeps associated-type references as faithful
-    // `Self.<name>` projections; a bare `lower_type_expr_in_ns` would erase each
-    // one to `Ty::Unknown`, which then trips the runtime lowering boundary.
-    // Empty for non-interface methods (the `self_replacement` path below
-    // handles class/impl receivers).
-    let interface_signature_bindings: rustc_hash::FxHashMap<Name, baml_compiler2_tir::ty::Ty> =
-        match enclosing_interface.and_then(|iface_data| {
-            item_tree
-                .interfaces
+    // Every type variable in scope for this signature, keyed by name, with its
+    // interface bounds. `function_in_scope_generic_param_bounds` covers the
+    // enclosing class/interface plus the function's own params; an out-of-body
+    // impl's own generics are added on top. Threaded into every `lower_type_expr`
+    // below so a `T.member` projection resolves through `T`'s declared bound
+    // *during* lowering — the modern replacement for the removed post-hoc
+    // `AssociatedProjectionResolver::resolve_deep` pass.
+    let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(db, file, func_id);
+    let mut scope_bounds =
+        baml_compiler2_tir::lower_type_expr::function_in_scope_generic_param_bounds(db, func_loc)
+            .clone();
+    if let Some((impl_id, _)) = enclosing_free_impl {
+        let impl_loc = baml_compiler2_hir::loc::ImplLoc::new(db, file, impl_id);
+        scope_bounds.extend(
+            baml_compiler2_tir::lower_type_expr::impl_generic_param_bounds(db, impl_loc)
                 .iter()
-                .find(|(_, data)| data.default_methods.contains(&func_id))
-                .map(|(iface_id, _)| {
-                    (
-                        baml_compiler2_hir::loc::InterfaceLoc::new(db, file, *iface_id),
-                        iface_data,
-                    )
-                })
-        }) {
-            Some((iface_loc, iface_data)) => {
+                .map(|(name, conjunction)| (name.clone(), conjunction.clone())),
+        );
+    }
+
+    // A method declared inside an interface resolves its associated types
+    // (`Item`/`Error`) and `Self` against the rigid `Self` type variable, the same
+    // way the method body does. Binding each associated-type name to the projection
+    // `Self.<name>` (and `Self` to its rigid type variable) keeps a bare `Item` in a
+    // signature as a faithful `Self.Item` projection rather than an unresolved type.
+    // Empty for non-interface methods (the `self_replacement` path below handles
+    // class/impl receivers). Only the interface's own associated types are bound;
+    // names inherited through `requires` are not (that ambiguity-aware resolution
+    // lived in the removed `interface_self_projection_bindings`).
+    let self_var =
+        || baml_compiler2_tir::ty::Ty::TypeVar(Name::new("Self"), baml_type::TyAttr::default());
+    let interface_signature_bindings: rustc_hash::FxHashMap<Name, baml_compiler2_tir::ty::Ty> =
+        match enclosing_interface {
+            Some(iface_data) => {
                 let mut bindings: rustc_hash::FxHashMap<Name, baml_compiler2_tir::ty::Ty> =
                     enclosing_generics
                         .iter()
@@ -1958,119 +2032,94 @@ fn compute_function_metadata_from_item_tree(
                             )
                         })
                         .collect();
-                bindings.extend(
-                    baml_compiler2_tir::inference::interface_self_projection_bindings(
-                        db,
-                        iface_loc,
-                        iface_data,
-                        pkg_items,
-                        &pkg_info.namespace_path,
-                    ),
-                );
+                bindings.insert(Name::new("Self"), self_var());
+                for assoc in &iface_data.associated_types {
+                    bindings.insert(
+                        assoc.name.clone(),
+                        baml_compiler2_tir::ty::Ty::AssociatedTypeProjection {
+                            base: Box::new(self_var()),
+                            interface: None,
+                            member: assoc.name.clone(),
+                            attr: baml_type::TyAttr::default(),
+                        },
+                    );
+                }
                 bindings
             }
             None => rustc_hash::FxHashMap::default(),
         };
 
-    let lower_tir_type = |te: &TypeExpr| -> baml_compiler2_tir::ty::Ty {
-        let mut diags = Vec::new();
+    // Lower a signature type expression against this method's scope, recording any
+    // diagnostics into `diags`. For an interface method the associated-type / `Self`
+    // bindings are applied by lowering with their names in scope (so `Item` lowers
+    // to `TypeVar(Item)`) and then substituting; for every other method `Self` is
+    // first replaced by the concrete receiver type. In both cases `scope_bounds`
+    // drives projection resolution. Namespace-relative resolution (e.g. `MyLorem`
+    // in a signature under `ns_lorem/`) uses the file's namespace so a non-root-ns
+    // class does not erase to `unknown`.
+    let lower_scoped = |te: &TypeExpr,
+                        diags: &mut Vec<baml_compiler2_tir::infer_context::TirTypeError>|
+     -> baml_compiler2_tir::ty::Ty {
         if enclosing_interface.is_some() {
-            // Interface method: lower with the `Self`/associated-type bindings so
-            // `Item`/`Error`/`Self` resolve to projections and type variables
-            // rather than `Ty::Unknown`.
-            return baml_compiler2_tir::generics::lower_type_expr_with_generics(
-                db,
+            let generic_params: Vec<Name> = interface_signature_bindings.keys().cloned().collect();
+            let lowered = baml_compiler2_tir::lower_type_expr::lower_type_expr(
                 te,
-                pkg_items,
-                &pkg_info.namespace_path,
+                &baml_compiler2_tir::lower_type_expr::ScopeCtx {
+                    db,
+                    package_items: pkg_items,
+                    ns_context: &pkg_info.namespace_path,
+                    generic_params: &generic_params,
+                    bounds: &scope_bounds,
+                    self_ty: None,
+                },
+                diags,
+            );
+            return baml_compiler2_tir::generics::substitute_ty(
+                &lowered,
                 &interface_signature_bindings,
-                &mut diags,
             );
         }
-        // Use `lower_type_expr_in_ns` so unqualified references (e.g. `MyLorem`
-        // in a function signature under `ns_lorem/`) resolve against the
-        // defining file's namespace before falling back to the package root.
-        // `lower_type_expr` passes `&[]` as the ns context, which would lose
-        // parameter types to `Ty::Unknown` → runtime `unknown` for any
-        // non-root-ns class — surfacing as "expected instance, got map" in the
-        // runtime because the coercion layer can't see the declared type.
-        let resolved_te = if let Some(replacement) = &self_replacement {
-            baml_compiler2_tir::lower_type_expr::substitute_self_in(te, replacement)
-        } else {
-            te.clone()
+        let resolved_te = match &self_replacement {
+            Some(replacement) => baml_compiler2_tir::lower_type_expr::substitute_paths_in(
+                te,
+                &std::collections::HashMap::from([(Name::new("Self"), replacement.clone())]),
+            ),
+            None => te.clone(),
         };
-        baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
-            db,
+        baml_compiler2_tir::lower_type_expr::lower_type_expr(
             &resolved_te,
-            pkg_items,
-            &pkg_info.namespace_path,
-            &enclosing_generics,
-            &mut diags,
+            &baml_compiler2_tir::lower_type_expr::ScopeCtx {
+                db,
+                package_items: pkg_items,
+                ns_context: &pkg_info.namespace_path,
+                generic_params: &enclosing_generics,
+                bounds: &scope_bounds,
+                self_ty: None,
+            },
+            diags,
         )
     };
 
-    let raw_generic_param_bounds: HashMap<Name, baml_compiler2_tir::ty::Ty> =
+    // Each scoped generic parameter's bound as a displayable `Ty`, kept only when it
+    // lowers cleanly (a bound that fails to resolve is dropped rather than shown as
+    // `unknown`). Rendered into `display_type_params` below.
+    let generic_param_bounds: HashMap<Name, baml_compiler2_tir::ty::Ty> =
         scoped_generic_param_names
             .iter()
             .enumerate()
             .filter_map(|(idx, name)| {
                 let bound_te = scoped_generic_bound_exprs.get(idx)?.as_ref()?;
                 let mut diags = Vec::new();
-                // Lower bounds with the same `Self`/associated-type bindings as
-                // the signature (mirroring `lower_tir_type`) so an interface
-                // default-method bound like `U extends Self.Item` resolves to a
-                // projection instead of erasing `Self` to `Ty::Unknown` — which
-                // the `diags.is_empty()` gate below would then silently drop from
-                // the emitted metadata.
-                let bound_ty = if enclosing_interface.is_some() {
-                    baml_compiler2_tir::generics::lower_type_expr_with_generics(
-                        db,
-                        bound_te,
-                        pkg_items,
-                        &pkg_info.namespace_path,
-                        &interface_signature_bindings,
-                        &mut diags,
-                    )
-                } else {
-                    let resolved_te = if let Some(replacement) = &self_replacement {
-                        baml_compiler2_tir::lower_type_expr::substitute_self_in(
-                            bound_te,
-                            replacement,
-                        )
-                    } else {
-                        bound_te.clone()
-                    };
-                    baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
-                        db,
-                        &resolved_te,
-                        pkg_items,
-                        &pkg_info.namespace_path,
-                        &enclosing_generics,
-                        &mut diags,
-                    )
-                };
+                let bound_ty = lower_scoped(bound_te, &mut diags);
                 diags.is_empty().then(|| (name.clone(), bound_ty))
             })
             .collect();
-    let raw_bound_resolver =
-        baml_compiler2_tir::associated_projection::AssociatedProjectionResolver::new(
-            db,
-            &cache.aliases,
-            &raw_generic_param_bounds,
-        );
-    let generic_param_bounds: HashMap<Name, baml_compiler2_tir::ty::Ty> = raw_generic_param_bounds
-        .iter()
-        .map(|(name, bound)| (name.clone(), raw_bound_resolver.resolve_deep(bound)))
-        .collect();
 
+    // Projection resolution is folded into `lower_scoped` (via `scope_bounds`), so
+    // no separate resolve pass is needed.
     let resolve_display_tir = |te: &TypeExpr| -> baml_compiler2_tir::ty::Ty {
-        let tir_ty = lower_tir_type(te);
-        baml_compiler2_tir::associated_projection::AssociatedProjectionResolver::new(
-            db,
-            &cache.aliases,
-            &generic_param_bounds,
-        )
-        .resolve_deep(&tir_ty)
+        let mut diags = Vec::new();
+        lower_scoped(te, &mut diags)
     };
 
     let runtime_from_display_tir = |tir_ty: &baml_compiler2_tir::ty::Ty| -> baml_type::RuntimeTy {
