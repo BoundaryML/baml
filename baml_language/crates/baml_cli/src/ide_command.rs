@@ -2,7 +2,6 @@ use std::{
     env,
     ffi::OsString,
     fs,
-    io::Write,
     path::{Path, PathBuf},
     process::Command,
 };
@@ -77,11 +76,10 @@ impl IdeInstallArgs {
             );
         }
 
-        writeln!(
-            std::io::stdout(),
-            "installed BAML IDE extension from {}",
-            vsix.display()
-        )?;
+        #[allow(clippy::print_stdout)]
+        {
+            println!("installed BAML IDE extension from {}", vsix.display());
+        }
         Ok(ExitCode::Success)
     }
 
