@@ -169,3 +169,55 @@ test "path error: leaf does not coerce" {
     // .person is an object; asking for int at the leaf must throw, not misparse.
     assert.is_true(_path_err(".person").starts_with("leaf does not coerce"))
 }
+
+// ── path_or (the coalescing sibling) ─────────────────────────────────────────
+
+function path_or_hit() -> int {
+    baml.json.path_or<int>(_doc(), ".usage.input_tokens", -1)
+}
+
+function path_or_missing() -> int {
+    baml.json.path_or<int>(_doc(), ".usage.nonexistent", -1)
+}
+
+function path_or_mismatch() -> string {
+    // .person is an object; the string coercion fails -> default.
+    baml.json.path_or<string>(_doc(), ".person", "none")
+}
+
+function path_or_bad_selector() -> string {
+    baml.json.path_or<string>(_doc(), "not-a-selector", "fallback")
+}
+
+function path_or_nested_hit() -> string {
+    baml.json.path_or<string>(_doc(), ".choices[1].message.content", "")
+}
+
+test "path_or: present value wins over the default" {
+    assert.is_true(baml.deep_equals(path_or_hit(), 12))
+}
+
+test "path_or: missing field yields the default, never throws" {
+    assert.is_true(baml.deep_equals(path_or_missing(), -1))
+}
+
+test "path_or: uncoercible leaf yields the default" {
+    assert.equal(path_or_mismatch(), "none")
+}
+
+test "path_or: malformed selector yields the default" {
+    assert.equal(path_or_bad_selector(), "fallback")
+}
+
+test "path_or: nested selector hit" {
+    assert.equal(path_or_nested_hit(), "second")
+}
+
+function path_or_inferred() -> string {
+    // T infers from the default argument — no explicit type args needed.
+    baml.json.path_or(_doc(), ".choices[0].message.content", "")
+}
+
+test "path_or: type argument infers from the default" {
+    assert.equal(path_or_inferred(), "hi")
+}

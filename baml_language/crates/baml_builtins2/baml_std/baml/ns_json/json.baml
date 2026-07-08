@@ -217,6 +217,21 @@ function _path_index(current: json, idx: int, selector: string) -> json throws J
 /// index, malformed selector, or a leaf that does not coerce to `T`. For whole envelopes
 /// (or `type`-tagged arrays that need filtering) prefer typed wire classes decoded via
 /// `baml.sap.parse<Wire>` with `@alias` fields.
+/// The coalescing sibling of [`path`]: a missing field, shape mismatch,
+/// out-of-bounds index, malformed selector, or uncoercible leaf yields
+/// `default` instead of throwing — the "field with default" idiom every
+/// ecosystem grows (Python's `d.get(k, default)`, serde's `.unwrap_or(...)`,
+/// jq's `// default`, gjson's zero-value gets). Use `path` when a miss is a
+/// bug to surface; use `path_or` for best-effort reads of noisy wire JSON:
+///
+///   baml.json.path_or(tc, ".function.name", "")     // T inferred from the default
+///   baml.json.path_or<int>(j, ".usage.input_tokens", 0)
+function path_or<T>(j: json, selector: string, default: T) -> T throws never {
+    path<T>(j, selector) catch (e) {
+        _ => default,
+    }
+}
+
 function path<T>(j: json, selector: string) -> T throws JsonPathError {
     if (!(selector.starts_with(".") || selector.starts_with("["))) {
         throw JsonPathError {

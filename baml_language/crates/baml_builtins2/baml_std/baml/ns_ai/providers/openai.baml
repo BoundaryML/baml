@@ -373,13 +373,14 @@ class OpenAi {
                     t.messages.push({ "role": "assistant", "tool_calls": tcs });
                     let calls: root.ai.ToolCall[] = [];
                     for (let tc in tcs) {
-                        let fn = root.json.field(tc, "function");
+                        // Best-effort reads of noisy wire JSON: a missing piece
+                        // degrades to "" rather than failing the turn.
                         calls
                             .push(
                                 root.ai.ToolCall {
-                                    id: _openai_json_str(root.json.field(tc, "id")),
-                                    name: _openai_json_str(root.json.field(fn, "name")),
-                                    args: _openai_json_str(root.json.field(fn, "arguments")),
+                                    id: root.json.path_or(tc, ".id", ""),
+                                    name: root.json.path_or(tc, ".function.name", ""),
+                                    args: root.json.path_or(tc, ".function.arguments", ""),
                                 },
                             );
                     }
@@ -634,11 +635,4 @@ class OpenAiToolTranscript {
     base_url: string?,
     tools_json: string,
     messages: json[],
-}
-
-function _openai_json_str(j: json) -> string throws never {
-    match (j) {
-        let s: string => s,
-        _ => "",
-    }
 }

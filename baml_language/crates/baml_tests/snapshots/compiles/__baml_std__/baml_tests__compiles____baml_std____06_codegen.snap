@@ -9821,19 +9821,19 @@ function baml.ai.OpenAi$stream.root.ai.Tools.step(self: baml.ai.OpenAi$stream, t
   L7:
     load_var msg
     load_field .content
-    store_var _109
-    load_var _109
-    store_var _108
-    load_var _109
+    store_var _107
+    load_var _107
+    store_var _106
+    load_var _107
     load_const null
     cmp_op ==
     pop_jump_if_false L8
     load_const ""
-    store_var _108
+    store_var _106
 
   L8:
     load_type #0
-    load_var _108
+    load_var _106
     call baml.sap.parse
     jump L32
     load_var e
@@ -10009,27 +10009,27 @@ function baml.ai.OpenAi$stream.root.ai.Tools.step(self: baml.ai.OpenAi$stream, t
 
   L30:
     load_var _63
-    store_var_load_var tc
-    load_const "function"
-    call baml.json.field
-    store_var fn
+    store_var tc
+    load_type string
     load_var tc
-    load_const "id"
-    call baml.json.field
-    call baml.ai._openai_json_str
-    store_var _97
-    load_var fn
-    load_const "name"
-    call baml.json.field
-    call baml.ai._openai_json_str
-    store_var _100
-    load_var fn
-    load_const "arguments"
-    call baml.json.field
-    call baml.ai._openai_json_str
-    store_var _103
-    load_var2 19 24
-    load_var2 25 26
+    load_const ".id"
+    load_const ""
+    call baml.json.path_or
+    store_var _95
+    load_type string
+    load_var tc
+    load_const ".function.name"
+    load_const ""
+    call baml.json.path_or
+    store_var _98
+    load_type string
+    load_var tc
+    load_const ".function.arguments"
+    load_const ""
+    call baml.json.path_or
+    store_var _101
+    load_var2 19 23
+    load_var2 24 25
     init_instance baml.ai.ToolCall .id, .name, .args
     call baml.Array.push
     pop 1
@@ -12043,19 +12043,19 @@ function baml.ai.OpenAi.root.ai.Tools.step(self: baml.ai.OpenAi, t: baml.ai.Open
   L7:
     load_var msg
     load_field .content
-    store_var _109
-    load_var _109
-    store_var _108
-    load_var _109
+    store_var _107
+    load_var _107
+    store_var _106
+    load_var _107
     load_const null
     cmp_op ==
     pop_jump_if_false L8
     load_const ""
-    store_var _108
+    store_var _106
 
   L8:
     load_type #0
-    load_var _108
+    load_var _106
     call baml.sap.parse
     jump L32
     load_var e
@@ -12231,27 +12231,27 @@ function baml.ai.OpenAi.root.ai.Tools.step(self: baml.ai.OpenAi, t: baml.ai.Open
 
   L30:
     load_var _63
-    store_var_load_var tc
-    load_const "function"
-    call baml.json.field
-    store_var fn
+    store_var tc
+    load_type string
     load_var tc
-    load_const "id"
-    call baml.json.field
-    call baml.ai._openai_json_str
-    store_var _97
-    load_var fn
-    load_const "name"
-    call baml.json.field
-    call baml.ai._openai_json_str
-    store_var _100
-    load_var fn
-    load_const "arguments"
-    call baml.json.field
-    call baml.ai._openai_json_str
-    store_var _103
-    load_var2 19 24
-    load_var2 25 26
+    load_const ".id"
+    load_const ""
+    call baml.json.path_or
+    store_var _95
+    load_type string
+    load_var tc
+    load_const ".function.name"
+    load_const ""
+    call baml.json.path_or
+    store_var _98
+    load_type string
+    load_var tc
+    load_const ".function.arguments"
+    load_const ""
+    call baml.json.path_or
+    store_var _101
+    load_var2 19 23
+    load_var2 24 25
     init_instance baml.ai.ToolCall .id, .name, .args
     call baml.Array.push
     pop 1
@@ -13911,10 +13911,11 @@ function baml.ai.OpenAiRealtime$stream.Realtime.run(self: baml.ai.OpenAiRealtime
     throw
 
   L11:
+    load_type string
     load_var j
-    load_const "type"
-    call baml.json.field
-    call baml.ai._realtime_json_str
+    load_const ".type"
+    load_const ""
+    call baml.json.path_or
     store_var etype
     load_var etype
     load_const "response.output_text.delta"
@@ -13932,10 +13933,11 @@ function baml.ai.OpenAiRealtime$stream.Realtime.run(self: baml.ai.OpenAiRealtime
     pop_jump_if_false L14
     load_var acc
     store_var _68
+    load_type string
     load_var j
-    load_const "delta"
-    call baml.json.field
-    call baml.ai._realtime_json_str
+    load_const ".delta"
+    load_const ""
+    call baml.json.path_or
     store_var _69
     load_var2 21 22
     bin_op +
@@ -14184,10 +14186,11 @@ function baml.ai.OpenAiRealtime.Realtime.run(self: baml.ai.OpenAiRealtime, promp
     throw
 
   L11:
+    load_type string
     load_var j
-    load_const "type"
-    call baml.json.field
-    call baml.ai._realtime_json_str
+    load_const ".type"
+    load_const ""
+    call baml.json.path_or
     store_var etype
     load_var etype
     load_const "response.output_text.delta"
@@ -14205,10 +14208,11 @@ function baml.ai.OpenAiRealtime.Realtime.run(self: baml.ai.OpenAiRealtime, promp
     pop_jump_if_false L14
     load_var acc
     store_var _68
+    load_type string
     load_var j
-    load_const "delta"
-    call baml.json.field
-    call baml.ai._realtime_json_str
+    load_const ".delta"
+    load_const ""
+    call baml.json.path_or
     store_var _69
     load_var2 21 22
     bin_op +
@@ -22067,23 +22071,6 @@ function baml.ai._messages_text(messages: baml.ai.ChatMessage[]) -> string {
     unreachable
 }
 
-function baml.ai._openai_json_str(j: baml.json.json) -> string {
-    load_var j
-    is_type string
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_const ""
-    jump L2
-
-  L1:
-    load_var j
-
-  L2:
-    return
-}
-
 function baml.ai._openai_responses_envelope(raw_text: string) -> baml.ai.OpenAiRespEnvelopeWire | null {
     load_type baml.ai.OpenAiRespEnvelopeWire
     load_var raw_text
@@ -22456,23 +22443,6 @@ function baml.ai._openai_responses_output_text(envelope: baml.ai.OpenAiRespEnvel
 
   L49:
     unreachable
-}
-
-function baml.ai._realtime_json_str(j: baml.json.json) -> string {
-    load_var j
-    is_type string
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_const ""
-    jump L2
-
-  L1:
-    load_var j
-
-  L2:
-    return
 }
 
 function baml.ai.any_of(preds: ((baml.ai.LoopInfo) -> bool throws never)[]) -> (baml.ai.LoopInfo) -> bool throws never {
@@ -29602,6 +29572,19 @@ function baml.json.path(j: baml.json.json, selector: string) -> T {
 
   L63:
     unreachable
+}
+
+function baml.json.path_or(j: baml.json.json, selector: string, default: T) -> T {
+    load_type #0
+    load_var2 1 2
+    call baml.json.path
+    jump L0
+    load_var e
+    throw_if_panic
+    load_var default
+
+  L0:
+    return
 }
 
 function baml.json.serialize(v: T) -> string {

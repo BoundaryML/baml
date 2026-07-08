@@ -13583,34 +13583,6 @@ fn baml.ai.OpenAi._messages_for(self: baml.ai.OpenAi, messages: baml.ai.ChatMess
     }
 }
 
-fn baml.ai._openai_json_str(j: baml.json.json) -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: bool
-    let _3: string // s
-
-    bb0: {
-        _2 = is_type(copy _1, string);
-        branch copy _2 -> [bb2, bb1];
-    }
-
-    bb1: {
-        _0 = const "";
-        goto -> bb3;
-    }
-
-    bb2: {
-        _3 = copy _1;
-        _0 = copy _3;
-        goto -> bb3;
-    }
-
-    bb3: {
-        return;
-    }
-}
-
 fn baml.ai.OpenAi._request_body(self: baml.ai.OpenAi, messages: baml.ai.ChatMessage[], stream: bool) -> string {
     // Locals:
     let _0: string // _0 // return
@@ -15444,32 +15416,30 @@ fn baml.ai.OpenAi.root.ai.Tools.step(self: null, t: baml.ai.OpenAiToolTranscript
     let _90: bool
     let _91: baml.json.json
     let _92: baml.json.json // tc
-    let _93: baml.json.json // fn
-    let _94: baml.json.json
-    let _95: int
-    let _96: baml.ai.ToolCall
-    let _97: string
-    let _98: baml.json.json
+    let _93: int
+    let _94: baml.ai.ToolCall
+    let _95: string | ""
+    let _96: baml.json.json
+    let _97: type
+    let _98: string | ""
     let _99: baml.json.json
-    let _100: string
-    let _101: baml.json.json
+    let _100: type
+    let _101: string | ""
     let _102: baml.json.json
-    let _103: string
-    let _104: baml.json.json
-    let _105: baml.json.json
-    let _106: baml.ai.ToolCall[]
-    let _107: unknown // e
-    let _108: string
-    let _109: string | null
-    let _110: bool
-    let _111: type
-    let _112: baml.errors.UnknownError
-    let _113: string | null
-    let _114: string[]
+    let _103: type
+    let _104: baml.ai.ToolCall[]
+    let _105: unknown // e
+    let _106: string
+    let _107: string | null
+    let _108: bool
+    let _109: type
+    let _110: baml.errors.UnknownError
+    let _111: string | null
+    let _112: string[]
 
     bb0: {
         _5 = copy _2.3;
-        _3 = call const fn baml.json.parse(copy _5) -> [bb1, unwind: bb51];
+        _3 = call const fn baml.json.parse(copy _5) -> [bb1, unwind: bb47];
     }
 
     bb1: {
@@ -15500,21 +15470,21 @@ fn baml.ai.OpenAi.root.ai.Tools.step(self: null, t: baml.ai.OpenAiToolTranscript
     bb4: {
         _13 = baml.http.Request { const "POST", copy _14, copy _18, copy _21 };
         _25 = copy _13;
-        _23 = call const fn baml.http.send(copy _25, const <omitted>) -> [bb5, unwind: bb53];
+        _23 = call const fn baml.http.send(copy _25, const <omitted>) -> [bb5, unwind: bb49];
     }
 
     bb5: {
-        _29 = sys_op const fn baml.http.Response.text(copy _23) -> bb6 unwind bb55;
+        _29 = sys_op const fn baml.http.Response.text(copy _23) -> bb6 unwind bb51;
     }
 
     bb6: {
         _37 = copy _29;
-        _36 = call const fn baml.json.parse(copy _37) -> [bb7, unwind: bb57];
+        _36 = call const fn baml.json.parse(copy _37) -> [bb7, unwind: bb53];
     }
 
     bb7: {
         _38 = load_type(baml.ai.OpenAiToolRespWire);
-        _34 = call const fn baml.json.from_json<copy _38>(copy _36) -> [bb8, unwind: bb57];
+        _34 = call const fn baml.json.from_json<copy _38>(copy _36) -> [bb8, unwind: bb53];
     }
 
     bb8: {
@@ -15548,20 +15518,20 @@ fn baml.ai.OpenAi.root.ai.Tools.step(self: null, t: baml.ai.OpenAiToolTranscript
     }
 
     bb13: {
-        _109 = copy _42.0;
-        _108 = copy _109;
-        _110 = copy _109 == const null;
-        branch copy _110 -> [bb14, bb15];
+        _107 = copy _42.0;
+        _106 = copy _107;
+        _108 = copy _107 == const null;
+        branch copy _108 -> [bb14, bb15];
     }
 
     bb14: {
-        _108 = const "";
+        _106 = const "";
         goto -> bb15;
     }
 
     bb15: {
-        _111 = load_type(#0);
-        _0 = call const fn baml.sap.parse<copy _111>(copy _108) -> [bb50, unwind: bb59];
+        _109 = load_type(#0);
+        _0 = call const fn baml.sap.parse<copy _109>(copy _106) -> [bb46, unwind: bb55];
     }
 
     bb16: {
@@ -15696,112 +15666,98 @@ fn baml.ai.OpenAi.root.ai.Tools.step(self: null, t: baml.ai.OpenAiToolTranscript
 
     bb40: {
         _90 = is_type(copy _63, baml.iter.Done);
-        branch copy _90 -> [bb49, bb41];
+        branch copy _90 -> [bb45, bb41];
     }
 
     bb41: {
         _91 = copy _63;
         fresh_cell(_92);
         _92 = copy _91;
-        _94 = copy _92;
-        _93 = call const fn baml.json.field(copy _94, const "function") -> [bb42];
+        _96 = copy _92;
+        _97 = load_type(string);
+        _95 = call const fn baml.json.path_or<copy _97>(copy _96, const ".id", const "") -> [bb42];
     }
 
     bb42: {
         _99 = copy _92;
-        _98 = call const fn baml.json.field(copy _99, const "id") -> [bb43];
+        _100 = load_type(string);
+        _98 = call const fn baml.json.path_or<copy _100>(copy _99, const ".function.name", const "") -> [bb43];
     }
 
     bb43: {
-        _97 = call const fn baml.ai._openai_json_str(copy _98) -> [bb44];
+        _102 = copy _92;
+        _103 = load_type(string);
+        _101 = call const fn baml.json.path_or<copy _103>(copy _102, const ".function.arguments", const "") -> [bb44];
     }
 
     bb44: {
-        _102 = copy _93;
-        _101 = call const fn baml.json.field(copy _102, const "name") -> [bb45];
+        _94 = baml.ai.ToolCall { copy _95, copy _98, copy _101 };
+        _93 = call const fn baml.Array.push(copy _59, copy _94) -> [bb19];
     }
 
     bb45: {
-        _100 = call const fn baml.ai._openai_json_str(copy _101) -> [bb46];
+        _104 = copy _59;
+        _0 = baml.ai.ToolCalls { copy _104 };
+        goto -> bb46;
     }
 
     bb46: {
-        _105 = copy _93;
-        _104 = call const fn baml.json.field(copy _105, const "arguments") -> [bb47];
-    }
-
-    bb47: {
-        _103 = call const fn baml.ai._openai_json_str(copy _104) -> [bb48];
-    }
-
-    bb48: {
-        _96 = baml.ai.ToolCall { copy _97, copy _100, copy _103 };
-        _95 = call const fn baml.Array.push(copy _59, copy _96) -> [bb19];
-    }
-
-    bb49: {
-        _106 = copy _59;
-        _0 = baml.ai.ToolCalls { copy _106 };
-        goto -> bb50;
-    }
-
-    bb50: {
         return;
     }
 
-    bb51: {
-        throw_if_panic copy _4 -> bb52;
+    bb47: {
+        throw_if_panic copy _4 -> bb48;
     }
 
-    bb52: {
+    bb48: {
         _7 = copy _4;
         _8 = [const "tools_json invalid"]: string[];
         _6 = baml.errors.UnknownError { copy _7, copy _8 };
         throw copy _6;
     }
 
-    bb53: {
-        throw_if_panic copy _24 -> bb54;
+    bb49: {
+        throw_if_panic copy _24 -> bb50;
     }
 
-    bb54: {
+    bb50: {
         _27 = copy _24;
         _28 = [const "tools send failed"]: string[];
         _26 = baml.errors.UnknownError { copy _27, copy _28 };
         throw copy _26;
     }
 
-    bb55: {
-        throw_if_panic copy _30 -> bb56;
+    bb51: {
+        throw_if_panic copy _30 -> bb52;
     }
 
-    bb56: {
+    bb52: {
         _32 = copy _30;
         _33 = [const "tools body read failed"]: string[];
         _31 = baml.errors.UnknownError { copy _32, copy _33 };
         throw copy _31;
     }
 
-    bb57: {
-        throw_if_panic copy _35 -> bb58;
+    bb53: {
+        throw_if_panic copy _35 -> bb54;
     }
 
-    bb58: {
+    bb54: {
         _40 = copy _29;
         _41 = [const "tools parse failed"]: string[];
         _39 = baml.errors.UnknownError { copy _40, copy _41 };
         throw copy _39;
     }
 
-    bb59: {
-        throw_if_panic copy _107 -> bb60;
+    bb55: {
+        throw_if_panic copy _105 -> bb56;
     }
 
-    bb60: {
-        _113 = copy _42.0;
-        _114 = [const "tools final parse failed"]: string[];
-        _112 = baml.errors.UnknownError { copy _113, copy _114 };
-        throw copy _112;
+    bb56: {
+        _111 = copy _42.0;
+        _112 = [const "tools final parse failed"]: string[];
+        _110 = baml.errors.UnknownError { copy _111, copy _112 };
+        throw copy _110;
     }
 }
 
@@ -17037,34 +16993,6 @@ fn baml.ai.OpenAiCompatible.root.ai.Streaming.stream_messages(self: null, messag
     }
 }
 
-fn baml.ai._realtime_json_str(j: baml.json.json) -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: bool
-    let _3: string // s
-
-    bb0: {
-        _2 = is_type(copy _1, string);
-        branch copy _2 -> [bb2, bb1];
-    }
-
-    bb1: {
-        _0 = const "";
-        goto -> bb3;
-    }
-
-    bb2: {
-        _3 = copy _1;
-        _0 = copy _3;
-        goto -> bb3;
-    }
-
-    bb3: {
-        return;
-    }
-}
-
 fn baml.ai.OpenAiRealtime.LiveControl.cancel(self: null, io: baml.ai.Channel) -> null {
     // Locals:
     let _0: null // _0 // return
@@ -17143,15 +17071,15 @@ fn baml.ai.OpenAiRealtime.Realtime.run(self: null, prompt: string, io: baml.ai.C
     let _60: string[]
     let _61: string // etype
     let _62: baml.json.json
-    let _63: baml.json.json
+    let _63: type
     let _64: bool
     let _65: bool
     let _66: string
     let _67: string
     let _68: string
-    let _69: string
+    let _69: ""
     let _70: baml.json.json
-    let _71: baml.json.json
+    let _71: type
     let _72: bool
     let _73: bool
     let _74: string
@@ -17184,7 +17112,7 @@ fn baml.ai.OpenAiRealtime.Realtime.run(self: null, prompt: string, io: baml.ai.C
         _12 = copy _1.2;
         _11 = const "Bearer " + copy _12;
         _10 = { const "Authorization": copy _11 }: map<string, string>;
-        _4 = sys_op const fn baml.ws.connect(copy _6, copy _10) -> bb3 unwind bb35;
+        _4 = sys_op const fn baml.ws.connect(copy _6, copy _10) -> bb3 unwind bb33;
     }
 
     bb3: {
@@ -17197,7 +17125,7 @@ fn baml.ai.OpenAiRealtime.Realtime.run(self: null, prompt: string, io: baml.ai.C
 
     bb4: {
         _23 = copy _16;
-        _21 = sys_op const fn baml.ws.WsStream.send(copy _4, copy _23) -> bb5 unwind bb37;
+        _21 = sys_op const fn baml.ws.WsStream.send(copy _4, copy _23) -> bb5 unwind bb35;
     }
 
     bb5: {
@@ -17209,7 +17137,7 @@ fn baml.ai.OpenAiRealtime.Realtime.run(self: null, prompt: string, io: baml.ai.C
 
     bb6: {
         _33 = copy _27;
-        _31 = sys_op const fn baml.ws.WsStream.send(copy _4, copy _33) -> bb7 unwind bb39;
+        _31 = sys_op const fn baml.ws.WsStream.send(copy _4, copy _33) -> bb7 unwind bb37;
     }
 
     bb7: {
@@ -17239,7 +17167,7 @@ fn baml.ai.OpenAiRealtime.Realtime.run(self: null, prompt: string, io: baml.ai.C
     }
 
     bb12: {
-        _41 = sys_op const fn baml.ws.WsStream.next(copy _4) -> bb13 unwind bb41;
+        _41 = sys_op const fn baml.ws.WsStream.next(copy _4) -> bb13 unwind bb39;
     }
 
     bb13: {
@@ -17260,162 +17188,156 @@ fn baml.ai.OpenAiRealtime.Realtime.run(self: null, prompt: string, io: baml.ai.C
 
     bb16: {
         _51 = copy _46;
-        _49 = virtual_call send as baml.ai.Channel(copy _3, copy _51) -> [bb17, unwind: bb43];
+        _49 = virtual_call send as baml.ai.Channel(copy _3, copy _51) -> [bb17, unwind: bb41];
     }
 
     bb17: {
         _57 = copy _46;
-        _55 = call const fn baml.json.parse(copy _57) -> [bb18, unwind: bb45];
+        _55 = call const fn baml.json.parse(copy _57) -> [bb18, unwind: bb43];
     }
 
     bb18: {
-        _63 = copy _55;
-        _62 = call const fn baml.json.field(copy _63, const "type") -> [bb19];
+        _62 = copy _55;
+        _63 = load_type(string);
+        _61 = call const fn baml.json.path_or<copy _63>(copy _62, const ".type", const "") -> [bb19];
     }
 
     bb19: {
-        _61 = call const fn baml.ai._realtime_json_str(copy _62) -> [bb20];
+        _66 = copy _61;
+        _65 = copy _66 == const "response.output_text.delta";
+        _64 = short_circuit(||) copy _65 -> [eval: bb20, join: bb21];
     }
 
     bb20: {
-        _66 = copy _61;
-        _65 = copy _66 == const "response.output_text.delta";
-        _64 = short_circuit(||) copy _65 -> [eval: bb21, join: bb22];
+        _67 = copy _61;
+        _64 = copy _67 == const "response.text.delta";
+        goto -> bb21;
     }
 
     bb21: {
-        _67 = copy _61;
-        _64 = copy _67 == const "response.text.delta";
-        goto -> bb22;
+        branch copy _64 -> [bb22, bb24];
     }
 
     bb22: {
-        branch copy _64 -> [bb23, bb26];
+        _68 = copy _37;
+        _70 = copy _55;
+        _71 = load_type(string);
+        _69 = call const fn baml.json.path_or<copy _71>(copy _70, const ".delta", const "") -> [bb23];
     }
 
     bb23: {
-        _68 = copy _37;
-        _71 = copy _55;
-        _70 = call const fn baml.json.field(copy _71, const "delta") -> [bb24];
+        _37 = copy _68 + copy _69;
+        goto -> bb24;
     }
 
     bb24: {
-        _69 = call const fn baml.ai._realtime_json_str(copy _70) -> [bb25];
+        _74 = copy _61;
+        _73 = copy _74 == const "error";
+        _72 = short_circuit(||) copy _73 -> [eval: bb25, join: bb26];
     }
 
     bb25: {
-        _37 = copy _68 + copy _69;
+        _75 = copy _61;
+        _72 = copy _75 == const "response.failed";
         goto -> bb26;
     }
 
     bb26: {
-        _74 = copy _61;
-        _73 = copy _74 == const "error";
-        _72 = short_circuit(||) copy _73 -> [eval: bb27, join: bb28];
+        branch copy _72 -> [bb31, bb27];
     }
 
     bb27: {
-        _75 = copy _61;
-        _72 = copy _75 == const "response.failed";
-        goto -> bb28;
+        _82 = copy _61;
+        _81 = copy _82 == const "response.done";
+        _80 = short_circuit(||) copy _81 -> [eval: bb28, join: bb29];
     }
 
     bb28: {
-        branch copy _72 -> [bb33, bb29];
+        _83 = copy _61;
+        _80 = copy _83 == const "response.completed";
+        goto -> bb29;
     }
 
     bb29: {
-        _82 = copy _61;
-        _81 = copy _82 == const "response.done";
-        _80 = short_circuit(||) copy _81 -> [eval: bb30, join: bb31];
+        branch copy _80 -> [bb30, bb8];
     }
 
     bb30: {
-        _83 = copy _61;
-        _80 = copy _83 == const "response.completed";
-        goto -> bb31;
-    }
-
-    bb31: {
-        branch copy _80 -> [bb32, bb8];
-    }
-
-    bb32: {
         _38 = const true;
         goto -> bb8;
     }
 
-    bb33: {
-        _76 = sys_op const fn baml.ws.WsStream.close(copy _4) -> bb34;
+    bb31: {
+        _76 = sys_op const fn baml.ws.WsStream.close(copy _4) -> bb32;
     }
 
-    bb34: {
+    bb32: {
         _78 = copy _46;
         _79 = [const "realtime: error event"]: string[];
         _77 = baml.errors.UnknownError { copy _78, copy _79 };
         throw copy _77;
     }
 
-    bb35: {
-        throw_if_panic copy _5 -> bb36;
+    bb33: {
+        throw_if_panic copy _5 -> bb34;
     }
 
-    bb36: {
+    bb34: {
         _14 = copy _5;
         _15 = [const "realtime: connect failed"]: string[];
         _13 = baml.errors.UnknownError { copy _14, copy _15 };
         throw copy _13;
     }
 
-    bb37: {
-        throw_if_panic copy _22 -> bb38;
+    bb35: {
+        throw_if_panic copy _22 -> bb36;
     }
 
-    bb38: {
+    bb36: {
         _25 = copy _22;
         _26 = [const "realtime: send item failed"]: string[];
         _24 = baml.errors.UnknownError { copy _25, copy _26 };
         throw copy _24;
     }
 
-    bb39: {
-        throw_if_panic copy _32 -> bb40;
+    bb37: {
+        throw_if_panic copy _32 -> bb38;
     }
 
-    bb40: {
+    bb38: {
         _35 = copy _32;
         _36 = [const "realtime: response.create failed"]: string[];
         _34 = baml.errors.UnknownError { copy _35, copy _36 };
         throw copy _34;
     }
 
-    bb41: {
-        throw_if_panic copy _42 -> bb42;
+    bb39: {
+        throw_if_panic copy _42 -> bb40;
     }
 
-    bb42: {
+    bb40: {
         _44 = copy _42;
         _45 = [const "realtime: recv failed"]: string[];
         _43 = baml.errors.UnknownError { copy _44, copy _45 };
         throw copy _43;
     }
 
-    bb43: {
-        throw_if_panic copy _50 -> bb44;
+    bb41: {
+        throw_if_panic copy _50 -> bb42;
     }
 
-    bb44: {
+    bb42: {
         _53 = copy _50;
         _54 = [const "realtime: channel send failed"]: string[];
         _52 = baml.errors.UnknownError { copy _53, copy _54 };
         throw copy _52;
     }
 
-    bb45: {
-        throw_if_panic copy _56 -> bb46;
+    bb43: {
+        throw_if_panic copy _56 -> bb44;
     }
 
-    bb46: {
+    bb44: {
         _59 = copy _46;
         _60 = [const "realtime: event not JSON"]: string[];
         _58 = baml.errors.UnknownError { copy _59, copy _60 };
@@ -28454,6 +28376,34 @@ fn baml.json.path(j: baml.json.json, selector: string) -> T {
     bb92: {
         _122 = baml.json.JsonPathError { const "leaf does not coerce to the requested type", copy _2 };
         throw copy _122;
+    }
+}
+
+fn baml.json.path_or(j: baml.json.json, selector: string, default: T) -> T {
+    // Locals:
+    let _0: T // _0 // return
+    let _1: baml.json.json // j // param
+    let _2: string // selector // param
+    let _3: T // default // param
+    let _4: unknown // e
+    let _5: type
+
+    bb0: {
+        _5 = load_type(#0);
+        _0 = call const fn baml.json.path<copy _5>(copy _1, copy _2) -> [bb3, unwind: bb1];
+    }
+
+    bb1: {
+        throw_if_panic copy _4 -> bb2;
+    }
+
+    bb2: {
+        _0 = copy _3;
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
     }
 }
 

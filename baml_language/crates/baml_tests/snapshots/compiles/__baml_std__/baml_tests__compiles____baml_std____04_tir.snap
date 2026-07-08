@@ -3934,8 +3934,7 @@ function baml.ai.OpenAi.step<T>(self: baml.ai.OpenAi, t: baml.ai.OpenAiToolTrans
           let calls: root.ai.ToolCall[] = [] : baml.ai.ToolCall[]
           for tc in tcs
             { : void
-              let fn = root.json.field(tc, "function") : baml.json.json
-              calls.push(root.ai.ToolCall { id: _openai_json_str(root.json.field(tc, "id")), name: _openai_json_str(root.json.field(fn, "name")), args: _openai_json_str(root.json.field(fn, "arguments")) }) : int
+              calls.push(root.ai.ToolCall { id: root.json.path_or(tc, ".id", ""), name: root.json.path_or(tc, ".function.name", ""), args: root.json.path_or(tc, ".function.arguments", "") }) : int
             }
           root.ai.ToolCalls { calls: calls } : baml.ai.ToolCalls
         }
@@ -3975,15 +3974,6 @@ class baml.ai.OpenAiToolTranscript {
   base_url: string | null
   tools_json: string
   messages: baml.json.json[]
-}
-function baml.ai._openai_json_str(j: baml.json.json) -> string throws never {
-  { : string | ""
-    match (j : baml.json.json) : string | ""
-      s: string =>
-        s : string
-      _ =>
-        "" : ""
-  }
 }
 class baml.ai.OpenAiHttpError$stream {
   status: int | null
@@ -4333,8 +4323,7 @@ function baml.ai.OpenAi$stream.step<T>(self: baml.ai.OpenAi$stream, t: baml.ai.O
           let calls: root.ai.ToolCall[] = [] : baml.ai.ToolCall[]
           for tc in tcs
             { : void
-              let fn = root.json.field(tc, "function") : baml.json.json
-              calls.push(root.ai.ToolCall { id: _openai_json_str(root.json.field(tc, "id")), name: _openai_json_str(root.json.field(fn, "name")), args: _openai_json_str(root.json.field(fn, "arguments")) }) : int
+              calls.push(root.ai.ToolCall { id: root.json.path_or(tc, ".id", ""), name: root.json.path_or(tc, ".function.name", ""), args: root.json.path_or(tc, ".function.arguments", "") }) : int
             }
           root.ai.ToolCalls { calls: calls } : baml.ai.ToolCalls
         }
@@ -4626,10 +4615,10 @@ function baml.ai.OpenAiRealtime.run(self: baml.ai.OpenAiRealtime, prompt: string
                 { : never
                   throw root.errors.UnknownError { data: raw, message: ["realtime: event n..."] } : baml.errors.UnknownError
                 }
-        let etype = _realtime_json_str(root.json.field(j, "type")) : string
+        let etype = root.json.path_or<T>(j, ".type", "") : "" -> string
         if (etype == "response.output_t..." || etype == "response.text.delta" : bool) : void
           { : void
-            acc = acc + _realtime_json_str(root.json.field(j, "delta")) : string
+            acc = acc + root.json.path_or(j, ".delta", "") : string
           }
         if (etype == "error" || etype == "response.failed" : bool) : void
           { : never
@@ -4653,15 +4642,6 @@ function baml.ai.OpenAiRealtime.cancel(self: baml.ai.OpenAiRealtime, io: baml.ai
 function baml.ai.OpenAiRealtime.truncate(self: baml.ai.OpenAiRealtime, io: baml.ai.Channel, played_ms: int) -> null throws baml.errors.RealtimeError {
   { : never
     throw root.errors.Unsupported { message: "realtime transpor..." } : baml.errors.Unsupported
-  }
-}
-function baml.ai._realtime_json_str(j: baml.json.json) -> string throws never {
-  { : string | ""
-    match (j : baml.json.json) : string | ""
-      s: string =>
-        s : string
-      _ =>
-        "" : ""
   }
 }
 class baml.ai.OpenAiRealtime$stream {
@@ -4725,10 +4705,10 @@ function baml.ai.OpenAiRealtime$stream.run(self: baml.ai.OpenAiRealtime$stream, 
                 { : never
                   throw root.errors.UnknownError { data: raw, message: ["realtime: event n..."] } : baml.errors.UnknownError
                 }
-        let etype = _realtime_json_str(root.json.field(j, "type")) : string
+        let etype = root.json.path_or<T>(j, ".type", "") : "" -> string
         if (etype == "response.output_t..." || etype == "response.text.delta" : bool) : void
           { : void
-            acc = acc + _realtime_json_str(root.json.field(j, "delta")) : string
+            acc = acc + root.json.path_or(j, ".delta", "") : string
           }
         if (etype == "error" || etype == "response.failed" : bool) : void
           { : never
@@ -8003,6 +7983,14 @@ function baml.json._path_index(current: baml.json.json, idx: int, selector: stri
         { : never
           throw JsonPathError { message: "index [" + idx.to_string() + "] on a non-array", selector: selector } : baml.json.JsonPathError
         }
+  }
+}
+function baml.json.path_or<T>(j: baml.json.json, selector: string, default: T) -> T throws never {
+  { : T
+    catch (path<T>(j, selector) : T) : T
+      catch (e)
+        _ =>
+          default : T
   }
 }
 function baml.json.path<T>(j: baml.json.json, selector: string) -> T throws baml.json.JsonPathError {

@@ -95,11 +95,11 @@ class OpenAiRealtime {
                         throw root.errors.UnknownError { data: raw, message: ["realtime: event not JSON"] }
                     },
                 };
-                let etype = _realtime_json_str(root.json.field(j, "type"));
+                let etype = root.json.path_or(j, ".type", "");
                 // Text deltas: GA emits `response.output_text.delta`; older/beta builds
                 // used `response.text.delta`. Field is `delta` in both.
                 if (etype == "response.output_text.delta" || etype == "response.text.delta") {
-                    acc = acc + _realtime_json_str(root.json.field(j, "delta"));
+                    acc = acc + root.json.path_or(j, ".delta", "");
                 }
                 if (etype == "error" || etype == "response.failed") {
                     ws.close();
@@ -129,16 +129,5 @@ class OpenAiRealtime {
         ) -> null throws root.errors.RealtimeError {
             throw root.errors.Unsupported { message: "realtime transport not yet wired" }
         }
-    }
-}
-
-// ── private helpers ──
-
-/// Extract a JSON value as a string, or `""` if it is not a string. Mirrors
-/// `_openai_json_str` — a `throws never` accessor for one-off event-field reads.
-function _realtime_json_str(j: json) -> string throws never {
-    match (j) {
-        let s: string => s,
-        _ => "",
     }
 }

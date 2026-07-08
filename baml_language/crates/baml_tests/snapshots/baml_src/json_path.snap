@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/tests/baml_src.rs
-assertion_line: 140
 ---
 function json_path.$init_test_ns_json_path_json_path(registry: testing.TestCollector) -> null {
     load_var registry
@@ -102,6 +101,42 @@ function json_path.$init_test_ns_json_path_json_path(registry: testing.TestColle
     load_var registry
     load_const "path error: leaf does not coerce"
     make_closure .<lambda($init_test_ns_json_path_json_path, 16)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "path_or: present value wins over the default"
+    make_closure .<lambda($init_test_ns_json_path_json_path, 17)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "path_or: missing field yields the default, never throws"
+    make_closure .<lambda($init_test_ns_json_path_json_path, 18)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "path_or: uncoercible leaf yields the default"
+    make_closure .<lambda($init_test_ns_json_path_json_path, 19)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "path_or: malformed selector yields the default"
+    make_closure .<lambda($init_test_ns_json_path_json_path, 20)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "path_or: nested selector hit"
+    make_closure .<lambda($init_test_ns_json_path_json_path, 21)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "path_or: type argument infers from the default"
+    make_closure .<lambda($init_test_ns_json_path_json_path, 22)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
@@ -312,6 +347,74 @@ function json_path.path_nested_array_string() -> string {
     load_const "ERR"
 
   L0:
+    return
+}
+
+function json_path.path_or_bad_selector() -> string {
+    call user.json_path._doc
+    store_var _1
+    load_type string
+    load_var _1
+    load_const "not-a-selector"
+    load_const "fallback"
+    call baml.json.path_or
+    return
+}
+
+function json_path.path_or_hit() -> int {
+    call user.json_path._doc
+    store_var _1
+    load_type int
+    load_var _1
+    load_const ".usage.input_tokens"
+    load_const 1
+    unary_op -
+    call baml.json.path_or
+    return
+}
+
+function json_path.path_or_inferred() -> string {
+    call user.json_path._doc
+    store_var _1
+    load_type string
+    load_var _1
+    load_const ".choices[0].message.content"
+    load_const ""
+    call baml.json.path_or
+    return
+}
+
+function json_path.path_or_mismatch() -> string {
+    call user.json_path._doc
+    store_var _1
+    load_type string
+    load_var _1
+    load_const ".person"
+    load_const "none"
+    call baml.json.path_or
+    return
+}
+
+function json_path.path_or_missing() -> int {
+    call user.json_path._doc
+    store_var _1
+    load_type int
+    load_var _1
+    load_const ".usage.nonexistent"
+    load_const 1
+    unary_op -
+    call baml.json.path_or
+    return
+}
+
+function json_path.path_or_nested_hit() -> string {
+    call user.json_path._doc
+    store_var _1
+    load_type string
+    load_var _1
+    load_const ".choices[1].message.content"
+    load_const ""
+    call baml.json.path_or
     return
 }
 

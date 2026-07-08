@@ -431,3 +431,12 @@ against the STORED type. `baml.sap.parse_type(t: type, raw)` shipped as pure BAM
 `StreamCache.new(t, t)` — no new host surface (divergence from the plan's "net-new"
 assumption, in the good direction). Caveat recorded in gotchas: SAP's single-string-field
 passthrough means validation only discriminates on multi-field arg shapes.
+
+## `baml.json.path_or<T>` — the coalescing accessor (user proposal)
+
+`path_or<T>(j, selector, default) -> T throws never`: the "field with default" idiom
+(Python `d.get(k, default)`, serde `.unwrap_or`, jq `// default`) as `path`'s sibling —
+`path` stays strict for callers who want misses surfaced. The private string-coalescing
+helpers it obsoleted (`_openai_json_str`, `_realtime_json_str`) are deleted; the OpenAI
+tools decode and realtime event reads now use `path_or` directly (`.function.name`
+nested selectors replaced the two-step `field` chains). 5 unit tests in `ns_json_path`.
