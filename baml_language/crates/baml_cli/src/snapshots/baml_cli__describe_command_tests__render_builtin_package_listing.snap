@@ -175,9 +175,9 @@ function         baml.llm.prompt_template_for     <builtin>/baml/ns_llm/llm.baml
 function         baml.llm.render_prompt           <builtin>/baml/ns_llm/llm.baml:48
 function         baml.llm.build_request           <builtin>/baml/ns_llm/llm.baml:57
 function         baml.llm.build_request_stream    <builtin>/baml/ns_llm/llm.baml:66
-function         baml.llm.parse                   <builtin>/baml/ns_llm/llm.baml:80
-function         baml.llm.call_llm_function       <builtin>/baml/ns_llm/llm.baml:88
-function         baml.llm.stream_llm_function     <builtin>/baml/ns_llm/llm.baml:112
+function         baml.llm.parse                   <builtin>/baml/ns_llm/llm.baml:89
+function         baml.llm.call_llm_function       <builtin>/baml/ns_llm/llm.baml:99
+function         baml.llm.stream_llm_function     <builtin>/baml/ns_llm/llm.baml:123
 class            baml.llm.PromptAst               <builtin>/baml/ns_llm/llm_types.baml:1
 class            baml.llm.OutputFormat            <builtin>/baml/ns_llm/llm_types.baml:9
 class            baml.llm.Role                    <builtin>/baml/ns_llm/llm_types.baml:17

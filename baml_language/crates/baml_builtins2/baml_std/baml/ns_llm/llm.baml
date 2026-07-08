@@ -77,9 +77,20 @@ function build_request_stream(client: Client, function_name: string, args: map<s
 /// Used by LLM function `$parse` companions, which pass
 /// `<STREAM_EXPANDED, ORIGINAL>` as explicit type args.
 /// Only parses full responses, not partials.
-function parse<TStream, TFinal>(json: string) -> TFinal {
+///
+/// `$parse` is a purely local, network-free parse of an existing JSON string
+/// into the function's return type, so a schema mismatch (e.g. an out-of-enum
+/// value) is a *parse* failure — not an LLM/client failure. The underlying
+/// schema-aligned parser reports failures as `LlmClient` because it is shared
+/// with the network and streaming paths (whose `LlmClient` typing must stay
+/// intact); remap it to the parse-flavored `ParseError` here so the surfaced
+/// error name matches the operation and the documented
+/// `catch (baml.errors.ParseError)` pattern is reachable (no E0063).
+function parse<TStream, TFinal>(json: string) -> TFinal throws root.errors.ParseError {
   let cache: StreamCache<TStream, TFinal> = StreamCache.new(reflect.type_of<TStream>(), reflect.type_of<TFinal>());
-  __sap_parse_final<TStream, TFinal>(json, cache)
+  __sap_parse_final<TStream, TFinal>(json, cache) catch (_) {
+    root.errors.LlmClient { message } => throw root.errors.ParseError { message: message },
+  }
 }
 
 /// UNSAFE: do not call from user code

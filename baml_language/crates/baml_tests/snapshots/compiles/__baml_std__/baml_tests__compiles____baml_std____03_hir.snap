@@ -904,7 +904,7 @@ function baml.llm.call_llm_function(client: Client, function_name: string, args:
   { let jinja_string = match (prompt_closure) { null => get_jinja_template(function_name), _ => "" }; let context = baml.llm.ExecutionContext { jinja_string: jinja_string, args: args, function_name: function_name, prompt_closure: prompt_closure }; let result: T = client.execute_oneshot(context, 0) } result
 }
 function baml.llm.parse(json: string) -> TFinal  [expr] {
-  { let cache: StreamCache<TStream, TFinal> = StreamCache.new(reflect.type_of(), reflect.type_of()) } __sap_parse_final(json, cache)
+  { let cache: StreamCache<TStream, TFinal> = StreamCache.new(reflect.type_of(), reflect.type_of()) } __sap_parse_final(json, cache) catch (_) { root.errors.LlmClient { message: message } => throw root.errors.ParseError { message: message } }
 }
 function baml.llm.prompt_template_for(function_name: string, prompt_closure: (Context) -> PromptAst?) -> string  [expr] {
   {  } match (prompt_closure) { null => get_jinja_template(function_name), _ => "" }
