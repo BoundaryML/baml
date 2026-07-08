@@ -553,6 +553,11 @@ impl BexExternalValue {
             BexExternalValue::Variant { variant_name, .. } => variant_name.clone(),
             BexExternalValue::Union { value, .. } => value.render_readable(),
             BexExternalValue::Uint8Array(bytes) => format!("<bytes:{}>", bytes.len()),
+            // A rendered prompt handle: render its readable text instead of the
+            // `Adt(PromptAst(Message { .. }))` Rust `Debug` dump (B-627). Nested
+            // inside a `baml.llm.PromptAst { _data: .. }` instance, this makes the
+            // CLI's value print readable.
+            BexExternalValue::Adt(BexExternalAdt::PromptAst(ast)) => ast.render_text(),
             _ => format!("{self:?}"),
         }
     }
@@ -837,6 +842,39 @@ mod render_readable_tests {
         );
         // The bug: `Debug` leaks Rust-internal shapes. The readable form must not.
         for leak in ["Instance {", "QualifiedTypeName", "TyAttr", "Class("] {
+            assert!(!rendered.contains(leak), "leaked `{leak}` in: {rendered}");
+        }
+    }
+
+    /// A rendered-prompt handle (`baml.llm.PromptAst`'s `_data`) renders as its
+    /// readable prompt text, not the `Adt(PromptAst(Message { .. }))` Rust
+    /// `Debug` dump. This is the B-627 repro for the CLI value print.
+    #[test]
+    #[allow(clippy::default_trait_access)]
+    fn prompt_ast_renders_readable_text_not_debug() {
+        use std::sync::Arc;
+
+        use baml_builtins2::{PromptAst, PromptAstSimple};
+
+        // `metadata` is `serde_json::Value` (not a direct dep of this crate); its
+        // `Default` is `Value::Null`, so use `Default::default()` to avoid naming it.
+        let message = |role: &str, text: &str| {
+            Arc::new(PromptAst::Message {
+                role: role.to_string(),
+                content: Arc::new(PromptAstSimple::String(text.to_string())),
+                metadata: Default::default(),
+            })
+        };
+        let ast = Arc::new(PromptAst::Vec(vec![
+            message("system", "You are helpful."),
+            message("user", "Hi!"),
+        ]));
+        let value = BexExternalValue::Adt(BexExternalAdt::PromptAst(ast));
+
+        let rendered = value.render_readable();
+        assert_eq!(rendered, "[system]\nYou are helpful.\n\n[user]\nHi!");
+        // The bug: the opaque handle used to dump Rust `Debug`. Must not leak.
+        for leak in ["Adt(", "PromptAst(", "Message {", "String(", "Null"] {
             assert!(!rendered.contains(leak), "leaked `{leak}` in: {rendered}");
         }
     }
