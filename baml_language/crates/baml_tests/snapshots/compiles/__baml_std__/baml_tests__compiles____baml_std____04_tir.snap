@@ -837,6 +837,18 @@ function baml.env.get_or_panic(key: string) -> string throws never {
     get(key) ?? root.sys.panic("env var not found: " + key) : string
   }
 }
+function baml.env.get_or_panic_lenient(key: string, lenient: bool) -> string throws never {
+  { : string
+    if (lenient : bool) : string
+      { : string
+        get(key) ?? "" : string
+      }
+    else
+      { : string
+        get_or_panic(key) : string
+      }
+  }
+}
 
 --- <builtin>/baml/ns_errors/error_context.baml ---
 class baml.errors.ErrorContext {
@@ -2210,7 +2222,7 @@ function baml.llm.prompt_template_for(function_name: string, prompt_closure: ((b
 function baml.llm.render_prompt(client: baml.llm.Client, function_name: string, args: map<string, unknown>, prompt_closure: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null = null) -> baml.llm.PromptAst throws never {
   { : baml.llm.PromptAst
     let return_type = get_return_type(function_name) : type
-    let primitive_client = client.to_primitive_client() : baml.llm.PrimitiveClient
+    let primitive_client = client.to_primitive_client(lenient = true) : baml.llm.PrimitiveClient
     let template = prompt_template_for(function_name, prompt_closure) : string
     primitive_client.render_specialized_prompt(template, args, return_type, prompt_closure) : baml.llm.PromptAst
   }
@@ -2283,8 +2295,17 @@ class baml.llm.PlannerState$stream {
 }
 
 --- <builtin>/baml/ns_llm/llm_types.baml ---
+class baml.llm.PromptMessage {
+  role: string
+  content: string
+}
 class baml.llm.PromptAst {
   _data: $rust_type
+}
+function baml.llm.PromptAst.to_string(self: baml.llm.PromptAst) -> string throws never {
+  { : string
+    self.text() : string
+  }
 }
 class baml.llm.OutputFormat {
   _data: $rust_type
@@ -2319,7 +2340,7 @@ class baml.llm.Client {
   retry: baml.llm.RetryPolicy | null
   counter: int
 }
-function baml.llm.Client.to_primitive_client(self: baml.llm.Client) -> baml.llm.PrimitiveClient throws never {
+function baml.llm.Client.to_primitive_client(self: baml.llm.Client, lenient: bool = false) -> baml.llm.PrimitiveClient throws never {
   { : baml.llm.PrimitiveClient
     if (self.name.includes("/") : bool) : baml.llm.PrimitiveClient
       { : baml.llm.PrimitiveClient
@@ -2327,7 +2348,7 @@ function baml.llm.Client.to_primitive_client(self: baml.llm.Client) -> baml.llm.
       }
     else
       { : baml.llm.PrimitiveClient
-        self.get_constructor()() : baml.llm.PrimitiveClient
+        self.get_constructor()(lenient) : baml.llm.PrimitiveClient
       }
   }
 }
@@ -2792,8 +2813,19 @@ function baml.llm.prompt(body: (role: (string) -> baml.llm.Role throws never, ct
 }
 lambda baml.llm.prompt {
 }
+class baml.llm.PromptMessage$stream {
+  role: string | null
+  content: string | null
+}
 class baml.llm.PromptAst$stream {
   _data: $rust_type
+}
+function baml.llm.PromptAst$stream.to_string(self: baml.llm.PromptAst$stream) -> string throws never {
+  { : unknown
+    self.text() : unknown
+  }
+  !! 1808..1812: type `baml.llm.PromptAst$stream` has no member `text`
+  !! 1789..1794: declared throws is `never`, but this function may also throw `unknown`
 }
 class baml.llm.OutputFormat$stream {
   _data: $rust_type

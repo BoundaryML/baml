@@ -1,5 +1,45 @@
+/// A single chat message in a rendered prompt: a chat role and its text
+/// content. Produced by `PromptAst.messages()` for offline inspection of a
+/// rendered prompt (e.g. what `<Fn>$render_prompt` produced).
+class PromptMessage {
+  /// The chat role, e.g. "system", "user", "assistant". Empty for role-less
+  /// content — a prompt with no `${role(...)}` markers that was never
+  /// specialized to a client's default role.
+  role string
+  /// The message's rendered text content. Media parts render as a
+  /// human-readable placeholder (e.g. `image::url(...)`).
+  content string
+}
+
+/// The rendered prompt produced by `<Fn>$render_prompt` and the built-in
+/// `prompt` tag: a structural chat-message tree. Use the accessors below to read
+/// it as text or structured messages. To inspect the fully-resolved provider
+/// request instead (URL, headers, body, remapped roles), use
+/// `<Fn>$build_request`.
 class PromptAst {
   _data $rust_type
+
+  /// The rendered prompt as readable plain text: each chat message rendered as a
+  /// `[role]` header line followed by its content, messages separated by a blank
+  /// line (role-less content has no header). This is also what
+  /// `string.from(prompt)`, string interpolation, and `to_string` yield.
+  function text(self) -> string throws never {
+    $rust_io_function
+  }
+
+  /// The rendered prompt as an ordered list of chat messages (role + text
+  /// content). The primary structured accessor for offline prompt inspection.
+  function messages(self) -> PromptMessage[] throws never {
+    $rust_io_function
+  }
+
+  /// Render readably instead of dumping the opaque handle: `string.from(prompt)`,
+  /// string interpolation, and `to_string` all yield `text()`.
+  implements baml.ToString {
+    function to_string(self) -> string throws never {
+      self.text()
+    }
+  }
 }
 
 /// BEP-049 §10 (M5b.2). Opaque handle to a prebuilt output-format schema (the
@@ -98,17 +138,25 @@ class Client {
   retry RetryPolicy?
   counter int
 
-  function to_primitive_client(self) -> PrimitiveClient {
+  /// Build the primitive client this client resolves to.
+  ///
+  /// `lenient` controls how the generated constructor reads `env.X` client
+  /// options: when true, a missing variable yields "" instead of panicking.
+  /// Only the offline `render_prompt` path passes `true` — it needs the
+  /// client's provider/role metadata to render a prompt but never its
+  /// credentials. Every network path keeps the default `false`, so a missing
+  /// `api_key` env var still panics for `$call` / `$build_request`.
+  function to_primitive_client(self, lenient: bool = false) -> PrimitiveClient {
     if (self.name.includes("/")) {
       from_shorthand(self.name)
     } else {
-      self.get_constructor()()
+      self.get_constructor()(lenient)
     }
   }
 
   function get_constructor(
     self
-  ) -> (() -> PrimitiveClient throws root.errors.InvalidArgument) throws never {
+  ) -> ((bool) -> PrimitiveClient throws root.errors.InvalidArgument) throws never {
     $rust_io_function
   }
 

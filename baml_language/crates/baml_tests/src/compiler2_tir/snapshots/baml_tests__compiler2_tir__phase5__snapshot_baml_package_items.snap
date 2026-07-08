@@ -77,6 +77,7 @@ namespace baml.csv:
 namespace baml.env:
   function get
   function get_or_panic
+  function get_or_panic_lenient
 namespace baml.errors:
   class AccessError { methods: [] }
   class CompilationError { methods: [] }
@@ -197,7 +198,8 @@ namespace baml.llm:
   class PlannerState { methods: [rr_local_offset, rr_pick_index] }
   class PrimitiveClient { methods: [render_prompt, specialize_prompt, render_specialized_prompt, build_request, build_request_stream, new_stream_accumulator, validate_finish_reason, parse] }
   class PrimitiveClientOptions { methods: [] }
-  class PromptAst { methods: [] }
+  class PromptAst { methods: [text, messages, to_string] }
+  class PromptMessage { methods: [] }
   class RetryPolicy { methods: [] }
   class Role { methods: [] }
   class Stream<TStream, TFinal> { methods: [next, final] }

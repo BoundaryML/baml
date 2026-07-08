@@ -421,6 +421,9 @@ function baml.env.get(key: string) -> string?  [builtin]
 function baml.env.get_or_panic(key: string) -> string  [expr] {
   {  } get(key) NullCoalesce root.sys.panic("env var not found: " Add key)
 }
+function baml.env.get_or_panic_lenient(key: string, lenient: bool) -> string  [expr] {
+  {  } if (lenient) {  } get(key) NullCoalesce "" else {  } get_or_panic(key)
+}
 
 --- <builtin>/baml/ns_errors/error_context.baml ---
 class baml.errors.ErrorContext {
@@ -910,7 +913,7 @@ function baml.llm.prompt_template_for(function_name: string, prompt_closure: (Co
   {  } match (prompt_closure) { null => get_jinja_template(function_name), _ => "" }
 }
 function baml.llm.render_prompt(client: Client, function_name: string, args: map<string, unknown>, prompt_closure: (Context) -> PromptAst? = null) -> PromptAst  [expr] {
-  { let return_type = get_return_type(function_name); let primitive_client = client.to_primitive_client(); let template = prompt_template_for(function_name, prompt_closure) } primitive_client.render_specialized_prompt(template, args, return_type, prompt_closure)
+  { let return_type = get_return_type(function_name); let primitive_client = client.to_primitive_client(lenient = true); let template = prompt_template_for(function_name, prompt_closure) } primitive_client.render_specialized_prompt(template, args, return_type, prompt_closure)
 }
 function baml.llm.rr_local_offset(self: ?, client_name: string) -> int  [expr] {
   { let offset = 0; for seen_name in self.rr_client_names {  } if (seen_name Eq client_name) { offset Add= 1 } } offset
@@ -997,6 +1000,10 @@ class baml.llm.PrimitiveClientOptions {
 class baml.llm.PromptAst {
   _data: $rust_type
 }
+class baml.llm.PromptMessage {
+  role: string
+  content: string
+}
 class baml.llm.RetryPolicy {
   max_retries: int
   initial_delay_ms: int
@@ -1069,7 +1076,7 @@ function baml.llm.final(self: ?) -> TFinal  [expr] {
 }
 function baml.llm.finish_reason(self: ?) -> string?  [builtin]
 function baml.llm.from_shorthand(shorthand: string) -> baml.llm.PrimitiveClient  [builtin]
-function baml.llm.get_constructor(self: ?) -> () -> baml.llm.PrimitiveClient throws root.errors.InvalidArgument  [builtin]
+function baml.llm.get_constructor(self: ?) -> (bool) -> baml.llm.PrimitiveClient throws root.errors.InvalidArgument  [builtin]
 function baml.llm.get_jinja_template(function_name: string) -> string  [builtin]
 function baml.llm.get_return_type(function_name: string) -> type  [builtin]
 function baml.llm.input_tokens(self: ?) -> int?  [builtin]
@@ -1077,6 +1084,7 @@ function baml.llm.is_done(self: ?) -> bool  [builtin]
 function baml.llm.make_role(name: string) -> baml.llm.Role  [expr] {
   {  } baml.llm.Role { name: name, metadata: map {  } }
 }
+function baml.llm.messages(self: ?) -> baml.llm.PromptMessage[]  [builtin]
 function baml.llm.model(self: ?) -> string?  [builtin]
 function baml.llm.new(t_stream: type, t_final: type) -> baml.llm.StreamCache<TStream, TFinal>  [builtin]
 function baml.llm.new_stream_accumulator(self: ?) -> baml.llm.StreamAccumulator  [builtin]
@@ -1095,8 +1103,12 @@ function baml.llm.render_specialized_prompt(self: ?, template: string, args: map
   { let prompt = match (prompt_closure) { null => self.render_prompt(template, args, return_type), closure: (baml.llm.Context) -> baml.llm.PromptAst => closure(build_prompt_context(self, return_type)) } } self.specialize_prompt(prompt)
 }
 function baml.llm.specialize_prompt(self: ?, prompt: baml.llm.PromptAst) -> baml.llm.PromptAst  [builtin]
-function baml.llm.to_primitive_client(self: ?) -> baml.llm.PrimitiveClient  [expr] {
-  {  } if (self.name.includes("/")) {  } from_shorthand(self.name) else {  } self.get_constructor()()
+function baml.llm.text(self: ?) -> string  [builtin]
+function baml.llm.to_primitive_client(self: ?, lenient: bool = false) -> baml.llm.PrimitiveClient  [expr] {
+  {  } if (self.name.includes("/")) {  } from_shorthand(self.name) else {  } self.get_constructor()(lenient)
+}
+function baml.llm.to_string(self: ?) -> string  [expr] {
+  {  } self.text()
 }
 function baml.llm.validate_finish_reason(self: ?, finish_reason: string) -> null  [builtin]
 

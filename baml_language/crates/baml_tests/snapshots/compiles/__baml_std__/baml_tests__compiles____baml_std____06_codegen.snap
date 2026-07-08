@@ -3461,6 +3461,35 @@ function baml.env.get_or_panic(key: string) -> string {
     return
 }
 
+function baml.env.get_or_panic_lenient(key: string, lenient: bool) -> string {
+    load_var lenient
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var key
+    call baml.env.get_or_panic
+    store_var _0
+    jump L2
+
+  L1:
+    load_var key
+    sys_op baml.env.get
+    store_var _3
+    load_var _3
+    store_var _0
+    load_var _3
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L2
+    load_const ""
+    store_var _0
+
+  L2:
+    load_var _0
+    return
+}
+
 function baml.errors.ErrorContext$stream.baml.ToString.to_string(self: baml.errors.ErrorContext$stream) -> string {
     load_var self
     call baml.errors.ErrorContext._to_string_impl
@@ -7273,6 +7302,7 @@ function baml.json.to_string(v: T) -> string {
 
 function baml.llm.Client.__make_stream(self: baml.llm.Client, sse: baml.http.SseStream) -> baml.llm.Stream<TStream, TFinal> {
     load_var self
+    load_const <omitted>
     call baml.llm.Client.to_primitive_client
     store_var primitive
     load_var primitive
@@ -7665,6 +7695,7 @@ function baml.llm.Client.build_attempt_with_state(self: baml.llm.Client, planner
 
   L48:
     load_var self
+    load_const <omitted>
     call baml.llm.Client.to_primitive_client
     store_var primitive
     load_var primitive
@@ -8155,6 +8186,7 @@ function baml.llm.Client.execute_once_oneshot(self: baml.llm.Client, context: ba
 
   L28:
     load_var self
+    load_const <omitted>
     call baml.llm.Client.to_primitive_client
     store_var primitive
     load_type #0
@@ -8466,6 +8498,7 @@ function baml.llm.Client.execute_once_stream(self: baml.llm.Client, context: bam
 
   L28:
     load_var self
+    load_const <omitted>
     call baml.llm.Client.to_primitive_client
     store_var primitive
     load_var context
@@ -8693,29 +8726,39 @@ function baml.llm.Client.execute_stream(self: baml.llm.Client, context: baml.llm
     return
 }
 
-function baml.llm.Client.get_constructor(self: baml.llm.Client) -> () -> baml.llm.PrimitiveClient throws baml.errors.InvalidArgument {
+function baml.llm.Client.get_constructor(self: baml.llm.Client) -> (bool) -> baml.llm.PrimitiveClient throws baml.errors.InvalidArgument {
 }
 
-function baml.llm.Client.to_primitive_client(self: baml.llm.Client) -> baml.llm.PrimitiveClient {
+function baml.llm.Client.to_primitive_client(self: baml.llm.Client, lenient: bool) -> baml.llm.PrimitiveClient {
+    load_var lenient
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const false
+    store_var lenient
+
+  L0:
     load_var self
     load_field .name
     load_const "/"
     call baml.String.includes
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_var self
-    sys_op baml.llm.Client.get_constructor
-    call_indirect
+    pop_jump_if_false L1
     jump L2
 
   L1:
     load_var self
+    sys_op baml.llm.Client.get_constructor
+    store_var _7
+    load_var2 2 3
+    call_indirect
+    jump L3
+
+  L2:
+    load_var self
     load_field .name
     sys_op baml.llm.from_shorthand
 
-  L2:
+  L3:
     return
 }
 
@@ -8952,6 +8995,24 @@ function baml.llm.PrimitiveClient.specialize_prompt(self: baml.llm.PrimitiveClie
 }
 
 function baml.llm.PrimitiveClient.validate_finish_reason(self: baml.llm.PrimitiveClient, finish_reason: string) -> null {
+}
+
+function baml.llm.PromptAst$stream.baml.ToString.to_string(self: baml.llm.PromptAst$stream) -> string {
+    load_var self
+    sys_op baml.llm.PromptAst.text
+    return
+}
+
+function baml.llm.PromptAst.baml.ToString.to_string(self: baml.llm.PromptAst) -> string {
+    load_var self
+    sys_op baml.llm.PromptAst.text
+    return
+}
+
+function baml.llm.PromptAst.messages(self: baml.llm.PromptAst) -> baml.llm.PromptMessage[] {
+}
+
+function baml.llm.PromptAst.text(self: baml.llm.PromptAst) -> string {
 }
 
 function baml.llm.Stream.final(self: baml.llm.Stream<TStream, TFinal>) -> TFinal {
@@ -9191,6 +9252,7 @@ function baml.llm.build_request(client: baml.llm.Client, function_name: string, 
     sys_op baml.llm.get_return_type
     store_var return_type
     load_var client
+    load_const <omitted>
     call baml.llm.Client.to_primitive_client
     store_var primitive_client
     load_var2 2 4
@@ -9220,6 +9282,7 @@ function baml.llm.build_request_stream(client: baml.llm.Client, function_name: s
     sys_op baml.llm.get_return_type
     store_var return_type
     load_var client
+    load_const <omitted>
     call baml.llm.Client.to_primitive_client
     store_var primitive_client
     load_var2 2 4
@@ -9363,6 +9426,7 @@ function baml.llm.render_prompt(client: baml.llm.Client, function_name: string, 
     sys_op baml.llm.get_return_type
     store_var return_type
     load_var client
+    load_const true
     call baml.llm.Client.to_primitive_client
     store_var primitive_client
     load_var2 2 4
@@ -11193,221 +11257,245 @@ function baml.time.PlainTime$stream.baml.ToJson.to_json(self: baml.time.PlainTim
     load_var self
     is_type baml.Uint8Array
     pop_jump_if_false L0
-    jump L33
+    jump L37
 
   L0:
     load_var self
     is_type baml.Uint8Array
     pop_jump_if_false L1
-    jump L32
+    jump L36
 
   L1:
     load_var self
     is_type baml.TypeValue
     pop_jump_if_false L2
-    jump L31
+    jump L35
 
   L2:
     load_var self
     is_type baml.TypeValue
     pop_jump_if_false L3
-    jump L30
+    jump L34
 
   L3:
     load_var self
     is_type baml.errors.StackTrace
     pop_jump_if_false L4
-    jump L29
+    jump L33
 
   L4:
     load_var self
     is_type baml.errors.StackTrace
     pop_jump_if_false L5
-    jump L28
+    jump L32
 
   L5:
     load_var self
     is_type baml.errors.ErrorContext
     pop_jump_if_false L6
-    jump L27
+    jump L31
 
   L6:
     load_var self
     is_type baml.errors.ErrorContext
     pop_jump_if_false L7
-    jump L26
+    jump L30
 
   L7:
     load_var self
     is_type baml.time.PlainDateTime
     pop_jump_if_false L8
-    jump L25
+    jump L29
 
   L8:
     load_var self
     is_type baml.time.PlainDateTime
     pop_jump_if_false L9
-    jump L24
+    jump L28
 
   L9:
     load_var self
     is_type baml.time.PlainTime
     pop_jump_if_false L10
-    jump L23
+    jump L27
 
   L10:
     load_var self
     is_type baml.time.PlainTime
     pop_jump_if_false L11
-    jump L22
+    jump L26
 
   L11:
     load_var self
     is_type baml.time.ZonedDateTime
     pop_jump_if_false L12
-    jump L21
+    jump L25
 
   L12:
     load_var self
     is_type baml.time.ZonedDateTime
     pop_jump_if_false L13
-    jump L20
+    jump L24
 
   L13:
     load_var self
     is_type baml.time.Instant
     pop_jump_if_false L14
-    jump L19
+    jump L23
 
   L14:
     load_var self
     is_type baml.time.Instant
     pop_jump_if_false L15
-    jump L18
+    jump L22
 
   L15:
     load_var self
     is_type baml.time.PlainDate
     pop_jump_if_false L16
-    jump L17
+    jump L21
 
   L16:
     load_var self
     is_type baml.time.PlainDate
-    pop_jump_if_false L35
-    load_var self
-    call baml.ToString.to_string
-    store_var _2
-    jump L34
+    pop_jump_if_false L17
+    jump L20
 
   L17:
     load_var self
-    call baml.time.PlainDate.baml.ToString.to_string
-    store_var _2
-    jump L34
+    is_type baml.llm.PromptAst
+    pop_jump_if_false L18
+    jump L19
 
   L18:
     load_var self
+    is_type baml.llm.PromptAst
+    pop_jump_if_false L39
+    load_var self
     call baml.ToString.to_string
     store_var _2
-    jump L34
+    jump L38
 
   L19:
     load_var self
-    call baml.time.Instant.baml.ToString.to_string
+    call baml.llm.PromptAst.baml.ToString.to_string
     store_var _2
-    jump L34
+    jump L38
 
   L20:
     load_var self
     call baml.ToString.to_string
     store_var _2
-    jump L34
+    jump L38
 
   L21:
     load_var self
-    call baml.time.ZonedDateTime.baml.ToString.to_string
+    call baml.time.PlainDate.baml.ToString.to_string
     store_var _2
-    jump L34
+    jump L38
 
   L22:
     load_var self
     call baml.ToString.to_string
     store_var _2
-    jump L34
+    jump L38
 
   L23:
     load_var self
-    call baml.time.PlainTime.baml.ToString.to_string
+    call baml.time.Instant.baml.ToString.to_string
     store_var _2
-    jump L34
+    jump L38
 
   L24:
     load_var self
     call baml.ToString.to_string
     store_var _2
-    jump L34
+    jump L38
 
   L25:
     load_var self
-    call baml.time.PlainDateTime.baml.ToString.to_string
+    call baml.time.ZonedDateTime.baml.ToString.to_string
     store_var _2
-    jump L34
+    jump L38
 
   L26:
     load_var self
     call baml.ToString.to_string
     store_var _2
-    jump L34
+    jump L38
 
   L27:
     load_var self
-    call baml.errors.ErrorContext.baml.ToString.to_string
+    call baml.time.PlainTime.baml.ToString.to_string
     store_var _2
-    jump L34
+    jump L38
 
   L28:
     load_var self
     call baml.ToString.to_string
     store_var _2
-    jump L34
+    jump L38
 
   L29:
     load_var self
-    call baml.errors.StackTrace.baml.ToString.to_string
+    call baml.time.PlainDateTime.baml.ToString.to_string
     store_var _2
-    jump L34
+    jump L38
 
   L30:
     load_var self
     call baml.ToString.to_string
     store_var _2
-    jump L34
+    jump L38
 
   L31:
     load_var self
-    call baml.TypeValue.baml.ToString.to_string
+    call baml.errors.ErrorContext.baml.ToString.to_string
     store_var _2
-    jump L34
+    jump L38
 
   L32:
     load_var self
     call baml.ToString.to_string
     store_var _2
-    jump L34
+    jump L38
 
   L33:
+    load_var self
+    call baml.errors.StackTrace.baml.ToString.to_string
+    store_var _2
+    jump L38
+
+  L34:
+    load_var self
+    call baml.ToString.to_string
+    store_var _2
+    jump L38
+
+  L35:
+    load_var self
+    call baml.TypeValue.baml.ToString.to_string
+    store_var _2
+    jump L38
+
+  L36:
+    load_var self
+    call baml.ToString.to_string
+    store_var _2
+    jump L38
+
+  L37:
     load_var self
     call baml.Uint8Array.baml.ToString.to_string
     store_var _2
 
-  L34:
+  L38:
     load_type string
     load_var _2
     call baml.json.from
     return
 
-  L35:
+  L39:
     unreachable
 }
 
@@ -11463,221 +11551,245 @@ function baml.time.PlainTime.baml.ToJson.to_json(self: baml.time.PlainTime) -> b
     load_var self
     is_type baml.Uint8Array
     pop_jump_if_false L0
-    jump L33
+    jump L37
 
   L0:
     load_var self
     is_type baml.Uint8Array
     pop_jump_if_false L1
-    jump L32
+    jump L36
 
   L1:
     load_var self
     is_type baml.TypeValue
     pop_jump_if_false L2
-    jump L31
+    jump L35
 
   L2:
     load_var self
     is_type baml.TypeValue
     pop_jump_if_false L3
-    jump L30
+    jump L34
 
   L3:
     load_var self
     is_type baml.errors.StackTrace
     pop_jump_if_false L4
-    jump L29
+    jump L33
 
   L4:
     load_var self
     is_type baml.errors.StackTrace
     pop_jump_if_false L5
-    jump L28
+    jump L32
 
   L5:
     load_var self
     is_type baml.errors.ErrorContext
     pop_jump_if_false L6
-    jump L27
+    jump L31
 
   L6:
     load_var self
     is_type baml.errors.ErrorContext
     pop_jump_if_false L7
-    jump L26
+    jump L30
 
   L7:
     load_var self
     is_type baml.time.PlainDateTime
     pop_jump_if_false L8
-    jump L25
+    jump L29
 
   L8:
     load_var self
     is_type baml.time.PlainDateTime
     pop_jump_if_false L9
-    jump L24
+    jump L28
 
   L9:
     load_var self
     is_type baml.time.PlainTime
     pop_jump_if_false L10
-    jump L23
+    jump L27
 
   L10:
     load_var self
     is_type baml.time.PlainTime
     pop_jump_if_false L11
-    jump L22
+    jump L26
 
   L11:
     load_var self
     is_type baml.time.ZonedDateTime
     pop_jump_if_false L12
-    jump L21
+    jump L25
 
   L12:
     load_var self
     is_type baml.time.ZonedDateTime
     pop_jump_if_false L13
-    jump L20
+    jump L24
 
   L13:
     load_var self
     is_type baml.time.Instant
     pop_jump_if_false L14
-    jump L19
+    jump L23
 
   L14:
     load_var self
     is_type baml.time.Instant
     pop_jump_if_false L15
-    jump L18
+    jump L22
 
   L15:
     load_var self
     is_type baml.time.PlainDate
     pop_jump_if_false L16
-    jump L17
+    jump L21
 
   L16:
     load_var self
     is_type baml.time.PlainDate
-    pop_jump_if_false L35
-    load_var self
-    call baml.ToString.to_string
-    store_var _2
-    jump L34
+    pop_jump_if_false L17
+    jump L20
 
   L17:
     load_var self
-    call baml.time.PlainDate.baml.ToString.to_string
-    store_var _2
-    jump L34
+    is_type baml.llm.PromptAst
+    pop_jump_if_false L18
+    jump L19
 
   L18:
     load_var self
+    is_type baml.llm.PromptAst
+    pop_jump_if_false L39
+    load_var self
     call baml.ToString.to_string
     store_var _2
-    jump L34
+    jump L38
 
   L19:
     load_var self
-    call baml.time.Instant.baml.ToString.to_string
+    call baml.llm.PromptAst.baml.ToString.to_string
     store_var _2
-    jump L34
+    jump L38
 
   L20:
     load_var self
     call baml.ToString.to_string
     store_var _2
-    jump L34
+    jump L38
 
   L21:
     load_var self
-    call baml.time.ZonedDateTime.baml.ToString.to_string
+    call baml.time.PlainDate.baml.ToString.to_string
     store_var _2
-    jump L34
+    jump L38
 
   L22:
     load_var self
     call baml.ToString.to_string
     store_var _2
-    jump L34
+    jump L38
 
   L23:
     load_var self
-    call baml.time.PlainTime.baml.ToString.to_string
+    call baml.time.Instant.baml.ToString.to_string
     store_var _2
-    jump L34
+    jump L38
 
   L24:
     load_var self
     call baml.ToString.to_string
     store_var _2
-    jump L34
+    jump L38
 
   L25:
     load_var self
-    call baml.time.PlainDateTime.baml.ToString.to_string
+    call baml.time.ZonedDateTime.baml.ToString.to_string
     store_var _2
-    jump L34
+    jump L38
 
   L26:
     load_var self
     call baml.ToString.to_string
     store_var _2
-    jump L34
+    jump L38
 
   L27:
     load_var self
-    call baml.errors.ErrorContext.baml.ToString.to_string
+    call baml.time.PlainTime.baml.ToString.to_string
     store_var _2
-    jump L34
+    jump L38
 
   L28:
     load_var self
     call baml.ToString.to_string
     store_var _2
-    jump L34
+    jump L38
 
   L29:
     load_var self
-    call baml.errors.StackTrace.baml.ToString.to_string
+    call baml.time.PlainDateTime.baml.ToString.to_string
     store_var _2
-    jump L34
+    jump L38
 
   L30:
     load_var self
     call baml.ToString.to_string
     store_var _2
-    jump L34
+    jump L38
 
   L31:
     load_var self
-    call baml.TypeValue.baml.ToString.to_string
+    call baml.errors.ErrorContext.baml.ToString.to_string
     store_var _2
-    jump L34
+    jump L38
 
   L32:
     load_var self
     call baml.ToString.to_string
     store_var _2
-    jump L34
+    jump L38
 
   L33:
+    load_var self
+    call baml.errors.StackTrace.baml.ToString.to_string
+    store_var _2
+    jump L38
+
+  L34:
+    load_var self
+    call baml.ToString.to_string
+    store_var _2
+    jump L38
+
+  L35:
+    load_var self
+    call baml.TypeValue.baml.ToString.to_string
+    store_var _2
+    jump L38
+
+  L36:
+    load_var self
+    call baml.ToString.to_string
+    store_var _2
+    jump L38
+
+  L37:
     load_var self
     call baml.Uint8Array.baml.ToString.to_string
     store_var _2
 
-  L34:
+  L38:
     load_type string
     load_var _2
     call baml.json.from
     return
 
-  L35:
+  L39:
     unreachable
 }
 

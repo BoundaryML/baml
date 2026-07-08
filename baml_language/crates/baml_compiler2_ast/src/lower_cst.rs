@@ -2349,6 +2349,7 @@ fn synthesize_retry_policy_let(
                 &item,
                 &mut alloc,
                 env_var_refs,
+                crate::lower_config_item::EnvReadMode::Strict,
             );
             Some((Name::new(key.text()), value))
         })
@@ -2653,6 +2654,13 @@ fn synthesize_client_new_companion(
 ) -> FunctionDef {
     use baml_base::Literal;
 
+    // The constructor's `lenient: bool` parameter. `env.X` option reads are
+    // lowered to `baml.env.get_or_panic_lenient("X", lenient)` so the offline
+    // `render_prompt` path (which calls the constructor with `lenient = true`)
+    // can build the client for its metadata without a credential env var set,
+    // while the network paths keep `lenient = false` and still panic if unset.
+    let lenient_param_name = Name::new("lenient");
+
     let mut exprs: la_arena::Arena<Expr> = la_arena::Arena::new();
     let mut expr_spans: la_arena::Arena<text_size::TextRange> = la_arena::Arena::new();
     let mut alloc = |expr: Expr| -> ExprId {
@@ -2732,6 +2740,7 @@ fn synthesize_client_new_companion(
                     &opt_item,
                     &mut alloc,
                     env_var_refs,
+                    crate::lower_config_item::EnvReadMode::Lenient(&lenient_param_name),
                 );
                 let is_null = opt_item.value_str().as_deref() == Some("null");
 
@@ -2869,11 +2878,18 @@ fn synthesize_client_new_companion(
     };
 
     let func_name = format!("{client_name}$new");
+    let lenient_param = Param {
+        name: lenient_param_name,
+        type_expr: Some((TypeExprKind::Bool { attrs: vec![] }).at(span)),
+        default: None,
+        span,
+        name_span: name_token.text_range(),
+    };
     FunctionDef {
         name: Name::new(&func_name),
         generic_params: vec![],
         generic_param_bounds: vec![],
-        params: vec![],
+        params: vec![lenient_param],
         defaults: FunctionDefaults::empty(),
         return_type: None,
         throws: None,
