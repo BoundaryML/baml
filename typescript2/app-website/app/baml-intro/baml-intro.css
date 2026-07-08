@@ -375,6 +375,138 @@
   content: "—";
 }
 
+/* ---- eras timeline (homepage hero) ---- */
+.l6-tl {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  max-width: 420px;
+  padding: 4px 0;
+  margin: 1.6rem 0 1rem;
+  list-style: none;
+}
+/* the connecting line: muted at the top (the past), warming to the accent at
+   the bottom (the open question BAML is here to answer) */
+.l6-tl::before {
+  position: absolute;
+  top: 10px;
+  bottom: 12px;
+  left: 6px;
+  width: 2px;
+  content: "";
+  background: linear-gradient(
+    to bottom,
+    #ddd5c4 0%,
+    var(--l6-accent-soft) 62%,
+    var(--l6-accent) 100%
+  );
+  border-radius: 2px;
+  transform-origin: top center;
+  animation: l6-tl-draw 0.9s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+.l6-tl-item {
+  position: relative;
+  padding-left: 30px;
+  letter-spacing: -0.01em;
+  animation: l6-tl-in 0.55s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+.l6-tl-item:nth-child(1) {
+  animation-delay: 0.15s;
+}
+.l6-tl-item:nth-child(2) {
+  animation-delay: 0.28s;
+}
+.l6-tl-item:nth-child(3) {
+  animation-delay: 0.41s;
+}
+.l6-tl-item:nth-child(4) {
+  animation-delay: 0.54s;
+}
+.l6-tl-node {
+  position: absolute;
+  top: 0.3em;
+  left: 0;
+  width: 14px;
+  height: 14px;
+  background: #fdfbf5;
+  border: 2.5px solid var(--l6-soft);
+  border-radius: 50%;
+}
+.l6-tl-item:nth-child(2) .l6-tl-node {
+  border-color: #9a8fb5;
+}
+.l6-tl-item:nth-child(3) .l6-tl-node {
+  border-color: var(--l6-accent-soft);
+}
+/* the "now" node: filled accent with a soft halo that gently breathes */
+.l6-tl-node--now {
+  left: -1px;
+  width: 16px;
+  height: 16px;
+  background: var(--l6-accent);
+  border-color: var(--l6-accent);
+  box-shadow: 0 0 0 5px rgba(109, 40, 217, 0.14);
+  animation: l6-tl-pulse 2.4s ease-in-out 1s infinite;
+}
+.l6-tl-era {
+  font-weight: 600;
+  color: var(--l6-ink);
+}
+.l6-tl-arrow {
+  margin: 0 0.5ch;
+  color: var(--l6-soft);
+}
+.l6-tl-lang {
+  color: var(--l6-body);
+}
+.l6-tl-item--now .l6-tl-era {
+  color: var(--l6-accent);
+}
+.l6-tl-item--now .l6-tl-arrow {
+  color: var(--l6-accent-soft);
+}
+.l6-tl-item--now .l6-tl-lang {
+  font-family: var(--font-geist-mono), monospace;
+  font-weight: 700;
+  color: var(--l6-accent);
+  letter-spacing: 0.02em;
+}
+@keyframes l6-tl-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes l6-tl-draw {
+  from {
+    transform: scaleY(0);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+@keyframes l6-tl-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 5px rgba(109, 40, 217, 0.14);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(109, 40, 217, 0.05);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .l6-tl::before,
+  .l6-tl-item,
+  .l6-tl-node--now {
+    animation: none;
+  }
+}
+
 /* ---- homepage CTAs (after the design philosophy list) ---- */
 .l6-cta-wrap {
   padding-top: 0.5rem;
@@ -449,11 +581,6 @@
 /* ---- hero ---- */
 .l6-hero {
   padding-top: 4.5rem;
-}
-/* Tighten the gap between the hero and the "Our design philosophy" section
-   that follows it (hero bottom padding + this section's top padding). */
-#philosophy {
-  padding-top: 1.5rem;
 }
 /* The sheep flows inline with the text, so it sits on the first line next
    to "BAML" instead of centering against the whole wrapped headline. */
@@ -1281,4 +1408,590 @@
 .l6:is([data-code-theme="dark"], [data-code-theme="midnight"])
   .l2-el-line-warning {
   background: rgba(210, 153, 34, 0.12);
+}
+
+/* ============================================================================
+   Design-philosophy accordion (TenetsAccordion). Ported from the standalone
+   mockup and fully scoped under .l6-tenets-accordion so its generic class names
+   (.card, .frame, .branch, .tv-*, .fg, .stack) and CSS variables never leak
+   into the rest of the site. The mockup's page chrome (dotted-grid .stage, the
+   standalone h2 + intro) is dropped; the section supplies its own heading.
+   ========================================================================== */
+.l6-tenets-accordion {
+  --ground: #fdfbf5;
+  --card: #fffdf7;
+  --ink: #1a1612;
+  --body: #2b2520;
+  --muted: #6f6a63;
+  --soft: #8a8580;
+  --rule: #e7e2d6;
+  --rule-strong: #ddd5c4;
+  --accent: #6d28d9;
+  --accent-tint: rgba(109, 40, 217, 0.09);
+  --red: #b91c1c;
+  --green: #15803d;
+  --amber: #b45309;
+  --amber-bg: rgba(217, 119, 6, 0.12);
+  --amber-line: #d3893f;
+  --sans:
+    var(--font-geist-sans), system-ui, -apple-system, "Segoe UI", Roboto,
+    sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, monospace;
+  font-family: var(--sans);
+  -webkit-font-smoothing: antialiased;
+  color: var(--body);
+}
+.l6-tenets-accordion *,
+.l6-tenets-accordion *::before,
+.l6-tenets-accordion *::after {
+  box-sizing: border-box;
+}
+
+.l6-tenets-accordion .acc {
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+.l6-tenets-accordion .acc-head {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  width: 100%;
+  padding: 6px 2px;
+  font-family: var(--mono);
+  text-align: left;
+  cursor: pointer;
+  background: none;
+  border: 0;
+}
+.l6-tenets-accordion .acc-title {
+  flex: 1;
+  font-family: var(--mono);
+  font-size: 15.5px;
+  font-weight: 500;
+  color: var(--ink);
+}
+.l6-tenets-accordion .acc-title::before {
+  margin-right: 0.7rem;
+  color: var(--accent);
+  content: "—";
+}
+.l6-tenets-accordion .acc-item.is-open .acc-title::before {
+  content: "+";
+}
+.l6-tenets-accordion .acc-chev {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  color: var(--soft);
+  opacity: 0;
+  transition:
+    transform 220ms cubic-bezier(0.2, 0.7, 0.2, 1),
+    opacity 140ms ease;
+}
+.l6-tenets-accordion .acc-head:hover .acc-chev {
+  opacity: 1;
+}
+.l6-tenets-accordion .acc-item.is-open .acc-chev {
+  opacity: 1;
+  transform: rotate(90deg);
+}
+.l6-tenets-accordion .acc-body {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 250ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.l6-tenets-accordion .acc-item.is-open .acc-body {
+  grid-template-rows: 1fr;
+}
+.l6-tenets-accordion .acc-body-inner {
+  overflow: hidden;
+}
+.l6-tenets-accordion .acc-body-pad {
+  padding: 0 0 20px 25px;
+}
+
+.l6-tenets-accordion .why {
+  max-width: 56ch;
+  margin: 0 0 13px;
+  font-size: 15px;
+  line-height: 1.62;
+  color: var(--muted);
+}
+.l6-tenets-accordion .why code {
+  padding: 0.05em 0.35em;
+  font-family: var(--mono);
+  font-size: 0.9em;
+  color: var(--body);
+  background: rgba(26, 22, 18, 0.05);
+  border-radius: 4px;
+}
+.l6-tenets-accordion .code {
+  padding: 11px 13px;
+  margin: 0;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: var(--body);
+  white-space: pre;
+  background: rgba(26, 22, 18, 0.035);
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+}
+.l6-tenets-accordion .code .cm {
+  color: var(--soft);
+}
+.l6-tenets-accordion .code .bad {
+  color: var(--red);
+}
+.l6-tenets-accordion .code .ok {
+  color: var(--green);
+}
+
+/* ---- shared demo shell (tenets #4 and #5) ---- */
+.l6-tenets-accordion .cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-top: 4px;
+}
+@media (max-width: 620px) {
+  .l6-tenets-accordion .cols {
+    grid-template-columns: 1fr;
+  }
+}
+.l6-tenets-accordion .panel {
+  padding: 13px;
+  background: var(--card);
+  border: 1px solid var(--rule);
+  border-radius: 14px;
+  box-shadow: 0 1px 2px rgba(26, 22, 18, 0.04);
+  transition: border-color 300ms ease;
+}
+.l6-tenets-accordion .panel.good {
+  border-color: rgba(109, 40, 217, 0.4);
+}
+.l6-tenets-accordion .panel.bad {
+  border-color: rgba(217, 119, 6, 0.4);
+}
+.l6-tenets-accordion .p-head {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.l6-tenets-accordion .p-titlegroup {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.l6-tenets-accordion .p-eyebrow {
+  align-self: flex-start;
+  padding: 1px 7px;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  border-radius: 999px;
+}
+.l6-tenets-accordion .p-eyebrow--local,
+.l6-tenets-accordion .p-eyebrow--one {
+  color: #fff;
+  background: var(--accent);
+}
+.l6-tenets-accordion .p-eyebrow--nonlocal,
+.l6-tenets-accordion .p-eyebrow--many {
+  color: var(--amber);
+  background: var(--amber-bg);
+}
+.l6-tenets-accordion .p-title {
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+}
+.l6-tenets-accordion .replay {
+  padding: 0;
+  margin-top: 18px;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--soft);
+  cursor: pointer;
+  background: none;
+  border: 0;
+}
+.l6-tenets-accordion .replay:hover {
+  color: var(--accent);
+}
+
+/* ---- #5: keep edits local (context window) ---- */
+.l6-tenets-accordion .meter {
+  display: flex;
+  gap: 7px;
+  align-items: center;
+}
+.l6-tenets-accordion .meter-track {
+  width: 54px;
+  height: 6px;
+  overflow: hidden;
+  background: var(--rule);
+  border-radius: 3px;
+}
+.l6-tenets-accordion .meter-fill {
+  width: 14%;
+  height: 100%;
+  background: var(--accent);
+  border-radius: 3px;
+  transition:
+    width 220ms linear,
+    background 400ms ease;
+}
+.l6-tenets-accordion .meter-pct {
+  width: 7ch;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--soft);
+  text-align: right;
+}
+.l6-tenets-accordion .window {
+  position: relative;
+  height: 200px;
+  overflow: hidden;
+  background: rgba(26, 22, 18, 0.02);
+  border: 1px solid var(--rule);
+  border-radius: 9px;
+}
+.l6-tenets-accordion .stack {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  display: flex;
+  flex-direction: column;
+}
+.l6-tenets-accordion .row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  height: 26px;
+  padding: 0 10px;
+  font-family: var(--mono);
+  font-size: 11px;
+  white-space: nowrap;
+  border-top: 1px solid rgba(26, 22, 18, 0.04);
+  animation: l6ta-row-in 240ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+.l6-tenets-accordion .row .file {
+  color: var(--ink);
+}
+.l6-tenets-accordion .row .note {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--soft);
+}
+.l6-tenets-accordion .row--task,
+.l6-tenets-accordion .row--edit {
+  background: var(--accent-tint);
+}
+.l6-tenets-accordion .row--task .file,
+.l6-tenets-accordion .row--edit .file {
+  font-weight: 600;
+  color: var(--accent);
+}
+.l6-tenets-accordion .row--task .note,
+.l6-tenets-accordion .row--edit .note {
+  color: var(--accent);
+  opacity: 0.75;
+}
+.l6-tenets-accordion .row--task.evicted {
+  opacity: 0.3;
+}
+.l6-tenets-accordion .dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+.l6-tenets-accordion .row--task .dot,
+.l6-tenets-accordion .row--edit .dot {
+  background: var(--accent);
+}
+.l6-tenets-accordion .row--junk .dot {
+  background: var(--rule-strong);
+}
+.l6-tenets-accordion .row--call .dot {
+  background: var(--soft);
+}
+.l6-tenets-accordion .window::before {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  z-index: 2;
+  height: 30px;
+  pointer-events: none;
+  content: "";
+  background: linear-gradient(var(--card), rgba(255, 253, 247, 0));
+}
+.l6-tenets-accordion .tl {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px 4px;
+  align-items: center;
+  min-height: 24px;
+  margin-top: 13px;
+}
+.l6-tenets-accordion .tl-arrow {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--soft);
+  opacity: 0.55;
+}
+.l6-tenets-accordion .step {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+  padding: 2px 8px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  border-radius: 999px;
+  opacity: 0.4;
+  transition: opacity 220ms ease;
+}
+.l6-tenets-accordion .step.is-active {
+  opacity: 1;
+}
+.l6-tenets-accordion .step .sdot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+}
+.l6-tenets-accordion .step--task {
+  color: var(--accent);
+  background: var(--accent-tint);
+}
+.l6-tenets-accordion .step--task .sdot {
+  background: var(--accent);
+}
+.l6-tenets-accordion .step--warn {
+  color: var(--amber);
+  background: var(--amber-bg);
+}
+.l6-tenets-accordion .step--warn .sdot {
+  background: var(--amber);
+}
+.l6-tenets-accordion .step--ok {
+  color: #fff;
+  background: var(--accent);
+}
+.l6-tenets-accordion .step--ok .sdot {
+  background: #fff;
+}
+@keyframes l6ta-row-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ---- #4: leave one obvious way (branching tree) ---- */
+.l6-tenets-accordion .branch {
+  position: relative;
+  height: 200px;
+  margin-top: 8px;
+}
+.l6-tenets-accordion .branch svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+.l6-tenets-accordion .branch line {
+  stroke-width: 1.4;
+  fill: none;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+  opacity: 0;
+  transition: opacity 300ms ease;
+}
+.l6-tenets-accordion .branch line.in {
+  opacity: 0.85;
+}
+.l6-tenets-accordion .ln-many {
+  stroke: var(--amber-line);
+}
+.l6-tenets-accordion .ln-one {
+  stroke: var(--accent);
+}
+.l6-tenets-accordion .branch line.ln-one.in {
+  opacity: 1;
+  stroke-width: 2;
+}
+.l6-tenets-accordion .tnode {
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0);
+  transition:
+    opacity 220ms ease,
+    transform 240ms cubic-bezier(0.2, 0.9, 0.3, 1.5);
+}
+.l6-tenets-accordion .tnode.in {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
+}
+.l6-tenets-accordion .tnode--many {
+  background: var(--amber-line);
+}
+.l6-tenets-accordion .tnode--one {
+  width: 11px;
+  height: 11px;
+  background: var(--accent);
+}
+
+/* ---- #3: trace nondeterminism (waterfall) ---- */
+.l6-tenets-accordion .tv {
+  --labelw: 168px;
+  margin-top: 4px;
+  overflow: hidden;
+  background: var(--card);
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  box-shadow: 0 1px 2px rgba(26, 22, 18, 0.04);
+}
+.l6-tenets-accordion .tv-head {
+  padding: 11px 14px;
+  font-family: var(--mono);
+  border-bottom: 1px solid var(--rule);
+}
+.l6-tenets-accordion .tv-title {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.l6-tenets-accordion .tv-title .m {
+  color: var(--accent);
+}
+.l6-tenets-accordion .tv-body {
+  position: relative;
+  padding: 8px 14px 12px 0;
+}
+.l6-tenets-accordion .tv-grid {
+  position: absolute;
+  top: 8px;
+  right: 14px;
+  bottom: 12px;
+  left: var(--labelw);
+  pointer-events: none;
+}
+.l6-tenets-accordion .tv-gl {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: rgba(26, 22, 18, 0.05);
+}
+.l6-tenets-accordion .tv-playhead {
+  position: absolute;
+  top: -2px;
+  bottom: 0;
+  left: 0;
+  width: 1.5px;
+  background: var(--accent);
+  opacity: 0;
+}
+.l6-tenets-accordion .tv-playhead.on {
+  opacity: 0.5;
+}
+.l6-tenets-accordion .tv-playhead::before {
+  position: absolute;
+  top: -3px;
+  left: 50%;
+  width: 5px;
+  height: 5px;
+  content: "";
+  background: var(--accent);
+  border-radius: 50%;
+  transform: translateX(-50%);
+}
+.l6-tenets-accordion .tv-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: var(--labelw) 1fr;
+  align-items: center;
+  height: 25px;
+}
+.l6-tenets-accordion .tv-label {
+  padding-left: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--ink);
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity 160ms ease;
+}
+.l6-tenets-accordion .tv-row.in .tv-label {
+  opacity: 1;
+}
+.l6-tenets-accordion .tv-label .note {
+  color: var(--soft);
+}
+.l6-tenets-accordion .tv-label .fail {
+  color: #c2410c;
+}
+.l6-tenets-accordion .tv-track {
+  position: relative;
+  height: 100%;
+}
+.l6-tenets-accordion .tv-bar {
+  position: absolute;
+  top: 6px;
+  width: 0;
+  height: 13px;
+  border-radius: 3px;
+  opacity: 0;
+}
+.l6-tenets-accordion .tv-bar.on {
+  opacity: 1;
+}
+.l6-tenets-accordion .tv-bar--fail {
+  background: repeating-linear-gradient(
+    -45deg,
+    #e6b8a4,
+    #e6b8a4 3px,
+    #f3d9cd 3px,
+    #f3d9cd 6px
+  ) !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .l6-tenets-accordion .acc-chev,
+  .l6-tenets-accordion .acc-body,
+  .l6-tenets-accordion .row,
+  .l6-tenets-accordion .tnode,
+  .l6-tenets-accordion .branch line,
+  .l6-tenets-accordion .tv-label,
+  .l6-tenets-accordion .tv-bar {
+    transition: none;
+    animation: none;
+  }
+}
+@media (max-width: 620px) {
+  .l6-tenets-accordion .acc-title {
+    font-size: 15px;
+  }
 }

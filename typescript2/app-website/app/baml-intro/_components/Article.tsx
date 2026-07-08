@@ -50,6 +50,7 @@ import {
   TS_INSTANCEOF,
   TS_LIES,
 } from './snippets';
+import { TenetsAccordion } from './TenetsAccordion';
 
 /* All sections share one reading-column width so every header aligns.
  * Editors, playgrounds, and side-by-side pairs break out wider via
@@ -430,19 +431,6 @@ function WorkflowPlayground() {
   );
 }
 
-/* Design philosophy — the principles that decide every feature, stated as
- * bare aphorisms (Zen-of-Python style). Each one tees up a section below; the
- * article is where they get demonstrated, so the lines stay unexplained. */
-const TENETS: string[] = [
-  'No viral edits.',
-  'Look like TypeScript.',
-  'Make undesired state unrepresentable.',
-  "Fix JavaScript's footguns.",
-  'One obvious way.',
-  'Tools for agents, not IDEs.',
-  'Make nondeterminism observable and testable.',
-];
-
 /* `view` splits this one document across routes: the homepage (`intro`) shows
  * the hero + design philosophy + the two CTAs; `/explore` (`deep`) shows Part 1
  * onward with the "On this page" rail; `all` (the legacy /baml-intro) renders
@@ -513,10 +501,7 @@ export function Article({ view = 'all' }: { view?: 'all' | 'intro' | 'deep' }) {
           <nav aria-label="On this page" className="l6-toc">
             <p className="l6-toc-cap font-mono">On this page</p>
             <ul>
-              {(view === 'deep'
-                ? TOC.filter((item) => item.id !== 'philosophy')
-                : TOC
-              ).map((item) => (
+              {TOC.map((item) => (
                 <li key={item.id}>
                   <a
                     className={`${item.sub ? 'l6-toc-sub' : ''}${
@@ -579,18 +564,30 @@ export function Article({ view = 'all' }: { view?: 'all' | 'intro' | 'deep' }) {
                   }
                 </p>
               )}
-              <ul className="l6-tenets">
-                <li className="l6-tenet" style={{ fontSize: 'inherit' }}>
-                  Hardware -&gt; Assembly
+              <ul className="l6-tl">
+                <li className="l6-tl-item">
+                  <span className="l6-tl-node" />
+                  <span className="l6-tl-era">Hardware</span>
+                  <span className="l6-tl-arrow">→</span>
+                  <span className="l6-tl-lang">Assembly</span>
                 </li>
-                <li className="l6-tenet" style={{ fontSize: 'inherit' }}>
-                  Operating Systems -&gt; Java
+                <li className="l6-tl-item">
+                  <span className="l6-tl-node" />
+                  <span className="l6-tl-era">Operating Systems</span>
+                  <span className="l6-tl-arrow">→</span>
+                  <span className="l6-tl-lang">Java</span>
                 </li>
-                <li className="l6-tenet" style={{ fontSize: 'inherit' }}>
-                  Web -&gt; Javascript
+                <li className="l6-tl-item">
+                  <span className="l6-tl-node" />
+                  <span className="l6-tl-era">Web</span>
+                  <span className="l6-tl-arrow">→</span>
+                  <span className="l6-tl-lang">Javascript</span>
                 </li>
-                <li className="l6-tenet" style={{ fontSize: 'inherit' }}>
-                  Agentic Coding -&gt; ????
+                <li className="l6-tl-item l6-tl-item--now">
+                  <span className="l6-tl-node l6-tl-node--now" />
+                  <span className="l6-tl-era">Agentic Coding</span>
+                  <span className="l6-tl-arrow">→</span>
+                  <span className="l6-tl-lang">????</span>
                 </li>
               </ul>
               <p>
@@ -606,23 +603,17 @@ export function Article({ view = 'all' }: { view?: 'all' | 'intro' | 'deep' }) {
                 {', and more.'}
               </p>
             </section>
-
-            {/* ---- design philosophy ---- */}
-            <Section id="philosophy" title="Our design philosophy">
-              <ul className="l6-tenets font-mono">
-                {TENETS.map((t) => (
-                  <li className="l6-tenet" key={t}>
-                    {t}
-                  </li>
-                ))}
-              </ul>
-            </Section>
           </>
         )}
 
         {/* Part 1 onward: /explore (deep) and legacy /baml-intro */}
         {view !== 'intro' && (
           <>
+            {/* ---- design philosophy (opens the deep dive) ---- */}
+            <Section id="philosophy" title="Our design philosophy">
+              <TenetsAccordion />
+            </Section>
+
             {/* ===== Part 1 · A better language ===== */}
             <Part eyebrow="Part 1" id="language" title="A better language">
               <p>
