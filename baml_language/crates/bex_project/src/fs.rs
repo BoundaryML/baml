@@ -157,8 +157,10 @@ impl BamlVFS {
         };
 
         let path_as_str = raw.to_string_lossy();
+        #[cfg(windows)]
+        let path_as_str = path_as_str.replace('\\', "/");
         vfs_path
-            .join(path_as_str)
+            .join(path_as_str.as_ref())
             .map_err(|e| LspError::InvalidPath {
                 path: raw.clone(),
                 message: format!("{context}: {e}"),

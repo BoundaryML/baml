@@ -1548,6 +1548,12 @@ pub fn new_lsp(
 mod tests {
     use super::*;
 
+    impl crate::fs::BulkReadFileSystem for vfs::PhysicalFS {
+        fn read_many(&self, _glob: &str) -> vfs::VfsResult<Vec<(String, Vec<u8>)>> {
+            Ok(Vec::new())
+        }
+    }
+
     struct TempWorkspace {
         root: std::path::PathBuf,
     }
@@ -1573,8 +1579,8 @@ mod tests {
 
         fn vfs_path(&self, rel: &str) -> vfs::VfsPath {
             let abs = self.root.join(rel);
-            vfs::VfsPath::new(vfs::PhysicalFS::new("/"))
-                .join(abs.to_string_lossy())
+            crate::fs::BamlVFS::new(std::sync::Arc::new(Box::new(vfs::PhysicalFS::new("/"))))
+                .get_path_from_path(&abs, "test workspace path")
                 .unwrap()
         }
     }
