@@ -1,10 +1,10 @@
 // The "thinker" half of OpenAI's responder–thinker realtime pattern:
 // gpt-realtime-2.1 speaks; this BAML function decides which tool to run and
-// with what arguments. Model is env-overridable so the same brain can point
-// at any Anthropic-compatible endpoint.
+// with what arguments. Model/endpoint are env-overridable so the same brain
+// can point at any OpenAI-compatible endpoint (THINKER_* in server/.env).
 
 client<llm> Thinker {
-  provider anthropic
+  provider openai
   options {
     model env.THINKER_MODEL
     base_url env.THINKER_BASE_URL

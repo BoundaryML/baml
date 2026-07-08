@@ -16,8 +16,11 @@ try {
   }
 } catch {}
 
-// Direct Anthropic beats the claude-CLI proxy stand-in.
-if (process.env.ANTHROPIC_API_KEY) {
+// Direct Anthropic beats the claude-CLI proxy stand-in — but only when the
+// thinker IS a Claude model; a THINKER_MODEL like gpt-* brings its own
+// endpoint/key in .env and must not be rerouted to api.anthropic.com.
+const claudeThinker = !process.env.THINKER_MODEL || process.env.THINKER_MODEL.startsWith("claude");
+if (process.env.ANTHROPIC_API_KEY && claudeThinker) {
   process.env.THINKER_API_KEY = process.env.ANTHROPIC_API_KEY;
   process.env.THINKER_BASE_URL = "https://api.anthropic.com";
   process.env.THINKER_MODEL ??= "claude-sonnet-4-6";
