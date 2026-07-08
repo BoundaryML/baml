@@ -25,13 +25,17 @@ members = [
   "sandbox",
   "boundary-udf",
   "playground-server",
+  # A modified fork we own (ring-free TLS + signer); a workspace member so our
+  # changes get fmt/clippy/test coverage in CI. Its one network test is
+  # #[ignore]d, so `cargo test --workspace` stays hermetic.
+  "vendored/gcp-auth",
 ]
-# Vendored third-party crates: consumed as path dependencies but kept out of the
-# workspace so their dev-deps/tests don't enter our build graph.
+# minijinja is a large upstream fork tracked close to upstream; kept out of the
+# workspace so its extensive test suite and dev-deps don't enter our build
+# graph. (It is still consumed as a path dependency.)
 exclude = [
   "vendored/minijinja",
   "vendored/minijinja-contrib",
-  "vendored/gcp-auth",
 ]
 default-members = [
   "baml-compiler",
@@ -81,7 +85,9 @@ console_log = "1"
 dashmap = "5.5.3"
 derive-new = "0.7"
 derive_builder = "0.20.0"
-derive_more = { version = "0.99.18", features = ["constructor"] }
+# 1.0 requires each derive's feature to be listed explicitly (0.99 enabled all
+# by default). The workspace uses only `From` and `Constructor`.
+derive_more = { version = "1.0", features = ["from", "constructor"] }
 dissimilar = "1.0.9"
 dunce = "1.0.4"
 either = "1.8.1"
