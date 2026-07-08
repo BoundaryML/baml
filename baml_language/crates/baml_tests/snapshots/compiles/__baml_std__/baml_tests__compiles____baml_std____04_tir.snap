@@ -1585,6 +1585,32 @@ function baml.ai.native_provider_for(primitive: baml.llm.PrimitiveClient) -> bam
       { : never
         return Gemini { model: primitive.options.model ?? "gemini-2.5-flash", api_key: primitive.options.api_key, base_url: primitive.options.base_url, extra_headers: primitive.options.headers, extra_body: primitive.options.request_body, append_output_schema: false } : baml.ai.Gemini
       }
+    if (primitive.provider == "openai-generic" : bool) : void
+      { : never
+        match (primitive.options.base_url : string | null) : never
+          null =>
+            { : never
+              return null : null
+            }
+          bu: string =>
+            { : never
+              match (primitive.options.model : string | null) : never
+                null =>
+                  { : never
+                    return null : null
+                  }
+                m: string =>
+                  { : never
+                    let auth: BearerAuth | HeaderAuth | NoAuth = : baml.ai.NoAuth | baml.ai.BearerAuth -> baml.ai.BearerAuth | baml.ai.HeaderAuth | baml.ai.NoAuth
+                      match (primitive.options.api_key : string | null) : baml.ai.NoAuth | baml.ai.BearerAuth
+                        null =>
+                          NoAuth {  } : baml.ai.NoAuth
+                        k: string =>
+                          BearerAuth { token: k } : baml.ai.BearerAuth
+                    return OpenAiCompatible { model: m, base_url: bu, auth: auth, extra_headers: primitive.options.headers, extra_body: primitive.options.request_body, append_output_schema: false } : baml.ai.OpenAiCompatible
+                  }
+            }
+      }
     null : null
   }
 }
@@ -4317,6 +4343,194 @@ class baml.ai.OpenAiToolTranscript$stream {
   base_url: string | null
   tools_json: string | null
   messages: baml.json.json$stream[]
+}
+
+--- <builtin>/baml/ns_ai/providers/openai_compatible.baml ---
+class baml.ai.NoAuth {
+}
+class baml.ai.BearerAuth {
+  token: string
+}
+class baml.ai.HeaderAuth {
+  name: string
+  value: string
+}
+class baml.ai.OpenAiCompatible {
+  model: string
+  base_url: string
+  auth: baml.ai.BearerAuth | baml.ai.HeaderAuth | baml.ai.NoAuth
+  extra_headers: map<string, string> | null
+  extra_body: map<string, unknown> | null
+  append_output_schema: bool | null
+}
+function baml.ai.OpenAiCompatible._inner(self: baml.ai.OpenAiCompatible) -> baml.ai.OpenAi throws never {
+  { : baml.ai.OpenAi
+    OpenAi { model: self.model, api_key: "", base_url: self.base_url, extra_headers: null, extra_body: self.extra_body, append_output_schema: self.append_output_schema } : baml.ai.OpenAi
+  }
+}
+function baml.ai.OpenAiCompatible._headers(self: baml.ai.OpenAiCompatible) -> map<string, string> throws never {
+  { : map<string, string>
+    let headers: map<string, string> = map { "Content-Type": "application/json" } : map<string, string>
+    match (self.auth : baml.ai.BearerAuth | baml.ai.HeaderAuth | baml.ai.NoAuth) : void
+      b: BearerAuth =>
+        { : void
+          headers.set("Authorization", "Bearer " + b.token) : string | null
+        }
+      h: HeaderAuth =>
+        { : void
+          headers.set(h.name, h.value) : string | null
+        }
+      _ =>
+        { : void
+        }
+    match (self.extra_headers : map<string, string> | null) : void
+      extra: map<string, string> =>
+        { : void
+          for k in extra.keys()
+            { : void
+              headers.set(k, extra.get(k) ?? "") : string | null
+            }
+        }
+      _ =>
+        { : void
+        }
+    headers : map<string, string>
+  }
+}
+function baml.ai.OpenAiCompatible.build_request<T>(self: baml.ai.OpenAiCompatible, messages: baml.ai.ChatMessage[]) -> baml.http.Request throws baml.errors.UnknownError {
+  { : baml.http.Request
+    let r = self._inner().build_request(messages) : baml.http.Request
+    root.http.Request { method: r.method, url: r.url, headers: self._headers(), body: r.body } : baml.http.Request
+  }
+}
+function baml.ai.OpenAiCompatible.send(self: baml.ai.OpenAiCompatible, request: baml.http.Request) -> string throws baml.errors.CallError | baml.errors.UnknownError {
+  { : string
+    self._inner().send(request) : string
+  }
+}
+function baml.ai.OpenAiCompatible.parse<T>(self: baml.ai.OpenAiCompatible, from: string) -> T throws baml.errors.UnknownError {
+  { : T
+    self._inner().parse<T>(from) : T
+  }
+}
+function baml.ai.OpenAiCompatible.meta_of(self: baml.ai.OpenAiCompatible, from: string) -> baml.ai.ResponseMeta throws never {
+  { : baml.ai.ResponseMeta
+    self._inner().meta_of(from) : baml.ai.ResponseMeta
+  }
+}
+function baml.ai.OpenAiCompatible.stream_messages<TStream, TFinal>(self: baml.ai.OpenAiCompatible, messages: baml.ai.ChatMessage[]) -> baml.llm.Stream<TStream, TFinal> throws baml.errors.UnknownError {
+  { : baml.llm.Stream<TStream, TFinal>
+    let inner = self._inner() : baml.ai.OpenAi
+    let schema: string = root.llm.render_output_format(reflect.type_of<TFinal>()) : string
+    let req = root.http.Request { method: "POST", url: self.base_url + "/chat/completions", headers: self._headers(), body: inner._request_body(inner._messages_for(messages, schema), true) } : baml.http.Request
+    let sse = : baml.http.SseStream
+      catch (root.http.fetch_sse(req) : baml.http.SseStream) : baml.http.SseStream
+        catch (e)
+          _ =>
+            { : never
+              throw root.errors.UnknownError { data: e, message: ["openai-compatible..."] } : baml.errors.UnknownError
+            }
+    let primitive = : baml.llm.PrimitiveClient
+      catch (root.llm.from_shorthand("openai-generic/" + self.model) : baml.llm.PrimitiveClient) : baml.llm.PrimitiveClient
+        catch (e)
+          _ =>
+            { : never
+              throw root.errors.UnknownError { data: e, message: ["openai-compatible..."] } : baml.errors.UnknownError
+            }
+    let acc = : baml.llm.StreamAccumulator
+      catch (primitive.new_stream_accumulator() : baml.llm.StreamAccumulator) : baml.llm.StreamAccumulator
+        catch (e)
+          _ =>
+            { : never
+              throw root.errors.UnknownError { data: e, message: ["openai-compatible..."] } : baml.errors.UnknownError
+            }
+    let cache = root.llm.StreamCache.new(reflect.type_of<TStream>(), reflect.type_of<TFinal>()) : baml.llm.StreamCache<TStream, TFinal>
+    root.llm.Stream { _client: primitive, _acc: acc, _sse: sse, _cache: cache } : baml.llm.Stream<TStream, TFinal>
+  }
+}
+class baml.ai.NoAuth$stream {
+}
+class baml.ai.BearerAuth$stream {
+  token: string | null
+}
+class baml.ai.HeaderAuth$stream {
+  name: string | null
+  value: string | null
+}
+class baml.ai.OpenAiCompatible$stream {
+  model: string | null
+  base_url: string | null
+  auth: baml.ai.BearerAuth$stream | baml.ai.HeaderAuth$stream | baml.ai.NoAuth$stream | null
+  extra_headers: map<string, string> | null
+  extra_body: map<string, unknown> | null
+  append_output_schema: bool | null
+}
+function baml.ai.OpenAiCompatible$stream.build_request<T>(self: baml.ai.OpenAiCompatible$stream, messages: baml.ai.ChatMessage[]) -> baml.http.Request throws baml.errors.UnknownError {
+  { : baml.http.Request
+    let r = self._inner().build_request(messages) : unknown
+    root.http.Request { method: r.method, url: r.url, headers: self._headers(), body: r.body } : baml.http.Request
+  }
+  !! 2123..2129: type `baml.ai.OpenAiCompatible$stream` has no member `_inner`
+  !! 2284..2292: type `baml.ai.OpenAiCompatible$stream` has no member `_headers`
+  !! 1948..1972: declared throws is `baml.errors.UnknownError`, but this function may also throw `unknown`
+  ?? 1948..1972: extraneous throws declaration: baml.errors.UnknownError
+}
+function baml.ai.OpenAiCompatible$stream.send(self: baml.ai.OpenAiCompatible$stream, request: baml.http.Request) -> string throws baml.errors.CallError | baml.errors.UnknownError {
+  { : unknown
+    self._inner().send(request) : unknown
+  }
+  !! 2671..2677: type `baml.ai.OpenAiCompatible$stream` has no member `_inner`
+  !! 2459..2507: declared throws is `baml.errors.CallError | baml.errors.UnknownError`, but this function may also throw `unknown`
+  ?? 2459..2507: extraneous throws declaration: baml.errors.CallError, baml.errors.UnknownError
+}
+function baml.ai.OpenAiCompatible$stream.parse<T>(self: baml.ai.OpenAiCompatible$stream, from: string) -> T throws baml.errors.UnknownError {
+  { : unknown
+    self._inner().parse(from) : unknown
+  }
+  !! 2842..2848: type `baml.ai.OpenAiCompatible$stream` has no member `_inner`
+  !! 2798..2822: declared throws is `baml.errors.UnknownError`, but this function may also throw `unknown`
+  ?? 2798..2822: extraneous throws declaration: baml.errors.UnknownError
+}
+function baml.ai.OpenAiCompatible$stream.meta_of(self: baml.ai.OpenAiCompatible$stream, from: string) -> baml.ai.ResponseMeta throws never {
+  { : unknown
+    self._inner().meta_of(from) : unknown
+  }
+  !! 3013..3019: type `baml.ai.OpenAiCompatible$stream` has no member `_inner`
+  !! 3008..3035: type mismatch: expected baml.ai.ResponseMeta, got unknown
+  !! 2988..2993: declared throws is `never`, but this function may also throw `unknown`
+}
+function baml.ai.OpenAiCompatible$stream.stream_messages<TStream, TFinal>(self: baml.ai.OpenAiCompatible$stream, messages: baml.ai.ChatMessage[]) -> baml.llm.Stream<TStream, TFinal> throws baml.errors.UnknownError {
+  { : baml.llm.Stream<TStream, TFinal>
+    let inner = self._inner() : unknown
+    let schema: string = root.llm.render_output_format(reflect.type_of<TFinal>()) : string
+    let req = root.http.Request { method: "POST", url: self.base_url + "/chat/completions", headers: self._headers(), body: inner._request_body(inner._messages_for(messages, schema), true) } : baml.http.Request
+    let sse = : baml.http.SseStream
+      catch (root.http.fetch_sse(req) : baml.http.SseStream) : baml.http.SseStream
+        catch (e)
+          _ =>
+            { : never
+              throw root.errors.UnknownError { data: e, message: ["openai-compatible..."] } : baml.errors.UnknownError
+            }
+    let primitive = : baml.llm.PrimitiveClient
+      catch (root.llm.from_shorthand("openai-generic/" + self.model) : baml.llm.PrimitiveClient) : baml.llm.PrimitiveClient
+        catch (e)
+          _ =>
+            { : never
+              throw root.errors.UnknownError { data: e, message: ["openai-compatible..."] } : baml.errors.UnknownError
+            }
+    let acc = : baml.llm.StreamAccumulator
+      catch (primitive.new_stream_accumulator() : baml.llm.StreamAccumulator) : baml.llm.StreamAccumulator
+        catch (e)
+          _ =>
+            { : never
+              throw root.errors.UnknownError { data: e, message: ["openai-compatible..."] } : baml.errors.UnknownError
+            }
+    let cache = root.llm.StreamCache.new(reflect.type_of<TStream>(), reflect.type_of<TFinal>()) : baml.llm.StreamCache<TStream, TFinal>
+    root.llm.Stream { _client: primitive, _acc: acc, _sse: sse, _cache: cache } : baml.llm.Stream<TStream, TFinal>
+  }
+  !! 3541..3547: type `baml.ai.OpenAiCompatible$stream` has no member `_inner`
+  !! 3804..3812: type `baml.ai.OpenAiCompatible$stream` has no member `_headers`
+  !! 3485..3509: declared throws is `baml.errors.UnknownError`, but this function may also throw `unknown`
 }
 
 --- <builtin>/baml/ns_ai/providers/openai_realtime.baml ---

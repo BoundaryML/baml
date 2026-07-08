@@ -141,6 +141,7 @@ pub const ALL: &[BuiltinFile] = &[
     builtin!("baml", "ns_ai/capabilities/introspection.baml"),
     builtin!("baml", "ns_ai/combinators.baml"),
     builtin!("baml", "ns_ai/providers/openai.baml"),
+    builtin!("baml", "ns_ai/providers/openai_compatible.baml"),
     builtin!("baml", "ns_ai/providers/openai_responses.baml"),
     builtin!("baml", "ns_ai/providers/openai_strict.baml"),
     builtin!("baml", "ns_ai/providers/openai_realtime.baml"),

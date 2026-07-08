@@ -233,5 +233,36 @@ function native_provider_for(primitive: root.llm.PrimitiveClient) -> Provider | 
             append_output_schema: false,
         };
     }
+    if (primitive.provider == "openai-generic") {
+        // The compat class REQUIRES a base_url (that's its point); a config
+        // without one keeps the legacy builder. api_key maps to Bearer auth,
+        // no key means an unauthenticated local runtime.
+        match (primitive.options.base_url) {
+            null => {
+                return null;
+            },
+            let bu: string => {
+                match (primitive.options.model) {
+                    null => {
+                        return null;
+                    },
+                    let m: string => {
+                        let auth: BearerAuth | HeaderAuth | NoAuth = match (primitive.options.api_key) {
+                            null => NoAuth {},
+                            let k: string => BearerAuth { token: k },
+                        };
+                        return OpenAiCompatible {
+                            model: m,
+                            base_url: bu,
+                            auth: auth,
+                            extra_headers: primitive.options.headers,
+                            extra_body: primitive.options.request_body,
+                            append_output_schema: false,
+                        };
+                    },
+                }
+            },
+        }
+    }
     null
 }

@@ -1890,10 +1890,10 @@ fn baml.ai.drive_call(client: baml.ai.Provider, prompt: baml.llm.PromptAst) -> T
     let _12: bool
     let _13: bool
     let _14: bool
-    let _15: baml.ai.HttpProvider // h
-    let _16: baml.ai.ChatMessage[]
-    let _17: type
-    let _18: bool
+    let _15: bool
+    let _16: baml.ai.HttpProvider // h
+    let _17: baml.ai.ChatMessage[]
+    let _18: type
     let _19: bool
     let _20: bool
     let _21: bool
@@ -1901,193 +1901,205 @@ fn baml.ai.drive_call(client: baml.ai.Provider, prompt: baml.llm.PromptAst) -> T
     let _23: bool
     let _24: bool
     let _25: bool
-    let _26: baml.ai.Streaming // s
-    let _27: unknown // e
-    let _28: baml.llm.Stream<T, T>
-    let _29: baml.ai.ChatMessage[]
-    let _30: type
-    let _31: type
+    let _26: bool
+    let _27: bool
+    let _28: baml.ai.Streaming // s
+    let _29: unknown // e
+    let _30: baml.llm.Stream<T, T>
+    let _31: baml.ai.ChatMessage[]
     let _32: type
     let _33: type
-    let _34: bool
-    let _35: bool
+    let _34: type
+    let _35: type
     let _36: bool
     let _37: bool
     let _38: bool
-    let _39: baml.errors.StreamError // se
-    let _40: baml.errors.UnknownError
-    let _41: baml.errors.Io | baml.errors.LlmClient | baml.errors.UnknownError
-    let _42: string[]
-    let _43: baml.errors.Unsupported
+    let _39: bool
+    let _40: bool
+    let _41: baml.errors.StreamError // se
+    let _42: baml.errors.UnknownError
+    let _43: baml.errors.Io | baml.errors.LlmClient | baml.errors.UnknownError
+    let _44: string[]
+    let _45: baml.errors.Unsupported
 
     bb0: {
         _3 = sys_op const fn baml.ai.prompt_to_messages(copy _2) -> bb1;
     }
 
     bb1: {
-        _4 = is_type(copy _1, baml.ai.ToolLoop);
-        branch copy _4 -> [bb23, bb2];
+        _4 = is_type(copy _1, baml.ai.Traced);
+        branch copy _4 -> [bb25, bb2];
     }
 
     bb2: {
-        _5 = is_type(copy _1, baml.ai.Retry);
-        branch copy _5 -> [bb23, bb3];
+        _5 = is_type(copy _1, baml.ai.OpenAiCompatible);
+        branch copy _5 -> [bb25, bb3];
     }
 
     bb3: {
-        _6 = is_type(copy _1, baml.ai.OpenAi);
-        branch copy _6 -> [bb23, bb4];
+        _6 = is_type(copy _1, baml.ai.ToolLoop);
+        branch copy _6 -> [bb25, bb4];
     }
 
     bb4: {
-        _7 = is_type(copy _1, baml.ai.Gemini);
-        branch copy _7 -> [bb23, bb5];
+        _7 = is_type(copy _1, baml.ai.Retry);
+        branch copy _7 -> [bb25, bb5];
     }
 
     bb5: {
-        _8 = is_type(copy _1, baml.ai.OpenAiResponses);
-        branch copy _8 -> [bb23, bb6];
+        _8 = is_type(copy _1, baml.ai.OpenAi);
+        branch copy _8 -> [bb25, bb6];
     }
 
     bb6: {
-        _9 = is_type(copy _1, baml.ai.RoundRobin);
-        branch copy _9 -> [bb23, bb7];
+        _9 = is_type(copy _1, baml.ai.Gemini);
+        branch copy _9 -> [bb25, bb7];
     }
 
     bb7: {
-        _10 = is_type(copy _1, baml.ai.Fallback);
-        branch copy _10 -> [bb23, bb8];
+        _10 = is_type(copy _1, baml.ai.OpenAiResponses);
+        branch copy _10 -> [bb25, bb8];
     }
 
     bb8: {
-        _11 = is_type(copy _1, baml.ai.OpenAiStrict);
-        branch copy _11 -> [bb23, bb9];
+        _11 = is_type(copy _1, baml.ai.RoundRobin);
+        branch copy _11 -> [bb25, bb9];
     }
 
     bb9: {
-        _12 = is_type(copy _1, baml.ai.Anthropic);
-        branch copy _12 -> [bb23, bb10];
+        _12 = is_type(copy _1, baml.ai.Fallback);
+        branch copy _12 -> [bb25, bb10];
     }
 
     bb10: {
-        _13 = is_type(copy _1, baml.ai.Traced);
-        branch copy _13 -> [bb23, bb11];
+        _13 = is_type(copy _1, baml.ai.OpenAiStrict);
+        branch copy _13 -> [bb25, bb11];
     }
 
     bb11: {
-        _14 = is_type(copy _1, baml.llm.Client);
-        branch copy _14 -> [bb23, bb12];
+        _14 = is_type(copy _1, baml.ai.Anthropic);
+        branch copy _14 -> [bb25, bb12];
     }
 
     bb12: {
-        _18 = is_type(copy _1, baml.ai.Retry);
-        branch copy _18 -> [bb21, bb13];
+        _15 = is_type(copy _1, baml.llm.Client);
+        branch copy _15 -> [bb25, bb13];
     }
 
     bb13: {
-        _19 = is_type(copy _1, baml.ai.OpenAi);
-        branch copy _19 -> [bb21, bb14];
+        _19 = is_type(copy _1, baml.ai.Traced);
+        branch copy _19 -> [bb23, bb14];
     }
 
     bb14: {
-        _20 = is_type(copy _1, baml.ai.Gemini);
-        branch copy _20 -> [bb21, bb15];
+        _20 = is_type(copy _1, baml.ai.OpenAiCompatible);
+        branch copy _20 -> [bb23, bb15];
     }
 
     bb15: {
-        _21 = is_type(copy _1, baml.ai.RoundRobin);
-        branch copy _21 -> [bb21, bb16];
+        _21 = is_type(copy _1, baml.ai.Retry);
+        branch copy _21 -> [bb23, bb16];
     }
 
     bb16: {
-        _22 = is_type(copy _1, baml.ai.Fallback);
-        branch copy _22 -> [bb21, bb17];
+        _22 = is_type(copy _1, baml.ai.OpenAi);
+        branch copy _22 -> [bb23, bb17];
     }
 
     bb17: {
-        _23 = is_type(copy _1, baml.ai.Anthropic);
-        branch copy _23 -> [bb21, bb18];
+        _23 = is_type(copy _1, baml.ai.Gemini);
+        branch copy _23 -> [bb23, bb18];
     }
 
     bb18: {
-        _24 = is_type(copy _1, baml.ai.Traced);
-        branch copy _24 -> [bb21, bb19];
+        _24 = is_type(copy _1, baml.ai.RoundRobin);
+        branch copy _24 -> [bb23, bb19];
     }
 
     bb19: {
-        _25 = is_type(copy _1, baml.llm.Client);
-        branch copy _25 -> [bb21, bb20];
+        _25 = is_type(copy _1, baml.ai.Fallback);
+        branch copy _25 -> [bb23, bb20];
     }
 
     bb20: {
-        _43 = baml.errors.Unsupported { const "client's provider supports neither HttpProvider nor Streaming" };
-        throw copy _43;
+        _26 = is_type(copy _1, baml.ai.Anthropic);
+        branch copy _26 -> [bb23, bb21];
     }
 
     bb21: {
-        _26 = copy _1;
-        _29 = copy _3;
-        _30 = load_type(#0);
-        _31 = load_type(#0);
-        _28 = virtual_call stream_messages as baml.ai.Streaming<copy _30, copy _31>(copy _26, copy _29) -> [bb22, unwind: bb25];
+        _27 = is_type(copy _1, baml.llm.Client);
+        branch copy _27 -> [bb23, bb22];
     }
 
     bb22: {
-        _32 = load_type(#0);
-        _33 = load_type(#0);
-        _0 = call const fn baml.llm.Stream.final<copy _32, copy _33>(copy _28) -> [bb24, unwind: bb25];
+        _45 = baml.errors.Unsupported { const "client's provider supports neither HttpProvider nor Streaming" };
+        throw copy _45;
     }
 
     bb23: {
-        _15 = copy _1;
-        _16 = copy _3;
-        _17 = load_type(#0);
-        _0 = virtual_call call_messages as baml.ai.HttpProvider<copy _17>(copy _15, copy _16) -> [bb24];
+        _28 = copy _1;
+        _31 = copy _3;
+        _32 = load_type(#0);
+        _33 = load_type(#0);
+        _30 = virtual_call stream_messages as baml.ai.Streaming<copy _32, copy _33>(copy _28, copy _31) -> [bb24, unwind: bb27];
     }
 
     bb24: {
-        return;
+        _34 = load_type(#0);
+        _35 = load_type(#0);
+        _0 = call const fn baml.llm.Stream.final<copy _34, copy _35>(copy _30) -> [bb26, unwind: bb27];
     }
 
     bb25: {
-        _34 = is_type(copy _27, baml.errors.CannotRetry);
-        branch copy _34 -> [bb32, bb26];
+        _16 = copy _1;
+        _17 = copy _3;
+        _18 = load_type(#0);
+        _0 = virtual_call call_messages as baml.ai.HttpProvider<copy _18>(copy _16, copy _17) -> [bb26];
     }
 
     bb26: {
-        _35 = is_type(copy _27, baml.ai.AnthropicHttpError);
-        branch copy _35 -> [bb32, bb27];
+        return;
     }
 
     bb27: {
-        _36 = is_type(copy _27, baml.ai.GeminiHttpError);
-        branch copy _36 -> [bb32, bb28];
+        _36 = is_type(copy _29, baml.errors.CannotRetry);
+        branch copy _36 -> [bb34, bb28];
     }
 
     bb28: {
-        _37 = is_type(copy _27, baml.ai.OpenAiHttpError);
-        branch copy _37 -> [bb32, bb29];
+        _37 = is_type(copy _29, baml.ai.AnthropicHttpError);
+        branch copy _37 -> [bb34, bb29];
     }
 
     bb29: {
-        _38 = is_type(copy _27, baml.errors.Unsupported);
-        branch copy _38 -> [bb32, bb30];
+        _38 = is_type(copy _29, baml.ai.GeminiHttpError);
+        branch copy _38 -> [bb34, bb30];
     }
 
     bb30: {
-        throw_if_panic copy _27 -> bb31;
+        _39 = is_type(copy _29, baml.ai.OpenAiHttpError);
+        branch copy _39 -> [bb34, bb31];
     }
 
     bb31: {
-        _41 = copy _27;
-        _42 = [const "stream drain failed while degrading call -> stream"]: string[];
-        _40 = baml.errors.UnknownError { copy _41, copy _42 };
-        throw copy _40;
+        _40 = is_type(copy _29, baml.errors.Unsupported);
+        branch copy _40 -> [bb34, bb32];
     }
 
     bb32: {
-        _39 = copy _27;
-        throw copy _39;
+        throw_if_panic copy _29 -> bb33;
+    }
+
+    bb33: {
+        _43 = copy _29;
+        _44 = [const "stream drain failed while degrading call -> stream"]: string[];
+        _42 = baml.errors.UnknownError { copy _43, copy _44 };
+        throw copy _42;
+    }
+
+    bb34: {
+        _41 = copy _29;
+        throw copy _41;
     }
 }
 
@@ -2109,87 +2121,93 @@ fn baml.ai.drive_with(client: baml.ai.Provider, prompt: baml.llm.PromptAst, proj
     let _13: bool
     let _14: bool
     let _15: bool
-    let _16: baml.ai.HttpProvider // h
-    let _17: baml.ai.ChatMessage[]
-    let _18: type
+    let _16: bool
+    let _17: baml.ai.HttpProvider // h
+    let _18: baml.ai.ChatMessage[]
     let _19: type
     let _20: type
-    let _21: baml.errors.Unsupported
+    let _21: type
+    let _22: baml.errors.Unsupported
 
     bb0: {
         _4 = sys_op const fn baml.ai.prompt_to_messages(copy _2) -> bb1;
     }
 
     bb1: {
-        _5 = is_type(copy _1, baml.ai.ToolLoop);
-        branch copy _5 -> [bb13, bb2];
+        _5 = is_type(copy _1, baml.ai.Traced);
+        branch copy _5 -> [bb14, bb2];
     }
 
     bb2: {
-        _6 = is_type(copy _1, baml.ai.Retry);
-        branch copy _6 -> [bb13, bb3];
+        _6 = is_type(copy _1, baml.ai.OpenAiCompatible);
+        branch copy _6 -> [bb14, bb3];
     }
 
     bb3: {
-        _7 = is_type(copy _1, baml.ai.OpenAi);
-        branch copy _7 -> [bb13, bb4];
+        _7 = is_type(copy _1, baml.ai.ToolLoop);
+        branch copy _7 -> [bb14, bb4];
     }
 
     bb4: {
-        _8 = is_type(copy _1, baml.ai.Gemini);
-        branch copy _8 -> [bb13, bb5];
+        _8 = is_type(copy _1, baml.ai.Retry);
+        branch copy _8 -> [bb14, bb5];
     }
 
     bb5: {
-        _9 = is_type(copy _1, baml.ai.OpenAiResponses);
-        branch copy _9 -> [bb13, bb6];
+        _9 = is_type(copy _1, baml.ai.OpenAi);
+        branch copy _9 -> [bb14, bb6];
     }
 
     bb6: {
-        _10 = is_type(copy _1, baml.ai.RoundRobin);
-        branch copy _10 -> [bb13, bb7];
+        _10 = is_type(copy _1, baml.ai.Gemini);
+        branch copy _10 -> [bb14, bb7];
     }
 
     bb7: {
-        _11 = is_type(copy _1, baml.ai.Fallback);
-        branch copy _11 -> [bb13, bb8];
+        _11 = is_type(copy _1, baml.ai.OpenAiResponses);
+        branch copy _11 -> [bb14, bb8];
     }
 
     bb8: {
-        _12 = is_type(copy _1, baml.ai.OpenAiStrict);
-        branch copy _12 -> [bb13, bb9];
+        _12 = is_type(copy _1, baml.ai.RoundRobin);
+        branch copy _12 -> [bb14, bb9];
     }
 
     bb9: {
-        _13 = is_type(copy _1, baml.ai.Anthropic);
-        branch copy _13 -> [bb13, bb10];
+        _13 = is_type(copy _1, baml.ai.Fallback);
+        branch copy _13 -> [bb14, bb10];
     }
 
     bb10: {
-        _14 = is_type(copy _1, baml.ai.Traced);
-        branch copy _14 -> [bb13, bb11];
+        _14 = is_type(copy _1, baml.ai.OpenAiStrict);
+        branch copy _14 -> [bb14, bb11];
     }
 
     bb11: {
-        _15 = is_type(copy _1, baml.llm.Client);
-        branch copy _15 -> [bb13, bb12];
+        _15 = is_type(copy _1, baml.ai.Anthropic);
+        branch copy _15 -> [bb14, bb12];
     }
 
     bb12: {
-        _21 = baml.errors.Unsupported { const "client's provider does not support HttpProvider (call_with)" };
-        throw copy _21;
+        _16 = is_type(copy _1, baml.llm.Client);
+        branch copy _16 -> [bb14, bb13];
     }
 
     bb13: {
-        _16 = copy _1;
-        _17 = copy _4;
-        _18 = load_type(#0);
-        _19 = load_type(#1);
-        _20 = load_type(#2);
-        _0 = virtual_call call_messages_with as baml.ai.HttpProvider<copy _18, copy _19, copy _20>(copy _16, copy _17, copy _3) -> [bb14];
+        _22 = baml.errors.Unsupported { const "client's provider does not support HttpProvider (call_with)" };
+        throw copy _22;
     }
 
     bb14: {
+        _17 = copy _1;
+        _18 = copy _4;
+        _19 = load_type(#0);
+        _20 = load_type(#1);
+        _21 = load_type(#2);
+        _0 = virtual_call call_messages_with as baml.ai.HttpProvider<copy _19, copy _20, copy _21>(copy _17, copy _18, copy _3) -> [bb15];
+    }
+
+    bb15: {
         return;
     }
 }
@@ -2257,70 +2275,76 @@ fn baml.ai.drive_stream(client: baml.ai.Provider, prompt: baml.llm.PromptAst) ->
     let _9: bool
     let _10: bool
     let _11: bool
-    let _12: baml.ai.Streaming // s
-    let _13: baml.ai.ChatMessage[]
-    let _14: type
+    let _12: bool
+    let _13: baml.ai.Streaming // s
+    let _14: baml.ai.ChatMessage[]
     let _15: type
-    let _16: baml.errors.Unsupported
+    let _16: type
+    let _17: baml.errors.Unsupported
 
     bb0: {
         _3 = sys_op const fn baml.ai.prompt_to_messages(copy _2) -> bb1;
     }
 
     bb1: {
-        _4 = is_type(copy _1, baml.ai.Retry);
-        branch copy _4 -> [bb10, bb2];
+        _4 = is_type(copy _1, baml.ai.Traced);
+        branch copy _4 -> [bb11, bb2];
     }
 
     bb2: {
-        _5 = is_type(copy _1, baml.ai.OpenAi);
-        branch copy _5 -> [bb10, bb3];
+        _5 = is_type(copy _1, baml.ai.OpenAiCompatible);
+        branch copy _5 -> [bb11, bb3];
     }
 
     bb3: {
-        _6 = is_type(copy _1, baml.ai.Gemini);
-        branch copy _6 -> [bb10, bb4];
+        _6 = is_type(copy _1, baml.ai.Retry);
+        branch copy _6 -> [bb11, bb4];
     }
 
     bb4: {
-        _7 = is_type(copy _1, baml.ai.RoundRobin);
-        branch copy _7 -> [bb10, bb5];
+        _7 = is_type(copy _1, baml.ai.OpenAi);
+        branch copy _7 -> [bb11, bb5];
     }
 
     bb5: {
-        _8 = is_type(copy _1, baml.ai.Fallback);
-        branch copy _8 -> [bb10, bb6];
+        _8 = is_type(copy _1, baml.ai.Gemini);
+        branch copy _8 -> [bb11, bb6];
     }
 
     bb6: {
-        _9 = is_type(copy _1, baml.ai.Anthropic);
-        branch copy _9 -> [bb10, bb7];
+        _9 = is_type(copy _1, baml.ai.RoundRobin);
+        branch copy _9 -> [bb11, bb7];
     }
 
     bb7: {
-        _10 = is_type(copy _1, baml.ai.Traced);
-        branch copy _10 -> [bb10, bb8];
+        _10 = is_type(copy _1, baml.ai.Fallback);
+        branch copy _10 -> [bb11, bb8];
     }
 
     bb8: {
-        _11 = is_type(copy _1, baml.llm.Client);
-        branch copy _11 -> [bb10, bb9];
+        _11 = is_type(copy _1, baml.ai.Anthropic);
+        branch copy _11 -> [bb11, bb9];
     }
 
     bb9: {
-        _16 = baml.errors.Unsupported { const "client's provider does not support Streaming" };
-        throw copy _16;
+        _12 = is_type(copy _1, baml.llm.Client);
+        branch copy _12 -> [bb11, bb10];
     }
 
     bb10: {
-        _12 = copy _1;
-        _13 = copy _3;
-        _14 = load_type(#0);
-        _15 = load_type(#1);
-        _0 = virtual_call stream_messages as baml.ai.Streaming<copy _14, copy _15>(copy _12, copy _13) -> [bb11];
+        _17 = baml.errors.Unsupported { const "client's provider does not support Streaming" };
+        throw copy _17;
     }
 
     bb11: {
+        _13 = copy _1;
+        _14 = copy _3;
+        _15 = load_type(#0);
+        _16 = load_type(#1);
+        _0 = virtual_call stream_messages as baml.ai.Streaming<copy _15, copy _16>(copy _13, copy _14) -> [bb12];
+    }
+
+    bb12: {
         return;
     }
 }
@@ -3870,42 +3894,43 @@ fn baml.ai.Retry.root.ai.HttpProvider.call_messages_with(self: null, messages: b
     let _20: bool
     let _21: bool
     let _22: bool
-    let _23: baml.ai.HttpProvider // h
-    let _24: baml.ai.CallResult<T, baml.ai.ResponseMeta> // r0
-    let _25: unknown // e
-    let _26: (baml.ai.ResponseMeta) -> baml.ai.ResponseMeta throws never
-    let _27: type
+    let _23: bool
+    let _24: baml.ai.HttpProvider // h
+    let _25: baml.ai.CallResult<T, baml.ai.ResponseMeta> // r0
+    let _26: unknown // e
+    let _27: (baml.ai.ResponseMeta) -> baml.ai.ResponseMeta throws never
     let _28: type
     let _29: type
-    let _30: bool
+    let _30: type
     let _31: bool
     let _32: bool
     let _33: bool
     let _34: bool
     let _35: bool
-    let _36: baml.errors.Failure // f
-    let _37: bool
+    let _36: bool
+    let _37: baml.errors.Failure // f
     let _38: bool
-    let _39: int
+    let _39: bool
     let _40: int
     let _41: int
-    let _42: null
-    let _43: baml.time.Duration
-    let _44: int
+    let _42: int
+    let _43: null
+    let _44: baml.time.Duration
     let _45: int
-    let _46: bool
-    let _47: int
+    let _46: int
+    let _47: bool
     let _48: int
     let _49: int
-    let _50: null
-    let _51: baml.time.Duration
-    let _52: int
+    let _50: int
+    let _51: null
+    let _52: baml.time.Duration
     let _53: int
-    let _54: T
-    let _55: V
-    let _56: baml.ai.ResponseMeta
-    let _57: baml.errors.UnknownError
-    let _58: string[]
+    let _54: int
+    let _55: T
+    let _56: V
+    let _57: baml.ai.ResponseMeta
+    let _58: baml.errors.UnknownError
+    let _59: string[]
 
     bb0: {
         _5 = copy _1.0;
@@ -3935,101 +3960,101 @@ fn baml.ai.Retry.root.ai.HttpProvider.call_messages_with(self: null, messages: b
     }
 
     bb5: {
-        _30 = is_type(copy _25, baml.errors.CannotRetry);
-        branch copy _30 -> [bb17, bb6];
+        _31 = is_type(copy _26, baml.errors.CannotRetry);
+        branch copy _31 -> [bb17, bb6];
     }
 
     bb6: {
-        _31 = is_type(copy _25, baml.errors.LoopBudgetExceeded);
-        branch copy _31 -> [bb17, bb7];
+        _32 = is_type(copy _26, baml.errors.LoopBudgetExceeded);
+        branch copy _32 -> [bb17, bb7];
     }
 
     bb7: {
-        _32 = is_type(copy _25, baml.ai.AnthropicHttpError);
-        branch copy _32 -> [bb17, bb8];
+        _33 = is_type(copy _26, baml.ai.AnthropicHttpError);
+        branch copy _33 -> [bb17, bb8];
     }
 
     bb8: {
-        _33 = is_type(copy _25, baml.ai.GeminiHttpError);
-        branch copy _33 -> [bb17, bb9];
+        _34 = is_type(copy _26, baml.ai.GeminiHttpError);
+        branch copy _34 -> [bb17, bb9];
     }
 
     bb9: {
-        _34 = is_type(copy _25, baml.ai.OpenAiHttpError);
-        branch copy _34 -> [bb17, bb10];
+        _35 = is_type(copy _26, baml.ai.OpenAiHttpError);
+        branch copy _35 -> [bb17, bb10];
     }
 
     bb10: {
-        _35 = is_type(copy _25, baml.errors.Unsupported);
-        branch copy _35 -> [bb17, bb11];
+        _36 = is_type(copy _26, baml.errors.Unsupported);
+        branch copy _36 -> [bb17, bb11];
     }
 
     bb11: {
-        throw_if_panic copy _25 -> bb12;
+        throw_if_panic copy _26 -> bb12;
     }
 
     bb12: {
-        _47 = copy _7;
-        _48 = copy _1.1;
-        _46 = copy _47 < copy _48;
-        branch copy _46 -> [bb14, bb13];
+        _48 = copy _7;
+        _49 = copy _1.1;
+        _47 = copy _48 < copy _49;
+        branch copy _47 -> [bb14, bb13];
     }
 
     bb13: {
-        rethrow copy _25;
+        rethrow copy _26;
     }
 
     bb14: {
-        _49 = copy _7;
-        _7 = copy _49 + const 1_i64;
-        _52 = copy _8;
-        _51 = call const fn baml.time.Duration.from_milliseconds(copy _52) -> [bb15];
+        _50 = copy _7;
+        _7 = copy _50 + const 1_i64;
+        _53 = copy _8;
+        _52 = call const fn baml.time.Duration.from_milliseconds(copy _53) -> [bb15];
     }
 
     bb15: {
-        _50 = sys_op const fn baml.sys.sleep(copy _51) -> bb16;
+        _51 = sys_op const fn baml.sys.sleep(copy _52) -> bb16;
     }
 
     bb16: {
-        _53 = copy _8;
-        _8 = copy _53 * const 2_i64;
+        _54 = copy _8;
+        _8 = copy _54 * const 2_i64;
         goto -> bb24;
     }
 
     bb17: {
-        _36 = copy _25;
-        _39 = copy _7;
-        _40 = copy _1.1;
-        _38 = copy _39 < copy _40;
-        _37 = short_circuit(&&) copy _38 -> [eval: bb18, join: bb19];
+        _37 = copy _26;
+        _40 = copy _7;
+        _41 = copy _1.1;
+        _39 = copy _40 < copy _41;
+        _38 = short_circuit(&&) copy _39 -> [eval: bb18, join: bb19];
     }
 
     bb18: {
-        _37 = virtual_call is_retryable as baml.errors.Failure(copy _36) -> [bb19];
+        _38 = virtual_call is_retryable as baml.errors.Failure(copy _37) -> [bb19];
     }
 
     bb19: {
-        branch copy _37 -> [bb21, bb20];
+        branch copy _38 -> [bb21, bb20];
     }
 
     bb20: {
-        rethrow copy _25;
+        rethrow copy _26;
     }
 
     bb21: {
-        _41 = copy _7;
-        _7 = copy _41 + const 1_i64;
-        _44 = copy _8;
-        _43 = call const fn baml.time.Duration.from_milliseconds(copy _44) -> [bb22];
+        _42 = copy _7;
+        _7 = copy _42 + const 1_i64;
+        _45 = copy _8;
+        _44 = call const fn baml.time.Duration.from_milliseconds(copy _45) -> [bb22];
     }
 
     bb22: {
-        _42 = sys_op const fn baml.sys.sleep(copy _43) -> bb23;
+        _43 = sys_op const fn baml.sys.sleep(copy _44) -> bb23;
     }
 
     bb23: {
-        _45 = copy _8;
-        _8 = copy _45 * const 2_i64;
+        _46 = copy _8;
+        _8 = copy _46 * const 2_i64;
         goto -> bb24;
     }
 
@@ -4038,92 +4063,97 @@ fn baml.ai.Retry.root.ai.HttpProvider.call_messages_with(self: null, messages: b
     }
 
     bb25: {
-        _0 = call const fn baml.sys.panic(const "unreachable") -> [bb41];
+        _0 = call const fn baml.sys.panic(const "unreachable") -> [bb42];
     }
 
     bb26: {
         _11 = copy _1.0;
-        _12 = is_type(copy _11, baml.ai.ToolLoop);
-        branch copy _12 -> [bb38, bb27];
+        _12 = is_type(copy _11, baml.ai.Traced);
+        branch copy _12 -> [bb39, bb27];
     }
 
     bb27: {
-        _13 = is_type(copy _11, baml.ai.Retry);
-        branch copy _13 -> [bb38, bb28];
+        _13 = is_type(copy _11, baml.ai.OpenAiCompatible);
+        branch copy _13 -> [bb39, bb28];
     }
 
     bb28: {
-        _14 = is_type(copy _11, baml.ai.OpenAi);
-        branch copy _14 -> [bb38, bb29];
+        _14 = is_type(copy _11, baml.ai.ToolLoop);
+        branch copy _14 -> [bb39, bb29];
     }
 
     bb29: {
-        _15 = is_type(copy _11, baml.ai.Gemini);
-        branch copy _15 -> [bb38, bb30];
+        _15 = is_type(copy _11, baml.ai.Retry);
+        branch copy _15 -> [bb39, bb30];
     }
 
     bb30: {
-        _16 = is_type(copy _11, baml.ai.OpenAiResponses);
-        branch copy _16 -> [bb38, bb31];
+        _16 = is_type(copy _11, baml.ai.OpenAi);
+        branch copy _16 -> [bb39, bb31];
     }
 
     bb31: {
-        _17 = is_type(copy _11, baml.ai.RoundRobin);
-        branch copy _17 -> [bb38, bb32];
+        _17 = is_type(copy _11, baml.ai.Gemini);
+        branch copy _17 -> [bb39, bb32];
     }
 
     bb32: {
-        _18 = is_type(copy _11, baml.ai.Fallback);
-        branch copy _18 -> [bb38, bb33];
+        _18 = is_type(copy _11, baml.ai.OpenAiResponses);
+        branch copy _18 -> [bb39, bb33];
     }
 
     bb33: {
-        _19 = is_type(copy _11, baml.ai.OpenAiStrict);
-        branch copy _19 -> [bb38, bb34];
+        _19 = is_type(copy _11, baml.ai.RoundRobin);
+        branch copy _19 -> [bb39, bb34];
     }
 
     bb34: {
-        _20 = is_type(copy _11, baml.ai.Anthropic);
-        branch copy _20 -> [bb38, bb35];
+        _20 = is_type(copy _11, baml.ai.Fallback);
+        branch copy _20 -> [bb39, bb35];
     }
 
     bb35: {
-        _21 = is_type(copy _11, baml.ai.Traced);
-        branch copy _21 -> [bb38, bb36];
+        _21 = is_type(copy _11, baml.ai.OpenAiStrict);
+        branch copy _21 -> [bb39, bb36];
     }
 
     bb36: {
-        _22 = is_type(copy _11, baml.llm.Client);
-        branch copy _22 -> [bb38, bb37];
+        _22 = is_type(copy _11, baml.ai.Anthropic);
+        branch copy _22 -> [bb39, bb37];
     }
 
     bb37: {
-        _58 = [const "retry: inner is not callable"]: string[];
-        _57 = baml.errors.UnknownError { const null, copy _58 };
-        throw copy _57;
+        _23 = is_type(copy _11, baml.llm.Client);
+        branch copy _23 -> [bb39, bb38];
     }
 
     bb38: {
-        _23 = copy _11;
-        _26 = make_closure lambda[0]<3 type_args>();
-        _27 = load_type(#0);
-        _28 = load_type(baml.ai.ResponseMeta);
-        _29 = load_type(never);
-        _24 = virtual_call call_messages_with as baml.ai.HttpProvider<copy _27, copy _28, copy _29>(copy _23, copy _2, copy _26) -> [bb39, unwind: bb5];
+        _59 = [const "retry: inner is not callable"]: string[];
+        _58 = baml.errors.UnknownError { const null, copy _59 };
+        throw copy _58;
     }
 
     bb39: {
-        _54 = copy _24.0;
-        _56 = copy _24.1;
-        _55 = call copy _3(copy _56) -> [bb40];
+        _24 = copy _11;
+        _27 = make_closure lambda[0]<3 type_args>();
+        _28 = load_type(#0);
+        _29 = load_type(baml.ai.ResponseMeta);
+        _30 = load_type(never);
+        _25 = virtual_call call_messages_with as baml.ai.HttpProvider<copy _28, copy _29, copy _30>(copy _24, copy _2, copy _27) -> [bb40, unwind: bb5];
     }
 
     bb40: {
-        _0 = baml.ai.CallResult<#0, #1> { copy _54, copy _55 };
-        goto -> bb41;
+        _55 = copy _25.0;
+        _57 = copy _25.1;
+        _56 = call copy _3(copy _57) -> [bb41];
     }
 
     bb41: {
+        _0 = baml.ai.CallResult<#0, #1> { copy _55, copy _56 };
+        goto -> bb42;
+    }
+
+    bb42: {
         return;
     }
 }
@@ -4194,18 +4224,19 @@ fn baml.ai.Fallback.root.ai.HttpProvider.call_messages_with(self: null, messages
     let _45: bool
     let _46: bool
     let _47: bool
-    let _48: baml.ai.HttpProvider // h
-    let _49: baml.ai.CallResult<T, baml.ai.ResponseMeta> // r0
-    let _50: unknown // e
-    let _51: (baml.ai.ResponseMeta) -> baml.ai.ResponseMeta throws never
-    let _52: type
+    let _48: bool
+    let _49: baml.ai.HttpProvider // h
+    let _50: baml.ai.CallResult<T, baml.ai.ResponseMeta> // r0
+    let _51: unknown // e
+    let _52: (baml.ai.ResponseMeta) -> baml.ai.ResponseMeta throws never
     let _53: type
     let _54: type
-    let _55: T
-    let _56: V
-    let _57: baml.ai.ResponseMeta
-    let _58: baml.errors.UnknownError
-    let _59: string[]
+    let _55: type
+    let _56: T
+    let _57: V
+    let _58: baml.ai.ResponseMeta
+    let _59: baml.errors.UnknownError
+    let _60: string[]
 
     bb0: {
         _4 = copy _1.0;
@@ -4218,7 +4249,7 @@ fn baml.ai.Fallback.root.ai.HttpProvider.call_messages_with(self: null, messages
     }
 
     bb2: {
-        throw_if_panic copy _50 -> bb3;
+        throw_if_panic copy _51 -> bb3;
     }
 
     bb3: {
@@ -4333,95 +4364,100 @@ fn baml.ai.Fallback.root.ai.HttpProvider.call_messages_with(self: null, messages
 
     bb24: {
         _34 = is_type(copy _7, baml.iter.Done);
-        branch copy _34 -> [bb40, bb25];
+        branch copy _34 -> [bb41, bb25];
     }
 
     bb25: {
         _35 = copy _7;
         fresh_cell(_36);
         _36 = copy _35;
-        _37 = is_type(copy _36, baml.ai.ToolLoop);
-        branch copy _37 -> [bb36, bb26];
+        _37 = is_type(copy _36, baml.ai.Traced);
+        branch copy _37 -> [bb37, bb26];
     }
 
     bb26: {
-        _38 = is_type(copy _36, baml.ai.Retry);
-        branch copy _38 -> [bb36, bb27];
+        _38 = is_type(copy _36, baml.ai.OpenAiCompatible);
+        branch copy _38 -> [bb37, bb27];
     }
 
     bb27: {
-        _39 = is_type(copy _36, baml.ai.OpenAi);
-        branch copy _39 -> [bb36, bb28];
+        _39 = is_type(copy _36, baml.ai.ToolLoop);
+        branch copy _39 -> [bb37, bb28];
     }
 
     bb28: {
-        _40 = is_type(copy _36, baml.ai.Gemini);
-        branch copy _40 -> [bb36, bb29];
+        _40 = is_type(copy _36, baml.ai.Retry);
+        branch copy _40 -> [bb37, bb29];
     }
 
     bb29: {
-        _41 = is_type(copy _36, baml.ai.OpenAiResponses);
-        branch copy _41 -> [bb36, bb30];
+        _41 = is_type(copy _36, baml.ai.OpenAi);
+        branch copy _41 -> [bb37, bb30];
     }
 
     bb30: {
-        _42 = is_type(copy _36, baml.ai.RoundRobin);
-        branch copy _42 -> [bb36, bb31];
+        _42 = is_type(copy _36, baml.ai.Gemini);
+        branch copy _42 -> [bb37, bb31];
     }
 
     bb31: {
-        _43 = is_type(copy _36, baml.ai.Fallback);
-        branch copy _43 -> [bb36, bb32];
+        _43 = is_type(copy _36, baml.ai.OpenAiResponses);
+        branch copy _43 -> [bb37, bb32];
     }
 
     bb32: {
-        _44 = is_type(copy _36, baml.ai.OpenAiStrict);
-        branch copy _44 -> [bb36, bb33];
+        _44 = is_type(copy _36, baml.ai.RoundRobin);
+        branch copy _44 -> [bb37, bb33];
     }
 
     bb33: {
-        _45 = is_type(copy _36, baml.ai.Anthropic);
-        branch copy _45 -> [bb36, bb34];
+        _45 = is_type(copy _36, baml.ai.Fallback);
+        branch copy _45 -> [bb37, bb34];
     }
 
     bb34: {
-        _46 = is_type(copy _36, baml.ai.Traced);
-        branch copy _46 -> [bb36, bb35];
+        _46 = is_type(copy _36, baml.ai.OpenAiStrict);
+        branch copy _46 -> [bb37, bb35];
     }
 
     bb35: {
-        _47 = is_type(copy _36, baml.llm.Client);
-        branch copy _47 -> [bb36, bb3];
+        _47 = is_type(copy _36, baml.ai.Anthropic);
+        branch copy _47 -> [bb37, bb36];
     }
 
     bb36: {
-        _48 = copy _36;
-        _51 = make_closure lambda[0]<3 type_args>();
-        _52 = load_type(#0);
-        _53 = load_type(baml.ai.ResponseMeta);
-        _54 = load_type(never);
-        _49 = virtual_call call_messages_with as baml.ai.HttpProvider<copy _52, copy _53, copy _54>(copy _48, copy _2, copy _51) -> [bb37, unwind: bb2];
+        _48 = is_type(copy _36, baml.llm.Client);
+        branch copy _48 -> [bb37, bb3];
     }
 
     bb37: {
-        _55 = copy _49.0;
-        _57 = copy _49.1;
-        _56 = call copy _3(copy _57) -> [bb38];
+        _49 = copy _36;
+        _52 = make_closure lambda[0]<3 type_args>();
+        _53 = load_type(#0);
+        _54 = load_type(baml.ai.ResponseMeta);
+        _55 = load_type(never);
+        _50 = virtual_call call_messages_with as baml.ai.HttpProvider<copy _53, copy _54, copy _55>(copy _49, copy _2, copy _52) -> [bb38, unwind: bb2];
     }
 
     bb38: {
-        _0 = baml.ai.CallResult<#0, #1> { copy _55, copy _56 };
-        goto -> bb39;
+        _56 = copy _50.0;
+        _58 = copy _50.1;
+        _57 = call copy _3(copy _58) -> [bb39];
     }
 
     bb39: {
-        return;
+        _0 = baml.ai.CallResult<#0, #1> { copy _56, copy _57 };
+        goto -> bb40;
     }
 
     bb40: {
-        _59 = [const "fallback: all providers failed"]: string[];
-        _58 = baml.errors.UnknownError { const null, copy _59 };
-        throw copy _58;
+        return;
+    }
+
+    bb41: {
+        _60 = [const "fallback: all providers failed"]: string[];
+        _59 = baml.errors.UnknownError { const null, copy _60 };
+        throw copy _59;
     }
 }
 
@@ -4459,110 +4495,116 @@ fn baml.ai.Traced.root.ai.HttpProvider.call_messages_with(self: null, messages: 
     let _13: bool
     let _14: bool
     let _15: bool
-    let _16: baml.ai.HttpProvider // h
-    let _17: baml.ai.CallResult<T, baml.ai.ResponseMeta> // r0
-    let _18: (baml.ai.ResponseMeta) -> baml.ai.ResponseMeta throws never
-    let _19: type
+    let _16: bool
+    let _17: baml.ai.HttpProvider // h
+    let _18: baml.ai.CallResult<T, baml.ai.ResponseMeta> // r0
+    let _19: (baml.ai.ResponseMeta) -> baml.ai.ResponseMeta throws never
     let _20: type
     let _21: type
-    let _22: null
-    let _23: (baml.ai.ResponseMeta) -> null throws never
-    let _24: baml.ai.ResponseMeta
-    let _25: T
-    let _26: V
-    let _27: baml.ai.ResponseMeta
-    let _28: baml.errors.UnknownError
-    let _29: string[]
+    let _22: type
+    let _23: null
+    let _24: (baml.ai.ResponseMeta) -> null throws never
+    let _25: baml.ai.ResponseMeta
+    let _26: T
+    let _27: V
+    let _28: baml.ai.ResponseMeta
+    let _29: baml.errors.UnknownError
+    let _30: string[]
 
     bb0: {
         _4 = copy _1.0;
-        _5 = is_type(copy _4, baml.ai.ToolLoop);
-        branch copy _5 -> [bb12, bb1];
+        _5 = is_type(copy _4, baml.ai.Traced);
+        branch copy _5 -> [bb13, bb1];
     }
 
     bb1: {
-        _6 = is_type(copy _4, baml.ai.Retry);
-        branch copy _6 -> [bb12, bb2];
+        _6 = is_type(copy _4, baml.ai.OpenAiCompatible);
+        branch copy _6 -> [bb13, bb2];
     }
 
     bb2: {
-        _7 = is_type(copy _4, baml.ai.OpenAi);
-        branch copy _7 -> [bb12, bb3];
+        _7 = is_type(copy _4, baml.ai.ToolLoop);
+        branch copy _7 -> [bb13, bb3];
     }
 
     bb3: {
-        _8 = is_type(copy _4, baml.ai.Gemini);
-        branch copy _8 -> [bb12, bb4];
+        _8 = is_type(copy _4, baml.ai.Retry);
+        branch copy _8 -> [bb13, bb4];
     }
 
     bb4: {
-        _9 = is_type(copy _4, baml.ai.OpenAiResponses);
-        branch copy _9 -> [bb12, bb5];
+        _9 = is_type(copy _4, baml.ai.OpenAi);
+        branch copy _9 -> [bb13, bb5];
     }
 
     bb5: {
-        _10 = is_type(copy _4, baml.ai.RoundRobin);
-        branch copy _10 -> [bb12, bb6];
+        _10 = is_type(copy _4, baml.ai.Gemini);
+        branch copy _10 -> [bb13, bb6];
     }
 
     bb6: {
-        _11 = is_type(copy _4, baml.ai.Fallback);
-        branch copy _11 -> [bb12, bb7];
+        _11 = is_type(copy _4, baml.ai.OpenAiResponses);
+        branch copy _11 -> [bb13, bb7];
     }
 
     bb7: {
-        _12 = is_type(copy _4, baml.ai.OpenAiStrict);
-        branch copy _12 -> [bb12, bb8];
+        _12 = is_type(copy _4, baml.ai.RoundRobin);
+        branch copy _12 -> [bb13, bb8];
     }
 
     bb8: {
-        _13 = is_type(copy _4, baml.ai.Anthropic);
-        branch copy _13 -> [bb12, bb9];
+        _13 = is_type(copy _4, baml.ai.Fallback);
+        branch copy _13 -> [bb13, bb9];
     }
 
     bb9: {
-        _14 = is_type(copy _4, baml.ai.Traced);
-        branch copy _14 -> [bb12, bb10];
+        _14 = is_type(copy _4, baml.ai.OpenAiStrict);
+        branch copy _14 -> [bb13, bb10];
     }
 
     bb10: {
-        _15 = is_type(copy _4, baml.llm.Client);
-        branch copy _15 -> [bb12, bb11];
+        _15 = is_type(copy _4, baml.ai.Anthropic);
+        branch copy _15 -> [bb13, bb11];
     }
 
     bb11: {
-        _29 = [const "traced: inner is not callable"]: string[];
-        _28 = baml.errors.UnknownError { const null, copy _29 };
-        throw copy _28;
+        _16 = is_type(copy _4, baml.llm.Client);
+        branch copy _16 -> [bb13, bb12];
     }
 
     bb12: {
-        _16 = copy _4;
-        _18 = make_closure lambda[0]<3 type_args>();
-        _19 = load_type(#0);
-        _20 = load_type(baml.ai.ResponseMeta);
-        _21 = load_type(never);
-        _17 = virtual_call call_messages_with as baml.ai.HttpProvider<copy _19, copy _20, copy _21>(copy _16, copy _2, copy _18) -> [bb13];
+        _30 = [const "traced: inner is not callable"]: string[];
+        _29 = baml.errors.UnknownError { const null, copy _30 };
+        throw copy _29;
     }
 
     bb13: {
-        _23 = copy _1.1;
-        _24 = copy _17.1;
-        _22 = call const fn baml.ai.UsageMeter.record(copy _23, copy _24) -> [bb14];
+        _17 = copy _4;
+        _19 = make_closure lambda[0]<3 type_args>();
+        _20 = load_type(#0);
+        _21 = load_type(baml.ai.ResponseMeta);
+        _22 = load_type(never);
+        _18 = virtual_call call_messages_with as baml.ai.HttpProvider<copy _20, copy _21, copy _22>(copy _17, copy _2, copy _19) -> [bb14];
     }
 
     bb14: {
-        _25 = copy _17.0;
-        _27 = copy _17.1;
-        _26 = call copy _3(copy _27) -> [bb15];
+        _24 = copy _1.1;
+        _25 = copy _18.1;
+        _23 = call const fn baml.ai.UsageMeter.record(copy _24, copy _25) -> [bb15];
     }
 
     bb15: {
-        _0 = baml.ai.CallResult<#0, #1> { copy _25, copy _26 };
-        goto -> bb16;
+        _26 = copy _18.0;
+        _28 = copy _18.1;
+        _27 = call copy _3(copy _28) -> [bb16];
     }
 
     bb16: {
+        _0 = baml.ai.CallResult<#0, #1> { copy _26, copy _27 };
+        goto -> bb17;
+    }
+
+    bb17: {
         return;
     }
 }
@@ -4614,12 +4656,13 @@ fn baml.ai.RoundRobin.root.ai.HttpProvider.call_messages_with(self: null, messag
     let _26: bool
     let _27: bool
     let _28: bool
-    let _29: baml.ai.HttpProvider // h
-    let _30: type
+    let _29: bool
+    let _30: baml.ai.HttpProvider // h
     let _31: type
     let _32: type
-    let _33: baml.errors.UnknownError
-    let _34: string[]
+    let _33: type
+    let _34: baml.errors.UnknownError
+    let _35: string[]
 
     bb0: {
         _5 = copy _1.0;
@@ -4630,7 +4673,7 @@ fn baml.ai.RoundRobin.root.ai.HttpProvider.call_messages_with(self: null, messag
     bb1: {
         _7 = copy _4;
         _6 = copy _7 == const 0_i64;
-        branch copy _6 -> [bb17, bb2];
+        branch copy _6 -> [bb18, bb2];
     }
 
     bb2: {
@@ -4646,79 +4689,84 @@ fn baml.ai.RoundRobin.root.ai.HttpProvider.call_messages_with(self: null, messag
     }
 
     bb3: {
-        _18 = is_type(copy _14, baml.ai.ToolLoop);
-        branch copy _18 -> [bb15, bb4];
+        _18 = is_type(copy _14, baml.ai.Traced);
+        branch copy _18 -> [bb16, bb4];
     }
 
     bb4: {
-        _19 = is_type(copy _14, baml.ai.Retry);
-        branch copy _19 -> [bb15, bb5];
+        _19 = is_type(copy _14, baml.ai.OpenAiCompatible);
+        branch copy _19 -> [bb16, bb5];
     }
 
     bb5: {
-        _20 = is_type(copy _14, baml.ai.OpenAi);
-        branch copy _20 -> [bb15, bb6];
+        _20 = is_type(copy _14, baml.ai.ToolLoop);
+        branch copy _20 -> [bb16, bb6];
     }
 
     bb6: {
-        _21 = is_type(copy _14, baml.ai.Gemini);
-        branch copy _21 -> [bb15, bb7];
+        _21 = is_type(copy _14, baml.ai.Retry);
+        branch copy _21 -> [bb16, bb7];
     }
 
     bb7: {
-        _22 = is_type(copy _14, baml.ai.OpenAiResponses);
-        branch copy _22 -> [bb15, bb8];
+        _22 = is_type(copy _14, baml.ai.OpenAi);
+        branch copy _22 -> [bb16, bb8];
     }
 
     bb8: {
-        _23 = is_type(copy _14, baml.ai.RoundRobin);
-        branch copy _23 -> [bb15, bb9];
+        _23 = is_type(copy _14, baml.ai.Gemini);
+        branch copy _23 -> [bb16, bb9];
     }
 
     bb9: {
-        _24 = is_type(copy _14, baml.ai.Fallback);
-        branch copy _24 -> [bb15, bb10];
+        _24 = is_type(copy _14, baml.ai.OpenAiResponses);
+        branch copy _24 -> [bb16, bb10];
     }
 
     bb10: {
-        _25 = is_type(copy _14, baml.ai.OpenAiStrict);
-        branch copy _25 -> [bb15, bb11];
+        _25 = is_type(copy _14, baml.ai.RoundRobin);
+        branch copy _25 -> [bb16, bb11];
     }
 
     bb11: {
-        _26 = is_type(copy _14, baml.ai.Anthropic);
-        branch copy _26 -> [bb15, bb12];
+        _26 = is_type(copy _14, baml.ai.Fallback);
+        branch copy _26 -> [bb16, bb12];
     }
 
     bb12: {
-        _27 = is_type(copy _14, baml.ai.Traced);
-        branch copy _27 -> [bb15, bb13];
+        _27 = is_type(copy _14, baml.ai.OpenAiStrict);
+        branch copy _27 -> [bb16, bb13];
     }
 
     bb13: {
-        _28 = is_type(copy _14, baml.llm.Client);
-        branch copy _28 -> [bb15, bb14];
+        _28 = is_type(copy _14, baml.ai.Anthropic);
+        branch copy _28 -> [bb16, bb14];
     }
 
     bb14: {
-        _34 = [const "round_robin: member not callable"]: string[];
-        _33 = baml.errors.UnknownError { const null, copy _34 };
-        throw copy _33;
+        _29 = is_type(copy _14, baml.llm.Client);
+        branch copy _29 -> [bb16, bb15];
     }
 
     bb15: {
-        _29 = copy _14;
-        _30 = load_type(#0);
-        _31 = load_type(#1);
-        _32 = load_type(#2);
-        _0 = virtual_call call_messages_with as baml.ai.HttpProvider<copy _30, copy _31, copy _32>(copy _29, copy _2, copy _3) -> [bb16];
+        _35 = [const "round_robin: member not callable"]: string[];
+        _34 = baml.errors.UnknownError { const null, copy _35 };
+        throw copy _34;
     }
 
     bb16: {
-        return;
+        _30 = copy _14;
+        _31 = load_type(#0);
+        _32 = load_type(#1);
+        _33 = load_type(#2);
+        _0 = virtual_call call_messages_with as baml.ai.HttpProvider<copy _31, copy _32, copy _33>(copy _30, copy _2, copy _3) -> [bb17];
     }
 
     bb17: {
+        return;
+    }
+
+    bb18: {
         _9 = [const "round_robin: no members"]: string[];
         _8 = baml.errors.UnknownError { const null, copy _9 };
         throw copy _8;
@@ -4990,11 +5038,12 @@ fn baml.ai.RoundRobin.root.ai.Streaming.stream_messages(self: null, messages: ba
     let _22: bool
     let _23: bool
     let _24: bool
-    let _25: baml.ai.Streaming // s
-    let _26: type
+    let _25: bool
+    let _26: baml.ai.Streaming // s
     let _27: type
-    let _28: baml.errors.UnknownError
-    let _29: string[]
+    let _28: type
+    let _29: baml.errors.UnknownError
+    let _30: string[]
 
     bb0: {
         _4 = copy _1.0;
@@ -5005,7 +5054,7 @@ fn baml.ai.RoundRobin.root.ai.Streaming.stream_messages(self: null, messages: ba
     bb1: {
         _6 = copy _3;
         _5 = copy _6 == const 0_i64;
-        branch copy _5 -> [bb14, bb2];
+        branch copy _5 -> [bb15, bb2];
     }
 
     bb2: {
@@ -5021,63 +5070,68 @@ fn baml.ai.RoundRobin.root.ai.Streaming.stream_messages(self: null, messages: ba
     }
 
     bb3: {
-        _17 = is_type(copy _13, baml.ai.Retry);
-        branch copy _17 -> [bb12, bb4];
+        _17 = is_type(copy _13, baml.ai.Traced);
+        branch copy _17 -> [bb13, bb4];
     }
 
     bb4: {
-        _18 = is_type(copy _13, baml.ai.OpenAi);
-        branch copy _18 -> [bb12, bb5];
+        _18 = is_type(copy _13, baml.ai.OpenAiCompatible);
+        branch copy _18 -> [bb13, bb5];
     }
 
     bb5: {
-        _19 = is_type(copy _13, baml.ai.Gemini);
-        branch copy _19 -> [bb12, bb6];
+        _19 = is_type(copy _13, baml.ai.Retry);
+        branch copy _19 -> [bb13, bb6];
     }
 
     bb6: {
-        _20 = is_type(copy _13, baml.ai.RoundRobin);
-        branch copy _20 -> [bb12, bb7];
+        _20 = is_type(copy _13, baml.ai.OpenAi);
+        branch copy _20 -> [bb13, bb7];
     }
 
     bb7: {
-        _21 = is_type(copy _13, baml.ai.Fallback);
-        branch copy _21 -> [bb12, bb8];
+        _21 = is_type(copy _13, baml.ai.Gemini);
+        branch copy _21 -> [bb13, bb8];
     }
 
     bb8: {
-        _22 = is_type(copy _13, baml.ai.Anthropic);
-        branch copy _22 -> [bb12, bb9];
+        _22 = is_type(copy _13, baml.ai.RoundRobin);
+        branch copy _22 -> [bb13, bb9];
     }
 
     bb9: {
-        _23 = is_type(copy _13, baml.ai.Traced);
-        branch copy _23 -> [bb12, bb10];
+        _23 = is_type(copy _13, baml.ai.Fallback);
+        branch copy _23 -> [bb13, bb10];
     }
 
     bb10: {
-        _24 = is_type(copy _13, baml.llm.Client);
-        branch copy _24 -> [bb12, bb11];
+        _24 = is_type(copy _13, baml.ai.Anthropic);
+        branch copy _24 -> [bb13, bb11];
     }
 
     bb11: {
-        _29 = [const "round_robin: member not streaming"]: string[];
-        _28 = baml.errors.UnknownError { const null, copy _29 };
-        throw copy _28;
+        _25 = is_type(copy _13, baml.llm.Client);
+        branch copy _25 -> [bb13, bb12];
     }
 
     bb12: {
-        _25 = copy _13;
-        _26 = load_type(#0);
-        _27 = load_type(#1);
-        _0 = virtual_call stream_messages as baml.ai.Streaming<copy _26, copy _27>(copy _25, copy _2) -> [bb13];
+        _30 = [const "round_robin: member not streaming"]: string[];
+        _29 = baml.errors.UnknownError { const null, copy _30 };
+        throw copy _29;
     }
 
     bb13: {
-        return;
+        _26 = copy _13;
+        _27 = load_type(#0);
+        _28 = load_type(#1);
+        _0 = virtual_call stream_messages as baml.ai.Streaming<copy _27, copy _28>(copy _26, copy _2) -> [bb14];
     }
 
     bb14: {
+        return;
+    }
+
+    bb15: {
         _8 = [const "round_robin: no members"]: string[];
         _7 = baml.errors.UnknownError { const null, copy _8 };
         throw copy _7;
@@ -5105,38 +5159,39 @@ fn baml.ai.Retry.root.ai.Streaming.stream_messages(self: null, messages: baml.ai
     let _16: bool
     let _17: bool
     let _18: bool
-    let _19: baml.ai.Streaming // s
-    let _20: baml.llm.Stream<TStream, TFinal> // st
-    let _21: unknown // e
-    let _22: type
+    let _19: bool
+    let _20: baml.ai.Streaming // s
+    let _21: baml.llm.Stream<TStream, TFinal> // st
+    let _22: unknown // e
     let _23: type
-    let _24: bool
+    let _24: type
     let _25: bool
     let _26: bool
     let _27: bool
     let _28: bool
-    let _29: baml.errors.Failure // f
-    let _30: bool
+    let _29: bool
+    let _30: baml.errors.Failure // f
     let _31: bool
-    let _32: int
+    let _32: bool
     let _33: int
     let _34: int
-    let _35: null
-    let _36: unknown // se
-    let _37: baml.time.Duration
-    let _38: int
+    let _35: int
+    let _36: null
+    let _37: unknown // se
+    let _38: baml.time.Duration
     let _39: int
-    let _40: bool
-    let _41: int
+    let _40: int
+    let _41: bool
     let _42: int
     let _43: int
-    let _44: null
-    let _45: unknown // se
-    let _46: baml.time.Duration
-    let _47: int
+    let _44: int
+    let _45: null
+    let _46: unknown // se
+    let _47: baml.time.Duration
     let _48: int
-    let _49: baml.errors.UnknownError
-    let _50: string[]
+    let _49: int
+    let _50: baml.errors.UnknownError
+    let _51: string[]
 
     bb0: {
         _4 = copy _1.0;
@@ -5166,17 +5221,17 @@ fn baml.ai.Retry.root.ai.Streaming.stream_messages(self: null, messages: baml.ai
     }
 
     bb5: {
-        throw_if_panic copy _45 -> bb6;
+        throw_if_panic copy _46 -> bb6;
     }
 
     bb6: {
-        _44 = const null;
+        _45 = const null;
         goto -> bb7;
     }
 
     bb7: {
-        _48 = copy _7;
-        _7 = copy _48 * const 2_i64;
+        _49 = copy _7;
+        _7 = copy _49 * const 2_i64;
         goto -> bb8;
     }
 
@@ -5185,166 +5240,171 @@ fn baml.ai.Retry.root.ai.Streaming.stream_messages(self: null, messages: baml.ai
     }
 
     bb9: {
-        _0 = call const fn baml.sys.panic(const "unreachable") -> [bb40];
+        _0 = call const fn baml.sys.panic(const "unreachable") -> [bb41];
     }
 
     bb10: {
         _10 = copy _1.0;
-        _11 = is_type(copy _10, baml.ai.Retry);
-        branch copy _11 -> [bb19, bb11];
+        _11 = is_type(copy _10, baml.ai.Traced);
+        branch copy _11 -> [bb20, bb11];
     }
 
     bb11: {
-        _12 = is_type(copy _10, baml.ai.OpenAi);
-        branch copy _12 -> [bb19, bb12];
+        _12 = is_type(copy _10, baml.ai.OpenAiCompatible);
+        branch copy _12 -> [bb20, bb12];
     }
 
     bb12: {
-        _13 = is_type(copy _10, baml.ai.Gemini);
-        branch copy _13 -> [bb19, bb13];
+        _13 = is_type(copy _10, baml.ai.Retry);
+        branch copy _13 -> [bb20, bb13];
     }
 
     bb13: {
-        _14 = is_type(copy _10, baml.ai.RoundRobin);
-        branch copy _14 -> [bb19, bb14];
+        _14 = is_type(copy _10, baml.ai.OpenAi);
+        branch copy _14 -> [bb20, bb14];
     }
 
     bb14: {
-        _15 = is_type(copy _10, baml.ai.Fallback);
-        branch copy _15 -> [bb19, bb15];
+        _15 = is_type(copy _10, baml.ai.Gemini);
+        branch copy _15 -> [bb20, bb15];
     }
 
     bb15: {
-        _16 = is_type(copy _10, baml.ai.Anthropic);
-        branch copy _16 -> [bb19, bb16];
+        _16 = is_type(copy _10, baml.ai.RoundRobin);
+        branch copy _16 -> [bb20, bb16];
     }
 
     bb16: {
-        _17 = is_type(copy _10, baml.ai.Traced);
-        branch copy _17 -> [bb19, bb17];
+        _17 = is_type(copy _10, baml.ai.Fallback);
+        branch copy _17 -> [bb20, bb17];
     }
 
     bb17: {
-        _18 = is_type(copy _10, baml.llm.Client);
-        branch copy _18 -> [bb19, bb18];
+        _18 = is_type(copy _10, baml.ai.Anthropic);
+        branch copy _18 -> [bb20, bb18];
     }
 
     bb18: {
-        _50 = [const "retry: inner is not streaming"]: string[];
-        _49 = baml.errors.UnknownError { const null, copy _50 };
-        throw copy _49;
+        _19 = is_type(copy _10, baml.llm.Client);
+        branch copy _19 -> [bb20, bb19];
     }
 
     bb19: {
-        _19 = copy _10;
-        _22 = load_type(#0);
-        _23 = load_type(#1);
-        _20 = virtual_call stream_messages as baml.ai.Streaming<copy _22, copy _23>(copy _19, copy _2) -> [bb39, unwind: bb20];
+        _51 = [const "retry: inner is not streaming"]: string[];
+        _50 = baml.errors.UnknownError { const null, copy _51 };
+        throw copy _50;
     }
 
     bb20: {
-        _24 = is_type(copy _21, baml.errors.CannotRetry);
-        branch copy _24 -> [bb30, bb21];
+        _20 = copy _10;
+        _23 = load_type(#0);
+        _24 = load_type(#1);
+        _21 = virtual_call stream_messages as baml.ai.Streaming<copy _23, copy _24>(copy _20, copy _2) -> [bb40, unwind: bb21];
     }
 
     bb21: {
-        _25 = is_type(copy _21, baml.ai.AnthropicHttpError);
-        branch copy _25 -> [bb30, bb22];
+        _25 = is_type(copy _22, baml.errors.CannotRetry);
+        branch copy _25 -> [bb31, bb22];
     }
 
     bb22: {
-        _26 = is_type(copy _21, baml.ai.GeminiHttpError);
-        branch copy _26 -> [bb30, bb23];
+        _26 = is_type(copy _22, baml.ai.AnthropicHttpError);
+        branch copy _26 -> [bb31, bb23];
     }
 
     bb23: {
-        _27 = is_type(copy _21, baml.ai.OpenAiHttpError);
-        branch copy _27 -> [bb30, bb24];
+        _27 = is_type(copy _22, baml.ai.GeminiHttpError);
+        branch copy _27 -> [bb31, bb24];
     }
 
     bb24: {
-        _28 = is_type(copy _21, baml.errors.Unsupported);
-        branch copy _28 -> [bb30, bb25];
+        _28 = is_type(copy _22, baml.ai.OpenAiHttpError);
+        branch copy _28 -> [bb31, bb25];
     }
 
     bb25: {
-        throw_if_panic copy _21 -> bb26;
+        _29 = is_type(copy _22, baml.errors.Unsupported);
+        branch copy _29 -> [bb31, bb26];
     }
 
     bb26: {
-        _41 = copy _6;
-        _42 = copy _1.1;
-        _40 = copy _41 < copy _42;
-        branch copy _40 -> [bb28, bb27];
+        throw_if_panic copy _22 -> bb27;
     }
 
     bb27: {
-        rethrow copy _21;
+        _42 = copy _6;
+        _43 = copy _1.1;
+        _41 = copy _42 < copy _43;
+        branch copy _41 -> [bb29, bb28];
     }
 
     bb28: {
-        _43 = copy _6;
-        _6 = copy _43 + const 1_i64;
-        _47 = copy _7;
-        _46 = call const fn baml.time.Duration.from_milliseconds(copy _47) -> [bb29, unwind: bb5];
+        rethrow copy _22;
     }
 
     bb29: {
-        _44 = sys_op const fn baml.sys.sleep(copy _46) -> bb7 unwind bb5;
+        _44 = copy _6;
+        _6 = copy _44 + const 1_i64;
+        _48 = copy _7;
+        _47 = call const fn baml.time.Duration.from_milliseconds(copy _48) -> [bb30, unwind: bb5];
     }
 
     bb30: {
-        _29 = copy _21;
-        _32 = copy _6;
-        _33 = copy _1.1;
-        _31 = copy _32 < copy _33;
-        _30 = short_circuit(&&) copy _31 -> [eval: bb31, join: bb32];
+        _45 = sys_op const fn baml.sys.sleep(copy _47) -> bb7 unwind bb5;
     }
 
     bb31: {
-        _30 = virtual_call is_retryable as baml.errors.Failure(copy _29) -> [bb32];
+        _30 = copy _22;
+        _33 = copy _6;
+        _34 = copy _1.1;
+        _32 = copy _33 < copy _34;
+        _31 = short_circuit(&&) copy _32 -> [eval: bb32, join: bb33];
     }
 
     bb32: {
-        branch copy _30 -> [bb34, bb33];
+        _31 = virtual_call is_retryable as baml.errors.Failure(copy _30) -> [bb33];
     }
 
     bb33: {
-        rethrow copy _21;
+        branch copy _31 -> [bb35, bb34];
     }
 
     bb34: {
-        _34 = copy _6;
-        _6 = copy _34 + const 1_i64;
-        _38 = copy _7;
-        _37 = call const fn baml.time.Duration.from_milliseconds(copy _38) -> [bb35, unwind: bb36];
+        rethrow copy _22;
     }
 
     bb35: {
-        _35 = sys_op const fn baml.sys.sleep(copy _37) -> bb38 unwind bb36;
+        _35 = copy _6;
+        _6 = copy _35 + const 1_i64;
+        _39 = copy _7;
+        _38 = call const fn baml.time.Duration.from_milliseconds(copy _39) -> [bb36, unwind: bb37];
     }
 
     bb36: {
-        throw_if_panic copy _36 -> bb37;
+        _36 = sys_op const fn baml.sys.sleep(copy _38) -> bb39 unwind bb37;
     }
 
     bb37: {
-        _35 = const null;
-        goto -> bb38;
+        throw_if_panic copy _37 -> bb38;
     }
 
     bb38: {
-        _39 = copy _7;
-        _7 = copy _39 * const 2_i64;
-        goto -> bb8;
+        _36 = const null;
+        goto -> bb39;
     }
 
     bb39: {
-        _0 = copy _20;
-        goto -> bb40;
+        _40 = copy _7;
+        _7 = copy _40 * const 2_i64;
+        goto -> bb8;
     }
 
     bb40: {
+        _0 = copy _21;
+        goto -> bb41;
+    }
+
+    bb41: {
         return;
     }
 }
@@ -5395,13 +5455,14 @@ fn baml.ai.Fallback.root.ai.Streaming.stream_messages(self: null, messages: baml
     let _41: bool
     let _42: bool
     let _43: bool
-    let _44: baml.ai.Streaming // s
-    let _45: baml.llm.Stream<TStream, TFinal> // st
-    let _46: unknown // e
-    let _47: type
+    let _44: bool
+    let _45: baml.ai.Streaming // s
+    let _46: baml.llm.Stream<TStream, TFinal> // st
+    let _47: unknown // e
     let _48: type
-    let _49: baml.errors.UnknownError
-    let _50: string[]
+    let _49: type
+    let _50: baml.errors.UnknownError
+    let _51: string[]
 
     bb0: {
         _3 = copy _1.0;
@@ -5414,7 +5475,7 @@ fn baml.ai.Fallback.root.ai.Streaming.stream_messages(self: null, messages: baml
     }
 
     bb2: {
-        throw_if_panic copy _46 -> bb3;
+        throw_if_panic copy _47 -> bb3;
     }
 
     bb3: {
@@ -5529,72 +5590,77 @@ fn baml.ai.Fallback.root.ai.Streaming.stream_messages(self: null, messages: baml
 
     bb24: {
         _33 = is_type(copy _6, baml.iter.Done);
-        branch copy _33 -> [bb36, bb25];
+        branch copy _33 -> [bb37, bb25];
     }
 
     bb25: {
         _34 = copy _6;
         fresh_cell(_35);
         _35 = copy _34;
-        _36 = is_type(copy _35, baml.ai.Retry);
-        branch copy _36 -> [bb33, bb26];
+        _36 = is_type(copy _35, baml.ai.Traced);
+        branch copy _36 -> [bb34, bb26];
     }
 
     bb26: {
-        _37 = is_type(copy _35, baml.ai.OpenAi);
-        branch copy _37 -> [bb33, bb27];
+        _37 = is_type(copy _35, baml.ai.OpenAiCompatible);
+        branch copy _37 -> [bb34, bb27];
     }
 
     bb27: {
-        _38 = is_type(copy _35, baml.ai.Gemini);
-        branch copy _38 -> [bb33, bb28];
+        _38 = is_type(copy _35, baml.ai.Retry);
+        branch copy _38 -> [bb34, bb28];
     }
 
     bb28: {
-        _39 = is_type(copy _35, baml.ai.RoundRobin);
-        branch copy _39 -> [bb33, bb29];
+        _39 = is_type(copy _35, baml.ai.OpenAi);
+        branch copy _39 -> [bb34, bb29];
     }
 
     bb29: {
-        _40 = is_type(copy _35, baml.ai.Fallback);
-        branch copy _40 -> [bb33, bb30];
+        _40 = is_type(copy _35, baml.ai.Gemini);
+        branch copy _40 -> [bb34, bb30];
     }
 
     bb30: {
-        _41 = is_type(copy _35, baml.ai.Anthropic);
-        branch copy _41 -> [bb33, bb31];
+        _41 = is_type(copy _35, baml.ai.RoundRobin);
+        branch copy _41 -> [bb34, bb31];
     }
 
     bb31: {
-        _42 = is_type(copy _35, baml.ai.Traced);
-        branch copy _42 -> [bb33, bb32];
+        _42 = is_type(copy _35, baml.ai.Fallback);
+        branch copy _42 -> [bb34, bb32];
     }
 
     bb32: {
-        _43 = is_type(copy _35, baml.llm.Client);
-        branch copy _43 -> [bb33, bb3];
+        _43 = is_type(copy _35, baml.ai.Anthropic);
+        branch copy _43 -> [bb34, bb33];
     }
 
     bb33: {
-        _44 = copy _35;
-        _47 = load_type(#0);
-        _48 = load_type(#1);
-        _45 = virtual_call stream_messages as baml.ai.Streaming<copy _47, copy _48>(copy _44, copy _2) -> [bb34, unwind: bb2];
+        _44 = is_type(copy _35, baml.llm.Client);
+        branch copy _44 -> [bb34, bb3];
     }
 
     bb34: {
-        _0 = copy _45;
-        goto -> bb35;
+        _45 = copy _35;
+        _48 = load_type(#0);
+        _49 = load_type(#1);
+        _46 = virtual_call stream_messages as baml.ai.Streaming<copy _48, copy _49>(copy _45, copy _2) -> [bb35, unwind: bb2];
     }
 
     bb35: {
-        return;
+        _0 = copy _46;
+        goto -> bb36;
     }
 
     bb36: {
-        _50 = [const "fallback: no streaming member"]: string[];
-        _49 = baml.errors.UnknownError { const null, copy _50 };
-        throw copy _49;
+        return;
+    }
+
+    bb37: {
+        _51 = [const "fallback: no streaming member"]: string[];
+        _50 = baml.errors.UnknownError { const null, copy _51 };
+        throw copy _50;
     }
 }
 
@@ -5612,67 +5678,73 @@ fn baml.ai.Traced.root.ai.Streaming.stream_messages(self: null, messages: baml.a
     let _9: bool
     let _10: bool
     let _11: bool
-    let _12: baml.ai.Streaming // s
-    let _13: type
+    let _12: bool
+    let _13: baml.ai.Streaming // s
     let _14: type
-    let _15: baml.errors.UnknownError
-    let _16: string[]
+    let _15: type
+    let _16: baml.errors.UnknownError
+    let _17: string[]
 
     bb0: {
         _3 = copy _1.0;
-        _4 = is_type(copy _3, baml.ai.Retry);
-        branch copy _4 -> [bb9, bb1];
+        _4 = is_type(copy _3, baml.ai.Traced);
+        branch copy _4 -> [bb10, bb1];
     }
 
     bb1: {
-        _5 = is_type(copy _3, baml.ai.OpenAi);
-        branch copy _5 -> [bb9, bb2];
+        _5 = is_type(copy _3, baml.ai.OpenAiCompatible);
+        branch copy _5 -> [bb10, bb2];
     }
 
     bb2: {
-        _6 = is_type(copy _3, baml.ai.Gemini);
-        branch copy _6 -> [bb9, bb3];
+        _6 = is_type(copy _3, baml.ai.Retry);
+        branch copy _6 -> [bb10, bb3];
     }
 
     bb3: {
-        _7 = is_type(copy _3, baml.ai.RoundRobin);
-        branch copy _7 -> [bb9, bb4];
+        _7 = is_type(copy _3, baml.ai.OpenAi);
+        branch copy _7 -> [bb10, bb4];
     }
 
     bb4: {
-        _8 = is_type(copy _3, baml.ai.Fallback);
-        branch copy _8 -> [bb9, bb5];
+        _8 = is_type(copy _3, baml.ai.Gemini);
+        branch copy _8 -> [bb10, bb5];
     }
 
     bb5: {
-        _9 = is_type(copy _3, baml.ai.Anthropic);
-        branch copy _9 -> [bb9, bb6];
+        _9 = is_type(copy _3, baml.ai.RoundRobin);
+        branch copy _9 -> [bb10, bb6];
     }
 
     bb6: {
-        _10 = is_type(copy _3, baml.ai.Traced);
-        branch copy _10 -> [bb9, bb7];
+        _10 = is_type(copy _3, baml.ai.Fallback);
+        branch copy _10 -> [bb10, bb7];
     }
 
     bb7: {
-        _11 = is_type(copy _3, baml.llm.Client);
-        branch copy _11 -> [bb9, bb8];
+        _11 = is_type(copy _3, baml.ai.Anthropic);
+        branch copy _11 -> [bb10, bb8];
     }
 
     bb8: {
-        _16 = [const "traced: inner is not streaming"]: string[];
-        _15 = baml.errors.UnknownError { const null, copy _16 };
-        throw copy _15;
+        _12 = is_type(copy _3, baml.llm.Client);
+        branch copy _12 -> [bb10, bb9];
     }
 
     bb9: {
-        _12 = copy _3;
-        _13 = load_type(#0);
-        _14 = load_type(#1);
-        _0 = virtual_call stream_messages as baml.ai.Streaming<copy _13, copy _14>(copy _12, copy _2) -> [bb10];
+        _17 = [const "traced: inner is not streaming"]: string[];
+        _16 = baml.errors.UnknownError { const null, copy _17 };
+        throw copy _16;
     }
 
     bb10: {
+        _13 = copy _3;
+        _14 = load_type(#0);
+        _15 = load_type(#1);
+        _0 = virtual_call stream_messages as baml.ai.Streaming<copy _14, copy _15>(copy _13, copy _2) -> [bb11];
+    }
+
+    bb11: {
         return;
     }
 }
@@ -5914,14 +5986,14 @@ fn baml.ai.HttpProvider$for$root.llm.Client.call_messages_with(self: baml.llm.Cl
     let _23: bool
     let _24: bool
     let _25: bool
-    let _26: baml.ai.HttpProvider // h
-    let _27: type
+    let _26: bool
+    let _27: baml.ai.HttpProvider // h
     let _28: type
     let _29: type
-    let _30: string // body
-    let _31: baml.http.Request
-    let _32: type
-    let _33: bool
+    let _30: type
+    let _31: string // body
+    let _32: baml.http.Request
+    let _33: type
     let _34: bool
     let _35: bool
     let _36: bool
@@ -5933,24 +6005,29 @@ fn baml.ai.HttpProvider$for$root.llm.Client.call_messages_with(self: baml.llm.Cl
     let _42: bool
     let _43: bool
     let _44: bool
-    let _45: T
-    let _46: string
-    let _47: type
-    let _48: bool
-    let _49: bool
-    let _50: bool
+    let _45: bool
+    let _46: bool
+    let _47: bool
+    let _48: T
+    let _49: string
+    let _50: type
     let _51: bool
     let _52: bool
     let _53: bool
-    let _54: V
-    let _55: baml.ai.ResponseMeta
-    let _56: string
+    let _54: bool
+    let _55: bool
+    let _56: bool
     let _57: bool
-    let _58: bool
-    let _59: bool
-    let _60: bool
+    let _58: V
+    let _59: baml.ai.ResponseMeta
+    let _60: string
     let _61: bool
     let _62: bool
+    let _63: bool
+    let _64: bool
+    let _65: bool
+    let _66: bool
+    let _67: bool
 
     bb0: {
         _5 = copy _1.1;
@@ -5958,11 +6035,11 @@ fn baml.ai.HttpProvider$for$root.llm.Client.call_messages_with(self: baml.llm.Cl
     }
 
     bb1: {
-        branch copy _4 -> [bb2, bb17];
+        branch copy _4 -> [bb2, bb18];
     }
 
     bb2: {
-        _6 = call const fn baml.llm.Client.to_primitive_client(copy _1) -> [bb3, unwind: bb72];
+        _6 = call const fn baml.llm.Client.to_primitive_client(copy _1) -> [bb3, unwind: bb81];
     }
 
     bb3: {
@@ -5972,327 +6049,368 @@ fn baml.ai.HttpProvider$for$root.llm.Client.call_messages_with(self: baml.llm.Cl
 
     bb4: {
         _13 = copy _11 == const null;
-        branch copy _13 -> [bb17, bb5];
+        branch copy _13 -> [bb18, bb5];
     }
 
     bb5: {
         _14 = copy _11;
-        _15 = is_type(copy _14, baml.ai.ToolLoop);
-        branch copy _15 -> [bb16, bb6];
+        _15 = is_type(copy _14, baml.ai.Traced);
+        branch copy _15 -> [bb17, bb6];
     }
 
     bb6: {
-        _16 = is_type(copy _14, baml.ai.Retry);
-        branch copy _16 -> [bb16, bb7];
+        _16 = is_type(copy _14, baml.ai.OpenAiCompatible);
+        branch copy _16 -> [bb17, bb7];
     }
 
     bb7: {
-        _17 = is_type(copy _14, baml.ai.OpenAi);
-        branch copy _17 -> [bb16, bb8];
+        _17 = is_type(copy _14, baml.ai.ToolLoop);
+        branch copy _17 -> [bb17, bb8];
     }
 
     bb8: {
-        _18 = is_type(copy _14, baml.ai.Gemini);
-        branch copy _18 -> [bb16, bb9];
+        _18 = is_type(copy _14, baml.ai.Retry);
+        branch copy _18 -> [bb17, bb9];
     }
 
     bb9: {
-        _19 = is_type(copy _14, baml.ai.OpenAiResponses);
-        branch copy _19 -> [bb16, bb10];
+        _19 = is_type(copy _14, baml.ai.OpenAi);
+        branch copy _19 -> [bb17, bb10];
     }
 
     bb10: {
-        _20 = is_type(copy _14, baml.ai.RoundRobin);
-        branch copy _20 -> [bb16, bb11];
+        _20 = is_type(copy _14, baml.ai.Gemini);
+        branch copy _20 -> [bb17, bb11];
     }
 
     bb11: {
-        _21 = is_type(copy _14, baml.ai.Fallback);
-        branch copy _21 -> [bb16, bb12];
+        _21 = is_type(copy _14, baml.ai.OpenAiResponses);
+        branch copy _21 -> [bb17, bb12];
     }
 
     bb12: {
-        _22 = is_type(copy _14, baml.ai.OpenAiStrict);
-        branch copy _22 -> [bb16, bb13];
+        _22 = is_type(copy _14, baml.ai.RoundRobin);
+        branch copy _22 -> [bb17, bb13];
     }
 
     bb13: {
-        _23 = is_type(copy _14, baml.ai.Anthropic);
-        branch copy _23 -> [bb16, bb14];
+        _23 = is_type(copy _14, baml.ai.Fallback);
+        branch copy _23 -> [bb17, bb14];
     }
 
     bb14: {
-        _24 = is_type(copy _14, baml.ai.Traced);
-        branch copy _24 -> [bb16, bb15];
+        _24 = is_type(copy _14, baml.ai.OpenAiStrict);
+        branch copy _24 -> [bb17, bb15];
     }
 
     bb15: {
-        _25 = is_type(copy _14, baml.llm.Client);
-        branch copy _25 -> [bb16, bb17];
+        _25 = is_type(copy _14, baml.ai.Anthropic);
+        branch copy _25 -> [bb17, bb16];
     }
 
     bb16: {
-        _26 = copy _14;
-        _27 = load_type(#0);
-        _28 = load_type(#1);
-        _29 = load_type(#2);
-        _0 = virtual_call call_messages_with as baml.ai.HttpProvider<copy _27, copy _28, copy _29>(copy _26, copy _2, copy _3) -> [bb71];
+        _26 = is_type(copy _14, baml.llm.Client);
+        branch copy _26 -> [bb17, bb18];
     }
 
     bb17: {
-        _32 = load_type(#0);
-        _33 = is_type(copy _1, baml.ai.OpenAi);
-        branch copy _33 -> [bb29, bb18];
+        _27 = copy _14;
+        _28 = load_type(#0);
+        _29 = load_type(#1);
+        _30 = load_type(#2);
+        _0 = virtual_call call_messages_with as baml.ai.HttpProvider<copy _28, copy _29, copy _30>(copy _27, copy _2, copy _3) -> [bb80];
     }
 
     bb18: {
-        _34 = is_type(copy _1, baml.ai.Gemini);
-        branch copy _34 -> [bb28, bb19];
+        _33 = load_type(#0);
+        _34 = is_type(copy _1, baml.ai.OpenAiCompatible);
+        branch copy _34 -> [bb32, bb19];
     }
 
     bb19: {
-        _35 = is_type(copy _1, baml.ai.OpenAiResponses);
-        branch copy _35 -> [bb27, bb20];
+        _35 = is_type(copy _1, baml.ai.OpenAi);
+        branch copy _35 -> [bb31, bb20];
     }
 
     bb20: {
-        _36 = is_type(copy _1, baml.ai.OpenAiStrict);
-        branch copy _36 -> [bb26, bb21];
+        _36 = is_type(copy _1, baml.ai.Gemini);
+        branch copy _36 -> [bb30, bb21];
     }
 
     bb21: {
-        _37 = is_type(copy _1, baml.ai.Anthropic);
-        branch copy _37 -> [bb25, bb22];
+        _37 = is_type(copy _1, baml.ai.OpenAiResponses);
+        branch copy _37 -> [bb29, bb22];
     }
 
     bb22: {
-        _38 = is_type(copy _1, baml.llm.Client);
-        branch copy _38 -> [bb24, bb23];
+        _38 = is_type(copy _1, baml.ai.OpenAiStrict);
+        branch copy _38 -> [bb28, bb23];
     }
 
     bb23: {
-        unreachable;
+        _39 = is_type(copy _1, baml.ai.Anthropic);
+        branch copy _39 -> [bb27, bb24];
     }
 
     bb24: {
-        _31 = call const fn baml.ai.HttpProvider$for$root.llm.Client.build_request<copy _32>(copy _1, copy _2) -> [bb30];
+        _40 = is_type(copy _1, baml.llm.Client);
+        branch copy _40 -> [bb26, bb25];
     }
 
     bb25: {
-        _31 = call const fn baml.ai.Anthropic.root.ai.HttpProvider.build_request<copy _32>(copy _1, copy _2) -> [bb30];
+        unreachable;
     }
 
     bb26: {
-        _31 = call const fn baml.ai.OpenAiStrict.root.ai.HttpProvider.build_request<copy _32>(copy _1, copy _2) -> [bb30];
+        _32 = call const fn baml.ai.HttpProvider$for$root.llm.Client.build_request<copy _33>(copy _1, copy _2) -> [bb33];
     }
 
     bb27: {
-        _31 = call const fn baml.ai.OpenAiResponses.root.ai.HttpProvider.build_request<copy _32>(copy _1, copy _2) -> [bb30];
+        _32 = call const fn baml.ai.Anthropic.root.ai.HttpProvider.build_request<copy _33>(copy _1, copy _2) -> [bb33];
     }
 
     bb28: {
-        _31 = call const fn baml.ai.Gemini.root.ai.HttpProvider.build_request<copy _32>(copy _1, copy _2) -> [bb30];
+        _32 = call const fn baml.ai.OpenAiStrict.root.ai.HttpProvider.build_request<copy _33>(copy _1, copy _2) -> [bb33];
     }
 
     bb29: {
-        _31 = call const fn baml.ai.OpenAi.root.ai.HttpProvider.build_request<copy _32>(copy _1, copy _2) -> [bb30];
+        _32 = call const fn baml.ai.OpenAiResponses.root.ai.HttpProvider.build_request<copy _33>(copy _1, copy _2) -> [bb33];
     }
 
     bb30: {
-        _39 = is_type(copy _1, baml.ai.OpenAi);
-        branch copy _39 -> [bb42, bb31];
+        _32 = call const fn baml.ai.Gemini.root.ai.HttpProvider.build_request<copy _33>(copy _1, copy _2) -> [bb33];
     }
 
     bb31: {
-        _40 = is_type(copy _1, baml.ai.Gemini);
-        branch copy _40 -> [bb41, bb32];
+        _32 = call const fn baml.ai.OpenAi.root.ai.HttpProvider.build_request<copy _33>(copy _1, copy _2) -> [bb33];
     }
 
     bb32: {
-        _41 = is_type(copy _1, baml.ai.OpenAiResponses);
-        branch copy _41 -> [bb40, bb33];
+        _32 = call const fn baml.ai.OpenAiCompatible.root.ai.HttpProvider.build_request<copy _33>(copy _1, copy _2) -> [bb33];
     }
 
     bb33: {
-        _42 = is_type(copy _1, baml.ai.OpenAiStrict);
-        branch copy _42 -> [bb39, bb34];
+        _41 = is_type(copy _1, baml.ai.OpenAiCompatible);
+        branch copy _41 -> [bb47, bb34];
     }
 
     bb34: {
-        _43 = is_type(copy _1, baml.ai.Anthropic);
-        branch copy _43 -> [bb38, bb35];
+        _42 = is_type(copy _1, baml.ai.OpenAi);
+        branch copy _42 -> [bb46, bb35];
     }
 
     bb35: {
-        _44 = is_type(copy _1, baml.llm.Client);
-        branch copy _44 -> [bb37, bb36];
+        _43 = is_type(copy _1, baml.ai.Gemini);
+        branch copy _43 -> [bb45, bb36];
     }
 
     bb36: {
-        unreachable;
+        _44 = is_type(copy _1, baml.ai.OpenAiResponses);
+        branch copy _44 -> [bb44, bb37];
     }
 
     bb37: {
-        _30 = call const fn baml.ai.HttpProvider$for$root.llm.Client.send(copy _1, copy _31) -> [bb43];
+        _45 = is_type(copy _1, baml.ai.OpenAiStrict);
+        branch copy _45 -> [bb43, bb38];
     }
 
     bb38: {
-        _30 = call const fn baml.ai.Anthropic.root.ai.HttpProvider.send(copy _1, copy _31) -> [bb43];
+        _46 = is_type(copy _1, baml.ai.Anthropic);
+        branch copy _46 -> [bb42, bb39];
     }
 
     bb39: {
-        _30 = call const fn baml.ai.OpenAiStrict.root.ai.HttpProvider.send(copy _1, copy _31) -> [bb43];
+        _47 = is_type(copy _1, baml.llm.Client);
+        branch copy _47 -> [bb41, bb40];
     }
 
     bb40: {
-        _30 = call const fn baml.ai.OpenAiResponses.root.ai.HttpProvider.send(copy _1, copy _31) -> [bb43];
+        unreachable;
     }
 
     bb41: {
-        _30 = call const fn baml.ai.Gemini.root.ai.HttpProvider.send(copy _1, copy _31) -> [bb43];
+        _31 = call const fn baml.ai.HttpProvider$for$root.llm.Client.send(copy _1, copy _32) -> [bb48];
     }
 
     bb42: {
-        _30 = call const fn baml.ai.OpenAi.root.ai.HttpProvider.send(copy _1, copy _31) -> [bb43];
+        _31 = call const fn baml.ai.Anthropic.root.ai.HttpProvider.send(copy _1, copy _32) -> [bb48];
     }
 
     bb43: {
-        _46 = copy _30;
-        _47 = load_type(#0);
-        _48 = is_type(copy _1, baml.ai.OpenAi);
-        branch copy _48 -> [bb55, bb44];
+        _31 = call const fn baml.ai.OpenAiStrict.root.ai.HttpProvider.send(copy _1, copy _32) -> [bb48];
     }
 
     bb44: {
-        _49 = is_type(copy _1, baml.ai.Gemini);
-        branch copy _49 -> [bb54, bb45];
+        _31 = call const fn baml.ai.OpenAiResponses.root.ai.HttpProvider.send(copy _1, copy _32) -> [bb48];
     }
 
     bb45: {
-        _50 = is_type(copy _1, baml.ai.OpenAiResponses);
-        branch copy _50 -> [bb53, bb46];
+        _31 = call const fn baml.ai.Gemini.root.ai.HttpProvider.send(copy _1, copy _32) -> [bb48];
     }
 
     bb46: {
-        _51 = is_type(copy _1, baml.ai.OpenAiStrict);
-        branch copy _51 -> [bb52, bb47];
+        _31 = call const fn baml.ai.OpenAi.root.ai.HttpProvider.send(copy _1, copy _32) -> [bb48];
     }
 
     bb47: {
-        _52 = is_type(copy _1, baml.ai.Anthropic);
-        branch copy _52 -> [bb51, bb48];
+        _31 = call const fn baml.ai.OpenAiCompatible.root.ai.HttpProvider.send(copy _1, copy _32) -> [bb48];
     }
 
     bb48: {
-        _53 = is_type(copy _1, baml.llm.Client);
-        branch copy _53 -> [bb50, bb49];
+        _49 = copy _31;
+        _50 = load_type(#0);
+        _51 = is_type(copy _1, baml.ai.OpenAiCompatible);
+        branch copy _51 -> [bb62, bb49];
     }
 
     bb49: {
-        unreachable;
+        _52 = is_type(copy _1, baml.ai.OpenAi);
+        branch copy _52 -> [bb61, bb50];
     }
 
     bb50: {
-        _45 = call const fn baml.ai.HttpProvider$for$root.llm.Client.parse<copy _47>(copy _1, copy _46) -> [bb56];
+        _53 = is_type(copy _1, baml.ai.Gemini);
+        branch copy _53 -> [bb60, bb51];
     }
 
     bb51: {
-        _45 = call const fn baml.ai.Anthropic.root.ai.HttpProvider.parse<copy _47>(copy _1, copy _46) -> [bb56];
+        _54 = is_type(copy _1, baml.ai.OpenAiResponses);
+        branch copy _54 -> [bb59, bb52];
     }
 
     bb52: {
-        _45 = call const fn baml.ai.OpenAiStrict.root.ai.HttpProvider.parse<copy _47>(copy _1, copy _46) -> [bb56];
+        _55 = is_type(copy _1, baml.ai.OpenAiStrict);
+        branch copy _55 -> [bb58, bb53];
     }
 
     bb53: {
-        _45 = call const fn baml.ai.OpenAiResponses.root.ai.HttpProvider.parse<copy _47>(copy _1, copy _46) -> [bb56];
+        _56 = is_type(copy _1, baml.ai.Anthropic);
+        branch copy _56 -> [bb57, bb54];
     }
 
     bb54: {
-        _45 = call const fn baml.ai.Gemini.root.ai.HttpProvider.parse<copy _47>(copy _1, copy _46) -> [bb56];
+        _57 = is_type(copy _1, baml.llm.Client);
+        branch copy _57 -> [bb56, bb55];
     }
 
     bb55: {
-        _45 = call const fn baml.ai.OpenAi.root.ai.HttpProvider.parse<copy _47>(copy _1, copy _46) -> [bb56];
-    }
-
-    bb56: {
-        _56 = copy _30;
-        _57 = is_type(copy _1, baml.ai.OpenAi);
-        branch copy _57 -> [bb68, bb57];
-    }
-
-    bb57: {
-        _58 = is_type(copy _1, baml.ai.Gemini);
-        branch copy _58 -> [bb67, bb58];
-    }
-
-    bb58: {
-        _59 = is_type(copy _1, baml.ai.OpenAiResponses);
-        branch copy _59 -> [bb66, bb59];
-    }
-
-    bb59: {
-        _60 = is_type(copy _1, baml.ai.OpenAiStrict);
-        branch copy _60 -> [bb65, bb60];
-    }
-
-    bb60: {
-        _61 = is_type(copy _1, baml.ai.Anthropic);
-        branch copy _61 -> [bb64, bb61];
-    }
-
-    bb61: {
-        _62 = is_type(copy _1, baml.llm.Client);
-        branch copy _62 -> [bb63, bb62];
-    }
-
-    bb62: {
         unreachable;
     }
 
+    bb56: {
+        _48 = call const fn baml.ai.HttpProvider$for$root.llm.Client.parse<copy _50>(copy _1, copy _49) -> [bb63];
+    }
+
+    bb57: {
+        _48 = call const fn baml.ai.Anthropic.root.ai.HttpProvider.parse<copy _50>(copy _1, copy _49) -> [bb63];
+    }
+
+    bb58: {
+        _48 = call const fn baml.ai.OpenAiStrict.root.ai.HttpProvider.parse<copy _50>(copy _1, copy _49) -> [bb63];
+    }
+
+    bb59: {
+        _48 = call const fn baml.ai.OpenAiResponses.root.ai.HttpProvider.parse<copy _50>(copy _1, copy _49) -> [bb63];
+    }
+
+    bb60: {
+        _48 = call const fn baml.ai.Gemini.root.ai.HttpProvider.parse<copy _50>(copy _1, copy _49) -> [bb63];
+    }
+
+    bb61: {
+        _48 = call const fn baml.ai.OpenAi.root.ai.HttpProvider.parse<copy _50>(copy _1, copy _49) -> [bb63];
+    }
+
+    bb62: {
+        _48 = call const fn baml.ai.OpenAiCompatible.root.ai.HttpProvider.parse<copy _50>(copy _1, copy _49) -> [bb63];
+    }
+
     bb63: {
-        _55 = call const fn baml.ai.HttpProvider$for$root.llm.Client.meta_of(copy _1, copy _56) -> [bb69];
+        _60 = copy _31;
+        _61 = is_type(copy _1, baml.ai.OpenAiCompatible);
+        branch copy _61 -> [bb77, bb64];
     }
 
     bb64: {
-        _55 = call const fn baml.ai.Anthropic.root.ai.HttpProvider.meta_of(copy _1, copy _56) -> [bb69];
+        _62 = is_type(copy _1, baml.ai.OpenAi);
+        branch copy _62 -> [bb76, bb65];
     }
 
     bb65: {
-        _55 = call const fn baml.ai.OpenAiStrict.root.ai.HttpProvider.meta_of(copy _1, copy _56) -> [bb69];
+        _63 = is_type(copy _1, baml.ai.Gemini);
+        branch copy _63 -> [bb75, bb66];
     }
 
     bb66: {
-        _55 = call const fn baml.ai.OpenAiResponses.root.ai.HttpProvider.meta_of(copy _1, copy _56) -> [bb69];
+        _64 = is_type(copy _1, baml.ai.OpenAiResponses);
+        branch copy _64 -> [bb74, bb67];
     }
 
     bb67: {
-        _55 = call const fn baml.ai.Gemini.root.ai.HttpProvider.meta_of(copy _1, copy _56) -> [bb69];
+        _65 = is_type(copy _1, baml.ai.OpenAiStrict);
+        branch copy _65 -> [bb73, bb68];
     }
 
     bb68: {
-        _55 = call const fn baml.ai.OpenAi.root.ai.HttpProvider.meta_of(copy _1, copy _56) -> [bb69];
+        _66 = is_type(copy _1, baml.ai.Anthropic);
+        branch copy _66 -> [bb72, bb69];
     }
 
     bb69: {
-        _54 = call copy _3(copy _55) -> [bb70];
+        _67 = is_type(copy _1, baml.llm.Client);
+        branch copy _67 -> [bb71, bb70];
     }
 
     bb70: {
-        _0 = baml.ai.CallResult<#0, #1> { copy _45, copy _54 };
-        goto -> bb71;
+        unreachable;
     }
 
     bb71: {
-        return;
+        _59 = call const fn baml.ai.HttpProvider$for$root.llm.Client.meta_of(copy _1, copy _60) -> [bb78];
     }
 
     bb72: {
-        throw_if_panic copy _7 -> bb73;
+        _59 = call const fn baml.ai.Anthropic.root.ai.HttpProvider.meta_of(copy _1, copy _60) -> [bb78];
     }
 
     bb73: {
+        _59 = call const fn baml.ai.OpenAiStrict.root.ai.HttpProvider.meta_of(copy _1, copy _60) -> [bb78];
+    }
+
+    bb74: {
+        _59 = call const fn baml.ai.OpenAiResponses.root.ai.HttpProvider.meta_of(copy _1, copy _60) -> [bb78];
+    }
+
+    bb75: {
+        _59 = call const fn baml.ai.Gemini.root.ai.HttpProvider.meta_of(copy _1, copy _60) -> [bb78];
+    }
+
+    bb76: {
+        _59 = call const fn baml.ai.OpenAi.root.ai.HttpProvider.meta_of(copy _1, copy _60) -> [bb78];
+    }
+
+    bb77: {
+        _59 = call const fn baml.ai.OpenAiCompatible.root.ai.HttpProvider.meta_of(copy _1, copy _60) -> [bb78];
+    }
+
+    bb78: {
+        _58 = call copy _3(copy _59) -> [bb79];
+    }
+
+    bb79: {
+        _0 = baml.ai.CallResult<#0, #1> { copy _48, copy _58 };
+        goto -> bb80;
+    }
+
+    bb80: {
+        return;
+    }
+
+    bb81: {
+        throw_if_panic copy _7 -> bb82;
+    }
+
+    bb82: {
         _9 = copy _7;
         _10 = [const "legacy bridge: client construction failed"]: string[];
         _8 = baml.errors.UnknownError { copy _9, copy _10 };
@@ -6404,6 +6522,24 @@ fn baml.ai.native_provider_for(primitive: baml.llm.PrimitiveClient) -> baml.ai.P
     let _38: string | null
     let _39: map<string, string>
     let _40: map<string, unknown>
+    let _41: bool
+    let _42: string
+    let _43: string | null
+    let _44: bool
+    let _45: string // bu
+    let _46: string | null
+    let _47: bool
+    let _48: string // m
+    let _49: baml.ai.BearerAuth | baml.ai.HeaderAuth | baml.ai.NoAuth // auth
+    let _50: string | null
+    let _51: bool
+    let _52: string // k
+    let _53: string
+    let _54: string
+    let _55: string
+    let _56: baml.ai.BearerAuth | baml.ai.HeaderAuth | baml.ai.NoAuth
+    let _57: map<string, string>
+    let _58: map<string, unknown>
 
     bb0: {
         _5 = copy _1.2.13;
@@ -6419,7 +6555,7 @@ fn baml.ai.native_provider_for(primitive: baml.llm.PrimitiveClient) -> baml.ai.P
 
     bb2: {
         _2 = copy _3 != const 0_i64;
-        branch copy _2 -> [bb22, bb3];
+        branch copy _2 -> [bb31, bb3];
     }
 
     bb3: {
@@ -6430,7 +6566,7 @@ fn baml.ai.native_provider_for(primitive: baml.llm.PrimitiveClient) -> baml.ai.P
 
     bb4: {
         _0 = const null;
-        goto -> bb23;
+        goto -> bb32;
     }
 
     bb5: {
@@ -6441,112 +6577,170 @@ fn baml.ai.native_provider_for(primitive: baml.llm.PrimitiveClient) -> baml.ai.P
 
     bb6: {
         _0 = const null;
-        goto -> bb23;
+        goto -> bb32;
     }
 
     bb7: {
         _13 = copy _1.1;
         _12 = copy _13 == const "openai";
-        branch copy _12 -> [bb17, bb8];
+        branch copy _12 -> [bb26, bb8];
     }
 
     bb8: {
         _24 = copy _1.1;
         _23 = copy _24 == const "anthropic";
-        branch copy _23 -> [bb14, bb9];
+        branch copy _23 -> [bb23, bb9];
     }
 
     bb9: {
         _33 = copy _1.1;
         _32 = copy _33 == const "google-ai";
-        branch copy _32 -> [bb11, bb10];
+        branch copy _32 -> [bb20, bb10];
     }
 
     bb10: {
-        _0 = const null;
-        goto -> bb23;
+        _42 = copy _1.1;
+        _41 = copy _42 == const "openai-generic";
+        branch copy _41 -> [bb12, bb11];
     }
 
     bb11: {
-        _35 = copy _1.2.0;
-        _34 = copy _35;
-        _36 = copy _35 == const null;
-        branch copy _36 -> [bb12, bb13];
+        _0 = const null;
+        goto -> bb32;
     }
 
     bb12: {
-        _34 = const "gemini-2.5-flash";
-        goto -> bb13;
+        _43 = copy _1.2.1;
+        _44 = copy _43 == const null;
+        branch copy _44 -> [bb19, bb13];
     }
 
     bb13: {
+        _45 = copy _43;
+        _46 = copy _1.2.0;
+        _47 = copy _46 == const null;
+        branch copy _47 -> [bb18, bb14];
+    }
+
+    bb14: {
+        _48 = copy _46;
+        _50 = copy _1.2.9;
+        _51 = copy _50 == const null;
+        branch copy _51 -> [bb16, bb15];
+    }
+
+    bb15: {
+        _52 = copy _50;
+        _53 = copy _52;
+        _49 = baml.ai.BearerAuth { copy _53 };
+        goto -> bb17;
+    }
+
+    bb16: {
+        _49 = baml.ai.NoAuth {  };
+        goto -> bb17;
+    }
+
+    bb17: {
+        _54 = copy _48;
+        _55 = copy _45;
+        _56 = copy _49;
+        _57 = copy _1.2.12;
+        _58 = copy _1.2.14;
+        _0 = baml.ai.OpenAiCompatible { copy _54, copy _55, copy _56, copy _57, copy _58, const false };
+        goto -> bb32;
+    }
+
+    bb18: {
+        _0 = const null;
+        goto -> bb32;
+    }
+
+    bb19: {
+        _0 = const null;
+        goto -> bb32;
+    }
+
+    bb20: {
+        _35 = copy _1.2.0;
+        _34 = copy _35;
+        _36 = copy _35 == const null;
+        branch copy _36 -> [bb21, bb22];
+    }
+
+    bb21: {
+        _34 = const "gemini-2.5-flash";
+        goto -> bb22;
+    }
+
+    bb22: {
         _37 = copy _1.2.9;
         _38 = copy _1.2.1;
         _39 = copy _1.2.12;
         _40 = copy _1.2.14;
         _0 = baml.ai.Gemini { copy _34, copy _37, copy _38, copy _39, copy _40, const false };
-        goto -> bb23;
+        goto -> bb32;
     }
 
-    bb14: {
+    bb23: {
         _26 = copy _1.2.0;
         _25 = copy _26;
         _27 = copy _26 == const null;
-        branch copy _27 -> [bb15, bb16];
+        branch copy _27 -> [bb24, bb25];
     }
 
-    bb15: {
+    bb24: {
         _25 = const "claude-sonnet-4-5";
-        goto -> bb16;
+        goto -> bb25;
     }
 
-    bb16: {
+    bb25: {
         _28 = copy _1.2.9;
         _29 = copy _1.2.1;
         _30 = copy _1.2.12;
         _31 = copy _1.2.14;
         _0 = baml.ai.Anthropic { copy _25, copy _28, copy _29, const null, const null, copy _30, copy _31, const false };
-        goto -> bb23;
+        goto -> bb32;
     }
 
-    bb17: {
+    bb26: {
         _15 = copy _1.2.0;
         _14 = copy _15;
         _16 = copy _15 == const null;
-        branch copy _16 -> [bb18, bb19];
+        branch copy _16 -> [bb27, bb28];
     }
 
-    bb18: {
+    bb27: {
         _14 = const "gpt-4o";
-        goto -> bb19;
+        goto -> bb28;
     }
 
-    bb19: {
+    bb28: {
         _18 = copy _1.2.9;
         _17 = copy _18;
         _19 = copy _18 == const null;
-        branch copy _19 -> [bb20, bb21];
+        branch copy _19 -> [bb29, bb30];
     }
 
-    bb20: {
+    bb29: {
         _17 = const "";
-        goto -> bb21;
+        goto -> bb30;
     }
 
-    bb21: {
+    bb30: {
         _20 = copy _1.2.1;
         _21 = copy _1.2.12;
         _22 = copy _1.2.14;
         _0 = baml.ai.OpenAi { copy _14, copy _17, copy _20, copy _21, copy _22, const false };
-        goto -> bb23;
+        goto -> bb32;
     }
 
-    bb22: {
+    bb31: {
         _0 = const null;
-        goto -> bb23;
+        goto -> bb32;
     }
 
-    bb23: {
+    bb32: {
         return;
     }
 }
@@ -6694,36 +6888,37 @@ fn baml.ai.Streaming$for$root.llm.Client.stream_messages(self: baml.llm.Client, 
     let _21: bool
     let _22: bool
     let _23: bool
-    let _24: baml.ai.Streaming // s
-    let _25: type
+    let _24: bool
+    let _25: baml.ai.Streaming // s
     let _26: type
-    let _27: baml.llm.PromptAst // ast
-    let _28: baml.llm.PromptAst // specialized
-    let _29: unknown // e
-    let _30: baml.llm.PromptAst
-    let _31: baml.errors.UnknownError
-    let _32: baml.errors.LlmClient | baml.errors.RenderPrompt
-    let _33: string[]
-    let _34: baml.http.Request // request
-    let _35: unknown // e
-    let _36: baml.llm.PromptAst
-    let _37: type
-    let _38: baml.errors.UnknownError
-    let _39: baml.errors.LlmClient
-    let _40: string[]
-    let _41: baml.http.SseStream // sse
-    let _42: unknown // e
-    let _43: baml.http.Request
-    let _44: baml.errors.UnknownError
-    let _45: baml.errors.Io | baml.errors.Timeout
-    let _46: string[]
-    let _47: unknown // e
-    let _48: baml.http.SseStream
-    let _49: type
+    let _27: type
+    let _28: baml.llm.PromptAst // ast
+    let _29: baml.llm.PromptAst // specialized
+    let _30: unknown // e
+    let _31: baml.llm.PromptAst
+    let _32: baml.errors.UnknownError
+    let _33: baml.errors.LlmClient | baml.errors.RenderPrompt
+    let _34: string[]
+    let _35: baml.http.Request // request
+    let _36: unknown // e
+    let _37: baml.llm.PromptAst
+    let _38: type
+    let _39: baml.errors.UnknownError
+    let _40: baml.errors.LlmClient
+    let _41: string[]
+    let _42: baml.http.SseStream // sse
+    let _43: unknown // e
+    let _44: baml.http.Request
+    let _45: baml.errors.UnknownError
+    let _46: baml.errors.Io | baml.errors.Timeout
+    let _47: string[]
+    let _48: unknown // e
+    let _49: baml.http.SseStream
     let _50: type
-    let _51: baml.errors.UnknownError
-    let _52: baml.errors.InvalidArgument | baml.errors.LlmClient
-    let _53: string[]
+    let _51: type
+    let _52: baml.errors.UnknownError
+    let _53: baml.errors.InvalidArgument | baml.errors.LlmClient
+    let _54: string[]
 
     bb0: {
         _4 = copy _1.1;
@@ -6732,11 +6927,11 @@ fn baml.ai.Streaming$for$root.llm.Client.stream_messages(self: baml.llm.Client, 
 
     bb1: {
         _3 = !copy _5;
-        branch copy _3 -> [bb21, bb2];
+        branch copy _3 -> [bb22, bb2];
     }
 
     bb2: {
-        _7 = call const fn baml.llm.Client.to_primitive_client(copy _1) -> [bb3, unwind: bb22];
+        _7 = call const fn baml.llm.Client.to_primitive_client(copy _1) -> [bb3, unwind: bb23];
     }
 
     bb3: {
@@ -6746,150 +6941,155 @@ fn baml.ai.Streaming$for$root.llm.Client.stream_messages(self: baml.llm.Client, 
 
     bb4: {
         _14 = copy _12 == const null;
-        branch copy _14 -> [bb14, bb5];
+        branch copy _14 -> [bb15, bb5];
     }
 
     bb5: {
         _15 = copy _12;
-        _16 = is_type(copy _15, baml.ai.Retry);
-        branch copy _16 -> [bb13, bb6];
+        _16 = is_type(copy _15, baml.ai.Traced);
+        branch copy _16 -> [bb14, bb6];
     }
 
     bb6: {
-        _17 = is_type(copy _15, baml.ai.OpenAi);
-        branch copy _17 -> [bb13, bb7];
+        _17 = is_type(copy _15, baml.ai.OpenAiCompatible);
+        branch copy _17 -> [bb14, bb7];
     }
 
     bb7: {
-        _18 = is_type(copy _15, baml.ai.Gemini);
-        branch copy _18 -> [bb13, bb8];
+        _18 = is_type(copy _15, baml.ai.Retry);
+        branch copy _18 -> [bb14, bb8];
     }
 
     bb8: {
-        _19 = is_type(copy _15, baml.ai.RoundRobin);
-        branch copy _19 -> [bb13, bb9];
+        _19 = is_type(copy _15, baml.ai.OpenAi);
+        branch copy _19 -> [bb14, bb9];
     }
 
     bb9: {
-        _20 = is_type(copy _15, baml.ai.Fallback);
-        branch copy _20 -> [bb13, bb10];
+        _20 = is_type(copy _15, baml.ai.Gemini);
+        branch copy _20 -> [bb14, bb10];
     }
 
     bb10: {
-        _21 = is_type(copy _15, baml.ai.Anthropic);
-        branch copy _21 -> [bb13, bb11];
+        _21 = is_type(copy _15, baml.ai.RoundRobin);
+        branch copy _21 -> [bb14, bb11];
     }
 
     bb11: {
-        _22 = is_type(copy _15, baml.ai.Traced);
-        branch copy _22 -> [bb13, bb12];
+        _22 = is_type(copy _15, baml.ai.Fallback);
+        branch copy _22 -> [bb14, bb12];
     }
 
     bb12: {
-        _23 = is_type(copy _15, baml.llm.Client);
-        branch copy _23 -> [bb13, bb14];
+        _23 = is_type(copy _15, baml.ai.Anthropic);
+        branch copy _23 -> [bb14, bb13];
     }
 
     bb13: {
-        _24 = copy _15;
-        _25 = load_type(#0);
-        _26 = load_type(#1);
-        _0 = virtual_call stream_messages as baml.ai.Streaming<copy _25, copy _26>(copy _24, copy _2) -> [bb20];
+        _24 = is_type(copy _15, baml.llm.Client);
+        branch copy _24 -> [bb14, bb15];
     }
 
     bb14: {
-        _27 = sys_op const fn baml.ai.messages_to_prompt(copy _2) -> bb15;
+        _25 = copy _15;
+        _26 = load_type(#0);
+        _27 = load_type(#1);
+        _0 = virtual_call stream_messages as baml.ai.Streaming<copy _26, copy _27>(copy _25, copy _2) -> [bb21];
     }
 
     bb15: {
-        _30 = copy _27;
-        _28 = sys_op const fn baml.llm.PrimitiveClient.specialize_prompt(copy _7, copy _30) -> bb16 unwind bb24;
+        _28 = sys_op const fn baml.ai.messages_to_prompt(copy _2) -> bb16;
     }
 
     bb16: {
-        _36 = copy _28;
-        _37 = load_type(#1);
-        goto -> bb17;
+        _31 = copy _28;
+        _29 = sys_op const fn baml.llm.PrimitiveClient.specialize_prompt(copy _7, copy _31) -> bb17 unwind bb25;
     }
 
     bb17: {
-        _34 = sys_op const fn baml.llm.PrimitiveClient.build_request_stream(copy _7, copy _36, copy _37) -> bb18 unwind bb26;
+        _37 = copy _29;
+        _38 = load_type(#1);
+        goto -> bb18;
     }
 
     bb18: {
-        _43 = copy _34;
-        _41 = sys_op const fn baml.http.fetch_sse(copy _43) -> bb19 unwind bb28;
+        _35 = sys_op const fn baml.llm.PrimitiveClient.build_request_stream(copy _7, copy _37, copy _38) -> bb19 unwind bb27;
     }
 
     bb19: {
-        _48 = copy _41;
-        _49 = load_type(#0);
-        _50 = load_type(#1);
-        _0 = call const fn baml.llm.Client.__make_stream<copy _49, copy _50>(copy _1, copy _48) -> [bb20, unwind: bb30];
+        _44 = copy _35;
+        _42 = sys_op const fn baml.http.fetch_sse(copy _44) -> bb20 unwind bb29;
     }
 
     bb20: {
-        return;
+        _49 = copy _42;
+        _50 = load_type(#0);
+        _51 = load_type(#1);
+        _0 = call const fn baml.llm.Client.__make_stream<copy _50, copy _51>(copy _1, copy _49) -> [bb21, unwind: bb31];
     }
 
     bb21: {
+        return;
+    }
+
+    bb22: {
         _6 = baml.errors.Unsupported { const "the legacy codec bridges primitive clients; strategy configs lower to new-model combinators" };
         throw copy _6;
     }
 
-    bb22: {
-        throw_if_panic copy _8 -> bb23;
+    bb23: {
+        throw_if_panic copy _8 -> bb24;
     }
 
-    bb23: {
+    bb24: {
         _10 = copy _8;
         _11 = [const "legacy bridge: client construction failed"]: string[];
         _9 = baml.errors.UnknownError { copy _10, copy _11 };
         throw copy _9;
     }
 
-    bb24: {
-        throw_if_panic copy _29 -> bb25;
-    }
-
     bb25: {
-        _32 = copy _29;
-        _33 = [const "legacy bridge: specialize failed"]: string[];
-        _31 = baml.errors.UnknownError { copy _32, copy _33 };
-        throw copy _31;
+        throw_if_panic copy _30 -> bb26;
     }
 
     bb26: {
-        throw_if_panic copy _35 -> bb27;
+        _33 = copy _30;
+        _34 = [const "legacy bridge: specialize failed"]: string[];
+        _32 = baml.errors.UnknownError { copy _33, copy _34 };
+        throw copy _32;
     }
 
     bb27: {
-        _39 = copy _35;
-        _40 = [const "legacy bridge: build_request_stream failed"]: string[];
-        _38 = baml.errors.UnknownError { copy _39, copy _40 };
-        throw copy _38;
+        throw_if_panic copy _36 -> bb28;
     }
 
     bb28: {
-        throw_if_panic copy _42 -> bb29;
+        _40 = copy _36;
+        _41 = [const "legacy bridge: build_request_stream failed"]: string[];
+        _39 = baml.errors.UnknownError { copy _40, copy _41 };
+        throw copy _39;
     }
 
     bb29: {
-        _45 = copy _42;
-        _46 = [const "legacy bridge: SSE connect failed"]: string[];
-        _44 = baml.errors.UnknownError { copy _45, copy _46 };
-        throw copy _44;
+        throw_if_panic copy _43 -> bb30;
     }
 
     bb30: {
-        throw_if_panic copy _47 -> bb31;
+        _46 = copy _43;
+        _47 = [const "legacy bridge: SSE connect failed"]: string[];
+        _45 = baml.errors.UnknownError { copy _46, copy _47 };
+        throw copy _45;
     }
 
     bb31: {
-        _52 = copy _47;
-        _53 = [const "legacy bridge: stream construction failed"]: string[];
-        _51 = baml.errors.UnknownError { copy _52, copy _53 };
-        throw copy _51;
+        throw_if_panic copy _48 -> bb32;
+    }
+
+    bb32: {
+        _53 = copy _48;
+        _54 = [const "legacy bridge: stream construction failed"]: string[];
+        _52 = baml.errors.UnknownError { copy _53, copy _54 };
+        throw copy _52;
     }
 }
 
@@ -15918,6 +16118,826 @@ fn baml.ai.OpenAiResponseMeta.root.ai.ResponseMeta.usage(self: null) -> baml.ai.
 
     bb6: {
         return;
+    }
+}
+
+fn baml.ai.OpenAiCompatible._headers(self: baml.ai.OpenAiCompatible) -> map<string, string> {
+    // Locals:
+    let _0: map<string, string> // _0 // return
+    let _1: baml.ai.OpenAiCompatible // self // param
+    let _2: map<string, string> // headers
+    let _3: baml.ai.BearerAuth | baml.ai.HeaderAuth | baml.ai.NoAuth
+    let _4: bool
+    let _5: baml.ai.BearerAuth // b
+    let _6: string | null
+    let _7: string
+    let _8: string
+    let _9: type
+    let _10: type
+    let _11: bool
+    let _12: baml.ai.HeaderAuth // h
+    let _13: string | null
+    let _14: string
+    let _15: string
+    let _16: type
+    let _17: type
+    let _18: map<string, string> | null
+    let _19: bool
+    let _20: map<string, string> // extra
+    let _21: string[]
+    let _22: type
+    let _23: type
+    let _24: baml.iter.Iterator<Item = string, Error = never>
+    let _25: type
+    let _26: unknown
+    let _27: bool
+    let _28: unknown
+    let _29: bool
+    let _30: type
+    let _31: bool
+    let _32: type
+    let _33: type
+    let _34: bool
+    let _35: type
+    let _36: type
+    let _37: type
+    let _38: bool
+    let _39: type
+    let _40: bool
+    let _41: unknown
+    let _42: bool
+    let _43: type
+    let _44: type
+    let _45: type
+    let _46: bool
+    let _47: unknown
+    let _48: bool
+    let _49: unknown
+    let _50: bool
+    let _51: type
+    let _52: type
+    let _53: bool
+    let _54: string
+    let _55: string // k
+    let _56: string | null
+    let _57: string
+    let _58: string
+    let _59: string | null
+    let _60: string
+    let _61: type
+    let _62: type
+    let _63: bool
+    let _64: type
+    let _65: type
+
+    bb0: {
+        _2 = { const "Content-Type": const "application/json" }: map<string, string>;
+        _3 = copy _1.2;
+        _4 = is_type(copy _3, baml.ai.BearerAuth);
+        branch copy _4 -> [bb3, bb1];
+    }
+
+    bb1: {
+        _11 = is_type(copy _3, baml.ai.HeaderAuth);
+        branch copy _11 -> [bb2, bb4];
+    }
+
+    bb2: {
+        _12 = copy _3;
+        _14 = copy _12.0;
+        _15 = copy _12.1;
+        _16 = load_type(string);
+        _17 = load_type(string);
+        _13 = call const fn baml.Map.set<copy _16, copy _17>(copy _2, copy _14, copy _15) -> [bb4];
+    }
+
+    bb3: {
+        _5 = copy _3;
+        _8 = copy _5.0;
+        _7 = const "Bearer " + copy _8;
+        _9 = load_type(string);
+        _10 = load_type(string);
+        _6 = call const fn baml.Map.set<copy _9, copy _10>(copy _2, const "Authorization", copy _7) -> [bb4];
+    }
+
+    bb4: {
+        _18 = copy _1.3;
+        _19 = is_type(copy _18, map<string, string>);
+        branch copy _19 -> [bb5, bb33];
+    }
+
+    bb5: {
+        _20 = copy _18;
+        _22 = load_type(string);
+        _23 = load_type(string);
+        _21 = call const fn baml.Map.keys<copy _22, copy _23>(copy _20) -> [bb6];
+    }
+
+    bb6: {
+        _25 = load_type(string);
+        _24 = call const fn baml.iter.Iterable$for$T[].iter<copy _25>(copy _21) -> [bb7];
+    }
+
+    bb7: {
+        _27 = is_type(copy _24, baml.iter.Flatten<_, string, never, never>);
+        branch copy _27 -> [bb27, bb8];
+    }
+
+    bb8: {
+        _29 = is_type(copy _24, baml.iter.ArrayIterator<string>);
+        branch copy _29 -> [bb26, bb9];
+    }
+
+    bb9: {
+        _31 = is_type(copy _24, baml.iter.StepBy<string, never>);
+        branch copy _31 -> [bb25, bb10];
+    }
+
+    bb10: {
+        _34 = is_type(copy _24, baml.iter.Chain<string, never, never>);
+        branch copy _34 -> [bb24, bb11];
+    }
+
+    bb11: {
+        _38 = is_type(copy _24, baml.iter.Repeat<string>);
+        branch copy _38 -> [bb23, bb12];
+    }
+
+    bb12: {
+        _40 = is_type(copy _24, baml.iter.Map<_, string, never, never>);
+        branch copy _40 -> [bb22, bb13];
+    }
+
+    bb13: {
+        _42 = is_type(copy _24, baml.iter.Filter<string, never, never>);
+        branch copy _42 -> [bb21, bb14];
+    }
+
+    bb14: {
+        _46 = is_type(copy _24, baml.iter.FilterMap<_, string, never, never>);
+        branch copy _46 -> [bb20, bb15];
+    }
+
+    bb15: {
+        _48 = is_type(copy _24, baml.iter.FlatMap<_, string, never, never, never>);
+        branch copy _48 -> [bb19, bb16];
+    }
+
+    bb16: {
+        _50 = is_type(copy _24, baml.iter.Peekable<string, never>);
+        branch copy _50 -> [bb18, bb17];
+    }
+
+    bb17: {
+        unreachable;
+    }
+
+    bb18: {
+        _51 = load_type(string);
+        _52 = load_type(never);
+        _26 = call const fn baml.iter.Peekable.Iterator.next<copy _51, copy _52>(copy _24) -> [bb28];
+    }
+
+    bb19: {
+        _49 = make_bound_method baml.iter.FlatMap.Iterator.next(copy _24);
+        _26 = call copy _49() -> [bb28];
+    }
+
+    bb20: {
+        _47 = make_bound_method baml.iter.FilterMap.Iterator.next(copy _24);
+        _26 = call copy _47() -> [bb28];
+    }
+
+    bb21: {
+        _43 = load_type(string);
+        _44 = load_type(never);
+        _45 = load_type(never);
+        _26 = call const fn baml.iter.Filter.Iterator.next<copy _43, copy _44, copy _45>(copy _24) -> [bb28];
+    }
+
+    bb22: {
+        _41 = make_bound_method baml.iter.Map.Iterator.next(copy _24);
+        _26 = call copy _41() -> [bb28];
+    }
+
+    bb23: {
+        _39 = load_type(string);
+        _26 = call const fn baml.iter.Repeat.Iterator.next<copy _39>(copy _24) -> [bb28];
+    }
+
+    bb24: {
+        _35 = load_type(string);
+        _36 = load_type(never);
+        _37 = load_type(never);
+        _26 = call const fn baml.iter.Chain.Iterator.next<copy _35, copy _36, copy _37>(copy _24) -> [bb28];
+    }
+
+    bb25: {
+        _32 = load_type(string);
+        _33 = load_type(never);
+        _26 = call const fn baml.iter.StepBy.Iterator.next<copy _32, copy _33>(copy _24) -> [bb28];
+    }
+
+    bb26: {
+        _30 = load_type(string);
+        _26 = call const fn baml.iter.ArrayIterator.Iterator.next<copy _30>(copy _24) -> [bb28];
+    }
+
+    bb27: {
+        _28 = make_bound_method baml.iter.Flatten.Iterator.next(copy _24);
+        _26 = call copy _28() -> [bb28];
+    }
+
+    bb28: {
+        _53 = is_type(copy _26, baml.iter.Done);
+        branch copy _53 -> [bb33, bb29];
+    }
+
+    bb29: {
+        _54 = copy _26;
+        fresh_cell(_55);
+        _55 = copy _54;
+        _57 = copy _55;
+        _60 = copy _55;
+        _61 = load_type(string);
+        _62 = load_type(string);
+        _59 = call const fn baml.Map.get<copy _61, copy _62>(copy _20, copy _60) -> [bb30];
+    }
+
+    bb30: {
+        _58 = copy _59;
+        _63 = copy _59 == const null;
+        branch copy _63 -> [bb31, bb32];
+    }
+
+    bb31: {
+        _58 = const "";
+        goto -> bb32;
+    }
+
+    bb32: {
+        _64 = load_type(string);
+        _65 = load_type(string);
+        _56 = call const fn baml.Map.set<copy _64, copy _65>(copy _2, copy _57, copy _58) -> [bb7];
+    }
+
+    bb33: {
+        _0 = copy _2;
+        goto -> bb34;
+    }
+
+    bb34: {
+        return;
+    }
+}
+
+fn baml.ai.OpenAiCompatible._inner(self: baml.ai.OpenAiCompatible) -> baml.ai.OpenAi {
+    // Locals:
+    let _0: baml.ai.OpenAi // _0 // return
+    let _1: baml.ai.OpenAiCompatible // self // param
+    let _2: string
+    let _3: string
+    let _4: map<string, unknown> | null
+    let _5: bool | null
+
+    bb0: {
+        _2 = copy _1.0;
+        _3 = copy _1.1;
+        _4 = copy _1.4;
+        _5 = copy _1.5;
+        _0 = baml.ai.OpenAi { copy _2, const "", copy _3, const null, copy _4, copy _5 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn baml.ai.OpenAiCompatible.root.ai.HttpProvider.build_request(self: null, messages: baml.ai.ChatMessage[]) -> baml.http.Request {
+    // Locals:
+    let _0: baml.http.Request // _0 // return
+    let _1: null // self // param
+    let _2: baml.ai.ChatMessage[] // messages // param
+    let _3: baml.http.Request // r
+    let _4: baml.ai.OpenAi
+    let _5: type
+    let _6: bool
+    let _7: bool
+    let _8: bool
+    let _9: bool
+    let _10: bool
+    let _11: bool
+    let _12: bool
+    let _13: string
+    let _14: string
+    let _15: map<string, string>
+    let _16: string
+
+    bb0: {
+        _4 = call const fn baml.ai.OpenAiCompatible._inner(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _5 = load_type(#0);
+        _6 = is_type(copy _4, baml.ai.OpenAiCompatible);
+        branch copy _6 -> [bb15, bb2];
+    }
+
+    bb2: {
+        _7 = is_type(copy _4, baml.ai.OpenAi);
+        branch copy _7 -> [bb14, bb3];
+    }
+
+    bb3: {
+        _8 = is_type(copy _4, baml.ai.Gemini);
+        branch copy _8 -> [bb13, bb4];
+    }
+
+    bb4: {
+        _9 = is_type(copy _4, baml.ai.OpenAiResponses);
+        branch copy _9 -> [bb12, bb5];
+    }
+
+    bb5: {
+        _10 = is_type(copy _4, baml.ai.OpenAiStrict);
+        branch copy _10 -> [bb11, bb6];
+    }
+
+    bb6: {
+        _11 = is_type(copy _4, baml.ai.Anthropic);
+        branch copy _11 -> [bb10, bb7];
+    }
+
+    bb7: {
+        _12 = is_type(copy _4, baml.llm.Client);
+        branch copy _12 -> [bb9, bb8];
+    }
+
+    bb8: {
+        unreachable;
+    }
+
+    bb9: {
+        _3 = call const fn baml.ai.HttpProvider$for$root.llm.Client.build_request<copy _5>(copy _4, copy _2) -> [bb16];
+    }
+
+    bb10: {
+        _3 = call const fn baml.ai.Anthropic.root.ai.HttpProvider.build_request<copy _5>(copy _4, copy _2) -> [bb16];
+    }
+
+    bb11: {
+        _3 = call const fn baml.ai.OpenAiStrict.root.ai.HttpProvider.build_request<copy _5>(copy _4, copy _2) -> [bb16];
+    }
+
+    bb12: {
+        _3 = call const fn baml.ai.OpenAiResponses.root.ai.HttpProvider.build_request<copy _5>(copy _4, copy _2) -> [bb16];
+    }
+
+    bb13: {
+        _3 = call const fn baml.ai.Gemini.root.ai.HttpProvider.build_request<copy _5>(copy _4, copy _2) -> [bb16];
+    }
+
+    bb14: {
+        _3 = call const fn baml.ai.OpenAi.root.ai.HttpProvider.build_request<copy _5>(copy _4, copy _2) -> [bb16];
+    }
+
+    bb15: {
+        _3 = call const fn baml.ai.OpenAiCompatible.root.ai.HttpProvider.build_request<copy _5>(copy _4, copy _2) -> [bb16];
+    }
+
+    bb16: {
+        _13 = copy _3.0;
+        _14 = copy _3.1;
+        _15 = call const fn baml.ai.OpenAiCompatible._headers(copy _1) -> [bb17];
+    }
+
+    bb17: {
+        _16 = copy _3.3;
+        _0 = baml.http.Request { copy _13, copy _14, copy _15, copy _16 };
+        goto -> bb18;
+    }
+
+    bb18: {
+        return;
+    }
+}
+
+fn baml.ai.OpenAiCompatible.root.ai.HttpProvider.meta_of(self: null, from: string) -> baml.ai.ResponseMeta {
+    // Locals:
+    let _0: baml.ai.ResponseMeta // _0 // return
+    let _1: null // self // param
+    let _2: string // from // param
+    let _3: baml.ai.OpenAi
+    let _4: bool
+    let _5: bool
+    let _6: bool
+    let _7: bool
+    let _8: bool
+    let _9: bool
+    let _10: bool
+
+    bb0: {
+        _3 = call const fn baml.ai.OpenAiCompatible._inner(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _4 = is_type(copy _3, baml.ai.OpenAiCompatible);
+        branch copy _4 -> [bb15, bb2];
+    }
+
+    bb2: {
+        _5 = is_type(copy _3, baml.ai.OpenAi);
+        branch copy _5 -> [bb14, bb3];
+    }
+
+    bb3: {
+        _6 = is_type(copy _3, baml.ai.Gemini);
+        branch copy _6 -> [bb13, bb4];
+    }
+
+    bb4: {
+        _7 = is_type(copy _3, baml.ai.OpenAiResponses);
+        branch copy _7 -> [bb12, bb5];
+    }
+
+    bb5: {
+        _8 = is_type(copy _3, baml.ai.OpenAiStrict);
+        branch copy _8 -> [bb11, bb6];
+    }
+
+    bb6: {
+        _9 = is_type(copy _3, baml.ai.Anthropic);
+        branch copy _9 -> [bb10, bb7];
+    }
+
+    bb7: {
+        _10 = is_type(copy _3, baml.llm.Client);
+        branch copy _10 -> [bb9, bb8];
+    }
+
+    bb8: {
+        unreachable;
+    }
+
+    bb9: {
+        _0 = call const fn baml.ai.HttpProvider$for$root.llm.Client.meta_of(copy _3, copy _2) -> [bb16];
+    }
+
+    bb10: {
+        _0 = call const fn baml.ai.Anthropic.root.ai.HttpProvider.meta_of(copy _3, copy _2) -> [bb16];
+    }
+
+    bb11: {
+        _0 = call const fn baml.ai.OpenAiStrict.root.ai.HttpProvider.meta_of(copy _3, copy _2) -> [bb16];
+    }
+
+    bb12: {
+        _0 = call const fn baml.ai.OpenAiResponses.root.ai.HttpProvider.meta_of(copy _3, copy _2) -> [bb16];
+    }
+
+    bb13: {
+        _0 = call const fn baml.ai.Gemini.root.ai.HttpProvider.meta_of(copy _3, copy _2) -> [bb16];
+    }
+
+    bb14: {
+        _0 = call const fn baml.ai.OpenAi.root.ai.HttpProvider.meta_of(copy _3, copy _2) -> [bb16];
+    }
+
+    bb15: {
+        _0 = call const fn baml.ai.OpenAiCompatible.root.ai.HttpProvider.meta_of(copy _3, copy _2) -> [bb16];
+    }
+
+    bb16: {
+        return;
+    }
+}
+
+fn baml.ai.OpenAiCompatible.root.ai.HttpProvider.parse(self: null, from: string) -> T {
+    // Locals:
+    let _0: T // _0 // return
+    let _1: null // self // param
+    let _2: string // from // param
+    let _3: baml.ai.OpenAi
+    let _4: type
+    let _5: bool
+    let _6: bool
+    let _7: bool
+    let _8: bool
+    let _9: bool
+    let _10: bool
+    let _11: bool
+
+    bb0: {
+        _3 = call const fn baml.ai.OpenAiCompatible._inner(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _4 = load_type(#0);
+        _5 = is_type(copy _3, baml.ai.OpenAiCompatible);
+        branch copy _5 -> [bb15, bb2];
+    }
+
+    bb2: {
+        _6 = is_type(copy _3, baml.ai.OpenAi);
+        branch copy _6 -> [bb14, bb3];
+    }
+
+    bb3: {
+        _7 = is_type(copy _3, baml.ai.Gemini);
+        branch copy _7 -> [bb13, bb4];
+    }
+
+    bb4: {
+        _8 = is_type(copy _3, baml.ai.OpenAiResponses);
+        branch copy _8 -> [bb12, bb5];
+    }
+
+    bb5: {
+        _9 = is_type(copy _3, baml.ai.OpenAiStrict);
+        branch copy _9 -> [bb11, bb6];
+    }
+
+    bb6: {
+        _10 = is_type(copy _3, baml.ai.Anthropic);
+        branch copy _10 -> [bb10, bb7];
+    }
+
+    bb7: {
+        _11 = is_type(copy _3, baml.llm.Client);
+        branch copy _11 -> [bb9, bb8];
+    }
+
+    bb8: {
+        unreachable;
+    }
+
+    bb9: {
+        _0 = call const fn baml.ai.HttpProvider$for$root.llm.Client.parse<copy _4>(copy _3, copy _2) -> [bb16];
+    }
+
+    bb10: {
+        _0 = call const fn baml.ai.Anthropic.root.ai.HttpProvider.parse<copy _4>(copy _3, copy _2) -> [bb16];
+    }
+
+    bb11: {
+        _0 = call const fn baml.ai.OpenAiStrict.root.ai.HttpProvider.parse<copy _4>(copy _3, copy _2) -> [bb16];
+    }
+
+    bb12: {
+        _0 = call const fn baml.ai.OpenAiResponses.root.ai.HttpProvider.parse<copy _4>(copy _3, copy _2) -> [bb16];
+    }
+
+    bb13: {
+        _0 = call const fn baml.ai.Gemini.root.ai.HttpProvider.parse<copy _4>(copy _3, copy _2) -> [bb16];
+    }
+
+    bb14: {
+        _0 = call const fn baml.ai.OpenAi.root.ai.HttpProvider.parse<copy _4>(copy _3, copy _2) -> [bb16];
+    }
+
+    bb15: {
+        _0 = call const fn baml.ai.OpenAiCompatible.root.ai.HttpProvider.parse<copy _4>(copy _3, copy _2) -> [bb16];
+    }
+
+    bb16: {
+        return;
+    }
+}
+
+fn baml.ai.OpenAiCompatible.root.ai.HttpProvider.send(self: null, request: baml.http.Request) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: null // self // param
+    let _2: baml.http.Request // request // param
+    let _3: baml.ai.OpenAi
+    let _4: bool
+    let _5: bool
+    let _6: bool
+    let _7: bool
+    let _8: bool
+    let _9: bool
+    let _10: bool
+
+    bb0: {
+        _3 = call const fn baml.ai.OpenAiCompatible._inner(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _4 = is_type(copy _3, baml.ai.OpenAiCompatible);
+        branch copy _4 -> [bb15, bb2];
+    }
+
+    bb2: {
+        _5 = is_type(copy _3, baml.ai.OpenAi);
+        branch copy _5 -> [bb14, bb3];
+    }
+
+    bb3: {
+        _6 = is_type(copy _3, baml.ai.Gemini);
+        branch copy _6 -> [bb13, bb4];
+    }
+
+    bb4: {
+        _7 = is_type(copy _3, baml.ai.OpenAiResponses);
+        branch copy _7 -> [bb12, bb5];
+    }
+
+    bb5: {
+        _8 = is_type(copy _3, baml.ai.OpenAiStrict);
+        branch copy _8 -> [bb11, bb6];
+    }
+
+    bb6: {
+        _9 = is_type(copy _3, baml.ai.Anthropic);
+        branch copy _9 -> [bb10, bb7];
+    }
+
+    bb7: {
+        _10 = is_type(copy _3, baml.llm.Client);
+        branch copy _10 -> [bb9, bb8];
+    }
+
+    bb8: {
+        unreachable;
+    }
+
+    bb9: {
+        _0 = call const fn baml.ai.HttpProvider$for$root.llm.Client.send(copy _3, copy _2) -> [bb16];
+    }
+
+    bb10: {
+        _0 = call const fn baml.ai.Anthropic.root.ai.HttpProvider.send(copy _3, copy _2) -> [bb16];
+    }
+
+    bb11: {
+        _0 = call const fn baml.ai.OpenAiStrict.root.ai.HttpProvider.send(copy _3, copy _2) -> [bb16];
+    }
+
+    bb12: {
+        _0 = call const fn baml.ai.OpenAiResponses.root.ai.HttpProvider.send(copy _3, copy _2) -> [bb16];
+    }
+
+    bb13: {
+        _0 = call const fn baml.ai.Gemini.root.ai.HttpProvider.send(copy _3, copy _2) -> [bb16];
+    }
+
+    bb14: {
+        _0 = call const fn baml.ai.OpenAi.root.ai.HttpProvider.send(copy _3, copy _2) -> [bb16];
+    }
+
+    bb15: {
+        _0 = call const fn baml.ai.OpenAiCompatible.root.ai.HttpProvider.send(copy _3, copy _2) -> [bb16];
+    }
+
+    bb16: {
+        return;
+    }
+}
+
+fn baml.ai.OpenAiCompatible.root.ai.Streaming.stream_messages(self: null, messages: baml.ai.ChatMessage[]) -> baml.llm.Stream<TStream, TFinal> {
+    // Locals:
+    let _0: baml.llm.Stream<TStream, TFinal> // _0 // return
+    let _1: null // self // param
+    let _2: baml.ai.ChatMessage[] // messages // param
+    let _3: baml.ai.OpenAi // inner
+    let _4: string // schema
+    let _5: type
+    let _6: baml.http.Request // req
+    let _7: string
+    let _8: string
+    let _9: map<string, string>
+    let _10: string
+    let _11: baml.ai.ChatMessage[]
+    let _12: string
+    let _13: baml.http.SseStream // sse
+    let _14: unknown // e
+    let _15: baml.http.Request
+    let _16: baml.errors.UnknownError
+    let _17: baml.errors.Io | baml.errors.Timeout
+    let _18: string[]
+    let _19: baml.llm.PrimitiveClient // primitive
+    let _20: unknown // e
+    let _21: string
+    let _22: string
+    let _23: baml.errors.UnknownError
+    let _24: baml.errors.InvalidArgument
+    let _25: string[]
+    let _26: baml.llm.StreamAccumulator // acc
+    let _27: unknown // e
+    let _28: baml.errors.UnknownError
+    let _29: baml.errors.LlmClient
+    let _30: string[]
+    let _31: baml.llm.StreamCache<TStream, TFinal> // cache
+    let _32: type
+    let _33: type
+    let _34: baml.llm.PrimitiveClient
+    let _35: baml.llm.StreamAccumulator
+    let _36: baml.http.SseStream
+    let _37: baml.llm.StreamCache<TStream, TFinal>
+
+    bb0: {
+        _3 = call const fn baml.ai.OpenAiCompatible._inner(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _5 = load_type(#1);
+        goto -> bb2;
+    }
+
+    bb2: {
+        _4 = sys_op const fn baml.llm.render_output_format(copy _5) -> bb3;
+    }
+
+    bb3: {
+        _8 = copy _1.1;
+        _7 = copy _8 + const "/chat/completions";
+        _9 = call const fn baml.ai.OpenAiCompatible._headers(copy _1) -> [bb4];
+    }
+
+    bb4: {
+        _12 = copy _4;
+        _11 = call const fn baml.ai.OpenAi._messages_for(copy _3, copy _2, copy _12) -> [bb5];
+    }
+
+    bb5: {
+        _10 = call const fn baml.ai.OpenAi._request_body(copy _3, copy _11, const true) -> [bb6];
+    }
+
+    bb6: {
+        _6 = baml.http.Request { const "POST", copy _7, copy _9, copy _10 };
+        _15 = copy _6;
+        _13 = sys_op const fn baml.http.fetch_sse(copy _15) -> bb7 unwind bb14;
+    }
+
+    bb7: {
+        _22 = copy _1.0;
+        _21 = const "openai-generic/" + copy _22;
+        _19 = sys_op const fn baml.llm.from_shorthand(copy _21) -> bb8 unwind bb16;
+    }
+
+    bb8: {
+        _26 = sys_op const fn baml.llm.PrimitiveClient.new_stream_accumulator(copy _19) -> bb9 unwind bb18;
+    }
+
+    bb9: {
+        _32 = load_type(#0);
+        goto -> bb10;
+    }
+
+    bb10: {
+        _33 = load_type(#1);
+        goto -> bb11;
+    }
+
+    bb11: {
+        _31 = sys_op const fn baml.llm.StreamCache.new(copy _32, copy _33) -> bb12;
+    }
+
+    bb12: {
+        _34 = copy _19;
+        _35 = copy _26;
+        _36 = copy _13;
+        _37 = copy _31;
+        _0 = baml.llm.Stream<#0, #1> { copy _34, copy _35, copy _36, copy _37 };
+        goto -> bb13;
+    }
+
+    bb13: {
+        return;
+    }
+
+    bb14: {
+        throw_if_panic copy _14 -> bb15;
+    }
+
+    bb15: {
+        _17 = copy _14;
+        _18 = [const "openai-compatible fetch_sse failed"]: string[];
+        _16 = baml.errors.UnknownError { copy _17, copy _18 };
+        throw copy _16;
+    }
+
+    bb16: {
+        throw_if_panic copy _20 -> bb17;
+    }
+
+    bb17: {
+        _24 = copy _20;
+        _25 = [const "openai-compatible stream setup failed"]: string[];
+        _23 = baml.errors.UnknownError { copy _24, copy _25 };
+        throw copy _23;
+    }
+
+    bb18: {
+        throw_if_panic copy _27 -> bb19;
+    }
+
+    bb19: {
+        _29 = copy _27;
+        _30 = [const "openai-compatible accumulator failed"]: string[];
+        _28 = baml.errors.UnknownError { copy _29, copy _30 };
+        throw copy _28;
     }
 }
 

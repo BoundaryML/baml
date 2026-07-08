@@ -123,6 +123,10 @@ class            baml.ai.OpenAiToolChoiceWire     <builtin>/baml/ns_ai/providers
 class            baml.ai.OpenAiToolRespWire       <builtin>/baml/ns_ai/providers/openai.baml:626
 class            baml.ai.OpenAiToolTranscript     <builtin>/baml/ns_ai/providers/openai.baml:631
 function         baml.ai._openai_json_str         <builtin>/baml/ns_ai/providers/openai.baml:639
+class            baml.ai.NoAuth                   <builtin>/baml/ns_ai/providers/openai_compatible.baml:9
+class            baml.ai.BearerAuth               <builtin>/baml/ns_ai/providers/openai_compatible.baml:12
+class            baml.ai.HeaderAuth               <builtin>/baml/ns_ai/providers/openai_compatible.baml:17
+class            baml.ai.OpenAiCompatible         <builtin>/baml/ns_ai/providers/openai_compatible.baml:23
 class            baml.ai.OpenAiRealtime           <builtin>/baml/ns_ai/providers/openai_realtime.baml:10
 function         baml.ai._realtime_json_str       <builtin>/baml/ns_ai/providers/openai_realtime.baml:139
 class            baml.ai.OpenAiRespContentWire    <builtin>/baml/ns_ai/providers/openai_responses.baml:13

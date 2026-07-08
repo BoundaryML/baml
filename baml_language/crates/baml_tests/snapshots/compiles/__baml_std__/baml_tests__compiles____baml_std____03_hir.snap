@@ -516,7 +516,7 @@ function baml.ai.meta_of(self: ?, from: string) -> ResponseMeta  [expr] {
   {  } baml.ai.LegacyMeta {  }
 }
 function baml.ai.native_provider_for(primitive: root.llm.PrimitiveClient) -> Provider | null  [expr] {
-  { if (primitive.options.query_params.keys().length() Ne 0) { return null }; match (primitive.options.finish_reason_allow_list) { null => {  }, _ => { return null } }; match (primitive.options.finish_reason_deny_list) { null => {  }, _ => { return null } }; if (primitive.provider Eq "openai") { return OpenAi { model: primitive.options.model NullCoalesce "gpt-4o", api_key: primitive.options.api_key NullCoalesce "", base_url: primitive.options.base_url, extra_headers: primitive.options.headers, extra_body: primitive.options.request_body, append_output_schema: false } }; if (primitive.provider Eq "anthropic") { return Anthropic { model: primitive.options.model NullCoalesce "claude-sonnet-4-5", api_key: primitive.options.api_key, base_url: primitive.options.base_url, max_tokens: null, anthropic_version: null, extra_headers: primitive.options.headers, extra_body: primitive.options.request_body, append_output_schema: false } }; if (primitive.provider Eq "google-ai") { return Gemini { model: primitive.options.model NullCoalesce "gemini-2.5-flash", api_key: primitive.options.api_key, base_url: primitive.options.base_url, extra_headers: primitive.options.headers, extra_body: primitive.options.request_body, append_output_schema: false } } } null
+  { if (primitive.options.query_params.keys().length() Ne 0) { return null }; match (primitive.options.finish_reason_allow_list) { null => {  }, _ => { return null } }; match (primitive.options.finish_reason_deny_list) { null => {  }, _ => { return null } }; if (primitive.provider Eq "openai") { return OpenAi { model: primitive.options.model NullCoalesce "gpt-4o", api_key: primitive.options.api_key NullCoalesce "", base_url: primitive.options.base_url, extra_headers: primitive.options.headers, extra_body: primitive.options.request_body, append_output_schema: false } }; if (primitive.provider Eq "anthropic") { return Anthropic { model: primitive.options.model NullCoalesce "claude-sonnet-4-5", api_key: primitive.options.api_key, base_url: primitive.options.base_url, max_tokens: null, anthropic_version: null, extra_headers: primitive.options.headers, extra_body: primitive.options.request_body, append_output_schema: false } }; if (primitive.provider Eq "google-ai") { return Gemini { model: primitive.options.model NullCoalesce "gemini-2.5-flash", api_key: primitive.options.api_key, base_url: primitive.options.base_url, extra_headers: primitive.options.headers, extra_body: primitive.options.request_body, append_output_schema: false } }; if (primitive.provider Eq "openai-generic") {  } match (primitive.options.base_url) { null => { return null }, bu: string => {  } match (primitive.options.model) { null => { return null }, m: string => { let auth: BearerAuth | HeaderAuth | NoAuth = match (primitive.options.api_key) { null => NoAuth {  }, k: string => BearerAuth { token: k } }; return OpenAiCompatible { model: m, base_url: bu, auth: auth, extra_headers: primitive.options.headers, extra_body: primitive.options.request_body, append_output_schema: false } } } } } null
 }
 function baml.ai.parse(self: ?, from: string) -> T  [expr] {
   { let primitive = self.to_primitive_client() catch (e) { _ => throw root.errors.UnknownError { data: e, message: ["legacy bridge: cl..."] } } } primitive.parse(from) catch (e) { _ => throw root.errors.UnknownError { data: e, message: ["legacy bridge: pa..."] } }
@@ -1024,6 +1024,46 @@ function baml.ai.submit(self: ?, t: baml.ai.OpenAiToolTranscript, results: root.
 }
 function baml.ai.usage(self: ?) -> root.ai.Usage  [expr] {
   {  } match (self._wire()) { w: baml.ai.OpenAiResponseWire => match (w.usage) { u: baml.ai.OpenAiUsageWire => {  } root.ai.Usage { input_tokens: u.prompt_tokens, output_tokens: u.completion_tokens }, _ => root.ai.Usage { input_tokens: 0, output_tokens: 0 } }, _ => root.ai.Usage { input_tokens: 0, output_tokens: 0 } }
+}
+
+--- <builtin>/baml/ns_ai/providers/openai_compatible.baml ---
+class baml.ai.BearerAuth {
+  token: string
+}
+class baml.ai.HeaderAuth {
+  name: string
+  value: string
+}
+class baml.ai.NoAuth {
+}
+class baml.ai.OpenAiCompatible {
+  model: string
+  base_url: string
+  auth: baml.ai.BearerAuth | baml.ai.HeaderAuth | baml.ai.NoAuth
+  extra_headers: map<string, string>?
+  extra_body: map<string, unknown>?
+  append_output_schema: bool?
+}
+function baml.ai._headers(self: ?) -> map<string, string>  [expr] {
+  { let headers: map<string, string> = map { "Content-Type": "application/json" }; match (self.auth) { b: baml.ai.BearerAuth => { headers.set("Authorization", "Bearer " Add b.token) }, h: baml.ai.HeaderAuth => { headers.set(h.name, h.value) }, _ => {  } }; match (self.extra_headers) { extra: map<string, string> => { for k in extra.keys() { headers.set(k, extra.get(k) NullCoalesce "") } }, _ => {  } } } headers
+}
+function baml.ai._inner(self: ?) -> OpenAi  [expr] {
+  {  } OpenAi { model: self.model, api_key: "", base_url: self.base_url, extra_headers: null, extra_body: self.extra_body, append_output_schema: self.append_output_schema }
+}
+function baml.ai.build_request(self: ?, messages: root.ai.ChatMessage[]) -> root.http.Request  [expr] {
+  { let r = self._inner().build_request(messages) } root.http.Request { method: r.method, url: r.url, headers: self._headers(), body: r.body }
+}
+function baml.ai.meta_of(self: ?, from: string) -> root.ai.ResponseMeta  [expr] {
+  {  } self._inner().meta_of(from)
+}
+function baml.ai.parse(self: ?, from: string) -> T  [expr] {
+  {  } self._inner().parse(from)
+}
+function baml.ai.send(self: ?, request: root.http.Request) -> string  [expr] {
+  {  } self._inner().send(request)
+}
+function baml.ai.stream_messages(self: ?, messages: root.ai.ChatMessage[]) -> root.llm.Stream<TStream, TFinal>  [expr] {
+  { let inner = self._inner(); let schema: string = root.llm.render_output_format(reflect.type_of()); let req = root.http.Request { method: "POST", url: self.base_url Add "/chat/completions", headers: self._headers(), body: inner._request_body(inner._messages_for(messages, schema), true) }; let sse = root.http.fetch_sse(req) catch (e) { _ => { throw root.errors.UnknownError { data: e, message: ["openai-compatible..."] } } }; let primitive = root.llm.from_shorthand("openai-generic/" Add self.model) catch (e) { _ => { throw root.errors.UnknownError { data: e, message: ["openai-compatible..."] } } }; let acc = primitive.new_stream_accumulator() catch (e) { _ => { throw root.errors.UnknownError { data: e, message: ["openai-compatible..."] } } }; let cache = root.llm.StreamCache.new(reflect.type_of(), reflect.type_of()) } root.llm.Stream { _client: primitive, _acc: acc, _sse: sse, _cache: cache }
 }
 
 --- <builtin>/baml/ns_ai/providers/openai_realtime.baml ---
