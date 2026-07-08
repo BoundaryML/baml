@@ -3517,6 +3517,105 @@ function needs<T extends Marker>(x: T) -> int throws never {
     }
 
     #[test]
+    fn self_associated_projection_conforms_across_multiple_declaring_interfaces() {
+        // `Both` implements two interfaces that *each* declare an associated type `Item`, and
+        // each interface's method returns `Self.Item`. Realizing the interface signature must
+        // resolve `Self.Item` through the *declaring* interface (`(Self as Producer).Item`,
+        // `(Self as Labeled).Item`) — NOT through `Both`'s whole impl set, which would make
+        // `Self.Item` ambiguous and spuriously reject both conforming overrides.
+        let diags = impl_diagnostics(
+            "interface Producer {\n  type Item\n  \
+             function make(self) -> Self.Item throws never\n}\n\
+             interface Labeled {\n  type Item\n  \
+             function label(self) -> Self.Item throws never\n}\n\
+             class Both {\n  \
+             implements Producer {\n    type Item = int\n    \
+             function make(self) -> int throws never { 0 }\n  }\n  \
+             implements Labeled {\n    type Item = string\n    \
+             function label(self) -> string throws never { \"x\" }\n  }\n}\n",
+        );
+        assert!(
+            !diags
+                .iter()
+                .any(|e| matches!(e, TirTypeError::InterfaceMethodSignatureMismatch { .. })),
+            "each `Self.Item` should resolve through its declaring interface and conform, got {diags:?}"
+        );
+    }
+
+    #[test]
+    fn self_associated_projection_reduction_still_enforces_conformance() {
+        // Negative control: `make` returns `Self.Item` (= `int` for this impl), but the override
+        // returns `string`. The realized `(Self as Producer).Item` must reduce to `int` and hold
+        // the override to it — if `Self.Item` were erased to a compatible sentinel this would pass.
+        let diags = impl_diagnostics(
+            "interface Producer {\n  type Item\n  \
+             function make(self) -> Self.Item throws never\n}\n\
+             class Bad {\n  \
+             implements Producer {\n    type Item = int\n    \
+             function make(self) -> string throws never { \"x\" }\n  }\n}\n",
+        );
+        assert!(
+            diags.iter().any(|e| matches!(
+                e,
+                TirTypeError::InterfaceMethodSignatureMismatch { method, .. } if method.as_str() == "make"
+            )),
+            "a `string` override of a `Self.Item`(=`int`) return should be rejected, got {diags:?}"
+        );
+    }
+
+    #[test]
+    fn self_associated_projection_in_requires_clause_is_satisfied() {
+        // `Stream requires Source<Item = Self.Item>`: the requires clause projects `Self.Item`.
+        // Realized at the implementor with `Self` bound to `Stream`, it must resolve to the
+        // implementor's `Stream::Item` (`int`) so the `Source<Item = int>` obligation is checked
+        // against `MyStream`'s actual `Source` impl (also `int`) — satisfied, no E0125.
+        let diags = impl_diagnostics(
+            "interface Source {\n  type Item\n  \
+             function get(self) -> Self.Item throws never\n}\n\
+             interface Stream requires Source<Item = Self.Item> {\n  type Item\n  \
+             function next(self) -> Self.Item throws never\n}\n\
+             class MyStream {\n  \
+             implements Source {\n    type Item = int\n    \
+             function get(self) -> int throws never { 0 }\n  }\n  \
+             implements Stream {\n    type Item = int\n    \
+             function next(self) -> int throws never { 1 }\n  }\n}\n",
+        );
+        assert!(
+            !diags
+                .iter()
+                .any(|e| matches!(e, TirTypeError::MissingRequiredInterface { .. })),
+            "the `Source<Item = Self.Item>` obligation resolves to `Source<Item = int>`, which \
+             `MyStream` implements — expected no MissingRequiredInterface, got {diags:?}"
+        );
+    }
+
+    #[test]
+    fn self_associated_projection_in_requires_clause_detects_mismatch() {
+        // As above, but `MyStream`'s `Source` impl pins `Item = string` while its `Stream` impl
+        // pins `Item = int`. The requires obligation reduces to `Source<Item = int>` (from
+        // `Stream::Item`), which the `Source<Item = string>` impl does NOT satisfy (associated
+        // types are invariant) — proving `Self.Item` resolved to the real pin, not an erased sentinel.
+        let diags = impl_diagnostics(
+            "interface Source {\n  type Item\n  \
+             function get(self) -> Self.Item throws never\n}\n\
+             interface Stream requires Source<Item = Self.Item> {\n  type Item\n  \
+             function next(self) -> Self.Item throws never\n}\n\
+             class Mismatch {\n  \
+             implements Source {\n    type Item = string\n    \
+             function get(self) -> string throws never { \"s\" }\n  }\n  \
+             implements Stream {\n    type Item = int\n    \
+             function next(self) -> int throws never { 1 }\n  }\n}\n",
+        );
+        assert!(
+            diags
+                .iter()
+                .any(|e| matches!(e, TirTypeError::MissingRequiredInterface { .. })),
+            "the reduced `Source<Item = int>` obligation is unmet by a `Source<Item = string>` \
+             impl — expected MissingRequiredInterface, got {diags:?}"
+        );
+    }
+
+    #[test]
     fn implements_non_interface_is_reported() {
         // The head `NotIface` is a class, not an interface (E0119).
         let diags = impl_diagnostics(

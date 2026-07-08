@@ -922,6 +922,52 @@ fn orphan_check(
     OrphanOutcome::NoLocalType
 }
 
+/// Realize an interface-scoped type (a method signature or a `requires`-clause interface)
+/// through `lower`, treating `Self` as a *rigid type variable* bound to `self_bound` — the
+/// interface being implemented — and substituting `Self -> receiver` (plus `bindings`) *last*.
+///
+/// Unqualified `Self.member` therefore lowers to a symbolic `(Self as I).member` projection —
+/// its declaring interface fixed by `I`'s own `requires`-closure, not the receiver's whole
+/// impl set — and only collapses to the receiver's realization *after* substitution, where
+/// `normalize` reduces `(receiver as I).member` against `receiver`'s impl. Pinning
+/// `Self = receiver` *before* lowering (the former shape) instead routed `Self.member` through
+/// the concrete receiver's impls, so a receiver implementing several interfaces that each
+/// declare `member` made the projection ambiguous — a spurious `Ty::Error` that failed
+/// conformance even for a valid impl.
+#[expect(clippy::too_many_arguments)]
+fn realize_with_symbolic_self<'db>(
+    db: &'db dyn crate::Db,
+    package_items: &baml_compiler2_hir::package::PackageItems<'db>,
+    ns_context: &[Name],
+    base_generics: &[Name],
+    base_bounds: &crate::lower_type_expr::TypeVarBoundsMap,
+    self_bound: &baml_type::Interface,
+    receiver: &Ty,
+    bindings: &rustc_hash::FxHashMap<Name, Ty>,
+    lower: impl FnOnce(&crate::lower_type_expr::ScopeCtx<'_, 'db>) -> Ty,
+) -> Ty {
+    let self_name = Name::new("Self");
+    // `Self` joins the in-scope generics with the implemented interface as its bound, so a
+    // `Self.member` projection resolves the declaring interface through that bound's closure.
+    let mut generics = base_generics.to_vec();
+    generics.push(self_name.clone());
+    let mut bounds = base_bounds.clone();
+    bounds.insert(self_name.clone(), vec![self_bound.clone()]);
+    let lowered = lower(&crate::lower_type_expr::ScopeCtx {
+        db,
+        package_items,
+        ns_context,
+        generic_params: &generics,
+        bounds: &bounds,
+        self_ty: Some(Ty::TypeVar(self_name.clone(), TyAttr::default())),
+    });
+    // Substitute the receiver for `Self` last: `(Self as I).member` becomes
+    // `(receiver as I).member`, which `normalize` reduces against the receiver's impl.
+    let mut substitution = bindings.clone();
+    substitution.insert(self_name, receiver.clone());
+    substitute_ty(&lowered, &substitution)
+}
+
 /// Phase-5 signature/type conformance for one `implements` block. Runs strictly downstream of
 /// [`impl_data`] + associated-type resolution, so the canonical type algebra is fully
 /// determined here: `equivalent`/`is_subtype` may re-enter `impl_data` (via `impls_for_type`)
@@ -1106,6 +1152,13 @@ pub fn validate_impl_signatures<'db>(
     let iface_bindings =
         crate::generics::bind_type_vars(&iface_data.generic_params, &data.interface_args);
     let iface_bounds = crate::lower_type_expr::interface_generic_param_bounds(db, data.interface);
+    // In the interface's own declared signatures (and `requires` clauses), `Self` is a rigid
+    // type variable bound to the interface being implemented, realized at the impl's args. Both
+    // conformance sides realize `Self.member` symbolically through this bound, then substitute
+    // `Self -> for_ty` last (see `realize_with_symbolic_self`).
+    let self_bound =
+        baml_type::Interface::new(iface_qtn.clone(), data.interface_args.clone(), vec![]);
+    let no_bindings = rustc_hash::FxHashMap::<Name, Ty>::default();
 
     for &method_loc in &data.methods {
         let method_name = item_tree[method_loc.id(db)].name.clone();
@@ -1135,16 +1188,16 @@ pub fn validate_impl_signatures<'db>(
         let impl_spec = InterfaceMethodSpec::from_default(db, method_loc);
         let mut impl_scope_generics = impl_generic_names.clone();
         impl_scope_generics.extend(impl_spec.generic_param_names());
-        let mut impl_fn = impl_spec.to_function_ty(
-            &crate::lower_type_expr::ScopeCtx {
-                db,
-                package_items: &res_ctx.own_items,
-                ns_context: &pkg_info.namespace_path,
-                generic_params: &impl_scope_generics,
-                bounds: &bounds,
-                self_ty: Some(for_ty.clone()),
-            },
-            &mut d,
+        let mut impl_fn = realize_with_symbolic_self(
+            db,
+            &res_ctx.own_items,
+            &pkg_info.namespace_path,
+            &impl_scope_generics,
+            &bounds,
+            &self_bound,
+            &for_ty,
+            &no_bindings,
+            |scope| impl_spec.to_function_ty(scope, &mut d),
         );
         if let Ty::Function { throws, .. } = &mut impl_fn {
             **throws = crate::callable::callable_throws(db, method_loc).clone();
@@ -1153,19 +1206,16 @@ pub fn validate_impl_signatures<'db>(
         // The interface method's function type, realized at `interface_args`.
         let mut iface_scope_generics = iface_data.generic_params.clone();
         iface_scope_generics.extend(iface_spec.generic_param_names());
-        let iface_fn = crate::generics::substitute_ty(
-            &iface_spec.to_function_ty(
-                &crate::lower_type_expr::ScopeCtx {
-                    db,
-                    package_items: iface_pkg_items,
-                    ns_context: &iface_pkg_info.namespace_path,
-                    generic_params: &iface_scope_generics,
-                    bounds: iface_bounds,
-                    self_ty: Some(for_ty.clone()),
-                },
-                &mut d,
-            ),
+        let iface_fn = realize_with_symbolic_self(
+            db,
+            iface_pkg_items,
+            &iface_pkg_info.namespace_path,
+            &iface_scope_generics,
+            iface_bounds,
+            &self_bound,
+            &for_ty,
             &iface_bindings,
+            |scope| iface_spec.to_function_ty(scope, &mut d),
         );
 
         if !baml_type::normalize::is_subtype(&impl_fn, &iface_fn, &ctx) {
@@ -1185,19 +1235,24 @@ pub fn validate_impl_signatures<'db>(
     // Cycle-safe here — `implements_interface` re-enters `impl_data`, never this phase-5 query. ──
     {
         let mut d = Vec::new();
-        let requires_scope = crate::lower_type_expr::ScopeCtx {
-            db,
-            package_items: iface_pkg_items,
-            ns_context: &iface_pkg_info.namespace_path,
-            generic_params: &iface_data.generic_params,
-            bounds: iface_bounds,
-            self_ty: None,
-        };
         for required_te in &iface_data.requires {
-            let required = crate::generics::substitute_ty(
-                &crate::lower_type_expr::lower_type_expr(required_te, &requires_scope, &mut d),
+            // A `requires` clause may project `Self.member` (`requires I<Item = Self.Item>`), so
+            // realize it with `Self` bound to the implemented interface and `Self -> for_ty` last.
+            let required = realize_with_symbolic_self(
+                db,
+                iface_pkg_items,
+                &iface_pkg_info.namespace_path,
+                &iface_data.generic_params,
+                iface_bounds,
+                &self_bound,
+                &for_ty,
                 &iface_bindings,
+                |scope| crate::lower_type_expr::lower_type_expr(required_te, scope, &mut d),
             );
+            // Reduce any `Self.member` projection in the realized obligation
+            // (`(for_ty as I).X` -> the for-type's binding) so the associated pins below are
+            // concrete and `implements_interface` matches them structurally.
+            let required = baml_type::normalize::normalize(&required, &ctx);
             let Ty::Interface(qtn, generics, assoc, _) = &required else {
                 continue;
             };
