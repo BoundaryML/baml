@@ -130,6 +130,7 @@ namespace baml.ai:
   function drive_with<T, V, E2>
   function has_tool_call
   function messages_to_prompt
+  function native_provider_for
   function prompt_to_messages
   function step_count_is
 namespace baml.csv:
@@ -318,8 +319,6 @@ namespace baml.llm:
   class VertexAiOptions { methods: [] }
   function __sap_parse_final<TStream, TFinal>
   function __sap_parse_partial<TStream, TFinal>
-  function _openai_delegation_ok
-  function _openai_from
   function assemble_prompt_ast
   function build_output_format
   function build_prompt_context

@@ -266,13 +266,6 @@ class Client {
         let specialized = primitive.render_specialized_prompt(
           context.jinja_string, context.args, return_type, context.prompt_closure);
 
-        // NEW PROVIDER PATH: route OpenAI streaming through `baml.ai.OpenAi` (mirrors the
-        // oneshot delegation), forwarding headers/request_body. Media / query_params /
-        // finish-reason lists fall back to the legacy builder (see _openai_delegation_ok).
-        if (_openai_delegation_ok(primitive, specialized)) {
-          return _openai_from(primitive).stream_messages<TStream, TFinal>(root.ai.prompt_to_messages(specialized));
-        }
-
         let http_request = primitive.build_request_stream(specialized, return_type);
         let sse = root.http.fetch_sse(http_request);
         let stream: Stream<TStream, TFinal> = self.__make_stream<TStream, TFinal>(sse);
@@ -377,15 +370,6 @@ class Client {
         // companion uses — so execution and preview never drift.
         let specialized = primitive.render_specialized_prompt(
           context.jinja_string, context.args, return_type, context.prompt_closure)
-
-        // NEW PROVIDER PATH: route OpenAI through the BAML-authored `baml.ai.OpenAi`
-        // provider (request/response logic in BAML), forwarding headers/request_body.
-        // Media / query_params / finish-reason lists fall back to the legacy builder
-        // (see _openai_delegation_ok); other providers keep the legacy Rust path until
-        // they are ported. See _plan/deviations.md.
-        if (_openai_delegation_ok(primitive, specialized)) {
-          return _openai_from(primitive).call_messages<T>(root.ai.prompt_to_messages(specialized));
-        }
 
         let http_request = primitive.build_request(specialized, return_type)
         let http_response = root.http.send(http_request)
@@ -824,38 +808,6 @@ function prompt_has_media(prompt: PromptAst) -> bool throws never {
   $rust_io_function
 }
 
-
-/// True iff an openai call can be served by the BAML-authored `baml.ai.OpenAi` provider.
-/// Media rides natively (`prompt_to_messages`); only query_params and finish-reason
-/// validation lists still fall back to the legacy request builder.
-function _openai_delegation_ok(primitive: PrimitiveClient, specialized: PromptAst) -> bool throws never {
-  if (primitive.provider != "openai") { return false; }
-  if (primitive.options.query_params.keys().length() != 0) { return false; }
-  match (primitive.options.finish_reason_allow_list) {
-    null => {},
-    _ => { return false; },
-  }
-  match (primitive.options.finish_reason_deny_list) {
-    null => {},
-    _ => { return false; },
-  }
-  true
-}
-
-/// Build a `baml.ai.OpenAi` from a legacy client's options, forwarding headers and
-/// request_body (temperature, max_tokens, …). Schema-append is disabled: the rendered
-/// template already carries (or deliberately omits) `${ctx.output_format}` — appending
-/// again would double-inject the schema.
-function _openai_from(primitive: PrimitiveClient) -> root.ai.OpenAi throws never {
-  root.ai.OpenAi {
-    model: primitive.options.model ?? "gpt-4o",
-    api_key: primitive.options.api_key ?? "",
-    base_url: primitive.options.base_url,
-    extra_headers: primitive.options.headers,
-    extra_body: primitive.options.request_body,
-    append_output_schema: false,
-  }
-}
 
 /// DO NOT CALL FROM USER CODE
 function __sap_parse_final<TStream, TFinal>(json: string, cache: StreamCache<TStream, TFinal>) -> TFinal throws root.errors.LlmClient {

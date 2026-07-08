@@ -95,3 +95,65 @@ implements HttpProvider for root.llm.Client {
         LegacyMeta {}
     }
 }
+
+/// Route a legacy PRIMITIVE client to its BAML-native provider class when the
+/// provider is ported (openai / anthropic / google-ai) and the config is
+/// expressible natively — query_params and finish-reason validation lists are
+/// not, and keep the legacy request builder. Returns null otherwise.
+///
+/// This replaces the orchestrator's openai-only `_openai_delegation_ok` /
+/// `_openai_from` special-case (DCP Phase C): the routing decision now lives
+/// with the native classes, generalized to all ported providers, and is
+/// consumed by `baml.llm.call_llm_function` / `stream_llm_function`.
+/// Schema-append is disabled on every constructed provider: the rendered
+/// template already carries (or deliberately omits) `${ctx.output_format}`.
+function native_provider_for(primitive: root.llm.PrimitiveClient) -> Provider | null throws never {
+    if (primitive.options.query_params.keys().length() != 0) {
+        return null;
+    }
+    match (primitive.options.finish_reason_allow_list) {
+        null => {},
+        _ => {
+            return null;
+        },
+    }
+    match (primitive.options.finish_reason_deny_list) {
+        null => {},
+        _ => {
+            return null;
+        },
+    }
+    if (primitive.provider == "openai") {
+        return OpenAi {
+            model: primitive.options.model ?? "gpt-4o",
+            api_key: primitive.options.api_key ?? "",
+            base_url: primitive.options.base_url,
+            extra_headers: primitive.options.headers,
+            extra_body: primitive.options.request_body,
+            append_output_schema: false,
+        };
+    }
+    if (primitive.provider == "anthropic") {
+        return Anthropic {
+            model: primitive.options.model ?? "claude-sonnet-4-5",
+            api_key: primitive.options.api_key,
+            base_url: primitive.options.base_url,
+            max_tokens: null,
+            anthropic_version: null,
+            extra_headers: primitive.options.headers,
+            extra_body: primitive.options.request_body,
+            append_output_schema: false,
+        };
+    }
+    if (primitive.provider == "google-ai") {
+        return Gemini {
+            model: primitive.options.model ?? "gemini-2.5-flash",
+            api_key: primitive.options.api_key,
+            base_url: primitive.options.base_url,
+            extra_headers: primitive.options.headers,
+            extra_body: primitive.options.request_body,
+            append_output_schema: false,
+        };
+    }
+    null
+}

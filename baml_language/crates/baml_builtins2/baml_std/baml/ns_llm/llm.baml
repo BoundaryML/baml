@@ -120,10 +120,29 @@ function call_llm_function<T>(client: root.ai.Provider, function_name: string, a
   };
 
   match (client) {
-    // Declared/legacy client (or a legacy call-site override): today's
-    // orchestrator path, unchanged. This concrete arm precedes capability
-    // negotiation, so legacy strategy configs keep their strategy loops.
+    // Declared/legacy client (or a legacy call-site override). Ported
+    // primitives (openai/anthropic/google-ai, expressible configs) route
+    // through their BAML-native provider class; strategy configs and
+    // unported/unexpressible configs keep the legacy orchestrator (this
+    // concrete arm precedes capability negotiation, so strategy loops stay
+    // intact).
     let lc: Client => {
+      if (lc.client_type == ClientType.Primitive) {
+        let primitive = lc.to_primitive_client();
+        match (root.ai.native_provider_for(primitive)) {
+          null => {},
+          let np: root.ai.Provider => {
+            let return_type = get_return_type(function_name);
+            let specialized = primitive.render_specialized_prompt(jinja_string, args, return_type, prompt_closure);
+            match (np) {
+              let h: root.ai.HttpProvider => {
+                return h.call_messages<T>(root.ai.prompt_to_messages(specialized));
+              },
+              _ => {},
+            }
+          },
+        }
+      }
       let context = ExecutionContext {
         jinja_string: jinja_string,
         args: args,
@@ -165,9 +184,27 @@ function stream_llm_function<TStream, TFinal>(client: root.ai.Provider, function
     };
 
     match (client) {
-        // Declared/legacy client (or a legacy override): today's stream
-        // orchestrator, unchanged.
+        // Declared/legacy client (or a legacy override). Ported primitives
+        // whose native class supports Streaming route natively (Gemini's
+        // does not yet — it falls through to the legacy stream orchestrator
+        // automatically).
         let lc: Client => {
+            if (lc.client_type == ClientType.Primitive) {
+                let primitive = lc.to_primitive_client();
+                match (root.ai.native_provider_for(primitive)) {
+                    null => {},
+                    let np: root.ai.Provider => {
+                        let return_type = get_return_type(function_name);
+                        let specialized = primitive.render_specialized_prompt(jinja_string, args, return_type, prompt_closure);
+                        match (np) {
+                            let s2: root.ai.Streaming => {
+                                return s2.stream_messages<TStream, TFinal>(root.ai.prompt_to_messages(specialized));
+                            },
+                            _ => {},
+                        }
+                    },
+                }
+            }
             let context = ExecutionContext {
                 jinja_string: jinja_string,
                 args: args,

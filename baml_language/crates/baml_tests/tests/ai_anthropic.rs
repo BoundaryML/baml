@@ -423,3 +423,51 @@ async fn anthropic_stream_live() {
         "live stream final unexpected: {s:?}"
     );
 }
+
+/// Phase C.2: a DECLARED `client<llm> { provider anthropic }` now routes
+/// through the BAML-native `baml.ai.Anthropic` provider (native wire shape:
+/// x-api-key header, system hoisted top-level) instead of the legacy builder.
+#[tokio::test]
+async fn e2e_declared_anthropic_routes_natively() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/v1/messages"))
+        .respond_with(ResponseTemplate::new(200).set_body_string(
+            r#"{"content":[{"type":"text","text":"native-pong"}],"stop_reason":"end_turn","usage":{"input_tokens":1,"output_tokens":1}}"#,
+        ))
+        .mount(&server)
+        .await;
+    let uri = server.uri();
+
+    let output = baml_test!(&format!(
+        r#"
+        client<llm> Claude {{
+          provider anthropic
+          options {{
+            model "claude-haiku-4-5-20251001"
+            api_key "test-key"
+            base_url "{uri}"
+          }}
+        }}
+        function Ask(q: string) -> string {{
+          client Claude
+          prompt `${{q}}`
+        }}
+        function main() -> string {{ Ask("hi") catch (e) {{ _ => "failed" }} }}
+        "#
+    ));
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("native-pong".into())
+    );
+    let reqs = server.received_requests().await.unwrap();
+    assert_eq!(reqs.len(), 1);
+    assert!(
+        reqs[0].headers.get("x-api-key").is_some(),
+        "native Anthropic wire uses x-api-key"
+    );
+    assert!(
+        reqs[0].headers.get("anthropic-version").is_some(),
+        "native Anthropic wire sets anthropic-version"
+    );
+}

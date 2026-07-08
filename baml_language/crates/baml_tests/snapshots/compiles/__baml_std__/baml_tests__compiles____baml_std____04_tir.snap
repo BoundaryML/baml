@@ -1250,6 +1250,43 @@ function baml.ai.LegacyMeta.citations(self: baml.ai.LegacyMeta) -> baml.ai.Citat
     Unavailable { reason: "legacy bridge sur..." } : baml.ai.Unavailable
   }
 }
+function baml.ai.native_provider_for(primitive: baml.llm.PrimitiveClient) -> baml.ai.Provider | null throws never {
+  { : null
+    if (primitive.options.query_params.keys().length() != 0 : bool) : void
+      { : never
+        return null : null
+      }
+    match (primitive.options.finish_reason_allow_list : string[] | null) : void
+      null =>
+        { : void
+        }
+      _ =>
+        { : never
+          return null : null
+        }
+    match (primitive.options.finish_reason_deny_list : string[] | null) : void
+      null =>
+        { : void
+        }
+      _ =>
+        { : never
+          return null : null
+        }
+    if (primitive.provider == "openai" : bool) : void
+      { : never
+        return OpenAi { model: primitive.options.model ?? "gpt-4o", api_key: primitive.options.api_key ?? "", base_url: primitive.options.base_url, extra_headers: primitive.options.headers, extra_body: primitive.options.request_body, append_output_schema: false } : baml.ai.OpenAi
+      }
+    if (primitive.provider == "anthropic" : bool) : void
+      { : never
+        return Anthropic { model: primitive.options.model ?? "claude-sonnet-4-5", api_key: primitive.options.api_key, base_url: primitive.options.base_url, max_tokens: null, anthropic_version: null, extra_headers: primitive.options.headers, extra_body: primitive.options.request_body, append_output_schema: false } : baml.ai.Anthropic
+      }
+    if (primitive.provider == "google-ai" : bool) : void
+      { : never
+        return Gemini { model: primitive.options.model ?? "gemini-2.5-flash", api_key: primitive.options.api_key, base_url: primitive.options.base_url, extra_headers: primitive.options.headers, extra_body: primitive.options.request_body, append_output_schema: false } : baml.ai.Gemini
+      }
+    null : null
+  }
+}
 function baml.ai.build_request<T>(self: unknown, messages: baml.ai.ChatMessage[]) -> baml.http.Request throws baml.errors.CallError | baml.errors.UnknownError {
   { : baml.http.Request
     if (self.client_type != root.llm.ClientType.Primitive : bool) : void
@@ -7384,6 +7421,27 @@ function baml.llm.call_llm_function<T>(client: baml.ai.Provider, function_name: 
     match (client : baml.ai.Provider) : T
       lc: Client =>
         { : T
+          if (lc.client_type == ClientType.Primitive : bool) : void
+            { : void
+              let primitive = lc.to_primitive_client() : baml.llm.PrimitiveClient
+              match (root.ai.native_provider_for(primitive) : baml.ai.Provider | null) : void
+                null =>
+                  { : void
+                  }
+                np: root.ai.Provider =>
+                  { : void
+                    let return_type = get_return_type(function_name) : type
+                    let specialized = primitive.render_specialized_prompt(jinja_string, args, return_type, prompt_closure) : baml.llm.PromptAst
+                    match (np : baml.ai.Provider) : void
+                      h: root.ai.HttpProvider =>
+                        { : never
+                          return h.call_messages<T>(root.ai.prompt_to_messages(specialized)) : T
+                        }
+                      _ =>
+                        { : void
+                        }
+                  }
+            }
           let context = ExecutionContext { jinja_string: jinja_string, args: args, function_name: function_name, prompt_closure: prompt_closure } : baml.llm.ExecutionContext
           let result: T = lc.execute_oneshot<T>(context, 0) : T
           result : T
@@ -7411,6 +7469,27 @@ function baml.llm.stream_llm_function<TStream, TFinal>(client: baml.ai.Provider,
     match (client : baml.ai.Provider) : baml.llm.Stream<TStream, TFinal>
       lc: Client =>
         { : baml.llm.Stream<TStream, TFinal>
+          if (lc.client_type == ClientType.Primitive : bool) : void
+            { : void
+              let primitive = lc.to_primitive_client() : baml.llm.PrimitiveClient
+              match (root.ai.native_provider_for(primitive) : baml.ai.Provider | null) : void
+                null =>
+                  { : void
+                  }
+                np: root.ai.Provider =>
+                  { : void
+                    let return_type = get_return_type(function_name) : type
+                    let specialized = primitive.render_specialized_prompt(jinja_string, args, return_type, prompt_closure) : baml.llm.PromptAst
+                    match (np : baml.ai.Provider) : void
+                      s2: root.ai.Streaming =>
+                        { : never
+                          return s2.stream_messages(root.ai.prompt_to_messages(specialized)) : baml.llm.Stream<TStream, TFinal>
+                        }
+                      _ =>
+                        { : void
+                        }
+                  }
+            }
           let context = ExecutionContext { jinja_string: jinja_string, args: args, function_name: function_name, prompt_closure: prompt_closure } : baml.llm.ExecutionContext
           let result: Stream<TStream, TFinal> = lc.execute_stream(context, 0) : baml.llm.Stream<TStream, TFinal>
           result : baml.llm.Stream<TStream, TFinal>
@@ -7634,10 +7713,6 @@ function baml.llm.Client.execute_once_stream<TStream, TFinal>(self: baml.llm.Cli
           let primitive = self.to_primitive_client() : baml.llm.PrimitiveClient
           let return_type = get_return_type(context.function_name) : type
           let specialized = primitive.render_specialized_prompt(context.jinja_string, context.args, return_type, context.prompt_closure) : baml.llm.PromptAst
-          if (_openai_delegation_ok(primitive, specialized) : bool) : void
-            { : never
-              return _openai_from(primitive).stream_messages(root.ai.prompt_to_messages(specialized)) : baml.llm.Stream<TStream, TFinal>
-            }
           let http_request = primitive.build_request_stream(specialized, return_type) : baml.http.Request
           let sse = root.http.fetch_sse(http_request) : baml.http.SseStream
           let stream: Stream<TStream, TFinal> = self.__make_stream(sse) : baml.llm.Stream<TStream, TFinal>
@@ -7734,10 +7809,6 @@ function baml.llm.Client.execute_once_oneshot<T>(self: baml.llm.Client, context:
           let primitive = self.to_primitive_client() : baml.llm.PrimitiveClient
           let return_type = reflect.type_of() : type
           let specialized = primitive.render_specialized_prompt(context.jinja_string, context.args, return_type, context.prompt_closure) : baml.llm.PromptAst
-          if (_openai_delegation_ok(primitive, specialized) : bool) : void
-            { : never
-              return _openai_from(primitive).call_messages<T>(root.ai.prompt_to_messages(specialized)) : T
-            }
           let http_request = primitive.build_request(specialized, return_type) : baml.http.Request
           let http_response = root.http.send(http_request) : baml.http.Response
           if (http_response.ok() : bool) : T
@@ -7963,40 +8034,6 @@ function baml.llm.prompt(body: (role: (string) -> baml.llm.Role throws never, ct
   }
 }
 lambda baml.llm.prompt {
-}
-function baml.llm._openai_delegation_ok(primitive: baml.llm.PrimitiveClient, specialized: baml.llm.PromptAst) -> bool throws never {
-  { : true
-    if (primitive.provider != "openai" : bool) : void
-      { : never
-        return false : false
-      }
-    if (primitive.options.query_params.keys().length() != 0 : bool) : void
-      { : never
-        return false : false
-      }
-    match (primitive.options.finish_reason_allow_list : string[] | null) : void
-      null =>
-        { : void
-        }
-      _ =>
-        { : never
-          return false : false
-        }
-    match (primitive.options.finish_reason_deny_list : string[] | null) : void
-      null =>
-        { : void
-        }
-      _ =>
-        { : never
-          return false : false
-        }
-    true : true
-  }
-}
-function baml.llm._openai_from(primitive: baml.llm.PrimitiveClient) -> baml.ai.OpenAi throws never {
-  { : baml.ai.OpenAi
-    root.ai.OpenAi { model: primitive.options.model ?? "gpt-4o", api_key: primitive.options.api_key ?? "", base_url: primitive.options.base_url, extra_headers: primitive.options.headers, extra_body: primitive.options.request_body, append_output_schema: false } : baml.ai.OpenAi
-  }
 }
 class baml.llm.PromptAst$stream {
   _data: $rust_type
