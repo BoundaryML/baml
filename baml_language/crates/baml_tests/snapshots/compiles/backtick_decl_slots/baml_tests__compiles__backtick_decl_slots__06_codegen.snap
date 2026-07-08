@@ -49,7 +49,7 @@ function user.Fast$new() -> null {
     return
 }
 
-function user.Greet(name: string, client: baml.llm.Client) -> string {
+function user.Greet(name: string, client: baml.ai.Provider) -> string {
     load_var ?1
     make_cell
     store_var ?1
@@ -78,7 +78,7 @@ function user.Greet(name: string, client: baml.llm.Client) -> string {
     return
 }
 
-function user.Greet$build_request(name: string, client: baml.llm.Client) -> baml.http.Request {
+function user.Greet$build_request(name: string, client: baml.ai.Provider) -> baml.http.Request {
     load_var ?1
     make_cell
     store_var ?1
@@ -106,7 +106,7 @@ function user.Greet$build_request(name: string, client: baml.llm.Client) -> baml
     return
 }
 
-function user.Greet$build_request_stream(name: string, client: baml.llm.Client) -> baml.http.Request {
+function user.Greet$build_request_stream(name: string, client: baml.ai.Provider) -> baml.http.Request {
     load_var ?1
     make_cell
     store_var ?1
@@ -134,7 +134,7 @@ function user.Greet$build_request_stream(name: string, client: baml.llm.Client) 
     return
 }
 
-function user.Greet$parse(json: string, client: baml.llm.Client) -> string {
+function user.Greet$parse(json: string, client: baml.ai.Provider) -> string {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -150,7 +150,7 @@ function user.Greet$parse(json: string, client: baml.llm.Client) -> string {
     return
 }
 
-function user.Greet$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client) -> baml.llm.Stream<string | null, string> {
+function user.Greet$parse_stream(sse: baml.http.SseStream, client: baml.ai.Provider) -> baml.llm.Stream<string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -162,11 +162,11 @@ function user.Greet$parse_stream(sse: baml.http.SseStream, client: baml.llm.Clie
     load_type string | null
     load_type string
     load_var2 2 1
-    call baml.llm.Client.__make_stream
+    call baml.llm.make_stream_for
     return
 }
 
-function user.Greet$render_prompt(name: string, client: baml.llm.Client) -> baml.llm.PromptAst {
+function user.Greet$render_prompt(name: string, client: baml.ai.Provider) -> baml.llm.PromptAst {
     load_var ?1
     make_cell
     store_var ?1
@@ -194,7 +194,7 @@ function user.Greet$render_prompt(name: string, client: baml.llm.Client) -> baml
     return
 }
 
-function user.Greet$stream(name: string, client: baml.llm.Client) -> baml.llm.Stream<string | null, string> {
+function user.Greet$stream(name: string, client: baml.ai.Provider) -> baml.llm.Stream<string | null, string> {
     load_var ?1
     make_cell
     store_var ?1

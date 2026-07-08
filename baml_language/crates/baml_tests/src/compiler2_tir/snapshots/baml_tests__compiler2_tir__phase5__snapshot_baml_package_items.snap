@@ -65,7 +65,6 @@ namespace baml.ai:
   class GeminiUsageWire { methods: [] }
   type HttpProvider
   class Job<T> { methods: [] }
-  class LegacyClient { methods: [build_request, send, parse, meta_of] }
   class LegacyMeta { methods: [finish_reason, usage, reasoning, logprobs, citations] }
   type LiveControl
   class Logprob { methods: [] }
@@ -330,7 +329,9 @@ namespace baml.llm:
   function from_shorthand
   function get_jinja_template
   function get_return_type
+  function legacy_client_of
   function make_role
+  function make_stream_for<TStream, TFinal>
   function parse<TStream, TFinal>
   function prompt
   function prompt_has_media

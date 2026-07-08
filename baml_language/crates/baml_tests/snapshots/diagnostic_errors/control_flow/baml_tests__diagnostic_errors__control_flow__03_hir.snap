@@ -11,16 +11,16 @@ function user.Headers() -> string  [expr] {
 function user.IfElseWithHeaders(flag: bool) -> string  [expr] {
   { // [1] Check flag } if (flag) { // [1] True branch } "yes" else { // [1] False branch } "no"
 }
-function user.LlmFunction(input: string, client: baml.llm.Client = TestClient) -> string  [llm] {
+function user.LlmFunction(input: string, client: baml.ai.Provider = TestClient) -> string  [llm] {
   baml.llm.call_llm_function(client, "LlmFunction", map { "input": input })
 }
-function user.LlmFunction$build_request(input: string, client: baml.llm.Client = TestClient) -> baml.http.Request  [expr] {
+function user.LlmFunction$build_request(input: string, client: baml.ai.Provider = TestClient) -> baml.http.Request  [expr] {
   baml.llm.build_request(client, "LlmFunction", map { "input": input })
 }
-function user.LlmFunction$build_request_stream(input: string, client: baml.llm.Client = TestClient) -> baml.http.Request  [expr] {
+function user.LlmFunction$build_request_stream(input: string, client: baml.ai.Provider = TestClient) -> baml.http.Request  [expr] {
   baml.llm.build_request_stream(client, "LlmFunction", map { "input": input })
 }
-function user.LlmFunction$render_prompt(input: string, client: baml.llm.Client = TestClient) -> baml.llm.PromptAst  [expr] {
+function user.LlmFunction$render_prompt(input: string, client: baml.ai.Provider = TestClient) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(client, "LlmFunction", map { "input": input })
 }
 function user.MatchExpression(x: int) -> string  [expr] {

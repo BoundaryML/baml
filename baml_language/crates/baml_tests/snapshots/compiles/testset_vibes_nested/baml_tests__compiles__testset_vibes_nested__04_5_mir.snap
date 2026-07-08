@@ -861,11 +861,11 @@ fn .<lambda(<lambda(<lambda(<lambda($init_test_main, 0)>, 3)>, 4)>, 5)>() -> nul
     }
 }
 
-fn user.ClassifySentiment(text: string, client: baml.llm.Client) -> Sentiment {
+fn user.ClassifySentiment(text: string, client: baml.ai.Provider) -> Sentiment {
     // Locals:
     let _0: Sentiment // _0 // return
     let _1: string // text // param
-    let _2: baml.llm.Client // client // param
+    let _2: baml.ai.Provider // client // param
     let _3: bool
     let _4: map<string, unknown>
     let _5: type
@@ -891,11 +891,11 @@ fn user.ClassifySentiment(text: string, client: baml.llm.Client) -> Sentiment {
     }
 }
 
-fn user.ClassifySentiment$build_request(text: string, client: baml.llm.Client) -> baml.http.Request {
+fn user.ClassifySentiment$build_request(text: string, client: baml.ai.Provider) -> baml.http.Request {
     // Locals:
     let _0: baml.http.Request // _0 // return
     let _1: string // text // param
-    let _2: baml.llm.Client // client // param
+    let _2: baml.ai.Provider // client // param
     let _3: bool
     let _4: map<string, unknown>
 
@@ -919,11 +919,11 @@ fn user.ClassifySentiment$build_request(text: string, client: baml.llm.Client) -
     }
 }
 
-fn user.ClassifySentiment$build_request_stream(text: string, client: baml.llm.Client) -> baml.http.Request {
+fn user.ClassifySentiment$build_request_stream(text: string, client: baml.ai.Provider) -> baml.http.Request {
     // Locals:
     let _0: baml.http.Request // _0 // return
     let _1: string // text // param
-    let _2: baml.llm.Client // client // param
+    let _2: baml.ai.Provider // client // param
     let _3: bool
     let _4: map<string, unknown>
 
@@ -947,11 +947,11 @@ fn user.ClassifySentiment$build_request_stream(text: string, client: baml.llm.Cl
     }
 }
 
-fn user.ClassifySentiment$render_prompt(text: string, client: baml.llm.Client) -> baml.llm.PromptAst {
+fn user.ClassifySentiment$render_prompt(text: string, client: baml.ai.Provider) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // _0 // return
     let _1: string // text // param
-    let _2: baml.llm.Client // client // param
+    let _2: baml.ai.Provider // client // param
     let _3: bool
     let _4: map<string, unknown>
 
@@ -975,11 +975,11 @@ fn user.ClassifySentiment$render_prompt(text: string, client: baml.llm.Client) -
     }
 }
 
-fn user.ClassifySentiment2(text: string, client: baml.llm.Client) -> string {
+fn user.ClassifySentiment2(text: string, client: baml.ai.Provider) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // text // param
-    let _2: baml.llm.Client // client // param
+    let _2: baml.ai.Provider // client // param
     let _3: bool
     let _4: map<string, unknown>
     let _5: type
@@ -1005,11 +1005,11 @@ fn user.ClassifySentiment2(text: string, client: baml.llm.Client) -> string {
     }
 }
 
-fn user.ClassifySentiment2$build_request(text: string, client: baml.llm.Client) -> baml.http.Request {
+fn user.ClassifySentiment2$build_request(text: string, client: baml.ai.Provider) -> baml.http.Request {
     // Locals:
     let _0: baml.http.Request // _0 // return
     let _1: string // text // param
-    let _2: baml.llm.Client // client // param
+    let _2: baml.ai.Provider // client // param
     let _3: bool
     let _4: map<string, unknown>
 
@@ -1033,11 +1033,11 @@ fn user.ClassifySentiment2$build_request(text: string, client: baml.llm.Client) 
     }
 }
 
-fn user.ClassifySentiment2$build_request_stream(text: string, client: baml.llm.Client) -> baml.http.Request {
+fn user.ClassifySentiment2$build_request_stream(text: string, client: baml.ai.Provider) -> baml.http.Request {
     // Locals:
     let _0: baml.http.Request // _0 // return
     let _1: string // text // param
-    let _2: baml.llm.Client // client // param
+    let _2: baml.ai.Provider // client // param
     let _3: bool
     let _4: map<string, unknown>
 
@@ -1061,11 +1061,11 @@ fn user.ClassifySentiment2$build_request_stream(text: string, client: baml.llm.C
     }
 }
 
-fn user.ClassifySentiment2$render_prompt(text: string, client: baml.llm.Client) -> baml.llm.PromptAst {
+fn user.ClassifySentiment2$render_prompt(text: string, client: baml.ai.Provider) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // _0 // return
     let _1: string // text // param
-    let _2: baml.llm.Client // client // param
+    let _2: baml.ai.Provider // client // param
     let _3: bool
     let _4: map<string, unknown>
 
@@ -1162,12 +1162,12 @@ fn user.GPT4o$new() -> null {
     }
 }
 
-fn user.GenerateTests(count: int, topic: string, client: baml.llm.Client) -> string[] {
+fn user.GenerateTests(count: int, topic: string, client: baml.ai.Provider) -> string[] {
     // Locals:
     let _0: string[] // _0 // return
     let _1: int // count // param
     let _2: string // topic // param
-    let _3: baml.llm.Client // client // param
+    let _3: baml.ai.Provider // client // param
     let _4: bool
     let _5: map<string, unknown>
     let _6: type
@@ -1193,12 +1193,12 @@ fn user.GenerateTests(count: int, topic: string, client: baml.llm.Client) -> str
     }
 }
 
-fn user.GenerateTests$build_request(count: int, topic: string, client: baml.llm.Client) -> baml.http.Request {
+fn user.GenerateTests$build_request(count: int, topic: string, client: baml.ai.Provider) -> baml.http.Request {
     // Locals:
     let _0: baml.http.Request // _0 // return
     let _1: int // count // param
     let _2: string // topic // param
-    let _3: baml.llm.Client // client // param
+    let _3: baml.ai.Provider // client // param
     let _4: bool
     let _5: map<string, unknown>
 
@@ -1222,12 +1222,12 @@ fn user.GenerateTests$build_request(count: int, topic: string, client: baml.llm.
     }
 }
 
-fn user.GenerateTests$build_request_stream(count: int, topic: string, client: baml.llm.Client) -> baml.http.Request {
+fn user.GenerateTests$build_request_stream(count: int, topic: string, client: baml.ai.Provider) -> baml.http.Request {
     // Locals:
     let _0: baml.http.Request // _0 // return
     let _1: int // count // param
     let _2: string // topic // param
-    let _3: baml.llm.Client // client // param
+    let _3: baml.ai.Provider // client // param
     let _4: bool
     let _5: map<string, unknown>
 
@@ -1251,12 +1251,12 @@ fn user.GenerateTests$build_request_stream(count: int, topic: string, client: ba
     }
 }
 
-fn user.GenerateTests$render_prompt(count: int, topic: string, client: baml.llm.Client) -> baml.llm.PromptAst {
+fn user.GenerateTests$render_prompt(count: int, topic: string, client: baml.ai.Provider) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // _0 // return
     let _1: int // count // param
     let _2: string // topic // param
-    let _3: baml.llm.Client // client // param
+    let _3: baml.ai.Provider // client // param
     let _4: bool
     let _5: map<string, unknown>
 

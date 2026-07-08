@@ -17,7 +17,7 @@ function boundary.id() -> boundary.LocalId {
 function boundary.id.current() -> string {
 }
 
-function user.ExtractAny(client: baml.llm.Client) -> baml.json.json {
+function user.ExtractAny(client: baml.ai.Provider) -> baml.json.json {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -37,7 +37,7 @@ function user.ExtractAny(client: baml.llm.Client) -> baml.json.json {
     return
 }
 
-function user.ExtractAny$build_request(client: baml.llm.Client) -> baml.http.Request {
+function user.ExtractAny$build_request(client: baml.ai.Provider) -> baml.http.Request {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -56,7 +56,7 @@ function user.ExtractAny$build_request(client: baml.llm.Client) -> baml.http.Req
     return
 }
 
-function user.ExtractAny$build_request_stream(client: baml.llm.Client) -> baml.http.Request {
+function user.ExtractAny$build_request_stream(client: baml.ai.Provider) -> baml.http.Request {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -75,7 +75,7 @@ function user.ExtractAny$build_request_stream(client: baml.llm.Client) -> baml.h
     return
 }
 
-function user.ExtractAny$parse(json: string, client: baml.llm.Client) -> baml.json.json {
+function user.ExtractAny$parse(json: string, client: baml.ai.Provider) -> baml.json.json {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -91,7 +91,7 @@ function user.ExtractAny$parse(json: string, client: baml.llm.Client) -> baml.js
     return
 }
 
-function user.ExtractAny$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client) -> baml.llm.Stream<baml.json.json$stream | null, baml.json.json> {
+function user.ExtractAny$parse_stream(sse: baml.http.SseStream, client: baml.ai.Provider) -> baml.llm.Stream<baml.json.json$stream | null, baml.json.json> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -103,11 +103,11 @@ function user.ExtractAny$parse_stream(sse: baml.http.SseStream, client: baml.llm
     load_type baml.json.json$stream | null
     load_type baml.json.json
     load_var2 2 1
-    call baml.llm.Client.__make_stream
+    call baml.llm.make_stream_for
     return
 }
 
-function user.ExtractAny$render_prompt(client: baml.llm.Client) -> baml.llm.PromptAst {
+function user.ExtractAny$render_prompt(client: baml.ai.Provider) -> baml.llm.PromptAst {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -126,7 +126,7 @@ function user.ExtractAny$render_prompt(client: baml.llm.Client) -> baml.llm.Prom
     return
 }
 
-function user.ExtractAny$stream(client: baml.llm.Client) -> baml.llm.Stream<baml.json.json$stream | null, baml.json.json> {
+function user.ExtractAny$stream(client: baml.ai.Provider) -> baml.llm.Stream<baml.json.json$stream | null, baml.json.json> {
     load_var client
     load_const <omitted>
     cmp_op ==

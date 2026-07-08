@@ -45,27 +45,45 @@ function prompt_template_for(function_name: string, prompt_closure: ((Context) -
   }
 }
 
-function render_prompt(client: Client, function_name: string, args: map<string, unknown>, prompt_closure: ((Context) -> PromptAst)? = null) -> PromptAst {
+/// Unwrap the `LegacyClient` bridge back to the legacy `Client` config. The
+/// injected LLM-function `client` param is the new-model existential
+/// `root.ai.Provider` (DCP §1.1); the declared client arrives as a
+/// `LegacyClient`-wrapped default. Paths that genuinely need the legacy
+/// config (the Jinja/companion pipeline) throw typed `Unsupported` for a
+/// native override — those routes go native in the Phase C desugar.
+function legacy_client_of(client: root.ai.Provider) -> Client throws root.errors.Unsupported {
+  // The leading `let` keeps the parser from sniffing `match (client)` as an
+  // LLM declarative body (`client` is a keyword token).
+  let provider = client;
+  match (provider) {
+    let lc: Client => lc,
+    _ => throw root.errors.Unsupported {
+      message: "this path needs a legacy client config; a native provider override is not supported here",
+    },
+  }
+}
+
+function render_prompt(client: root.ai.Provider, function_name: string, args: map<string, unknown>, prompt_closure: ((Context) -> PromptAst)? = null) -> PromptAst {
   let return_type = get_return_type(function_name);
-  let primitive_client = client.to_primitive_client();
+  let primitive_client = legacy_client_of(client).to_primitive_client();
   let template = prompt_template_for(function_name, prompt_closure);
   // `render_specialized_prompt` is the same render the orchestrator uses, so the
   // playground preview/cURL render byte-identically to execution.
   primitive_client.render_specialized_prompt(template, args, return_type, prompt_closure)
 }
 
-function build_request(client: Client, function_name: string, args: map<string, unknown>, prompt_closure: ((Context) -> PromptAst)? = null) -> root.http.Request {
+function build_request(client: root.ai.Provider, function_name: string, args: map<string, unknown>, prompt_closure: ((Context) -> PromptAst)? = null) -> root.http.Request {
   let return_type = get_return_type(function_name);
-  let primitive_client = client.to_primitive_client();
+  let primitive_client = legacy_client_of(client).to_primitive_client();
   let template = prompt_template_for(function_name, prompt_closure);
   let specialized_prompt = primitive_client.render_specialized_prompt(template, args, return_type, prompt_closure);
 
   primitive_client.build_request(specialized_prompt, return_type)
 }
 
-function build_request_stream(client: Client, function_name: string, args: map<string, unknown>, prompt_closure: ((Context) -> PromptAst)? = null) -> root.http.Request {
+function build_request_stream(client: root.ai.Provider, function_name: string, args: map<string, unknown>, prompt_closure: ((Context) -> PromptAst)? = null) -> root.http.Request {
   let return_type = get_return_type(function_name);
-  let primitive_client = client.to_primitive_client();
+  let primitive_client = legacy_client_of(client).to_primitive_client();
   let template = prompt_template_for(function_name, prompt_closure);
   let specialized_prompt = primitive_client.render_specialized_prompt(template, args, return_type, prompt_closure);
 
@@ -85,7 +103,7 @@ function parse<TStream, TFinal>(json: string) -> TFinal {
 /// UNSAFE: do not call from user code
 ///
 /// Call an LLM function and return its full result.
-function call_llm_function<T>(client: Client, function_name: string, args: map<string, unknown>, prompt_closure: ((Context) -> PromptAst)? = null) -> T {
+function call_llm_function<T>(client: root.ai.Provider, function_name: string, args: map<string, unknown>, prompt_closure: ((Context) -> PromptAst)? = null) -> T {
   // New-mode (backtick) functions have no Jinja template registered; the
   // closure renders the prompt, so only look one up for the legacy path.
   let jinja_string = match (prompt_closure) {
@@ -93,15 +111,36 @@ function call_llm_function<T>(client: Client, function_name: string, args: map<s
     _ => "",
   };
 
-  let context = ExecutionContext {
-    jinja_string: jinja_string,
-    args: args,
-    function_name: function_name,
-    prompt_closure: prompt_closure,
-  };
-
-  let result: T = client.execute_oneshot<T>(context, 0);
-  result
+  match (client) {
+    // Declared/legacy client (or a legacy call-site override): today's
+    // orchestrator path, unchanged. This concrete arm precedes capability
+    // negotiation, so legacy strategy configs keep their strategy loops.
+    let lc: Client => {
+      let context = ExecutionContext {
+        jinja_string: jinja_string,
+        args: args,
+        function_name: function_name,
+        prompt_closure: prompt_closure,
+      };
+      let result: T = lc.execute_oneshot<T>(context, 0);
+      result
+    },
+    // Native override (`Foo(x, client = Anthropic { … })`): render with a
+    // neutral legacy renderer (roles/media preserved), then hand native
+    // messages to the provider. The renderer's provider-specific
+    // specialization is generic role/wrapping only; wire shaping is the
+    // native provider's job.
+    let h: root.ai.HttpProvider => {
+      let renderer = from_shorthand("openai/gpt-4o");
+      let return_type = get_return_type(function_name);
+      let specialized = renderer.render_specialized_prompt(jinja_string, args, return_type, prompt_closure);
+      let messages = root.ai.prompt_to_messages(specialized);
+      h.call_messages<T>(messages)
+    },
+    _ => throw root.errors.Unsupported {
+      message: "client override supports neither the legacy bridge nor HttpProvider",
+    },
+  }
 }
 
 /// UNSAFE: do not call from user code
@@ -109,7 +148,7 @@ function call_llm_function<T>(client: Client, function_name: string, args: map<s
 /// The streaming counterpart of `call_llm_function`.
 ///
 /// Sends the request and returns a `Stream<TStream, TFinal>` which can be used to consume the data as it arrives.
-function stream_llm_function<TStream, TFinal>(client: Client, function_name: string, args: map<string, unknown>, prompt_closure: ((Context) -> PromptAst)? = null) -> Stream<TStream, TFinal> {
+function stream_llm_function<TStream, TFinal>(client: root.ai.Provider, function_name: string, args: map<string, unknown>, prompt_closure: ((Context) -> PromptAst)? = null) -> Stream<TStream, TFinal> {
     // New-mode (backtick) functions have no Jinja template registered; the
     // closure renders the prompt, so only look one up for the legacy path.
     let jinja_string = match (prompt_closure) {
@@ -117,13 +156,40 @@ function stream_llm_function<TStream, TFinal>(client: Client, function_name: str
         _ => "",
     };
 
-    let context = ExecutionContext {
-        jinja_string: jinja_string,
-        args: args,
-        function_name: function_name,
-        prompt_closure: prompt_closure,
-    };
+    match (client) {
+        // Declared/legacy client (or a legacy override): today's stream
+        // orchestrator, unchanged.
+        let lc: Client => {
+            let context = ExecutionContext {
+                jinja_string: jinja_string,
+                args: args,
+                function_name: function_name,
+                prompt_closure: prompt_closure,
+            };
+            let result: Stream<TStream, TFinal> = lc.execute_stream<TStream, TFinal>(context, 0);
+            result
+        },
+        // Native override: render neutrally, stream through the provider's
+        // Streaming capability.
+        let s: root.ai.Streaming => {
+            let renderer = from_shorthand("openai/gpt-4o");
+            let return_type = get_return_type(function_name);
+            let specialized = renderer.render_specialized_prompt(jinja_string, args, return_type, prompt_closure);
+            let messages = root.ai.prompt_to_messages(specialized);
+            s.stream_messages<TStream, TFinal>(messages)
+        },
+        _ => throw root.errors.Unsupported {
+            message: "client override supports neither the legacy bridge nor Streaming",
+        },
+    }
+}
 
-    let result: Stream<TStream, TFinal> = client.execute_stream<TStream, TFinal>(context, 0);
-    result
+/// UNSAFE: do not call from user code
+///
+/// The `$parse_stream` companion seam: build a legacy `Stream` from an open
+/// SSE handle. Unwraps the Provider-typed client param back to the legacy
+/// `Client` (`Unsupported` for native overrides — `$parse_stream` is a
+/// legacy-wire companion by definition).
+function make_stream_for<TStream, TFinal>(client: root.ai.Provider, sse: root.http.SseStream) -> Stream<TStream, TFinal> {
+  legacy_client_of(client).__make_stream<TStream, TFinal>(sse)
 }

@@ -448,13 +448,10 @@ function baml.ai.stream_messages(self: ?, messages: root.ai.ChatMessage[]) -> ro
 }
 
 --- <builtin>/baml/ns_ai/core/legacy.baml ---
-class baml.ai.LegacyClient {
-  inner: root.llm.Client
-}
 class baml.ai.LegacyMeta {
 }
 function baml.ai.build_request(self: ?, messages: ChatMessage[]) -> root.http.Request  [expr] {
-  { if (self.inner.client_type Ne root.llm.ClientType.Primitive) { throw root.errors.Unsupported { message: "LegacyClient brid..." } }; let primitive = self.inner.to_primitive_client() catch (e) { _ => throw root.errors.UnknownError { data: e, message: ["legacy bridge: cl..."] } }; let ast = messages_to_prompt(messages); let specialized = primitive.specialize_prompt(ast) catch (e) { _ => throw root.errors.UnknownError { data: e, message: ["legacy bridge: sp..."] } } } primitive.build_request(specialized, reflect.type_of()) catch (e) { _ => throw root.errors.UnknownError { data: e, message: ["legacy bridge: bu..."] } }
+  { if (self.client_type Ne root.llm.ClientType.Primitive) { throw root.errors.Unsupported { message: "the legacy codec ..." } }; let primitive = self.to_primitive_client() catch (e) { _ => throw root.errors.UnknownError { data: e, message: ["legacy bridge: cl..."] } }; let ast = messages_to_prompt(messages); let specialized = primitive.specialize_prompt(ast) catch (e) { _ => throw root.errors.UnknownError { data: e, message: ["legacy bridge: sp..."] } } } primitive.build_request(specialized, reflect.type_of()) catch (e) { _ => throw root.errors.UnknownError { data: e, message: ["legacy bridge: bu..."] } }
 }
 function baml.ai.citations(self: ?) -> Citation[] | Unavailable  [expr] {
   {  } Unavailable { reason: "legacy bridge sur..." }
@@ -469,7 +466,7 @@ function baml.ai.meta_of(self: ?, from: string) -> ResponseMeta  [expr] {
   {  } baml.ai.LegacyMeta {  }
 }
 function baml.ai.parse(self: ?, from: string) -> T  [expr] {
-  { let primitive = self.inner.to_primitive_client() catch (e) { _ => throw root.errors.UnknownError { data: e, message: ["legacy bridge: cl..."] } } } primitive.parse(from) catch (e) { _ => throw root.errors.UnknownError { data: e, message: ["legacy bridge: pa..."] } }
+  { let primitive = self.to_primitive_client() catch (e) { _ => throw root.errors.UnknownError { data: e, message: ["legacy bridge: cl..."] } } } primitive.parse(from) catch (e) { _ => throw root.errors.UnknownError { data: e, message: ["legacy bridge: pa..."] } }
 }
 function baml.ai.reasoning(self: ?) -> string | Unavailable  [expr] {
   {  } Unavailable { reason: "legacy bridge sur..." }
@@ -1910,14 +1907,20 @@ class baml.llm.OrchestrationStep {
 class baml.llm.PlannerState {
   rr_client_names: string[]
 }
-function baml.llm.build_request(client: Client, function_name: string, args: map<string, unknown>, prompt_closure: (Context) -> PromptAst? = null) -> root.http.Request  [expr] {
-  { let return_type = get_return_type(function_name); let primitive_client = client.to_primitive_client(); let template = prompt_template_for(function_name, prompt_closure); let specialized_prompt = primitive_client.render_specialized_prompt(template, args, return_type, prompt_closure) } primitive_client.build_request(specialized_prompt, return_type)
+function baml.llm.build_request(client: root.ai.Provider, function_name: string, args: map<string, unknown>, prompt_closure: (Context) -> PromptAst? = null) -> root.http.Request  [expr] {
+  { let return_type = get_return_type(function_name); let primitive_client = legacy_client_of(client).to_primitive_client(); let template = prompt_template_for(function_name, prompt_closure); let specialized_prompt = primitive_client.render_specialized_prompt(template, args, return_type, prompt_closure) } primitive_client.build_request(specialized_prompt, return_type)
 }
-function baml.llm.build_request_stream(client: Client, function_name: string, args: map<string, unknown>, prompt_closure: (Context) -> PromptAst? = null) -> root.http.Request  [expr] {
-  { let return_type = get_return_type(function_name); let primitive_client = client.to_primitive_client(); let template = prompt_template_for(function_name, prompt_closure); let specialized_prompt = primitive_client.render_specialized_prompt(template, args, return_type, prompt_closure) } primitive_client.build_request_stream(specialized_prompt, return_type)
+function baml.llm.build_request_stream(client: root.ai.Provider, function_name: string, args: map<string, unknown>, prompt_closure: (Context) -> PromptAst? = null) -> root.http.Request  [expr] {
+  { let return_type = get_return_type(function_name); let primitive_client = legacy_client_of(client).to_primitive_client(); let template = prompt_template_for(function_name, prompt_closure); let specialized_prompt = primitive_client.render_specialized_prompt(template, args, return_type, prompt_closure) } primitive_client.build_request_stream(specialized_prompt, return_type)
 }
-function baml.llm.call_llm_function(client: Client, function_name: string, args: map<string, unknown>, prompt_closure: (Context) -> PromptAst? = null) -> T  [expr] {
-  { let jinja_string = match (prompt_closure) { null => get_jinja_template(function_name), _ => "" }; let context = baml.llm.ExecutionContext { jinja_string: jinja_string, args: args, function_name: function_name, prompt_closure: prompt_closure }; let result: T = client.execute_oneshot(context, 0) } result
+function baml.llm.call_llm_function(client: root.ai.Provider, function_name: string, args: map<string, unknown>, prompt_closure: (Context) -> PromptAst? = null) -> T  [expr] {
+  { let jinja_string = match (prompt_closure) { null => get_jinja_template(function_name), _ => "" } } match (client) { lc: Client => { let context = baml.llm.ExecutionContext { jinja_string: jinja_string, args: args, function_name: function_name, prompt_closure: prompt_closure }; let result: T = lc.execute_oneshot(context, 0) } result, h: root.ai.HttpProvider => { let renderer = from_shorthand("openai/gpt-4o"); let return_type = get_return_type(function_name); let specialized = renderer.render_specialized_prompt(jinja_string, args, return_type, prompt_closure); let messages = root.ai.prompt_to_messages(specialized) } h.call_messages(messages), _ => throw root.errors.Unsupported { message: "client override s..." } }
+}
+function baml.llm.legacy_client_of(client: root.ai.Provider) -> Client  [expr] {
+  { let provider = client } match (provider) { lc: Client => lc, _ => throw root.errors.Unsupported { message: "this path needs a..." } }
+}
+function baml.llm.make_stream_for(client: root.ai.Provider, sse: root.http.SseStream) -> Stream<TStream, TFinal>  [expr] {
+  {  } legacy_client_of(client).__make_stream(sse)
 }
 function baml.llm.parse(json: string) -> TFinal  [expr] {
   { let cache: StreamCache<TStream, TFinal> = StreamCache.new(reflect.type_of(), reflect.type_of()) } __sap_parse_final(json, cache)
@@ -1925,8 +1928,8 @@ function baml.llm.parse(json: string) -> TFinal  [expr] {
 function baml.llm.prompt_template_for(function_name: string, prompt_closure: (Context) -> PromptAst?) -> string  [expr] {
   {  } match (prompt_closure) { null => get_jinja_template(function_name), _ => "" }
 }
-function baml.llm.render_prompt(client: Client, function_name: string, args: map<string, unknown>, prompt_closure: (Context) -> PromptAst? = null) -> PromptAst  [expr] {
-  { let return_type = get_return_type(function_name); let primitive_client = client.to_primitive_client(); let template = prompt_template_for(function_name, prompt_closure) } primitive_client.render_specialized_prompt(template, args, return_type, prompt_closure)
+function baml.llm.render_prompt(client: root.ai.Provider, function_name: string, args: map<string, unknown>, prompt_closure: (Context) -> PromptAst? = null) -> PromptAst  [expr] {
+  { let return_type = get_return_type(function_name); let primitive_client = legacy_client_of(client).to_primitive_client(); let template = prompt_template_for(function_name, prompt_closure) } primitive_client.render_specialized_prompt(template, args, return_type, prompt_closure)
 }
 function baml.llm.rr_local_offset(self: ?, client_name: string) -> int  [expr] {
   { let offset = 0; for seen_name in self.rr_client_names {  } if (seen_name Eq client_name) { offset Add= 1 } } offset
@@ -1934,8 +1937,8 @@ function baml.llm.rr_local_offset(self: ?, client_name: string) -> int  [expr] {
 function baml.llm.rr_pick_index(self: ?, client_name: string, counter: int, sub_client_count: int) -> int  [expr] {
   { let local_offset = self.rr_local_offset(client_name); self.rr_client_names.push(client_name) } counter Add local_offset Mod sub_client_count
 }
-function baml.llm.stream_llm_function(client: Client, function_name: string, args: map<string, unknown>, prompt_closure: (Context) -> PromptAst? = null) -> Stream<TStream, TFinal>  [expr] {
-  { let jinja_string = match (prompt_closure) { null => get_jinja_template(function_name), _ => "" }; let context = baml.llm.ExecutionContext { jinja_string: jinja_string, args: args, function_name: function_name, prompt_closure: prompt_closure }; let result: Stream<TStream, TFinal> = client.execute_stream(context, 0) } result
+function baml.llm.stream_llm_function(client: root.ai.Provider, function_name: string, args: map<string, unknown>, prompt_closure: (Context) -> PromptAst? = null) -> Stream<TStream, TFinal>  [expr] {
+  { let jinja_string = match (prompt_closure) { null => get_jinja_template(function_name), _ => "" } } match (client) { lc: Client => { let context = baml.llm.ExecutionContext { jinja_string: jinja_string, args: args, function_name: function_name, prompt_closure: prompt_closure }; let result: Stream<TStream, TFinal> = lc.execute_stream(context, 0) } result, s: root.ai.Streaming => { let renderer = from_shorthand("openai/gpt-4o"); let return_type = get_return_type(function_name); let specialized = renderer.render_specialized_prompt(jinja_string, args, return_type, prompt_closure); let messages = root.ai.prompt_to_messages(specialized) } s.stream_messages(messages), _ => throw root.errors.Unsupported { message: "client override s..." } }
 }
 
 --- <builtin>/baml/ns_llm/llm_types.baml ---

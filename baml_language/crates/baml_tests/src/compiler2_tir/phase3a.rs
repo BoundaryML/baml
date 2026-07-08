@@ -407,12 +407,12 @@ function call_overrides() -> string {
     let tir = render_tir(&db, file);
 
     assert!(
-        tir.contains("function user.Ask(input: string, client: baml.llm.Client = DefaultClient)"),
+        tir.contains("function user.Ask(input: string, client: baml.ai.Provider = DefaultClient)"),
         "{tir}"
     );
     assert!(
         tir.contains(
-            "function user.Ask$build_request(input: string, client: baml.llm.Client = DefaultClient) -> baml.http.Request"
+            "function user.Ask$build_request(input: string, client: baml.ai.Provider = DefaultClient) -> baml.http.Request"
         ),
         "{tir}"
     );

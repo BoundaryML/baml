@@ -42,7 +42,7 @@ function type_reflection.$init_test_ns_type_reflection_type_reflection(registry:
     return
 }
 
-function type_reflection.GetBar(client: baml.llm.Client) -> type_reflection.Bar {
+function type_reflection.GetBar(client: baml.ai.Provider) -> type_reflection.Bar {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -62,7 +62,7 @@ function type_reflection.GetBar(client: baml.llm.Client) -> type_reflection.Bar 
     return
 }
 
-function type_reflection.GetBar$build_request(client: baml.llm.Client) -> baml.http.Request {
+function type_reflection.GetBar$build_request(client: baml.ai.Provider) -> baml.http.Request {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -81,7 +81,7 @@ function type_reflection.GetBar$build_request(client: baml.llm.Client) -> baml.h
     return
 }
 
-function type_reflection.GetBar$build_request_stream(client: baml.llm.Client) -> baml.http.Request {
+function type_reflection.GetBar$build_request_stream(client: baml.ai.Provider) -> baml.http.Request {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -100,7 +100,7 @@ function type_reflection.GetBar$build_request_stream(client: baml.llm.Client) ->
     return
 }
 
-function type_reflection.GetBar$parse(json: string, client: baml.llm.Client) -> type_reflection.Bar {
+function type_reflection.GetBar$parse(json: string, client: baml.ai.Provider) -> type_reflection.Bar {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -116,7 +116,7 @@ function type_reflection.GetBar$parse(json: string, client: baml.llm.Client) -> 
     return
 }
 
-function type_reflection.GetBar$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client) -> baml.llm.Stream<type_reflection.Bar$stream | null, type_reflection.Bar> {
+function type_reflection.GetBar$parse_stream(sse: baml.http.SseStream, client: baml.ai.Provider) -> baml.llm.Stream<type_reflection.Bar$stream | null, type_reflection.Bar> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -128,11 +128,11 @@ function type_reflection.GetBar$parse_stream(sse: baml.http.SseStream, client: b
     load_type type_reflection.Bar$stream | null
     load_type type_reflection.Bar
     load_var2 2 1
-    call baml.llm.Client.__make_stream
+    call baml.llm.make_stream_for
     return
 }
 
-function type_reflection.GetBar$render_prompt(client: baml.llm.Client) -> baml.llm.PromptAst {
+function type_reflection.GetBar$render_prompt(client: baml.ai.Provider) -> baml.llm.PromptAst {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -151,7 +151,7 @@ function type_reflection.GetBar$render_prompt(client: baml.llm.Client) -> baml.l
     return
 }
 
-function type_reflection.GetBar$stream(client: baml.llm.Client) -> baml.llm.Stream<type_reflection.Bar$stream | null, type_reflection.Bar> {
+function type_reflection.GetBar$stream(client: baml.ai.Provider) -> baml.llm.Stream<type_reflection.Bar$stream | null, type_reflection.Bar> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -172,7 +172,7 @@ function type_reflection.GetBar$stream(client: baml.llm.Client) -> baml.llm.Stre
     return
 }
 
-function type_reflection.GetFoo(client: baml.llm.Client) -> type_reflection.Foo {
+function type_reflection.GetFoo(client: baml.ai.Provider) -> type_reflection.Foo {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -192,7 +192,7 @@ function type_reflection.GetFoo(client: baml.llm.Client) -> type_reflection.Foo 
     return
 }
 
-function type_reflection.GetFoo$build_request(client: baml.llm.Client) -> baml.http.Request {
+function type_reflection.GetFoo$build_request(client: baml.ai.Provider) -> baml.http.Request {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -211,7 +211,7 @@ function type_reflection.GetFoo$build_request(client: baml.llm.Client) -> baml.h
     return
 }
 
-function type_reflection.GetFoo$build_request_stream(client: baml.llm.Client) -> baml.http.Request {
+function type_reflection.GetFoo$build_request_stream(client: baml.ai.Provider) -> baml.http.Request {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -230,7 +230,7 @@ function type_reflection.GetFoo$build_request_stream(client: baml.llm.Client) ->
     return
 }
 
-function type_reflection.GetFoo$parse(json: string, client: baml.llm.Client) -> type_reflection.Foo {
+function type_reflection.GetFoo$parse(json: string, client: baml.ai.Provider) -> type_reflection.Foo {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -246,7 +246,7 @@ function type_reflection.GetFoo$parse(json: string, client: baml.llm.Client) -> 
     return
 }
 
-function type_reflection.GetFoo$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client) -> baml.llm.Stream<type_reflection.Foo$stream | null, type_reflection.Foo> {
+function type_reflection.GetFoo$parse_stream(sse: baml.http.SseStream, client: baml.ai.Provider) -> baml.llm.Stream<type_reflection.Foo$stream | null, type_reflection.Foo> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -258,11 +258,11 @@ function type_reflection.GetFoo$parse_stream(sse: baml.http.SseStream, client: b
     load_type type_reflection.Foo$stream | null
     load_type type_reflection.Foo
     load_var2 2 1
-    call baml.llm.Client.__make_stream
+    call baml.llm.make_stream_for
     return
 }
 
-function type_reflection.GetFoo$render_prompt(client: baml.llm.Client) -> baml.llm.PromptAst {
+function type_reflection.GetFoo$render_prompt(client: baml.ai.Provider) -> baml.llm.PromptAst {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -281,7 +281,7 @@ function type_reflection.GetFoo$render_prompt(client: baml.llm.Client) -> baml.l
     return
 }
 
-function type_reflection.GetFoo$stream(client: baml.llm.Client) -> baml.llm.Stream<type_reflection.Foo$stream | null, type_reflection.Foo> {
+function type_reflection.GetFoo$stream(client: baml.ai.Provider) -> baml.llm.Stream<type_reflection.Foo$stream | null, type_reflection.Foo> {
     load_var client
     load_const <omitted>
     cmp_op ==

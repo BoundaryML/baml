@@ -328,12 +328,156 @@ source: crates/baml_tests/src/generated_tests.rs
     │ Note: Error code: E0001
 ────╯
 
+  [type] error: type mismatch: expected baml.ai.Provider, got unknown
+     ╭─[ function_decls.baml:453:43 ]
+     │
+ 453 │ ╭─▶ function LlmBasic(name: string) -> string {
+     ┆ ┆   
+ 456 │ ├─▶ }
+     │ │       
+     │ ╰─────── type mismatch: expected baml.ai.Provider, got unknown
+     │     
+     │     Note: Error code: E0001
+─────╯
+
+  [type] error: type mismatch: expected baml.ai.Provider, got unknown
+     ╭─[ function_decls.baml:453:43 ]
+     │
+ 453 │ ╭─▶ function LlmBasic(name: string) -> string {
+     ┆ ┆   
+ 456 │ ├─▶ }
+     │ │       
+     │ ╰─────── type mismatch: expected baml.ai.Provider, got unknown
+     │     
+     │     Note: Error code: E0001
+─────╯
+
+  [type] error: type mismatch: expected baml.ai.Provider, got unknown
+     ╭─[ function_decls.baml:453:43 ]
+     │
+ 453 │ ╭─▶ function LlmBasic(name: string) -> string {
+     ┆ ┆   
+ 456 │ ├─▶ }
+     │ │       
+     │ ╰─────── type mismatch: expected baml.ai.Provider, got unknown
+     │     
+     │     Note: Error code: E0001
+─────╯
+
+  [type] error: type mismatch: expected baml.ai.Provider, got unknown
+     ╭─[ function_decls.baml:453:43 ]
+     │
+ 453 │ ╭─▶ function LlmBasic(name: string) -> string {
+     ┆ ┆   
+ 456 │ ├─▶ }
+     │ │       
+     │ ╰─────── type mismatch: expected baml.ai.Provider, got unknown
+     │     
+     │     Note: Error code: E0001
+─────╯
+
   [type] error: unresolved name: GPT4
      ╭─[ function_decls.baml:453:43 ]
      │
  453 │ ╭─▶ function LlmBasic(name: string) -> string {
      ┆ ┆   
  456 │ ├─▶ }
+     │ │       
+     │ ╰─────── unresolved name: GPT4
+     │     
+     │     Note: Error code: E0003
+─────╯
+
+  [type] error: unresolved name: GPT4
+     ╭─[ function_decls.baml:453:43 ]
+     │
+ 453 │ ╭─▶ function LlmBasic(name: string) -> string {
+     ┆ ┆   
+ 456 │ ├─▶ }
+     │ │       
+     │ ╰─────── unresolved name: GPT4
+     │     
+     │     Note: Error code: E0003
+─────╯
+
+  [type] error: unresolved name: GPT4
+     ╭─[ function_decls.baml:453:43 ]
+     │
+ 453 │ ╭─▶ function LlmBasic(name: string) -> string {
+     ┆ ┆   
+ 456 │ ├─▶ }
+     │ │       
+     │ ╰─────── unresolved name: GPT4
+     │     
+     │     Note: Error code: E0003
+─────╯
+
+  [type] error: unresolved name: GPT4
+     ╭─[ function_decls.baml:453:43 ]
+     │
+ 453 │ ╭─▶ function LlmBasic(name: string) -> string {
+     ┆ ┆   
+ 456 │ ├─▶ }
+     │ │       
+     │ ╰─────── unresolved name: GPT4
+     │     
+     │     Note: Error code: E0003
+─────╯
+
+  [type] error: type mismatch: expected baml.ai.Provider, got unknown
+     ╭─[ function_decls.baml:464:47 ]
+     │
+ 464 │ ╭─▶ function LlmMultiLine(text: string) -> string {
+     ┆ ┆   
+ 471 │ ├─▶ }
+     │ │       
+     │ ╰─────── type mismatch: expected baml.ai.Provider, got unknown
+     │     
+     │     Note: Error code: E0001
+─────╯
+
+  [type] error: type mismatch: expected baml.ai.Provider, got unknown
+     ╭─[ function_decls.baml:464:47 ]
+     │
+ 464 │ ╭─▶ function LlmMultiLine(text: string) -> string {
+     ┆ ┆   
+ 471 │ ├─▶ }
+     │ │       
+     │ ╰─────── type mismatch: expected baml.ai.Provider, got unknown
+     │     
+     │     Note: Error code: E0001
+─────╯
+
+  [type] error: type mismatch: expected baml.ai.Provider, got unknown
+     ╭─[ function_decls.baml:464:47 ]
+     │
+ 464 │ ╭─▶ function LlmMultiLine(text: string) -> string {
+     ┆ ┆   
+ 471 │ ├─▶ }
+     │ │       
+     │ ╰─────── type mismatch: expected baml.ai.Provider, got unknown
+     │     
+     │     Note: Error code: E0001
+─────╯
+
+  [type] error: type mismatch: expected baml.ai.Provider, got unknown
+     ╭─[ function_decls.baml:464:47 ]
+     │
+ 464 │ ╭─▶ function LlmMultiLine(text: string) -> string {
+     ┆ ┆   
+ 471 │ ├─▶ }
+     │ │       
+     │ ╰─────── type mismatch: expected baml.ai.Provider, got unknown
+     │     
+     │     Note: Error code: E0001
+─────╯
+
+  [type] error: unresolved name: GPT4
+     ╭─[ function_decls.baml:464:47 ]
+     │
+ 464 │ ╭─▶ function LlmMultiLine(text: string) -> string {
+     ┆ ┆   
+ 471 │ ├─▶ }
      │ │       
      │ ╰─────── unresolved name: GPT4
      │     
@@ -353,11 +497,203 @@ source: crates/baml_tests/src/generated_tests.rs
 ─────╯
 
   [type] error: unresolved name: GPT4
+     ╭─[ function_decls.baml:464:47 ]
+     │
+ 464 │ ╭─▶ function LlmMultiLine(text: string) -> string {
+     ┆ ┆   
+ 471 │ ├─▶ }
+     │ │       
+     │ ╰─────── unresolved name: GPT4
+     │     
+     │     Note: Error code: E0003
+─────╯
+
+  [type] error: unresolved name: GPT4
+     ╭─[ function_decls.baml:464:47 ]
+     │
+ 464 │ ╭─▶ function LlmMultiLine(text: string) -> string {
+     ┆ ┆   
+ 471 │ ├─▶ }
+     │ │       
+     │ ╰─────── unresolved name: GPT4
+     │     
+     │     Note: Error code: E0003
+─────╯
+
+  [type] error: type mismatch: expected baml.ai.Provider, got unknown
      ╭─[ function_decls.baml:480:51 ]
      │
  480 │ ╭─▶ function LlmReversedOrder(text: string) -> string {
      ┆ ┆   
  483 │ ├─▶ }
+     │ │       
+     │ ╰─────── type mismatch: expected baml.ai.Provider, got unknown
+     │     
+     │     Note: Error code: E0001
+─────╯
+
+  [type] error: type mismatch: expected baml.ai.Provider, got unknown
+     ╭─[ function_decls.baml:480:51 ]
+     │
+ 480 │ ╭─▶ function LlmReversedOrder(text: string) -> string {
+     ┆ ┆   
+ 483 │ ├─▶ }
+     │ │       
+     │ ╰─────── type mismatch: expected baml.ai.Provider, got unknown
+     │     
+     │     Note: Error code: E0001
+─────╯
+
+  [type] error: type mismatch: expected baml.ai.Provider, got unknown
+     ╭─[ function_decls.baml:480:51 ]
+     │
+ 480 │ ╭─▶ function LlmReversedOrder(text: string) -> string {
+     ┆ ┆   
+ 483 │ ├─▶ }
+     │ │       
+     │ ╰─────── type mismatch: expected baml.ai.Provider, got unknown
+     │     
+     │     Note: Error code: E0001
+─────╯
+
+  [type] error: type mismatch: expected baml.ai.Provider, got unknown
+     ╭─[ function_decls.baml:480:51 ]
+     │
+ 480 │ ╭─▶ function LlmReversedOrder(text: string) -> string {
+     ┆ ┆   
+ 483 │ ├─▶ }
+     │ │       
+     │ ╰─────── type mismatch: expected baml.ai.Provider, got unknown
+     │     
+     │     Note: Error code: E0001
+─────╯
+
+  [type] error: unresolved name: GPT4
+     ╭─[ function_decls.baml:480:51 ]
+     │
+ 480 │ ╭─▶ function LlmReversedOrder(text: string) -> string {
+     ┆ ┆   
+ 483 │ ├─▶ }
+     │ │       
+     │ ╰─────── unresolved name: GPT4
+     │     
+     │     Note: Error code: E0003
+─────╯
+
+  [type] error: unresolved name: GPT4
+     ╭─[ function_decls.baml:480:51 ]
+     │
+ 480 │ ╭─▶ function LlmReversedOrder(text: string) -> string {
+     ┆ ┆   
+ 483 │ ├─▶ }
+     │ │       
+     │ ╰─────── unresolved name: GPT4
+     │     
+     │     Note: Error code: E0003
+─────╯
+
+  [type] error: unresolved name: GPT4
+     ╭─[ function_decls.baml:480:51 ]
+     │
+ 480 │ ╭─▶ function LlmReversedOrder(text: string) -> string {
+     ┆ ┆   
+ 483 │ ├─▶ }
+     │ │       
+     │ ╰─────── unresolved name: GPT4
+     │     
+     │     Note: Error code: E0003
+─────╯
+
+  [type] error: unresolved name: GPT4
+     ╭─[ function_decls.baml:480:51 ]
+     │
+ 480 │ ╭─▶ function LlmReversedOrder(text: string) -> string {
+     ┆ ┆   
+ 483 │ ├─▶ }
+     │ │       
+     │ ╰─────── unresolved name: GPT4
+     │     
+     │     Note: Error code: E0003
+─────╯
+
+  [type] error: type mismatch: expected baml.ai.Provider, got unknown
+     ╭─[ function_decls.baml:488:131 ]
+     │
+ 488 │ ╭─▶ function LlmWithLongSignature(first_context: string, second_context: string, third_context: string, user_query: string) -> string {
+     ┆ ┆   
+ 494 │ ├─▶ }
+     │ │       
+     │ ╰─────── type mismatch: expected baml.ai.Provider, got unknown
+     │     
+     │     Note: Error code: E0001
+─────╯
+
+  [type] error: type mismatch: expected baml.ai.Provider, got unknown
+     ╭─[ function_decls.baml:488:131 ]
+     │
+ 488 │ ╭─▶ function LlmWithLongSignature(first_context: string, second_context: string, third_context: string, user_query: string) -> string {
+     ┆ ┆   
+ 494 │ ├─▶ }
+     │ │       
+     │ ╰─────── type mismatch: expected baml.ai.Provider, got unknown
+     │     
+     │     Note: Error code: E0001
+─────╯
+
+  [type] error: type mismatch: expected baml.ai.Provider, got unknown
+     ╭─[ function_decls.baml:488:131 ]
+     │
+ 488 │ ╭─▶ function LlmWithLongSignature(first_context: string, second_context: string, third_context: string, user_query: string) -> string {
+     ┆ ┆   
+ 494 │ ├─▶ }
+     │ │       
+     │ ╰─────── type mismatch: expected baml.ai.Provider, got unknown
+     │     
+     │     Note: Error code: E0001
+─────╯
+
+  [type] error: type mismatch: expected baml.ai.Provider, got unknown
+     ╭─[ function_decls.baml:488:131 ]
+     │
+ 488 │ ╭─▶ function LlmWithLongSignature(first_context: string, second_context: string, third_context: string, user_query: string) -> string {
+     ┆ ┆   
+ 494 │ ├─▶ }
+     │ │       
+     │ ╰─────── type mismatch: expected baml.ai.Provider, got unknown
+     │     
+     │     Note: Error code: E0001
+─────╯
+
+  [type] error: unresolved name: GPT4
+     ╭─[ function_decls.baml:488:131 ]
+     │
+ 488 │ ╭─▶ function LlmWithLongSignature(first_context: string, second_context: string, third_context: string, user_query: string) -> string {
+     ┆ ┆   
+ 494 │ ├─▶ }
+     │ │       
+     │ ╰─────── unresolved name: GPT4
+     │     
+     │     Note: Error code: E0003
+─────╯
+
+  [type] error: unresolved name: GPT4
+     ╭─[ function_decls.baml:488:131 ]
+     │
+ 488 │ ╭─▶ function LlmWithLongSignature(first_context: string, second_context: string, third_context: string, user_query: string) -> string {
+     ┆ ┆   
+ 494 │ ├─▶ }
+     │ │       
+     │ ╰─────── unresolved name: GPT4
+     │     
+     │     Note: Error code: E0003
+─────╯
+
+  [type] error: unresolved name: GPT4
+     ╭─[ function_decls.baml:488:131 ]
+     │
+ 488 │ ╭─▶ function LlmWithLongSignature(first_context: string, second_context: string, third_context: string, user_query: string) -> string {
+     ┆ ┆   
+ 494 │ ├─▶ }
      │ │       
      │ ╰─────── unresolved name: GPT4
      │     

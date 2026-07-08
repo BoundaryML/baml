@@ -1,7 +1,8 @@
-// Offline tests for the LegacyClient bridge (DCP §1.1 Phase B): a legacy
-// client<llm> config as a baml.ai.Provider. Wire-shape only — no network:
-// build_request runs the full messages -> PromptAst -> specialize -> legacy
-// request-builder pipeline and we inspect the resulting http.Request.
+// Offline tests for the legacy bridge (DCP §1.1 Phase B): baml.llm.Client
+// IS a baml.ai.Provider (out-of-body implements in ns_ai/core/legacy.baml).
+// Wire-shape only — no network: build_request runs the full messages ->
+// PromptAst -> specialize -> legacy request-builder pipeline and we inspect
+// the resulting http.Request.
 
 function legacy_openai() -> baml.llm.Client {
     baml.llm.Client {
@@ -14,7 +15,7 @@ function legacy_openai() -> baml.llm.Client {
 }
 
 test "legacy bridge builds a chat-completions request from messages" {
-    let bridge = baml.ai.LegacyClient { inner: legacy_openai() };
+    let bridge = legacy_openai();
     let messages = [
         baml.ai.ChatMessage.system("be terse"),
         baml.ai.ChatMessage.user("say pong"),
@@ -30,7 +31,7 @@ test "legacy bridge builds a chat-completions request from messages" {
 }
 
 test "legacy bridge is a Provider — negotiation sees HttpProvider" {
-    let p: baml.ai.Provider = baml.ai.LegacyClient { inner: legacy_openai() };
+    let p: baml.ai.Provider = legacy_openai();
     let label = match (p) {
         let h: baml.ai.HttpProvider => "http-capable",
         _ => "not-http",
@@ -46,8 +47,7 @@ test "legacy bridge refuses strategy configs with a typed Unsupported" {
         retry: null,
         counter: 0,
     };
-    let bridge = baml.ai.LegacyClient { inner: strategy };
-    let outcome = bridge.build_request<string>([baml.ai.ChatMessage.user("x")]) catch (e) {
+    let outcome = strategy.build_request<string>([baml.ai.ChatMessage.user("x")]) catch (e) {
         let u: baml.errors.Unsupported => baml.http.Request { method: "UNSUPPORTED", url: "", headers: {}, body: "" },
         _ => baml.http.Request { method: "OTHER", url: "", headers: {}, body: "" },
     };

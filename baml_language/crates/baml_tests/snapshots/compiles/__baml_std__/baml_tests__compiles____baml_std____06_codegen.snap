@@ -4457,31 +4457,31 @@ function baml.ai.Fallback$stream.root.ai.HttpProvider.call_messages_with(self: b
 
   L25:
     load_var m
-    is_type baml.ai.LegacyClient
+    is_type baml.ai.RoundRobin
     pop_jump_if_false L26
     jump L30
 
   L26:
     load_var m
-    is_type baml.ai.RoundRobin
+    is_type baml.ai.Fallback
     pop_jump_if_false L27
     jump L30
 
   L27:
     load_var m
-    is_type baml.ai.Fallback
+    is_type baml.ai.OpenAiStrict
     pop_jump_if_false L28
     jump L30
 
   L28:
     load_var m
-    is_type baml.ai.OpenAiStrict
+    is_type baml.ai.Anthropic
     pop_jump_if_false L29
     jump L30
 
   L29:
     load_var m
-    is_type baml.ai.Anthropic
+    is_type baml.llm.Client
     pop_jump_if_false L0
 
   L30:
@@ -4931,31 +4931,31 @@ function baml.ai.Fallback.root.ai.HttpProvider.call_messages_with(self: baml.ai.
 
   L25:
     load_var m
-    is_type baml.ai.LegacyClient
+    is_type baml.ai.RoundRobin
     pop_jump_if_false L26
     jump L30
 
   L26:
     load_var m
-    is_type baml.ai.RoundRobin
+    is_type baml.ai.Fallback
     pop_jump_if_false L27
     jump L30
 
   L27:
     load_var m
-    is_type baml.ai.Fallback
+    is_type baml.ai.OpenAiStrict
     pop_jump_if_false L28
     jump L30
 
   L28:
     load_var m
-    is_type baml.ai.OpenAiStrict
+    is_type baml.ai.Anthropic
     pop_jump_if_false L29
     jump L30
 
   L29:
     load_var m
-    is_type baml.ai.Anthropic
+    is_type baml.llm.Client
     pop_jump_if_false L0
 
   L30:
@@ -7600,6 +7600,136 @@ function baml.ai.GeminiResponseMeta.root.ai.ResponseMeta.usage(self: baml.ai.Gem
     return
 }
 
+function baml.ai.HttpProvider$for$root.llm.Client.build_request(self: baml.llm.Client, messages: baml.ai.ChatMessage[]) -> baml.http.Request {
+    load_var self
+    load_field .client_type
+    load_const baml.llm.ClientType.Primitive
+    alloc_variant baml.llm.ClientType
+    call baml.ops.equals_equals
+    unary_op !
+    pop_jump_if_false L0
+    jump L4
+
+  L0:
+    load_var self
+    call baml.llm.Client.to_primitive_client
+    store_var primitive
+    jump L1
+    load_var e
+    throw_if_panic
+    load_var e
+    load_const "legacy bridge: client construction failed"
+    load_type string
+    alloc_array 1
+    init_instance baml.errors.UnknownError .data, .message
+    throw
+
+  L1:
+    load_var messages
+    sys_op baml.ai.messages_to_prompt
+    store_var ast
+    load_var2 3 5
+    sys_op baml.llm.PrimitiveClient.specialize_prompt
+    store_var specialized
+    jump L2
+    load_var e
+    throw_if_panic
+    load_var e
+    load_const "legacy bridge: specialize failed"
+    load_type string
+    alloc_array 1
+    init_instance baml.errors.UnknownError .data, .message
+    throw
+
+  L2:
+    load_var2 3 6
+    load_type #0
+    sys_op baml.llm.PrimitiveClient.build_request
+    jump L3
+    load_var e
+    throw_if_panic
+    load_var e
+    load_const "legacy bridge: build_request failed"
+    load_type string
+    alloc_array 1
+    init_instance baml.errors.UnknownError .data, .message
+    throw
+
+  L3:
+    return
+
+  L4:
+    load_const "the legacy codec bridges primitive clients; strategy configs lower to new-model combinators"
+    init_instance baml.errors.Unsupported .message
+    throw
+}
+
+function baml.ai.HttpProvider$for$root.llm.Client.meta_of(self: baml.llm.Client, from: string) -> baml.ai.ResponseMeta {
+    alloc_instance baml.ai.LegacyMeta
+    return
+}
+
+function baml.ai.HttpProvider$for$root.llm.Client.parse(self: baml.llm.Client, from: string) -> T {
+    load_var self
+    call baml.llm.Client.to_primitive_client
+    jump L0
+    load_var e
+    throw_if_panic
+    load_var e
+    load_const "legacy bridge: client construction failed"
+    load_type string
+    alloc_array 1
+    init_instance baml.errors.UnknownError .data, .message
+    throw
+
+  L0:
+    load_var from
+    load_type #0
+    sys_op baml.llm.PrimitiveClient.parse
+    jump L1
+    load_var e
+    throw_if_panic
+    load_var e
+    load_const "legacy bridge: parse failed"
+    load_type string
+    alloc_array 1
+    init_instance baml.errors.UnknownError .data, .message
+    throw
+
+  L1:
+    return
+}
+
+function baml.ai.HttpProvider$for$root.llm.Client.send(self: baml.llm.Client, request: baml.http.Request) -> string {
+    load_var request
+    load_const <omitted>
+    call baml.http.send
+    jump L0
+    load_var e
+    throw_if_panic
+    load_var e
+    load_const "legacy bridge: send failed"
+    load_type string
+    alloc_array 1
+    init_instance baml.errors.UnknownError .data, .message
+    throw
+
+  L0:
+    sys_op baml.http.Response.text
+    jump L1
+    load_var e
+    throw_if_panic
+    load_var e
+    load_const "legacy bridge: body read failed"
+    load_type string
+    alloc_array 1
+    init_instance baml.errors.UnknownError .data, .message
+    throw
+
+  L1:
+    return
+}
+
 function baml.ai.HttpProvider.call(self: baml.ai.HttpProvider, prompt: string) -> T {
     load_type #1
     load_type null
@@ -7683,272 +7813,6 @@ function baml.ai.HttpProvider.call_with(self: baml.ai.HttpProvider, prompt: stri
     virtual_call nargs=3 ntypeargs=3
     store_var _0
     load_var _0
-    return
-}
-
-function baml.ai.LegacyClient$stream.HttpProvider.build_request(self: baml.ai.LegacyClient$stream, messages: baml.ai.ChatMessage[]) -> baml.http.Request {
-    load_var self
-    load_field .0
-    load_field .1
-    load_const baml.llm.ClientType.Primitive
-    alloc_variant baml.llm.ClientType
-    call baml.ops.equals_equals
-    unary_op !
-    pop_jump_if_false L0
-    jump L4
-
-  L0:
-    load_var self
-    load_field .0
-    call baml.llm.Client.to_primitive_client
-    store_var primitive
-    jump L1
-    load_var e
-    throw_if_panic
-    load_var e
-    load_const "legacy bridge: client construction failed"
-    load_type string
-    alloc_array 1
-    init_instance baml.errors.UnknownError .data, .message
-    throw
-
-  L1:
-    load_var messages
-    sys_op baml.ai.messages_to_prompt
-    store_var ast
-    load_var2 3 5
-    sys_op baml.llm.PrimitiveClient.specialize_prompt
-    store_var specialized
-    jump L2
-    load_var e
-    throw_if_panic
-    load_var e
-    load_const "legacy bridge: specialize failed"
-    load_type string
-    alloc_array 1
-    init_instance baml.errors.UnknownError .data, .message
-    throw
-
-  L2:
-    load_var2 3 6
-    load_type #0
-    sys_op baml.llm.PrimitiveClient.build_request
-    jump L3
-    load_var e
-    throw_if_panic
-    load_var e
-    load_const "legacy bridge: build_request failed"
-    load_type string
-    alloc_array 1
-    init_instance baml.errors.UnknownError .data, .message
-    throw
-
-  L3:
-    return
-
-  L4:
-    load_const "LegacyClient bridges primitive clients; strategy configs lower to new-model combinators"
-    init_instance baml.errors.Unsupported .message
-    throw
-}
-
-function baml.ai.LegacyClient$stream.HttpProvider.meta_of(self: baml.ai.LegacyClient$stream, from: string) -> baml.ai.ResponseMeta {
-    alloc_instance baml.ai.LegacyMeta
-    return
-}
-
-function baml.ai.LegacyClient$stream.HttpProvider.parse(self: baml.ai.LegacyClient$stream, from: string) -> T {
-    load_var self
-    load_field .0
-    call baml.llm.Client.to_primitive_client
-    jump L0
-    load_var e
-    throw_if_panic
-    load_var e
-    load_const "legacy bridge: client construction failed"
-    load_type string
-    alloc_array 1
-    init_instance baml.errors.UnknownError .data, .message
-    throw
-
-  L0:
-    load_var from
-    load_type #0
-    sys_op baml.llm.PrimitiveClient.parse
-    jump L1
-    load_var e
-    throw_if_panic
-    load_var e
-    load_const "legacy bridge: parse failed"
-    load_type string
-    alloc_array 1
-    init_instance baml.errors.UnknownError .data, .message
-    throw
-
-  L1:
-    return
-}
-
-function baml.ai.LegacyClient$stream.HttpProvider.send(self: baml.ai.LegacyClient$stream, request: baml.http.Request) -> string {
-    load_var request
-    load_const <omitted>
-    call baml.http.send
-    jump L0
-    load_var e
-    throw_if_panic
-    load_var e
-    load_const "legacy bridge: send failed"
-    load_type string
-    alloc_array 1
-    init_instance baml.errors.UnknownError .data, .message
-    throw
-
-  L0:
-    sys_op baml.http.Response.text
-    jump L1
-    load_var e
-    throw_if_panic
-    load_var e
-    load_const "legacy bridge: body read failed"
-    load_type string
-    alloc_array 1
-    init_instance baml.errors.UnknownError .data, .message
-    throw
-
-  L1:
-    return
-}
-
-function baml.ai.LegacyClient.HttpProvider.build_request(self: baml.ai.LegacyClient, messages: baml.ai.ChatMessage[]) -> baml.http.Request {
-    load_var self
-    load_field .0
-    load_field .1
-    load_const baml.llm.ClientType.Primitive
-    alloc_variant baml.llm.ClientType
-    call baml.ops.equals_equals
-    unary_op !
-    pop_jump_if_false L0
-    jump L4
-
-  L0:
-    load_var self
-    load_field .0
-    call baml.llm.Client.to_primitive_client
-    store_var primitive
-    jump L1
-    load_var e
-    throw_if_panic
-    load_var e
-    load_const "legacy bridge: client construction failed"
-    load_type string
-    alloc_array 1
-    init_instance baml.errors.UnknownError .data, .message
-    throw
-
-  L1:
-    load_var messages
-    sys_op baml.ai.messages_to_prompt
-    store_var ast
-    load_var2 3 5
-    sys_op baml.llm.PrimitiveClient.specialize_prompt
-    store_var specialized
-    jump L2
-    load_var e
-    throw_if_panic
-    load_var e
-    load_const "legacy bridge: specialize failed"
-    load_type string
-    alloc_array 1
-    init_instance baml.errors.UnknownError .data, .message
-    throw
-
-  L2:
-    load_var2 3 6
-    load_type #0
-    sys_op baml.llm.PrimitiveClient.build_request
-    jump L3
-    load_var e
-    throw_if_panic
-    load_var e
-    load_const "legacy bridge: build_request failed"
-    load_type string
-    alloc_array 1
-    init_instance baml.errors.UnknownError .data, .message
-    throw
-
-  L3:
-    return
-
-  L4:
-    load_const "LegacyClient bridges primitive clients; strategy configs lower to new-model combinators"
-    init_instance baml.errors.Unsupported .message
-    throw
-}
-
-function baml.ai.LegacyClient.HttpProvider.meta_of(self: baml.ai.LegacyClient, from: string) -> baml.ai.ResponseMeta {
-    alloc_instance baml.ai.LegacyMeta
-    return
-}
-
-function baml.ai.LegacyClient.HttpProvider.parse(self: baml.ai.LegacyClient, from: string) -> T {
-    load_var self
-    load_field .0
-    call baml.llm.Client.to_primitive_client
-    jump L0
-    load_var e
-    throw_if_panic
-    load_var e
-    load_const "legacy bridge: client construction failed"
-    load_type string
-    alloc_array 1
-    init_instance baml.errors.UnknownError .data, .message
-    throw
-
-  L0:
-    load_var from
-    load_type #0
-    sys_op baml.llm.PrimitiveClient.parse
-    jump L1
-    load_var e
-    throw_if_panic
-    load_var e
-    load_const "legacy bridge: parse failed"
-    load_type string
-    alloc_array 1
-    init_instance baml.errors.UnknownError .data, .message
-    throw
-
-  L1:
-    return
-}
-
-function baml.ai.LegacyClient.HttpProvider.send(self: baml.ai.LegacyClient, request: baml.http.Request) -> string {
-    load_var request
-    load_const <omitted>
-    call baml.http.send
-    jump L0
-    load_var e
-    throw_if_panic
-    load_var e
-    load_const "legacy bridge: send failed"
-    load_type string
-    alloc_array 1
-    init_instance baml.errors.UnknownError .data, .message
-    throw
-
-  L0:
-    sys_op baml.http.Response.text
-    jump L1
-    load_var e
-    throw_if_panic
-    load_var e
-    load_const "legacy bridge: body read failed"
-    load_type string
-    alloc_array 1
-    init_instance baml.errors.UnknownError .data, .message
-    throw
-
-  L1:
     return
 }
 
@@ -16596,7 +16460,7 @@ function baml.ai.Retry$stream.root.ai.HttpProvider.call_messages_with(self: baml
     store_var _4
     load_var _4
     pop_jump_if_false L0
-    jump L28
+    jump L29
 
   L0:
     load_const 0
@@ -16610,7 +16474,7 @@ function baml.ai.Retry$stream.root.ai.HttpProvider.call_messages_with(self: baml
   L2:
     load_const "unreachable"
     call baml.sys.panic
-    jump L27
+    jump L28
 
   L3:
     load_var self
@@ -16646,31 +16510,31 @@ function baml.ai.Retry$stream.root.ai.HttpProvider.call_messages_with(self: baml
 
   L8:
     load_var _8
-    is_type baml.ai.LegacyClient
+    is_type baml.ai.RoundRobin
     pop_jump_if_false L9
     jump L14
 
   L9:
     load_var _8
-    is_type baml.ai.RoundRobin
+    is_type baml.ai.Fallback
     pop_jump_if_false L10
     jump L14
 
   L10:
     load_var _8
-    is_type baml.ai.Fallback
+    is_type baml.ai.OpenAiStrict
     pop_jump_if_false L11
     jump L14
 
   L11:
     load_var _8
-    is_type baml.ai.OpenAiStrict
+    is_type baml.ai.Anthropic
     pop_jump_if_false L12
     jump L14
 
   L12:
     load_var _8
-    is_type baml.ai.Anthropic
+    is_type baml.llm.Client
     pop_jump_if_false L13
     jump L14
 
@@ -16692,50 +16556,56 @@ function baml.ai.Retry$stream.root.ai.HttpProvider.call_messages_with(self: baml
     load_const "call_messages_with"
     virtual_call nargs=3 ntypeargs=3
     store_var r
-    jump L26
+    jump L27
     load_var e
     is_type baml.errors.CannotRetry
     pop_jump_if_false L15
-    jump L22
+    jump L23
 
   L15:
     load_var e
     is_type baml.errors.LoopBudgetExceeded
     pop_jump_if_false L16
-    jump L22
+    jump L23
 
   L16:
     load_var e
     is_type baml.ai.AnthropicHttpError
     pop_jump_if_false L17
-    jump L22
+    jump L23
 
   L17:
     load_var e
     is_type baml.ai.GeminiHttpError
     pop_jump_if_false L18
-    jump L22
+    jump L23
 
   L18:
     load_var e
     is_type baml.ai.OpenAiHttpError
     pop_jump_if_false L19
-    jump L22
+    jump L23
 
   L19:
+    load_var e
+    is_type baml.errors.Unsupported
+    pop_jump_if_false L20
+    jump L23
+
+  L20:
     load_var e
     throw_if_panic
     load_var2 5 1
     load_field .1
     cmp_int_op <
-    pop_jump_if_false L20
-    jump L21
+    pop_jump_if_false L21
+    jump L22
 
-  L20:
+  L21:
     load_var e
     rethrow
 
-  L21:
+  L22:
     load_var attempt
     load_const 1
     add_int
@@ -16748,26 +16618,26 @@ function baml.ai.Retry$stream.root.ai.HttpProvider.call_messages_with(self: baml
     pop 1
     jump L1
 
-  L22:
+  L23:
     load_var2 5 1
     load_field .1
     cmp_int_op <
-    jump_if_false L23
+    jump_if_false L24
     pop 1
     load_var e
     load_type baml.errors.Failure
     load_const "is_retryable"
     virtual_call nargs=1 ntypeargs=0
 
-  L23:
-    pop_jump_if_false L24
-    jump L25
-
   L24:
+    pop_jump_if_false L25
+    jump L26
+
+  L25:
     load_var e
     rethrow
 
-  L25:
+  L26:
     load_var attempt
     load_const 1
     add_int
@@ -16780,13 +16650,13 @@ function baml.ai.Retry$stream.root.ai.HttpProvider.call_messages_with(self: baml
     pop 1
     jump L1
 
-  L26:
+  L27:
     load_var r
 
-  L27:
+  L28:
     return
 
-  L28:
+  L29:
     load_const "provider is effectful; wrap the idempotent part or use a bespoke combinator"
     init_instance baml.errors.CannotRetry .message
     throw
@@ -16883,7 +16753,7 @@ function baml.ai.Retry.root.ai.HttpProvider.call_messages_with(self: baml.ai.Ret
     store_var _4
     load_var _4
     pop_jump_if_false L0
-    jump L28
+    jump L29
 
   L0:
     load_const 0
@@ -16897,7 +16767,7 @@ function baml.ai.Retry.root.ai.HttpProvider.call_messages_with(self: baml.ai.Ret
   L2:
     load_const "unreachable"
     call baml.sys.panic
-    jump L27
+    jump L28
 
   L3:
     load_var self
@@ -16933,31 +16803,31 @@ function baml.ai.Retry.root.ai.HttpProvider.call_messages_with(self: baml.ai.Ret
 
   L8:
     load_var _8
-    is_type baml.ai.LegacyClient
+    is_type baml.ai.RoundRobin
     pop_jump_if_false L9
     jump L14
 
   L9:
     load_var _8
-    is_type baml.ai.RoundRobin
+    is_type baml.ai.Fallback
     pop_jump_if_false L10
     jump L14
 
   L10:
     load_var _8
-    is_type baml.ai.Fallback
+    is_type baml.ai.OpenAiStrict
     pop_jump_if_false L11
     jump L14
 
   L11:
     load_var _8
-    is_type baml.ai.OpenAiStrict
+    is_type baml.ai.Anthropic
     pop_jump_if_false L12
     jump L14
 
   L12:
     load_var _8
-    is_type baml.ai.Anthropic
+    is_type baml.llm.Client
     pop_jump_if_false L13
     jump L14
 
@@ -16979,50 +16849,56 @@ function baml.ai.Retry.root.ai.HttpProvider.call_messages_with(self: baml.ai.Ret
     load_const "call_messages_with"
     virtual_call nargs=3 ntypeargs=3
     store_var r
-    jump L26
+    jump L27
     load_var e
     is_type baml.errors.CannotRetry
     pop_jump_if_false L15
-    jump L22
+    jump L23
 
   L15:
     load_var e
     is_type baml.errors.LoopBudgetExceeded
     pop_jump_if_false L16
-    jump L22
+    jump L23
 
   L16:
     load_var e
     is_type baml.ai.AnthropicHttpError
     pop_jump_if_false L17
-    jump L22
+    jump L23
 
   L17:
     load_var e
     is_type baml.ai.GeminiHttpError
     pop_jump_if_false L18
-    jump L22
+    jump L23
 
   L18:
     load_var e
     is_type baml.ai.OpenAiHttpError
     pop_jump_if_false L19
-    jump L22
+    jump L23
 
   L19:
+    load_var e
+    is_type baml.errors.Unsupported
+    pop_jump_if_false L20
+    jump L23
+
+  L20:
     load_var e
     throw_if_panic
     load_var2 5 1
     load_field .1
     cmp_int_op <
-    pop_jump_if_false L20
-    jump L21
+    pop_jump_if_false L21
+    jump L22
 
-  L20:
+  L21:
     load_var e
     rethrow
 
-  L21:
+  L22:
     load_var attempt
     load_const 1
     add_int
@@ -17035,26 +16911,26 @@ function baml.ai.Retry.root.ai.HttpProvider.call_messages_with(self: baml.ai.Ret
     pop 1
     jump L1
 
-  L22:
+  L23:
     load_var2 5 1
     load_field .1
     cmp_int_op <
-    jump_if_false L23
+    jump_if_false L24
     pop 1
     load_var e
     load_type baml.errors.Failure
     load_const "is_retryable"
     virtual_call nargs=1 ntypeargs=0
 
-  L23:
-    pop_jump_if_false L24
-    jump L25
-
   L24:
+    pop_jump_if_false L25
+    jump L26
+
+  L25:
     load_var e
     rethrow
 
-  L25:
+  L26:
     load_var attempt
     load_const 1
     add_int
@@ -17067,13 +16943,13 @@ function baml.ai.Retry.root.ai.HttpProvider.call_messages_with(self: baml.ai.Ret
     pop 1
     jump L1
 
-  L26:
+  L27:
     load_var r
 
-  L27:
+  L28:
     return
 
-  L28:
+  L29:
     load_const "provider is effectful; wrap the idempotent part or use a bespoke combinator"
     init_instance baml.errors.CannotRetry .message
     throw
@@ -17220,31 +17096,31 @@ function baml.ai.RoundRobin$stream.root.ai.HttpProvider.call_messages_with(self:
 
   L5:
     load_var _14
-    is_type baml.ai.LegacyClient
+    is_type baml.ai.RoundRobin
     pop_jump_if_false L6
     jump L11
 
   L6:
     load_var _14
-    is_type baml.ai.RoundRobin
+    is_type baml.ai.Fallback
     pop_jump_if_false L7
     jump L11
 
   L7:
     load_var _14
-    is_type baml.ai.Fallback
+    is_type baml.ai.OpenAiStrict
     pop_jump_if_false L8
     jump L11
 
   L8:
     load_var _14
-    is_type baml.ai.OpenAiStrict
+    is_type baml.ai.Anthropic
     pop_jump_if_false L9
     jump L11
 
   L9:
     load_var _14
-    is_type baml.ai.Anthropic
+    is_type baml.llm.Client
     pop_jump_if_false L10
     jump L11
 
@@ -17373,31 +17249,31 @@ function baml.ai.RoundRobin.root.ai.HttpProvider.call_messages_with(self: baml.a
 
   L5:
     load_var _14
-    is_type baml.ai.LegacyClient
+    is_type baml.ai.RoundRobin
     pop_jump_if_false L6
     jump L11
 
   L6:
     load_var _14
-    is_type baml.ai.RoundRobin
+    is_type baml.ai.Fallback
     pop_jump_if_false L7
     jump L11
 
   L7:
     load_var _14
-    is_type baml.ai.Fallback
+    is_type baml.ai.OpenAiStrict
     pop_jump_if_false L8
     jump L11
 
   L8:
     load_var _14
-    is_type baml.ai.OpenAiStrict
+    is_type baml.ai.Anthropic
     pop_jump_if_false L9
     jump L11
 
   L9:
     load_var _14
-    is_type baml.ai.Anthropic
+    is_type baml.llm.Client
     pop_jump_if_false L10
     jump L11
 
@@ -18762,61 +18638,61 @@ function baml.ai.drive_call(client: baml.ai.Provider, prompt: baml.llm.PromptAst
     load_var client
     is_type baml.ai.ToolLoop
     pop_jump_if_false L0
-    jump L20
+    jump L21
 
   L0:
     load_var client
     is_type baml.ai.Retry
     pop_jump_if_false L1
-    jump L20
+    jump L21
 
   L1:
     load_var client
     is_type baml.ai.OpenAi
     pop_jump_if_false L2
-    jump L20
+    jump L21
 
   L2:
     load_var client
     is_type baml.ai.Gemini
     pop_jump_if_false L3
-    jump L20
+    jump L21
 
   L3:
     load_var client
     is_type baml.ai.OpenAiResponses
     pop_jump_if_false L4
-    jump L20
+    jump L21
 
   L4:
     load_var client
-    is_type baml.ai.LegacyClient
+    is_type baml.ai.RoundRobin
     pop_jump_if_false L5
-    jump L20
+    jump L21
 
   L5:
     load_var client
-    is_type baml.ai.RoundRobin
+    is_type baml.ai.Fallback
     pop_jump_if_false L6
-    jump L20
+    jump L21
 
   L6:
     load_var client
-    is_type baml.ai.Fallback
+    is_type baml.ai.OpenAiStrict
     pop_jump_if_false L7
-    jump L20
+    jump L21
 
   L7:
     load_var client
-    is_type baml.ai.OpenAiStrict
+    is_type baml.ai.Anthropic
     pop_jump_if_false L8
-    jump L20
+    jump L21
 
   L8:
     load_var client
-    is_type baml.ai.Anthropic
+    is_type baml.llm.Client
     pop_jump_if_false L9
-    jump L20
+    jump L21
 
   L9:
     load_var client
@@ -18860,31 +18736,37 @@ function baml.ai.drive_call(client: baml.ai.Provider, prompt: baml.llm.PromptAst
     load_var _23
     call baml.llm.Stream.final
     store_var _0
-    jump L21
+    jump L22
     load_var e
     is_type baml.errors.CannotRetry
     pop_jump_if_false L15
-    jump L19
+    jump L20
 
   L15:
     load_var e
     is_type baml.ai.AnthropicHttpError
     pop_jump_if_false L16
-    jump L19
+    jump L20
 
   L16:
     load_var e
     is_type baml.ai.GeminiHttpError
     pop_jump_if_false L17
-    jump L19
+    jump L20
 
   L17:
     load_var e
     is_type baml.ai.OpenAiHttpError
     pop_jump_if_false L18
-    jump L19
+    jump L20
 
   L18:
+    load_var e
+    is_type baml.errors.Unsupported
+    pop_jump_if_false L19
+    jump L20
+
+  L19:
     load_var e
     throw_if_panic
     load_var e
@@ -18894,11 +18776,11 @@ function baml.ai.drive_call(client: baml.ai.Provider, prompt: baml.llm.PromptAst
     init_instance baml.errors.UnknownError .data, .message
     throw
 
-  L19:
+  L20:
     load_var e
     throw
 
-  L20:
+  L21:
     load_type #0
     load_var2 1 4
     load_type baml.ai.HttpProvider
@@ -18906,7 +18788,7 @@ function baml.ai.drive_call(client: baml.ai.Provider, prompt: baml.llm.PromptAst
     virtual_call nargs=2 ntypeargs=1
     store_var _0
 
-  L21:
+  L22:
     load_var _0
     return
 }
@@ -19053,31 +18935,31 @@ function baml.ai.drive_with(client: baml.ai.Provider, prompt: baml.llm.PromptAst
 
   L4:
     load_var client
-    is_type baml.ai.LegacyClient
+    is_type baml.ai.RoundRobin
     pop_jump_if_false L5
     jump L10
 
   L5:
     load_var client
-    is_type baml.ai.RoundRobin
+    is_type baml.ai.Fallback
     pop_jump_if_false L6
     jump L10
 
   L6:
     load_var client
-    is_type baml.ai.Fallback
+    is_type baml.ai.OpenAiStrict
     pop_jump_if_false L7
     jump L10
 
   L7:
     load_var client
-    is_type baml.ai.OpenAiStrict
+    is_type baml.ai.Anthropic
     pop_jump_if_false L8
     jump L10
 
   L8:
     load_var client
-    is_type baml.ai.Anthropic
+    is_type baml.llm.Client
     pop_jump_if_false L9
     jump L10
 
@@ -26531,19 +26413,19 @@ function baml.llm.Client.execute_once_oneshot(self: baml.llm.Client, context: ba
 
   L39:
     load_var _16
-    is_type baml.ai.LegacyClient
+    is_type baml.ai.OpenAiStrict
     pop_jump_if_false L40
     jump L43
 
   L40:
     load_var _16
-    is_type baml.ai.OpenAiStrict
+    is_type baml.ai.Anthropic
     pop_jump_if_false L41
     jump L42
 
   L41:
     load_var _16
-    is_type baml.ai.Anthropic
+    is_type baml.llm.Client<...>
     pop_jump_if_false L48
     load_type string
     load_var2 9 7
@@ -27700,7 +27582,7 @@ function baml.llm.build_prompt_context(primitive: baml.llm.PrimitiveClient, retu
     return
 }
 
-function baml.llm.build_request(client: baml.llm.Client, function_name: string, args: map<string, unknown>, prompt_closure: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null) -> baml.http.Request {
+function baml.llm.build_request(client: baml.ai.Provider, function_name: string, args: map<string, unknown>, prompt_closure: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null) -> baml.http.Request {
     load_var prompt_closure
     load_const <omitted>
     cmp_op ==
@@ -27713,6 +27595,7 @@ function baml.llm.build_request(client: baml.llm.Client, function_name: string, 
     sys_op baml.llm.get_return_type
     store_var return_type
     load_var client
+    call baml.llm.legacy_client_of
     call baml.llm.Client.to_primitive_client
     store_var primitive_client
     load_var2 2 4
@@ -27729,7 +27612,7 @@ function baml.llm.build_request(client: baml.llm.Client, function_name: string, 
     return
 }
 
-function baml.llm.build_request_stream(client: baml.llm.Client, function_name: string, args: map<string, unknown>, prompt_closure: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null) -> baml.http.Request {
+function baml.llm.build_request_stream(client: baml.ai.Provider, function_name: string, args: map<string, unknown>, prompt_closure: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null) -> baml.http.Request {
     load_var prompt_closure
     load_const <omitted>
     cmp_op ==
@@ -27742,6 +27625,7 @@ function baml.llm.build_request_stream(client: baml.llm.Client, function_name: s
     sys_op baml.llm.get_return_type
     store_var return_type
     load_var client
+    call baml.llm.legacy_client_of
     call baml.llm.Client.to_primitive_client
     store_var primitive_client
     load_var2 2 4
@@ -27758,7 +27642,7 @@ function baml.llm.build_request_stream(client: baml.llm.Client, function_name: s
     return
 }
 
-function baml.llm.call_llm_function(client: baml.llm.Client, function_name: string, args: map<string, unknown>, prompt_closure: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null) -> T {
+function baml.llm.call_llm_function(client: baml.ai.Provider, function_name: string, args: map<string, unknown>, prompt_closure: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null) -> T {
     load_var prompt_closure
     load_const <omitted>
     cmp_op ==
@@ -27784,13 +27668,109 @@ function baml.llm.call_llm_function(client: baml.llm.Client, function_name: stri
     store_var jinja_string
 
   L3:
+    load_var client
+    is_type baml.llm.Client
+    pop_jump_if_false L4
+    jump L16
+
+  L4:
+    load_var client
+    is_type baml.ai.ToolLoop
+    pop_jump_if_false L5
+    jump L15
+
+  L5:
+    load_var client
+    is_type baml.ai.Retry
+    pop_jump_if_false L6
+    jump L15
+
+  L6:
+    load_var client
+    is_type baml.ai.OpenAi
+    pop_jump_if_false L7
+    jump L15
+
+  L7:
+    load_var client
+    is_type baml.ai.Gemini
+    pop_jump_if_false L8
+    jump L15
+
+  L8:
+    load_var client
+    is_type baml.ai.OpenAiResponses
+    pop_jump_if_false L9
+    jump L15
+
+  L9:
+    load_var client
+    is_type baml.ai.RoundRobin
+    pop_jump_if_false L10
+    jump L15
+
+  L10:
+    load_var client
+    is_type baml.ai.Fallback
+    pop_jump_if_false L11
+    jump L15
+
+  L11:
+    load_var client
+    is_type baml.ai.OpenAiStrict
+    pop_jump_if_false L12
+    jump L15
+
+  L12:
+    load_var client
+    is_type baml.ai.Anthropic
+    pop_jump_if_false L13
+    jump L15
+
+  L13:
+    load_var client
+    is_type baml.llm.Client
+    pop_jump_if_false L14
+    jump L15
+
+  L14:
+    load_const "client override supports neither the legacy bridge nor HttpProvider"
+    init_instance baml.errors.Unsupported .message
+    throw
+
+  L15:
+    load_const "openai/gpt-4o"
+    sys_op baml.llm.from_shorthand
+    store_var renderer
+    load_var function_name
+    sys_op baml.llm.get_return_type
+    store_var return_type
+    load_var2 7 6
+    load_var2 3 8
+    load_var prompt_closure
+    call baml.llm.PrimitiveClient.render_specialized_prompt
+    sys_op baml.ai.prompt_to_messages
+    store_var messages
     load_type #0
-    load_var2 1 5
+    load_var2 1 9
+    load_type baml.ai.HttpProvider
+    load_const "call_messages"
+    virtual_call nargs=2 ntypeargs=1
+    store_var _0
+    jump L17
+
+  L16:
+    load_type #0
+    load_var2 1 6
     load_var2 3 2
     load_var prompt_closure
     init_instance baml.llm.ExecutionContext .jinja_string, .args, .function_name, .prompt_closure
     load_const 0
     call baml.llm.Client.execute_oneshot
+    store_var _0
+
+  L17:
+    load_var _0
     return
 }
 
@@ -27803,12 +27783,39 @@ function baml.llm.get_jinja_template(function_name: string) -> string {
 function baml.llm.get_return_type(function_name: string) -> type {
 }
 
+function baml.llm.legacy_client_of(client: baml.ai.Provider) -> baml.llm.Client {
+    load_var client
+    is_type baml.llm.Client
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "this path needs a legacy client config; a native provider override is not supported here"
+    init_instance baml.errors.Unsupported .message
+    throw
+
+  L1:
+    load_var client
+    return
+}
+
 function baml.llm.make_role(name: string) -> baml.llm.Role {
     load_var name
     load_type string
     load_type unknown
     alloc_map 0
     init_instance baml.llm.Role .name, .metadata
+    return
+}
+
+function baml.llm.make_stream_for(client: baml.ai.Provider, sse: baml.http.SseStream) -> baml.llm.Stream<TStream, TFinal> {
+    load_var client
+    call baml.llm.legacy_client_of
+    store_var _3
+    load_type #0
+    load_type #1
+    load_var2 3 2
+    call baml.llm.Client.__make_stream
     return
 }
 
@@ -27861,7 +27868,7 @@ function baml.llm.prompt_to_text(prompt: baml.llm.PromptAst) -> string {
 function baml.llm.render_output_format(return_type: type) -> string {
 }
 
-function baml.llm.render_prompt(client: baml.llm.Client, function_name: string, args: map<string, unknown>, prompt_closure: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null) -> baml.llm.PromptAst {
+function baml.llm.render_prompt(client: baml.ai.Provider, function_name: string, args: map<string, unknown>, prompt_closure: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null) -> baml.llm.PromptAst {
     load_var prompt_closure
     load_const <omitted>
     cmp_op ==
@@ -27874,6 +27881,7 @@ function baml.llm.render_prompt(client: baml.llm.Client, function_name: string, 
     sys_op baml.llm.get_return_type
     store_var return_type
     load_var client
+    call baml.llm.legacy_client_of
     call baml.llm.Client.to_primitive_client
     store_var primitive_client
     load_var2 2 4
@@ -27886,7 +27894,7 @@ function baml.llm.render_prompt(client: baml.llm.Client, function_name: string, 
     return
 }
 
-function baml.llm.stream_llm_function(client: baml.llm.Client, function_name: string, args: map<string, unknown>, prompt_closure: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null) -> baml.llm.Stream<TStream, TFinal> {
+function baml.llm.stream_llm_function(client: baml.ai.Provider, function_name: string, args: map<string, unknown>, prompt_closure: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null) -> baml.llm.Stream<TStream, TFinal> {
     load_var prompt_closure
     load_const <omitted>
     cmp_op ==
@@ -27912,14 +27920,75 @@ function baml.llm.stream_llm_function(client: baml.llm.Client, function_name: st
     store_var jinja_string
 
   L3:
+    load_var client
+    is_type baml.llm.Client
+    pop_jump_if_false L4
+    jump L10
+
+  L4:
+    load_var client
+    is_type baml.ai.Retry
+    pop_jump_if_false L5
+    jump L9
+
+  L5:
+    load_var client
+    is_type baml.ai.OpenAi
+    pop_jump_if_false L6
+    jump L9
+
+  L6:
+    load_var client
+    is_type baml.ai.Fallback
+    pop_jump_if_false L7
+    jump L9
+
+  L7:
+    load_var client
+    is_type baml.ai.Anthropic
+    pop_jump_if_false L8
+    jump L9
+
+  L8:
+    load_const "client override supports neither the legacy bridge nor Streaming"
+    init_instance baml.errors.Unsupported .message
+    throw
+
+  L9:
+    load_const "openai/gpt-4o"
+    sys_op baml.llm.from_shorthand
+    store_var renderer
+    load_var function_name
+    sys_op baml.llm.get_return_type
+    store_var return_type
+    load_var2 7 6
+    load_var2 3 8
+    load_var prompt_closure
+    call baml.llm.PrimitiveClient.render_specialized_prompt
+    sys_op baml.ai.prompt_to_messages
+    store_var messages
     load_type #0
     load_type #1
-    load_var2 1 5
+    load_var2 1 9
+    load_type baml.ai.Streaming
+    load_const "stream_messages"
+    virtual_call nargs=2 ntypeargs=2
+    store_var _0
+    jump L11
+
+  L10:
+    load_type #0
+    load_type #1
+    load_var2 1 6
     load_var2 3 2
     load_var prompt_closure
     init_instance baml.llm.ExecutionContext .jinja_string, .args, .function_name, .prompt_closure
     load_const 0
     call baml.llm.Client.execute_stream
+    store_var _0
+
+  L11:
+    load_var _0
     return
 }
 

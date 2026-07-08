@@ -1250,17 +1250,14 @@ function baml.ai.LegacyMeta.citations(self: baml.ai.LegacyMeta) -> baml.ai.Citat
     Unavailable { reason: "legacy bridge sur..." } : baml.ai.Unavailable
   }
 }
-class baml.ai.LegacyClient {
-  inner: baml.llm.Client
-}
-function baml.ai.LegacyClient.build_request<T>(self: baml.ai.LegacyClient, messages: baml.ai.ChatMessage[]) -> baml.http.Request throws baml.errors.CallError | baml.errors.UnknownError {
+function baml.ai.build_request<T>(self: unknown, messages: baml.ai.ChatMessage[]) -> baml.http.Request throws baml.errors.CallError | baml.errors.UnknownError {
   { : baml.http.Request
-    if (self.inner.client_type != root.llm.ClientType.Primitive : bool) : void
+    if (self.client_type != root.llm.ClientType.Primitive : bool) : void
       { : never
-        throw root.errors.Unsupported { message: "LegacyClient brid..." } : baml.errors.Unsupported
+        throw root.errors.Unsupported { message: "the legacy codec ..." } : baml.errors.Unsupported
       }
     let primitive = : baml.llm.PrimitiveClient
-      catch (self.inner.to_primitive_client() : baml.llm.PrimitiveClient) : baml.llm.PrimitiveClient
+      catch (self.to_primitive_client() : baml.llm.PrimitiveClient) : baml.llm.PrimitiveClient
         catch (e)
           _ =>
             throw root.errors.UnknownError { data: e, message: ["legacy bridge: cl..."] } : never
@@ -1276,7 +1273,7 @@ function baml.ai.LegacyClient.build_request<T>(self: baml.ai.LegacyClient, messa
           throw root.errors.UnknownError { data: e, message: ["legacy bridge: bu..."] } : never
   }
 }
-function baml.ai.LegacyClient.send(self: baml.ai.LegacyClient, request: baml.http.Request) -> string throws baml.errors.UnknownError {
+function baml.ai.send(self: unknown, request: baml.http.Request) -> string throws baml.errors.UnknownError {
   { : string
     let response = : baml.http.Response
       catch (root.http.send(request) : baml.http.Response) : baml.http.Response
@@ -1289,10 +1286,10 @@ function baml.ai.LegacyClient.send(self: baml.ai.LegacyClient, request: baml.htt
           throw root.errors.UnknownError { data: e, message: ["legacy bridge: bo..."] } : never
   }
 }
-function baml.ai.LegacyClient.parse<T>(self: baml.ai.LegacyClient, from: string) -> T throws baml.errors.UnknownError {
+function baml.ai.parse<T>(self: unknown, from: string) -> T throws baml.errors.UnknownError {
   { : T
     let primitive = : baml.llm.PrimitiveClient
-      catch (self.inner.to_primitive_client() : baml.llm.PrimitiveClient) : baml.llm.PrimitiveClient
+      catch (self.to_primitive_client() : baml.llm.PrimitiveClient) : baml.llm.PrimitiveClient
         catch (e)
           _ =>
             throw root.errors.UnknownError { data: e, message: ["legacy bridge: cl..."] } : never
@@ -1302,7 +1299,7 @@ function baml.ai.LegacyClient.parse<T>(self: baml.ai.LegacyClient, from: string)
           throw root.errors.UnknownError { data: e, message: ["legacy bridge: pa..."] } : never
   }
 }
-function baml.ai.LegacyClient.meta_of(self: baml.ai.LegacyClient, from: string) -> baml.ai.ResponseMeta throws never {
+function baml.ai.meta_of(self: unknown, from: string) -> baml.ai.ResponseMeta throws never {
   { : baml.ai.LegacyMeta
     LegacyMeta {  } : baml.ai.LegacyMeta
   }
@@ -1332,73 +1329,6 @@ function baml.ai.LegacyMeta$stream.logprobs(self: baml.ai.LegacyMeta$stream) -> 
 function baml.ai.LegacyMeta$stream.citations(self: baml.ai.LegacyMeta$stream) -> baml.ai.Citation[] | baml.ai.Unavailable throws never {
   { : baml.ai.Unavailable
     Unavailable { reason: "legacy bridge sur..." } : baml.ai.Unavailable
-  }
-}
-class baml.ai.LegacyClient$stream {
-  inner: baml.llm.Client$stream | null
-}
-function baml.ai.LegacyClient$stream.build_request<T>(self: baml.ai.LegacyClient$stream, messages: baml.ai.ChatMessage[]) -> baml.http.Request throws baml.errors.CallError | baml.errors.UnknownError {
-  { : unknown
-    if (self.inner.client_type != root.llm.ClientType.Primitive : bool) : void
-      { : never
-        throw root.errors.Unsupported { message: "LegacyClient brid..." } : baml.errors.Unsupported
-      }
-    let primitive = : unknown
-      catch (self.inner.to_primitive_client() : unknown) : unknown
-        catch (e)
-          _ =>
-            throw root.errors.UnknownError { data: e, message: ["legacy bridge: cl..."] } : never
-    let ast = messages_to_prompt(messages) : baml.llm.PromptAst
-    let specialized = : unknown
-      catch (primitive.specialize_prompt(ast) : unknown) : unknown
-        catch (e)
-          _ =>
-            throw root.errors.UnknownError { data: e, message: ["legacy bridge: sp..."] } : never
-    catch (primitive.build_request(specialized, reflect.type_of<T>()) : unknown) : unknown
-      catch (e)
-        _ =>
-          throw root.errors.UnknownError { data: e, message: ["legacy bridge: bu..."] } : never
-  }
-  !! 2255..2277: did you mean `self.inner?.client_type`? `self.inner.client_type` does not handle the case when `self.inner` is null
-  !! 2255..2277: did you mean `self.inner?.client_type`? `self.inner.client_type` does not handle the case when `self.inner` is null
-  !! 2543..2573: did you mean `self.inner?.to_primitive_client`? `self.inner.to_primitive_client` does not handle the case when `self.inner` is null
-  !! 2554..2573: type `baml.llm.Client$stream` has no member `to_primitive_client`
-  !! 2543..2575: `unknown | null` is not a function — it cannot be called
-  ?? 3082..3174: unreachable arm
-}
-function baml.ai.LegacyClient$stream.send(self: baml.ai.LegacyClient$stream, request: baml.http.Request) -> string throws baml.errors.UnknownError {
-  { : string
-    let response = : baml.http.Response
-      catch (root.http.send(request) : baml.http.Response) : baml.http.Response
-        catch (e)
-          _ =>
-            throw root.errors.UnknownError { data: e, message: ["legacy bridge: se..."] } : never
-    catch (response.text() : string) : string
-      catch (e)
-        _ =>
-          throw root.errors.UnknownError { data: e, message: ["legacy bridge: bo..."] } : never
-  }
-}
-function baml.ai.LegacyClient$stream.parse<T>(self: baml.ai.LegacyClient$stream, from: string) -> T throws baml.errors.UnknownError {
-  { : unknown
-    let primitive = : unknown
-      catch (self.inner.to_primitive_client() : unknown) : unknown
-        catch (e)
-          _ =>
-            throw root.errors.UnknownError { data: e, message: ["legacy bridge: cl..."] } : never
-    catch (primitive.parse(from) : unknown) : unknown
-      catch (e)
-        _ =>
-          throw root.errors.UnknownError { data: e, message: ["legacy bridge: pa..."] } : never
-  }
-  !! 3844..3874: did you mean `self.inner?.to_primitive_client`? `self.inner.to_primitive_client` does not handle the case when `self.inner` is null
-  !! 3855..3874: type `baml.llm.Client$stream` has no member `to_primitive_client`
-  !! 3844..3876: `unknown | null` is not a function — it cannot be called
-  ?? 4095..4179: unreachable arm
-}
-function baml.ai.LegacyClient$stream.meta_of(self: baml.ai.LegacyClient$stream, from: string) -> baml.ai.ResponseMeta throws never {
-  { : baml.ai.LegacyMeta
-    LegacyMeta {  } : baml.ai.LegacyMeta
   }
 }
 
@@ -7395,27 +7325,37 @@ function baml.llm.prompt_template_for(function_name: string, prompt_closure: ((b
         "" : ""
   }
 }
-function baml.llm.render_prompt(client: baml.llm.Client, function_name: string, args: map<string, unknown>, prompt_closure: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null = null) -> baml.llm.PromptAst throws never {
+function baml.llm.legacy_client_of(client: baml.ai.Provider) -> baml.llm.Client throws baml.errors.Unsupported {
+  { : baml.llm.Client
+    let provider = client : baml.ai.Provider
+    match (provider : baml.ai.Provider) : baml.llm.Client
+      lc: Client =>
+        lc : baml.llm.Client
+      _ =>
+        throw root.errors.Unsupported { message: "this path needs a..." } : never
+  }
+}
+function baml.llm.render_prompt(client: baml.ai.Provider, function_name: string, args: map<string, unknown>, prompt_closure: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null = null) -> baml.llm.PromptAst throws never {
   { : baml.llm.PromptAst
     let return_type = get_return_type(function_name) : type
-    let primitive_client = client.to_primitive_client() : baml.llm.PrimitiveClient
+    let primitive_client = legacy_client_of(client).to_primitive_client() : baml.llm.PrimitiveClient
     let template = prompt_template_for(function_name, prompt_closure) : string
     primitive_client.render_specialized_prompt(template, args, return_type, prompt_closure) : baml.llm.PromptAst
   }
 }
-function baml.llm.build_request(client: baml.llm.Client, function_name: string, args: map<string, unknown>, prompt_closure: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null = null) -> baml.http.Request throws never {
+function baml.llm.build_request(client: baml.ai.Provider, function_name: string, args: map<string, unknown>, prompt_closure: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null = null) -> baml.http.Request throws never {
   { : baml.http.Request
     let return_type = get_return_type(function_name) : type
-    let primitive_client = client.to_primitive_client() : baml.llm.PrimitiveClient
+    let primitive_client = legacy_client_of(client).to_primitive_client() : baml.llm.PrimitiveClient
     let template = prompt_template_for(function_name, prompt_closure) : string
     let specialized_prompt = primitive_client.render_specialized_prompt(template, args, return_type, prompt_closure) : baml.llm.PromptAst
     primitive_client.build_request(specialized_prompt, return_type) : baml.http.Request
   }
 }
-function baml.llm.build_request_stream(client: baml.llm.Client, function_name: string, args: map<string, unknown>, prompt_closure: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null = null) -> baml.http.Request throws never {
+function baml.llm.build_request_stream(client: baml.ai.Provider, function_name: string, args: map<string, unknown>, prompt_closure: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null = null) -> baml.http.Request throws never {
   { : baml.http.Request
     let return_type = get_return_type(function_name) : type
-    let primitive_client = client.to_primitive_client() : baml.llm.PrimitiveClient
+    let primitive_client = legacy_client_of(client).to_primitive_client() : baml.llm.PrimitiveClient
     let template = prompt_template_for(function_name, prompt_closure) : string
     let specialized_prompt = primitive_client.render_specialized_prompt(template, args, return_type, prompt_closure) : baml.llm.PromptAst
     primitive_client.build_request_stream(specialized_prompt, return_type) : baml.http.Request
@@ -7427,7 +7367,7 @@ function baml.llm.parse<TStream, TFinal>(json: string) -> TFinal throws never {
     __sap_parse_final<TFinal>(json, cache) : TFinal
   }
 }
-function baml.llm.call_llm_function<T>(client: baml.llm.Client, function_name: string, args: map<string, unknown>, prompt_closure: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null = null) -> T throws never {
+function baml.llm.call_llm_function<T>(client: baml.ai.Provider, function_name: string, args: map<string, unknown>, prompt_closure: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null = null) -> T throws never {
   { : T
     let jinja_string = : string | "" -> string
       match (prompt_closure : ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null) : string | ""
@@ -7435,12 +7375,26 @@ function baml.llm.call_llm_function<T>(client: baml.llm.Client, function_name: s
           get_jinja_template(function_name) : string
         _ =>
           "" : ""
-    let context = ExecutionContext { jinja_string: jinja_string, args: args, function_name: function_name, prompt_closure: prompt_closure } : baml.llm.ExecutionContext
-    let result: T = client.execute_oneshot<T>(context, 0) : T
-    result : T
+    match (client : baml.ai.Provider) : T
+      lc: Client =>
+        { : T
+          let context = ExecutionContext { jinja_string: jinja_string, args: args, function_name: function_name, prompt_closure: prompt_closure } : baml.llm.ExecutionContext
+          let result: T = lc.execute_oneshot<T>(context, 0) : T
+          result : T
+        }
+      h: root.ai.HttpProvider =>
+        { : T
+          let renderer = from_shorthand("openai/gpt-4o") : baml.llm.PrimitiveClient
+          let return_type = get_return_type(function_name) : type
+          let specialized = renderer.render_specialized_prompt(jinja_string, args, return_type, prompt_closure) : baml.llm.PromptAst
+          let messages = root.ai.prompt_to_messages(specialized) : baml.ai.ChatMessage[]
+          h.call_messages<T>(messages) : T
+        }
+      _ =>
+        throw root.errors.Unsupported { message: "client override s..." } : never
   }
 }
-function baml.llm.stream_llm_function<TStream, TFinal>(client: baml.llm.Client, function_name: string, args: map<string, unknown>, prompt_closure: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null = null) -> baml.llm.Stream<TStream, TFinal> throws never {
+function baml.llm.stream_llm_function<TStream, TFinal>(client: baml.ai.Provider, function_name: string, args: map<string, unknown>, prompt_closure: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null = null) -> baml.llm.Stream<TStream, TFinal> throws never {
   { : baml.llm.Stream<TStream, TFinal>
     let jinja_string = : string | "" -> string
       match (prompt_closure : ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null) : string | ""
@@ -7448,9 +7402,28 @@ function baml.llm.stream_llm_function<TStream, TFinal>(client: baml.llm.Client, 
           get_jinja_template(function_name) : string
         _ =>
           "" : ""
-    let context = ExecutionContext { jinja_string: jinja_string, args: args, function_name: function_name, prompt_closure: prompt_closure } : baml.llm.ExecutionContext
-    let result: Stream<TStream, TFinal> = client.execute_stream(context, 0) : baml.llm.Stream<TStream, TFinal>
-    result : baml.llm.Stream<TStream, TFinal>
+    match (client : baml.ai.Provider) : baml.llm.Stream<TStream, TFinal>
+      lc: Client =>
+        { : baml.llm.Stream<TStream, TFinal>
+          let context = ExecutionContext { jinja_string: jinja_string, args: args, function_name: function_name, prompt_closure: prompt_closure } : baml.llm.ExecutionContext
+          let result: Stream<TStream, TFinal> = lc.execute_stream(context, 0) : baml.llm.Stream<TStream, TFinal>
+          result : baml.llm.Stream<TStream, TFinal>
+        }
+      s: root.ai.Streaming =>
+        { : baml.llm.Stream<TStream, TFinal>
+          let renderer = from_shorthand("openai/gpt-4o") : baml.llm.PrimitiveClient
+          let return_type = get_return_type(function_name) : type
+          let specialized = renderer.render_specialized_prompt(jinja_string, args, return_type, prompt_closure) : baml.llm.PromptAst
+          let messages = root.ai.prompt_to_messages(specialized) : baml.ai.ChatMessage[]
+          s.stream_messages(messages) : baml.llm.Stream<TStream, TFinal>
+        }
+      _ =>
+        throw root.errors.Unsupported { message: "client override s..." } : never
+  }
+}
+function baml.llm.make_stream_for<TStream, TFinal>(client: baml.ai.Provider, sse: baml.http.SseStream) -> baml.llm.Stream<TStream, TFinal> throws never {
+  { : baml.llm.Stream<TStream, TFinal>
+    legacy_client_of(client).__make_stream(sse) : baml.llm.Stream<TStream, TFinal>
   }
 }
 class baml.llm.OrchestrationStep$stream {

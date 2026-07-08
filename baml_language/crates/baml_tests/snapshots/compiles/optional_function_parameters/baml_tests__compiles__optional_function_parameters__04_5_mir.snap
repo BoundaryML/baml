@@ -2,13 +2,13 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === MIR2 ===
-fn user.AskDocs(query: string, max_results: int, filter: string, client: baml.llm.Client) -> string {
+fn user.AskDocs(query: string, max_results: int, filter: string, client: baml.ai.Provider) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // query // param
     let _2: int // max_results // param
     let _3: string // filter // param
-    let _4: baml.llm.Client // client // param
+    let _4: baml.ai.Provider // client // param
     let _5: bool
     let _6: bool
     let _7: bool
@@ -55,13 +55,13 @@ fn user.AskDocs(query: string, max_results: int, filter: string, client: baml.ll
     }
 }
 
-fn user.AskDocs$build_request(query: string, max_results: int, filter: string, client: baml.llm.Client) -> baml.http.Request {
+fn user.AskDocs$build_request(query: string, max_results: int, filter: string, client: baml.ai.Provider) -> baml.http.Request {
     // Locals:
     let _0: baml.http.Request // _0 // return
     let _1: string // query // param
     let _2: int // max_results // param
     let _3: string // filter // param
-    let _4: baml.llm.Client // client // param
+    let _4: baml.ai.Provider // client // param
     let _5: bool
     let _6: bool
     let _7: bool
@@ -106,13 +106,13 @@ fn user.AskDocs$build_request(query: string, max_results: int, filter: string, c
     }
 }
 
-fn user.AskDocs$build_request_stream(query: string, max_results: int, filter: string, client: baml.llm.Client) -> baml.http.Request {
+fn user.AskDocs$build_request_stream(query: string, max_results: int, filter: string, client: baml.ai.Provider) -> baml.http.Request {
     // Locals:
     let _0: baml.http.Request // _0 // return
     let _1: string // query // param
     let _2: int // max_results // param
     let _3: string // filter // param
-    let _4: baml.llm.Client // client // param
+    let _4: baml.ai.Provider // client // param
     let _5: bool
     let _6: bool
     let _7: bool
@@ -157,13 +157,13 @@ fn user.AskDocs$build_request_stream(query: string, max_results: int, filter: st
     }
 }
 
-fn user.AskDocs$render_prompt(query: string, max_results: int, filter: string, client: baml.llm.Client) -> baml.llm.PromptAst {
+fn user.AskDocs$render_prompt(query: string, max_results: int, filter: string, client: baml.ai.Provider) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // _0 // return
     let _1: string // query // param
     let _2: int // max_results // param
     let _3: string // filter // param
-    let _4: baml.llm.Client // client // param
+    let _4: baml.ai.Provider // client // param
     let _5: bool
     let _6: bool
     let _7: bool

@@ -29,11 +29,11 @@ fn user.Fast$new() -> null {
     }
 }
 
-fn user.Greet(name: string, client: baml.llm.Client) -> string {
+fn user.Greet(name: string, client: baml.ai.Provider) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // name // param [captured]
-    let _2: baml.llm.Client // client // param
+    let _2: baml.ai.Provider // client // param
     let _3: bool
     let _4: map<string, unknown>
     let _5: (baml.llm.Context) -> baml.llm.PromptAst throws never
@@ -89,11 +89,11 @@ fn .<tagged(Greet, 0)>(role: (string) -> baml.llm.Role throws never, ctx: baml.l
     }
 }
 
-fn user.Greet$build_request(name: string, client: baml.llm.Client) -> baml.http.Request {
+fn user.Greet$build_request(name: string, client: baml.ai.Provider) -> baml.http.Request {
     // Locals:
     let _0: baml.http.Request // _0 // return
     let _1: string // name // param [captured]
-    let _2: baml.llm.Client // client // param
+    let _2: baml.ai.Provider // client // param
     let _3: bool
     let _4: map<string, unknown>
     let _5: (baml.llm.Context) -> baml.llm.PromptAst throws never
@@ -147,11 +147,11 @@ fn .<tagged(Greet$build_request, 0)>(role: (string) -> baml.llm.Role throws neve
     }
 }
 
-fn user.Greet$build_request_stream(name: string, client: baml.llm.Client) -> baml.http.Request {
+fn user.Greet$build_request_stream(name: string, client: baml.ai.Provider) -> baml.http.Request {
     // Locals:
     let _0: baml.http.Request // _0 // return
     let _1: string // name // param [captured]
-    let _2: baml.llm.Client // client // param
+    let _2: baml.ai.Provider // client // param
     let _3: bool
     let _4: map<string, unknown>
     let _5: (baml.llm.Context) -> baml.llm.PromptAst throws never
@@ -205,11 +205,11 @@ fn .<tagged(Greet$build_request_stream, 0)>(role: (string) -> baml.llm.Role thro
     }
 }
 
-fn user.Greet$render_prompt(name: string, client: baml.llm.Client) -> baml.llm.PromptAst {
+fn user.Greet$render_prompt(name: string, client: baml.ai.Provider) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // _0 // return
     let _1: string // name // param [captured]
-    let _2: baml.llm.Client // client // param
+    let _2: baml.ai.Provider // client // param
     let _3: bool
     let _4: map<string, unknown>
     let _5: (baml.llm.Context) -> baml.llm.PromptAst throws never

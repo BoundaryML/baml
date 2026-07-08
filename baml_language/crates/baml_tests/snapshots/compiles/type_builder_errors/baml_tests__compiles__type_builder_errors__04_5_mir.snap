@@ -2,11 +2,11 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === MIR2 ===
-fn user.TypeBuilderFn(from_text: string, client: baml.llm.Client) -> Resume {
+fn user.TypeBuilderFn(from_text: string, client: baml.ai.Provider) -> Resume {
     // Locals:
     let _0: Resume // _0 // return
     let _1: string // from_text // param
-    let _2: baml.llm.Client // client // param
+    let _2: baml.ai.Provider // client // param
     let _3: bool
     let _4: baml.llm.Client[]
     let _5: map<string, unknown>
@@ -34,11 +34,11 @@ fn user.TypeBuilderFn(from_text: string, client: baml.llm.Client) -> Resume {
     }
 }
 
-fn user.TypeBuilderFn$build_request(from_text: string, client: baml.llm.Client) -> baml.http.Request {
+fn user.TypeBuilderFn$build_request(from_text: string, client: baml.ai.Provider) -> baml.http.Request {
     // Locals:
     let _0: baml.http.Request // _0 // return
     let _1: string // from_text // param
-    let _2: baml.llm.Client // client // param
+    let _2: baml.ai.Provider // client // param
     let _3: bool
     let _4: baml.llm.Client[]
     let _5: map<string, unknown>
@@ -64,11 +64,11 @@ fn user.TypeBuilderFn$build_request(from_text: string, client: baml.llm.Client) 
     }
 }
 
-fn user.TypeBuilderFn$build_request_stream(from_text: string, client: baml.llm.Client) -> baml.http.Request {
+fn user.TypeBuilderFn$build_request_stream(from_text: string, client: baml.ai.Provider) -> baml.http.Request {
     // Locals:
     let _0: baml.http.Request // _0 // return
     let _1: string // from_text // param
-    let _2: baml.llm.Client // client // param
+    let _2: baml.ai.Provider // client // param
     let _3: bool
     let _4: baml.llm.Client[]
     let _5: map<string, unknown>
@@ -94,11 +94,11 @@ fn user.TypeBuilderFn$build_request_stream(from_text: string, client: baml.llm.C
     }
 }
 
-fn user.TypeBuilderFn$render_prompt(from_text: string, client: baml.llm.Client) -> baml.llm.PromptAst {
+fn user.TypeBuilderFn$render_prompt(from_text: string, client: baml.ai.Provider) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // _0 // return
     let _1: string // from_text // param
-    let _2: baml.llm.Client // client // param
+    let _2: baml.ai.Provider // client // param
     let _3: bool
     let _4: baml.llm.Client[]
     let _5: map<string, unknown>

@@ -17,7 +17,7 @@ function boundary.id() -> boundary.LocalId {
 function boundary.id.current() -> string {
 }
 
-function user.AskDocs(query: string, max_results: int, filter: string, client: baml.llm.Client) -> string {
+function user.AskDocs(query: string, max_results: int, filter: string, client: baml.ai.Provider) -> string {
     load_var max_results
     load_const <omitted>
     cmp_op ==
@@ -58,7 +58,7 @@ function user.AskDocs(query: string, max_results: int, filter: string, client: b
     return
 }
 
-function user.AskDocs$build_request(query: string, max_results: int, filter: string, client: baml.llm.Client) -> baml.http.Request {
+function user.AskDocs$build_request(query: string, max_results: int, filter: string, client: baml.ai.Provider) -> baml.http.Request {
     load_var max_results
     load_const <omitted>
     cmp_op ==
@@ -98,7 +98,7 @@ function user.AskDocs$build_request(query: string, max_results: int, filter: str
     return
 }
 
-function user.AskDocs$build_request_stream(query: string, max_results: int, filter: string, client: baml.llm.Client) -> baml.http.Request {
+function user.AskDocs$build_request_stream(query: string, max_results: int, filter: string, client: baml.ai.Provider) -> baml.http.Request {
     load_var max_results
     load_const <omitted>
     cmp_op ==
@@ -138,7 +138,7 @@ function user.AskDocs$build_request_stream(query: string, max_results: int, filt
     return
 }
 
-function user.AskDocs$parse(json: string, client: baml.llm.Client) -> string {
+function user.AskDocs$parse(json: string, client: baml.ai.Provider) -> string {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -154,7 +154,7 @@ function user.AskDocs$parse(json: string, client: baml.llm.Client) -> string {
     return
 }
 
-function user.AskDocs$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client) -> baml.llm.Stream<string | null, string> {
+function user.AskDocs$parse_stream(sse: baml.http.SseStream, client: baml.ai.Provider) -> baml.llm.Stream<string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -166,11 +166,11 @@ function user.AskDocs$parse_stream(sse: baml.http.SseStream, client: baml.llm.Cl
     load_type string | null
     load_type string
     load_var2 2 1
-    call baml.llm.Client.__make_stream
+    call baml.llm.make_stream_for
     return
 }
 
-function user.AskDocs$render_prompt(query: string, max_results: int, filter: string, client: baml.llm.Client) -> baml.llm.PromptAst {
+function user.AskDocs$render_prompt(query: string, max_results: int, filter: string, client: baml.ai.Provider) -> baml.llm.PromptAst {
     load_var max_results
     load_const <omitted>
     cmp_op ==
@@ -210,7 +210,7 @@ function user.AskDocs$render_prompt(query: string, max_results: int, filter: str
     return
 }
 
-function user.AskDocs$stream(query: string, max_results: int, filter: string, client: baml.llm.Client) -> baml.llm.Stream<string | null, string> {
+function user.AskDocs$stream(query: string, max_results: int, filter: string, client: baml.ai.Provider) -> baml.llm.Stream<string | null, string> {
     load_var max_results
     load_const <omitted>
     cmp_op ==

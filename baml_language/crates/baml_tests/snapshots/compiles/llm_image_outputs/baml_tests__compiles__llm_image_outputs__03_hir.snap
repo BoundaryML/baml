@@ -2,40 +2,40 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === HIR2 ===
-function user.GenerateImage(prompt: string, client: baml.llm.Client = OpenAIImageResponses) -> image  [llm] {
+function user.GenerateImage(prompt: string, client: baml.ai.Provider = OpenAIImageResponses) -> image  [llm] {
   baml.llm.call_llm_function(client, "GenerateImage", map { "prompt": prompt })
 }
-function user.GenerateImage$build_request(prompt: string, client: baml.llm.Client = OpenAIImageResponses) -> baml.http.Request  [expr] {
+function user.GenerateImage$build_request(prompt: string, client: baml.ai.Provider = OpenAIImageResponses) -> baml.http.Request  [expr] {
   baml.llm.build_request(client, "GenerateImage", map { "prompt": prompt })
 }
-function user.GenerateImage$build_request_stream(prompt: string, client: baml.llm.Client = OpenAIImageResponses) -> baml.http.Request  [expr] {
+function user.GenerateImage$build_request_stream(prompt: string, client: baml.ai.Provider = OpenAIImageResponses) -> baml.http.Request  [expr] {
   baml.llm.build_request_stream(client, "GenerateImage", map { "prompt": prompt })
 }
-function user.GenerateImage$render_prompt(prompt: string, client: baml.llm.Client = OpenAIImageResponses) -> baml.llm.PromptAst  [expr] {
+function user.GenerateImage$render_prompt(prompt: string, client: baml.ai.Provider = OpenAIImageResponses) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(client, "GenerateImage", map { "prompt": prompt })
 }
-function user.GenerateImageSet(prompt: string, client: baml.llm.Client = OpenAIImageResponses) -> image[]  [llm] {
+function user.GenerateImageSet(prompt: string, client: baml.ai.Provider = OpenAIImageResponses) -> image[]  [llm] {
   baml.llm.call_llm_function(client, "GenerateImageSet", map { "prompt": prompt })
 }
-function user.GenerateImageSet$build_request(prompt: string, client: baml.llm.Client = OpenAIImageResponses) -> baml.http.Request  [expr] {
+function user.GenerateImageSet$build_request(prompt: string, client: baml.ai.Provider = OpenAIImageResponses) -> baml.http.Request  [expr] {
   baml.llm.build_request(client, "GenerateImageSet", map { "prompt": prompt })
 }
-function user.GenerateImageSet$build_request_stream(prompt: string, client: baml.llm.Client = OpenAIImageResponses) -> baml.http.Request  [expr] {
+function user.GenerateImageSet$build_request_stream(prompt: string, client: baml.ai.Provider = OpenAIImageResponses) -> baml.http.Request  [expr] {
   baml.llm.build_request_stream(client, "GenerateImageSet", map { "prompt": prompt })
 }
-function user.GenerateImageSet$render_prompt(prompt: string, client: baml.llm.Client = OpenAIImageResponses) -> baml.llm.PromptAst  [expr] {
+function user.GenerateImageSet$render_prompt(prompt: string, client: baml.ai.Provider = OpenAIImageResponses) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(client, "GenerateImageSet", map { "prompt": prompt })
 }
-function user.GenerateMixedImageNarrative(prompt: string, client: baml.llm.Client = OpenAIImageResponses) -> image | string[]  [llm] {
+function user.GenerateMixedImageNarrative(prompt: string, client: baml.ai.Provider = OpenAIImageResponses) -> image | string[]  [llm] {
   baml.llm.call_llm_function(client, "GenerateMixedImag...", map { "prompt": prompt })
 }
-function user.GenerateMixedImageNarrative$build_request(prompt: string, client: baml.llm.Client = OpenAIImageResponses) -> baml.http.Request  [expr] {
+function user.GenerateMixedImageNarrative$build_request(prompt: string, client: baml.ai.Provider = OpenAIImageResponses) -> baml.http.Request  [expr] {
   baml.llm.build_request(client, "GenerateMixedImag...", map { "prompt": prompt })
 }
-function user.GenerateMixedImageNarrative$build_request_stream(prompt: string, client: baml.llm.Client = OpenAIImageResponses) -> baml.http.Request  [expr] {
+function user.GenerateMixedImageNarrative$build_request_stream(prompt: string, client: baml.ai.Provider = OpenAIImageResponses) -> baml.http.Request  [expr] {
   baml.llm.build_request_stream(client, "GenerateMixedImag...", map { "prompt": prompt })
 }
-function user.GenerateMixedImageNarrative$render_prompt(prompt: string, client: baml.llm.Client = OpenAIImageResponses) -> baml.llm.PromptAst  [expr] {
+function user.GenerateMixedImageNarrative$render_prompt(prompt: string, client: baml.ai.Provider = OpenAIImageResponses) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(client, "GenerateMixedImag...", map { "prompt": prompt })
 }
 function user.OpenAIImageResponses$new() -> ?  [expr] {

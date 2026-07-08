@@ -10,7 +10,7 @@ function boundary.id() -> boundary.LocalId {
 function boundary.id.current() -> string {
 }
 
-function user.Fn(client: baml.llm.Client) -> string {
+function user.Fn(client: baml.ai.Provider) -> string {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -37,7 +37,7 @@ function user.Fn(client: baml.llm.Client) -> string {
     return
 }
 
-function user.Fn$build_request(client: baml.llm.Client) -> baml.http.Request {
+function user.Fn$build_request(client: baml.ai.Provider) -> baml.http.Request {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -63,7 +63,7 @@ function user.Fn$build_request(client: baml.llm.Client) -> baml.http.Request {
     return
 }
 
-function user.Fn$build_request_stream(client: baml.llm.Client) -> baml.http.Request {
+function user.Fn$build_request_stream(client: baml.ai.Provider) -> baml.http.Request {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -89,7 +89,7 @@ function user.Fn$build_request_stream(client: baml.llm.Client) -> baml.http.Requ
     return
 }
 
-function user.Fn$parse(json: string, client: baml.llm.Client) -> string {
+function user.Fn$parse(json: string, client: baml.ai.Provider) -> string {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -112,7 +112,7 @@ function user.Fn$parse(json: string, client: baml.llm.Client) -> string {
     return
 }
 
-function user.Fn$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client) -> baml.llm.Stream<string | null, string> {
+function user.Fn$parse_stream(sse: baml.http.SseStream, client: baml.ai.Provider) -> baml.llm.Stream<string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -131,11 +131,11 @@ function user.Fn$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client)
     load_type string | null
     load_type string
     load_var2 2 1
-    call baml.llm.Client.__make_stream
+    call baml.llm.make_stream_for
     return
 }
 
-function user.Fn$render_prompt(client: baml.llm.Client) -> baml.llm.PromptAst {
+function user.Fn$render_prompt(client: baml.ai.Provider) -> baml.llm.PromptAst {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -161,7 +161,7 @@ function user.Fn$render_prompt(client: baml.llm.Client) -> baml.llm.PromptAst {
     return
 }
 
-function user.Fn$stream(client: baml.llm.Client) -> baml.llm.Stream<string | null, string> {
+function user.Fn$stream(client: baml.ai.Provider) -> baml.llm.Stream<string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==

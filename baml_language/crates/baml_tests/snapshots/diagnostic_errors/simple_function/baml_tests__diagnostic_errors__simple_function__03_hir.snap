@@ -6,15 +6,15 @@ class user.User {
   name: string
   age: int
 }
-function user.HelloWorld(name: string, client: baml.llm.Client = GPT4) -> string  [llm] {
+function user.HelloWorld(name: string, client: baml.ai.Provider = GPT4) -> string  [llm] {
   baml.llm.call_llm_function(client, "HelloWorld", map { "name": name })
 }
-function user.HelloWorld$build_request(name: string, client: baml.llm.Client = GPT4) -> baml.http.Request  [expr] {
+function user.HelloWorld$build_request(name: string, client: baml.ai.Provider = GPT4) -> baml.http.Request  [expr] {
   baml.llm.build_request(client, "HelloWorld", map { "name": name })
 }
-function user.HelloWorld$build_request_stream(name: string, client: baml.llm.Client = GPT4) -> baml.http.Request  [expr] {
+function user.HelloWorld$build_request_stream(name: string, client: baml.ai.Provider = GPT4) -> baml.http.Request  [expr] {
   baml.llm.build_request_stream(client, "HelloWorld", map { "name": name })
 }
-function user.HelloWorld$render_prompt(name: string, client: baml.llm.Client = GPT4) -> baml.llm.PromptAst  [expr] {
+function user.HelloWorld$render_prompt(name: string, client: baml.ai.Provider = GPT4) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(client, "HelloWorld", map { "name": name })
 }

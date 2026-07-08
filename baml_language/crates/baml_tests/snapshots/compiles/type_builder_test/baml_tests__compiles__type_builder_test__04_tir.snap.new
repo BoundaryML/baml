@@ -1,0 +1,34 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 36129
+---
+=== TIR2 ===
+function user.Fn(client: baml.ai.Provider = ...) -> string throws never {
+  baml.llm.call_llm_function<T>(client, "Fn", map {  }) : string
+}
+function user.Fn$render_prompt(client: baml.ai.Provider = ...) -> baml.llm.PromptAst throws never {
+  baml.llm.render_prompt(client, "Fn", map {  }) : baml.llm.PromptAst
+}
+function user.Fn$build_request(client: baml.ai.Provider = ...) -> baml.http.Request throws never {
+  baml.llm.build_request(client, "Fn", map {  }) : baml.http.Request
+}
+function user.Fn$build_request_stream(client: baml.ai.Provider = ...) -> baml.http.Request throws never {
+  baml.llm.build_request_stream(client, "Fn", map {  }) : baml.http.Request
+}
+class user.TopLevelClass {
+  a: string
+}
+enum user.TopLevelEnum
+function user.Fn$stream(client: baml.ai.Provider = ...) -> baml.llm.Stream<string | null, string> throws never {
+  baml.llm.stream_llm_function(client, "Fn", map {  }) : baml.llm.Stream<string | null, string>
+}
+function user.Fn$parse_stream(sse: baml.http.SseStream, client: baml.ai.Provider = ...) -> baml.llm.Stream<string | null, string> throws never {
+  client.__make_stream(sse) : unknown
+  !! 0..68: type `baml.ai.Provider` has no member `__make_stream`
+}
+function user.Fn$parse(json: string, client: baml.ai.Provider = ...) -> string throws never {
+  baml.llm.parse<TFinal>(json) : string
+}
+class user.TopLevelClass$stream {
+  a: string | null
+}

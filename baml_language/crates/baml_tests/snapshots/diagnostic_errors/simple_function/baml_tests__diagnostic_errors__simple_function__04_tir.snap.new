@@ -1,0 +1,42 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 52905
+---
+=== TIR2 ===
+function user.HelloWorld(name: string, client: baml.ai.Provider = ...) -> string throws never {
+  baml.llm.call_llm_function<T>(client, "HelloWorld", map { "name": name }) : string
+  !! 44..104: unresolved name: GPT4
+}
+function user.HelloWorld$render_prompt(name: string, client: baml.ai.Provider = ...) -> baml.llm.PromptAst throws never {
+  baml.llm.render_prompt(client, "HelloWorld", map { "name": name }) : baml.llm.PromptAst
+  !! 44..104: unresolved name: GPT4
+}
+function user.HelloWorld$build_request(name: string, client: baml.ai.Provider = ...) -> baml.http.Request throws never {
+  baml.llm.build_request(client, "HelloWorld", map { "name": name }) : baml.http.Request
+  !! 44..104: unresolved name: GPT4
+}
+function user.HelloWorld$build_request_stream(name: string, client: baml.ai.Provider = ...) -> baml.http.Request throws never {
+  baml.llm.build_request_stream(client, "HelloWorld", map { "name": name }) : baml.http.Request
+  !! 44..104: unresolved name: GPT4
+}
+class user.User {
+  name: string
+  age: int
+}
+function user.HelloWorld$stream(name: string, client: baml.ai.Provider = ...) -> baml.llm.Stream<string | null, string> throws never {
+  baml.llm.stream_llm_function(client, "HelloWorld", map { "name": name }) : baml.llm.Stream<string | null, string>
+  !! 44..104: unresolved name: GPT4
+}
+function user.HelloWorld$parse_stream(sse: baml.http.SseStream, client: baml.ai.Provider = ...) -> baml.llm.Stream<string | null, string> throws never {
+  client.__make_stream(sse) : unknown
+  !! 44..104: unresolved name: GPT4
+  !! 0..104: type `baml.ai.Provider` has no member `__make_stream`
+}
+function user.HelloWorld$parse(json: string, client: baml.ai.Provider = ...) -> string throws never {
+  baml.llm.parse<TFinal>(json) : string
+  !! 44..104: unresolved name: GPT4
+}
+class user.User$stream {
+  name: string | null
+  age: int | null
+}

@@ -17,7 +17,7 @@ function boundary.id() -> boundary.LocalId {
 function boundary.id.current() -> string {
 }
 
-function user.CommentAfterArrow(client: baml.llm.Client) -> string {
+function user.CommentAfterArrow(client: baml.ai.Provider) -> string {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -37,7 +37,7 @@ function user.CommentAfterArrow(client: baml.llm.Client) -> string {
     return
 }
 
-function user.CommentAfterArrow$build_request(client: baml.llm.Client) -> baml.http.Request {
+function user.CommentAfterArrow$build_request(client: baml.ai.Provider) -> baml.http.Request {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -56,7 +56,7 @@ function user.CommentAfterArrow$build_request(client: baml.llm.Client) -> baml.h
     return
 }
 
-function user.CommentAfterArrow$build_request_stream(client: baml.llm.Client) -> baml.http.Request {
+function user.CommentAfterArrow$build_request_stream(client: baml.ai.Provider) -> baml.http.Request {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -75,7 +75,7 @@ function user.CommentAfterArrow$build_request_stream(client: baml.llm.Client) ->
     return
 }
 
-function user.CommentAfterArrow$parse(json: string, client: baml.llm.Client) -> string {
+function user.CommentAfterArrow$parse(json: string, client: baml.ai.Provider) -> string {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -91,7 +91,7 @@ function user.CommentAfterArrow$parse(json: string, client: baml.llm.Client) -> 
     return
 }
 
-function user.CommentAfterArrow$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client) -> baml.llm.Stream<string | null, string> {
+function user.CommentAfterArrow$parse_stream(sse: baml.http.SseStream, client: baml.ai.Provider) -> baml.llm.Stream<string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -103,11 +103,11 @@ function user.CommentAfterArrow$parse_stream(sse: baml.http.SseStream, client: b
     load_type string | null
     load_type string
     load_var2 2 1
-    call baml.llm.Client.__make_stream
+    call baml.llm.make_stream_for
     return
 }
 
-function user.CommentAfterArrow$render_prompt(client: baml.llm.Client) -> baml.llm.PromptAst {
+function user.CommentAfterArrow$render_prompt(client: baml.ai.Provider) -> baml.llm.PromptAst {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -126,7 +126,7 @@ function user.CommentAfterArrow$render_prompt(client: baml.llm.Client) -> baml.l
     return
 }
 
-function user.CommentAfterArrow$stream(client: baml.llm.Client) -> baml.llm.Stream<string | null, string> {
+function user.CommentAfterArrow$stream(client: baml.ai.Provider) -> baml.llm.Stream<string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -147,7 +147,7 @@ function user.CommentAfterArrow$stream(client: baml.llm.Client) -> baml.llm.Stre
     return
 }
 
-function user.FunctionWithComments(a: string, b: int, client: baml.llm.Client) -> string {
+function user.FunctionWithComments(a: string, b: int, client: baml.ai.Provider) -> string {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -170,7 +170,7 @@ function user.FunctionWithComments(a: string, b: int, client: baml.llm.Client) -
     return
 }
 
-function user.FunctionWithComments$build_request(a: string, b: int, client: baml.llm.Client) -> baml.http.Request {
+function user.FunctionWithComments$build_request(a: string, b: int, client: baml.ai.Provider) -> baml.http.Request {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -192,7 +192,7 @@ function user.FunctionWithComments$build_request(a: string, b: int, client: baml
     return
 }
 
-function user.FunctionWithComments$build_request_stream(a: string, b: int, client: baml.llm.Client) -> baml.http.Request {
+function user.FunctionWithComments$build_request_stream(a: string, b: int, client: baml.ai.Provider) -> baml.http.Request {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -214,7 +214,7 @@ function user.FunctionWithComments$build_request_stream(a: string, b: int, clien
     return
 }
 
-function user.FunctionWithComments$parse(json: string, client: baml.llm.Client) -> string {
+function user.FunctionWithComments$parse(json: string, client: baml.ai.Provider) -> string {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -230,7 +230,7 @@ function user.FunctionWithComments$parse(json: string, client: baml.llm.Client) 
     return
 }
 
-function user.FunctionWithComments$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client) -> baml.llm.Stream<string | null, string> {
+function user.FunctionWithComments$parse_stream(sse: baml.http.SseStream, client: baml.ai.Provider) -> baml.llm.Stream<string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -242,11 +242,11 @@ function user.FunctionWithComments$parse_stream(sse: baml.http.SseStream, client
     load_type string | null
     load_type string
     load_var2 2 1
-    call baml.llm.Client.__make_stream
+    call baml.llm.make_stream_for
     return
 }
 
-function user.FunctionWithComments$render_prompt(a: string, b: int, client: baml.llm.Client) -> baml.llm.PromptAst {
+function user.FunctionWithComments$render_prompt(a: string, b: int, client: baml.ai.Provider) -> baml.llm.PromptAst {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -268,7 +268,7 @@ function user.FunctionWithComments$render_prompt(a: string, b: int, client: baml
     return
 }
 
-function user.FunctionWithComments$stream(a: string, b: int, client: baml.llm.Client) -> baml.llm.Stream<string | null, string> {
+function user.FunctionWithComments$stream(a: string, b: int, client: baml.ai.Provider) -> baml.llm.Stream<string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==

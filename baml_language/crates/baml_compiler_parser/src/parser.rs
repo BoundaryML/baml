@@ -4168,14 +4168,34 @@ impl<'a> Parser<'a> {
                         return false;
                     }
                     if text == "client" || text == "prompt" {
-                        return true;
+                        // An LLM field is `client <value>` / `prompt <template>`.
+                        // A following `=`, `,`, or `)` means a named call arg
+                        // (`Foo(x, client = …)`) or a plain identifier use —
+                        // an expression body, not an LLM directive.
+                        let j = self.skip_trivia_and_comments_from(i + 1);
+                        let next = self.tokens.get(j).map(|t| t.kind);
+                        if !matches!(
+                            next,
+                            Some(TokenKind::Equals | TokenKind::Comma | TokenKind::RParen)
+                        ) {
+                            return true;
+                        }
                     }
                 }
-                // `client` as KW_CLIENT: LLM directive is `client Model`, not `client.method(...)`.
+                // `client` as KW_CLIENT: LLM directive is `client Model` — not
+                // `client.method(...)` and not the named call arg `client = …`.
                 TokenKind::Client if brace_depth == 1 => {
                     let j = self.skip_trivia_and_comments_from(i + 1);
                     let next = self.tokens.get(j).map(|t| t.kind);
-                    if next != Some(TokenKind::Dot) {
+                    if !matches!(
+                        next,
+                        Some(
+                            TokenKind::Dot
+                                | TokenKind::Equals
+                                | TokenKind::Comma
+                                | TokenKind::RParen
+                        )
+                    ) {
                         return true;
                     }
                 }
@@ -9031,6 +9051,53 @@ function call_llm_function(client: Client, function_name: string) -> unknown {
         let source = r#"
 function f() -> int {
   client.execute()
+}
+"#;
+
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let func = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::FUNCTION_DEF)
+            .expect("expected FUNCTION_DEF");
+        assert!(
+            func.children()
+                .any(|n| n.kind() == SyntaxKind::EXPR_FUNCTION_BODY),
+            "expected expression body, not LLM body"
+        );
+    }
+
+    #[test]
+    fn expression_body_call_with_client_named_arg_is_not_llm_body() {
+        // DCP §1.1: `Foo(x, client = <Provider>)` as the FIRST statement of a
+        // body must stay an expression body — `client` here is a named call
+        // arg, not an LLM `client` directive.
+        let source = r#"
+function main() -> string {
+  Ask("hi", client = override_provider())
+}
+"#;
+
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let func = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::FUNCTION_DEF)
+            .expect("expected FUNCTION_DEF");
+        assert!(
+            func.children()
+                .any(|n| n.kind() == SyntaxKind::EXPR_FUNCTION_BODY),
+            "expected expression body, not LLM body"
+        );
+    }
+
+    #[test]
+    fn expression_body_call_with_prompt_named_arg_is_not_llm_body() {
+        let source = r#"
+function main() -> string {
+  render(prompt = "hello", client = c)
 }
 "#;
 

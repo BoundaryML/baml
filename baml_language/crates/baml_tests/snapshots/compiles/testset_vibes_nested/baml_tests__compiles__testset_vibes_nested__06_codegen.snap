@@ -36,7 +36,7 @@ function user.$init_test_main(registry: testing.TestCollector) -> null {
     return
 }
 
-function user.ClassifySentiment(text: string, client: baml.llm.Client) -> Sentiment {
+function user.ClassifySentiment(text: string, client: baml.ai.Provider) -> Sentiment {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -58,7 +58,7 @@ function user.ClassifySentiment(text: string, client: baml.llm.Client) -> Sentim
     return
 }
 
-function user.ClassifySentiment$build_request(text: string, client: baml.llm.Client) -> baml.http.Request {
+function user.ClassifySentiment$build_request(text: string, client: baml.ai.Provider) -> baml.http.Request {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -79,7 +79,7 @@ function user.ClassifySentiment$build_request(text: string, client: baml.llm.Cli
     return
 }
 
-function user.ClassifySentiment$build_request_stream(text: string, client: baml.llm.Client) -> baml.http.Request {
+function user.ClassifySentiment$build_request_stream(text: string, client: baml.ai.Provider) -> baml.http.Request {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -100,7 +100,7 @@ function user.ClassifySentiment$build_request_stream(text: string, client: baml.
     return
 }
 
-function user.ClassifySentiment$parse(json: string, client: baml.llm.Client) -> Sentiment {
+function user.ClassifySentiment$parse(json: string, client: baml.ai.Provider) -> Sentiment {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -116,7 +116,7 @@ function user.ClassifySentiment$parse(json: string, client: baml.llm.Client) -> 
     return
 }
 
-function user.ClassifySentiment$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client) -> baml.llm.Stream<Sentiment$stream | null, Sentiment> {
+function user.ClassifySentiment$parse_stream(sse: baml.http.SseStream, client: baml.ai.Provider) -> baml.llm.Stream<Sentiment$stream | null, Sentiment> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -128,11 +128,11 @@ function user.ClassifySentiment$parse_stream(sse: baml.http.SseStream, client: b
     load_type Sentiment$stream | null
     load_type Sentiment
     load_var2 2 1
-    call baml.llm.Client.__make_stream
+    call baml.llm.make_stream_for
     return
 }
 
-function user.ClassifySentiment$render_prompt(text: string, client: baml.llm.Client) -> baml.llm.PromptAst {
+function user.ClassifySentiment$render_prompt(text: string, client: baml.ai.Provider) -> baml.llm.PromptAst {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -153,7 +153,7 @@ function user.ClassifySentiment$render_prompt(text: string, client: baml.llm.Cli
     return
 }
 
-function user.ClassifySentiment$stream(text: string, client: baml.llm.Client) -> baml.llm.Stream<Sentiment$stream | null, Sentiment> {
+function user.ClassifySentiment$stream(text: string, client: baml.ai.Provider) -> baml.llm.Stream<Sentiment$stream | null, Sentiment> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -176,7 +176,7 @@ function user.ClassifySentiment$stream(text: string, client: baml.llm.Client) ->
     return
 }
 
-function user.ClassifySentiment2(text: string, client: baml.llm.Client) -> string {
+function user.ClassifySentiment2(text: string, client: baml.ai.Provider) -> string {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -198,7 +198,7 @@ function user.ClassifySentiment2(text: string, client: baml.llm.Client) -> strin
     return
 }
 
-function user.ClassifySentiment2$build_request(text: string, client: baml.llm.Client) -> baml.http.Request {
+function user.ClassifySentiment2$build_request(text: string, client: baml.ai.Provider) -> baml.http.Request {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -219,7 +219,7 @@ function user.ClassifySentiment2$build_request(text: string, client: baml.llm.Cl
     return
 }
 
-function user.ClassifySentiment2$build_request_stream(text: string, client: baml.llm.Client) -> baml.http.Request {
+function user.ClassifySentiment2$build_request_stream(text: string, client: baml.ai.Provider) -> baml.http.Request {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -240,7 +240,7 @@ function user.ClassifySentiment2$build_request_stream(text: string, client: baml
     return
 }
 
-function user.ClassifySentiment2$parse(json: string, client: baml.llm.Client) -> string {
+function user.ClassifySentiment2$parse(json: string, client: baml.ai.Provider) -> string {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -256,7 +256,7 @@ function user.ClassifySentiment2$parse(json: string, client: baml.llm.Client) ->
     return
 }
 
-function user.ClassifySentiment2$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client) -> baml.llm.Stream<string | null, string> {
+function user.ClassifySentiment2$parse_stream(sse: baml.http.SseStream, client: baml.ai.Provider) -> baml.llm.Stream<string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -268,11 +268,11 @@ function user.ClassifySentiment2$parse_stream(sse: baml.http.SseStream, client: 
     load_type string | null
     load_type string
     load_var2 2 1
-    call baml.llm.Client.__make_stream
+    call baml.llm.make_stream_for
     return
 }
 
-function user.ClassifySentiment2$render_prompt(text: string, client: baml.llm.Client) -> baml.llm.PromptAst {
+function user.ClassifySentiment2$render_prompt(text: string, client: baml.ai.Provider) -> baml.llm.PromptAst {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -293,7 +293,7 @@ function user.ClassifySentiment2$render_prompt(text: string, client: baml.llm.Cl
     return
 }
 
-function user.ClassifySentiment2$stream(text: string, client: baml.llm.Client) -> baml.llm.Stream<string | null, string> {
+function user.ClassifySentiment2$stream(text: string, client: baml.ai.Provider) -> baml.llm.Stream<string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -377,7 +377,7 @@ function user.GPT4o$new() -> null {
     return
 }
 
-function user.GenerateTests(count: int, topic: string, client: baml.llm.Client) -> string[] {
+function user.GenerateTests(count: int, topic: string, client: baml.ai.Provider) -> string[] {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -400,7 +400,7 @@ function user.GenerateTests(count: int, topic: string, client: baml.llm.Client) 
     return
 }
 
-function user.GenerateTests$build_request(count: int, topic: string, client: baml.llm.Client) -> baml.http.Request {
+function user.GenerateTests$build_request(count: int, topic: string, client: baml.ai.Provider) -> baml.http.Request {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -422,7 +422,7 @@ function user.GenerateTests$build_request(count: int, topic: string, client: bam
     return
 }
 
-function user.GenerateTests$build_request_stream(count: int, topic: string, client: baml.llm.Client) -> baml.http.Request {
+function user.GenerateTests$build_request_stream(count: int, topic: string, client: baml.ai.Provider) -> baml.http.Request {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -444,7 +444,7 @@ function user.GenerateTests$build_request_stream(count: int, topic: string, clie
     return
 }
 
-function user.GenerateTests$parse(json: string, client: baml.llm.Client) -> string[] {
+function user.GenerateTests$parse(json: string, client: baml.ai.Provider) -> string[] {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -460,7 +460,7 @@ function user.GenerateTests$parse(json: string, client: baml.llm.Client) -> stri
     return
 }
 
-function user.GenerateTests$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client) -> baml.llm.Stream<string[], string[]> {
+function user.GenerateTests$parse_stream(sse: baml.http.SseStream, client: baml.ai.Provider) -> baml.llm.Stream<string[], string[]> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -472,11 +472,11 @@ function user.GenerateTests$parse_stream(sse: baml.http.SseStream, client: baml.
     load_type string[]
     load_type string[]
     load_var2 2 1
-    call baml.llm.Client.__make_stream
+    call baml.llm.make_stream_for
     return
 }
 
-function user.GenerateTests$render_prompt(count: int, topic: string, client: baml.llm.Client) -> baml.llm.PromptAst {
+function user.GenerateTests$render_prompt(count: int, topic: string, client: baml.ai.Provider) -> baml.llm.PromptAst {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -498,7 +498,7 @@ function user.GenerateTests$render_prompt(count: int, topic: string, client: bam
     return
 }
 
-function user.GenerateTests$stream(count: int, topic: string, client: baml.llm.Client) -> baml.llm.Stream<string[], string[]> {
+function user.GenerateTests$stream(count: int, topic: string, client: baml.ai.Provider) -> baml.llm.Stream<string[], string[]> {
     load_var client
     load_const <omitted>
     cmp_op ==

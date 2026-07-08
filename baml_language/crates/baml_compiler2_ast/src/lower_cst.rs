@@ -617,12 +617,19 @@ pub(crate) fn append_default_client_param(
     client_name: &str,
     span: text_size::TextRange,
 ) {
+    // DCP §1.1 (Phase B): the injected parameter is the NEW-model existential
+    // `baml.ai.Provider`, so call sites can swap in any provider
+    // (`Foo(x, client = Anthropic { … })`). The declared legacy config rides
+    // as the default unchanged — `baml.llm.Client` itself implements
+    // `Provider`/`HttpProvider` (out-of-body blocks in `ns_ai/core/legacy.baml`),
+    // which also keeps legacy call-site overrides (`client = OtherClient`)
+    // working.
     let default_expr = alloc_client_override_default_expr(defaults, client_name, span);
     params.push(Param {
         name: Name::new("client"),
         type_expr: Some(
             TypeExprKind::Path {
-                segments: vec![Name::new("baml"), Name::new("llm"), Name::new("Client")],
+                segments: vec![Name::new("baml"), Name::new("ai"), Name::new("Provider")],
                 generic_args: vec![],
                 associated_type_bindings: vec![],
                 attrs: vec![],
@@ -975,16 +982,23 @@ pub fn synthesize_llm_make_stream_call(
         alloc(Expr::Path(vec![Name::new(client_name)]))
     };
 
-    // 3. Callee: CLIENT.__make_stream (method call on the client)
-    let callee = alloc(Expr::MemberAccess {
-        base: client_arg,
-        member: Name::new("__make_stream"),
-    });
+    // 3. Callee: `baml.llm.make_stream_for` — a free fn that unwraps the
+    // Provider-typed client back to the legacy Client (the param is
+    // `baml.ai.Provider` since DCP §1.1, so a direct `.__make_stream`
+    // member call no longer typechecks).
+    let callee = alloc(Expr::Path(vec![
+        Name::new("baml"),
+        Name::new("llm"),
+        Name::new("make_stream_for"),
+    ]));
 
     let call = alloc(Expr::Call {
         callee,
         type_args,
-        args: vec![CallArg::positional(sse_expr)],
+        args: vec![
+            CallArg::positional(client_arg),
+            CallArg::positional(sse_expr),
+        ],
     });
 
     let body = ExprBody {

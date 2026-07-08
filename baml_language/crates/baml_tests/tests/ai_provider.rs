@@ -1697,3 +1697,87 @@ async fn workflow_graph_live() {
         "content missing: {s:?}"
     );
 }
+
+/// Phase B (DCP §1.1): the injected `client` param is `baml.ai.Provider` — a
+/// call site can swap in a NATIVE provider and the call routes through it
+/// (not the declared legacy client, whose endpoint here would fail).
+#[tokio::test]
+async fn e2e_client_override_native_provider_mock() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/chat/completions"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_string(r#"{"choices":[{"message":{"content":"override-pong"}}]}"#),
+        )
+        .mount(&server)
+        .await;
+    let uri = server.uri();
+
+    let output = baml_test!(&format!(
+        r#"
+        client<llm> DeadClient {{
+          provider openai
+          options {{
+            model "gpt-5.4-mini"
+            api_key "unused"
+            base_url "http://127.0.0.1:9"
+          }}
+        }}
+        function Ask(q: string) -> string {{
+          client DeadClient
+          prompt `${{q}}`
+        }}
+        function main() -> string {{
+            Ask("hi", client = baml.ai.OpenAi {{
+                model: "gpt-5.4-mini",
+                api_key: "test-key",
+                base_url: "{uri}",
+            }}) catch (e) {{ _ => "override failed" }}
+        }}
+        "#
+    ));
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("override-pong".into())
+    );
+    let reqs = server.received_requests().await.unwrap();
+    assert_eq!(reqs.len(), 1, "override provider should receive the request");
+}
+
+/// Phase B: a combinator chain is a Provider too — the override path accepts it.
+#[tokio::test]
+async fn e2e_client_override_combinator_mock() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/chat/completions"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_string(r#"{"choices":[{"message":{"content":"fallback-pong"}}]}"#),
+        )
+        .mount(&server)
+        .await;
+    let uri = server.uri();
+
+    let output = baml_test!(&format!(
+        r#"
+        client<llm> DeadClient {{
+          provider openai
+          options {{ model "gpt-5.4-mini" api_key "unused" base_url "http://127.0.0.1:9" }}
+        }}
+        function Ask(q: string) -> string {{
+          client DeadClient
+          prompt `${{q}}`
+        }}
+        function main() -> string {{
+            let dead = baml.ai.OpenAi {{ model: "m", api_key: "k", base_url: "http://127.0.0.1:9" }};
+            let live = baml.ai.OpenAi {{ model: "gpt-5.4-mini", api_key: "k", base_url: "{uri}" }};
+            Ask("hi", client = dead.fallback_to(live)) catch (e) {{ _ => "combinator failed" }}
+        }}
+        "#
+    ));
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("fallback-pong".into())
+    );
+}

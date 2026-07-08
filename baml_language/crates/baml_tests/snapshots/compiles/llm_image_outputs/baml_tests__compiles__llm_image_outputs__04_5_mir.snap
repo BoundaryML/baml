@@ -2,11 +2,11 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === MIR2 ===
-fn user.GenerateImage(prompt: string, client: baml.llm.Client) -> image {
+fn user.GenerateImage(prompt: string, client: baml.ai.Provider) -> image {
     // Locals:
     let _0: image // _0 // return
     let _1: string // prompt // param
-    let _2: baml.llm.Client // client // param
+    let _2: baml.ai.Provider // client // param
     let _3: bool
     let _4: map<string, unknown>
     let _5: type
@@ -32,11 +32,11 @@ fn user.GenerateImage(prompt: string, client: baml.llm.Client) -> image {
     }
 }
 
-fn user.GenerateImage$build_request(prompt: string, client: baml.llm.Client) -> baml.http.Request {
+fn user.GenerateImage$build_request(prompt: string, client: baml.ai.Provider) -> baml.http.Request {
     // Locals:
     let _0: baml.http.Request // _0 // return
     let _1: string // prompt // param
-    let _2: baml.llm.Client // client // param
+    let _2: baml.ai.Provider // client // param
     let _3: bool
     let _4: map<string, unknown>
 
@@ -60,11 +60,11 @@ fn user.GenerateImage$build_request(prompt: string, client: baml.llm.Client) -> 
     }
 }
 
-fn user.GenerateImage$build_request_stream(prompt: string, client: baml.llm.Client) -> baml.http.Request {
+fn user.GenerateImage$build_request_stream(prompt: string, client: baml.ai.Provider) -> baml.http.Request {
     // Locals:
     let _0: baml.http.Request // _0 // return
     let _1: string // prompt // param
-    let _2: baml.llm.Client // client // param
+    let _2: baml.ai.Provider // client // param
     let _3: bool
     let _4: map<string, unknown>
 
@@ -88,11 +88,11 @@ fn user.GenerateImage$build_request_stream(prompt: string, client: baml.llm.Clie
     }
 }
 
-fn user.GenerateImage$render_prompt(prompt: string, client: baml.llm.Client) -> baml.llm.PromptAst {
+fn user.GenerateImage$render_prompt(prompt: string, client: baml.ai.Provider) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // _0 // return
     let _1: string // prompt // param
-    let _2: baml.llm.Client // client // param
+    let _2: baml.ai.Provider // client // param
     let _3: bool
     let _4: map<string, unknown>
 
@@ -116,11 +116,11 @@ fn user.GenerateImage$render_prompt(prompt: string, client: baml.llm.Client) -> 
     }
 }
 
-fn user.GenerateImageSet(prompt: string, client: baml.llm.Client) -> image[] {
+fn user.GenerateImageSet(prompt: string, client: baml.ai.Provider) -> image[] {
     // Locals:
     let _0: image[] // _0 // return
     let _1: string // prompt // param
-    let _2: baml.llm.Client // client // param
+    let _2: baml.ai.Provider // client // param
     let _3: bool
     let _4: map<string, unknown>
     let _5: type
@@ -146,11 +146,11 @@ fn user.GenerateImageSet(prompt: string, client: baml.llm.Client) -> image[] {
     }
 }
 
-fn user.GenerateImageSet$build_request(prompt: string, client: baml.llm.Client) -> baml.http.Request {
+fn user.GenerateImageSet$build_request(prompt: string, client: baml.ai.Provider) -> baml.http.Request {
     // Locals:
     let _0: baml.http.Request // _0 // return
     let _1: string // prompt // param
-    let _2: baml.llm.Client // client // param
+    let _2: baml.ai.Provider // client // param
     let _3: bool
     let _4: map<string, unknown>
 
@@ -174,11 +174,11 @@ fn user.GenerateImageSet$build_request(prompt: string, client: baml.llm.Client) 
     }
 }
 
-fn user.GenerateImageSet$build_request_stream(prompt: string, client: baml.llm.Client) -> baml.http.Request {
+fn user.GenerateImageSet$build_request_stream(prompt: string, client: baml.ai.Provider) -> baml.http.Request {
     // Locals:
     let _0: baml.http.Request // _0 // return
     let _1: string // prompt // param
-    let _2: baml.llm.Client // client // param
+    let _2: baml.ai.Provider // client // param
     let _3: bool
     let _4: map<string, unknown>
 
@@ -202,11 +202,11 @@ fn user.GenerateImageSet$build_request_stream(prompt: string, client: baml.llm.C
     }
 }
 
-fn user.GenerateImageSet$render_prompt(prompt: string, client: baml.llm.Client) -> baml.llm.PromptAst {
+fn user.GenerateImageSet$render_prompt(prompt: string, client: baml.ai.Provider) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // _0 // return
     let _1: string // prompt // param
-    let _2: baml.llm.Client // client // param
+    let _2: baml.ai.Provider // client // param
     let _3: bool
     let _4: map<string, unknown>
 
@@ -230,11 +230,11 @@ fn user.GenerateImageSet$render_prompt(prompt: string, client: baml.llm.Client) 
     }
 }
 
-fn user.GenerateMixedImageNarrative(prompt: string, client: baml.llm.Client) -> (image | string)[] {
+fn user.GenerateMixedImageNarrative(prompt: string, client: baml.ai.Provider) -> (image | string)[] {
     // Locals:
     let _0: (image | string)[] // _0 // return
     let _1: string // prompt // param
-    let _2: baml.llm.Client // client // param
+    let _2: baml.ai.Provider // client // param
     let _3: bool
     let _4: map<string, unknown>
     let _5: type
@@ -260,11 +260,11 @@ fn user.GenerateMixedImageNarrative(prompt: string, client: baml.llm.Client) -> 
     }
 }
 
-fn user.GenerateMixedImageNarrative$build_request(prompt: string, client: baml.llm.Client) -> baml.http.Request {
+fn user.GenerateMixedImageNarrative$build_request(prompt: string, client: baml.ai.Provider) -> baml.http.Request {
     // Locals:
     let _0: baml.http.Request // _0 // return
     let _1: string // prompt // param
-    let _2: baml.llm.Client // client // param
+    let _2: baml.ai.Provider // client // param
     let _3: bool
     let _4: map<string, unknown>
 
@@ -288,11 +288,11 @@ fn user.GenerateMixedImageNarrative$build_request(prompt: string, client: baml.l
     }
 }
 
-fn user.GenerateMixedImageNarrative$build_request_stream(prompt: string, client: baml.llm.Client) -> baml.http.Request {
+fn user.GenerateMixedImageNarrative$build_request_stream(prompt: string, client: baml.ai.Provider) -> baml.http.Request {
     // Locals:
     let _0: baml.http.Request // _0 // return
     let _1: string // prompt // param
-    let _2: baml.llm.Client // client // param
+    let _2: baml.ai.Provider // client // param
     let _3: bool
     let _4: map<string, unknown>
 
@@ -316,11 +316,11 @@ fn user.GenerateMixedImageNarrative$build_request_stream(prompt: string, client:
     }
 }
 
-fn user.GenerateMixedImageNarrative$render_prompt(prompt: string, client: baml.llm.Client) -> baml.llm.PromptAst {
+fn user.GenerateMixedImageNarrative$render_prompt(prompt: string, client: baml.ai.Provider) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // _0 // return
     let _1: string // prompt // param
-    let _2: baml.llm.Client // client // param
+    let _2: baml.ai.Provider // client // param
     let _3: bool
     let _4: map<string, unknown>
 

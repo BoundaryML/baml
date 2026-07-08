@@ -41,31 +41,31 @@ function ai_examples._model_text(p: baml.ai.Provider, prompt: string) -> string 
 
   L4:
     load_var p
-    is_type baml.ai.LegacyClient
+    is_type baml.ai.RoundRobin
     pop_jump_if_false L5
     jump L10
 
   L5:
     load_var p
-    is_type baml.ai.RoundRobin
+    is_type baml.ai.Fallback
     pop_jump_if_false L6
     jump L10
 
   L6:
     load_var p
-    is_type baml.ai.Fallback
+    is_type baml.ai.OpenAiStrict
     pop_jump_if_false L7
     jump L10
 
   L7:
     load_var p
-    is_type baml.ai.OpenAiStrict
+    is_type baml.ai.Anthropic
     pop_jump_if_false L8
     jump L10
 
   L8:
     load_var p
-    is_type baml.ai.Anthropic
+    is_type baml.llm.Client
     pop_jump_if_false L9
     jump L10
 
@@ -373,31 +373,31 @@ function ai_examples.cascaded_voice(stt: ai_examples.Stt, llm: baml.ai.Provider,
 
   L4:
     load_var llm
-    is_type baml.ai.LegacyClient
+    is_type baml.ai.RoundRobin
     pop_jump_if_false L5
     jump L10
 
   L5:
     load_var llm
-    is_type baml.ai.RoundRobin
+    is_type baml.ai.Fallback
     pop_jump_if_false L6
     jump L10
 
   L6:
     load_var llm
-    is_type baml.ai.Fallback
+    is_type baml.ai.OpenAiStrict
     pop_jump_if_false L7
     jump L10
 
   L7:
     load_var llm
-    is_type baml.ai.OpenAiStrict
+    is_type baml.ai.Anthropic
     pop_jump_if_false L8
     jump L10
 
   L8:
     load_var llm
-    is_type baml.ai.Anthropic
+    is_type baml.llm.Client
     pop_jump_if_false L9
     jump L10
 
@@ -834,31 +834,31 @@ function ai_examples.guarded_call(p: baml.ai.Provider, prompt: string, blocked: 
 
   L5:
     load_var p
-    is_type baml.ai.LegacyClient
+    is_type baml.ai.RoundRobin
     pop_jump_if_false L6
     jump L11
 
   L6:
     load_var p
-    is_type baml.ai.RoundRobin
+    is_type baml.ai.Fallback
     pop_jump_if_false L7
     jump L11
 
   L7:
     load_var p
-    is_type baml.ai.Fallback
+    is_type baml.ai.OpenAiStrict
     pop_jump_if_false L8
     jump L11
 
   L8:
     load_var p
-    is_type baml.ai.OpenAiStrict
+    is_type baml.ai.Anthropic
     pop_jump_if_false L9
     jump L11
 
   L9:
     load_var p
-    is_type baml.ai.Anthropic
+    is_type baml.llm.Client
     pop_jump_if_false L10
     jump L11
 
@@ -1064,31 +1064,31 @@ function ai_examples.handoff_dispatch(specialist: baml.ai.Provider, calls: baml.
 
   L25:
     load_var specialist
-    is_type baml.ai.LegacyClient
+    is_type baml.ai.RoundRobin
     pop_jump_if_false L26
     jump L31
 
   L26:
     load_var specialist
-    is_type baml.ai.RoundRobin
+    is_type baml.ai.Fallback
     pop_jump_if_false L27
     jump L31
 
   L27:
     load_var specialist
-    is_type baml.ai.Fallback
+    is_type baml.ai.OpenAiStrict
     pop_jump_if_false L28
     jump L31
 
   L28:
     load_var specialist
-    is_type baml.ai.OpenAiStrict
+    is_type baml.ai.Anthropic
     pop_jump_if_false L29
     jump L31
 
   L29:
     load_var specialist
-    is_type baml.ai.Anthropic
+    is_type baml.llm.Client
     pop_jump_if_false L30
     jump L31
 
@@ -1577,31 +1577,31 @@ function ai_examples.run_eval(task: baml.ai.Provider, judge: ai_examples.Scorer,
 
   L4:
     load_var task
-    is_type baml.ai.LegacyClient
+    is_type baml.ai.RoundRobin
     pop_jump_if_false L5
     jump L10
 
   L5:
     load_var task
-    is_type baml.ai.RoundRobin
+    is_type baml.ai.Fallback
     pop_jump_if_false L6
     jump L10
 
   L6:
     load_var task
-    is_type baml.ai.Fallback
+    is_type baml.ai.OpenAiStrict
     pop_jump_if_false L7
     jump L10
 
   L7:
     load_var task
-    is_type baml.ai.OpenAiStrict
+    is_type baml.ai.Anthropic
     pop_jump_if_false L8
     jump L10
 
   L8:
     load_var task
-    is_type baml.ai.Anthropic
+    is_type baml.llm.Client
     pop_jump_if_false L9
     jump L10
 

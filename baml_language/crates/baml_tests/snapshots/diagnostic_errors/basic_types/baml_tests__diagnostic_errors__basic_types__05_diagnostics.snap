@@ -22,6 +22,54 @@ source: crates/baml_tests/src/generated_tests.rs
     │ Note: Error code: E0015
 ────╯
 
+  [type] error: type mismatch: expected baml.ai.Provider, got unknown
+   ╭─[ functions.baml:6:32 ]
+   │
+ 6 │ ╭─▶ function GetStatus() -> Status {
+   ┆ ┆   
+ 9 │ ├─▶ }
+   │ │       
+   │ ╰─────── type mismatch: expected baml.ai.Provider, got unknown
+   │     
+   │     Note: Error code: E0001
+───╯
+
+  [type] error: type mismatch: expected baml.ai.Provider, got unknown
+   ╭─[ functions.baml:6:32 ]
+   │
+ 6 │ ╭─▶ function GetStatus() -> Status {
+   ┆ ┆   
+ 9 │ ├─▶ }
+   │ │       
+   │ ╰─────── type mismatch: expected baml.ai.Provider, got unknown
+   │     
+   │     Note: Error code: E0001
+───╯
+
+  [type] error: type mismatch: expected baml.ai.Provider, got unknown
+   ╭─[ functions.baml:6:32 ]
+   │
+ 6 │ ╭─▶ function GetStatus() -> Status {
+   ┆ ┆   
+ 9 │ ├─▶ }
+   │ │       
+   │ ╰─────── type mismatch: expected baml.ai.Provider, got unknown
+   │     
+   │     Note: Error code: E0001
+───╯
+
+  [type] error: type mismatch: expected baml.ai.Provider, got unknown
+   ╭─[ functions.baml:6:32 ]
+   │
+ 6 │ ╭─▶ function GetStatus() -> Status {
+   ┆ ┆   
+ 9 │ ├─▶ }
+   │ │       
+   │ ╰─────── type mismatch: expected baml.ai.Provider, got unknown
+   │     
+   │     Note: Error code: E0001
+───╯
+
   [type] error: unresolved name: GPT4
    ╭─[ functions.baml:6:32 ]
    │
@@ -35,6 +83,90 @@ source: crates/baml_tests/src/generated_tests.rs
 ───╯
 
   [type] error: unresolved name: GPT4
+   ╭─[ functions.baml:6:32 ]
+   │
+ 6 │ ╭─▶ function GetStatus() -> Status {
+   ┆ ┆   
+ 9 │ ├─▶ }
+   │ │       
+   │ ╰─────── unresolved name: GPT4
+   │     
+   │     Note: Error code: E0003
+───╯
+
+  [type] error: unresolved name: GPT4
+   ╭─[ functions.baml:6:32 ]
+   │
+ 6 │ ╭─▶ function GetStatus() -> Status {
+   ┆ ┆   
+ 9 │ ├─▶ }
+   │ │       
+   │ ╰─────── unresolved name: GPT4
+   │     
+   │     Note: Error code: E0003
+───╯
+
+  [type] error: unresolved name: GPT4
+   ╭─[ functions.baml:6:32 ]
+   │
+ 6 │ ╭─▶ function GetStatus() -> Status {
+   ┆ ┆   
+ 9 │ ├─▶ }
+   │ │       
+   │ ╰─────── unresolved name: GPT4
+   │     
+   │     Note: Error code: E0003
+───╯
+
+  [type] error: type mismatch: expected baml.ai.Provider, got unknown
+    ╭─[ functions.baml:12:45 ]
+    │
+ 12 │ ╭─▶ function GetMixedList() -> (int | string)[] {
+    ┆ ┆   
+ 15 │ ├─▶ }
+    │ │       
+    │ ╰─────── type mismatch: expected baml.ai.Provider, got unknown
+    │     
+    │     Note: Error code: E0001
+────╯
+
+  [type] error: type mismatch: expected baml.ai.Provider, got unknown
+    ╭─[ functions.baml:12:45 ]
+    │
+ 12 │ ╭─▶ function GetMixedList() -> (int | string)[] {
+    ┆ ┆   
+ 15 │ ├─▶ }
+    │ │       
+    │ ╰─────── type mismatch: expected baml.ai.Provider, got unknown
+    │     
+    │     Note: Error code: E0001
+────╯
+
+  [type] error: type mismatch: expected baml.ai.Provider, got unknown
+    ╭─[ functions.baml:12:45 ]
+    │
+ 12 │ ╭─▶ function GetMixedList() -> (int | string)[] {
+    ┆ ┆   
+ 15 │ ├─▶ }
+    │ │       
+    │ ╰─────── type mismatch: expected baml.ai.Provider, got unknown
+    │     
+    │     Note: Error code: E0001
+────╯
+
+  [type] error: type mismatch: expected baml.ai.Provider, got unknown
+    ╭─[ functions.baml:12:45 ]
+    │
+ 12 │ ╭─▶ function GetMixedList() -> (int | string)[] {
+    ┆ ┆   
+ 15 │ ├─▶ }
+    │ │       
+    │ ╰─────── type mismatch: expected baml.ai.Provider, got unknown
+    │     
+    │     Note: Error code: E0001
+────╯
+
+  [type] error: unresolved name: GPT4
     ╭─[ functions.baml:12:45 ]
     │
  12 │ ╭─▶ function GetMixedList() -> (int | string)[] {
@@ -42,6 +174,126 @@ source: crates/baml_tests/src/generated_tests.rs
  15 │ ├─▶ }
     │ │       
     │ ╰─────── unresolved name: GPT4
+    │     
+    │     Note: Error code: E0003
+────╯
+
+  [type] error: unresolved name: GPT4
+    ╭─[ functions.baml:12:45 ]
+    │
+ 12 │ ╭─▶ function GetMixedList() -> (int | string)[] {
+    ┆ ┆   
+ 15 │ ├─▶ }
+    │ │       
+    │ ╰─────── unresolved name: GPT4
+    │     
+    │     Note: Error code: E0003
+────╯
+
+  [type] error: unresolved name: GPT4
+    ╭─[ functions.baml:12:45 ]
+    │
+ 12 │ ╭─▶ function GetMixedList() -> (int | string)[] {
+    ┆ ┆   
+ 15 │ ├─▶ }
+    │ │       
+    │ ╰─────── unresolved name: GPT4
+    │     
+    │     Note: Error code: E0003
+────╯
+
+  [type] error: unresolved name: GPT4
+    ╭─[ functions.baml:12:45 ]
+    │
+ 12 │ ╭─▶ function GetMixedList() -> (int | string)[] {
+    ┆ ┆   
+ 15 │ ├─▶ }
+    │ │       
+    │ ╰─────── unresolved name: GPT4
+    │     
+    │     Note: Error code: E0003
+────╯
+
+  [type] error: type mismatch: expected baml.ai.Provider, got unknown
+    ╭─[ functions.baml:17:53 ]
+    │
+ 17 │ ╭─▶ function GetMixedMap() -> map<string, int | string> {
+    ┆ ┆   
+ 20 │ ├─▶ }
+    │ │      
+    │ ╰────── type mismatch: expected baml.ai.Provider, got unknown
+    │     
+    │     Note: Error code: E0001
+────╯
+
+  [type] error: type mismatch: expected baml.ai.Provider, got unknown
+    ╭─[ functions.baml:17:53 ]
+    │
+ 17 │ ╭─▶ function GetMixedMap() -> map<string, int | string> {
+    ┆ ┆   
+ 20 │ ├─▶ }
+    │ │      
+    │ ╰────── type mismatch: expected baml.ai.Provider, got unknown
+    │     
+    │     Note: Error code: E0001
+────╯
+
+  [type] error: type mismatch: expected baml.ai.Provider, got unknown
+    ╭─[ functions.baml:17:53 ]
+    │
+ 17 │ ╭─▶ function GetMixedMap() -> map<string, int | string> {
+    ┆ ┆   
+ 20 │ ├─▶ }
+    │ │      
+    │ ╰────── type mismatch: expected baml.ai.Provider, got unknown
+    │     
+    │     Note: Error code: E0001
+────╯
+
+  [type] error: type mismatch: expected baml.ai.Provider, got unknown
+    ╭─[ functions.baml:17:53 ]
+    │
+ 17 │ ╭─▶ function GetMixedMap() -> map<string, int | string> {
+    ┆ ┆   
+ 20 │ ├─▶ }
+    │ │      
+    │ ╰────── type mismatch: expected baml.ai.Provider, got unknown
+    │     
+    │     Note: Error code: E0001
+────╯
+
+  [type] error: unresolved name: GPT4
+    ╭─[ functions.baml:17:53 ]
+    │
+ 17 │ ╭─▶ function GetMixedMap() -> map<string, int | string> {
+    ┆ ┆   
+ 20 │ ├─▶ }
+    │ │      
+    │ ╰────── unresolved name: GPT4
+    │     
+    │     Note: Error code: E0003
+────╯
+
+  [type] error: unresolved name: GPT4
+    ╭─[ functions.baml:17:53 ]
+    │
+ 17 │ ╭─▶ function GetMixedMap() -> map<string, int | string> {
+    ┆ ┆   
+ 20 │ ├─▶ }
+    │ │      
+    │ ╰────── unresolved name: GPT4
+    │     
+    │     Note: Error code: E0003
+────╯
+
+  [type] error: unresolved name: GPT4
+    ╭─[ functions.baml:17:53 ]
+    │
+ 17 │ ╭─▶ function GetMixedMap() -> map<string, int | string> {
+    ┆ ┆   
+ 20 │ ├─▶ }
+    │ │      
+    │ ╰────── unresolved name: GPT4
     │     
     │     Note: Error code: E0003
 ────╯
