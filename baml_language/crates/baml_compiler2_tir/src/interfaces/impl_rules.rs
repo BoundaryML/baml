@@ -1872,7 +1872,9 @@ fn impl_bounds_hold_symbolic(
 ///
 /// `is_subtype` discharges the impls' generic bounds; new callers pass a
 /// `baml_type::normalize`-backed closure rather than the deprecated local oracle.
-pub(crate) fn impls_for_type<'db>(
+/// Public so downstream consumers (MIR's open-world dispatch lowering) enumerate
+/// impls through the same canonical substrate as the checker.
+pub fn impls_for_type<'db>(
     db: &'db dyn crate::Db,
     pkg_id: PackageId<'db>,
     concrete: &Ty,
