@@ -31,7 +31,7 @@ macro-phase, "DCP §…") and [`llm-provider-plan.md`](./llm-provider-plan.md) (
 - [x] Exit met: registry pinned by tests; drivers strict-compile; full lib suite + snapshots green. **Phase A complete.**
 
 ### Phase B — `client: baml.ai.Provider` + LegacyClient bridge (DCP §1.1)
-- [ ] `LegacyClient` class (`implements Provider/HttpProvider/Streaming` over legacy `Client`, PromptAst-threaded) — the only consumer of the legacy Rust pipeline.
+- [x] `LegacyClient` bridge, first slice (`ns_ai/core/legacy.baml` + `messages_to_prompt` reverse host fn in sys_ops): `implements Provider/HttpProvider` over a **primitive** legacy `Client` — messages → PromptAst → `specialize_prompt` → legacy `build_request`/`parse`; `LegacyMeta` best-effort. 3 offline wire-shape tests (`ns_ai_bridge/`). Strategy configs throw typed `Unsupported` — they lower to new-model combinators over per-member bridges in the lowering step. **Still open: `Streaming` through the bridge** (lands with the lowering step).
 - [ ] Retype the injected param (`append_default_client_param`); shorthand→native-class map (openai/anthropic/gemini); named `client<llm>` lowering → native fields or bridge (bridge for unported providers + `query_params`/finish-reason configs).
 - [ ] `client <name>` accepts a **user function returning `Provider`** (declared-client for custom providers, DCP §1.4).
 - [ ] Formatter: fix (or consciously accept) the `client`-named-param limitation.
