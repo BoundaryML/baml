@@ -537,16 +537,39 @@ fn prepend_parent_type_generics(
     Some(type_name)
 }
 
-/// The `implements … for …` block whose method list contains `func_data`, if
-/// any. A method is identified by its source span (unique per declaration).
-fn enclosing_impl_for_func<'a>(
-    item_tree: &'a baml_compiler2_hir::item_tree::ItemTree,
+/// An out-of-body impl block's declared generics as `(param names, each's single optional
+/// bound)`. The legacy flat form the generic env consumes; the `ImplBlock` holds the full
+/// `&`-bound set per param, of which only the first is used here (matching the old single-bound
+/// representation). Empty for an in-body (`InClass`) block.
+fn free_impl_generics(
+    block: &baml_compiler2_hir::item_tree::ImplBlock,
+) -> (Vec<Name>, Vec<Option<baml_compiler2_ast::TypeExpr>>) {
+    match &block.subject {
+        baml_compiler2_hir::item_tree::ImplSubject::Free { generics, .. } => (
+            generics.iter().map(|g| g.name.clone()).collect(),
+            generics.iter().map(|g| g.bounds.first().cloned()).collect(),
+        ),
+        baml_compiler2_hir::item_tree::ImplSubject::InClass { .. } => {
+            debug_assert!(false, "Should only be called for a free impl");
+            (Vec::new(), Vec::new())
+        }
+    }
+}
+
+/// The out-of-body `implement … for …` block whose method list contains `func_data`, as its
+/// declared generics, if any. A method is identified by its source span (unique per declaration).
+/// Reads the unified `impls` store via the `free_impls` index.
+fn enclosing_impl_generics_for_func(
+    item_tree: &baml_compiler2_hir::item_tree::ItemTree,
     func_data: &baml_compiler2_hir::item_tree::Function,
-) -> Option<&'a baml_compiler2_hir::item_tree::ImplementsFor> {
-    item_tree.implements_for.iter().find(|imp| {
-        imp.methods
+) -> Option<(Vec<Name>, Vec<Option<baml_compiler2_ast::TypeExpr>>)> {
+    item_tree.free_impls.iter().find_map(|impl_id| {
+        let block = item_tree.impls.get(impl_id)?;
+        block
+            .methods
             .iter()
             .any(|&mid| item_tree[mid].span == func_data.span)
+            .then(|| free_impl_generics(block))
     })
 }
 
@@ -562,8 +585,10 @@ fn generic_env_for_function_data(
     // Sortable for T[]`), which live on the impl block rather than a parent
     // scope. Mirror the `ScopeKind::Function` arm: impl generics take the place
     // of parent-type generics so a nested lambda body can resolve them too.
-    if let Some(imp) = enclosing_impl_for_func(ctx.item_tree, func_data) {
-        env.prepend_declared(&imp.generic_params, &imp.generic_param_bounds);
+    if let Some((generic_params, generic_param_bounds)) =
+        enclosing_impl_generics_for_func(ctx.item_tree, func_data)
+    {
+        env.prepend_declared(&generic_params, &generic_param_bounds);
     } else {
         prepend_parent_type_generics(ctx, &mut env, function_scope.parent);
     }
@@ -1335,10 +1360,10 @@ pub fn infer_scope_types<'db>(
                     let body = baml_compiler2_ppir::function_body(db, func_loc);
                     let sig = baml_compiler2_ppir::elaborated_function_signature(db, func_loc);
 
-                    let enclosing_impl = item_tree
-                        .implements_for
-                        .iter()
-                        .find(|imp| imp.methods.contains(local_id));
+                    let enclosing_impl = item_tree.free_impls.iter().find_map(|impl_id| {
+                        let block = item_tree.impls.get(impl_id)?;
+                        block.methods.contains(local_id).then_some(block)
+                    });
 
                     let mut env = GenericEnv::from_params(sig.user_generic_params.clone());
                     env.params
@@ -1349,8 +1374,9 @@ pub fn infer_scope_types<'db>(
                         func_data.span,
                     );
                     if let Some(imp) = enclosing_impl {
+                        let (impl_generic_params, impl_generic_bounds) = free_impl_generics(imp);
                         for mp in &sig.user_generic_params {
-                            if imp.generic_params.iter().any(|cp| cp == mp) {
+                            if impl_generic_params.iter().any(|cp| cp == mp) {
                                 builder.report_at_span(
                                     crate::infer_context::TirTypeError::TypeParamShadowedImplParam {
                                         param_name: mp.clone(),
@@ -1359,7 +1385,7 @@ pub fn infer_scope_types<'db>(
                                 );
                             }
                         }
-                        env.prepend_declared(&imp.generic_params, &imp.generic_param_bounds);
+                        env.prepend_declared(&impl_generic_params, &impl_generic_bounds);
                     } else if let Some((type_name, parent_generics, parent_bounds)) =
                         parent_type_generic_env(
                             GenericLookupContext {
@@ -1498,10 +1524,15 @@ pub fn infer_scope_types<'db>(
                         // enclosing class's full receiver type (`Foo<T>`, carrying its generics).
                         let self_ty: Option<Ty> = if interface_self_bound.is_some() {
                             Some(crate::self_type::self_type_for_interface_default())
-                        } else if let Some(imp) = enclosing_impl {
+                        } else if let Some(imp) = enclosing_impl
+                            && let baml_compiler2_hir::item_tree::ImplSubject::Free {
+                                for_target,
+                                ..
+                            } = &imp.subject
+                        {
                             let mut diags = Vec::new();
                             Some(crate::lower_type_expr::lower_type_expr(
-                                &imp.for_target,
+                                for_target,
                                 &crate::lower_type_expr::ScopeCtx {
                                     db,
                                     package_items: pkg_items,

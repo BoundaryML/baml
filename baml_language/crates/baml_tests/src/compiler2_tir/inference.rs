@@ -526,9 +526,9 @@ implements ToJson for Dog {
 
     let item_tree = baml_compiler2_hir::file_item_tree(&db, impl_file);
     assert_eq!(
-        item_tree.implements_for.len(),
+        item_tree.free_impls.len(),
         1,
-        "cross-file class target must remain a first-class ImplementsFor record"
+        "cross-file class target must remain a first-class out-of-body impl record"
     );
 
     let diagnostics = baml_project::collect_compiler2_diagnostics(&db);

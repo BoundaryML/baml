@@ -2495,15 +2495,20 @@ impl<'db> TypeInferenceBuilder<'db> {
         let db = self.context.db();
         let item_tree = baml_compiler2_ppir::file_item_tree(db, func_loc.file(db));
         let func_id = func_loc.id(db);
-        if let Some(imp) = item_tree
-            .implements_for
-            .iter()
-            .find(|imp| imp.methods.contains(&func_id))
-        {
-            return (
-                imp.generic_params.clone(),
-                item_tree[func_id].generic_params.clone(),
-            );
+        // The enclosing out-of-body impl's declared generic-param names, from the unified `impls`
+        // store via the `free_impls` index (replacing the removed `implements_for`).
+        if let Some(impl_params) = item_tree.free_impls.iter().find_map(|impl_id| {
+            let block = item_tree.impls.get(impl_id)?;
+            if !block.methods.contains(&func_id) {
+                return None;
+            }
+            let baml_compiler2_hir::item_tree::ImplSubject::Free { generics, .. } = &block.subject
+            else {
+                return None;
+            };
+            Some(generics.iter().map(|g| g.name.clone()).collect::<Vec<_>>())
+        }) {
+            return (impl_params, item_tree[func_id].generic_params.clone());
         }
 
         let fn_params = item_tree[func_id].generic_params.clone();

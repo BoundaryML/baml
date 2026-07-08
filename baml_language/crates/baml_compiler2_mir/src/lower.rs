@@ -1117,12 +1117,18 @@ pub fn def_to_item_ref<'db>(db: &'db dyn crate::Db, def: Definition<'db>) -> Ite
                 };
             }
         }
-        for imp in &item_tree.implements_for {
-            if imp.methods.contains(&func_local_id) {
+        for impl_id in &item_tree.free_impls {
+            let Some(block) = item_tree.impls.get(impl_id) else {
+                continue;
+            };
+            if block.methods.contains(&func_local_id)
+                && let baml_compiler2_hir::item_tree::ImplSubject::Free { for_target, .. } =
+                    &block.subject
+            {
                 return ItemRef::Method {
                     package: pkg_info.package.clone(),
                     namespace: pkg_info.namespace_path,
-                    class: Name::new(format!("{}$for${}", imp.interface_target, imp.for_target)),
+                    class: Name::new(format!("{}$for${}", block.interface_target, for_target)),
                     name,
                 };
             }

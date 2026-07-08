@@ -476,33 +476,46 @@ fn build_packages(
         // (a) Out-of-body `implement<G> I for FOR { ... }`: primitives,
         // containers, generic classes, and blanket `for T`. (A non-generic
         // concrete class's out-of-body impl folds onto the class — see (b).)
-        for imp in &item_tree.implements_for {
+        for impl_id in &item_tree.free_impls {
+            let Some(block) = item_tree.impls.get(impl_id) else {
+                continue;
+            };
+            let baml_compiler2_hir::item_tree::ImplSubject::Free {
+                for_target,
+                generics,
+            } = &block.subject
+            else {
+                continue;
+            };
+            let impl_param_names: Vec<Name> = generics.iter().map(|g| g.name.clone()).collect();
+            // Legacy flat single-bound form (first `&`-bound per param).
+            let impl_param_bounds: Vec<Option<baml_compiler2_ast::TypeExpr>> =
+                generics.iter().map(|g| g.bounds.first().cloned()).collect();
             let Some((iface_tn, interface_args, mut interface_assoc)) = split_interface(
-                &lower(&imp.interface_target, &imp.generic_params),
+                &lower(&block.interface_target, &impl_param_names),
                 resolved,
-                &imp.generic_params,
+                &impl_param_names,
             ) else {
                 continue;
             };
             interface_assoc.extend(lower_assoc(
-                &imp.associated_type_bindings,
-                &imp.generic_params,
+                &block.associated_type_bindings,
+                &impl_param_names,
             ));
             let for_ty_pattern = baml_compiler2_mir::tir2_to_template(
-                &lower(&imp.for_target, &imp.generic_params),
+                &lower(for_target, &impl_param_names),
                 resolved,
-                &imp.generic_params,
+                &impl_param_names,
             );
-            let Some(generic_param_bounds) =
-                bound_sets(&imp.generic_param_bounds, &imp.generic_params)
+            let Some(generic_param_bounds) = bound_sets(&impl_param_bounds, &impl_param_names)
             else {
                 continue;
             };
             // An impl's own method is compiled against the impl's own generics.
-            let impl_frame: Vec<baml_type::TyTemplate> =
-                (0..u32::try_from(imp.generic_params.len()).expect("generic arity fits u32"))
-                    .map(baml_type::TyTemplate::TypeArgRef)
-                    .collect();
+            let impl_frame: Vec<baml_type::TyTemplate> = (0..u32::try_from(impl_param_names.len())
+                .expect("generic arity fits u32"))
+                .map(baml_type::TyTemplate::TypeArgRef)
+                .collect();
             let Some(interface_head) = interface_indices
                 .get(&iface_tn)
                 .copied()
@@ -511,7 +524,7 @@ fn build_packages(
                 continue;
             };
             let mut methods = indexmap::IndexMap::new();
-            for &m in &imp.methods {
+            for &m in &block.methods {
                 let fqn = def_to_item_ref(db, Definition::Function(FunctionLoc::new(db, *file, m)))
                     .to_string();
                 let Some(fqn) = resolve_fqn(&fqn) else {
@@ -1843,10 +1856,16 @@ fn compute_function_metadata_from_item_tree(
     };
 
     let item_tree = file_item_tree(db, file);
-    let enclosing_impl = item_tree
-        .implements_for
-        .iter()
-        .find(|imp| imp.methods.contains(&func_id));
+    let enclosing_impl_for_target = item_tree.free_impls.iter().find_map(|impl_id| {
+        let block = item_tree.impls.get(impl_id)?;
+        if !block.methods.contains(&func_id) {
+            return None;
+        }
+        match &block.subject {
+            baml_compiler2_hir::item_tree::ImplSubject::Free { for_target, .. } => Some(for_target),
+            baml_compiler2_hir::item_tree::ImplSubject::InClass { .. } => None,
+        }
+    });
     let enclosing_class = item_tree
         .classes
         .values()
@@ -1855,8 +1874,8 @@ fn compute_function_metadata_from_item_tree(
         .interfaces
         .values()
         .find(|iface_data| iface_data.default_methods.contains(&func_id));
-    let self_replacement = enclosing_impl
-        .map(|imp| imp.for_target.clone())
+    let self_replacement = enclosing_impl_for_target
+        .map(|for_target| for_target.clone())
         .or_else(|| {
             enclosing_class.map(|class_data| {
                 type_expr_for_name_with_generic_args(

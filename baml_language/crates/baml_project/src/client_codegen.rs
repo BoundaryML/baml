@@ -149,8 +149,11 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                 non_free_function_ids.insert(*m);
             }
         }
-        for imp in &item_tree.implements_for {
-            for m in &imp.methods {
+        for impl_id in &item_tree.free_impls {
+            let Some(block) = item_tree.impls.get(impl_id) else {
+                continue;
+            };
+            for m in &block.methods {
                 non_free_function_ids.insert(*m);
             }
         }

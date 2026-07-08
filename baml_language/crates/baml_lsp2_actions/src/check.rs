@@ -197,9 +197,12 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
     // (`$rust_function`/builtin) impl methods skip the scope-inference path, so
     // without this their signatures would leave `Self` unresolved here.
     let mut method_to_impl = Vec::new();
-    for imp in &item_tree.implements_for {
-        for &method_id in &imp.methods {
-            method_to_impl.push((method_id, imp));
+    for impl_id in &item_tree.free_impls {
+        let Some(block) = item_tree.impls.get(impl_id) else {
+            continue;
+        };
+        for &method_id in &block.methods {
+            method_to_impl.push((method_id, block));
         }
     }
 
@@ -236,14 +239,21 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
             .iter()
             .find(|(mid, _)| mid == local_id)
             .map(|(_, imp)| *imp);
-        if let Some(imp) = enclosing_impl {
-            let mut merged = imp.generic_params.clone();
+        if let Some(imp) = enclosing_impl
+            && let baml_compiler2_hir::item_tree::ImplSubject::Free { generics, .. } = &imp.subject
+        {
+            let mut merged: Vec<Name> = generics.iter().map(|g| g.name.clone()).collect();
             merged.extend(generic_params);
             generic_params = merged;
         }
         // Pre-resolve `Self` to the enclosing impl's `for` target before lowering
         // signature types, mirroring the body path in `tir::inference`.
-        let self_replacement = enclosing_impl.map(|imp| imp.for_target.clone());
+        let self_replacement = enclosing_impl.and_then(|imp| match &imp.subject {
+            baml_compiler2_hir::item_tree::ImplSubject::Free { for_target, .. } => {
+                Some(for_target.clone())
+            }
+            baml_compiler2_hir::item_tree::ImplSubject::InClass { .. } => None,
+        });
         let lower_sig_te = |te: &baml_compiler2_ast::TypeExpr,
                             generic_params: &[Name],
                             diags: &mut Vec<baml_compiler2_tir::infer_context::TirTypeError>|
